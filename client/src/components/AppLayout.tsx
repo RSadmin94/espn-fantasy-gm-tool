@@ -77,24 +77,24 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
                 {items.map((item) => {
                   const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
                   return (
-                    <Link key={item.href} href={item.href}>
-                      <a
-                        className={cn(
-                          "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group",
-                          active
-                            ? "bg-primary/15 text-primary shadow-sm"
-                            : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
-                        )}
-                      >
-                        <item.icon className={cn("w-4 h-4 flex-shrink-0 transition-colors", active ? "text-primary" : "group-hover:text-foreground")} />
-                        <span className="flex-1 truncate">{item.label}</span>
-                        {item.badge && (
-                          <Badge className="text-[8px] px-1 py-0 h-3.5 espn-gradient text-white border-0 font-bold">
-                            {item.badge}
-                          </Badge>
-                        )}
-                        {active && <ChevronRight className="w-3 h-3 text-primary flex-shrink-0" />}
-                      </a>
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group",
+                        active
+                          ? "bg-primary/15 text-primary shadow-sm"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
+                      )}
+                    >
+                      <item.icon className={cn("w-4 h-4 flex-shrink-0 transition-colors", active ? "text-primary" : "group-hover:text-foreground")} />
+                      <span className="flex-1 truncate">{item.label}</span>
+                      {item.badge && (
+                        <Badge className="text-[8px] px-1 py-0 h-3.5 espn-gradient text-white border-0 font-bold">
+                          {item.badge}
+                        </Badge>
+                      )}
+                      {active && <ChevronRight className="w-3 h-3 text-primary flex-shrink-0" />}
                     </Link>
                   );
                 })}
