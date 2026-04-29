@@ -324,6 +324,148 @@ export const appRouter = router({
 
       return { latestSeason, nextSeason, teams: result };
     }),
+    keeperEligibility2026: publicProcedure.query(async () => {
+      // Full 2026 keeper eligibility calculator with 2-consecutive-year rule enforcement
+      // Rule: a player kept in BOTH 2024 AND 2025 must return to the draft pool in 2026
+      // Round cost: if kept in round R in 2025, cost to keep in 2026 = R - 1
+      const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+
+      // Build per-team, per-player keeper history across all seasons
+      const keepersByPlayerByTeam: Record<number, Record<number, Array<{ season: number; roundId: number; playerName: string; position: string }>>> = {};
+      const teamNames: Record<number, string> = {};
+
+      for (const season of cachedSeasons) {
+        const data = await getSeasonData(season);
+        if (!data) continue;
+        const picks = normalizeDraftPicks(data);
+        for (const pick of picks) {
+          const p = pick as Record<string, unknown>;
+          if (!p.keeper) continue;
+          const tid = p.teamId as number;
+          const pid = p.playerId as number;
+          if (!keepersByPlayerByTeam[tid]) keepersByPlayerByTeam[tid] = {};
+          if (!keepersByPlayerByTeam[tid][pid]) keepersByPlayerByTeam[tid][pid] = [];
+          keepersByPlayerByTeam[tid][pid].push({
+            season: p.season as number,
+            roundId: p.roundId as number,
+            playerName: (p.playerName as string) || `Player#${pid}`,
+            position: (p.position as string) || "?",
+          });
+          teamNames[tid] = (p.teamName as string) || `Team ${tid}`;
+        }
+      }
+
+      // Get 2025 keepers as the baseline for 2026 eligibility
+      const latestSeason = 2025;
+      const data2025 = await getSeasonData(latestSeason);
+      const data2024 = await getSeasonData(2024);
+      const teams2025 = data2025 ? normalizeTeams(data2025) : [];
+
+      // Build 2024 keeper set: playerId -> roundId (for consecutive check)
+      const keepers2024: Record<number, Record<number, number>> = {}; // teamId -> playerId -> roundId
+      if (data2024) {
+        const picks2024 = normalizeDraftPicks(data2024);
+        for (const pick of picks2024) {
+          const p = pick as Record<string, unknown>;
+          if (!p.keeper) continue;
+          const tid = p.teamId as number;
+          const pid = p.playerId as number;
+          if (!keepers2024[tid]) keepers2024[tid] = {};
+          keepers2024[tid][pid] = p.roundId as number;
+        }
+      }
+
+      // Build 2025 keeper set
+      const keepers2025: Record<number, Array<{ playerId: number; playerName: string; position: string; roundId: number }>> = {};
+      if (data2025) {
+        const picks2025 = normalizeDraftPicks(data2025);
+        for (const pick of picks2025) {
+          const p = pick as Record<string, unknown>;
+          if (!p.keeper) continue;
+          const tid = p.teamId as number;
+          if (!keepers2025[tid]) keepers2025[tid] = [];
+          keepers2025[tid].push({
+            playerId: p.playerId as number,
+            playerName: (p.playerName as string) || `Player#${p.playerId}`,
+            position: (p.position as string) || "?",
+            roundId: p.roundId as number,
+          });
+        }
+      }
+
+      // Value tier: compare keeper round cost vs estimated draft value
+      function valueTier(position: string, roundCost: number): { tier: string; label: string } {
+        // Rough 2026 ADP tiers by position
+        const adpRound: Record<string, number> = {
+          QB: 6, RB: 3, WR: 3, TE: 5, K: 14, DEF: 13,
+        };
+        const pos = position?.toUpperCase() || "";
+        const adp = adpRound[pos] ?? 7;
+        const savings = adp - roundCost;
+        if (savings >= 4) return { tier: "elite", label: "Elite Value" };
+        if (savings >= 2) return { tier: "good", label: "Good Value" };
+        if (savings >= 0) return { tier: "fair", label: "Fair Value" };
+        return { tier: "poor", label: "Poor Value" };
+      }
+
+      const teamResults = teams2025.map(team => {
+        const tid = team.teamId as number;
+        const tname = (team.teamName as string) || teamNames[tid] || `Team ${tid}`;
+        const my2025Keepers = keepers2025[tid] || [];
+        const my2024Keepers = keepers2024[tid] || {};
+
+        const players = my2025Keepers.map(k => {
+          const keptIn2024 = my2024Keepers[k.playerId] !== undefined;
+          const isIneligible = keptIn2024; // kept in both 2024 and 2025 = 2 consecutive years
+          const roundCost2026 = k.roundId - 1; // cost to keep = kept round - 1
+          const consecutiveYears = keptIn2024 ? 2 : 1;
+          const value = isIneligible ? { tier: "ineligible", label: "Must Return" } : valueTier(k.position, roundCost2026);
+          return {
+            playerId: k.playerId,
+            playerName: k.playerName,
+            position: k.position,
+            round2025: k.roundId,
+            round2024: keptIn2024 ? my2024Keepers[k.playerId] : null,
+            roundCost2026: isIneligible ? null : roundCost2026,
+            consecutiveYears,
+            isIneligible,
+            valueTier: value.tier,
+            valueLabel: value.label,
+          };
+        });
+
+        return {
+          teamId: tid,
+          teamName: tname,
+          players,
+          ineligibleCount: players.filter(p => p.isIneligible).length,
+          eligibleCount: players.filter(p => !p.isIneligible).length,
+        };
+      });
+
+      // League-wide summary
+      const allIneligible = teamResults.flatMap(t =>
+        t.players.filter(p => p.isIneligible).map(p => ({ ...p, teamName: t.teamName }))
+      );
+      const allEligible = teamResults.flatMap(t =>
+        t.players.filter(p => !p.isIneligible).map(p => ({ ...p, teamName: t.teamName }))
+      );
+
+      return {
+        season: 2026,
+        deadline: "August 18, 2026",
+        rule: "Players kept in 2024 AND 2025 (2 consecutive years) must return to the draft pool for 2026.",
+        teams: teamResults,
+        leagueSummary: {
+          totalIneligible: allIneligible.length,
+          totalEligible: allEligible.length,
+          ineligiblePlayers: allIneligible,
+          topValueKeepers: allEligible
+            .filter(p => p.valueTier === "elite" || p.valueTier === "good")
+            .sort((a, b) => (a.roundCost2026 ?? 99) - (b.roundCost2026 ?? 99)),
+        },
+      };
+    }),
   }),
 
   advisor: router({

@@ -16,6 +16,7 @@ const navItems = [
   { href: "/rosters", icon: Users, label: "Rosters", group: "Team Mgmt" },
   { href: "/draft", icon: ClipboardList, label: "Draft History", group: "Team Mgmt" },
   { href: "/keepers", icon: Star, label: "Keeper Tracker", group: "Team Mgmt" },
+  { href: "/keeper-calculator", icon: Brain, label: "Keeper Calculator", group: "Team Mgmt", badge: "2026" },
   // Pro Tools
   { href: "/startsit", icon: Zap, label: "Start/Sit Advisor", group: "Pro Tools", badge: "AI" },
   { href: "/trade", icon: ArrowLeftRight, label: "Trade Analyzer", group: "Pro Tools", badge: "AI" },

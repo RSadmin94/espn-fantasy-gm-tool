@@ -861,6 +861,32 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* 2026 Keeper Eligibility Calculator CTA */}
+            <Card className="card-glow bg-gradient-to-r from-primary/10 to-emerald-500/10 border-primary/30">
+              <CardContent className="py-4 px-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+                      <Brain className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">2026 Keeper Eligibility Calculator</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        See which players hit the 2-year limit, round costs for eligible keepers, and value analysis for all 14 teams.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="flex-shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground"
+                    onClick={() => navigate("/keeper-calculator")}
+                  >
+                    Open Calculator
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Live Keeper History Timeline */}
             {keeperHistory.length > 0 && (
               <Card className="card-glow bg-card border-border">

@@ -131,3 +131,15 @@
 - [x] Add keeper history timeline to Keeper Intelligence tab in Dashboard (live table from keeperHistory endpoint)
 - [x] Wire espnService.ts normalizers to extract draft picks with keeper/reservedForKeeper flags (keeperRound = roundId where keeper=true)
 - [x] Run full test suite and save checkpoint
+
+## NEW: 2026 Keeper Eligibility Calculator
+
+- [x] Analyze 2024 and 2025 keeper data to map player IDs kept in both seasons
+- [x] Build keeperEligibility2026 tRPC endpoint: cross-references 2024 and 2025 keepers per team, flags players kept 2 consecutive years (ineligible in 2026), calculates round cost (kept round - 1), and returns eligibility status per team
+- [x] Build KeeperCalculator.tsx page: per-team cards showing each player's eligibility status (ELIGIBLE / INELIGIBLE / MUST RETURN TO POOL), round cost, value tier badge, and 2-year rule warning
+- [x] Add league-wide summary: how many players are hitting the 2-year limit across all 14 teams
+- [x] Add value analysis column: compare keeper round cost vs estimated 2026 ADP round
+- [x] Integrate KeeperCalculator into Keeper Intelligence tab on Dashboard as a summary panel
+- [x] Add "Keeper Calculator" nav link in AppLayout sidebar under Team Mgmt section
+- [x] Write vitest for keeperEligibility2026 endpoint covering 2-year rule logic
+- [x] Run all tests and save checkpoint

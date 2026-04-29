@@ -15,6 +15,7 @@ import WaiverWire from "./pages/WaiverWire";
 import Advisor from "./pages/Advisor";
 import DataRefresh from "./pages/DataRefresh";
 import StartSit from "./pages/StartSit";
+import KeeperCalculator from "./pages/KeeperCalculator";
 
 function Router() {
   return (
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/rosters" component={Rosters} />
       <Route path="/draft" component={DraftHistory} />
       <Route path="/keepers" component={Keepers} />
+      <Route path="/keeper-calculator" component={KeeperCalculator} />
       <Route path="/matchups" component={Matchups} />
       <Route path="/trade" component={TradeAnalyzer} />
       <Route path="/waiver" component={WaiverWire} />
