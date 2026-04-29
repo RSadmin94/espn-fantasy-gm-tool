@@ -664,6 +664,249 @@ export const appRouter = router({
     };
   }),
 
+  ownerCareerStats: publicProcedure.query(async () => {
+    const cachedSeasons = await getAllCachedSeasons();
+
+    // ── Per-owner aggregated stats ──────────────────────────────────────────
+    // memberId → owner profile
+    const ownerMap = new Map<string, {
+      memberId: string;
+      firstName: string;
+      lastName: string;
+      displayName: string;
+      // career totals
+      totalWins: number;
+      totalLosses: number;
+      totalTies: number;
+      totalPF: number;
+      totalPA: number;
+      playoffAppearances: number;
+      championships: number;
+      runnerUps: number;
+      // season-by-season
+      seasonRecords: Array<{
+        season: number;
+        teamName: string;
+        wins: number;
+        losses: number;
+        ties: number;
+        pf: number;
+        pa: number;
+        rank: number;
+        playoffSeed: number;
+        madePlayoffs: boolean;
+        isChampion: boolean;
+        isRunnerUp: boolean;
+      }>;
+      // head-to-head: opponentMemberId → { wins, losses, ties }
+      h2h: Map<string, { wins: number; losses: number; ties: number }>;
+    }>();
+
+    // Helper: resolve member ID → owner entry, creating if needed
+    function getOrCreateOwner(memberId: string, members: any[]) {
+      if (!ownerMap.has(memberId)) {
+        const m = members.find((x: any) => x.id === memberId) || {};
+        ownerMap.set(memberId, {
+          memberId,
+          firstName: m.firstName || '',
+          lastName: m.lastName || '',
+          displayName: m.displayName || memberId,
+          totalWins: 0, totalLosses: 0, totalTies: 0,
+          totalPF: 0, totalPA: 0,
+          playoffAppearances: 0, championships: 0, runnerUps: 0,
+          seasonRecords: [],
+          h2h: new Map(),
+        });
+      }
+      return ownerMap.get(memberId)!;
+    }
+
+    for (const season of cachedSeasons) {
+      const row = await getCachedView(season, 'combined');
+      if (!row) continue;
+      const data = row.payload as any;
+
+      const members: any[] = data.members || [];
+      const teams: any[] = data.teams || [];
+      const schedule: any[] = data.schedule || [];
+      const settings: any = data.settings || {};
+      const playoffMatchupPeriodStart: number =
+        (settings.scheduleSettings?.matchupPeriodCount ?? 14) + 1;
+
+      // Build teamId → memberId map for this season
+      const teamToMember = new Map<number, string>();
+      for (const team of teams) {
+        const primaryOwner: string = team.primaryOwner || (team.owners?.[0] ?? '');
+        if (primaryOwner) teamToMember.set(team.id, primaryOwner);
+      }
+
+      // Determine champion: team with rankFinal === 1, or winner of the championship matchup
+      // ESPN sets rankFinal after season ends; fall back to highest playoff seed winner
+      let championTeamId: number | null = null;
+      let runnerUpTeamId: number | null = null;
+
+      // Look for championship matchup (WINNERS_BRACKET in the last matchup period)
+      const completedPlayoffs = schedule.filter(
+        (m: any) => m.playoffTierType === 'WINNERS_BRACKET' && m.winner && m.winner !== 'UNDECIDED'
+      );
+      if (completedPlayoffs.length > 0) {
+        // The championship is the last completed winners bracket matchup
+        const champMatchup = completedPlayoffs.reduce((a: any, b: any) =>
+          a.matchupPeriodId >= b.matchupPeriodId ? a : b
+        );
+        if (champMatchup.winner === 'HOME') {
+          championTeamId = champMatchup.home?.teamId ?? null;
+          runnerUpTeamId = champMatchup.away?.teamId ?? null;
+        } else if (champMatchup.winner === 'AWAY') {
+          championTeamId = champMatchup.away?.teamId ?? null;
+          runnerUpTeamId = champMatchup.home?.teamId ?? null;
+        }
+      }
+      // Fallback: rankFinal === 1
+      if (!championTeamId) {
+        const champ = teams.find((t: any) => t.rankFinal === 1);
+        if (champ) championTeamId = champ.id;
+        const ru = teams.find((t: any) => t.rankFinal === 2);
+        if (ru) runnerUpTeamId = ru.id;
+      }
+
+      // Process each team's season record
+      for (const team of teams) {
+        const memberId = teamToMember.get(team.id);
+        if (!memberId) continue;
+        const owner = getOrCreateOwner(memberId, members);
+
+        const overall = team.record?.overall || {};
+        const wins = overall.wins ?? 0;
+        const losses = overall.losses ?? 0;
+        const ties = overall.ties ?? 0;
+        const pf = team.points ?? 0;
+        // PA from record.overall.pointsAgainst if available, else 0
+        const pa = overall.pointsAgainst ?? 0;
+        const playoffSeed = team.playoffSeed ?? 0;
+        const madePlayoffs = playoffSeed > 0 && playoffSeed <= 7;
+        const isChampion = team.id === championTeamId;
+        const isRunnerUp = team.id === runnerUpTeamId;
+
+        owner.totalWins += wins;
+        owner.totalLosses += losses;
+        owner.totalTies += ties;
+        owner.totalPF += pf;
+        owner.totalPA += pa;
+        if (madePlayoffs) owner.playoffAppearances++;
+        if (isChampion) owner.championships++;
+        if (isRunnerUp) owner.runnerUps++;
+
+        owner.seasonRecords.push({
+          season,
+          teamName: team.name || team.abbrev || `Team ${team.id}`,
+          wins, losses, ties, pf, pa,
+          rank: team.rankCalculatedFinal ?? team.rankFinal ?? 0,
+          playoffSeed,
+          madePlayoffs,
+          isChampion,
+          isRunnerUp,
+        });
+      }
+
+      // Process head-to-head from regular-season matchups
+      const regularSeason = schedule.filter(
+        (m: any) => (!m.playoffTierType || m.playoffTierType === 'NONE') &&
+          m.winner && m.winner !== 'UNDECIDED'
+      );
+
+      for (const matchup of regularSeason) {
+        const homeTeamId: number = matchup.home?.teamId;
+        const awayTeamId: number = matchup.away?.teamId;
+        if (!homeTeamId || !awayTeamId) continue;
+
+        const homeMember = teamToMember.get(homeTeamId);
+        const awayMember = teamToMember.get(awayTeamId);
+        if (!homeMember || !awayMember) continue;
+
+        const homeOwner = getOrCreateOwner(homeMember, members);
+        const awayOwner = getOrCreateOwner(awayMember, members);
+
+        if (!homeOwner.h2h.has(awayMember)) homeOwner.h2h.set(awayMember, { wins: 0, losses: 0, ties: 0 });
+        if (!awayOwner.h2h.has(homeMember)) awayOwner.h2h.set(homeMember, { wins: 0, losses: 0, ties: 0 });
+
+        const homeH2H = homeOwner.h2h.get(awayMember)!;
+        const awayH2H = awayOwner.h2h.get(homeMember)!;
+
+        if (matchup.winner === 'HOME') {
+          homeH2H.wins++; awayH2H.losses++;
+        } else if (matchup.winner === 'AWAY') {
+          awayH2H.wins++; homeH2H.losses++;
+        } else {
+          homeH2H.ties++; awayH2H.ties++;
+        }
+      }
+    }
+
+    // ── Serialize to plain objects ──────────────────────────────────────────
+    const owners = Array.from(ownerMap.values()).map((o) => {
+      const totalGames = o.totalWins + o.totalLosses + o.totalTies;
+      const winPct = totalGames > 0 ? Math.round((o.totalWins / totalGames) * 1000) / 10 : 0;
+      const avgPF = o.seasonRecords.length > 0
+        ? Math.round((o.totalPF / o.seasonRecords.length) * 10) / 10
+        : 0;
+      const avgPA = o.seasonRecords.length > 0
+        ? Math.round((o.totalPA / o.seasonRecords.length) * 10) / 10
+        : 0;
+      const h2hArray = Array.from(o.h2h.entries()).map(([oppId, rec]) => ({
+        opponentMemberId: oppId,
+        wins: rec.wins,
+        losses: rec.losses,
+        ties: rec.ties,
+      }));
+      // Best and worst seasons by win %
+      const sortedSeasons = [...o.seasonRecords].sort((a, b) => {
+        const aGames = a.wins + a.losses + a.ties;
+        const bGames = b.wins + b.losses + b.ties;
+        const aPct = aGames > 0 ? a.wins / aGames : 0;
+        const bPct = bGames > 0 ? b.wins / bGames : 0;
+        return bPct - aPct;
+      });
+      return {
+        memberId: o.memberId,
+        firstName: o.firstName,
+        lastName: o.lastName,
+        displayName: o.displayName,
+        fullName: [o.firstName, o.lastName].filter(Boolean).join(' ') || o.displayName,
+        totalWins: o.totalWins,
+        totalLosses: o.totalLosses,
+        totalTies: o.totalTies,
+        totalGames,
+        winPct,
+        totalPF: Math.round(o.totalPF * 10) / 10,
+        totalPA: Math.round(o.totalPA * 10) / 10,
+        avgPF,
+        avgPA,
+        pointDiff: Math.round((o.totalPF - o.totalPA) * 10) / 10,
+        playoffAppearances: o.playoffAppearances,
+        championships: o.championships,
+        runnerUps: o.runnerUps,
+        seasonsActive: o.seasonRecords.length,
+        playoffRate: o.seasonRecords.length > 0
+          ? Math.round((o.playoffAppearances / o.seasonRecords.length) * 1000) / 10
+          : 0,
+        seasonRecords: o.seasonRecords.sort((a, b) => a.season - b.season),
+        h2h: h2hArray,
+        bestSeason: sortedSeasons[0] ?? null,
+        worstSeason: sortedSeasons[sortedSeasons.length - 1] ?? null,
+      };
+    });
+
+    // Sort by all-time win % descending
+    owners.sort((a, b) => b.winPct - a.winPct);
+
+    return {
+      owners,
+      seasons: cachedSeasons,
+      totalSeasons: cachedSeasons.length,
+    };
+  }),
+
   advisor: router({
     chat: protectedProcedure
       .input(z.object({ message: z.string().min(1).max(2000), season: z.number().optional() }))

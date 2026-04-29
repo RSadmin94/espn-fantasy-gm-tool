@@ -153,3 +153,13 @@
 - [x] Add /player-profiles route to App.tsx
 - [x] Write vitest for playerProfiles endpoint
 - [x] Run all tests and save checkpoint
+
+## NEW: Owner Career Stats Page
+
+- [x] Analyze matchup/schedule data structure in ESPN cache for 2018–2025
+- [x] Build ownerCareerStats tRPC endpoint: all-time W/L, PF/PA, win%, playoff appearances, championships, H2H matrix
+- [x] Build OwnerStats.tsx page: career summary leaderboard, per-owner profile cards, H2H matrix table, season-by-season breakdown
+- [x] Add /owner-stats route to App.tsx
+- [x] Add "Owner Stats" nav link in AppLayout sidebar under Intelligence section
+- [x] Write vitest for ownerCareerStats endpoint
+- [x] Run all tests and save checkpoint

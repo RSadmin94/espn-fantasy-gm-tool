@@ -17,6 +17,7 @@ import DataRefresh from "./pages/DataRefresh";
 import StartSit from "./pages/StartSit";
 import KeeperCalculator from "./pages/KeeperCalculator";
 import PlayerProfiles from "./pages/PlayerProfiles";
+import OwnerStats from "./pages/OwnerStats";
 
 function Router() {
   return (
@@ -34,6 +35,7 @@ function Router() {
       <Route path="/refresh" component={DataRefresh} />
       <Route path="/startsit" component={StartSit} />
       <Route path="/player-profiles" component={PlayerProfiles} />
+      <Route path="/owner-stats" component={OwnerStats} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
