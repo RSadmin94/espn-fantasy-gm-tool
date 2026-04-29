@@ -2,6 +2,7 @@ import { eq, desc, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users, espnSeasonCache, refreshManifest, chatHistory,
+  pickTrades, InsertPickTrade,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -113,4 +114,26 @@ export async function clearChatHistory(userId: number) {
   const db = await getDb();
   if (!db) return;
   await db.delete(chatHistory).where(eq(chatHistory.userId, userId));
+}
+
+// ── Pick Trade helpers ────────────────────────────────────────────────────────
+export async function getPickTrades(draftYear: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(pickTrades)
+    .where(eq(pickTrades.draftYear, draftYear))
+    .orderBy(pickTrades.round, pickTrades.pickInRound);
+}
+
+export async function addPickTrade(trade: InsertPickTrade) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.insert(pickTrades).values(trade);
+  return result;
+}
+
+export async function removePickTrade(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(pickTrades).where(eq(pickTrades.id, id));
 }

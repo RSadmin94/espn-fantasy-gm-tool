@@ -170,3 +170,14 @@
 - [x] Add ownerPredictions tRPC endpoint: LLM-powered 2026 behavioral prediction per owner using career stats + GM style as context
 - [x] Update OwnerStats.tsx: add GM Style profile card (archetype badge, activity charts, style metrics) and 2026 Predictions panel per owner
 - [x] Run all tests and save checkpoint
+
+## NEW: Pick Value Calculator + Draft Pick Trade Tracker
+
+- [x] Design 14-team PPR pick value chart (calibrated JJ chart, 14 teams × 15 rounds = 210 picks)
+- [x] Build pickValue + draftPickTracker tRPC endpoints in routers.ts
+- [x] Build PickValueCalculator.tsx: two-pick comparison with WIN/FAIR/LOSS verdict, full value chart table
+- [x] Build DraftPickTracker.tsx: owned picks board, traded-away log, net portfolio value, pick trade entry form
+- [x] Add /pick-value and /pick-tracker routes to App.tsx
+- [x] Add nav links in AppLayout under PRO TOOLS section
+- [x] Write vitest for pick value chart math and trade verdict logic
+- [x] Run all tests and save checkpoint

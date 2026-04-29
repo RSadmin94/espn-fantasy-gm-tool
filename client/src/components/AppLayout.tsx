@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Trophy, Users, ClipboardList, Star, Swords,
   ArrowLeftRight, TrendingUp, Bot, RefreshCw, ChevronRight,
-  Activity, Brain, Zap, UserSearch, BarChart3,
+  Activity, Brain, Zap, UserSearch, BarChart3, Calculator, GitCompare,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -21,6 +21,8 @@ const navItems = [
   { href: "/startsit", icon: Zap, label: "Start/Sit Advisor", group: "Pro Tools", badge: "AI" },
   { href: "/trade", icon: ArrowLeftRight, label: "Trade Analyzer", group: "Pro Tools", badge: "AI" },
   { href: "/waiver", icon: TrendingUp, label: "Waiver Wire", group: "Pro Tools", badge: "AI" },
+  { href: "/pick-value", icon: Calculator, label: "Pick Value Calc", group: "Pro Tools", badge: "NEW" },
+  { href: "/pick-tracker", icon: GitCompare, label: "Pick Trade Tracker", group: "Pro Tools", badge: "NEW" },
   // Intelligence
   { href: "/advisor", icon: Bot, label: "AI GM Advisor", group: "Intelligence", badge: "AI" },
   { href: "/player-profiles", icon: UserSearch, label: "Player Profiles", group: "Intelligence" },

@@ -18,6 +18,8 @@ import StartSit from "./pages/StartSit";
 import KeeperCalculator from "./pages/KeeperCalculator";
 import PlayerProfiles from "./pages/PlayerProfiles";
 import OwnerStats from "./pages/OwnerStats";
+import PickValueCalculator from "./pages/PickValueCalculator";
+import DraftPickTracker from "./pages/DraftPickTracker";
 
 function Router() {
   return (
@@ -36,6 +38,8 @@ function Router() {
       <Route path="/startsit" component={StartSit} />
       <Route path="/player-profiles" component={PlayerProfiles} />
       <Route path="/owner-stats" component={OwnerStats} />
+      <Route path="/pick-value" component={PickValueCalculator} />
+      <Route path="/pick-tracker" component={DraftPickTracker} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

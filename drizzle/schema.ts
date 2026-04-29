@@ -68,3 +68,24 @@ export const chatHistory = mysqlTable("chat_history", {
 });
 
 export type ChatHistory = typeof chatHistory.$inferSelect;
+
+// Draft pick trade log — tracks picks acquired/traded away for a given draft year
+export const pickTrades = mysqlTable(
+  "pick_trades",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    draftYear: int("draftYear").notNull().default(2026),
+    type: mysqlEnum("type", ["acquired", "traded_away"]).notNull(),
+    round: int("round").notNull(),
+    pickInRound: int("pickInRound").notNull(),
+    label: varchar("label", { length: 8 }).notNull(),
+    counterparty: varchar("counterparty", { length: 128 }).notNull(),
+    notes: text("notes"),
+    pickValue: int("pickValue").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_pick_trades_year").on(t.draftYear)]
+);
+
+export type PickTrade = typeof pickTrades.$inferSelect;
+export type InsertPickTrade = typeof pickTrades.$inferInsert;

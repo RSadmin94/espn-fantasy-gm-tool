@@ -5,6 +5,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
+import { getPickTrades, addPickTrade, removePickTrade } from "./db";
 import {
   fetchEspnViews,
   normalizeSettings,
@@ -1197,6 +1198,150 @@ Generate a JSON prediction report with these exact fields:
         prediction: parsed,
       };
     }),
+
+  // ── Pick Value Calculator ─────────────────────────────────────────────────
+  // 14-team PPR calibrated pick value chart (210 picks, 15 rounds × 14 teams)
+  // Formula: value(overall) = 3000 * e^(-0.028 * (overall - 1))
+  // Calibrated so: 1.01=3000, 1.14≈2085, 2.01≈1409, 3.14≈952, 5.14≈435
+  pickValueChart: publicProcedure.query(() => {
+    const TEAMS = 14;
+    const ROUNDS = 15;
+    const BASE = 3000;
+    const K = 0.028;
+    const picks: Array<{ overall: number; round: number; pickInRound: number; label: string; value: number }> = [];
+    for (let overall = 1; overall <= TEAMS * ROUNDS; overall++) {
+      const round = Math.ceil(overall / TEAMS);
+      const positionInRound = overall - (round - 1) * TEAMS;
+      const pickInRound = round % 2 === 1 ? positionInRound : TEAMS + 1 - positionInRound;
+      const value = Math.round(BASE * Math.exp(-K * (overall - 1)));
+      picks.push({ overall, round, pickInRound, label: `${round}.${String(pickInRound).padStart(2, '0')}`, value });
+    }
+    return picks;
+  }),
+
+  pickTradeEval: publicProcedure
+    .input(z.object({
+      sideA: z.array(z.object({ round: z.number(), pickInRound: z.number() })),
+      sideB: z.array(z.object({ round: z.number(), pickInRound: z.number() })),
+    }))
+    .query(({ input }) => {
+      const TEAMS = 14;
+      const BASE = 3000;
+      const K = 0.028;
+      function pickValue(round: number, pickInRound: number): number {
+        const overall = (round - 1) * TEAMS + (round % 2 === 1 ? pickInRound : TEAMS + 1 - pickInRound);
+        return Math.round(BASE * Math.exp(-K * (overall - 1)));
+      }
+      const valueA = input.sideA.reduce((s, p) => s + pickValue(p.round, p.pickInRound), 0);
+      const valueB = input.sideB.reduce((s, p) => s + pickValue(p.round, p.pickInRound), 0);
+      const diff = valueA - valueB;
+      const pct = valueB > 0 ? Math.round((valueA / valueB) * 100) : 0;
+      let verdict: 'WIN' | 'FAIR' | 'LOSS';
+      if (pct >= 110) verdict = 'WIN';
+      else if (pct >= 90) verdict = 'FAIR';
+      else verdict = 'LOSS';
+      return { valueA, valueB, diff, pct, verdict };
+    }),
+
+  // ── Draft Pick Trade Tracker ──────────────────────────────────────────────
+  // Returns all logged pick trades for a given draft year
+  getPickTrades: publicProcedure
+    .input(z.object({ draftYear: z.number().default(2026) }))
+    .query(async ({ input }) => {
+      const trades = await getPickTrades(input.draftYear);
+      const BASE = 3000; const K = 0.028; const TEAMS = 14;
+      function pv(round: number, pir: number) {
+        const overall = (round - 1) * TEAMS + (round % 2 === 1 ? pir : TEAMS + 1 - pir);
+        return Math.round(BASE * Math.exp(-K * (overall - 1)));
+      }
+      const acquired = trades.filter((t) => t.type === 'acquired');
+      const tradedAway = trades.filter((t) => t.type === 'traded_away');
+      const acquiredValue = acquired.reduce((s, t) => s + t.pickValue, 0);
+      const tradedValue = tradedAway.reduce((s, t) => s + t.pickValue, 0);
+      return { trades, acquiredValue, tradedValue, netValue: acquiredValue - tradedValue };
+    }),
+
+  addPickTrade: publicProcedure
+    .input(z.object({
+      draftYear: z.number().default(2026),
+      type: z.enum(['acquired', 'traded_away']),
+      round: z.number().min(1).max(15),
+      pickInRound: z.number().min(1).max(14),
+      counterparty: z.string().min(1).max(128),
+      notes: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const TEAMS = 14; const BASE = 3000; const K = 0.028;
+      const overall = (input.round - 1) * TEAMS + (input.round % 2 === 1 ? input.pickInRound : TEAMS + 1 - input.pickInRound);
+      const pickValue = Math.round(BASE * Math.exp(-K * (overall - 1)));
+      const label = `${input.round}.${String(input.pickInRound).padStart(2, '0')}`;
+      await addPickTrade({ ...input, label, pickValue, notes: input.notes ?? null });
+      return { success: true };
+    }),
+
+  removePickTrade: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await removePickTrade(input.id);
+      return { success: true };
+    }),
+
+  // Returns the 2026 draft order from ESPN
+  draftPickPortfolio: publicProcedure.query(async () => {
+    const TEAMS = 14;
+    const BASE = 3000;
+    const K = 0.028;
+    function pickValue(round: number, pickInRound: number): number {
+      const overall = (round - 1) * TEAMS + (round % 2 === 1 ? pickInRound : TEAMS + 1 - pickInRound);
+      return Math.round(BASE * Math.exp(-K * (overall - 1)));
+    }
+
+    // Load 2026 draft order from ESPN cache
+    let draftOrder: Array<{ teamId: number; teamName: string; round: number; pickInRound: number; overall: number }> = [];
+    try {
+      const cached = await getCachedView(2026, 'combined');
+      if (cached?.payload) {
+        const raw = cached.payload as Record<string, unknown>;
+        const normalized = normalizeDraftOrder(raw);
+        // normalizeDraftOrder returns { pickOrder: [{position, teamId, name, abbrev, owners}], draftDate, ... }
+        // pickOrder is the snake order for round 1 only; we expand to all 15 rounds
+        const pickOrder = normalized.pickOrder as Array<{ position: number; teamId: number; name?: string; abbrev?: string; owners?: string }>;
+        for (let round = 1; round <= 15; round++) {
+          const roundOrder = round % 2 === 1 ? pickOrder : [...pickOrder].reverse();
+          roundOrder.forEach((slot, idx) => {
+            const pickInRound = idx + 1;
+            const overall = (round - 1) * TEAMS + (round % 2 === 1 ? pickInRound : TEAMS + 1 - pickInRound);
+            draftOrder.push({
+              teamId: slot.teamId,
+              teamName: slot.name || `Team ${slot.teamId}`,
+              round,
+              pickInRound: round % 2 === 1 ? pickInRound : TEAMS + 1 - idx,
+              overall,
+            });
+          });
+        }
+      }
+    } catch { /* no 2026 cache yet */ }
+
+    // If no 2026 data, generate a placeholder 14-team snake order
+    if (draftOrder.length === 0) {
+      for (let round = 1; round <= 15; round++) {
+        for (let pos = 1; pos <= TEAMS; pos++) {
+          const pickInRound = round % 2 === 1 ? pos : TEAMS + 1 - pos;
+          const overall = (round - 1) * TEAMS + pos;
+          draftOrder.push({
+            teamId: pickInRound,
+            teamName: `Team ${pickInRound}`,
+            round,
+            pickInRound,
+            overall,
+          });
+        }
+      }
+    }
+
+    return { draftOrder, totalPicks: draftOrder.length };
+  }),
 
   advisor: router({
     chat: protectedProcedure
