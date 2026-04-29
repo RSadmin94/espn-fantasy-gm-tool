@@ -238,7 +238,15 @@ export default function Dashboard() {
 
   const { data: standings, isLoading: standingsLoading } = trpc.espn.standings.useQuery({ season: 2025 });
   const { data: manifests } = trpc.espn.manifests.useQuery();
+  const { data: draftOrder2026Raw } = trpc.espn.draftOrder.useQuery({ season: 2026 });
+  const { data: keeperHistoryRaw } = trpc.espn.keeperHistory.useQuery();
   const chatMutation = trpc.advisor.chat.useMutation();
+
+  type DraftOrderEntry = { position: number; teamId: number; name?: string; owners?: string };
+  type DraftOrderData = { pickOrder?: DraftOrderEntry[]; draftDate?: number; keeperDeadline?: number };
+  type KeeperHistoryEntry = { season: number; teamName: string; playerName: string; position: string; roundId: number; teamId: number };
+  const draftOrder2026 = draftOrder2026Raw as DraftOrderData | null;
+  const keeperHistory = (keeperHistoryRaw as KeeperHistoryEntry[]) || [];
 
   const cachedSeasons = manifests?.filter((m: Record<string, unknown>) => m.status === "success").length ?? 0;
 
@@ -741,6 +749,37 @@ export default function Dashboard() {
                 </Card>
               </div>
             </div>
+            {/* Live 2026 Draft Order */}
+            {draftOrder2026?.pickOrder && draftOrder2026.pickOrder.length > 0 && (
+              <Card className="card-glow bg-card border-border">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-yellow-400" />
+                    2026 Live Draft Order
+                    <Badge className="ml-auto text-[9px] px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">LIVE</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                    {draftOrder2026.pickOrder.map((entry) => (
+                      <div
+                        key={entry.position}
+                        className={`flex flex-col items-center p-2.5 rounded-lg border text-center ${
+                          entry.name?.toLowerCase().includes("str8") || entry.owners?.toLowerCase().includes("rod")
+                            ? "border-primary/50 bg-primary/10"
+                            : "border-border bg-accent/30"
+                        }`}
+                      >
+                        <span className="text-lg font-bold text-primary">{entry.position}</span>
+                        <span className="text-[10px] text-foreground font-medium leading-tight mt-0.5 line-clamp-2">{entry.name || `Team ${entry.teamId}`}</span>
+                        {entry.owners && <span className="text-[9px] text-muted-foreground mt-0.5 hidden md:block">{entry.owners.split(";")[0]?.trim()}</span>}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-3 text-center">Snake draft — your pick is highlighted in blue</p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* ── TAB 5: KEEPER INTELLIGENCE ── */}
@@ -821,6 +860,56 @@ export default function Dashboard() {
                 </Card>
               </div>
             </div>
+
+            {/* Live Keeper History Timeline */}
+            {keeperHistory.length > 0 && (
+              <Card className="card-glow bg-card border-border">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-primary" />
+                    Keeper History Timeline — All Seasons
+                    <Badge className="ml-auto text-[9px] px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">LIVE DATA</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-2 px-3 text-muted-foreground font-medium">Season</th>
+                          <th className="text-left py-2 px-3 text-muted-foreground font-medium">Team</th>
+                          <th className="text-left py-2 px-3 text-muted-foreground font-medium">Player Kept</th>
+                          <th className="text-left py-2 px-3 text-muted-foreground font-medium">Pos</th>
+                          <th className="text-left py-2 px-3 text-muted-foreground font-medium">Round</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {keeperHistory
+                          .sort((a, b) => b.season - a.season || a.teamName.localeCompare(b.teamName))
+                          .map((k, i) => (
+                            <tr
+                              key={i}
+                              className={`border-b border-border/50 hover:bg-accent/30 transition-colors ${
+                                k.teamName?.toLowerCase().includes("str8") || k.teamName?.toLowerCase().includes("rod")
+                                  ? "bg-primary/5"
+                                  : ""
+                              }`}
+                            >
+                              <td className="py-2 px-3 font-semibold text-primary">{k.season}</td>
+                              <td className="py-2 px-3 text-foreground max-w-[140px] truncate">{k.teamName}</td>
+                              <td className="py-2 px-3 text-foreground font-medium">{k.playerName || <span className="text-muted-foreground italic">Unknown</span>}</td>
+                              <td className="py-2 px-3">
+                                <Badge variant="outline" className="text-[9px] px-1.5 py-0">{k.position || "?"}</Badge>
+                              </td>
+                              <td className="py-2 px-3 text-muted-foreground">Rd {k.roundId}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* ── TAB 6: GM AI CHAT ── */}
