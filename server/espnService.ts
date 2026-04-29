@@ -209,29 +209,139 @@ export function normalizeRosters(data: Record<string, unknown>) {
   return rosters;
 }
 
+export function buildPlayerIdMap(data: Record<string, unknown>): Map<number, { name: string; position: string; positionId: number; proTeam: string }> {
+  const map = new Map<number, { name: string; position: string; positionId: number; proTeam: string }>();
+  // Build from roster entries (most reliable source)
+  for (const team of (data.teams as Record<string, unknown>[]) || []) {
+    for (const entry of ((team.roster as Record<string, unknown>)?.entries as Record<string, unknown>[]) || []) {
+      const poolEntry = (entry.playerPoolEntry as Record<string, unknown>) || {};
+      const player = (poolEntry.player as Record<string, unknown>) || {};
+      const pid = player.id as number;
+      if (pid && !map.has(pid)) {
+        map.set(pid, {
+          name: (player.fullName as string) || "",
+          position: POSITION_MAP[player.defaultPositionId as number] || "?",
+          positionId: player.defaultPositionId as number,
+          proTeam: PRO_TEAM_MAP[player.proTeamId as number] || "?",
+        });
+      }
+    }
+  }
+  // Also try players array if present
+  for (const fa of (data.players as Record<string, unknown>[]) || []) {
+    const poolEntry = (fa.playerPoolEntry as Record<string, unknown>) || fa;
+    const player = (poolEntry.player as Record<string, unknown>) || {};
+    const pid = (player.id || fa.id) as number;
+    if (pid && !map.has(pid)) {
+      map.set(pid, {
+        name: (player.fullName as string) || "",
+        position: POSITION_MAP[player.defaultPositionId as number] || "?",
+        positionId: player.defaultPositionId as number,
+        proTeam: PRO_TEAM_MAP[player.proTeamId as number] || "?",
+      });
+    }
+  }
+  return map;
+}
+
+/**
+ * Resolve player names for IDs not found in the roster map
+ * by calling the ESPN public athlete API.
+ */
+export async function resolveUnknownPlayerIds(
+  unknownIds: number[]
+): Promise<Map<number, { name: string; position: string }>> {
+  const result = new Map<number, { name: string; position: string }>();
+  const POS_MAP: Record<string, string> = { QB: "QB", RB: "RB", WR: "WR", TE: "TE", K: "K", "D/ST": "D/ST" };
+  await Promise.allSettled(
+    unknownIds.map(async (pid) => {
+      try {
+        const url = `https://site.api.espn.com/apis/common/v3/sports/football/nfl/athletes/${pid}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        if (!res.ok) return;
+        const d = (await res.json()) as Record<string, unknown>;
+        const athlete = (d.athlete as Record<string, unknown>) || {};
+        const name = (athlete.displayName as string) || (athlete.fullName as string) || "";
+        const posAbbr = ((athlete.position as Record<string, unknown>)?.abbreviation as string) || "?";
+        if (name) result.set(pid, { name, position: POS_MAP[posAbbr] || posAbbr });
+      } catch { /* ignore */ }
+    })
+  );
+  return result;
+}
+
 export function normalizeDraftPicks(data: Record<string, unknown>) {
   const season = data.seasonId as number;
   const draft = (data.draftDetail as Record<string, unknown>) || {};
   const picks = (draft.picks as Record<string, unknown>[]) || [];
+  const playerMap = buildPlayerIdMap(data);
+
+  // Build teamId -> teamName map
+  const teamNameMap: Record<number, string> = {};
+  for (const t of (data.teams as Record<string, unknown>[]) || []) {
+    const tid = t.id as number;
+    teamNameMap[tid] = `${t.location || ""} ${t.nickname || ""}`.trim() || (t.name as string) || `Team ${tid}`;
+  }
 
   return picks.map((pick) => {
-    const poolEntry = (pick.playerPoolEntry as Record<string, unknown>) || {};
-    const player = (poolEntry.player as Record<string, unknown>) || {};
+    const playerId = pick.playerId as number;
+    const pinfo = playerMap.get(playerId) || { name: "", position: "?", positionId: 0, proTeam: "?" };
     return {
       season,
       roundId: pick.roundId,
       roundPickNumber: pick.roundPickNumber,
       overallPickNumber: pick.overallPickNumber,
       teamId: pick.teamId,
-      playerId: player.id || pick.playerId,
-      playerName: player.fullName,
-      positionId: player.defaultPositionId,
-      position: POSITION_MAP[player.defaultPositionId as number] || "?",
-      proTeam: PRO_TEAM_MAP[player.proTeamId as number] || "?",
+      teamName: teamNameMap[pick.teamId as number] || `Team ${pick.teamId}`,
+      playerId,
+      playerName: pinfo.name,
+      positionId: pinfo.positionId,
+      position: pinfo.position,
+      proTeam: pinfo.proTeam,
       keeper: pick.keeper,
-      autoDrafted: pick.autoDraftTypeId,
+      reservedForKeeper: pick.reservedForKeeper,
+      autoDrafted: (pick.autoDraftTypeId as number) > 0,
     };
   });
+}
+
+export function normalizeDraftOrder(data: Record<string, unknown>) {
+  const settings = (data.settings as Record<string, unknown>) || {};
+  const draftSettings = (settings.draftSettings as Record<string, unknown>) || {};
+  const pickOrder = (draftSettings.pickOrder as number[]) || [];
+  const draftDate = draftSettings.date as number;
+  const keeperDeadline = draftSettings.keeperDeadlineDate as number;
+
+  const teamNameMap: Record<number, { name: string; abbrev: string; owners: string }> = {};
+  const members: Record<string, Record<string, unknown>> = {};
+  for (const m of (data.members as Record<string, unknown>[]) || []) {
+    members[m.id as string] = m;
+  }
+  for (const t of (data.teams as Record<string, unknown>[]) || []) {
+    const tid = t.id as number;
+    const owners = (t.owners as string[]) || [];
+    const ownerNames = owners.map((oid) => {
+      const m = members[oid] || {};
+      return `${m.firstName || ""} ${m.lastName || ""}`.trim() || oid;
+    });
+    teamNameMap[tid] = {
+      name: `${t.location || ""} ${t.nickname || ""}`.trim() || (t.name as string) || `Team ${tid}`,
+      abbrev: (t.abbrev as string) || "",
+      owners: ownerNames.join("; "),
+    };
+  }
+
+  return {
+    pickOrder: pickOrder.map((teamId, idx) => ({
+      position: idx + 1,
+      teamId,
+      ...teamNameMap[teamId],
+    })),
+    draftDate,
+    keeperDeadline,
+    draftType: draftSettings.orderType,
+    keeperCount: draftSettings.keeperCount,
+  };
 }
 
 export function normalizeMatchups(data: Record<string, unknown>) {

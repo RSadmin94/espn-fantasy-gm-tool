@@ -10,8 +10,10 @@ import {
   normalizeTeams,
   normalizeRosters,
   normalizeDraftPicks,
+  normalizeDraftOrder,
   normalizeMatchups,
   normalizeTransactions,
+  resolveUnknownPlayerIds,
 } from "./espnService";
 import {
   getCachedView,
@@ -119,7 +121,24 @@ export const appRouter = router({
       .query(async ({ input }) => {
         const data = await getSeasonData(input.season);
         if (!data) return [];
-        const picks = normalizeDraftPicks(data);
+        const rawPicks = normalizeDraftPicks(data) as unknown[];
+        // Resolve any player IDs that weren't in the roster map
+        const unknownIds = rawPicks
+          .filter((p: unknown) => !(p as Record<string, unknown>).playerName)
+          .map((p: unknown) => (p as Record<string, unknown>).playerId as number)
+          .filter(Boolean);
+        let picks: unknown[] = rawPicks;
+        if (unknownIds.length > 0) {
+          const resolved = await resolveUnknownPlayerIds(unknownIds);
+          picks = rawPicks.map((p: unknown) => {
+            const pick = p as Record<string, unknown>;
+            if (!pick.playerName && resolved.has(pick.playerId as number)) {
+              const info = resolved.get(pick.playerId as number)!;
+              return { ...pick, playerName: info.name, position: pick.position === "?" ? info.position : pick.position };
+            }
+            return pick;
+          });
+        }
         if (input.teamId !== undefined) return picks.filter((p: unknown) => (p as Record<string, unknown>).teamId === input.teamId);
         return picks;
       }),
@@ -190,15 +209,120 @@ export const appRouter = router({
         const data = await getSeasonData(season);
         if (!data) continue;
         const picks = normalizeDraftPicks(data);
-        const teams = normalizeTeams(data);
-        const teamMap: Record<number, string> = {};
-        for (const t of teams) teamMap[t.teamId as number] = t.teamName as string;
         for (const pick of picks) {
           const p = pick as Record<string, unknown>;
-          if (p.keeper) keepers.push({ ...p, teamName: teamMap[p.teamId as number] || `Team ${p.teamId}` });
+          if (p.keeper) keepers.push(p);
         }
       }
       return keepers;
+    }),
+
+    draftOrder: publicProcedure
+      .input(z.object({ season: z.number() }))
+      .query(async ({ input }) => {
+        const data = await getSeasonData(input.season);
+        if (!data) return null;
+        return normalizeDraftOrder(data);
+      }),
+
+    keeperAnalysis: publicProcedure.query(async () => {
+      // Build keeper eligibility per team with 2-consecutive-year rule
+      const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+      // Map: teamId -> list of { season, playerId, playerName, position, roundId }
+      const keepersByTeam: Record<number, Array<{ season: number; playerId: number; playerName: string; position: string; roundId: number; teamName: string }>> = {};
+
+      for (const season of cachedSeasons) {
+        const data = await getSeasonData(season);
+        if (!data) continue;
+        const picks = normalizeDraftPicks(data);
+        for (const pick of picks) {
+          const p = pick as Record<string, unknown>;
+          if (!p.keeper) continue;
+          const tid = p.teamId as number;
+          if (!keepersByTeam[tid]) keepersByTeam[tid] = [];
+          keepersByTeam[tid].push({
+            season: p.season as number,
+            playerId: p.playerId as number,
+            playerName: (p.playerName as string) || `Player #${p.playerId}`,
+            position: p.position as string,
+            roundId: p.roundId as number,
+            teamName: p.teamName as string,
+          });
+        }
+      }
+
+      // For each team, determine which players were kept in consecutive years
+      // A player kept in year N AND year N-1 has been kept 2 years in a row → NOT eligible in year N+1
+      const latestSeason = cachedSeasons[cachedSeasons.length - 1] ?? 2025;
+      const nextSeason = latestSeason + 1;
+
+      const result: Array<{
+        teamId: number;
+        teamName: string;
+        keeperHistory: Array<{ season: number; playerName: string; position: string; roundId: number; consecutiveYears: number }>;
+        ineligibleForNext: string[];
+        eligibleForNext: Array<{ playerName: string; position: string; roundId: number; consecutiveYears: number; mustReturn: boolean }>;
+      }> = [];
+
+      // Get current season rosters for eligible player list
+      const currentData = await getSeasonData(latestSeason);
+      const currentRosters = currentData ? normalizeRosters(currentData) : [];
+      const currentTeams = currentData ? normalizeTeams(currentData) : [];
+
+      for (const team of currentTeams) {
+        const tid = team.teamId as number;
+        const tname = team.teamName as string;
+        const teamKeepers = (keepersByTeam[tid] || []).sort((a, b) => a.season - b.season);
+
+        // Build consecutive year counts for each player
+        const playerConsecutive: Record<number, number> = {};
+        for (const k of teamKeepers) {
+          const pid = k.playerId;
+          // Check if this player was also kept the previous year
+          const prevYearKeeper = teamKeepers.find(prev => prev.season === k.season - 1 && prev.playerId === pid);
+          if (prevYearKeeper) {
+            playerConsecutive[pid] = (playerConsecutive[pid] || 1) + 1;
+          } else {
+            playerConsecutive[pid] = 1;
+          }
+        }
+
+        // Players kept in the latest season
+        const latestKeepers = teamKeepers.filter(k => k.season === latestSeason);
+        const ineligible: string[] = [];
+        const eligible: Array<{ playerName: string; position: string; roundId: number; consecutiveYears: number; mustReturn: boolean }> = [];
+
+        for (const k of latestKeepers) {
+          const consec = playerConsecutive[k.playerId] || 1;
+          if (consec >= 2) {
+            ineligible.push(k.playerName);
+          } else {
+            eligible.push({
+              playerName: k.playerName,
+              position: k.position,
+              roundId: k.roundId,
+              consecutiveYears: consec,
+              mustReturn: false,
+            });
+          }
+        }
+
+        result.push({
+          teamId: tid,
+          teamName: tname,
+          keeperHistory: teamKeepers.map(k => ({
+            season: k.season,
+            playerName: k.playerName,
+            position: k.position,
+            roundId: k.roundId,
+            consecutiveYears: playerConsecutive[k.playerId] || 1,
+          })),
+          ineligibleForNext: ineligible,
+          eligibleForNext: eligible,
+        });
+      }
+
+      return { latestSeason, nextSeason, teams: result };
     }),
   }),
 

@@ -118,3 +118,16 @@
 - [x] Matchups page (weekly scoreboard)
 - [x] AI GM Advisor standalone page
 - [x] Data Refresh Control Panel
+
+## NEW: Draft History & Keeper Intelligence (Phase 2 Additions)
+
+- [ ] Analyze ESPN draft API structure from seeded 2018-2025 data
+- [ ] Build draftHistory tRPC endpoint: returns all picks for a season with player name, round, pick, team, keeper flag
+- [ ] Build keeperAnalysis tRPC endpoint: computes keeper eligibility per team enforcing 2-consecutive-year rule
+- [ ] Build draftOrder2026 tRPC endpoint: returns 2026 snake draft order with team names and positions
+- [ ] Rebuild DraftHistory.tsx: season selector, round tabs, pick-by-pick table with keeper badges, team filter
+- [ ] Rebuild Keepers.tsx: per-team keeper eligibility cards, 2-year rule warning badges, value analysis, 2026 deadline countdown
+- [ ] Add live 2026 draft order to Draft Strategy tab in Dashboard
+- [ ] Add keeper history timeline to Keeper Intelligence tab in Dashboard
+- [ ] Wire espnService.ts normalizers to extract draft picks with keeperRound field
+- [ ] Run full test suite and save checkpoint
