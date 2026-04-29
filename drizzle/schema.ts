@@ -1,17 +1,16 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+  json,
+  index,
+} from "drizzle-orm/mysql-core";
 
-/**
- * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
- */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +24,47 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+// Cache raw ESPN API JSON payloads per season + view
+export const espnSeasonCache = mysqlTable(
+  "espn_season_cache",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    season: int("season").notNull(),
+    viewName: varchar("viewName", { length: 64 }).notNull(),
+    payload: json("payload").notNull(),
+    fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [index("idx_season_view").on(t.season, t.viewName)]
+);
+
+export type EspnSeasonCache = typeof espnSeasonCache.$inferSelect;
+
+// Track when each season was last refreshed
+export const refreshManifest = mysqlTable("refresh_manifest", {
+  id: int("id").autoincrement().primaryKey(),
+  season: int("season").notNull().unique(),
+  lastRefreshedAt: timestamp("lastRefreshedAt").defaultNow().notNull(),
+  viewsRefreshed: json("viewsRefreshed"),
+  teamCount: int("teamCount"),
+  rosterCount: int("rosterCount"),
+  matchupCount: int("matchupCount"),
+  draftPickCount: int("draftPickCount"),
+  transactionCount: int("transactionCount"),
+  status: mysqlEnum("status", ["success", "partial", "failed"]).default("success").notNull(),
+  errorMessage: text("errorMessage"),
+});
+
+export type RefreshManifest = typeof refreshManifest.$inferSelect;
+
+// AI GM Advisor chat history
+export const chatHistory = mysqlTable("chat_history", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  season: int("season"),
+  role: mysqlEnum("role", ["user", "assistant"]).notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ChatHistory = typeof chatHistory.$inferSelect;

@@ -4,32 +4,42 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
+import Dashboard from "./pages/Dashboard";
+import Standings from "./pages/Standings";
+import Rosters from "./pages/Rosters";
+import DraftHistory from "./pages/DraftHistory";
+import Keepers from "./pages/Keepers";
+import Matchups from "./pages/Matchups";
+import TradeAnalyzer from "./pages/TradeAnalyzer";
+import WaiverWire from "./pages/WaiverWire";
+import Advisor from "./pages/Advisor";
+import DataRefresh from "./pages/DataRefresh";
+import StartSit from "./pages/StartSit";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
+      <Route path="/" component={Dashboard} />
+      <Route path="/standings" component={Standings} />
+      <Route path="/rosters" component={Rosters} />
+      <Route path="/draft" component={DraftHistory} />
+      <Route path="/keepers" component={Keepers} />
+      <Route path="/matchups" component={Matchups} />
+      <Route path="/trade" component={TradeAnalyzer} />
+      <Route path="/waiver" component={WaiverWire} />
+      <Route path="/advisor" component={Advisor} />
+      <Route path="/refresh" component={DataRefresh} />
+      <Route path="/startsit" component={StartSit} />
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
           <Router />

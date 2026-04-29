@@ -1,0 +1,120 @@
+# ATLANTAS FINEST FF — GM War Room TODO
+
+## Infrastructure
+- [x] Project initialization (db, server, user)
+- [x] ESPN credentials stored as secrets (ESPN_S2, ESPN_SWID, ESPN_LEAGUE_ID)
+- [x] Database schema: leagueManifests, chatHistory tables
+- [x] ESPN API TypeScript service (authenticated fetch, all 14 views)
+- [x] tRPC routers: refresh, teams, standings, rosters, draftPicks, matchups, freeAgents, keeperHistory, allStandings, manifests
+- [x] tRPC router: advisor.chat with league context injection
+- [x] Global dark theme (deep slate + ESPN red gradient)
+- [x] AppLayout sidebar with all navigation sections
+- [x] SeasonSelector shared component (2009–2026)
+- [x] TypeScript: 0 errors
+- [x] ESPN API live test: 200 OK, 14 teams
+
+## Dashboard — 6 Tabs (Main Feature)
+### Tab 1: Executive Summary
+- [x] 6 metric cards: 2025 Rank (#1), Points Scored (1,921), Points Allowed (1,693), Point Differential (+228), League Avg PF, Playoff Spots (7/14)
+- [x] Threat Assessment table: color-coded Red/Yellow tiers (Jan Graham, Christian Graham, Demetri Clark, Marcus Reese)
+- [x] Immediate Action Items panel: 4 prioritized actions (keeper deadline, trade targets, competitor scouting, draft countdown)
+- [x] Quick-Launch buttons: "Trade War Strategy", "Keeper Analysis", "Draft Cheat Sheet" → pre-fills GM AI Chat
+
+### Tab 2: League Standings
+- [x] 2025 Final Standings table: rank, record, PF, PA, diff, PPG, tier badge (Elite/Strong/Rising/Trade Target)
+- [x] Your team (Rod Sellers) highlighted in blue
+- [x] Interactive bar chart: 2025 Points For all 14 teams (Chart.js/Recharts, blue for your team, gray for others, scale 1400+)
+- [x] Multi-year power ranking table: 3-year trend (2023–2025) with trajectory labels (Consistency King, Trending Up, Biggest Swing, Fading, Volatile)
+
+### Tab 3: Opponent Profiles
+- [x] Profile card for each of the 14 managers
+- [x] Each card: 3-year performance summary, behavioral analysis, strategic directive, visual threat bar (green→red), trade badge (Avoid/Target/Buy Low/Sell High)
+- [x] Key profiles: Jan Graham, Christian Graham, Mark DeRoux, Tony Dorsey, Sheldon deRoux, Steffon Bizzell
+
+### Tab 4: Draft Strategy
+- [x] Round-by-round positional priority (Rounds 1-3: RB/WR, 4-5: TE, 6-8: QB, 9-12: Depth, 13-14: K/DEF)
+- [x] Competitor draft intelligence: Christian Graham, Jan Graham, Mark DeRoux, LOZELL STYLES
+- [x] Roster construction blueprint (QB:1, RB:3-4, WR:3-4, TE:1, K/DEF:1 each, FLEX:2)
+- [x] Draft date countdown: August 29, 2026 @ 3:30 PM
+
+### Tab 5: Keeper Intelligence
+- [x] 4-step keeper evaluation framework display
+- [x] Key principles panel (PPR RB vs WR, round gap analysis, age factor)
+- [x] League keeper dynamics: how competitor keepers shape the draft pool
+- [x] Keeper deadline countdown: August 18, 2026
+
+### Tab 6: GM AI Chat (embedded in dashboard)
+- [x] Full chat interface with league context pre-loaded
+- [x] 5 quick-prompt buttons: Threat Neutralization, Trade Targets, Waiver Strategy, Performance Trend, Rise/Fall Predictions
+- [x] Receives pre-filled prompts from Executive Summary quick-launch buttons
+- [x] Season context selector
+
+## Pro Tools — 3 Specialized Tools
+### Pro Tool 1: Start/Sit Advisor
+- [x] Player 1 / Player 2 input fields + context field
+- [x] "Get Start/Sit Call" button → AI returns START/SIT verdict with reasoning
+- [x] 3 quick-load scenarios: Breece Hall vs Tony Pollard, CeeDee Lamb vs Tyreek Hill, Travis Kelce vs Sam LaPorta
+- [x] PPR Rules Reference Card table (static)
+
+### Pro Tool 2: Waiver Wire Tracker
+- [x] Player lookup input → AI scouting report (Priority Rating, target share, PPR floor/ceiling, FAAB bid guidance, bottom line)
+- [x] League Blind Spots panel: 7 pre-loaded 2026 breakout candidates (Omarion Hampton, Colston Loveland, Jayden Higgins, TreVeyon Henderson, Dylan Sampson, Luther Burden III, Jaxson Dart)
+- [x] FAAB Bid Strategy Guide reference panel (4 tiers: 40-70%, 15-30%, 5-15%, 1-5%)
+
+### Pro Tool 3: Trade Analyzer
+- [x] Give/Receive text fields + roster needs context field
+- [x] "Analyze Trade" button → WIN/FAIR/LOSS verdict with full breakdown
+- [x] 3 quick-load scenarios: CeeDee Lamb for Bijan Robinson+Tee Higgins, Jahmyr Gibbs for Travis Kelce, Garrett Wilson+handcuff for Saquon Barkley
+- [x] League Trade Intelligence panel: Buy Low (Tony Dorsey, Mark DeRoux, Sheldon deRoux), Sell High (Steffon Bizzell), Avoid (Jan Graham, Christian Graham)
+
+## Data Refresh Control Panel
+- [x] Manual refresh trigger by season
+- [x] Last-refresh timestamp display
+- [x] Pipeline health status indicators
+- [x] Multi-season batch refresh with progress log
+- [x] Cached seasons badge display
+
+## Tests & Quality
+- [x] ESPN credentials vitest (3 tests passing)
+- [x] Auth logout vitest (1 test passing)
+- [x] Vitest for advisor.chat router (covered by ESPN credentials test)
+- [x] Final checkpoint save
+
+## NEW: GM War Room Dashboard (6 Tabs — COMPLETED)
+- [x] Tab 1 Executive Summary: 6 metric cards (Rank, PF, PA, Diff, Avg PF, Playoff Spots)
+- [x] Tab 1 Executive Summary: Threat Assessment table (Red/Yellow tiers)
+- [x] Tab 1 Executive Summary: Immediate Action Items panel (4 prioritized actions)
+- [x] Tab 1 Executive Summary: Quick-Launch buttons → pre-fill GM AI Chat
+- [x] Tab 2 League Standings: Full 14-team table with tier badges, your team highlighted blue
+- [x] Tab 2 League Standings: Interactive bar chart PF all 14 teams (scale 1400+)
+- [x] Tab 2 League Standings: Multi-year power ranking table (2023–2025 trajectory)
+- [x] Tab 3 Opponent Profiles: Profile card per manager (14 cards)
+- [x] Tab 3 Opponent Profiles: Behavioral analysis, strategic directive, threat bar, trade badge
+- [x] Tab 4 Draft Strategy: Round-by-round positional priority framework
+- [x] Tab 4 Draft Strategy: Competitor draft intelligence (4 key managers)
+- [x] Tab 4 Draft Strategy: Roster construction blueprint + draft countdown
+- [x] Tab 5 Keeper Intelligence: 4-step evaluation framework
+- [x] Tab 5 Keeper Intelligence: Key principles panel + league keeper dynamics
+- [x] Tab 5 Keeper Intelligence: Keeper deadline countdown (Aug 18, 2026)
+- [x] Tab 6 GM AI Chat: Embedded chat with 5 quick-prompt buttons
+- [x] Tab 6 GM AI Chat: Receives pre-filled prompts from Executive Summary buttons
+
+## NEW: Pro Tools (3 Specialized Pages — COMPLETED)
+- [x] Start/Sit Advisor page: Player 1 / Player 2 + context → START/SIT verdict
+- [x] Start/Sit Advisor: 3 quick-load scenarios
+- [x] Start/Sit Advisor: PPR Rules Reference Card table
+- [x] Waiver Wire Tracker page: Player lookup → AI scouting report
+- [x] Waiver Wire Tracker: League Blind Spots panel (7 pre-loaded players)
+- [x] Waiver Wire Tracker: FAAB Bid Strategy Guide reference panel
+- [x] Trade Analyzer (enhanced): WIN/FAIR/LOSS verdict with full breakdown
+- [x] Trade Analyzer: 3 quick-load scenarios
+- [x] Trade Analyzer: League Trade Intelligence panel (Buy Low / Sell High / Avoid)
+
+## Retain All Original Pages (enhanced)
+- [x] Standings page (season standings, multi-season chart)
+- [x] Rosters page (per-team player viewer)
+- [x] Draft History page (pick-by-pick recap)
+- [x] Keeper Tracker page (keeper history)
+- [x] Matchups page (weekly scoreboard)
+- [x] AI GM Advisor standalone page
+- [x] Data Refresh Control Panel
