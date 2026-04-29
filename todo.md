@@ -143,3 +143,13 @@
 - [x] Add "Keeper Calculator" nav link in AppLayout sidebar under Team Mgmt section
 - [x] Write vitest for keeperEligibility2026 endpoint covering 2-year rule logic
 - [x] Run all tests and save checkpoint
+
+## NEW: Player Profiles (2018–2025 Historical Analysis)
+
+- [x] Query and analyze all draft picks (2018–2025) from espnSeasonCache — extract player IDs, names, positions, rounds, teams, keeper flags
+- [x] Build playerProfiles tRPC endpoint: aggregate per-player draft history, keeper history, team ownership timeline, positional data
+- [x] Build PlayerProfiles.tsx page: searchable/filterable player cards with draft history timeline, keeper badges, team ownership, value analysis
+- [x] Add "Player Profiles" nav link in AppLayout sidebar under Intelligence section
+- [x] Add /player-profiles route to App.tsx
+- [x] Write vitest for playerProfiles endpoint
+- [x] Run all tests and save checkpoint

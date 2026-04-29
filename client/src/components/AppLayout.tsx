@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Trophy, Users, ClipboardList, Star, Swords,
   ArrowLeftRight, TrendingUp, Bot, RefreshCw, ChevronRight,
-  Activity, Brain, Zap,
+  Activity, Brain, Zap, UserSearch,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -23,6 +23,7 @@ const navItems = [
   { href: "/waiver", icon: TrendingUp, label: "Waiver Wire", group: "Pro Tools", badge: "AI" },
   // Intelligence
   { href: "/advisor", icon: Bot, label: "AI GM Advisor", group: "Intelligence", badge: "AI" },
+  { href: "/player-profiles", icon: UserSearch, label: "Player Profiles", group: "Intelligence" },
   // System
   { href: "/refresh", icon: RefreshCw, label: "Data Refresh", group: "System" },
 ];

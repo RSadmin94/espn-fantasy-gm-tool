@@ -16,6 +16,7 @@ import Advisor from "./pages/Advisor";
 import DataRefresh from "./pages/DataRefresh";
 import StartSit from "./pages/StartSit";
 import KeeperCalculator from "./pages/KeeperCalculator";
+import PlayerProfiles from "./pages/PlayerProfiles";
 
 function Router() {
   return (
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/advisor" component={Advisor} />
       <Route path="/refresh" component={DataRefresh} />
       <Route path="/startsit" component={StartSit} />
+      <Route path="/player-profiles" component={PlayerProfiles} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

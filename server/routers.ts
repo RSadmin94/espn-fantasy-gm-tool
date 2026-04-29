@@ -468,6 +468,202 @@ export const appRouter = router({
     }),
   }),
 
+  playerProfiles: publicProcedure.query(async () => {
+    // Aggregate per-player draft + keeper + transaction history across all cached seasons
+    const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+
+    const POS_MAP: Record<number, string> = {
+      1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST", 17: "D/ST",
+    };
+
+    // Global player info map: playerId -> { name, position, proTeam }
+    const playerInfoMap = new Map<number, { name: string; position: string; proTeam: string }>();
+    // Per-season team name map: season -> teamId -> { name, ownerName }
+    const teamNamesBySeason: Record<number, Record<number, { name: string; ownerName: string }>> = {};
+
+    // Collect all unique picks (deduplicated by season+overallPickNumber)
+    const seenPickKeys = new Set<string>();
+    const allUniquePicks: Array<{
+      season: number; round: number; pick: number; overallPick: number;
+      playerId: number; teamId: number; isKeeper: boolean;
+    }> = [];
+
+    // Collect all transactions
+    const allTxns: Array<{
+      season: number; type: string; playerId: number;
+      fromTeamId: number | null; toTeamId: number | null;
+    }> = [];
+
+    for (const season of cachedSeasons) {
+      const data = await getSeasonData(season);
+      if (!data) continue;
+
+      // Build team name map for this season
+      teamNamesBySeason[season] = {};
+      const members: Record<string, Record<string, unknown>> = {};
+      for (const m of (data.members as Record<string, unknown>[]) || []) {
+        members[m.id as string] = m;
+      }
+      for (const t of (data.teams as Record<string, unknown>[]) || []) {
+        const tid = t.id as number;
+        const name = `${t.location || ""} ${t.nickname || ""}`.trim() || `Team ${tid}`;
+        const owners = (t.owners as string[]) || [];
+        const ownerName = owners
+          .map((oid) => {
+            const m = members[oid] || {};
+            return `${m.firstName || ""} ${m.lastName || ""}`.trim();
+          })
+          .filter(Boolean)
+          .join(", ");
+        teamNamesBySeason[season][tid] = { name, ownerName };
+
+        // Build player info from roster entries
+        const entries = ((t.roster as Record<string, unknown>)?.entries as Record<string, unknown>[]) || [];
+        for (const entry of entries) {
+          const poolEntry = (entry.playerPoolEntry as Record<string, unknown>) || {};
+          const player = (poolEntry.player as Record<string, unknown>) || {};
+          const pid = player.id as number;
+          if (pid && !playerInfoMap.has(pid)) {
+            playerInfoMap.set(pid, {
+              name: (player.fullName as string) || `Player ${pid}`,
+              position: POS_MAP[player.defaultPositionId as number] || "?",
+              proTeam: String(player.proTeamId || ""),
+            });
+          }
+        }
+      }
+
+      // Extract unique draft picks
+      const draft = (data.draftDetail as Record<string, unknown>) || {};
+      const picks = (draft.picks as Record<string, unknown>[]) || [];
+      for (const pick of picks) {
+        const key = `${season}:${pick.overallPickNumber}`;
+        if (seenPickKeys.has(key)) continue;
+        seenPickKeys.add(key);
+        allUniquePicks.push({
+          season,
+          round: pick.roundId as number,
+          pick: pick.roundPickNumber as number,
+          overallPick: pick.overallPickNumber as number,
+          playerId: pick.playerId as number,
+          teamId: pick.teamId as number,
+          isKeeper: pick.keeper === true || pick.reservedForKeeper === true,
+        });
+      }
+
+      // Extract transactions
+      const txns = (data.transactions as Record<string, unknown>[]) || [];
+      for (const tx of txns) {
+        const items = (tx.items as Record<string, unknown>[]) || [];
+        for (const item of items) {
+          const pid = (item.playerId || (item.player as Record<string, unknown>)?.id) as number;
+          if (!pid) continue;
+          allTxns.push({
+            season,
+            type: tx.type as string,
+            playerId: pid,
+            fromTeamId: (item.fromTeamId as number) || null,
+            toTeamId: (item.toTeamId as number) || null,
+          });
+        }
+      }
+    }
+
+    // Build per-player profiles
+    const playerMap = new Map<number, {
+      playerId: number;
+      playerName: string;
+      position: string;
+      draftHistory: Array<{ season: number; round: number; pick: number; overallPick: number; teamId: number; teamName: string; ownerName: string; isKeeper: boolean }>;
+      keeperSeasons: number[];
+      teamsBySeason: Record<number, { teamId: number; teamName: string; ownerName: string }>;
+      firstSeen: number;
+      lastSeen: number;
+      totalDrafts: number;
+      totalKeeperYears: number;
+    }>();
+
+    for (const pick of allUniquePicks) {
+      const pid = pick.playerId;
+      const info = playerInfoMap.get(pid);
+      const teamInfo = teamNamesBySeason[pick.season]?.[pick.teamId] || { name: `Team ${pick.teamId}`, ownerName: "" };
+
+      if (!playerMap.has(pid)) {
+        playerMap.set(pid, {
+          playerId: pid,
+          playerName: info?.name || `Player ${pid}`,
+          position: info?.position || "?",
+          draftHistory: [],
+          keeperSeasons: [],
+          teamsBySeason: {},
+          firstSeen: pick.season,
+          lastSeen: pick.season,
+          totalDrafts: 0,
+          totalKeeperYears: 0,
+        });
+      }
+
+      const p = playerMap.get(pid)!;
+      if (info?.name) { p.playerName = info.name; p.position = info.position; }
+
+      p.draftHistory.push({
+        season: pick.season,
+        round: pick.round,
+        pick: pick.pick,
+        overallPick: pick.overallPick,
+        teamId: pick.teamId,
+        teamName: teamInfo.name,
+        ownerName: teamInfo.ownerName,
+        isKeeper: pick.isKeeper,
+      });
+
+      if (pick.isKeeper) p.keeperSeasons.push(pick.season);
+      p.teamsBySeason[pick.season] = { teamId: pick.teamId, teamName: teamInfo.name, ownerName: teamInfo.ownerName };
+      p.firstSeen = Math.min(p.firstSeen, pick.season);
+      p.lastSeen = Math.max(p.lastSeen, pick.season);
+      p.totalDrafts++;
+      if (pick.isKeeper) p.totalKeeperYears++;
+    }
+
+    // Build final profiles array with computed fields
+    const profiles = Array.from(playerMap.values()).map((p) => {
+      const rounds = p.draftHistory.map((d) => d.round);
+      const avgRound = rounds.length > 0 ? Math.round((rounds.reduce((s, r) => s + r, 0) / rounds.length) * 10) / 10 : null;
+      const roundTrend = p.draftHistory.length >= 2
+        ? p.draftHistory[p.draftHistory.length - 1].round - p.draftHistory[0].round
+        : 0;
+      const uniqueTeams = Array.from(new Set(Object.values(p.teamsBySeason).map((t) => t.teamName)));
+      const uniqueOwners = Array.from(new Set(Object.values(p.teamsBySeason).map((t) => t.ownerName).filter(Boolean)));
+      const transactionCount = allTxns.filter((tx) => tx.playerId === p.playerId).length;
+
+      return {
+        ...p,
+        draftHistory: p.draftHistory.sort((a, b) => a.season - b.season),
+        avgDraftRound: avgRound,
+        minRound: rounds.length > 0 ? Math.min(...rounds) : null,
+        maxRound: rounds.length > 0 ? Math.max(...rounds) : null,
+        roundTrend, // negative = rising value, positive = falling
+        uniqueTeams,
+        uniqueOwners,
+        seasonsActive: p.lastSeen - p.firstSeen + 1,
+        transactionCount,
+        // League-wide prominence score: keeper years * 3 + total drafts + seasons active
+        prominenceScore: p.totalKeeperYears * 3 + p.totalDrafts + (p.lastSeen - p.firstSeen),
+      };
+    });
+
+    // Sort by prominence (most notable players first)
+    profiles.sort((a, b) => b.prominenceScore - a.prominenceScore);
+
+    return {
+      profiles,
+      totalPlayers: profiles.length,
+      totalKeptPlayers: profiles.filter((p) => p.totalKeeperYears > 0).length,
+      leagueStaples: profiles.filter((p) => p.totalDrafts >= 3).length,
+      seasons: cachedSeasons,
+    };
+  }),
+
   advisor: router({
     chat: protectedProcedure
       .input(z.object({ message: z.string().min(1).max(2000), season: z.number().optional() }))
