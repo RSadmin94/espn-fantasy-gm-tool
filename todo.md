@@ -163,3 +163,10 @@
 - [x] Add "Owner Stats" nav link in AppLayout sidebar under Intelligence section
 - [x] Write vitest for ownerCareerStats endpoint
 - [x] Run all tests and save checkpoint
+
+## NEW: GM Style Profiles + 2026 Predictions
+
+- [x] Extend ownerCareerStats endpoint with per-season transaction counters (acquisitions, drops, trades, roster moves) and computed GM style metrics (waiver aggression, trade frequency, roster churn, stability score)
+- [x] Add ownerPredictions tRPC endpoint: LLM-powered 2026 behavioral prediction per owner using career stats + GM style as context
+- [x] Update OwnerStats.tsx: add GM Style profile card (archetype badge, activity charts, style metrics) and 2026 Predictions panel per owner
+- [x] Run all tests and save checkpoint

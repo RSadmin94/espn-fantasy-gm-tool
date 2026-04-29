@@ -2,6 +2,7 @@ import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
+import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
 import {
@@ -700,6 +701,15 @@ export const appRouter = router({
       }>;
       // head-to-head: opponentMemberId → { wins, losses, ties }
       h2h: Map<string, { wins: number; losses: number; ties: number }>;
+      // transaction counters per season
+      txnSeasons: Array<{
+        season: number;
+        acquisitions: number;
+        drops: number;
+        trades: number;
+        moveToActive: number;
+        moveToIR: number;
+      }>;
     }>();
 
     // Helper: resolve member ID → owner entry, creating if needed
@@ -716,6 +726,7 @@ export const appRouter = router({
           playoffAppearances: 0, championships: 0, runnerUps: 0,
           seasonRecords: [],
           h2h: new Map(),
+          txnSeasons: [],
         });
       }
       return ownerMap.get(memberId)!;
@@ -797,6 +808,7 @@ export const appRouter = router({
         if (isChampion) owner.championships++;
         if (isRunnerUp) owner.runnerUps++;
 
+        const tc = team.transactionCounter || {};
         owner.seasonRecords.push({
           season,
           teamName: team.name || team.abbrev || `Team ${team.id}`,
@@ -806,6 +818,14 @@ export const appRouter = router({
           madePlayoffs,
           isChampion,
           isRunnerUp,
+        });
+        owner.txnSeasons.push({
+          season,
+          acquisitions: tc.acquisitions ?? 0,
+          drops: tc.drops ?? 0,
+          trades: tc.trades ?? 0,
+          moveToActive: tc.moveToActive ?? 0,
+          moveToIR: tc.moveToIR ?? 0,
         });
       }
 
@@ -859,6 +879,51 @@ export const appRouter = router({
         losses: rec.losses,
         ties: rec.ties,
       }));
+      // ── Transaction / GM Style metrics ──
+      const totalAcquisitions = o.txnSeasons.reduce((s, t) => s + t.acquisitions, 0);
+      const totalDrops = o.txnSeasons.reduce((s, t) => s + t.drops, 0);
+      const totalTrades = o.txnSeasons.reduce((s, t) => s + t.trades, 0);
+      const totalRosterMoves = o.txnSeasons.reduce((s, t) => s + t.moveToActive + t.moveToIR, 0);
+      const txnSeasonCount = o.txnSeasons.length || 1;
+      const avgAcquisitions = Math.round((totalAcquisitions / txnSeasonCount) * 10) / 10;
+      const avgTrades = Math.round((totalTrades / txnSeasonCount) * 10) / 10;
+
+      // Waiver aggression: 0–100 scale based on avg acquisitions
+      // League context: ~10 = very low, ~70 = very high
+      const waiverAggression = Math.min(100, Math.round((avgAcquisitions / 70) * 100));
+
+      // Trade frequency: 0–100 scale based on avg trades per season
+      // League context: ~2 = low, ~15 = very high
+      const tradeFrequency = Math.min(100, Math.round((avgTrades / 15) * 100));
+
+      // Roster stability: inverse of churn (acquisitions + drops relative to roster size ~14)
+      // High stability = low churn
+      const avgChurn = (totalAcquisitions + totalDrops) / txnSeasonCount;
+      const rosterStability = Math.max(0, Math.round(100 - (avgChurn / 100) * 100));
+
+      // GM Archetype based on dominant traits
+      let gmArchetype: string;
+      let gmArchetypeDesc: string;
+      if (waiverAggression >= 70 && tradeFrequency >= 60) {
+        gmArchetype = 'Dealmaker';
+        gmArchetypeDesc = 'Extremely active on both the waiver wire and in trades. Never sits still — always looking for an edge.';
+      } else if (waiverAggression >= 70) {
+        gmArchetype = 'Waiver Grinder';
+        gmArchetypeDesc = 'Dominates the waiver wire with high-volume pickups. Relies on finding hidden gems over big trades.';
+      } else if (tradeFrequency >= 60) {
+        gmArchetype = 'Trade Shark';
+        gmArchetypeDesc = 'Prefers to build the roster through trades rather than free agency. Looks to exploit market inefficiencies.';
+      } else if (rosterStability >= 70) {
+        gmArchetype = 'Patient Builder';
+        gmArchetypeDesc = 'Trusts the draft and rarely makes moves. Builds through the draft and keeper strategy.';
+      } else if (waiverAggression >= 45) {
+        gmArchetype = 'Opportunist';
+        gmArchetypeDesc = 'Moderately active — makes targeted moves when the right opportunity arises.';
+      } else {
+        gmArchetype = 'Set & Forget';
+        gmArchetypeDesc = 'Minimal roster activity. Relies heavily on draft-day decisions to carry the season.';
+      }
+
       // Best and worst seasons by win %
       const sortedSeasons = [...o.seasonRecords].sort((a, b) => {
         const aGames = a.wins + a.losses + a.ties;
@@ -894,6 +959,19 @@ export const appRouter = router({
         h2h: h2hArray,
         bestSeason: sortedSeasons[0] ?? null,
         worstSeason: sortedSeasons[sortedSeasons.length - 1] ?? null,
+        // Transaction stats
+        txnSeasons: o.txnSeasons.sort((a, b) => a.season - b.season),
+        totalAcquisitions,
+        totalDrops,
+        totalTrades,
+        totalRosterMoves,
+        avgAcquisitions,
+        avgTrades,
+        waiverAggression,
+        tradeFrequency,
+        rosterStability,
+        gmArchetype,
+        gmArchetypeDesc,
       };
     });
 
@@ -906,6 +984,219 @@ export const appRouter = router({
       totalSeasons: cachedSeasons.length,
     };
   }),
+
+  ownerPredictions: publicProcedure
+    .input(z.object({ memberId: z.string() }))
+    .query(async ({ input }) => {
+      // Fetch the full owner stats to build context
+      const cachedSeasons = await getAllCachedSeasons();
+
+      // Collect all owner data for this member across seasons
+      let ownerName = '';
+      let teamNames: string[] = [];
+      const seasonSummaries: string[] = [];
+      let totalAcquisitions = 0;
+      let totalTrades = 0;
+      let totalDrops = 0;
+      let totalWins = 0;
+      let totalLosses = 0;
+      let championships = 0;
+      let playoffAppearances = 0;
+      let seasonsActive = 0;
+
+      for (const season of cachedSeasons) {
+        const row = await getCachedView(season, 'combined');
+        if (!row) continue;
+        const data = row.payload as any;
+
+        const members: any[] = data.members || [];
+        const teams: any[] = data.teams || [];
+        const schedule: any[] = data.schedule || [];
+
+        // Find this owner's team in this season
+        const team = teams.find((t: any) =>
+          t.primaryOwner === input.memberId || t.owners?.includes(input.memberId)
+        );
+        if (!team) continue;
+
+        // Resolve name from members
+        if (!ownerName) {
+          const m = members.find((x: any) => x.id === input.memberId);
+          if (m) ownerName = [m.firstName, m.lastName].filter(Boolean).join(' ') || m.displayName;
+        }
+
+        const teamName = team.name || team.abbrev || `Team ${team.id}`;
+        if (!teamNames.includes(teamName)) teamNames.push(teamName);
+
+        const tc = team.transactionCounter || {};
+        const acq = tc.acquisitions ?? 0;
+        const drops = tc.drops ?? 0;
+        const trades = tc.trades ?? 0;
+        totalAcquisitions += acq;
+        totalTrades += trades;
+        totalDrops += drops;
+
+        const overall = team.record?.overall || {};
+        const wins = overall.wins ?? 0;
+        const losses = overall.losses ?? 0;
+        totalWins += wins;
+        totalLosses += losses;
+        seasonsActive++;
+
+        // Determine if champion this season
+        const completedPlayoffs = schedule.filter(
+          (m: any) => m.playoffTierType === 'WINNERS_BRACKET' && m.winner && m.winner !== 'UNDECIDED'
+        );
+        let isChamp = false;
+        if (completedPlayoffs.length > 0) {
+          const champMatchup = completedPlayoffs.reduce((a: any, b: any) =>
+            a.matchupPeriodId >= b.matchupPeriodId ? a : b
+          );
+          const champTeamId = champMatchup.winner === 'HOME'
+            ? champMatchup.home?.teamId
+            : champMatchup.away?.teamId;
+          isChamp = champTeamId === team.id;
+        }
+        if (isChamp) championships++;
+
+        const playoffSeed = team.playoffSeed ?? 0;
+        const madePlayoffs = playoffSeed > 0 && playoffSeed <= 7;
+        if (madePlayoffs) playoffAppearances++;
+
+        const pf = team.points ?? 0;
+        seasonSummaries.push(
+          `${season}: ${teamName} | ${wins}-${losses} | PF: ${pf.toFixed(1)} | ` +
+          `Seed: ${playoffSeed || 'Missed'} | ${isChamp ? 'CHAMPION' : madePlayoffs ? 'Playoff' : 'Missed Playoffs'} | ` +
+          `Adds: ${acq}, Drops: ${drops}, Trades: ${trades}`
+        );
+      }
+
+      // Guard: if no seasons found for this memberId, return NOT_FOUND
+      if (seasonsActive === 0) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `No season data found for memberId: ${input.memberId}`,
+        });
+      }
+
+      if (!ownerName) ownerName = input.memberId;
+
+      const totalGames = totalWins + totalLosses;
+      const winPct = totalGames > 0 ? Math.round((totalWins / totalGames) * 1000) / 10 : 0;
+      const avgAcq = seasonsActive > 0 ? Math.round(totalAcquisitions / seasonsActive) : 0;
+      const avgTrades = seasonsActive > 0 ? Math.round(totalTrades / seasonsActive) : 0;
+
+      // Classify GM style
+      const waiverAggression = Math.min(100, Math.round((avgAcq / 70) * 100));
+      const tradeFrequency = Math.min(100, Math.round((avgTrades / 15) * 100));
+      const avgChurn = (totalAcquisitions + totalDrops) / (seasonsActive || 1);
+      const rosterStability = Math.max(0, Math.round(100 - (avgChurn / 100) * 100));
+
+      let gmArchetype = 'Opportunist';
+      if (waiverAggression >= 70 && tradeFrequency >= 60) gmArchetype = 'Dealmaker';
+      else if (waiverAggression >= 70) gmArchetype = 'Waiver Grinder';
+      else if (tradeFrequency >= 60) gmArchetype = 'Trade Shark';
+      else if (rosterStability >= 70) gmArchetype = 'Patient Builder';
+      else if (waiverAggression < 30 && tradeFrequency < 30) gmArchetype = 'Set & Forget';
+
+      const prompt = `You are an expert Fantasy Football analyst for the 18-season keeper league "ATLANTAS FINEST FF" (14 teams, PPR, 1 keeper, 7-team playoffs, snake draft).
+
+Analyze the following owner's career history and generate a detailed 2026 behavioral prediction report.
+
+OWNER: ${ownerName}
+Team names used: ${teamNames.join(', ')}
+Career record: ${totalWins}-${totalLosses} (${winPct}% win rate) across ${seasonsActive} seasons
+Championships: ${championships} | Playoff appearances: ${playoffAppearances}/${seasonsActive}
+GM Archetype: ${gmArchetype}
+Avg acquisitions/season: ${avgAcq} | Avg trades/season: ${avgTrades}
+Waiver aggression score: ${waiverAggression}/100 | Trade frequency score: ${tradeFrequency}/100 | Roster stability: ${rosterStability}/100
+
+SEASON-BY-SEASON HISTORY:
+${seasonSummaries.join('\n')}
+
+Generate a JSON prediction report with these exact fields:
+{
+  "ownerSummary": "2-3 sentence narrative describing this owner's career arc and management style",
+  "strengths": ["strength 1", "strength 2", "strength 3"],
+  "weaknesses": ["weakness 1", "weakness 2"],
+  "predictedBehavior2026": {
+    "draftStrategy": "Predicted draft approach for 2026 (2-3 sentences)",
+    "waiverApproach": "Predicted waiver wire behavior (1-2 sentences)",
+    "tradeApproach": "Predicted trade behavior (1-2 sentences)",
+    "keeperPrediction": "Analysis of their likely keeper strategy (1-2 sentences)",
+    "overallOutlook": "Overall 2026 season prediction with confidence level (2-3 sentences)"
+  },
+  "dangerRating": "LOW | MEDIUM | HIGH | ELITE",
+  "dangerRationale": "1-2 sentences explaining the danger rating",
+  "rivalryAlert": "Identify 1-2 specific owners they tend to clash with or who exploit their weaknesses, based on the data"
+}`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: 'system', content: 'You are a fantasy football analytics expert. Always respond with valid JSON only, no markdown fences.' },
+          { role: 'user', content: prompt },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'owner_prediction',
+            strict: true,
+            schema: {
+              type: 'object',
+              properties: {
+                ownerSummary: { type: 'string' },
+                strengths: { type: 'array', items: { type: 'string' } },
+                weaknesses: { type: 'array', items: { type: 'string' } },
+                predictedBehavior2026: {
+                  type: 'object',
+                  properties: {
+                    draftStrategy: { type: 'string' },
+                    waiverApproach: { type: 'string' },
+                    tradeApproach: { type: 'string' },
+                    keeperPrediction: { type: 'string' },
+                    overallOutlook: { type: 'string' },
+                  },
+                  required: ['draftStrategy', 'waiverApproach', 'tradeApproach', 'keeperPrediction', 'overallOutlook'],
+                  additionalProperties: false,
+                },
+                dangerRating: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'ELITE'] },
+                dangerRationale: { type: 'string' },
+                rivalryAlert: { type: 'string' },
+              },
+              required: ['ownerSummary', 'strengths', 'weaknesses', 'predictedBehavior2026', 'dangerRating', 'dangerRationale', 'rivalryAlert'],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const raw = response.choices?.[0]?.message?.content;
+      let parsed: unknown;
+      try {
+        parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      } catch {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to parse LLM prediction response',
+        });
+      }
+      if (!parsed || typeof parsed !== 'object') {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'LLM returned an invalid prediction format',
+        });
+      }
+
+      return {
+        memberId: input.memberId,
+        ownerName,
+        gmArchetype,
+        waiverAggression,
+        tradeFrequency,
+        rosterStability,
+        prediction: parsed,
+      };
+    }),
 
   advisor: router({
     chat: protectedProcedure
