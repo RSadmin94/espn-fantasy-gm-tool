@@ -181,3 +181,10 @@
 - [x] Add nav links in AppLayout under PRO TOOLS section
 - [x] Write vitest for pick value chart math and trade verdict logic
 - [x] Run all tests and save checkpoint
+
+## NEW: Keeper Calculator — Competitor Intelligence Tab
+
+- [x] Extend keeperEligibility2026 endpoint: add per-team ineligibility impact (which teams have ineligible players, what round they must spend on replacement, positional gap created)
+- [x] Add competitorIntelligence tRPC query: returns league-wide ineligibility map with draft advantage analysis
+- [x] Add "Competitor Intel" tab to KeeperCalculator.tsx: ineligible alert cards per team, replacement round cost, positional scarcity impact, your draft advantage summary
+- [x] Run all tests and save checkpoint

@@ -453,6 +453,78 @@ export const appRouter = router({
         t.players.filter(p => !p.isIneligible).map(p => ({ ...p, teamName: t.teamName }))
       );
 
+      // ── Competitor Intelligence ────────────────────────────────────────────
+      // For each team with an ineligible player, compute:
+      //   - which player is ineligible and their position
+      //   - the round they were kept (= the round they'll need to spend on a replacement)
+      //   - the positional gap this creates (e.g. losing a RB1 means they MUST draft a RB early)
+      //   - the draft advantage this creates for other teams
+      const POSITION_ADP: Record<string, { tier: string; description: string }> = {
+        RB: { tier: "RB1", description: "Top running back — typically drafted rounds 1–3" },
+        WR: { tier: "WR1", description: "Top wide receiver — typically drafted rounds 1–4" },
+        QB: { tier: "QB1", description: "Starting quarterback — typically drafted rounds 5–8" },
+        TE: { tier: "TE1", description: "Starting tight end — typically drafted rounds 3–6" },
+        K:  { tier: "K",   description: "Kicker — typically drafted round 14–15" },
+        DEF:{ tier: "D/ST",description: "Defense — typically drafted round 13–15" },
+      };
+
+      const competitorConstraints = teamResults
+        .filter(t => t.ineligibleCount > 0)
+        .map(t => {
+          const ineligiblePlayers = t.players.filter(p => p.isIneligible);
+          const constraints = ineligiblePlayers.map(p => {
+            const pos = (p.position || "?").toUpperCase();
+            const posInfo = POSITION_ADP[pos] ?? { tier: pos, description: `${pos} player` };
+            // The round they kept the player in 2025 = the round they must now spend on a replacement
+            const replacementRound = p.round2025;
+            // Threat level: how early they must draft a replacement
+            const threatLevel: "critical" | "high" | "medium" | "low" =
+              replacementRound <= 2 ? "critical" :
+              replacementRound <= 4 ? "high" :
+              replacementRound <= 7 ? "medium" : "low";
+            // Draft advantage: if they lose a round 1-2 player, they burn an early pick on replacement
+            const draftAdvantage =
+              replacementRound <= 2
+                ? `They MUST spend a round ${replacementRound} pick on a ${posInfo.tier} replacement — their early picks are spoken for`
+                : replacementRound <= 4
+                ? `They need a round ${replacementRound} ${posInfo.tier} — mid-round picks are constrained`
+                : `They need a round ${replacementRound} ${posInfo.tier} — limited late-round impact`;
+            return {
+              playerName: p.playerName,
+              position: p.position,
+              positionTier: posInfo.tier,
+              round2024: p.round2024,
+              round2025: p.round2025,
+              replacementRound,
+              threatLevel,
+              draftAdvantage,
+              yourOpportunity:
+                replacementRound <= 3
+                  ? `Target ${posInfo.tier}s in rounds ${replacementRound}–${replacementRound + 1} before they panic-draft`
+                  : `Monitor their draft — they may reach for a ${posInfo.tier} in round ${replacementRound}`,
+            };
+          });
+          return {
+            teamId: t.teamId,
+            teamName: t.teamName,
+            constraints,
+            overallThreat: constraints.some(c => c.threatLevel === "critical") ? "critical" :
+                           constraints.some(c => c.threatLevel === "high") ? "high" : "medium",
+          };
+        })
+        .sort((a, b) => {
+          const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+          return (order[a.overallThreat] ?? 9) - (order[b.overallThreat] ?? 9);
+        });
+
+      // Positional scarcity: which positions are returning to the pool
+      const returningByPosition: Record<string, Array<{ playerName: string; teamName: string; round2025: number }>> = {};
+      for (const p of allIneligible) {
+        const pos = (p.position || "?").toUpperCase();
+        if (!returningByPosition[pos]) returningByPosition[pos] = [];
+        returningByPosition[pos].push({ playerName: p.playerName, teamName: p.teamName, round2025: p.round2025 });
+      }
+
       return {
         season: 2026,
         deadline: "August 18, 2026",
@@ -465,6 +537,14 @@ export const appRouter = router({
           topValueKeepers: allEligible
             .filter(p => p.valueTier === "elite" || p.valueTier === "good")
             .sort((a, b) => (a.roundCost2026 ?? 99) - (b.roundCost2026 ?? 99)),
+        },
+        competitorIntelligence: {
+          constraints: competitorConstraints,
+          returningByPosition,
+          totalReturningPlayers: allIneligible.length,
+          keyInsight: allIneligible.length > 0
+            ? `${allIneligible.length} elite player${allIneligible.length > 1 ? "s" : ""} returning to the draft pool — ${competitorConstraints.filter(c => c.overallThreat === "critical").length} team${competitorConstraints.filter(c => c.overallThreat === "critical").length !== 1 ? "s" : ""} must burn early picks on replacements`
+            : "No ineligible players this season",
         },
       };
     }),
