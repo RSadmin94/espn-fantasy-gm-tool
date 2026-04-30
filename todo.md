@@ -218,3 +218,11 @@
 - [x] Build draftTendencies tRPC endpoint: per-manager round-by-round positional breakdown
 - [x] Rebuild Draft Strategy tab with real data: positional heat map, round-by-round per manager, league-wide patterns
 - [x] Run tests, update todo.md, and save checkpoint
+
+## NEW: Trade Offer Generator
+- [x] Build tradeOfferGenerator tRPC endpoint: accepts target (player name or pick), finds owner, computes fair value using pick chart, pulls GM style + H2H context, generates LLM trade offer with negotiation strategy
+- [x] Build TradeOfferGenerator.tsx page: target input (player/pick), counterpart auto-detect, offer builder with value balance meter, AI negotiation strategy panel
+- [x] Add /trade-offer route to App.tsx
+- [x] Add "Trade Offer Generator" nav link in AppLayout under Pro Tools
+- [x] Write vitest for trade value calculation logic (32 tests: pick value, pick parsing, player value estimation, value ratio, fuzzy match)
+- [x] Run all tests and save checkpoint (92 tests passing across 9 test files)
