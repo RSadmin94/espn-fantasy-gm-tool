@@ -676,10 +676,7 @@ export default function KeeperCalculator() {
                   <Trophy className="w-3.5 h-3.5 mr-1.5" />
                   Top Value
                 </TabsTrigger>
-                <TabsTrigger value="my-profile" className="data-[state=active]:bg-slate-700">
-                  <User className="w-3.5 h-3.5 mr-1.5" />
-                  My Profile
-                </TabsTrigger>
+
               </TabsList>
 
               {/* ── Eligibility Tab ── */}
@@ -787,11 +784,6 @@ export default function KeeperCalculator() {
                     </div>
                   </CardContent>
                 </Card>
-              </TabsContent>
-
-              {/* ── My Profile Tab ── */}
-              <TabsContent value="my-profile" className="mt-4">
-                {data.ownerProfile && <OwnerProfilePanel profile={data.ownerProfile} />}
               </TabsContent>
 
               {/* ── Competitor Intel Tab ── */}
