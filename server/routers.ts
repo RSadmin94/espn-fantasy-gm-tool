@@ -1512,6 +1512,162 @@ Respond with JSON in this exact format:
     return parsed as { narrative: string; focusAreas2026: string[]; draftRecommendations: string; honestVerdict: string };
   }),
 
+  // ── League Draft Tendencies ──────────────────────────────────────────────
+  // Aggregates all 14 managers' draft picks by round and position from 2018-2025
+  leagueDraftTendencies: publicProcedure.query(async () => {
+    const POS_MAP: Record<number, string> = {
+      1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST", 17: "D/ST",
+    };
+    const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+
+    // owner key -> stats
+    const ownerMap = new Map<string, {
+      memberId: string; name: string; seasons: Set<number>;
+      byRound: Record<number, Record<string, number>>;
+      byPosition: Record<string, number>;
+      round1Picks: Array<{ season: number; playerName: string; position: string; isKeeper: boolean }>;
+      round2Picks: Array<{ season: number; playerName: string; position: string; isKeeper: boolean }>;
+      round3Picks: Array<{ season: number; playerName: string; position: string; isKeeper: boolean }>;
+      totalPicks: number;
+    }>();
+
+    const seenPickKeys = new Set<string>();
+
+    for (const season of cachedSeasons) {
+      const data = await getSeasonData(season);
+      if (!data) continue;
+
+      // Build member name map
+      const memberNameMap: Record<string, string> = {};
+      for (const m of (data.members as Record<string, unknown>[]) || []) {
+        const mid = m.id as string;
+        memberNameMap[mid] = `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || mid;
+      }
+
+      // Build player info from rosters
+      const playerInfoMap = new Map<number, { name: string; position: string }>();
+      for (const t of (data.teams as Record<string, unknown>[]) || []) {
+        const entries = ((t.roster as Record<string, unknown>)?.entries as Record<string, unknown>[]) || [];
+        for (const entry of entries) {
+          const poolEntry = (entry.playerPoolEntry as Record<string, unknown>) || {};
+          const player = (poolEntry.player as Record<string, unknown>) || {};
+          const pid = player.id as number;
+          if (pid && !playerInfoMap.has(pid)) {
+            playerInfoMap.set(pid, {
+              name: (player.fullName as string) || `Player#${pid}`,
+              position: POS_MAP[player.defaultPositionId as number] || "UNK",
+            });
+          }
+        }
+      }
+
+      // Build team -> primary owner map
+      const teamOwnerMap: Record<number, string> = {};
+      for (const t of (data.teams as Record<string, unknown>[]) || []) {
+        const tid = t.id as number;
+        const owners = (t.owners as string[]) || [];
+        teamOwnerMap[tid] = t.primaryOwner as string || owners[0] || "";
+      }
+
+      // Process draft picks
+      const draft = (data.draftDetail as Record<string, unknown>) || {};
+      const picks = (draft.picks as Record<string, unknown>[]) || [];
+      for (const pick of picks) {
+        const overall = pick.overallPickNumber as number;
+        const pickKey = `${season}:${overall}`;
+        if (seenPickKeys.has(pickKey)) continue;
+        seenPickKeys.add(pickKey);
+
+        const teamId = pick.teamId as number;
+        const ownerId = teamOwnerMap[teamId] || `team_${teamId}`;
+        const ownerName = memberNameMap[ownerId] || `Team${teamId}`;
+        const round = (pick.roundId as number) || Math.ceil(overall / 14) || 1;
+        const isKeeper = pick.keeper === true || pick.reservedForKeeper === true;
+
+        // Get player name and position
+        const pEntry = (pick.playerPoolEntry as Record<string, unknown>) || {};
+        const pPlayer = (pEntry.player as Record<string, unknown>) || {};
+        const playerId = pick.playerId as number;
+        const playerInfo = playerInfoMap.get(playerId);
+        const playerName = (pPlayer.fullName as string) || playerInfo?.name || `Player#${playerId}`;
+        const posId = pPlayer.defaultPositionId as number || 0;
+        const position = POS_MAP[posId] || playerInfo?.position || "UNK";
+
+        if (!ownerMap.has(ownerId)) {
+          ownerMap.set(ownerId, {
+            memberId: ownerId, name: ownerName, seasons: new Set(),
+            byRound: {}, byPosition: {}, round1Picks: [], round2Picks: [], round3Picks: [], totalPicks: 0,
+          });
+        }
+        const o = ownerMap.get(ownerId)!;
+        o.seasons.add(season);
+        o.totalPicks++;
+        if (!o.byRound[round]) o.byRound[round] = {};
+        o.byRound[round][position] = (o.byRound[round][position] || 0) + 1;
+        o.byPosition[position] = (o.byPosition[position] || 0) + 1;
+        const pickDetail = { season, playerName, position, isKeeper };
+        if (round === 1) o.round1Picks.push(pickDetail);
+        if (round === 2) o.round2Picks.push(pickDetail);
+        if (round === 3) o.round3Picks.push(pickDetail);
+      }
+    }
+
+    // Serialize and compute derived fields
+    const owners = Array.from(ownerMap.values())
+      .filter(o => o.totalPicks > 0)
+      .sort((a, b) => b.seasons.size - a.seasons.size || b.totalPicks - a.totalPicks)
+      .map(o => {
+        const posTotal = Object.values(o.byPosition).reduce((s, v) => s + v, 0);
+        const topPositions = Object.entries(o.byPosition)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([pos, count]) => ({ pos, count, pct: Math.round(count / posTotal * 100) }));
+        const r1Top = Object.entries(o.byRound[1] || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || "?";
+        const r2Top = Object.entries(o.byRound[2] || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || "?";
+        const r3Top = Object.entries(o.byRound[3] || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || "?";
+        // Draft style badge
+        const rb1 = o.byRound[1]?.["RB"] || 0;
+        const wr1 = o.byRound[1]?.["WR"] || 0;
+        const qb1 = o.byRound[1]?.["QB"] || 0;
+        const te1 = o.byRound[1]?.["TE"] || 0;
+        const r1Total = rb1 + wr1 + qb1 + te1 || 1;
+        let draftStyle = "Balanced";
+        if (rb1 / r1Total >= 0.6) draftStyle = "RB-First";
+        else if (wr1 / r1Total >= 0.6) draftStyle = "WR-First";
+        else if (qb1 / r1Total >= 0.3) draftStyle = "QB-Early";
+        else if (te1 / r1Total >= 0.3) draftStyle = "TE-Premium";
+        return {
+          memberId: o.memberId,
+          name: o.name,
+          seasons: o.seasons.size,
+          totalPicks: o.totalPicks,
+          topPositions,
+          byRound: o.byRound,
+          round1Picks: o.round1Picks,
+          round2Picks: o.round2Picks,
+          round3Picks: o.round3Picks,
+          r1Top, r2Top, r3Top,
+          draftStyle,
+          rb1Pct: Math.round(rb1 / r1Total * 100),
+          wr1Pct: Math.round(wr1 / r1Total * 100),
+        };
+      });
+
+    // League-wide round tendencies
+    const leagueByRound: Record<number, Record<string, number>> = {};
+    for (const o of Array.from(ownerMap.values())) {
+      for (const [round, posCounts] of Object.entries(o.byRound)) {
+        const r = Number(round);
+        if (!leagueByRound[r]) leagueByRound[r] = {};
+        for (const [pos, cnt] of Object.entries(posCounts)) {
+          leagueByRound[r][pos] = (leagueByRound[r][pos] || 0) + cnt;
+        }
+      }
+    }
+
+    return { owners, leagueByRound, seasons: cachedSeasons };
+  }),
+
   // ── Pick Value Calculator ─────────────────────────────────────────────────
   // 14-team PPR calibrated pick value chart (210 picks, 15 rounds × 14 teams)
   // Formula: value(overall) = 3000 * e^(-0.028 * (overall - 1))

@@ -258,6 +258,7 @@ export default function Dashboard() {
   const { data: manifests } = trpc.espn.manifests.useQuery();
   const { data: draftOrder2026Raw } = trpc.espn.draftOrder.useQuery({ season: 2026 });
   const { data: keeperHistoryRaw } = trpc.espn.keeperHistory.useQuery();
+  const { data: leagueDraftData, isLoading: draftTendenciesLoading } = trpc.leagueDraftTendencies.useQuery();
   const chatMutation = trpc.advisor.chat.useMutation();
 
   type DraftOrderEntry = { position: number; teamId: number; name?: string; owners?: string };
@@ -785,6 +786,96 @@ export default function Dashboard() {
                 </Card>
               </div>
             </div>
+            {/* League Draft Tendencies Heat Map */}
+            <Card className="card-glow bg-card border-border">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <BarChart2 className="w-4 h-4 text-primary" />
+                  Manager Draft Tendencies — 2018–2025
+                  <Badge className="ml-auto text-[9px] px-1.5 bg-blue-500/20 text-blue-400 border-blue-500/30">REAL DATA</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {draftTendenciesLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading draft history...
+                  </div>
+                ) : leagueDraftData ? (
+                  <div className="space-y-4">
+                    {/* Manager cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {leagueDraftData.owners
+                        .filter((o: { name: string; totalPicks: number; seasons: number; topPositions: Array<{pos: string; count: number; pct: number}>; byRound: Record<number, Record<string, number>>; round1Picks: Array<{season: number; playerName: string; position: string; isKeeper: boolean}>; r1Top: string; r2Top: string; r3Top: string; draftStyle: string; rb1Pct: number; wr1Pct: number }) => o.totalPicks > 0)
+                        .map((o: { name: string; totalPicks: number; seasons: number; topPositions: Array<{pos: string; count: number; pct: number}>; byRound: Record<number, Record<string, number>>; round1Picks: Array<{season: number; playerName: string; position: string; isKeeper: boolean}>; r1Top: string; r2Top: string; r3Top: string; draftStyle: string; rb1Pct: number; wr1Pct: number }) => {
+                          const posColors: Record<string, string> = { RB: "bg-red-500", WR: "bg-blue-500", QB: "bg-purple-500", TE: "bg-orange-500", K: "bg-slate-500", "D/ST": "bg-slate-400", UNK: "bg-slate-600" };
+                          const styleColors: Record<string, string> = { "RB-First": "text-red-400", "WR-First": "text-blue-400", "QB-Early": "text-purple-400", "TE-Premium": "text-orange-400", "Balanced": "text-emerald-400" };
+                          const isRod = o.name.toLowerCase().includes("rod") || o.name.toLowerCase().includes("str8");
+                          return (
+                            <div key={o.name} className={`p-3 rounded-lg border ${isRod ? "border-primary/50 bg-primary/10" : "border-border bg-accent/30"}`}>
+                              <div className="flex items-center justify-between mb-2">
+                                <div>
+                                  <p className="text-xs font-bold text-foreground">{o.name}{isRod ? " (You)" : ""}</p>
+                                  <p className="text-[10px] text-muted-foreground">{o.seasons} seasons · {o.totalPicks} picks</p>
+                                </div>
+                                <span className={`text-[10px] font-bold ${styleColors[o.draftStyle] || "text-muted-foreground"}`}>{o.draftStyle}</span>
+                              </div>
+                              {/* Position bar */}
+                              <div className="flex h-2 rounded-full overflow-hidden mb-2 gap-px">
+                                {o.topPositions.map((p: {pos: string; count: number; pct: number}) => (
+                                  <div key={p.pos} className={`${posColors[p.pos] || "bg-slate-500"}`} style={{ width: `${p.pct}%` }} title={`${p.pos}: ${p.pct}%`} />
+                                ))}
+                              </div>
+                              {/* Round tendencies */}
+                              <div className="grid grid-cols-3 gap-1 mb-2">
+                                {[1, 2, 3].map(rd => {
+                                  const rdData = o.byRound[rd] || {};
+                                  const topPos = Object.entries(rdData).sort((a: [string, unknown], b: [string, unknown]) => (b[1] as number) - (a[1] as number))[0];
+                                  return (
+                                    <div key={rd} className="text-center p-1.5 rounded bg-background/50">
+                                      <p className="text-[9px] text-muted-foreground">Rd {rd}</p>
+                                      <p className={`text-xs font-bold ${topPos ? (posColors[topPos[0]]?.replace("bg-", "text-") || "text-foreground") : "text-muted-foreground"}`}>
+                                        {topPos ? `${topPos[0]} ×${topPos[1]}` : "—"}
+                                      </p>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {/* Rd1 picks */}
+                              {o.round1Picks.length > 0 && (
+                                <div className="space-y-0.5">
+                                  <p className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wide">Round 1 History</p>
+                                  {o.round1Picks.slice(0, 4).map((p: {season: number; playerName: string; position: string; isKeeper: boolean}, i: number) => (
+                                    <div key={i} className="flex items-center gap-1">
+                                      <span className="text-[9px] text-muted-foreground w-8">{p.season}</span>
+                                      <span className="text-[10px] text-foreground truncate flex-1">{p.playerName}</span>
+                                      <span className={`text-[9px] font-bold ${posColors[p.position]?.replace("bg-", "text-") || "text-muted-foreground"}`}>{p.position}</span>
+                                      {p.isKeeper && <span className="text-[8px] text-yellow-400">K</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                    {/* Legend */}
+                    <div className="flex flex-wrap gap-3 pt-2 border-t border-border">
+                      {[{pos:"RB",color:"bg-red-500"},{pos:"WR",color:"bg-blue-500"},{pos:"QB",color:"bg-purple-500"},{pos:"TE",color:"bg-orange-500"},{pos:"K/DST",color:"bg-slate-500"}].map(p => (
+                        <div key={p.pos} className="flex items-center gap-1">
+                          <div className={`w-2.5 h-2.5 rounded-sm ${p.color}`} />
+                          <span className="text-[10px] text-muted-foreground">{p.pos}</span>
+                        </div>
+                      ))}
+                      <span className="text-[10px] text-muted-foreground ml-auto">Bar = positional % of all picks · Rd1/2/3 = top position drafted that round · K = keeper pick</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No draft tendency data available.</p>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Live 2026 Draft Order */}
             {draftOrder2026?.pickOrder && draftOrder2026.pickOrder.length > 0 && (
               <Card className="card-glow bg-card border-border">

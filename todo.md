@@ -207,8 +207,14 @@
 
 ## NEW: Opponent Profile Deep-Dive Modal
 
-- [ ] Build per-opponent career data from ESPN cache: draft tendencies, GM activity, career record, H2H vs Rod for all 13 opponents
-- [ ] Add opponentProfile tRPC endpoint returning full deep-dive data for a given memberId
-- [ ] Build OpponentProfileModal component: career stats, draft tendencies chart, GM activity, H2H vs Rod, strengths/weaknesses/blind spots, AI scouting report
-- [ ] Wire modal to Opponent Profiles tab cards (click any card to open deep-dive)
-- [ ] Run tests, update todo.md, and save checkpoint
+- [x] Build per-opponent career data from ESPN cache: draft tendencies, GM activity, career record, H2H vs Rod for all 13 opponents
+- [x] Add opponentProfile tRPC endpoint returning full deep-dive data for a given memberId
+- [x] Build OpponentProfileModal component: career stats, draft tendencies chart, GM activity, H2H vs Rod, strengths/weaknesses/blind spots, AI scouting report
+- [x] Wire modal to Opponent Profiles tab cards (click any card to open deep-dive)
+- [x] Run tests, update todo.md, and save checkpoint
+
+## NEW: Draft Strategy Tab — Real Draft Data
+- [x] Extract all managers' draft picks by round and position from ESPN cache (2018-2025)
+- [x] Build draftTendencies tRPC endpoint: per-manager round-by-round positional breakdown
+- [x] Rebuild Draft Strategy tab with real data: positional heat map, round-by-round per manager, league-wide patterns
+- [x] Run tests, update todo.md, and save checkpoint
