@@ -584,7 +584,22 @@ export const appRouter = router({
 
           // 2026 keeper situation
           const myTeam2026 = teamResults.find(t => t.teamId === ROD_TEAM_ID);
-          const my2026Keeper = myTeam2026?.players.find(p => !p.isIneligible) ?? null;
+          // Known player name map for IDs that ESPN stores without playerInfo
+          const KNOWN_PLAYER_NAMES: Record<number, { name: string; position: string }> = {
+            4427366: { name: "Breece Hall", position: "RB" },
+            3929630: { name: "Saquon Barkley", position: "RB" },
+            3043078: { name: "Derrick Henry", position: "RB" },
+          };
+          const resolvePlayerName = (p: { playerName: string; position: string; playerId?: number }) => {
+            if (p.playerName && !p.playerName.startsWith("Player#")) return p;
+            const pid = p.playerId as number | undefined;
+            if (pid && KNOWN_PLAYER_NAMES[pid]) {
+              return { ...p, playerName: KNOWN_PLAYER_NAMES[pid].name, position: KNOWN_PLAYER_NAMES[pid].position };
+            }
+            return p;
+          };
+          const my2026KeeperRaw = myTeam2026?.players.find(p => !p.isIneligible) ?? null;
+          const my2026Keeper = my2026KeeperRaw ? resolvePlayerName(my2026KeeperRaw as unknown as { playerName: string; position: string; playerId?: number }) as typeof my2026KeeperRaw : null;
           const my2026Ineligible = myTeam2026?.players.filter(p => p.isIneligible) ?? [];
 
           // Trend: last 3 seasons

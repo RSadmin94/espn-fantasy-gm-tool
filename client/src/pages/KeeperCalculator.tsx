@@ -658,7 +658,7 @@ export default function KeeperCalculator() {
 
             {/* ── Tabs ── */}
             <Tabs defaultValue="eligibility">
-              <TabsList className="bg-slate-800/60 border border-slate-700/40">
+              <TabsList className="bg-slate-800/60 border border-slate-700/40 flex-wrap h-auto gap-1 p-1">
                 <TabsTrigger value="eligibility" className="data-[state=active]:bg-slate-700">
                   <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
                   Eligibility
