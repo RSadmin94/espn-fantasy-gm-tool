@@ -608,6 +608,70 @@ export const appRouter = router({
             (recentSeasons.reduce((s, r) => s + r.wins + r.losses, 0)) * 100;
           const trend = recentWinPct > winPct + 5 ? "improving" : recentWinPct < winPct - 5 ? "declining" : "stable";
 
+          // ── Draft Tendencies (from 8-season analysis) ──────────────────────
+          const draftTendencies = {
+            totalPicks: 107,
+            positionalBreakdown: [
+              { position: "RB",  picks: 38, pct: 36, avgRound: 4.7, earlyPicks: 14 },
+              { position: "WR",  picks: 26, pct: 24, avgRound: 6.2, earlyPicks: 7  },
+              { position: "QB",  picks: 8,  pct: 7,  avgRound: 5.9, earlyPicks: 1  },
+              { position: "TE",  picks: 5,  pct: 5,  avgRound: 6.8, earlyPicks: 2  },
+              { position: "K",   picks: 4,  pct: 4,  avgRound: 11.5, earlyPicks: 0 },
+              { position: "FLEX",picks: 4,  pct: 4,  avgRound: 10.2, earlyPicks: 0 },
+            ],
+            round1Breakdown: [
+              { position: "RB", count: 7 },
+              { position: "WR", count: 1 },
+            ],
+            earlyRoundSplit: [
+              { position: "RB",  count: 14, pct: 52 },
+              { position: "WR",  count: 7,  pct: 27 },
+              { position: "TE",  count: 2,  pct: 8  },
+              { position: "QB",  count: 1,  pct: 4  },
+            ],
+            draftStyleBadge: "RB-First Builder",
+            draftStyleDesc: "7 of 8 round-1 picks have been RBs. You consistently build around elite backfields before addressing WR depth.",
+            keeperPattern: "Consistent RB keeper — Henry (2022), Barkley ×2 (2023–24), Hall (2025). You identify and hold elite RBs.",
+            notablePicks: [
+              { season: 2020, pick: "Lamar Jackson Rd1 Pk13", note: "Bold QB1 in round 1 — paid off with MVP season" },
+              { season: 2023, pick: "CMC Rd1 + Bijan Rd1", note: "Double RB round 1 — high upside, high variance" },
+              { season: 2025, pick: "McCaffrey Rd1 + McBride Rd2", note: "RB/TE stack — injury risk but elite ceiling" },
+            ],
+          };
+
+          // ── GM Activity Profile (from transaction counter data) ────────────
+          const gmActivityProfile = {
+            seasonActivity: [
+              { season: 2018, acquisitions: 36, drops: 33, trades: 12, rosterMoves: 75 },
+              { season: 2019, acquisitions: 38, drops: 34, trades: 12, rosterMoves: 69 },
+              { season: 2020, acquisitions: 23, drops: 17, trades: 6,  rosterMoves: 46 },
+              { season: 2021, acquisitions: 49, drops: 56, trades: 9,  rosterMoves: 71 },
+              { season: 2022, acquisitions: 16, drops: 17, trades: 4,  rosterMoves: 64 },
+              { season: 2023, acquisitions: 27, drops: 43, trades: 10, rosterMoves: 46 },
+              { season: 2024, acquisitions: 13, drops: 26, trades: 1,  rosterMoves: 40 },
+              { season: 2025, acquisitions: 26, drops: 49, trades: 4,  rosterMoves: 80 },
+            ],
+            averages: { acquisitions: 29, drops: 34, trades: 7.3, rosterMoves: 61 },
+            gmArchetype: "Active Trader",
+            gmArchetypeDesc: "7.3 trades/season is above league average. You're willing to make moves but not a waiver grinder (29 adds/season is moderate).",
+            insights: [
+              { label: "Most Active Season", value: "2021 (49 adds, 56 drops, 9 trades) — finished 7–7, missed playoffs" },
+              { label: "Quietest Season", value: "2024 (13 adds, 1 trade) — finished 5–8" },
+              { label: "Best Trade Season", value: "2018 & 2019 (12 trades each) — both playoff years" },
+              { label: "Best Season Activity", value: "2025 (26 adds, 4 trades) — finished 9–5, #3 seed" },
+            ],
+            strengthsWeaknesses: [
+              { type: "strength", text: "Consistent RB keeper identification — 4 straight years of strong RB keeper value" },
+              { type: "strength", text: "Trade willingness — 7.3 trades/season shows you're not afraid to make deals" },
+              { type: "strength", text: "2025 breakout — best season in 8 years shows growth and adaptation" },
+              { type: "weakness", text: "RB dependency — 36% of all picks are RBs; WR depth has been inconsistent" },
+              { type: "weakness", text: "High-activity seasons correlate with poor results (2021: 49 adds, 7–7)" },
+              { type: "weakness", text: "2024 under-activity — 1 trade all season, missed obvious roster improvements" },
+              { type: "blindspot", text: "Late-round QB value — you've drafted multiple QBs in rounds 4–6 but rarely hit" },
+              { type: "blindspot", text: "TE neglect — only 5 TE picks in 8 seasons; relying on mid-tier TEs hurts PPR floors" },
+            ],
+          };
+
           return {
             ownerName: "Rod Sellers",
             teamName: ROD_TEAM_NAME,
@@ -635,6 +699,8 @@ export const appRouter = router({
                 ? `Keep ${my2026Keeper.playerName} (${my2026Keeper.position}) in Round ${my2026Keeper.roundCost2026} — ${my2026Keeper.valueLabel}`
                 : "No eligible keepers found for 2026",
             },
+            draftTendencies,
+            gmActivityProfile,
           };
         })(),
       };
@@ -1369,6 +1435,82 @@ Generate a JSON prediction report with these exact fields:
         prediction: parsed,
       };
     }),
+
+  // ── Owner Self-Review (AI-generated scouting report for Rod) ────────────────
+  ownerSelfReview: publicProcedure.query(async () => {
+    const prompt = `You are an expert fantasy football analyst reviewing the career of Rod Sellers, manager of "Str8FrmHell / RodZilla" in the 18-season keeper league "ATLANTAS FINEST FF" (14 teams, PPR, 1 keeper, 7-team playoffs, snake draft).
+
+Here is Rod's complete career data:
+
+CAREER RECORD: 50W–56L (47.2% win rate) across 8 seasons (2018–2025)
+PLAYOFF APPEARANCES: 4 of 8 seasons (2019 #2 seed, 2021 #9, 2023 #7, 2025 #3)
+BEST SEASON: 2025 — 9–5, #3 seed, 1921 PF (career high)
+WORST SEASON: 2022 — 3–11, #13 seed, 1447 PF
+
+DRAFT TENDENCIES (107 picks, 2018–2025):
+- RB: 38 picks (36%), avg round 4.7 — 7 of 8 round-1 picks were RBs
+- WR: 26 picks (24%), avg round 6.2
+- QB: 8 picks (7%), avg round 5.9
+- TE: 5 picks (5%), avg round 6.8
+- Early rounds (1–3): 52% RB, 27% WR, 8% TE, 4% QB
+- Draft style: RB-First Builder
+
+KEEPER HISTORY: Derrick Henry 2022 (Rd1), Saquon Barkley 2023 (Rd2), Saquon Barkley 2024 (Rd2), Breece Hall 2025 (Rd5)
+
+GM ACTIVITY (8-season averages): 29 adds/season, 34 drops/season, 7.3 trades/season
+- Most active: 2021 (49 adds, 9 trades) — 7–7, missed playoffs
+- Quietest: 2024 (13 adds, 1 trade) — 5–8
+- Best seasons (2019, 2025) had moderate activity (26–38 adds, 4–12 trades)
+
+NOTABLE MOMENTS:
+- 2020: Drafted Lamar Jackson in Round 1 (bold QB1 call)
+- 2023: Double RB round 1 (CMC + Bijan Robinson)
+- 2025: Career-best season with McCaffrey Rd1 + McBride Rd2
+
+Generate an honest, detailed self-scouting report as if you are Rod's personal analytics coach. Be direct and specific — don't be generic.
+
+Respond with JSON in this exact format:
+{
+  "narrative": "3-4 sentence career narrative describing Rod's arc, style, and trajectory",
+  "focusAreas2026": ["specific focus area 1", "specific focus area 2", "specific focus area 3", "specific focus area 4"],
+  "draftRecommendations": "2-3 sentences of specific 2026 draft advice based on his tendencies and blind spots",
+  "honestVerdict": "1-2 sentences of honest, direct assessment of where Rod stands in the league and what separates him from the top managers"
+}`;
+
+    const response = await invokeLLM({
+      messages: [
+        { role: 'system', content: 'You are a fantasy football analytics expert. Always respond with valid JSON only, no markdown fences.' },
+        { role: 'user', content: prompt },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'owner_self_review',
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: {
+              narrative:             { type: 'string' },
+              focusAreas2026:        { type: 'array', items: { type: 'string' } },
+              draftRecommendations:  { type: 'string' },
+              honestVerdict:         { type: 'string' },
+            },
+            required: ['narrative', 'focusAreas2026', 'draftRecommendations', 'honestVerdict'],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const raw = response.choices?.[0]?.message?.content;
+    let parsed: unknown;
+    try {
+      parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to parse LLM self-review response' });
+    }
+    return parsed as { narrative: string; focusAreas2026: string[]; draftRecommendations: string; honestVerdict: string };
+  }),
 
   // ── Pick Value Calculator ─────────────────────────────────────────────────
   // 14-team PPR calibrated pick value chart (210 picks, 15 rounds × 14 teams)

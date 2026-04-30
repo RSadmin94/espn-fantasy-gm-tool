@@ -195,3 +195,12 @@
 - [x] Extend keeperEligibility2026 endpoint to include ownerProfile field for the logged-in user's team
 - [x] Add "My Profile" section to KeeperCalculator.tsx: personal stats card, keeper history timeline, 2026 recommendation
 - [x] Run all tests and save checkpoint
+
+## NEW: My Tendencies & Self-Review (My Profile Tab)
+- [ ] Analyze Rod's draft picks by position/round across 2018–2025 (positional tendencies, avg draft round per position, round-1 picks history)
+- [ ] Compute GM activity metrics: avg acquisitions/season, avg trades/season, roster churn vs league avg
+- [ ] Add tendencies data to ownerProfile server response (draftTendencies, gmActivityProfile, strengthsWeaknesses)
+- [ ] Add ownerSelfReview tRPC procedure: LLM-generated honest self-scouting report using all career data
+- [ ] Add Tendencies panel to My Profile tab: positional draft breakdown chart, avg round by position, draft style badge
+- [ ] Add Self-Review panel to My Profile tab: AI-generated strengths/weaknesses/blind spots/2026 focus areas with on-demand refresh
+- [ ] Run all tests and save checkpoint
