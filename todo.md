@@ -197,10 +197,18 @@
 - [x] Run all tests and save checkpoint
 
 ## NEW: My Tendencies & Self-Review (My Profile Tab)
-- [ ] Analyze Rod's draft picks by position/round across 2018–2025 (positional tendencies, avg draft round per position, round-1 picks history)
-- [ ] Compute GM activity metrics: avg acquisitions/season, avg trades/season, roster churn vs league avg
-- [ ] Add tendencies data to ownerProfile server response (draftTendencies, gmActivityProfile, strengthsWeaknesses)
-- [ ] Add ownerSelfReview tRPC procedure: LLM-generated honest self-scouting report using all career data
-- [ ] Add Tendencies panel to My Profile tab: positional draft breakdown chart, avg round by position, draft style badge
-- [ ] Add Self-Review panel to My Profile tab: AI-generated strengths/weaknesses/blind spots/2026 focus areas with on-demand refresh
-- [ ] Run all tests and save checkpoint
+- [x] Analyze Rod's draft picks by position/round across 2018–2025 (positional tendencies, avg draft round per position, round-1 picks history)
+- [x] Compute GM activity metrics: avg acquisitions/season, avg trades/season, roster churn vs league avg
+- [x] Add tendencies data to ownerProfile server response (draftTendencies, gmActivityProfile, strengthsWeaknesses)
+- [x] Add ownerSelfReview tRPC procedure: LLM-generated honest self-scouting report using all career data
+- [x] Add Tendencies panel to My Profile tab: positional draft breakdown chart, avg round by position, draft style badge
+- [x] Add Self-Review panel to My Profile tab: AI-generated strengths/weaknesses/blind spots/2026 focus areas with on-demand refresh
+- [x] Run all tests and save checkpoint
+
+## NEW: Opponent Profile Deep-Dive Modal
+
+- [ ] Build per-opponent career data from ESPN cache: draft tendencies, GM activity, career record, H2H vs Rod for all 13 opponents
+- [ ] Add opponentProfile tRPC endpoint returning full deep-dive data for a given memberId
+- [ ] Build OpponentProfileModal component: career stats, draft tendencies chart, GM activity, H2H vs Rod, strengths/weaknesses/blind spots, AI scouting report
+- [ ] Wire modal to Opponent Profiles tab cards (click any card to open deep-dive)
+- [ ] Run tests, update todo.md, and save checkpoint

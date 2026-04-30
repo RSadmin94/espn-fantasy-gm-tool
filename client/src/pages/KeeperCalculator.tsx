@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 
-// ── helpers ────────────────────────────────────────────────────────────────
+// -- helpers ----------------------------------------------------------------
 
 const POSITION_COLORS: Record<string, string> = {
   QB:  "bg-purple-500/20 text-purple-300 border-purple-500/30",
@@ -132,7 +132,7 @@ function PlayerRow({
   );
 }
 
-// ── Competitor Intelligence Tab ────────────────────────────────────────────
+// -- Competitor Intelligence Tab --------------------------------------------
 
 type CompetitorConstraint = {
   teamId: number;
@@ -311,7 +311,7 @@ function CompetitorIntelTab({
   );
 }
 
-// ── Owner Profile Panel ───────────────────────────────────────────────────
+// -- Owner Profile Panel --------------------------------------------------─
 
 type OwnerProfileData = {
   ownerName: string;
@@ -350,7 +350,7 @@ function OwnerProfilePanel({ profile }: { profile: OwnerProfileData }) {
 
   return (
     <div className="space-y-5">
-      {/* ── Profile Header ── */}
+      {/* -- Profile Header -- */}
       <Card className="border-primary/40 bg-primary/5 ring-1 ring-primary/20">
         <CardContent className="py-4 px-5">
           <div className="flex items-start gap-4">
@@ -375,7 +375,7 @@ function OwnerProfilePanel({ profile }: { profile: OwnerProfileData }) {
         </CardContent>
       </Card>
 
-      {/* ── Career Stats Grid ── */}
+      {/* -- Career Stats Grid -- */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "Career W–L", value: `${careerStats.totalWins}–${careerStats.totalLosses}`, sub: `${careerStats.winPct}% win rate`, color: "text-foreground" },
@@ -393,7 +393,7 @@ function OwnerProfilePanel({ profile }: { profile: OwnerProfileData }) {
         ))}
       </div>
 
-      {/* ── Season-by-Season Record ── */}
+      {/* -- Season-by-Season Record -- */}
       <Card className="border-border bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
@@ -452,7 +452,7 @@ function OwnerProfilePanel({ profile }: { profile: OwnerProfileData }) {
         </CardContent>
       </Card>
 
-      {/* ── Keeper History ── */}
+      {/* -- Keeper History -- */}
       <Card className="border-border bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
@@ -492,7 +492,7 @@ function OwnerProfilePanel({ profile }: { profile: OwnerProfileData }) {
         </CardContent>
       </Card>
 
-      {/* ── 2026 Keeper Recommendation ── */}
+      {/* -- 2026 Keeper Recommendation -- */}
       <Card className="border-primary/30 bg-primary/5">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-primary">
@@ -535,7 +535,7 @@ function OwnerProfilePanel({ profile }: { profile: OwnerProfileData }) {
   );
 }
 
-// ── main page ──────────────────────────────────────────────────────────────
+// -- main page --------------------------------------------------------------
 
 export default function KeeperCalculator() {
   const { data, isLoading, error } = trpc.espn.keeperEligibility2026.useQuery();
@@ -552,7 +552,7 @@ export default function KeeperCalculator() {
   return (
     <AppLayout>
       <div className="p-6 max-w-6xl mx-auto space-y-6">
-        {/* ── Page Header ── */}
+        {/* -- Page Header -- */}
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground tracking-tight">
@@ -574,7 +574,7 @@ export default function KeeperCalculator() {
           </div>
         </div>
 
-        {/* ── Rule Banner ── */}
+        {/* -- Rule Banner -- */}
         <Card className="border-amber-500/30 bg-amber-500/5">
           <CardContent className="py-3 px-4">
             <div className="flex items-start gap-3">
@@ -610,7 +610,7 @@ export default function KeeperCalculator() {
 
         {data && (
           <>
-            {/* ── League Summary Stats ── */}
+            {/* -- League Summary Stats -- */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Card className="bg-card border-border">
                 <CardContent className="py-4 px-4">
@@ -656,7 +656,7 @@ export default function KeeperCalculator() {
               </Card>
             </div>
 
-            {/* ── Tabs ── */}
+            {/* -- Tabs -- */}
             <Tabs defaultValue="eligibility">
               <TabsList className="bg-slate-800/60 border border-slate-700/40 flex-wrap h-auto gap-1 p-1">
                 <TabsTrigger value="eligibility" className="data-[state=active]:bg-slate-700">
@@ -679,7 +679,7 @@ export default function KeeperCalculator() {
 
               </TabsList>
 
-              {/* ── Eligibility Tab ── */}
+              {/* -- Eligibility Tab -- */}
               <TabsContent value="eligibility" className="mt-4 space-y-4">
                 {/* Ineligible alert */}
                 {data.leagueSummary.ineligiblePlayers.length > 0 && (
@@ -786,7 +786,7 @@ export default function KeeperCalculator() {
                 </Card>
               </TabsContent>
 
-              {/* ── Competitor Intel Tab ── */}
+              {/* -- Competitor Intel Tab -- */}
               <TabsContent value="intel" className="mt-4">
                 <CompetitorIntelTab
                   constraints={data.competitorIntelligence?.constraints ?? []}
@@ -795,7 +795,7 @@ export default function KeeperCalculator() {
                 />
               </TabsContent>
 
-              {/* ── Top Value Tab ── */}
+              {/* -- Top Value Tab -- */}
               <TabsContent value="top-value" className="mt-4">
                 {data.leagueSummary.topValueKeepers.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground text-sm">No elite or good value keepers found</div>

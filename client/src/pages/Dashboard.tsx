@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
 import { MyProfileTab } from "./MyProfileTabContent";
+import { OpponentProfileModal } from "./OpponentProfileModal";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
@@ -38,6 +39,7 @@ const OPPONENT_PROFILES = [
     directive: "Avoid trading. Beat her on the field. Study her roster weekly.",
     badge: "AVOID", badgeColor: "bg-red-500/20 text-red-400 border-red-500/30",
     tierColor: "border-red-500/40 bg-red-500/5",
+    memberId: "{F0C28C6B-C9FC-4D9E-828C-6BC9FC7D9EA8}",
   },
   {
     name: "Christian Graham", team: "Comebzck S\"ING\"ZZNNN", abbr: "CG",
@@ -47,6 +49,7 @@ const OPPONENT_PROFILES = [
     directive: "Study his keeper pick. Bet against his safe plays. Beat him in head-to-head.",
     badge: "AVOID", badgeColor: "bg-red-500/20 text-red-400 border-red-500/30",
     tierColor: "border-red-500/40 bg-red-500/5",
+    memberId: "{0C4B6DC7-265E-4A23-99DE-2B67369E9141}",
   },
   {
     name: "Demetri Clark", team: "Giv'me My Trophy", abbr: "DC",
@@ -56,6 +59,7 @@ const OPPONENT_PROFILES = [
     directive: "Watch his roster moves. He knows what he's doing. Don't underestimate.",
     badge: "WATCH", badgeColor: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
     tierColor: "border-yellow-500/40 bg-yellow-500/5",
+    memberId: "{96E5F3A7-0AB6-4DF1-AE89-E64CAF4A400B}",
   },
   {
     name: "Marcus Reese", team: "BLUReese6", abbr: "MR",
@@ -65,6 +69,7 @@ const OPPONENT_PROFILES = [
     directive: "Monitor his waiver adds. He's getting better fast. Don't sleep on him.",
     badge: "WATCH", badgeColor: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
     tierColor: "border-yellow-500/40 bg-yellow-500/5",
+    memberId: "{82E515D1-73FF-466C-A7A8-099B050278B5}",
   },
   {
     name: "Mark DeRoux", team: "Dominus Thus", abbr: "MD",
@@ -74,6 +79,7 @@ const OPPONENT_PROFILES = [
     directive: "Hit early when he's 0-2 or 1-3. He'll give up value out of frustration.",
     badge: "BUY LOW", badgeColor: "bg-green-500/20 text-green-400 border-green-500/30",
     tierColor: "border-green-500/40 bg-green-500/5",
+    memberId: "{1130450A-E524-475A-96E2-F45C79CDBE21}",
   },
   {
     name: "Tony Dorsey", team: "PRIMETIME PLAYAZ", abbr: "TD",
@@ -83,6 +89,7 @@ const OPPONENT_PROFILES = [
     directive: "Offer 2-for-1 when he's at 2-4 record. He wants wins, not value.",
     badge: "BUY LOW", badgeColor: "bg-green-500/20 text-green-400 border-green-500/30",
     tierColor: "border-green-500/40 bg-green-500/5",
+    memberId: "{TONY-DORSEY-PLACEHOLDER}",
   },
   {
     name: "Sheldon deRoux", team: "DARE2BGR8", abbr: "SD",
@@ -92,6 +99,7 @@ const OPPONENT_PROFILES = [
     directive: "Target his roster. Ignore his record — his players are better than they look.",
     badge: "BUY LOW", badgeColor: "bg-green-500/20 text-green-400 border-green-500/30",
     tierColor: "border-green-500/40 bg-green-500/5",
+    memberId: "{54D64361-5249-472A-9643-615249A72AD3}",
   },
   {
     name: "Steffon Bizzell", team: "Winkstradamus", abbr: "SB",
@@ -101,6 +109,7 @@ const OPPONENT_PROFILES = [
     directive: "Let him offer first. He'll undervalue his own players. Sell high to him.",
     badge: "SELL HIGH", badgeColor: "bg-blue-500/20 text-blue-400 border-blue-500/30",
     tierColor: "border-blue-500/40 bg-blue-500/5",
+    memberId: "{C300FD29-76C4-4FF0-8C91-A4F7BC17ADF2}",
   },
   {
     name: "Nate West", team: "Snake 🐍", abbr: "NW",
@@ -110,6 +119,7 @@ const OPPONENT_PROFILES = [
     directive: "Standard trade approach. Fair value exchanges are fine.",
     badge: "FAIR", badgeColor: "bg-slate-500/20 text-slate-400 border-slate-500/30",
     tierColor: "border-slate-500/40 bg-slate-500/5",
+    memberId: "{9F27F0FE-36FA-4C9B-A7F0-FE36FA3C9B90}",
   },
   {
     name: "Randy Broner Jr", team: "3 And A Possible", abbr: "RB",
@@ -119,6 +129,7 @@ const OPPONENT_PROFILES = [
     directive: "Standard approach. Offer fair trades — he's less experienced.",
     badge: "FAIR", badgeColor: "bg-slate-500/20 text-slate-400 border-slate-500/30",
     tierColor: "border-slate-500/40 bg-slate-500/5",
+    memberId: "{B7DED29D-BF48-441C-91B8-34CCFBB09271}",
   },
   {
     name: "LOZELL STYLES", team: "SMASHVILLE TITANS", abbr: "LS",
@@ -128,6 +139,7 @@ const OPPONENT_PROFILES = [
     directive: "Watch round 1 for unpredictable picks. Can bounce back fast — don't ignore.",
     badge: "WATCH", badgeColor: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
     tierColor: "border-yellow-500/40 bg-yellow-500/5",
+    memberId: "{LOZELL-STYLES-PLACEHOLDER}",
   },
   {
     name: "Marlon Moore", team: "TigerCommander", abbr: "MM",
@@ -137,15 +149,17 @@ const OPPONENT_PROFILES = [
     directive: "Safe trade partner. Fair value exchanges work well.",
     badge: "FAIR", badgeColor: "bg-slate-500/20 text-slate-400 border-slate-500/30",
     tierColor: "border-slate-500/40 bg-slate-500/5",
+    memberId: "{EE3AD8B7-4239-40B0-BAD8-B7423960B094}",
   },
   {
-    name: "Jan Graham", team: "Comebzck S\"ING\"ZZNNN", abbr: "CG2",
+    name: "teco Browning", team: "SMASHVILLE TITANS (2018-2023)", abbr: "TB",
     record25: "4-10", pf25: 1640, rank25: 11, rank24: 13, rank23: 11,
     trajectory: "down", threat: 32,
     behavioral: "Struggling manager. Below-average roster construction. Potential trade target.",
-    directive: "Target for trades when he's desperate. Offer fair value and he'll accept.",
+    directive: "Target for trades when desperate. Offer fair value and they'll accept.",
     badge: "BUY LOW", badgeColor: "bg-green-500/20 text-green-400 border-green-500/30",
     tierColor: "border-green-500/40 bg-green-500/5",
+    memberId: "{C65919E6-63DE-4E91-9919-E663DEFE9114}",
   },
   {
     name: "Bruce Edwards", team: "The Playmakers", abbr: "BE",
@@ -155,6 +169,7 @@ const OPPONENT_PROFILES = [
     directive: "Exploit his overconfidence. He thinks he's better than his current roster.",
     badge: "SELL HIGH", badgeColor: "bg-blue-500/20 text-blue-400 border-blue-500/30",
     tierColor: "border-blue-500/40 bg-blue-500/5",
+    memberId: "{34381793-095A-4099-B91E-04FB92B016A7}",
   },
 ];
 
@@ -234,6 +249,7 @@ export default function Dashboard() {
   const [chatMessages, setChatMessages] = useState<{ role: string; content: string }[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatSeason, setChatSeason] = useState(2025);
+  const [selectedOpponent, setSelectedOpponent] = useState<{ memberId: string; name: string } | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth();
@@ -621,9 +637,23 @@ export default function Dashboard() {
 
           {/* ── TAB 3: OPPONENT PROFILES ── */}
           <TabsContent value="opponents" className="mt-0">
+            {selectedOpponent && (
+              <OpponentProfileModal
+                memberId={selectedOpponent.memberId}
+                ownerName={selectedOpponent.name}
+                onClose={() => setSelectedOpponent(null)}
+              />
+            )}
+            <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1.5">
+              <ChevronRight className="w-3 h-3" /> Click any card for a full deep-dive profile
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {OPPONENT_PROFILES.map((opp) => (
-                <Card key={opp.name + opp.team} className={`card-glow border ${opp.tierColor}`}>
+                <Card
+                  key={opp.name + opp.team}
+                  className={`card-glow border ${opp.tierColor} cursor-pointer hover:scale-[1.02] transition-transform`}
+                  onClick={() => setSelectedOpponent({ memberId: opp.memberId, name: opp.name })}
+                >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2.5">
@@ -635,7 +665,10 @@ export default function Dashboard() {
                           <p className="text-xs text-muted-foreground leading-tight truncate max-w-[140px]">{opp.team}</p>
                         </div>
                       </div>
-                      <Badge variant="outline" className={`text-[9px] px-1.5 border flex-shrink-0 ${opp.badgeColor}`}>{opp.badge}</Badge>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <Badge variant="outline" className={`text-[9px] px-1.5 border ${opp.badgeColor}`}>{opp.badge}</Badge>
+                        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                      </div>
                     </div>
 
                     {/* 3-year record */}

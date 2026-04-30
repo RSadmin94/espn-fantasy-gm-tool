@@ -1656,6 +1656,73 @@ Respond with JSON in this exact format:
     return { draftOrder, totalPicks: draftOrder.length };
   }),
 
+  opponentProfile: publicProcedure
+    .input(z.object({ memberId: z.string() }))
+    .query(async ({ input }) => {
+      const { findOpponentData } = await import("./opponentData");
+      const data = findOpponentData(input.memberId);
+      if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Opponent not found" });
+      return data;
+    }),
+
+  opponentScouting: publicProcedure
+    .input(z.object({ memberId: z.string() }))
+    .query(async () => {
+      const { findOpponentData } = await import("./opponentData");
+      // This endpoint is called after opponentProfile to generate the AI scouting report
+      // The actual generation happens client-side via a separate mutation
+      return { ready: true };
+    }),
+
+  opponentScoutingReport: publicProcedure
+    .input(z.object({ memberId: z.string() }))
+    .mutation(async ({ input }) => {
+      const { findOpponentData } = await import("./opponentData");
+      const data = findOpponentData(input.memberId);
+      if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Opponent not found" });
+
+      const totalW = data.career.wins;
+      const totalL = data.career.losses;
+      const winPct = totalW + totalL > 0 ? Math.round((totalW / (totalW + totalL)) * 100) : 0;
+      const h2hW = data.h2hVsRod.wins;
+      const h2hL = data.h2hVsRod.losses;
+      const recentSeasons = data.seasons.slice(-3);
+      const recentRecord = recentSeasons.map(s => `${s.season}: ${s.wins}-${s.losses}`).join(", ");
+
+      const prompt = `You are an expert fantasy football analyst scouting ${data.ownerName} for the ATLANTAS FINEST FF league (14-team PPR keeper league, 2026 season).
+
+Career Record: ${totalW}W-${totalL}L (${winPct}% win rate) over ${data.seasons.length} seasons
+H2H vs Rod Sellers (the user): ${h2hW}W-${h2hL}L
+Recent 3 seasons: ${recentRecord}
+GM Archetype: ${data.gmArchetype} — ${data.gmArchetypeDesc}
+Avg Activity: ${data.avgAcquisitions} adds/season, ${data.avgTrades} trades/season
+Draft Style: ${data.draftStyleBadge} — ${data.draftStyleDesc}
+
+Strengths: ${data.strengthsWeaknesses.filter(s => s.type === "strength").map(s => s.text).join("; ")}
+Weaknesses: ${data.strengthsWeaknesses.filter(s => s.type === "weakness").map(s => s.text).join("; ")}
+Blind Spots: ${data.strengthsWeaknesses.filter(s => s.type === "blindspot").map(s => s.text).join("; ")}
+
+Write a detailed scouting report for Rod Sellers to use against this opponent in 2026. Include:
+1. THREAT LEVEL (Elite/High/Medium/Low) with one-sentence justification
+2. CAREER NARRATIVE (2-3 sentences on their arc and what defines them)
+3. HOW TO BEAT THEM (3 specific tactical recommendations for Rod)
+4. TRADE STRATEGY (should Rod trade with them? What to offer? What to demand?)
+5. DRAFT DAY INTEL (what positions do they prioritize? How does that affect the draft board?)
+6. 2026 PREDICTION (one bold prediction about their season)
+
+Be specific, honest, and tactical. This is a competitive scouting report, not a puff piece.`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: "You are an expert fantasy football analyst providing competitive scouting reports. Be direct, specific, and tactical." },
+          { role: "user", content: prompt },
+        ],
+      });
+
+      const report = response.choices?.[0]?.message?.content ?? "Scouting report unavailable.";
+      return { report, ownerName: data.ownerName };
+    }),
+
   advisor: router({
     chat: protectedProcedure
       .input(z.object({ message: z.string().min(1).max(2000), season: z.number().optional() }))
