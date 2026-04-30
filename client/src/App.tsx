@@ -20,6 +20,7 @@ import PlayerProfiles from "./pages/PlayerProfiles";
 import OwnerStats from "./pages/OwnerStats";
 import PickValueCalculator from "./pages/PickValueCalculator";
 import DraftPickTracker from "./pages/DraftPickTracker";
+import KeeperROI from "./pages/KeeperROI";
 
 function Router() {
   return (
@@ -40,6 +41,7 @@ function Router() {
       <Route path="/owner-stats" component={OwnerStats} />
       <Route path="/pick-value" component={PickValueCalculator} />
       <Route path="/pick-tracker" component={DraftPickTracker} />
+      <Route path="/keeper-roi" component={KeeperROI} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

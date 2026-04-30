@@ -631,7 +631,7 @@ export const appRouter = router({
             ],
             draftStyleBadge: "RB-First Builder",
             draftStyleDesc: "7 of 8 round-1 picks have been RBs. You consistently build around elite backfields before addressing WR depth.",
-            keeperPattern: "Consistent RB keeper — Henry (2022), Barkley ×2 (2023–24), Hall (2025). You identify and hold elite RBs.",
+            keeperPattern: "Consistent RB keeper — Henry (2022), Barkley x2 (2023-24), Hall (2025). 2026 keeper TBD — pending trade decisions.",
             notablePicks: [
               { season: 2020, pick: "Lamar Jackson Rd1 Pk13", note: "Bold QB1 in round 1 — paid off with MVP season" },
               { season: 2023, pick: "CMC Rd1 + Bijan Rd1", note: "Double RB round 1 — high upside, high variance" },
@@ -695,9 +695,8 @@ export const appRouter = router({
             keeper2026: {
               eligible: my2026Keeper ? [my2026Keeper] : [],
               ineligible: my2026Ineligible,
-              recommendation: my2026Keeper
-                ? `Keep ${my2026Keeper.playerName} (${my2026Keeper.position}) in Round ${my2026Keeper.roundCost2026} — ${my2026Keeper.valueLabel}`
-                : "No eligible keepers found for 2026",
+              recommendation: "2026 keeper is TBD — pending trade decisions. Evaluate your best round-surplus option before the Aug 18 deadline.",
+              status: "pending",
             },
             draftTendencies,
             gmActivityProfile,
@@ -1456,6 +1455,7 @@ DRAFT TENDENCIES (107 picks, 2018–2025):
 - Draft style: RB-First Builder
 
 KEEPER HISTORY: Derrick Henry 2022 (Rd1), Saquon Barkley 2023 (Rd2), Saquon Barkley 2024 (Rd2), Breece Hall 2025 (Rd5)
+2026 KEEPER: TBD -- pending trade decisions before Aug 18 deadline
 
 GM ACTIVITY (8-season averages): 29 adds/season, 34 drops/season, 7.3 trades/season
 - Most active: 2021 (49 adds, 9 trades) — 7–7, missed playoffs
@@ -1878,6 +1878,180 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       const report = response.choices?.[0]?.message?.content ?? "Scouting report unavailable.";
       return { report, ownerName: data.ownerName };
     }),
+
+  keeperROI: publicProcedure.query(async () => {
+    // Aggregate all keeper picks across 2022-2025 with ROI analysis
+    // ROI = round saved vs. what you'd have to spend in a normal draft
+    // A keeper kept in round N costs round N-1 in the next draft
+    // "Round surplus" = (market round - keeper cost round)
+    // Market round = the round the player would realistically go in a normal draft
+    // We approximate market round using: if kept in Rd X, they were worth at least Rd X-1 (the cost)
+    // Better approximation: use pick value chart to compute value ratio
+
+    const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+
+    // Pick value chart (14-team PPR, same as pickValueChart endpoint)
+    const TOTAL_TEAMS = 14;
+    const TOTAL_ROUNDS = 15;
+    const BASE_VALUE = 3000;
+    const DECAY = 0.93;
+    const pickValues: Record<string, number> = {};
+    for (let round = 1; round <= TOTAL_ROUNDS; round++) {
+      for (let pick = 1; pick <= TOTAL_TEAMS; pick++) {
+        const overall = (round - 1) * TOTAL_TEAMS + pick;
+        const value = Math.round(BASE_VALUE * Math.pow(DECAY, overall - 1));
+        pickValues[`${round}.${pick}`] = value;
+        pickValues[`${round}`] = pickValues[`${round}`] ?? value; // first pick of round as round value
+      }
+    }
+    // Round-level values (use mid-round pick, pick 7 of 14)
+    const roundValue = (round: number) => {
+      const overall = (round - 1) * TOTAL_TEAMS + 7;
+      return Math.round(BASE_VALUE * Math.pow(DECAY, overall - 1));
+    };
+
+    // Collect all keeper picks
+    type KeeperROIEntry = {
+      season: number;
+      teamId: number;
+      teamName: string;
+      playerId: number;
+      playerName: string;
+      position: string;
+      keptRound: number;       // round they were kept AT (the draft slot used)
+      costRound: number;       // round it cost to keep them (keptRound - 1, or 1 if Rd1)
+      marketRound: number;     // estimated market round (keptRound - 1 = minimum value)
+      roundSurplus: number;    // marketRound - costRound (positive = good value)
+      keeperValue: number;     // pick chart value at keptRound
+      costValue: number;       // pick chart value at costRound
+      valueRatio: number;      // keeperValue / costValue
+      roiLabel: string;        // ELITE / GREAT / GOOD / FAIR / POOR
+      consecutiveYear: number; // 1st or 2nd year kept
+    };
+
+    const allKeepers: KeeperROIEntry[] = [];
+    const playerConsecutiveTracker: Record<string, number> = {}; // `${teamId}-${playerId}` -> years kept
+
+    for (const season of cachedSeasons) {
+      const data = await getSeasonData(season);
+      if (!data) continue;
+      const picks = normalizeDraftPicks(data);
+
+      for (const pick of picks) {
+        const p = pick as Record<string, unknown>;
+        if (!p.keeper) continue;
+
+        const teamId = p.teamId as number;
+        const playerId = p.playerId as number;
+        const playerName = (p.playerName as string) || `Player#${playerId}`;
+        const position = (p.position as string) || "?";
+        const keptRound = p.roundId as number;
+        const teamName = (p.teamName as string) || `Team ${teamId}`;
+
+        // Cost round = keptRound - 1 (minimum 1)
+        const costRound = Math.max(1, keptRound - 1);
+        // Market round approximation: we treat the kept round as their minimum market value
+        // If kept in Rd 5, they're worth at LEAST a Rd 4 pick (what you paid)
+        // For ROI we compare: value at keptRound vs value at costRound
+        const marketRound = keptRound; // conservative: worth the round they were kept at
+        const roundSurplus = marketRound - costRound; // always 1 unless Rd1 keeper (0)
+
+        const keeperVal = roundValue(keptRound);
+        const costVal = roundValue(costRound);
+        const valueRatio = costRound === keptRound ? 1 : keeperVal / costVal;
+
+        // Consecutive year tracking
+        const key = `${teamId}-${playerId}`;
+        playerConsecutiveTracker[key] = (playerConsecutiveTracker[key] || 0) + 1;
+        const consecutiveYear = playerConsecutiveTracker[key];
+
+        // ROI label based on round and position
+        let roiLabel: string;
+        if (keptRound === 1) roiLabel = "ELITE";
+        else if (keptRound <= 3) roiLabel = "GREAT";
+        else if (keptRound <= 6) roiLabel = "GOOD";
+        else if (keptRound <= 9) roiLabel = "FAIR";
+        else roiLabel = "POOR";
+
+        allKeepers.push({
+          season,
+          teamId,
+          teamName,
+          playerId,
+          playerName,
+          position,
+          keptRound,
+          costRound,
+          marketRound,
+          roundSurplus,
+          keeperValue: keeperVal,
+          costValue: costVal,
+          valueRatio: Math.round(valueRatio * 100) / 100,
+          roiLabel,
+          consecutiveYear,
+        });
+      }
+    }
+
+    // Sort by season desc, then by keptRound asc
+    allKeepers.sort((a, b) => b.season - a.season || a.keptRound - b.keptRound);
+
+    // Per-team summary
+    const teamSummaries = Object.values(
+      allKeepers.reduce((acc, k) => {
+        if (!acc[k.teamId]) {
+          acc[k.teamId] = {
+            teamId: k.teamId,
+            teamName: k.teamName,
+            totalKeepers: 0,
+            eliteKeepers: 0,
+            greatKeepers: 0,
+            goodKeepers: 0,
+            fairPoorKeepers: 0,
+            avgKeptRound: 0,
+            roundsSum: 0,
+          };
+        }
+        const t = acc[k.teamId];
+        t.totalKeepers++;
+        t.roundsSum += k.keptRound;
+        if (k.roiLabel === "ELITE") t.eliteKeepers++;
+        else if (k.roiLabel === "GREAT") t.greatKeepers++;
+        else if (k.roiLabel === "GOOD") t.goodKeepers++;
+        else t.fairPoorKeepers++;
+        return acc;
+      }, {} as Record<number, { teamId: number; teamName: string; totalKeepers: number; eliteKeepers: number; greatKeepers: number; goodKeepers: number; fairPoorKeepers: number; avgKeptRound: number; roundsSum: number }>)
+    ).map(t => ({
+      ...t,
+      avgKeptRound: Math.round((t.roundsSum / t.totalKeepers) * 10) / 10,
+    })).sort((a, b) => b.totalKeepers - a.totalKeepers);
+
+    // League-wide stats
+    const totalKeepers = allKeepers.length;
+    const eliteCount = allKeepers.filter(k => k.roiLabel === "ELITE").length;
+    const greatCount = allKeepers.filter(k => k.roiLabel === "GREAT").length;
+    const goodCount = allKeepers.filter(k => k.roiLabel === "GOOD").length;
+    const fairPoorCount = allKeepers.filter(k => k.roiLabel === "FAIR" || k.roiLabel === "POOR").length;
+
+    // Best value keepers (Rd1 kept players, or Rd2 players kept in Rd1)
+    const bestValueKeepers = allKeepers
+      .filter(k => k.keptRound <= 3)
+      .slice(0, 10);
+
+    // Worst value keepers (kept in late rounds, Rd 8+)
+    const worstValueKeepers = allKeepers
+      .filter(k => k.keptRound >= 8)
+      .slice(0, 10);
+
+    return {
+      allKeepers,
+      teamSummaries,
+      leagueStats: { totalKeepers, eliteCount, greatCount, goodCount, fairPoorCount },
+      bestValueKeepers,
+      worstValueKeepers,
+      seasons: cachedSeasons,
+    };
+  }),
 
   advisor: router({
     chat: protectedProcedure

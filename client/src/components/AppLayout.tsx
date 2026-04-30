@@ -23,6 +23,7 @@ const navItems = [
   { href: "/waiver", icon: TrendingUp, label: "Waiver Wire", group: "Pro Tools", badge: "AI" },
   { href: "/pick-value", icon: Calculator, label: "Pick Value Calc", group: "Pro Tools", badge: "NEW" },
   { href: "/pick-tracker", icon: GitCompare, label: "Pick Trade Tracker", group: "Pro Tools", badge: "NEW" },
+  { href: "/keeper-roi", icon: TrendingUp, label: "Keeper ROI Tracker", group: "Pro Tools" },
   // Intelligence
   { href: "/advisor", icon: Bot, label: "AI GM Advisor", group: "Intelligence", badge: "AI" },
   { href: "/player-profiles", icon: UserSearch, label: "Player Profiles", group: "Intelligence" },
