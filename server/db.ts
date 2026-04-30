@@ -2,7 +2,7 @@ import { eq, desc, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users, espnSeasonCache, refreshManifest, chatHistory,
-  pickTrades, InsertPickTrade,
+  pickTrades, InsertPickTrade, espnViewHealth, InsertEspnViewHealth,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -136,4 +136,40 @@ export async function removePickTrade(id: number) {
   const db = await getDb();
   if (!db) return;
   await db.delete(pickTrades).where(eq(pickTrades.id, id));
+}
+
+// ── ESPN View Health helpers ──────────────────────────────────────────────────
+
+export async function upsertViewHealth(
+  season: number,
+  viewName: string,
+  data: { status: "ok" | "error" | "stale" | "empty"; errorMessage?: string; recordCount?: number }
+) {
+  const db = await getDb();
+  if (!db) return;
+  const updateSet = {
+    status: data.status,
+    errorMessage: data.errorMessage ?? null,
+    recordCount: data.recordCount ?? null,
+    fetchedAt: new Date(),
+    updatedAt: new Date(),
+  };
+  await db.insert(espnViewHealth)
+    .values({ season, viewName, ...updateSet })
+    .onDuplicateKeyUpdate({ set: updateSet });
+}
+
+export async function getViewHealthForSeason(season: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(espnViewHealth)
+    .where(eq(espnViewHealth.season, season))
+    .orderBy(espnViewHealth.viewName);
+}
+
+export async function getAllViewHealth() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(espnViewHealth)
+    .orderBy(desc(espnViewHealth.season), espnViewHealth.viewName);
 }

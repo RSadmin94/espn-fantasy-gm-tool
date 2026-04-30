@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Trophy, Users, ClipboardList, Star, Swords,
   ArrowLeftRight, TrendingUp, Bot, RefreshCw, ChevronRight,
   Activity, Brain, Zap, UserSearch, BarChart3, Calculator, GitCompare,
+  Shield, BarChart2, Microscope,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -27,10 +28,13 @@ const navItems = [
   { href: "/trade-offer", icon: ArrowLeftRight, label: "Trade Offer Gen", group: "Pro Tools", badge: "NEW" },
   // Intelligence
   { href: "/advisor", icon: Bot, label: "AI GM Advisor", group: "Intelligence", badge: "AI" },
+  { href: "/analytics", icon: BarChart2, label: "League Analytics", group: "Intelligence", badge: "NEW" },
+  { href: "/manager-behavior", icon: Microscope, label: "Opponent Intel", group: "Intelligence", badge: "NEW" },
   { href: "/player-profiles", icon: UserSearch, label: "Player Profiles", group: "Intelligence" },
   { href: "/owner-stats", icon: BarChart3, label: "Owner Career Stats", group: "Intelligence" },
   // System
   { href: "/refresh", icon: RefreshCw, label: "Data Refresh", group: "System" },
+  { href: "/data-health", icon: Shield, label: "Data Health", group: "System" },
 ];
 
 const groups = ["Overview", "Team Mgmt", "Pro Tools", "Intelligence", "System"];

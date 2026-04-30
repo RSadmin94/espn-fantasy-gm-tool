@@ -1,9 +1,14 @@
 /**
  * ESPN Fantasy Football API Service
  * Authenticates with SWID + espn_s2 cookies and fetches league data.
+ *
+ * HARDENED VERSION:
+ * - Per-view error isolation: one failed view does not kill the whole fetch
+ * - Cookie expiry detection with clear error messages
+ * - Data quality gates: validates rosters, draft data, matchup counts
+ * - Staleness detection: flags cached data older than 7 days
+ * - View health tracking: persists per-view status to espn_view_health table
  */
-
-import { ENV } from "./_core/env";
 
 const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
 const SWID = process.env.ESPN_SWID || "";
@@ -24,6 +29,8 @@ export const ALL_VIEWS = [
 ] as const;
 
 export type EspnView = (typeof ALL_VIEWS)[number];
+
+// ─── Maps ─────────────────────────────────────────────────────────────────────
 
 export const POSITION_MAP: Record<number, string> = {
   1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K",
@@ -48,6 +55,8 @@ export const PRO_TEAM_MAP: Record<number, string> = {
   30: "JAX", 33: "BAL", 34: "HOU",
 };
 
+// ─── Auth helpers ─────────────────────────────────────────────────────────────
+
 function buildCookieString(): string {
   const parts: string[] = [];
   if (SWID) parts.push(`SWID=${SWID}`);
@@ -55,41 +64,306 @@ function buildCookieString(): string {
   return parts.join("; ");
 }
 
+export function hasCookies(): boolean {
+  return Boolean(SWID && ESPN_S2);
+}
+
 function getBaseUrl(season: number): string {
   return `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${LEAGUE_ID}`;
 }
 
+// ─── Pipeline result types ────────────────────────────────────────────────────
+
+export type ViewFetchStatus = "ok" | "error" | "auth_error" | "empty";
+
+export interface ViewFetchResult {
+  viewName: string;
+  status: ViewFetchStatus;
+  data: Record<string, unknown> | null;
+  error?: string;
+  recordCount?: number;
+}
+
+export interface PipelineFetchResult {
+  season: number;
+  merged: Record<string, unknown>;
+  viewResults: ViewFetchResult[];
+  authError: boolean;
+  hasPartialData: boolean;
+  allViewsOk: boolean;
+  cookiesPresent: boolean;
+}
+
+// ─── Core fetch: all views in one request (fast path) ────────────────────────
+
+async function fetchAllViewsAtOnce(
+  season: number,
+  views: string[]
+): Promise<{ data: Record<string, unknown>; status: number } | { status: number; error: string }> {
+  const url = new URL(getBaseUrl(season));
+  for (const v of views) url.searchParams.append("view", v);
+
+  const headers: Record<string, string> = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+    Accept: "application/json,text/plain,*/*",
+    Referer: "https://fantasy.espn.com/football/league",
+  };
+  const cookieStr = buildCookieString();
+  if (cookieStr) headers["Cookie"] = cookieStr;
+
+  try {
+    const res = await fetch(url.toString(), { headers, signal: AbortSignal.timeout(30000) });
+    if (!res.ok) return { status: res.status, error: `HTTP ${res.status} ${res.statusText}` };
+    const data = await res.json() as Record<string, unknown>;
+    return { data, status: res.status };
+  } catch (err) {
+    return { status: 0, error: err instanceof Error ? err.message : "Network error" };
+  }
+}
+
+// ─── Per-view fetch (fallback for isolation) ──────────────────────────────────
+
+async function fetchSingleView(
+  season: number,
+  viewName: string
+): Promise<ViewFetchResult> {
+  const url = new URL(getBaseUrl(season));
+  url.searchParams.append("view", viewName);
+
+  const headers: Record<string, string> = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+    Accept: "application/json,text/plain,*/*",
+    Referer: "https://fantasy.espn.com/football/league",
+  };
+  const cookieStr = buildCookieString();
+  if (cookieStr) headers["Cookie"] = cookieStr;
+
+  try {
+    const res = await fetch(url.toString(), { headers, signal: AbortSignal.timeout(15000) });
+
+    if (res.status === 401 || res.status === 403) {
+      return {
+        viewName,
+        status: "auth_error",
+        data: null,
+        error: `ESPN returned ${res.status} — cookies may be expired. Update ESPN_SWID and ESPN_S2.`,
+      };
+    }
+
+    if (!res.ok) {
+      return {
+        viewName,
+        status: "error",
+        data: null,
+        error: `HTTP ${res.status} ${res.statusText}`,
+      };
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const recordCount = estimateRecordCount(viewName, data);
+
+    if (recordCount === 0) {
+      return { viewName, status: "empty", data, recordCount, error: `View returned empty data` };
+    }
+
+    return { viewName, status: "ok", data, recordCount };
+  } catch (err) {
+    return {
+      viewName,
+      status: "error",
+      data: null,
+      error: err instanceof Error ? err.message : "Network error",
+    };
+  }
+}
+
+// ─── Record count estimator for quality gates ─────────────────────────────────
+
+function estimateRecordCount(viewName: string, data: Record<string, unknown>): number {
+  switch (viewName) {
+    case "mTeam": return ((data.teams as unknown[]) || []).length;
+    case "mRoster": {
+      const teams = (data.teams as Record<string, unknown>[]) || [];
+      return teams.reduce((sum, t) => {
+        const entries = ((t.roster as Record<string, unknown>)?.entries as unknown[]) || [];
+        return sum + entries.length;
+      }, 0);
+    }
+    case "mMatchup":
+    case "mMatchupScore":
+    case "mSchedule": return ((data.schedule as unknown[]) || []).length;
+    case "mDraftDetail": {
+      const draft = (data.draftDetail as Record<string, unknown>) || {};
+      return ((draft.picks as unknown[]) || []).length;
+    }
+    case "mTransactions2": return ((data.transactions as unknown[]) || []).length;
+    case "mSettings": return data.settings ? 1 : 0;
+    case "mStandings": return ((data.teams as unknown[]) || []).length;
+    case "mStatus": return data.status ? 1 : 0;
+    default: return 1;
+  }
+}
+
+// ─── Data quality validator ───────────────────────────────────────────────────
+
+export interface DataQualityReport {
+  season: number;
+  issues: string[];
+  warnings: string[];
+  isUsable: boolean;
+}
+
+export function validateDataQuality(
+  season: number,
+  data: Record<string, unknown>
+): DataQualityReport {
+  const issues: string[] = [];
+  const warnings: string[] = [];
+
+  // Teams check
+  const teams = (data.teams as Record<string, unknown>[]) || [];
+  if (teams.length === 0) issues.push("No teams found — roster data missing");
+  else if (teams.length < 10) warnings.push(`Only ${teams.length} teams found (expected 14)`);
+
+  // Roster check
+  const rosterEntries = teams.reduce((sum, t) => {
+    const entries = ((t.roster as Record<string, unknown>)?.entries as unknown[]) || [];
+    return sum + entries.length;
+  }, 0);
+  if (rosterEntries === 0) issues.push("No roster entries found — player data missing");
+  else if (rosterEntries < 100) warnings.push(`Only ${rosterEntries} roster entries (expected 200+)`);
+
+  // Matchup check
+  const schedule = (data.schedule as unknown[]) || [];
+  if (schedule.length === 0) warnings.push("No schedule/matchup data found");
+  else if (schedule.length < 50 && season >= 2018) warnings.push(`Only ${schedule.length} matchups (expected 100+)`);
+
+  // Draft check (only for completed seasons)
+  if (season <= 2025) {
+    const draft = (data.draftDetail as Record<string, unknown>) || {};
+    const picks = (draft.picks as unknown[]) || [];
+    if (picks.length === 0) warnings.push("No draft picks found — draft history may be missing");
+    else if (picks.length < 100) warnings.push(`Only ${picks.length} draft picks (expected 180+)`);
+  }
+
+  // Transaction check
+  const txs = (data.transactions as unknown[]) || [];
+  if (txs.length === 0 && season >= 2018) warnings.push("No transactions found — waiver/trade history missing");
+
+  return {
+    season,
+    issues,
+    warnings,
+    isUsable: issues.length === 0,
+  };
+}
+
+// ─── Staleness check ──────────────────────────────────────────────────────────
+
+export function isStale(fetchedAt: Date, maxAgeHours = 168): boolean {
+  const ageMs = Date.now() - fetchedAt.getTime();
+  return ageMs > maxAgeHours * 60 * 60 * 1000;
+}
+
+export function staleSummary(fetchedAt: Date): string {
+  const ageMs = Date.now() - fetchedAt.getTime();
+  const hours = Math.floor(ageMs / (1000 * 60 * 60));
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+// ─── Main hardened fetch ──────────────────────────────────────────────────────
+
+/**
+ * Fetches all ESPN views for a season with per-view error isolation.
+ * First attempts a single bulk request. If that fails due to auth, throws immediately.
+ * If partial views fail, falls back to per-view fetching for those views.
+ * Returns a PipelineFetchResult with merged data and per-view health status.
+ */
+export async function fetchEspnViewsHardened(
+  season: number,
+  views: string[] = [...ALL_VIEWS]
+): Promise<PipelineFetchResult> {
+  const cookiesPresent = hasCookies();
+  const viewResults: ViewFetchResult[] = [];
+
+  // Fast path: try all views in one request
+  const bulkResult = await fetchAllViewsAtOnce(season, views);
+
+  if ("data" in bulkResult) {
+    // Bulk succeeded — validate each view's data quality
+    for (const viewName of views) {
+      const count = estimateRecordCount(viewName, bulkResult.data);
+      viewResults.push({
+        viewName,
+        status: count === 0 ? "empty" : "ok",
+        data: bulkResult.data,
+        recordCount: count,
+        error: count === 0 ? "View returned empty data" : undefined,
+      });
+    }
+    return {
+      season,
+      merged: bulkResult.data,
+      viewResults,
+      authError: false,
+      hasPartialData: viewResults.some(v => v.status !== "ok"),
+      allViewsOk: viewResults.every(v => v.status === "ok"),
+      cookiesPresent,
+    };
+  }
+
+  // Bulk failed — check if auth error
+  if (bulkResult.status === 401 || bulkResult.status === 403) {
+    throw new Error(
+      `ESPN API returned ${bulkResult.status}. Cookies may be expired. Please update ESPN_SWID and ESPN_S2 in your secrets.`
+    );
+  }
+
+  // Bulk failed for other reason — fall back to per-view isolation
+  const merged: Record<string, unknown> = {};
+  let authError = false;
+
+  await Promise.allSettled(
+    views.map(async (viewName) => {
+      const result = await fetchSingleView(season, viewName);
+      viewResults.push(result);
+      if (result.status === "auth_error") authError = true;
+      if (result.data) {
+        // Merge view data into the combined object
+        Object.assign(merged, result.data);
+      }
+    })
+  );
+
+  if (authError) {
+    throw new Error(
+      `ESPN API authentication failed. Cookies may be expired. Please update ESPN_SWID and ESPN_S2 in your secrets.`
+    );
+  }
+
+  return {
+    season,
+    merged,
+    viewResults,
+    authError: false,
+    hasPartialData: viewResults.some(v => v.status !== "ok"),
+    allViewsOk: viewResults.every(v => v.status === "ok"),
+    cookiesPresent,
+  };
+}
+
+/**
+ * Legacy fetch function — maintained for backward compatibility.
+ * Internally uses the hardened fetch but returns the merged data directly.
+ */
 export async function fetchEspnViews(
   season: number,
   views: string[] = [...ALL_VIEWS]
 ): Promise<Record<string, unknown>> {
-  const url = new URL(getBaseUrl(season));
-  for (const v of views) {
-    url.searchParams.append("view", v);
-  }
-
-  const headers: Record<string, string> = {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-    Accept: "application/json,text/plain,*/*",
-    Referer: "https://fantasy.espn.com/football/league",
-  };
-
-  const cookieStr = buildCookieString();
-  if (cookieStr) headers["Cookie"] = cookieStr;
-
-  const res = await fetch(url.toString(), { headers });
-
-  if (res.status === 401 || res.status === 403) {
-    throw new Error(
-      `ESPN API returned ${res.status}. Cookies may be expired. Please update ESPN_SWID and ESPN_S2.`
-    );
-  }
-  if (!res.ok) {
-    throw new Error(`ESPN API error: ${res.status} ${res.statusText}`);
-  }
-
-  return res.json() as Promise<Record<string, unknown>>;
+  const result = await fetchEspnViewsHardened(season, views);
+  return result.merged;
 }
 
 // ─── Normalizers ─────────────────────────────────────────────────────────────
@@ -136,7 +410,6 @@ export function normalizeTeams(data: Record<string, unknown>) {
       return `${m.firstName || ""} ${m.lastName || ""}`.trim() || oid;
     });
     const record = ((team.record as Record<string, unknown>)?.overall as Record<string, unknown>) || {};
-    const currentRecord = ((team.record as Record<string, unknown>)?.home as Record<string, unknown>) || {};
 
     return {
       season,
@@ -146,6 +419,7 @@ export function normalizeTeams(data: Record<string, unknown>) {
       location: team.location,
       nickname: team.nickname,
       owners: ownerNames.join("; "),
+      memberIds: owners,
       wins: record.wins,
       losses: record.losses,
       ties: record.ties,
@@ -179,9 +453,19 @@ export function normalizeRosters(data: Record<string, unknown>) {
 
       let appliedTotal: number | null = null;
       let projectedTotal: number | null = null;
+      let appliedAverage: number | null = null;
+      let appliedStats: Record<string, number> = {};
+
       for (const stat of stats) {
-        if (stat.statSourceId === 0) appliedTotal = stat.appliedTotal as number;
-        if (stat.statSourceId === 1) projectedTotal = stat.appliedTotal as number;
+        // statSourceId 0 = actual, 1 = projected; statSplitTypeId 0 = season total
+        if (stat.statSourceId === 0 && stat.statSplitTypeId === 0) {
+          appliedTotal = stat.appliedTotal as number;
+          appliedAverage = stat.appliedAverage as number;
+          appliedStats = (stat.appliedStats as Record<string, number>) || {};
+        }
+        if (stat.statSourceId === 1 && stat.statSplitTypeId === 0) {
+          projectedTotal = stat.appliedTotal as number;
+        }
       }
 
       rosters.push({
@@ -202,7 +486,11 @@ export function normalizeRosters(data: Record<string, unknown>) {
         percentOwned: ownership.percentOwned,
         percentStarted: ownership.percentStarted,
         appliedTotal,
+        appliedAverage,
         projectedTotal,
+        appliedStats,
+        keeperValue: poolEntry.keeperValue,
+        keeperValueFuture: poolEntry.keeperValueFuture,
       });
     }
   }

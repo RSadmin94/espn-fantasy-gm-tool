@@ -5,9 +5,10 @@ import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
-import { getPickTrades, addPickTrade, removePickTrade } from "./db";
+import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth } from "./db";
 import {
   fetchEspnViews,
+  fetchEspnViewsHardened,
   normalizeSettings,
   normalizeTeams,
   normalizeRosters,
@@ -16,7 +17,24 @@ import {
   normalizeMatchups,
   normalizeTransactions,
   resolveUnknownPlayerIds,
+  validateDataQuality,
+  isStale,
+  staleSummary,
+  hasCookies,
 } from "./espnService";
+import {
+  calcVORP,
+  calcPositionalScarcity,
+  calcRosterGaps,
+  calcKeeperEfficiency,
+  calcManagerBehavior,
+  calcROSValue,
+  calcPickValue,
+  type PlayerRow,
+  type TeamRow,
+  type TransactionRow,
+  type DraftPickRow,
+} from "./analytics";
 import {
   getCachedView,
   upsertCachedView,
@@ -53,23 +71,52 @@ export const appRouter = router({
       .input(z.object({ season: z.number().optional(), seasons: z.array(z.number()).optional() }))
       .mutation(async ({ input }) => {
         const seasonsToRefresh = input.seasons ?? (input.season ? [input.season] : [ALL_SEASONS[ALL_SEASONS.length - 1]]);
-        const results: Record<number, { status: string; error?: string }> = {};
+        const results: Record<number, { status: string; error?: string; viewHealth?: Record<string, string>; qualityWarnings?: string[] }> = {};
         for (const season of seasonsToRefresh) {
           try {
-            const views = ["mSettings","mTeam","mRoster","mMatchup","mMatchupScore","mScoreboard","mSchedule","mStandings","mStatus","mDraftDetail","mTransactions2"];
-            const data = await fetchEspnViews(season, views);
+            // Use hardened pipeline with per-view error isolation
+            const pipelineResult = await fetchEspnViewsHardened(season);
+            const data = pipelineResult.merged;
+
+            // Persist per-view health records
+            for (const vr of pipelineResult.viewResults) {
+              await upsertViewHealth(season, vr.viewName, {
+                status: vr.status === "auth_error" ? "error" : vr.status,
+                errorMessage: vr.error,
+                recordCount: vr.recordCount,
+              });
+            }
+
             await upsertCachedView(season, "combined", data);
             const teams = normalizeTeams(data);
             const rosters = normalizeRosters(data);
             const matchups = normalizeMatchups(data);
             const picks = normalizeDraftPicks(data);
             const txs = normalizeTransactions(data);
+
+            // Data quality validation
+            const quality = validateDataQuality(season, data);
+
+            const overallStatus = pipelineResult.allViewsOk && quality.isUsable ? "success"
+              : pipelineResult.hasPartialData || !quality.isUsable ? "partial"
+              : "success";
+
             await upsertRefreshManifest(season, {
               teamCount: teams.length, rosterCount: rosters.length,
               matchupCount: matchups.length, draftPickCount: picks.length,
-              transactionCount: txs.length, status: "success", viewsRefreshed: views,
+              transactionCount: txs.length, status: overallStatus,
+              viewsRefreshed: pipelineResult.viewResults.filter(v => v.status === "ok").map(v => v.viewName),
+              errorMessage: quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
             });
-            results[season] = { status: "success" };
+
+            const viewHealth: Record<string, string> = {};
+            for (const vr of pipelineResult.viewResults) viewHealth[vr.viewName] = vr.status;
+
+            results[season] = {
+              status: overallStatus,
+              viewHealth,
+              qualityWarnings: [...quality.issues, ...quality.warnings],
+            };
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             await upsertRefreshManifest(season, { status: "failed", errorMessage: msg });
@@ -2442,6 +2489,326 @@ Be concise, data-driven, and specific. Reference actual team names and player na
       await clearChatHistory(ctx.user.id);
       return { success: true };
     }),
+  }),
+
+  // ── Pipeline Health ────────────────────────────────────────────────────────
+  pipeline: router({
+    health: publicProcedure
+      .input(z.object({ season: z.number().optional() }))
+      .query(async ({ input }) => {
+        const manifests = await getRefreshManifests();
+        const cachedSeasons = await getAllCachedSeasons();
+        const cookiesPresent = hasCookies();
+
+        // Build per-season health summary
+        const seasonHealth = await Promise.all(
+          cachedSeasons.map(async (season) => {
+            const manifest = manifests.find(m => m.season === season);
+            const viewHealth = input.season === season || !input.season
+              ? await getViewHealthForSeason(season)
+              : [];
+
+            const staleFlag = manifest?.lastRefreshedAt
+              ? isStale(new Date(manifest.lastRefreshedAt))
+              : true;
+            const staleAge = manifest?.lastRefreshedAt
+              ? staleSummary(new Date(manifest.lastRefreshedAt))
+              : "Never";
+
+            return {
+              season,
+              status: manifest?.status ?? "unknown",
+              lastRefreshedAt: manifest?.lastRefreshedAt ?? null,
+              staleFlag,
+              staleAge,
+              teamCount: manifest?.teamCount ?? 0,
+              rosterCount: manifest?.rosterCount ?? 0,
+              matchupCount: manifest?.matchupCount ?? 0,
+              draftPickCount: manifest?.draftPickCount ?? 0,
+              transactionCount: manifest?.transactionCount ?? 0,
+              errorMessage: manifest?.errorMessage ?? null,
+              viewHealth: viewHealth.map(vh => ({
+                viewName: vh.viewName,
+                status: vh.status,
+                recordCount: vh.recordCount,
+                errorMessage: vh.errorMessage,
+                fetchedAt: vh.fetchedAt,
+              })),
+            };
+          })
+        );
+
+        const totalSeasons = cachedSeasons.length;
+        const staleSeasons = seasonHealth.filter(s => s.staleFlag).length;
+        const failedSeasons = seasonHealth.filter(s => s.status === "failed").length;
+        const partialSeasons = seasonHealth.filter(s => s.status === "partial").length;
+
+        return {
+          cookiesPresent,
+          totalSeasons,
+          staleSeasons,
+          failedSeasons,
+          partialSeasons,
+          overallHealth: failedSeasons > 0 ? "critical"
+            : staleSeasons > 3 ? "degraded"
+            : partialSeasons > 0 ? "warning"
+            : "healthy",
+          seasonHealth,
+        };
+      }),
+
+    validate: publicProcedure
+      .input(z.object({ season: z.number() }))
+      .query(async ({ input }) => {
+        const data = await getCachedView(input.season, "combined");
+        if (!data) return { isUsable: false, issues: ["No cached data for this season"], warnings: [], season: input.season };
+        return validateDataQuality(input.season, data.payload as Record<string, unknown>);
+      }),
+  }),
+
+  // ── Analytics ─────────────────────────────────────────────────────────────
+  analytics: router({
+    vorp: publicProcedure
+      .input(z.object({ season: z.number() }))
+      .query(async ({ input }) => {
+        const data = await getSeasonData(input.season);
+        if (!data) return [];
+        const rosters = normalizeRosters(data) as unknown[];
+        const teams = normalizeTeams(data);
+        const teamOwnerMap: Record<number, string> = {};
+        for (const t of teams) teamOwnerMap[t.teamId as number] = t.owners as string;
+
+        const players: PlayerRow[] = rosters.map((r: unknown) => {
+          const p = r as Record<string, unknown>;
+          return {
+            playerId: p.playerId as number,
+            playerName: (p.playerName as string) || "Unknown",
+            position: (p.position as string) || "?",
+            teamId: p.teamId as number,
+            ownerName: teamOwnerMap[p.teamId as number] || "Unknown",
+            seasonPoints: (p.appliedTotal as number) || 0,
+            avgPoints: (p.appliedAverage as number) || 0,
+            projectedTotal: (p.projectedTotal as number) || null,
+            keeperValue: (p.keeperValue as number) || 0,
+            keeperValueFuture: (p.keeperValueFuture as number) || 0,
+            injuryStatus: (p.injuryStatus as string) || "",
+            appliedStats: (p.appliedStats as Record<string, number>) || {},
+          };
+        });
+
+        return calcVORP(players);
+      }),
+
+    scarcity: publicProcedure
+      .input(z.object({ season: z.number() }))
+      .query(async ({ input }) => {
+        const data = await getSeasonData(input.season);
+        if (!data) return [];
+        const rosters = normalizeRosters(data) as unknown[];
+        const teams = normalizeTeams(data);
+        const teamOwnerMap: Record<number, string> = {};
+        for (const t of teams) teamOwnerMap[t.teamId as number] = t.owners as string;
+
+        const toPlayerRow = (r: unknown): PlayerRow => {
+          const p = r as Record<string, unknown>;
+          return {
+            playerId: p.playerId as number,
+            playerName: (p.playerName as string) || "Unknown",
+            position: (p.position as string) || "?",
+            teamId: (p.teamId as number) || 0,
+            ownerName: teamOwnerMap[p.teamId as number] || "Free Agent",
+            seasonPoints: (p.appliedTotal as number) || 0,
+            avgPoints: (p.appliedAverage as number) || 0,
+            projectedTotal: null,
+            keeperValue: 0,
+            keeperValueFuture: 0,
+            injuryStatus: "",
+            appliedStats: {},
+          };
+        };
+
+        const rosteredPlayers = rosters.map(toPlayerRow);
+        const faRaw = (data.players as Record<string, unknown>[]) || [];
+        const freeAgents: PlayerRow[] = faRaw
+          .filter(fa => !fa.onTeamId || fa.onTeamId === 0)
+          .map(fa => {
+            const entry = (fa.playerPoolEntry as Record<string, unknown>) || fa;
+            const player = (entry.player as Record<string, unknown>) || {};
+            const stats = (player.stats as Record<string, unknown>[]) || [];
+            let avg = 0;
+            for (const s of stats) {
+              if (s.statSourceId === 0 && s.statSplitTypeId === 0) avg = (s.appliedAverage as number) || 0;
+            }
+            return {
+              playerId: (player.id || fa.id) as number,
+              playerName: (player.fullName as string) || "Unknown",
+              position: ["QB","RB","WR","TE","K","D/ST"][(player.defaultPositionId as number) - 1] || "?",
+              teamId: 0,
+              ownerName: "Free Agent",
+              seasonPoints: 0,
+              avgPoints: avg,
+              projectedTotal: null,
+              keeperValue: 0,
+              keeperValueFuture: 0,
+              injuryStatus: "",
+              appliedStats: {},
+            };
+          });
+
+        return calcPositionalScarcity(rosteredPlayers, freeAgents);
+      }),
+
+    rosterGaps: publicProcedure
+      .input(z.object({ season: z.number() }))
+      .query(async ({ input }) => {
+        const data = await getSeasonData(input.season);
+        if (!data) return [];
+        const rosters = normalizeRosters(data) as unknown[];
+        const teams = normalizeTeams(data);
+        const teamOwnerMap: Record<number, string> = {};
+        for (const t of teams) teamOwnerMap[t.teamId as number] = t.owners as string;
+
+        const players: PlayerRow[] = rosters.map((r: unknown) => {
+          const p = r as Record<string, unknown>;
+          return {
+            playerId: p.playerId as number,
+            playerName: (p.playerName as string) || "Unknown",
+            position: (p.position as string) || "?",
+            teamId: p.teamId as number,
+            ownerName: teamOwnerMap[p.teamId as number] || "Unknown",
+            seasonPoints: (p.appliedTotal as number) || 0,
+            avgPoints: (p.appliedAverage as number) || 0,
+            projectedTotal: null,
+            keeperValue: (p.keeperValue as number) || 0,
+            keeperValueFuture: (p.keeperValueFuture as number) || 0,
+            injuryStatus: (p.injuryStatus as string) || "",
+            appliedStats: {},
+          };
+        });
+
+        return calcRosterGaps(players);
+      }),
+
+    keeperEfficiency: publicProcedure
+      .input(z.object({ season: z.number() }))
+      .query(async ({ input }) => {
+        const data = await getSeasonData(input.season);
+        if (!data) return [];
+        const rosters = normalizeRosters(data) as unknown[];
+        const teams = normalizeTeams(data);
+        const teamOwnerMap: Record<number, string> = {};
+        for (const t of teams) teamOwnerMap[t.teamId as number] = t.owners as string;
+
+        const players: PlayerRow[] = rosters.map((r: unknown) => {
+          const p = r as Record<string, unknown>;
+          return {
+            playerId: p.playerId as number,
+            playerName: (p.playerName as string) || "Unknown",
+            position: (p.position as string) || "?",
+            teamId: p.teamId as number,
+            ownerName: teamOwnerMap[p.teamId as number] || "Unknown",
+            seasonPoints: (p.appliedTotal as number) || 0,
+            avgPoints: (p.appliedAverage as number) || 0,
+            projectedTotal: null,
+            keeperValue: (p.keeperValue as number) || 0,
+            keeperValueFuture: (p.keeperValueFuture as number) || 0,
+            injuryStatus: (p.injuryStatus as string) || "",
+            appliedStats: {},
+          };
+        });
+
+        const vorp = calcVORP(players);
+        return calcKeeperEfficiency(players, vorp);
+      }),
+
+    managerBehavior: publicProcedure
+      .input(z.object({ seasons: z.array(z.number()).optional() }))
+      .query(async ({ input }) => {
+        const cachedSeasons = input.seasons ?? await getAllCachedSeasons();
+        const allTransactions: TransactionRow[] = [];
+        const allDraftPicks: DraftPickRow[] = [];
+        const teamMap: Record<number, TeamRow> = {};
+        const ownerNameMap: Record<number, string> = {};
+
+        for (const season of cachedSeasons) {
+          const data = await getSeasonData(season);
+          if (!data) continue;
+          const teams = normalizeTeams(data);
+          for (const t of teams) {
+            const tid = t.teamId as number;
+            if (!teamMap[tid]) {
+              teamMap[tid] = { teamId: tid, ownerName: t.owners as string, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0 };
+              ownerNameMap[tid] = t.owners as string;
+            }
+            teamMap[tid].wins += (t.wins as number) || 0;
+            teamMap[tid].losses += (t.losses as number) || 0;
+            teamMap[tid].pointsFor += (t.pointsFor as number) || 0;
+            teamMap[tid].pointsAgainst += (t.pointsAgainst as number) || 0;
+          }
+          const txs = normalizeTransactions(data) as unknown[];
+          for (const tx of txs) {
+            const t = tx as Record<string, unknown>;
+            allTransactions.push({
+              season: t.season as number,
+              teamId: t.teamId as number,
+              type: t.type as string,
+              itemType: t.itemType as string,
+              proposedDate: t.proposedDate as number,
+            });
+          }
+          const picks = normalizeDraftPicks(data) as unknown[];
+          for (const pick of picks) {
+            const p = pick as Record<string, unknown>;
+            allDraftPicks.push({
+              season: p.season as number,
+              teamId: p.teamId as number,
+              roundId: p.roundId as number,
+              roundPickNumber: p.roundPickNumber as number,
+              overallPickNumber: p.overallPickNumber as number,
+              position: (p.position as string) || "?",
+              keeper: (p.keeper as boolean) || false,
+            });
+          }
+        }
+
+        return calcManagerBehavior(
+          Object.values(teamMap),
+          allTransactions,
+          allDraftPicks,
+          ownerNameMap
+        );
+      }),
+
+    rosValues: publicProcedure
+      .input(z.object({ season: z.number(), weeksRemaining: z.number().optional() }))
+      .query(async ({ input }) => {
+        const data = await getSeasonData(input.season);
+        if (!data) return [];
+        const rosters = normalizeRosters(data) as unknown[];
+        const teams = normalizeTeams(data);
+        const teamOwnerMap: Record<number, string> = {};
+        for (const t of teams) teamOwnerMap[t.teamId as number] = t.owners as string;
+
+        const players: PlayerRow[] = rosters.map((r: unknown) => {
+          const p = r as Record<string, unknown>;
+          return {
+            playerId: p.playerId as number,
+            playerName: (p.playerName as string) || "Unknown",
+            position: (p.position as string) || "?",
+            teamId: p.teamId as number,
+            ownerName: teamOwnerMap[p.teamId as number] || "Unknown",
+            seasonPoints: (p.appliedTotal as number) || 0,
+            avgPoints: (p.appliedAverage as number) || 0,
+            projectedTotal: null,
+            keeperValue: 0,
+            keeperValueFuture: 0,
+            injuryStatus: (p.injuryStatus as string) || "",
+            appliedStats: {},
+          };
+        });
+
+        return calcROSValue(players, input.weeksRemaining ?? 10);
+      }),
   }),
 });
 

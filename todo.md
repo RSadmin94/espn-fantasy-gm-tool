@@ -226,3 +226,77 @@
 - [x] Add "Trade Offer Generator" nav link in AppLayout under Pro Tools
 - [x] Write vitest for trade value calculation logic (32 tests: pick value, pick parsing, player value estimation, value ratio, fuzzy match)
 - [x] Run all tests and save checkpoint (92 tests passing across 9 test files)
+
+## REBUILD: Hardened Architecture
+
+### Phase 2 — ESPN Data Pipeline
+- [x] Add espnViewHealth table to schema (per-season, per-view status, error messages, fetched_at)
+- [x] Rewrite fetchEspnViews with per-view error isolation (one failed view does not kill the whole fetch)
+- [x] Add cookie expiry detection (401/403 with clear user-facing error + staleness flag)
+- [x] Add data quality gates: validate rosters non-empty, draft data present, matchup count reasonable
+- [x] Add stale-data warnings: flag any cached season older than 7 days
+- [x] Build DataHealth page: per-season, per-view status with color-coded health indicators
+- [x] Expose pipeline health via tRPC pipelineHealth endpoint
+
+### Phase 3 — Analytics Layer
+- [x] Build server/analytics.ts: VORP calculator (value over replacement by position)
+- [x] Build positional scarcity index (starters rostered vs available at each position)
+- [x] Build roster gap analyzer (weakest positions per team)
+- [x] Build keeper efficiency score (keeper value vs draft cost vs ADP)
+- [x] Build manager behavior stats from transaction data (trades/yr, waiver adds/yr, drop mistakes, reach rate)
+- [x] Build rest-of-season (ROS) value estimator using PPG + schedule remaining
+- [x] Build LeagueAnalytics page (/analytics) with VORP, scarcity, roster gaps, keeper efficiency tabs
+- [x] Build ManagerBehavior page (/manager-behavior) with calculated GM profiles from transaction data
+- [x] Write 24 analytics vitest tests — 121 tests total passing, 0 TypeScript errors
+
+### Phase 4 — Replace Hardcoded Content
+- [ ] Delete opponentData.ts (hardcoded GM profiles)
+- [ ] Generate all GM profiles dynamically from ESPN transaction + draft data
+- [ ] Remove all hardcoded player names, buy-low targets, waiver suggestions from UI
+
+### Phase 5 — Math-First Trade Analyzer
+- [ ] Rebuild trade analyzer: calculate ROS value, keeper value, positional scarcity, lineup replacement value
+- [ ] Add playoff schedule factor to trade value
+- [ ] Add manager tendency factor (is this GM likely to accept this type of deal?)
+- [ ] AI verdict layer: explains the math, does not replace it
+
+### Phase 6 — Draft Optimizer
+- [ ] Build keeper-adjusted draft board (remove kept players from pool)
+- [ ] Add tier breaks by position (top-5 QB, top-12 RB, etc.)
+- [ ] Add round-by-round scarcity alerts (e.g. "RB cliff at pick 24")
+- [ ] Add "best pick for Rod" recommendation per round
+- [ ] Add opponent tendency overlay (what each GM typically drafts by round)
+
+### Phase 7 — UI Consolidation (7 screens)
+- [ ] Command Center (Dashboard + Standings + Matchups merged)
+- [ ] Draft War Room (Draft History + Keeper Calculator + Draft Optimizer merged)
+- [ ] Keeper Lab (Keeper Tracker + Keeper ROI + Keeper Calculator merged)
+- [ ] Trade Lab (Trade Analyzer + Trade Offer Generator + Pick Value + Pick Tracker merged)
+- [ ] Waiver Lab (Waiver Wire + Start/Sit + Player Profiles merged)
+- [ ] Opponent Intel (Owner Stats + Opponent Profiles merged)
+- [ ] Data Health (Data Refresh + pipeline health dashboard)
+
+### Phase 8 — AI Layer Rewire
+- [ ] AI GM Advisor gets calculated facts as context (VORP, scarcity, ROS values, manager stats)
+- [ ] All AI tools explain calculations, not replace them
+
+### Phase 9 — Tests + Checkpoint
+- [ ] Write vitest for analytics.ts (VORP, scarcity, roster gaps, keeper efficiency, ROS value)
+- [ ] Write vitest for pipeline health checks
+- [ ] Write vitest for math-first trade analyzer
+- [ ] All tests passing, save checkpoint
+
+## REBUILD Phase 1-3 Complete (2026-04-30)
+- [x] Harden ESPN pipeline: fetchEspnViewsHardened with per-view error isolation
+- [x] Add espnViewHealth DB table and helpers (upsertViewHealth, getViewHealthForSeason, getAllViewHealth)
+- [x] Add validateDataQuality, isStale, staleSummary, hasCookies to espnService
+- [x] Update refresh endpoint to use hardened pipeline and write view health records
+- [x] Add pipeline.health and pipeline.validate tRPC endpoints
+- [x] Build analytics engine: calcVORP, calcPositionalScarcity, calcRosterGaps, calcKeeperEfficiency, calcManagerBehavior, calcROSValue, calcPickValue
+- [x] Add analytics.vorp, analytics.scarcity, analytics.rosterGaps, analytics.keeperEfficiency, analytics.managerBehavior, analytics.rosValues tRPC endpoints
+- [x] Build DataHealth page (/data-health) with per-season and per-view health indicators
+- [x] Build LeagueAnalytics page (/analytics) with VORP, scarcity, roster gaps, keeper efficiency tabs
+- [x] Build ManagerBehavior page (/manager-behavior) with calculated GM profiles from transaction data
+- [x] Wire all new routes in App.tsx and AppLayout.tsx
+- [x] Write 24 analytics vitest tests (VORP, scarcity, roster gaps, keeper efficiency, manager behavior, ROS value, pick value)
+- [x] All 121 tests passing across 10 test files, 0 TypeScript errors

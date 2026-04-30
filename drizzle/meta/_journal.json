@@ -22,6 +22,13 @@
       "when": 1777503983160,
       "tag": "0002_careless_sandman",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1777519920117,
+      "tag": "0003_optimal_ben_grimm",
+      "breakpoints": true
     }
   ]
 }

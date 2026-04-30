@@ -89,3 +89,22 @@ export const pickTrades = mysqlTable(
 
 export type PickTrade = typeof pickTrades.$inferSelect;
 export type InsertPickTrade = typeof pickTrades.$inferInsert;
+
+// Per-view health tracking for the ESPN data pipeline
+export const espnViewHealth = mysqlTable(
+  "espn_view_health",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    season: int("season").notNull(),
+    viewName: varchar("viewName", { length: 64 }).notNull(),
+    status: mysqlEnum("status", ["ok", "error", "stale", "empty"]).notNull().default("ok"),
+    errorMessage: text("errorMessage"),
+    recordCount: int("recordCount"),
+    fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [index("idx_view_health_season_view").on(t.season, t.viewName)]
+);
+
+export type EspnViewHealth = typeof espnViewHealth.$inferSelect;
+export type InsertEspnViewHealth = typeof espnViewHealth.$inferInsert;
