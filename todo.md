@@ -188,3 +188,10 @@
 - [x] Add competitorIntelligence tRPC query: returns league-wide ineligibility map with draft advantage analysis
 - [x] Add "Competitor Intel" tab to KeeperCalculator.tsx: ineligible alert cards per team, replacement round cost, positional scarcity impact, your draft advantage summary
 - [x] Run all tests and save checkpoint
+
+## NEW: My Profile — Keeper Calculator
+
+- [x] Query ESPN cache to identify Roderick's team(s) across 2018–2025 and extract keeper history, W/L record, and stats
+- [x] Extend keeperEligibility2026 endpoint to include ownerProfile field for the logged-in user's team
+- [x] Add "My Profile" section to KeeperCalculator.tsx: personal stats card, keeper history timeline, 2026 recommendation
+- [x] Run all tests and save checkpoint

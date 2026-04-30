@@ -25,6 +25,10 @@ import {
   Target,
   Zap,
   Eye,
+  User,
+  BarChart2,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 
@@ -307,6 +311,230 @@ function CompetitorIntelTab({
   );
 }
 
+// ── Owner Profile Panel ───────────────────────────────────────────────────
+
+type OwnerProfileData = {
+  ownerName: string;
+  teamName: string;
+  teamId: number;
+  careerSeasons: Array<{ season: number; wins: number; losses: number; pf: number; pa: number; seed: number; teamName: string }>;
+  careerStats: {
+    totalWins: number;
+    totalLosses: number;
+    winPct: number;
+    totalPF: number;
+    totalPA: number;
+    avgPF: number;
+    playoffSeasons: number;
+    totalSeasons: number;
+    bestSeason: { season: number; wins: number; losses: number; pf: number; seed: number };
+    worstSeason: { season: number; wins: number; losses: number; pf: number; seed: number };
+    trend: string;
+    recentWinPct: number;
+  };
+  keeperHistory: Array<{ season: number; playerName: string; position: string; round: number; eligible2026: boolean }>;
+  keeper2026: {
+    eligible: Array<{ playerName: string; position: string; roundCost2026: number | null; valueLabel: string; valueTier: string }>;
+    ineligible: Array<{ playerName: string; position: string; round2025: number }>;
+    recommendation: string;
+  };
+};
+
+function OwnerProfilePanel({ profile }: { profile: OwnerProfileData }) {
+  const { careerStats, careerSeasons, keeperHistory, keeper2026 } = profile;
+  const trendIcon = careerStats.trend === "improving" ? <ArrowUp className="w-3 h-3 text-emerald-400" /> :
+                    careerStats.trend === "declining" ? <ArrowDown className="w-3 h-3 text-red-400" /> :
+                    <Minus className="w-3 h-3 text-yellow-400" />;
+  const trendColor = careerStats.trend === "improving" ? "text-emerald-400" :
+                     careerStats.trend === "declining" ? "text-red-400" : "text-yellow-400";
+
+  return (
+    <div className="space-y-5">
+      {/* ── Profile Header ── */}
+      <Card className="border-primary/40 bg-primary/5 ring-1 ring-primary/20">
+        <CardContent className="py-4 px-5">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center flex-shrink-0">
+              <User className="w-6 h-6 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-bold text-foreground">{profile.ownerName}</h2>
+                <Badge className="text-[9px] px-1.5 bg-primary/20 text-primary border-primary/30">YOUR TEAM</Badge>
+                <Badge variant="outline" className={`text-[9px] px-1.5 flex items-center gap-1 ${trendColor}`}>
+                  {trendIcon}
+                  {careerStats.trend.charAt(0).toUpperCase() + careerStats.trend.slice(1)}
+                </Badge>
+              </div>
+              <div className="text-sm text-muted-foreground mt-0.5">{profile.teamName}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {careerStats.totalSeasons} seasons · {careerStats.totalWins}W–{careerStats.totalLosses}L · {careerStats.winPct}% win rate · {careerStats.playoffSeasons} playoff appearances
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Career Stats Grid ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Career W–L", value: `${careerStats.totalWins}–${careerStats.totalLosses}`, sub: `${careerStats.winPct}% win rate`, color: "text-foreground" },
+          { label: "Total PF", value: careerStats.totalPF.toLocaleString(), sub: `Avg ${careerStats.avgPF.toFixed(0)}/season`, color: "text-blue-400" },
+          { label: "Playoff Appearances", value: `${careerStats.playoffSeasons}/${careerStats.totalSeasons}`, sub: "seasons made playoffs", color: "text-emerald-400" },
+          { label: "Recent Win %", value: `${careerStats.recentWinPct}%`, sub: "last 3 seasons", color: trendColor },
+        ].map((stat, i) => (
+          <Card key={i} className="bg-card border-border">
+            <CardContent className="py-3 px-3">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{stat.label}</div>
+              <div className={`text-xl font-bold ${stat.color}`}>{stat.value}</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">{stat.sub}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* ── Season-by-Season Record ── */}
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
+            <BarChart2 className="w-4 h-4 text-primary" />
+            Season-by-Season Record (2018–2025)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 px-2 text-muted-foreground font-medium">Season</th>
+                  <th className="text-left py-2 px-2 text-muted-foreground font-medium">Record</th>
+                  <th className="text-left py-2 px-2 text-muted-foreground font-medium">PF</th>
+                  <th className="text-left py-2 px-2 text-muted-foreground font-medium">PA</th>
+                  <th className="text-left py-2 px-2 text-muted-foreground font-medium">Seed</th>
+                  <th className="text-left py-2 px-2 text-muted-foreground font-medium">Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {careerSeasons.map((s) => {
+                  const isBest = s.season === careerStats.bestSeason.season;
+                  const isWorst = s.season === careerStats.worstSeason.season;
+                  const madePlayoffs = s.seed <= 7;
+                  return (
+                    <tr key={s.season} className={`border-b border-border/50 transition-colors ${
+                      isBest ? "bg-emerald-500/5" : isWorst ? "bg-red-500/5" : "hover:bg-accent/20"
+                    }`}>
+                      <td className="py-2 px-2 font-semibold text-foreground">
+                        {s.season}
+                        {isBest && <Badge className="ml-1.5 text-[8px] px-1 py-0 bg-emerald-600 text-white border-0">BEST</Badge>}
+                        {isWorst && <Badge className="ml-1.5 text-[8px] px-1 py-0 bg-red-700 text-white border-0">WORST</Badge>}
+                      </td>
+                      <td className="py-2 px-2">
+                        <span className={s.wins > s.losses ? "text-emerald-400 font-semibold" : s.wins < s.losses ? "text-red-400 font-semibold" : "text-yellow-400 font-semibold"}>
+                          {s.wins}–{s.losses}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 text-foreground">{s.pf.toFixed(1)}</td>
+                      <td className="py-2 px-2 text-muted-foreground">{s.pa.toFixed(1)}</td>
+                      <td className="py-2 px-2 text-muted-foreground">#{s.seed}</td>
+                      <td className="py-2 px-2">
+                        {madePlayoffs ? (
+                          <Badge variant="outline" className="text-[9px] px-1.5 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Playoffs</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[9px] px-1.5 bg-slate-500/10 text-slate-400 border-slate-500/30">Missed</Badge>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Keeper History ── */}
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
+            <Star className="w-4 h-4 text-yellow-400" />
+            Keeper History (2022–2025)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {keeperHistory.map((k, i) => {
+              const posClass = POSITION_COLORS[k.position?.toUpperCase()] ?? "bg-gray-500/20 text-gray-300 border-gray-500/30";
+              return (
+                <div key={i} className={`flex items-center gap-3 p-3 rounded-lg border ${
+                  k.eligible2026 ? "bg-emerald-500/5 border-emerald-500/20" : "bg-slate-800/40 border-border/50"
+                }`}>
+                  <div className="text-sm font-bold text-muted-foreground w-10 flex-shrink-0">{k.season}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm text-foreground">{k.playerName}</span>
+                      <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${posClass}`}>{k.position}</Badge>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Kept in Round {k.round}</div>
+                  </div>
+                  {k.eligible2026 ? (
+                    <Badge variant="outline" className="text-[9px] px-1.5 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 flex-shrink-0">
+                      Eligible 2026
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[9px] px-1.5 bg-slate-500/10 text-slate-400 border-slate-500/30 flex-shrink-0">
+                      Past
+                    </Badge>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── 2026 Keeper Recommendation ── */}
+      <Card className="border-primary/30 bg-primary/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2 text-primary">
+            <Target className="w-4 h-4" />
+            2026 Keeper Decision
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {keeper2026.eligible.length > 0 ? (
+            keeper2026.eligible.map((p, i) => {
+              const valCfg = VALUE_CONFIG[p.valueTier] ?? VALUE_CONFIG.fair;
+              const posClass = POSITION_COLORS[p.position?.toUpperCase()] ?? "bg-gray-500/20 text-gray-300 border-gray-500/30";
+              return (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm text-foreground">{p.playerName}</span>
+                      <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${posClass}`}>{p.position}</Badge>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Keep in Round {p.roundCost2026} for 2026</div>
+                  </div>
+                  <Badge variant="outline" className={`text-[9px] px-1.5 flex items-center gap-1 flex-shrink-0 ${valCfg.bg} ${valCfg.color}`}>
+                    {valCfg.icon}
+                    {p.valueLabel}
+                  </Badge>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-sm text-muted-foreground italic">No eligible keepers for 2026</div>
+          )}
+          <div className="flex items-start gap-2 bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mt-2">
+            <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-blue-200/80">{keeper2026.recommendation}</div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ── main page ──────────────────────────────────────────────────────────────
 
 export default function KeeperCalculator() {
@@ -448,6 +676,10 @@ export default function KeeperCalculator() {
                   <Trophy className="w-3.5 h-3.5 mr-1.5" />
                   Top Value
                 </TabsTrigger>
+                <TabsTrigger value="my-profile" className="data-[state=active]:bg-slate-700">
+                  <User className="w-3.5 h-3.5 mr-1.5" />
+                  My Profile
+                </TabsTrigger>
               </TabsList>
 
               {/* ── Eligibility Tab ── */}
@@ -555,6 +787,11 @@ export default function KeeperCalculator() {
                     </div>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              {/* ── My Profile Tab ── */}
+              <TabsContent value="my-profile" className="mt-4">
+                {data.ownerProfile && <OwnerProfilePanel profile={data.ownerProfile} />}
               </TabsContent>
 
               {/* ── Competitor Intel Tab ── */}

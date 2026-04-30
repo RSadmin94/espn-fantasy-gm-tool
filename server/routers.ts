@@ -546,6 +546,82 @@ export const appRouter = router({
             ? `${allIneligible.length} elite player${allIneligible.length > 1 ? "s" : ""} returning to the draft pool — ${competitorConstraints.filter(c => c.overallThreat === "critical").length} team${competitorConstraints.filter(c => c.overallThreat === "critical").length !== 1 ? "s" : ""} must burn early picks on replacements`
             : "No ineligible players this season",
         },
+        ownerProfile: (() => {
+          // Rod Sellers — Str8FrmHell / RodZilla — Team ID 11 across all seasons
+          const ROD_TEAM_ID = 11;
+          const ROD_TEAM_NAME = "Str8FrmHell, RodZilla";
+
+          // Career season records (from ESPN cache, 2018–2025)
+          const careerSeasons = [
+            { season: 2018, wins: 5,  losses: 8,  pf: 1583.1, pa: 1788.9, seed: 13, teamName: "Str8FrmHell, Rod's Minions" },
+            { season: 2019, wins: 8,  losses: 5,  pf: 1843.1, pa: 1821.4, seed: 2,  teamName: "Str8FrmHell, RodZilla" },
+            { season: 2020, wins: 6,  losses: 7,  pf: 1781.8, pa: 1706.4, seed: 10, teamName: "Str8FrmHell, RodZilla" },
+            { season: 2021, wins: 7,  losses: 7,  pf: 1699.2, pa: 1782.5, seed: 9,  teamName: "Str8FrmHell, RodZilla" },
+            { season: 2022, wins: 3,  losses: 11, pf: 1447.1, pa: 1857.7, seed: 13, teamName: "Str8FrmHell, RodZilla" },
+            { season: 2023, wins: 7,  losses: 7,  pf: 1893.6, pa: 1885.7, seed: 7,  teamName: "Str8FrmHell, RodZilla" },
+            { season: 2024, wins: 5,  losses: 8,  pf: 1652.3, pa: 1680.8, seed: 10, teamName: "Str8FrmHell, RodZilla" },
+            { season: 2025, wins: 9,  losses: 5,  pf: 1921.3, pa: 1693.3, seed: 3,  teamName: "Str8FrmHell, RodZilla" },
+          ];
+
+          const totalWins   = careerSeasons.reduce((s, r) => s + r.wins, 0);
+          const totalLosses = careerSeasons.reduce((s, r) => s + r.losses, 0);
+          const totalGames  = totalWins + totalLosses;
+          const winPct      = totalGames > 0 ? (totalWins / totalGames) * 100 : 0;
+          const totalPF     = careerSeasons.reduce((s, r) => s + r.pf, 0);
+          const totalPA     = careerSeasons.reduce((s, r) => s + r.pa, 0);
+          const avgPF       = totalPF / careerSeasons.length;
+          const bestSeason  = careerSeasons.reduce((best, r) => r.wins > best.wins ? r : best, careerSeasons[0]);
+          const worstSeason = careerSeasons.reduce((worst, r) => r.wins < worst.wins ? r : worst, careerSeasons[0]);
+          const playoffSeasons = careerSeasons.filter(r => r.seed <= 7).length; // top 7 of 14 make playoffs
+
+          // Keeper history (2022–2025, from ESPN data)
+          const keeperHistory = [
+            { season: 2022, playerName: "Derrick Henry",   position: "RB", round: 1, eligible2026: false },
+            { season: 2023, playerName: "Saquon Barkley",  position: "RB", round: 2, eligible2026: false },
+            { season: 2024, playerName: "Saquon Barkley",  position: "RB", round: 2, eligible2026: false },
+            { season: 2025, playerName: "Breece Hall",     position: "RB", round: 5, eligible2026: true  },
+          ];
+
+          // 2026 keeper situation
+          const myTeam2026 = teamResults.find(t => t.teamId === ROD_TEAM_ID);
+          const my2026Keeper = myTeam2026?.players.find(p => !p.isIneligible) ?? null;
+          const my2026Ineligible = myTeam2026?.players.filter(p => p.isIneligible) ?? [];
+
+          // Trend: last 3 seasons
+          const recentSeasons = careerSeasons.slice(-3);
+          const recentWinPct = recentSeasons.reduce((s, r) => s + r.wins, 0) /
+            (recentSeasons.reduce((s, r) => s + r.wins + r.losses, 0)) * 100;
+          const trend = recentWinPct > winPct + 5 ? "improving" : recentWinPct < winPct - 5 ? "declining" : "stable";
+
+          return {
+            ownerName: "Rod Sellers",
+            teamName: ROD_TEAM_NAME,
+            teamId: ROD_TEAM_ID,
+            careerSeasons,
+            careerStats: {
+              totalWins,
+              totalLosses,
+              winPct: Math.round(winPct * 10) / 10,
+              totalPF: Math.round(totalPF * 10) / 10,
+              totalPA: Math.round(totalPA * 10) / 10,
+              avgPF: Math.round(avgPF * 10) / 10,
+              playoffSeasons,
+              totalSeasons: careerSeasons.length,
+              bestSeason,
+              worstSeason,
+              trend,
+              recentWinPct: Math.round(recentWinPct * 10) / 10,
+            },
+            keeperHistory,
+            keeper2026: {
+              eligible: my2026Keeper ? [my2026Keeper] : [],
+              ineligible: my2026Ineligible,
+              recommendation: my2026Keeper
+                ? `Keep ${my2026Keeper.playerName} (${my2026Keeper.position}) in Round ${my2026Keeper.roundCost2026} — ${my2026Keeper.valueLabel}`
+                : "No eligible keepers found for 2026",
+            },
+          };
+        })(),
       };
     }),
   }),
