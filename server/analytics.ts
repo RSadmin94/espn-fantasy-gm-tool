@@ -1,3 +1,4 @@
+// FILE: server/analytics.ts
 /**
  * Analytics Engine — ESPN FF GM War Room
  *
@@ -481,7 +482,8 @@ export interface ROSValueResult {
   avgPoints: number;
   weeksRemaining: number;
   rosProjectedTotal: number;   // avgPoints × weeksRemaining
-  rosAdjusted: number;         // adjusted for injury risk and trend
+  rosAdjusted: number;         // adjusted for injury risk, schedule, and trend
+  scheduleStrength: "Easy" | "Neutral" | "Tough";
   injuryRisk: "None" | "Low" | "Medium" | "High";
   trendLabel: "Hot" | "Stable" | "Cold" | "Unknown";
 }
@@ -505,8 +507,18 @@ export function calcROSValue(
       : injuryRisk === "Low" ? 0.95
       : 1.0;
 
+    const scheduleRaw = (player as PlayerRow & { scheduleStrength?: string | number }).scheduleStrength;
+    const scheduleText = String(scheduleRaw ?? "").toLowerCase();
+    const scheduleNumber = typeof scheduleRaw === "number" ? scheduleRaw : 0;
+    const scheduleStrength: ROSValueResult["scheduleStrength"] = scheduleText.includes("easy") || scheduleText.includes("weak") || scheduleNumber > 0.1
+      ? "Easy"
+      : scheduleText.includes("tough") || scheduleText.includes("hard") || scheduleNumber < -0.1
+        ? "Tough"
+        : "Neutral";
+    const scheduleMultiplier = scheduleStrength === "Easy" ? 1.08 : scheduleStrength === "Tough" ? 0.92 : 1.0;
+
     const rosProjectedTotal = Math.round(player.avgPoints * weeksRemaining * 10) / 10;
-    const rosAdjusted = Math.round(rosProjectedTotal * injuryDiscount * 10) / 10;
+    const rosAdjusted = Math.round(rosProjectedTotal * injuryDiscount * scheduleMultiplier * 10) / 10;
 
     return {
       playerId: player.playerId,
@@ -517,6 +529,7 @@ export function calcROSValue(
       weeksRemaining,
       rosProjectedTotal,
       rosAdjusted,
+      scheduleStrength,
       injuryRisk,
       trendLabel: "Stable" as const, // enhanced with weekly data in future
     };

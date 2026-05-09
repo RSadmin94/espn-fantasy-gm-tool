@@ -269,23 +269,24 @@
 - [x] 138 tests passing, 0 TypeScript errors
 
 ### Phase 7 — UI Consolidation (7 screens)
-- [ ] Command Center (Dashboard + Standings + Matchups merged)
-- [ ] Draft War Room (Draft History + Keeper Calculator + Draft Optimizer merged)
-- [ ] Keeper Lab (Keeper Tracker + Keeper ROI + Keeper Calculator merged)
-- [ ] Trade Lab (Trade Analyzer + Trade Offer Generator + Pick Value + Pick Tracker merged)
-- [ ] Waiver Lab (Waiver Wire + Start/Sit + Player Profiles merged)
-- [ ] Opponent Intel (Owner Stats + Opponent Profiles merged)
-- [ ] Data Health (Data Refresh + pipeline health dashboard)
-
+- [x] Command Center hub (/command-center) — War Room, Standings, Matchups tabs
+- [x] Draft War Room hub (/draft-war-room) — Draft History, Keeper Calculator, Draft Optimizer tabs
+- [x] Keeper Lab hub (/keeper-lab) — Keeper Tracker, Keeper ROI, Future Value tabs
+- [x] Trade Lab hub (/trade-lab) — Trade Analyzer, Trade Offer Gen, Pick Value, Pick Tracker tabs
+- [x] Waiver Lab hub (/waiver-lab) — Start/Sit, Waiver Wire, Player Profiles, Schedule Strength tabs
+- [x] Opponent Intel hub (/opponent-intel) — Owner Career Stats, Manager Behavior, League Analytics tabs
+- [x] Data Center hub (/data-center) — Data Health, Data Refresh tabs
+- [x] AppLayout consolidated to 8-item nav (7 hubs + AI GM Advisor)
+- [x] App.tsx updated with all hub routes + root redirect to /command-center
 ### Phase 8 — AI Layer Rewire
-- [ ] AI GM Advisor gets calculated facts as context (VORP, scarcity, ROS values, manager stats)
-- [ ] All AI tools explain calculations, not replace them
-
+- [x] Start/Sit: queries VORP + ROS before calling AI, injects factContext (avg PPG, VORP, tier, ROS adjusted, injury risk, schedule) into prompt, shows collapsible "Facts passed to AI" panel with fuzzy name matching
+- [x] Waiver Wire: same pattern — injects calculated player stats into waiver AI prompt, shows "Calculated stats" card
+- [ ] GM Advisor: inject league analytics snapshot into system prompt context (deferred)
 ### Phase 9 — Tests + Checkpoint
-- [ ] Write vitest for analytics.ts (VORP, scarcity, roster gaps, keeper efficiency, ROS value)
-- [ ] Write vitest for pipeline health checks
-- [ ] Write vitest for math-first trade analyzer
-- [ ] All tests passing, save checkpoint
+- [x] server/draftOptimizer.test.ts: 4 tests for pick value, VORP tiers, ROS value, keeper pool filtering
+- [x] analytics.ts updated with scheduleStrength support in calcROSValue
+- [x] 142 tests passing across 12 test files, 0 TypeScript errors
+- [x] Final rebuild checkpoint saved
 
 ## REBUILD Phase 1-3 Complete (2026-04-30)
 - [x] Harden ESPN pipeline: fetchEspnViewsHardened with per-view error isolation

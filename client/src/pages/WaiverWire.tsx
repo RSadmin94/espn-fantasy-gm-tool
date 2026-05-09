@@ -1,3 +1,4 @@
+// FILE: client/src/pages/WaiverWire.tsx
 import { useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import SeasonSelector from "@/components/SeasonSelector";
@@ -13,6 +14,56 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 import { Search, TrendingUp, Brain, Loader2, Star, Zap, DollarSign } from "lucide-react";
+
+
+type AnalyticsRecord = Record<string, unknown>;
+
+type PlayerFact = {
+  playerName: string;
+  avgPoints: number | null;
+  vorp: number | null;
+  vorpTier: string;
+  rosAdjusted: number | null;
+  injuryRisk: string;
+  scheduleStrength: string;
+};
+
+const toRecords = (value: unknown): AnalyticsRecord[] => Array.isArray(value) ? value.filter((item): item is AnalyticsRecord => Boolean(item) && typeof item === "object") : [];
+const toNumberOrNull = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) ? value : null;
+const toDisplayNumber = (value: number | null): string => value === null ? "—" : value.toFixed(1);
+const toName = (value: unknown): string => typeof value === "string" ? value : "";
+const normalizeName = (value: string): string => value.toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[^a-z0-9\s.'-]/g, " ").replace(/\s+/g, " ").trim();
+
+const findByPlayerName = (records: AnalyticsRecord[], input: string): AnalyticsRecord | undefined => {
+  const normalizedInput = normalizeName(input);
+  if (!normalizedInput) return undefined;
+  return records.find((record) => {
+    const normalizedRecord = normalizeName(toName(record.playerName));
+    return Boolean(normalizedRecord) && (normalizedRecord.includes(normalizedInput) || normalizedInput.includes(normalizedRecord));
+  });
+};
+
+const getPlayerFact = (playerName: string, vorpData: unknown, rosData: unknown): PlayerFact | null => {
+  const vorpRecord = findByPlayerName(toRecords(vorpData), playerName);
+  const rosRecord = findByPlayerName(toRecords(rosData), playerName);
+  if (!vorpRecord && !rosRecord) return null;
+
+  return {
+    playerName: toName(vorpRecord?.playerName ?? rosRecord?.playerName) || playerName,
+    avgPoints: toNumberOrNull(vorpRecord?.avgPoints ?? rosRecord?.avgPoints),
+    vorp: toNumberOrNull(vorpRecord?.vorp),
+    vorpTier: toName(vorpRecord?.vorpTier) || "—",
+    rosAdjusted: toNumberOrNull(rosRecord?.rosAdjusted),
+    injuryRisk: toName(rosRecord?.injuryRisk) || "—",
+    scheduleStrength: toName(rosRecord?.scheduleStrength) || "—",
+  };
+};
+
+const formatFactContext = (playerName: string, fact: PlayerFact | null): string => {
+  if (!fact) return `CALCULATED FACTS (do not contradict these):\n${playerName}: no matching calculated VORP/ROS record found`;
+  const vorpPrefix = fact.vorp === null || fact.vorp < 0 ? "" : "+";
+  return `CALCULATED FACTS (do not contradict these):\n${fact.playerName}: avg PPG=${toDisplayNumber(fact.avgPoints)}, VORP=${vorpPrefix}${toDisplayNumber(fact.vorp)} (Tier: ${fact.vorpTier}), ROS adjusted=${toDisplayNumber(fact.rosAdjusted)}, injury risk=${fact.injuryRisk}, schedule=${fact.scheduleStrength}`;
+};
 
 const POS_FILTER_OPTIONS = ["All", "QB", "RB", "WR", "TE", "K", "D/ST"];
 const POS_ID_MAP: Record<string, number[]> = { QB: [1], RB: [2], WR: [3], TE: [4], K: [5], "D/ST": [16] };
@@ -55,7 +106,10 @@ export default function WaiverWire() {
   const [activeBlindSpot, setActiveBlindSpot] = useState<string | null>(null);
 
   const { data: freeAgents, isLoading: faLoading } = trpc.espn.freeAgents.useQuery({ season });
+  const { data: vorpData } = trpc.analytics.vorp.useQuery({ season: 2025 });
+  const { data: rosData } = trpc.analytics.rosValues.useQuery({ season: 2025, weeksRemaining: 8 });
   const chatMutation = trpc.advisor.chat.useMutation();
+  const playerFact = getPlayerFact(playerQuery.trim(), vorpData, rosData);
 
   const allFAs = ((freeAgents as Record<string, unknown>[]) || []).filter(Boolean);
   const filtered = posFilter === "All"
@@ -70,7 +124,11 @@ export default function WaiverWire() {
     setLoading(true);
     setReport(null);
     setActiveBlindSpot(playerName ?? null);
-    const prompt = `WAIVER WIRE SCOUTING REPORT — PPR 14-Team League (ATLANTAS FINEST FF)
+    const selectedFact = getPlayerFact(query, vorpData, rosData);
+    const factContext = formatFactContext(query, selectedFact);
+    const prompt = `${factContext}
+
+WAIVER WIRE SCOUTING REPORT — PPR 14-Team League (ATLANTAS FINEST FF)
 
 Player/Target: ${query}
 
@@ -121,6 +179,23 @@ Be specific and decisive. This is a 14-team PPR keeper league where depth is cri
                 <span className="ml-2 hidden sm:inline">Analyze</span>
               </Button>
             </div>
+            {playerQuery.trim() && playerFact && (
+              <Card className="mt-3 bg-accent/30 border-border">
+                <CardHeader className="py-3">
+                  <CardTitle className="text-xs font-semibold text-muted-foreground">Calculated stats</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-[11px]">
+                    <div><p className="text-muted-foreground">Avg PPG</p><p className="text-foreground font-semibold">{toDisplayNumber(playerFact.avgPoints)}</p></div>
+                    <div><p className="text-muted-foreground">VORP</p><p className="text-foreground font-semibold">{toDisplayNumber(playerFact.vorp)}</p></div>
+                    <div><p className="text-muted-foreground">VORP Tier</p><p className="text-foreground font-semibold">{playerFact.vorpTier}</p></div>
+                    <div><p className="text-muted-foreground">ROS Value</p><p className="text-foreground font-semibold">{toDisplayNumber(playerFact.rosAdjusted)}</p></div>
+                    <div><p className="text-muted-foreground">Injury Risk</p><p className="text-foreground font-semibold">{playerFact.injuryRisk}</p></div>
+                    <div><p className="text-muted-foreground">Schedule</p><p className="text-foreground font-semibold">{playerFact.scheduleStrength}</p></div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             {!isAuthenticated && (
               <p className="text-xs text-muted-foreground mt-2">
                 <button className="text-primary underline" onClick={() => window.location.href = getLoginUrl()}>Sign in</button> to use AI scouting reports

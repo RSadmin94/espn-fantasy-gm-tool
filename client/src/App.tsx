@@ -1,3 +1,5 @@
+// FILE: client/src/App.tsx
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -25,14 +27,26 @@ import TradeOfferGenerator from "./pages/TradeOfferGenerator";
 import DataHealth from "./pages/DataHealth";
 import LeagueAnalytics from "./pages/LeagueAnalytics";
 import ManagerBehavior from "./pages/ManagerBehavior";
-import DraftOptimizer from "./pages/DraftOptimizer";
-import KeeperFutureValue from "./pages/KeeperFutureValue";
-import StrengthOfSchedule from "./pages/StrengthOfSchedule";
+import CommandCenter from "@/pages/hubs/CommandCenter";
+import DraftWarRoom from "@/pages/hubs/DraftWarRoom";
+import KeeperLab from "@/pages/hubs/KeeperLab";
+import TradeLab from "@/pages/hubs/TradeLab";
+import WaiverLab from "@/pages/hubs/WaiverLab";
+import OpponentIntel from "@/pages/hubs/OpponentIntel";
+import DataCenter from "@/pages/hubs/DataCenter";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
+      <Route path="/" component={() => { useEffect(() => { window.location.replace("/command-center"); }, []); return null; }} />
+      <Route path="/command-center" component={CommandCenter} />
+      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/draft-war-room" component={DraftWarRoom} />
+      <Route path="/keeper-lab" component={KeeperLab} />
+      <Route path="/trade-lab" component={TradeLab} />
+      <Route path="/waiver-lab" component={WaiverLab} />
+      <Route path="/opponent-intel" component={OpponentIntel} />
+      <Route path="/data-center" component={DataCenter} />
       <Route path="/standings" component={Standings} />
       <Route path="/rosters" component={Rosters} />
       <Route path="/draft" component={DraftHistory} />
@@ -53,9 +67,6 @@ function Router() {
       <Route path="/data-health" component={DataHealth} />
       <Route path="/analytics" component={LeagueAnalytics} />
       <Route path="/manager-behavior" component={ManagerBehavior} />
-      <Route path="/draft-optimizer" component={DraftOptimizer} />
-      <Route path="/keeper-future-value" component={KeeperFutureValue} />
-      <Route path="/schedule-strength" component={StrengthOfSchedule} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
