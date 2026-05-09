@@ -385,3 +385,10 @@
 - [x] Champion detection verified correct across all 8 seasons (2018–2025) — Rod Sellers is 2025 champion
 - [x] Transaction counts confirmed accurate from live ESPN cache
 - [x] 155 tests passing, 0 TypeScript errors
+
+## BUG: Opponent Profiles Tab — Multiple Issues — FIXED
+- [x] Fix threat score 99% bug: winPct from server is 0-100 percentage, was being multiplied as if 0-1 decimal — fixed to divide by 100 before multiplying by 40
+- [x] Fix directive always AVOID: was caused by threat=99 for everyone — now properly differentiated (78% WATCH down to 43% FAIR)
+- [x] Merge duplicate Jan Graham entries: mergedOwners useMemo combines two ESPN member IDs by fullName key, sums totals, merges seasonRecords
+- [x] Filter inactive owners: INACTIVE_KEYWORDS list excludes teco Browning, Maurice Welch, Vince Sellers from all three computed arrays (liveOpponents, liveRankings, liveDraftIntel)
+- [x] Behavioral text: comes from live gmArchetypeDesc field — will improve further after fresh 2025 data refresh

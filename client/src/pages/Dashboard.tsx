@@ -197,10 +197,14 @@ export default function Dashboard() {
   const owners: LiveOwner[] = (ownerStatsData?.owners as LiveOwner[] | undefined) ?? [];
   const ROD_KEYWORDS = ["rod", "sellers", "str8"];
   const isRod = (o: LiveOwner) => ROD_KEYWORDS.some(k => o.fullName.toLowerCase().includes(k) || o.displayName.toLowerCase().includes(k));
+  // Inactive/former owners who left the league — exclude from current opponent cards
+  const INACTIVE_KEYWORDS = ["teco", "browning", "tecostix", "maurice", "welch", "dallas727", "vince"];
+  const isInactive = (o: LiveOwner) => INACTIVE_KEYWORDS.some(k => o.fullName.toLowerCase().includes(k) || o.displayName.toLowerCase().includes(k));
 
   // Compute live threat score: weighted combo of win%, avg PF rank, playoff rate, championships
+  // winPct and playoffRate come from server as 0-100 percentage values, so divide by 100
   const computeThreat = (o: LiveOwner): number => {
-    const winScore = Math.round(o.winPct * 40);
+    const winScore = Math.round((o.winPct / 100) * 40);
     const pfScore = Math.min(30, Math.round((o.avgPF / 1900) * 30));
     const playoffScore = Math.round((o.playoffRate / 100) * 20);
     const champScore = Math.min(10, o.championships * 5);
@@ -235,9 +239,51 @@ export default function Dashboard() {
   type LiveOpp = { memberId: string; name: string; team: string; abbr: string; threat: number; badge: string; badgeColor: string; tierColor: string; trajectory: "up" | "down" | "steady"; pf25: number; rank23: number; rank24: number; rank25: number; behavioral: string; directive: string; wins25: number; losses25: number };
   type LiveRank = { manager: string; rank23: number; rank24: number; rank25: number; label: string; you: boolean };
   type LiveDraftItem = { name: string; record: string; intel: string; risk: string };
+  // Merge duplicate Jan Graham accounts (same person, two ESPN member IDs)
+  // Keep the one with more seasons active; merge seasonRecords from both
+  const mergedOwners = useMemo((): LiveOwner[] => {
+    const seen = new Map<string, LiveOwner>();
+    const result: LiveOwner[] = [];
+    for (const o of owners) {
+      const nameKey = o.fullName.trim().toLowerCase();
+      if (seen.has(nameKey)) {
+        // Merge: combine seasonRecords (prefer higher-data entry per season), sum totals
+        const existing = seen.get(nameKey)!;
+        const mergedRecords = [...existing.seasonRecords];
+        for (const sr of o.seasonRecords) {
+          if (!mergedRecords.find(r => r.season === sr.season)) mergedRecords.push(sr);
+        }
+        const merged: LiveOwner = {
+          ...existing,
+          totalWins: existing.totalWins + o.totalWins,
+          totalLosses: existing.totalLosses + o.totalLosses,
+          totalPF: existing.totalPF + o.totalPF,
+          playoffAppearances: existing.playoffAppearances + o.playoffAppearances,
+          championships: existing.championships + o.championships,
+          totalAcquisitions: existing.totalAcquisitions + o.totalAcquisitions,
+          totalTrades: existing.totalTrades + o.totalTrades,
+          seasonsActive: existing.seasonsActive + o.seasonsActive,
+          seasonRecords: mergedRecords.sort((a, b) => a.season - b.season),
+        };
+        const totalGames = merged.totalWins + merged.totalLosses;
+        merged.winPct = totalGames > 0 ? Math.round((merged.totalWins / totalGames) * 1000) / 10 : 0;
+        merged.avgPF = merged.seasonsActive > 0 ? Math.round(merged.totalPF / merged.seasonsActive) : 0;
+        merged.playoffRate = merged.seasonsActive > 0 ? Math.round((merged.playoffAppearances / merged.seasonsActive) * 100) : 0;
+        seen.set(nameKey, merged);
+        // Replace in result array
+        const idx = result.findIndex(r => r.fullName.trim().toLowerCase() === nameKey);
+        if (idx >= 0) result[idx] = merged;
+      } else {
+        seen.set(nameKey, o);
+        result.push(o);
+      }
+    }
+    return result;
+  }, [owners]);
+
   const liveOpponents = useMemo((): LiveOpp[] =>
-    owners
-      .filter(o => !isRod(o))
+    mergedOwners
+      .filter(o => !isRod(o) && !isInactive(o))
       .map(o => {
         const threat = computeThreat(o);
         const { badge, badgeColor, tierColor } = computeBadge(threat, o);
@@ -255,7 +301,7 @@ export default function Dashboard() {
   [ownerStatsData]);
 
   const liveRankings = useMemo((): LiveRank[] =>
-    owners
+    mergedOwners
       .map(o => {
         const you = isRod(o);
         const rank23 = o.seasonRecords.find(s => s.season === 2023)?.rank ?? 99;
@@ -271,8 +317,8 @@ export default function Dashboard() {
   [ownerStatsData]);
 
   const liveDraftIntel = useMemo((): LiveDraftItem[] =>
-    owners
-      .filter(o => !isRod(o))
+    mergedOwners
+      .filter(o => !isRod(o) && !isInactive(o))
       .map(o => {
         const rec25 = o.seasonRecords.find(s => s.season === 2025);
         const record = rec25 ? `${rec25.wins}-${rec25.losses} in 2025` : `${o.seasonsActive} seasons`;
