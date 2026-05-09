@@ -441,3 +441,9 @@
 ## NEW: Undo Pick in Mock Draft Simulator
 
 - [x] Add Undo Pick button to MockDraftSimulator.tsx: reverses last pick, restores player to pool, moves cursor back one slot
+
+## NEW: Mock Draft Simulator Enhancements
+
+- [x] Add "Auto-Draft to My Pick" button: runs all AI picks until it is Rod's turn
+- [x] Add "Draft All Remaining" button: AI finishes rest of draft automatically after Rod's last pick
+- [x] Show all 14 teams' rosters in post-draft grade report with grades side-by-side

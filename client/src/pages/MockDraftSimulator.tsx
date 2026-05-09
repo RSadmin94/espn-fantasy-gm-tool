@@ -2,13 +2,13 @@
 // Opponent-Aware Mock Draft Simulator
 // 14-team snake draft where AI opponents draft based on their real historical tendencies.
 // Rod picks from his actual draft slot. Post-draft ECR grade.
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Search, Play, RotateCcw, Trophy, Users, Zap, ChevronRight, Undo2 } from "lucide-react";
+import { Search, Play, RotateCcw, Trophy, ChevronRight, Undo2, FastForward, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MergedPlayer } from "../../../server/fantasyDataService";
 
@@ -55,12 +55,10 @@ function pickForAI(
   const pool = available.filter((p) => !alreadyPicked.has(p.fpId));
   if (pool.length === 0) return null;
 
-  // Determine preferred position for this round based on historical tendencies
   const roundKey = Math.min(round, 6);
   const roundPrefs: Record<string, number> = (owner.byRound?.[roundKey] ?? {}) as Record<string, number>;
   const totalRoundPicks = Object.values(roundPrefs).reduce((a: number, b: number) => a + b, 0);
 
-  // Build weighted position preference
   const posWeights: Record<string, number> = {};
   if (totalRoundPicks > 0) {
     for (const [pos, cnt] of Object.entries(roundPrefs)) {
@@ -68,16 +66,13 @@ function pickForAI(
     }
   }
 
-  // Override for early QB/TE tendencies
   if (round <= 3 && owner.earlyQbPct > 30) posWeights["QB"] = (posWeights["QB"] ?? 0) + 0.3;
   if (round <= 3 && owner.earlyTePct > 30) posWeights["TE"] = (posWeights["TE"] ?? 0) + 0.3;
   if (round === 1 && owner.rb1Pct > 50) posWeights["RB"] = (posWeights["RB"] ?? 0) + 0.5;
   if (round === 1 && owner.wr1Pct > 50) posWeights["WR"] = (posWeights["WR"] ?? 0) + 0.5;
 
-  // Find best available player weighted by position preference
   const scored = pool.slice(0, 30).map((p) => {
     const posWeight = posWeights[p.position] ?? 0.1;
-    // Add randomness to simulate real draft variance
     const noise = Math.random() * 0.15;
     return { player: p, score: posWeight + noise - (p.ecrRank / 500) };
   });
@@ -86,15 +81,14 @@ function pickForAI(
   return scored[0]?.player ?? pool[0];
 }
 
-function gradeRoster(picks: DraftPick[], allPlayers: MergedPlayer[]): { grade: string; avgEcr: number; totalVbd: number } {
+function gradeRoster(picks: DraftPick[]): { grade: string; avgEcr: number; totalVbd: number } {
   if (picks.length === 0) return { grade: "—", avgEcr: 0, totalVbd: 0 };
   const avgEcr = picks.reduce((s, p) => s + p.player.ecrRank, 0) / picks.length;
   const totalVbd = picks.reduce((s, p) => s + (p.player.pfr2025?.vbd ?? 0), 0);
 
-  // Grade based on average ECR relative to pick number
   let surplus = 0;
   for (const pick of picks) {
-    surplus += pick.overall - pick.player.ecrRank; // positive = value, negative = reach
+    surplus += pick.overall - pick.player.ecrRank;
   }
   const avgSurplus = surplus / picks.length;
 
@@ -115,12 +109,14 @@ function gradeRoster(picks: DraftPick[], allPlayers: MergedPlayer[]): { grade: s
 
 export default function MockDraftSimulator() {
   const [draftSlot, setDraftSlot] = useState(1);
-  const [isRunning, setIsRunning] = useState(false);
   const [picks, setPicks] = useState<DraftPick[]>([]);
   const [draftComplete, setDraftComplete] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [manualPickMode, setManualPickMode] = useState(false);
   const [currentOverall, setCurrentOverall] = useState(1);
+  const [isAutoRunning, setIsAutoRunning] = useState(false);
+  const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  const autoRunRef = useRef(false);
 
   const { data: boardData, isLoading: boardLoading } = trpc.draftBoard.getPlayers.useQuery(
     undefined,
@@ -134,12 +130,9 @@ export default function MockDraftSimulator() {
     { staleTime: 10 * 60 * 1000 }
   );
 
-  // Build the 14-team draft order with owner names
   const teams = useMemo(() => {
     if (!draftOrderData) return [];
-    // draftOrder returns { draftOrder: [{teamId, teamName, round, pickInRound, overall}] }
     const raw = (draftOrderData as { draftOrder?: { teamId: number; teamName: string; round: number; pickInRound: number; overall: number }[] }).draftOrder ?? [];
-    // Get unique teams in their first-round order
     const seen = new Set<number>();
     const uniqueTeams: { teamId: number; teamName: string; ownerName: string; draftPosition: number }[] = [];
     for (const pick of raw.filter((p) => p.round === 1).sort((a, b) => a.pickInRound - b.pickInRound)) {
@@ -156,7 +149,6 @@ export default function MockDraftSimulator() {
     return idx >= 0 ? idx : draftSlot - 1;
   }, [teams, draftSlot]);
 
-  // Build snake draft order: [0..13, 13..0, 0..13, ...]
   const snakeOrder = useMemo(() => {
     const order: number[] = [];
     for (let r = 0; r < TOTAL_ROUNDS; r++) {
@@ -191,37 +183,39 @@ export default function MockDraftSimulator() {
     return raw;
   }, [tendenciesData]);
 
-  const runAIPick = useCallback(() => {
-    if (!boardData || currentPickTeamIdx === rodSlotIndex || draftComplete) return;
+  // Core AI pick logic (pure, uses passed-in state to avoid stale closures)
+  const makeAIPick = useCallback((
+    overallSlot: number,
+    currentPicks: DraftPick[],
+    allPlayers: MergedPlayer[]
+  ): DraftPick | null => {
+    const teamIdx = snakeOrder[overallSlot - 1] ?? 0;
+    if (teamIdx === rodSlotIndex) return null; // Rod's turn, skip
+    const team = teams[teamIdx];
+    if (!team) return null;
 
-    const team = teams[currentPickTeamIdx];
-    if (!team) return;
+    const pickedSet = new Set(currentPicks.map((p) => p.player.fpId));
+    const available = allPlayers.filter((p) => !pickedSet.has(p.fpId));
+    const round = Math.ceil(overallSlot / TOTAL_TEAMS);
 
     const owner = owners.find((o) =>
       o.name.toLowerCase().includes(team.ownerName.split(" ")[0].toLowerCase())
-    ) ?? owners[currentPickTeamIdx % owners.length];
+    ) ?? owners[teamIdx % owners.length];
 
     const player = owner
-      ? pickForAI(owner, currentRound, availablePlayers, pickedIds)
-      : availablePlayers[0];
+      ? pickForAI(owner, round, available, pickedSet)
+      : available[0];
 
-    if (!player) return;
+    if (!player) return null;
 
-    const newPick: DraftPick = {
-      round: currentRound,
-      pick: (currentOverall - 1) % TOTAL_TEAMS + 1,
-      overall: currentOverall,
+    return {
+      round,
+      pick: (overallSlot - 1) % TOTAL_TEAMS + 1,
+      overall: overallSlot,
       owner: team.ownerName,
       player,
     };
-
-    setPicks((prev) => [...prev, newPick]);
-    setCurrentOverall((prev) => prev + 1);
-
-    if (currentOverall >= TOTAL_TEAMS * TOTAL_ROUNDS) {
-      setDraftComplete(true);
-    }
-  }, [boardData, currentPickTeamIdx, rodSlotIndex, draftComplete, teams, owners, availablePlayers, pickedIds, currentRound, currentOverall]);
+  }, [snakeOrder, rodSlotIndex, teams, owners]);
 
   const handleRodPick = useCallback((player: MergedPlayer) => {
     if (!isRodsTurn) return;
@@ -240,10 +234,90 @@ export default function MockDraftSimulator() {
     if (currentOverall >= TOTAL_TEAMS * TOTAL_ROUNDS) setDraftComplete(true);
   }, [isRodsTurn, teams, rodSlotIndex, currentRound, currentOverall]);
 
+  // Advance one AI pick
   const handleAutoAdvance = useCallback(() => {
-    if (isRodsTurn || draftComplete) return;
-    runAIPick();
-  }, [isRodsTurn, draftComplete, runAIPick]);
+    if (isRodsTurn || draftComplete || !boardData) return;
+    const pick = makeAIPick(currentOverall, picks, boardData.players);
+    if (!pick) return;
+    setPicks((prev) => [...prev, pick]);
+    setCurrentOverall((prev) => {
+      const next = prev + 1;
+      if (next > TOTAL_TEAMS * TOTAL_ROUNDS) setDraftComplete(true);
+      return next;
+    });
+  }, [isRodsTurn, draftComplete, boardData, makeAIPick, currentOverall, picks]);
+
+  // Auto-Draft to My Pick: run all AI picks until it's Rod's turn
+  const handleAutoDraftToMyPick = useCallback(() => {
+    if (!boardData || draftComplete) return;
+    setIsAutoRunning(true);
+    autoRunRef.current = true;
+
+    let slot = currentOverall;
+    let currentPicksList = [...picks];
+    const allPlayers = boardData.players;
+    const totalSlots = TOTAL_TEAMS * TOTAL_ROUNDS;
+
+    // Run synchronously until Rod's turn or draft end
+    while (slot <= totalSlots) {
+      const teamIdx = snakeOrder[slot - 1] ?? 0;
+      if (teamIdx === rodSlotIndex) break; // Stop at Rod's turn
+      const pick = makeAIPick(slot, currentPicksList, allPlayers);
+      if (!pick) break;
+      currentPicksList = [...currentPicksList, pick];
+      slot++;
+    }
+
+    if (slot > totalSlots) {
+      setDraftComplete(true);
+    }
+    setPicks(currentPicksList);
+    setCurrentOverall(slot);
+    setIsAutoRunning(false);
+    autoRunRef.current = false;
+  }, [boardData, draftComplete, currentOverall, picks, snakeOrder, rodSlotIndex, makeAIPick]);
+
+  // Draft All Remaining: AI finishes the entire rest of the draft
+  const handleDraftAllRemaining = useCallback(() => {
+    if (!boardData || draftComplete) return;
+    setIsAutoRunning(true);
+
+    let slot = currentOverall;
+    let currentPicksList = [...picks];
+    const allPlayers = boardData.players;
+    const totalSlots = TOTAL_TEAMS * TOTAL_ROUNDS;
+
+    while (slot <= totalSlots) {
+      const teamIdx = snakeOrder[slot - 1] ?? 0;
+      if (teamIdx === rodSlotIndex) {
+        // Rod's turn — auto-pick best available for Rod too
+        const pickedSet = new Set(currentPicksList.map((p) => p.player.fpId));
+        const available = allPlayers.filter((p) => !pickedSet.has(p.fpId));
+        const player = available[0];
+        if (!player) break;
+        const round = Math.ceil(slot / TOTAL_TEAMS);
+        const team = teams[rodSlotIndex];
+        currentPicksList = [...currentPicksList, {
+          round,
+          pick: (slot - 1) % TOTAL_TEAMS + 1,
+          overall: slot,
+          owner: team?.ownerName ?? ROD_NAME,
+          player,
+        }];
+        slot++;
+      } else {
+        const pick = makeAIPick(slot, currentPicksList, allPlayers);
+        if (!pick) break;
+        currentPicksList = [...currentPicksList, pick];
+        slot++;
+      }
+    }
+
+    setPicks(currentPicksList);
+    setCurrentOverall(Math.min(slot, totalSlots + 1));
+    setDraftComplete(true);
+    setIsAutoRunning(false);
+  }, [boardData, draftComplete, currentOverall, picks, snakeOrder, rodSlotIndex, makeAIPick, teams]);
 
   const handleReset = useCallback(() => {
     setPicks([]);
@@ -251,6 +325,9 @@ export default function MockDraftSimulator() {
     setDraftComplete(false);
     setSearchQuery("");
     setManualPickMode(false);
+    setIsAutoRunning(false);
+    setExpandedTeam(null);
+    autoRunRef.current = false;
   }, []);
 
   const handleUndo = useCallback(() => {
@@ -263,9 +340,26 @@ export default function MockDraftSimulator() {
   }, [picks.length]);
 
   const rodPicks = useMemo(() => picks.filter((p) => p.owner === (teams[rodSlotIndex]?.ownerName ?? ROD_NAME)), [picks, teams, rodSlotIndex]);
-  const rodGrade = useMemo(() => gradeRoster(rodPicks, boardData?.players ?? []), [rodPicks, boardData]);
+  const rodGrade = useMemo(() => gradeRoster(rodPicks), [rodPicks]);
+
+  // Build per-team rosters for the post-draft report
+  const allTeamRosters = useMemo(() => {
+    if (!draftComplete || teams.length === 0) return [];
+    return teams.map((team) => {
+      const teamPicks = picks.filter((p) => p.owner === team.ownerName);
+      const grade = gradeRoster(teamPicks);
+      const isRod = team.ownerName === (teams[rodSlotIndex]?.ownerName ?? ROD_NAME);
+      return { team, picks: teamPicks, grade, isRod };
+    }).sort((a, b) => {
+      // Rod first, then sort by grade
+      if (a.isRod) return -1;
+      if (b.isRod) return 1;
+      return a.grade.avgEcr - b.grade.avgEcr;
+    });
+  }, [draftComplete, teams, picks, rodSlotIndex]);
 
   const top5Available = availablePlayers.slice(0, 5);
+  const draftStarted = picks.length > 0 || currentOverall > 1;
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -277,25 +371,25 @@ export default function MockDraftSimulator() {
             14-team snake draft. AI opponents draft using their real historical tendencies. You pick for Rod.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
             size="sm"
             onClick={handleUndo}
-            disabled={picks.length === 0}
+            disabled={picks.length === 0 || isAutoRunning}
             className="gap-2"
             title="Undo last pick"
           >
             <Undo2 className="w-4 h-4" /> Undo Pick
           </Button>
-          <Button variant="outline" size="sm" onClick={handleReset} className="gap-2">
+          <Button variant="outline" size="sm" onClick={handleReset} disabled={isAutoRunning} className="gap-2">
             <RotateCcw className="w-4 h-4" /> Reset
           </Button>
         </div>
       </div>
 
       {/* Setup */}
-      {picks.length === 0 && !draftComplete && (
+      {!draftStarted && !draftComplete && (
         <Card className="border-slate-700/50 bg-slate-800/30">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Draft Setup</CardTitle>
@@ -304,7 +398,7 @@ export default function MockDraftSimulator() {
             <div className="flex items-center gap-4 flex-wrap">
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">Rod's Draft Slot</label>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-wrap">
                   {Array.from({ length: TOTAL_TEAMS }, (_, i) => i + 1).map((slot) => (
                     <Button
                       key={slot}
@@ -345,7 +439,7 @@ export default function MockDraftSimulator() {
       )}
 
       {/* Active draft */}
-      {(picks.length > 0 || currentOverall > 1) && !draftComplete && (
+      {draftStarted && !draftComplete && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Current pick status */}
           <div className="lg:col-span-1 space-y-4">
@@ -362,14 +456,36 @@ export default function MockDraftSimulator() {
                   {isRodsTurn ? "🎯 Rod's Turn" : `${teams[currentPickTeamIdx]?.ownerName ?? "AI"} is picking…`}
                 </p>
                 {!isRodsTurn && (
-                  <Button size="sm" onClick={handleAutoAdvance} className="w-full gap-2">
-                    <ChevronRight className="w-4 h-4" /> Advance (AI picks)
-                  </Button>
+                  <div className="space-y-2">
+                    <Button size="sm" onClick={handleAutoAdvance} disabled={isAutoRunning} className="w-full gap-2">
+                      <ChevronRight className="w-4 h-4" /> Advance (AI picks)
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleAutoDraftToMyPick}
+                      disabled={isAutoRunning}
+                      className="w-full gap-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                    >
+                      <FastForward className="w-4 h-4" /> Auto-Draft to My Pick
+                    </Button>
+                  </div>
                 )}
                 {isRodsTurn && (
-                  <Button size="sm" variant="outline" onClick={() => setManualPickMode(true)} className="w-full gap-2">
-                    <Search className="w-4 h-4" /> Search & Pick
-                  </Button>
+                  <div className="space-y-2">
+                    <Button size="sm" variant="outline" onClick={() => setManualPickMode(true)} className="w-full gap-2">
+                      <Search className="w-4 h-4" /> Search & Pick
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleDraftAllRemaining}
+                      disabled={isAutoRunning}
+                      className="w-full gap-2 border-slate-600 text-slate-400 hover:bg-slate-700/50 text-xs"
+                    >
+                      <Zap className="w-3 h-3" /> Auto-finish entire draft
+                    </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -474,8 +590,9 @@ export default function MockDraftSimulator() {
       {/* Draft complete — grade report */}
       {draftComplete && (
         <div className="space-y-6">
+          {/* Rod's summary card */}
           <Card className="border-emerald-500/30 bg-emerald-500/10">
-            <CardContent className="p-6 flex items-center gap-6">
+            <CardContent className="p-6 flex items-center gap-6 flex-wrap">
               <div className="text-center">
                 <p className="text-xs text-muted-foreground mb-1">Draft Grade</p>
                 <p className={cn("text-6xl font-black", GRADE_COLORS[rodGrade.grade] ?? "text-foreground")}>
@@ -491,42 +608,82 @@ export default function MockDraftSimulator() {
                   Total VBD (2025 base): <span className="text-foreground font-medium">{rodGrade.totalVbd}</span>
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Grade reflects how much value you extracted vs. your draft position (positive = value picks, negative = reaches).
+                  Grade reflects value extracted vs. draft position (positive = value picks, negative = reaches).
                 </p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-slate-700/50 bg-slate-800/30">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-amber-400" />
-                Rod's Final Roster
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="space-y-1">
-                {rodPicks.map((pick) => (
-                  <div key={pick.overall} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-slate-700/30">
-                    <span className="text-xs text-muted-foreground w-16 shrink-0">Rd {pick.round}</span>
-                    <Badge variant="outline" className={cn("text-xs px-1 py-0 h-5 shrink-0", POS_COLORS[pick.player.position] ?? "")}>
-                      {pick.player.position}
-                    </Badge>
-                    <span className="text-sm font-medium text-foreground flex-1">{pick.player.name}</span>
-                    <span className="text-xs text-muted-foreground">{pick.player.team}</span>
-                    <span className="text-xs text-muted-foreground">ECR #{pick.player.ecrRank}</span>
-                    <span className={cn(
-                      "text-xs font-semibold w-12 text-right",
-                      (pick.overall - pick.player.ecrRank) >= 5 ? "text-emerald-400" :
-                      (pick.overall - pick.player.ecrRank) <= -5 ? "text-red-400" : "text-muted-foreground"
-                    )}>
-                      {pick.overall - pick.player.ecrRank > 0 ? `+${pick.overall - pick.player.ecrRank}` : pick.overall - pick.player.ecrRank}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          {/* All 14 teams league-wide summary */}
+          <div>
+            <h2 className="text-base font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-amber-400" />
+              All Teams — Draft Grades
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {allTeamRosters.map(({ team, picks: teamPicks, grade, isRod }) => (
+                <Card
+                  key={team.teamId}
+                  className={cn(
+                    "border cursor-pointer transition-colors",
+                    isRod ? "border-primary/40 bg-primary/5" : "border-slate-700/50 bg-slate-800/30 hover:bg-slate-800/50"
+                  )}
+                  onClick={() => setExpandedTeam(expandedTeam === team.ownerName ? null : team.ownerName)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {isRod && <span className="text-xs text-primary font-semibold shrink-0">YOU</span>}
+                        <span className="text-sm font-medium text-foreground truncate">{team.ownerName}</span>
+                      </div>
+                      <span className={cn("text-2xl font-black shrink-0", GRADE_COLORS[grade.grade] ?? "text-foreground")}>
+                        {grade.grade}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>Avg ECR {grade.avgEcr.toFixed(0)}</span>
+                      <span>VBD {grade.totalVbd}</span>
+                      <span>{teamPicks.length} picks</span>
+                    </div>
+                    {/* Positional summary pills */}
+                    <div className="flex gap-1 mt-2 flex-wrap">
+                      {(["QB", "RB", "WR", "TE", "K", "DST"] as const).map((pos) => {
+                        const count = teamPicks.filter((p) => p.player.position === pos).length;
+                        if (count === 0) return null;
+                        return (
+                          <span key={pos} className={cn("text-xs px-1.5 py-0.5 rounded border", POS_COLORS[pos])}>
+                            {pos} ×{count}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    {/* Expanded roster */}
+                    {expandedTeam === team.ownerName && (
+                      <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-1">
+                        {teamPicks.map((pick) => (
+                          <div key={pick.overall} className="flex items-center gap-2 text-xs">
+                            <span className="text-muted-foreground w-10 shrink-0">Rd {pick.round}</span>
+                            <Badge variant="outline" className={cn("px-1 py-0 h-4 text-[10px] shrink-0", POS_COLORS[pick.player.position] ?? "")}>
+                              {pick.player.position}
+                            </Badge>
+                            <span className="text-foreground truncate flex-1">{pick.player.name}</span>
+                            <span className={cn(
+                              "shrink-0 font-medium",
+                              (pick.overall - pick.player.ecrRank) >= 5 ? "text-emerald-400" :
+                              (pick.overall - pick.player.ecrRank) <= -5 ? "text-red-400" : "text-muted-foreground"
+                            )}>
+                              {pick.overall - pick.player.ecrRank > 0 ? `+${pick.overall - pick.player.ecrRank}` : pick.overall - pick.player.ecrRank}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">Click any team card to expand their full roster.</p>
+          </div>
 
           <Button onClick={handleReset} variant="outline" className="gap-2">
             <RotateCcw className="w-4 h-4" /> Run Another Mock Draft
