@@ -281,7 +281,7 @@
 ### Phase 8 — AI Layer Rewire
 - [x] Start/Sit: queries VORP + ROS before calling AI, injects factContext (avg PPG, VORP, tier, ROS adjusted, injury risk, schedule) into prompt, shows collapsible "Facts passed to AI" panel with fuzzy name matching
 - [x] Waiver Wire: same pattern — injects calculated player stats into waiver AI prompt, shows "Calculated stats" card
-- [ ] GM Advisor: inject league analytics snapshot into system prompt context (deferred)
+- [x] GM Advisor: inject league analytics snapshot into system prompt context (VORP leaders by position, positional scarcity alerts, biggest roster weaknesses — all calculated facts, AI instructed not to contradict them)
 ### Phase 9 — Tests + Checkpoint
 - [x] server/draftOptimizer.test.ts: 4 tests for pick value, VORP tiers, ROS value, keeper pool filtering
 - [x] analytics.ts updated with scheduleStrength support in calcROSValue

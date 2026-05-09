@@ -2603,12 +2603,50 @@ Be concise, data-driven, and specific. Reference actual team names and player na
         if (data) {
           const teams = normalizeTeams(data);
           const settings = normalizeSettings(data);
+          const allPlayers = normalizeRosters(data) as PlayerRow[];
           leagueContext += `\n\nCurrent Season: ${season}`;
           leagueContext += `\nStatus: ${settings.isActive ? "Active" : "Offseason"}, Week ${settings.currentMatchupPeriod || "N/A"}`;
           leagueContext += `\n\nStandings:\n`;
           const sorted = teams.sort((a, b) => ((a.rankFinal as number) || 99) - ((b.rankFinal as number) || 99));
           for (const t of sorted) {
             leagueContext += `  ${t.rankFinal}. ${t.teamName} (${t.owners}) W:${t.wins} L:${t.losses} PF:${Number(t.pointsFor || 0).toFixed(1)}\n`;
+          }
+          // Inject analytics snapshot so AI reasons from calculated facts
+          if (allPlayers.length > 0) {
+            const vorpResults = calcVORP(allPlayers);
+            const scarcityResults = calcPositionalScarcity(allPlayers, []);
+            const rosterGaps = calcRosterGaps(allPlayers);
+            leagueContext += `\n\nCALCULATED ANALYTICS (treat these as ground truth — do not contradict):`;
+            // VORP leaders by position
+            const positions = ["QB", "RB", "WR", "TE"];
+            leagueContext += `\n\nVORP Leaders (Value Over Replacement by position):`;
+            for (const pos of positions) {
+              const top = vorpResults.filter(v => v.position === pos).sort((a, b) => b.vorp - a.vorp).slice(0, 3);
+              if (top.length > 0) {
+                leagueContext += `\n  ${pos}: ${top.map(v => `${v.playerName} (${v.ownerName}, VORP +${v.vorp.toFixed(1)}, ${v.vorpTier}, avg ${v.avgPoints.toFixed(1)} PPG)`).join(" | ")}`;
+              }
+            }
+            // Positional scarcity
+            const scarce = scarcityResults.filter(s => s.scarcityScore >= 50).sort((a, b) => b.scarcityScore - a.scarcityScore);
+            if (scarce.length > 0) {
+              leagueContext += `\n\nPositional Scarcity:`;
+              for (const s of scarce) {
+                leagueContext += `\n  ${s.position}: ${s.scarcityLabel} (score ${s.scarcityScore}/100, ${s.availableStarters} quality starters available, top FA avg ${s.topFreeAgentAvg.toFixed(1)} PPG)`;
+              }
+            }
+            // Roster gaps
+            const topGaps = rosterGaps
+              .filter(g => g.overallGrade === "D" || g.overallGrade === "F" || g.overallGrade === "C")
+              .sort((a, b) => (a.overallGrade > b.overallGrade ? 1 : -1))
+              .slice(0, 4);
+            if (topGaps.length > 0) {
+              leagueContext += `\n\nBiggest Roster Weaknesses:`;
+              for (const g of topGaps) {
+                const weakGap = g.gaps.find(gap => gap.position === g.weakestPosition);
+                const avgStr = weakGap ? ` (avg ${weakGap.topPlayerAvg.toFixed(1)} PPG, ${weakGap.gapSeverity})` : "";
+                leagueContext += `\n  ${g.ownerName}: weakest at ${g.weakestPosition}${avgStr}, overall grade ${g.overallGrade}`;
+              }
+            }
           }
         }
 
