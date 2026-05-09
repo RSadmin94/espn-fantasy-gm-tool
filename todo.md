@@ -400,3 +400,12 @@
 - [x] Add more data to each card: career W-L record, best season rank, playoff rate %, trajectory pill
 - [x] Add trajectory narrative sentence (e.g., "3 consecutive playoff appearances", "dropped from #1 to #6 in 2 years")
 - [x] Ensure all 13 opponent cards have unique, non-repeated insight text
+
+## NEW: Competitor Draft Intelligence — Deeper Tendencies
+
+- [x] Enhance leagueDraftTendencies server procedure: add avgPickRound per position, late-round position targets, QB timing, TE timing, keeper rate, positional reach score
+- [x] Add generateDraftTendencyNarrative() on client: produces 2-3 sentences of specific tendencies per manager from actual pick data
+- [x] Add generateDraftCounterStrategy() per manager: specific advice for Rod on how to draft against this person
+- [x] Rebuild Competitor Draft Intelligence section: replace 6-item simple list with full per-manager deep-dive cards using leagueDraftTendencies data
+- [x] Each card shows: draft style badge, positional bar, round-by-round tendencies (Rd1-6), actual Rd1 pick history, key tendencies list, counter-strategy box
+- [x] Add "Tendencies at a Glance" summary row: QB timing, TE timing, keeper rate, diversity score per card

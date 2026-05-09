@@ -1701,6 +1701,80 @@ Respond with JSON in this exact format:
         else if (wr1 / r1Total >= 0.6) draftStyle = "WR-First";
         else if (qb1 / r1Total >= 0.3) draftStyle = "QB-Early";
         else if (te1 / r1Total >= 0.3) draftStyle = "TE-Premium";
+
+        // Extended tendency metrics
+        // QB timing: collect all rounds where QB was drafted
+        const allQBRounds: number[] = [];
+        for (const [rd, posCounts] of Object.entries(o.byRound)) {
+          const rdNum = Number(rd);
+          const qbCount = (posCounts as Record<string, number>)["QB"] || 0;
+          for (let i = 0; i < qbCount; i++) allQBRounds.push(rdNum);
+        }
+        const qbEarliestRound = allQBRounds.length > 0 ? Math.min(...allQBRounds) : 99;
+        const qbAvgRound = allQBRounds.length > 0 ? Math.round(allQBRounds.reduce((a, b) => a + b, 0) / allQBRounds.length) : 99;
+
+        // TE timing
+        const allTERounds: number[] = [];
+        for (const [rd, posCounts] of Object.entries(o.byRound)) {
+          const rdNum = Number(rd);
+          const teCount = (posCounts as Record<string, number>)["TE"] || 0;
+          for (let i = 0; i < teCount; i++) allTERounds.push(rdNum);
+        }
+        const teEarliestRound = allTERounds.length > 0 ? Math.min(...allTERounds) : 99;
+        const teAvgRound = allTERounds.length > 0 ? Math.round(allTERounds.reduce((a, b) => a + b, 0) / allTERounds.length) : 99;
+
+        // Keeper rate: % of round1 picks that are keepers
+        const r1KeeperCount = o.round1Picks.filter((p: { isKeeper: boolean }) => p.isKeeper).length;
+        const keeperRate = o.round1Picks.length > 0 ? Math.round(r1KeeperCount / o.round1Picks.length * 100) : 0;
+        const allEarlyPicks = [...o.round1Picks, ...o.round2Picks, ...o.round3Picks];
+        const totalKeeperPicks = allEarlyPicks.filter((p: { isKeeper: boolean }) => p.isKeeper).length;
+
+        // Early rounds (1-3) positional concentration
+        const earlyRoundPicks: Record<string, number> = {};
+        for (let rd = 1; rd <= 3; rd++) {
+          for (const [pos, cnt] of Object.entries(o.byRound[rd] || {})) {
+            earlyRoundPicks[pos] = (earlyRoundPicks[pos] || 0) + (cnt as number);
+          }
+        }
+        const earlyTotal = Object.values(earlyRoundPicks).reduce((s, v) => s + v, 0) || 1;
+        const earlyRbPct = Math.round(((earlyRoundPicks["RB"] || 0) / earlyTotal) * 100);
+        const earlyWrPct = Math.round(((earlyRoundPicks["WR"] || 0) / earlyTotal) * 100);
+        const earlyQbPct = Math.round(((earlyRoundPicks["QB"] || 0) / earlyTotal) * 100);
+        const earlyTePct = Math.round(((earlyRoundPicks["TE"] || 0) / earlyTotal) * 100);
+
+        // Mid rounds (4-6) top positions
+        const midRoundPicks: Record<string, number> = {};
+        for (const [rd, posCounts] of Object.entries(o.byRound)) {
+          const rdNum = Number(rd);
+          if (rdNum >= 4 && rdNum <= 6) {
+            for (const [pos, cnt] of Object.entries(posCounts as Record<string, number>)) {
+              midRoundPicks[pos] = (midRoundPicks[pos] || 0) + cnt;
+            }
+          }
+        }
+        const midTotal = Object.values(midRoundPicks).reduce((s, v) => s + v, 0) || 1;
+        const midTopPos = Object.entries(midRoundPicks).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([pos, cnt]) => ({ pos, pct: Math.round((cnt as number) / midTotal * 100) }));
+
+        // Late rounds (10+) top positions
+        const lateRoundPicks: Record<string, number> = {};
+        for (const [rd, posCounts] of Object.entries(o.byRound)) {
+          if (Number(rd) >= 10) {
+            for (const [pos, cnt] of Object.entries(posCounts as Record<string, number>)) {
+              lateRoundPicks[pos] = (lateRoundPicks[pos] || 0) + cnt;
+            }
+          }
+        }
+        const lateTotal = Object.values(lateRoundPicks).reduce((s, v) => s + v, 0) || 1;
+        const lateTopPos = Object.entries(lateRoundPicks).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([pos, cnt]) => ({ pos, pct: Math.round((cnt as number) / lateTotal * 100) }));
+
+        // Positional diversity score (0-100)
+        const posEntropy = topPositions.reduce((entropy: number, p: { pct: number }) => {
+          const frac = p.pct / 100;
+          return entropy - (frac > 0 ? frac * Math.log2(frac) : 0);
+        }, 0);
+        const maxEntropy = Math.log2(5);
+        const diversityScore = Math.round((posEntropy / maxEntropy) * 100);
+
         return {
           memberId: o.memberId,
           name: o.name,
@@ -1715,6 +1789,12 @@ Respond with JSON in this exact format:
           draftStyle,
           rb1Pct: Math.round(rb1 / r1Total * 100),
           wr1Pct: Math.round(wr1 / r1Total * 100),
+          qbEarliestRound, qbAvgRound,
+          teEarliestRound, teAvgRound,
+          keeperRate, totalKeeperPicks,
+          earlyRbPct, earlyWrPct, earlyQbPct, earlyTePct,
+          midTopPos, lateTopPos,
+          diversityScore,
         };
       });
 
