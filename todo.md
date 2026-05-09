@@ -437,3 +437,7 @@
 - [x] Add all 5 new pages to DraftWarRoom and WaiverLab hubs
 - [x] Write vitest tests for draftBoard procedures (25 tests, all passing)
 - [x] Save checkpoint (ed8144b3)
+
+## NEW: Undo Pick in Mock Draft Simulator
+
+- [x] Add Undo Pick button to MockDraftSimulator.tsx: reverses last pick, restores player to pool, moves cursor back one slot

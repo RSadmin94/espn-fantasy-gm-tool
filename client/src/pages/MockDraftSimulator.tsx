@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Search, Play, RotateCcw, Trophy, Users, Zap, ChevronRight } from "lucide-react";
+import { Search, Play, RotateCcw, Trophy, Users, Zap, ChevronRight, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MergedPlayer } from "../../../server/fantasyDataService";
 
@@ -253,6 +253,15 @@ export default function MockDraftSimulator() {
     setManualPickMode(false);
   }, []);
 
+  const handleUndo = useCallback(() => {
+    if (picks.length === 0) return;
+    setPicks((prev) => prev.slice(0, -1));
+    setCurrentOverall((prev) => Math.max(1, prev - 1));
+    setDraftComplete(false);
+    setSearchQuery("");
+    setManualPickMode(false);
+  }, [picks.length]);
+
   const rodPicks = useMemo(() => picks.filter((p) => p.owner === (teams[rodSlotIndex]?.ownerName ?? ROD_NAME)), [picks, teams, rodSlotIndex]);
   const rodGrade = useMemo(() => gradeRoster(rodPicks, boardData?.players ?? []), [rodPicks, boardData]);
 
@@ -269,6 +278,16 @@ export default function MockDraftSimulator() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleUndo}
+            disabled={picks.length === 0}
+            className="gap-2"
+            title="Undo last pick"
+          >
+            <Undo2 className="w-4 h-4" /> Undo Pick
+          </Button>
           <Button variant="outline" size="sm" onClick={handleReset} className="gap-2">
             <RotateCcw className="w-4 h-4" /> Reset
           </Button>
