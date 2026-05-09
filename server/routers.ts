@@ -2740,10 +2740,12 @@ Be concise, data-driven, and specific. Reference actual team names and player na
         );
 
         const totalSeasons = cachedSeasons.length;
-        const staleSeasons = seasonHealth.filter(s => s.staleFlag).length;
-        const failedSeasons = seasonHealth.filter(s => s.status === "failed").length;
-        const partialSeasons = seasonHealth.filter(s => s.status === "partial").length;
-
+        // Only count seasons ESPN API actually supports (2018+) for health scoring.
+        // Pre-2018 seasons fail by design (ESPN API limitation) and must not pollute the banner.
+        const scoredHealth = seasonHealth.filter(s => s.season >= 2018);
+        const staleSeasons = scoredHealth.filter(s => s.staleFlag).length;
+        const failedSeasons = scoredHealth.filter(s => s.status === "failed").length;
+        const partialSeasons = scoredHealth.filter(s => s.status === "partial").length;
         return {
           cookiesPresent,
           totalSeasons,

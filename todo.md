@@ -363,3 +363,7 @@
 - [x] Build ScheduledRefresh.tsx management UI: status badge, next run, last run, task UID, pause/resume/delete buttons
 - [x] Add Auto-Refresh tab to DataCenter.tsx
 - [x] 155 tests passing, 0 TypeScript errors
+
+## BUG: Stale Data Banner Shows After Refresh — FIXED
+- [x] Diagnose: seasons 2009–2017 all have status=failed (ESPN API only supports 2018+) and are older than 7 days — counted as both failed AND stale, pushing staleSeasons > 3 and triggering amber banner
+- [x] Fix: pipeline.health now filters to seasons >= 2018 before computing staleSeasons/failedSeasons/partialSeasons — pre-2018 failures are expected and excluded from health scoring
