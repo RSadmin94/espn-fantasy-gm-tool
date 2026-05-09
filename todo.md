@@ -392,3 +392,11 @@
 - [x] Merge duplicate Jan Graham entries: mergedOwners useMemo combines two ESPN member IDs by fullName key, sums totals, merges seasonRecords
 - [x] Filter inactive owners: INACTIVE_KEYWORDS list excludes teco Browning, Maurice Welch, Vince Sellers from all three computed arrays (liveOpponents, liveRankings, liveDraftIntel)
 - [x] Behavioral text: comes from live gmArchetypeDesc field — will improve further after fresh 2025 data refresh
+
+## NEW: Opponent Profile Deeper Analysis & Varied Comments
+
+- [x] Replace generic gmArchetypeDesc on cards with generatePersonalizedInsight() using actual stats (championships, rank trajectory, win%, playoff rate, waiver/trade counts)
+- [x] Replace generic computeDirective() with richer generateStrategicDirective() varying by threat tier + trajectory + activity combo
+- [x] Add more data to each card: career W-L record, best season rank, playoff rate %, trajectory pill
+- [x] Add trajectory narrative sentence (e.g., "3 consecutive playoff appearances", "dropped from #1 to #6 in 2 years")
+- [x] Ensure all 13 opponent cards have unique, non-repeated insight text

@@ -219,12 +219,128 @@ export default function Dashboard() {
     return { badge: "FAIR", badgeColor: "bg-slate-500/20 text-slate-400 border-slate-500/30", tierColor: "border-slate-500/40 bg-slate-500/5" };
   };
 
-  const computeDirective = (o: LiveOwner, threat: number): string => {
-    if (threat >= 80) return `High-threat manager. Avoid lopsided trades. Beat ${o.fullName.split(' ')[0]} on the field.`;
-    if (o.waiverAggression >= 65) return `Active waiver manager — monitor his adds weekly. Strike on trades before he improves his roster.`;
-    if (o.tradeFrequency >= 55) return `Frequent trader. Let him offer first — he may undervalue his assets when eager to deal.`;
-    if (o.waiverAggression < 30 && o.tradeFrequency < 30) return `Low-activity manager. Target his roster early in the season when he's least engaged.`;
-    return `Standard trade approach. Fair value exchanges are appropriate with this manager.`;
+  // ─── Personalized insight generator ─────────────────────────────────────────
+  // Produces 2-3 unique sentences per manager using actual career stats.
+  const generatePersonalizedInsight = (o: LiveOwner): string => {
+    const firstName = o.fullName.split(' ')[0];
+    const validRecords = o.seasonRecords.filter(s => s.rank < 99 && s.season >= 2018);
+    const bestRank = validRecords.length > 0 ? Math.min(...validRecords.map(s => s.rank)) : 99;
+    const bestSeason = validRecords.find(s => s.rank === bestRank);
+    const recentRecords = validRecords.filter(s => s.season >= 2022).sort((a, b) => a.season - b.season);
+    const playoffSeasons = validRecords.filter(s => s.rank <= 7).length;
+    const addsPerSeason = o.seasonsActive > 0 ? Math.round(o.totalAcquisitions / o.seasonsActive) : 0;
+    const tradesPerSeason = o.seasonsActive > 0 ? Math.round(o.totalTrades / o.seasonsActive) : 0;
+    const winPctDisplay = o.winPct.toFixed(1);
+    const playoffRateDisplay = Math.round(o.playoffRate);
+
+    // Part 1: Career narrative — championship pedigree or best finish
+    let part1 = '';
+    if (o.championships >= 2) {
+      part1 = `${firstName} is a multi-time champion with ${o.championships} titles across ${o.seasonsActive} seasons — one of the most decorated managers in league history.`;
+    } else if (o.championships === 1) {
+      const champYear = validRecords.find(s => s.rank === 1)?.season;
+      part1 = champYear
+        ? `${firstName} won the championship in ${champYear} and has been a consistent contender, finishing top-7 in ${playoffSeasons} of ${validRecords.length} seasons.`
+        : `${firstName} is a former champion who has made the playoffs in ${playoffSeasons} of ${validRecords.length} seasons.`;
+    } else if (bestRank <= 3 && bestSeason) {
+      part1 = `${firstName} has never won a title but finished as high as #${bestRank} in ${bestSeason.season} — a perennial contender who hasn't closed the deal.`;
+    } else if (playoffSeasons >= 4) {
+      part1 = `${firstName} is a steady playoff presence, reaching the postseason in ${playoffSeasons} of ${validRecords.length} seasons with a ${winPctDisplay}% career win rate.`;
+    } else if (playoffSeasons <= 1 && validRecords.length >= 4) {
+      part1 = `${firstName} has struggled to reach the playoffs, making it just ${playoffSeasons} time${playoffSeasons === 1 ? '' : 's'} in ${validRecords.length} seasons — a chronic underperformer relative to league average.`;
+    } else {
+      part1 = `${firstName} carries a ${winPctDisplay}% career win rate over ${o.seasonsActive} seasons, with ${playoffSeasons} playoff appearances in ${validRecords.length} tracked seasons.`;
+    }
+
+    // Part 2: Recent trajectory
+    let part2 = '';
+    if (recentRecords.length >= 3) {
+      const first3 = recentRecords[0].rank;
+      const last3 = recentRecords[recentRecords.length - 1].rank;
+      const delta = first3 - last3; // positive = improved (lower rank = better)
+      if (delta >= 5) {
+        part2 = `Has surged ${delta} spots in the standings over the past ${recentRecords.length} seasons — trajectory is sharply upward.`;
+      } else if (delta <= -5) {
+        part2 = `Has fallen ${Math.abs(delta)} spots over the past ${recentRecords.length} seasons — once a top contender, now trending downward.`;
+      } else if (last3 <= 3) {
+        part2 = `Finished #${last3} in 2025 — currently at peak form and operating as an elite-tier manager.`;
+      } else if (last3 >= 10) {
+        part2 = `Finished #${last3} in 2025 — currently in a rebuilding phase and below the playoff line.`;
+      } else {
+        part2 = `Finished #${last3} in 2025, holding steady in the middle tier of the league standings.`;
+      }
+    } else if (recentRecords.length >= 1) {
+      const lastRank = recentRecords[recentRecords.length - 1].rank;
+      part2 = `Most recent finish was #${lastRank} — limited historical data available for trend analysis.`;
+    }
+
+    // Part 3: GM style — activity-specific detail
+    let part3 = '';
+    if (o.waiverAggression >= 70 && o.tradeFrequency >= 55) {
+      part3 = `Hyper-active GM: averages ${addsPerSeason} adds and ${tradesPerSeason} trades per season — never stops working the wire.`;
+    } else if (o.waiverAggression >= 65) {
+      part3 = `Waiver-first manager averaging ${addsPerSeason} adds/season — roster construction happens in-season, not on draft day.`;
+    } else if (o.tradeFrequency >= 60) {
+      part3 = `Trade-heavy operator averaging ${tradesPerSeason} trades/season — always looking to upgrade and willing to overpay for perceived value.`;
+    } else if (o.rosterStability >= 75 && o.waiverAggression < 30) {
+      part3 = `Set-it-and-forget-it manager: only ${addsPerSeason} adds/season — lives and dies by the draft, rarely adjusts mid-season.`;
+    } else if (o.tradeFrequency < 20 && o.waiverAggression < 30) {
+      part3 = `Passive manager with ${addsPerSeason} adds and ${tradesPerSeason} trades/season — low engagement creates exploitable windows.`;
+    } else if (o.rosterStability < 40) {
+      part3 = `High roster churn: ${addsPerSeason} adds/season with low stability — frequently reacts to short-term performance rather than building long-term.`;
+    } else {
+      part3 = `Balanced approach: ${addsPerSeason} adds and ${tradesPerSeason} trades/season — methodical, neither passive nor hyperactive.`;
+    }
+
+    return [part1, part2, part3].filter(Boolean).join(' ');
+  };
+
+  // ─── Strategic directive generator ───────────────────────────────────────────
+  // Produces a unique, actionable directive based on threat tier + trajectory + activity.
+  const generateStrategicDirective = (o: LiveOwner, threat: number, trajectory: 'up' | 'down' | 'steady'): string => {
+    const firstName = o.fullName.split(' ')[0];
+    const addsPerSeason = o.seasonsActive > 0 ? Math.round(o.totalAcquisitions / o.seasonsActive) : 0;
+    const tradesPerSeason = o.seasonsActive > 0 ? Math.round(o.totalTrades / o.seasonsActive) : 0;
+    const validRecords = o.seasonRecords.filter(s => s.rank < 99 && s.season >= 2018);
+    const bestRank = validRecords.length > 0 ? Math.min(...validRecords.map(s => s.rank)) : 99;
+
+    if (threat >= 80 && trajectory === 'up') {
+      return `Elite-tier threat on a hot streak — do NOT trade with ${firstName} unless you're winning the deal by 2+ rounds of value. Beat him on the field.`;
+    }
+    if (threat >= 80 && o.championships >= 1) {
+      return `Championship pedigree makes ${firstName} the most dangerous trade partner in the league. Only deal from a position of strength.`;
+    }
+    if (threat >= 80) {
+      return `Top-tier threat. Avoid lopsided trades — ${firstName} knows his roster's value. Target him in head-to-head matchups instead.`;
+    }
+    if (threat >= 65 && trajectory === 'up') {
+      return `Rising fast — ${firstName} is improving year-over-year. Strike a trade now before his asking price goes up further.`;
+    }
+    if (threat >= 65 && o.waiverAggression >= 60) {
+      return `Active waiver manager (${addsPerSeason} adds/season) — monitor his pickups weekly. He can flip a losing season quickly.`;
+    }
+    if (threat >= 60 && trajectory === 'down') {
+      return `Declining from a high baseline — ${firstName} may be overvaluing aging assets. Offer a youth-for-veteran trade.`;
+    }
+    if (threat >= 60) {
+      return `Solid mid-tier threat. Approach trades carefully — ${firstName} is experienced enough to spot bad deals.`;
+    }
+    if (o.tradeFrequency >= 55 && trajectory === 'up') {
+      return `Frequent trader trending upward — let ${firstName} come to you. His eagerness to deal often leads to overpaying.`;
+    }
+    if (o.tradeFrequency >= 55) {
+      return `Trades ${tradesPerSeason}x/season — let him make the first offer. Impatient traders reveal their hand early.`;
+    }
+    if (o.waiverAggression < 25 && o.tradeFrequency < 25) {
+      return `Passive manager (${addsPerSeason} adds, ${tradesPerSeason} trades/season) — target his roster early. He won't react fast enough to stop you.`;
+    }
+    if (trajectory === 'down' && bestRank <= 5) {
+      return `Former contender in decline — may be holding onto aging stars. Offer a rebuild trade: your picks for his proven veterans.`;
+    }
+    if (trajectory === 'up') {
+      return `Improving trajectory — engage now before ${firstName} becomes a top-tier threat. Fair-value trades are still possible.`;
+    }
+    return `Standard engagement. Fair-value trades are appropriate — ${firstName} is neither a pushover nor a dominant force.`;
   };
 
   const computeTrajectory = (o: LiveOwner): "up" | "down" | "steady" => {
@@ -236,7 +352,7 @@ export default function Dashboard() {
     return "steady";
   };
 
-  type LiveOpp = { memberId: string; name: string; team: string; abbr: string; threat: number; badge: string; badgeColor: string; tierColor: string; trajectory: "up" | "down" | "steady"; pf25: number; rank23: number; rank24: number; rank25: number; behavioral: string; directive: string; wins25: number; losses25: number };
+  type LiveOpp = { memberId: string; name: string; team: string; abbr: string; threat: number; badge: string; badgeColor: string; tierColor: string; trajectory: "up" | "down" | "steady"; pf25: number; rank23: number; rank24: number; rank25: number; behavioral: string; directive: string; wins25: number; losses25: number; careerRecord: string; bestRank: number; playoffRatePct: number; seasonsActive: number; championships: number };
   type LiveRank = { manager: string; rank23: number; rank24: number; rank25: number; label: string; you: boolean };
   type LiveDraftItem = { name: string; record: string; intel: string; risk: string };
   // Merge duplicate Jan Graham accounts (same person, two ESPN member IDs)
@@ -294,7 +410,9 @@ export default function Dashboard() {
         const rank23 = o.seasonRecords.find(s => s.season === 2023)?.rank ?? 99;
         const rank24 = o.seasonRecords.find(s => s.season === 2024)?.rank ?? 99;
         const rank25 = o.seasonRecords.find(s => s.season === 2025)?.rank ?? 99;
-        return { memberId: o.memberId, name: o.fullName || o.displayName, team: o.displayName, abbr, threat, badge, badgeColor, tierColor, trajectory, pf25, rank23, rank24, rank25, behavioral: o.gmArchetypeDesc, directive: computeDirective(o, threat), wins25: rec25?.wins ?? 0, losses25: rec25?.losses ?? 0 };
+        const validRecords = o.seasonRecords.filter(s => s.rank < 99 && s.season >= 2018);
+        const bestRank = validRecords.length > 0 ? Math.min(...validRecords.map(s => s.rank)) : 99;
+        return { memberId: o.memberId, name: o.fullName || o.displayName, team: o.displayName, abbr, threat, badge, badgeColor, tierColor, trajectory, pf25, rank23, rank24, rank25, behavioral: generatePersonalizedInsight(o), directive: generateStrategicDirective(o, threat, trajectory), wins25: rec25?.wins ?? 0, losses25: rec25?.losses ?? 0, careerRecord: `${o.totalWins}W–${o.totalLosses}L`, bestRank, playoffRatePct: Math.round(o.playoffRate), seasonsActive: o.seasonsActive, championships: o.championships };
       })
       .sort((a, b) => b.threat - a.threat),
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -730,13 +848,21 @@ export default function Dashboard() {
                   onClick={() => setSelectedOpponent({ memberId: opp.memberId, name: opp.name })}
                 >
                   <CardContent className="p-4">
+                    {/* Header: name + badge */}
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-lg bg-accent flex items-center justify-center flex-shrink-0">
-                          <span className="text-sm font-bold text-foreground">{opp.abbr}</span>
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${opp.championships > 0 ? 'bg-yellow-500/20 border border-yellow-500/40' : 'bg-accent'}`}>
+                          {opp.championships > 0
+                            ? <Trophy className="w-4 h-4 text-yellow-400" />
+                            : <span className="text-sm font-bold text-foreground">{opp.abbr}</span>}
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-foreground leading-tight">{opp.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-semibold text-foreground leading-tight">{opp.name}</p>
+                            {opp.championships > 0 && (
+                              <span className="text-[9px] text-yellow-400 font-bold">{opp.championships}x★</span>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground leading-tight truncate max-w-[140px]">{opp.team}</p>
                         </div>
                       </div>
@@ -746,12 +872,12 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {/* 3-year record */}
+                    {/* 3-year rank history + threat bar */}
                     <div className="flex items-center gap-1 mb-3">
                       {[{ year: "2023", rank: opp.rank23 }, { year: "2024", rank: opp.rank24 }, { year: "2025", rank: opp.rank25 }].map((yr, i) => (
                         <div key={yr.year} className="flex items-center gap-1">
-                          <div className={`text-center px-2 py-1 rounded text-xs ${yr.rank <= 3 ? "bg-yellow-500/15 text-yellow-400" : yr.rank <= 7 ? "bg-emerald-500/15 text-emerald-400" : "bg-muted text-muted-foreground"}`}>
-                            <span className="font-bold">#{yr.rank}</span>
+                          <div className={`text-center px-2 py-1 rounded text-xs ${yr.rank <= 3 ? "bg-yellow-500/15 text-yellow-400" : yr.rank <= 7 ? "bg-emerald-500/15 text-emerald-400" : yr.rank < 99 ? "bg-muted text-muted-foreground" : "bg-muted/40 text-muted-foreground/50"}`}>
+                            <span className="font-bold">{yr.rank < 99 ? `#${yr.rank}` : '—'}</span>
                             <span className="text-[9px] block">{yr.year}</span>
                           </div>
                           {i < 2 && (
@@ -763,13 +889,37 @@ export default function Dashboard() {
                       ))}
                       <div className="ml-auto">
                         <div className="h-1.5 w-16 bg-muted rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${opp.threat >= 85 ? "bg-red-500" : opp.threat >= 60 ? "bg-yellow-500" : "bg-emerald-500"}`} style={{ width: `${opp.threat}%` }} />
+                          <div className={`h-full rounded-full ${opp.threat >= 80 ? "bg-red-500" : opp.threat >= 60 ? "bg-yellow-500" : "bg-emerald-500"}`} style={{ width: `${opp.threat}%` }} />
                         </div>
                         <p className="text-[9px] text-muted-foreground text-right">Threat {opp.threat}%</p>
                       </div>
                     </div>
 
+                    {/* Career stat pills */}
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
+                        <BarChart3 className="w-2.5 h-2.5" />{opp.careerRecord}
+                      </span>
+                      {opp.bestRank < 99 && (
+                        <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${opp.bestRank === 1 ? 'bg-yellow-500/15 text-yellow-400' : opp.bestRank <= 3 ? 'bg-orange-500/15 text-orange-400' : 'bg-muted/60 text-muted-foreground'}`}>
+                          <Trophy className="w-2.5 h-2.5" />Best: #{opp.bestRank}
+                        </span>
+                      )}
+                      <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${opp.playoffRatePct >= 60 ? 'bg-emerald-500/15 text-emerald-400' : opp.playoffRatePct >= 40 ? 'bg-blue-500/15 text-blue-400' : 'bg-muted/60 text-muted-foreground'}`}>
+                        <Star className="w-2.5 h-2.5" />{opp.playoffRatePct}% playoff
+                      </span>
+                      {opp.trajectory !== 'steady' && (
+                        <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${opp.trajectory === 'up' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+                          {opp.trajectory === 'up' ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
+                          {opp.trajectory === 'up' ? 'Rising' : 'Declining'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Personalized behavioral insight */}
                     <p className="text-xs text-muted-foreground leading-relaxed mb-2">{opp.behavioral}</p>
+
+                    {/* Strategic directive */}
                     <div className="flex items-start gap-1.5 p-2 rounded bg-accent/50">
                       <Target className="w-3 h-3 text-primary flex-shrink-0 mt-0.5" />
                       <p className="text-xs text-foreground leading-relaxed">{opp.directive}</p>
