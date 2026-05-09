@@ -1,0 +1,112 @@
+{
+  "query": "SELECT season, status, lastRefreshedAt, viewsRefreshed FROM refresh_manifest ORDER BY season DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT season, status, lastRefreshedAt, viewsRefreshed FROM refresh_manifest ORDER BY season DESC;",
+  "rows": [
+    {
+      "season": "2025",
+      "status": "success",
+      "lastRefreshedAt": "2026-05-09 16:21:39",
+      "viewsRefreshed": "[\"mSettings\", \"mTeam\", \"mRoster\", \"mMatchup\", \"mMatchupScore\", \"mScoreboard\", \"mSchedule\", \"mStandings\", \"mStatus\", \"mDraftDetail\", \"mTransactions2\"]"
+    },
+    {
+      "season": "2024",
+      "status": "success",
+      "lastRefreshedAt": "2026-04-29 19:54:42",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2023",
+      "status": "success",
+      "lastRefreshedAt": "2026-04-29 19:54:43",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2022",
+      "status": "success",
+      "lastRefreshedAt": "2026-04-29 19:54:46",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2021",
+      "status": "success",
+      "lastRefreshedAt": "2026-04-29 19:54:48",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2020",
+      "status": "success",
+      "lastRefreshedAt": "2026-04-29 19:54:50",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2019",
+      "status": "success",
+      "lastRefreshedAt": "2026-04-29 19:54:52",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2018",
+      "status": "success",
+      "lastRefreshedAt": "2026-04-29 19:54:53",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2017",
+      "status": "failed",
+      "lastRefreshedAt": "2026-04-29 19:54:54",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2016",
+      "status": "failed",
+      "lastRefreshedAt": "2026-04-29 19:54:55",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2015",
+      "status": "failed",
+      "lastRefreshedAt": "2026-04-29 19:54:56",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2014",
+      "status": "failed",
+      "lastRefreshedAt": "2026-04-29 19:54:57",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2013",
+      "status": "failed",
+      "lastRefreshedAt": "2026-04-29 19:54:58",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2012",
+      "status": "failed",
+      "lastRefreshedAt": "2026-04-29 19:54:58",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2011",
+      "status": "failed",
+      "lastRefreshedAt": "2026-04-29 19:54:59",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2010",
+      "status": "failed",
+      "lastRefreshedAt": "2026-04-29 19:54:59",
+      "viewsRefreshed": "NULL"
+    },
+    {
+      "season": "2009",
+      "status": "failed",
+      "lastRefreshedAt": "2026-04-29 19:55:00",
+      "viewsRefreshed": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "season\tstatus\tlastRefreshedAt\tviewsRefreshed\n2025\tsuccess\t2026-05-09 16:21:39\t[\"mSettings\", \"mTeam\", \"mRoster\", \"mMatchup\", \"mMatchupScore\", \"mScoreboard\", \"mSchedule\", \"mStandings\", \"mStatus\", \"mDraftDetail\", \"mTransactions2\"]\n2024\tsuccess\t2026-04-29 19:54:42\tNULL\n2023\tsuccess\t2026-04-29 19:54:43\tNULL\n2022\tsuccess\t2026-04-29 19:54:46\tNULL\n2021\tsuccess\t2026-04-29 19:54:48\tNULL\n2020\tsuccess\t2026-04-29 19:54:50\tNULL\n2019\tsuccess\t2026-04-29 19:54:52\tNULL\n2018\tsuccess\t2026-04-29 19:54:53\tNULL\n2017\tfailed\t2026-04-29 19:54:54\tNULL\n2016\tfailed\t2026-04-29 19:54:55\tNULL\n2015\tfailed\t2026-04-29 19:54:56\tNULL\n2014\tfailed\t2026-04-29 19:54:57\tNULL\n2013\tfailed\t2026-04-29 19:54:58\tNULL\n2012\tfailed\t2026-04-29 19:54:58\tNULL\n2011\tfailed\t2026-04-29 19:54:59\tNULL\n2010\tfailed\t2026-04-29 19:54:59\tNULL\n2009\tfailed\t2026-04-29 19:55:00\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 567
+}

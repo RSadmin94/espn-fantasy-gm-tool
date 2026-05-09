@@ -371,3 +371,8 @@
 ## BUG: Trade Lab — Pick Number Not Visible After Selection — FIXED
 - [x] Root cause: SelectTrigger used bg-slate-800 background but no explicit text color, causing selected value text to render as dark-on-dark
 - [x] Fixed PickValueCalculator.tsx (Round + Pick selectors) and DraftPickTracker.tsx (Round, Pick Position, Counterparty selectors) — added text-slate-100 to all 5 SelectTrigger elements
+
+## BUG: Stale Data Banner Still Appearing (Round 2) — FIXED
+- [x] DB query: seasons 2018–2024 all status=success but lastRefreshedAt=April 29 (10 days ago), exceeding 7-day threshold — staleFlag=true for 7 seasons, staleSeasons=7>3 triggers banner
+- [x] Fix: closed seasons (< 2025) now always get staleFlag=false — their data is immutable and should never trigger a freshness warning
+- [x] Live health check now returns overallHealth=healthy, staleSeasons=0, failedSeasons=0

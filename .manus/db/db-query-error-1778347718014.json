@@ -1,0 +1,8 @@
+{
+  "query": "SELECT season, status, last_refreshed_at, views_ok, views_failed FROM espn_cache ORDER BY season DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT season, status, last_refreshed_at, views_ok, views_failed FROM espn_cache ORDER BY season DESC;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1146 (42S02) at line 1: Table 'd7edtbt5uxwnubkjhewerh.espn_cache' doesn't exist"
+  ]
+}

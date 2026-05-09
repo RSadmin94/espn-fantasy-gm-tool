@@ -2709,9 +2709,14 @@ Be concise, data-driven, and specific. Reference actual team names and player na
               ? await getViewHealthForSeason(season)
               : [];
 
-            const staleFlag = manifest?.lastRefreshedAt
-              ? isStale(new Date(manifest.lastRefreshedAt))
-              : true;
+            // Closed seasons (< 2025) have immutable data — never stale regardless of age.
+            // Only open seasons (2025+) need a freshness check.
+            const isClosedSeason = season < 2025;
+            const staleFlag = isClosedSeason
+              ? false
+              : manifest?.lastRefreshedAt
+                ? isStale(new Date(manifest.lastRefreshedAt))
+                : true;
             const staleAge = manifest?.lastRefreshedAt
               ? staleSummary(new Date(manifest.lastRefreshedAt))
               : "Never";
