@@ -1,12 +1,13 @@
 // FILE: client/src/components/AppLayout.tsx
-import { createContext, useContext } from "react";
+import React, { createContext, useContext, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ClipboardList, Star, ArrowLeftRight, Bot, ChevronRight,
-  Activity, Brain, Zap, Shield, Microscope,
+  Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { trpc } from "@/lib/trpc";
 
 const navItems = [
   // Command Center
@@ -26,6 +27,89 @@ const navItems = [
 ];
 
 const groups = ["Overview", "Draft & Keepers", "Decision Tools", "Intelligence", "System"];
+
+// ── Data Health Banner ────────────────────────────────────────────────────────
+function DataHealthBanner() {
+  const [dismissed, setDismissed] = useState(false);
+  const { data } = trpc.pipeline.health.useQuery(
+    {},
+    { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 }
+  );
+
+  if (dismissed || !data) return null;
+
+  const { cookiesPresent, overallHealth, staleSeasons, partialSeasons } = data;
+
+  // Determine which banner to show (most severe wins)
+  let variant: "red" | "amber" | "yellow" | null = null;
+  if (!cookiesPresent) {
+    variant = "red";
+  } else if (overallHealth === "critical" || overallHealth === "degraded" || staleSeasons > 3) {
+    variant = "amber";
+  } else if (overallHealth === "warning") {
+    variant = "yellow";
+  }
+
+  if (!variant) return null;
+
+  const config = {
+    red: {
+      wrapper: "bg-red-950/60 border-red-500/40 text-red-200",
+      icon: <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />,
+      message: (
+        <>
+          ESPN cookies are missing or expired. Live data is unavailable.{" "}
+          <Link href="/data-center" className="underline underline-offset-2 hover:text-red-100 font-semibold">
+            Go to Data Center → Credentials
+          </Link>{" "}
+          to update.
+        </>
+      ),
+    },
+    amber: {
+      wrapper: "bg-amber-950/60 border-amber-500/40 text-amber-200",
+      icon: <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />,
+      message: (
+        <>
+          League data is stale ({staleSeasons} season{staleSeasons !== 1 ? "s" : ""} not refreshed in 7+ days). Recommendations may be less accurate.{" "}
+          <Link href="/data-center" className="underline underline-offset-2 hover:text-amber-100 font-semibold">
+            Go to Data Center
+          </Link>{" "}
+          to sync.
+        </>
+      ),
+    },
+    yellow: {
+      wrapper: "bg-yellow-950/40 border-yellow-500/30 text-yellow-200",
+      icon: <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0" />,
+      message: (
+        <>
+          Some league data may be incomplete ({partialSeasons} partial season{partialSeasons !== 1 ? "s" : ""}). Recommendations may be less accurate.{" "}
+          <Link href="/data-center" className="underline underline-offset-2 hover:text-yellow-100 font-semibold">
+            Go to Data Center
+          </Link>{" "}
+          to review.
+        </>
+      ),
+    },
+  };
+
+  const { wrapper, icon, message } = config[variant];
+
+  return (
+    <div className={cn("flex-shrink-0 border-b px-6 py-2.5 flex items-center gap-3 text-xs", wrapper)}>
+      {icon}
+      <span className="flex-1">{message}</span>
+      <button
+        onClick={() => setDismissed(true)}
+        className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+        aria-label="Dismiss"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
 
 // ── Embedded context ─────────────────────────────────────────────────────────
 // Prevents double sidebar: if AppLayout is already rendered by a parent
@@ -136,6 +220,9 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
             </div>
           </header>
         )}
+
+        {/* Data health alert banner */}
+        <DataHealthBanner />
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">

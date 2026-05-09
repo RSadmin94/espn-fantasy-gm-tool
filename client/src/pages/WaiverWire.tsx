@@ -1,5 +1,5 @@
 // FILE: client/src/pages/WaiverWire.tsx
-import { useState } from "react";
+import React, { useState, useMemo } from "react";
 import AppLayout from "@/components/AppLayout";
 import SeasonSelector from "@/components/SeasonSelector";
 import { trpc } from "@/lib/trpc";
@@ -13,8 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
-import { Search, TrendingUp, Brain, Loader2, Star, Zap, DollarSign } from "lucide-react";
-
+import { Search, TrendingUp, TrendingDown, Minus, Brain, Loader2, Star, Zap, DollarSign } from "lucide-react";
 
 type AnalyticsRecord = Record<string, unknown>;
 
@@ -26,6 +25,21 @@ type PlayerFact = {
   rosAdjusted: number | null;
   injuryRisk: string;
   scheduleStrength: string;
+};
+
+type PlayerTrendResult = {
+  searchName: string;
+  playerId: number;
+  playerName: string;
+  position: string;
+  weeks: number[];
+  targets: number[];
+  snapPct: number[];
+  fantasyPoints: number[];
+  avgTargets: number;
+  avgSnapPct: number;
+  avgFantasyPoints: number;
+  trend: "rising" | "falling" | "stable";
 };
 
 const toRecords = (value: unknown): AnalyticsRecord[] => Array.isArray(value) ? value.filter((item): item is AnalyticsRecord => Boolean(item) && typeof item === "object") : [];
@@ -65,6 +79,18 @@ const formatFactContext = (playerName: string, fact: PlayerFact | null): string 
   return `CALCULATED FACTS (do not contradict these):\n${fact.playerName}: avg PPG=${toDisplayNumber(fact.avgPoints)}, VORP=${vorpPrefix}${toDisplayNumber(fact.vorp)} (Tier: ${fact.vorpTier}), ROS adjusted=${toDisplayNumber(fact.rosAdjusted)}, injury risk=${fact.injuryRisk}, schedule=${fact.scheduleStrength}`;
 };
 
+const formatTrendContext = (playerName: string, trends: PlayerTrendResult[] | undefined): string => {
+  if (!trends || trends.length === 0) return `\nWEEKLY TREND DATA: not cached for this player`;
+  const nameLower = playerName.toLowerCase();
+  const firstWord = nameLower.split(" ")[0] ?? "";
+  const match = trends.find(
+    (t) => t.searchName.toLowerCase() === nameLower || t.playerName.toLowerCase().includes(firstWord)
+  );
+  if (!match) return `\nWEEKLY TREND DATA: not found in weekly stats cache`;
+  const weekStr = match.weeks.map((w, i) => `Wk${w}: ${(match.fantasyPoints[i] ?? 0).toFixed(1)} pts`).join(", ");
+  return `\nWEEKLY TREND DATA (last ${match.weeks.length} weeks — use for momentum assessment):\n${match.playerName} (${match.position}) — Trend: ${match.trend.toUpperCase()} | ${weekStr} | Avg targets: ${match.avgTargets.toFixed(1)}/game | Avg snap%: ${match.avgSnapPct.toFixed(0)}%`;
+};
+
 const POS_FILTER_OPTIONS = ["All", "QB", "RB", "WR", "TE", "K", "D/ST"];
 const POS_ID_MAP: Record<string, number[]> = { QB: [1], RB: [2], WR: [3], TE: [4], K: [5], "D/ST": [16] };
 const POS_COLORS: Record<string, string> = {
@@ -96,6 +122,24 @@ const FAAB_GUIDE = [
   { tier: "Handcuff / Stash", range: "$1–$3", note: "Injury insurance, minimal spend" },
 ];
 
+function TrendBadge({ trend }: { trend: "rising" | "falling" | "stable" }) {
+  if (trend === "rising") return (
+    <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border text-[10px] px-1.5 py-0 gap-1">
+      <TrendingUp className="w-2.5 h-2.5" /> RISING
+    </Badge>
+  );
+  if (trend === "falling") return (
+    <Badge className="bg-red-500/20 text-red-400 border-red-500/30 border text-[10px] px-1.5 py-0 gap-1">
+      <TrendingDown className="w-2.5 h-2.5" /> FALLING
+    </Badge>
+  );
+  return (
+    <Badge className="bg-muted/40 text-muted-foreground border-border border text-[10px] px-1.5 py-0 gap-1">
+      <Minus className="w-2.5 h-2.5" /> STABLE
+    </Badge>
+  );
+}
+
 export default function WaiverWire() {
   const { isAuthenticated } = useAuth();
   const [season, setSeason] = useState(2025);
@@ -109,7 +153,25 @@ export default function WaiverWire() {
   const { data: vorpData } = trpc.analytics.vorp.useQuery({ season: 2025 });
   const { data: rosData } = trpc.analytics.rosValues.useQuery({ season: 2025, weeksRemaining: 8 });
   const chatMutation = trpc.advisor.chat.useMutation();
-  const playerFact = getPlayerFact(playerQuery.trim(), vorpData, rosData);
+
+  const trimmedQuery = playerQuery.trim();
+  const playerFact = getPlayerFact(trimmedQuery, vorpData, rosData);
+
+  // Stabilize trend query input with useMemo to avoid infinite re-renders
+  const trendPlayerNames = useMemo(
+    () => (trimmedQuery ? [trimmedQuery] : []),
+    [trimmedQuery]
+  );
+  const { data: trendDataRaw } = trpc.weeklyStats.getPlayerTrendsByName.useQuery(
+    { season: 2025, playerNames: trendPlayerNames, lastNWeeks: 4 },
+    { enabled: trendPlayerNames.length > 0, staleTime: 10 * 60 * 1000 }
+  );
+  const trendData = trendDataRaw as PlayerTrendResult[] | undefined;
+
+  const playerTrend = trendData?.find(
+    (t) => t.searchName.toLowerCase() === trimmedQuery.toLowerCase() ||
+      t.playerName.toLowerCase().includes((trimmedQuery.split(" ")[0] ?? "").toLowerCase())
+  );
 
   const allFAs = ((freeAgents as Record<string, unknown>[]) || []).filter(Boolean);
   const filtered = posFilter === "All"
@@ -118,15 +180,22 @@ export default function WaiverWire() {
   const sorted = [...filtered].sort((a, b) => Number(b.percentOwned || 0) - Number(a.percentOwned || 0));
 
   const analyzePlayer = async (playerName?: string) => {
-    const query = playerName ?? playerQuery.trim();
+    const query = playerName ?? trimmedQuery;
     if (!query) { toast.error("Enter a player name to analyze."); return; }
     if (!isAuthenticated) { toast.error("Please sign in to use the AI Advisor."); return; }
     setLoading(true);
     setReport(null);
     setActiveBlindSpot(playerName ?? null);
+
     const selectedFact = getPlayerFact(query, vorpData, rosData);
     const factContext = formatFactContext(query, selectedFact);
-    const prompt = `${factContext}
+    // For blind spot clicks we don't have trend data pre-loaded — use current trendData if query matches
+    const activeTrends = playerName
+      ? undefined  // blind spot: no cached trend for arbitrary text
+      : trendData;
+    const trendContext = formatTrendContext(query, activeTrends as PlayerTrendResult[] | undefined);
+
+    const prompt = `${factContext}${trendContext}
 
 WAIVER WIRE SCOUTING REPORT — PPR 14-Team League (ATLANTAS FINEST FF)
 
@@ -136,11 +205,12 @@ Generate a comprehensive waiver wire scouting report for this player in a 14-tea
 
 1. **Current Role & Usage** — snap count, target share, carry share, red zone usage
 2. **PPR Value Assessment** — floor, ceiling, weekly consistency
-3. **Matchup Analysis** — upcoming schedule quality (next 3 weeks)
-4. **Roster Fit** — which roster types benefit most from adding this player
-5. **FAAB Bid Recommendation** — suggested bid range with justification
-6. **Keeper Potential** — is this player worth stashing for future seasons?
-7. **Verdict** — ADD NOW / ADD IF AVAILABLE / MONITOR / PASS
+3. **Recent Momentum** — factor in the weekly trend data above (rising/falling/stable)
+4. **Matchup Analysis** — upcoming schedule quality (next 3 weeks)
+5. **Roster Fit** — which roster types benefit most from adding this player
+6. **FAAB Bid Recommendation** — suggested bid range with justification
+7. **Keeper Potential** — is this player worth stashing for future seasons?
+8. **Verdict** — ADD NOW / ADD IF AVAILABLE / MONITOR / PASS
 
 Be specific and decisive. This is a 14-team PPR keeper league where depth is critical.`;
     try {
@@ -174,25 +244,38 @@ Be specific and decisive. This is a 14-team PPR keeper league where depth is cri
                 placeholder="Enter any player name for a full AI scouting report with FAAB bid recommendation..."
                 className="flex-1 bg-accent border-border text-sm"
               />
-              <Button onClick={() => analyzePlayer()} disabled={loading || !playerQuery.trim()} className="espn-gradient text-white border-0 flex-shrink-0">
+              <Button onClick={() => analyzePlayer()} disabled={loading || !trimmedQuery} className="espn-gradient text-white border-0 flex-shrink-0">
                 {loading && !activeBlindSpot ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 <span className="ml-2 hidden sm:inline">Analyze</span>
               </Button>
             </div>
-            {playerQuery.trim() && playerFact && (
+            {trimmedQuery && playerFact && (
               <Card className="mt-3 bg-accent/30 border-border">
                 <CardHeader className="py-3">
                   <CardTitle className="text-xs font-semibold text-muted-foreground">Calculated stats</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-[11px]">
+                  <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-[11px]">
                     <div><p className="text-muted-foreground">Avg PPG</p><p className="text-foreground font-semibold">{toDisplayNumber(playerFact.avgPoints)}</p></div>
                     <div><p className="text-muted-foreground">VORP</p><p className="text-foreground font-semibold">{toDisplayNumber(playerFact.vorp)}</p></div>
                     <div><p className="text-muted-foreground">VORP Tier</p><p className="text-foreground font-semibold">{playerFact.vorpTier}</p></div>
                     <div><p className="text-muted-foreground">ROS Value</p><p className="text-foreground font-semibold">{toDisplayNumber(playerFact.rosAdjusted)}</p></div>
                     <div><p className="text-muted-foreground">Injury Risk</p><p className="text-foreground font-semibold">{playerFact.injuryRisk}</p></div>
                     <div><p className="text-muted-foreground">Schedule</p><p className="text-foreground font-semibold">{playerFact.scheduleStrength}</p></div>
+                    <div>
+                      <p className="text-muted-foreground">Trend</p>
+                      {playerTrend ? <TrendBadge trend={playerTrend.trend} /> : <p className="text-foreground font-semibold">—</p>}
+                    </div>
                   </div>
+                  {playerTrend && (
+                    <div className="mt-2 pt-2 border-t border-border text-[10px] text-muted-foreground">
+                      <span className="text-foreground font-medium">{playerTrend.playerName}</span>
+                      {" — "}
+                      {playerTrend.weeks.map((w, i) => `Wk${w}: ${(playerTrend.fantasyPoints[i] ?? 0).toFixed(1)}`).join(", ")}
+                      {" | "}
+                      {playerTrend.avgTargets.toFixed(1)} tgt/g · {playerTrend.avgSnapPct.toFixed(0)}% snap
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -253,7 +336,7 @@ Be specific and decisive. This is a 14-team PPR keeper league where depth is cri
               </CardHeader>
               <CardContent className="p-0">
                 {faLoading ? (
-                  <div className="px-4 pb-3 space-y-2">{[...Array(6)].map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
+                  <div className="px-4 pb-3 space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
                 ) : sorted.length > 0 ? (
                   <div className="divide-y divide-border max-h-72 overflow-y-auto">
                     {sorted.slice(0, 30).map((player, i) => {
@@ -287,7 +370,7 @@ Be specific and decisive. This is a 14-team PPR keeper league where depth is cri
               </CardHeader>
               <CardContent>
                 {loading ? (
-                  <div className="space-y-3">{[...Array(8)].map((_, i) => <Skeleton key={i} className="h-4 w-full" />)}</div>
+                  <div className="space-y-3">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-4 w-full" />)}</div>
                 ) : report ? (
                   <div className="prose prose-sm prose-invert max-w-none"><Streamdown>{report}</Streamdown></div>
                 ) : (

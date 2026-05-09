@@ -1,5 +1,5 @@
 // FILE: client/src/pages/StartSit.tsx
-import { useState } from "react";
+import React, { useState, useMemo } from "react";
 import AppLayout from "@/components/AppLayout";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
-import { Brain, Zap, CheckCircle, XCircle, Loader2, ChevronRight } from "lucide-react";
+import { Brain, Zap, CheckCircle, XCircle, Loader2, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 const QUICK_SCENARIOS = [
   {
@@ -34,7 +34,6 @@ const QUICK_SCENARIOS = [
   },
 ];
 
-
 type AnalyticsRecord = Record<string, unknown>;
 
 type PlayerFact = {
@@ -45,6 +44,21 @@ type PlayerFact = {
   rosAdjusted: number | null;
   injuryRisk: string;
   scheduleStrength: string;
+};
+
+type PlayerTrendResult = {
+  searchName: string;
+  playerId: number;
+  playerName: string;
+  position: string;
+  weeks: number[];
+  targets: number[];
+  snapPct: number[];
+  fantasyPoints: number[];
+  avgTargets: number;
+  avgSnapPct: number;
+  avgFantasyPoints: number;
+  trend: "rising" | "falling" | "stable";
 };
 
 const toRecords = (value: unknown): AnalyticsRecord[] => Array.isArray(value) ? value.filter((item): item is AnalyticsRecord => Boolean(item) && typeof item === "object") : [];
@@ -84,6 +98,18 @@ const formatFactLine = (label: string, fact: PlayerFact | null): string => {
   return `${fact.playerName}: avg PPG=${toDisplayNumber(fact.avgPoints)}, VORP=${vorpPrefix}${toDisplayNumber(fact.vorp)} (Tier: ${fact.vorpTier}), ROS adjusted=${toDisplayNumber(fact.rosAdjusted)}, injury risk=${fact.injuryRisk}, schedule=${fact.scheduleStrength}`;
 };
 
+const formatTrendLine = (playerName: string, trends: PlayerTrendResult[] | undefined): string => {
+  if (!trends || trends.length === 0) return `${playerName}: weekly trend data not cached`;
+  const nameLower = playerName.toLowerCase();
+  const firstWord = nameLower.split(" ")[0] ?? "";
+  const match = trends.find(
+    (t) => t.searchName.toLowerCase() === nameLower || t.playerName.toLowerCase().includes(firstWord)
+  );
+  if (!match) return `${playerName}: not found in weekly stats cache`;
+  const weekStr = match.weeks.map((w, i) => `Wk${w}: ${(match.fantasyPoints[i] ?? 0).toFixed(1)} pts`).join(", ");
+  return `${match.playerName} (${match.position}) — Trend: ${match.trend.toUpperCase()} | Last ${match.weeks.length} weeks: ${weekStr} | Avg targets: ${match.avgTargets.toFixed(1)}/game | Avg snap%: ${match.avgSnapPct.toFixed(0)}%`;
+};
+
 const PPR_RULES = [
   { position: "QB", scoring: "4 pts/TD pass, 1 pt/25 yds passing, 6 pts/rush TD, 1 pt/10 rush yds" },
   { position: "RB", scoring: "6 pts/rush TD, 1 pt/10 rush yds, 1 pt/reception, 6 pts/rec TD" },
@@ -92,6 +118,24 @@ const PPR_RULES = [
   { position: "K", scoring: "3 pts/FG (0-39 yds), 4 pts/FG (40-49 yds), 5 pts/FG (50+ yds)" },
   { position: "D/ST", scoring: "Points allowed tiers, sacks (1 pt), INTs (2 pts), TDs (6 pts)" },
 ];
+
+function TrendBadge({ trend }: { trend: "rising" | "falling" | "stable" }) {
+  if (trend === "rising") return (
+    <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border text-[10px] px-1.5 py-0 gap-1">
+      <TrendingUp className="w-2.5 h-2.5" /> RISING
+    </Badge>
+  );
+  if (trend === "falling") return (
+    <Badge className="bg-red-500/20 text-red-400 border-red-500/30 border text-[10px] px-1.5 py-0 gap-1">
+      <TrendingDown className="w-2.5 h-2.5" /> FALLING
+    </Badge>
+  );
+  return (
+    <Badge className="bg-muted/40 text-muted-foreground border-border border text-[10px] px-1.5 py-0 gap-1">
+      <Minus className="w-2.5 h-2.5" /> STABLE
+    </Badge>
+  );
+}
 
 export default function StartSit() {
   const { isAuthenticated } = useAuth();
@@ -108,11 +152,38 @@ export default function StartSit() {
 
   const player1Name = player1.trim();
   const player2Name = player2.trim();
+
+  // Stabilize trend query input with useMemo to avoid infinite re-renders
+  const trendPlayerNames = useMemo(
+    () => [player1Name, player2Name].filter(Boolean),
+    [player1Name, player2Name]
+  );
+  const { data: trendDataRaw } = trpc.weeklyStats.getPlayerTrendsByName.useQuery(
+    { season: 2025, playerNames: trendPlayerNames, lastNWeeks: 4 },
+    { enabled: trendPlayerNames.length > 0, staleTime: 10 * 60 * 1000 }
+  );
+  const trendData = trendDataRaw as PlayerTrendResult[] | undefined;
+
   const player1Fact = getPlayerFact(player1Name, vorpData, rosData);
   const player2Fact = getPlayerFact(player2Name, vorpData, rosData);
+
+  const player1Trend = trendData?.find(
+    (t) => t.searchName.toLowerCase() === player1Name.toLowerCase() ||
+      t.playerName.toLowerCase().includes((player1Name.split(" ")[0] ?? "").toLowerCase())
+  );
+  const player2Trend = trendData?.find(
+    (t) => t.searchName.toLowerCase() === player2Name.toLowerCase() ||
+      t.playerName.toLowerCase().includes((player2Name.split(" ")[0] ?? "").toLowerCase())
+  );
+
   const factContext = `CALCULATED FACTS (do not contradict these):
 ${formatFactLine(player1Name || "Player 1", player1Fact)}
 ${formatFactLine(player2Name || "Player 2", player2Fact)}`;
+
+  const trendContext = trendPlayerNames.length > 0
+    ? `\nWEEKLY TREND DATA (last 4 weeks — use this to assess momentum):\n${formatTrendLine(player1Name, trendData)}\n${formatTrendLine(player2Name, trendData)}`
+    : "";
+
   const showFactsPanel = Boolean(player1Name && player2Name && vorpData);
 
   const analyze = async () => {
@@ -127,7 +198,7 @@ ${formatFactLine(player2Name || "Player 2", player2Fact)}`;
     setLoading(true);
     setResult(null);
     setVerdict(null);
-    const prompt = `${factContext}
+    const prompt = `${factContext}${trendContext}
 
 START/SIT DECISION — PPR 14-Team League (ATLANTAS FINEST FF)
 
@@ -139,8 +210,9 @@ Analyze this start/sit decision for a PPR 14-team keeper league. Consider:
 1. Projected points and floor/ceiling
 2. Matchup quality (opponent defense rank vs position)
 3. Target share / usage rate / snap count
-4. Injury concerns or weather factors
-5. PPR scoring impact (receptions matter heavily)
+4. Recent weekly trend (rising/falling/stable momentum)
+5. Injury concerns or weather factors
+6. PPR scoring impact (receptions matter heavily)
 
 End your response with a clear verdict on its own line:
 VERDICT: START [Player Name] — [one sentence reason]
@@ -264,23 +336,47 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
                             <th className="text-left py-1.5 pr-3 text-muted-foreground font-semibold">VORP</th>
                             <th className="text-left py-1.5 pr-3 text-muted-foreground font-semibold">VORP Tier</th>
                             <th className="text-left py-1.5 pr-3 text-muted-foreground font-semibold">ROS Value</th>
-                            <th className="text-left py-1.5 text-muted-foreground font-semibold">Injury Risk</th>
+                            <th className="text-left py-1.5 pr-3 text-muted-foreground font-semibold">Injury Risk</th>
+                            <th className="text-left py-1.5 text-muted-foreground font-semibold">Trend</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                          {[player1Fact, player2Fact].map((fact, index) => (
+                          {[
+                            { fact: player1Fact, name: player1Name, trend: player1Trend },
+                            { fact: player2Fact, name: player2Name, trend: player2Trend },
+                          ].map(({ fact, name, trend }, index) => (
                             <tr key={index}>
-                              <td className="py-1.5 pr-3 text-foreground">{fact?.playerName ?? (index === 0 ? player1Name : player2Name)}</td>
+                              <td className="py-1.5 pr-3 text-foreground">{fact?.playerName ?? name}</td>
                               <td className="py-1.5 pr-3 text-muted-foreground">{toDisplayNumber(fact?.avgPoints ?? null)}</td>
                               <td className="py-1.5 pr-3 text-muted-foreground">{toDisplayNumber(fact?.vorp ?? null)}</td>
                               <td className="py-1.5 pr-3 text-muted-foreground">{fact?.vorpTier ?? "—"}</td>
                               <td className="py-1.5 pr-3 text-muted-foreground">{toDisplayNumber(fact?.rosAdjusted ?? null)}</td>
-                              <td className="py-1.5 text-muted-foreground">{fact?.injuryRisk ?? "—"}</td>
+                              <td className="py-1.5 pr-3 text-muted-foreground">{fact?.injuryRisk ?? "—"}</td>
+                              <td className="py-1.5">
+                                {trend ? <TrendBadge trend={trend.trend} /> : <span className="text-muted-foreground">—</span>}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
+                    {/* Trend detail rows */}
+                    {(player1Trend || player2Trend) && (
+                      <div className="mt-2 space-y-1 border-t border-border pt-2">
+                        {[
+                          { trend: player1Trend, name: player1Name },
+                          { trend: player2Trend, name: player2Name },
+                        ].map(({ trend, name }, i) => trend ? (
+                          <div key={i} className="text-[10px] text-muted-foreground">
+                            <span className="text-foreground font-medium">{trend.playerName}</span>
+                            {" — "}
+                            {trend.weeks.map((w, wi) => `Wk${w}: ${(trend.fantasyPoints[wi] ?? 0).toFixed(1)}`).join(", ")}
+                            {" | "}
+                            {trend.avgTargets.toFixed(1)} tgt/g · {trend.avgSnapPct.toFixed(0)}% snap
+                          </div>
+                        ) : null)}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -323,7 +419,7 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
             <CardContent>
               {loading ? (
                 <div className="space-y-3">
-                  {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-4 w-full" />)}
+                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-4 w-full" />)}
                 </div>
               ) : result ? (
                 <div className="prose prose-sm prose-invert max-w-none">

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Link } from "wouter";
 import AppLayout from "@/components/AppLayout";
 import { MyProfileTab } from "./MyProfileTabContent";
 import { OpponentProfileModal } from "./OpponentProfileModal";
@@ -226,6 +227,80 @@ const QUICK_PROMPTS_CHAT = [
   "Who will rise and who will fall in 2026 based on 3-year trajectories?",
 ];
 
+// ─── Keeper Deadline Countdown Card ──────────────────────────────────────────
+const KEEPER_DEADLINE = new Date("2026-08-18T23:59:00-04:00");
+
+function KeeperCountdownCard() {
+  const now = new Date();
+  const msRemaining = KEEPER_DEADLINE.getTime() - now.getTime();
+  const daysRemaining = Math.max(0, Math.floor(msRemaining / (1000 * 60 * 60 * 24)));
+  const isPast = msRemaining <= 0;
+
+  type Urgency = "critical" | "urgent" | "approaching" | "upcoming" | "locked";
+  const urgency: Urgency = isPast ? "locked"
+    : daysRemaining < 7 ? "critical"
+    : daysRemaining < 30 ? "urgent"
+    : daysRemaining < 60 ? "approaching"
+    : "upcoming";
+
+  const cardClass = {
+    critical: "border-red-500/50 bg-red-950/20",
+    urgent: "border-amber-500/50 bg-amber-950/20",
+    approaching: "border-yellow-500/30 bg-card",
+    upcoming: "border-border bg-card",
+    locked: "border-border bg-card opacity-60",
+  }[urgency];
+
+  const numClass = {
+    critical: "text-red-400",
+    urgent: "text-amber-400",
+    approaching: "text-yellow-400",
+    upcoming: "text-primary",
+    locked: "text-muted-foreground",
+  }[urgency];
+
+  const badgeClass = {
+    critical: "bg-red-500/20 text-red-400 border-red-500/30 border",
+    urgent: "bg-amber-500/20 text-amber-400 border-amber-500/30 border",
+    approaching: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border",
+    upcoming: "bg-primary/10 text-primary border-primary/30 border",
+    locked: "bg-muted/30 text-muted-foreground border-border border",
+  }[urgency];
+
+  const badgeLabel = {
+    critical: "CRITICAL",
+    urgent: "URGENT",
+    approaching: "APPROACHING",
+    upcoming: "UPCOMING",
+    locked: "LOCKED",
+  }[urgency];
+
+  return (
+    <Card className={`card-glow ${cardClass}`}>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="p-1.5 rounded-md bg-accent">
+            <Star className="w-4 h-4 text-yellow-400" />
+          </div>
+          <Badge className={`text-[9px] px-1.5 py-0 ${badgeClass}`}>{badgeLabel}</Badge>
+        </div>
+        {isPast ? (
+          <p className="text-sm font-semibold text-muted-foreground mt-1">Keeper window closed</p>
+        ) : (
+          <>
+            <p className={`text-xl font-bold ${numClass}`}>{daysRemaining}</p>
+            <p className="text-xs font-medium text-foreground mt-0.5">Keeper Deadline</p>
+            <p className="text-[10px] text-muted-foreground">days until Aug 18, 2026</p>
+          </>
+        )}
+        <Link href="/keeper-lab" className="text-[10px] text-primary hover:underline mt-1 block">
+          Open Keeper Lab →
+        </Link>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Countdown helper ─────────────────────────────────────────────────────────
 function Countdown({ target, label }: { target: Date; label: string }) {
   const now = new Date();
@@ -362,6 +437,7 @@ export default function Dashboard() {
                   </CardContent>
                 </Card>
               ))}
+              <KeeperCountdownCard />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

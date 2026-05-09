@@ -304,17 +304,17 @@
 - [x] All 121 tests passing across 10 test files, 0 TypeScript errors
 
 ## Weekly Stats Cache (2026-05-09)
-- [ ] Add weeklyPlayerStats table to drizzle/schema.ts (playerId, playerName, season, week, targets, receptions, receivingYards, rushingYards, snapCount, snapPct, fantasyPoints, position, teamId, ownerName)
-- [ ] Build server/weeklyStatsService.ts: fetch per-week stats from ESPN scoringPeriodId endpoint
-- [ ] Add espn.fetchWeeklyStats tRPC mutation: pulls all weeks for a season, caches in DB
-- [ ] Add espn.weeklyStats tRPC query: returns cached weekly stats by season/player/week
-- [ ] Add espn.playerWeeklyTrend tRPC query: returns last N weeks for a player (targets, snaps, PPG trend)
-- [ ] Surface weekly stats in PlayerProfiles page (targets/snaps sparkline per week)
-- [ ] Update Start/Sit facts panel to show last 4 weeks targets + snap % for each player
-- [ ] Update Waiver Wire facts card to show weekly trend for pickup candidates
-- [ ] Inject weekly trend summary into GM Advisor system prompt context
-- [ ] Write vitest tests for weekly stats normalization
-- [ ] Save checkpoint
+- [x] Add weeklyPlayerStats table to drizzle/schema.ts (playerId, playerName, season, week, targets, receptions, receivingYards, rushingYards, snapCount, snapPct, fantasyPoints, position, teamId, ownerName)
+- [x] Build server/weeklyStatsService.ts: fetch per-week stats from ESPN scoringPeriodId endpoint
+- [x] Add espn.fetchWeeklyStats tRPC mutation: pulls all weeks for a season, caches in DB
+- [x] Add espn.weeklyStats tRPC query: returns cached weekly stats by season/player/week
+- [x] Add espn.playerWeeklyTrend tRPC query: returns last N weeks for a player (targets, snaps, PPG trend)
+- [x] Surface weekly stats in PlayerProfiles page (targets/snaps sparkline per week)
+- [x] Update Start/Sit facts panel to show last 4 weeks targets + snap % for each player
+- [x] Update Waiver Wire facts card to show weekly trend for pickup candidates
+- [x] Inject weekly trend summary into GM Advisor system prompt context
+- [x] Write vitest tests for weekly stats normalization
+- [x] Save checkpoint
 
 ## Weekly Stats Cache — COMPLETE (2026-05-09)
 - [x] Add weekly_player_stats DB table (26 cols: targets, receptions, rec yards, rec TDs, rush att, rush yards, rush TDs, pass att, completions, pass yards, pass TDs, INTs, snap count, snap pct, fantasy points × 100, 3 indexes)
@@ -328,4 +328,11 @@
 
 ## BUG: Double Sidebar on Command Center (and hub pages)
 - [x] Fix double sidebar: added InsideLayoutContext to AppLayout.tsx — nested AppLayout calls detect they are already inside a layout and render children only, no extra sidebar. Zero changes needed to any of the 22 child pages or 7 hub pages.
+- [x] 155 tests passing, 0 TypeScript errors
+
+## Phase 10 — AI Context Enhancements + UX Polish (2026-05-09)
+- [x] Data Health Alert Banner: added DataHealthBanner component to AppLayout.tsx — calls pipeline.health, shows red/amber/yellow dismissible banner with link to Data Center based on cookie status, staleness, and data quality
+- [x] Weekly Trend Injection — Start/Sit: queries weeklyStats.getPlayerTrendsByName for both players, injects last-4-week trend lines (pts/wk, avg targets, snap%) into AI prompt; shows Trend badge (RISING/FALLING/STABLE) and per-week breakdown in "Facts passed to AI" panel
+- [x] Weekly Trend Injection — Waiver Wire: same pattern — queries trend for typed player name, injects trend context into AI scouting report prompt, adds Trend column to Calculated Stats card with per-week detail row
+- [x] Keeper Deadline Countdown Card: added KeeperCountdownCard to Executive Summary metric grid (7th card) — shows days remaining until Aug 18 2026 with urgency color coding (upcoming/approaching/urgent/critical/locked) and link to Keeper Lab
 - [x] 155 tests passing, 0 TypeScript errors
