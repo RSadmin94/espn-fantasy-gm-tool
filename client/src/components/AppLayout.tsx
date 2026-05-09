@@ -1,4 +1,5 @@
 // FILE: client/src/components/AppLayout.tsx
+import { createContext, useContext } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
@@ -26,6 +27,11 @@ const navItems = [
 
 const groups = ["Overview", "Draft & Keepers", "Decision Tools", "Intelligence", "System"];
 
+// ── Embedded context ─────────────────────────────────────────────────────────
+// Prevents double sidebar: if AppLayout is already rendered by a parent
+// (e.g. a hub page), any nested AppLayout renders only its children.
+const InsideLayoutContext = createContext(false);
+
 interface AppLayoutProps {
   children: React.ReactNode;
   title?: string;
@@ -35,8 +41,15 @@ interface AppLayoutProps {
 
 export default function AppLayout({ children, title, subtitle, headerRight }: AppLayoutProps) {
   const [location] = useLocation();
+  const alreadyInsideLayout = useContext(InsideLayoutContext);
+
+  // Nested call: skip shell, render children only
+  if (alreadyInsideLayout) {
+    return <>{children}</>;
+  }
 
   return (
+    <InsideLayoutContext.Provider value={true}>
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Sidebar */}
       <aside className="w-62 flex-shrink-0 flex flex-col border-r border-border bg-card" style={{ width: "15.5rem" }}>
@@ -130,5 +143,6 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
         </main>
       </div>
     </div>
+    </InsideLayoutContext.Provider>
   );
 }

@@ -325,3 +325,7 @@
 - [x] Add /weekly-stats route to App.tsx and "Weekly Stats" nav item to AppLayout (System group)
 - [x] Write 13 vitest tests in server/weeklyStats.test.ts: normalizeWeeklyStats (5 tests), computePlayerTrend (8 tests)
 - [x] 155 tests passing across 13 test files, 0 TypeScript errors
+
+## BUG: Double Sidebar on Command Center (and hub pages)
+- [x] Fix double sidebar: added InsideLayoutContext to AppLayout.tsx — nested AppLayout calls detect they are already inside a layout and render children only, no extra sidebar. Zero changes needed to any of the 22 child pages or 7 hub pages.
+- [x] 155 tests passing, 0 TypeScript errors
