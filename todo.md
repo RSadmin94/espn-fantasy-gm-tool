@@ -450,10 +450,10 @@
 
 ## NEW: Save Draft Results Feature
 
-- [ ] Add mock_draft_results table to drizzle/schema.ts
-- [ ] Run pnpm db:push to apply migration
-- [ ] Add saveDraft, listDrafts, getDraft, deleteDraft tRPC procedures
-- [ ] Add Save Draft button to MockDraftSimulator post-draft grade report
-- [ ] Build DraftHistory.tsx page for reviewing past drafts
-- [ ] Wire DraftHistory tab into DraftWarRoom hub
-- [ ] Write vitest tests for saveDraft and listDrafts procedures
+- [x] Add mock_draft_results table to drizzle/schema.ts
+- [x] Run pnpm db:push to apply migration
+- [x] Add saveDraft, listDrafts, getDraft, deleteDraft tRPC procedures
+- [x] Add Save Draft button to MockDraftSimulator post-draft grade report
+- [x] Build SavedDrafts.tsx page for reviewing past drafts
+- [x] Wire Saved Mocks tab into DraftWarRoom hub
+- [x] Write vitest tests for saveDraft and listDrafts procedures (15 tests)
