@@ -165,6 +165,8 @@ export default function Dashboard() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatSeason, setChatSeason] = useState(2025);
   const [selectedOpponent, setSelectedOpponent] = useState<{ memberId: string; name: string } | null>(null);
+  // Draft intel: track which manager+round combos are expanded (key = "name:2" or "name:3")
+  const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth();
@@ -1074,9 +1076,7 @@ export default function Dashboard() {
                     return `${firstName} is balanced and hard to exploit positionally. Focus on best-player-available and don't let him dictate your board.`;
                   };
 
-                  // Track which manager+round combos are expanded: key = "name:2" or "name:3"
-                  // eslint-disable-next-line react-hooks/rules-of-hooks
-                  const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
+                  // toggleRound uses expandedRounds state declared at component top level
                   const toggleRound = (name: string, rd: number) => {
                     const key = `${name}:${rd}`;
                     setExpandedRounds(prev => {
