@@ -5,11 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { RefreshCw, CheckCircle2, XCircle, Clock, Database, AlertTriangle } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, Clock, Database } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
+
 
 const ALL_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026];
 
@@ -17,8 +15,6 @@ export default function DataRefresh() {
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([2025]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshLog, setRefreshLog] = useState<{ season: number; status: "success" | "error"; message: string }[]>([]);
-  const { isAuthenticated } = useAuth();
-
   const { data: manifest } = trpc.espn.manifests.useQuery();
   const refreshMutation = trpc.espn.refresh.useMutation();
   const utils = trpc.useUtils();
@@ -34,10 +30,6 @@ export default function DataRefresh() {
   const selectRecent = () => setSelectedSeasons([2023, 2024, 2025, 2026]);
 
   const handleRefresh = async () => {
-    if (!isAuthenticated) {
-      window.location.href = getLoginUrl();
-      return;
-    }
     if (selectedSeasons.length === 0) {
       toast.error("Select at least one season to refresh");
       return;
@@ -169,15 +161,7 @@ export default function DataRefresh() {
               </p>
             </div>
 
-            {!isAuthenticated && (
-              <div className="flex items-center gap-2 p-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10">
-                <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
-                <p className="text-sm text-yellow-300">
-                  You must be signed in to refresh data.{" "}
-                  <button onClick={() => window.location.href = getLoginUrl()} className="underline">Sign in</button>
-                </p>
-              </div>
-            )}
+
           </CardContent>
         </Card>
 

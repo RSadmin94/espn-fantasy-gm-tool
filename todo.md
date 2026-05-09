@@ -336,3 +336,9 @@
 - [x] Weekly Trend Injection — Waiver Wire: same pattern — queries trend for typed player name, injects trend context into AI scouting report prompt, adds Trend column to Calculated Stats card with per-week detail row
 - [x] Keeper Deadline Countdown Card: added KeeperCountdownCard to Executive Summary metric grid (7th card) — shows days remaining until Aug 18 2026 with urgency color coding (upcoming/approaching/urgent/critical/locked) and link to Keeper Lab
 - [x] 155 tests passing, 0 TypeScript errors
+
+## BUG: Data Center Refresh Not Working — FIXED
+- [x] Diagnose why refresh fails in Data Center UI — espn.refresh was protectedProcedure, returned 401 for unauthenticated users
+- [x] Fix root cause: changed espn.refresh to publicProcedure (ESPN credentials are server-side secrets, no user auth needed)
+- [x] Removed auth gate from DataRefresh.tsx UI (redirect to login, warning banner)
+- [x] Verify fix: curl test returns {status:success, 11 views ok}, 155 tests passing

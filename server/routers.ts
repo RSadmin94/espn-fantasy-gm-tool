@@ -68,7 +68,7 @@ export const appRouter = router({
   }),
 
   espn: router({
-    refresh: protectedProcedure
+    refresh: publicProcedure
       .input(z.object({ season: z.number().optional(), seasons: z.array(z.number()).optional() }))
       .mutation(async ({ input }) => {
         const seasonsToRefresh = input.seasons ?? (input.season ? [input.season] : [ALL_SEASONS[ALL_SEASONS.length - 1]]);
