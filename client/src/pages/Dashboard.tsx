@@ -1202,6 +1202,51 @@ export default function Dashboard() {
                                   </div>
                                 </div>
 
+                                {/* Mid-Round Targets (Rds 4–6) */}
+                                {o.midTopPos && o.midTopPos.length > 0 && (
+                                  <div>
+                                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-semibold mb-1.5 flex items-center gap-1">
+                                      <Hash className="w-3 h-3" /> Mid-Round Targets (Rds 4–6)
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {/* Full positional breakdown for Rds 4-6 */}
+                                      {(() => {
+                                        const midBreakdown: Record<string, number> = {};
+                                        for (let rd = 4; rd <= 6; rd++) {
+                                          for (const [pos, cnt] of Object.entries(o.byRound[rd] || {})) {
+                                            midBreakdown[pos] = (midBreakdown[pos] || 0) + (cnt as number);
+                                          }
+                                        }
+                                        const midTotal = Object.values(midBreakdown).reduce((s, v) => s + v, 0) || 1;
+                                        return Object.entries(midBreakdown)
+                                          .sort((a, b) => (b[1] as number) - (a[1] as number))
+                                          .map(([pos, cnt]) => {
+                                            const pct = Math.round((cnt as number) / midTotal * 100);
+                                            return (
+                                              <div key={pos} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-background/60 border border-border/50">
+                                                <div className={`w-2 h-2 rounded-sm flex-shrink-0 ${posColors[pos] || "bg-slate-500"}`} />
+                                                <span className={`text-[10px] font-bold ${posTextColors[pos] || "text-muted-foreground"}`}>{pos}</span>
+                                                <span className="text-[10px] text-muted-foreground">{pct}%</span>
+                                                <span className="text-[9px] text-muted-foreground/60">×{cnt}</span>
+                                              </div>
+                                            );
+                                          });
+                                      })()}
+                                    </div>
+                                    {/* Narrative insight for mid-rounds */}
+                                    {o.midTopPos[0] && (
+                                      <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
+                                        {o.midTopPos[0].pct >= 50
+                                          ? `Heavily concentrates on ${o.midTopPos[0].pos} in the value rounds (${o.midTopPos[0].pct}%) — predictable target in Rds 4–6.`
+                                          : o.midTopPos[0].pct >= 35
+                                          ? `Leans toward ${o.midTopPos[0].pos} in Rds 4–6 (${o.midTopPos[0].pct}%)${o.midTopPos[1] ? `, with ${o.midTopPos[1].pos} as a secondary target (${o.midTopPos[1].pct}%)` : ''}.`
+                                          : `Spreads picks across positions in Rds 4–6 — no dominant tendency, harder to anticipate.`
+                                        }
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
                                 {/* Round 1 pick history */}
                                 {o.round1Picks.length > 0 && (
                                   <div>

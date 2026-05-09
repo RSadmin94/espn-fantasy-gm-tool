@@ -409,3 +409,7 @@
 - [x] Rebuild Competitor Draft Intelligence section: replace 6-item simple list with full per-manager deep-dive cards using leagueDraftTendencies data
 - [x] Each card shows: draft style badge, positional bar, round-by-round tendencies (Rd1-6), actual Rd1 pick history, key tendencies list, counter-strategy box
 - [x] Add "Tendencies at a Glance" summary row: QB timing, TE timing, keeper rate, diversity score per card
+
+## NEW: Mid-Round Targets Row
+
+- [x] Add Mid-Round Targets row (Rds 4–6) to each competitor draft intelligence card using midTopPos data
