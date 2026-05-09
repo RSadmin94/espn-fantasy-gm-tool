@@ -34,6 +34,7 @@ import {
   type TeamRow,
   type TransactionRow,
   type DraftPickRow,
+  type ManagerBehaviorStats,
 } from "./analytics";
 import {
   getCachedView,
@@ -1859,30 +1860,26 @@ Respond with JSON in this exact format:
     return { draftOrder, totalPicks: draftOrder.length };
   }),
 
-  opponentProfile: publicProcedure
+    opponentProfile: publicProcedure
     .input(z.object({ memberId: z.string() }))
     .query(async ({ input }) => {
-      const { findOpponentData } = await import("./opponentData");
-      const data = findOpponentData(input.memberId);
-      if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Opponent not found" });
+      const { findLiveOpponentProfile } = await import("./liveOpponentProfile");
+      const data = await findLiveOpponentProfile(input.memberId);
+      if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Opponent not found — sync ESPN data first" });
       return data;
     }),
-
   opponentScouting: publicProcedure
     .input(z.object({ memberId: z.string() }))
     .query(async () => {
-      const { findOpponentData } = await import("./opponentData");
-      // This endpoint is called after opponentProfile to generate the AI scouting report
-      // The actual generation happens client-side via a separate mutation
+      // Readiness check — actual generation happens via opponentScoutingReport mutation
       return { ready: true };
     }),
-
   opponentScoutingReport: publicProcedure
     .input(z.object({ memberId: z.string() }))
     .mutation(async ({ input }) => {
-      const { findOpponentData } = await import("./opponentData");
-      const data = findOpponentData(input.memberId);
-      if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Opponent not found" });
+      const { findLiveOpponentProfile } = await import("./liveOpponentProfile");
+      const data = await findLiveOpponentProfile(input.memberId);
+      if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Opponent not found — sync ESPN data first" });
 
       const totalW = data.career.wins;
       const totalL = data.career.losses;
@@ -2314,15 +2311,8 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       const offerOptions = buildOffer(targetValue, rodOfferCandidates);
 
       // ── 8. Pull GM style context for target owner ─────────────────────────
-      const { OPPONENT_DATA } = await import("./opponentData");
-      const opponentProfile = OPPONENT_DATA[targetMemberId];
-      const gmStyle = opponentProfile ? {
-        archetype: opponentProfile.gmArchetype,
-        avgTrades: opponentProfile.avgTrades,
-        h2hVsRod: opponentProfile.h2hVsRod,
-        strengthsWeaknesses: opponentProfile.strengthsWeaknesses,
-        draftStyleBadge: opponentProfile.draftStyleBadge,
-      } : null;
+      const { getGmStyleForTradeGenerator } = await import("./liveOpponentProfile");
+      const gmStyle = await getGmStyleForTradeGenerator(targetMemberId);
 
       // ── 9. Generate AI trade strategy ─────────────────────────────────────
       const targetDesc = targetPlayer
@@ -2438,6 +2428,162 @@ Generate a trade strategy and recommended approach.`,
         })),
         gmStyle,
         strategy,
+      };
+    }),
+
+  // ── Math-First Trade Analyzer ────────────────────────────────────────────
+  tradeAnalyze: protectedProcedure
+    .input(z.object({
+      season: z.number(),
+      sideA: z.array(z.object({
+        playerId: z.number(),
+        playerName: z.string(),
+        position: z.string(),
+        avgPoints: z.number(),
+        teamId: z.number(),
+      })),
+      sideB: z.array(z.object({
+        playerId: z.number(),
+        playerName: z.string(),
+        position: z.string(),
+        avgPoints: z.number(),
+        teamId: z.number(),
+      })),
+      teamAId: z.number(),
+      teamBId: z.number(),
+      // Optional picks in the trade
+      picksA: z.array(z.object({ round: z.number(), pick: z.number().default(7) })).optional(),
+      picksB: z.array(z.object({ round: z.number(), pick: z.number().default(7) })).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const { calcVORP, calcPositionalScarcity, calcKeeperEfficiency, calcROSValue, calcTradeValue, calcPickValue } = await import("./analytics");
+      const data = await getSeasonData(input.season);
+      if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season. Sync ESPN first." });
+
+      // Build full roster player list for context
+      const rosters = normalizeRosters(data) as Record<string, unknown>[];
+      const allPlayers: import("./analytics").PlayerRow[] = rosters.map(r => ({
+        playerId: r.playerId as number,
+        playerName: r.playerName as string,
+        position: r.position as string,
+        avgPoints: r.avgPoints as number,
+        seasonPoints: r.seasonPoints as number,
+        teamId: r.teamId as number,
+        ownerName: r.ownerName as string || "",
+        projectedTotal: null,
+        keeperValue: 0,
+        keeperValueFuture: 0,
+        injuryStatus: "",
+        appliedStats: {},
+      }));
+
+      // Calculate analytics context
+      const vorpResults = calcVORP(allPlayers);
+      const scarcityResults = calcPositionalScarcity(allPlayers, []); // no free agents in cache
+      const keeperResults = calcKeeperEfficiency(allPlayers, vorpResults);
+
+      // Weeks remaining (approximate — 14 regular season weeks, playoffs weeks 15-17)
+      const weeksRemaining = 10;
+
+      // Score each player in the trade
+      const scorePlayer = (p: { playerId: number; playerName: string; position: string; avgPoints: number; teamId: number }) => {
+        const playerRow: import("./analytics").PlayerRow = {
+          playerId: p.playerId,
+          playerName: p.playerName,
+          position: p.position,
+          avgPoints: p.avgPoints,
+          seasonPoints: p.avgPoints * 14,
+          teamId: p.teamId,
+          ownerName: "",
+          projectedTotal: null,
+          keeperValue: 0,
+          keeperValueFuture: 0,
+          injuryStatus: "",
+          appliedStats: {},
+        };
+        const vorp = vorpResults.find(v => v.playerId === p.playerId);
+        const ros = calcROSValue([playerRow], weeksRemaining)[0];
+        const scarcity = scarcityResults.find(s => s.position === p.position);
+        const keeper = keeperResults.find(k => k.playerId === p.playerId);
+        return calcTradeValue(playerRow, vorp, ros, scarcity, keeper);
+      };
+
+      const sideAValues = input.sideA.map(scorePlayer);
+      const sideBValues = input.sideB.map(scorePlayer);
+
+      // Score picks
+      const pickValueA = (input.picksA || []).reduce((sum, p) => sum + calcPickValue(p.round, p.pick), 0);
+      const pickValueB = (input.picksB || []).reduce((sum, p) => sum + calcPickValue(p.round, p.pick), 0);
+
+      const totalA = sideAValues.reduce((s, v) => s + v.compositeValue, 0) + pickValueA;
+      const totalB = sideBValues.reduce((s, v) => s + v.compositeValue, 0) + pickValueB;
+
+      const ratio = totalB > 0 ? totalA / totalB : 1;
+      const fairnessGrade =
+        ratio >= 0.95 && ratio <= 1.05 ? "FAIR"
+        : ratio >= 0.85 ? "SLIGHT EDGE B"
+        : ratio >= 0.75 ? "B WINS"
+        : ratio <= 1.05 && ratio >= 1.0 ? "FAIR"
+        : ratio > 1.05 && ratio <= 1.15 ? "SLIGHT EDGE A"
+        : ratio > 1.15 ? "A WINS"
+        : "LOPSIDED";
+
+      // Positional needs analysis
+      const teamARoster = allPlayers.filter(p => p.teamId === input.teamAId);
+      const teamBRoster = allPlayers.filter(p => p.teamId === input.teamBId);
+      const posCount = (roster: typeof allPlayers) => {
+        const counts: Record<string, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
+        for (const p of roster) if (p.position in counts) counts[p.position]++;
+        return counts;
+      };
+      const needsA = posCount(teamARoster);
+      const needsB = posCount(teamBRoster);
+
+      // Build math summary for AI context
+      const mathSummary = [
+        `TRADE MATH (${input.season} Season Data):`,
+        `Side A total value: ${totalA} (${sideAValues.map(v => `${v.name}: ${v.compositeValue} [${v.valueBreakdown}]`).join(", ")}${pickValueA > 0 ? `, picks: ${pickValueA}` : ""})`,
+        `Side B total value: ${totalB} (${sideBValues.map(v => `${v.name}: ${v.compositeValue} [${v.valueBreakdown}]`).join(", ")}${pickValueB > 0 ? `, picks: ${pickValueB}` : ""})`,
+        `Value ratio A/B: ${ratio.toFixed(2)} → ${fairnessGrade}`,
+        `Team A roster depth: QB:${needsA.QB} RB:${needsA.RB} WR:${needsA.WR} TE:${needsA.TE}`,
+        `Team B roster depth: QB:${needsB.QB} RB:${needsB.RB} WR:${needsB.WR} TE:${needsB.TE}`,
+        `Positions changing hands: A gives ${Array.from(new Set(input.sideA.map(p => p.position))).join("+")}, B gives ${Array.from(new Set(input.sideB.map(p => p.position))).join("+")}`,
+      ].join("\n");
+
+      const prompt = `You are an expert fantasy football analyst. The following trade math has already been calculated — DO NOT recalculate values. Your job is to EXPLAIN and RECOMMEND based on the numbers.
+
+${mathSummary}
+
+League context: 14-team PPR keeper league (ATLANTAS FINEST FF). Keepers cost 1 round more than previous year's draft round.
+
+Provide:
+1. VERDICT: One sentence — who wins this trade (or FAIR if balanced).
+2. WHY: 2-3 sentences explaining the math in plain English.
+3. ROSTER FIT: Does this trade address each team's actual positional needs?
+4. KEEPER ANGLE: Any long-term keeper implications?
+5. RECOMMENDATION: Should Team A accept? Should Team B accept? (YES/NO with one sentence each)`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: "You are a fantasy football trade analyst. The math is already done. Explain and recommend based on the provided numbers. Be concise and decisive." },
+          { role: "user", content: prompt },
+        ],
+      });
+      const aiVerdict = response.choices?.[0]?.message?.content ?? "Analysis unavailable.";
+
+      return {
+        sideAValues,
+        sideBValues,
+        totalA,
+        totalB,
+        pickValueA,
+        pickValueB,
+        ratio: Math.round(ratio * 100) / 100,
+        fairnessGrade,
+        aiVerdict,
+        mathSummary,
+        teamANeeds: needsA,
+        teamBNeeds: needsB,
       };
     }),
 
@@ -2807,9 +2953,278 @@ Be concise, data-driven, and specific. Reference actual team names and player na
           };
         });
 
-        return calcROSValue(players, input.weeksRemaining ?? 10);
+         return calcROSValue(players, input.weeksRemaining ?? 10);
+      }),
+
+    // ── 3D PROJECTIONS ──────────────────────────────────────────────────────────
+    projections3D: publicProcedure
+      .input(z.object({
+        season: z.number(),
+        weeksRemaining: z.number().optional().default(10),
+        teamId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        const { calc3DProjections } = await import("./analytics_additions");
+        const data = await getSeasonData(input.season);
+        if (!data) return [];
+        const rosters = normalizeRosters(data) as Record<string, unknown>[];
+        const teams = normalizeTeams(data);
+        const teamOwnerMap: Record<number, string> = {};
+        for (const t of teams) teamOwnerMap[t.teamId as number] = t.owners as string;
+        const players: PlayerRow[] = rosters
+          .filter(r => !input.teamId || r.teamId === input.teamId)
+          .map(r => ({
+            playerId: r.playerId as number,
+            playerName: (r.playerName as string) || "Unknown",
+            position: (r.position as string) || "?",
+            teamId: r.teamId as number,
+            ownerName: teamOwnerMap[r.teamId as number] || "Unknown",
+            seasonPoints: (r.appliedTotal as number) || 0,
+            avgPoints: (r.appliedAverage as number) || 0,
+            projectedTotal: null,
+            keeperValue: 0,
+            keeperValueFuture: 0,
+            injuryStatus: (r.injuryStatus as string) || "",
+            appliedStats: {},
+          }));
+        const weeklyScoresMap = new Map<number, number[]>();
+        for (const r of rosters) {
+          const pid = r.playerId as number;
+          const stats = r.appliedStats as Record<string, number> | undefined;
+          if (stats) {
+            const weekly = Object.entries(stats)
+              .filter(([k]) => k.startsWith("week_"))
+              .map(([, v]) => v as number)
+              .filter(v => v > 0);
+            if (weekly.length > 0) weeklyScoresMap.set(pid, weekly);
+          }
+        }
+        return calc3DProjections(weeklyScoresMap, players, input.weeksRemaining);
+      }),
+
+    // ── KEEPER FUTURE VALUE ─────────────────────────────────────────────────────
+    keeperFutureValue: publicProcedure
+      .input(z.object({ season: z.number(), teamId: z.number().optional() }))
+      .query(async ({ input }) => {
+        const { calcKeeperFutureValue } = await import("./analytics_additions");
+        const data = await getSeasonData(input.season);
+        if (!data) return [];
+        const rosters = normalizeRosters(data) as Record<string, unknown>[];
+        const teams = normalizeTeams(data);
+        const teamOwnerMap: Record<number, string> = {};
+        for (const t of teams) teamOwnerMap[t.teamId as number] = t.owners as string;
+        const draftPicks = normalizeDraftPicks(data) as Record<string, unknown>[];
+        const keeperRoundMap: Record<number, number> = {};
+        for (const p of draftPicks) {
+          if (p.keeper === true) keeperRoundMap[p.playerId as number] = p.roundId as number;
+        }
+        const players: PlayerRow[] = rosters
+          .filter(r => !input.teamId || r.teamId === input.teamId)
+          .map(r => ({
+            playerId: r.playerId as number,
+            playerName: (r.playerName as string) || "Unknown",
+            position: (r.position as string) || "?",
+            teamId: r.teamId as number,
+            ownerName: teamOwnerMap[r.teamId as number] || "Unknown",
+            seasonPoints: (r.appliedTotal as number) || 0,
+            avgPoints: (r.appliedAverage as number) || 0,
+            projectedTotal: null,
+            keeperValue: keeperRoundMap[r.playerId as number] || 0,
+            keeperValueFuture: 0,
+            injuryStatus: (r.injuryStatus as string) || "",
+            appliedStats: {},
+          }))
+          .filter(p => p.keeperValue > 0);
+        return calcKeeperFutureValue(players);
+      }),
+
+    // ── STRENGTH OF SCHEDULE ────────────────────────────────────────────────────
+    strengthOfSchedule: publicProcedure
+      .input(z.object({
+        season: z.number(),
+        currentWeek: z.number().optional().default(1),
+        playoffStartWeek: z.number().optional().default(15),
+      }))
+      .query(async ({ input }) => {
+        const { calcStrengthOfSchedule } = await import("./analytics_additions");
+        const data = await getSeasonData(input.season);
+        if (!data) return [];
+        const rawTeams = normalizeTeams(data);
+        const ownerNameMap: Record<number, string> = {};
+        for (const t of rawTeams) ownerNameMap[t.teamId as number] = t.owners as string;
+        const teams: TeamRow[] = rawTeams.map(t => ({
+          teamId: t.teamId as number,
+          ownerName: t.owners as string,
+          wins: t.wins as number,
+          losses: t.losses as number,
+          pointsFor: t.pointsFor as number,
+          pointsAgainst: t.pointsAgainst as number,
+        }));
+        const rawSchedule = ((data as Record<string, unknown>).schedule || {}) as Record<string, unknown>;
+        const matchups: { week: number; homeTeamId: number; awayTeamId: number; homeScore: number; awayScore: number; winner: string; }[] = [];
+        for (const [weekKey, gamesUnknown] of Object.entries(rawSchedule)) {
+          const games = Array.isArray(gamesUnknown) ? gamesUnknown : [gamesUnknown];
+          for (const gameUnknown of games) {
+            const g = gameUnknown as Record<string, unknown>;
+            const home = (g.home || {}) as Record<string, unknown>;
+            const away = (g.away || {}) as Record<string, unknown>;
+            const week = Number(g.week ?? g.matchupPeriodId ?? weekKey);
+            const homeTeamId = Number(g.homeTeamId ?? home.teamId ?? home.id ?? 0);
+            const awayTeamId = Number(g.awayTeamId ?? away.teamId ?? away.id ?? 0);
+            const homeScore = Number(g.homeScore ?? home.totalPoints ?? home.points ?? 0);
+            const awayScore = Number(g.awayScore ?? away.totalPoints ?? away.points ?? 0);
+            if (!Number.isFinite(week) || !homeTeamId || !awayTeamId) continue;
+            const winner = (g.winner as string) || (homeScore > awayScore ? "HOME" : awayScore > homeScore ? "AWAY" : "UNDECIDED");
+            matchups.push({ week, homeTeamId, awayTeamId, homeScore, awayScore, winner });
+          }
+        }
+        return calcStrengthOfSchedule(matchups, teams, ownerNameMap, input.currentWeek, input.playoffStartWeek);
+      }),
+
+    // ── OPPONENT OVERVALUATION ──────────────────────────────────────────────────
+    opponentOvervaluation: publicProcedure
+      .input(z.object({ seasons: z.array(z.number()).optional() }))
+      .query(async ({ input }) => {
+        const { calcOpponentOvervaluation } = await import("./analytics_additions");
+        const seasons = input.seasons || [2023, 2024, 2025];
+        const allDraftPicks: DraftPickRow[] = [];
+        const teamMap: Record<number, TeamRow> = {};
+        const ownerNameMap: Record<number, string> = {};
+        const allTransactions: TransactionRow[] = [];
+        const allDraftPickRows: DraftPickRow[] = [];
+        for (const season of seasons) {
+          const data = await getSeasonData(season);
+          if (!data) continue;
+          const picks = normalizeDraftPicks(data) as Record<string, unknown>[];
+          for (const p of picks) {
+            allDraftPicks.push({ season, teamId: p.teamId as number, roundId: p.roundId as number, roundPickNumber: p.roundPickNumber as number, overallPickNumber: p.overallPickNumber as number, position: (p.position as string) || "?", keeper: (p.keeper as boolean) || false });
+            allDraftPickRows.push({ season, teamId: p.teamId as number, roundId: p.roundId as number, roundPickNumber: p.roundPickNumber as number, overallPickNumber: p.overallPickNumber as number, position: (p.position as string) || "?", keeper: (p.keeper as boolean) || false });
+          }
+          const teams = normalizeTeams(data);
+          for (const t of teams) {
+            const tid = t.teamId as number;
+            if (!teamMap[tid]) { teamMap[tid] = { teamId: tid, ownerName: t.owners as string, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0 }; ownerNameMap[tid] = t.owners as string; }
+            teamMap[tid].wins += (t.wins as number) || 0;
+            teamMap[tid].losses += (t.losses as number) || 0;
+            teamMap[tid].pointsFor += (t.pointsFor as number) || 0;
+            teamMap[tid].pointsAgainst += (t.pointsAgainst as number) || 0;
+          }
+          const txns = normalizeTransactions(data) as Record<string, unknown>[];
+          for (const tx of txns) allTransactions.push({ season, teamId: tx.teamId as number, type: tx.type as string, itemType: (tx.itemType as string) || "", proposedDate: (tx.proposedDate as number) || 0 });
+        }
+        const teams = Object.values(teamMap);
+        const behavior = calcManagerBehavior(teams, allTransactions, allDraftPickRows, ownerNameMap) as ManagerBehaviorStats[];
+        return calcOpponentOvervaluation(allDraftPicks, teams, ownerNameMap, behavior);
+      }),
+
+    // ── WAIVER REPLACEMENT COST ─────────────────────────────────────────────────
+    waiverReplacementCost: publicProcedure
+      .input(z.object({ season: z.number() }))
+      .query(async ({ input }) => {
+        const { calcWaiverReplacementCost } = await import("./analytics_additions");
+        const data = await getSeasonData(input.season);
+        if (!data) return [];
+        const rosters = normalizeRosters(data) as Record<string, unknown>[];
+        const rosteredIds = new Set(rosters.map(r => r.playerId as number));
+        const allPlayers = (data as Record<string, unknown>).players as Record<string, unknown>[] || [];
+        const freeAgentPlayers: PlayerRow[] = allPlayers
+          .filter(p => !rosteredIds.has(p.id as number))
+          .map(p => ({ playerId: p.id as number, playerName: (p.fullName as string) || "Unknown", position: (p.position as string) || "?", teamId: 0, ownerName: "Free Agent", seasonPoints: 0, avgPoints: (p.avgPoints as number) || 0, projectedTotal: null, keeperValue: 0, keeperValueFuture: 0, injuryStatus: (p.injuryStatus as string) || "", appliedStats: {} }))
+          .filter(p => p.avgPoints > 0);
+        return calcWaiverReplacementCost(freeAgentPlayers);
+      }),
+
+    // ── STRATEGY MODE CONTEXT ───────────────────────────────────────────────────
+    strategyMode: publicProcedure
+      .input(z.object({ season: z.number(), teamId: z.number(), currentWeek: z.number().optional().default(1), manualOverride: z.enum(["win_now", "long_term", "balanced"]).optional() }))
+      .query(async ({ input }) => {
+        const { buildStrategyModeContext } = await import("./analytics_additions");
+        const data = await getSeasonData(input.season);
+        if (!data) return null;
+        const teams = normalizeTeams(data);
+        const team = teams.find(t => t.teamId === input.teamId);
+        if (!team) return null;
+        return buildStrategyModeContext({ wins: (team.wins as number) || 0, losses: (team.losses as number) || 0, ties: (team.ties as number) || 0 }, input.currentWeek, 14, input.manualOverride);
       }),
   }),
-});
 
+  // ── DRAFT OPTIMIZER ──────────────────────────────────────────────────────────
+  draftOptimizer: protectedProcedure
+    .input(z.object({
+      season: z.number(),
+      draftSlot: z.number().optional().default(11),
+      weeksRemaining: z.number().optional().default(10),
+    }))
+    .query(async ({ input }) => {
+      const data = await getSeasonData(input.season);
+      if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season. Sync ESPN first." });
+      const rosters = normalizeRosters(data) as Record<string, unknown>[];
+      const teams = normalizeTeams(data);
+      const teamOwnerMap: Record<number, string> = {};
+      for (const t of teams) teamOwnerMap[t.teamId as number] = t.owners as string;
+      const allPlayers: PlayerRow[] = rosters.map(r => ({
+        playerId: r.playerId as number,
+        playerName: (r.playerName as string) || "Unknown",
+        position: (r.position as string) || "?",
+        teamId: r.teamId as number,
+        ownerName: teamOwnerMap[r.teamId as number] || "Unknown",
+        seasonPoints: (r.appliedTotal as number) || 0,
+        avgPoints: (r.appliedAverage as number) || (r.avgPoints as number) || 0,
+        projectedTotal: null,
+        keeperValue: (r.keeperValue as number) || 0,
+        keeperValueFuture: (r.keeperValueFuture as number) || 0,
+        injuryStatus: (r.injuryStatus as string) || "",
+        appliedStats: {},
+      }));
+      const draftPicks = normalizeDraftPicks(data) as Record<string, unknown>[];
+      const keeperPlayerIds = new Set(draftPicks.filter(p => p.keeper === true).map(p => p.playerId as number));
+      const availablePlayers = allPlayers.filter(p => !keeperPlayerIds.has(p.playerId));
+      const removedKeepers = allPlayers.filter(p => keeperPlayerIds.has(p.playerId)).map(p => ({ playerId: p.playerId, playerName: p.playerName, position: p.position, ownerName: p.ownerName, avgPoints: p.avgPoints }));
+      const vorpResults = calcVORP(availablePlayers);
+      const scarcityResults = calcPositionalScarcity(availablePlayers, []);
+      const rosResults = calcROSValue(availablePlayers, input.weeksRemaining);
+      const enriched = availablePlayers.map(p => {
+        const vorp = vorpResults.find(v => v.playerId === p.playerId);
+        const ros = rosResults.find(r => r.playerId === p.playerId);
+        return { playerId: p.playerId, playerName: p.playerName, position: p.position, ownerName: p.ownerName, avgPoints: Math.round(p.avgPoints * 10) / 10, vorp: vorp?.vorp ?? 0, vorpTier: vorp?.vorpTier ?? "Borderline", rosValue: ros?.rosAdjusted ?? 0, injuryRisk: ros?.injuryRisk ?? "None", compositeScore: Math.round((p.avgPoints * 2) + (vorp?.vorp ?? 0) * 1.5) };
+      }).sort((a, b) => b.compositeScore - a.compositeScore);
+      const positions = ["QB", "RB", "WR", "TE"];
+      const tieredBoard: Record<string, { tier: number; tierLabel: string; players: typeof enriched; }[]> = {};
+      for (const pos of positions) {
+        const posPlayers = enriched.filter(p => p.position === pos);
+        const tiers: { tier: number; tierLabel: string; players: typeof enriched; }[] = [];
+        let currentTier: typeof enriched = [];
+        let tierNum = 1;
+        const tierLabels = ["Elite", "High-end starter", "Starter", "Borderline starter", "Depth"];
+        for (let i = 0; i < posPlayers.length; i++) {
+          currentTier.push(posPlayers[i]);
+          const next = posPlayers[i + 1];
+          const isGap = !next || (posPlayers[i].compositeScore - next.compositeScore) > 8;
+          const isTierFull = currentTier.length >= 6;
+          if ((isGap || isTierFull) && currentTier.length > 0) {
+            tiers.push({ tier: tierNum, tierLabel: tierLabels[tierNum - 1] || `Tier ${tierNum}`, players: currentTier });
+            currentTier = []; tierNum++;
+            if (tierNum > 5) break;
+          }
+        }
+        if (currentTier.length > 0) tiers.push({ tier: tierNum, tierLabel: "Depth", players: currentTier });
+        tieredBoard[pos] = tiers;
+      }
+      const scarcePositions = scarcityResults.filter(s => s.scarcityScore >= 60).map(s => ({ position: s.position, scarcityScore: s.scarcityScore, scarcityLabel: s.scarcityLabel, topFreeAgentAvg: s.topFreeAgentAvg, alert: s.scarcityScore >= 80 ? `Only ${s.availableStarters} ${s.position} starter slots remain unclaimed` : `${s.position} depth is thinning — ${s.availableStarters} quality starters available` }));
+      const TEAMS = 14;
+      const rodRecommendations: { round: number; pickInRound: number; overallPick: number; pickValue: number; recommendation: string; topAvailable: { playerName: string; position: string; compositeScore: number; }[]; }[] = [];
+      for (let round = 1; round <= 14; round++) {
+        const pickInRound = round % 2 === 1 ? input.draftSlot : (TEAMS + 1 - input.draftSlot);
+        const overallPick = (round - 1) * TEAMS + pickInRound;
+        const pickValue = calcPickValue(round, pickInRound);
+        const targetPos = round <= 3 ? ["RB", "WR"] : round <= 5 ? ["WR", "RB", "TE"] : round <= 8 ? ["QB", "WR", "RB"] : ["RB", "WR", "TE", "QB"];
+        const stillAvailable = enriched.filter(p => targetPos.includes(p.position)).slice(overallPick - 1, overallPick + 4);
+        const rec = round === 1 ? "Priority: elite RB or WR — do not reach for QB or TE" : round === 2 ? "Fill the opposite of Round 1 — RB/WR balance is critical" : round <= 4 ? "Target TE if elite option fell, otherwise best RB/WR on board" : round <= 7 ? "QB window opens here — mid-tier QBs score similarly in PPR" : round <= 10 ? "Handcuffs, upside sleepers, depth RBs" : "K and DEF in rounds 13-14 only — never earlier";
+        rodRecommendations.push({ round, pickInRound, overallPick, pickValue, recommendation: rec, topAvailable: stillAvailable.slice(0, 3).map(p => ({ playerName: p.playerName, position: p.position, compositeScore: p.compositeScore })) });
+      }
+      const positionCounts: Record<string, number> = {};
+      for (const p of availablePlayers) positionCounts[p.position] = (positionCounts[p.position] || 0) + 1;
+      return { season: input.season, draftSlot: input.draftSlot, computedAt: new Date().toISOString(), totalAvailable: availablePlayers.length, removedKeepers, keeperCount: removedKeepers.length, tieredBoard, scarcePositions, rodRecommendations, scarcityResults, positionCounts };
+    }),
+});
 export type AppRouter = typeof appRouter;

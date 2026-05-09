@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Trophy, Users, ClipboardList, Star, Swords,
   ArrowLeftRight, TrendingUp, Bot, RefreshCw, ChevronRight,
   Activity, Brain, Zap, UserSearch, BarChart3, Calculator, GitCompare,
-  Shield, BarChart2, Microscope,
+  Shield, BarChart2, Microscope, Target, Gem, CalendarDays,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -26,6 +26,9 @@ const navItems = [
   { href: "/pick-tracker", icon: GitCompare, label: "Pick Trade Tracker", group: "Pro Tools", badge: "NEW" },
   { href: "/keeper-roi", icon: TrendingUp, label: "Keeper ROI Tracker", group: "Pro Tools" },
   { href: "/trade-offer", icon: ArrowLeftRight, label: "Trade Offer Gen", group: "Pro Tools", badge: "NEW" },
+  { href: "/draft-optimizer", icon: Target, label: "Draft Optimizer", group: "Pro Tools", badge: "NEW" },
+  { href: "/keeper-future-value", icon: Gem, label: "Keeper Future Value", group: "Pro Tools", badge: "NEW" },
+  { href: "/schedule-strength", icon: CalendarDays, label: "Schedule Strength", group: "Pro Tools", badge: "NEW" },
   // Intelligence
   { href: "/advisor", icon: Bot, label: "AI GM Advisor", group: "Intelligence", badge: "AI" },
   { href: "/analytics", icon: BarChart2, label: "League Analytics", group: "Intelligence", badge: "NEW" },

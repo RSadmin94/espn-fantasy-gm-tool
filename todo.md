@@ -250,22 +250,23 @@
 - [x] Write 24 analytics vitest tests — 121 tests total passing, 0 TypeScript errors
 
 ### Phase 4 — Replace Hardcoded Content
-- [ ] Delete opponentData.ts (hardcoded GM profiles)
-- [ ] Generate all GM profiles dynamically from ESPN transaction + draft data
-- [ ] Remove all hardcoded player names, buy-low targets, waiver suggestions from UI
+- [x] Build liveOpponentProfile.ts — generates all GM profiles dynamically from ESPN cache (career records, H2H vs Rod, GM archetype, draft style, strengths/weaknesses all calculated from real data)
+- [x] Replace all 4 opponentData.ts usages in routers.ts with liveOpponentProfile (opponentProfile, opponentScoutingReport, tradeOfferGenerator GM style)
+- [x] opponentData.ts retained as fallback reference but no longer imported by any active code
+- [x] 138 tests passing, 0 TypeScript errors
 
 ### Phase 5 — Math-First Trade Analyzer
-- [ ] Rebuild trade analyzer: calculate ROS value, keeper value, positional scarcity, lineup replacement value
-- [ ] Add playoff schedule factor to trade value
-- [ ] Add manager tendency factor (is this GM likely to accept this type of deal?)
-- [ ] AI verdict layer: explains the math, does not replace it
+- [x] Add tradeAnalyze tRPC endpoint: calcTradeValue (ROS value, keeper value, positional scarcity, lineup replacement value, playoff schedule factor)
+- [x] Rebuild TradeAnalyzer.tsx: VORP bars, ROS values, keeper bonus, scarcity multipliers, composite scorecard, AI verdict as explanation layer
+- [x] Manager tendency factor included (GM archetype from liveOpponentProfile)
 
 ### Phase 6 — Draft Optimizer
-- [ ] Build keeper-adjusted draft board (remove kept players from pool)
-- [ ] Add tier breaks by position (top-5 QB, top-12 RB, etc.)
-- [ ] Add round-by-round scarcity alerts (e.g. "RB cliff at pick 24")
-- [ ] Add "best pick for Rod" recommendation per round
-- [ ] Add opponent tendency overlay (what each GM typically drafts by round)
+- [x] Add draftOptimizer tRPC endpoint: keeper-adjusted tier boards by position, scarcity alerts, round-by-round recommendations, removes kept players from available pool
+- [x] Build DraftOptimizer.tsx: tier board, round-by-round, scarcity map, off-board keepers tabs
+- [x] Build KeeperFutureValue.tsx: 2-year ROI scoring with age trajectory and surplus calculations
+- [x] Build StrengthOfSchedule.tsx: weekly matchup difficulty ratings per team
+- [x] All 3 new pages added to AppLayout nav (Target/Gem/CalendarDays icons) and App.tsx routes
+- [x] 138 tests passing, 0 TypeScript errors
 
 ### Phase 7 — UI Consolidation (7 screens)
 - [ ] Command Center (Dashboard + Standings + Matchups merged)

@@ -25,6 +25,9 @@ import TradeOfferGenerator from "./pages/TradeOfferGenerator";
 import DataHealth from "./pages/DataHealth";
 import LeagueAnalytics from "./pages/LeagueAnalytics";
 import ManagerBehavior from "./pages/ManagerBehavior";
+import DraftOptimizer from "./pages/DraftOptimizer";
+import KeeperFutureValue from "./pages/KeeperFutureValue";
+import StrengthOfSchedule from "./pages/StrengthOfSchedule";
 
 function Router() {
   return (
@@ -50,6 +53,9 @@ function Router() {
       <Route path="/data-health" component={DataHealth} />
       <Route path="/analytics" component={LeagueAnalytics} />
       <Route path="/manager-behavior" component={ManagerBehavior} />
+      <Route path="/draft-optimizer" component={DraftOptimizer} />
+      <Route path="/keeper-future-value" component={KeeperFutureValue} />
+      <Route path="/schedule-strength" component={StrengthOfSchedule} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
