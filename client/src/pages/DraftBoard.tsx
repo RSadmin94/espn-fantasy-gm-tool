@@ -5,10 +5,10 @@ import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   RefreshCw, Search, TrendingUp, TrendingDown, Minus, Info, Star,
-  ChevronDown, ChevronUp, Filter
+  Users
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PlayerDetailDrawer } from "./PlayerDetailDrawer";
@@ -34,6 +34,96 @@ const POS_COLORS: Record<string, string> = {
   K: "bg-slate-500/20 text-slate-300 border-slate-500/30",
   DST: "bg-orange-500/20 text-orange-300 border-orange-500/30",
 };
+
+// Tier → round range mapping (14-team league, ~14 picks per round)
+// Tier 1 (ECR 1-14)   → Rd 1
+// Tier 2 (ECR 15-42)  → Rds 2-3
+// Tier 3 (ECR 43-70)  → Rds 4-5
+// Tier 4 (ECR 71-98)  → Rds 6-7
+// Tier 5 (ECR 99-140) → Rds 8-10
+// Tier 6+             → Rds 11+
+const TIER_ROUND_RANGE: Record<number, [number, number]> = {
+  1: [1, 1],
+  2: [2, 3],
+  3: [4, 5],
+  4: [6, 7],
+  5: [8, 10],
+  6: [11, 15],
+  7: [11, 15],
+};
+
+/**
+ * Count how many opponents (out of 13) historically target `position`
+ * heavily in the given round range. "Heavily" = ≥1 pick on average in
+ * that range per season (i.e. they drafted that position there at least
+ * once across their career in those rounds).
+ */
+function computeCollisionCount(
+  owners: Array<{ byRound: Record<number, Record<string, number>>; seasons: number }>,
+  position: string,
+  roundRange: [number, number]
+): number {
+  const [lo, hi] = roundRange;
+  let count = 0;
+  for (const owner of owners) {
+    let picksInRange = 0;
+    for (let rd = lo; rd <= hi; rd++) {
+      picksInRange += owner.byRound[rd]?.[position] ?? 0;
+    }
+    // At least 1 pick in that range across their career = they target it there
+    if (picksInRange >= 1) count++;
+  }
+  return count;
+}
+
+type CollisionLevel = "HIGH" | "MED" | "LOW";
+
+function getCollisionLevel(count: number): CollisionLevel {
+  if (count >= 5) return "HIGH";
+  if (count >= 3) return "MED";
+  return "LOW";
+}
+
+function CollisionBadge({
+  count,
+  position,
+  tier,
+}: {
+  count: number;
+  position: string;
+  tier: number;
+}) {
+  const level = getCollisionLevel(count);
+  const roundRange = TIER_ROUND_RANGE[tier] ?? [1, 1];
+  const rdLabel =
+    roundRange[0] === roundRange[1]
+      ? `Rd ${roundRange[0]}`
+      : `Rds ${roundRange[0]}–${roundRange[1]}`;
+
+  const styles: Record<CollisionLevel, string> = {
+    HIGH: "bg-red-500/20 border-red-500/40 text-red-300",
+    MED: "bg-amber-500/20 border-amber-500/40 text-amber-300",
+    LOW: "bg-emerald-500/20 border-emerald-500/40 text-emerald-300",
+  };
+  const dots: Record<CollisionLevel, string> = {
+    HIGH: "●●●",
+    MED: "●●○",
+    LOW: "●○○",
+  };
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-semibold leading-none whitespace-nowrap",
+        styles[level]
+      )}
+      title={`${count}/13 opponents historically draft ${position} in ${rdLabel} — ${level} collision risk`}
+    >
+      <Users className="w-2.5 h-2.5 shrink-0" />
+      {count}/13 {dots[level]}
+    </span>
+  );
+}
 
 function GapBadge({ gap }: { gap: number | null }) {
   if (gap === null) return <span className="text-slate-500 text-xs">—</span>;
@@ -62,6 +152,19 @@ export default function DraftBoard() {
     undefined,
     { staleTime: 5 * 60 * 1000 }
   );
+
+  const { data: tendencies } = trpc.leagueDraftTendencies.useQuery(undefined, {
+    staleTime: 30 * 60 * 1000,
+  });
+
+  // Build a lightweight owners array for collision computation
+  const collisionOwners = useMemo(() => {
+    if (!tendencies?.owners) return [];
+    return tendencies.owners.map((o) => ({
+      byRound: o.byRound as Record<number, Record<string, number>>,
+      seasons: o.seasons,
+    }));
+  }, [tendencies]);
 
   const players = useMemo(() => {
     if (!data?.players) return [];
@@ -190,6 +293,13 @@ export default function DraftBoard() {
         <span className="flex items-center gap-1"><TrendingDown className="w-3 h-3 text-emerald-400" /> Value pick (ADP later than ECR)</span>
         <span className="flex items-center gap-1"><TrendingUp className="w-3 h-3 text-red-400" /> Reach (ADP earlier than ECR)</span>
         <span className="flex items-center gap-1"><Info className="w-3 h-3" /> Gap = ADP − ECR rank</span>
+        {collisionOwners.length > 0 && (
+          <>
+            <span className="flex items-center gap-1 text-red-300"><Users className="w-3 h-3" /> HIGH ≥5 opponents target this pos/round</span>
+            <span className="flex items-center gap-1 text-amber-300"><Users className="w-3 h-3" /> MED 3–4 opponents</span>
+            <span className="flex items-center gap-1 text-emerald-300"><Users className="w-3 h-3" /> LOW 0–2 opponents</span>
+          </>
+        )}
       </div>
 
       {/* Loading / Error */}
@@ -222,8 +332,8 @@ export default function DraftBoard() {
           <div className={cn(
             "grid text-xs font-medium text-muted-foreground px-4 py-1",
             showPFR
-              ? "grid-cols-[3rem_2rem_1fr_5rem_4rem_4rem_4rem_4rem_4rem_4rem_4rem]"
-              : "grid-cols-[3rem_2rem_1fr_5rem_4rem_4rem_4rem_4rem]"
+              ? "grid-cols-[3rem_2rem_1fr_5rem_4rem_4rem_4rem_4rem_7rem_4rem_4rem_4rem]"
+              : "grid-cols-[3rem_2rem_1fr_5rem_4rem_4rem_4rem_4rem_7rem]"
           )}>
             <span>ECR</span>
             <span></span>
@@ -233,6 +343,7 @@ export default function DraftBoard() {
             <span>Gap</span>
             <span>Bye</span>
             <span>Own%</span>
+            <span className="flex items-center gap-1"><Users className="w-3 h-3" />Collision</span>
             {showPFR && <>
               <span>2025 Pts</span>
               <span>VBD</span>
@@ -241,116 +352,160 @@ export default function DraftBoard() {
           </div>
 
           {/* Player rows */}
-          {tierPlayers.map((p) => (
-            <div key={p.fpId} className="space-y-0">
-              <div
-                className={cn(
-                  "group grid items-center px-4 py-2 rounded-md cursor-pointer transition-colors",
-                  showPFR
-                    ? "grid-cols-[3rem_2rem_1fr_5rem_4rem_4rem_4rem_4rem_4rem_4rem_4rem]"
-                    : "grid-cols-[3rem_2rem_1fr_5rem_4rem_4rem_4rem_4rem]",
-                  expandedPlayer === p.fpId
-                    ? "bg-slate-700/60 border border-slate-600/50"
-                    : "hover:bg-slate-800/50"
-                )}
-                onClick={() => setExpandedPlayer(expandedPlayer === p.fpId ? null : p.fpId)}
-              >
+          {tierPlayers.map((p) => {
+            const roundRange = TIER_ROUND_RANGE[p.tier] ?? [1, 1];
+            const collisionCount = collisionOwners.length > 0
+              ? computeCollisionCount(collisionOwners, p.position, roundRange)
+              : null;
 
-                {/* ECR Rank */}
-                <span className="text-sm font-bold text-foreground">{p.ecrRank}</span>
-                {/* Position badge */}
-                <Badge
-                  variant="outline"
-                  className={cn("text-xs px-1 py-0 h-5 font-semibold", POS_COLORS[p.position] ?? "")}
-                >
-                  {p.position}
-                </Badge>
-                {/* Name + team */}
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-medium text-sm text-foreground truncate">{p.name}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">{p.team}</span>
-                  {p.pfr2025 && <span className="text-xs text-emerald-500/70 shrink-0">●</span>}
-                </div>
-                {/* Pos rank */}
-                <span className="text-xs text-muted-foreground">{p.posRank}</span>
-                {/* ADP */}
-                <span className="text-xs text-muted-foreground">
-                  {p.adp !== null ? p.adp.toFixed(1) : "—"}
-                </span>
-                {/* Gap */}
-                <GapBadge gap={p.ecrAdpGap} />
-                {/* Bye */}
-                <span className="text-xs text-muted-foreground">{p.byeWeek ?? "—"}</span>
-                {/* Own% */}
-                <span className="text-xs text-muted-foreground">{p.ownedPct > 0 ? `${p.ownedPct.toFixed(0)}%` : "—"}</span>
-                {/* Detail button — only visible on hover */}
-                <button
-                  className="hidden group-hover:flex ml-auto items-center justify-center w-6 h-6 rounded hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-colors"
-                  onClick={(e) => { e.stopPropagation(); setDrawerPlayer(p as unknown as Record<string, unknown>); }}
-                  title="View player details"
-                >
-                  <Info className="w-3.5 h-3.5" />
-                </button>
-                {/* PFR columns */}
-                {showPFR && <>
-                  <span className="text-xs text-muted-foreground">
-                    {p.pfr2025 ? p.pfr2025.pprPoints.toFixed(1) : "—"}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {p.pfr2025 ? p.pfr2025.vbd : "—"}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {p.pfr2025 ? `#${p.pfr2025.overallRank}` : "—"}
-                  </span>
-                </>}
-              </div>
-
-              {/* Expanded detail row */}
-              {expandedPlayer === p.fpId && (
-                <div className="mx-4 mb-2 p-4 bg-slate-800/80 rounded-b-lg border border-slate-600/40 border-t-0 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                  <div>
-                    <p className="text-muted-foreground mb-1">ECR Range</p>
-                    <p className="font-semibold text-foreground">{p.ecrMin}–{p.ecrMax} <span className="text-muted-foreground font-normal">(avg {p.ecrAvg.toFixed(1)}, σ {p.ecrStd.toFixed(1)})</span></p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground mb-1">ADP vs ECR</p>
-                    <p className="font-semibold text-foreground">
-                      {p.adp !== null ? `ADP ${p.adp.toFixed(1)}` : "No ADP data"}
-                      {p.ecrAdpGap !== null && (
-                        <span className={cn("ml-2", p.ecrAdpGap >= 5 ? "text-emerald-400" : p.ecrAdpGap <= -5 ? "text-red-400" : "text-muted-foreground")}>
-                          ({p.ecrAdpGap > 0 ? `+${p.ecrAdpGap}` : p.ecrAdpGap} spots)
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  {p.pfr2025 ? (
-                    <>
-                      <div>
-                        <p className="text-muted-foreground mb-1">2025 Offense</p>
-                        <p className="font-semibold text-foreground">
-                          {p.position === "QB"
-                            ? `${p.pfr2025.passYds} yds, ${p.pfr2025.passTDs} TD, ${p.pfr2025.passInts} INT`
-                            : p.position === "RB"
-                            ? `${p.pfr2025.rushYds} rush / ${p.pfr2025.recYds} rec`
-                            : `${p.pfr2025.targets} tgt, ${p.pfr2025.receptions} rec, ${p.pfr2025.recYds} yds`}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground mb-1">2025 Fantasy</p>
-                        <p className="font-semibold text-foreground">
-                          {p.pfr2025.pprPoints.toFixed(1)} PPR pts · {p.pfr2025.totalTDs} TDs · VBD {p.pfr2025.vbd}
-                        </p>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="col-span-2">
-                      <p className="text-muted-foreground">No 2025 PFR stats available (new player or position change)</p>
-                    </div>
+            return (
+              <div key={p.fpId} className="space-y-0">
+                <div
+                  className={cn(
+                    "group grid items-center px-4 py-2 rounded-md cursor-pointer transition-colors",
+                    showPFR
+                      ? "grid-cols-[3rem_2rem_1fr_5rem_4rem_4rem_4rem_4rem_7rem_4rem_4rem_4rem]"
+                      : "grid-cols-[3rem_2rem_1fr_5rem_4rem_4rem_4rem_4rem_7rem]",
+                    expandedPlayer === p.fpId
+                      ? "bg-slate-700/60 border border-slate-600/50"
+                      : "hover:bg-slate-800/50"
                   )}
+                  onClick={() => setExpandedPlayer(expandedPlayer === p.fpId ? null : p.fpId)}
+                >
+                  {/* ECR Rank */}
+                  <span className="text-sm font-bold text-foreground">{p.ecrRank}</span>
+                  {/* Position badge */}
+                  <Badge
+                    variant="outline"
+                    className={cn("text-xs px-1 py-0 h-5 font-semibold", POS_COLORS[p.position] ?? "")}
+                  >
+                    {p.position}
+                  </Badge>
+                  {/* Name + team */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium text-sm text-foreground truncate">{p.name}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">{p.team}</span>
+                    {p.pfr2025 && <span className="text-xs text-emerald-500/70 shrink-0">●</span>}
+                  </div>
+                  {/* Pos rank */}
+                  <span className="text-xs text-muted-foreground">{p.posRank}</span>
+                  {/* ADP */}
+                  <span className="text-xs text-muted-foreground">
+                    {p.adp !== null ? p.adp.toFixed(1) : "—"}
+                  </span>
+                  {/* Gap */}
+                  <GapBadge gap={p.ecrAdpGap} />
+                  {/* Bye */}
+                  <span className="text-xs text-muted-foreground">{p.byeWeek ?? "—"}</span>
+                  {/* Own% */}
+                  <span className="text-xs text-muted-foreground">{p.ownedPct > 0 ? `${p.ownedPct.toFixed(0)}%` : "—"}</span>
+                  {/* Collision Risk badge */}
+                  <div className="flex items-center">
+                    {collisionCount !== null ? (
+                      <CollisionBadge
+                        count={collisionCount}
+                        position={p.position}
+                        tier={p.tier}
+                      />
+                    ) : (
+                      <span className="text-slate-600 text-xs">—</span>
+                    )}
+                  </div>
+                  {/* PFR columns */}
+                  {showPFR && <>
+                    <span className="text-xs text-muted-foreground">
+                      {p.pfr2025 ? p.pfr2025.pprPoints.toFixed(1) : "—"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {p.pfr2025 ? p.pfr2025.vbd : "—"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {p.pfr2025 ? `#${p.pfr2025.overallRank}` : "—"}
+                    </span>
+                  </>}
+                  {/* Detail button — only visible on hover */}
+                  <button
+                    className="absolute right-4 hidden group-hover:flex items-center justify-center w-6 h-6 rounded hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); setDrawerPlayer(p as unknown as Record<string, unknown>); }}
+                    title="View player details"
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {/* Expanded detail row */}
+                {expandedPlayer === p.fpId && (
+                  <div className="mx-4 mb-2 p-4 bg-slate-800/80 rounded-b-lg border border-slate-600/40 border-t-0 space-y-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                      <div>
+                        <p className="text-muted-foreground mb-1">ECR Range</p>
+                        <p className="font-semibold text-foreground">{p.ecrMin}–{p.ecrMax} <span className="text-muted-foreground font-normal">(avg {p.ecrAvg.toFixed(1)}, σ {p.ecrStd.toFixed(1)})</span></p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground mb-1">ADP vs ECR</p>
+                        <p className="font-semibold text-foreground">
+                          {p.adp !== null ? `ADP ${p.adp.toFixed(1)}` : "No ADP data"}
+                          {p.ecrAdpGap !== null && (
+                            <span className={cn("ml-2", p.ecrAdpGap >= 5 ? "text-emerald-400" : p.ecrAdpGap <= -5 ? "text-red-400" : "text-muted-foreground")}>
+                              ({p.ecrAdpGap > 0 ? `+${p.ecrAdpGap}` : p.ecrAdpGap} spots)
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      {collisionCount !== null && (
+                        <div>
+                          <p className="text-muted-foreground mb-1">Collision Risk</p>
+                          <p className="font-semibold text-foreground">
+                            {collisionCount}/13 opponents target {p.position} in{" "}
+                            {(() => {
+                              const rr = TIER_ROUND_RANGE[p.tier] ?? [1, 1];
+                              return rr[0] === rr[1] ? `Rd ${rr[0]}` : `Rds ${rr[0]}–${rr[1]}`;
+                            })()}
+                          </p>
+                          <p className={cn(
+                            "text-xs mt-0.5",
+                            getCollisionLevel(collisionCount) === "HIGH" ? "text-red-400" :
+                            getCollisionLevel(collisionCount) === "MED" ? "text-amber-400" :
+                            "text-emerald-400"
+                          )}>
+                            {getCollisionLevel(collisionCount) === "HIGH"
+                              ? "High competition — consider targeting earlier"
+                              : getCollisionLevel(collisionCount) === "MED"
+                              ? "Moderate competition — monitor board"
+                              : "Low competition — good value window"}
+                          </p>
+                        </div>
+                      )}
+                      {p.pfr2025 ? (
+                        <>
+                          <div>
+                            <p className="text-muted-foreground mb-1">2025 Offense</p>
+                            <p className="font-semibold text-foreground">
+                              {p.position === "QB"
+                                ? `${p.pfr2025.passYds} yds, ${p.pfr2025.passTDs} TD, ${p.pfr2025.passInts} INT`
+                                : p.position === "RB"
+                                ? `${p.pfr2025.rushYds} rush / ${p.pfr2025.recYds} rec`
+                                : `${p.pfr2025.targets} tgt, ${p.pfr2025.receptions} rec, ${p.pfr2025.recYds} yds`}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground mb-1">2025 Fantasy</p>
+                            <p className="font-semibold text-foreground">
+                              {p.pfr2025.pprPoints.toFixed(1)} PPR pts · {p.pfr2025.totalTDs} TDs · VBD {p.pfr2025.vbd}
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="col-span-2">
+                          <p className="text-muted-foreground">No 2025 PFR stats available (new player or position change)</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       ))}
 

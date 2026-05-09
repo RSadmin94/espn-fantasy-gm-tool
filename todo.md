@@ -464,6 +464,7 @@
 
 ## NEW: Player Detail Drawer (Draft Board)
 
-- [ ] Build PlayerDetailDrawer component: slide-out panel with full player profile, ECR range, ADP trend, 2025 PFR stats, opponent draft history, and Rod's Edge score
+- [x] Build PlayerDetailDrawer component: slide-out panel with full player profile, ECR range, ADP trend, 2025 PFR stats, opponent draft history, and Rod's Edge score
 - [x] Add getPlayerDraftHistory tRPC procedure: returns which opponents have drafted this player and in what round/year
-- [ ] Wire into DraftBoard.tsx: clicking a row opens the drawer instead of inline expand
+- [x] Wire into DraftBoard.tsx: Info icon on each row opens the drawer
+- [x] Add Draft Collision Risk badge to each player row in DraftBoard.tsx showing how many opponents historically target that position in the same round tier (HIGH/MED/LOW)
