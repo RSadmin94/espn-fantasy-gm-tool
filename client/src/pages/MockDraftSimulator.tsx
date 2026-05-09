@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Search, Play, RotateCcw, Trophy, ChevronRight, Undo2, FastForward, Zap } from "lucide-react";
+import { Search, Play, RotateCcw, Trophy, ChevronRight, Undo2, FastForward, Zap, Save, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { MergedPlayer } from "../../../server/fantasyDataService";
 
@@ -361,6 +362,29 @@ export default function MockDraftSimulator() {
   const top5Available = availablePlayers.slice(0, 5);
   const draftStarted = picks.length > 0 || currentOverall > 1;
 
+  const [savedDraftId, setSavedDraftId] = useState<number | null>(null);
+  const saveDraftMutation = trpc.draftBoard.saveDraft.useMutation({
+    onSuccess: (data) => {
+      setSavedDraftId(data.id);
+      toast.success("Draft saved! View it in Draft History.");
+    },
+    onError: (err) => {
+      toast.error(`Save failed: ${err.message}`);
+    },
+  });
+
+  const handleSaveDraft = useCallback(() => {
+    if (!draftComplete || rodPicks.length === 0) return;
+    saveDraftMutation.mutate({
+      draftSlot: draftSlot,
+      grade: rodGrade.grade,
+      avgEcr: rodGrade.avgEcr,
+      totalVbd: rodGrade.totalVbd,
+      rodPicksJson: rodPicks as unknown as Record<string, unknown>[],
+      allPicksJson: picks as unknown as Record<string, unknown>[],
+    });
+  }, [draftComplete, rodPicks, picks, draftSlot, rodGrade, saveDraftMutation]);
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -685,9 +709,26 @@ export default function MockDraftSimulator() {
             <p className="text-xs text-muted-foreground mt-2">Click any team card to expand their full roster.</p>
           </div>
 
-          <Button onClick={handleReset} variant="outline" className="gap-2">
-            <RotateCcw className="w-4 h-4" /> Run Another Mock Draft
-          </Button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button onClick={handleReset} variant="outline" className="gap-2">
+              <RotateCcw className="w-4 h-4" /> Run Another Mock Draft
+            </Button>
+            {savedDraftId ? (
+              <div className="flex items-center gap-2 text-emerald-400 text-sm">
+                <CheckCircle2 className="w-4 h-4" />
+                Draft saved (ID #{savedDraftId}) — view in Draft History
+              </div>
+            ) : (
+              <Button
+                onClick={handleSaveDraft}
+                disabled={saveDraftMutation.isPending || !draftComplete}
+                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <Save className="w-4 h-4" />
+                {saveDraftMutation.isPending ? "Saving…" : "Save Draft Results"}
+              </Button>
+            )}
+          </div>
         </div>
       )}
     </div>

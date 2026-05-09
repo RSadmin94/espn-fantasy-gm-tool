@@ -447,3 +447,13 @@
 - [x] Add "Auto-Draft to My Pick" button: runs all AI picks until it is Rod's turn
 - [x] Add "Draft All Remaining" button: AI finishes rest of draft automatically after Rod's last pick
 - [x] Show all 14 teams' rosters in post-draft grade report with grades side-by-side
+
+## NEW: Save Draft Results Feature
+
+- [ ] Add mock_draft_results table to drizzle/schema.ts
+- [ ] Run pnpm db:push to apply migration
+- [ ] Add saveDraft, listDrafts, getDraft, deleteDraft tRPC procedures
+- [ ] Add Save Draft button to MockDraftSimulator post-draft grade report
+- [ ] Build DraftHistory.tsx page for reviewing past drafts
+- [ ] Wire DraftHistory tab into DraftWarRoom hub
+- [ ] Write vitest tests for saveDraft and listDrafts procedures

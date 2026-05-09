@@ -3639,6 +3639,104 @@ Be concise, data-driven, and specific. Reference actual team names and player na
         );
         return player ?? null;
       }),
+
+    /** Save a completed mock draft to the database */
+    saveDraft: protectedProcedure
+      .input(z.object({
+        label: z.string().max(128).optional(),
+        draftSlot: z.number().int().min(1).max(14),
+        totalTeams: z.number().int().default(14),
+        totalRounds: z.number().int().default(15),
+        grade: z.string().max(4),
+        avgEcr: z.number(),
+        totalVbd: z.number().default(0),
+        rodPicksJson: z.array(z.any()),
+        allPicksJson: z.array(z.any()),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbMod = await import("./db");
+        const { getDb } = dbMod;
+        const { mockDraftResults } = await import("../drizzle/schema");
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const result = await dbConn.insert(mockDraftResults).values({
+          userId: ctx.user.id,
+          label: input.label ?? `Mock Draft — Slot ${input.draftSlot}`,
+          draftSlot: input.draftSlot,
+          totalTeams: input.totalTeams,
+          totalRounds: input.totalRounds,
+          grade: input.grade,
+          avgEcr: Math.round(input.avgEcr * 10),
+          totalVbd: Math.round(input.totalVbd),
+          rodPicksJson: input.rodPicksJson,
+          allPicksJson: input.allPicksJson,
+        });
+        return { id: Number((result as { insertId?: unknown }).insertId ?? 0) };
+      }),
+
+    /** List all saved mock drafts for the current user */
+    listDrafts: protectedProcedure
+      .query(async ({ ctx }) => {
+        const dbMod = await import("./db");
+        const { getDb } = dbMod;
+        const { mockDraftResults } = await import("../drizzle/schema");
+        const { desc, eq: eqOp } = await import("drizzle-orm");
+        const dbConn = await getDb();
+        if (!dbConn) return [];
+        const rows = await dbConn
+          .select({
+            id: mockDraftResults.id,
+            label: mockDraftResults.label,
+            draftSlot: mockDraftResults.draftSlot,
+            totalTeams: mockDraftResults.totalTeams,
+            totalRounds: mockDraftResults.totalRounds,
+            grade: mockDraftResults.grade,
+            avgEcr: mockDraftResults.avgEcr,
+            totalVbd: mockDraftResults.totalVbd,
+            createdAt: mockDraftResults.createdAt,
+          })
+          .from(mockDraftResults)
+          .where(eqOp(mockDraftResults.userId, ctx.user.id))
+          .orderBy(desc(mockDraftResults.createdAt))
+          .limit(50);
+        return rows.map((r) => ({ ...r, avgEcr: r.avgEcr / 10 }));
+      }),
+
+    /** Get a single saved mock draft with full pick data */
+    getDraft: protectedProcedure
+      .input(z.object({ id: z.number().int() }))
+      .query(async ({ ctx, input }) => {
+        const dbMod = await import("./db");
+        const { getDb } = dbMod;
+        const { mockDraftResults } = await import("../drizzle/schema");
+        const { eq: eqOp, and: andOp } = await import("drizzle-orm");
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const rows = await dbConn
+          .select()
+          .from(mockDraftResults)
+          .where(andOp(eqOp(mockDraftResults.id, input.id), eqOp(mockDraftResults.userId, ctx.user.id)))
+          .limit(1);
+        if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
+        const r = rows[0];
+        return { ...r, avgEcr: r.avgEcr / 10 };
+      }),
+
+    /** Delete a saved mock draft */
+    deleteDraft: protectedProcedure
+      .input(z.object({ id: z.number().int() }))
+      .mutation(async ({ ctx, input }) => {
+        const dbMod = await import("./db");
+        const { getDb } = dbMod;
+        const { mockDraftResults } = await import("../drizzle/schema");
+        const { eq: eqOp, and: andOp } = await import("drizzle-orm");
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        await dbConn
+          .delete(mockDraftResults)
+          .where(andOp(eqOp(mockDraftResults.id, input.id), eqOp(mockDraftResults.userId, ctx.user.id)));
+        return { success: true };
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

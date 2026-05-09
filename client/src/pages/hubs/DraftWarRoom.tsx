@@ -7,6 +7,7 @@ import DraftOptimizer from "@/pages/DraftOptimizer";
 import DraftBoard from "@/pages/DraftBoard";
 import PlayerComparison from "@/pages/PlayerComparison";
 import MockDraftSimulator from "@/pages/MockDraftSimulator";
+import SavedDrafts from "@/pages/SavedDrafts";
 
 const TAB_CLASS = "rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium whitespace-nowrap";
 
@@ -24,6 +25,9 @@ export default function DraftWarRoom() {
             </TabsTrigger>
             <TabsTrigger value="mock-draft" className={TAB_CLASS}>
               Mock Draft Sim
+            </TabsTrigger>
+            <TabsTrigger value="saved-mocks" className={TAB_CLASS}>
+              Saved Mocks
             </TabsTrigger>
             <TabsTrigger value="draft-history" className={TAB_CLASS}>
               Draft History
@@ -44,6 +48,9 @@ export default function DraftWarRoom() {
         </TabsContent>
         <TabsContent value="mock-draft" className="mt-0">
           <MockDraftSimulator />
+        </TabsContent>
+        <TabsContent value="saved-mocks" className="mt-0">
+          <SavedDrafts />
         </TabsContent>
         <TabsContent value="draft-history" className="mt-0">
           <DraftHistory />

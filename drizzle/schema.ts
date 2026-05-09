@@ -192,3 +192,28 @@ export const fantasyDataCache = mysqlTable(
 );
 export type FantasyDataCache = typeof fantasyDataCache.$inferSelect;
 export type InsertFantasyDataCache = typeof fantasyDataCache.$inferInsert;
+
+// ─── Mock Draft Results ───────────────────────────────────────────────────────
+export const mockDraftResults = mysqlTable(
+  "mock_draft_results",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    userId: int("userId").notNull(),
+    label: varchar("label", { length: 128 }).notNull().default("Mock Draft"),
+    draftSlot: int("draftSlot").notNull(),
+    totalTeams: int("totalTeams").notNull().default(14),
+    totalRounds: int("totalRounds").notNull().default(15),
+    grade: varchar("grade", { length: 4 }).notNull(),
+    avgEcr: int("avgEcr").notNull(), // stored * 10 for one decimal precision
+    totalVbd: int("totalVbd").notNull().default(0),
+    rodPicksJson: json("rodPicksJson").notNull(), // array of DraftPick for Rod's team
+    allPicksJson: json("allPicksJson").notNull(), // full 14-team pick list
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_mock_draft_user").on(t.userId),
+    index("idx_mock_draft_created").on(t.createdAt),
+  ]
+);
+export type MockDraftResult = typeof mockDraftResults.$inferSelect;
+export type InsertMockDraftResult = typeof mockDraftResults.$inferInsert;
