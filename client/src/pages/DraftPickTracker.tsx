@@ -99,7 +99,7 @@ function AddTradeForm({ onSuccess }: { onSuccess: () => void }) {
           <div>
             <div className="text-xs text-slate-500 mb-1">Round</div>
             <Select value={round} onValueChange={setRound}>
-              <SelectTrigger className="h-9 bg-slate-800 border-slate-700 text-sm">
+              <SelectTrigger className="h-9 bg-slate-800 border-slate-700 text-sm text-slate-100">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -112,7 +112,7 @@ function AddTradeForm({ onSuccess }: { onSuccess: () => void }) {
           <div>
             <div className="text-xs text-slate-500 mb-1">Pick Position</div>
             <Select value={pickInRound} onValueChange={setPickInRound}>
-              <SelectTrigger className="h-9 bg-slate-800 border-slate-700 text-sm">
+              <SelectTrigger className="h-9 bg-slate-800 border-slate-700 text-sm text-slate-100">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -131,7 +131,7 @@ function AddTradeForm({ onSuccess }: { onSuccess: () => void }) {
             {type === "acquired" ? "Acquired From" : "Traded To"}
           </div>
           <Select value={counterparty} onValueChange={setCounterparty}>
-            <SelectTrigger className="h-9 bg-slate-800 border-slate-700 text-sm">
+            <SelectTrigger className="h-9 bg-slate-800 border-slate-700 text-sm text-slate-100">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

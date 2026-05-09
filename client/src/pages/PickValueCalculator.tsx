@@ -83,7 +83,7 @@ function PickSelector({
         <div className="flex-1">
           <div className="text-xs text-slate-500 mb-1">Round</div>
           <Select value={selRound} onValueChange={setSelRound}>
-            <SelectTrigger className="h-9 bg-slate-800 border-slate-700 text-sm">
+            <SelectTrigger className="h-9 bg-slate-800 border-slate-700 text-sm text-slate-100">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -96,7 +96,7 @@ function PickSelector({
         <div className="flex-1">
           <div className="text-xs text-slate-500 mb-1">Pick</div>
           <Select value={selPick} onValueChange={setSelPick}>
-            <SelectTrigger className="h-9 bg-slate-800 border-slate-700 text-sm">
+            <SelectTrigger className="h-9 bg-slate-800 border-slate-700 text-sm text-slate-100">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
