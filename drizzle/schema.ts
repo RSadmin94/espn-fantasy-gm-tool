@@ -177,3 +177,18 @@ export const scheduledJobs = mysqlTable("scheduled_jobs", {
 });
 export type ScheduledJob = typeof scheduledJobs.$inferSelect;
 export type InsertScheduledJob = typeof scheduledJobs.$inferInsert;
+
+// ─── Fantasy Data Cache (FantasyPros ECR/ADP + PFR stats) ─────────────────────
+export const fantasyDataCache = mysqlTable(
+  "fantasy_data_cache",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    cacheKey: varchar("cacheKey", { length: 64 }).notNull(),
+    payload: json("payload").notNull(),
+    fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_fantasy_cache_key").on(t.cacheKey)]
+);
+export type FantasyDataCache = typeof fantasyDataCache.$inferSelect;
+export type InsertFantasyDataCache = typeof fantasyDataCache.$inferInsert;

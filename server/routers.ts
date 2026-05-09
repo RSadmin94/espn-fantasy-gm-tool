@@ -6,6 +6,7 @@ import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob } from "./db";
+import { getDraftBoard, getPFRStats, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
 import { parse as parseCookie } from "cookie";
 import {
@@ -3585,6 +3586,58 @@ Be concise, data-driven, and specific. Reference actual team names and player na
         await deleteHeartbeatJob(input.taskUid, sessionToken);
         await upsertScheduledJob({ name: "weekly-espn-refresh", taskUid: input.taskUid, isEnabled: false });
         return { ok: true };
+      }),
+  }),
+
+  // ─── Draft Board (FantasyPros ECR + ADP + PFR stats) ─────────────────────────
+  draftBoard: router({
+    /** Get the full merged draft board (ECR + ADP + PFR). Cached 6 hours. */
+    getPlayers: publicProcedure
+      .input(z.object({ forceRefresh: z.boolean().optional() }).optional())
+      .query(async ({ input }) => {
+        const result = await getDraftBoard(input?.forceRefresh ?? false);
+        return result;
+      }),
+
+    /** Compare 2–3 players by name and return ECR, ADP, PFR stats side-by-side */
+    comparePlayers: publicProcedure
+      .input(z.object({ names: z.array(z.string()).min(2).max(3) }))
+      .query(async ({ input }) => {
+        const board = await getDraftBoard();
+        const results = input.names.map((name) => {
+          const norm = name.toLowerCase().replace(/[*+'.]/g, "").trim();
+          const player = board.players.find(
+            (p) => p.name.toLowerCase().replace(/[*+'.]/g, "").trim() === norm ||
+                   p.shortName.toLowerCase().replace(/[*+'.]/g, "").trim() === norm
+          );
+          return { name, player: player ?? null };
+        });
+        return { players: results, fetchedAt: board.fetchedAt };
+      }),
+
+    /** Search players by name prefix (for autocomplete) */
+    searchPlayers: publicProcedure
+      .input(z.object({ query: z.string().min(1), limit: z.number().optional() }))
+      .query(async ({ input }) => {
+        const board = await getDraftBoard();
+        const q = input.query.toLowerCase();
+        const matches = board.players
+          .filter((p) => p.name.toLowerCase().includes(q) || p.shortName.toLowerCase().includes(q))
+          .slice(0, input.limit ?? 20);
+        return matches;
+      }),
+
+    /** Get a single player's full profile (ECR + ADP + PFR) */
+    getPlayer: publicProcedure
+      .input(z.object({ name: z.string() }))
+      .query(async ({ input }) => {
+        const board = await getDraftBoard();
+        const norm = input.name.toLowerCase().replace(/[*+'.]/g, "").trim();
+        const player = board.players.find(
+          (p) => p.name.toLowerCase().replace(/[*+'.]/g, "").trim() === norm ||
+                 p.shortName.toLowerCase().replace(/[*+'.]/g, "").trim() === norm
+        );
+        return player ?? null;
       }),
   }),
 });

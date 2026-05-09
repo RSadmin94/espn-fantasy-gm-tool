@@ -423,3 +423,17 @@
 ## NEW: Rd2/Rd3 Pick History Toggles
 
 - [x] Add per-card expand/collapse toggle for Rd2 and Rd3 pick history in Competitor Draft Intelligence
+
+## NEW: FantasyPros + PFR Data Integration & 5 Features
+
+- [ ] Build server/fantasyDataService.ts: FantasyPros ECR scraper, ADP scraper, PFR stats scraper, merge + cache with 6hr TTL
+- [ ] Add fantasy_data_cache DB table (key, data JSON, fetched_at)
+- [ ] Add draftBoard tRPC router: getPlayers (merged ECR+ADP+PFR), comparePlayer, getDraftSimState, makeDraftPick, resetDraft
+- [ ] Build DraftBoard.tsx page: tier breaks, ECR rank, ADP, ECR vs ADP gap, PFR stats overlay, position filter, search
+- [ ] Build PlayerComparison.tsx ("Who Should I Draft?"): 2-3 player comparison with ECR, ADP, PFR stats, opponent likelihood notes
+- [ ] Build MockDraftSimulator.tsx: 14-team draft, AI opponents use real historical tendencies, Rod picks from actual slot, post-draft ECR grade
+- [ ] Build WeeklyProjections.tsx: FantasyPros projections + Start/Sit advisor with matchup data
+- [ ] Build WaiverIntelligence.tsx: FantasyPros waiver rankings + opponent positional tendency overlay
+- [ ] Add all 5 new pages to AppLayout nav and App.tsx routes
+- [ ] Write vitest tests for draftBoard procedures
+- [ ] Save checkpoint
