@@ -3264,5 +3264,156 @@ Be concise, data-driven, and specific. Reference actual team names and player na
       for (const p of availablePlayers) positionCounts[p.position] = (positionCounts[p.position] || 0) + 1;
       return { season: input.season, draftSlot: input.draftSlot, computedAt: new Date().toISOString(), totalAvailable: availablePlayers.length, removedKeepers, keeperCount: removedKeepers.length, tieredBoard, scarcePositions, rodRecommendations, scarcityResults, positionCounts };
     }),
+  // ── WEEKLY STATS ─────────────────────────────────────────────────────────────
+  weeklyStats: router({
+  /** Fetch and cache weekly stats for a season (all weeks or a specific week) */
+  fetchAndCache: protectedProcedure
+    .input(z.object({
+      season: z.number().int().min(2018).max(2030),
+      week: z.number().int().min(1).max(18).optional(), // if omitted, fetch all weeks
+      maxWeek: z.number().int().min(1).max(18).default(17),
+      forceRefresh: z.boolean().default(false),
+    }))
+    .mutation(async ({ input }) => {
+      const { fetchWeeklyStatsForPeriod, fetchAllWeeksForSeason } = await import("./weeklyStatsService");
+      const { upsertWeeklyStats, getCachedWeeksForSeason, deleteWeeklyStatsForSeason } = await import("./db");
+
+      if (input.forceRefresh) {
+        if (input.week) {
+          // Delete just this week's data
+          const db = await import("./db");
+          const { getDb } = db;
+          const { weeklyPlayerStats } = await import("../drizzle/schema");
+          const { eq, and } = await import("drizzle-orm");
+          const dbConn = await getDb();
+          if (dbConn) await dbConn.delete(weeklyPlayerStats).where(and(eq(weeklyPlayerStats.season, input.season), eq(weeklyPlayerStats.week, input.week)));
+        } else {
+          await deleteWeeklyStatsForSeason(input.season);
+        }
+      }
+
+      if (input.week) {
+        // Fetch a single week
+        const cachedWeeks = await getCachedWeeksForSeason(input.season);
+        if (!input.forceRefresh && cachedWeeks.includes(input.week)) {
+          return { status: "cached", weeksAttempted: 1, weeksFetched: 0, totalRows: 0, errors: [], message: `Week ${input.week} already cached` };
+        }
+        const result = await fetchWeeklyStatsForPeriod(input.season, input.week);
+        if (result.error) return { status: "error", weeksAttempted: 1, weeksFetched: 0, totalRows: 0, errors: [{ week: input.week, error: result.error }], message: result.error };
+        await upsertWeeklyStats(result.rows);
+        return { status: "ok", weeksAttempted: 1, weeksFetched: 1, totalRows: result.rows.length, errors: [], message: `Week ${input.week}: ${result.rows.length} players cached` };
+      } else {
+        // Fetch all weeks, skip already-cached ones unless forceRefresh
+        const cachedWeeks = input.forceRefresh ? [] : await getCachedWeeksForSeason(input.season);
+        const result = await fetchAllWeeksForSeason(input.season, input.maxWeek);
+        // Only upsert weeks not already cached
+        const newRows = input.forceRefresh ? result.allRows : result.allRows.filter(r => !cachedWeeks.includes(r.week));
+        if (newRows.length > 0) await upsertWeeklyStats(newRows);
+        return {
+          status: result.errors.length === 0 ? "ok" : "partial",
+          weeksAttempted: result.weeksAttempted,
+          weeksFetched: result.weeksFetched,
+          totalRows: newRows.length,
+          errors: result.errors,
+          message: `${result.weeksFetched} weeks fetched, ${newRows.length} rows cached`,
+        };
+      }
+    }),
+
+  /** Get cached weekly stats for a season */
+  getBySeason: protectedProcedure
+    .input(z.object({ season: z.number().int().min(2018).max(2030) }))
+    .query(async ({ input }) => {
+      const { getWeeklyStatsBySeason, getCachedWeeksForSeason } = await import("./db");
+      const rows = await getWeeklyStatsBySeason(input.season);
+      const cachedWeeks = await getCachedWeeksForSeason(input.season);
+      return { rows, cachedWeeks, totalRows: rows.length };
+    }),
+
+  /** Get weekly stats for a specific player */
+  getByPlayer: protectedProcedure
+    .input(z.object({
+      season: z.number().int().min(2018).max(2030),
+      playerId: z.number().int(),
+    }))
+    .query(async ({ input }) => {
+      const { getWeeklyStatsByPlayer } = await import("./db");
+      const rows = await getWeeklyStatsByPlayer(input.season, input.playerId);
+      return { rows, weekCount: rows.length };
+    }),
+
+  /** Get stats for a specific week */
+  getByWeek: protectedProcedure
+    .input(z.object({
+      season: z.number().int().min(2018).max(2030),
+      week: z.number().int().min(1).max(18),
+    }))
+    .query(async ({ input }) => {
+      const { getWeeklyStatsByWeek } = await import("./db");
+      const rows = await getWeeklyStatsByWeek(input.season, input.week);
+      return { rows, playerCount: rows.length };
+    }),
+
+  /** Get trend data for a player (last N weeks) */
+  getPlayerTrend: protectedProcedure
+    .input(z.object({
+      season: z.number().int().min(2018).max(2030),
+      playerId: z.number().int(),
+      lastNWeeks: z.number().int().min(1).max(17).default(4),
+    }))
+    .query(async ({ input }) => {
+      const { getWeeklyStatsByPlayer } = await import("./db");
+      const { computePlayerTrend } = await import("./weeklyStatsService");
+      const rawRows = await getWeeklyStatsByPlayer(input.season, input.playerId);
+      if (rawRows.length === 0) return null;
+      const rows = rawRows.map(r => ({ ...r, targets: r.targets ?? 0, receptions: r.receptions ?? 0, receivingYards: r.receivingYards ?? 0, receivingTDs: r.receivingTDs ?? 0, rushingAttempts: r.rushingAttempts ?? 0, rushingYards: r.rushingYards ?? 0, rushingTDs: r.rushingTDs ?? 0, passingAttempts: r.passingAttempts ?? 0, completions: r.completions ?? 0, passingYards: r.passingYards ?? 0, passingTDs: r.passingTDs ?? 0, interceptions: r.interceptions ?? 0, snapCount: r.snapCount ?? 0, snapPct: r.snapPct ?? 0, fantasyPoints: r.fantasyPoints ?? 0 }));
+      return computePlayerTrend(rows, input.playerId, input.lastNWeeks);
+    }),
+  /** Get trend data for multiple players by name (fuzzy match) */
+  getPlayerTrendsByName: protectedProcedure
+    .input(z.object({
+      season: z.number().int().min(2018).max(2030),
+      playerNames: z.array(z.string()).max(10),
+      lastNWeeks: z.number().int().min(1).max(17).default(4),
+    }))
+    .query(async ({ input }) => {
+      const { getWeeklyStatsBySeason } = await import("./db");
+      const { computePlayerTrend } = await import("./weeklyStatsService");
+        const rawAllRows = await getWeeklyStatsBySeason(input.season);
+      if (rawAllRows.length === 0) return [];
+      const allRows = rawAllRows.map(r => ({ ...r, targets: r.targets ?? 0, receptions: r.receptions ?? 0, receivingYards: r.receivingYards ?? 0, receivingTDs: r.receivingTDs ?? 0, rushingAttempts: r.rushingAttempts ?? 0, rushingYards: r.rushingYards ?? 0, rushingTDs: r.rushingTDs ?? 0, passingAttempts: r.passingAttempts ?? 0, completions: r.completions ?? 0, passingYards: r.passingYards ?? 0, passingTDs: r.passingTDs ?? 0, interceptions: r.interceptions ?? 0, snapCount: r.snapCount ?? 0, snapPct: r.snapPct ?? 0, fantasyPoints: r.fantasyPoints ?? 0 }));
+      // Build unique player list
+      const playerMap = new Map<number, string>();
+      for (const r of allRows) playerMap.set(r.playerId, r.playerName);
+      const results = [];
+      for (const name of input.playerNames) {
+        const nameLower = name.toLowerCase();
+        let bestId: number | null = null;
+        let bestScore = 0;
+        for (const [pid, pname] of Array.from(playerMap.entries())) {
+          const pLower = pname.toLowerCase();
+          if (pLower === nameLower) { bestId = pid; break; }
+          const queryWords = nameLower.split(" ").filter(Boolean);
+          const matchCount = queryWords.filter(w => pLower.includes(w)).length;
+          const score = matchCount / queryWords.length;
+          if (score > bestScore) { bestScore = score; bestId = pid; }
+        }
+        if (bestId && bestScore >= 0.5) {
+          const trend = computePlayerTrend(allRows, bestId, input.lastNWeeks);
+          if (trend) results.push({ searchName: name, ...trend });
+        }
+      }
+      return results;
+    }),
+
+  /** Get which weeks are cached for a season */
+  getCachedWeeks: protectedProcedure
+    .input(z.object({ season: z.number().int().min(2018).max(2030) }))
+    .query(async ({ input }) => {
+      const { getCachedWeeksForSeason } = await import("./db");
+      const weeks = await getCachedWeeksForSeason(input.season);
+      return { season: input.season, cachedWeeks: weeks, weekCount: weeks.length };
+    }),
+  }),
 });
 export type AppRouter = typeof appRouter;

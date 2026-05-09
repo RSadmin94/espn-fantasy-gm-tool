@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users, espnSeasonCache, refreshManifest, chatHistory,
   pickTrades, InsertPickTrade, espnViewHealth, InsertEspnViewHealth,
+  weeklyPlayerStats, InsertWeeklyPlayerStats,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -172,4 +173,88 @@ export async function getAllViewHealth() {
   if (!db) return [];
   return db.select().from(espnViewHealth)
     .orderBy(desc(espnViewHealth.season), espnViewHealth.viewName);
+}
+
+// ── Weekly Player Stats helpers ───────────────────────────────────────────────
+
+/** Upsert a batch of weekly stat rows (insert or replace on season+week+playerId) */
+export async function upsertWeeklyStats(rows: InsertWeeklyPlayerStats[]): Promise<void> {
+  const db = await getDb();
+  if (!db || rows.length === 0) return;
+  const BATCH = 50;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const batch = rows.slice(i, i + BATCH);
+    for (const row of batch) {
+      await db.insert(weeklyPlayerStats)
+        .values(row)
+        .onDuplicateKeyUpdate({
+          set: {
+            targets: row.targets,
+            receptions: row.receptions,
+            receivingYards: row.receivingYards,
+            receivingTDs: row.receivingTDs,
+            rushingAttempts: row.rushingAttempts,
+            rushingYards: row.rushingYards,
+            rushingTDs: row.rushingTDs,
+            passingAttempts: row.passingAttempts,
+            completions: row.completions,
+            passingYards: row.passingYards,
+            passingTDs: row.passingTDs,
+            interceptions: row.interceptions,
+            snapCount: row.snapCount,
+            snapPct: row.snapPct,
+            fantasyPoints: row.fantasyPoints,
+            ownerName: row.ownerName,
+            teamId: row.teamId,
+            updatedAt: new Date(),
+          },
+        });
+    }
+  }
+}
+
+/** Get all cached weekly stats for a season */
+export async function getWeeklyStatsBySeason(season: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(weeklyPlayerStats)
+    .where(eq(weeklyPlayerStats.season, season))
+    .orderBy(weeklyPlayerStats.week, weeklyPlayerStats.playerName);
+}
+
+/** Get all weekly stats for a specific player in a season */
+export async function getWeeklyStatsByPlayer(season: number, playerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(weeklyPlayerStats)
+    .where(and(eq(weeklyPlayerStats.season, season), eq(weeklyPlayerStats.playerId, playerId)))
+    .orderBy(weeklyPlayerStats.week);
+}
+
+/** Get stats for a specific week */
+export async function getWeeklyStatsByWeek(season: number, week: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(weeklyPlayerStats)
+    .where(and(eq(weeklyPlayerStats.season, season), eq(weeklyPlayerStats.week, week)))
+    .orderBy(desc(weeklyPlayerStats.fantasyPoints));
+}
+
+/** Get which weeks have already been cached for a season */
+export async function getCachedWeeksForSeason(season: number): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .selectDistinct({ week: weeklyPlayerStats.week })
+    .from(weeklyPlayerStats)
+    .where(eq(weeklyPlayerStats.season, season))
+    .orderBy(weeklyPlayerStats.week);
+  return rows.map(r => r.week);
+}
+
+/** Delete all cached weekly stats for a season */
+export async function deleteWeeklyStatsForSeason(season: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(weeklyPlayerStats).where(eq(weeklyPlayerStats.season, season));
 }

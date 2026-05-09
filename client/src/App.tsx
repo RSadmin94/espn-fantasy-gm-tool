@@ -25,6 +25,7 @@ import DraftPickTracker from "./pages/DraftPickTracker";
 import KeeperROI from "./pages/KeeperROI";
 import TradeOfferGenerator from "./pages/TradeOfferGenerator";
 import DataHealth from "./pages/DataHealth";
+import WeeklyStats from "./pages/WeeklyStats";
 import LeagueAnalytics from "./pages/LeagueAnalytics";
 import ManagerBehavior from "./pages/ManagerBehavior";
 import CommandCenter from "@/pages/hubs/CommandCenter";
@@ -65,6 +66,7 @@ function Router() {
       <Route path="/keeper-roi" component={KeeperROI} />
       <Route path="/trade-offer" component={TradeOfferGenerator} />
       <Route path="/data-health" component={DataHealth} />
+      <Route path="/weekly-stats" component={WeeklyStats} />
       <Route path="/analytics" component={LeagueAnalytics} />
       <Route path="/manager-behavior" component={ManagerBehavior} />
       <Route path="/404" component={NotFound} />

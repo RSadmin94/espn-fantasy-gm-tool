@@ -108,3 +108,49 @@ export const espnViewHealth = mysqlTable(
 
 export type EspnViewHealth = typeof espnViewHealth.$inferSelect;
 export type InsertEspnViewHealth = typeof espnViewHealth.$inferInsert;
+
+// Per-week player stats cache (targets, snaps, yards, receptions, fantasy points)
+export const weeklyPlayerStats = mysqlTable(
+  "weekly_player_stats",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    season: int("season").notNull(),
+    week: int("week").notNull(),
+    playerId: int("playerId").notNull(),
+    playerName: varchar("playerName", { length: 128 }).notNull(),
+    position: varchar("position", { length: 8 }).notNull(),
+    proTeam: varchar("proTeam", { length: 8 }).notNull().default("?"),
+    teamId: int("teamId"),
+    ownerName: varchar("ownerName", { length: 128 }),
+    // Receiving
+    targets: int("targets").default(0),
+    receptions: int("receptions").default(0),
+    receivingYards: int("receivingYards").default(0),
+    receivingTDs: int("receivingTDs").default(0),
+    // Rushing
+    rushingAttempts: int("rushingAttempts").default(0),
+    rushingYards: int("rushingYards").default(0),
+    rushingTDs: int("rushingTDs").default(0),
+    // Passing
+    passingAttempts: int("passingAttempts").default(0),
+    completions: int("completions").default(0),
+    passingYards: int("passingYards").default(0),
+    passingTDs: int("passingTDs").default(0),
+    interceptions: int("interceptions").default(0),
+    // Usage
+    snapCount: int("snapCount").default(0),
+    snapPct: int("snapPct").default(0), // 0-100
+    // Fantasy
+    fantasyPoints: int("fantasyPoints").default(0), // stored as points * 100 for precision
+    fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    index("idx_wps_season_week").on(t.season, t.week),
+    index("idx_wps_player_season").on(t.playerId, t.season),
+    index("idx_wps_season_week_player").on(t.season, t.week, t.playerId),
+  ]
+);
+
+export type WeeklyPlayerStats = typeof weeklyPlayerStats.$inferSelect;
+export type InsertWeeklyPlayerStats = typeof weeklyPlayerStats.$inferInsert;

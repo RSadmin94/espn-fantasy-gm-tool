@@ -21,6 +21,7 @@ const navItems = [
   { href: "/opponent-intel", icon: Microscope, label: "Opponent Intel", group: "Intelligence" },
   // System
   { href: "/data-center", icon: Shield, label: "Data Center", group: "System" },
+  { href: "/weekly-stats", icon: Activity, label: "Weekly Stats", group: "System" },
 ];
 
 const groups = ["Overview", "Draft & Keepers", "Decision Tools", "Intelligence", "System"];

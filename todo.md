@@ -302,3 +302,26 @@
 - [x] Wire all new routes in App.tsx and AppLayout.tsx
 - [x] Write 24 analytics vitest tests (VORP, scarcity, roster gaps, keeper efficiency, manager behavior, ROS value, pick value)
 - [x] All 121 tests passing across 10 test files, 0 TypeScript errors
+
+## Weekly Stats Cache (2026-05-09)
+- [ ] Add weeklyPlayerStats table to drizzle/schema.ts (playerId, playerName, season, week, targets, receptions, receivingYards, rushingYards, snapCount, snapPct, fantasyPoints, position, teamId, ownerName)
+- [ ] Build server/weeklyStatsService.ts: fetch per-week stats from ESPN scoringPeriodId endpoint
+- [ ] Add espn.fetchWeeklyStats tRPC mutation: pulls all weeks for a season, caches in DB
+- [ ] Add espn.weeklyStats tRPC query: returns cached weekly stats by season/player/week
+- [ ] Add espn.playerWeeklyTrend tRPC query: returns last N weeks for a player (targets, snaps, PPG trend)
+- [ ] Surface weekly stats in PlayerProfiles page (targets/snaps sparkline per week)
+- [ ] Update Start/Sit facts panel to show last 4 weeks targets + snap % for each player
+- [ ] Update Waiver Wire facts card to show weekly trend for pickup candidates
+- [ ] Inject weekly trend summary into GM Advisor system prompt context
+- [ ] Write vitest tests for weekly stats normalization
+- [ ] Save checkpoint
+
+## Weekly Stats Cache — COMPLETE (2026-05-09)
+- [x] Add weekly_player_stats DB table (26 cols: targets, receptions, rec yards, rec TDs, rush att, rush yards, rush TDs, pass att, completions, pass yards, pass TDs, INTs, snap count, snap pct, fantasy points × 100, 3 indexes)
+- [x] Build server/weeklyStatsService.ts: fetchWeeklyStatsForPeriod (scoringPeriodId param), normalizeWeeklyStats (statSplitTypeId=1 weekly split, statSourceId=0 actual), fetchAllWeeksForSeason, computePlayerTrend (rising/falling/stable)
+- [x] Add DB helpers to server/db.ts: upsertWeeklyStats, getWeeklyStatsBySeason, getWeeklyStatsByPlayer, getCachedWeeks
+- [x] Add weeklyStats tRPC router to appRouter: fetchAndCache, getSeasonStats, getPlayerTrend, getCachedWeeks
+- [x] Build client/src/pages/WeeklyStats.tsx: fetch-by-week UI, season stats table with position filter + search, player trend panel, cache status indicators
+- [x] Add /weekly-stats route to App.tsx and "Weekly Stats" nav item to AppLayout (System group)
+- [x] Write 13 vitest tests in server/weeklyStats.test.ts: normalizeWeeklyStats (5 tests), computePlayerTrend (8 tests)
+- [x] 155 tests passing across 13 test files, 0 TypeScript errors
