@@ -342,3 +342,13 @@
 - [x] Fix root cause: changed espn.refresh to publicProcedure (ESPN credentials are server-side secrets, no user auth needed)
 - [x] Removed auth gate from DataRefresh.tsx UI (redirect to login, warning banner)
 - [x] Verify fix: curl test returns {status:success, 11 views ok}, 155 tests passing
+
+## BUG: Published Site Shows Blank Page — FIXED
+- [x] Diagnose blank page in production build — Google Fonts link tag in index.html had `</head>` embedded in the URL (malformed href), causing the `<script type="module">` tag to be swallowed into the attribute value, so the app JS bundle never loaded
+- [x] Fix root cause: corrected the href to use `&display=swap` — build now produces clean `<script type="module">` tag
+
+## FEATURE: Smart Refresh — Skip Closed Seasons — DONE
+- [x] Mark seasons 2009–2024 as "closed" (data will not change)
+- [x] Refresh endpoint: skip closed seasons already cached with status=success (unless forceRefresh=true)
+- [x] DataRefresh UI: amber Lock badge on closed seasons, skip summary line, Force Re-fetch toggle, improved log with skipped/success/error icons
+- [x] Only open seasons (2025, 2026) refresh by default; closed+cached seasons auto-skipped

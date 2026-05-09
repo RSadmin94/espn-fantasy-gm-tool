@@ -69,11 +69,26 @@ export const appRouter = router({
 
   espn: router({
     refresh: publicProcedure
-      .input(z.object({ season: z.number().optional(), seasons: z.array(z.number()).optional() }))
+      .input(z.object({
+        season: z.number().optional(),
+        seasons: z.array(z.number()).optional(),
+        forceRefresh: z.boolean().optional(), // override closed-season skip
+      }))
       .mutation(async ({ input }) => {
+        const CURRENT_SEASON = 2025;
+        const CLOSED_SEASONS = ALL_SEASONS.filter(s => s < CURRENT_SEASON); // 2009–2024 are closed
         const seasonsToRefresh = input.seasons ?? (input.season ? [input.season] : [ALL_SEASONS[ALL_SEASONS.length - 1]]);
-        const results: Record<number, { status: string; error?: string; viewHealth?: Record<string, string>; qualityWarnings?: string[] }> = {};
+        const results: Record<number, { status: string; error?: string; viewHealth?: Record<string, string>; qualityWarnings?: string[]; skipped?: boolean }> = {};
         for (const season of seasonsToRefresh) {
+          // Skip closed seasons that are already successfully cached (unless forceRefresh)
+          if (!input.forceRefresh && CLOSED_SEASONS.includes(season)) {
+            const existing = await getRefreshManifests();
+            const manifest = (existing as { season: number; status: string }[]).find(m => m.season === season);
+            if (manifest?.status === "success") {
+              results[season] = { status: "skipped", skipped: true };
+              continue;
+            }
+          }
           try {
             // Use hardened pipeline with per-view error isolation
             const pipelineResult = await fetchEspnViewsHardened(season);
