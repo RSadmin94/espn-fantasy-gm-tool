@@ -6,7 +6,7 @@ import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob } from "./db";
-import { getDraftBoard, getPFRStats, type MergedPlayer } from "./fantasyDataService";
+import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
 import { parse as parseCookie } from "cookie";
 import {
@@ -3736,6 +3736,81 @@ Be concise, data-driven, and specific. Reference actual team names and player na
           .delete(mockDraftResults)
           .where(andOp(eqOp(mockDraftResults.id, input.id), eqOp(mockDraftResults.userId, ctx.user.id)));
         return { success: true };
+      }),
+    /** Get ADP trend history for a player (last 10 snapshots) */
+    getAdpTrend: publicProcedure
+      .input(z.object({ fpId: z.number().int(), limit: z.number().int().min(2).max(30).optional() }))
+      .query(async ({ input }) => {
+        return getAdpTrend(input.fpId, input.limit ?? 10);
+      }),
+    /** Get draft history for a player across all seasons — which owners drafted them, what round/year */
+    getPlayerDraftHistory: publicProcedure
+      .input(z.object({ playerName: z.string().min(2) }))
+      .query(async ({ input }) => {
+        const seasons = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+        const normInput = input.playerName.toLowerCase().replace(/[*+'.,]/g, "").trim();
+        const nameParts = normInput.split(" ").filter(Boolean);
+        const results: Array<{
+          season: number;
+          ownerName: string;
+          teamName: string;
+          round: number;
+          pick: number;
+          isKeeper: boolean;
+        }> = [];
+        for (const season of seasons) {
+          try {
+            const [draftRow, teamsRow, membersRow] = await Promise.all([
+              getCachedView(season, "draftDetail"),
+              getCachedView(season, "teams"),
+              getCachedView(season, "members"),
+            ]);
+            if (!draftRow || !teamsRow || !membersRow) continue;
+            const draftPayload = draftRow.payload as Record<string, unknown>;
+            const teamsPayload = teamsRow.payload as Record<string, unknown>;
+            const membersPayload = membersRow.payload as Record<string, unknown>;
+            if (!draftPayload?.picks) continue;
+            const picks = draftPayload.picks as Array<Record<string, unknown>>;
+            const teams = (Array.isArray(teamsPayload) ? teamsPayload : (teamsPayload.teams ?? [])) as Array<Record<string, unknown>>;
+            const members = (Array.isArray(membersPayload) ? membersPayload : (membersPayload.members ?? [])) as Array<Record<string, unknown>>;
+            // Build teamId -> owner name map
+            const teamOwnerMap = new Map<number, { ownerName: string; teamName: string }>();
+            for (const t of teams) {
+              const tid = t.id as number;
+              const tname = ((t.location as string) || "") + " " + ((t.nickname as string) || "");
+              const primaryOwner = t.primaryOwner as string | undefined;
+              if (primaryOwner) {
+                const member = members.find((m) => (m.id as string) === primaryOwner);
+                if (member) {
+                  const fname = ((member.firstName as string) || "").trim();
+                  const lname = ((member.lastName as string) || "").trim();
+                  teamOwnerMap.set(tid, { ownerName: `${fname} ${lname}`.trim(), teamName: tname.trim() });
+                }
+              }
+            }
+            for (const pick of picks) {
+              const pname = ((pick.playerName as string) || "").toLowerCase().replace(/[*+'.,]/g, "").trim();
+              if (!pname) continue;
+              // Match if all name parts are found in the pick name
+              const matched = nameParts.length > 0 && nameParts.every(part => pname.includes(part));
+              if (!matched) continue;
+              const teamId = pick.teamId as number;
+              const owner = teamOwnerMap.get(teamId);
+              if (!owner) continue;
+              results.push({
+                season,
+                ownerName: owner.ownerName,
+                teamName: owner.teamName,
+                round: (pick.roundId as number) || (pick.roundNum as number) || 0,
+                pick: (pick.roundPickNumber as number) || (pick.overallPickNumber as number) || 0,
+                isKeeper: !!(pick.keeper || pick.reservedForKeeper),
+              });
+            }
+          } catch {
+            // skip seasons with no data
+          }
+        }
+        return results.sort((a, b) => b.season - a.season);
       }),
   }),
 });

@@ -5,8 +5,8 @@
  */
 
 import { getDb } from "./db";
-import { fantasyDataCache } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { fantasyDataCache, adpTrendSnapshots } from "../drizzle/schema";
+import { eq, desc, and, gte } from "drizzle-orm";
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -402,12 +402,70 @@ export async function getDraftBoard(forceRefresh = false): Promise<DraftBoardRes
   const merged = mergePlayers(ecr, adp, pfr);
   await setCached(CACHE_KEY, merged);
 
+  // Record ADP trend snapshot (fire-and-forget, don't block the response)
+  recordAdpSnapshot(merged).catch(() => {});
+
   return {
     players: merged,
     fetchedAt: new Date(),
     sources: { ecr: ecr.length, adp: adp.length, pfr: pfr.length, merged: merged.length },
     fromCache: false,
   };
+}
+
+// ─── ADP Trend Tracking ──────────────────────────────────────────────────────
+
+/**
+ * Insert one snapshot row per player into adp_trend_snapshots.
+ * Called after every fresh fetch (fire-and-forget).
+ */
+async function recordAdpSnapshot(players: MergedPlayer[]): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const now = new Date();
+  // Batch insert in chunks of 100 to avoid oversized queries
+  const CHUNK = 100;
+  for (let i = 0; i < players.length; i += CHUNK) {
+    const chunk = players.slice(i, i + CHUNK);
+    await db.insert(adpTrendSnapshots).values(
+      chunk.map((p) => ({
+        fpId: p.fpId,
+        playerName: p.name,
+        position: p.position,
+        adp: p.adp !== null ? Math.round(p.adp * 10) : null,
+        ecrRank: p.ecrRank,
+        snapshotAt: now,
+      }))
+    );
+  }
+}
+
+export interface AdpTrendEntry {
+  snapshotAt: Date;
+  adp: number | null;   // actual ADP (null if no ADP data)
+  ecrRank: number;
+}
+
+/**
+ * Return the last N snapshots for a player (by fpId), newest-first.
+ * Used to compute rising/falling ADP trend on the client.
+ */
+export async function getAdpTrend(fpId: number, limit = 10): Promise<AdpTrendEntry[]> {
+  const db = await getDb();
+  if (!db) return [];
+  // Only look at snapshots from the last 30 days
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select()
+    .from(adpTrendSnapshots)
+    .where(and(eq(adpTrendSnapshots.fpId, fpId), gte(adpTrendSnapshots.snapshotAt, since)))
+    .orderBy(desc(adpTrendSnapshots.snapshotAt))
+    .limit(limit);
+  return rows.map((r) => ({
+    snapshotAt: r.snapshotAt,
+    adp: r.adp !== null ? r.adp / 10 : null,
+    ecrRank: r.ecrRank,
+  }));
 }
 
 /**

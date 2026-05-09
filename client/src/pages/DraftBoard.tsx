@@ -11,6 +11,7 @@ import {
   ChevronDown, ChevronUp, Filter
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PlayerDetailDrawer } from "./PlayerDetailDrawer";
 
 const POSITIONS = ["ALL", "QB", "RB", "WR", "TE", "K", "DST"];
 const TIER_COLORS: Record<number, string> = {
@@ -55,6 +56,7 @@ export default function DraftBoard() {
   const [showPFR, setShowPFR] = useState(false);
   const [tierFilter, setTierFilter] = useState<number | null>(null);
   const [expandedPlayer, setExpandedPlayer] = useState<number | null>(null);
+  const [drawerPlayer, setDrawerPlayer] = useState<Record<string, unknown> | null>(null);
 
   const { data, isLoading, error, refetch, isFetching } = trpc.draftBoard.getPlayers.useQuery(
     undefined,
@@ -243,7 +245,7 @@ export default function DraftBoard() {
             <div key={p.fpId} className="space-y-0">
               <div
                 className={cn(
-                  "grid items-center px-4 py-2 rounded-md cursor-pointer transition-colors",
+                  "group grid items-center px-4 py-2 rounded-md cursor-pointer transition-colors",
                   showPFR
                     ? "grid-cols-[3rem_2rem_1fr_5rem_4rem_4rem_4rem_4rem_4rem_4rem_4rem]"
                     : "grid-cols-[3rem_2rem_1fr_5rem_4rem_4rem_4rem_4rem]",
@@ -253,6 +255,7 @@ export default function DraftBoard() {
                 )}
                 onClick={() => setExpandedPlayer(expandedPlayer === p.fpId ? null : p.fpId)}
               >
+
                 {/* ECR Rank */}
                 <span className="text-sm font-bold text-foreground">{p.ecrRank}</span>
                 {/* Position badge */}
@@ -280,6 +283,14 @@ export default function DraftBoard() {
                 <span className="text-xs text-muted-foreground">{p.byeWeek ?? "—"}</span>
                 {/* Own% */}
                 <span className="text-xs text-muted-foreground">{p.ownedPct > 0 ? `${p.ownedPct.toFixed(0)}%` : "—"}</span>
+                {/* Detail button — only visible on hover */}
+                <button
+                  className="hidden group-hover:flex ml-auto items-center justify-center w-6 h-6 rounded hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-colors"
+                  onClick={(e) => { e.stopPropagation(); setDrawerPlayer(p as unknown as Record<string, unknown>); }}
+                  title="View player details"
+                >
+                  <Info className="w-3.5 h-3.5" />
+                </button>
                 {/* PFR columns */}
                 {showPFR && <>
                   <span className="text-xs text-muted-foreground">
@@ -347,6 +358,45 @@ export default function DraftBoard() {
         <div className="text-center py-16 text-muted-foreground">
           No players match the current filters.
         </div>
+      )}
+
+      {/* Player Detail Drawer */}
+      {drawerPlayer && (
+        <PlayerDetailDrawer
+          player={{
+            fpId: drawerPlayer.fpId as number,
+            name: drawerPlayer.name as string,
+            team: drawerPlayer.team as string,
+            position: drawerPlayer.position as string,
+            ecrRank: drawerPlayer.ecrRank as number,
+            ecrTier: drawerPlayer.ecrTier as number,
+            posRank: drawerPlayer.posRank as string,
+            adp: drawerPlayer.adp as number | null,
+            adpGap: drawerPlayer.ecrAdpGap as number | null,
+            byeWeek: drawerPlayer.byeWeek as number | null,
+            ownedPct: drawerPlayer.ownedPct as number | null,
+            ecrMin: drawerPlayer.ecrMin as number | null,
+            ecrMax: drawerPlayer.ecrMax as number | null,
+            ecrAvg: drawerPlayer.ecrAvg as number | null,
+            ecrStd: drawerPlayer.ecrStd as number | null,
+            pfr2025: drawerPlayer.pfr2025
+              ? {
+                  rushYds: (drawerPlayer.pfr2025 as Record<string, unknown>).rushYds as number | null,
+                  rushTd: (drawerPlayer.pfr2025 as Record<string, unknown>).rushTDs as number | null,
+                  recYds: (drawerPlayer.pfr2025 as Record<string, unknown>).recYds as number | null,
+                  recTd: (drawerPlayer.pfr2025 as Record<string, unknown>).recTDs as number | null,
+                  rec: (drawerPlayer.pfr2025 as Record<string, unknown>).receptions as number | null,
+                  targets: (drawerPlayer.pfr2025 as Record<string, unknown>).targets as number | null,
+                  passYds: (drawerPlayer.pfr2025 as Record<string, unknown>).passYds as number | null,
+                  passTd: (drawerPlayer.pfr2025 as Record<string, unknown>).passTDs as number | null,
+                  pprPts: (drawerPlayer.pfr2025 as Record<string, unknown>).pprPoints as number | null,
+                  vbd: (drawerPlayer.pfr2025 as Record<string, unknown>).vbd as number | null,
+                  fantasyRank: (drawerPlayer.pfr2025 as Record<string, unknown>).overallRank as number | null,
+                }
+              : null,
+          }}
+          onClose={() => setDrawerPlayer(null)}
+        />
       )}
     </div>
   );

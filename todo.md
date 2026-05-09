@@ -461,3 +461,9 @@
 ## NEW: Best Available Highlight in Mock Draft Sim
 
 - [x] Add Best Available panel to MockDraftSimulator showing top 8 value picks by ECR-ADP gap on Rod's turn
+
+## NEW: Player Detail Drawer (Draft Board)
+
+- [ ] Build PlayerDetailDrawer component: slide-out panel with full player profile, ECR range, ADP trend, 2025 PFR stats, opponent draft history, and Rod's Edge score
+- [x] Add getPlayerDraftHistory tRPC procedure: returns which opponents have drafted this player and in what round/year
+- [ ] Wire into DraftBoard.tsx: clicking a row opens the drawer instead of inline expand

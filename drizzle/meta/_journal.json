@@ -71,6 +71,13 @@
       "when": 1778361741663,
       "tag": "0009_kind_lady_ursula",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1778363245796,
+      "tag": "0010_rich_ikaris",
+      "breakpoints": true
     }
   ]
 }

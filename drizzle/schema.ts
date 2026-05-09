@@ -217,3 +217,24 @@ export const mockDraftResults = mysqlTable(
 );
 export type MockDraftResult = typeof mockDraftResults.$inferSelect;
 export type InsertMockDraftResult = typeof mockDraftResults.$inferInsert;
+
+// ─── ADP Trend Snapshots ─────────────────────────────────────────────────────
+// Stores one row per player per fetch so we can compute rising/falling trends
+export const adpTrendSnapshots = mysqlTable(
+  "adp_trend_snapshots",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    fpId: int("fpId").notNull(),
+    playerName: varchar("playerName", { length: 128 }).notNull(),
+    position: varchar("position", { length: 8 }).notNull(),
+    adp: int("adp"), // stored * 10 for one decimal, null if no ADP
+    ecrRank: int("ecrRank").notNull(),
+    snapshotAt: timestamp("snapshotAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_adp_trend_player").on(t.fpId),
+    index("idx_adp_trend_snapshot").on(t.snapshotAt),
+  ]
+);
+export type AdpTrendSnapshot = typeof adpTrendSnapshots.$inferSelect;
+export type InsertAdpTrendSnapshot = typeof adpTrendSnapshots.$inferInsert;
