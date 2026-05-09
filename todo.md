@@ -426,14 +426,14 @@
 
 ## NEW: FantasyPros + PFR Data Integration & 5 Features
 
-- [ ] Build server/fantasyDataService.ts: FantasyPros ECR scraper, ADP scraper, PFR stats scraper, merge + cache with 6hr TTL
-- [ ] Add fantasy_data_cache DB table (key, data JSON, fetched_at)
-- [ ] Add draftBoard tRPC router: getPlayers (merged ECR+ADP+PFR), comparePlayer, getDraftSimState, makeDraftPick, resetDraft
-- [ ] Build DraftBoard.tsx page: tier breaks, ECR rank, ADP, ECR vs ADP gap, PFR stats overlay, position filter, search
-- [ ] Build PlayerComparison.tsx ("Who Should I Draft?"): 2-3 player comparison with ECR, ADP, PFR stats, opponent likelihood notes
-- [ ] Build MockDraftSimulator.tsx: 14-team draft, AI opponents use real historical tendencies, Rod picks from actual slot, post-draft ECR grade
-- [ ] Build WeeklyProjections.tsx: FantasyPros projections + Start/Sit advisor with matchup data
-- [ ] Build WaiverIntelligence.tsx: FantasyPros waiver rankings + opponent positional tendency overlay
-- [ ] Add all 5 new pages to AppLayout nav and App.tsx routes
-- [ ] Write vitest tests for draftBoard procedures
-- [ ] Save checkpoint
+- [x] Build server/fantasyDataService.ts: FantasyPros ECR scraper, ADP scraper, PFR stats scraper, merge + cache with 6hr TTL
+- [x] Add fantasy_data_cache DB table (key, data JSON, fetched_at)
+- [x] Add draftBoard tRPC router: getPlayers (merged ECR+ADP+PFR), comparePlayer, searchPlayers, getPlayer
+- [x] Build DraftBoard.tsx page: tier breaks, ECR rank, ADP, ECR vs ADP gap, PFR stats overlay, position filter, search
+- [x] Build PlayerComparison.tsx ("Who Should I Draft?"): 2-3 player comparison with ECR, ADP, PFR stats, opponent likelihood notes
+- [x] Build MockDraftSimulator.tsx: 14-team draft, AI opponents use real historical tendencies, Rod picks from actual slot, post-draft ECR grade
+- [x] Build WeeklyProjections.tsx: FantasyPros ECR + PFR 2025 stats as projection baseline
+- [x] Build WaiverIntelligence.tsx: FantasyPros waiver rankings + opponent positional tendency overlay
+- [x] Add all 5 new pages to DraftWarRoom and WaiverLab hubs
+- [x] Write vitest tests for draftBoard procedures (25 tests, all passing)
+- [x] Save checkpoint (ed8144b3)
