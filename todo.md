@@ -413,3 +413,9 @@
 ## NEW: Mid-Round Targets Row
 
 - [x] Add Mid-Round Targets row (Rds 4–6) to each competitor draft intelligence card using midTopPos data
+
+## BUG: Missing 2024/2025 Picks in Competitor Draft Intelligence
+
+- [x] Diagnose why round1Picks for some managers are missing 2024 and 2025 seasons
+- [x] Fix data pipeline to include all cached seasons for round1Picks/round2Picks/round3Picks (sort newest-first; missing entries are genuine keeper slots)
+- [x] Increase visible pick history rows per card from 6 to show all available years; add footnote for keeper-slot gaps

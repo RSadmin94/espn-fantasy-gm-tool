@@ -1254,7 +1254,7 @@ export default function Dashboard() {
                                       <BookOpen className="w-3 h-3" /> Round 1 Pick History
                                     </p>
                                     <div className="space-y-1">
-                                      {o.round1Picks.slice(0, 6).map((p: {season: number; playerName: string; position: string; isKeeper: boolean}, i: number) => (
+                                      {o.round1Picks.map((p: {season: number; playerName: string; position: string; isKeeper: boolean}, i: number) => (
                                         <div key={i} className="flex items-center gap-2 py-0.5">
                                           <span className="text-[9px] text-muted-foreground w-8 flex-shrink-0">{p.season}</span>
                                           <span className="text-[10px] text-foreground truncate flex-1">{p.playerName}</span>
@@ -1263,6 +1263,12 @@ export default function Dashboard() {
                                         </div>
                                       ))}
                                     </div>
+                                    {/* Note: seasons without a Rd1 entry used that slot as a keeper (pick moved to a later round) */}
+                                    {o.round1Picks.length < o.seasons && (
+                                      <p className="text-[9px] text-muted-foreground/60 italic mt-1">
+                                        {o.seasons - o.round1Picks.length} season{o.seasons - o.round1Picks.length !== 1 ? 's' : ''} with no Rd1 entry — keeper used that slot (pick moved to later round)
+                                      </p>
+                                    )}
                                   </div>
                                 )}
 
