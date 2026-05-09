@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Search, Play, RotateCcw, Trophy, ChevronRight, Undo2, FastForward, Zap, Save, CheckCircle2 } from "lucide-react";
+import { Search, Play, RotateCcw, Trophy, ChevronRight, Undo2, FastForward, Zap, Save, CheckCircle2, TrendingDown, TrendingUp, Star } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { MergedPlayer } from "../../../server/fantasyDataService";
@@ -359,8 +359,24 @@ export default function MockDraftSimulator() {
     });
   }, [draftComplete, teams, picks, rodSlotIndex]);
 
-  const top5Available = availablePlayers.slice(0, 5);
   const draftStarted = picks.length > 0 || currentOverall > 1;
+
+  // Best Available: top value picks by ECR-ADP gap (positive = value, negative = reach)
+  const [bestAvailPos, setBestAvailPos] = useState<string>("ALL");
+  const bestAvailablePlayers = useMemo(() => {
+    const pool = bestAvailPos === "ALL"
+      ? availablePlayers
+      : availablePlayers.filter((p) => p.position === bestAvailPos);
+    // Sort by ECR-ADP gap descending (most value first), then by ECR rank as tiebreaker
+    return [...pool]
+      .sort((a, b) => {
+        const gapA = a.ecrAdpGap ?? 0;
+        const gapB = b.ecrAdpGap ?? 0;
+        if (gapB !== gapA) return gapB - gapA;
+        return a.ecrRank - b.ecrRank;
+      })
+      .slice(0, 8);
+  }, [availablePlayers, bestAvailPos]);
 
   const [savedDraftId, setSavedDraftId] = useState<number | null>(null);
   const saveDraftMutation = trpc.draftBoard.saveDraft.useMutation({
@@ -514,29 +530,79 @@ export default function MockDraftSimulator() {
               </CardContent>
             </Card>
 
-            {/* Top 5 available */}
-            <Card className="border-slate-700/50 bg-slate-800/30">
+            {/* Best Available — value picks by ECR-ADP gap */}
+            <Card className={cn(
+              "border-2 transition-colors",
+              isRodsTurn ? "border-emerald-500/50 bg-emerald-950/20" : "border-slate-700/50 bg-slate-800/30"
+            )}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Top Available</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5 text-emerald-400" />
+                    Best Available
+                  </CardTitle>
+                  {isRodsTurn && (
+                    <span className="text-xs text-emerald-400 font-medium">Click to pick</span>
+                  )}
+                </div>
+                {/* Position filter tabs */}
+                <div className="flex gap-1 flex-wrap mt-2">
+                  {["ALL", "RB", "WR", "QB", "TE", "K", "DST"].map((pos) => (
+                    <button
+                      key={pos}
+                      onClick={() => setBestAvailPos(pos)}
+                      className={cn(
+                        "text-xs px-2 py-0.5 rounded border transition-colors",
+                        bestAvailPos === pos
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-slate-700 text-slate-400 hover:border-slate-500 bg-transparent"
+                      )}
+                    >
+                      {pos}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Gap = ADP − ECR · green = value, red = reach</p>
               </CardHeader>
               <CardContent className="p-3 pt-0 space-y-1">
-                {top5Available.map((p) => (
-                  <div
-                    key={p.fpId}
-                    className={cn(
-                      "flex items-center gap-2 px-2 py-1.5 rounded transition-colors",
-                      isRodsTurn ? "cursor-pointer hover:bg-slate-700" : "opacity-60"
-                    )}
-                    onClick={() => isRodsTurn && handleRodPick(p)}
-                  >
-                    <span className="text-xs text-muted-foreground w-6 text-right">{p.ecrRank}</span>
-                    <Badge variant="outline" className={cn("text-xs px-1 py-0 h-5 shrink-0", POS_COLORS[p.position] ?? "")}>
-                      {p.position}
-                    </Badge>
-                    <span className="text-sm text-foreground truncate flex-1">{p.name}</span>
-                    <span className="text-xs text-muted-foreground">{p.team}</span>
-                  </div>
-                ))}
+                {bestAvailablePlayers.map((p) => {
+                  const gap = p.ecrAdpGap ?? 0;
+                  const isValue = gap >= 5;
+                  const isReach = gap <= -5;
+                  return (
+                    <div
+                      key={p.fpId}
+                      className={cn(
+                        "flex items-center gap-2 px-2 py-1.5 rounded transition-colors group",
+                        isRodsTurn
+                          ? "cursor-pointer hover:bg-slate-700 active:scale-[0.98]"
+                          : "opacity-60 cursor-default",
+                        isRodsTurn && isValue && "hover:bg-emerald-900/30"
+                      )}
+                      onClick={() => isRodsTurn && handleRodPick(p)}
+                      title={isRodsTurn ? `Pick ${p.name}` : undefined}
+                    >
+                      <span className="text-xs text-muted-foreground w-6 text-right shrink-0">{p.ecrRank}</span>
+                      <Badge variant="outline" className={cn("text-xs px-1 py-0 h-5 shrink-0", POS_COLORS[p.position] ?? "")}>
+                        {p.position}
+                      </Badge>
+                      <span className="text-sm text-foreground truncate flex-1">{p.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{p.team}</span>
+                      {/* Gap badge */}
+                      <span className={cn(
+                        "text-xs font-medium flex items-center gap-0.5 shrink-0",
+                        isValue ? "text-emerald-400" : isReach ? "text-red-400" : "text-slate-500"
+                      )}>
+                        {isValue && <TrendingDown className="w-3 h-3" />}
+                        {isReach && <TrendingUp className="w-3 h-3" />}
+                        {gap > 0 ? `+${gap}` : gap === 0 ? "—" : gap}
+                      </span>
+                    </div>
+                  );
+                })}
+                {bestAvailablePlayers.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-2">No players available</p>
+                )}
               </CardContent>
             </Card>
 

@@ -457,3 +457,7 @@
 - [x] Build SavedDrafts.tsx page for reviewing past drafts
 - [x] Wire Saved Mocks tab into DraftWarRoom hub
 - [x] Write vitest tests for saveDraft and listDrafts procedures (15 tests)
+
+## NEW: Best Available Highlight in Mock Draft Sim
+
+- [x] Add Best Available panel to MockDraftSimulator showing top 8 value picks by ECR-ADP gap on Rod's turn
