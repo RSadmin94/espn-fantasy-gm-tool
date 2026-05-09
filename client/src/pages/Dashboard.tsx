@@ -21,7 +21,7 @@ import {
   Shield, AlertTriangle, CheckCircle, Clock, Calendar, Bot,
   ChevronRight, Send, Loader2, ArrowUpRight, ArrowDownRight, Minus,
   BarChart3, Swords, RefreshCw, User, BarChart2, Info,
-  CheckCircle2, ArrowUp, ArrowDown, BookOpen, Eye, Crosshair, Hash
+  CheckCircle2, ArrowUp, ArrowDown, BookOpen, Eye, Crosshair, Hash, ChevronDown
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
@@ -1074,6 +1074,18 @@ export default function Dashboard() {
                     return `${firstName} is balanced and hard to exploit positionally. Focus on best-player-available and don't let him dictate your board.`;
                   };
 
+                  // Track which manager+round combos are expanded: key = "name:2" or "name:3"
+                  // eslint-disable-next-line react-hooks/rules-of-hooks
+                  const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
+                  const toggleRound = (name: string, rd: number) => {
+                    const key = `${name}:${rd}`;
+                    setExpandedRounds(prev => {
+                      const next = new Set(prev);
+                      if (next.has(key)) next.delete(key); else next.add(key);
+                      return next;
+                    });
+                  };
+
                   const opponents = (leagueDraftData.owners as DraftOwner[])
                     .filter(o => o.totalPicks > 0 && !o.name.toLowerCase().includes("rod") && !o.name.toLowerCase().includes("str8"))
                     .filter(o => !(["teco","browning","tecostix","maurice","welch","dallas727","vince"].some(k => o.name.toLowerCase().includes(k))))
@@ -1271,6 +1283,41 @@ export default function Dashboard() {
                                     )}
                                   </div>
                                 )}
+
+                                {/* Rd2 and Rd3 pick history toggles */}
+                                {([2, 3] as const).map(rd => {
+                                  const picks = rd === 2 ? o.round2Picks : o.round3Picks;
+                                  if (!picks || picks.length === 0) return null;
+                                  const key = `${o.name}:${rd}`;
+                                  const isOpen = expandedRounds.has(key);
+                                  return (
+                                    <div key={rd}>
+                                      <button
+                                        onClick={() => toggleRound(o.name, rd)}
+                                        className="w-full flex items-center justify-between text-[9px] text-muted-foreground uppercase tracking-wider font-semibold py-1 hover:text-foreground transition-colors"
+                                      >
+                                        <span className="flex items-center gap-1">
+                                          <BookOpen className="w-3 h-3" />
+                                          Round {rd} Pick History
+                                          <span className="normal-case text-muted-foreground/60 ml-1">({picks.length} seasons)</span>
+                                        </span>
+                                        <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+                                      </button>
+                                      {isOpen && (
+                                        <div className="space-y-1 mt-1 pl-1 border-l border-border/50">
+                                          {picks.map((p: {season: number; playerName: string; position: string; isKeeper: boolean}, i: number) => (
+                                            <div key={i} className="flex items-center gap-2 py-0.5">
+                                              <span className="text-[9px] text-muted-foreground w-8 flex-shrink-0">{p.season}</span>
+                                              <span className="text-[10px] text-foreground truncate flex-1">{p.playerName}</span>
+                                              <span className={`text-[9px] font-bold flex-shrink-0 ${posTextColors[p.position] || "text-muted-foreground"}`}>{p.position}</span>
+                                              {p.isKeeper && <span className="text-[8px] text-yellow-400 font-bold flex-shrink-0">K</span>}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
 
                                 {/* Tendency bullets */}
                                 <div>
