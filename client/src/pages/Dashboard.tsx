@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "wouter";
 import AppLayout from "@/components/AppLayout";
 import { MyProfileTab } from "./MyProfileTabContent";
@@ -29,167 +29,12 @@ import {
 } from "recharts";
 import { useLocation } from "wouter";
 
-// ─── Static league intelligence data ──────────────────────────────────────────
+// ─── Static strategy content (non-person-specific) ─────────────────────────
 
-const OPPONENT_PROFILES = [
-  {
-    name: "Jan Graham", team: "ALLFRUMTHEWEST JG", abbr: "JG",
-    record25: "11-3", pf25: 2032, rank25: 2, rank24: 9, rank23: 5,
-    trajectory: "up", threat: 95,
-    behavioral: "League-high scorer, expert trader, never gives value. Most dangerous manager in the league.",
-    directive: "Avoid trading. Beat her on the field. Study her roster weekly.",
-    badge: "AVOID", badgeColor: "bg-red-500/20 text-red-400 border-red-500/30",
-    tierColor: "border-red-500/40 bg-red-500/5",
-    memberId: "{F0C28C6B-C9FC-4D9E-828C-6BC9FC7D9EA8}",
-  },
-  {
-    name: "Christian Graham", team: "Comebzck S\"ING\"ZZNNN", abbr: "CG",
-    record25: "12-2", pf25: 1980, rank25: 1, rank24: 3, rank23: 4,
-    trajectory: "steady", threat: 92,
-    behavioral: "Most consistent 3-year manager. Does not panic sell. Never gives up value in trades.",
-    directive: "Study his keeper pick. Bet against his safe plays. Beat him in head-to-head.",
-    badge: "AVOID", badgeColor: "bg-red-500/20 text-red-400 border-red-500/30",
-    tierColor: "border-red-500/40 bg-red-500/5",
-    memberId: "{0C4B6DC7-265E-4A23-99DE-2B67369E9141}",
-  },
-  {
-    name: "Demetri Clark", team: "Giv'me My Trophy", abbr: "DC",
-    record25: "8-6", pf25: 1820, rank25: 4, rank24: 1, rank23: 7,
-    trajectory: "down", threat: 72,
-    behavioral: "2024 champion. Veteran manager. Has championship pedigree and knows how to peak at the right time.",
-    directive: "Watch his roster moves. He knows what he's doing. Don't underestimate.",
-    badge: "WATCH", badgeColor: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-    tierColor: "border-yellow-500/40 bg-yellow-500/5",
-    memberId: "{96E5F3A7-0AB6-4DF1-AE89-E64CAF4A400B}",
-  },
-  {
-    name: "Marcus Reese", team: "BLUReese6", abbr: "MR",
-    record25: "9-5", pf25: 1855, rank25: 3, rank24: 8, rank23: 10,
-    trajectory: "up", threat: 70,
-    behavioral: "Ascending trajectory. Improving roster management. Dangerous sleeper threat for 2026.",
-    directive: "Monitor his waiver adds. He's getting better fast. Don't sleep on him.",
-    badge: "WATCH", badgeColor: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-    tierColor: "border-yellow-500/40 bg-yellow-500/5",
-    memberId: "{82E515D1-73FF-466C-A7A8-099B050278B5}",
-  },
-  {
-    name: "Mark DeRoux", team: "Dominus Thus", abbr: "MD",
-    record25: "3-11", pf25: 1580, rank25: 14, rank24: 2, rank23: 14,
-    trajectory: "volatile", threat: 45,
-    behavioral: "Extreme boom-bust. Desperate when losing. Emotional trader. Will overpay for help early in season.",
-    directive: "Hit early when he's 0-2 or 1-3. He'll give up value out of frustration.",
-    badge: "BUY LOW", badgeColor: "bg-green-500/20 text-green-400 border-green-500/30",
-    tierColor: "border-green-500/40 bg-green-500/5",
-    memberId: "{1130450A-E524-475A-96E2-F45C79CDBE21}",
-  },
-  {
-    name: "Tony Dorsey", team: "PRIMETIME PLAYAZ", abbr: "TD",
-    record25: "5-9", pf25: 1710, rank25: 9, rank24: 11, rank23: 9,
-    trajectory: "steady", threat: 40,
-    behavioral: "Chronic bad luck. Frustrated manager. Trades volume for wins. Will take less than fair value.",
-    directive: "Offer 2-for-1 when he's at 2-4 record. He wants wins, not value.",
-    badge: "BUY LOW", badgeColor: "bg-green-500/20 text-green-400 border-green-500/30",
-    tierColor: "border-green-500/40 bg-green-500/5",
-    memberId: "{TONY-DORSEY-PLACEHOLDER}",
-  },
-  {
-    name: "Sheldon deRoux", team: "DARE2BGR8", abbr: "SD",
-    record25: "7-7", pf25: 1890, rank25: 5, rank24: 6, rank23: 8,
-    trajectory: "steady", threat: 55,
-    behavioral: "High scorer with terrible schedule luck. His players are undervalued due to his record.",
-    directive: "Target his roster. Ignore his record — his players are better than they look.",
-    badge: "BUY LOW", badgeColor: "bg-green-500/20 text-green-400 border-green-500/30",
-    tierColor: "border-green-500/40 bg-green-500/5",
-    memberId: "{54D64361-5249-472A-9643-615249A72AD3}",
-  },
-  {
-    name: "Steffon Bizzell", team: "Winkstradamus", abbr: "SB",
-    record25: "6-8", pf25: 1760, rank25: 7, rank24: 5, rank23: 11,
-    trajectory: "down", threat: 42,
-    behavioral: "Overconfident after 2024 Top 5. Overvalues his own players. Will ask too little when he offers first.",
-    directive: "Let him offer first. He'll undervalue his own players. Sell high to him.",
-    badge: "SELL HIGH", badgeColor: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-    tierColor: "border-blue-500/40 bg-blue-500/5",
-    memberId: "{C300FD29-76C4-4FF0-8C91-A4F7BC17ADF2}",
-  },
-  {
-    name: "Nate West", team: "Snake 🐍", abbr: "NW",
-    record25: "7-7", pf25: 1795, rank25: 6, rank24: 7, rank23: 6,
-    trajectory: "steady", threat: 50,
-    behavioral: "Consistent mid-tier manager. Steady but not elite. Drafts well but struggles in-season.",
-    directive: "Standard trade approach. Fair value exchanges are fine.",
-    badge: "FAIR", badgeColor: "bg-slate-500/20 text-slate-400 border-slate-500/30",
-    tierColor: "border-slate-500/40 bg-slate-500/5",
-    memberId: "{9F27F0FE-36FA-4C9B-A7F0-FE36FA3C9B90}",
-  },
-  {
-    name: "Randy Broner Jr", team: "3 And A Possible", abbr: "RB",
-    record25: "6-8", pf25: 1740, rank25: 8, rank24: 10, rank23: 12,
-    trajectory: "up", threat: 38,
-    behavioral: "Improving manager. Learning the game. Can be exploited with complex trade structures.",
-    directive: "Standard approach. Offer fair trades — he's less experienced.",
-    badge: "FAIR", badgeColor: "bg-slate-500/20 text-slate-400 border-slate-500/30",
-    tierColor: "border-slate-500/40 bg-slate-500/5",
-    memberId: "{B7DED29D-BF48-441C-91B8-34CCFBB09271}",
-  },
-  {
-    name: "LOZELL STYLES", team: "SMASHVILLE TITANS", abbr: "LS",
-    record25: "4-10", pf25: 1620, rank25: 12, rank24: 3, rank23: 13,
-    trajectory: "volatile", threat: 48,
-    behavioral: "Volatile manager. Dropped from #3 in 2024 to #12 in 2025. Unpredictable draft behavior.",
-    directive: "Watch round 1 for unpredictable picks. Can bounce back fast — don't ignore.",
-    badge: "WATCH", badgeColor: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-    tierColor: "border-yellow-500/40 bg-yellow-500/5",
-    memberId: "{LOZELL-STYLES-PLACEHOLDER}",
-  },
-  {
-    name: "Marlon Moore", team: "TigerCommander", abbr: "MM",
-    record25: "5-9", pf25: 1680, rank25: 10, rank24: 12, rank23: 10,
-    trajectory: "steady", threat: 35,
-    behavioral: "Consistent lower-tier manager. Predictable draft patterns. Rarely makes aggressive moves.",
-    directive: "Safe trade partner. Fair value exchanges work well.",
-    badge: "FAIR", badgeColor: "bg-slate-500/20 text-slate-400 border-slate-500/30",
-    tierColor: "border-slate-500/40 bg-slate-500/5",
-    memberId: "{EE3AD8B7-4239-40B0-BAD8-B7423960B094}",
-  },
-  {
-    name: "teco Browning", team: "SMASHVILLE TITANS (2018-2023)", abbr: "TB",
-    record25: "4-10", pf25: 1640, rank25: 11, rank24: 13, rank23: 11,
-    trajectory: "down", threat: 32,
-    behavioral: "Struggling manager. Below-average roster construction. Potential trade target.",
-    directive: "Target for trades when desperate. Offer fair value and they'll accept.",
-    badge: "BUY LOW", badgeColor: "bg-green-500/20 text-green-400 border-green-500/30",
-    tierColor: "border-green-500/40 bg-green-500/5",
-    memberId: "{C65919E6-63DE-4E91-9919-E663DEFE9114}",
-  },
-  {
-    name: "Bruce Edwards", team: "The Playmakers", abbr: "BE",
-    record25: "6-8", pf25: 1720, rank25: 13, rank24: 4, rank23: 1,
-    trajectory: "down", threat: 44,
-    behavioral: "Former champion (#1 in 2023) now declining. Fading trajectory. Overvalues past glory.",
-    directive: "Exploit his overconfidence. He thinks he's better than his current roster.",
-    badge: "SELL HIGH", badgeColor: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-    tierColor: "border-blue-500/40 bg-blue-500/5",
-    memberId: "{34381793-095A-4099-B91E-04FB92B016A7}",
-  },
-];
+// NOTE: OPPONENT_PROFILES, MULTI_YEAR_RANKINGS, and COMPETITOR_DRAFT_INTEL have
+// been removed. All opponent data is now sourced live from trpc.analytics.ownerCareerStats.
 
-const MULTI_YEAR_RANKINGS = [
-  { manager: "Rod Sellers", team: "Str8FrmHell", rank23: 13, rank24: 13, rank25: 1, label: "Biggest Swing ⚡", you: true },
-  { manager: "Christian Graham", team: "Comebzck", rank23: 4, rank24: 3, rank25: 1, label: "Consistency King 👑", you: false },
-  { manager: "Jan Graham", team: "ALLFRUMTHEWEST", rank23: 5, rank24: 9, rank25: 2, label: "Trending Up 📈", you: false },
-  { manager: "Marcus Reese", team: "BLUReese6", rank23: 10, rank24: 8, rank25: 3, label: "Trending Up 📈", you: false },
-  { manager: "Demetri Clark", team: "Giv'me My Trophy", rank23: 7, rank24: 1, rank25: 4, label: "Fading 📉", you: false },
-  { manager: "Sheldon deRoux", team: "DARE2BGR8", rank23: 8, rank24: 6, rank25: 5, label: "Steady 🔄", you: false },
-  { manager: "Nate West", team: "Snake 🐍", rank23: 6, rank24: 7, rank25: 6, label: "Steady 🔄", you: false },
-  { manager: "Steffon Bizzell", team: "Winkstradamus", rank23: 11, rank24: 5, rank25: 7, label: "Volatile 🎲", you: false },
-  { manager: "Randy Broner Jr", team: "3 And A Possible", rank23: 12, rank24: 10, rank25: 8, label: "Trending Up 📈", you: false },
-  { manager: "Tony Dorsey", team: "PRIMETIME PLAYAZ", rank23: 9, rank24: 11, rank25: 9, label: "Steady 🔄", you: false },
-  { manager: "Marlon Moore", team: "TigerCommander", rank23: 10, rank24: 12, rank25: 10, label: "Steady 🔄", you: false },
-  { manager: "LOZELL STYLES", team: "SMASHVILLE TITANS", rank23: 13, rank24: 3, rank25: 12, label: "Volatile 🎲", you: false },
-  { manager: "Mark DeRoux", team: "Dominus Thus", rank23: 14, rank24: 2, rank25: 14, label: "Extreme Volatile 💥", you: false },
-  { manager: "Bruce Edwards", team: "The Playmakers", rank23: 1, rank24: 4, rank25: 13, label: "Fading 📉", you: false },
-];
+// OPPONENT_PROFILES and MULTI_YEAR_RANKINGS removed — now computed live from ownerCareerStats
 
 const DRAFT_ROUNDS = [
   { round: "Rounds 1–3", priority: "RB / WR", note: "Attack aggressively. Elite RBs are the scarcest commodity in 14-team PPR. Do NOT reach for QB.", color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" },
@@ -199,12 +44,7 @@ const DRAFT_ROUNDS = [
   { round: "Rounds 13–14", priority: "K / DEF", note: "Always last — they are interchangeable and wasteful when drafted early.", color: "text-slate-400", bg: "bg-slate-500/10 border-slate-500/30" },
 ];
 
-const COMPETITOR_DRAFT_INTEL = [
-  { name: "Christian Graham", record: "12-2 in 2025", intel: "Will keep an elite stud — removes one top player from the draft pool. Drafts methodically, no panic picks.", risk: "high" },
-  { name: "Jan Graham", record: "2,032 pts in 2025", intel: "Will keep her best player and draft aggressively regardless. Expert drafter — don't expect value to fall to you.", risk: "high" },
-  { name: "Mark DeRoux", record: "3-11 in 2025", intel: "Will draft emotionally, reaching for name recognition over value. You benefit from his reaches.", risk: "low" },
-  { name: "LOZELL STYLES", record: "Volatile (3rd→12th)", intel: "Watch round 1 for unpredictable picks. Dropped 9 spots in one year — could go either way.", risk: "medium" },
-];
+// COMPETITOR_DRAFT_INTEL removed — now computed live from ownerCareerStats
 
 const KEEPER_PRINCIPLES = [
   { step: "1", title: "What round was this player drafted in 2025?", desc: "Your keeper costs the round they were drafted. A Round 8 pick kept costs you your Round 8 slot." },
@@ -334,6 +174,7 @@ export default function Dashboard() {
   const { data: draftOrder2026Raw } = trpc.espn.draftOrder.useQuery({ season: 2026 });
   const { data: keeperHistoryRaw } = trpc.espn.keeperHistory.useQuery();
   const { data: leagueDraftData, isLoading: draftTendenciesLoading } = trpc.leagueDraftTendencies.useQuery();
+  const { data: ownerStatsData, isLoading: ownerStatsLoading } = trpc.ownerCareerStats.useQuery();
   const chatMutation = trpc.advisor.chat.useMutation();
 
   type DraftOrderEntry = { position: number; teamId: number; name?: string; owners?: string };
@@ -341,6 +182,114 @@ export default function Dashboard() {
   type KeeperHistoryEntry = { season: number; teamName: string; playerName: string; position: string; roundId: number; teamId: number };
   const draftOrder2026 = draftOrder2026Raw as DraftOrderData | null;
   const keeperHistory = (keeperHistoryRaw as KeeperHistoryEntry[]) || [];
+
+  // Live opponent profiles derived from ownerCareerStats
+  type LiveOwner = {
+    memberId: string; fullName: string; displayName: string;
+    totalWins: number; totalLosses: number; winPct: number;
+    totalPF: number; avgPF: number; championships: number;
+    playoffAppearances: number; playoffRate: number; seasonsActive: number;
+    gmArchetype: string; gmArchetypeDesc: string;
+    waiverAggression: number; tradeFrequency: number; rosterStability: number;
+    seasonRecords: { season: number; wins: number; losses: number; pf: number; rank: number }[];
+    totalAcquisitions: number; totalTrades: number;
+  };
+  const owners: LiveOwner[] = (ownerStatsData?.owners as LiveOwner[] | undefined) ?? [];
+  const ROD_KEYWORDS = ["rod", "sellers", "str8"];
+  const isRod = (o: LiveOwner) => ROD_KEYWORDS.some(k => o.fullName.toLowerCase().includes(k) || o.displayName.toLowerCase().includes(k));
+
+  // Compute live threat score: weighted combo of win%, avg PF rank, playoff rate, championships
+  const computeThreat = (o: LiveOwner): number => {
+    const winScore = Math.round(o.winPct * 40);
+    const pfScore = Math.min(30, Math.round((o.avgPF / 1900) * 30));
+    const playoffScore = Math.round((o.playoffRate / 100) * 20);
+    const champScore = Math.min(10, o.championships * 5);
+    return Math.min(99, winScore + pfScore + playoffScore + champScore);
+  };
+
+  const computeBadge = (threat: number, o: LiveOwner): { badge: string; badgeColor: string; tierColor: string } => {
+    if (threat >= 80) return { badge: "AVOID", badgeColor: "bg-red-500/20 text-red-400 border-red-500/30", tierColor: "border-red-500/40 bg-red-500/5" };
+    if (threat >= 60) return { badge: "WATCH", badgeColor: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", tierColor: "border-yellow-500/40 bg-yellow-500/5" };
+    if (o.waiverAggression < 35 && o.tradeFrequency < 35) return { badge: "BUY LOW", badgeColor: "bg-green-500/20 text-green-400 border-green-500/30", tierColor: "border-green-500/40 bg-green-500/5" };
+    if (o.rosterStability < 40) return { badge: "SELL HIGH", badgeColor: "bg-blue-500/20 text-blue-400 border-blue-500/30", tierColor: "border-blue-500/40 bg-blue-500/5" };
+    return { badge: "FAIR", badgeColor: "bg-slate-500/20 text-slate-400 border-slate-500/30", tierColor: "border-slate-500/40 bg-slate-500/5" };
+  };
+
+  const computeDirective = (o: LiveOwner, threat: number): string => {
+    if (threat >= 80) return `High-threat manager. Avoid lopsided trades. Beat ${o.fullName.split(' ')[0]} on the field.`;
+    if (o.waiverAggression >= 65) return `Active waiver manager — monitor his adds weekly. Strike on trades before he improves his roster.`;
+    if (o.tradeFrequency >= 55) return `Frequent trader. Let him offer first — he may undervalue his assets when eager to deal.`;
+    if (o.waiverAggression < 30 && o.tradeFrequency < 30) return `Low-activity manager. Target his roster early in the season when he's least engaged.`;
+    return `Standard trade approach. Fair value exchanges are appropriate with this manager.`;
+  };
+
+  const computeTrajectory = (o: LiveOwner): "up" | "down" | "steady" => {
+    const recent = o.seasonRecords.filter(s => s.season >= 2023).sort((a, b) => a.season - b.season);
+    if (recent.length < 2) return "steady";
+    const first = recent[0].rank; const last = recent[recent.length - 1].rank;
+    if (last < first - 2) return "up"; // lower rank number = better
+    if (last > first + 2) return "down";
+    return "steady";
+  };
+
+  type LiveOpp = { memberId: string; name: string; team: string; abbr: string; threat: number; badge: string; badgeColor: string; tierColor: string; trajectory: "up" | "down" | "steady"; pf25: number; rank23: number; rank24: number; rank25: number; behavioral: string; directive: string; wins25: number; losses25: number };
+  type LiveRank = { manager: string; rank23: number; rank24: number; rank25: number; label: string; you: boolean };
+  type LiveDraftItem = { name: string; record: string; intel: string; risk: string };
+  const liveOpponents = useMemo((): LiveOpp[] =>
+    owners
+      .filter(o => !isRod(o))
+      .map(o => {
+        const threat = computeThreat(o);
+        const { badge, badgeColor, tierColor } = computeBadge(threat, o);
+        const trajectory = computeTrajectory(o);
+        const abbr = o.fullName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || o.displayName.slice(0, 2).toUpperCase();
+        const rec25 = o.seasonRecords.find(s => s.season === 2025);
+        const pf25 = rec25?.pf ?? 0;
+        const rank23 = o.seasonRecords.find(s => s.season === 2023)?.rank ?? 99;
+        const rank24 = o.seasonRecords.find(s => s.season === 2024)?.rank ?? 99;
+        const rank25 = o.seasonRecords.find(s => s.season === 2025)?.rank ?? 99;
+        return { memberId: o.memberId, name: o.fullName || o.displayName, team: o.displayName, abbr, threat, badge, badgeColor, tierColor, trajectory, pf25, rank23, rank24, rank25, behavioral: o.gmArchetypeDesc, directive: computeDirective(o, threat), wins25: rec25?.wins ?? 0, losses25: rec25?.losses ?? 0 };
+      })
+      .sort((a, b) => b.threat - a.threat),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [ownerStatsData]);
+
+  const liveRankings = useMemo((): LiveRank[] =>
+    owners
+      .map(o => {
+        const you = isRod(o);
+        const rank23 = o.seasonRecords.find(s => s.season === 2023)?.rank ?? 99;
+        const rank24 = o.seasonRecords.find(s => s.season === 2024)?.rank ?? 99;
+        const rank25 = o.seasonRecords.find(s => s.season === 2025)?.rank ?? 99;
+        const delta = rank23 - rank25; // positive = improved
+        const label = delta >= 5 ? "Biggest Swing" : delta <= -5 ? "Fading" : rank25 <= 3 ? "Elite" : rank25 <= 7 ? "Playoff Tier" : "Rebuilding";
+        return { manager: o.fullName || o.displayName, rank23, rank24, rank25, label, you };
+      })
+      .filter(r => r.rank25 < 99)
+      .sort((a, b) => a.rank25 - b.rank25),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [ownerStatsData]);
+
+  const liveDraftIntel = useMemo((): LiveDraftItem[] =>
+    owners
+      .filter(o => !isRod(o))
+      .map(o => {
+        const rec25 = o.seasonRecords.find(s => s.season === 2025);
+        const record = rec25 ? `${rec25.wins}-${rec25.losses} in 2025` : `${o.seasonsActive} seasons`;
+        const risk = computeThreat(o) >= 70 ? "high" : computeThreat(o) >= 45 ? "medium" : "low";
+        const intel = o.championships > 0
+          ? `${o.championships}x champion. Will keep a proven stud — removes elite value from the pool. Drafts with championship pedigree.`
+          : o.waiverAggression >= 65
+          ? `High waiver activity (${Math.round(o.totalAcquisitions / Math.max(1, o.seasonsActive))} adds/season). Aggressively patches roster mid-draft. Expect late-round steals.`
+          : o.tradeFrequency >= 55
+          ? `Active trader (${Math.round(o.totalTrades / Math.max(1, o.seasonsActive))} trades/season). May reach for players he wants to trade for later. Watch his picks.`
+          : `${o.gmArchetype} manager. ${o.gmArchetypeDesc}`;
+        return { name: o.fullName || o.displayName, record, intel, risk };
+      })
+      .sort((a, b) => (a.risk === "high" ? -1 : b.risk === "high" ? 1 : a.risk === "medium" ? -1 : 1))
+      .slice(0, 6),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [ownerStatsData]);
 
   const cachedSeasons = manifests?.filter((m: Record<string, unknown>) => m.status === "success").length ?? 0;
 
@@ -451,7 +400,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="divide-y divide-border">
-                    {OPPONENT_PROFILES.slice(0, 6).map((opp) => (
+                    {liveOpponents.slice(0, 6).map((opp: LiveOpp) => (
                       <div key={opp.name} className="flex items-center gap-3 px-5 py-3">
                         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${opp.threat >= 85 ? "bg-red-500" : opp.threat >= 60 ? "bg-yellow-500" : "bg-emerald-500"}`} />
                         <div className="flex-1 min-w-0">
@@ -459,8 +408,8 @@ export default function Dashboard() {
                           <p className="text-xs text-muted-foreground truncate">{opp.team}</p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className="text-xs font-semibold">{opp.pf25.toLocaleString()} pts</p>
-                          <p className="text-[10px] text-muted-foreground">{opp.record25} record</p>
+                          <p className="text-xs font-semibold">{opp.pf25 > 0 ? opp.pf25.toLocaleString() : "—"} pts</p>
+                          <p className="text-[10px] text-muted-foreground">{opp.wins25}-{opp.losses25} record</p>
                         </div>
                         <div className="w-16 flex-shrink-0">
                           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -687,7 +636,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="divide-y divide-border">
-                      {MULTI_YEAR_RANKINGS.slice(0, 8).map((row) => (
+                      {(ownerStatsLoading ? [] as LiveRank[] : liveRankings).slice(0, 8).map((row: LiveRank) => (
                         <div key={row.manager} className={`flex items-center gap-3 px-5 py-2 ${row.you ? "bg-blue-500/8" : ""}`}>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
@@ -724,8 +673,11 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1.5">
               <ChevronRight className="w-3 h-3" /> Click any card for a full deep-dive profile
             </p>
+            {ownerStatsLoading && (
+              <div className="py-12 text-center text-muted-foreground text-sm">Loading opponent profiles…</div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {OPPONENT_PROFILES.map((opp) => (
+              {liveOpponents.map((opp: LiveOpp) => (
                 <Card
                   key={opp.name + opp.team}
                   className={`card-glow border ${opp.tierColor} cursor-pointer hover:scale-[1.02] transition-transform`}
@@ -817,7 +769,7 @@ export default function Dashboard() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {COMPETITOR_DRAFT_INTEL.map((c) => (
+                    {(ownerStatsLoading ? [] as LiveDraftItem[] : liveDraftIntel).map((c: LiveDraftItem) => (
                       <div key={c.name} className="flex gap-3 p-3 rounded-lg bg-accent/40 border border-border">
                         <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${c.risk === "high" ? "bg-red-500" : c.risk === "medium" ? "bg-yellow-500" : "bg-emerald-500"}`} />
                         <div>

@@ -7,6 +7,7 @@ import {
   varchar,
   json,
   index,
+  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
@@ -35,7 +36,10 @@ export const espnSeasonCache = mysqlTable(
     fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (t) => [index("idx_season_view").on(t.season, t.viewName)]
+  (t) => [
+    // unique constraint enables onDuplicateKeyUpdate to work as a true upsert
+    uniqueIndex("uq_season_view").on(t.season, t.viewName),
+  ]
 );
 
 export type EspnSeasonCache = typeof espnSeasonCache.$inferSelect;

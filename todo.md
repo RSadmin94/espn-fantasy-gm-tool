@@ -376,3 +376,12 @@
 - [x] DB query: seasons 2018–2024 all status=success but lastRefreshedAt=April 29 (10 days ago), exceeding 7-day threshold — staleFlag=true for 7 seasons, staleSeasons=7>3 triggers banner
 - [x] Fix: closed seasons (< 2025) now always get staleFlag=false — their data is immutable and should never trigger a freshness warning
 - [x] Live health check now returns overallHealth=healthy, staleSeasons=0, failedSeasons=0
+
+## BUG: Opponent Intel Data Incorrect — FIXED
+- [x] Root cause 1: espn_season_cache had 3–5 duplicate rows per season — getCachedView had no ORDER BY so returned stale April 29 data instead of latest refresh
+- [x] Fix: getCachedView now orders by fetchedAt DESC; added unique constraint on (season, viewName) via migration 0007; deleted all duplicate rows via SQL
+- [x] Root cause 2: Dashboard had hardcoded OPPONENT_PROFILES (14 cards), MULTI_YEAR_RANKINGS (14 rows), COMPETITOR_DRAFT_INTEL (4 items) with wrong records, wrong pronouns (Jan Graham labeled ‘her’), stale data
+- [x] Fix: Removed all three hardcoded arrays; replaced with live ownerCareerStats data — threat scores, 3-year rank history, behavioral text, and draft intel all computed from real ESPN cache
+- [x] Champion detection verified correct across all 8 seasons (2018–2025) — Rod Sellers is 2025 champion
+- [x] Transaction counts confirmed accurate from live ESPN cache
+- [x] 155 tests passing, 0 TypeScript errors

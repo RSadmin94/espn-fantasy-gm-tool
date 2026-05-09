@@ -53,8 +53,13 @@ export async function getUserByOpenId(openId: string) {
 export async function getCachedView(season: number, viewName: string) {
   const db = await getDb();
   if (!db) return null;
+  // ORDER BY fetchedAt DESC ensures we always get the most recent row.
+  // Without this, duplicate rows (from missing unique constraint) could
+  // return stale data from an earlier refresh instead of the latest one.
   const result = await db.select().from(espnSeasonCache)
-    .where(and(eq(espnSeasonCache.season, season), eq(espnSeasonCache.viewName, viewName))).limit(1);
+    .where(and(eq(espnSeasonCache.season, season), eq(espnSeasonCache.viewName, viewName)))
+    .orderBy(desc(espnSeasonCache.fetchedAt))
+    .limit(1);
   return result[0] ?? null;
 }
 

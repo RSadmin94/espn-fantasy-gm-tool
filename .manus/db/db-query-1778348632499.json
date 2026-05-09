@@ -1,0 +1,35 @@
+{
+  "query": "SELECT viewName, LENGTH(CAST(payload AS CHAR)) as payload_size, fetchedAt FROM espn_season_cache WHERE season = 2025 ORDER BY viewName;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT viewName, LENGTH(CAST(payload AS CHAR)) as payload_size, fetchedAt FROM espn_season_cache WHERE season = 2025 ORDER BY viewName;",
+  "rows": [
+    {
+      "viewName": "combined",
+      "payload_size": "2408611",
+      "fetchedAt": "2026-04-29 19:39:35"
+    },
+    {
+      "viewName": "combined",
+      "payload_size": "2408611",
+      "fetchedAt": "2026-04-29 19:40:17"
+    },
+    {
+      "viewName": "combined",
+      "payload_size": "2408611",
+      "fetchedAt": "2026-04-29 19:51:04"
+    },
+    {
+      "viewName": "combined",
+      "payload_size": "2408611",
+      "fetchedAt": "2026-04-29 19:54:39"
+    },
+    {
+      "viewName": "combined",
+      "payload_size": "2408611",
+      "fetchedAt": "2026-05-09 16:21:39"
+    }
+  ],
+  "messages": [],
+  "stdout": "viewName\tpayload_size\tfetchedAt\ncombined\t2408611\t2026-04-29 19:39:35\ncombined\t2408611\t2026-04-29 19:40:17\ncombined\t2408611\t2026-04-29 19:51:04\ncombined\t2408611\t2026-04-29 19:54:39\ncombined\t2408611\t2026-05-09 16:21:39\n",
+  "stderr": "",
+  "execution_time_ms": 786
+}
