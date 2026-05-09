@@ -3,6 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DataHealth from "@/pages/DataHealth";
 import DataRefresh from "@/pages/DataRefresh";
+import ScheduledRefresh from "@/pages/ScheduledRefresh";
 
 export default function DataCenter() {
   return (
@@ -16,6 +17,9 @@ export default function DataCenter() {
         <TabsTrigger value="data-refresh" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium">
           Data Refresh
         </TabsTrigger>
+        <TabsTrigger value="scheduled-refresh" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium">
+          Auto-Refresh
+        </TabsTrigger>
           </TabsList>
         </div>
     <TabsContent value="data-health" className="mt-0">
@@ -23,6 +27,9 @@ export default function DataCenter() {
     </TabsContent>
     <TabsContent value="data-refresh" className="mt-0">
       <DataRefresh />
+    </TabsContent>
+    <TabsContent value="scheduled-refresh" className="mt-0">
+      <ScheduledRefresh />
     </TabsContent>
       </Tabs>
     </AppLayout>

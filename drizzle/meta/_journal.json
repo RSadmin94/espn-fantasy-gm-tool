@@ -36,6 +36,20 @@
       "when": 1778340555414,
       "tag": "0004_yellow_anita_blake",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1778345036779,
+      "tag": "0005_ordinary_onslaught",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1778345114091,
+      "tag": "0006_special_lady_bullseye",
+      "breakpoints": true
     }
   ]
 }

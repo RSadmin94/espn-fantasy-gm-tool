@@ -352,3 +352,14 @@
 - [x] Refresh endpoint: skip closed seasons already cached with status=success (unless forceRefresh=true)
 - [x] DataRefresh UI: amber Lock badge on closed seasons, skip summary line, Force Re-fetch toggle, improved log with skipped/success/error icons
 - [x] Only open seasons (2025, 2026) refresh by default; closed+cached seasons auto-skipped
+
+## FEATURE: Weekly Auto-Refresh Heartbeat Job — DONE
+- [x] Apply §5c SDK patches: manusTypes.ts (add taskUid field) + sdk.ts (cron short-circuit + AuthenticatedUser type + buildCronUser)
+- [x] Add /api/scheduled/espn-refresh Express handler (server/scheduledRefresh.ts) — authenticates cron token, runs refresh for 2025+2026, records run status in DB
+- [x] Mount handler in server/_core/index.ts before Vite fallthrough
+- [x] Add scheduled_jobs table to drizzle/schema.ts (migrations 0005, 0006 applied)
+- [x] Add DB helpers: getScheduledJobs, getScheduledJobByName, getScheduledJobByTaskUid, upsertScheduledJob, updateScheduledJobRun
+- [x] Add schedule tRPC router: list (public), create/pause/resume/delete (protected) procedures
+- [x] Build ScheduledRefresh.tsx management UI: status badge, next run, last run, task UID, pause/resume/delete buttons
+- [x] Add Auto-Refresh tab to DataCenter.tsx
+- [x] 155 tests passing, 0 TypeScript errors

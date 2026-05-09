@@ -5,7 +5,9 @@ import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
-import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth } from "./db";
+import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob } from "./db";
+import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
+import { parse as parseCookie } from "cookie";
 import {
   fetchEspnViews,
   fetchEspnViewsHardened,
@@ -3429,6 +3431,74 @@ Be concise, data-driven, and specific. Reference actual team names and player na
       const weeks = await getCachedWeeksForSeason(input.season);
       return { season: input.season, cachedWeeks: weeks, weekCount: weeks.length };
     }),
+  }),
+
+  schedule: router({
+    /** Get all scheduled jobs */
+    list: publicProcedure.query(async () => {
+      return getScheduledJobs();
+    }),
+
+    /** Create or re-register the weekly ESPN refresh Heartbeat job */
+    create: protectedProcedure
+      .input(z.object({
+        cronExpression: z.string().default("0 0 6 * * 1"), // Monday 06:00 UTC
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const sessionToken = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
+        const job = await createHeartbeatJob({
+          name: "weekly-espn-refresh",
+          cron: input.cronExpression,
+          path: "/api/scheduled/espn-refresh",
+          description: input.description ?? "Weekly ESPN data refresh for seasons 2025 and 2026",
+        }, sessionToken);
+        await upsertScheduledJob({
+          name: "weekly-espn-refresh",
+          description: input.description ?? "Weekly ESPN data refresh for seasons 2025 and 2026",
+          cronExpression: input.cronExpression,
+          callbackPath: "/api/scheduled/espn-refresh",
+          taskUid: job.taskUid,
+          isEnabled: true,
+          nextRunAt: job.nextExecutionAt ? new Date(job.nextExecutionAt) : undefined,
+        });
+        return { taskUid: job.taskUid, nextExecutionAt: job.nextExecutionAt };
+      }),
+
+    /** Pause the weekly ESPN refresh job */
+    pause: protectedProcedure
+      .input(z.object({ taskUid: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const sessionToken = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
+        await updateHeartbeatJob(input.taskUid, { enable: false }, sessionToken);
+        await upsertScheduledJob({ name: "weekly-espn-refresh", taskUid: input.taskUid, isEnabled: false });
+        return { ok: true };
+      }),
+
+    /** Resume the weekly ESPN refresh job */
+    resume: protectedProcedure
+      .input(z.object({ taskUid: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const sessionToken = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
+        const result = await updateHeartbeatJob(input.taskUid, { enable: true }, sessionToken);
+        await upsertScheduledJob({
+          name: "weekly-espn-refresh",
+          taskUid: input.taskUid,
+          isEnabled: true,
+          nextRunAt: result.nextExecutionAt ? new Date(result.nextExecutionAt) : undefined,
+        });
+        return { ok: true, nextExecutionAt: result.nextExecutionAt };
+      }),
+
+    /** Delete the weekly ESPN refresh job */
+    delete: protectedProcedure
+      .input(z.object({ taskUid: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const sessionToken = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
+        await deleteHeartbeatJob(input.taskUid, sessionToken);
+        await upsertScheduledJob({ name: "weekly-espn-refresh", taskUid: input.taskUid, isEnabled: false });
+        return { ok: true };
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

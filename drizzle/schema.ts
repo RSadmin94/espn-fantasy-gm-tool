@@ -154,3 +154,22 @@ export const weeklyPlayerStats = mysqlTable(
 
 export type WeeklyPlayerStats = typeof weeklyPlayerStats.$inferSelect;
 export type InsertWeeklyPlayerStats = typeof weeklyPlayerStats.$inferInsert;
+
+// ─── Scheduled Jobs ───────────────────────────────────────────────────────────
+export const scheduledJobs = mysqlTable("scheduled_jobs", {
+  id: int("id").primaryKey().autoincrement(),
+  name: text("name").notNull(),
+  description: text("description"),
+  cronExpression: text("cronExpression"),
+  callbackPath: text("callbackPath"),
+  taskUid: text("taskUid"),
+  isEnabled: int("isEnabled").default(1).notNull(), // 1=enabled, 0=disabled
+  lastRunAt: timestamp("lastRunAt"),
+  nextRunAt: timestamp("nextRunAt"),
+  lastRunStatus: mysqlEnum("lastRunStatus", ["success", "partial", "failed"]),
+  lastRunDetails: text("lastRunDetails"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ScheduledJob = typeof scheduledJobs.$inferSelect;
+export type InsertScheduledJob = typeof scheduledJobs.$inferInsert;

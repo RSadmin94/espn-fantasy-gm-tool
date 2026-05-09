@@ -1,0 +1,1 @@
+ALTER TABLE `scheduled_jobs` MODIFY COLUMN `isEnabled` int NOT NULL DEFAULT 1;

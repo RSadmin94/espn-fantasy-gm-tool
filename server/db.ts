@@ -4,6 +4,7 @@ import {
   InsertUser, users, espnSeasonCache, refreshManifest, chatHistory,
   pickTrades, InsertPickTrade, espnViewHealth, InsertEspnViewHealth,
   weeklyPlayerStats, InsertWeeklyPlayerStats,
+  scheduledJobs, ScheduledJob,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -257,4 +258,56 @@ export async function deleteWeeklyStatsForSeason(season: number): Promise<void> 
   const db = await getDb();
   if (!db) return;
   await db.delete(weeklyPlayerStats).where(eq(weeklyPlayerStats.season, season));
+}
+
+// ─── Scheduled Jobs ───────────────────────────────────────────────────────────
+export async function getScheduledJobs(): Promise<ScheduledJob[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(scheduledJobs).orderBy(scheduledJobs.name);
+}
+export async function getScheduledJobByName(name: string): Promise<ScheduledJob | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(scheduledJobs).where(eq(scheduledJobs.name, name)).limit(1);
+  return rows[0] ?? null;
+}
+export async function getScheduledJobByTaskUid(taskUid: string): Promise<ScheduledJob | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(scheduledJobs).where(eq(scheduledJobs.taskUid, taskUid)).limit(1);
+  return rows[0] ?? null;
+}
+export async function upsertScheduledJob(data: {
+  name: string; description?: string; cronExpression?: string;
+  callbackPath?: string; taskUid?: string; isEnabled?: boolean; nextRunAt?: Date;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const isEnabledInt = data.isEnabled === false ? 0 : 1;
+  const existing = await getScheduledJobByName(data.name);
+  if (existing) {
+    await db.update(scheduledJobs).set({
+      description: data.description ?? existing.description,
+      cronExpression: data.cronExpression ?? existing.cronExpression,
+      callbackPath: data.callbackPath ?? existing.callbackPath,
+      taskUid: data.taskUid ?? existing.taskUid,
+      isEnabled: isEnabledInt,
+      nextRunAt: data.nextRunAt ?? existing.nextRunAt,
+      updatedAt: new Date(),
+    }).where(eq(scheduledJobs.name, data.name));
+  } else {
+    await db.insert(scheduledJobs).values({
+      name: data.name, description: data.description ?? null,
+      cronExpression: data.cronExpression ?? null, callbackPath: data.callbackPath ?? null,
+      taskUid: data.taskUid ?? null, isEnabled: isEnabledInt, nextRunAt: data.nextRunAt ?? null,
+    });
+  }
+}
+export async function updateScheduledJobRun(taskUid: string, status: "success" | "partial" | "failed", details?: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(scheduledJobs)
+    .set({ lastRunAt: new Date(), lastRunStatus: status, lastRunDetails: details ?? null, updatedAt: new Date() })
+    .where(eq(scheduledJobs.taskUid, taskUid));
 }
