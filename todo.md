@@ -468,3 +468,11 @@
 - [x] Add getPlayerDraftHistory tRPC procedure: returns which opponents have drafted this player and in what round/year
 - [x] Wire into DraftBoard.tsx: Info icon on each row opens the drawer
 - [x] Add Draft Collision Risk badge to each player row in DraftBoard.tsx showing how many opponents historically target that position in the same round tier (HIGH/MED/LOW)
+
+## NEW: Saved Mocks — Side-by-Side Comparison View
+- [x] Select any 2 drafts from the list (numbered badges: Draft A / Draft B) and click Compare Selected
+- [x] Overview tab: head-to-head metrics (grade, avg ECR, total VBD, avg value surplus, value picks, reaches), positional construction bars, positional breakdown table, advantage summary
+- [x] Pick-by-Pick tab: round-by-round table with ADP gap (green = value, red = reach) for both drafts
+- [x] All Teams tab: full positional construction cards for every team in both drafts side-by-side
+- [x] Winner banner: shows which draft wins on more metrics (or "Even match")
+- [x] 195 tests passing, 0 TypeScript errors
