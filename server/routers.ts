@@ -2701,7 +2701,25 @@ Be concise, data-driven, and specific. Reference actual team names and player na
         if (data) {
           const teams = normalizeTeams(data);
           const settings = normalizeSettings(data);
-          const allPlayers = normalizeRosters(data) as PlayerRow[];
+          const teamOwnerMapAdvisor: Record<number, string> = {};
+          for (const t of teams) teamOwnerMapAdvisor[t.teamId as number] = t.owners as string;
+          const allPlayers: PlayerRow[] = (normalizeRosters(data) as unknown[]).map((r: unknown) => {
+            const p = r as Record<string, unknown>;
+            return {
+              playerId: p.playerId as number,
+              playerName: (p.playerName as string) || "Unknown",
+              position: (p.position as string) || "?",
+              teamId: p.teamId as number,
+              ownerName: teamOwnerMapAdvisor[p.teamId as number] || "Unknown",
+              seasonPoints: (p.appliedTotal as number) || 0,
+              avgPoints: (p.appliedAverage as number) || 0,
+              projectedTotal: (p.projectedTotal as number) || null,
+              keeperValue: (p.keeperValue as number) || 0,
+              keeperValueFuture: (p.keeperValueFuture as number) || 0,
+              injuryStatus: (p.injuryStatus as string) || "",
+              appliedStats: (p.appliedStats as Record<string, number>) || {},
+            };
+          });
           leagueContext += `\n\nCurrent Season: ${season}`;
           leagueContext += `\nStatus: ${settings.isActive ? "Active" : "Offseason"}, Week ${settings.currentMatchupPeriod || "N/A"}`;
           leagueContext += `\n\nStandings:\n`;
