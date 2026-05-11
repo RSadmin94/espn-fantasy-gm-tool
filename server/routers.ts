@@ -2727,6 +2727,60 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
         });
       }
 
+      // ── Compute pick tradability scores for target owner's picks ──────────
+      // Score each of the target owner's picks based on their DNA behavior.
+      // High tradability = owner has high trade frequency, trades more when losing,
+      // and historically gives away picks in this round range.
+      function calcPickTradability(pick: PickAsset, dna: import("./leagueDNA").ManagerDNA | null): {
+        score: number; // 0-100
+        label: "HOT" | "WARM" | "NEUTRAL" | "COLD";
+        reason: string;
+      } {
+        if (!dna) return { score: 50, label: "NEUTRAL", reason: "No behavioral data" };
+        let score = 50;
+        const reasons: string[] = [];
+        // Trade frequency: high traders are more likely to move any pick
+        const tradeFreqBonus = Math.round((dna.trade.tradeFrequency - 50) * 0.4);
+        score += tradeFreqBonus;
+        if (dna.trade.tradeFrequency >= 70) reasons.push(`Active trader (${dna.trade.avgTradesPerSeason.toFixed(1)} trades/season)`);
+        // Loss-trade ratio: if they trade more when losing, and they are currently losing, boost
+        if (dna.trade.lossTradeRatio > 1.3) {
+          score += 10;
+          reasons.push(`Trades ${dna.trade.lossTradeRatio.toFixed(1)}x more when losing`);
+        }
+        // Desperation triggers: if they have a history of panic trades, boost
+        if (dna.trade.desperation_triggers >= 2) {
+          score += 8;
+          reasons.push(`${dna.trade.desperation_triggers} desperation trade seasons`);
+        }
+        // Round preference: late-round picks (6+) are easier to trade away
+        if (pick.round >= 6) {
+          score += 12;
+          reasons.push(`Late-round pick (Rd ${pick.round}) — historically easier to move`);
+        } else if (pick.round >= 3) {
+          score += 5;
+          reasons.push(`Mid-round pick (Rd ${pick.round})`);
+        } else {
+          score -= 10;
+          reasons.push(`Premium pick (Rd ${pick.round}) — owners rarely trade these`);
+        }
+        // Exploitability: highly exploitable owners are more likely to accept any deal
+        if (dna.exploitabilityScore >= 70) {
+          score += 8;
+          reasons.push(`Highly exploitable (score: ${dna.exploitabilityScore}/100)`);
+        }
+        // Tilt: tilting owners are more desperate
+        if (dna.tilt.tiltScore >= 60) {
+          score += 8;
+          reasons.push(`Currently tilting (${dna.tilt.tiltLabel})`);
+        }
+        score = Math.max(0, Math.min(100, score));
+        const label: "HOT" | "WARM" | "NEUTRAL" | "COLD" =
+          score >= 75 ? "HOT" :
+          score >= 55 ? "WARM" :
+          score >= 35 ? "NEUTRAL" : "COLD";
+        return { score, label, reason: reasons.slice(0, 2).join(" · ") || "Average tradability" };
+      }
       // Map to legacy offerOptions shape for downstream LLM + UI compatibility
       const offerOptions = balancedOffers.map(bo => ({
         players: [] as never[],
@@ -2884,7 +2938,14 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
           totalValue: o.totalValue,
           valueRatio: targetValue > 0 ? Math.round((o.totalValue / targetValue) * 100) : 0,
           rodGives: o.rodGives,
-          rodReceives: o.rodReceives,
+          rodReceives: {
+            ...o.rodReceives,
+            // Enrich each received pick with a tradability score
+            pickAssets: o.rodReceives.pickAssets.map(pk => ({
+              ...pk,
+              tradability: calcPickTradability(pk, dnaProfile),
+            })),
+          },
           valueRatioPct: o.valueRatioPct,
         })),
         rodAvailablePicks: rodAllPicks.map(pk => ({

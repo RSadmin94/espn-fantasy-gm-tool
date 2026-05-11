@@ -363,15 +363,38 @@ export default function TradeOfferGenerator() {
                             {/* Rod Receives */}
                             <div className="space-y-1.5">
                               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Rod Receives</p>
-                              {(receives?.picks ?? [result.targetName]).map((pick: string, j: number) => (
-                                <div key={j} className="flex items-center gap-1.5">
-                                  <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 text-xs font-mono">GET</Badge>
-                                  <span className="text-sm text-foreground font-medium">{pick}</span>
-                                  {receives?.pickAssets?.[j] && (
-                                    <span className="text-xs text-muted-foreground ml-auto">{receives.pickAssets[j].value.toLocaleString()}</span>
-                                  )}
-                                </div>
-                              ))}
+                              {(receives?.picks ?? [result.targetName]).map((pick: string, j: number) => {
+                                const pa = receives?.pickAssets?.[j];
+                                const trad = pa?.tradability;
+                                const tradBadge = trad?.label === "HOT"
+                                  ? { cls: "bg-red-500/20 text-red-400 border-red-500/30", icon: "🔥" }
+                                  : trad?.label === "WARM"
+                                  ? { cls: "bg-orange-500/20 text-orange-400 border-orange-500/30", icon: "⚡" }
+                                  : trad?.label === "COLD"
+                                  ? { cls: "bg-slate-500/20 text-slate-400 border-slate-500/30", icon: "❄️" }
+                                  : null;
+                                return (
+                                  <div key={j} className="space-y-0.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 text-xs font-mono">GET</Badge>
+                                      <span className="text-sm text-foreground font-medium">{pick}</span>
+                                      {pa && (
+                                        <span className="text-xs text-muted-foreground ml-auto">{pa.value.toLocaleString()}</span>
+                                      )}
+                                    </div>
+                                    {tradBadge && trad && (
+                                      <div className="flex items-center gap-1.5 pl-8">
+                                        <Badge className={`text-[10px] border px-1.5 py-0 ${tradBadge.cls}`}>
+                                          {tradBadge.icon} {trad.label}
+                                        </Badge>
+                                        <span className="text-[10px] text-muted-foreground truncate" title={trad.reason}>
+                                          {trad.reason}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                               <div className="text-xs text-muted-foreground pt-0.5">
                                 Total: <span className="font-semibold text-foreground">{(receives?.totalValue ?? result.targetValue).toLocaleString()}</span>
                               </div>
