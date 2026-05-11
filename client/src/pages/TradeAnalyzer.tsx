@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import AppLayout from "@/components/AppLayout";
 import SeasonSelector from "@/components/SeasonSelector";
 import { trpc } from "@/lib/trpc";
@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeftRight, Plus, X, Brain, Scale, Loader2, TrendingUp, TrendingDown, Minus, ChevronRight } from "lucide-react";
+import { ArrowLeftRight, Plus, X, Brain, Scale, Loader2, TrendingUp, TrendingDown, Minus, ChevronRight, Trophy } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
@@ -373,6 +373,18 @@ export default function TradeAnalyzer() {
         picksB: picksB.map(p => ({ round: p.round, pick: p.pick })),
       });
       setResult(res as unknown as TradeResult);
+      // Phase 5: fire championship what-if delta after trade result
+      if (sideA.length > 0 && sideB.length > 0) {
+        setChampDeltaLoading(true);
+        setChampDelta(null);
+        whatIfMutation.mutateAsync({
+          season,
+          beforeLineup: sideA.map(p => ({ playerId: p.playerId, playerName: p.playerName, position: p.position, projectedPoints: p.avgPoints, volatilityMultiplier: 1 })),
+          afterLineup: sideB.map(p => ({ playerId: p.playerId, playerName: p.playerName, position: p.position, projectedPoints: p.avgPoints, volatilityMultiplier: 1 })),
+          decisionDescription: `Trade: give ${sideA.map(p => p.playerName).join(", ")} for ${sideB.map(p => p.playerName).join(", ")}`,
+          simCount: 500,
+        }).then(d => setChampDelta(d as any)).catch(() => {}).finally(() => setChampDeltaLoading(false));
+      }
     } catch (e) {
       toast.error("Trade analysis failed. Make sure ESPN data is synced for this season.");
     } finally {
@@ -387,6 +399,11 @@ export default function TradeAnalyzer() {
         result.pickValueA, result.pickValueB, 1
       )
     : 1;
+
+  // Phase 5: Championship what-if delta — runs after trade result is available
+  const [champDelta, setChampDelta] = useState<{ champProbabilityBefore: number; champProbabilityAfter: number; interpretation: string } | null>(null);
+  const [champDeltaLoading, setChampDeltaLoading] = useState(false);
+  const whatIfMutation = trpc.champ.whatIfDelta.useMutation();
 
   return (
     <AppLayout title="Trade Analyzer" subtitle="Math-first trade evaluation — VORP, ROS value, keeper bonus, positional scarcity">
@@ -593,6 +610,56 @@ export default function TradeAnalyzer() {
                 <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                   {result.aiVerdict}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Phase 5: Championship Equity Impact */}
+            <Card className="card-glow bg-card border-border border-yellow-500/20">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-yellow-400" /> Championship Equity Impact
+                  <span className="ml-auto text-[9px] bg-yellow-500/10 text-yellow-300 border border-yellow-500/30 rounded px-1.5 py-0.5">Phase 5</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {champDeltaLoading && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Simulating 500 season paths to calculate championship probability delta…
+                  </div>
+                )}
+                {champDelta && (() => {
+                  const d = champDelta;
+                  const delta = d.champProbabilityAfter - d.champProbabilityBefore;
+                  const isPositive = delta > 0.5;
+                  const isNegative = delta < -0.5;
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <div className="text-xs text-muted-foreground">Before trade</div>
+                          <div className="text-2xl font-black text-foreground">{d.champProbabilityBefore.toFixed(1)}%</div>
+                        </div>
+                        <div className={`text-3xl font-black flex items-center gap-1 ${
+                          isPositive ? 'text-emerald-400' : isNegative ? 'text-red-400' : 'text-muted-foreground'
+                        }`}>
+                          {isPositive ? <TrendingUp className="w-6 h-6" /> : isNegative ? <TrendingDown className="w-6 h-6" /> : <Minus className="w-6 h-6" />}
+                          {delta > 0 ? '+' : ''}{delta.toFixed(1)}%
+                        </div>
+                        <div className="space-y-0.5 text-right">
+                          <div className="text-xs text-muted-foreground">After trade</div>
+                          <div className="text-2xl font-black text-foreground">{d.champProbabilityAfter.toFixed(1)}%</div>
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
+                        <p className="text-xs text-foreground leading-relaxed">{d.interpretation}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+                {!champDeltaLoading && !champDelta && (
+                  <p className="text-xs text-muted-foreground">Championship equity impact will appear after running trade analysis.</p>
+                )}
               </CardContent>
             </Card>
 

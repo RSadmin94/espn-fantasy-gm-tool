@@ -522,3 +522,13 @@
 - [x] Build War Room 5-agent debate panel UI in StartSit.tsx (mode toggle, verdict cards, consensus bar, disagreement list)
 - [x] Verify TypeScript 0 errors after integration
 - [x] Verify 195 tests still pass after integration
+
+## Phase 5 — Championship Equity Engine
+- [x] Copy championshipEngine.ts and champRouter.ts into server/
+- [x] Edit routers.ts: add import for champRouter
+- [x] Edit routers.ts: mount champ: champRouter inside appRouter
+- [x] Fix Map iterator TypeScript error in championshipEngine.ts
+- [x] Build Championship Equity tab in Command Center (Full Report, League Rankings, Variance Mode Advice)
+- [x] Add Championship Impact card to Trade Analyzer (before/after champ % delta using whatIfDelta mutation)
+- [x] Verify TypeScript 0 errors after integration
+- [x] Verify 195 tests still pass after integration

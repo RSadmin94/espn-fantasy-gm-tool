@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Dashboard from "@/pages/Dashboard";
 import Standings from "@/pages/Standings";
 import Matchups from "@/pages/Matchups";
+import ChampionshipEquity from "@/pages/ChampionshipEquity";
 
 export default function CommandCenter() {
   return (
@@ -11,26 +12,32 @@ export default function CommandCenter() {
       <Tabs defaultValue="war-room" className="w-full">
         <div className="px-6 pt-4 border-b border-border">
           <TabsList className="bg-transparent p-0 h-auto gap-1">
-        <TabsTrigger value="war-room" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium">
-          War Room
-        </TabsTrigger>
-        <TabsTrigger value="standings" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium">
-          Standings
-        </TabsTrigger>
-        <TabsTrigger value="matchups" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium">
-          Matchups
-        </TabsTrigger>
+            <TabsTrigger value="war-room" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium">
+              War Room
+            </TabsTrigger>
+            <TabsTrigger value="standings" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium">
+              Standings
+            </TabsTrigger>
+            <TabsTrigger value="matchups" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium">
+              Matchups
+            </TabsTrigger>
+            <TabsTrigger value="champ-equity" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium">
+              🏆 Champ Equity
+            </TabsTrigger>
           </TabsList>
         </div>
-    <TabsContent value="war-room" className="mt-0">
-      <Dashboard />
-    </TabsContent>
-    <TabsContent value="standings" className="mt-0">
-      <Standings />
-    </TabsContent>
-    <TabsContent value="matchups" className="mt-0">
-      <Matchups />
-    </TabsContent>
+        <TabsContent value="war-room" className="mt-0">
+          <Dashboard />
+        </TabsContent>
+        <TabsContent value="standings" className="mt-0">
+          <Standings />
+        </TabsContent>
+        <TabsContent value="matchups" className="mt-0">
+          <Matchups />
+        </TabsContent>
+        <TabsContent value="champ-equity" className="mt-0">
+          <ChampionshipEquity />
+        </TabsContent>
       </Tabs>
     </AppLayout>
   );
