@@ -506,3 +506,10 @@
 - [x] Wire buildDNAPromptBlock into advisor.chat leagueContext (after Phase 1 injury injection)
 - [x] Verify TypeScript 0 errors after integration
 - [x] Verify 195 tests still pass after integration
+
+## DNA × Trade Offer Generator
+- [x] Add opponent selector dropdown to Trade Offer Generator UI (populated from dna.leagueProfiles)
+- [x] Show DNA summary card for selected opponent (archetype, exploitability, tilt risk, top exploit, trade window)
+- [x] Wire dna.managerProfile into the trade.generateOffer server procedure — inject DNA prompt block before LLM call
+- [x] Update the LLM system prompt to use opponent DNA facts to customize offer framing, asset targeting, and negotiation angle
+- [x] Verify TypeScript 0 errors and 195 tests still pass

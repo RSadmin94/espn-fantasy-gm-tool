@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeftRight, Target, TrendingUp, Brain, MessageSquare, AlertTriangle, Clock, Star } from "lucide-react";
+import {
+  ArrowLeftRight, Target, TrendingUp, Brain, MessageSquare,
+  AlertTriangle, Clock, Star, Dna, Zap, ShieldAlert, BarChart3,
+} from "lucide-react";
 
 const DEAL_RATING_COLORS: Record<string, string> = {
   EXCELLENT: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -29,11 +32,23 @@ const VALUE_RATIO_LABEL = (ratio: number) => {
   return "UNDERPAY";
 };
 
+const EXPLOIT_COLOR = (score: number) => {
+  if (score >= 70) return { bar: "bg-red-500", text: "text-red-400", label: "HIGHLY EXPLOITABLE" };
+  if (score >= 50) return { bar: "bg-orange-500", text: "text-orange-400", label: "MODERATELY EXPLOITABLE" };
+  if (score >= 30) return { bar: "bg-yellow-500", text: "text-yellow-400", label: "MARKET-AWARE" };
+  return { bar: "bg-emerald-500", text: "text-emerald-400", label: "SHARK" };
+};
+
+const TILT_COLOR = (label: string) => {
+  if (label === "High Tilt Risk") return "bg-red-500/20 text-red-400 border-red-500/30";
+  if (label === "Moderate Tilt") return "bg-orange-500/20 text-orange-400 border-orange-500/30";
+  if (label === "Steady") return "bg-blue-500/20 text-blue-400 border-blue-500/30";
+  return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+};
+
 export default function TradeOfferGenerator() {
   const [targetInput, setTargetInput] = useState("");
   const [targetType, setTargetType] = useState<"player" | "pick">("player");
-  const [submitted, setSubmitted] = useState(false);
-  const [queryInput, setQueryInput] = useState({ targetInput: "", targetType: "player" as "player" | "pick" });
 
   const mutation = trpc.tradeOfferGenerator.useMutation();
 
@@ -44,6 +59,7 @@ export default function TradeOfferGenerator() {
 
   const result = mutation.data;
   const strategy = result?.strategy as any;
+  const dna = result?.dnaProfile as any;
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -53,8 +69,16 @@ export default function TradeOfferGenerator() {
           <div className="p-2 rounded-lg bg-orange-500/20">
             <ArrowLeftRight className="h-6 w-6 text-orange-400" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Trade Offer Generator</h1>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-foreground">Trade Offer Generator</h1>
+              {dna && (
+                <Badge className="bg-purple-500/20 text-purple-400 border border-purple-500/30 text-xs gap-1">
+                  <Dna className="h-3 w-3" />
+                  DNA-Powered
+                </Badge>
+              )}
+            </div>
             <p className="text-muted-foreground text-sm">
               Enter a player or pick you want — get a fair offer, GM intel, and AI negotiation strategy
             </p>
@@ -70,7 +94,6 @@ export default function TradeOfferGenerator() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Type selector */}
             <div className="flex gap-2">
               <Button
                 variant={targetType === "player" ? "default" : "outline"}
@@ -119,7 +142,7 @@ export default function TradeOfferGenerator() {
             )}
 
             <p className="text-xs text-muted-foreground">
-              Uses 2025 ESPN fantasy stats, PPR scoring rules, pick value chart, and GM behavioral profiles to build a targeted offer.
+              Uses 2025 ESPN fantasy stats, PPR scoring rules, pick value chart, GM behavioral profiles, and Phase 3 League DNA to build a targeted offer.
             </p>
           </CardContent>
         </Card>
@@ -138,6 +161,11 @@ export default function TradeOfferGenerator() {
                         {result.targetStats && (
                           <Badge variant="outline" className="text-xs border-orange-500/30 text-orange-400">
                             {result.targetStats.position}
+                          </Badge>
+                        )}
+                        {dna && (
+                          <Badge className={`text-xs border ${TILT_COLOR(dna.tiltLabel)}`}>
+                            {dna.tiltLabel}
                           </Badge>
                         )}
                       </div>
@@ -165,6 +193,11 @@ export default function TradeOfferGenerator() {
                     <div className="text-right">
                       <div className="text-2xl font-bold text-orange-400">{result.targetValue.toLocaleString()}</div>
                       <div className="text-xs text-muted-foreground">Est. Value</div>
+                      {dna && (
+                        <div className={`text-xs font-semibold mt-1 ${EXPLOIT_COLOR(dna.exploitabilityScore).text}`}>
+                          Exploit: {dna.exploitabilityScore}/100
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -192,6 +225,12 @@ export default function TradeOfferGenerator() {
                 <TabsTrigger value="strategy" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400">
                   AI Strategy
                 </TabsTrigger>
+                {dna && (
+                  <TabsTrigger value="dna" className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-400 gap-1">
+                    <Dna className="h-3.5 w-3.5" />
+                    DNA Intelligence
+                  </TabsTrigger>
+                )}
                 {result.gmStyle && (
                   <TabsTrigger value="gm" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400">
                     GM Profile
@@ -244,7 +283,6 @@ export default function TradeOfferGenerator() {
                             <div className={`text-sm font-semibold ${VALUE_RATIO_COLOR(offer.valueRatio)}`}>
                               {offer.valueRatio}% — {VALUE_RATIO_LABEL(offer.valueRatio)}
                             </div>
-                            {/* Value bar */}
                             <div className="mt-2 w-24 h-2 bg-muted rounded-full overflow-hidden">
                               <div
                                 className={`h-full rounded-full ${offer.valueRatio >= 95 && offer.valueRatio <= 110 ? "bg-emerald-500" : offer.valueRatio > 110 ? "bg-blue-500" : "bg-yellow-500"}`}
@@ -313,7 +351,6 @@ export default function TradeOfferGenerator() {
                       </Card>
                     </div>
 
-                    {/* Closing Message */}
                     <Card className="border-emerald-500/30 bg-emerald-500/5">
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2">
@@ -333,6 +370,177 @@ export default function TradeOfferGenerator() {
                   <div className="text-center text-muted-foreground py-8">No strategy data available.</div>
                 )}
               </TabsContent>
+
+              {/* DNA Intelligence Tab */}
+              {dna && (
+                <TabsContent value="dna" className="mt-4 space-y-4">
+                  {/* Header card */}
+                  <Card className="border-purple-500/30 bg-purple-500/5">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Dna className="h-4 w-4 text-purple-400" />
+                        {result.targetOwner} — League DNA Profile
+                        <Badge variant="outline" className="text-xs ml-auto border-purple-500/30 text-purple-400">
+                          {dna.seasonsAnalyzed} seasons analyzed
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      {/* Archetype + Tilt */}
+                      <div className="flex flex-wrap gap-2">
+                        <Badge className="bg-purple-500/20 text-purple-400 border border-purple-500/30 text-sm px-3 py-1">
+                          {dna.gmArchetype}
+                        </Badge>
+                        <Badge className={`border text-sm px-3 py-1 ${TILT_COLOR(dna.tiltLabel)}`}>
+                          {dna.tiltLabel}
+                        </Badge>
+                      </div>
+
+                      {/* Exploitability bar */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Exploitability Score</span>
+                          <span className={`text-sm font-bold ${EXPLOIT_COLOR(dna.exploitabilityScore).text}`}>
+                            {dna.exploitabilityScore}/100 — {dna.exploitabilityLabel}
+                          </span>
+                        </div>
+                        <div className="h-3 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${EXPLOIT_COLOR(dna.exploitabilityScore).bar}`}
+                            style={{ width: `${dna.exploitabilityScore}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Tilt score bar */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tilt Score</span>
+                          <span className="text-sm font-bold text-foreground">{dna.tiltScore}/100</span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${dna.tiltScore >= 70 ? "bg-red-500" : dna.tiltScore >= 40 ? "bg-orange-500" : "bg-blue-500"}`}
+                            style={{ width: `${dna.tiltScore}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Trade stats */}
+                      <div className="grid grid-cols-3 gap-3 text-center">
+                        <div className="p-3 rounded-lg bg-muted/30">
+                          <div className="text-xl font-bold text-foreground">{dna.avgTradesPerSeason.toFixed(1)}</div>
+                          <div className="text-xs text-muted-foreground">Avg Trades/Season</div>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/30">
+                          <div className="text-xl font-bold text-orange-400">{dna.lossTradeRatio.toFixed(2)}x</div>
+                          <div className="text-xs text-muted-foreground">Loss-Trade Ratio</div>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/30">
+                          <div className="text-xl font-bold text-foreground">
+                            {dna.h2hVsRod.wins}W-{dna.h2hVsRod.losses}L
+                          </div>
+                          <div className="text-xs text-muted-foreground">H2H vs Rod</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Draft Bias Table */}
+                  <Card className="border-border bg-card/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4 text-blue-400" />
+                        Draft Position Biases vs League Average
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Negative = drafts earlier than league avg (overvalues). Positive = drafts later (undervalues).
+                      </p>
+                      <div className="space-y-2">
+                        {(Object.entries(dna.biasVsLeague) as Array<[string, number]>)
+                          .sort((a, b) => a[1] - b[1])
+                          .map(([pos, bias]) => {
+                            const isOver = bias < 0;
+                            const pct = Math.min(100, Math.abs(bias) * 15);
+                            return (
+                              <div key={pos} className="flex items-center gap-3">
+                                <span className="text-xs font-bold text-foreground w-8">{pos}</span>
+                                <div className="flex-1 flex items-center gap-2">
+                                  {isOver ? (
+                                    <>
+                                      <div className="flex-1 flex justify-end">
+                                        <div
+                                          className="h-2 rounded-full bg-red-500/70"
+                                          style={{ width: `${pct}%` }}
+                                        />
+                                      </div>
+                                      <div className="w-px h-4 bg-border" />
+                                      <div className="flex-1" />
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="flex-1" />
+                                      <div className="w-px h-4 bg-border" />
+                                      <div className="flex-1">
+                                        <div
+                                          className="h-2 rounded-full bg-emerald-500/70"
+                                          style={{ width: `${pct}%` }}
+                                        />
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                                <span className={`text-xs font-semibold w-20 text-right ${isOver ? "text-red-400" : "text-emerald-400"}`}>
+                                  {bias > 0 ? "+" : ""}{bias.toFixed(1)} rds
+                                </span>
+                                <Badge variant="outline" className={`text-xs ${isOver ? "border-red-500/30 text-red-400" : "border-emerald-500/30 text-emerald-400"}`}>
+                                  {isOver ? "OVERVALUES" : "UNDERVALUES"}
+                                </Badge>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Exploit Windows */}
+                  {dna.exploitWindows?.length > 0 && (
+                    <Card className="border-yellow-500/30 bg-yellow-500/5">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Zap className="h-4 w-4 text-yellow-400" />
+                          Exploit Windows
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {(dna.exploitWindows as string[]).map((window, i) => (
+                          <div key={i} className="flex gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                            <ShieldAlert className="h-4 w-4 text-yellow-400 shrink-0 mt-0.5" />
+                            <p className="text-sm text-foreground leading-relaxed">{window}</p>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* DNA Summary */}
+                  {dna.dnaSummary && (
+                    <Card className="border-border bg-card/50">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Brain className="h-4 w-4 text-purple-400" />
+                          Full DNA Summary
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-foreground leading-relaxed">{dna.dnaSummary}</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+              )}
 
               {/* GM Profile Tab */}
               {result.gmStyle && (
@@ -372,8 +580,7 @@ export default function TradeOfferGenerator() {
                       {Array.isArray(result.gmStyle.strengthsWeaknesses) && result.gmStyle.strengthsWeaknesses.length > 0 && (
                         <div className="space-y-2">
                           {(result.gmStyle.strengthsWeaknesses as Array<{type: string; text: string}>)
-                            .filter(sw => sw.type === "strength")
-                            .slice(0, 1)
+                            .filter(sw => sw.type === "strength").slice(0, 1)
                             .map((sw, i) => (
                               <div key={i} className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                                 <div className="text-xs font-semibold text-emerald-400 mb-1">STRENGTH</div>
@@ -381,8 +588,7 @@ export default function TradeOfferGenerator() {
                               </div>
                             ))}
                           {(result.gmStyle.strengthsWeaknesses as Array<{type: string; text: string}>)
-                            .filter(sw => sw.type === "weakness")
-                            .slice(0, 1)
+                            .filter(sw => sw.type === "weakness").slice(0, 1)
                             .map((sw, i) => (
                               <div key={i} className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
                                 <div className="text-xs font-semibold text-red-400 mb-1">WEAKNESS</div>
@@ -390,8 +596,7 @@ export default function TradeOfferGenerator() {
                               </div>
                             ))}
                           {(result.gmStyle.strengthsWeaknesses as Array<{type: string; text: string}>)
-                            .filter(sw => sw.type === "blindspot")
-                            .slice(0, 1)
+                            .filter(sw => sw.type === "blindspot").slice(0, 1)
                             .map((sw, i) => (
                               <div key={i} className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                                 <div className="text-xs font-semibold text-yellow-400 mb-1">BLIND SPOT</div>
@@ -451,6 +656,11 @@ export default function TradeOfferGenerator() {
               <p className="text-xs text-muted-foreground">
                 Try: "Tyreek Hill", "Lamar Jackson", "1.03", "2.07"
               </p>
+              {/* DNA preview */}
+              <div className="mt-6 flex items-center justify-center gap-2 text-xs text-purple-400/70">
+                <Dna className="h-3.5 w-3.5" />
+                <span>Phase 3 DNA Intelligence will customize the AI strategy for the target owner's behavioral profile</span>
+              </div>
             </CardContent>
           </Card>
         )}

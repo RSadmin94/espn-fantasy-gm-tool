@@ -2415,10 +2415,38 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
 
       const offerOptions = buildOffer(targetValue, rodOfferCandidates);
 
-      // ── 8. Pull GM style context for target owner ─────────────────────────
+       // ── 8. Pull GM style context for target owner ─────────────────────────
       const { getGmStyleForTradeGenerator } = await import("./liveOpponentProfile");
       const gmStyle = await getGmStyleForTradeGenerator(targetMemberId);
-
+      // ── 8b. Pull Phase 3 DNA profile for target owner ────────────────────
+      let dnaProfile: import("./leagueDNA").ManagerDNA | null = null;
+      let dnaPromptBlock = "";
+      try {
+        const { calcLeagueDNA } = await import("./leagueDNA");
+        const { buildManagerRawData } = await import("./dnaRouter");
+        const allManagers = await buildManagerRawData();
+        const dnaProfiles = calcLeagueDNA(allManagers);
+        const found = dnaProfiles.find(p => p.memberId === targetMemberId);
+        if (found) {
+          dnaProfile = found;
+             const bias = (Object.entries(found.draft.biasVsLeague) as Array<[string, number]>)
+            .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+            .slice(0, 3)
+            .map(([pos, rounds]) => `${pos} (${rounds > 0 ? "+" : ""}${rounds.toFixed(1)} rounds vs avg)`)
+            .join(", ");
+          dnaPromptBlock = `\n\nLEAGUE DNA INTELLIGENCE FOR ${found.ownerName.toUpperCase()} (derived from ${found.seasonsAnalyzed} seasons of actual behavior):
+  GM Archetype: ${found.gmArchetype}
+  Exploitability Score: ${found.exploitabilityScore}/100 — ${found.exploitabilityLabel}
+  Tilt Risk: ${found.tilt.tiltLabel} (tilt score: ${found.tilt.tiltScore}/100)
+  Trade Frequency: ${found.trade.avgTradesPerSeason.toFixed(1)}/season | Loss-trade ratio: ${found.trade.lossTradeRatio.toFixed(2)}x
+  Draft Biases (overvalues/undervalues vs league avg): ${bias}
+  Top Exploit: ${found.exploitWindows[0] ?? "No specific exploit identified"}
+  H2H vs Rod: ${found.trade.h2hVsRod.wins}W-${found.trade.h2hVsRod.losses}L (Rod wins ${found.trade.h2hVsRod.winPct.toFixed(0)}% of matchups)
+  INSTRUCTION: Use these behavioral facts to customize the negotiation strategy, offer framing, and closing message. If they overvalue a position, offer that. If they are tilting, apply urgency. If they are highly exploitable, be aggressive.`;
+        }
+      } catch {
+        // DNA unavailable — continue without it
+      }
       // ── 9. Generate AI trade strategy ─────────────────────────────────────
       const targetDesc = targetPlayer
         ? `${targetPlayer.fullName} (${targetPlayer.position}, ${targetPlayer.seasonPoints} fantasy pts in 2025, avg ${targetPlayer.avgPoints} pts/game)`
@@ -2462,9 +2490,8 @@ ${gmContext}
 My offer options:
 ${offerDesc}
 
-League context: 14-team PPR, keeper league, 2026 season. Rod Sellers (Str8FrmHell/RodZilla) went 9-5 in 2025, finished 3rd seed.
-
-Generate a trade strategy and recommended approach.`,
+LLeague context: 14-team PPR, keeper league, 2026 season. Rod Sellers (Str8FrmHell/RodZilla) went 9-5 in 2025, finished 3rd seed.${dnaPromptBlock ? "\n" + dnaPromptBlock : ""}
+Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTANT: The DNA intelligence above contains behavioral facts — use them to make the negotiation strategy, timing, and closing message highly specific to this opponent." : ""}`,
         },
       ];
 
@@ -2532,11 +2559,24 @@ Generate a trade strategy and recommended approach.`,
           valueRatio: Math.round((o.totalValue / targetValue) * 100),
         })),
         gmStyle,
+        dnaProfile: dnaProfile ? {
+          gmArchetype: dnaProfile.gmArchetype,
+          exploitabilityScore: dnaProfile.exploitabilityScore,
+          exploitabilityLabel: dnaProfile.exploitabilityLabel,
+          tiltScore: dnaProfile.tilt.tiltScore,
+          tiltLabel: dnaProfile.tilt.tiltLabel,
+          avgTradesPerSeason: dnaProfile.trade.avgTradesPerSeason,
+          lossTradeRatio: dnaProfile.trade.lossTradeRatio,
+          h2hVsRod: dnaProfile.trade.h2hVsRod,
+          biasVsLeague: dnaProfile.draft.biasVsLeague as Record<string, number>,
+          exploitWindows: dnaProfile.exploitWindows,
+          dnaSummary: dnaProfile.dnaSummary,
+          seasonsAnalyzed: dnaProfile.seasonsAnalyzed,
+        } : null,
         strategy,
       };
     }),
-
-  // ── Math-First Trade Analyzer ────────────────────────────────────────────
+  // ── Math-First Trade Analyzerr ────────────────────────────────────────────
   tradeAnalyze: protectedProcedure
     .input(z.object({
       season: z.number(),
