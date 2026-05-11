@@ -634,16 +634,22 @@
 - [x] 279/279 tests passing, 0 TypeScript errors
 
 ## Personal GM Decision Memory
-- [ ] Extend schema: gmDecisions table (id, decisionType, toolSource, description, context, recommendation, accepted, outcome, outcomeScore, weekNum, season, resolvedAt, createdAt)
-- [ ] Extend schema: gmDecisionTags table (decisionId, tag) for filtering by player/team/opponent
-- [ ] Build gmDecisionService.ts: logDecision, resolveOutcome, getDecisionFeed, getRetrospective, getAccuracyStats
-- [ ] Build gmDecisionRouter.ts: logDecision, resolveOutcome, getDecisionFeed, getRetrospective, getAccuracyStats, getPatternAnalysis
-- [ ] Mount gmDecisionRouter in appRouter
-- [ ] Add "Log This Decision" button to Start/Sit results panel
-- [ ] Add "Log This Decision" button to Trade Analyzer results panel
-- [ ] Add "Log This Decision" button to Waiver Wire results panel
-- [ ] Add "Log This Decision" button to Trade Offer Generator results panel
-- [ ] Build GMDecisionMemory hub page: decision feed, outcome timeline, win/loss breakdown, retrospective LLM analysis
-- [ ] Add "GM Memory" nav item to AppLayout sidebar under System section
-- [ ] Write vitest tests for gmDecisionService accuracy stats and pattern analysis
-- [ ] 279+ tests passing, 0 TypeScript errors
+- [x] Extend schema: gmDecisions table (17 cols, 5 indexes) + gmDecisionTags table (3 cols, 2 indexes)
+- [x] Build gmDecisionService.ts: logDecision, resolveOutcome, getDecisionFeed, getRetrospective, getAccuracyStats, computeAccuracyStats, computePatterns
+- [x] Build gmDecisionRouter.ts: 8 tRPC procedures (logDecision, resolveOutcome, getDecisionFeed, getAccuracyStats, getPatternAnalysis, getRetrospectiveAnalysis, getDecisionById, deleteDecision)
+- [x] Mount gmDecisionRouter in appRouter
+- [x] Add "Log This Decision" button to Start/Sit results panel
+- [x] Add "Log This Decision" button to Trade Analyzer results panel
+- [x] Add "Log This Decision" button to Trade Offer Generator results panel
+- [ ] Add "Log This Decision" button to Waiver Wire results panel (pending)
+- [x] Build GMDecisionMemory hub page: Decision Feed, Accuracy Breakdown, Patterns, Retrospective tabs
+- [x] Add "GM Memory" nav item to AppLayout sidebar under System section
+- [x] Write vitest tests for gmDecisionService accuracy stats and pattern analysis (23 tests)
+- [x] 293/293 tests passing, 0 TypeScript errors
+
+## Trade Offer Generator — Picks-Only Fix (Bug)
+- [x] Resolve pick owner from ESPN 2026 draft order data (not Pick Tracker text lookup)
+- [x] Remove all player assets from offer options — offer must be draft picks for draft picks only
+- [x] Show resolved owner name, team, and DNA profile in the target pick card
+- [x] Offer options: show only picks Rod can offer (from his current pick holdings per ESPN data)
+- [x] 0 TypeScript errors, all tests passing (293/293)

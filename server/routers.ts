@@ -2355,7 +2355,27 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
           const pick = parseInt(m[2]);
           targetPickValue = pickValueCanonical(round, pick);
           targetPickLabel = `Round ${round}.${String(pick).padStart(2, '0')} (2026 Draft)`;
-          // Try to resolve pick owner from pick_trades table (acquired picks = someone else's pick Rod got)
+
+          // ── Resolve pick owner from 2026 ESPN draft order ──────────────────
+          // Step 1: Get the 2026 draft order from ESPN (uses 2025 season data which has 2026 draft settings)
+          const draftOrderData = normalizeDraftOrder(seasonData as Record<string, unknown>);
+          const pickOrder = draftOrderData.pickOrder || [];
+          // Snake draft: odd rounds go 1→14, even rounds go 14→1
+          // The team at position `pick` in round `round` is the original owner
+          let originalOwnerTeamId: number | null = null;
+          let originalOwnerName = "Unknown";
+          if (pickOrder.length >= pick) {
+            // For snake draft: odd round = ascending order, even round = descending order
+            const slotIndex = round % 2 === 1 ? pick - 1 : pickOrder.length - pick;
+            const slot = pickOrder[slotIndex];
+            if (slot) {
+              originalOwnerTeamId = slot.teamId;
+              // Use the owners field (actual owner name) from the draft order
+              originalOwnerName = slot.owners || slot.name || `Team ${slot.teamId}`;
+            }
+          }
+
+          // Step 2: Check pick_trades to see if this pick has been traded
           const pickTrades2026 = await getPickTrades(2026);
           const acquiredPick = pickTrades2026.find(
             t => t.type === "acquired" && t.round === round && t.pickInRound === pick
@@ -2363,16 +2383,33 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
           const tradedAwayPick = pickTrades2026.find(
             t => t.type === "traded_away" && t.round === round && t.pickInRound === pick
           );
+
           if (acquiredPick) {
-            // Rod acquired this pick FROM counterparty — the pick originally belonged to counterparty
-            targetPickOwnerName = `Rod Sellers (acquired from ${acquiredPick.counterparty})`;
+            // Rod acquired this pick — original owner is the counterparty who traded it to Rod
+            // The pick is now owned by Rod, but the target of the trade offer is whoever Rod wants to trade it to
+            // In this context, we're acquiring a pick, so the owner is whoever currently holds it
+            targetPickOwnerName = acquiredPick.counterparty;
           } else if (tradedAwayPick) {
-            // Rod traded this pick TO counterparty — counterparty now owns it
+            // Rod traded this pick away — it now belongs to the counterparty
             targetPickOwnerName = tradedAwayPick.counterparty;
           } else {
-            // Default: assume pick belongs to its original team (draft position owner)
-            // Use pick position to guess original team from 2025 standings
-            targetPickOwnerName = input.targetOwnerId ? (teamMap[parseInt(input.targetOwnerId)]?.ownerName || "Unknown") : `Pick ${round}.${String(pick).padStart(2, '0')} owner (unknown — check Pick Tracker)`;
+            // No trade recorded — original owner from draft order
+            targetPickOwnerName = originalOwnerName;
+          }
+
+          // Step 3: Resolve targetMemberId from owner name via teamMap
+          if (!input.targetOwnerId) {
+            const cleanTarget = targetPickOwnerName.toLowerCase().replace(/[^a-z0-9 ]/g, "");
+            for (const [, info] of Object.entries(teamMap)) {
+              const cleanOwner = info.ownerName.toLowerCase().replace(/[^a-z0-9 ]/g, "");
+              const targetFirst = cleanTarget.split(" ")[0];
+              const ownerFirst = cleanOwner.split(" ")[0];
+              if (cleanOwner.includes(targetFirst) || cleanTarget.includes(ownerFirst) || targetFirst === ownerFirst) {
+                // Set targetOwnerId via a local variable for later use
+                (input as any).targetOwnerId = info.memberId;
+                break;
+              }
+            }
           }
         } else {
           targetPickLabel = input.targetInput;
@@ -2380,22 +2417,18 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
           targetPickOwnerName = "Unknown";
         }
       } else {
-        // Fuzzy match player name
-        const query = input.targetInput.toLowerCase();
-        targetPlayer = allPlayers.find(p =>
-          p.fullName.toLowerCase().includes(query) ||
-          query.includes(p.fullName.toLowerCase().split(" ")[1] || "")
-        ) || null;
-        if (!targetPlayer) {
-          throw new TRPCError({ code: "NOT_FOUND", message: `Player "${input.targetInput}" not found on any roster. Check the spelling or try a last name only.` });
-        }
+        // targetType === "player" — not supported in pre-draft picks-only mode
+        throw new TRPCError({ code: "BAD_REQUEST", message: "The Trade Offer Generator is currently in picks-only mode (pre-draft 2026). Please select a draft pick as the target." });
       }
+      // Type assertion: reset targetPlayer type after the if/else block
+      // (TypeScript narrows to 'never' because the else branch always throws)
+      const resolvedTargetPlayer = targetPlayer as PlayerInfo | null;
 
       // ── 5. Determine target owner ─────────────────────────────────────────
-      const targetOwnerName = targetPlayer?.ownerName || targetPickOwnerName;
+      const targetOwnerName = resolvedTargetPlayer?.ownerName || targetPickOwnerName;
       // Resolve memberId from owner name when not directly available.
       // Pick trades store counterparty as a display name, not a memberId.
-      let targetMemberId = targetPlayer?.memberId || input.targetOwnerId || "";
+      let targetMemberId = resolvedTargetPlayer?.memberId || input.targetOwnerId || "";
       if (!targetMemberId && targetOwnerName && targetOwnerName !== "Unknown") {
         try {
           const { buildLiveOpponentProfiles } = await import("./liveOpponentProfile");
@@ -2417,53 +2450,128 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       // ── 6. Estimate target value ──────────────────────────────────────────
       let targetValue = 0;
       let targetValueBasis = "";
-      if (targetPlayer) {
+      if (resolvedTargetPlayer) {
         // Value = season points * position multiplier + keeper bonus
         const posMultiplier: Record<string, number> = { QB: 1.0, RB: 1.3, WR: 1.2, TE: 1.1, K: 0.4, FLEX: 1.0 };
-        const mult = posMultiplier[targetPlayer.position] || 1.0;
-        const baseValue = targetPlayer.seasonPoints * mult;
-        const keeperBonus = targetPlayer.keeperValueFuture > 0 ? (15 - targetPlayer.keeperValueFuture) * 80 : 0;
+        const mult = posMultiplier[resolvedTargetPlayer.position] || 1.0;
+        const baseValue = resolvedTargetPlayer.seasonPoints * mult;
+        const keeperBonus = resolvedTargetPlayer.keeperValueFuture > 0 ? (15 - resolvedTargetPlayer.keeperValueFuture) * 80 : 0;
         targetValue = Math.round(baseValue + keeperBonus);
-        targetValueBasis = `${targetPlayer.seasonPoints} fantasy pts (2025), ${targetPlayer.position} position multiplier ${mult}x, keeper round ${targetPlayer.keeperValueFuture > 0 ? targetPlayer.keeperValueFuture : "N/A"}`;
+        targetValueBasis = `${resolvedTargetPlayer.seasonPoints} fantasy pts (2025), ${resolvedTargetPlayer.position} position multiplier ${mult}x, keeper round ${resolvedTargetPlayer.keeperValueFuture > 0 ? resolvedTargetPlayer.keeperValueFuture : "N/A"}`;
       } else {
         targetValue = targetPickValue;
         targetValueBasis = `Pick chart value for ${targetPickLabel}`;
       }
 
-      // ── 7. Build return package options ───────────────────────────────────
-      // Find players on Rod's roster (team 11) that could be offered
-      const rodTeam = Object.values(teamMap).find(t => t.ownerName.toLowerCase().includes("rod") || t.teamId === 11);
-      const rodRoster = rodTeam ? allPlayers.filter(p => p.teamId === rodTeam.teamId) : [];
-
-      // Sort Rod's roster by value descending to find offer candidates
-      const rodOfferCandidates = rodRoster
-        .filter(p => p.position !== "K" && p.position !== "D/ST")
-        .sort((a, b) => b.seasonPoints - a.seasonPoints);
-
-      // Build 3 offer tiers: fair, slight overpay, package deal
-      const buildOffer = (valueTarget: number, candidates: PlayerInfo[]) => {
-        const offers: { players: PlayerInfo[]; picks: string[]; totalValue: number }[] = [];
-        // Single player offer
-        const single = candidates.find(c => Math.abs(c.seasonPoints * 1.2 - valueTarget / 1.2) < valueTarget * 0.25);
-        if (single) offers.push({ players: [single], picks: [], totalValue: Math.round(single.seasonPoints * 1.2) });
-        // Player + pick offer
-        const mid = candidates.find(c => c.seasonPoints * 1.2 < valueTarget * 0.9);
-        if (mid) {
-          const pickNeeded = valueTarget - Math.round(mid.seasonPoints * 1.2);
-          const pickRound = pickNeeded > 1200 ? 1 : pickNeeded > 800 ? 2 : pickNeeded > 500 ? 3 : 4;
-          offers.push({ players: [mid], picks: [`2026 Round ${pickRound}`], totalValue: Math.round(mid.seasonPoints * 1.2 + pickValueCanonical(pickRound, 7)) });
+      // ── 7. Build Rod's available picks for offer ─────────────────────────
+      // Pre-draft mode: offers are PICKS ONLY — no players.
+      // Rod's available picks = his original draft positions (from 2026 draft order)
+      //   MINUS any he has traded away
+      //   PLUS any he has acquired from others.
+      const draftOrderForOffers = normalizeDraftOrder(seasonData as Record<string, unknown>);
+      const pickOrderForOffers = draftOrderForOffers.pickOrder || [];
+      const TOTAL_ROUNDS = 14;
+      const TEAMS_COUNT = 14;
+      // Find Rod's team in teamMap
+      const rodTeam = Object.values(teamMap).find(t =>
+        t.ownerName.toLowerCase().includes("rod") || t.teamId === 11
+      );
+      const rodTeamId = rodTeam?.teamId ?? 11;
+      // Collect all pick_trades for 2026
+      const allPickTrades2026 = await getPickTrades(2026);
+      const tradedAwayByRod = allPickTrades2026.filter(t => t.type === "traded_away");
+      const acquiredByRod = allPickTrades2026.filter(t => t.type === "acquired");
+      // Build Rod's original picks from the draft order
+      interface PickAsset {
+        label: string;
+        round: number;
+        pickInRound: number;
+        value: number;
+        source: "original" | "acquired";
+        acquiredFrom?: string;
+      }
+      const rodOriginalPicks: PickAsset[] = [];
+      for (let r = 1; r <= TOTAL_ROUNDS; r++) {
+        for (let p = 1; p <= TEAMS_COUNT; p++) {
+          const slotIndex = r % 2 === 1 ? p - 1 : TEAMS_COUNT - p;
+          const slot = pickOrderForOffers[slotIndex];
+          if (slot && slot.teamId === rodTeamId) {
+            // Check if Rod has traded this pick away
+            const tradedAway = tradedAwayByRod.find(t => t.round === r && t.pickInRound === p);
+            if (!tradedAway) {
+              rodOriginalPicks.push({
+                label: `Round ${r}.${String(p).padStart(2, "0")}`,
+                round: r,
+                pickInRound: p,
+                value: pickValueCanonical(r, p),
+                source: "original",
+              });
+            }
+          }
         }
-        // Two-player package
-        const top2 = candidates.slice(0, 2);
-        if (top2.length === 2) {
-          offers.push({ players: top2, picks: [], totalValue: Math.round((top2[0].seasonPoints + top2[1].seasonPoints) * 1.1) });
+      }
+      // Add acquired picks
+      const rodAcquiredPicks: PickAsset[] = acquiredByRod.map(t => ({
+        label: t.label || `Round ${t.round}.${String(t.pickInRound).padStart(2, "0")}`,
+        round: t.round,
+        pickInRound: t.pickInRound,
+        value: t.pickValue,
+        source: "acquired" as const,
+        acquiredFrom: t.counterparty,
+      }));
+      const rodAllPicks = [...rodOriginalPicks, ...rodAcquiredPicks]
+        .sort((a, b) => b.value - a.value); // highest value first
+      // Build 3 offer options: single pick closest to value, slight overpay, package of 2 picks
+      const offerOptions: { players: never[]; picks: string[]; pickAssets: PickAsset[]; totalValue: number }[] = [];
+      // Option 1: Single pick closest to target value (fair offer)
+      const fairPick = rodAllPicks.find(pk =>
+        pk.label !== targetPickLabel && Math.abs(pk.value - targetValue) / Math.max(targetValue, 1) < 0.35
+      );
+      if (fairPick) {
+        offerOptions.push({ players: [], picks: [fairPick.label], pickAssets: [fairPick], totalValue: fairPick.value });
+      }
+      // Option 2: Single pick slight overpay (sweetener — next round up)
+      const overpayPick = rodAllPicks.find(pk =>
+        pk.label !== targetPickLabel && pk.value > targetValue * 0.85 && pk !== fairPick
+      );
+      if (overpayPick) {
+        offerOptions.push({ players: [], picks: [overpayPick.label], pickAssets: [overpayPick], totalValue: overpayPick.value });
+      }
+      // Option 3: Two-pick package totaling close to or above target value
+      const pkgCandidates = rodAllPicks.filter(pk =>
+        pk.label !== targetPickLabel && pk !== fairPick && pk !== overpayPick
+      );
+      if (pkgCandidates.length >= 2) {
+        // Find best 2-pick combo whose combined value is within 10-40% above target
+        let bestPkg: PickAsset[] | null = null;
+        let bestDiff = Infinity;
+        for (let i = 0; i < pkgCandidates.length; i++) {
+          for (let j = i + 1; j < pkgCandidates.length; j++) {
+            const total = pkgCandidates[i].value + pkgCandidates[j].value;
+            const diff = Math.abs(total - targetValue * 1.1);
+            if (diff < bestDiff) { bestDiff = diff; bestPkg = [pkgCandidates[i], pkgCandidates[j]]; }
+          }
         }
-        return offers;
-      };
+        if (bestPkg) {
+          offerOptions.push({
+            players: [],
+            picks: bestPkg.map(pk => pk.label),
+            pickAssets: bestPkg,
+            totalValue: bestPkg[0].value + bestPkg[1].value,
+          });
+        }
+      }
+      // Fallback: if no picks found, surface a message
+      if (offerOptions.length === 0) {
+        offerOptions.push({
+          players: [],
+          picks: ["No available picks — check Pick Tracker"],
+          pickAssets: [],
+          totalValue: 0,
+        });
+      }
 
-      const offerOptions = buildOffer(targetValue, rodOfferCandidates);
-
-       // ── 8. Pull GM style context for target owner ─────────────────────────
+      // ── 8. Pull GM style context for target owner ─────────────────────────
       const { getGmStyleForTradeGenerator } = await import("./liveOpponentProfile");
       const gmStyle = await getGmStyleForTradeGenerator(targetMemberId);
       // ── 8b. Pull Phase 3 DNA profile for target owner ────────────────────
@@ -2496,14 +2604,13 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
         // DNA unavailable — continue without it
       }
       // ── 9. Generate AI trade strategy ─────────────────────────────────────
-      const targetDesc = targetPlayer
-        ? `${targetPlayer.fullName} (${targetPlayer.position}, ${targetPlayer.seasonPoints} fantasy pts in 2025, avg ${targetPlayer.avgPoints} pts/game)`
+      const targetDesc = resolvedTargetPlayer
+        ? `${resolvedTargetPlayer.fullName} (${resolvedTargetPlayer.position}, ${resolvedTargetPlayer.seasonPoints} fantasy pts in 2025, avg ${resolvedTargetPlayer.avgPoints} pts/game)`
         : targetPickLabel;
 
       const offerDesc = offerOptions.map((o, i) => {
-        const players = o.players.map(p => `${p.fullName} (${p.position}, ${p.seasonPoints} pts)`).join(" + ");
         const picks = o.picks.join(" + ");
-        return `Option ${i + 1}: ${[players, picks].filter(Boolean).join(" + ")} (est. value: ${o.totalValue})`;
+        return `Option ${i + 1}: ${picks} (est. value: ${o.totalValue}, ${targetValue > 0 ? Math.round((o.totalValue / targetValue) * 100) : 0}% of target value)`;
       }).join("\n");
 
       const gmContext = gmStyle
@@ -2585,26 +2692,35 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
 
       return {
         targetType: input.targetType,
-        targetName: targetPlayer?.fullName || targetPickLabel,
+        targetName: resolvedTargetPlayer?.fullName || targetPickLabel,
         targetOwner: targetOwnerName,
         targetMemberId,
         targetValue,
         targetValueBasis,
-        targetStats: targetPlayer ? {
-          position: targetPlayer.position,
-          seasonPoints: targetPlayer.seasonPoints,
-          avgPoints: targetPlayer.avgPoints,
-          keeperValue: targetPlayer.keeperValue,
-          keeperValueFuture: targetPlayer.keeperValueFuture,
-          injuryStatus: targetPlayer.injuryStatus,
-          stats: targetPlayer.stats,
+        targetStats: resolvedTargetPlayer ? {
+          position: resolvedTargetPlayer.position,
+          seasonPoints: resolvedTargetPlayer.seasonPoints,
+          avgPoints: resolvedTargetPlayer.avgPoints,
+          keeperValue: resolvedTargetPlayer.keeperValue,
+          keeperValueFuture: resolvedTargetPlayer.keeperValueFuture,
+          injuryStatus: resolvedTargetPlayer.injuryStatus,
+          stats: resolvedTargetPlayer.stats,
         } : null,
         scoringDesc,
         offerOptions: offerOptions.map(o => ({
-          players: o.players.map(p => ({ name: p.fullName, position: p.position, seasonPoints: p.seasonPoints })),
+          players: [],
           picks: o.picks,
+          pickAssets: (o as any).pickAssets ?? [],
           totalValue: o.totalValue,
-          valueRatio: Math.round((o.totalValue / targetValue) * 100),
+          valueRatio: targetValue > 0 ? Math.round((o.totalValue / targetValue) * 100) : 0,
+        })),
+        rodAvailablePicks: rodAllPicks.map(pk => ({
+          label: pk.label,
+          round: pk.round,
+          pickInRound: pk.pickInRound,
+          value: pk.value,
+          source: pk.source,
+          acquiredFrom: pk.acquiredFrom,
         })),
         gmStyle,
         dnaProfile: dnaProfile ? {

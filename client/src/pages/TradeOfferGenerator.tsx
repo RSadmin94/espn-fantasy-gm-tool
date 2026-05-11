@@ -312,7 +312,7 @@ export default function TradeOfferGenerator() {
               {/* Offer Options Tab */}
               <TabsContent value="offers" className="mt-4 space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  These offers are built from your 2025 roster using PPR fantasy point values and the 14-team pick chart.
+                  These pick offers are built from your available 2026 draft picks using the 14-team pick value chart.
                 </p>
                 {result.offerOptions.length === 0 ? (
                   <Card className="border-border bg-card/50">
@@ -331,13 +331,7 @@ export default function TradeOfferGenerator() {
                               {i === 0 && <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">Recommended</Badge>}
                             </div>
                             <div className="space-y-1">
-                              {offer.players.map((p, j) => (
-                                <div key={j} className="flex items-center gap-2 text-sm">
-                                  <Badge variant="outline" className="text-xs w-8 text-center">{p.position}</Badge>
-                                  <span className="text-foreground font-medium">{p.name}</span>
-                                  <span className="text-muted-foreground">({p.seasonPoints} pts)</span>
-                                </div>
-                              ))}
+                              {/* Picks-only mode: no players in offers */}
                               {offer.picks.map((pick, j) => (
                                 <div key={j} className="flex items-center gap-2 text-sm">
                                   <Badge variant="outline" className="text-xs">PICK</Badge>
