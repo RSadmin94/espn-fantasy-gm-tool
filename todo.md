@@ -584,3 +584,30 @@
 - [x] Add Vegas Context Panel to Start/Sit results (game total, spread, implied, win prob, adj %, bookmaker)
 - [x] Write 25 vitest tests for vegasOddsService pure functions
 - [x] 247/247 tests passing, 0 TypeScript errors
+
+## Beat Reporter & Depth Chart Intelligence Feed
+- [ ] Build beatReporterService.ts: fetch ESPN NFL news (athlete-tagged) + team injury reports for all 32 teams
+- [ ] Build LLM signal extraction pipeline: parse raw news into structured signals (role_up/down, workload_risk, injury_risk, hidden_opportunity, depth_chart_change, coach_trust_up/down)
+- [ ] Add playerNewsSignals DB table: playerId, playerName, signalType, magnitude, projectionImpact, summary, confidence, headline, publishedAt, cachedAt
+- [ ] Build beatReporterRouter.ts: getPlayerSignals, refreshSignals, getLeagueSignalFeed tRPC procedures
+- [ ] Integrate enrichWithBeatReporter() into simulationRouter as third adjustment layer (after injury + Vegas)
+- [ ] Inject beat reporter signal block into startSit LLM prompt
+- [ ] Build Beat Reporter panel in Start/Sit UI: signal badges, projection impact, headline source
+- [ ] Build Signal Feed panel in Waiver Wire: top hidden opportunities + role changes league-wide
+- [ ] Write vitest tests for signal extraction pure functions
+- [ ] 247+ tests passing, 0 TypeScript errors
+
+## Beat Reporter & Depth Chart Intelligence Feed
+- [x] Research NFL news APIs: ESPN News, ESPN Team Injuries, Sleeper Trending, RotoBaller RSS — all confirmed live
+- [x] Build beatReporterService.ts: fetch ESPN news (50 articles, athlete-tagged), ESPN team injury reports (all 32 teams, beat reporter notes), Sleeper trending players, RotoBaller NFL RSS; 6-hour cache TTL in player_news_signals table
+- [x] Build beatReporterSignalExtractor.ts: LLM extracts structured signals (signalType, magnitude, projectionImpactPct, summary, confidence) from raw news items in batches of 15; JSON schema response format
+- [x] Pure helpers: computeBeatReporterAdjustment (weighted by confidence x magnitude, capped +-20%), formatSignalsForPrompt (for LLM injection)
+- [x] Build beatReporterRouter.ts: getSignalsForPlayer, getTopSignals, refreshSignals (owner-only), getNewsStatus
+- [x] Mount beatReporterRouter in appRouter
+- [x] Integrate into Monte Carlo engine: enrichWithBeatReporter() as Step 3 in startSit procedure (after injury + Vegas enrichment)
+- [x] Inject beat reporter signals into startSit LLM system prompt as BEAT REPORTER INTELLIGENCE section
+- [x] Return beatReporterSignals and beatReporterAdjustment in startSit response for UI display
+- [x] Build BeatReporterPanel.tsx: SignalRow, BeatReporterPanel, TwoPlayerBeatPanel, TopSignalsFeed components
+- [x] Inject TwoPlayerBeatPanel into StartSit.tsx after Vegas Context Panel
+- [x] 15 vitest tests for computeBeatReporterAdjustment and formatSignalsForPrompt — all passing
+- [x] 262/262 tests passing, 0 TypeScript errors

@@ -154,6 +154,7 @@ import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 import { Brain, Zap, CheckCircle, XCircle, Loader2, ChevronRight, TrendingUp, TrendingDown, Minus, Activity, BarChart3, Shield, Rocket, Swords, Star, Calendar, AlertTriangle, Users, TrendingUp as TrendUp, Flame, Snowflake, DollarSign, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { TwoPlayerBeatPanel } from "@/components/BeatReporterPanel";
 import {
   StartSitComparisonViz,
   SimulationLoadingSkeleton,
@@ -794,6 +795,21 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
                     {renderCtx(ctxB, `${player2Name || "Player B"} (${simTeam2.toUpperCase()})`, "text-blue-400")}
                   </CardContent>
                 </Card>
+              );
+            })()}
+            {/* Beat Reporter Intelligence Panel */}
+            {simMode && simResult && (() => {
+              const resData = startSitMutation.data;
+              const beatSignalsA = (resData as any)?.playerA?.beatReporterSignals ?? [];
+              const beatSignalsB = (resData as any)?.playerB?.beatReporterSignals ?? [];
+              const beatAdjA = (resData as any)?.playerA?.beatReporterAdjustment ?? 0;
+              const beatAdjB = (resData as any)?.playerB?.beatReporterAdjustment ?? 0;
+              if (beatSignalsA.length === 0 && beatSignalsB.length === 0) return null;
+              return (
+                <TwoPlayerBeatPanel
+                  playerA={{ name: player1Name || "Player A", signals: beatSignalsA, adjustment: beatAdjA }}
+                  playerB={{ name: player2Name || "Player B", signals: beatSignalsB, adjustment: beatAdjB }}
+                />
               );
             })()}
             {/* War Room panel */}

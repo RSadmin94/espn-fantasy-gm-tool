@@ -13,6 +13,7 @@ import { agentRouter } from "./agentRouter";
 import { champRouter } from "./champRouter";
 import { backtestingRouter } from "./backtestingRouter";
 import { vegasRouter } from "./vegasRouter";
+import { beatReporterRouter } from "./beatReporterRouter";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob } from "./db";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
@@ -76,6 +77,7 @@ export const appRouter = router({
   champ: champRouter,
   backtest: backtestingRouter,
   vegas: vegasRouter,
+  beatReporter: beatReporterRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

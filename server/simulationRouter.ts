@@ -32,6 +32,12 @@ import {
   buildVegasPromptBlock,
   type VegasTeamContext,
 } from "./vegasOddsService";
+import { getCachedSignals } from "./beatReporterService";
+import type { PlayerNewsSignal } from "../drizzle/schema";
+import {
+  computeBeatReporterAdjustment,
+  formatSignalsForPrompt,
+} from "./beatReporterSignalExtractor";
 
 // ─── Shared input schema ──────────────────────────────────────────────────────
 
@@ -50,10 +56,12 @@ const SimPlayerInput = z.object({
 
 // ─── Helper: enrich players with Vegas implied totals ───────────────────────
 
-/** Extended SimPlayer with Vegas context attached for prompt building */
+/** Extended SimPlayer with Vegas context and beat reporter signals attached */
 export interface SimPlayerWithVegas extends SimPlayer {
   nflTeam?: string;
   vegasContext?: VegasTeamContext | null;
+  beatReporterSignals?: PlayerNewsSignal[];
+  beatReporterAdjustment?: number;
 }
 
 async function enrichWithVegas(
@@ -105,6 +113,48 @@ async function enrichWithInjury(players: SimPlayer[]): Promise<SimPlayer[]> {
       volatilityMultiplier: p.volatilityMultiplier ?? 1.0,
       stdDev: p.stdDev ?? deriveStdDev(p.projectedPoints, p.position, p.ecrStd),
     }));
+  }
+}
+
+// ─── Helper: enrich players with beat reporter signals ──────────────────────
+
+async function enrichWithBeatReporter(
+  players: SimPlayerWithVegas[]
+): Promise<SimPlayerWithVegas[]> {
+  try {
+    // Fetch signals for all players in parallel
+    const signalResults = await Promise.allSettled(
+      players.map((p) => getCachedSignals(p.playerName))
+    );
+
+    return players.map((p, i) => {
+      const result = signalResults[i];
+      if (result?.status !== "fulfilled" || !result.value.length) return p;
+
+      const signals = result.value;
+      const adjustment = computeBeatReporterAdjustment(
+        signals.map((s) => ({
+          projectionImpactPct: s.projectionImpactPct,
+          confidence: s.confidence,
+          magnitude: s.magnitude / 100, // stored as 0–100, needs 0–1
+        }))
+      );
+
+      // Apply beat reporter adjustment on top of existing matchupAdjustment
+      // Convert multiplier (e.g. 1.12) to additive adjustment (e.g. +0.12)
+      const beatAdj = adjustment - 1.0;
+      const existingAdj = p.matchupAdjustment ?? 0;
+      const combinedAdj = Math.max(-0.35, Math.min(0.35, existingAdj + beatAdj));
+
+      return {
+        ...p,
+        matchupAdjustment: combinedAdj,
+        beatReporterSignals: signals,
+        beatReporterAdjustment: beatAdj,
+      };
+    });
+  } catch {
+    return players;
   }
 }
 
@@ -169,7 +219,10 @@ export const simulationRouter = router({
         })) as SimPlayerWithVegas[]
       );
 
-      const allPlayers = vegasEnriched;
+      // Step 3: Enrich with beat reporter signals (role changes, injury risk, hidden opportunities)
+      const beatEnriched = await enrichWithBeatReporter(vegasEnriched);
+
+      const allPlayers = beatEnriched;
       const enrichedA = allPlayers[0]!;
       const enrichedB = allPlayers[1]!;
       const restOfLineup = allPlayers.slice(2, 2 + input.restOfLineup.length);
@@ -205,10 +258,28 @@ export const simulationRouter = router({
         ? "\n\n" + buildVegasPromptBlock(vegasContextsForPrompt)
         : "";
 
+      // Build beat reporter signal blocks for both players
+      const beatSignalsA = (enrichedA as SimPlayerWithVegas).beatReporterSignals ?? [];
+      const beatSignalsB = (enrichedB as SimPlayerWithVegas).beatReporterSignals ?? [];
+      const beatBlockA = formatSignalsForPrompt(input.playerA.playerName, beatSignalsA.map(s => ({
+        signalType: s.signalType,
+        summary: s.summary,
+        projectionImpactPct: s.projectionImpactPct,
+        confidence: s.confidence,
+      })));
+      const beatBlockB = formatSignalsForPrompt(input.playerB.playerName, beatSignalsB.map(s => ({
+        signalType: s.signalType,
+        summary: s.summary,
+        projectionImpactPct: s.projectionImpactPct,
+        confidence: s.confidence,
+      })));
+      const beatBlock = [beatBlockA, beatBlockB].filter(Boolean).join("\n\n");
+      const beatSection = beatBlock ? `\n\nBEAT REPORTER INTELLIGENCE:\n${beatBlock}` : "";
+
       const systemPrompt = `You are an expert Fantasy Football analyst for "ATLANTAS FINEST FF" (14-team PPR keeper league).
 The Monte Carlo simulation below ran 10,000 matchups — treat these numbers as ground truth. Do not contradict them.
 
-${simResult.summaryText}${vegasBlock}
+${simResult.summaryText}${vegasBlock}${beatSection}
 
 PLAYER PROFILES:
   ${input.playerA.playerName} (${input.playerA.position}): ${simResult.playerA.adjustedProjection} pts projected | Floor: ${simResult.playerA.scoreRange.p10} | Ceiling: ${simResult.playerA.scoreRange.p90} | Bust risk: ${simResult.playerA.bustProbability}% | Injury multiplier: ${simResult.playerA.volatilityMultiplier.toFixed(2)}x
@@ -218,8 +289,9 @@ Deliver a concise START/SIT verdict:
 1. Lead with the recommendation (START [name]) and the win-probability improvement.
 2. Explain WHY in 2-3 sentences using the simulation numbers.
 3. Reference Vegas game environment if it materially affects the decision.
-4. Note any injury risk or confidence concern.
-5. If it's a coin flip (<3% delta), say so clearly.`;
+4. Reference any beat reporter signals (role changes, injury risk, hidden opportunities) that affect the decision.
+5. Note any injury risk or confidence concern.
+6. If it's a coin flip (<3% delta), say so clearly.`;
 
       const userMsg = `Should I start ${input.playerA.playerName} or ${input.playerB.playerName}?${input.context ? `\n\nContext: ${input.context}` : ""}`;
 
@@ -244,11 +316,15 @@ Deliver a concise START/SIT verdict:
           ...input.playerA,
           outcome: simResult.playerA,
           vegasContext: (enrichedA as SimPlayerWithVegas).vegasContext ?? null,
+          beatReporterSignals: (enrichedA as SimPlayerWithVegas).beatReporterSignals ?? [],
+          beatReporterAdjustment: (enrichedA as SimPlayerWithVegas).beatReporterAdjustment ?? 0,
         },
         playerB: {
           ...input.playerB,
           outcome: simResult.playerB,
           vegasContext: (enrichedB as SimPlayerWithVegas).vegasContext ?? null,
+          beatReporterSignals: (enrichedB as SimPlayerWithVegas).beatReporterSignals ?? [],
+          beatReporterAdjustment: (enrichedB as SimPlayerWithVegas).beatReporterAdjustment ?? 0,
         },
       };
     }),

@@ -372,3 +372,56 @@ export const champEquityPredictions = mysqlTable(
 );
 export type ChampEquityPrediction = typeof champEquityPredictions.$inferSelect;
 export type InsertChampEquityPrediction = typeof champEquityPredictions.$inferInsert;
+
+// ─── Beat Reporter: Player News Signals ───────────────────────────────────────
+// Stores structured signals extracted from ESPN news + injury reports per player
+// Each row = one signal extracted from one news item for one player
+export const playerNewsSignals = mysqlTable(
+  "player_news_signals",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    // Player identification
+    playerName: varchar("playerName", { length: 128 }).notNull(),
+    espnPlayerId: int("espnPlayerId"),
+    nflTeam: varchar("nflTeam", { length: 8 }),
+    position: varchar("position", { length: 8 }),
+    // Signal classification
+    signalType: mysqlEnum("signalType", [
+      "role_up",
+      "role_down",
+      "injury_risk",
+      "workload_risk",
+      "hidden_opportunity",
+      "depth_chart_change",
+      "coach_trust_up",
+      "coach_trust_down",
+      "return_from_injury",
+      "neutral",
+    ]).notNull(),
+    // Signal strength: 0.0 (weak) → 1.0 (strong)
+    magnitude: int("magnitude").notNull().default(50), // stored as 0–100 integer
+    // Projection impact: applied as multiplier in Monte Carlo (-25 to +25, stored as integer %)
+    projectionImpactPct: int("projectionImpactPct").notNull().default(0),
+    // LLM-generated one-sentence summary of the signal
+    summary: text("summary").notNull(),
+    // Confidence in signal extraction: 0–100
+    confidence: int("confidence").notNull().default(70),
+    // Source article metadata
+    headline: text("headline"),
+    articleDescription: text("articleDescription"),
+    sourceType: mysqlEnum("sourceType", ["espn_news", "espn_injury", "rss"]).default("espn_news"),
+    publishedAt: timestamp("publishedAt"),
+    // Cache control
+    cachedAt: timestamp("cachedAt").defaultNow().notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+  },
+  (t) => [
+    index("idx_pns_player_name").on(t.playerName),
+    index("idx_pns_espn_id").on(t.espnPlayerId),
+    index("idx_pns_expires").on(t.expiresAt),
+    index("idx_pns_signal_type").on(t.signalType),
+  ]
+);
+
+export type PlayerNewsSignal = typeof playerNewsSignals.$inferSelect;
+export type InsertPlayerNewsSignal = typeof playerNewsSignals.$inferInsert;
