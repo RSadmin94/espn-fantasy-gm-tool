@@ -1,0 +1,8 @@
+{
+  "query": "SELECT viewName, season, fetchedAt, LENGTH(data) as dataSize FROM espn_season_cache WHERE season = 2026 ORDER BY viewName;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT viewName, season, fetchedAt, LENGTH(data) as dataSize FROM espn_season_cache WHERE season = 2026 ORDER BY viewName;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'data' in 'field list'"
+  ]
+}

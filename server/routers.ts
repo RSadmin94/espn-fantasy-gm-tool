@@ -2470,15 +2470,44 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       // Rod's available picks = his original draft positions (from 2026 draft order)
       //   MINUS any he has traded away
       //   PLUS any he has acquired from others.
-      const draftOrderForOffers = normalizeDraftOrder(seasonData as Record<string, unknown>);
-      const pickOrderForOffers = draftOrderForOffers.pickOrder || [];
+      // Fetch live 2026 draft order from ESPN (not 2025 cache — different pick order)
+      let pickOrderForOffers: { position: number; teamId: number; name?: string; abbrev?: string; owners?: string }[] = [];
+      let live2026TeamMap: Record<number, { owner: string; teamId: number }> = {};
+      try {
+        const live2026 = await fetchEspnViews(2026, ["mDraftDetail", "mSettings", "mTeam"]) as any;
+        const draftOrder2026 = normalizeDraftOrder(live2026);
+        pickOrderForOffers = draftOrder2026.pickOrder || [];
+        // Build teamId → owner name from live 2026 data
+        const live2026Members: Record<string, string> = {};
+        for (const m of (live2026.members || [])) {
+          live2026Members[m.id] = `${m.firstName || ""} ${m.lastName || ""}`.trim();
+        }
+        for (const t of (live2026.teams || [])) {
+          const ownerId = t.primaryOwner || (t.owners?.[0] ?? "");
+          live2026TeamMap[t.id] = {
+            owner: live2026Members[ownerId] || `Owner ${t.id}`,
+            teamId: t.id,
+          };
+        }
+      } catch {
+        // Fallback: use 2025 data if 2026 fetch fails
+        const draftOrderFallback = normalizeDraftOrder(seasonData as Record<string, unknown>);
+        pickOrderForOffers = draftOrderFallback.pickOrder || [];
+      }
       const TOTAL_ROUNDS = 14;
       const TEAMS_COUNT = 14;
-      // Find Rod's team in teamMap
-      const rodTeam = Object.values(teamMap).find(t =>
-        t.ownerName.toLowerCase().includes("rod") || t.teamId === 11
-      );
-      const rodTeamId = rodTeam?.teamId ?? 11;
+      // Find Rod's team — prefer live 2026 team map, fall back to 2025 teamMap
+      const rodTeamId: number = (() => {
+        // First try live 2026 data
+        for (const [tid, info] of Object.entries(live2026TeamMap)) {
+          if (info.owner.toLowerCase().includes("rod")) return Number(tid);
+        }
+        // Fall back to 2025 teamMap
+        const rodTeam2025 = Object.values(teamMap).find(t =>
+          t.ownerName.toLowerCase().includes("rod") || t.teamId === 11
+        );
+        return rodTeam2025?.teamId ?? 11;
+      })();
       // Collect all pick_trades for 2026
       const allPickTrades2026 = await getPickTrades(2026);
       const tradedAwayByRod = allPickTrades2026.filter(t => t.type === "traded_away");
@@ -2533,17 +2562,29 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
 
       // Collect target owner's picks from the 2026 draft order
       const targetOwnerPicks: PickAsset[] = [];
-      // Resolve target owner's teamId from teamMap using targetOwnerName
+      // Resolve target owner's teamId — prefer live 2026 team map, fall back to 2025 teamMap
       let targetTeamId: number | null = null;
+      const cleanTarget = targetOwnerName.toLowerCase().replace(/[^a-z0-9 ]/g, "");
+      const targetFirst = cleanTarget.split(" ")[0];
+      // Try live 2026 data first
+      for (const [tid, info] of Object.entries(live2026TeamMap)) {
+        const cleanOwner = info.owner.toLowerCase().replace(/[^a-z0-9 ]/g, "");
+        const ownerFirst = cleanOwner.split(" ")[0];
+        if (cleanOwner.includes(targetFirst) || cleanTarget.includes(ownerFirst) || targetFirst === ownerFirst) {
+          targetTeamId = Number(tid);
+          break;
+        }
+      }
+      // Fall back to 2025 teamMap if not found
+      if (targetTeamId === null) {
       for (const [, info] of Object.entries(teamMap)) {
         const cleanOwner = info.ownerName.toLowerCase().replace(/[^a-z0-9 ]/g, "");
-        const cleanTarget = targetOwnerName.toLowerCase().replace(/[^a-z0-9 ]/g, "");
-        const targetFirst = cleanTarget.split(" ")[0];
         const ownerFirst = cleanOwner.split(" ")[0];
         if (cleanOwner.includes(targetFirst) || cleanTarget.includes(ownerFirst) || targetFirst === ownerFirst) {
           targetTeamId = info.teamId;
           break;
         }
+      }
       }
       if (targetTeamId !== null) {
         for (let r = 1; r <= TOTAL_ROUNDS; r++) {

@@ -668,3 +668,16 @@
 - [x] Option 2 must be 2-for-2 (two Rod picks vs two target picks, or target pick + another pick from target owner)
 - [x] Option 3 must be 3-for-3 or removed if not enough picks available
 - [x] 0 TypeScript errors, 293/293 tests passing
+
+## Trade Offer Generator — Pick Tradability Intelligence
+- [ ] Build getOwnerPickTradePropensity(): analyze historical pick_trades to compute per-owner pick-trading patterns (which rounds they trade, trade frequency, early vs late round preference)
+- [ ] Score each of the target owner's 2026 picks with a tradability likelihood (HIGH/MEDIUM/LOW) based on their historical behavior
+- [ ] Return tradabilityScores map in tradeOfferGenerator tRPC response
+- [ ] UI: highlight HIGH-tradability picks in the "Rod Receives" side with a flame/hot badge and behavioral tooltip
+- [ ] UI: show a "Pick Trade History" summary card for the target owner (rounds most traded, total picks traded, tendency label)
+- [ ] 0 TypeScript errors, all tests passing
+
+## Trade Offer Generator — Rod Pick Resolution Bug
+- [x] Fix rodAllPicks to use 2026 ESPN draft order position (Rod = pick 1.11), not prior year data
+- [x] Verify Rod's full 2026 pick holdings are correct before building offer options
+- [x] 0 TypeScript errors, 293/293 tests passing

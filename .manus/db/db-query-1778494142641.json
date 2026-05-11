@@ -1,0 +1,58 @@
+{
+  "query": "SELECT season, viewName, fetchedAt, LENGTH(payload) as payloadSize FROM espn_season_cache ORDER BY season DESC, viewName LIMIT 30;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT season, viewName, fetchedAt, LENGTH(payload) as payloadSize FROM espn_season_cache ORDER BY season DESC, viewName LIMIT 30;",
+  "rows": [
+    {
+      "season": "2025",
+      "viewName": "combined",
+      "fetchedAt": "2026-05-09 16:21:39",
+      "payloadSize": "2408611"
+    },
+    {
+      "season": "2024",
+      "viewName": "combined",
+      "fetchedAt": "2026-04-29 19:54:42",
+      "payloadSize": "2293214"
+    },
+    {
+      "season": "2023",
+      "viewName": "combined",
+      "fetchedAt": "2026-04-29 19:54:43",
+      "payloadSize": "2417360"
+    },
+    {
+      "season": "2022",
+      "viewName": "combined",
+      "fetchedAt": "2026-04-29 19:54:46",
+      "payloadSize": "2472596"
+    },
+    {
+      "season": "2021",
+      "viewName": "combined",
+      "fetchedAt": "2026-04-29 19:54:48",
+      "payloadSize": "2411356"
+    },
+    {
+      "season": "2020",
+      "viewName": "combined",
+      "fetchedAt": "2026-04-29 19:54:50",
+      "payloadSize": "2415867"
+    },
+    {
+      "season": "2019",
+      "viewName": "combined",
+      "fetchedAt": "2026-04-29 19:54:52",
+      "payloadSize": "2065280"
+    },
+    {
+      "season": "2018",
+      "viewName": "combined",
+      "fetchedAt": "2026-04-29 19:54:53",
+      "payloadSize": "1253333"
+    }
+  ],
+  "messages": [],
+  "stdout": "season\tviewName\tfetchedAt\tpayloadSize\n2025\tcombined\t2026-05-09 16:21:39\t2408611\n2024\tcombined\t2026-04-29 19:54:42\t2293214\n2023\tcombined\t2026-04-29 19:54:43\t2417360\n2022\tcombined\t2026-04-29 19:54:46\t2472596\n2021\tcombined\t2026-04-29 19:54:48\t2411356\n2020\tcombined\t2026-04-29 19:54:50\t2415867\n2019\tcombined\t2026-04-29 19:54:52\t2065280\n2018\tcombined\t2026-04-29 19:54:53\t1253333\n",
+  "stderr": "",
+  "execution_time_ms": 914
+}
