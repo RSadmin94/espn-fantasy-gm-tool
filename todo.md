@@ -513,3 +513,12 @@
 - [x] Wire dna.managerProfile into the trade.generateOffer server procedure — inject DNA prompt block before LLM call
 - [x] Update the LLM system prompt to use opponent DNA facts to customize offer framing, asset targeting, and negotiation angle
 - [x] Verify TypeScript 0 errors and 195 tests still pass
+
+## Phase 4 — Multi-Agent War Room
+- [x] Copy agentWarRoom.ts and agentRouter.ts into server/
+- [x] Edit routers.ts: add import for agentRouter
+- [x] Edit routers.ts: mount agents: agentRouter inside appRouter
+- [x] Fix getDNABlock stub in agentRouter.ts to use real buildManagerRawData + calcLeagueDNA
+- [x] Build War Room 5-agent debate panel UI in StartSit.tsx (mode toggle, verdict cards, consensus bar, disagreement list)
+- [x] Verify TypeScript 0 errors after integration
+- [x] Verify 195 tests still pass after integration

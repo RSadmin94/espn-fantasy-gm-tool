@@ -4,6 +4,147 @@ import AppLayout from "@/components/AppLayout";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
+
+// ─── War Room Types ───────────────────────────────────────────────────────────
+type AgentRole = "floor" | "upside" | "counter" | "keeper" | "playoff";
+type AgentVerdict = {
+  role: AgentRole;
+  label: string;
+  verdict: "A" | "B" | "NEUTRAL";
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  primaryReason: string;
+  riskOrConcern: string;
+  recommendation: string;
+};
+type WarRoomResult = {
+  question: string;
+  verdicts: AgentVerdict[];
+  consensus: {
+    verdict: "A" | "B" | "NEUTRAL";
+    agreeCount: number;
+    confidenceScore: number;
+    confidenceLabel: "DECISIVE" | "LEAN" | "CONTESTED" | "SPLIT";
+  };
+  disagreements: string[];
+  summaryText: string;
+  promptBlockForAdvisor: string;
+};
+const AGENT_META: Record<AgentRole, { icon: React.ReactNode; color: string; bgColor: string; borderColor: string; description: string }> = {
+  floor:   { icon: <Shield className="h-4 w-4" />,   color: "text-blue-400",   bgColor: "bg-blue-500/10",   borderColor: "border-blue-500/30",   description: "Minimizes bust risk, favors proven starters" },
+  upside:  { icon: <Rocket className="h-4 w-4" />,   color: "text-purple-400", bgColor: "bg-purple-500/10", borderColor: "border-purple-500/30", description: "Chases league-winning ceiling, accepts volatility" },
+  counter: { icon: <Swords className="h-4 w-4" />,   color: "text-orange-400", bgColor: "bg-orange-500/10", borderColor: "border-orange-500/30", description: "Blocks & exploits your 13 specific opponents" },
+  keeper:  { icon: <Star className="h-4 w-4" />,     color: "text-yellow-400", bgColor: "bg-yellow-500/10", borderColor: "border-yellow-500/30", description: "Thinks in 2026/2027 cost vs production" },
+  playoff: { icon: <Calendar className="h-4 w-4" />, color: "text-emerald-400",bgColor: "bg-emerald-500/10",borderColor: "border-emerald-500/30",description: "Optimizes for weeks 14-17 & championship path" },
+};
+const CONFIDENCE_COLORS: Record<string, string> = {
+  HIGH:   "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+  MEDIUM: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+  LOW:    "bg-red-500/20 text-red-400 border-red-500/30",
+};
+const CONSENSUS_COLORS: Record<string, { bar: string; text: string; bg: string }> = {
+  DECISIVE:  { bar: "bg-emerald-500", text: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" },
+  LEAN:      { bar: "bg-blue-500",    text: "text-blue-400",    bg: "bg-blue-500/10 border-blue-500/30" },
+  CONTESTED: { bar: "bg-yellow-500",  text: "text-yellow-400",  bg: "bg-yellow-500/10 border-yellow-500/30" },
+  SPLIT:     { bar: "bg-red-500",     text: "text-red-400",     bg: "bg-red-500/10 border-red-500/30" },
+};
+function AgentVerdictCard({ agent, playerA, playerB }: { agent: AgentVerdict; playerA: string; playerB: string }) {
+  const meta = AGENT_META[agent.role];
+  const isA = agent.verdict === "A";
+  const isB = agent.verdict === "B";
+  const verdictName = isA ? (playerA || "Player A") : isB ? (playerB || "Player B") : "NEUTRAL";
+  const verdictColor = isA ? "text-emerald-400" : isB ? "text-blue-400" : "text-yellow-400";
+  return (
+    <div className={`rounded-xl border ${meta.borderColor} ${meta.bgColor} p-4 space-y-3`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className={meta.color}>{meta.icon}</span>
+          <div>
+            <div className={`text-sm font-bold ${meta.color}`}>{agent.label}</div>
+            <div className="text-[10px] text-muted-foreground">{meta.description}</div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className={`text-sm font-black ${verdictColor}`}>{isA || isB ? "START" : "NEUTRAL"}</div>
+          <div className={`text-xs font-semibold ${verdictColor} max-w-[100px] truncate`}>{verdictName}</div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Badge className={`text-[10px] border px-1.5 py-0 ${CONFIDENCE_COLORS[agent.confidence]}`}>{agent.confidence}</Badge>
+        <span className="text-xs text-muted-foreground truncate">{agent.primaryReason}</span>
+      </div>
+      <p className="text-xs text-foreground leading-relaxed border-t border-border/50 pt-2">{agent.recommendation}</p>
+      {agent.riskOrConcern && (
+        <div className="flex gap-1.5 text-[10px] text-muted-foreground">
+          <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5 text-yellow-500/70" />
+          <span>{agent.riskOrConcern}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+function WarRoomPanel({ result, playerA, playerB }: { result: WarRoomResult; playerA: string; playerB: string }) {
+  const { consensus } = result;
+  const cc = CONSENSUS_COLORS[consensus.confidenceLabel] ?? CONSENSUS_COLORS.CONTESTED;
+  const winnerName = consensus.verdict === "A" ? (playerA || "Player A") : consensus.verdict === "B" ? (playerB || "Player B") : "NEUTRAL";
+  return (
+    <div className="space-y-4">
+      <div className={`rounded-xl border ${cc.bg} p-4`}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Users className={`h-5 w-5 ${cc.text}`} />
+            <span className="text-sm font-bold text-foreground">War Room Consensus</span>
+          </div>
+          <Badge className={`border text-xs px-2 ${cc.bg} ${cc.text}`}>{consensus.confidenceLabel}</Badge>
+        </div>
+        <div className="flex items-end gap-4 mb-3">
+          <div>
+            <div className="text-3xl font-black text-foreground">{winnerName}</div>
+            <div className="text-sm text-muted-foreground">{consensus.agreeCount}/5 agents agree</div>
+          </div>
+          <div className="text-right ml-auto">
+            <div className={`text-2xl font-black ${cc.text}`}>{consensus.confidenceScore}</div>
+            <div className="text-xs text-muted-foreground">Confidence</div>
+          </div>
+        </div>
+        <div className="h-2 bg-muted rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all duration-700 ${cc.bar}`} style={{ width: `${consensus.confidenceScore}%` }} />
+        </div>
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+          <span>Split</span><span>Contested</span><span>Lean</span><span>Decisive</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-3">
+        {result.verdicts.map((agent) => (
+          <AgentVerdictCard key={agent.role} agent={agent} playerA={playerA} playerB={playerB} />
+        ))}
+      </div>
+      {result.disagreements.length > 0 && (
+        <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="h-4 w-4 text-yellow-400" />
+            <span className="text-sm font-semibold text-yellow-400">Minority Dissent — This is Signal</span>
+          </div>
+          <div className="space-y-2">
+            {result.disagreements.map((d, i) => (
+              <p key={i} className="text-xs text-foreground leading-relaxed border-l-2 border-yellow-500/40 pl-3">{d}</p>
+            ))}
+          </div>
+        </div>
+      )}
+      {result.summaryText && (
+        <div className="rounded-xl border border-border bg-card/50 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Brain className="h-4 w-4 text-purple-400" />
+            <span className="text-sm font-semibold text-foreground">War Room Summary</span>
+          </div>
+          <div className="prose prose-sm prose-invert max-w-none">
+            <Streamdown>{result.summaryText}</Streamdown>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,7 +152,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
-import { Brain, Zap, CheckCircle, XCircle, Loader2, ChevronRight, TrendingUp, TrendingDown, Minus, Activity, BarChart3 } from "lucide-react";
+import { Brain, Zap, CheckCircle, XCircle, Loader2, ChevronRight, TrendingUp, TrendingDown, Minus, Activity, BarChart3, Shield, Rocket, Swords, Star, Calendar, AlertTriangle, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   StartSitComparisonViz,
@@ -161,8 +302,14 @@ export default function StartSit() {
   const [simResult, setSimResult] = useState<StartSitSimResult | null>(null);
   const [simLoading, setSimLoading] = useState(false);
 
+  // War Room state
+  const [warRoomMode, setWarRoomMode] = useState(false);
+  const [warRoomResult, setWarRoomResult] = useState<WarRoomResult | null>(null);
+  const [warRoomLoading, setWarRoomLoading] = useState(false);
+
   const chatMutation = trpc.advisor.chat.useMutation();
   const startSitMutation = trpc.simulation.startSit.useMutation();
+  const warRoomMutation = trpc.agents.startSit.useMutation();
   const { data: vorpData } = trpc.analytics.vorp.useQuery({ season: 2025 });
   const { data: rosData } = trpc.analytics.rosValues.useQuery({ season: 2025, weeksRemaining: 8 });
 
@@ -296,6 +443,27 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
     }
   };
 
+  // ── War Room (5 agents) ────────────────────────────────────────────────────
+  const runWarRoom = async () => {
+    if (!player1.trim() || !player2.trim()) { toast.error("Please enter both players."); return; }
+    if (!isAuthenticated) { toast.error("Please sign in to use the War Room."); return; }
+    setWarRoomLoading(true);
+    setWarRoomResult(null);
+    try {
+      const res = await warRoomMutation.mutateAsync({
+        playerA: { name: player1.trim(), position: simPos1, projectedPoints: parseFloat(simProj1) || undefined },
+        playerB: { name: player2.trim(), position: simPos2, projectedPoints: parseFloat(simProj2) || undefined },
+        leagueContext: `${factContext}${trendContext}${context ? `\nAdditional context: ${context}` : ""}`,
+        simulationSummary: simResult ? JSON.stringify(simResult).slice(0, 500) : undefined,
+      });
+      setWarRoomResult(res as unknown as WarRoomResult);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "War Room failed. Please try again.");
+    } finally {
+      setWarRoomLoading(false);
+    }
+  };
+
   const loadScenario = (s: typeof QUICK_SCENARIOS[0]) => {
     setPlayer1(s.player1);
     setPlayer2(s.player2);
@@ -303,6 +471,7 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
     setResult(null);
     setVerdict(null);
     setSimResult(null);
+    setWarRoomResult(null);
   };
 
   return (
@@ -481,17 +650,37 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
                   </CardContent>
                 </Card>
               )}
-              <Button
-                onClick={analyze}
-                disabled={loading || !player1.trim() || !player2.trim()}
-                className="w-full espn-gradient text-white border-0"
-              >
-                {loading ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Analyzing...</>
-                ) : (
-                  <><Brain className="w-4 h-4 mr-2" /> Get Start/Sit Decision</>
-                )}
-              </Button>
+              {/* Mode selector */}
+              <div className="flex rounded-lg border border-border overflow-hidden">
+                <button
+                  onClick={() => setWarRoomMode(false)}
+                  className={`flex-1 py-2 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+                    !warRoomMode ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Brain className="h-3.5 w-3.5" /> Quick Verdict
+                </button>
+                <button
+                  onClick={() => setWarRoomMode(true)}
+                  className={`flex-1 py-2 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+                    warRoomMode ? "bg-purple-600 text-white" : "bg-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Users className="h-3.5 w-3.5" /> War Room (5 Agents)
+                </button>
+              </div>
+              {!warRoomMode ? (
+                <Button onClick={analyze} disabled={loading || !player1.trim() || !player2.trim()} className="w-full espn-gradient text-white border-0">
+                  {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Analyzing...</> : <><Brain className="w-4 h-4 mr-2" /> Get Start/Sit Decision</>}
+                </Button>
+              ) : (
+                <>
+                  <Button onClick={runWarRoom} disabled={warRoomLoading || !player1.trim() || !player2.trim()} className="w-full bg-purple-600 hover:bg-purple-700 text-white border-0">
+                    {warRoomLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> 5 Agents Debating (~3-4s)...</> : <><Users className="w-4 h-4 mr-2" /> Convene War Room</>}
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground text-center">Floor · Upside · Counter · Keeper · Playoff agents run in parallel with Phase 1+2+3 context</p>
+                </>
+              )}
               {!isAuthenticated && (
                 <p className="text-xs text-muted-foreground text-center">
                   <button className="text-primary underline" onClick={() => window.location.href = getLoginUrl()}>Sign in</button> to use the AI Advisor
@@ -532,8 +721,40 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
                 </CardContent>
               </Card>
             )}
+            {/* War Room panel */}
+            {warRoomMode && (
+              <Card className="card-glow bg-card border-purple-500/20">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Users className="w-4 h-4 text-purple-400" />
+                    5-Agent War Room Debate
+                    {warRoomLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400 ml-auto" />}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {warRoomLoading ? (
+                    <div className="space-y-3">
+                      <div className="text-xs text-purple-400/70 text-center animate-pulse">Floor · Upside · Counter · Keeper · Playoff agents debating...</div>
+                      {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-24 rounded-xl bg-muted/20 animate-pulse" />)}
+                    </div>
+                  ) : warRoomResult ? (
+                    <WarRoomPanel result={warRoomResult} playerA={player1Name} playerB={player2Name} />
+                  ) : (
+                    <div className="h-48 flex flex-col items-center justify-center text-center gap-3">
+                      <Users className="w-10 h-10 text-purple-400/30" />
+                      <p className="text-sm text-muted-foreground max-w-xs">Switch to War Room mode and click "Convene War Room" to get a 5-agent debate with Phase 1+2+3 context.</p>
+                      <div className="flex flex-wrap justify-center gap-1.5 mt-1">
+                        {(Object.entries(AGENT_META) as Array<[AgentRole, typeof AGENT_META[AgentRole]]>).map(([role, meta]) => (
+                          <Badge key={role} className={`text-[10px] border ${meta.bgColor} ${meta.color} ${meta.borderColor}`}>{meta.icon}<span className="ml-1">{role}</span></Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
             {/* AI verdict card */}
-            <Card className="card-glow bg-card border-border">
+            {!warRoomMode && <Card className="card-glow bg-card border-border">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-emerald-400" />
@@ -575,7 +796,7 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
                 </div>
               )}
             </CardContent>
-          </Card>
+          </Card>}
           </div>
         </div>
 
