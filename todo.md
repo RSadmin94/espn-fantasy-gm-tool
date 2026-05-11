@@ -491,3 +491,10 @@
 - [x] Edit routers.ts: mount simulation: simulationRouter inside appRouter
 - [x] Verify TypeScript 0 errors after integration
 - [x] Verify 195 tests still pass after integration
+
+## Monte Carlo Simulation Visualization
+- [x] Create SimulationResultsViz component: distribution bar, percentile bands, bust/ceiling %, win probability gauge, confidence badge
+- [x] Create PlayerOutcomeCard component: single player floor/median/ceiling with animated bar
+- [x] Create StartSitComparisonViz component: side-by-side player comparison with win-prob delta
+- [x] Wire simulation.startSit into Waiver Lab Start/Sit tab replacing text-only verdict
+- [ ] Wire simulation.playerOutcome into a standalone Player Outcome modal (accessible from Draft Board player rows)

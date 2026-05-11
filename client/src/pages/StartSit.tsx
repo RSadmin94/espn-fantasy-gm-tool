@@ -11,7 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
-import { Brain, Zap, CheckCircle, XCircle, Loader2, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Brain, Zap, CheckCircle, XCircle, Loader2, ChevronRight, TrendingUp, TrendingDown, Minus, Activity, BarChart3 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  StartSitComparisonViz,
+  SimulationLoadingSkeleton,
+  type StartSitSimResult,
+} from "@/components/SimulationResultsViz";
 
 const QUICK_SCENARIOS = [
   {
@@ -146,7 +152,17 @@ export default function StartSit() {
   const [loading, setLoading] = useState(false);
   const [verdict, setVerdict] = useState<"START_1" | "START_2" | "TOSS_UP" | null>(null);
 
+  // Monte Carlo simulation state
+  const [simMode, setSimMode] = useState(false);
+  const [simPos1, setSimPos1] = useState("RB");
+  const [simPos2, setSimPos2] = useState("RB");
+  const [simProj1, setSimProj1] = useState("14.0");
+  const [simProj2, setSimProj2] = useState("12.0");
+  const [simResult, setSimResult] = useState<StartSitSimResult | null>(null);
+  const [simLoading, setSimLoading] = useState(false);
+
   const chatMutation = trpc.advisor.chat.useMutation();
+  const startSitMutation = trpc.simulation.startSit.useMutation();
   const { data: vorpData } = trpc.analytics.vorp.useQuery({ season: 2025 });
   const { data: rosData } = trpc.analytics.rosValues.useQuery({ season: 2025, weeksRemaining: 8 });
 
@@ -240,12 +256,53 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
     }
   };
 
+  // ── Monte Carlo simulation ─────────────────────────────────────────────────
+  const runSimulation = async () => {
+    const proj1 = parseFloat(simProj1);
+    const proj2 = parseFloat(simProj2);
+    if (!player1.trim() || !player2.trim()) {
+      toast.error("Enter both player names first.");
+      return;
+    }
+    if (isNaN(proj1) || isNaN(proj2) || proj1 <= 0 || proj2 <= 0) {
+      toast.error("Enter valid projected points for both players.");
+      return;
+    }
+    setSimLoading(true);
+    setSimResult(null);
+    try {
+      const res = await startSitMutation.mutateAsync({
+        playerA: {
+          playerId: Math.abs(player1Name.split("").reduce((a, c) => a + c.charCodeAt(0), 0)),
+          playerName: player1Name,
+          position: simPos1,
+          projectedPoints: proj1,
+        },
+        playerB: {
+          playerId: Math.abs(player2Name.split("").reduce((a, c) => a + c.charCodeAt(0), 0)),
+          playerName: player2Name,
+          position: simPos2,
+          projectedPoints: proj2,
+        },
+        restOfLineup: [],
+        opponentLineup: [],
+        context: context || undefined,
+      });
+      setSimResult(res.simResult as unknown as StartSitSimResult);
+    } catch {
+      toast.error("Simulation failed. Please try again.");
+    } finally {
+      setSimLoading(false);
+    }
+  };
+
   const loadScenario = (s: typeof QUICK_SCENARIOS[0]) => {
     setPlayer1(s.player1);
     setPlayer2(s.player2);
     setContext(s.context);
     setResult(null);
     setVerdict(null);
+    setSimResult(null);
   };
 
   return (
@@ -321,6 +378,50 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
                   rows={2}
                 />
               </div>
+              {/* Monte Carlo toggle */}
+              <div className="rounded-lg border border-border/60 bg-accent/20 p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5 text-primary" />
+                    Monte Carlo Simulation
+                  </span>
+                  <button
+                    onClick={() => setSimMode((v) => !v)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${simMode ? "bg-primary" : "bg-muted"}`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${simMode ? "translate-x-4" : "translate-x-1"}`} />
+                  </button>
+                </div>
+                {simMode && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      Set position and projected points for each player to run 10,000 matchup simulations.
+                    </p>
+                    {/* Player A row */}
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-semibold w-20 shrink-0 text-emerald-400">Player A</span>
+                      <span className="text-muted-foreground truncate flex-1 min-w-0">{player1Name || "—"}</span>
+                      <select value={simPos1} onChange={(e) => setSimPos1(e.target.value)} className="bg-accent border border-border rounded px-1.5 py-1 text-xs text-foreground w-16 shrink-0">
+                        {["QB","RB","WR","TE","K","D/ST"].map((p) => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                      <Input type="number" min={0} max={60} step={0.5} value={simProj1} onChange={(e) => setSimProj1(e.target.value)} placeholder="Proj pts" className="bg-accent border-border text-xs h-7 w-20 shrink-0" />
+                    </div>
+                    {/* Player B row */}
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-semibold w-20 shrink-0 text-blue-400">Player B</span>
+                      <span className="text-muted-foreground truncate flex-1 min-w-0">{player2Name || "—"}</span>
+                      <select value={simPos2} onChange={(e) => setSimPos2(e.target.value)} className="bg-accent border border-border rounded px-1.5 py-1 text-xs text-foreground w-16 shrink-0">
+                        {["QB","RB","WR","TE","K","D/ST"].map((p) => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                      <Input type="number" min={0} max={60} step={0.5} value={simProj2} onChange={(e) => setSimProj2(e.target.value)} placeholder="Proj pts" className="bg-accent border-border text-xs h-7 w-20 shrink-0" />
+                    </div>
+                    <Button onClick={runSimulation} disabled={simLoading || !player1.trim() || !player2.trim()} size="sm" className="w-full bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 text-xs">
+                      {simLoading ? <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Simulating 10,000 matchups...</> : <><BarChart3 className="w-3 h-3 mr-1.5" /> Run Monte Carlo Simulation</>}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               {showFactsPanel && (
                 <Card className="bg-accent/30 border-border">
                   <CardHeader className="py-3">
@@ -400,7 +501,39 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
           </Card>
 
           {/* Result panel */}
-          <Card className="card-glow bg-card border-border">
+          <div className="space-y-4">
+            {/* Monte Carlo simulation results */}
+            {simMode && (
+              <Card className="card-glow bg-card border-border">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-primary" />
+                    Monte Carlo Simulation
+                    <Badge className="ml-auto text-[10px] bg-primary/10 text-primary border-primary/20 border">10,000 runs</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {simLoading ? (
+                    <SimulationLoadingSkeleton />
+                  ) : simResult ? (
+                    <StartSitComparisonViz
+                      simResult={simResult}
+                      labelA={player1Name || "Player A"}
+                      labelB={player2Name || "Player B"}
+                    />
+                  ) : (
+                    <div className="h-40 flex flex-col items-center justify-center text-center gap-3">
+                      <Activity className="w-8 h-8 text-muted-foreground/40" />
+                      <p className="text-sm text-muted-foreground max-w-xs">
+                        Enable Monte Carlo, set projected points, and click "Run Simulation" to see floor/median/ceiling distributions and win probability.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+            {/* AI verdict card */}
+            <Card className="card-glow bg-card border-border">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-emerald-400" />
@@ -443,6 +576,7 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
               )}
             </CardContent>
           </Card>
+          </div>
         </div>
 
         {/* PPR Rules Reference */}
