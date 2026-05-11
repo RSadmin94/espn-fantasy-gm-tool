@@ -532,3 +532,9 @@
 - [x] Add Championship Impact card to Trade Analyzer (before/after champ % delta using whatIfDelta mutation)
 - [x] Verify TypeScript 0 errors after integration
 - [x] Verify 195 tests still pass after integration
+
+## Trade Analyzer — Picks-Only Mode
+- [x] Remove player selection from Trade Analyzer — both sides should only accept 2026 draft picks
+- [x] Keep pick round/slot input UI, restrict to 2026 season picks only
+- [x] Added DRAFT_2026_COMPLETE flag — flip to true after draft to re-enable player trading
+- [x] Verify TypeScript 0 errors and tests still pass
