@@ -37,6 +37,7 @@ import OpponentIntel from "@/pages/hubs/OpponentIntel";
 import DataCenter from "@/pages/hubs/DataCenter";
 import BacktestingHub from "@/pages/hubs/BacktestingHub";
 import GMDecisionMemory from "@/pages/hubs/GMDecisionMemory";
+import MLForecast from "@/pages/MLForecast";
 
 function Router() {
   return (
@@ -73,6 +74,7 @@ function Router() {
       <Route path="/weekly-stats" component={WeeklyStats} />
       <Route path="/analytics" component={LeagueAnalytics} />
       <Route path="/manager-behavior" component={ManagerBehavior} />
+      <Route path="/ml-forecast" component={MLForecast} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

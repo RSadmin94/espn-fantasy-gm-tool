@@ -15,6 +15,7 @@ import { backtestingRouter } from "./backtestingRouter";
 import { vegasRouter } from "./vegasRouter";
 import { beatReporterRouter } from "./beatReporterRouter";
 import { gmDecisionRouter } from "./gmDecisionRouter";
+import { mlRouter } from "./mlRouter";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob } from "./db";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
@@ -81,6 +82,7 @@ export const appRouter = router({
   vegas: vegasRouter,
   beatReporter: beatReporterRouter,
   gmDecision: gmDecisionRouter,
+  ml: mlRouter,
   leagueScoring: router({
     getSettings: publicProcedure
       .input(z.object({ season: z.number().optional() }))

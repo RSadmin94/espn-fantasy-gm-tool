@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 import { Search, TrendingUp, TrendingDown, Minus, Brain, Loader2, Star, Zap, DollarSign } from "lucide-react";
+import { LogDecisionButton } from "@/components/LogDecisionButton";
 
 type AnalyticsRecord = Record<string, unknown>;
 
@@ -148,6 +149,7 @@ export default function WaiverWire() {
   const [report, setReport] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeBlindSpot, setActiveBlindSpot] = useState<string | null>(null);
+  const [lastAnalyzedPlayer, setLastAnalyzedPlayer] = useState<string | null>(null);
 
   const { data: freeAgents, isLoading: faLoading } = trpc.espn.freeAgents.useQuery({ season });
   const { data: vorpData } = trpc.analytics.vorp.useQuery({ season: 2025 });
@@ -216,6 +218,7 @@ Be specific and decisive. This is a 14-team PPR keeper league where depth is cri
     try {
       const res = await chatMutation.mutateAsync({ message: prompt, season: 2025 });
       setReport(res.message);
+      setLastAnalyzedPlayer(query);
     } catch {
       toast.error("Analysis failed. Please try again.");
     } finally {
@@ -372,7 +375,26 @@ Be specific and decisive. This is a 14-team PPR keeper league where depth is cri
                 {loading ? (
                   <div className="space-y-3">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-4 w-full" />)}</div>
                 ) : report ? (
-                  <div className="prose prose-sm prose-invert max-w-none"><Streamdown>{report}</Streamdown></div>
+                  <div className="space-y-4">
+                    <div className="prose prose-sm prose-invert max-w-none"><Streamdown>{report}</Streamdown></div>
+                    {lastAnalyzedPlayer && (
+                      <div className="pt-3 border-t border-border flex justify-end">
+                        <LogDecisionButton
+                          toolSource="waiver_wire"
+                          decisionType="waiver_add"
+                          description={`Waiver wire scouting report: ${lastAnalyzedPlayer}`}
+                          recommendation={report.includes("ADD NOW") ? "ADD NOW" : report.includes("ADD IF AVAILABLE") ? "ADD IF AVAILABLE" : report.includes("MONITOR") ? "MONITOR" : "PASS"}
+                          playersInvolved={[lastAnalyzedPlayer]}
+                          aiContext={report.slice(0, 500)}
+                          season={season}
+                          tags={["waiver", "scouting"]}
+                          label="Log This Decision"
+                          variant="outline"
+                          size="sm"
+                        />
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className="h-48 flex flex-col items-center justify-center text-center gap-3">
                     <Search className="w-10 h-10 text-primary/30" />

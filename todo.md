@@ -619,7 +619,7 @@
 - [x] Build FastAPI prediction microservice: ml/prediction_service.py — /predict, /health, /feature-importance endpoints
 - [x] Build Node.js bridge: server/mlService.ts — callMLService(), enrichWithML(), getMLFeatureImportance()
 - [x] Integrate ML projections into Monte Carlo engine as fourth enrichment layer (enrichWithML in simulationRouter)
-- [ ] Build ML Forecasting UI: projection confidence bands, feature importance chart, model accuracy panel (pending)
+- [x] Build ML Forecasting UI: projection confidence bands, feature importance chart, model accuracy panel
 - [x] Write vitest tests for feature engineering pure functions
 - [x] 279/279 tests passing, 0 TypeScript errors
 
@@ -641,7 +641,7 @@
 - [x] Add "Log This Decision" button to Start/Sit results panel
 - [x] Add "Log This Decision" button to Trade Analyzer results panel
 - [x] Add "Log This Decision" button to Trade Offer Generator results panel
-- [ ] Add "Log This Decision" button to Waiver Wire results panel (pending)
+- [x] Add "Log This Decision" button to Waiver Wire results panel
 - [x] Build GMDecisionMemory hub page: Decision Feed, Accuracy Breakdown, Patterns, Retrospective tabs
 - [x] Add "GM Memory" nav item to AppLayout sidebar under System section
 - [x] Write vitest tests for gmDecisionService accuracy stats and pattern analysis (23 tests)
@@ -653,3 +653,11 @@
 - [x] Show resolved owner name, team, and DNA profile in the target pick card
 - [x] Offer options: show only picks Rod can offer (from his current pick holdings per ESPN data)
 - [x] 0 TypeScript errors, all tests passing (293/293)
+
+## Final Completion (May 2026)
+- [x] Trade Offer Generator picks-only fix: ESPN draft order owner resolution, player assets removed, DNA profile shown
+- [x] ML Forecasting UI: /ml-forecast page with confidence bands, feature importance chart, model accuracy panel
+- [x] Log This Decision button added to Waiver Wire results panel
+- [x] mlRouter.ts: ml.health, ml.predict, ml.predictBatch tRPC procedures
+- [x] ML Forecast nav item added to AppLayout sidebar (System group)
+- [x] 0 TypeScript errors, 293/293 tests passing
