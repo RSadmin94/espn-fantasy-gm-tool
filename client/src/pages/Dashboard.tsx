@@ -157,6 +157,78 @@ function Countdown({ target, label }: { target: Date; label: string }) {
   );
 }
 
+// ─── League Pulse Strip ─────────────────────────────────────────────────────
+function LeaguePulseStrip() {
+  const { data, isLoading } = trpc.weeklyAssessment.leaguePulse.useQuery({ season: 2025 });
+
+  if (isLoading) {
+    return (
+      <Card className="card-glow bg-card border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Activity className="w-4 h-4 text-orange-400" />
+            Live League Pulse
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
+            {Array.from({ length: 14 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded" />)}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!data) return null;
+
+  const hotTeams = data.teams.filter((t: { desperationScore: number }) => t.desperationScore >= 70);
+  const totalTx = data.teams.reduce((s: number, t: { lastWeekTransactionCount: number }) => s + t.lastWeekTransactionCount, 0);
+
+  return (
+    <Card className="card-glow bg-card border-orange-500/20">
+      <CardHeader className="pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Activity className="w-4 h-4 text-orange-400" />
+            <span className="text-orange-400">Live League Pulse</span>
+            <span className="text-muted-foreground font-normal text-xs">Week {data.week}</span>
+          </CardTitle>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span><span className="text-red-400 font-semibold">{hotTeams.length}</span> desperate</span>
+            <span><span className="text-blue-400 font-semibold">{totalTx}</span> moves last 7d</span>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className="grid grid-cols-4 md:grid-cols-7 gap-1.5">
+          {data.teams.map((team: { teamId: number; ownerName: string; standingRank: number; wins: number; losses: number; desperationScore: number; desperationLabel: string; lastWeekTransactionCount: number }) => {
+            const barColor = team.desperationScore >= 70 ? "bg-red-500" : team.desperationScore >= 45 ? "bg-orange-500" : team.desperationScore >= 25 ? "bg-yellow-500" : "bg-slate-600";
+            const textColor = team.desperationScore >= 70 ? "text-red-400" : team.desperationScore >= 45 ? "text-orange-400" : team.desperationScore >= 25 ? "text-yellow-400" : "text-slate-400";
+            return (
+              <div key={team.teamId} className="bg-accent/30 rounded p-1.5 border border-border hover:border-border/80 transition-colors">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-muted-foreground text-[10px] font-mono">#{team.standingRank}</span>
+                  {team.lastWeekTransactionCount > 0 && (
+                    <span className="text-[10px] text-blue-400">{team.lastWeekTransactionCount}tx</span>
+                  )}
+                </div>
+                <div className="text-xs text-foreground font-medium truncate leading-tight">{team.ownerName.split(' ')[0]}</div>
+                <div className="text-[10px] text-muted-foreground">{team.wins}–{team.losses}</div>
+                <div className="mt-1">
+                  <div className="h-0.5 bg-muted rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${barColor}`} style={{ width: `${team.desperationScore}%` }} />
+                  </div>
+                  <div className={`text-[9px] mt-0.5 ${textColor}`}>{team.desperationLabel}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("executive");
@@ -641,6 +713,9 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* League Pulse — Live Desperation Strip */}
+            <LeaguePulseStrip />
 
             {/* Countdowns + Quick Launch */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

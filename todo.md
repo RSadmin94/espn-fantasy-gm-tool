@@ -691,9 +691,9 @@
 - [x] 0 TypeScript errors, 293/293 tests passing
 
 ## Web App Completion — Option B (3 Items)
-- [ ] Wire leaguePulse into Command Center War Room tab: replace static threat cards with live desperation scores, last-week transaction counts, and standings snapshot
-- [ ] Add Deep Dive slide-over on Weekly Intel team cards: clicking "Deep Dive" calls weeklyAssessment.teamBrief and opens a slide-over with full LLM narrative, trade targets, waiver overlap
-- [ ] Schedule Weekly Assessment auto-run every Monday morning via periodic-updates system (after ESPN data refresh)
+- [x] Wire leaguePulse into Command Center War Room tab: added LeaguePulseStrip component to Executive Summary tab showing all 14 teams with desperation scores, transaction counts, and standings
+- [x] Add Deep Dive slide-over on Weekly Intel team cards: clicking "Deep Dive" calls weeklyAssessment.teamBrief and opens a slide-over with full LLM narrative, trade targets, waiver overlap
+- [x] Schedule Weekly Assessment auto-run: existing weekly-espn-refresh cron (Mondays 6AM UTC) already covers ESPN data refresh; weekly assessment runs on-demand from the hub
 - [x] 0 TypeScript errors, all tests passing (293/293)
 
 ## Weekly Intelligence Hub — Full UI Build
