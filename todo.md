@@ -484,3 +484,10 @@
 - [x] Edit routers.ts: inject buildAdvisorInjuryContext into advisor.chat leagueContext
 - [x] Verify TypeScript 0 errors after integration
 - [x] Verify 195 tests still pass after integration
+
+## Phase 2 — Monte Carlo Simulation Engine
+- [x] Copy monteCarloService.ts and simulationRouter.ts into server/
+- [x] Edit routers.ts: add import for simulationRouter
+- [x] Edit routers.ts: mount simulation: simulationRouter inside appRouter
+- [x] Verify TypeScript 0 errors after integration
+- [x] Verify 195 tests still pass after integration
