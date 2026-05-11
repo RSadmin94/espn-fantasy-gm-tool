@@ -1,8 +1,12 @@
-import { X, TrendingUp, TrendingDown, Minus, Star, Users, BarChart2, Calendar } from "lucide-react";
+import React, { useState } from "react";
+import { X, TrendingUp, TrendingDown, Minus, Star, Users, BarChart2, Calendar, Activity, Loader2, BarChart3 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
+import { PlayerOutcomeCard, type PlayerOutcome } from "@/components/SimulationResultsViz";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -113,11 +117,39 @@ function computeEdgeScore(player: MergedPlayer): { score: number; label: string;
   return { score, label, color };
 }
 
+// Default projected points by position (PPR 14-team averages)
+const DEFAULT_PROJ: Record<string, number> = {
+  QB: 22.0, RB: 14.0, WR: 13.0, TE: 10.0, K: 8.0, DST: 7.0,
+};
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function PlayerDetailDrawer({ player, onClose }: Props) {
   const edge = computeEdgeScore(player);
   const posColor = POS_COLORS[player.position] || POS_COLORS.DST;
+
+  // Monte Carlo simulation state
+  const [simProj, setSimProj] = useState(String(DEFAULT_PROJ[player.position] ?? 12.0));
+  const [committedProj, setCommittedProj] = useState<number | null>(null);
+
+  const { data: simOutcome, isFetching: simLoading } = trpc.simulation.playerOutcome.useQuery(
+    {
+      playerId: player.fpId,
+      playerName: player.name,
+      position: player.position,
+      projectedPoints: committedProj ?? (DEFAULT_PROJ[player.position] ?? 12.0),
+    },
+    { enabled: committedProj !== null, staleTime: 0 }
+  );
+
+  const runOutcomeSim = () => {
+    const proj = parseFloat(simProj);
+    if (isNaN(proj) || proj <= 0) {
+      toast.error("Enter a valid projected points value.");
+      return;
+    }
+    setCommittedProj(proj);
+  };
 
   // Fetch draft history from ESPN cache
   const { data: draftHistory, isLoading: histLoading } = trpc.draftBoard.getPlayerDraftHistory.useQuery(
@@ -310,7 +342,49 @@ export function PlayerDetailDrawer({ player, onClose }: Props) {
           )}
 
           <Separator className="border-slate-700" />
-
+          {/* Monte Carlo Outcome Simulation */}
+          <div>
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5" /> Monte Carlo Outcome Simulation
+            </h3>
+            <div className="flex items-center gap-2 mb-3">
+              <label className="text-xs text-slate-400 shrink-0">Projected pts:</label>
+              <Input
+                type="number"
+                min={0}
+                max={60}
+                step={0.5}
+                value={simProj}
+                onChange={(e) => setSimProj(e.target.value)}
+                className="bg-slate-800 border-slate-700 text-xs h-7 w-20"
+              />
+              <Button
+                onClick={runOutcomeSim}
+                disabled={simLoading}
+                size="sm"
+                className="flex-1 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 text-xs h-7"
+              >
+                {simLoading ? (
+                  <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Simulating...</>
+                ) : (
+                  <><BarChart3 className="w-3 h-3 mr-1" /> Run 10,000 Sims</>
+                )}
+              </Button>
+            </div>
+            {simOutcome ? (
+              <PlayerOutcomeCard
+                outcome={simOutcome}
+                accent={player.position === "QB" ? "blue" : "emerald"}
+              />
+            ) : (
+              <div className="h-24 flex items-center justify-center rounded-lg bg-slate-800/40 border border-slate-700/50">
+                <p className="text-xs text-slate-500 text-center px-4">
+                  Set projected points and run simulation to see floor/median/ceiling distribution.
+                </p>
+              </div>
+            )}
+          </div>
+          <Separator className="border-slate-700" />
           {/* League Draft History */}
           <div>
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
