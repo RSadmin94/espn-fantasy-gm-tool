@@ -8,6 +8,7 @@ import { invokeLLM, type Message } from "./_core/llm";
 import { injuryRouter } from "./injuryRouter";
 import { buildAdvisorInjuryContext } from "./injuryAnalytics";
 import { simulationRouter } from "./simulationRouter";
+import { dnaRouter } from "./dnaRouter";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob } from "./db";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
@@ -66,6 +67,7 @@ export const appRouter = router({
   system: systemRouter,
   injury: injuryRouter,
   simulation: simulationRouter,
+  dna: dnaRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -2780,6 +2782,20 @@ Be concise, data-driven, and specific. Reference actual team names and player na
             } catch {
               // Injury fetch failed — continue without it
             }
+          }
+
+          // Phase 3: inject League DNA behavioral intelligence
+          try {
+            const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
+            const { buildManagerRawData } = await import("./dnaRouter");
+            const managerRawData = await buildManagerRawData();
+            if (managerRawData.length > 0) {
+              const dnaProfiles = calcLeagueDNA(managerRawData);
+              const dnaBlock = buildDNAPromptBlock(dnaProfiles);
+              leagueContext += "\n\n" + dnaBlock;
+            }
+          } catch {
+            // DNA unavailable — continue without it
           }
         }
         const history = await getChatHistory(userId, season);

@@ -498,3 +498,11 @@
 - [x] Create StartSitComparisonViz component: side-by-side player comparison with win-prob delta
 - [x] Wire simulation.startSit into Waiver Lab Start/Sit tab replacing text-only verdict
 - [x] Wire simulation.playerOutcome into a standalone Player Outcome modal (accessible from Draft Board player rows)
+
+## Phase 3 — League DNA Engine
+- [x] Copy leagueDNA.ts and dnaRouter.ts into server/
+- [x] Edit routers.ts: add import for dnaRouter
+- [x] Edit routers.ts: mount dna: dnaRouter inside appRouter
+- [x] Wire buildDNAPromptBlock into advisor.chat leagueContext (after Phase 1 injury injection)
+- [x] Verify TypeScript 0 errors after integration
+- [x] Verify 195 tests still pass after integration
