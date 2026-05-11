@@ -16,6 +16,7 @@ import { vegasRouter } from "./vegasRouter";
 import { beatReporterRouter } from "./beatReporterRouter";
 import { gmDecisionRouter } from "./gmDecisionRouter";
 import { mlRouter } from "./mlRouter";
+import { weeklyAssessmentRouter } from "./weeklyAssessmentRouter";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob } from "./db";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
@@ -83,6 +84,7 @@ export const appRouter = router({
   beatReporter: beatReporterRouter,
   gmDecision: gmDecisionRouter,
   ml: mlRouter,
+  weeklyAssessment: weeklyAssessmentRouter,
   leagueScoring: router({
     getSettings: publicProcedure
       .input(z.object({ season: z.number().optional() }))
@@ -2585,7 +2587,6 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
           break;
         }
       }
-      }
       if (targetTeamId !== null) {
         for (let r = 1; r <= TOTAL_ROUNDS; r++) {
           for (let p = 1; p <= TEAMS_COUNT; p++) {
@@ -2613,6 +2614,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
           }
         }
       }
+      } // end if (targetTeamId === null) fallback
       // Sort target owner picks by value descending
       targetOwnerPicks.sort((a, b) => b.value - a.value);
 

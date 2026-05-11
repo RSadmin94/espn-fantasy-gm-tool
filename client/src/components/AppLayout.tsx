@@ -27,6 +27,7 @@ const navItems = [
   { href: "/backtesting", icon: Target, label: "Backtesting", group: "System", badge: "NEW" },
   { href: "/gm-memory", icon: Brain, label: "GM Memory", group: "System", badge: "NEW" },
   { href: "/ml-forecast", icon: BarChart3, label: "ML Forecast", group: "System", badge: "ML" },
+  { href: "/weekly-intelligence", icon: Activity, label: "Weekly Intel", group: "Intelligence", badge: "NEW" },
 ];
 
 const groups = ["Overview", "Draft & Keepers", "Decision Tools", "Intelligence", "System"];

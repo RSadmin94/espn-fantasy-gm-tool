@@ -681,3 +681,11 @@
 - [x] Fix rodAllPicks to use 2026 ESPN draft order position (Rod = pick 1.11), not prior year data
 - [x] Verify Rod's full 2026 pick holdings are correct before building offer options
 - [x] 0 TypeScript errors, 293/293 tests passing
+
+## Weekly Assessment Engine Integration
+- [x] Drop weeklyAssessmentService.ts and weeklyAssessmentRouter.ts into server/
+- [x] Wire weeklyAssessmentRouter into routers.ts (import + mount)
+- [x] Build Weekly Intelligence hub page (/weekly-intelligence) with 14 team cards, sort/filter, progressive load
+- [x] Update Command Center: leaguePulse on load (instant), rodOpportunities in quick-launch
+- [x] Add Weekly Intelligence nav entry in AppLayout (Intelligence group)
+- [x] 0 TypeScript errors, 293/293 tests passing
