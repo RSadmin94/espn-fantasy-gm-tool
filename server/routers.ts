@@ -14,6 +14,7 @@ import { champRouter } from "./champRouter";
 import { backtestingRouter } from "./backtestingRouter";
 import { vegasRouter } from "./vegasRouter";
 import { beatReporterRouter } from "./beatReporterRouter";
+import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob } from "./db";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
@@ -78,6 +79,27 @@ export const appRouter = router({
   backtest: backtestingRouter,
   vegas: vegasRouter,
   beatReporter: beatReporterRouter,
+  leagueScoring: router({
+    getSettings: publicProcedure
+      .input(z.object({ season: z.number().optional() }))
+      .query(async ({ input }) => {
+        const settings = await getLeagueScoringSettings(input.season);
+        return {
+          scoringType: settings.scoringType,
+          scoringDescription: settings.scoringDescription,
+          receptionPoints: settings.receptionPoints,
+          passingTDPoints: settings.passingTDPoints,
+          rushingTDPoints: settings.rushingTDPoints,
+          receivingTDPoints: settings.receivingTDPoints,
+          passingYardsPerPoint: settings.passingYardsPerPoint,
+          rushingYardsPerPoint: settings.rushingYardsPerPoint,
+          receivingYardsPerPoint: settings.receivingYardsPerPoint,
+          interceptionPoints: settings.interceptionPoints,
+          breakdown: getScoringBreakdown(settings),
+          fetchedAt: settings.fetchedAt,
+        };
+      }),
+  }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -2256,15 +2278,10 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
         };
       }
 
-      // ── 2. League scoring settings ─────────────────────────────────────────
-      const scoringItems: any[] = seasonData.settings?.scoringSettings?.scoringItems || [];
-      const scoringMap: Record<number, number> = {};
-      for (const item of scoringItems) {
-        if (item.statId !== undefined) scoringMap[item.statId] = item.points;
-      }
-      // Key PPR stats: statId 1 = receptions (0.5), 42 = rec yards (/10), 43 = rec TDs (6)
-      // 24 = rush yards (/10), 25 = rush TDs (6), 3 = pass yards (/25), 4 = pass TDs (4)
-      const scoringDesc = `PPR (0.5/rec), 6pts/TD, 4pts/pass TD, 1pt/25 pass yds, 1pt/10 rush yds, 1pt/10 rec yds`;
+      // ── 2. League scoring settings (from leagueScoringService) ──────────────
+      const leagueScoringSettings = await getLeagueScoringSettings().catch(() => null);
+      const scoringMap: Record<number, number> = leagueScoringSettings?.scoringMap ?? {};
+      const scoringDesc = leagueScoringSettings?.scoringDescription ?? `Half PPR (0.5/rec), 6pts/TD, 4pts/pass TD, 1pt/25 pass yds, 1pt/10 rush yds, 1pt/10 rec yds`;
 
       // ── 3. Build player roster index ──────────────────────────────────────
       interface PlayerInfo {

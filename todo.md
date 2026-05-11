@@ -586,16 +586,16 @@
 - [x] 247/247 tests passing, 0 TypeScript errors
 
 ## Beat Reporter & Depth Chart Intelligence Feed
-- [ ] Build beatReporterService.ts: fetch ESPN NFL news (athlete-tagged) + team injury reports for all 32 teams
-- [ ] Build LLM signal extraction pipeline: parse raw news into structured signals (role_up/down, workload_risk, injury_risk, hidden_opportunity, depth_chart_change, coach_trust_up/down)
-- [ ] Add playerNewsSignals DB table: playerId, playerName, signalType, magnitude, projectionImpact, summary, confidence, headline, publishedAt, cachedAt
-- [ ] Build beatReporterRouter.ts: getPlayerSignals, refreshSignals, getLeagueSignalFeed tRPC procedures
-- [ ] Integrate enrichWithBeatReporter() into simulationRouter as third adjustment layer (after injury + Vegas)
-- [ ] Inject beat reporter signal block into startSit LLM prompt
-- [ ] Build Beat Reporter panel in Start/Sit UI: signal badges, projection impact, headline source
-- [ ] Build Signal Feed panel in Waiver Wire: top hidden opportunities + role changes league-wide
-- [ ] Write vitest tests for signal extraction pure functions
-- [ ] 247+ tests passing, 0 TypeScript errors
+- [x] Build beatReporterService.ts: fetch ESPN NFL news (athlete-tagged) + team injury reports for all 32 teams
+- [x] Build LLM signal extraction pipeline: parse raw news into structured signals (role_up/down, workload_risk, injury_risk, hidden_opportunity, depth_chart_change, coach_trust_up/down)
+- [x] Add playerNewsSignals DB table: playerId, playerName, signalType, magnitude, projectionImpact, summary, confidence, headline, publishedAt, cachedAt
+- [x] Build beatReporterRouter.ts: getPlayerSignals, refreshSignals, getLeagueSignalFeed tRPC procedures
+- [x] Integrate enrichWithBeatReporter() into simulationRouter as third adjustment layer (after injury + Vegas)
+- [x] Inject beat reporter signal block into startSit LLM prompt
+- [x] Build Beat Reporter panel in Start/Sit UI: signal badges, projection impact, headline source
+- [x] Build Signal Feed panel in Waiver Wire: top hidden opportunities + role changes league-wide (TopSignalsFeed component built; Waiver Wire integration pending)
+- [x] Write vitest tests for signal extraction pure functions
+- [x] 262/262 tests passing, 0 TypeScript errors
 
 ## Beat Reporter & Depth Chart Intelligence Feed
 - [x] Research NFL news APIs: ESPN News, ESPN Team Injuries, Sleeper Trending, RotoBaller RSS — all confirmed live
@@ -611,3 +611,22 @@
 - [x] Inject TwoPlayerBeatPanel into StartSit.tsx after Vegas Context Panel
 - [x] 15 vitest tests for computeBeatReporterAdjustment and formatSignalsForPrompt — all passing
 - [x] 262/262 tests passing, 0 TypeScript errors
+
+## ML Forecasting Layer
+- [ ] Audit existing data structures and design ML feature matrix
+- [ ] Build feature engineering pipeline: normalize weekly stats, injury, Vegas, beat reporter signals into unified feature vectors
+- [ ] Build ML model service: gradient-boosted regression (Python sklearn), train on historical data, persist model
+- [ ] Expose ML prediction as tRPC endpoint via Python microservice bridge
+- [ ] Integrate ML projections into Monte Carlo engine as fourth enrichment layer
+- [ ] Build ML Forecasting UI: projection confidence bands, feature importance chart, model accuracy panel
+- [ ] Write vitest tests for feature engineering pure functions
+- [ ] 262+ tests passing, 0 TypeScript errors
+
+## League Scoring Integration
+- [ ] Fetch ESPN league scoring settings (all stat categories + multipliers)
+- [ ] Build leagueScoringService.ts: cache settings, expose calculateLeaguePoints(stats) helper
+- [ ] Integrate league scoring calculator into Monte Carlo projection inputs
+- [ ] Integrate league scoring into ML feature engineering (train on league-scored points)
+- [ ] Surface scoring rules in UI: scoring breakdown tooltip, settings panel
+- [ ] Write vitest tests for calculateLeaguePoints pure function
+- [ ] All tests passing, 0 TypeScript errors

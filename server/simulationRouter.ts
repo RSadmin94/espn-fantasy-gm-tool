@@ -33,6 +33,7 @@ import {
   type VegasTeamContext,
 } from "./vegasOddsService";
 import { getCachedSignals } from "./beatReporterService";
+import { getLeagueScoringSettings } from "./leagueScoringService";
 import type { PlayerNewsSignal } from "../drizzle/schema";
 import {
   computeBeatReporterAdjustment,
@@ -276,9 +277,14 @@ export const simulationRouter = router({
       const beatBlock = [beatBlockA, beatBlockB].filter(Boolean).join("\n\n");
       const beatSection = beatBlock ? `\n\nBEAT REPORTER INTELLIGENCE:\n${beatBlock}` : "";
 
-      const systemPrompt = `You are an expert Fantasy Football analyst for "ATLANTAS FINEST FF" (14-team PPR keeper league).
-The Monte Carlo simulation below ran 10,000 matchups — treat these numbers as ground truth. Do not contradict them.
+      // Step 4: Load league scoring settings for LLM context
+      const leagueScoring = await getLeagueScoringSettings().catch(() => null);
+      const scoringLine = leagueScoring?.scoringDescription
+        ? `\n\nLEAGUE SCORING: ${leagueScoring.scoringDescription}`
+        : "";
 
+      const systemPrompt = `You are an expert Fantasy Football analyst for "ATLANTAS FINEST FF" (14-team PPR keeper league).
+The Monte Carlo simulation below ran 10,000 matchups — treat these numbers as ground truth. Do not contradict them.${scoringLine}
 ${simResult.summaryText}${vegasBlock}${beatSection}
 
 PLAYER PROFILES:

@@ -1,0 +1,112 @@
+{
+  "trained_at": "2026-05-11T04:42:49.772648",
+  "n_training_rows": 2724,
+  "n_val_rows": 682,
+  "mae": 5.564,
+  "rmse": 7.014,
+  "top_features": [
+    [
+      "beat_net_impact",
+      542
+    ],
+    [
+      "ppg_last1",
+      528
+    ],
+    [
+      "spread",
+      523
+    ],
+    [
+      "beat_confidence",
+      521
+    ],
+    [
+      "ppg_std5",
+      491
+    ],
+    [
+      "snap_pct_last1",
+      486
+    ],
+    [
+      "injury_risk_score",
+      470
+    ],
+    [
+      "implied_team_total",
+      428
+    ],
+    [
+      "ppg_std3",
+      422
+    ],
+    [
+      "ppg_season",
+      405
+    ],
+    [
+      "snap_pct_last3",
+      404
+    ],
+    [
+      "game_total",
+      398
+    ],
+    [
+      "ppg_last3",
+      392
+    ],
+    [
+      "ppg_last5",
+      340
+    ],
+    [
+      "week_num",
+      306
+    ]
+  ],
+  "feature_columns": [
+    "ppg_last1",
+    "ppg_last3",
+    "ppg_last5",
+    "ppg_season",
+    "ppg_std3",
+    "ppg_std5",
+    "snap_pct_last1",
+    "snap_pct_last3",
+    "targets_last1",
+    "targets_last3",
+    "rush_att_last1",
+    "rush_att_last3",
+    "implied_team_total",
+    "game_total",
+    "spread",
+    "is_home",
+    "vegas_adjustment",
+    "beat_net_impact",
+    "beat_confidence",
+    "beat_signal_count",
+    "beat_sig_role_up",
+    "beat_sig_role_down",
+    "beat_sig_injury_risk",
+    "beat_sig_workload_risk",
+    "beat_sig_hidden_opportunity",
+    "beat_sig_depth_chart_change",
+    "beat_sig_coach_trust_up",
+    "beat_sig_coach_trust_down",
+    "beat_sig_return_from_injury",
+    "beat_sig_neutral",
+    "injury_risk_score",
+    "days_since_last_game",
+    "pos_QB",
+    "pos_RB",
+    "pos_WR",
+    "pos_TE",
+    "pos_K",
+    "pos_D_ST",
+    "week_num",
+    "season_norm"
+  ],
+  "data_source": "real"
+}
