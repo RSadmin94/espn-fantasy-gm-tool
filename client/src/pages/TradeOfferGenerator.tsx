@@ -651,6 +651,79 @@ export default function TradeOfferGenerator() {
                     </Card>
                   )}
 
+                  {/* Pick Trade History Summary */}
+                  {(result as any).pickTradeHistory && (() => {
+                    const pth = (result as any).pickTradeHistory;
+                    return (
+                      <Card className="border-orange-500/30 bg-orange-500/5">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4 text-orange-400" />
+                            Pick Trade Behavior
+                            <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs ml-auto">
+                              {pth.tendencyLabel}
+                            </Badge>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {/* Summary line */}
+                          <p className="text-sm text-foreground leading-relaxed">{pth.summaryLine}</p>
+
+                          {/* Stats grid */}
+                          <div className="grid grid-cols-3 gap-3 text-center">
+                            <div className="p-3 rounded-lg bg-muted/30">
+                              <div className="text-xl font-bold text-foreground">{pth.avgTradesPerSeason.toFixed(1)}</div>
+                              <div className="text-xs text-muted-foreground">Avg Trades/Season</div>
+                            </div>
+                            <div className="p-3 rounded-lg bg-muted/30">
+                              <div className="text-xl font-bold text-orange-400">{pth.lossTradeRatio.toFixed(2)}x</div>
+                              <div className="text-xs text-muted-foreground">Loss-Trade Ratio</div>
+                            </div>
+                            <div className="p-3 rounded-lg bg-muted/30">
+                              <div className="text-xl font-bold text-foreground">{pth.totalPicksHeld}</div>
+                              <div className="text-xs text-muted-foreground">2026 Picks Held</div>
+                            </div>
+                          </div>
+
+                          {/* Hot / Cold rounds */}
+                          <div className="grid grid-cols-2 gap-3">
+                            {pth.hotRounds.length > 0 && (
+                              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                                <p className="text-[11px] font-semibold text-red-400 uppercase tracking-wider mb-1.5">🔥 Most Tradable</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {(pth.hotRounds as string[]).map((r: string) => (
+                                    <Badge key={r} className="bg-red-500/20 text-red-400 border-red-500/30 text-xs">{r}</Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {pth.coldRounds.length > 0 && (
+                              <div className="p-3 rounded-lg bg-slate-500/10 border border-slate-500/20">
+                                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">❄️ Hardest to Get</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {(pth.coldRounds as string[]).map((r: string) => (
+                                    <Badge key={r} className="bg-slate-500/20 text-slate-400 border-slate-500/30 text-xs">{r}</Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Desperation triggers */}
+                          {pth.desperationTriggers >= 2 && (
+                            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                              <Zap className="h-3.5 w-3.5 text-yellow-400 mt-0.5 shrink-0" />
+                              <p className="text-xs text-foreground">
+                                <span className="font-semibold text-yellow-400">Desperation Pattern: </span>
+                                Has made panic trades in {pth.desperationTriggers} seasons after a bad start. Apply pressure early in the season.
+                              </p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
+
                   {/* DNA Summary */}
                   {dna.dnaSummary && (
                     <Card className="border-border bg-card/50">

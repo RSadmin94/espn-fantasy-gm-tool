@@ -674,7 +674,7 @@
 - [x] Score each of the target owner's 2026 picks with a tradability label (HOT/WARM/NEUTRAL/COLD) + reason string
 - [x] Return tradability data embedded in rodReceives.pickAssets in tradeOfferGenerator tRPC response
 - [x] UI: highlight HOT/WARM/COLD picks in the "Rod Receives" side with flame/lightning/snowflake badges and behavioral reason text
-- [ ] UI: show a "Pick Trade History" summary card for the target owner (rounds most traded, total picks traded, tendency label)
+- [x] UI: show a "Pick Trade History" summary card for the target owner (rounds most traded, total picks traded, tendency label)
 - [x] 0 TypeScript errors, 293/293 tests passing
 
 ## Trade Offer Generator — Rod Pick Resolution Bug

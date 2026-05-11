@@ -2971,6 +2971,42 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
           dnaSummary: dnaProfile.dnaSummary,
           seasonsAnalyzed: dnaProfile.seasonsAnalyzed,
         } : null,
+        // Pick trade history summary for the target owner
+        pickTradeHistory: (() => {
+          if (!dnaProfile) return null;
+          const tf = dnaProfile.trade.tradeFrequency;
+          const ltr = dnaProfile.trade.lossTradeRatio;
+          const dt = dnaProfile.trade.desperation_triggers;
+          const avg = dnaProfile.trade.avgTradesPerSeason;
+          // Determine tendency label
+          const tendencyLabel =
+            tf >= 70 ? "Frequent Trader" :
+            tf >= 50 ? "Active Trader" :
+            tf >= 30 ? "Occasional Trader" :
+            "Rarely Trades";
+          // Determine which rounds they are most likely to trade based on pick value bias
+          // Late-round picks (6+) are easiest to move; early-round picks (1-2) are hardest
+          const hotRounds = targetOwnerPicks
+            .filter(p => p.round >= 5)
+            .map(p => `Rd ${p.round}`);
+          const coldRounds = targetOwnerPicks
+            .filter(p => p.round <= 2)
+            .map(p => `Rd ${p.round}`);
+          return {
+            tendencyLabel,
+            tradeFrequencyScore: tf,
+            avgTradesPerSeason: avg,
+            lossTradeRatio: ltr,
+            desperationTriggers: dt,
+            hotRounds: Array.from(new Set(hotRounds)).slice(0, 3),
+            coldRounds: Array.from(new Set(coldRounds)).slice(0, 3),
+            totalPicksHeld: targetOwnerPicks.length,
+            summaryLine: `${targetOwnerName} averages ${avg.toFixed(1)} trades/season (${tendencyLabel}). ` +
+              (ltr > 1.3 ? `Trades ${ltr.toFixed(1)}x more when losing. ` : "") +
+              (dt >= 2 ? `Has made desperation trades in ${dt} seasons. ` : "") +
+              (hotRounds.length > 0 ? `Late-round picks (${Array.from(new Set(hotRounds)).join(", ")}) are most tradable.` : ""),
+          };
+        })(),
         strategy,
       };
     }),
