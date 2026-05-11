@@ -5,78 +5,142 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeftRight, Plus, X, Brain, Scale, Loader2, TrendingUp, TrendingDown, Minus, Trophy, Info } from "lucide-react";
+import {
+  Plus, X, Brain, Scale, Loader2, TrendingUp, TrendingDown, Minus,
+  Trophy, Info, ArrowRight, Target, Package, Sparkles, RefreshCw,
+} from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
 
-// ─── Draft status gate ───────────────────────────────────────────────────────
-// Flip this to false once the 2026 draft has been completed to unlock player trading.
+// ─── Draft status gate ────────────────────────────────────────────────────────
+// Flip to true once the 2026 draft is completed to unlock player trading.
 const DRAFT_2026_COMPLETE = false;
 
-const POS_COLORS: Record<string, string> = {
-  QB: "text-red-400 border-red-500/30 bg-red-500/10",
-  RB: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
-  WR: "text-blue-400 border-blue-500/30 bg-blue-500/10",
-  TE: "text-yellow-400 border-yellow-500/30 bg-yellow-500/10",
-  "D/ST": "text-purple-400 border-purple-500/30 bg-purple-500/10",
-  K: "text-orange-400 border-orange-500/30 bg-orange-500/10",
-  Pick: "text-cyan-400 border-cyan-500/30 bg-cyan-500/10",
-};
-
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface PickEntry { round: number; pick: number; label: string; }
 
 interface TradeResult {
-  sideAValues: ValueResult[];
-  sideBValues: ValueResult[];
-  totalA: number;
-  totalB: number;
-  pickValueA: number;
-  pickValueB: number;
-  ratio: number;
-  fairnessGrade: string;
-  aiVerdict: string;
-  mathSummary: string;
-  teamANeeds: Record<string, number>;
-  teamBNeeds: Record<string, number>;
+  sideAValues: { name: string; compositeValue: number; valueBreakdown: string }[];
+  sideBValues: { name: string; compositeValue: number; valueBreakdown: string }[];
+  totalA: number; totalB: number;
+  pickValueA: number; pickValueB: number;
+  ratio: number; fairnessGrade: string;
+  aiVerdict: string; mathSummary: string;
 }
 
-interface ValueResult {
-  name: string;
-  position: string;
-  avgPoints: number;
-  vorp: number;
-  rosValue: number;
-  keeperBonus: number;
-  positionalScarcityBonus: number;
-  compositeValue: number;
-  valueBreakdown: string;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function pickLabel(round: number, pick: number) {
+  return `2026 Rd ${round}.${String(pick).padStart(2, "0")}`;
+}
+
+// Canonical pick value formula matching the server (14-team, PPR)
+function clientPickValue(round: number, pick: number): number {
+  const overall = (round - 1) * 14 + pick;
+  const BASE = 3000;
+  const K = 0.065;
+  return Math.round(BASE * Math.exp(-K * (overall - 1)));
+}
+
+// ─── Pick selector widget ─────────────────────────────────────────────────────
+function PickSelector({
+  picks, onAdd, onRemove, accentClass, placeholder,
+}: {
+  picks: PickEntry[];
+  onAdd: (p: PickEntry) => void;
+  onRemove: (label: string) => void;
+  accentClass: string;
+  placeholder: string;
+}) {
+  const [round, setRound] = useState("1");
+  const [slot, setSlot] = useState("1");
+
+  const add = () => {
+    const r = parseInt(round), s = parseInt(slot);
+    const lbl = pickLabel(r, s);
+    if (!picks.find(p => p.label === lbl)) onAdd({ round: r, pick: s, label: lbl });
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Selected picks */}
+      {picks.length > 0 ? (
+        <div className="space-y-1.5">
+          {picks.map(pk => (
+            <div key={pk.label} className="flex items-center justify-between gap-2 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[10px] text-cyan-400 border-cyan-500/30 bg-transparent">2026 Pick</Badge>
+                <span className="text-sm font-semibold text-cyan-300">{pk.label}</span>
+                <span className="text-xs text-muted-foreground">≈ {clientPickValue(pk.round, pk.pick).toLocaleString()} pts</span>
+              </div>
+              <button onClick={() => onRemove(pk.label)} className="text-muted-foreground hover:text-red-400 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          <div className="text-xs text-muted-foreground text-right">
+            Total: <span className="text-foreground font-semibold">{picks.reduce((s, p) => s + clientPickValue(p.round, p.pick), 0).toLocaleString()} pts</span>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-5 text-center text-xs text-muted-foreground">
+          {placeholder}
+        </div>
+      )}
+
+      {/* Add row */}
+      <div className="flex items-center gap-2">
+        <Select value={round} onValueChange={setRound}>
+          <SelectTrigger className="flex-1 h-9 text-xs border-border bg-input">
+            <SelectValue placeholder="Round" />
+          </SelectTrigger>
+          <SelectContent>
+            {Array.from({ length: 14 }, (_, i) => (
+              <SelectItem key={i + 1} value={String(i + 1)}>Round {i + 1}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={slot} onValueChange={setSlot}>
+          <SelectTrigger className="flex-1 h-9 text-xs border-border bg-input">
+            <SelectValue placeholder="Pick slot" />
+          </SelectTrigger>
+          <SelectContent>
+            {Array.from({ length: 14 }, (_, i) => (
+              <SelectItem key={i + 1} value={String(i + 1)}>Pick {i + 1}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button variant="outline" size="sm" onClick={add} className={`h-9 px-3 border-border shrink-0 ${accentClass}`}>
+          <Plus className="w-4 h-4" />
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 // ─── Verdict banner ───────────────────────────────────────────────────────────
-function VerdictBanner({ grade, totalA, totalB, pickValueA, pickValueB }: {
-  grade: string; totalA: number; totalB: number; pickValueA: number; pickValueB: number;
+function VerdictBanner({ grade, targetValue, offerValue }: {
+  grade: string; targetValue: number; offerValue: number;
 }) {
-  const isAWins = grade.includes("A WINS") || (grade === "LOPSIDED" && totalA > totalB);
-  const isBWins = grade.includes("B WINS") || (grade === "LOPSIDED" && totalB > totalA);
-  const isFair = grade === "FAIR";
-  const diff = Math.abs(totalA - totalB);
-  const pct = totalB > 0 ? Math.round(Math.abs((totalA - totalB) / totalB) * 100) : 0;
+  const diff = Math.abs(targetValue - offerValue);
+  const pct = targetValue > 0 ? Math.round((diff / targetValue) * 100) : 0;
+  const isFair = pct <= 10;
+  const youWin = offerValue < targetValue; // you give less than you get
 
   const color = isFair
     ? "border-blue-500/30 bg-blue-500/10"
-    : isAWins
+    : youWin
     ? "border-emerald-500/30 bg-emerald-500/10"
-    : "border-red-500/30 bg-red-500/10";
+    : "border-amber-500/30 bg-amber-500/10";
 
   const icon = isFair
     ? <Scale className="w-5 h-5 text-blue-400" />
-    : isAWins
+    : youWin
     ? <TrendingUp className="w-5 h-5 text-emerald-400" />
-    : <TrendingDown className="w-5 h-5 text-red-400" />;
+    : <TrendingDown className="w-5 h-5 text-amber-400" />;
 
-  const label = isFair ? "Fair trade" : isAWins ? "Side A wins" : "Side B wins";
-  const labelColor = isFair ? "text-blue-400" : isAWins ? "text-emerald-400" : "text-red-400";
+  const label = isFair ? "Fair trade" : youWin ? "You win this trade" : "You overpay slightly";
+  const labelColor = isFair ? "text-blue-400" : youWin ? "text-emerald-400" : "text-amber-400";
 
   return (
     <div className={`rounded-xl border p-4 ${color} flex items-center justify-between flex-wrap gap-4`}>
@@ -91,122 +155,33 @@ function VerdictBanner({ grade, totalA, totalB, pickValueA, pickValueB }: {
       </div>
       <div className="flex gap-6">
         <div className="text-center">
-          <div className="text-xs text-muted-foreground mb-1">Side A pick value</div>
-          <div className={`text-2xl font-bold ${isAWins ? "text-emerald-400" : "text-foreground"}`}>
-            {(pickValueA).toLocaleString()}
-          </div>
+          <div className="text-xs text-muted-foreground mb-1">You receive</div>
+          <div className="text-2xl font-bold text-cyan-400">{targetValue.toLocaleString()}</div>
         </div>
         <div className="flex items-center text-muted-foreground text-sm">vs</div>
         <div className="text-center">
-          <div className="text-xs text-muted-foreground mb-1">Side B pick value</div>
-          <div className={`text-2xl font-bold ${isBWins ? "text-emerald-400" : "text-foreground"}`}>
-            {(pickValueB).toLocaleString()}
-          </div>
+          <div className="text-xs text-muted-foreground mb-1">You give</div>
+          <div className={`text-2xl font-bold ${youWin ? "text-emerald-400" : "text-amber-400"}`}>{offerValue.toLocaleString()}</div>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Pick input panel ─────────────────────────────────────────────────────────
-function PickTradePanel({
-  label,
-  picks,
-  onAddPick,
-  onRemovePick,
-  accentClass,
-}: {
-  label: string;
-  picks: PickEntry[];
-  onAddPick: (p: PickEntry) => void;
-  onRemovePick: (label: string) => void;
-  accentClass: string;
-}) {
-  const [pickRound, setPickRound] = useState("1");
-  const [pickSlot, setPickSlot] = useState("1");
-
-  const addPick = () => {
-    const r = parseInt(pickRound);
-    const s = parseInt(pickSlot);
-    if (isNaN(r) || isNaN(s) || r < 1 || r > 14 || s < 1 || s > 14) return;
-    const lbl = `2026 Rd ${r}.${String(s).padStart(2, "0")}`;
-    if (!picks.find(pk => pk.label === lbl)) onAddPick({ round: r, pick: s, label: lbl });
-  };
-
-  return (
-    <Card className="card-glow bg-card border-border">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${accentClass}`} />
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-
-        {/* Selected picks */}
-        {picks.length > 0 ? (
-          <div className="space-y-1.5">
-            <div className="text-xs text-muted-foreground font-medium">2026 picks in this side</div>
-            {picks.map(pk => (
-              <div key={pk.label} className="flex items-center justify-between gap-2 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2.5">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-[10px] text-cyan-400 border-cyan-500/30 bg-transparent">2026 Pick</Badge>
-                  <span className="text-sm font-semibold text-cyan-300">{pk.label}</span>
-                </div>
-                <button onClick={() => onRemovePick(pk.label)} className="text-muted-foreground hover:text-red-400 transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">
-            No picks added yet — use the selector below
-          </div>
-        )}
-
-        {/* Add pick */}
-        <div className="space-y-2">
-          <div className="text-xs text-muted-foreground font-medium">Add a 2026 pick</div>
-          <div className="flex items-center gap-2">
-            <Select value={pickRound} onValueChange={setPickRound}>
-              <SelectTrigger className="flex-1 h-9 text-xs border-border bg-input">
-                <SelectValue placeholder="Round" />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 14 }, (_, i) => (
-                  <SelectItem key={i + 1} value={String(i + 1)}>Round {i + 1}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={pickSlot} onValueChange={setPickSlot}>
-              <SelectTrigger className="flex-1 h-9 text-xs border-border bg-input">
-                <SelectValue placeholder="Pick" />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 14 }, (_, i) => (
-                  <SelectItem key={i + 1} value={String(i + 1)}>Pick {i + 1}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="sm" onClick={addPick} className="h-9 px-3 border-border shrink-0">
-              <Plus className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-
-      </CardContent>
-    </Card>
-  );
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function TradeAnalyzer() {
-  const [picksA, setPicksA] = useState<PickEntry[]>([]);
-  const [picksB, setPicksB] = useState<PickEntry[]>([]);
+  // Picks the user WANTS to acquire
+  const [targetPicks, setTargetPicks] = useState<PickEntry[]>([]);
+  // Picks the user is OFFERING in return
+  const [offerPicks, setOfferPicks] = useState<PickEntry[]>([]);
+
   const [result, setResult] = useState<TradeResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [champDelta, setChampDelta] = useState<{ champProbabilityBefore: number; champProbabilityAfter: number; interpretation: string } | null>(null);
+  const [champDelta, setChampDelta] = useState<{
+    champProbabilityBefore: number;
+    champProbabilityAfter: number;
+    interpretation: string;
+  } | null>(null);
   const [champDeltaLoading, setChampDeltaLoading] = useState(false);
 
   const { isAuthenticated } = useAuth();
@@ -214,18 +189,36 @@ export default function TradeAnalyzer() {
   const whatIfMutation = trpc.champ.whatIfDelta.useMutation();
 
   const clearAll = () => {
-    setPicksA([]); setPicksB([]);
+    setTargetPicks([]); setOfferPicks([]);
     setResult(null); setChampDelta(null);
   };
 
-  const canAnalyze = picksA.length > 0 && picksB.length > 0;
+  const canAnalyze = targetPicks.length > 0 && offerPicks.length > 0;
 
-  const analyzeTrade = async () => {
+  // Auto-suggest a fair offer based on target pick value
+  const autoSuggestOffer = () => {
+    if (targetPicks.length === 0) { toast.error("Add the pick(s) you want to acquire first"); return; }
+    const targetTotal = targetPicks.reduce((s, p) => s + clientPickValue(p.round, p.pick), 0);
+    // Find the closest single pick in value
+    let bestRound = 1, bestSlot = 7, bestDiff = Infinity;
+    for (let r = 1; r <= 14; r++) {
+      for (let s = 1; s <= 14; s++) {
+        const v = clientPickValue(r, s);
+        const diff = Math.abs(v - targetTotal);
+        if (diff < bestDiff && !targetPicks.find(p => p.round === r && p.pick === s)) {
+          bestDiff = diff; bestRound = r; bestSlot = s;
+        }
+      }
+    }
+    const lbl = pickLabel(bestRound, bestSlot);
+    setOfferPicks([{ round: bestRound, pick: bestSlot, label: lbl }]);
+    toast.success(`Suggested: ${lbl} (≈ ${clientPickValue(bestRound, bestSlot).toLocaleString()} pts)`);
+  };
+
+  const analyze = async () => {
     if (!isAuthenticated) { window.location.href = getLoginUrl(); return; }
-    if (!canAnalyze) { toast.error("Add at least one 2026 pick to each side"); return; }
-    setLoading(true);
-    setResult(null);
-    setChampDelta(null);
+    if (!canAnalyze) { toast.error("Add picks to both sides before analyzing"); return; }
+    setLoading(true); setResult(null); setChampDelta(null);
     try {
       const res = await tradeAnalyzeMutation.mutateAsync({
         season: 2026,
@@ -233,30 +226,31 @@ export default function TradeAnalyzer() {
         sideB: [],
         teamAId: 0,
         teamBId: 0,
-        picksA: picksA.map(p => ({ round: p.round, pick: p.pick })),
-        picksB: picksB.map(p => ({ round: p.round, pick: p.pick })),
+        // Side A = what Rod gives (offer), Side B = what Rod gets (target)
+        picksA: offerPicks.map(p => ({ round: p.round, pick: p.pick })),
+        picksB: targetPicks.map(p => ({ round: p.round, pick: p.pick })),
       });
       setResult(res as unknown as TradeResult);
 
-      // Phase 5: championship equity delta for pick trades
+      // Phase 5: championship equity delta
       setChampDeltaLoading(true);
       whatIfMutation.mutateAsync({
         season: 2026,
-        beforeLineup: picksA.map((p, i) => ({
+        beforeLineup: offerPicks.map((p, i) => ({
           playerId: i + 9000,
           playerName: p.label,
           position: "Pick",
           projectedPoints: Math.max(0, 200 - (p.round - 1) * 14),
           volatilityMultiplier: 1,
         })),
-        afterLineup: picksB.map((p, i) => ({
+        afterLineup: targetPicks.map((p, i) => ({
           playerId: i + 9100,
           playerName: p.label,
           position: "Pick",
           projectedPoints: Math.max(0, 200 - (p.round - 1) * 14),
           volatilityMultiplier: 1,
         })),
-        decisionDescription: `Pick trade: give ${picksA.map(p => p.label).join(", ")} for ${picksB.map(p => p.label).join(", ")}`,
+        decisionDescription: `Acquire ${targetPicks.map(p => p.label).join(", ")} by giving ${offerPicks.map(p => p.label).join(", ")}`,
         simCount: 500,
       }).then(d => setChampDelta(d as any)).catch(() => {}).finally(() => setChampDeltaLoading(false));
 
@@ -267,146 +261,211 @@ export default function TradeAnalyzer() {
     }
   };
 
+  const targetTotal = targetPicks.reduce((s, p) => s + clientPickValue(p.round, p.pick), 0);
+  const offerTotal = offerPicks.reduce((s, p) => s + clientPickValue(p.round, p.pick), 0);
+  const valueDiff = targetTotal - offerTotal;
+  const diffPct = targetTotal > 0 ? Math.round(Math.abs(valueDiff) / targetTotal * 100) : 0;
+
   return (
     <AppLayout
       title="Trade Analyzer"
-      subtitle="2026 draft pick trade evaluation — pick value, round scarcity, championship equity impact"
+      subtitle="2026 draft pick trade builder — select what you want, build your offer, get a full recommendation"
     >
       <div className="p-6 space-y-6">
 
-        {/* Pre-draft notice banner */}
+        {/* Pre-draft notice */}
         {!DRAFT_2026_COMPLETE && (
           <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
             <Info className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
             <div className="text-sm text-amber-200 leading-relaxed">
               <span className="font-semibold text-amber-300">Pre-draft mode — 2026 picks only.</span>{" "}
-              Player trading will be unlocked once the 2026 draft is completed. Use this tool now to evaluate pick-for-pick swaps before draft day.
+              Player trading unlocks after the 2026 draft. Use this now to evaluate and build pick swap offers before draft day.
             </div>
           </div>
         )}
 
-        {/* How it works */}
-        <Card className="card-glow bg-card border-border border-blue-500/20">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex flex-wrap gap-6 text-xs text-muted-foreground">
-              {[
-                ["Pick value", "Each round's historical draft value based on 18 seasons of your league's data"],
-                ["Round scarcity", "Early picks carry exponentially more value — Rd 1 vs Rd 5 is not linear"],
-                ["Slot adjustment", "Pick 1.01 vs 1.14 matters — later slots in early rounds are discounted"],
-                ["Champ equity", "500-sim championship probability delta for the pick swap"],
-              ].map(([label, desc]) => (
-                <div key={label} className="flex items-start gap-2">
-                  <span className="font-semibold text-foreground shrink-0">{label}</span>
-                  <span>{desc}</span>
-                </div>
-              ))}
-            </div>
+        {/* Step 1 — Target picks */}
+        <Card className="card-glow bg-card border-border border-cyan-500/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Target className="w-4 h-4 text-cyan-400" />
+              Step 1 — Picks you want to acquire
+              {targetPicks.length > 0 && (
+                <Badge variant="outline" className="ml-auto text-xs text-cyan-400 border-cyan-500/30 bg-cyan-500/10">
+                  {targetPicks.length} pick{targetPicks.length > 1 ? "s" : ""} · {targetTotal.toLocaleString()} pts
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PickSelector
+              picks={targetPicks}
+              onAdd={p => setTargetPicks(prev => [...prev, p])}
+              onRemove={lbl => setTargetPicks(prev => prev.filter(p => p.label !== lbl))}
+              accentClass="text-cyan-400"
+              placeholder="Add the pick(s) you want to trade for"
+            />
           </CardContent>
         </Card>
 
-        {/* Controls row */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-cyan-400 border-cyan-500/30 bg-cyan-500/10 text-xs px-3 py-1">
-              2026 Draft Picks
-            </Badge>
-            <span className="text-xs text-muted-foreground">Select picks for each side of the trade</span>
-          </div>
-          {(picksA.length > 0 || picksB.length > 0) && (
-            <Button variant="outline" size="sm" onClick={clearAll} className="text-xs border-border">
-              <X className="w-3 h-3 mr-1" /> Clear all
+        {/* Step 2 — Offer picks */}
+        <Card className="card-glow bg-card border-border border-emerald-500/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Package className="w-4 h-4 text-emerald-400" />
+              Step 2 — Picks you will offer in return
+              {offerPicks.length > 0 && (
+                <Badge variant="outline" className={`ml-auto text-xs border ${
+                  diffPct <= 10
+                    ? "text-blue-400 border-blue-500/30 bg-blue-500/10"
+                    : offerTotal < targetTotal
+                    ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                    : "text-amber-400 border-amber-500/30 bg-amber-500/10"
+                }`}>
+                  {offerPicks.length} pick{offerPicks.length > 1 ? "s" : ""} · {offerTotal.toLocaleString()} pts
+                  {targetTotal > 0 && ` · ${valueDiff >= 0 ? "+" : ""}${(-valueDiff).toLocaleString()} vs target`}
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <PickSelector
+              picks={offerPicks}
+              onAdd={p => setOfferPicks(prev => [...prev, p])}
+              onRemove={lbl => setOfferPicks(prev => prev.filter(p => p.label !== lbl))}
+              accentClass="text-emerald-400"
+              placeholder="Add the pick(s) you will give up"
+            />
+            {targetPicks.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={autoSuggestOffer}
+                className="w-full text-xs border-border text-muted-foreground hover:text-foreground"
+              >
+                <Sparkles className="w-3.5 h-3.5 mr-1.5 text-yellow-400" />
+                Auto-suggest a fair offer for {targetPicks.map(p => p.label).join(" + ")}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Live value balance bar */}
+        {targetPicks.length > 0 && offerPicks.length > 0 && (
+          <Card className="card-glow bg-card border-border">
+            <CardContent className="pt-4 pb-4 space-y-2">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>You receive <span className="text-cyan-400 font-semibold">{targetTotal.toLocaleString()}</span></span>
+                <span className={`font-semibold ${diffPct <= 10 ? "text-blue-400" : valueDiff > 0 ? "text-emerald-400" : "text-amber-400"}`}>
+                  {diffPct <= 10 ? "Fair" : valueDiff > 0 ? `You win +${valueDiff.toLocaleString()}` : `You overpay ${(-valueDiff).toLocaleString()}`}
+                </span>
+                <span>You give <span className="text-emerald-400 font-semibold">{offerTotal.toLocaleString()}</span></span>
+              </div>
+              <div className="relative h-3 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="absolute left-0 top-0 h-full bg-cyan-500 rounded-l transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.round(targetTotal / Math.max(targetTotal, offerTotal) * 100))}%` }}
+                />
+                <div
+                  className="absolute right-0 top-0 h-full bg-emerald-500 rounded-r transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.round(offerTotal / Math.max(targetTotal, offerTotal) * 100))}%` }}
+                />
+              </div>
+              <div className="flex gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded bg-cyan-500 inline-block" /> Receive</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded bg-emerald-500 inline-block" /> Give</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Action row */}
+        <div className="flex gap-3">
+          <Button
+            className="flex-1 espn-gradient text-white font-semibold h-12 text-base disabled:opacity-50"
+            onClick={analyze}
+            disabled={!canAnalyze || loading}
+          >
+            {loading ? (
+              <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Generating recommendation…</>
+            ) : (
+              <><Brain className="w-5 h-5 mr-2" /> Get full trade recommendation</>
+            )}
+          </Button>
+          {(targetPicks.length > 0 || offerPicks.length > 0) && (
+            <Button variant="outline" size="icon" onClick={clearAll} className="h-12 w-12 border-border shrink-0" title="Clear all">
+              <RefreshCw className="w-4 h-4" />
             </Button>
           )}
         </div>
 
-        {/* Pick panels */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <PickTradePanel
-            label="Side A — gives these picks"
-            picks={picksA}
-            onAddPick={p => setPicksA(prev => [...prev, p])}
-            onRemovePick={lbl => setPicksA(prev => prev.filter(p => p.label !== lbl))}
-            accentClass="bg-emerald-500"
-          />
-          <PickTradePanel
-            label="Side B — gives these picks"
-            picks={picksB}
-            onAddPick={p => setPicksB(prev => [...prev, p])}
-            onRemovePick={lbl => setPicksB(prev => prev.filter(p => p.label !== lbl))}
-            accentClass="bg-blue-500"
-          />
-        </div>
-
-        {/* Analyze button */}
-        <Button
-          className="w-full espn-gradient text-white font-semibold h-12 text-base disabled:opacity-50"
-          onClick={analyzeTrade}
-          disabled={!canAnalyze || loading}
-        >
-          {loading ? (
-            <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Evaluating pick values…</>
-          ) : (
-            <><Scale className="w-5 h-5 mr-2" /> Analyze pick trade</>
-          )}
-        </Button>
-
-        {/* Results */}
+        {/* ── Results ── */}
         {result && (
           <div className="space-y-6">
 
             {/* Verdict banner */}
             <VerdictBanner
               grade={result.fairnessGrade}
-              totalA={result.totalA}
-              totalB={result.totalB}
-              pickValueA={result.pickValueA}
-              pickValueB={result.pickValueB}
+              targetValue={result.pickValueB}
+              offerValue={result.pickValueA}
             />
 
-            {/* Pick value breakdown — side by side */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="card-glow bg-card border-border">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Side A receives — {result.pickValueB.toLocaleString()} pick value
-                  </CardTitle>
+            {/* Trade summary */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-4 items-center">
+              <Card className="card-glow bg-card border-border border-emerald-500/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">You give up</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  {picksB.length > 0 && (
-                    <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-3 flex justify-between items-center">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {picksB.map(p => (
-                          <Badge key={p.label} variant="outline" className="text-xs text-cyan-300 border-cyan-500/30 bg-transparent">{p.label}</Badge>
-                        ))}
-                      </div>
-                      <span className="text-lg font-bold text-cyan-400 shrink-0 ml-3">{result.pickValueB.toLocaleString()}</span>
+                <CardContent className="space-y-1.5">
+                  {offerPicks.map(p => (
+                    <div key={p.label} className="flex items-center justify-between rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2">
+                      <span className="text-sm font-semibold text-emerald-300">{p.label}</span>
+                      <span className="text-xs text-muted-foreground">{clientPickValue(p.round, p.pick).toLocaleString()} pts</span>
                     </div>
-                  )}
+                  ))}
+                  <div className="text-right text-xs text-muted-foreground pt-1">
+                    Total: <span className="text-emerald-400 font-bold">{result.pickValueA.toLocaleString()}</span>
+                  </div>
                 </CardContent>
               </Card>
 
-              <Card className="card-glow bg-card border-border">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Side B receives — {result.pickValueA.toLocaleString()} pick value
-                  </CardTitle>
+              <div className="flex justify-center">
+                <ArrowRight className="w-8 h-8 text-muted-foreground" />
+              </div>
+
+              <Card className="card-glow bg-card border-border border-cyan-500/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">You receive</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  {picksA.length > 0 && (
-                    <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-3 flex justify-between items-center">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {picksA.map(p => (
-                          <Badge key={p.label} variant="outline" className="text-xs text-cyan-300 border-cyan-500/30 bg-transparent">{p.label}</Badge>
-                        ))}
-                      </div>
-                      <span className="text-lg font-bold text-cyan-400 shrink-0 ml-3">{result.pickValueA.toLocaleString()}</span>
+                <CardContent className="space-y-1.5">
+                  {targetPicks.map(p => (
+                    <div key={p.label} className="flex items-center justify-between rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2">
+                      <span className="text-sm font-semibold text-cyan-300">{p.label}</span>
+                      <span className="text-xs text-muted-foreground">{clientPickValue(p.round, p.pick).toLocaleString()} pts</span>
                     </div>
-                  )}
+                  ))}
+                  <div className="text-right text-xs text-muted-foreground pt-1">
+                    Total: <span className="text-cyan-400 font-bold">{result.pickValueB.toLocaleString()}</span>
+                  </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Math scorecard */}
+            {/* AI full recommendation */}
+            <Card className="card-glow bg-card border-border border-primary/20">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                  <Brain className="w-4 h-4 text-primary" /> Full trade recommendation
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                  {result.aiVerdict}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Value scorecard */}
             <Card className="card-glow bg-card border-border">
               <CardHeader className="pb-3">
                 <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
@@ -415,9 +474,9 @@ export default function TradeAnalyzer() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {[
-                  { label: "Total pick value", a: result.pickValueA, b: result.pickValueB },
-                  { label: "Player value (picks only)", a: result.totalA, b: result.totalB },
-                ].map(({ label, a, b }) => {
+                  { label: "Pick value", a: result.pickValueA, b: result.pickValueB, aLabel: "You give", bLabel: "You get" },
+                  { label: "Composite value", a: result.totalA, b: result.totalB, aLabel: "Your cost", bLabel: "Your gain" },
+                ].map(({ label, a, b, aLabel, bLabel }) => {
                   const max = Math.max(a, b, 1);
                   const pctA = Math.round((a / max) * 100);
                   const pctB = Math.round((b / max) * 100);
@@ -425,7 +484,7 @@ export default function TradeAnalyzer() {
                     <div key={label} className="space-y-1">
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>{label}</span>
-                        <span className="text-foreground font-medium">{a.toLocaleString()} vs {b.toLocaleString()}</span>
+                        <span className="text-foreground font-medium">{a.toLocaleString()} → {b.toLocaleString()}</span>
                       </div>
                       <div className="flex gap-1 h-2">
                         <div className="flex-1 bg-muted rounded-l overflow-hidden flex justify-end">
@@ -433,30 +492,16 @@ export default function TradeAnalyzer() {
                         </div>
                         <div className="w-px bg-border" />
                         <div className="flex-1 bg-muted rounded-r overflow-hidden">
-                          <div className="h-full bg-blue-500 rounded-r" style={{ width: `${pctB}%` }} />
+                          <div className="h-full bg-cyan-500 rounded-r" style={{ width: `${pctB}%` }} />
                         </div>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-muted-foreground">
+                        <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded bg-emerald-500 inline-block" /> {aLabel}</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded bg-cyan-500 inline-block" /> {bLabel}</span>
                       </div>
                     </div>
                   );
                 })}
-                <div className="flex gap-4 pt-1 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded bg-emerald-500 inline-block" /> Side A</span>
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded bg-blue-500 inline-block" /> Side B</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* AI verdict */}
-            <Card className="card-glow bg-card border-border border-primary/20">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                  <Brain className="w-4 h-4 text-primary" /> AI verdict — pick trade analysis
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                  {result.aiVerdict}
-                </div>
               </CardContent>
             </Card>
 
@@ -472,7 +517,7 @@ export default function TradeAnalyzer() {
                 {champDeltaLoading && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Simulating 500 season paths to calculate championship probability delta…
+                    Simulating 500 season paths…
                   </div>
                 )}
                 {champDelta && (() => {
@@ -505,7 +550,7 @@ export default function TradeAnalyzer() {
                   );
                 })()}
                 {!champDeltaLoading && !champDelta && (
-                  <p className="text-xs text-muted-foreground">Championship equity impact will appear after running trade analysis.</p>
+                  <p className="text-xs text-muted-foreground">Championship equity impact will appear after analysis.</p>
                 )}
               </CardContent>
             </Card>

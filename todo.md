@@ -538,3 +538,11 @@
 - [x] Keep pick round/slot input UI, restrict to 2026 season picks only
 - [x] Added DRAFT_2026_COMPLETE flag — flip to true after draft to re-enable player trading
 - [x] Verify TypeScript 0 errors and tests still pass
+
+## Trade Analyzer — Pick Acquisition Flow
+- [x] Redesign to "I want to acquire" flow: user selects target pick(s) they want, tool recommends what to offer
+- [x] Support multiple picks on both sides (target picks + offer picks)
+- [x] Auto-suggest fair offer button based on target pick value
+- [x] Live value balance bar showing receive vs give in real time
+- [x] Generate full trade recommendation with math scorecard, AI verdict, and championship equity impact
+- [x] Verify TypeScript 0 errors and 195 tests still pass
