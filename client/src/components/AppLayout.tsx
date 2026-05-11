@@ -4,7 +4,7 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ClipboardList, Star, ArrowLeftRight, Bot, ChevronRight,
-  Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target, BarChart3,
+  Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target, BarChart3, Link2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
@@ -12,6 +12,7 @@ import { trpc } from "@/lib/trpc";
 const navItems = [
   // Command Center
   { href: "/command-center", icon: LayoutDashboard, label: "Command Center", group: "Overview" },
+  { href: "/connect", icon: Link2, label: "Connect League", group: "Overview", badge: "NEW" },
   // Draft & Keepers
   { href: "/draft-war-room", icon: ClipboardList, label: "Draft War Room", group: "Draft & Keepers", badge: "2026" },
   { href: "/keeper-lab", icon: Star, label: "Keeper Lab", group: "Draft & Keepers" },

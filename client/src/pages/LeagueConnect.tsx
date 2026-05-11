@@ -1,0 +1,569 @@
+/**
+ * LeagueConnect — Multi-provider league onboarding flow
+ *
+ * Step 1: Choose provider (ESPN / Sleeper / coming soon)
+ * Step 2: Enter league credentials
+ * Step 3: DNA generation progress screen ("Analyzing 18 seasons...")
+ * Step 4: Success — league profile summary
+ */
+
+import { useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CheckCircle, Circle, Loader2, ChevronRight, ArrowLeft, ExternalLink, Zap, Lock } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getLoginUrl } from "@/const";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Step = "choose_provider" | "enter_credentials" | "generating" | "success";
+type Provider = "espn" | "sleeper" | "yahoo" | "nfl" | "fleaflicker" | "fantrax";
+
+interface ProviderCard {
+  id: Provider;
+  name: string;
+  emoji: string;
+  description: string;
+  authRequired: boolean;
+  status: "live" | "coming_soon";
+  instructions?: string;
+}
+
+const PROVIDERS: ProviderCard[] = [
+  {
+    id: "sleeper",
+    name: "Sleeper",
+    emoji: "😴",
+    description: "Modern platform with a public API. No login needed — just your league ID.",
+    authRequired: false,
+    status: "live",
+    instructions: "Find your league ID in the Sleeper app: tap your league → Settings → League ID.",
+  },
+  {
+    id: "espn",
+    name: "ESPN Fantasy",
+    emoji: "🏈",
+    description: "The most popular fantasy platform. Requires SWID + espn_s2 cookies.",
+    authRequired: true,
+    status: "live",
+    instructions: "Log into ESPN Fantasy → DevTools (F12) → Application → Cookies → copy SWID and espn_s2.",
+  },
+  {
+    id: "yahoo",
+    name: "Yahoo Fantasy",
+    emoji: "🟣",
+    description: "Yahoo Sports fantasy leagues. OAuth login coming soon.",
+    authRequired: true,
+    status: "coming_soon",
+  },
+  {
+    id: "nfl",
+    name: "NFL Fantasy",
+    emoji: "🏟️",
+    description: "The official NFL fantasy platform. Coming soon.",
+    authRequired: true,
+    status: "coming_soon",
+  },
+  {
+    id: "fleaflicker",
+    name: "Fleaflicker",
+    emoji: "🦟",
+    description: "Highly customizable platform with a public API. Coming soon.",
+    authRequired: false,
+    status: "coming_soon",
+  },
+  {
+    id: "fantrax",
+    name: "Fantrax",
+    emoji: "🎯",
+    description: "Advanced scoring and deep customization. Coming soon.",
+    authRequired: true,
+    status: "coming_soon",
+  },
+];
+
+// ─── DNA progress steps ───────────────────────────────────────────────────────
+
+const DNA_STEPS = [
+  "Connecting to Sleeper API...",
+  "Fetching league roster data...",
+  "Analyzing roster compositions...",
+  "Detecting behavioral patterns...",
+  "Mapping trade tendencies...",
+  "Building exploitability models...",
+  "Generating League DNA Profile...",
+  "Finalizing intelligence report...",
+];
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function LeagueConnect() {
+  const { user } = useAuth();
+  const [step, setStep] = useState<Step>("choose_provider");
+  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
+  const [leagueId, setLeagueId] = useState("");
+  const [username, setUsername] = useState("");
+  const [sleeperLeagues, setSleeperLeagues] = useState<Array<{ leagueId: string; name: string; season: string; teamCount: number; status: string }>>([]);
+  const [selectedLeagueId, setSelectedLeagueId] = useState("");
+  const [progressStep, setProgressStep] = useState(0);
+  const [progressPct, setProgressPct] = useState(0);
+  const [result, setResult] = useState<{
+    leagueName: string;
+    teamCount: number;
+    scoringType: string;
+    matchupCount: number;
+    transactionCount: number;
+    dnaProfile: unknown;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Sleeper username lookup
+  const sleeperUserQuery = trpc.providers.getSleeperLeaguesForUser.useQuery(
+    { username, season: 2025 },
+    { enabled: false }
+  );
+
+  // Sleeper league validation
+  const sleeperValidate = trpc.providers.validateSleeperLeague.useQuery(
+    { leagueId: selectedLeagueId || leagueId },
+    { enabled: false }
+  );
+
+  // Import mutation
+  const importMutation = trpc.providers.importSleeperLeague.useMutation({
+    onSuccess: (data) => {
+      setResult({
+        leagueName: data.league.leagueName,
+        teamCount: data.league.teamCount,
+        scoringType: data.league.scoringType,
+        matchupCount: data.matchupCount,
+        transactionCount: data.transactionCount,
+        dnaProfile: data.dnaProfile,
+      });
+      setProgressPct(100);
+      setProgressStep(DNA_STEPS.length - 1);
+      setTimeout(() => setStep("success"), 800);
+    },
+    onError: (err) => {
+      setError(err.message);
+      setStep("enter_credentials");
+    },
+  });
+
+  const handleProviderSelect = (provider: ProviderCard) => {
+    if (provider.status === "coming_soon") return;
+    setSelectedProvider(provider.id);
+    setError(null);
+    setStep("enter_credentials");
+  };
+
+  const handleSleeperLookup = async () => {
+    if (!username.trim()) return;
+    const res = await sleeperUserQuery.refetch();
+    if (res.data?.found && res.data.leagues) {
+      setSleeperLeagues(res.data.leagues);
+    } else {
+      setError(res.data?.error || "User not found");
+    }
+  };
+
+  const handleImport = async () => {
+    const id = selectedLeagueId || leagueId;
+    if (!id.trim()) {
+      setError("Please enter a league ID");
+      return;
+    }
+    setError(null);
+    setStep("generating");
+    setProgressStep(0);
+    setProgressPct(0);
+
+    // Animate progress steps
+    let step = 0;
+    const interval = setInterval(() => {
+      step++;
+      if (step < DNA_STEPS.length - 1) {
+        setProgressStep(step);
+        setProgressPct(Math.round((step / (DNA_STEPS.length - 1)) * 85));
+      } else {
+        clearInterval(interval);
+      }
+    }, 900);
+
+    importMutation.mutate({ leagueId: id, season: 2025 });
+  };
+
+  // ── Step: Choose provider ──────────────────────────────────────────────────
+  if (step === "choose_provider") {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-4xl mx-auto px-4 py-12">
+          {/* Header */}
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary rounded-full px-4 py-1.5 text-sm font-medium mb-4">
+              <Zap className="w-4 h-4" />
+              Multi-Platform Intelligence
+            </div>
+            <h1 className="text-4xl font-bold tracking-tight mb-3">Connect Your League</h1>
+            <p className="text-muted-foreground text-lg max-w-xl mx-auto">
+              Import your fantasy league to unlock DNA profiling, weekly assessments, trade analysis, and championship equity modeling.
+            </p>
+          </div>
+
+          {/* Provider grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {PROVIDERS.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => handleProviderSelect(p)}
+                disabled={p.status === "coming_soon"}
+                className={`
+                  relative text-left rounded-xl border p-5 transition-all duration-200
+                  ${p.status === "coming_soon"
+                    ? "opacity-50 cursor-not-allowed border-border bg-card"
+                    : "cursor-pointer border-border bg-card hover:border-primary hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-0.5"
+                  }
+                `}
+              >
+                {p.status === "coming_soon" && (
+                  <div className="absolute top-3 right-3">
+                    <Badge variant="secondary" className="text-xs">Soon</Badge>
+                  </div>
+                )}
+                {p.status === "live" && (
+                  <div className="absolute top-3 right-3">
+                    <Badge className="text-xs bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Live</Badge>
+                  </div>
+                )}
+                <div className="text-3xl mb-3">{p.emoji}</div>
+                <div className="font-semibold text-foreground mb-1">{p.name}</div>
+                <div className="text-sm text-muted-foreground leading-relaxed">{p.description}</div>
+                {p.authRequired && p.status === "live" && (
+                  <div className="flex items-center gap-1 mt-3 text-xs text-muted-foreground">
+                    <Lock className="w-3 h-3" />
+                    Credentials required
+                  </div>
+                )}
+                {!p.authRequired && p.status === "live" && (
+                  <div className="flex items-center gap-1 mt-3 text-xs text-emerald-400">
+                    <CheckCircle className="w-3 h-3" />
+                    No login needed
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Auth prompt */}
+          {!user && (
+            <Alert className="mt-8 border-primary/30 bg-primary/5">
+              <AlertDescription className="flex items-center justify-between">
+                <span className="text-sm">Sign in to save your league connection and access the full intelligence stack.</span>
+                <Button size="sm" variant="outline" asChild>
+                  <a href={getLoginUrl()}>Sign In</a>
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Step: Enter credentials (Sleeper) ─────────────────────────────────────
+  if (step === "enter_credentials" && selectedProvider === "sleeper") {
+    const provider = PROVIDERS.find(p => p.id === "sleeper")!;
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-2xl mx-auto px-4 py-12">
+          <button
+            onClick={() => { setStep("choose_provider"); setError(null); }}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to providers
+          </button>
+
+          <div className="flex items-center gap-3 mb-8">
+            <div className="text-4xl">{provider.emoji}</div>
+            <div>
+              <h2 className="text-2xl font-bold">{provider.name}</h2>
+              <p className="text-muted-foreground text-sm">{provider.description}</p>
+            </div>
+          </div>
+
+          {error && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Import Your Sleeper League</CardTitle>
+              <CardDescription>
+                {provider.instructions}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Option A: Username lookup */}
+              <div>
+                <div className="text-sm font-medium mb-2">Option 1 — Find by Sleeper username</div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Your Sleeper username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSleeperLookup()}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={handleSleeperLookup}
+                    disabled={sleeperUserQuery.isFetching}
+                  >
+                    {sleeperUserQuery.isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Look up"}
+                  </Button>
+                </div>
+              </div>
+
+              {/* League list from username lookup */}
+              {sleeperLeagues.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-muted-foreground">Select a league:</div>
+                  {sleeperLeagues.map((l) => (
+                    <button
+                      key={l.leagueId}
+                      onClick={() => setSelectedLeagueId(l.leagueId)}
+                      className={`
+                        w-full text-left rounded-lg border p-3 transition-all
+                        ${selectedLeagueId === l.leagueId
+                          ? "border-primary bg-primary/10"
+                          : "border-border hover:border-primary/50"
+                        }
+                      `}
+                    >
+                      <div className="font-medium text-sm">{l.name}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {l.season} · {l.teamCount} teams · {l.status}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <Separator />
+
+              {/* Option B: Direct league ID */}
+              <div>
+                <div className="text-sm font-medium mb-2">Option 2 — Enter league ID directly</div>
+                <Input
+                  placeholder="e.g. 917324820394872832"
+                  value={leagueId}
+                  onChange={(e) => setLeagueId(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleImport()}
+                />
+              </div>
+
+              <Button
+                className="w-full"
+                size="lg"
+                onClick={handleImport}
+                disabled={(!leagueId.trim() && !selectedLeagueId) || importMutation.isPending}
+              >
+                {importMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    Generate League DNA
+                    <ChevronRight className="w-4 h-4 ml-2" />
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Step: Generating DNA ───────────────────────────────────────────────────
+  if (step === "generating") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="max-w-lg w-full mx-auto px-4">
+          <div className="text-center mb-10">
+            <div className="text-5xl mb-4 animate-pulse">🧬</div>
+            <h2 className="text-2xl font-bold mb-2">Generating League DNA</h2>
+            <p className="text-muted-foreground text-sm">
+              Analyzing manager behavior, trade patterns, and roster tendencies...
+            </p>
+          </div>
+
+          {/* Progress bar */}
+          <div className="mb-8">
+            <Progress value={progressPct} className="h-2 mb-2" />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{progressPct}% complete</span>
+              <span>{DNA_STEPS.length} analysis steps</span>
+            </div>
+          </div>
+
+          {/* Steps list */}
+          <div className="space-y-3">
+            {DNA_STEPS.map((s, i) => (
+              <div
+                key={i}
+                className={`flex items-center gap-3 text-sm transition-all duration-300 ${
+                  i < progressStep
+                    ? "text-emerald-400"
+                    : i === progressStep
+                    ? "text-foreground"
+                    : "text-muted-foreground/40"
+                }`}
+              >
+                {i < progressStep ? (
+                  <CheckCircle className="w-4 h-4 shrink-0" />
+                ) : i === progressStep ? (
+                  <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                ) : (
+                  <Circle className="w-4 h-4 shrink-0" />
+                )}
+                {s}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Step: Success ──────────────────────────────────────────────────────────
+  if (step === "success" && result) {
+    const dna = result.dnaProfile as {
+      leagueSummary?: string;
+      teamProfiles?: Array<{
+        ownerName: string;
+        archetype: string;
+        desperationScore: number;
+        exploitabilityScore: number;
+        keyTrait: string;
+      }>;
+    } | null;
+
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-3xl mx-auto px-4 py-12">
+          {/* Success header */}
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/20 mb-4">
+              <CheckCircle className="w-8 h-8 text-emerald-400" />
+            </div>
+            <h2 className="text-3xl font-bold mb-2">League DNA Generated</h2>
+            <p className="text-muted-foreground">
+              {result.leagueName} · {result.teamCount} teams · {result.scoringType}
+            </p>
+          </div>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-4 mb-8">
+            {[
+              { label: "Teams Analyzed", value: result.teamCount },
+              { label: "Matchups Processed", value: result.matchupCount },
+              { label: "Transactions Mapped", value: result.transactionCount },
+            ].map((stat) => (
+              <Card key={stat.label} className="text-center">
+                <CardContent className="pt-4 pb-4">
+                  <div className="text-2xl font-bold text-primary">{stat.value}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{stat.label}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* League summary */}
+          {dna?.leagueSummary && (
+            <Card className="mb-6">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">League Intelligence Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground leading-relaxed">{dna.leagueSummary}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Team DNA profiles */}
+          {dna?.teamProfiles && dna.teamProfiles.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Manager DNA Profiles</CardTitle>
+                <CardDescription>Behavioral archetypes and exploitability scores</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {dna.teamProfiles.map((t, i) => (
+                    <div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm">{t.ownerName}</div>
+                        <div className="text-xs text-muted-foreground">{t.keyTrait}</div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-4">
+                        <Badge variant="outline" className="text-xs whitespace-nowrap">
+                          {t.archetype}
+                        </Badge>
+                        <div className="text-right">
+                          <div className="text-xs text-muted-foreground">Exploit</div>
+                          <div className={`text-sm font-bold ${
+                            t.exploitabilityScore >= 70 ? "text-red-400" :
+                            t.exploitabilityScore >= 40 ? "text-amber-400" :
+                            "text-emerald-400"
+                          }`}>
+                            {t.exploitabilityScore}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-3 mt-8">
+            <Button className="flex-1" asChild>
+              <a href="/weekly-intelligence">
+                Open Weekly Intelligence Hub
+                <ChevronRight className="w-4 h-4 ml-2" />
+              </a>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setStep("choose_provider");
+                setResult(null);
+                setLeagueId("");
+                setUsername("");
+                setSelectedLeagueId("");
+                setSleeperLeagues([]);
+              }}
+            >
+              Connect Another League
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}

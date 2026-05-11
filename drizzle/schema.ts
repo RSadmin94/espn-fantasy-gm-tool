@@ -513,3 +513,33 @@ export const gmDecisionTags = mysqlTable(
 );
 export type GmDecisionTag = typeof gmDecisionTags.$inferSelect;
 export type InsertGmDecisionTag = typeof gmDecisionTags.$inferInsert;
+
+// ─── Multi-provider league connections ────────────────────────────────────────
+// Stores which fantasy platform leagues each user has connected.
+export const leagueConnections = mysqlTable(
+  "league_connections",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    provider: varchar("provider", { length: 32 }).notNull(),
+    leagueId: varchar("leagueId", { length: 128 }).notNull(),
+    leagueName: varchar("leagueName", { length: 256 }).notNull().default(""),
+    season: int("season").notNull(),
+    isActive: boolean("isActive").default(true).notNull(),
+    credentials: json("credentials"),
+    lastSyncedAt: timestamp("lastSyncedAt"),
+    syncStatus: mysqlEnum("syncStatus", ["ok", "error", "pending"]).default("pending"),
+    syncError: text("syncError"),
+    dnaProfile: json("dnaProfile"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    index("idx_lc_user").on(t.userId),
+    index("idx_lc_provider_league").on(t.provider, t.leagueId),
+    uniqueIndex("uq_lc_user_provider_league_season").on(t.userId, t.provider, t.leagueId, t.season),
+  ]
+);
+export type LeagueConnection = typeof leagueConnections.$inferSelect;
+export type InsertLeagueConnection = typeof leagueConnections.$inferInsert;
+
