@@ -238,3 +238,137 @@ export const adpTrendSnapshots = mysqlTable(
 );
 export type AdpTrendSnapshot = typeof adpTrendSnapshots.$inferSelect;
 export type InsertAdpTrendSnapshot = typeof adpTrendSnapshots.$inferInsert;
+
+// ─── Backtesting: Start/Sit Decisions ────────────────────────────────────────
+// Logs each start/sit recommendation with Monte Carlo inputs and actual outcome
+export const startSitDecisions = mysqlTable(
+  "start_sit_decisions",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    season: int("season").notNull(),
+    week: int("week").notNull(),
+    // Player A (the one recommended to START)
+    playerAName: varchar("playerAName", { length: 128 }).notNull(),
+    playerAPosition: varchar("playerAPosition", { length: 8 }).notNull(),
+    playerAProjection: int("playerAProjection").notNull(), // * 100 for precision
+    playerAFloor: int("playerAFloor").notNull(),           // * 100
+    playerACeiling: int("playerACeiling").notNull(),       // * 100
+    playerABustPct: int("playerABustPct").notNull(),       // 0-100
+    playerAActualPoints: int("playerAActualPoints"),       // * 100, null until resolved
+    // Player B (the one recommended to SIT)
+    playerBName: varchar("playerBName", { length: 128 }).notNull(),
+    playerBPosition: varchar("playerBPosition", { length: 8 }).notNull(),
+    playerBProjection: int("playerBProjection").notNull(),
+    playerBFloor: int("playerBFloor").notNull(),
+    playerBCeiling: int("playerBCeiling").notNull(),
+    playerBBustPct: int("playerBBustPct").notNull(),
+    playerBActualPoints: int("playerBActualPoints"),
+    // Recommendation
+    recommendation: mysqlEnum("recommendation", ["A", "B", "TOSS_UP"]).notNull(),
+    winProbabilityA: int("winProbabilityA").notNull(), // 0-100
+    agentConsensus: int("agentConsensus"),             // 0-100, % of agents agreeing
+    aiVerdict: text("aiVerdict"),
+    // Outcome (filled in after the week resolves)
+    outcome: mysqlEnum("outcome", ["CORRECT", "INCORRECT", "PUSH"]),
+    resolvedAt: timestamp("resolvedAt"),
+    notes: text("notes"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_ssd_season_week").on(t.season, t.week),
+    index("idx_ssd_outcome").on(t.outcome),
+  ]
+);
+export type StartSitDecision = typeof startSitDecisions.$inferSelect;
+export type InsertStartSitDecision = typeof startSitDecisions.$inferInsert;
+
+// ─── Backtesting: Trade Decisions ─────────────────────────────────────────────
+// Logs each trade evaluation (accepted or rejected) and tracks what-if outcomes
+export const tradeDecisions = mysqlTable(
+  "trade_decisions",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    season: int("season").notNull(),
+    week: int("week").notNull(),
+    // Assets
+    assetsGiven: json("assetsGiven").notNull(),    // string[]
+    assetsReceived: json("assetsReceived").notNull(), // string[]
+    // Valuation at decision time
+    valueGiven: int("valueGiven").notNull(),       // composite score * 100
+    valueReceived: int("valueReceived").notNull(),
+    verdict: mysqlEnum("verdict", ["WIN", "FAIR", "LOSS"]).notNull(),
+    champDeltaBefore: int("champDeltaBefore"),     // champ % * 100
+    champDeltaAfter: int("champDeltaAfter"),
+    aiSummary: text("aiSummary"),
+    // Rod's actual decision
+    rodDecision: mysqlEnum("rodDecision", ["ACCEPTED", "REJECTED", "PENDING"]).notNull().default("PENDING"),
+    // Outcome after N weeks (filled in retrospectively)
+    outcomeRating: mysqlEnum("outcomeRating", ["GREAT", "GOOD", "NEUTRAL", "BAD", "TERRIBLE"]),
+    outcomeNotes: text("outcomeNotes"),
+    resolvedAt: timestamp("resolvedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_td_season_week").on(t.season, t.week),
+    index("idx_td_verdict").on(t.verdict),
+    index("idx_td_decision").on(t.rodDecision),
+  ]
+);
+export type TradeDecision = typeof tradeDecisions.$inferSelect;
+export type InsertTradeDecision = typeof tradeDecisions.$inferInsert;
+
+// ─── Backtesting: Monte Carlo Calibration ─────────────────────────────────────
+// Stores win-probability predictions and actual matchup outcomes for calibration
+export const monteCarloCalibration = mysqlTable(
+  "monte_carlo_calibration",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    season: int("season").notNull(),
+    week: int("week").notNull(),
+    teamName: varchar("teamName", { length: 128 }).notNull(),
+    opponentName: varchar("opponentName", { length: 128 }).notNull(),
+    predictedWinPct: int("predictedWinPct").notNull(), // 0-100
+    projectedScore: int("projectedScore").notNull(),   // * 100
+    projectedFloor: int("projectedFloor").notNull(),   // * 100
+    projectedCeiling: int("projectedCeiling").notNull(), // * 100
+    // Actuals (filled after week resolves)
+    actualScore: int("actualScore"),                   // * 100
+    actualOpponentScore: int("actualOpponentScore"),   // * 100
+    actualWon: int("actualWon"),                       // 1=won, 0=lost, null=pending
+    resolvedAt: timestamp("resolvedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_mcc_season_week").on(t.season, t.week),
+    index("idx_mcc_team").on(t.teamName),
+  ]
+);
+export type MonteCarloCalibration = typeof monteCarloCalibration.$inferSelect;
+export type InsertMonteCarloCalibration = typeof monteCarloCalibration.$inferInsert;
+
+// ─── Backtesting: Championship Equity Predictions ─────────────────────────────
+// Tracks weekly champ % predictions vs end-of-season reality
+export const champEquityPredictions = mysqlTable(
+  "champ_equity_predictions",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    season: int("season").notNull(),
+    week: int("week").notNull(),
+    teamName: varchar("teamName", { length: 128 }).notNull(),
+    predictedChampPct: int("predictedChampPct").notNull(), // * 100 for precision
+    predictedPlayoffPct: int("predictedPlayoffPct").notNull(),
+    currentRank: int("currentRank").notNull(),
+    // Actuals (filled at season end)
+    actuallyWonChamp: int("actuallyWonChamp"),   // 1=yes, 0=no, null=season ongoing
+    actuallyMadePlayoffs: int("actuallyMadePlayoffs"),
+    finalRank: int("finalRank"),
+    resolvedAt: timestamp("resolvedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_cep_season_week").on(t.season, t.week),
+    index("idx_cep_team").on(t.teamName),
+  ]
+);
+export type ChampEquityPrediction = typeof champEquityPredictions.$inferSelect;
+export type InsertChampEquityPrediction = typeof champEquityPredictions.$inferInsert;

@@ -4,7 +4,7 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ClipboardList, Star, ArrowLeftRight, Bot, ChevronRight,
-  Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X,
+  Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
@@ -24,6 +24,7 @@ const navItems = [
   // System
   { href: "/data-center", icon: Shield, label: "Data Center", group: "System" },
   { href: "/weekly-stats", icon: Activity, label: "Weekly Stats", group: "System" },
+  { href: "/backtesting", icon: Target, label: "Backtesting", group: "System", badge: "NEW" },
 ];
 
 const groups = ["Overview", "Draft & Keepers", "Decision Tools", "Intelligence", "System"];

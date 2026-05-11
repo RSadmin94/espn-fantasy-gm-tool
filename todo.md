@@ -553,3 +553,20 @@
 - [x] Acknowledge pick owner identity and DNA profile when generating a trade offer (owner name, archetype, exploit score, H2H vs Rod, tilt risk, top exploit window)
 - [x] Server: resolve memberId from owner display name when pick trade counterparty name is available but memberId is empty
 - [x] Verify TypeScript 0 errors and 195 tests still pass
+
+## Backtesting & Accuracy Dashboard
+- [x] Database schema: 4 new tables (start_sit_decisions, trade_decisions, monte_carlo_calibration, champ_equity_predictions)
+- [x] Migration applied via pnpm db:push
+- [x] backtestingService.ts: DB helpers + accuracy computation functions (calcStartSitAccuracy, calcMonteCarloCalibration, calcTradeDecisionReport, calcChampEquityReport, getBacktestSummary)
+- [x] backtestingRouter.ts: 16 tRPC procedures (summary, startSitAccuracy, startSitList, monteCarloCalibration, mcList, tradeReport, tradeList, champEquityReport, logStartSit, logTrade, logMonteCarlo, resolveStartSit, autoResolveStartSit, updateTrade, resolveChampEquity, logChampEquity)
+- [x] BacktestingHub.tsx: 6-tab dashboard (Overview, Start/Sit, Monte Carlo, Trades, Champ Equity, Log Decision)
+- [x] Overview tab: 4 summary cards + methodology explanation + empty state guidance
+- [x] Start/Sit tab: hit-rate gauges, by-position bar chart, decision log table, auto-resolve button
+- [x] Monte Carlo tab: accuracy cards, calibration bar chart (predicted vs actual win rate by bucket), prediction log
+- [x] Trades tab: summary cards, verdict breakdown chart, trade log with accept/reject action buttons
+- [x] Champ Equity tab: Rod's champ % over season line chart, calibration bar chart
+- [x] Log Decision tab: manual entry forms for Start/Sit, Trade, and Monte Carlo decisions
+- [x] Nav item added to AppLayout sidebar under System group (Target icon, NEW badge)
+- [x] Route /backtesting registered in App.tsx
+- [x] 27 vitest tests for pure accuracy computation logic (start/sit outcome, hit rate, Brier score, MC accuracy, trade win rate)
+- [x] 222/222 tests passing, 0 TypeScript errors

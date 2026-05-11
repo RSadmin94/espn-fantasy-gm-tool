@@ -78,6 +78,13 @@
       "when": 1778363245796,
       "tag": "0010_rich_ikaris",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1778485518348,
+      "tag": "0011_certain_scream",
+      "breakpoints": true
     }
   ]
 }

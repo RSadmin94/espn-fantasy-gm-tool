@@ -11,6 +11,7 @@ import { simulationRouter } from "./simulationRouter";
 import { dnaRouter } from "./dnaRouter";
 import { agentRouter } from "./agentRouter";
 import { champRouter } from "./champRouter";
+import { backtestingRouter } from "./backtestingRouter";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob } from "./db";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
@@ -72,6 +73,7 @@ export const appRouter = router({
   dna: dnaRouter,
   agents: agentRouter,
   champ: champRouter,
+  backtest: backtestingRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
