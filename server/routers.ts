@@ -2368,7 +2368,26 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
 
       // ── 5. Determine target owner ─────────────────────────────────────────
       const targetOwnerName = targetPlayer?.ownerName || targetPickOwnerName;
-      const targetMemberId = targetPlayer?.memberId || input.targetOwnerId || "";
+      // Resolve memberId from owner name when not directly available.
+      // Pick trades store counterparty as a display name, not a memberId.
+      let targetMemberId = targetPlayer?.memberId || input.targetOwnerId || "";
+      if (!targetMemberId && targetOwnerName && targetOwnerName !== "Unknown") {
+        try {
+          const { buildLiveOpponentProfiles } = await import("./liveOpponentProfile");
+          const profiles = await buildLiveOpponentProfiles();
+          const cleanTarget = targetOwnerName.toLowerCase().replace(/[^a-z0-9 ]/g, "");
+          for (const [mid, prof] of Array.from(profiles.entries())) {
+            const cleanProf = prof.ownerName.toLowerCase().replace(/[^a-z0-9 ]/g, "");
+            // Match on first token of either name (handles "Rod Sellers" vs "Rod")
+            const targetFirst = cleanTarget.split(" ")[0];
+            const profFirst = cleanProf.split(" ")[0];
+            if (cleanProf.includes(targetFirst) || cleanTarget.includes(profFirst)) {
+              targetMemberId = mid;
+              break;
+            }
+          }
+        } catch { /* continue without memberId */ }
+      }
 
       // ── 6. Estimate target value ──────────────────────────────────────────
       let targetValue = 0;

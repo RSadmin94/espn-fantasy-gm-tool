@@ -546,3 +546,10 @@
 - [x] Live value balance bar showing receive vs give in real time
 - [x] Generate full trade recommendation with math scorecard, AI verdict, and championship equity impact
 - [x] Verify TypeScript 0 errors and 195 tests still pass
+
+## Trade Offer Generator — Picks-Only (Pre-Draft Mode)
+- [x] Remove player selection from Trade Offer Generator — restrict to 2026 draft picks only until DRAFT_2026_COMPLETE flag is set
+- [x] Match the acquisition flow pattern from Trade Analyzer (round/slot dropdowns, pre-draft amber notice)
+- [x] Acknowledge pick owner identity and DNA profile when generating a trade offer (owner name, archetype, exploit score, H2H vs Rod, tilt risk, top exploit window)
+- [x] Server: resolve memberId from owner display name when pick trade counterparty name is available but memberId is empty
+- [x] Verify TypeScript 0 errors and 195 tests still pass

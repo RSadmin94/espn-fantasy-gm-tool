@@ -2,13 +2,20 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeftRight, Target, TrendingUp, Brain, MessageSquare,
-  AlertTriangle, Clock, Star, Dna, Zap, ShieldAlert, BarChart3,
+  AlertTriangle, Clock, Star, Dna, Zap, ShieldAlert, BarChart3, Info, Loader2, Plus,
 } from "lucide-react";
+
+// Flip to true once the 2026 draft is completed to unlock player trading.
+const DRAFT_2026_COMPLETE = false;
+
+function pickLabel(round: number, pick: number) {
+  return `2026 Rd ${round}.${String(pick).padStart(2, "0")}`;
+}
 
 const DEAL_RATING_COLORS: Record<string, string> = {
   EXCELLENT: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -47,14 +54,15 @@ const TILT_COLOR = (label: string) => {
 };
 
 export default function TradeOfferGenerator() {
-  const [targetInput, setTargetInput] = useState("");
-  const [targetType, setTargetType] = useState<"player" | "pick">("player");
+  const [round, setRound] = useState("1");
+  const [slot, setSlot] = useState("1");
 
   const mutation = trpc.tradeOfferGenerator.useMutation();
 
   const handleGenerate = () => {
-    if (!targetInput.trim()) return;
-    mutation.mutate({ targetInput: targetInput.trim(), targetType });
+    const r = parseInt(round);
+    const s = parseInt(slot);
+    mutation.mutate({ targetInput: pickLabel(r, s), targetType: "pick" });
   };
 
   const result = mutation.data;
@@ -80,59 +88,84 @@ export default function TradeOfferGenerator() {
               )}
             </div>
             <p className="text-muted-foreground text-sm">
-              Enter a player or pick you want — get a fair offer, GM intel, and AI negotiation strategy
+              Select a 2026 pick you want to acquire — get a fair offer, GM intel, and AI negotiation strategy
             </p>
           </div>
         </div>
+
+        {/* Pre-draft notice */}
+        {!DRAFT_2026_COMPLETE && (
+          <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+            <Info className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+            <div className="text-sm text-amber-200 leading-relaxed">
+              <span className="font-semibold text-amber-300">Pre-draft mode — 2026 picks only.</span>{" "}
+              Player trading unlocks after the 2026 draft. Use this to generate targeted pick acquisition offers before draft day.
+            </div>
+          </div>
+        )}
 
         {/* Input Card */}
         <Card className="border-orange-500/20 bg-card/50">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Target className="h-4 w-4 text-orange-400" />
-              What do you want to acquire?
+              Which 2026 draft pick do you want to acquire?
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex gap-2">
-              <Button
-                variant={targetType === "player" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setTargetType("player")}
-                className={targetType === "player" ? "bg-orange-500 hover:bg-orange-600 text-white" : ""}
-              >
-                Player
-              </Button>
-              <Button
-                variant={targetType === "pick" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setTargetType("pick")}
-                className={targetType === "pick" ? "bg-orange-500 hover:bg-orange-600 text-white" : ""}
-              >
-                Draft Pick
-              </Button>
-            </div>
-
-            <div className="flex gap-3">
-              <Input
-                value={targetInput}
-                onChange={e => setTargetInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && handleGenerate()}
-                placeholder={targetType === "player" ? "e.g. Tyreek Hill, Lamar Jackson, Bijan Robinson..." : "e.g. 1.03, 2.07, round 3 pick 5..."}
-                className="bg-background border-border text-foreground"
-              />
+            <div className="flex gap-3 items-end">
+              <div className="flex-1 space-y-1.5">
+                <label className="text-xs text-muted-foreground">Round</label>
+                <Select value={round} onValueChange={setRound}>
+                  <SelectTrigger className="bg-background border-border text-foreground">
+                    <SelectValue placeholder="Round" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 14 }, (_, i) => (
+                      <SelectItem key={i + 1} value={String(i + 1)}>Round {i + 1}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 space-y-1.5">
+                <label className="text-xs text-muted-foreground">Pick slot</label>
+                <Select value={slot} onValueChange={setSlot}>
+                  <SelectTrigger className="bg-background border-border text-foreground">
+                    <SelectValue placeholder="Pick" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 14 }, (_, i) => (
+                      <SelectItem key={i + 1} value={String(i + 1)}>Pick {i + 1}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Button
                 onClick={handleGenerate}
-                disabled={mutation.isPending || !targetInput.trim()}
-                className="bg-orange-500 hover:bg-orange-600 text-white min-w-[140px]"
+                disabled={mutation.isPending}
+                className="bg-orange-500 hover:bg-orange-600 text-white min-w-[160px] h-10"
               >
                 {mutation.isPending ? (
                   <span className="flex items-center gap-2">
-                    <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Analyzing...
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generating…
                   </span>
-                ) : "Generate Offer"}
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    Generate Offer
+                  </span>
+                )}
               </Button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs text-orange-400 border-orange-500/30 bg-orange-500/10">
+                Target: {pickLabel(parseInt(round), parseInt(slot))}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                Uses pick value chart, GM behavioral profiles, and Phase 3 League DNA to build a targeted offer
+              </span>
             </div>
 
             {mutation.error && (
@@ -140,81 +173,115 @@ export default function TradeOfferGenerator() {
                 {mutation.error.message}
               </div>
             )}
-
-            <p className="text-xs text-muted-foreground">
-              Uses 2025 ESPN fantasy stats, PPR scoring rules, pick value chart, GM behavioral profiles, and Phase 3 League DNA to build a targeted offer.
-            </p>
           </CardContent>
         </Card>
 
         {/* Results */}
         {result && (
           <div className="space-y-4">
-            {/* Target Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="border-border bg-card/50 md:col-span-2">
-                <CardContent className="pt-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-lg font-bold text-foreground">{result.targetName}</span>
-                        {result.targetStats && (
-                          <Badge variant="outline" className="text-xs border-orange-500/30 text-orange-400">
-                            {result.targetStats.position}
-                          </Badge>
-                        )}
-                        {dna && (
-                          <Badge className={`text-xs border ${TILT_COLOR(dna.tiltLabel)}`}>
-                            {dna.tiltLabel}
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">Owner: <span className="text-foreground font-medium">{result.targetOwner}</span></p>
-                      {result.targetStats && (
-                        <div className="mt-2 flex flex-wrap gap-3 text-sm">
-                          <span className="text-muted-foreground">
-                            2025 Pts: <span className="text-foreground font-semibold">{result.targetStats.seasonPoints}</span>
-                          </span>
-                          <span className="text-muted-foreground">
-                            Avg/Gm: <span className="text-foreground font-semibold">{result.targetStats.avgPoints}</span>
-                          </span>
-                          {result.targetStats.keeperValueFuture > 0 && (
-                            <span className="text-muted-foreground">
-                              Keeper Rd: <span className="text-yellow-400 font-semibold">{result.targetStats.keeperValueFuture}</span>
-                            </span>
-                          )}
-                          <span className={`font-medium ${result.targetStats.injuryStatus === "ACTIVE" ? "text-emerald-400" : "text-yellow-400"}`}>
-                            {result.targetStats.injuryStatus}
-                          </span>
-                        </div>
+
+            {/* ── Pick Owner Identity Card ─────────────────────────────── */}
+            <Card className="border-orange-500/30 bg-orange-500/5">
+              <CardContent className="pt-4">
+                <div className="flex items-start justify-between gap-4">
+                  {/* Left: pick label + owner name + archetype */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <Badge className="bg-orange-500/20 text-orange-400 border border-orange-500/30 text-sm font-bold px-3 py-1">
+                        {result.targetName}
+                      </Badge>
+                      {strategy && (
+                        <Badge className={`text-xs border ${DEAL_RATING_COLORS[strategy.dealRating] || DEAL_RATING_COLORS.FAIR}`}>
+                          {strategy.dealRating}
+                        </Badge>
                       )}
-                      <p className="text-xs text-muted-foreground mt-2">{result.scoringDesc}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="flex items-baseline gap-1.5 mt-1">
+                      <span className="text-xs text-muted-foreground">Held by</span>
+                      <span className="text-base font-bold text-foreground">{result.targetOwner}</span>
+                    </div>
+                    {dna && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <Badge className="bg-purple-500/20 text-purple-400 border border-purple-500/30 text-xs">
+                          {dna.gmArchetype}
+                        </Badge>
+                        <Badge className={`text-xs border ${TILT_COLOR(dna.tiltLabel)}`}>
+                          {dna.tiltLabel}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {dna.seasonsAnalyzed} seasons analyzed
+                        </Badge>
+                      </div>
+                    )}
+                    {result.gmStyle && !dna && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <Badge className="bg-purple-500/20 text-purple-400 border border-purple-500/30 text-xs">
+                          {result.gmStyle.archetype}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {result.gmStyle.draftStyleBadge}
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: key intel metrics */}
+                  <div className="flex gap-4 shrink-0">
+                    <div className="text-center">
                       <div className="text-2xl font-bold text-orange-400">{result.targetValue.toLocaleString()}</div>
-                      <div className="text-xs text-muted-foreground">Est. Value</div>
-                      {dna && (
-                        <div className={`text-xs font-semibold mt-1 ${EXPLOIT_COLOR(dna.exploitabilityScore).text}`}>
-                          Exploit: {dna.exploitabilityScore}/100
+                      <div className="text-xs text-muted-foreground">Pick Value</div>
+                    </div>
+                    {dna && (
+                      <div className="text-center">
+                        <div className={`text-2xl font-bold ${EXPLOIT_COLOR(dna.exploitabilityScore).text}`}>
+                          {dna.exploitabilityScore}
                         </div>
-                      )}
+                        <div className="text-xs text-muted-foreground">Exploit Score</div>
+                      </div>
+                    )}
+                    {(dna?.h2hVsRod || result.gmStyle?.h2hVsRod) && (
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-foreground">
+                          {(dna?.h2hVsRod ?? result.gmStyle?.h2hVsRod)!.wins}W
+                          <span className="text-muted-foreground text-base">-</span>
+                          {(dna?.h2hVsRod ?? result.gmStyle?.h2hVsRod)!.losses}L
+                        </div>
+                        <div className="text-xs text-muted-foreground">H2H vs Rod</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Exploitability bar */}
+                {dna && (
+                  <div className="mt-3 space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Exploitability</span>
+                      <span className={`font-semibold ${EXPLOIT_COLOR(dna.exploitabilityScore).text}`}>
+                        {EXPLOIT_COLOR(dna.exploitabilityScore).label}
+                      </span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-700 ${EXPLOIT_COLOR(dna.exploitabilityScore).bar}`}
+                        style={{ width: `${dna.exploitabilityScore}%` }}
+                      />
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                )}
 
-              {strategy && (
-                <Card className={`border ${DEAL_RATING_COLORS[strategy.dealRating] || DEAL_RATING_COLORS.FAIR} bg-card/50`}>
-                  <CardContent className="pt-4 text-center">
-                    <div className="text-3xl font-black mb-1">{strategy.dealRating}</div>
-                    <div className="text-xs text-muted-foreground">Deal Rating</div>
-                    <div className="mt-3 text-xs text-muted-foreground leading-relaxed">
-                      {strategy.targetAnalysis?.slice(0, 120)}...
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+                {/* Top exploit window */}
+                {dna?.exploitWindows?.[0] && (
+                  <div className="mt-3 flex items-start gap-2 p-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                    <Zap className="h-3.5 w-3.5 text-yellow-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-foreground leading-relaxed">
+                      <span className="font-semibold text-yellow-400">Top Exploit: </span>
+                      {dna.exploitWindows[0]}
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Main Tabs */}
             <Tabs defaultValue="offers">
