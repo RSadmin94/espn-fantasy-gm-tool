@@ -312,7 +312,7 @@ export default function TradeOfferGenerator() {
               {/* Offer Options Tab */}
               <TabsContent value="offers" className="mt-4 space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  These pick offers are built from your available 2026 draft picks using the 14-team pick value chart.
+                  Each offer is <span className="text-foreground font-medium">balanced</span>: Rod gives N picks and receives N picks in return. Values are matched using the 14-team pick value chart.
                 </p>
                 {result.offerOptions.length === 0 ? (
                   <Card className="border-border bg-card/50">
@@ -321,41 +321,82 @@ export default function TradeOfferGenerator() {
                     </CardContent>
                   </Card>
                 ) : (
-                  result.offerOptions.map((offer, i) => (
-                    <Card key={i} className={`border ${i === 0 ? "border-orange-500/40 bg-orange-500/5" : "border-border bg-card/50"}`}>
-                      <CardContent className="pt-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-sm font-semibold text-foreground">Option {i + 1}</span>
-                              {i === 0 && <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">Recommended</Badge>}
-                            </div>
-                            <div className="space-y-1">
-                              {/* Picks-only mode: no players in offers */}
-                              {offer.picks.map((pick, j) => (
-                                <div key={j} className="flex items-center gap-2 text-sm">
-                                  <Badge variant="outline" className="text-xs">PICK</Badge>
-                                  <span className="text-foreground font-medium">{pick}</span>
+                  result.offerOptions.map((offer, i) => {
+                    const gives = (offer as any).rodGives;
+                    const receives = (offer as any).rodReceives;
+                    const ratioPct = (offer as any).valueRatioPct ?? offer.valueRatio;
+                    return (
+                      <Card key={i} className={`border ${i === 0 ? "border-orange-500/40 bg-orange-500/5" : "border-border bg-card/50"}`}>
+                        <CardContent className="pt-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-sm font-semibold text-foreground">Option {i + 1}</span>
+                            {i === 0 && <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">Recommended</Badge>}
+                            <Badge variant="outline" className="text-xs ml-auto">
+                              {gives?.picks?.length ?? 1}-for-{receives?.picks?.length ?? 1}
+                            </Badge>
+                          </div>
+
+                          {/* Balanced trade layout */}
+                          <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-start">
+                            {/* Rod Gives */}
+                            <div className="space-y-1.5">
+                              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Rod Gives</p>
+                              {(gives?.picks ?? offer.picks).map((pick: string, j: number) => (
+                                <div key={j} className="flex items-center gap-1.5">
+                                  <Badge className="bg-red-500/15 text-red-400 border border-red-500/25 text-xs font-mono">GIVE</Badge>
+                                  <span className="text-sm text-foreground font-medium">{pick}</span>
+                                  {gives?.pickAssets?.[j] && (
+                                    <span className="text-xs text-muted-foreground ml-auto">{gives.pickAssets[j].value.toLocaleString()}</span>
+                                  )}
                                 </div>
                               ))}
+                              <div className="text-xs text-muted-foreground pt-0.5">
+                                Total: <span className="font-semibold text-foreground">{(gives?.totalValue ?? offer.totalValue).toLocaleString()}</span>
+                              </div>
+                            </div>
+
+                            {/* Arrow */}
+                            <div className="flex items-center justify-center pt-5">
+                              <ArrowLeftRight className="h-4 w-4 text-orange-400" />
+                            </div>
+
+                            {/* Rod Receives */}
+                            <div className="space-y-1.5">
+                              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Rod Receives</p>
+                              {(receives?.picks ?? [result.targetName]).map((pick: string, j: number) => (
+                                <div key={j} className="flex items-center gap-1.5">
+                                  <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 text-xs font-mono">GET</Badge>
+                                  <span className="text-sm text-foreground font-medium">{pick}</span>
+                                  {receives?.pickAssets?.[j] && (
+                                    <span className="text-xs text-muted-foreground ml-auto">{receives.pickAssets[j].value.toLocaleString()}</span>
+                                  )}
+                                </div>
+                              ))}
+                              <div className="text-xs text-muted-foreground pt-0.5">
+                                Total: <span className="font-semibold text-foreground">{(receives?.totalValue ?? result.targetValue).toLocaleString()}</span>
+                              </div>
                             </div>
                           </div>
-                          <div className="text-right ml-4">
-                            <div className="text-xl font-bold text-foreground">{offer.totalValue.toLocaleString()}</div>
-                            <div className={`text-sm font-semibold ${VALUE_RATIO_COLOR(offer.valueRatio)}`}>
-                              {offer.valueRatio}% — {VALUE_RATIO_LABEL(offer.valueRatio)}
+
+                          {/* Value match bar */}
+                          <div className="mt-3 space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Value match</span>
+                              <span className={`font-semibold ${VALUE_RATIO_COLOR(ratioPct)}`}>
+                                {ratioPct}% — {VALUE_RATIO_LABEL(ratioPct)}
+                              </span>
                             </div>
-                            <div className="mt-2 w-24 h-2 bg-muted rounded-full overflow-hidden">
+                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                               <div
-                                className={`h-full rounded-full ${offer.valueRatio >= 95 && offer.valueRatio <= 110 ? "bg-emerald-500" : offer.valueRatio > 110 ? "bg-blue-500" : "bg-yellow-500"}`}
-                                style={{ width: `${Math.min(100, offer.valueRatio)}%` }}
+                                className={`h-full rounded-full transition-all duration-700 ${ratioPct >= 95 && ratioPct <= 110 ? "bg-emerald-500" : ratioPct > 110 ? "bg-blue-500" : "bg-yellow-500"}`}
+                                style={{ width: `${Math.min(100, ratioPct)}%` }}
                               />
                             </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
+                        </CardContent>
+                      </Card>
+                    );
+                  })
                 )}
               </TabsContent>
 

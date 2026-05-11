@@ -2523,55 +2523,180 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       }));
       const rodAllPicks = [...rodOriginalPicks, ...rodAcquiredPicks]
         .sort((a, b) => b.value - a.value); // highest value first
-      // Build 3 offer options: single pick closest to value, slight overpay, package of 2 picks
-      const offerOptions: { players: never[]; picks: string[]; pickAssets: PickAsset[]; totalValue: number }[] = [];
-      // Option 1: Single pick closest to target value (fair offer)
-      const fairPick = rodAllPicks.find(pk =>
-        pk.label !== targetPickLabel && Math.abs(pk.value - targetValue) / Math.max(targetValue, 1) < 0.35
-      );
-      if (fairPick) {
-        offerOptions.push({ players: [], picks: [fairPick.label], pickAssets: [fairPick], totalValue: fairPick.value });
+
+      // ── Build target owner's available picks from 2026 draft order ──────────
+      // We need these so every offer is balanced: Rod gives N picks, Rod receives N picks.
+      // The target pick is always the "anchor" of what Rod receives.
+      // For multi-pick offers we add more of the target owner's picks to balance.
+      interface OfferSide { picks: string[]; pickAssets: PickAsset[]; totalValue: number; }
+      interface BalancedOffer { rodGives: OfferSide; rodReceives: OfferSide; valueRatioPct: number; }
+
+      // Collect target owner's picks from the 2026 draft order
+      const targetOwnerPicks: PickAsset[] = [];
+      // Resolve target owner's teamId from teamMap using targetOwnerName
+      let targetTeamId: number | null = null;
+      for (const [, info] of Object.entries(teamMap)) {
+        const cleanOwner = info.ownerName.toLowerCase().replace(/[^a-z0-9 ]/g, "");
+        const cleanTarget = targetOwnerName.toLowerCase().replace(/[^a-z0-9 ]/g, "");
+        const targetFirst = cleanTarget.split(" ")[0];
+        const ownerFirst = cleanOwner.split(" ")[0];
+        if (cleanOwner.includes(targetFirst) || cleanTarget.includes(ownerFirst) || targetFirst === ownerFirst) {
+          targetTeamId = info.teamId;
+          break;
+        }
       }
-      // Option 2: Single pick slight overpay (sweetener — next round up)
-      const overpayPick = rodAllPicks.find(pk =>
-        pk.label !== targetPickLabel && pk.value > targetValue * 0.85 && pk !== fairPick
-      );
-      if (overpayPick) {
-        offerOptions.push({ players: [], picks: [overpayPick.label], pickAssets: [overpayPick], totalValue: overpayPick.value });
-      }
-      // Option 3: Two-pick package totaling close to or above target value
-      const pkgCandidates = rodAllPicks.filter(pk =>
-        pk.label !== targetPickLabel && pk !== fairPick && pk !== overpayPick
-      );
-      if (pkgCandidates.length >= 2) {
-        // Find best 2-pick combo whose combined value is within 10-40% above target
-        let bestPkg: PickAsset[] | null = null;
-        let bestDiff = Infinity;
-        for (let i = 0; i < pkgCandidates.length; i++) {
-          for (let j = i + 1; j < pkgCandidates.length; j++) {
-            const total = pkgCandidates[i].value + pkgCandidates[j].value;
-            const diff = Math.abs(total - targetValue * 1.1);
-            if (diff < bestDiff) { bestDiff = diff; bestPkg = [pkgCandidates[i], pkgCandidates[j]]; }
+      if (targetTeamId !== null) {
+        for (let r = 1; r <= TOTAL_ROUNDS; r++) {
+          for (let p = 1; p <= TEAMS_COUNT; p++) {
+            const slotIndex = r % 2 === 1 ? p - 1 : TEAMS_COUNT - p;
+            const slot = pickOrderForOffers[slotIndex];
+            if (slot && slot.teamId === targetTeamId) {
+              // Skip the target pick itself (already the anchor of what Rod receives)
+              const lbl = `Round ${r}.${String(p).padStart(2, "0")}`;
+              if (lbl === targetPickLabel.replace(/ \(2026 Draft\)/, "")) continue;
+              // Skip any pick the target owner has traded away
+              const tradedByTarget = allPickTrades2026.find(
+                t => t.type === "traded_away" && t.round === r && t.pickInRound === p
+                  && t.counterparty && targetOwnerName.toLowerCase().includes(t.counterparty.toLowerCase().split(" ")[0])
+              );
+              if (!tradedByTarget) {
+                targetOwnerPicks.push({
+                  label: lbl,
+                  round: r,
+                  pickInRound: p,
+                  value: pickValueCanonical(r, p),
+                  source: "original",
+                });
+              }
+            }
           }
         }
-        if (bestPkg) {
-          offerOptions.push({
-            players: [],
-            picks: bestPkg.map(pk => pk.label),
-            pickAssets: bestPkg,
-            totalValue: bestPkg[0].value + bestPkg[1].value,
-          });
-        }
       }
-      // Fallback: if no picks found, surface a message
-      if (offerOptions.length === 0) {
-        offerOptions.push({
-          players: [],
-          picks: ["No available picks — check Pick Tracker"],
-          pickAssets: [],
-          totalValue: 0,
+      // Sort target owner picks by value descending
+      targetOwnerPicks.sort((a, b) => b.value - a.value);
+
+      // ── Anchor: what Rod receives always starts with the target pick ─────────
+      const targetPickAsset: PickAsset = {
+        label: targetPickLabel,
+        round: parseInt(targetPickLabel.match(/(\d+)\.(\d+)/)?.[1] ?? "1"),
+        pickInRound: parseInt(targetPickLabel.match(/(\d+)\.(\d+)/)?.[2] ?? "1"),
+        value: targetValue,
+        source: "original",
+      };
+
+      // Helper: find best N-pick combo from a list whose total is closest to a target sum
+      function bestNPickCombo(pool: PickAsset[], n: number, targetSum: number): PickAsset[] | null {
+        if (pool.length < n) return null;
+        let best: PickAsset[] | null = null;
+        let bestDiff = Infinity;
+        function recurse(start: number, chosen: PickAsset[], sum: number) {
+          if (chosen.length === n) {
+            const diff = Math.abs(sum - targetSum);
+            if (diff < bestDiff) { bestDiff = diff; best = [...chosen]; }
+            return;
+          }
+          const remaining = n - chosen.length;
+          for (let i = start; i <= pool.length - remaining; i++) {
+            recurse(i + 1, [...chosen, pool[i]], sum + pool[i].value);
+          }
+        }
+        recurse(0, [], 0);
+        return best;
+      }
+
+      // ── Build balanced offer options ─────────────────────────────────────────
+      // Each option: Rod gives K picks, Rod receives K picks (target pick + K-1 more from target owner)
+      const balancedOffers: BalancedOffer[] = [];
+
+      // Option 1: 1-for-1 — Rod gives 1 pick, receives target pick only
+      // Find Rod's single pick whose value is closest to targetValue (within ±40%)
+      const rod1Candidates = rodAllPicks.filter(pk => pk.label !== targetPickLabel);
+      const rod1Best = bestNPickCombo(rod1Candidates, 1, targetValue);
+      if (rod1Best) {
+        const rodGivesVal = rod1Best[0].value;
+        balancedOffers.push({
+          rodGives: { picks: rod1Best.map(p => p.label), pickAssets: rod1Best, totalValue: rodGivesVal },
+          rodReceives: { picks: [targetPickAsset.label], pickAssets: [targetPickAsset], totalValue: targetValue },
+          valueRatioPct: targetValue > 0 ? Math.round((rodGivesVal / targetValue) * 100) : 100,
         });
       }
+
+      // Option 2: 2-for-2 — Rod gives 2 picks, receives target pick + 1 more from target owner
+      // Find the best extra pick from target owner to add alongside the target pick
+      // Then find 2 Rod picks whose combined value ≈ combined receive value
+      if (targetOwnerPicks.length >= 1) {
+        // Try each of target owner's picks as the "bonus" receive pick
+        let bestOpt2: BalancedOffer | null = null;
+        let bestOpt2Diff = Infinity;
+        for (const bonusPick of targetOwnerPicks.slice(0, 6)) { // try top 6 bonus picks
+          const receiveTotal = targetValue + bonusPick.value;
+          const rod2Candidates = rodAllPicks.filter(pk => pk.label !== targetPickLabel);
+          const rod2Best = bestNPickCombo(rod2Candidates, 2, receiveTotal);
+          if (rod2Best) {
+            const rodGivesVal = rod2Best[0].value + rod2Best[1].value;
+            const diff = Math.abs(rodGivesVal - receiveTotal);
+            if (diff < bestOpt2Diff) {
+              bestOpt2Diff = diff;
+              bestOpt2 = {
+                rodGives: { picks: rod2Best.map(p => p.label), pickAssets: rod2Best, totalValue: rodGivesVal },
+                rodReceives: { picks: [targetPickAsset.label, bonusPick.label], pickAssets: [targetPickAsset, bonusPick], totalValue: receiveTotal },
+                valueRatioPct: receiveTotal > 0 ? Math.round((rodGivesVal / receiveTotal) * 100) : 100,
+              };
+            }
+          }
+        }
+        if (bestOpt2) balancedOffers.push(bestOpt2);
+      }
+
+      // Option 3: 3-for-3 — Rod gives 3 picks, receives target pick + 2 more from target owner
+      if (targetOwnerPicks.length >= 2 && rodAllPicks.length >= 3) {
+        let bestOpt3: BalancedOffer | null = null;
+        let bestOpt3Diff = Infinity;
+        // Try combinations of 2 bonus picks from target owner
+        for (let i = 0; i < Math.min(targetOwnerPicks.length, 5); i++) {
+          for (let j = i + 1; j < Math.min(targetOwnerPicks.length, 6); j++) {
+            const b1 = targetOwnerPicks[i];
+            const b2 = targetOwnerPicks[j];
+            const receiveTotal = targetValue + b1.value + b2.value;
+            const rod3Candidates = rodAllPicks.filter(pk => pk.label !== targetPickLabel);
+            const rod3Best = bestNPickCombo(rod3Candidates, 3, receiveTotal);
+            if (rod3Best) {
+              const rodGivesVal = rod3Best.reduce((s, p) => s + p.value, 0);
+              const diff = Math.abs(rodGivesVal - receiveTotal);
+              if (diff < bestOpt3Diff) {
+                bestOpt3Diff = diff;
+                bestOpt3 = {
+                  rodGives: { picks: rod3Best.map(p => p.label), pickAssets: rod3Best, totalValue: rodGivesVal },
+                  rodReceives: { picks: [targetPickAsset.label, b1.label, b2.label], pickAssets: [targetPickAsset, b1, b2], totalValue: receiveTotal },
+                  valueRatioPct: receiveTotal > 0 ? Math.round((rodGivesVal / receiveTotal) * 100) : 100,
+                };
+              }
+            }
+          }
+        }
+        if (bestOpt3) balancedOffers.push(bestOpt3);
+      }
+
+      // Fallback: if no balanced offers found, surface a message
+      if (balancedOffers.length === 0) {
+        balancedOffers.push({
+          rodGives: { picks: ["No available picks — check Pick Tracker"], pickAssets: [], totalValue: 0 },
+          rodReceives: { picks: [targetPickAsset.label], pickAssets: [targetPickAsset], totalValue: targetValue },
+          valueRatioPct: 0,
+        });
+      }
+
+      // Map to legacy offerOptions shape for downstream LLM + UI compatibility
+      const offerOptions = balancedOffers.map(bo => ({
+        players: [] as never[],
+        picks: bo.rodGives.picks,           // what Rod gives (shown as "offer")
+        pickAssets: bo.rodGives.pickAssets,
+        totalValue: bo.rodGives.totalValue,
+        // Extended balanced fields
+        rodGives: bo.rodGives,
+        rodReceives: bo.rodReceives,
+        valueRatioPct: bo.valueRatioPct,
+      }));
 
       // ── 8. Pull GM style context for target owner ─────────────────────────
       const { getGmStyleForTradeGenerator } = await import("./liveOpponentProfile");
@@ -2611,8 +2736,10 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
         : targetPickLabel;
 
       const offerDesc = offerOptions.map((o, i) => {
-        const picks = o.picks.join(" + ");
-        return `Option ${i + 1}: ${picks} (est. value: ${o.totalValue}, ${targetValue > 0 ? Math.round((o.totalValue / targetValue) * 100) : 0}% of target value)`;
+        const gives = o.rodGives.picks.join(" + ");
+        const receives = o.rodReceives.picks.join(" + ");
+        const ratio = o.valueRatioPct ?? (targetValue > 0 ? Math.round((o.totalValue / targetValue) * 100) : 0);
+        return `Option ${i + 1}: Rod gives [${gives}] (value: ${o.rodGives.totalValue}) in exchange for [${receives}] (value: ${o.rodReceives.totalValue}) — ${ratio}% value match`;
       }).join("\n");
 
       const gmContext = gmStyle
@@ -2712,9 +2839,12 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
         offerOptions: offerOptions.map(o => ({
           players: [],
           picks: o.picks,
-          pickAssets: (o as any).pickAssets ?? [],
+          pickAssets: o.pickAssets ?? [],
           totalValue: o.totalValue,
           valueRatio: targetValue > 0 ? Math.round((o.totalValue / targetValue) * 100) : 0,
+          rodGives: o.rodGives,
+          rodReceives: o.rodReceives,
+          valueRatioPct: o.valueRatioPct,
         })),
         rodAvailablePicks: rodAllPicks.map(pk => ({
           label: pk.label,

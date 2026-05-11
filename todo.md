@@ -661,3 +661,10 @@
 - [x] mlRouter.ts: ml.health, ml.predict, ml.predictBatch tRPC procedures
 - [x] ML Forecast nav item added to AppLayout sidebar (System group)
 - [x] 0 TypeScript errors, 293/293 tests passing
+
+## Trade Offer Generator — Balanced Offer Fix (Bug)
+- [x] Enforce equal pick counts on both sides: 1 pick offered → 1 pick requested; 2 picks offered → 2 picks requested (no 2-for-1 or 1-for-2 imbalance)
+- [x] Option 1 must be 1-for-1 (best single Rod pick vs target pick)
+- [x] Option 2 must be 2-for-2 (two Rod picks vs two target picks, or target pick + another pick from target owner)
+- [x] Option 3 must be 3-for-3 or removed if not enough picks available
+- [x] 0 TypeScript errors, 293/293 tests passing
