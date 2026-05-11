@@ -476,3 +476,11 @@
 - [x] All Teams tab: full positional construction cards for every team in both drafts side-by-side
 - [x] Winner banner: shows which draft wins on more metrics (or "Even match")
 - [x] 195 tests passing, 0 TypeScript errors
+
+## Phase 1 — Injury Intelligence Engine
+- [x] Copy injuryService.ts, injuryRouter.ts, injuryAnalytics.ts into server/
+- [x] Edit routers.ts: add imports for injuryRouter and buildAdvisorInjuryContext
+- [x] Edit routers.ts: mount injury: injuryRouter inside appRouter
+- [x] Edit routers.ts: inject buildAdvisorInjuryContext into advisor.chat leagueContext
+- [x] Verify TypeScript 0 errors after integration
+- [x] Verify 195 tests still pass after integration

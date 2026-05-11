@@ -5,6 +5,8 @@ import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
+import { injuryRouter } from "./injuryRouter";
+import { buildAdvisorInjuryContext } from "./injuryAnalytics";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob } from "./db";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
@@ -61,6 +63,7 @@ async function getSeasonData(season: number) {
 
 export const appRouter = router({
   system: systemRouter,
+  injury: injuryRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -2764,8 +2767,19 @@ Be concise, data-driven, and specific. Reference actual team names and player na
               }
             }
           }
+        // Phase 1: inject live injury intelligence into advisor context
+          if (allPlayers.length > 0) {
+            try {
+              const injuryContext = await buildAdvisorInjuryContext(
+                allPlayers.map((p: PlayerRow) => ({ playerId: p.playerId, playerName: p.playerName, position: p.position, teamId: p.teamId })),
+                0  // 0 = Rod's teamId placeholder
+              );
+              leagueContext += "\n\n" + injuryContext;
+            } catch {
+              // Injury fetch failed — continue without it
+            }
+          }
         }
-
         const history = await getChatHistory(userId, season);
         const messages: Message[] = [
           { role: "system", content: leagueContext },
