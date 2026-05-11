@@ -689,3 +689,18 @@
 - [x] Update Command Center: leaguePulse on load (instant), rodOpportunities in quick-launch
 - [x] Add Weekly Intelligence nav entry in AppLayout (Intelligence group)
 - [x] 0 TypeScript errors, 293/293 tests passing
+
+## Web App Completion — Option B (3 Items)
+- [ ] Wire leaguePulse into Command Center War Room tab: replace static threat cards with live desperation scores, last-week transaction counts, and standings snapshot
+- [ ] Add Deep Dive slide-over on Weekly Intel team cards: clicking "Deep Dive" calls weeklyAssessment.teamBrief and opens a slide-over with full LLM narrative, trade targets, waiver overlap
+- [ ] Schedule Weekly Assessment auto-run every Monday morning via periodic-updates system (after ESPN data refresh)
+- [x] 0 TypeScript errors, all tests passing (293/293)
+
+## Weekly Intelligence Hub — Full UI Build
+- [x] League pulse banner: standings snapshot, desperation scores, last-week transaction counts
+- [x] Rod opportunity board: trade targets, waiver wire pickups, start/sit edges
+- [x] 14 team assessment cards: DNA badge, threat tier, record, key signals (trade/waiver/start-sit)
+- [x] Sort/filter controls: by threat tier, desperation score, trade opportunity
+- [x] Deep Dive slide-over: calls weeklyAssessment.teamBrief, renders full LLM narrative + action items
+- [x] Wire to existing /weekly-intelligence route in App.tsx
+- [x] 0 TypeScript errors, all tests passing (293/293)
