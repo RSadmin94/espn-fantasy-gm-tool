@@ -36,6 +36,7 @@ import WaiverLab from "@/pages/hubs/WaiverLab";
 import OpponentIntel from "@/pages/hubs/OpponentIntel";
 import DataCenter from "@/pages/hubs/DataCenter";
 import BacktestingHub from "@/pages/hubs/BacktestingHub";
+import GMDecisionMemory from "@/pages/hubs/GMDecisionMemory";
 
 function Router() {
   return (
@@ -50,6 +51,7 @@ function Router() {
       <Route path="/opponent-intel" component={OpponentIntel} />
       <Route path="/data-center" component={DataCenter} />
       <Route path="/backtesting" component={BacktestingHub} />
+      <Route path="/gm-memory" component={GMDecisionMemory} />
       <Route path="/standings" component={Standings} />
       <Route path="/rosters" component={Rosters} />
       <Route path="/draft" component={DraftHistory} />

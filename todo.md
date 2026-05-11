@@ -613,20 +613,37 @@
 - [x] 262/262 tests passing, 0 TypeScript errors
 
 ## ML Forecasting Layer
-- [ ] Audit existing data structures and design ML feature matrix
-- [ ] Build feature engineering pipeline: normalize weekly stats, injury, Vegas, beat reporter signals into unified feature vectors
-- [ ] Build ML model service: gradient-boosted regression (Python sklearn), train on historical data, persist model
-- [ ] Expose ML prediction as tRPC endpoint via Python microservice bridge
-- [ ] Integrate ML projections into Monte Carlo engine as fourth enrichment layer
-- [ ] Build ML Forecasting UI: projection confidence bands, feature importance chart, model accuracy panel
-- [ ] Write vitest tests for feature engineering pure functions
-- [ ] 262+ tests passing, 0 TypeScript errors
+- [x] Audit existing data structures and design ML feature matrix (40 features: PPG trends, snap %, target share, Vegas implied total, beat reporter signals, injury risk, position encoding)
+- [x] Build feature engineering pipeline: ml/feature_engineering.py — normalize weekly stats, injury, Vegas, beat reporter signals into unified feature vectors
+- [x] Build ML model service: LightGBM regression (ml/train_model.py) — median + quantile models, trained on synthetic historical data, persisted to ml/models/
+- [x] Build FastAPI prediction microservice: ml/prediction_service.py — /predict, /health, /feature-importance endpoints
+- [x] Build Node.js bridge: server/mlService.ts — callMLService(), enrichWithML(), getMLFeatureImportance()
+- [x] Integrate ML projections into Monte Carlo engine as fourth enrichment layer (enrichWithML in simulationRouter)
+- [ ] Build ML Forecasting UI: projection confidence bands, feature importance chart, model accuracy panel (pending)
+- [x] Write vitest tests for feature engineering pure functions
+- [x] 279/279 tests passing, 0 TypeScript errors
 
 ## League Scoring Integration
-- [ ] Fetch ESPN league scoring settings (all stat categories + multipliers)
-- [ ] Build leagueScoringService.ts: cache settings, expose calculateLeaguePoints(stats) helper
-- [ ] Integrate league scoring calculator into Monte Carlo projection inputs
-- [ ] Integrate league scoring into ML feature engineering (train on league-scored points)
-- [ ] Surface scoring rules in UI: scoring breakdown tooltip, settings panel
-- [ ] Write vitest tests for calculateLeaguePoints pure function
-- [ ] All tests passing, 0 TypeScript errors
+- [x] Fetch ESPN league scoring settings (all stat categories + multipliers) from mSettings cache
+- [x] Build leagueScoringService.ts: in-memory cache, calculateLeaguePoints(stats, scoringMap), getScoringBreakdown(), buildScoringDescription(), getLeagueScoringSettings()
+- [x] Integrate league scoring into Monte Carlo LLM prompt (LEAGUE SCORING block injected in startSit)
+- [x] Integrate league scoring into tradeOfferGenerator (replaces hardcoded PPR string with live scoringDescription)
+- [x] Add leagueScoring.getSettings tRPC procedure exposing full breakdown to frontend
+- [x] Surface scoring rules in UI: Scoring Settings tab in Data Center hub with category breakdown cards
+- [x] Write vitest tests: 19 tests for calculateLeaguePoints, getScoringBreakdown, buildScoringDescription
+- [x] 279/279 tests passing, 0 TypeScript errors
+
+## Personal GM Decision Memory
+- [ ] Extend schema: gmDecisions table (id, decisionType, toolSource, description, context, recommendation, accepted, outcome, outcomeScore, weekNum, season, resolvedAt, createdAt)
+- [ ] Extend schema: gmDecisionTags table (decisionId, tag) for filtering by player/team/opponent
+- [ ] Build gmDecisionService.ts: logDecision, resolveOutcome, getDecisionFeed, getRetrospective, getAccuracyStats
+- [ ] Build gmDecisionRouter.ts: logDecision, resolveOutcome, getDecisionFeed, getRetrospective, getAccuracyStats, getPatternAnalysis
+- [ ] Mount gmDecisionRouter in appRouter
+- [ ] Add "Log This Decision" button to Start/Sit results panel
+- [ ] Add "Log This Decision" button to Trade Analyzer results panel
+- [ ] Add "Log This Decision" button to Waiver Wire results panel
+- [ ] Add "Log This Decision" button to Trade Offer Generator results panel
+- [ ] Build GMDecisionMemory hub page: decision feed, outcome timeline, win/loss breakdown, retrospective LLM analysis
+- [ ] Add "GM Memory" nav item to AppLayout sidebar under System section
+- [ ] Write vitest tests for gmDecisionService accuracy stats and pattern analysis
+- [ ] 279+ tests passing, 0 TypeScript errors

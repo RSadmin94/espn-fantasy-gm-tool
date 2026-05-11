@@ -1,5 +1,6 @@
 import {
   int,
+  boolean,
   mysqlEnum,
   mysqlTable,
   text,
@@ -425,3 +426,90 @@ export const playerNewsSignals = mysqlTable(
 
 export type PlayerNewsSignal = typeof playerNewsSignals.$inferSelect;
 export type InsertPlayerNewsSignal = typeof playerNewsSignals.$inferInsert;
+
+// ─── GM Decision Memory ────────────────────────────────────────────────────────
+// Tracks every decision Rod makes (or ignores) across all tools, with outcomes.
+export const gmDecisions = mysqlTable(
+  "gm_decisions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    // Which tool generated this decision
+    toolSource: mysqlEnum("toolSource", [
+      "start_sit",
+      "trade_analyzer",
+      "waiver_wire",
+      "trade_offer",
+      "keeper_lab",
+      "draft_war_room",
+      "manual",
+    ]).notNull(),
+    // Type of decision
+    decisionType: mysqlEnum("decisionType", [
+      "start_sit",
+      "trade_accept",
+      "trade_reject",
+      "waiver_add",
+      "waiver_pass",
+      "keeper_keep",
+      "keeper_drop",
+      "draft_pick",
+      "manual",
+    ]).notNull(),
+    // Human-readable description of the decision
+    description: text("description").notNull(),
+    // The AI recommendation (what the tool suggested)
+    recommendation: text("recommendation"),
+    // Did Rod follow the recommendation?
+    followedRecommendation: boolean("followedRecommendation"),
+    // Did Rod accept or reject the action (e.g. made the trade vs passed)
+    accepted: boolean("accepted").notNull().default(true),
+    // Key players / assets involved (JSON array of strings)
+    playersInvolved: text("playersInvolved"), // JSON: string[]
+    // Opponent / counterparty name if applicable
+    counterparty: varchar("counterparty", { length: 128 }),
+    // The full AI context/analysis at time of decision (for retrospective)
+    aiContext: text("aiContext"),
+    // Season and week context
+    season: int("season").notNull(),
+    weekNum: int("weekNum"),
+    // Outcome tracking (filled in later)
+    outcome: mysqlEnum("outcome", [
+      "correct",
+      "incorrect",
+      "neutral",
+      "pending",
+    ]).notNull().default("pending"),
+    // Outcome score: -100 to +100 (negative = bad outcome, positive = good)
+    outcomeScore: int("outcomeScore"),
+    // Free-text outcome notes
+    outcomeNotes: text("outcomeNotes"),
+    // When the outcome was resolved
+    resolvedAt: timestamp("resolvedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_gmd_tool").on(t.toolSource),
+    index("idx_gmd_type").on(t.decisionType),
+    index("idx_gmd_season_week").on(t.season, t.weekNum),
+    index("idx_gmd_outcome").on(t.outcome),
+    index("idx_gmd_created").on(t.createdAt),
+  ]
+);
+export type GmDecision = typeof gmDecisions.$inferSelect;
+export type InsertGmDecision = typeof gmDecisions.$inferInsert;
+
+// Tags for filtering decisions by player, team, or topic
+export const gmDecisionTags = mysqlTable(
+  "gm_decision_tags",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    decisionId: int("decisionId").notNull(),
+    tag: varchar("tag", { length: 128 }).notNull(),
+  },
+  (t) => [
+    index("idx_gmdt_decision").on(t.decisionId),
+    index("idx_gmdt_tag").on(t.tag),
+  ]
+);
+export type GmDecisionTag = typeof gmDecisionTags.$inferSelect;
+export type InsertGmDecisionTag = typeof gmDecisionTags.$inferInsert;

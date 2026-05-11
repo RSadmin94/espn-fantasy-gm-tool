@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
+import { LogDecisionButton } from "@/components/LogDecisionButton";
 import { toast } from "sonner";
 
 // ─── Draft status gate ────────────────────────────────────────────────────────

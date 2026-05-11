@@ -155,6 +155,7 @@ import { toast } from "sonner";
 import { Brain, Zap, CheckCircle, XCircle, Loader2, ChevronRight, TrendingUp, TrendingDown, Minus, Activity, BarChart3, Shield, Rocket, Swords, Star, Calendar, AlertTriangle, Users, TrendingUp as TrendUp, Flame, Snowflake, DollarSign, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { TwoPlayerBeatPanel } from "@/components/BeatReporterPanel";
+import { LogDecisionButton } from "@/components/LogDecisionButton";
 import {
   StartSitComparisonViz,
   SimulationLoadingSkeleton,
@@ -867,9 +868,23 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
                   {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-4 w-full" />)}
                 </div>
               ) : result ? (
-                <div className="prose prose-sm prose-invert max-w-none">
-                  <Streamdown>{result}</Streamdown>
-                </div>
+                <>
+                  <div className="prose prose-sm prose-invert max-w-none">
+                    <Streamdown>{result}</Streamdown>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-border/50 flex justify-end">
+                    <LogDecisionButton
+                      toolSource="start_sit"
+                      decisionType="start_sit"
+                      description={`Start/Sit: ${player1Name || "Player 1"} vs ${player2Name || "Player 2"}`}
+                      recommendation={verdict === "START_1" ? `Start ${player1Name || "Player 1"}` : verdict === "START_2" ? `Start ${player2Name || "Player 2"}` : "Toss-up — no clear recommendation"}
+                      playersInvolved={[player1Name, player2Name].filter(Boolean)}
+                      season={2025}
+                      tags={["start_sit"]}
+                      aiContext={result?.slice(0, 800)}
+                    />
+                  </div>
+                </>
               ) : (
                 <div className="h-48 flex flex-col items-center justify-center text-center gap-3">
                   <div className="flex gap-4">
