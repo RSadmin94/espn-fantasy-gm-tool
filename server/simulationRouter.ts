@@ -26,6 +26,12 @@ import {
   type SimPlayer,
 } from "./monteCarloService";
 import { getInjuries, calcInjuryScores } from "./injuryService";
+import {
+  getNFLOdds,
+  getVegasContextForTeam,
+  buildVegasPromptBlock,
+  type VegasTeamContext,
+} from "./vegasOddsService";
 
 // ─── Shared input schema ──────────────────────────────────────────────────────
 
@@ -38,7 +44,42 @@ const SimPlayerInput = z.object({
   volatilityMultiplier: z.number().min(0).max(1).optional(),
   matchupAdjustment: z.number().min(-0.2).max(0.2).optional(),
   ecrStd: z.number().optional(), // from FantasyPros board — used to derive stdDev
+  /** NFL team abbreviation (e.g. "ATL", "KC") — used to look up Vegas implied total */
+  nflTeam: z.string().optional(),
 });
+
+// ─── Helper: enrich players with Vegas implied totals ───────────────────────
+
+/** Extended SimPlayer with Vegas context attached for prompt building */
+export interface SimPlayerWithVegas extends SimPlayer {
+  nflTeam?: string;
+  vegasContext?: VegasTeamContext | null;
+}
+
+async function enrichWithVegas(
+  players: SimPlayerWithVegas[]
+): Promise<SimPlayerWithVegas[]> {
+  try {
+    const odds = await getNFLOdds();
+    return players.map(p => {
+      if (!p.nflTeam) return p;
+      const vegasContext = getVegasContextForTeam(p.nflTeam, odds);
+      if (!vegasContext) return p;
+      // Apply Vegas adjustment on top of existing matchupAdjustment
+      // Vegas adjustment is additive: a team implied at 27 vs avg 22.5 adds +0.20
+      const existingAdj = p.matchupAdjustment ?? 0;
+      const combinedAdj = Math.max(-0.30, Math.min(0.30, existingAdj + vegasContext.vegasAdjustment));
+      return {
+        ...p,
+        matchupAdjustment: combinedAdj,
+        vegasContext,
+      };
+    });
+  } catch {
+    // Vegas fetch failed — simulate without Vegas adjustment
+    return players;
+  }
+}
 
 // ─── Helper: enrich players with Phase 1 injury multipliers ──────────────────
 
@@ -107,18 +148,38 @@ export const simulationRouter = router({
       context: z.string().optional().default(""),
     }))
     .mutation(async ({ input }) => {
-      // Enrich all players with injury data
-      const allPlayers = await enrichWithInjury([
+      // Step 1: Enrich all players with injury data
+      const injuryEnriched = await enrichWithInjury([
         input.playerA as SimPlayer,
         input.playerB as SimPlayer,
         ...input.restOfLineup as SimPlayer[],
         ...input.opponentLineup as SimPlayer[],
       ]);
 
+      // Step 2: Enrich with Vegas implied totals (adds matchupAdjustment from game context)
+      const vegasEnriched = await enrichWithVegas(
+        injuryEnriched.map((p, i) => ({
+          ...p,
+          nflTeam: [
+            input.playerA,
+            input.playerB,
+            ...input.restOfLineup,
+            ...input.opponentLineup,
+          ][i]?.nflTeam,
+        })) as SimPlayerWithVegas[]
+      );
+
+      const allPlayers = vegasEnriched;
       const enrichedA = allPlayers[0]!;
       const enrichedB = allPlayers[1]!;
       const restOfLineup = allPlayers.slice(2, 2 + input.restOfLineup.length);
       const opponentLineup = allPlayers.slice(2 + input.restOfLineup.length);
+
+      // Collect Vegas contexts for prompt building
+      const vegasContextsForPrompt = [
+        { playerName: input.playerA.playerName, teamAbbr: input.playerA.nflTeam ?? "", context: (enrichedA as SimPlayerWithVegas).vegasContext ?? null },
+        { playerName: input.playerB.playerName, teamAbbr: input.playerB.nflTeam ?? "", context: (enrichedB as SimPlayerWithVegas).vegasContext ?? null },
+      ].filter(c => c.teamAbbr);
 
       // Use a default opponent lineup if none provided
       const effectiveOpponent = opponentLineup.length > 0 ? opponentLineup : [
@@ -140,10 +201,14 @@ export const simulationRouter = router({
       );
 
       // Inject simulation facts into LLM prompt — AI explains, sim decides
+      const vegasBlock = vegasContextsForPrompt.length > 0
+        ? "\n\n" + buildVegasPromptBlock(vegasContextsForPrompt)
+        : "";
+
       const systemPrompt = `You are an expert Fantasy Football analyst for "ATLANTAS FINEST FF" (14-team PPR keeper league).
 The Monte Carlo simulation below ran 10,000 matchups — treat these numbers as ground truth. Do not contradict them.
 
-${simResult.summaryText}
+${simResult.summaryText}${vegasBlock}
 
 PLAYER PROFILES:
   ${input.playerA.playerName} (${input.playerA.position}): ${simResult.playerA.adjustedProjection} pts projected | Floor: ${simResult.playerA.scoreRange.p10} | Ceiling: ${simResult.playerA.scoreRange.p90} | Bust risk: ${simResult.playerA.bustProbability}% | Injury multiplier: ${simResult.playerA.volatilityMultiplier.toFixed(2)}x
@@ -152,8 +217,9 @@ PLAYER PROFILES:
 Deliver a concise START/SIT verdict:
 1. Lead with the recommendation (START [name]) and the win-probability improvement.
 2. Explain WHY in 2-3 sentences using the simulation numbers.
-3. Note any injury risk or confidence concern.
-4. If it's a coin flip (<3% delta), say so clearly.`;
+3. Reference Vegas game environment if it materially affects the decision.
+4. Note any injury risk or confidence concern.
+5. If it's a coin flip (<3% delta), say so clearly.`;
 
       const userMsg = `Should I start ${input.playerA.playerName} or ${input.playerB.playerName}?${input.context ? `\n\nContext: ${input.context}` : ""}`;
 
@@ -174,8 +240,16 @@ Deliver a concise START/SIT verdict:
       return {
         simResult,
         aiVerdict,
-        playerA: { ...input.playerA, outcome: simResult.playerA },
-        playerB: { ...input.playerB, outcome: simResult.playerB },
+        playerA: {
+          ...input.playerA,
+          outcome: simResult.playerA,
+          vegasContext: (enrichedA as SimPlayerWithVegas).vegasContext ?? null,
+        },
+        playerB: {
+          ...input.playerB,
+          outcome: simResult.playerB,
+          vegasContext: (enrichedB as SimPlayerWithVegas).vegasContext ?? null,
+        },
       };
     }),
 
@@ -189,13 +263,19 @@ Deliver a concise START/SIT verdict:
       opponentLineup: z.array(SimPlayerInput),
     }))
     .mutation(async ({ input }) => {
-      const allPlayers = await enrichWithInjury([
+      const injuryEnriched = await enrichWithInjury([
         ...input.myLineup as SimPlayer[],
         ...input.opponentLineup as SimPlayer[],
       ]);
+      const vegasEnriched = await enrichWithVegas(
+        injuryEnriched.map((p, i) => ({
+          ...p,
+          nflTeam: [...input.myLineup, ...input.opponentLineup][i]?.nflTeam,
+        })) as SimPlayerWithVegas[]
+      );
 
-      const myEnriched = allPlayers.slice(0, input.myLineup.length);
-      const oppEnriched = allPlayers.slice(input.myLineup.length);
+      const myEnriched = vegasEnriched.slice(0, input.myLineup.length);
+      const oppEnriched = vegasEnriched.slice(input.myLineup.length);
 
       return simulateMatchup(myEnriched, oppEnriched, 10000);
     }),
@@ -212,13 +292,19 @@ Deliver a concise START/SIT verdict:
       opponentLineup: z.array(SimPlayerInput).optional().default([]),
     }))
     .query(async ({ input }) => {
-      const allPlayers = await enrichWithInjury([
+      const injuryEnriched = await enrichWithInjury([
         ...input.myLineup as SimPlayer[],
         ...input.opponentLineup as SimPlayer[],
       ]);
+      const vegasEnriched = await enrichWithVegas(
+        injuryEnriched.map((p, i) => ({
+          ...p,
+          nflTeam: [...input.myLineup, ...input.opponentLineup][i]?.nflTeam,
+        })) as SimPlayerWithVegas[]
+      );
 
-      const myEnriched = allPlayers.slice(0, input.myLineup.length);
-      const oppEnriched = allPlayers.slice(input.myLineup.length);
+      const myEnriched = vegasEnriched.slice(0, input.myLineup.length);
+      const oppEnriched = vegasEnriched.slice(input.myLineup.length);
 
       const lineupOutcome = calcLineupProjection(myEnriched, 10000);
 

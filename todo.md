@@ -570,3 +570,17 @@
 - [x] Route /backtesting registered in App.tsx
 - [x] 27 vitest tests for pure accuracy computation logic (start/sit outcome, hit rate, Brier score, MC accuracy, trade win rate)
 - [x] 222/222 tests passing, 0 TypeScript errors
+
+## Vegas Odds Integration — Monte Carlo Engine
+- [x] Research The Odds API v4 — NFL game lines, spreads, totals, player props
+- [x] Add oddsApiKey to ENV object (THE_ODDS_API_KEY)
+- [x] Build vegasOddsService.ts: fetch NFL odds, compute implied team totals, 12h DB cache
+- [x] Build vegasRouter.ts: nflOdds, teamContext, refreshOdds tRPC procedures
+- [x] Mount vegasRouter in appRouter
+- [x] Add enrichWithVegas() helper to simulationRouter — applies implied total as matchupAdjustment prior
+- [x] Inject Vegas context block into startSit LLM prompt (VEGAS GAME CONTEXT section)
+- [x] Apply Vegas enrichment to matchup and lineupCheck procedures
+- [x] Add nflTeam inputs to Monte Carlo form in StartSit.tsx
+- [x] Add Vegas Context Panel to Start/Sit results (game total, spread, implied, win prob, adj %, bookmaker)
+- [x] Write 25 vitest tests for vegasOddsService pure functions
+- [x] 247/247 tests passing, 0 TypeScript errors

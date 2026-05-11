@@ -152,7 +152,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
-import { Brain, Zap, CheckCircle, XCircle, Loader2, ChevronRight, TrendingUp, TrendingDown, Minus, Activity, BarChart3, Shield, Rocket, Swords, Star, Calendar, AlertTriangle, Users } from "lucide-react";
+import { Brain, Zap, CheckCircle, XCircle, Loader2, ChevronRight, TrendingUp, TrendingDown, Minus, Activity, BarChart3, Shield, Rocket, Swords, Star, Calendar, AlertTriangle, Users, TrendingUp as TrendUp, Flame, Snowflake, DollarSign, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   StartSitComparisonViz,
@@ -301,6 +301,9 @@ export default function StartSit() {
   const [simProj2, setSimProj2] = useState("12.0");
   const [simResult, setSimResult] = useState<StartSitSimResult | null>(null);
   const [simLoading, setSimLoading] = useState(false);
+  // Vegas team inputs
+  const [simTeam1, setSimTeam1] = useState("");
+  const [simTeam2, setSimTeam2] = useState("");
 
   // War Room state
   const [warRoomMode, setWarRoomMode] = useState(false);
@@ -310,6 +313,11 @@ export default function StartSit() {
   const chatMutation = trpc.advisor.chat.useMutation();
   const startSitMutation = trpc.simulation.startSit.useMutation();
   const warRoomMutation = trpc.agents.startSit.useMutation();
+  const refreshVegasMutation = trpc.vegas.refreshOdds.useMutation();
+  const { data: vegasData, refetch: refetchVegas } = trpc.vegas.nflOdds.useQuery(undefined, {
+    staleTime: 30 * 60 * 1000, // 30 min
+    retry: false,
+  });
   const { data: vorpData } = trpc.analytics.vorp.useQuery({ season: 2025 });
   const { data: rosData } = trpc.analytics.rosValues.useQuery({ season: 2025, weeksRemaining: 8 });
 
@@ -424,12 +432,14 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
           playerName: player1Name,
           position: simPos1,
           projectedPoints: proj1,
+          nflTeam: simTeam1.trim().toUpperCase() || undefined,
         },
         playerB: {
           playerId: Math.abs(player2Name.split("").reduce((a, c) => a + c.charCodeAt(0), 0)),
           playerName: player2Name,
           position: simPos2,
           projectedPoints: proj2,
+          nflTeam: simTeam2.trim().toUpperCase() || undefined,
         },
         restOfLineup: [],
         opponentLineup: [],
@@ -574,6 +584,7 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
                         {["QB","RB","WR","TE","K","D/ST"].map((p) => <option key={p} value={p}>{p}</option>)}
                       </select>
                       <Input type="number" min={0} max={60} step={0.5} value={simProj1} onChange={(e) => setSimProj1(e.target.value)} placeholder="Proj pts" className="bg-accent border-border text-xs h-7 w-20 shrink-0" />
+                      <Input value={simTeam1} onChange={(e) => setSimTeam1(e.target.value)} placeholder="Team" title="NFL team abbreviation (e.g. ATL, KC, SF)" className="bg-accent border-border text-xs h-7 w-14 shrink-0 uppercase" maxLength={3} />
                     </div>
                     {/* Player B row */}
                     <div className="flex items-center gap-2 text-xs">
@@ -583,7 +594,9 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
                         {["QB","RB","WR","TE","K","D/ST"].map((p) => <option key={p} value={p}>{p}</option>)}
                       </select>
                       <Input type="number" min={0} max={60} step={0.5} value={simProj2} onChange={(e) => setSimProj2(e.target.value)} placeholder="Proj pts" className="bg-accent border-border text-xs h-7 w-20 shrink-0" />
+                      <Input value={simTeam2} onChange={(e) => setSimTeam2(e.target.value)} placeholder="Team" title="NFL team abbreviation (e.g. ATL, KC, SF)" className="bg-accent border-border text-xs h-7 w-14 shrink-0 uppercase" maxLength={3} />
                     </div>
+                    <p className="text-[10px] text-muted-foreground">Team abbr (ATL, KC, SF…) enables Vegas implied total adjustment</p>
                     <Button onClick={runSimulation} disabled={simLoading || !player1.trim() || !player2.trim()} size="sm" className="w-full bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 text-xs">
                       {simLoading ? <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Simulating 10,000 matchups...</> : <><BarChart3 className="w-3 h-3 mr-1.5" /> Run Monte Carlo Simulation</>}
                     </Button>
@@ -721,6 +734,68 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
                 </CardContent>
               </Card>
             )}
+            {/* Vegas Context Panel — shown when simulation ran with team data */}
+            {simMode && simResult && (simTeam1.trim() || simTeam2.trim()) && (() => {
+              // Derive Vegas context from the mutation response (vegasContext attached to playerA/B)
+              const resData = startSitMutation.data;
+              const ctxA = (resData as any)?.playerA?.vegasContext ?? null;
+              const ctxB = (resData as any)?.playerB?.vegasContext ?? null;
+              const hasAny = ctxA || ctxB;
+              if (!hasAny) return null;
+              const renderCtx = (ctx: any, label: string, color: string) => {
+                if (!ctx) return null;
+                const adjPct = ctx.vegasAdjustment >= 0
+                  ? `+${(ctx.vegasAdjustment * 100).toFixed(1)}%`
+                  : `${(ctx.vegasAdjustment * 100).toFixed(1)}%`;
+                const adjColor = ctx.vegasAdjustment > 0.05 ? "text-emerald-400" : ctx.vegasAdjustment < -0.05 ? "text-red-400" : "text-muted-foreground";
+                const envIcon = ctx.gameEnvironment === "high_scoring"
+                  ? <Flame className="w-3 h-3 text-orange-400" />
+                  : ctx.gameEnvironment === "low_scoring"
+                  ? <Snowflake className="w-3 h-3 text-blue-400" />
+                  : <Activity className="w-3 h-3 text-muted-foreground" />;
+                return (
+                  <div className={`rounded-lg border border-border/60 bg-accent/20 p-3 space-y-1.5`}>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-bold ${color}`}>{label}</span>
+                      <div className="flex items-center gap-1">{envIcon}<span className="text-[10px] text-muted-foreground capitalize">{ctx.gameEnvironment.replace("_", " ")}</span></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                      <div className="flex justify-between"><span className="text-muted-foreground">vs</span><span className="text-foreground font-medium">{ctx.opponent}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Home</span><span className="text-foreground">{ctx.isHome ? "Yes" : "No"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Game O/U</span><span className="text-foreground">{ctx.gameTotal ?? "N/A"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Implied</span><span className="text-foreground font-semibold">{ctx.impliedTotal ?? "N/A"} pts</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Win prob</span><span className="text-foreground">{ctx.winProbability != null ? `${ctx.winProbability}%` : "N/A"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Vegas adj</span><span className={`font-bold ${adjColor}`}>{adjPct}</span></div>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">via {ctx.bookmakerSource}</div>
+                  </div>
+                );
+              };
+              return (
+                <Card className="card-glow bg-card border-yellow-500/20">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <DollarSign className="w-4 h-4 text-yellow-400" />
+                      Vegas Game Context
+                      <Badge className="ml-auto text-[10px] bg-yellow-500/10 text-yellow-400 border-yellow-500/20 border">DraftKings / FanDuel</Badge>
+                      <button
+                        onClick={async () => { await refreshVegasMutation.mutateAsync(); void refetchVegas(); toast.success("Vegas odds refreshed"); }}
+                        disabled={refreshVegasMutation.isPending}
+                        className="ml-1 text-muted-foreground hover:text-foreground transition-colors"
+                        title="Force-refresh odds from The Odds API"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${refreshVegasMutation.isPending ? "animate-spin" : ""}`} />
+                      </button>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-[11px] text-muted-foreground">Implied team totals are applied as a projection prior in the Monte Carlo engine. A team implied at 27 pts vs the 22.5 avg adds +20% to player projections.</p>
+                    {renderCtx(ctxA, `${player1Name || "Player A"} (${simTeam1.toUpperCase()})`, "text-emerald-400")}
+                    {renderCtx(ctxB, `${player2Name || "Player B"} (${simTeam2.toUpperCase()})`, "text-blue-400")}
+                  </CardContent>
+                </Card>
+              );
+            })()}
             {/* War Room panel */}
             {warRoomMode && (
               <Card className="card-glow bg-card border-purple-500/20">
