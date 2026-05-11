@@ -311,6 +311,11 @@ export default function StartSit() {
   const [warRoomMode, setWarRoomMode] = useState(false);
   const [warRoomResult, setWarRoomResult] = useState<WarRoomResult | null>(null);
   const [warRoomLoading, setWarRoomLoading] = useState(false);
+  // My team selection for opponent DNA context (persisted in localStorage)
+  const [myTeamId, setMyTeamId] = useState<number | null>(() => {
+    const stored = localStorage.getItem("ff_my_team_id");
+    return stored ? parseInt(stored, 10) : null;
+  });
 
   const chatMutation = trpc.advisor.chat.useMutation();
   const startSitMutation = trpc.simulation.startSit.useMutation();
@@ -322,6 +327,18 @@ export default function StartSit() {
   });
   const { data: vorpData } = trpc.analytics.vorp.useQuery({ season: 2025 });
   const { data: rosData } = trpc.analytics.rosValues.useQuery({ season: 2025, weeksRemaining: 8 });
+  // League pulse for opponent DNA context in War Room
+  const { data: pulseData } = trpc.weeklyAssessment.leaguePulse.useQuery(
+    { season: 2025 },
+    { staleTime: 10 * 60 * 1000, retry: false }
+  );
+  // Derive opponent member IDs from current week matchup
+  const opponentMemberIds = useMemo(() => {
+    if (!pulseData || !myTeamId) return undefined;
+    const myTeam = (pulseData.teams as Array<{ teamId: number; currentOpponentMemberIds?: string[] }>)
+      .find(t => t.teamId === myTeamId);
+    return myTeam?.currentOpponentMemberIds?.length ? myTeam.currentOpponentMemberIds : undefined;
+  }, [pulseData, myTeamId]);
 
   const player1Name = player1.trim();
   const player2Name = player2.trim();
@@ -467,6 +484,7 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
         playerB: { name: player2.trim(), position: simPos2, projectedPoints: parseFloat(simProj2) || undefined },
         leagueContext: `${factContext}${trendContext}${context ? `\nAdditional context: ${context}` : ""}`,
         simulationSummary: simResult ? JSON.stringify(simResult).slice(0, 500) : undefined,
+        opponentMemberIds,
       });
       setWarRoomResult(res as unknown as WarRoomResult);
     } catch (err: unknown) {
@@ -690,6 +708,34 @@ Be specific, data-driven, and decisive. Give a clear recommendation.`;
                 </Button>
               ) : (
                 <>
+                  {/* My Team selector for opponent DNA context */}
+                  {pulseData && (pulseData.teams as Array<{ teamId: number; ownerName: string }>).length > 0 && (
+                    <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3 space-y-2">
+                      <p className="text-[10px] font-semibold text-purple-400 uppercase tracking-wide">Opponent DNA Context</p>
+                      <select
+                        className="w-full text-xs bg-background border border-border rounded px-2 py-1.5 text-foreground"
+                        value={myTeamId ?? ""}
+                        onChange={(e) => {
+                          const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                          setMyTeamId(val);
+                          if (val) localStorage.setItem("ff_my_team_id", String(val));
+                          else localStorage.removeItem("ff_my_team_id");
+                        }}
+                      >
+                        <option value="">Select your team for opponent DNA…</option>
+                        {(pulseData.teams as Array<{ teamId: number; ownerName: string; currentOpponentOwner?: string }>).map(t => (
+                          <option key={t.teamId} value={t.teamId}>
+                            {t.ownerName}{t.currentOpponentOwner ? ` (vs ${t.currentOpponentOwner})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      {opponentMemberIds && (
+                        <p className="text-[10px] text-purple-300">
+                          ✓ Opponent DNA loaded — Counter Agent will exploit their tendencies
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <Button onClick={runWarRoom} disabled={warRoomLoading || !player1.trim() || !player2.trim()} className="w-full bg-purple-600 hover:bg-purple-700 text-white border-0">
                     {warRoomLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> 5 Agents Debating (~3-4s)...</> : <><Users className="w-4 h-4 mr-2" /> Convene War Room</>}
                   </Button>

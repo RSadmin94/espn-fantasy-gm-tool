@@ -704,3 +704,23 @@
 - [x] Deep Dive slide-over: calls weeklyAssessment.teamBrief, renders full LLM narrative + action items
 - [x] Wire to existing /weekly-intelligence route in App.tsx
 - [x] 0 TypeScript errors, all tests passing (293/293)
+
+## Yahoo Fantasy Adapter (Three-Platform Completion)
+- [ ] Add YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET to env.ts and secrets
+- [ ] Build Yahoo OAuth2 server-side flow: authorization URL builder, token exchange, token refresh (server/providers/yahooOAuth.ts)
+- [ ] Add Yahoo OAuth callback route to Express: GET /api/yahoo/oauth/callback
+- [ ] Build yahooAdapter.ts implementing ProviderAdapter: fetch league, teams, rosters, matchups, transactions, draft picks
+- [ ] Wire Yahoo adapter into provider registry (registry.ts), change status to "live"
+- [ ] Add importYahooLeague and getYahooAuthUrl procedures to providerRouter.ts
+- [ ] Update LeagueConnect.tsx: Yahoo tab with OAuth connect button, league picker after auth
+- [ ] Update Chrome extension background.js: activate Yahoo procedures routing
+- [ ] Update Chrome extension options.js: Yahoo league ID field
+- [ ] 0 TypeScript errors, all tests passing
+
+## ESPN End-to-End Wiring
+
+- [ ] Start/Sit: fetch leaguePulse to find current matchup opponent, pass opponentMemberIds to agents.startSit so DNA block is populated
+- [ ] Trade Analyzer: enrich tradeAnalyze LLM prompt with DNA profiles for both trade partners (archetype, desperation score, positional needs)
+- [ ] Waiver Intelligence: replace draftBoard.getPlayers with weeklyAssessment.rodOpportunities + leaguePulse to show desperate teams and targeted pickups
+- [ ] Chrome extension: audit and fix ESPN DOM selectors for team ID extraction
+- [ ] 0 TypeScript errors, all 293 tests passing after changes

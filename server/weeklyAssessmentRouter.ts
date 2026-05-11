@@ -148,7 +148,11 @@ export const weeklyAssessmentRouter = router({
       const currentWeek = (settings.currentMatchupPeriod as number) || 1;
 
       const ownerMap: Record<number, string> = {};
-      for (const t of teams) ownerMap[t.teamId as number] = t.owners as string;
+      const memberIdsMap: Record<number, string[]> = {};
+      for (const t of teams) {
+        ownerMap[t.teamId as number] = t.owners as string;
+        memberIdsMap[t.teamId as number] = (t.memberIds as string[]) || [];
+      }
 
       const lastWeekTxMap: Record<number, number> = {};
       const lastWeekStart = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -164,6 +168,19 @@ export const weeklyAssessmentRouter = router({
         const wB = (b.wins as number) || 0;
         return wB !== wA ? wB - wA : ((b.pointsFor as number) || 0) - ((a.pointsFor as number) || 0);
       });
+
+      // Build current week matchup map: teamId -> opponentTeamId
+      const currentMatchupMap: Record<number, number> = {};
+      for (const m of matchups) {
+        if ((m.matchupPeriodId as number) === currentWeek) {
+          const home = m.homeTeamId as number;
+          const away = m.awayTeamId as number;
+          if (home && away) {
+            currentMatchupMap[home] = away;
+            currentMatchupMap[away] = home;
+          }
+        }
+      }
 
       return {
         week: currentWeek,
@@ -192,8 +209,13 @@ export const weeklyAssessmentRouter = router({
               desperationScore >= 45 ? "RECEPTIVE" :
               desperationScore >= 25 ? "NEUTRAL" : "NOT INTERESTED",
             playoffProbability: Math.min(98, Math.max(2, Math.round(50 + (winPct - 0.5) * 200))),
+            memberIds: memberIdsMap[tid] ?? [],
+            currentOpponentTeamId: currentMatchupMap[tid] ?? null,
+            currentOpponentOwner: currentMatchupMap[tid] ? (ownerMap[currentMatchupMap[tid]] ?? null) : null,
+            currentOpponentMemberIds: currentMatchupMap[tid] ? (memberIdsMap[currentMatchupMap[tid]] ?? []) : [],
           };
         }),
+        currentMatchups: currentMatchupMap,
       };
     }),
 });

@@ -3133,18 +3133,42 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
         `Positions changing hands: A gives ${Array.from(new Set(input.sideA.map(p => p.position))).join("+")}, B gives ${Array.from(new Set(input.sideB.map(p => p.position))).join("+")}`,
       ].join("\n");
 
+      // Phase 3: Inject DNA profiles for both trade partners
+      let dnaContext = "";
+      try {
+        const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
+        const { buildManagerRawData } = await import("./dnaRouter");
+        const managerRawData = await buildManagerRawData();
+        if (managerRawData.length > 0) {
+          const dnaProfiles = calcLeagueDNA(managerRawData);
+          const teamsData = normalizeTeams(data);
+          const teamAData = teamsData.find(t => (t.teamId as number) === input.teamAId);
+          const teamBData = teamsData.find(t => (t.teamId as number) === input.teamBId);
+          const teamAMemberIds = (teamAData?.memberIds as string[]) || [];
+          const teamBMemberIds = (teamBData?.memberIds as string[]) || [];
+          const focusedProfiles = dnaProfiles.filter(p =>
+            teamAMemberIds.includes(p.memberId) || teamBMemberIds.includes(p.memberId)
+          );
+          if (focusedProfiles.length > 0) {
+            dnaContext = "\n\n" + buildDNAPromptBlock(focusedProfiles);
+          }
+        }
+      } catch {
+        // DNA unavailable — continue without it
+      }
+
       const prompt = `You are an expert fantasy football analyst. The following trade math has already been calculated — DO NOT recalculate values. Your job is to EXPLAIN and RECOMMEND based on the numbers.
 
-${mathSummary}
+${mathSummary}${dnaContext}
 
-League context: 14-team PPR keeper league (ATLANTAS FINEST FF). Keepers cost 1 round more than previous year's draft round.
+League context: 14-team PPR keeper league (ATLANTAS FINEST FF). Keepers cost 1 round more than previous year's draft round.${dnaContext ? "\nIMPORTANT: The DNA intelligence above contains behavioral facts about both owners — use them to make the negotiation strategy and recommendations highly specific to each owner's tendencies." : ""}
 
 Provide:
 1. VERDICT: One sentence — who wins this trade (or FAIR if balanced).
 2. WHY: 2-3 sentences explaining the math in plain English.
 3. ROSTER FIT: Does this trade address each team's actual positional needs?
 4. KEEPER ANGLE: Any long-term keeper implications?
-5. RECOMMENDATION: Should Team A accept? Should Team B accept? (YES/NO with one sentence each)`;
+5. RECOMMENDATION: Should Team A accept? Should Team B accept? (YES/NO with one sentence each)${dnaContext ? "\n6. NEGOTIATION: Based on each owner's DNA profile, how should Team A approach this negotiation?" : ""}`;
 
       const response = await invokeLLM({
         messages: [

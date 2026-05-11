@@ -10,10 +10,12 @@ import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { getSupportedProviders, PROVIDER_INFO, getAdapter } from "./providers/registry";
 import { getSleeperLeague } from "./providers/sleeperAdapter";
+import { YahooAdapter, getYahooLeaguesForUser } from "./providers/yahooAdapter";
+import { isYahooConfigured } from "./providers/yahooOAuth";
 import { invokeLLM } from "./_core/llm";
 import { getDb } from "./db";
 import { leagueConnections } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 // ─── Provider info ────────────────────────────────────────────────────────────
 
@@ -252,4 +254,302 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
       .where(eq(leagueConnections.userId, ctx.user.id));
     return rows;
   }),
+
+  // ─── Yahoo procedures ────────────────────────────────────────────────────────────────
+
+  /**
+   * Check if Yahoo OAuth is configured on this server.
+   * Returns { configured: boolean } so the frontend can show/hide the OAuth button.
+   */
+  isYahooConfigured: publicProcedure.query(() => {
+    return { configured: isYahooConfigured() };
+  }),
+
+  /**
+   * Get the Yahoo OAuth authorization URL for the current user.
+   * The frontend redirects the user to this URL to grant access.
+   */
+  getYahooAuthUrl: protectedProcedure
+    .input(z.object({ origin: z.string().url() }))
+    .query(({ input, ctx }) => {
+      if (!isYahooConfigured()) {
+        return { url: null, reason: "Yahoo OAuth is not configured on this server." };
+      }
+      const url = `${input.origin}/api/yahoo/oauth/start?origin=${encodeURIComponent(input.origin)}&userId=${ctx.user.id}`;
+      return { url, reason: null };
+    }),
+
+  /**
+   * Check if the current user has a pending Yahoo OAuth token (post-callback).
+   * Returns the token expiry and whether the user needs to pick a league.
+   */
+  getYahooPendingAuth: protectedProcedure.query(async ({ ctx }) => {
+    const database = await getDb();
+    if (!database) return { hasPendingAuth: false };
+
+    const rows = await database
+      .select()
+      .from(leagueConnections)
+      .where(
+        and(
+          eq(leagueConnections.userId, ctx.user.id),
+          eq(leagueConnections.provider, "yahoo"),
+          eq(leagueConnections.leagueId, "__pending__")
+        )
+      )
+      .limit(1);
+
+    if (!rows.length) return { hasPendingAuth: false };
+
+    const creds = rows[0].credentials as { accessToken?: string; refreshToken?: string; expiresAt?: number } | null;
+    return {
+      hasPendingAuth: true,
+      expiresAt: creds?.expiresAt ?? 0,
+    };
+  }),
+
+  /**
+   * List all Yahoo Fantasy leagues for the authenticated user.
+   * Requires a pending Yahoo auth token stored in leagueConnections.
+   */
+  getYahooLeagues: protectedProcedure
+    .input(z.object({ season: z.number().default(2025) }))
+    .query(async ({ input, ctx }) => {
+      const database = await getDb();
+      if (!database) return { leagues: [], error: "Database unavailable" };
+
+      // Get pending auth tokens
+      const rows = await database
+        .select()
+        .from(leagueConnections)
+        .where(
+          and(
+            eq(leagueConnections.userId, ctx.user.id),
+            eq(leagueConnections.provider, "yahoo"),
+            eq(leagueConnections.leagueId, "__pending__")
+          )
+        )
+        .limit(1);
+
+      if (!rows.length) {
+        return { leagues: [], error: "No Yahoo authorization found. Please connect Yahoo first." };
+      }
+
+      const creds = rows[0].credentials as { accessToken: string; refreshToken: string; expiresAt: number } | null;
+      if (!creds?.accessToken) {
+        return { leagues: [], error: "Invalid Yahoo credentials. Please reconnect." };
+      }
+
+      try {
+        const leagues = await getYahooLeaguesForUser(
+          creds.accessToken,
+          creds.refreshToken,
+          creds.expiresAt,
+          input.season
+        );
+        return { leagues, error: null };
+      } catch (err) {
+        return {
+          leagues: [],
+          error: err instanceof Error ? err.message : "Failed to fetch Yahoo leagues",
+        };
+      }
+    }),
+
+  /**
+   * Import a Yahoo league and generate its DNA profile.
+   * Requires a pending Yahoo auth token stored in leagueConnections.
+   */
+  importYahooLeague: protectedProcedure
+    .input(z.object({
+      leagueId: z.string().min(1),
+      leagueName: z.string().default(""),
+      season: z.number().default(2025),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const database = await getDb();
+      if (!database) throw new Error("Database unavailable");
+
+      // Get pending auth tokens
+      const rows = await database
+        .select()
+        .from(leagueConnections)
+        .where(
+          and(
+            eq(leagueConnections.userId, ctx.user.id),
+            eq(leagueConnections.provider, "yahoo"),
+            eq(leagueConnections.leagueId, "__pending__")
+          )
+        )
+        .limit(1);
+
+      if (!rows.length) throw new Error("No Yahoo authorization found. Please connect Yahoo first.");
+
+      const creds = rows[0].credentials as { accessToken: string; refreshToken: string; expiresAt: number } | null;
+      if (!creds?.accessToken) throw new Error("Invalid Yahoo credentials. Please reconnect.");
+
+      const steps: string[] = [];
+      steps.push("Connecting to Yahoo Fantasy API...");
+
+      // Build adapter with token-refresh persistence
+      const adapter = new YahooAdapter(
+        {
+          leagueId: input.leagueId,
+          accessToken: creds.accessToken,
+          refreshToken: creds.refreshToken,
+          expiresAt: creds.expiresAt,
+        },
+        async (newTokens) => {
+          // Persist refreshed tokens back to the pending connection
+          await database
+            .update(leagueConnections)
+            .set({
+              credentials: {
+                accessToken: newTokens.accessToken,
+                refreshToken: newTokens.refreshToken,
+                expiresAt: newTokens.expiresAt,
+              },
+            })
+            .where(
+              and(
+                eq(leagueConnections.userId, ctx.user.id),
+                eq(leagueConnections.provider, "yahoo"),
+                eq(leagueConnections.leagueId, "__pending__")
+              )
+            );
+        }
+      );
+
+      steps.push(`Fetching league data for ${input.leagueName || input.leagueId}...`);
+      const league = await adapter.fetchAndNormalize(input.leagueId, input.season);
+      steps.push(`Found league: ${league.settings.leagueName} (${league.teams.length} teams)`);
+
+      steps.push("Analyzing roster compositions...");
+      steps.push("Detecting behavioral patterns...");
+
+      const txByTeam = new Map<string, number>();
+      for (const tx of league.transactions) {
+        txByTeam.set(tx.teamId, (txByTeam.get(tx.teamId) || 0) + 1);
+      }
+
+      const tradesByTeam = new Map<string, number>();
+      for (const tx of league.transactions.filter(t => t.type === "TRADE")) {
+        tradesByTeam.set(tx.teamId, (tradesByTeam.get(tx.teamId) || 0) + 1);
+      }
+
+      steps.push("Generating League DNA Profile...");
+      const teamSummaries = league.teams.map(t => {
+        const trades = tradesByTeam.get(t.teamId) || 0;
+        const moves = txByTeam.get(t.teamId) || 0;
+        return `${t.ownerName} (${t.wins}-${t.losses}, ${t.pointsFor} PF): ${trades} trades, ${moves} total moves`;
+      }).join("\n");
+
+      const dnaResponse = await invokeLLM({
+        messages: [
+          {
+            role: "system" as const,
+            content: `You are an expert fantasy football analyst. Analyze this Yahoo Fantasy league and provide a DNA profile for each manager. For each manager, identify their archetype from: Aggressive Trader, Waiver Hawk, Draft & Hold, Contrarian, Reactive, Balanced, or Data-Driven. Return JSON matching the provided schema.`,
+          },
+          {
+            role: "user" as const,
+            content: `League: ${league.settings.leagueName} (${league.settings.season} season, ${league.settings.scoringType} scoring)\nTeams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "league_dna",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                leagueName: { type: "string" },
+                season: { type: "number" },
+                provider: { type: "string" },
+                teamProfiles: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      teamId: { type: "string" },
+                      ownerName: { type: "string" },
+                      archetype: { type: "string" },
+                      archetypeReason: { type: "string" },
+                      desperationScore: { type: "number" },
+                      exploitabilityScore: { type: "number" },
+                      keyTrait: { type: "string" },
+                    },
+                    required: ["teamId", "ownerName", "archetype", "archetypeReason", "desperationScore", "exploitabilityScore", "keyTrait"],
+                    additionalProperties: false,
+                  },
+                },
+                leagueSummary: { type: "string" },
+              },
+              required: ["leagueName", "season", "provider", "teamProfiles", "leagueSummary"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const rawContent = dnaResponse.choices?.[0]?.message?.content;
+      const dnaContent = typeof rawContent === "string" ? rawContent : null;
+      let dnaProfile: unknown = null;
+      try {
+        dnaProfile = JSON.parse(dnaContent || "{}");
+      } catch {
+        dnaProfile = { error: "Failed to parse DNA profile" };
+      }
+
+      steps.push("League DNA Profile complete.");
+
+      // Persist the real league connection (replace __pending__)
+      const latestCreds = {
+        accessToken: adapter["credentials" as keyof typeof adapter] as unknown as { accessToken: string; refreshToken: string; expiresAt: number },
+      };
+      // Use the adapter's current credentials (may have been refreshed)
+      const adapterCreds = (adapter as unknown as { credentials: { accessToken: string; refreshToken: string; expiresAt: number } }).credentials;
+
+      await database
+        .insert(leagueConnections)
+        .values({
+          userId: ctx.user.id,
+          provider: "yahoo",
+          leagueId: input.leagueId,
+          leagueName: league.settings.leagueName,
+          season: input.season,
+          isActive: true,
+          credentials: adapterCreds,
+          syncStatus: "ok",
+          dnaProfile,
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            leagueName: league.settings.leagueName,
+            isActive: true,
+            credentials: adapterCreds,
+            syncStatus: "ok",
+            dnaProfile,
+            lastSyncedAt: new Date(),
+          },
+        });
+
+      return {
+        success: true,
+        steps,
+        league: {
+          leagueId: input.leagueId,
+          leagueName: league.settings.leagueName,
+          season: league.settings.season,
+          teamCount: league.teams.length,
+          scoringType: league.settings.scoringType,
+          currentWeek: league.settings.currentWeek,
+          provider: "yahoo" as const,
+        },
+        teams: league.teams,
+        matchupCount: league.matchups.length,
+        transactionCount: league.transactions.length,
+        dnaProfile,
+      };
+    }),
 });

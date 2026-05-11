@@ -7,7 +7,7 @@
  * Step 4: Success — league profile summary
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,13 +16,13 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle, Circle, Loader2, ChevronRight, ArrowLeft, ExternalLink, Zap, Lock } from "lucide-react";
+import { CheckCircle, Circle, Loader2, ChevronRight, ArrowLeft, ExternalLink, Zap, Lock, RefreshCw } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Step = "choose_provider" | "enter_credentials" | "generating" | "success";
+type Step = "choose_provider" | "enter_credentials" | "yahoo_pick_league" | "generating" | "success";
 type Provider = "espn" | "sleeper" | "yahoo" | "nfl" | "fleaflicker" | "fantrax";
 
 interface ProviderCard {
@@ -58,9 +58,10 @@ const PROVIDERS: ProviderCard[] = [
     id: "yahoo",
     name: "Yahoo Fantasy",
     emoji: "🟣",
-    description: "Yahoo Sports fantasy leagues. OAuth login coming soon.",
+    description: "Yahoo Sports fantasy leagues. Connect via Yahoo OAuth — no cookies needed.",
     authRequired: true,
-    status: "coming_soon",
+    status: "live",
+    instructions: "Click \"Connect Yahoo\" to authorize via Yahoo. You'll be redirected to Yahoo to grant access, then returned here to pick your league.",
   },
   {
     id: "nfl",
@@ -122,8 +123,105 @@ export default function LeagueConnect() {
     dnaProfile: unknown;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Sleeper username lookup
+  // Yahoo state
+  const [yahooLeagues, setYahooLeagues] = useState<Array<{ leagueKey: string; leagueId: string; name: string; season: string; teamCount: number }>>([]);
+  const [selectedYahooLeagueId, setSelectedYahooLeagueId] = useState("");
+  const [selectedYahooLeagueName, setSelectedYahooLeagueName] = useState("");
+  // Check if Yahoo OAuth is configured
+  const yahooConfigured = trpc.providers.isYahooConfigured.useQuery();
+  // Check if we have a pending Yahoo auth (post-callback)
+  const yahooPendingAuth = trpc.providers.getYahooPendingAuth.useQuery(
+    undefined,
+    { enabled: !!user }
+  );
+  // Get Yahoo auth URL
+  const yahooAuthUrlQuery = trpc.providers.getYahooAuthUrl.useQuery(
+    { origin: typeof window !== "undefined" ? window.location.origin : "" },
+    { enabled: !!user && !!yahooConfigured.data?.configured }
+  );
+  // Get Yahoo leagues (after auth)
+  const yahooLeaguesQuery = trpc.providers.getYahooLeagues.useQuery(
+    { season: 2025 },
+    { enabled: false }
+  );
+  // Import Yahoo league mutation
+  const importYahooMutation = trpc.providers.importYahooLeague.useMutation({
+    onSuccess: (data) => {
+      setResult({
+        leagueName: data.league.leagueName,
+        teamCount: data.league.teamCount,
+        scoringType: data.league.scoringType,
+        matchupCount: data.matchupCount,
+        transactionCount: data.transactionCount,
+        dnaProfile: data.dnaProfile,
+      });
+      setProgressPct(100);
+      setProgressStep(DNA_STEPS.length - 1);
+      setTimeout(() => setStep("success"), 800);
+    },
+    onError: (err) => {
+      setError(err.message);
+      setStep("yahoo_pick_league");
+    },
+  });
+  // Detect Yahoo OAuth callback (yahoo_auth=success in URL)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("yahoo_auth") === "success") {
+      setSelectedProvider("yahoo");
+      setStep("yahoo_pick_league");
+      // Clean up URL
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (params.get("yahoo_error")) {
+      setError(`Yahoo authorization failed: ${params.get("yahoo_error")}`);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+  const handleYahooConnect = () => {
+    if (!user) {
+      window.location.href = getLoginUrl();
+      return;
+    }
+    const authUrl = yahooAuthUrlQuery.data?.url;
+    if (authUrl) {
+      window.location.href = authUrl;
+    }
+  };
+  const handleYahooLoadLeagues = async () => {
+    const res = await yahooLeaguesQuery.refetch();
+    if (res.data?.leagues) {
+      setYahooLeagues(res.data.leagues);
+    } else if (res.data?.error) {
+      setError(res.data.error);
+    }
+  };
+  const handleYahooImport = () => {
+    const id = selectedYahooLeagueId;
+    if (!id) {
+      setError("Please select a league");
+      return;
+    }
+    setError(null);
+    setStep("generating");
+    setProgressStep(0);
+    setProgressPct(0);
+    let step = 0;
+    const interval = setInterval(() => {
+      step++;
+      if (step < DNA_STEPS.length - 1) {
+        setProgressStep(step);
+        setProgressPct(Math.round((step / (DNA_STEPS.length - 1)) * 85));
+      } else {
+        clearInterval(interval);
+      }
+    }, 900);
+    importYahooMutation.mutate({
+      leagueId: id,
+      leagueName: selectedYahooLeagueName,
+      season: 2025,
+    });
+  };
+  // Sleeper username lookupp
   const sleeperUserQuery = trpc.providers.getSleeperLeaguesForUser.useQuery(
     { username, season: 2025 },
     { enabled: false }
@@ -160,6 +258,22 @@ export default function LeagueConnect() {
     if (provider.status === "coming_soon") return;
     setSelectedProvider(provider.id);
     setError(null);
+    if (provider.id === "yahoo") {
+      // Yahoo uses OAuth — redirect to Yahoo authorization
+      if (!user) {
+        window.location.href = getLoginUrl();
+        return;
+      }
+      const authUrl = yahooAuthUrlQuery.data?.url;
+      if (authUrl) {
+        window.location.href = authUrl;
+      } else if (!yahooConfigured.data?.configured) {
+        setError("Yahoo OAuth is not yet configured on this server. Please add YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET in Settings.");
+      } else {
+        setError("Could not get Yahoo authorization URL. Please try again.");
+      }
+      return;
+    }
     setStep("enter_credentials");
   };
 
@@ -395,6 +509,100 @@ export default function LeagueConnect() {
     );
   }
 
+  // ── Step: Yahoo pick league ───────────────────────────────────────────────
+  if (step === "yahoo_pick_league") {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-2xl mx-auto px-4 py-12">
+          <button
+            onClick={() => { setStep("choose_provider"); setError(null); }}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to providers
+          </button>
+          <div className="flex items-center gap-3 mb-8">
+            <div className="text-4xl">🟣</div>
+            <div>
+              <h2 className="text-2xl font-bold">Yahoo Fantasy</h2>
+              <p className="text-muted-foreground text-sm">Select the league you want to import</p>
+            </div>
+          </div>
+          {error && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Your Yahoo Leagues</CardTitle>
+              <CardDescription>
+                {yahooPendingAuth.data?.hasPendingAuth
+                  ? "Yahoo authorization successful. Load your leagues below."
+                  : "Authorization complete. Select a league to import."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {yahooLeagues.length === 0 ? (
+                <div className="text-center py-6">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Click below to fetch your Yahoo Fantasy leagues for the 2025 season.
+                  </p>
+                  <Button
+                    onClick={handleYahooLoadLeagues}
+                    disabled={yahooLeaguesQuery.isFetching}
+                    variant="outline"
+                  >
+                    {yahooLeaguesQuery.isFetching ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Loading leagues...</>
+                    ) : (
+                      <><RefreshCw className="w-4 h-4 mr-2" />Load My Yahoo Leagues</>
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-muted-foreground mb-3">Select a league to import:</div>
+                  {yahooLeagues.map((l) => (
+                    <button
+                      key={l.leagueKey}
+                      onClick={() => { setSelectedYahooLeagueId(l.leagueKey); setSelectedYahooLeagueName(l.name); }}
+                      className={`
+                        w-full text-left rounded-lg border p-3 transition-all
+                        ${selectedYahooLeagueId === l.leagueKey
+                          ? "border-primary bg-primary/10"
+                          : "border-border hover:border-primary/50"
+                        }
+                      `}
+                    >
+                      <div className="font-medium text-sm">{l.name}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {l.season} · {l.teamCount} teams
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {yahooLeagues.length > 0 && (
+                <Button
+                  className="w-full"
+                  size="lg"
+                  onClick={handleYahooImport}
+                  disabled={!selectedYahooLeagueId || importYahooMutation.isPending}
+                >
+                  {importYahooMutation.isPending ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Importing...</>
+                  ) : (
+                    <>Generate League DNA <ChevronRight className="w-4 h-4 ml-2" /></>
+                  )}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
   // ── Step: Generating DNA ───────────────────────────────────────────────────
   if (step === "generating") {
     return (

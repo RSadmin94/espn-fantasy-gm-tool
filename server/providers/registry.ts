@@ -9,6 +9,7 @@
 import type { ProviderAdapter, FantasyProvider } from "./types";
 import { EspnAdapter } from "./espnAdapter";
 import { SleeperAdapter } from "./sleeperAdapter";
+import { YahooAdapter } from "./yahooAdapter";
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
@@ -22,8 +23,10 @@ registry.set("sleeper", (leagueId?: string) =>
   new SleeperAdapter({ leagueId: leagueId || "" })
 );
 
-// Yahoo, NFL, CBS, Fleaflicker, Fantrax — adapters to be built
-// registry.set("yahoo", (leagueId) => new YahooAdapter({ leagueId: leagueId || "" }));
+// Yahoo — requires OAuth2 credentials; adapter is instantiated per-request with tokens
+// The registry entry is a placeholder; actual instantiation happens in providerRouter
+// registry.set("yahoo", ...) — see providerRouter.ts for Yahoo-specific instantiation
+// NFL, CBS, Fleaflicker, Fantrax — adapters to be built
 // registry.set("nfl",   (leagueId) => new NflAdapter({ leagueId: leagueId || "" }));
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -101,7 +104,8 @@ export const PROVIDER_INFO: ProviderInfo[] = [
     authRequired: true,
     authType: "oauth",
     logoEmoji: "🟣",
-    status: "coming_soon",
+    status: "live",
+    importInstructions: "Click \"Connect Yahoo\" to authorize via Yahoo OAuth. You will be redirected to Yahoo to grant access, then returned here to select your league.",
   },
   {
     id: "nfl",
