@@ -181,29 +181,48 @@ function LeaguePulseStrip() {
 
   if (!data) return null;
 
-  const hotTeams = data.teams.filter((t: { desperationScore: number }) => t.desperationScore >= 70);
+  const isComplete = (data as { isSeasonComplete?: boolean }).isSeasonComplete ?? false;
+  const champion = isComplete ? data.teams.find((t: { desperationLabel: string }) => t.desperationLabel === "CHAMPION") : null;
+  const rebuilding = isComplete ? data.teams.filter((t: { desperationLabel: string }) => t.desperationLabel === "REBUILDING").length : 0;
+  const hotTeams = !isComplete ? data.teams.filter((t: { desperationScore: number }) => t.desperationScore >= 70) : [];
   const totalTx = data.teams.reduce((s: number, t: { lastWeekTransactionCount: number }) => s + t.lastWeekTransactionCount, 0);
 
   return (
-    <Card className="card-glow bg-card border-orange-500/20">
+    <Card className={`card-glow bg-card ${isComplete ? "border-yellow-500/20" : "border-orange-500/20"}`}>
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Activity className="w-4 h-4 text-orange-400" />
-            <span className="text-orange-400">Live League Pulse</span>
-            <span className="text-muted-foreground font-normal text-xs">Week {data.week}</span>
+            <Activity className={`w-4 h-4 ${isComplete ? "text-yellow-400" : "text-orange-400"}`} />
+            <span className={isComplete ? "text-yellow-400" : "text-orange-400"}>
+              {isComplete ? "2025 Season Final Standings" : "Live League Pulse"}
+            </span>
+            {!isComplete && <span className="text-muted-foreground font-normal text-xs">Week {data.week}</span>}
+            {isComplete && <span className="text-muted-foreground font-normal text-xs">Season Complete • Planning for 2026</span>}
           </CardTitle>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span><span className="text-red-400 font-semibold">{hotTeams.length}</span> desperate</span>
-            <span><span className="text-blue-400 font-semibold">{totalTx}</span> moves last 7d</span>
+            {isComplete ? (
+              <>
+                {champion && <span><span className="text-yellow-400 font-semibold">{(champion as { ownerName: string }).ownerName.split(" ")[0]}</span> champion</span>}
+                <span><span className="text-red-400 font-semibold">{rebuilding}</span> rebuilding</span>
+              </>
+            ) : (
+              <>
+                <span><span className="text-red-400 font-semibold">{hotTeams.length}</span> desperate</span>
+                <span><span className="text-blue-400 font-semibold">{totalTx}</span> moves last 7d</span>
+              </>
+            )}
           </div>
         </div>
       </CardHeader>
       <CardContent className="pt-0">
         <div className="grid grid-cols-4 md:grid-cols-7 gap-1.5">
           {data.teams.map((team: { teamId: number; ownerName: string; standingRank: number; wins: number; losses: number; desperationScore: number; desperationLabel: string; lastWeekTransactionCount: number }) => {
-            const barColor = team.desperationScore >= 70 ? "bg-red-500" : team.desperationScore >= 45 ? "bg-orange-500" : team.desperationScore >= 25 ? "bg-yellow-500" : "bg-slate-600";
-            const textColor = team.desperationScore >= 70 ? "text-red-400" : team.desperationScore >= 45 ? "text-orange-400" : team.desperationScore >= 25 ? "text-yellow-400" : "text-slate-400";
+            const barColor = isComplete
+              ? (team.desperationLabel === "CHAMPION" ? "bg-yellow-400" : team.desperationLabel === "CONTENDER" ? "bg-emerald-500" : team.desperationLabel === "PLAYOFF TEAM" ? "bg-blue-500" : team.desperationLabel === "BUBBLE" ? "bg-orange-500" : "bg-red-600")
+              : (team.desperationScore >= 70 ? "bg-red-500" : team.desperationScore >= 45 ? "bg-orange-500" : team.desperationScore >= 25 ? "bg-yellow-500" : "bg-slate-600");
+            const textColor = isComplete
+              ? (team.desperationLabel === "CHAMPION" ? "text-yellow-400" : team.desperationLabel === "CONTENDER" ? "text-emerald-400" : team.desperationLabel === "PLAYOFF TEAM" ? "text-blue-400" : team.desperationLabel === "BUBBLE" ? "text-orange-400" : "text-red-400")
+              : (team.desperationScore >= 70 ? "text-red-400" : team.desperationScore >= 45 ? "text-orange-400" : team.desperationScore >= 25 ? "text-yellow-400" : "text-slate-400");
             return (
               <div key={team.teamId} className="bg-accent/30 rounded p-1.5 border border-border hover:border-border/80 transition-colors">
                 <div className="flex items-center justify-between mb-0.5">
@@ -745,7 +764,7 @@ export default function Dashboard() {
               </Card>
             </div>
 
-            {/* League Pulse — Live Desperation Strip */}
+            {/* League Pulse — 2025 Final Standings / Offseason Mode */}
             <LeaguePulseStrip />
 
             {/* Countdowns + Quick Launch */}
@@ -1467,8 +1486,8 @@ export default function Dashboard() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Trophy className="w-4 h-4 text-yellow-400" />
-                    2026 Live Draft Order
-                    <Badge className="ml-auto text-[9px] px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">LIVE</Badge>
+                    2026 Draft Order
+                    <Badge className="ml-auto text-[9px] px-1.5 bg-blue-500/20 text-blue-400 border-blue-500/30">ESPN</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1606,7 +1625,7 @@ export default function Dashboard() {
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Activity className="w-4 h-4 text-primary" />
                     Keeper History Timeline — All Seasons
-                    <Badge className="ml-auto text-[9px] px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">LIVE DATA</Badge>
+                    <Badge className="ml-auto text-[9px] px-1.5 bg-slate-500/20 text-slate-400 border-slate-500/30">CACHED</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>

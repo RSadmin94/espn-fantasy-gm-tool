@@ -545,3 +545,51 @@ export const leagueConnections = mysqlTable(
 export type LeagueConnection = typeof leagueConnections.$inferSelect;
 export type InsertLeagueConnection = typeof leagueConnections.$inferInsert;
 
+
+/**
+ * leagueIdentity — stores static ESPN league data per season.
+ *
+ * Populated once per season by the Data Center refresh pipeline.
+ * Consumers (offseasonRouter, draftBoard, etc.) read from here instead of
+ * re-fetching or re-parsing the raw ESPN season cache on every request.
+ *
+ * Static data (changes at most once per season):
+ *   - teams: [{teamId, name, abbrev, owners}]
+ *   - members: [{id, firstName, lastName, displayName}]
+ *   - draftOrder: [{position, teamId, teamName, ownerName}]
+ *   - draftDate: unix ms
+ *   - keeperDeadline: unix ms
+ *   - draftType: "SNAKE" | "AUCTION" | etc.
+ *   - keeperCount: number
+ *   - teamCount: number
+ *   - playoffTeamCount: number
+ *   - scoringType: "PPR" | "HALF_PPR" | "STANDARD"
+ */
+export const leagueIdentity = mysqlTable(
+  "league_identity",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    season: int("season").notNull(),
+    // Raw normalized blobs stored as JSON
+    teams: json("teams").notNull(),          // Array<{teamId, name, abbrev, owners}>
+    members: json("members").notNull(),       // Array<{id, firstName, lastName, displayName}>
+    draftOrder: json("draftOrder").notNull(), // Array<{position, teamId, teamName, ownerName}>
+    // Scalar settings
+    draftDate: int("draftDate"),        // unix seconds (ESPN returns seconds)
+    keeperDeadline: int("keeperDeadline"), // unix seconds
+    draftType: varchar("draftType", { length: 32 }),
+    keeperCount: int("keeperCount"),
+    teamCount: int("teamCount"),
+    playoffTeamCount: int("playoffTeamCount"),
+    scoringType: varchar("scoringType", { length: 32 }),
+    // Audit
+    fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_li_season").on(t.season),
+    index("idx_li_season").on(t.season),
+  ]
+);
+export type LeagueIdentity = typeof leagueIdentity.$inferSelect;
+export type InsertLeagueIdentity = typeof leagueIdentity.$inferInsert;

@@ -866,3 +866,18 @@
 - [x] Update OffseasonHub UI: DataSourceBanner component shows "2025 Season → Planning for 2026" with clear visual separation; subtitle and Draft Board tab label are now year-dynamic
 - [x] Verify keeper recommendations only use completed season data (2025) — enforced via `getCompletedSeasonForOffseason()` guard
 - [x] Run all tests and save checkpoint — 467/467 passing, 0 TS errors
+
+## FEATURE: Offseason Intel — Live ESPN Team Names + Draft Order
+- [ ] Audit current draft order source in offseasonRouter (draftBoard procedure) — identify if it uses cached 2025 data or live ESPN 2026 API
+- [ ] Update draftBoard procedure to fetch live 2026 draft order from ESPN API (mDraftDetail view or equivalent)
+- [ ] Update keeperRecommendations procedure to use live 2026 team names from ESPN API
+- [ ] Update OffseasonHub UI to display live team names and correct 2026 draft order
+- [ ] Run all tests and save checkpoint
+
+## BUG: App showing in-season 2025 data instead of end-of-season 2025 summary
+- [x] Audit all pages showing season data — identified LeaguePulseStrip, LIVE badges, Threat Assessment header as main offenders
+- [x] Command Center: LeaguePulseStrip now shows "2025 Season Final Standings" with rank-tier labels (CHAMPION/CONTENDER/PLAYOFF TEAM/BUBBLE/REBUILDING) instead of desperation scores
+- [x] leaguePulse server: added isSeasonComplete detection (week >= 14 OR season < currentYear); returns final rank tiers, binary playoff probability, no currentOpponent data when complete
+- [x] Sidebar/badges: "LIVE" badge on 2026 Draft Order → "ESPN" (blue); "LIVE DATA" on Keeper History → "CACHED" (slate)
+- [x] League Pulse comment updated from "Live Desperation Strip" to "2025 Final Standings / Offseason Mode"
+- [x] Run all tests and save checkpoint — 467/467 passing, 0 TS errors

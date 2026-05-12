@@ -15,7 +15,8 @@ import { invokeLLM } from "./_core/llm";
 import { buildKeeperRecommendations } from "./keeperRecommendationEngine";
 import { buildLeagueDraftBoard } from "./draftStrategyEngine";
 import { getCachedView, getAllCachedSeasons, getCompletedSeasonForOffseason } from "./db";
-import { normalizeDraftPicks, normalizeDraftOrder, normalizeTeams } from "./espnService";
+import { normalizeDraftPicks } from "./espnService";
+import { getOrFetchLeagueIdentity } from "./leagueIdentityService";
 
 async function getSeasonData(season: number) {
   const cached = await getCachedView(season, "combined");
@@ -97,10 +98,16 @@ export const offseasonRouter = router({
       }
     }
 
-    // Build eligibility data
-    const teams2025 = normalizeTeams(data2025);
+    // Build eligibility data — use live 2026 team names from leagueIdentity when available
+    const identity2026early = await getOrFetchLeagueIdentity(planningYear);
+    const { normalizeTeams: _normalizeTeams } = await import("./espnService");
+    const teams2025 = _normalizeTeams(data2025); // still needed for roster structure
     const teamNames: Record<number, string> = {};
-    for (const t of teams2025) teamNames[t.teamId as number] = (t.teamName as string) || `Team ${t.teamId}`;
+    if (identity2026early?.teams?.length) {
+      for (const t of identity2026early.teams) teamNames[t.teamId] = t.name;
+    } else {
+      for (const t of teams2025) teamNames[t.teamId as number] = (t.teamName as string) || `Team ${t.teamId}`;
+    }
 
     const eligibilityData = teams2025.map(team => {
       const tid = team.teamId as number;
@@ -151,16 +158,21 @@ export const offseasonRouter = router({
     const managers = await buildManagerRawData();
     const dnaProfiles = calcLeagueDNA(managers);
 
-    // Get 2026 draft order
-    const draftOrderRaw = normalizeDraftOrder(data2025);
-    const draftOrder = draftOrderRaw?.pickOrder
-      ? draftOrderRaw.pickOrder.map(p => ({
+    // Get 2026 draft order and team names from leagueIdentity (live ESPN, cached in DB)
+    const identity2026 = await getOrFetchLeagueIdentity(planningYear);
+    const draftOrder = identity2026?.draftOrder?.length
+      ? identity2026.draftOrder.map(p => ({
           teamId: p.teamId,
-          teamName: p.name ?? `Team ${p.teamId}`,
-          ownerName: p.owners,
+          teamName: p.teamName,
+          ownerName: p.ownerName,
           pickNumber: p.position,
         }))
       : null;
+    // Use live team names from identity if available, fall back to 2025 cache
+    const liveTeamNames: Record<number, string> = {};
+    if (identity2026?.teams?.length) {
+      for (const t of identity2026.teams) liveTeamNames[t.teamId] = t.name;
+    }
 
     // Build recommendations
     const recommendations = buildKeeperRecommendations(eligibilityData, dnaProfiles, draftOrder);
@@ -214,13 +226,14 @@ export const offseasonRouter = router({
     const keeperResult = await offseasonRouter.createCaller({} as never).keeperRecommendations();
     const keeperRecommendations = keeperResult.teams;
 
-    // Build draft order
-    const draftOrderRawResult = normalizeDraftOrder(data2025);
-    if (!draftOrderRawResult?.pickOrder?.length) return null;
-    const draftOrderRaw = draftOrderRawResult.pickOrder.map(p => ({
+    // Get 2026 draft order and team names from leagueIdentity (live ESPN, cached in DB)
+    const planningYear2 = latestSeason + 1;
+    const identity2026 = await getOrFetchLeagueIdentity(planningYear2);
+    if (!identity2026?.draftOrder?.length) return null;
+    const draftOrderRaw = identity2026.draftOrder.map(p => ({
       teamId: p.teamId,
-      teamName: p.name ?? `Team ${p.teamId}`,
-      ownerName: p.owners,
+      teamName: p.teamName,
+      ownerName: p.ownerName,
       pickNumber: p.position,
     }));
 
@@ -242,9 +255,16 @@ export const offseasonRouter = router({
       }
     }
 
-    const teams2025 = normalizeTeams(data2025);
+    // Use live 2026 team names from identity, fall back to 2025 cache names
     const teamNames: Record<number, string> = {};
-    for (const t of teams2025) teamNames[t.teamId as number] = (t.teamName as string) || `Team ${t.teamId}`;
+    if (identity2026?.teams?.length) {
+      for (const t of identity2026.teams) teamNames[t.teamId] = t.name;
+    } else {
+      // fallback: parse from 2025 data
+      const { normalizeTeams } = await import("./espnService");
+      const teams2025 = normalizeTeams(data2025);
+      for (const t of teams2025) teamNames[t.teamId as number] = (t.teamName as string) || `Team ${t.teamId}`;
+    }
 
     const returningPlayers: Array<{ playerName: string; teamName: string; position: string; round2025: number }> = [];
     for (const p of picks2025) {
@@ -298,12 +318,12 @@ export const offseasonRouter = router({
       const picks2025 = normalizeDraftPicks(data2025);
       const teamKeepers = picks2025.filter(p => p.keeper && p.teamId === input.teamId);
 
-      // Get DNA
+      // Get DNA — use live 2026 identity for owner name if available
       const managers = await buildManagerRawData();
       const dnaProfiles = calcLeagueDNA(managers);
-      const teams2025 = normalizeTeams(data2025);
-      const teamData = teams2025.find(t => t.teamId === input.teamId);
-      const ownerName = (teamData as { ownerName?: string })?.ownerName ?? input.teamName;
+      const identity2026brief = await getOrFetchLeagueIdentity(planningYear);
+      const liveTeam = identity2026brief?.teams?.find(t => t.teamId === input.teamId);
+      const ownerName = liveTeam?.owners ?? input.teamName;
       const teamDna = dnaProfiles.find(d =>
         d.ownerName && ownerName.toLowerCase().includes(d.ownerName.toLowerCase().split(" ")[0].toLowerCase())
       );

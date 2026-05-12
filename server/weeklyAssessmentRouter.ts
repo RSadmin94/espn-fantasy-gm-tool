@@ -179,6 +179,10 @@ export const weeklyAssessmentRouter = router({
       const transactions = normalizeTransactions(data) as unknown[];
       const settings = normalizeSettings(data);
       const currentWeek = (settings.currentMatchupPeriod as number) || 1;
+      // Detect end-of-season: ESPN regular season is 14 weeks; playoffs are 15-17.
+      // If currentMatchupPeriod >= 14 OR the season year < current calendar year, treat as completed.
+      const calendarYear = new Date().getFullYear();
+      const isSeasonComplete = currentWeek >= 14 || input.season < calendarYear;
 
       const ownerMap: Record<number, string> = {};
       const memberIdsMap: Record<number, string[]> = {};
@@ -216,39 +220,56 @@ export const weeklyAssessmentRouter = router({
       }
 
       return {
-        week: currentWeek,
+        week: isSeasonComplete ? 0 : currentWeek, // 0 = season complete signal
+        isSeasonComplete,
         season: input.season,
         teams: sortedTeams.map((t, idx) => {
           const tid = t.teamId as number;
           const wins = (t.wins as number) || 0;
           const losses = (t.losses as number) || 0;
+          const finalRank = (t.rankFinal as number) || (idx + 1);
 
-          // Simple desperation signal without full DNA
+          // For completed seasons: use final rank tier instead of desperation
+          // For in-season: use win% + recent activity desperation signal
           const winPct = (wins + losses) > 0 ? wins / (wins + losses) : 0.5;
-          const rawDesperation = Math.round((1 - winPct) * 60 + (lastWeekTxMap[tid] || 0) * 5);
-          const desperationScore = Math.min(100, rawDesperation);
+          let desperationScore: number;
+          let desperationLabel: string;
+          if (isSeasonComplete) {
+            // Repurpose as "offseason priority" based on final rank
+            desperationScore = Math.max(5, Math.round((1 - (finalRank - 1) / 14) * 85));
+            desperationLabel = finalRank === 1 ? "CHAMPION" :
+              finalRank <= 3 ? "CONTENDER" :
+              finalRank <= 7 ? "PLAYOFF TEAM" :
+              finalRank <= 10 ? "BUBBLE" : "REBUILDING";
+          } else {
+            const rawDesperation = Math.round((1 - winPct) * 60 + (lastWeekTxMap[tid] || 0) * 5);
+            desperationScore = Math.min(100, rawDesperation);
+            desperationLabel = desperationScore >= 70 ? "WIDE OPEN" :
+              desperationScore >= 45 ? "RECEPTIVE" :
+              desperationScore >= 25 ? "NEUTRAL" : "NOT INTERESTED";
+          }
 
           return {
             teamId: tid,
             ownerName: ownerMap[tid],
-            standingRank: idx + 1,
+            standingRank: isSeasonComplete ? finalRank : idx + 1,
             wins,
             losses,
             pointsFor: Math.round(((t.pointsFor as number) || 0) * 10) / 10,
             pointsAgainst: Math.round(((t.pointsAgainst as number) || 0) * 10) / 10,
             lastWeekTransactionCount: lastWeekTxMap[tid] || 0,
             desperationScore,
-            desperationLabel: desperationScore >= 70 ? "WIDE OPEN" :
-              desperationScore >= 45 ? "RECEPTIVE" :
-              desperationScore >= 25 ? "NEUTRAL" : "NOT INTERESTED",
-            playoffProbability: Math.min(98, Math.max(2, Math.round(50 + (winPct - 0.5) * 200))),
+            desperationLabel,
+            playoffProbability: isSeasonComplete
+              ? (finalRank <= 7 ? 100 : 0) // season over — binary
+              : Math.min(98, Math.max(2, Math.round(50 + (winPct - 0.5) * 200))),
             memberIds: memberIdsMap[tid] ?? [],
-            currentOpponentTeamId: currentMatchupMap[tid] ?? null,
-            currentOpponentOwner: currentMatchupMap[tid] ? (ownerMap[currentMatchupMap[tid]] ?? null) : null,
-            currentOpponentMemberIds: currentMatchupMap[tid] ? (memberIdsMap[currentMatchupMap[tid]] ?? []) : [],
+            currentOpponentTeamId: isSeasonComplete ? null : (currentMatchupMap[tid] ?? null),
+            currentOpponentOwner: isSeasonComplete ? null : (currentMatchupMap[tid] ? (ownerMap[currentMatchupMap[tid]] ?? null) : null),
+            currentOpponentMemberIds: isSeasonComplete ? [] : (currentMatchupMap[tid] ? (memberIdsMap[currentMatchupMap[tid]] ?? []) : []),
           };
         }),
-        currentMatchups: currentMatchupMap,
+        currentMatchups: isSeasonComplete ? {} : currentMatchupMap,
       };
       }); // end memCache
     }),

@@ -20,6 +20,7 @@ import { mlRouter } from "./mlRouter";
 import { weeklyAssessmentRouter } from "./weeklyAssessmentRouter";
 import { providerRouter } from "./providerRouter";
 import { offseasonRouter } from "./offseasonRouter";
+import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob } from "./db";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
@@ -158,6 +159,9 @@ export const appRouter = router({
             }
 
             await upsertCachedView(season, "combined", data);
+            // Persist static identity data (team names, draft order, settings) to league_identity table.
+            // All consumers (offseasonRouter, draftBoard, etc.) read from here instead of re-fetching ESPN.
+            try { await upsertLeagueIdentity(season, data); } catch (_e) { /* non-fatal — don't block the refresh */ }
             const teams = normalizeTeams(data);
             const rosters = normalizeRosters(data);
             const matchups = normalizeMatchups(data);

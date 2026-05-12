@@ -6,6 +6,7 @@ import {
   upsertCachedView,
   upsertRefreshManifest,
 } from "./db";
+import { upsertLeagueIdentity } from "./leagueIdentityService";
 import {
   normalizeTeams,
   normalizeRosters,
@@ -55,6 +56,8 @@ export async function espnRefreshHandler(req: Request, res: Response) {
         }
 
         await upsertCachedView(season, "combined", data);
+        // Persist static identity data (team names, draft order, settings) to league_identity table
+        try { await upsertLeagueIdentity(season, data); } catch (_e) { /* non-fatal */ }
 
         const teams = normalizeTeams(data);
         const rosters = normalizeRosters(data);
