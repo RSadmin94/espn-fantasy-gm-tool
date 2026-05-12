@@ -764,3 +764,12 @@
 - [ ] Fix team count: always match actual league size (dynamic, not hardcoded 14)
 - [ ] TypeScript: 0 errors after changes
 - [ ] Tests: all passing after changes
+
+## FIX: Mock Draft Pause/Override
+- [x] Add isPaused state — when paused, auto-advance and "To My Pick" stop before each AI pick
+- [x] Add Pause/Resume button visible during AI turns
+- [x] When paused on an AI pick: show the AI's intended pick with a "Let AI Pick" confirm + "Override" button
+- [x] Override mode opens a search panel to pick any available player for that AI team
+- [x] After override pick is made, resume auto-advance if it was running
+- [x] TypeScript: 0 errors
+- [x] Tests: all passing

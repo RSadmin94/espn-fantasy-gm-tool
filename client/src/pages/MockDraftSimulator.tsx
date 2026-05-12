@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import {
   Search, Play, RotateCcw, Trophy, Undo2, FastForward, Zap, Save,
   CheckCircle2, TrendingDown, TrendingUp, ChevronDown, Lock, Unlock, User,
+  Pause, PlayCircle, AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,7 @@ const ARCHETYPE_COLORS: Record<string, string> = {
 type DraftPick = {
   round: number;
   pick: number;
+  isOverride?: boolean;
   overall: number;
   owner: string;
   player: MergedPlayer;
@@ -194,7 +196,12 @@ export default function MockDraftSimulator() {
   const [savedDraftId, setSavedDraftId] = useState<number | null>(null);
   const [keeperOverrides, setKeeperOverrides] = useState<Record<number, KeeperOverride>>({});
   const [keeperDropdownOpen, setKeeperDropdownOpen] = useState<number | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const [overrideMode, setOverrideMode] = useState(false);
+  const [overrideQuery, setOverrideQuery] = useState("");
+  const [pendingAIPick, setPendingAIPick] = useState<{ player: MergedPlayer; teamIdx: number } | null>(null);
   const autoRunRef = useRef(false);
+  const wasAutoRunningRef = useRef(false);
 
   const { data: boardData, isLoading: boardLoading } = trpc.draftBoard.getPlayers.useQuery(
     undefined,
@@ -382,8 +389,93 @@ export default function MockDraftSimulator() {
     else setCurrentOverall(next);
   }, [isRodsTurn, owners, rodSlotIndex, currentRound, currentOverall, totalTeams]);
 
+  // Compute the AI's intended pick for the current slot (used by pause/override)
+  const computeAIIntendedPick = useCallback((): { player: MergedPlayer; teamIdx: number } | null => {
+    if (!boardData || isRodsTurn || draftComplete) return null;
+    let slot = currentOverall;
+    const totalSlots = totalTeams * TOTAL_ROUNDS;
+    while (slot <= totalSlots) {
+      const alreadyFilled = picks.some(p => p.overall === slot);
+      if (alreadyFilled) { slot++; continue; }
+      const teamIdx = snakeOrder[slot - 1] ?? 0;
+      if (teamIdx === rodSlotIndex) return null;
+      const pick = makeAIPick(slot, picks, boardData.players);
+      if (pick) return { player: pick.player, teamIdx };
+      slot++;
+    }
+    return null;
+  }, [boardData, isRodsTurn, draftComplete, currentOverall, picks, snakeOrder, rodSlotIndex, makeAIPick, totalTeams]);
+
+  const handleTogglePause = useCallback(() => {
+    if (isPaused) {
+      // Resume — clear override mode and pending pick
+      setIsPaused(false);
+      setOverrideMode(false);
+      setOverrideQuery("");
+      setPendingAIPick(null);
+    } else {
+      // Pause — compute the AI's intended pick so we can show it
+      const intended = computeAIIntendedPick();
+      setPendingAIPick(intended);
+      setIsPaused(true);
+      setOverrideMode(false);
+      setOverrideQuery("");
+    }
+  }, [isPaused, computeAIIntendedPick]);
+
+  const handleLetAIPick = useCallback(() => {
+    if (!pendingAIPick || !boardData) return;
+    const slot = currentOverall;
+    const teamIdx = snakeOrder[slot - 1] ?? 0;
+    const owner = owners[teamIdx];
+    const round = Math.ceil(slot / totalTeams);
+    const pick: DraftPick = {
+      round,
+      pick: (slot - 1) % totalTeams + 1,
+      overall: slot,
+      owner: owner?.ownerName ?? "AI",
+      player: pendingAIPick.player,
+    };
+    setPicks((prev) => [...prev, pick]);
+    setCurrentOverall(slot + 1);
+    setIsPaused(false);
+    setOverrideMode(false);
+    setOverrideQuery("");
+    setPendingAIPick(null);
+  }, [pendingAIPick, boardData, currentOverall, snakeOrder, owners, totalTeams]);
+
+  const handleOverridePick = useCallback((player: MergedPlayer) => {
+    const slot = currentOverall;
+    const teamIdx = snakeOrder[slot - 1] ?? 0;
+    const owner = owners[teamIdx];
+    const round = Math.ceil(slot / totalTeams);
+    const pick: DraftPick = {
+      round,
+      pick: (slot - 1) % totalTeams + 1,
+      overall: slot,
+      owner: owner?.ownerName ?? "AI",
+      player,
+      isOverride: true,
+    };
+    setPicks((prev) => [...prev, pick]);
+    setCurrentOverall(slot + 1);
+    setIsPaused(false);
+    setOverrideMode(false);
+    setOverrideQuery("");
+    setPendingAIPick(null);
+    toast.success(`Override: ${owner?.ownerName ?? "AI"} takes ${player.name}`);
+  }, [currentOverall, snakeOrder, owners, totalTeams]);
+
+  const overrideSearchResults = useMemo(() => {
+    if (!overrideQuery.trim() || overrideQuery.length < 2) return [];
+    const q = overrideQuery.toLowerCase();
+    return availablePlayers
+      .filter((p) => !keeperPlayerIds.has(p.fpId) && p.name.toLowerCase().includes(q))
+      .slice(0, 12);
+  }, [availablePlayers, overrideQuery, keeperPlayerIds]);
+
   const handleAutoAdvance = useCallback(() => {
-    if (isRodsTurn || draftComplete || !boardData) return;
+    if (isRodsTurn || draftComplete || !boardData || isPaused) return;
     let slot = currentOverall;
     while (slot <= totalTeams * TOTAL_ROUNDS) {
       const alreadyFilled = picks.some(p => p.overall === slot);
@@ -397,10 +489,10 @@ export default function MockDraftSimulator() {
       return;
     }
     setCurrentOverall(slot);
-  }, [isRodsTurn, draftComplete, boardData, currentOverall, picks, snakeOrder, rodSlotIndex, makeAIPick, totalTeams]);
+  }, [isRodsTurn, draftComplete, boardData, currentOverall, picks, snakeOrder, rodSlotIndex, makeAIPick, totalTeams, isPaused]);
 
   const handleAutoDraftToMyPick = useCallback(() => {
-    if (!boardData || draftComplete) return;
+    if (!boardData || draftComplete || isPaused) return;
     setIsAutoRunning(true);
     autoRunRef.current = true;
     let slot = currentOverall;
@@ -425,7 +517,7 @@ export default function MockDraftSimulator() {
   }, [boardData, draftComplete, currentOverall, picks, snakeOrder, rodSlotIndex, makeAIPick, totalTeams]);
 
   const handleDraftAllRemaining = useCallback(() => {
-    if (!boardData || draftComplete) return;
+    if (!boardData || draftComplete || isPaused) return;
     setIsAutoRunning(true);
     let slot = currentOverall;
     let currentPicksList = [...picks];
@@ -472,7 +564,12 @@ export default function MockDraftSimulator() {
     setIsAutoRunning(false);
     setExpandedTeam(null);
     autoRunRef.current = false;
+    wasAutoRunningRef.current = false;
     setSavedDraftId(null);
+    setIsPaused(false);
+    setOverrideMode(false);
+    setOverrideQuery("");
+    setPendingAIPick(null);
     initializedRef.current = false;
   }, []);
 
@@ -805,16 +902,99 @@ export default function MockDraftSimulator() {
                   )}
                 </div>
                 {!isRodsTurn && (
-                  <div className="flex gap-2 flex-wrap">
-                    <Button size="sm" variant="outline" onClick={handleAutoAdvance} disabled={isAutoRunning} className="gap-1 text-xs">
-                      <ChevronDown className="w-3 h-3" /> Next Pick
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={handleAutoDraftToMyPick} disabled={isAutoRunning} className="gap-1 text-xs">
-                      <FastForward className="w-3 h-3" /> To My Pick
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={handleDraftAllRemaining} disabled={isAutoRunning} className="gap-1 text-xs">
-                      <Zap className="w-3 h-3" /> Finish Draft
-                    </Button>
+                  <div className="space-y-2">
+                    {/* Pause/Override intercept panel */}
+                    {isPaused && (
+                      <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span className="text-xs font-semibold text-amber-300">PAUSED — {owners[currentPickTeamIdx]?.ownerName ?? "AI"}&apos;s pick</span>
+                        </div>
+                        {pendingAIPick && !overrideMode && (
+                          <div className="flex items-center gap-2 px-2 py-1.5 rounded bg-slate-800/60">
+                            <span className="text-xs text-muted-foreground shrink-0">AI would pick:</span>
+                            <Badge variant="outline" className={cn("text-[10px] px-1 py-0 h-4 shrink-0", POS_COLORS[pendingAIPick.player.position] ?? "")}>
+                              {pendingAIPick.player.position}
+                            </Badge>
+                            <span className="text-sm text-foreground truncate flex-1">{pendingAIPick.player.name}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">ECR #{pendingAIPick.player.ecrRank}</span>
+                          </div>
+                        )}
+                        {!overrideMode ? (
+                          <div className="flex gap-2 flex-wrap">
+                            <Button size="sm" onClick={handleLetAIPick} className="gap-1 text-xs bg-slate-700 hover:bg-slate-600 text-foreground">
+                              <PlayCircle className="w-3 h-3" /> Let AI Pick
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => { setOverrideMode(true); setOverrideQuery(""); }} className="gap-1 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/10">
+                              <Search className="w-3 h-3" /> Override Pick
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-amber-300 font-medium">Choose a player for {owners[currentPickTeamIdx]?.ownerName ?? "AI"}:</span>
+                              <button onClick={() => { setOverrideMode(false); setOverrideQuery(""); }} className="text-xs text-muted-foreground hover:text-foreground ml-auto">Cancel</button>
+                            </div>
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                              <Input
+                                placeholder="Search player to override…"
+                                value={overrideQuery}
+                                onChange={(e) => setOverrideQuery(e.target.value)}
+                                className="pl-9 h-8 text-xs bg-slate-800/50 border-slate-700"
+                                autoFocus
+                              />
+                            </div>
+                            <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                              {overrideSearchResults.map((p) => (
+                                <div
+                                  key={p.fpId}
+                                  className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-slate-700 transition-colors"
+                                  onClick={() => handleOverridePick(p)}
+                                >
+                                  <Badge variant="outline" className={cn("text-[10px] px-1 py-0 h-4 shrink-0", POS_COLORS[p.position] ?? "")}>
+                                    {p.position}
+                                  </Badge>
+                                  <span className="text-sm text-foreground truncate flex-1">{p.name}</span>
+                                  <span className="text-xs text-muted-foreground shrink-0">{p.team}</span>
+                                  <span className="text-xs text-muted-foreground shrink-0">#{p.ecrRank}</span>
+                                </div>
+                              ))}
+                              {overrideQuery.length >= 2 && overrideSearchResults.length === 0 && (
+                                <p className="text-xs text-muted-foreground text-center py-2">No players found</p>
+                              )}
+                              {overrideQuery.length < 2 && (
+                                <p className="text-xs text-muted-foreground text-center py-2">Type at least 2 characters to search</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* Normal AI controls */}
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleTogglePause}
+                        disabled={isAutoRunning}
+                        className={cn(
+                          "gap-1 text-xs",
+                          isPaused ? "border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/15" : "border-slate-600"
+                        )}
+                      >
+                        {isPaused ? <><PlayCircle className="w-3 h-3" /> Resume</> : <><Pause className="w-3 h-3" /> Pause</>}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleAutoAdvance} disabled={isAutoRunning || isPaused} className="gap-1 text-xs">
+                        <ChevronDown className="w-3 h-3" /> Next Pick
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleAutoDraftToMyPick} disabled={isAutoRunning || isPaused} className="gap-1 text-xs">
+                        <FastForward className="w-3 h-3" /> To My Pick
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleDraftAllRemaining} disabled={isAutoRunning || isPaused} className="gap-1 text-xs">
+                        <Zap className="w-3 h-3" /> Finish Draft
+                      </Button>
+                    </div>
                   </div>
                 )}
                 {rodPicks.length > 0 && (
