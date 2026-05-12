@@ -28,7 +28,6 @@ import {
   fetchEspnViews, hasCookies,
 } from "./espnService";
 import { getCachedView, upsertCachedView } from "./db";
-import { buildManagerRawData } from "./dnaRouter";
 import { memCache } from "./memCache";
 import { calcManagerDNA, type DraftPickRecord, type ManagerRawData } from "./leagueDNA";
 
@@ -139,35 +138,12 @@ export const weeklyAssessmentRouter = router({
         teamNameMap[t.teamId as number] = (t.teamName as string) || "Unknown";
       }
 
-      // Resolve ESPN memberId for this teamId from the current season's raw data
-      const rawTeams = (data.teams as Record<string, unknown>[]) || [];
-      const targetRawTeam = rawTeams.find((t) => (t.id as number) === input.teamId);
-      const targetMemberId: string = (targetRawTeam?.primaryOwner as string) ||
-        ((targetRawTeam?.owners as string[])?.[0] ?? String(input.teamId));
-
-      // Load real career data from all cached seasons
-      let managerRawData: ManagerRawData;
-      try {
-        const allManagers = await buildManagerRawData();
-        const careerData = allManagers.find((m) => m.memberId === targetMemberId);
-        if (careerData) {
-          managerRawData = careerData;
-        } else {
-          managerRawData = {
-            memberId: targetMemberId,
-            ownerName: ownerMap[input.teamId] || "Unknown",
-            seasonRecords: [], txnSeasons: [], draftPicks: [],
-            h2hVsRod: { wins: 0, losses: 0 }, currentSeason: null,
-          };
-        }
-      } catch (_) {
-        managerRawData = {
-          memberId: targetMemberId,
-          ownerName: ownerMap[input.teamId] || "Unknown",
-          seasonRecords: [], txnSeasons: [], draftPicks: [],
-          h2hVsRod: { wins: 0, losses: 0 }, currentSeason: null,
-        };
-      }
+      const managerRawData: ManagerRawData = {
+        memberId: String(input.teamId),
+        ownerName: ownerMap[input.teamId] || "Unknown",
+        seasonRecords: [], txnSeasons: [], draftPicks: [],
+        h2hVsRod: { wins: 0, losses: 0 }, currentSeason: null,
+      };
       const dna = calcManagerDNA(managerRawData, []);
       const dnaMap = new Map([[input.teamId, dna]]);
 
@@ -186,133 +162,7 @@ export const weeklyAssessmentRouter = router({
         teamNameMap,
       };
 
-      const assessment = await buildTeamAssessment(input.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId);
-
-      // ── Extension-compatible adapter ─────────────────────────────────────────
-      // The Chrome extension (v1.2.1+) expects specific field names that differ
-      // from the internal assessment schema. Map them here so the extension
-      // renders the full DNA panel with all details.
-      const ARCHETYPE_KEY_MAP: Record<string, string> = {
-        "Dealmaker":          "AGGRESSIVE_TRADER",
-        "Waiver Grinder":     "WAIVER_HAWK",
-        "Trade Shark":        "AGGRESSIVE_TRADER",
-        "Set & Forget":       "DRAFT_AND_HOLD",
-        "Positional Fanatic": "ANALYTICS_DRIVEN",
-        "Emotional Trader":   "EMOTIONAL_REACTOR",
-        "Balanced Manager":   "BALANCED_OPERATOR",
-      };
-      const archetypeKey = ARCHETYPE_KEY_MAP[assessment.gmArchetype] || "BALANCED_OPERATOR";
-
-      // Compute rosterHealth from starters array
-      const injuredStatuses = new Set(["OUT", "DOUBTFUL", "QUESTIONABLE", "IR", "INJURED_RESERVE"]);
-      const injuredCount = assessment.starters.filter(
-        (p) => injuredStatuses.has((p.injuryStatus || "").toUpperCase())
-      ).length;
-      // byeCount: players on bye have projectedPoints === 0 and are starters
-      const byeCount = assessment.starters.filter(
-        (p) => p.projectedPoints === 0 && (p.injuryStatus || "").toUpperCase() === "ACTIVE"
-      ).length;
-
-      // ── Career stats from ManagerRawData ──────────────────────────────────────
-      const sortedSeasons = [...managerRawData.seasonRecords].sort((a, b) => b.season - a.season);
-      const totalCareerWins = sortedSeasons.reduce((s, r) => s + r.wins, 0);
-      const totalCareerLosses = sortedSeasons.reduce((s, r) => s + r.losses, 0);
-      const playoffSeasons = sortedSeasons.filter((r) => r.madePlayoffs);
-      const championSeasons = sortedSeasons.filter((r) => r.isChampion);
-      const totalCareerPF = sortedSeasons.reduce((s, r) => s + r.pf, 0);
-
-      // Trade history from txnSeasons
-      const totalTrades = managerRawData.txnSeasons.reduce((s, t) => s + t.trades, 0);
-      const totalAcquisitions = managerRawData.txnSeasons.reduce((s, t) => s + t.acquisitions, 0);
-      const avgTradesPerSeason = managerRawData.txnSeasons.length > 0
-        ? Math.round((totalTrades / managerRawData.txnSeasons.length) * 10) / 10
-        : 0;
-
-      // Draft grade: based on keeper usage and positional tendencies
-      const keeperPicks = managerRawData.draftPicks.filter((p) => p.keeper);
-      const draftGrade = dna.draft.draftStyleBadge || "Unknown";
-
-      // Keeper history: unique player positions kept per season
-      const keeperHistory = managerRawData.draftPicks
-        .filter((p) => p.keeper)
-        .reduce<Record<number, { season: number; count: number; positions: string[] }>>((acc, p) => {
-          if (!acc[p.season]) acc[p.season] = { season: p.season, count: 0, positions: [] };
-          acc[p.season].count++;
-          acc[p.season].positions.push(p.position);
-          return acc;
-        }, {});
-      const keeperHistoryArr = Object.values(keeperHistory).sort((a, b) => b.season - a.season).slice(0, 5);
-
-      return {
-        ...assessment,
-        // Extension-compatible fields
-        dna: {
-          archetype: archetypeKey,
-          archetypeLabel: assessment.gmArchetype,
-          archetypeReason: `Based on ${managerRawData.seasonRecords.length} season${managerRawData.seasonRecords.length !== 1 ? "s" : ""} of data`,
-          seasonsAnalyzed: managerRawData.seasonRecords.length,
-          exploitabilityScore: dna.exploitabilityScore,
-          exploitabilityLabel: dna.exploitabilityLabel,
-          dnaSummary: dna.dnaSummary,
-          // Trade DNA
-          tradeFrequency: dna.trade.tradeFrequency,
-          avgTradesPerSeason,
-          lossTradeRatio: dna.trade.lossTradeRatio,
-          h2hVsRod: managerRawData.h2hVsRod,
-          // Waiver DNA
-          waiverAggression: dna.waiver.waiverAggression,
-          avgAcquisitionsPerSeason: dna.waiver.avgAcquisitionsPerSeason,
-          // Draft DNA
-          draftGrade,
-          draftStyleBadge: dna.draft.draftStyleBadge,
-          draftBiasVsLeague: dna.draft.biasVsLeague,
-          // Tilt
-          tiltScore: dna.tilt.tiltScore,
-          tiltLabel: dna.tilt.tiltLabel,
-        },
-        opportunities: assessment.rodOpportunities.map((op) => ({
-          type: op.type,
-          description: op.action,
-          urgency: op.urgency,
-        })),
-        rosterHealth: {
-          injuredCount,
-          byeCount,
-          starterCount: assessment.starters.length,
-        },
-        playoffOdds: assessment.playoffProbability,
-        record: { wins: assessment.wins, losses: assessment.losses },
-        briefing: assessment.aiGMBriefing,
-        // Career stats
-        career: {
-          seasonsPlayed: sortedSeasons.length,
-          totalWins: totalCareerWins,
-          totalLosses: totalCareerLosses,
-          winPct: (totalCareerWins + totalCareerLosses) > 0
-            ? Math.round((totalCareerWins / (totalCareerWins + totalCareerLosses)) * 1000) / 10
-            : 0,
-          totalPF: Math.round(totalCareerPF),
-          playoffAppearances: playoffSeasons.length,
-          championships: championSeasons.length,
-          totalTrades,
-          totalAcquisitions,
-          avgTradesPerSeason,
-          keeperPicksTotal: keeperPicks.length,
-          h2hVsRod: managerRawData.h2hVsRod,
-        },
-        // Season-by-season breakdown (most recent 8 seasons)
-        seasonHistory: sortedSeasons.slice(0, 8).map((r) => ({
-          season: r.season,
-          wins: r.wins,
-          losses: r.losses,
-          pf: Math.round(r.pf),
-          rank: r.rank,
-          playoffs: r.madePlayoffs,
-          champion: r.isChampion,
-        })),
-        // Keeper history (most recent 5 seasons)
-        keeperHistory: keeperHistoryArr,
-      };
+      return buildTeamAssessment(input.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId);
     }),
 
   /**
