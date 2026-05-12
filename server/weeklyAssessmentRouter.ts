@@ -25,9 +25,8 @@ import {
 import {
   normalizeTeams, normalizeRosters, normalizeMatchups,
   normalizeTransactions, normalizeSettings,
-  fetchEspnViews, hasCookies,
 } from "./espnService";
-import { getCachedView, upsertCachedView } from "./db";
+import { getCachedView } from "./db";
 import { memCache } from "./memCache";
 import { calcManagerDNA, type DraftPickRecord, type ManagerRawData } from "./leagueDNA";
 
@@ -112,24 +111,10 @@ export const weeklyAssessmentRouter = router({
       season: z.number().default(2025),
     }))
     .query(async ({ input }) => {
-      // Live-first: try ESPN API directly; fall back to DB cache if unavailable
-      let rawData: Record<string, unknown> | null = null;
-      if (hasCookies()) {
-        try {
-          const liveData = await fetchEspnViews(input.season);
-          if (liveData && Object.keys(liveData).length > 0) {
-            rawData = liveData;
-            upsertCachedView(input.season, "combined", liveData).catch(() => {});
-          }
-        } catch (_) { /* fall through */ }
-      }
-      if (!rawData) {
-        const cached = await getCachedView(input.season, "combined");
-        if (cached) rawData = cached.payload as Record<string, unknown>;
-      }
-      if (!rawData) throw new TRPCError({ code: "NOT_FOUND", message: `No data for the ${input.season} season. Run a Data Center refresh first.` });
+      const cached = await getCachedView(input.season, "combined");
+      if (!cached) throw new TRPCError({ code: "NOT_FOUND", message: "No data for this season." });
 
-      const data = rawData;
+      const data = cached.payload as Record<string, unknown>;
       const teams = normalizeTeams(data);
       const ownerMap: Record<number, string> = {};
       const teamNameMap: Record<number, string> = {};
@@ -185,38 +170,14 @@ export const weeklyAssessmentRouter = router({
     .input(z.object({ season: z.number().default(2025) }))
     .query(({ input }) => {
       return memCache(`leaguePulse:${input.season}`, 5 * 60_000, async () => {
-      // Live-first: try ESPN API directly; fall back to DB cache if unavailable
-      let data: Record<string, unknown> | null = null;
-      if (hasCookies()) {
-        try {
-          const liveData = await fetchEspnViews(input.season);
-          if (liveData && Object.keys(liveData).length > 0) {
-            data = liveData;
-            // Opportunistically update DB cache in the background
-            upsertCachedView(input.season, "combined", liveData).catch(() => {});
-          }
-        } catch (_) {
-          // ESPN fetch failed — fall through to DB cache
-        }
-      }
-      if (!data) {
-        const cached = await getCachedView(input.season, "combined");
-        if (cached) data = cached.payload as Record<string, unknown>;
-      }
-      // If no data at all, return an empty offseason placeholder instead of 404
-      if (!data) {
-        return {
-          week: 0, isSeasonComplete: true, season: input.season,
-          teams: [], currentMatchups: {}, noData: true,
-          message: `No data available for the ${input.season} season yet. Run a Data Center refresh to sync from ESPN.`,
-        };
-      }
+      const cached = await getCachedView(input.season, "combined");
+      if (!cached) throw new TRPCError({ code: "NOT_FOUND", message: "No data." });
 
-      const data2 = data;
-      const teams = normalizeTeams(data2);
-      const matchups = normalizeMatchups(data2);
-      const transactions = normalizeTransactions(data2) as unknown[];
-      const settings = normalizeSettings(data2);
+      const data = cached.payload as Record<string, unknown>;
+      const teams = normalizeTeams(data);
+      const matchups = normalizeMatchups(data);
+      const transactions = normalizeTransactions(data) as unknown[];
+      const settings = normalizeSettings(data);
       const currentWeek = (settings.currentMatchupPeriod as number) || 1;
       // Detect end-of-season: ESPN regular season is 14 weeks; playoffs are 15-17.
       // If currentMatchupPeriod >= 14 OR the season year < current calendar year, treat as completed.
@@ -318,27 +279,16 @@ export const weeklyAssessmentRouter = router({
    * Returns a jobId immediately; poll batchStatus with the jobId for progress.
    * The job runs asynchronously in the background (fire-and-forget Promise).
    */
-   batchRunAssessment: publicProcedure
+  batchRunAssessment: publicProcedure
     .input(z.object({ season: z.number().default(2025) }))
     .mutation(async ({ input }) => {
       pruneBatchJobs();
-      // Live-first: try ESPN API directly; fall back to DB cache if unavailable
-      let batchData: Record<string, unknown> | null = null;
-      if (hasCookies()) {
-        try {
-          const liveData = await fetchEspnViews(input.season);
-          if (liveData && Object.keys(liveData).length > 0) {
-            batchData = liveData;
-            upsertCachedView(input.season, "combined", liveData).catch(() => {});
-          }
-        } catch (_) { /* fall through */ }
-      }
-      if (!batchData) {
-        const cached = await getCachedView(input.season, "combined");
-        if (cached) batchData = cached.payload as Record<string, unknown>;
-      }
-      if (!batchData) throw new TRPCError({ code: "NOT_FOUND", message: `No ESPN data for the ${input.season} season. Run a Data Center refresh first.` });
-      const data = batchData;
+
+      // Get team list from cached data
+      const cached = await getCachedView(input.season, "combined");
+      if (!cached) throw new TRPCError({ code: "NOT_FOUND", message: "No ESPN data cached for this season. Run a data refresh first." });
+
+      const data = cached.payload as Record<string, unknown>;
       const teams = normalizeTeams(data);
       const ownerMap: Record<number, string> = {};
       for (const t of teams) {

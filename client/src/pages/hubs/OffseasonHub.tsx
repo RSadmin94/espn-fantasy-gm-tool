@@ -6,11 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
-import { toast } from "sonner";
 import {
   Trophy, AlertTriangle, TrendingUp, TrendingDown, Minus,
   Brain, Target, ChevronDown, ChevronUp, Loader2, Sparkles,
-  Calendar, Users, BarChart3, RefreshCw,
+  Calendar, Users, BarChart3,
 } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -548,36 +547,13 @@ function DataSourceBanner({ completedSeason, planningYear }: { completedSeason?:
 // ─── Main Hub ─────────────────────────────────────────────────────────────────
 
 export default function OffseasonHub() {
-  const utils = trpc.useUtils();
-
   // Pull season metadata from the keeper query (lightest query, always runs first)
-  const { data: keeperMeta, dataUpdatedAt } = trpc.offseason.keeperRecommendations.useQuery(undefined, {
+  const { data: keeperMeta } = trpc.offseason.keeperRecommendations.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
   const completedSeason = (keeperMeta as { completedSeason?: number })?.completedSeason;
   const planningYear = (keeperMeta as { planningYear?: number })?.planningYear;
-
-  const refreshMutation = trpc.offseason.refresh.useMutation({
-    onSuccess: async (result) => {
-      // Invalidate all offseason queries so they re-fetch with fresh data
-      await utils.offseason.keeperRecommendations.invalidate();
-      await utils.offseason.draftBoard.invalidate();
-      const status = result.status === "success" ? "success" : "partial";
-      if (status === "success") {
-        toast.success("ESPN data refreshed", { description: "Keeper recommendations and draft order updated." });
-      } else {
-        toast.warning("Partial refresh", { description: "Some ESPN views may be unavailable. Data updated where possible." });
-      }
-    },
-    onError: (err) => {
-      toast.error("Refresh failed", { description: err.message || "Could not reach ESPN. Try again in a moment." });
-    },
-  });
-
-  const lastSyncedLabel = dataUpdatedAt
-    ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : null;
 
   return (
     <AppLayout
@@ -585,25 +561,6 @@ export default function OffseasonHub() {
       subtitle={planningYear
         ? `${planningYear} keeper recommendations, draft order analysis, and manager behavior predictions`
         : "Offseason keeper recommendations, draft order analysis, and manager behavior predictions"}
-      headerRight={
-        <div className="flex items-center gap-2">
-          {lastSyncedLabel && (
-            <span className="text-xs text-muted-foreground hidden sm:block">Synced {lastSyncedLabel}</span>
-          )}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => refreshMutation.mutate()}
-            disabled={refreshMutation.isPending}
-            className="gap-1.5 text-xs"
-          >
-            {refreshMutation.isPending
-              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              : <RefreshCw className="w-3.5 h-3.5" />}
-            {refreshMutation.isPending ? "Syncing ESPN…" : "Sync ESPN"}
-          </Button>
-        </div>
-      }
     >
       <DataSourceBanner completedSeason={completedSeason} planningYear={planningYear} />
 

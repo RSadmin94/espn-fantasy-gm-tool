@@ -883,10 +883,10 @@
 - [x] Run all tests and save checkpoint — 467/467 passing, 0 TS errors
 
 ## FEATURE: Manual ESPN Refresh Button on Offseason Intel Page
-- [x] Add offseason.refresh tRPC mutation that re-fetches ESPN league identity (2026 team names + draft order) and invalidates keeper recommendation cache
-- [x] Add refresh button to OffseasonHub header with loading spinner, success toast, and error state
-- [x] Show last-synced timestamp next to the refresh button so user knows data freshness
-- [x] Run all tests and save checkpoint — 467/467 passing, 0 TS errors
+- [ ] Add offseason.refresh tRPC mutation that re-fetches ESPN league identity (2026 team names + draft order) and invalidates keeper recommendation cache
+- [ ] Add refresh button to OffseasonHub header with loading spinner, success toast, and error state
+- [ ] Show last-synced timestamp next to the refresh button so user knows data freshness
+- [ ] Run all tests and save checkpoint
 
 ## BUG: Owner DNA + Extension showing in-season 2025 data — FIXED
 - [x] Audit: root cause is weeklyAssessmentService.ts AI prompt hardcoded "Week X" framing; extension popup.js/inject.js had no isSeasonComplete branch
@@ -896,14 +896,3 @@
 - [x] Fix extension background.js: DEFAULT_SEASON now auto-detects (currentYear-1) instead of hardcoded 2025
 - [x] Extension repackaged as v1.3.0
 - [x] Run all tests and save checkpoint — 467/467 passing, 0 TS errors
-
-## BUG: Extension 404 when switching to season 2026
-- [x] leaguePulse returns 404/error when called with season=2026 (no cached data yet) — FIXED: now returns empty offseason placeholder
-- [x] Fix server: return graceful offseason placeholder instead of throwing NOT_FOUND
-- [x] Run tests and save checkpoint — 467/467 passing, 0 TS errors
-
-## FEATURE: Extension pulls live ESPN data directly (not DB cache)
-- [x] leaguePulse: fetch live from ESPN first (hasCookies guard), DB cache as fallback, empty placeholder instead of 404 when no data
-- [x] teamBrief: same live-first pattern with DB cache fallback
-- [x] batchRunAssessment: same live-first pattern
-- [x] Run tests and save checkpoint — 467/467 passing, 0 TS errors
