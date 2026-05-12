@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { memCache } from "./memCache";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -69,9 +70,10 @@ const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
 const ALL_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026];
 
 async function getSeasonData(season: number) {
-  const cached = await getCachedView(season, "combined");
-  if (cached) return cached.payload as Record<string, unknown>;
-  return null;
+  return memCache(`seasonData:${season}`, 10 * 60_000, async () => {
+    const cached = await getCachedView(season, "combined");
+    return cached ? (cached.payload as Record<string, unknown>) : null;
+  });
 }
 
 export const appRouter = router({
@@ -191,6 +193,8 @@ export const appRouter = router({
             results[season] = { status: "failed", error: msg };
           }
         }
+        // Bust all in-memory caches so next page load recomputes with fresh data
+        memCache.invalidateAll();
         return results;
       }),
 
@@ -1017,7 +1021,8 @@ export const appRouter = router({
     };
   }),
 
-  ownerCareerStats: publicProcedure.query(async () => {
+  ownerCareerStats: publicProcedure.query(() => {
+    return memCache("ownerCareerStats", 10 * 60_000, async () => {
     const cachedSeasons = await getAllCachedSeasons();
 
     // ── Per-owner aggregated stats ──────────────────────────────────────────
@@ -1335,6 +1340,7 @@ export const appRouter = router({
       seasons: cachedSeasons,
       totalSeasons: cachedSeasons.length,
     };
+    }); // end memCache
   }),
 
   ownerPredictions: publicProcedure
@@ -1629,7 +1635,8 @@ Respond with JSON in this exact format:
 
   // ── League Draft Tendencies ──────────────────────────────────────────────
   // Aggregates all 14 managers' draft picks by round and position from 2018-2025
-  leagueDraftTendencies: publicProcedure.query(async () => {
+  leagueDraftTendencies: publicProcedure.query(() => {
+    return memCache("leagueDraftTendencies", 10 * 60_000, async () => {
     const POS_MAP: Record<number, string> = {
       1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST", 17: "D/ST",
     };
@@ -1860,9 +1867,9 @@ Respond with JSON in this exact format:
       }
     }
 
-    return { owners, leagueByRound, seasons: cachedSeasons };
+     return { owners, leagueByRound, seasons: cachedSeasons };
+    }); // end memCache
   }),
-
   // ── Pick Value Calculator ─────────────────────────────────────────────────
   // 14-team PPR calibrated pick value chart (210 picks, 15 rounds × 14 teams)
   // Formula: value(overall) = 3000 * e^(-0.028 * (overall - 1))

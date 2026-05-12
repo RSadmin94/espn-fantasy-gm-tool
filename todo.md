@@ -732,14 +732,14 @@
 
 ## Offseason Intelligence Layer (2026 Keeper + Draft Focus)
 
-- [ ] Build keeperRecommendationEngine: score each eligible player per team using DNA archetype fit, round gap value, positional need, age/trajectory
-- [ ] Add keeperRecommendations tRPC procedure: returns top keeper pick + alternatives per team with reasoning
-- [ ] Build draftStrategyEngine: combine keeper decisions with 2026 draft order to project available talent pool and per-team strategy
-- [ ] Add draftStrategy2026 tRPC procedure: per-team draft strategy based on DNA, keepers, pick position, positional needs
-- [ ] Build OffseasonIntelligence.tsx hub page: keeper recommendations per team (DNA-driven), 2026 draft board, league-wide keeper impact summary
-- [ ] Add /offseason route to App.tsx and nav entry
-- [ ] Update Weekly Intel hub to show offseason banner (2025 season complete, link to offseason hub)
-- [ ] 0 TypeScript errors, all tests passing
+- [x] Build keeperRecommendationEngine: score each eligible player per team using DNA archetype fit, round gap value, positional need, age/trajectory
+- [x] Add keeperRecommendations tRPC procedure: returns top keeper pick + alternatives per team with reasoning
+- [x] Build draftStrategyEngine: combine keeper decisions with 2026 draft order to project available talent pool and per-team strategy
+- [x] Add draftStrategy2026 tRPC procedure: per-team draft strategy based on DNA, keepers, pick position, positional needs
+- [x] Build OffseasonIntelligence.tsx hub page: keeper recommendations per team (DNA-driven), 2026 draft board, league-wide keeper impact summary
+- [x] Add /offseason route to App.tsx and nav entry
+- [x] Update Weekly Intel hub to show offseason banner (2025 season complete, link to offseason hub)
+- [x] 0 TypeScript errors, all tests passing
 
 ## NEW: Offseason Intelligence Hub (2026 Keeper + Draft)
 
@@ -757,13 +757,13 @@
 
 ## FIX: Mock Draft Simulator
 
-- [ ] Add mockDraft.setup tRPC endpoint: returns all league owners with 2026 draft slot, recommended keeper (from offseason engine), DNA archetype, and historical tendencies merged
-- [ ] Fix AI pick logic: use DNA archetype modifiers on top of historical byRound weights (Gambler=noise, Value Hunter=ECR surplus, RB-First=RB weight boost, etc.)
-- [ ] Inject keeper picks as locked slots at the correct round before the draft starts — remove from pool, credit to owner
-- [ ] Setup screen: show all 14 owners as editable rows (draft slot, keeper dropdown, DNA badge) — all manually overridable
-- [ ] Fix team count: always match actual league size (dynamic, not hardcoded 14)
-- [ ] TypeScript: 0 errors after changes
-- [ ] Tests: all passing after changes
+- [x] Add mockDraft.setup tRPC endpoint: returns all league owners with 2026 draft slot, recommended keeper (from offseason engine), DNA archetype, and historical tendencies merged
+- [x] Fix AI pick logic: use DNA archetype modifiers on top of historical byRound weights (Gambler=noise, Value Hunter=ECR surplus, RB-First=RB weight boost, etc.)
+- [x] Inject keeper picks as locked slots at the correct round before the draft starts — remove from pool, credit to owner
+- [x] Setup screen: show all 14 owners as editable rows (draft slot, keeper dropdown, DNA badge) — all manually overridable
+- [x] Fix team count: always match actual league size (dynamic, not hardcoded 14)
+- [x] TypeScript: 0 errors after changes
+- [x] Tests: all passing after changes
 
 ## FIX: Mock Draft Pause/Override
 - [x] Add isPaused state — when paused, auto-advance and "To My Pick" stop before each AI pick

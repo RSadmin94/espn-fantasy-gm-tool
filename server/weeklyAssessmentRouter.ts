@@ -27,6 +27,7 @@ import {
   normalizeTransactions, normalizeSettings,
 } from "./espnService";
 import { getCachedView } from "./db";
+import { memCache } from "./memCache";
 import { calcManagerDNA, type DraftPickRecord, type ManagerRawData } from "./leagueDNA";
 
 // ─── Cache for expensive full reports ────────────────────────────────────────
@@ -167,7 +168,8 @@ export const weeklyAssessmentRouter = router({
    */
   leaguePulse: publicProcedure
     .input(z.object({ season: z.number().default(2025) }))
-    .query(async ({ input }) => {
+    .query(({ input }) => {
+      return memCache(`leaguePulse:${input.season}`, 5 * 60_000, async () => {
       const cached = await getCachedView(input.season, "combined");
       if (!cached) throw new TRPCError({ code: "NOT_FOUND", message: "No data." });
 
@@ -248,6 +250,7 @@ export const weeklyAssessmentRouter = router({
         }),
         currentMatchups: currentMatchupMap,
       };
+      }); // end memCache
     }),
 
   /**
