@@ -754,3 +754,13 @@
 - [x] Add /offseason route in App.tsx
 - [x] TypeScript: 0 errors
 - [x] Tests: 293/293 passing
+
+## FIX: Mock Draft Simulator
+
+- [ ] Add mockDraft.setup tRPC endpoint: returns all league owners with 2026 draft slot, recommended keeper (from offseason engine), DNA archetype, and historical tendencies merged
+- [ ] Fix AI pick logic: use DNA archetype modifiers on top of historical byRound weights (Gambler=noise, Value Hunter=ECR surplus, RB-First=RB weight boost, etc.)
+- [ ] Inject keeper picks as locked slots at the correct round before the draft starts — remove from pool, credit to owner
+- [ ] Setup screen: show all 14 owners as editable rows (draft slot, keeper dropdown, DNA badge) — all manually overridable
+- [ ] Fix team count: always match actual league size (dynamic, not hardcoded 14)
+- [ ] TypeScript: 0 errors after changes
+- [ ] Tests: all passing after changes

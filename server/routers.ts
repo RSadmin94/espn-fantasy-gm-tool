@@ -4145,6 +4145,134 @@ Be concise, data-driven, and specific. Reference actual team names and player na
 
   // ─── Draft Board (FantasyPros ECR + ADP + PFR stats) ─────────────────────────
   draftBoard: router({
+    /**
+     * Mock draft setup — returns all league owners with DNA, keeper recs, and draft order.
+     * Used by MockDraftSimulator to pre-populate the setup screen.
+     */
+    mockSetup: publicProcedure.query(async () => {
+      const { calcLeagueDNA } = await import("./leagueDNA");
+      const { buildManagerRawData } = await import("./dnaRouter");
+      const { buildKeeperRecommendations } = await import("./keeperRecommendationEngine");
+      const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
+      if (cachedSeasons.length === 0) return { owners: [], totalTeams: 0 };
+      const latestSeason = cachedSeasons[cachedSeasons.length - 1];
+      const data2025 = await getSeasonData(latestSeason);
+      if (!data2025) return { owners: [], totalTeams: 0 };
+      // 1. Draft order
+      const draftOrderRaw = normalizeDraftOrder(data2025);
+      const pickOrder = draftOrderRaw?.pickOrder ?? [];
+      const totalTeams = pickOrder.length || 14;
+      // 2. DNA profiles
+      const managers = await buildManagerRawData();
+      const dnaProfiles = calcLeagueDNA(managers);
+      // 3. Keeper eligibility
+      const keepers2025: Record<number, Array<{ playerId: number; playerName: string; position: string; roundId: number }>> = {};
+      const data2025picks = normalizeDraftPicks(data2025);
+      for (const p of data2025picks) {
+        if (!p.keeper) continue;
+        const tid = p.teamId as number;
+        const pid = p.playerId as number;
+        if (!keepers2025[tid]) keepers2025[tid] = [];
+        keepers2025[tid].push({
+          playerId: pid,
+          playerName: (p.playerName as string) || `Player#${pid}`,
+          position: (p.position as string) || "?",
+          roundId: p.roundId as number,
+        });
+      }
+      const prevSeason = latestSeason - 1;
+      const keepers2024: Record<number, Record<number, number>> = {};
+      if (cachedSeasons.includes(prevSeason)) {
+        const data2024 = await getSeasonData(prevSeason);
+        if (data2024) {
+          const picks2024 = normalizeDraftPicks(data2024);
+          for (const p of picks2024) {
+            if (!p.keeper) continue;
+            const tid = p.teamId as number;
+            const pid = p.playerId as number;
+            if (!keepers2024[tid]) keepers2024[tid] = {};
+            keepers2024[tid][pid] = p.roundId as number;
+          }
+        }
+      }
+      const teams2025 = normalizeTeams(data2025);
+      const adpRoundMap: Record<string, number> = { QB: 6, RB: 3, WR: 3, TE: 5, K: 14, DEF: 13 };
+      const eligibilityData = teams2025.map(team => {
+        const tid = team.teamId as number;
+        const tname = (team.teamName as string) || `Team ${tid}`;
+        const my2025Keepers = keepers2025[tid] || [];
+        const my2024Keepers = keepers2024[tid] || {};
+        const players = my2025Keepers.map(k => {
+          const keptIn2024 = my2024Keepers[k.playerId] !== undefined;
+          const isIneligible = keptIn2024;
+          const roundCost2026 = isIneligible ? null : k.roundId - 1;
+          const adp = adpRoundMap[k.position?.toUpperCase()] ?? 7;
+          const savings = roundCost2026 !== null ? adp - roundCost2026 : 0;
+          const valueTier = isIneligible ? "ineligible" : savings >= 4 ? "elite" : savings >= 2 ? "good" : savings >= 0 ? "fair" : "poor";
+          return {
+            playerId: k.playerId, playerName: k.playerName, position: k.position,
+            round2025: k.roundId, round2024: keptIn2024 ? my2024Keepers[k.playerId] : null,
+            roundCost2026, consecutiveYears: keptIn2024 ? 2 : 1,
+            isIneligible, valueTier, valueLabel: isIneligible ? "Must Return" : valueTier,
+          };
+        });
+        return { teamId: tid, teamName: tname, players, ineligibleCount: players.filter(p => p.isIneligible).length, eligibleCount: players.filter(p => !p.isIneligible).length };
+      });
+      const draftOrderForEngine = pickOrder.map(p => ({
+        teamId: p.teamId,
+        teamName: p.name ?? `Team ${p.teamId}`,
+        ownerName: p.owners,
+        pickNumber: p.position,
+      }));
+      const keeperRecs = buildKeeperRecommendations(eligibilityData, dnaProfiles, draftOrderForEngine);
+      // 4. Merge into per-owner rows
+      const owners = pickOrder.map(slot => {
+        const tid = slot.teamId;
+        const ownerName = slot.owners || `Team ${tid}`;
+        const teamName = slot.name || `Team ${tid}`;
+        const dna = dnaProfiles.find(d =>
+          d.ownerName && ownerName.toLowerCase().includes(d.ownerName.toLowerCase().split(" ")[0].toLowerCase())
+        ) ?? null;
+        const rec = keeperRecs.find(r => r.teamId === tid) ?? null;
+        const isRod = teamName.toLowerCase().includes("str8") ||
+          teamName.toLowerCase().includes("rodzilla") ||
+          ownerName.toLowerCase().includes("rod");
+        return {
+          teamId: tid,
+          teamName,
+          ownerName,
+          draftSlot: slot.position,
+          isRod,
+          gmArchetype: dna?.gmArchetype ?? "Balanced Manager",
+          draftStyleBadge: dna?.draft.draftStyleBadge ?? "Balanced",
+          reachPositions: dna?.draft.reachPositions ?? [] as string[],
+          valuePositions: dna?.draft.valuePositions ?? [] as string[],
+          biasVsLeague: dna?.draft.biasVsLeague ?? {} as Record<string, number>,
+          round1Distribution: dna?.draft.round1Distribution ?? {} as Record<string, number>,
+          keeperRate: dna?.draft.keeperRate ?? 0,
+          tiltScore: dna?.tilt.tiltScore ?? 50,
+          exploitabilityScore: dna?.exploitabilityScore ?? 50,
+          recommendedKeeper: rec?.primaryRecommendation ? {
+            playerId: rec.primaryRecommendation.playerId,
+            playerName: rec.primaryRecommendation.playerName,
+            position: rec.primaryRecommendation.position,
+            roundCost: rec.primaryRecommendation.roundCost2026,
+            roundSavings: rec.primaryRecommendation.roundSavings,
+            valueTier: rec.primaryRecommendation.valueTier,
+          } : null,
+          allKeeperOptions: (rec?.allOptions ?? []).map(o => ({
+            playerId: o.playerId,
+            playerName: o.playerName,
+            position: o.position,
+            roundCost: o.roundCost2026,
+            roundSavings: o.roundSavings,
+            valueTier: o.valueTier,
+          })),
+          keeperPrediction: rec?.dnaPrediction.keeperBehavior ?? "",
+        };
+      });
+      return { owners, totalTeams };
+    }),
     /** Get the full merged draft board (ECR + ADP + PFR). Cached 6 hours. */
     getPlayers: publicProcedure
       .input(z.object({ forceRefresh: z.boolean().optional() }).optional())
