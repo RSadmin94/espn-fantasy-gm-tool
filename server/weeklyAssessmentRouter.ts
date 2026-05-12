@@ -213,6 +213,36 @@ export const weeklyAssessmentRouter = router({
         (p) => p.projectedPoints === 0 && (p.injuryStatus || "").toUpperCase() === "ACTIVE"
       ).length;
 
+      // ── Career stats from ManagerRawData ──────────────────────────────────────
+      const sortedSeasons = [...managerRawData.seasonRecords].sort((a, b) => b.season - a.season);
+      const totalCareerWins = sortedSeasons.reduce((s, r) => s + r.wins, 0);
+      const totalCareerLosses = sortedSeasons.reduce((s, r) => s + r.losses, 0);
+      const playoffSeasons = sortedSeasons.filter((r) => r.madePlayoffs);
+      const championSeasons = sortedSeasons.filter((r) => r.isChampion);
+      const totalCareerPF = sortedSeasons.reduce((s, r) => s + r.pf, 0);
+
+      // Trade history from txnSeasons
+      const totalTrades = managerRawData.txnSeasons.reduce((s, t) => s + t.trades, 0);
+      const totalAcquisitions = managerRawData.txnSeasons.reduce((s, t) => s + t.acquisitions, 0);
+      const avgTradesPerSeason = managerRawData.txnSeasons.length > 0
+        ? Math.round((totalTrades / managerRawData.txnSeasons.length) * 10) / 10
+        : 0;
+
+      // Draft grade: based on keeper usage and positional tendencies
+      const keeperPicks = managerRawData.draftPicks.filter((p) => p.keeper);
+      const draftGrade = dna.draft.draftStyleBadge || "Unknown";
+
+      // Keeper history: unique player positions kept per season
+      const keeperHistory = managerRawData.draftPicks
+        .filter((p) => p.keeper)
+        .reduce<Record<number, { season: number; count: number; positions: string[] }>>((acc, p) => {
+          if (!acc[p.season]) acc[p.season] = { season: p.season, count: 0, positions: [] };
+          acc[p.season].count++;
+          acc[p.season].positions.push(p.position);
+          return acc;
+        }, {});
+      const keeperHistoryArr = Object.values(keeperHistory).sort((a, b) => b.season - a.season).slice(0, 5);
+
       return {
         ...assessment,
         // Extension-compatible fields
@@ -220,6 +250,25 @@ export const weeklyAssessmentRouter = router({
           archetype: archetypeKey,
           archetypeLabel: assessment.gmArchetype,
           archetypeReason: `Based on ${managerRawData.seasonRecords.length} season${managerRawData.seasonRecords.length !== 1 ? "s" : ""} of data`,
+          seasonsAnalyzed: managerRawData.seasonRecords.length,
+          exploitabilityScore: dna.exploitabilityScore,
+          exploitabilityLabel: dna.exploitabilityLabel,
+          dnaSummary: dna.dnaSummary,
+          // Trade DNA
+          tradeFrequency: dna.trade.tradeFrequency,
+          avgTradesPerSeason,
+          lossTradeRatio: dna.trade.lossTradeRatio,
+          h2hVsRod: managerRawData.h2hVsRod,
+          // Waiver DNA
+          waiverAggression: dna.waiver.waiverAggression,
+          avgAcquisitionsPerSeason: dna.waiver.avgAcquisitionsPerSeason,
+          // Draft DNA
+          draftGrade,
+          draftStyleBadge: dna.draft.draftStyleBadge,
+          draftBiasVsLeague: dna.draft.biasVsLeague,
+          // Tilt
+          tiltScore: dna.tilt.tiltScore,
+          tiltLabel: dna.tilt.tiltLabel,
         },
         opportunities: assessment.rodOpportunities.map((op) => ({
           type: op.type,
@@ -234,6 +283,35 @@ export const weeklyAssessmentRouter = router({
         playoffOdds: assessment.playoffProbability,
         record: { wins: assessment.wins, losses: assessment.losses },
         briefing: assessment.aiGMBriefing,
+        // Career stats
+        career: {
+          seasonsPlayed: sortedSeasons.length,
+          totalWins: totalCareerWins,
+          totalLosses: totalCareerLosses,
+          winPct: (totalCareerWins + totalCareerLosses) > 0
+            ? Math.round((totalCareerWins / (totalCareerWins + totalCareerLosses)) * 1000) / 10
+            : 0,
+          totalPF: Math.round(totalCareerPF),
+          playoffAppearances: playoffSeasons.length,
+          championships: championSeasons.length,
+          totalTrades,
+          totalAcquisitions,
+          avgTradesPerSeason,
+          keeperPicksTotal: keeperPicks.length,
+          h2hVsRod: managerRawData.h2hVsRod,
+        },
+        // Season-by-season breakdown (most recent 8 seasons)
+        seasonHistory: sortedSeasons.slice(0, 8).map((r) => ({
+          season: r.season,
+          wins: r.wins,
+          losses: r.losses,
+          pf: Math.round(r.pf),
+          rank: r.rank,
+          playoffs: r.madePlayoffs,
+          champion: r.isChampion,
+        })),
+        // Keeper history (most recent 5 seasons)
+        keeperHistory: keeperHistoryArr,
       };
     }),
 

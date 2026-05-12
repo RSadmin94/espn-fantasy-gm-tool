@@ -917,9 +917,9 @@
 - [x] Repackaged as v1.3.1 and delivered
 
 ## BUG/FEATURE: DNA Profile Panel Too Sparse
-- [ ] Audit teamBrief server response — identify all data fields returned vs what buildTeamBriefHTML renders
-- [ ] Fix "Unknown" team name — extension not resolving teamId from ESPN page URL/nav
-- [ ] Enrich teamBrief server: return career record, playoff history, trade history, draft grade, keeper history, season-by-season breakdown
-- [ ] Rewrite buildTeamBriefHTML: render all rich sections (career stats table, playoff history, trade tendencies, draft grade, keeper history, GM briefing)
-- [ ] Remove in-season "Desperation" metric from completed season view
-- [ ] Run tests, save checkpoint, deliver v1.3.2
+- [x] Audit teamBrief server response — identify all data fields returned vs what buildTeamBriefHTML renders
+- [x] Fix "Unknown" team name — extension not resolving teamId from ESPN page URL/nav (resolved: teamName comes from normalizeTeams location+nickname)
+- [x] Enrich teamBrief server: return career record, playoff history, trade history, draft grade, keeper history, season-by-season breakdown
+- [x] Rewrite buildTeamBriefHTML: render all rich sections (career stats table, playoff history, trade tendencies, draft grade, keeper history, GM briefing)
+- [x] Remove in-season "Desperation" metric from completed season view (already handled in v1.3.0 isComplete check)
+- [x] Run tests, save checkpoint, deliver v1.3.2
