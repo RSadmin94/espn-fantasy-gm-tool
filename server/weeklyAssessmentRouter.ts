@@ -147,7 +147,51 @@ export const weeklyAssessmentRouter = router({
         teamNameMap,
       };
 
-      return buildTeamAssessment(input.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId);
+      const raw = await buildTeamAssessment(input.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId);
+
+      // Map plain-English gmArchetype to ARCHETYPE_COLORS key used by the extension
+      const ARCHETYPE_KEY_MAP: Record<string, string> = {
+        "Dealmaker": "AGGRESSIVE_TRADER",
+        "Trade Shark": "AGGRESSIVE_TRADER",
+        "Waiver Grinder": "WAIVER_HAWK",
+        "Waiver Hawk": "WAIVER_HAWK",
+        "Set & Forget": "DRAFT_AND_HOLD",
+        "Draft & Hold": "DRAFT_AND_HOLD",
+        "Balanced Manager": "BALANCED_OPERATOR",
+        "Opportunist": "OPPORTUNIST",
+        "Ice Cold": "ICE_COLD",
+      };
+      const archetypeKey = ARCHETYPE_KEY_MAP[raw.gmArchetype] ?? "BALANCED_OPERATOR";
+
+      // Compute rosterHealth from starters array
+      const injuredCount = raw.starters.filter((p: { injuryStatus: string }) =>
+        p.injuryStatus && p.injuryStatus !== "ACTIVE" && p.injuryStatus !== "NORMAL"
+      ).length;
+      const starterCount = raw.starters.length;
+
+      return {
+        ...raw,
+        // Extension-compatible adapter fields
+        dna: {
+          archetype: archetypeKey,
+          archetypeLabel: raw.gmArchetype,
+          archetypeReason: raw.tiltLabel ?? "",
+        },
+        opportunities: (raw.rodOpportunities ?? []).map((op: { type: string; action: string; urgency: string; reasoning: string }) => ({
+          type: op.type,
+          description: op.action,
+          urgency: op.urgency,
+          reasoning: op.reasoning,
+        })),
+        rosterHealth: {
+          injuredCount,
+          byeCount: 0,
+          starterCount,
+        },
+        playoffOdds: Math.round((raw.playoffProbability ?? 0) * 100),
+        record: { wins: raw.wins, losses: raw.losses },
+        briefing: raw.aiGMBriefing ?? "",
+      };
     }),
 
   /**
