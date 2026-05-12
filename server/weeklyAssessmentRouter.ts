@@ -28,6 +28,7 @@ import {
   fetchEspnViews, hasCookies,
 } from "./espnService";
 import { getCachedView, upsertCachedView } from "./db";
+import { buildManagerRawData } from "./dnaRouter";
 import { memCache } from "./memCache";
 import { calcManagerDNA, type DraftPickRecord, type ManagerRawData } from "./leagueDNA";
 
@@ -138,12 +139,35 @@ export const weeklyAssessmentRouter = router({
         teamNameMap[t.teamId as number] = (t.teamName as string) || "Unknown";
       }
 
-      const managerRawData: ManagerRawData = {
-        memberId: String(input.teamId),
-        ownerName: ownerMap[input.teamId] || "Unknown",
-        seasonRecords: [], txnSeasons: [], draftPicks: [],
-        h2hVsRod: { wins: 0, losses: 0 }, currentSeason: null,
-      };
+      // Resolve ESPN memberId for this teamId from the current season's raw data
+      const rawTeams = (data.teams as Record<string, unknown>[]) || [];
+      const targetRawTeam = rawTeams.find((t) => (t.id as number) === input.teamId);
+      const targetMemberId: string = (targetRawTeam?.primaryOwner as string) ||
+        ((targetRawTeam?.owners as string[])?.[0] ?? String(input.teamId));
+
+      // Load real career data from all cached seasons
+      let managerRawData: ManagerRawData;
+      try {
+        const allManagers = await buildManagerRawData();
+        const careerData = allManagers.find((m) => m.memberId === targetMemberId);
+        if (careerData) {
+          managerRawData = careerData;
+        } else {
+          managerRawData = {
+            memberId: targetMemberId,
+            ownerName: ownerMap[input.teamId] || "Unknown",
+            seasonRecords: [], txnSeasons: [], draftPicks: [],
+            h2hVsRod: { wins: 0, losses: 0 }, currentSeason: null,
+          };
+        }
+      } catch (_) {
+        managerRawData = {
+          memberId: targetMemberId,
+          ownerName: ownerMap[input.teamId] || "Unknown",
+          seasonRecords: [], txnSeasons: [], draftPicks: [],
+          h2hVsRod: { wins: 0, losses: 0 }, currentSeason: null,
+        };
+      }
       const dna = calcManagerDNA(managerRawData, []);
       const dnaMap = new Map([[input.teamId, dna]]);
 
@@ -162,7 +186,55 @@ export const weeklyAssessmentRouter = router({
         teamNameMap,
       };
 
-      return buildTeamAssessment(input.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId);
+      const assessment = await buildTeamAssessment(input.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId);
+
+      // ── Extension-compatible adapter ─────────────────────────────────────────
+      // The Chrome extension (v1.2.1+) expects specific field names that differ
+      // from the internal assessment schema. Map them here so the extension
+      // renders the full DNA panel with all details.
+      const ARCHETYPE_KEY_MAP: Record<string, string> = {
+        "Dealmaker":          "AGGRESSIVE_TRADER",
+        "Waiver Grinder":     "WAIVER_HAWK",
+        "Trade Shark":        "AGGRESSIVE_TRADER",
+        "Set & Forget":       "DRAFT_AND_HOLD",
+        "Positional Fanatic": "ANALYTICS_DRIVEN",
+        "Emotional Trader":   "EMOTIONAL_REACTOR",
+        "Balanced Manager":   "BALANCED_OPERATOR",
+      };
+      const archetypeKey = ARCHETYPE_KEY_MAP[assessment.gmArchetype] || "BALANCED_OPERATOR";
+
+      // Compute rosterHealth from starters array
+      const injuredStatuses = new Set(["OUT", "DOUBTFUL", "QUESTIONABLE", "IR", "INJURED_RESERVE"]);
+      const injuredCount = assessment.starters.filter(
+        (p) => injuredStatuses.has((p.injuryStatus || "").toUpperCase())
+      ).length;
+      // byeCount: players on bye have projectedPoints === 0 and are starters
+      const byeCount = assessment.starters.filter(
+        (p) => p.projectedPoints === 0 && (p.injuryStatus || "").toUpperCase() === "ACTIVE"
+      ).length;
+
+      return {
+        ...assessment,
+        // Extension-compatible fields
+        dna: {
+          archetype: archetypeKey,
+          archetypeLabel: assessment.gmArchetype,
+          archetypeReason: `Based on ${managerRawData.seasonRecords.length} season${managerRawData.seasonRecords.length !== 1 ? "s" : ""} of data`,
+        },
+        opportunities: assessment.rodOpportunities.map((op) => ({
+          type: op.type,
+          description: op.action,
+          urgency: op.urgency,
+        })),
+        rosterHealth: {
+          injuredCount,
+          byeCount,
+          starterCount: assessment.starters.length,
+        },
+        playoffOdds: assessment.playoffProbability,
+        record: { wins: assessment.wins, losses: assessment.losses },
+        briefing: assessment.aiGMBriefing,
+      };
     }),
 
   /**
