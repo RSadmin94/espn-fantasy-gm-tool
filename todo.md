@@ -773,3 +773,31 @@
 - [x] After override pick is made, resume auto-advance if it was running
 - [x] TypeScript: 0 errors
 - [x] Tests: all passing
+
+## FEATURE: Advanced Mock Draft Intelligence
+
+### Best Available + Best Fit Panel
+- [x] Replace simple "Best Available" list with a dual-mode panel: "Best Available" (ECR rank + value gap) and "Best Fit" (roster need score + championship equity impact + positional scarcity)
+- [x] Best Fit score = weighted combo of: positional need (what's missing from Rod's roster), ECR value surplus, positional scarcity (how many of this position left in top 50), championship equity (does adding this player move Rod into top-3 projected?)
+- [x] Show "Best Fit" badge on the top recommended player with reason string (e.g., "Fills RB2 gap · +4 ECR value · TE scarce")
+
+### Position Run Alerts
+- [x] Track last N picks (configurable, default 12) and detect position runs: if 4+ of same position in last 8 picks, show alert banner
+- [x] Alert shows: "RB Run — 5 RBs in last 9 picks · 3 RBs remain in top 30" with urgency color (yellow → orange → red)
+- [x] TE/QB scarcity escalation: if top-5 at position are gone, show "TE Scarcity — Only 2 elite TEs remain"
+- [x] Alerts auto-dismiss after 3 picks or when run ends
+
+### Pick Survival Probability
+- [x] For each player in Best Available list, compute survival probability to Rod's next pick
+- [x] Survival = f(ECR rank, ADP, positional scarcity, # teams picking before Rod, historical draft tendencies of those teams)
+- [x] Show as percentage bar next to each player: green (>70%), yellow (40-70%), red (<40%)
+- [x] Tooltip: "3 teams likely need RB · 68% chance gone by pick 39"
+
+### Opponent Pick Prediction
+- [x] For each AI owner picking before Rod's next turn, show predicted position and player
+- [x] Use DNA archetype + current roster gaps + positional scarcity to compute: "68% chance Chris drafts RB · likely target: Zack Moss or Chuba Hubbard"
+- [x] Show as a collapsible "Next N Picks" panel listing each owner with their top predicted pick and confidence %
+- [x] Update in real-time as picks are made
+
+- [x] TypeScript: 0 errors
+- [x] Tests: all passing

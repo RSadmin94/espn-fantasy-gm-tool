@@ -12,13 +12,127 @@ import { Input } from "@/components/ui/input";
 import {
   Search, Play, RotateCcw, Trophy, Undo2, FastForward, Zap, Save,
   CheckCircle2, TrendingDown, TrendingUp, ChevronDown, Lock, Unlock, User,
-  Pause, PlayCircle, AlertCircle,
+  Pause, PlayCircle, AlertCircle, Flame, Target, BarChart3, Eye, ChevronRight,
 } from "lucide-react";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { MergedPlayer } from "../../../server/fantasyDataService";
 
 const TOTAL_ROUNDS = 15;
+const RUN_WINDOW = 12; // picks to scan for position runs
+const RUN_THRESHOLD = 4; // min picks of same position to trigger alert
+
+// ── Survival probability ─────────────────────────────────────────────────────
+// Estimate the probability that a player survives to Rod's next pick.
+// For each AI owner picking before Rod, we compute a rough P(they take this player)
+// using their positional bias and the player's ECR rank.
+function calcSurvival(
+  player: MergedPlayer,
+  picksUntilRod: number,
+  ownersBeforeRod: MockOwner[],
+  currentPicks: DraftPick[],
+  allPlayers: MergedPlayer[]
+): { pct: number; tooltip: string } {
+  if (picksUntilRod <= 0) return { pct: 100, tooltip: "Your pick now" };
+  const pickedSet = new Set(currentPicks.map(p => p.player.fpId));
+  const available = allPlayers.filter(p => !pickedSet.has(p.fpId));
+  const posRank = available.filter(p => p.position === player.position).findIndex(p => p.fpId === player.fpId) + 1;
+
+  let pGone = 0;
+  const threats: string[] = [];
+  for (const owner of ownersBeforeRod) {
+    const bias = owner.biasVsLeague?.[player.position] ?? 0;
+    const wantPos = (owner.reachPositions ?? []).includes(player.position);
+    // Base probability this owner takes this specific player
+    const posProb = Math.min(0.9, Math.max(0.05,
+      0.15 + (bias > 0 ? bias * 0.08 : 0) + (wantPos ? 0.12 : 0)
+    ));
+    // Scale by how high the player is in the position pool
+    const rankFactor = posRank <= 3 ? 1.0 : posRank <= 6 ? 0.7 : posRank <= 10 ? 0.4 : 0.2;
+    const pThisOwner = posProb * rankFactor;
+    if (pThisOwner > 0.15) threats.push(owner.ownerName.split(" ")[0]);
+    pGone = 1 - (1 - pGone) * (1 - pThisOwner);
+  }
+  const pct = Math.round((1 - pGone) * 100);
+  const tooltip = threats.length > 0
+    ? `${threats.slice(0, 3).join(", ")} likely need ${player.position} · ${pct}% chance survives`
+    : `${pct}% chance survives to your pick`;
+  return { pct, tooltip };
+}
+
+// ── Best Fit scoring ─────────────────────────────────────────────────────────
+function calcBestFit(
+  player: MergedPlayer,
+  rodRoster: DraftPick[],
+  availablePlayers: MergedPlayer[]
+): { score: number; reason: string } {
+  const posCounts: Record<string, number> = {};
+  for (const p of rodRoster) {
+    if (!p.isKeeper) posCounts[p.player.position] = (posCounts[p.player.position] ?? 0) + 1;
+  }
+  // Positional need: 0-3 scale
+  const needed: Record<string, number> = { QB: 1, RB: 3, WR: 3, TE: 1, K: 1, DST: 1 };
+  const have = posCounts[player.position] ?? 0;
+  const need = needed[player.position] ?? 2;
+  const needScore = Math.max(0, Math.min(3, need - have)) / 3;
+
+  // ECR value surplus: how much earlier than ADP
+  const valueSurplus = Math.max(0, (player.ecrAdpGap ?? 0)) / 20;
+
+  // Positional scarcity: how many of this position remain in top 50
+  const inTop50 = availablePlayers.filter(p => p.position === player.position && p.ecrRank <= 50).length;
+  const scarcityScore = Math.max(0, 1 - inTop50 / 8);
+
+  const score = needScore * 0.45 + valueSurplus * 0.35 + scarcityScore * 0.20;
+
+  const reasons: string[] = [];
+  if (needScore > 0.5) reasons.push(`Fills ${player.position} gap`);
+  if ((player.ecrAdpGap ?? 0) >= 5) reasons.push(`+${player.ecrAdpGap} ECR value`);
+  if (inTop50 <= 3) reasons.push(`${player.position} scarce (${inTop50} left)`);
+  return { score, reason: reasons.slice(0, 2).join(" · ") || "Solid depth" };
+}
+
+// ── Opponent pick prediction ──────────────────────────────────────────────────
+function predictNextPick(
+  owner: MockOwner,
+  currentPicks: DraftPick[],
+  allPlayers: MergedPlayer[],
+  keeperIds: Set<number>,
+  round: number
+): { player: MergedPlayer; position: string; confidence: number } | null {
+  const pickedSet = new Set(currentPicks.map(p => p.player.fpId));
+  const available = allPlayers.filter(p => !pickedSet.has(p.fpId) && !keeperIds.has(p.fpId));
+  if (available.length === 0) return null;
+
+  // Score top 30 candidates
+  const r1Dist = owner.round1Distribution ?? {};
+  const r1Total = Object.values(r1Dist).reduce((a, b) => a + b, 0) || 1;
+  const posWeights: Record<string, number> = {};
+  for (const [pos, cnt] of Object.entries(r1Dist)) posWeights[pos] = (cnt as number) / r1Total;
+  for (const [pos, bias] of Object.entries(owner.biasVsLeague ?? {})) {
+    const b = bias as number;
+    if (b > 1.5) posWeights[pos] = (posWeights[pos] ?? 0.1) * (1 + b * 0.15);
+  }
+  if (round <= 3 && (owner.biasVsLeague?.["QB"] ?? 0) > 2) posWeights["QB"] = (posWeights["QB"] ?? 0) + 0.4;
+  if (round <= 4 && (owner.biasVsLeague?.["TE"] ?? 0) > 2) posWeights["TE"] = (posWeights["TE"] ?? 0) + 0.3;
+
+  const scored = available.slice(0, 30).map(p => ({
+    player: p,
+    score: (posWeights[p.position] ?? 0.08) - p.ecrRank / 600,
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored[0];
+  if (!top) return null;
+
+  // Confidence = how dominant the top pick is vs the field
+  const topScore = top.score;
+  const secondScore = scored[1]?.score ?? 0;
+  const confidence = Math.min(95, Math.max(40, Math.round(50 + (topScore - secondScore) * 300)));
+  return { player: top.player, position: top.player.position, confidence };
+}
 
 const POS_COLORS: Record<string, string> = {
   QB: "bg-red-500/20 text-red-300 border-red-500/30",
@@ -605,12 +719,22 @@ export default function MockDraftSimulator() {
   }, [draftComplete, owners, picks]);
 
   const [bestAvailPos, setBestAvailPos] = useState<string>("ALL");
+  const [bestFitMode, setBestFitMode] = useState<"available" | "fit">("available");
+  const [showOpponentPredictions, setShowOpponentPredictions] = useState(true);
+
   const bestAvailablePlayers = useMemo(() => {
     const pool = bestAvailPos === "ALL"
       ? availablePlayers
       : availablePlayers.filter((p) => p.position === bestAvailPos);
-    return [...pool]
-      .filter(p => !keeperPlayerIds.has(p.fpId))
+    const filtered = pool.filter(p => !keeperPlayerIds.has(p.fpId));
+    if (bestFitMode === "fit") {
+      return [...filtered]
+        .map(p => ({ p, fit: calcBestFit(p, rodPicks, filtered) }))
+        .sort((a, b) => b.fit.score - a.fit.score)
+        .slice(0, 8)
+        .map(x => x.p);
+    }
+    return [...filtered]
       .sort((a, b) => {
         const gapA = a.ecrAdpGap ?? 0;
         const gapB = b.ecrAdpGap ?? 0;
@@ -618,7 +742,86 @@ export default function MockDraftSimulator() {
         return a.ecrRank - b.ecrRank;
       })
       .slice(0, 8);
-  }, [availablePlayers, bestAvailPos, keeperPlayerIds]);
+  }, [availablePlayers, bestAvailPos, keeperPlayerIds, bestFitMode, rodPicks]);
+
+  // ── Position Run Alerts ─────────────────────────────────────────────────────
+  const runAlerts = useMemo(() => {
+    if (!draftStarted) return [];
+    const recentPicks = picks.filter(p => !p.isKeeper).slice(-RUN_WINDOW);
+    const alerts: Array<{ pos: string; count: number; window: number; urgency: "yellow" | "orange" | "red" }> = [];
+    const posCounts: Record<string, number> = {};
+    for (const p of recentPicks) {
+      posCounts[p.player.position] = (posCounts[p.player.position] ?? 0) + 1;
+    }
+    for (const [pos, count] of Object.entries(posCounts)) {
+      if (count >= RUN_THRESHOLD) {
+        const urgency = count >= 6 ? "red" : count >= 5 ? "orange" : "yellow";
+        alerts.push({ pos, count, window: recentPicks.length, urgency });
+      }
+    }
+    // Scarcity alerts: top-5 at position all gone
+    if (boardData?.players) {
+      const pickedSet = new Set(picks.map(p => p.player.fpId));
+      for (const pos of ["QB", "RB", "WR", "TE"]) {
+        const top5 = boardData.players.filter(p => p.position === pos).slice(0, 5);
+        const allGone = top5.length >= 5 && top5.every(p => pickedSet.has(p.fpId));
+        if (allGone) alerts.push({ pos, count: 5, window: 0, urgency: "red" });
+      }
+    }
+    return alerts;
+  }, [picks, draftStarted, boardData]);
+
+  // ── Survival probabilities for best available list ──────────────────────────
+  const survivals = useMemo(() => {
+    if (!boardData || !draftStarted || isRodsTurn) return new Map<number, { pct: number; tooltip: string }>();
+    // Find how many picks until Rod's next turn
+    let picksUntilRod = 0;
+    const ownersBeforeRod: MockOwner[] = [];
+    for (let slot = currentOverall; slot <= totalTeams * TOTAL_ROUNDS; slot++) {
+      const teamIdx = snakeOrder[slot - 1] ?? 0;
+      if (teamIdx === rodSlotIndex) break;
+      if (!picks.some(p => p.overall === slot)) {
+        picksUntilRod++;
+        const owner = owners[teamIdx];
+        if (owner) ownersBeforeRod.push(owner);
+      }
+    }
+    const map = new Map<number, { pct: number; tooltip: string }>();
+    for (const p of bestAvailablePlayers) {
+      map.set(p.fpId, calcSurvival(p, picksUntilRod, ownersBeforeRod, picks, boardData.players));
+    }
+    return map;
+  }, [boardData, draftStarted, isRodsTurn, currentOverall, totalTeams, snakeOrder, rodSlotIndex, picks, owners, bestAvailablePlayers]);
+
+  // ── Best Fit reasons for display ────────────────────────────────────────────
+  const bestFitReasons = useMemo(() => {
+    if (!draftStarted || bestFitMode !== "fit" || !boardData) return new Map<number, string>();
+    const map = new Map<number, string>();
+    const filtered = availablePlayers.filter(p => !keeperPlayerIds.has(p.fpId));
+    for (const p of bestAvailablePlayers) {
+      const fit = calcBestFit(p, rodPicks, filtered);
+      map.set(p.fpId, fit.reason);
+    }
+    return map;
+  }, [draftStarted, bestFitMode, boardData, bestAvailablePlayers, rodPicks, availablePlayers, keeperPlayerIds]);
+
+  // ── Opponent pick predictions ────────────────────────────────────────────────
+  const opponentPredictions = useMemo(() => {
+    if (!boardData || !draftStarted || isRodsTurn || draftComplete) return [];
+    const preds: Array<{ owner: MockOwner; prediction: { player: MergedPlayer; position: string; confidence: number } | null; slot: number }> = [];
+    for (let slot = currentOverall; slot <= totalTeams * TOTAL_ROUNDS; slot++) {
+      const teamIdx = snakeOrder[slot - 1] ?? 0;
+      if (teamIdx === rodSlotIndex) break;
+      if (picks.some(p => p.overall === slot)) continue;
+      const owner = owners[teamIdx];
+      if (!owner) continue;
+      const round = Math.ceil(slot / totalTeams);
+      const pred = predictNextPick(owner, picks, boardData.players, keeperPlayerIds, round);
+      preds.push({ owner, prediction: pred, slot });
+      if (preds.length >= 5) break; // show at most 5 upcoming picks
+    }
+    return preds;
+  }, [boardData, draftStarted, isRodsTurn, draftComplete, currentOverall, totalTeams, snakeOrder, rodSlotIndex, picks, owners, keeperPlayerIds]);
 
   const saveDraftMutation = trpc.draftBoard.saveDraft.useMutation({
     onSuccess: (data) => {
@@ -1009,10 +1212,54 @@ export default function MockDraftSimulator() {
               </CardContent>
             </Card>
 
+            {/* Position Run Alerts */}
+            {runAlerts.length > 0 && (
+              <div className="space-y-1.5">
+                {runAlerts.map((alert, i) => (
+                  <div key={i} className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium",
+                    alert.urgency === "red" ? "border-red-500/40 bg-red-500/10 text-red-300" :
+                    alert.urgency === "orange" ? "border-orange-500/40 bg-orange-500/10 text-orange-300" :
+                    "border-yellow-500/40 bg-yellow-500/10 text-yellow-300"
+                  )}>
+                    <Flame className={cn("w-3.5 h-3.5 shrink-0",
+                      alert.urgency === "red" ? "text-red-400" :
+                      alert.urgency === "orange" ? "text-orange-400" : "text-yellow-400"
+                    )} />
+                    {alert.window > 0
+                      ? `${alert.pos} Run — ${alert.count} ${alert.pos}s in last ${alert.window} picks`
+                      : `${alert.pos} Scarcity — Top 5 all gone`
+                    }
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Best Available + Best Fit */}
             <Card className="border-slate-700/50 bg-slate-800/30">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center justify-between">
-                  <span>Best Available</span>
+                <CardTitle className="text-sm flex items-center justify-between gap-2">
+                  {/* Mode toggle */}
+                  <div className="flex rounded-md overflow-hidden border border-slate-700 shrink-0">
+                    <button
+                      onClick={() => setBestFitMode("available")}
+                      className={cn(
+                        "px-2.5 py-1 text-xs transition-colors",
+                        bestFitMode === "available" ? "bg-primary text-primary-foreground" : "text-slate-400 hover:text-foreground"
+                      )}
+                    >
+                      <BarChart3 className="w-3 h-3 inline mr-1" />Best Avail
+                    </button>
+                    <button
+                      onClick={() => setBestFitMode("fit")}
+                      className={cn(
+                        "px-2.5 py-1 text-xs transition-colors border-l border-slate-700",
+                        bestFitMode === "fit" ? "bg-primary text-primary-foreground" : "text-slate-400 hover:text-foreground"
+                      )}
+                    >
+                      <Target className="w-3 h-3 inline mr-1" />Best Fit
+                    </button>
+                  </div>
                   <div className="flex gap-1 flex-wrap">
                     {["ALL", "QB", "RB", "WR", "TE", "K", "DST"].map((pos) => (
                       <button
@@ -1030,45 +1277,141 @@ export default function MockDraftSimulator() {
                     ))}
                   </div>
                 </CardTitle>
-                <p className="text-xs text-muted-foreground">Gap = ADP − ECR · green = value, red = reach</p>
+                <p className="text-xs text-muted-foreground">
+                  {bestFitMode === "available" ? "Gap = ADP − ECR · green = value, red = reach" : "Ranked by need + value + scarcity fit for your roster"}
+                </p>
               </CardHeader>
               <CardContent className="p-3 pt-0 space-y-1">
-                {bestAvailablePlayers.map((p) => {
+                <TooltipProvider delayDuration={200}>
+                {bestAvailablePlayers.map((p, idx) => {
                   const gap = p.ecrAdpGap ?? 0;
                   const isValue = gap >= 5;
                   const isReach = gap <= -5;
+                  const survival = survivals.get(p.fpId);
+                  const fitReason = bestFitReasons.get(p.fpId);
+                  const isBestFitTop = bestFitMode === "fit" && idx === 0;
                   return (
-                    <div
-                      key={p.fpId}
-                      className={cn(
-                        "flex items-center gap-2 px-2 py-1.5 rounded transition-colors group",
-                        isRodsTurn ? "cursor-pointer hover:bg-slate-700 active:scale-[0.98]" : "opacity-60 cursor-default",
-                        isRodsTurn && isValue && "hover:bg-emerald-900/30"
+                    <div key={p.fpId} className="space-y-0.5">
+                      <div
+                        className={cn(
+                          "flex items-center gap-2 px-2 py-1.5 rounded transition-colors group",
+                          isRodsTurn ? "cursor-pointer hover:bg-slate-700 active:scale-[0.98]" : "opacity-60 cursor-default",
+                          isRodsTurn && isValue && "hover:bg-emerald-900/30",
+                          isBestFitTop && "ring-1 ring-primary/40 bg-primary/5"
+                        )}
+                        onClick={() => isRodsTurn && handleRodPick(p)}
+                      >
+                        <span className="text-xs text-muted-foreground w-6 text-right shrink-0">{p.ecrRank}</span>
+                        <Badge variant="outline" className={cn("text-xs px-1 py-0 h-5 shrink-0", POS_COLORS[p.position] ?? "")}>
+                          {p.position}
+                        </Badge>
+                        <span className="text-sm text-foreground truncate flex-1">{p.name}</span>
+                        {isBestFitTop && (
+                          <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 border-primary/40 text-primary">
+                            Best Fit
+                          </Badge>
+                        )}
+                        {bestFitMode === "available" && (
+                          <span className={cn(
+                            "text-xs font-medium flex items-center gap-0.5 shrink-0",
+                            isValue ? "text-emerald-400" : isReach ? "text-red-400" : "text-slate-500"
+                          )}>
+                            {isValue && <TrendingDown className="w-3 h-3" />}
+                            {isReach && <TrendingUp className="w-3 h-3" />}
+                            {gap > 0 ? "+" + gap : gap === 0 ? "—" : gap}
+                          </span>
+                        )}
+                        {/* Survival probability */}
+                        {survival && !isRodsTurn && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center gap-1 shrink-0 cursor-help">
+                                <div className="w-12 h-1.5 rounded-full bg-slate-700 overflow-hidden">
+                                  <div
+                                    className={cn(
+                                      "h-full rounded-full transition-all",
+                                      survival.pct >= 70 ? "bg-emerald-400" :
+                                      survival.pct >= 40 ? "bg-yellow-400" : "bg-red-400"
+                                    )}
+                                    style={{ width: `${survival.pct}%` }}
+                                  />
+                                </div>
+                                <span className={cn(
+                                  "text-[10px] font-medium w-8 text-right",
+                                  survival.pct >= 70 ? "text-emerald-400" :
+                                  survival.pct >= 40 ? "text-yellow-400" : "text-red-400"
+                                )}>{survival.pct}%</span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="max-w-[200px] text-xs">
+                              {survival.tooltip}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                      {/* Best Fit reason row */}
+                      {fitReason && (
+                        <p className="text-[10px] text-muted-foreground pl-8 pb-0.5">{fitReason}</p>
                       )}
-                      onClick={() => isRodsTurn && handleRodPick(p)}
-                    >
-                      <span className="text-xs text-muted-foreground w-6 text-right shrink-0">{p.ecrRank}</span>
-                      <Badge variant="outline" className={cn("text-xs px-1 py-0 h-5 shrink-0", POS_COLORS[p.position] ?? "")}>
-                        {p.position}
-                      </Badge>
-                      <span className="text-sm text-foreground truncate flex-1">{p.name}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">{p.team}</span>
-                      <span className={cn(
-                        "text-xs font-medium flex items-center gap-0.5 shrink-0",
-                        isValue ? "text-emerald-400" : isReach ? "text-red-400" : "text-slate-500"
-                      )}>
-                        {isValue && <TrendingDown className="w-3 h-3" />}
-                        {isReach && <TrendingUp className="w-3 h-3" />}
-                        {gap > 0 ? "+" + gap : gap === 0 ? "—" : gap}
-                      </span>
                     </div>
                   );
                 })}
+                </TooltipProvider>
                 {bestAvailablePlayers.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-2">No players available</p>
                 )}
               </CardContent>
             </Card>
+
+            {/* Opponent Pick Predictions */}
+            {draftStarted && !isRodsTurn && !draftComplete && opponentPredictions.length > 0 && (
+              <Card className="border-slate-700/50 bg-slate-800/30">
+                <CardHeader className="pb-1 pt-3 px-3">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Opponent Predictions</span>
+                    </div>
+                    <button
+                      onClick={() => setShowOpponentPredictions(p => !p)}
+                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                    >
+                      {showOpponentPredictions ? "Hide" : "Show"}
+                      <ChevronRight className={cn("w-3 h-3 transition-transform", showOpponentPredictions && "rotate-90")} />
+                    </button>
+                  </CardTitle>
+                </CardHeader>
+                {showOpponentPredictions && (
+                  <CardContent className="p-3 pt-0 space-y-1.5">
+                    {opponentPredictions.map(({ owner, prediction, slot }) => (
+                      <div key={slot} className="flex items-center gap-2 px-2 py-1.5 rounded bg-slate-900/40">
+                        <span className="text-xs text-muted-foreground shrink-0 w-14 truncate">{owner.ownerName.split(" ")[0]}</span>
+                        {prediction ? (
+                          <>
+                            <Badge variant="outline" className={cn("text-[10px] px-1 py-0 h-4 shrink-0", POS_COLORS[prediction.position] ?? "")}>
+                              {prediction.position}
+                            </Badge>
+                            <span className="text-xs text-foreground truncate flex-1">{prediction.player.name}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <div className="w-10 h-1 rounded-full bg-slate-700 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-cyan-400"
+                                  style={{ width: `${prediction.confidence}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-cyan-400 w-7 text-right">{prediction.confidence}%</span>
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Unpredictable</span>
+                        )}
+                      </div>
+                    ))}
+                    <p className="text-[10px] text-muted-foreground text-center pt-1">Confidence based on DNA archetype + historical bias</p>
+                  </CardContent>
+                )}
+              </Card>
+            )}
 
             {manualPickMode && isRodsTurn && (
               <Card className="border-primary/30 bg-primary/5">
