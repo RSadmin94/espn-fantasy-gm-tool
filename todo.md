@@ -825,26 +825,35 @@
 - [x] Tests: all passing
 
 ## FEATURE: Mock Draft Save/Compare
-- [ ] DB schema: mockDraftSaves table (id, name, strategyLabel, picksJson, ownersJson, champEquityScore, grade, avgEcr, totalVbd, createdAt)
-- [ ] tRPC: draftBoard.saveMockDraft mutation — saves full draft result with strategy label
-- [ ] tRPC: draftBoard.listMockDrafts query — returns all saved drafts with summary stats
-- [ ] tRPC: draftBoard.deleteMockDraft mutation
-- [ ] tRPC: draftBoard.compareMockDrafts query — takes 2-4 draft IDs, returns side-by-side comparison data
-- [ ] UI: "Save Draft" button in post-draft summary with strategy label input (e.g., "RB-Heavy", "BPA", "WR-First")
-- [ ] UI: Saved Drafts page showing all saved drafts as cards with equity score, grade, key stats
-- [ ] UI: Compare mode — select 2-4 drafts, show side-by-side table: equity score, grade, avg ECR, VBD, positional breakdown
-- [ ] UI: Equity bar chart comparing all saved drafts (RB-heavy +7.4, BPA +4.1, WR-heavy +6.2)
-- [ ] UI: Best strategy recommendation badge on highest equity draft
+- [x] DB schema: mockDraftSaves table (id, name, strategyLabel, picksJson, ownersJson, champEquityScore, grade, avgEcr, totalVbd, createdAt)
+- [x] tRPC: draftBoard.saveMockDraft mutation — saves full draft result with strategy label
+- [x] tRPC: draftBoard.listMockDrafts query — returns all saved drafts with summary stats
+- [x] tRPC: draftBoard.deleteMockDraft mutation
+- [x] tRPC: draftBoard.compareMockDrafts query — takes 2-4 draft IDs, returns side-by-side comparison data
+- [x] UI: "Save Draft" button in post-draft summary with strategy label input (e.g., "RB-Heavy", "BPA", "WR-First")
+- [x] UI: Saved Drafts page showing all saved drafts as cards with equity score, grade, key stats
+- [x] UI: Compare mode — select 2-4 drafts, show side-by-side table: equity score, grade, avg ECR, VBD, positional breakdown
+- [x] UI: Equity bar chart comparing all saved drafts (RB-heavy +7.4, BPA +4.1, WR-heavy +6.2)
+- [x] UI: Best strategy recommendation badge on highest equity draft
 
 ## FEATURE: Draft Pick Trade Evaluator
-- [ ] UI: Trade builder — two sides (My Picks / Their Picks), add picks by round/slot
-- [ ] Show pick value chart delta (total value each side)
-- [ ] Show round/overall delta and surplus/deficit
-- [ ] Owner DNA: show acceptance probability for each owner based on trade DNA (tradeFrequency, desperation, archetype)
-- [ ] Championship equity change: show how the trade affects Rod's equity score
-- [ ] Historical context: how many similar trades this owner has made in past seasons
+- [x] UI: Trade builder — two sides (My Picks / Their Picks), add picks by round/slot
+- [x] Show pick value chart delta (total value each side)
+- [x] Show round/overall delta and surplus/deficit
+- [x] Owner DNA: show acceptance probability for each owner based on trade DNA (tradeFrequency, desperation, archetype)
+- [x] Championship equity change: show how the trade affects Rod's equity score
+- [x] Historical context: how many similar trades this owner has made in past seasons
 
 ## FEATURE: Keeper Deadline Countdown
-- [ ] Banner on Command Center: "Keeper deadline: X days · Review Offseason Intel →"
-- [ ] Configurable deadline date (default Aug 18, 2026)
-- [ ] Color escalation: green (>60 days), yellow (30-60), orange (14-30), red (<14)
+- [x] Banner on Command Center: "Keeper deadline: X days · Review Offseason Intel →"
+- [x] Configurable deadline date (default Aug 18, 2026)
+- [x] Color escalation: green (>60 days), yellow (30-60), orange (14-30), red (<14)
+
+## TEST SUITE EXPANSION — Full Engine Coverage (May 2026)
+- [x] server/keeperRecommendationEngine.test.ts: 28 tests — value scoring, need scoring, risk assessment (RB position-based, non-RB savings-based), DNA behavior prediction, draft strategy notes, full buildKeeperRecommendations integration
+- [x] server/memCache.test.ts: 19 tests — TTL expiry, cache hit/miss, invalidation by key/prefix/all, concurrent access, type safety
+- [x] server/leagueDNA.test.ts: 32 tests — calcManagerDNA (all 6 archetypes including Emotional Trader priority order), tilt score, waiver DNA, trade DNA, exploit windows, gmArchetype priority chain
+- [x] server/draftStrategyEngine.test.ts: 22 tests — draft slot value, positional priority, keeper-adjusted pool, DNA archetype modifiers, scarcity alerts, round-by-round recommendations
+- [x] client/src/lib/mockDraftUtils.ts: extracted 5 pure functions from MockDraftSimulator for testability (calcBestFitScore, calcPickSurvivalProbability, calcChampEquityDelta, calcOpponentPickPrediction, calcRunAlerts)
+- [x] server/mockDraftIntelligence.test.ts: 56 tests — all 5 pure mock draft intelligence functions, edge cases, window behavior, scarcity bonuses, DNA archetype weights
+- [x] 467/467 tests passing, 0 TypeScript errors
