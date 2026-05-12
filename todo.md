@@ -729,3 +729,28 @@
 - [x] Add batchRunAssessment mutation + batchStatus query to weeklyAssessmentRouter: fire-and-forget job store, returns jobId immediately, polls per-team status
 - [x] Build batch trigger UI in WeeklyIntelligence.tsx: "Run All 14 Teams" orange button, animated progress bar, per-team status chips (pending/running/done/error), elapsed time, auto-refreshes fullReport on completion
 - [x] 0 TypeScript errors, 293/293 tests passing
+
+## Offseason Intelligence Layer (2026 Keeper + Draft Focus)
+
+- [ ] Build keeperRecommendationEngine: score each eligible player per team using DNA archetype fit, round gap value, positional need, age/trajectory
+- [ ] Add keeperRecommendations tRPC procedure: returns top keeper pick + alternatives per team with reasoning
+- [ ] Build draftStrategyEngine: combine keeper decisions with 2026 draft order to project available talent pool and per-team strategy
+- [ ] Add draftStrategy2026 tRPC procedure: per-team draft strategy based on DNA, keepers, pick position, positional needs
+- [ ] Build OffseasonIntelligence.tsx hub page: keeper recommendations per team (DNA-driven), 2026 draft board, league-wide keeper impact summary
+- [ ] Add /offseason route to App.tsx and nav entry
+- [ ] Update Weekly Intel hub to show offseason banner (2025 season complete, link to offseason hub)
+- [ ] 0 TypeScript errors, all tests passing
+
+## NEW: Offseason Intelligence Hub (2026 Keeper + Draft)
+
+- [x] Rewrite keeperRecommendationEngine: DNA predicts manager behavior; recommendations based on roster need + round cost vs open-pool ADP
+- [x] Fix offseasonRouter.ts: replace getSeasonDataPublic with getCachedView pattern, fix getAllCachedSeasons import from db.ts, fix normalizeDraftOrder type cast
+- [x] Fix draftStrategyEngine.ts: keeper.dnaPrediction.gmArchetype field access
+- [x] Wire offseasonRouter into appRouter as offseason namespace
+- [x] Build OffseasonHub.tsx: Keeper Recommendations tab + 2026 Draft Board tab
+- [x] Keeper Recommendations: per-team cards with primary/alternative keeper, value score (round cost vs ADP), need score, DNA behavior prediction, AI brief generator
+- [x] Draft Board: positional scarcity, returning player pool, per-team draft strategies with predicted targets and exploit opportunities
+- [x] Add "Offseason Intel" nav entry in AppLayout sidebar (Draft & Keepers group, 2026 badge)
+- [x] Add /offseason route in App.tsx
+- [x] TypeScript: 0 errors
+- [x] Tests: 293/293 passing

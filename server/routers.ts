@@ -18,6 +18,7 @@ import { gmDecisionRouter } from "./gmDecisionRouter";
 import { mlRouter } from "./mlRouter";
 import { weeklyAssessmentRouter } from "./weeklyAssessmentRouter";
 import { providerRouter } from "./providerRouter";
+import { offseasonRouter } from "./offseasonRouter";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob } from "./db";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
@@ -87,6 +88,7 @@ export const appRouter = router({
   ml: mlRouter,
   weeklyAssessment: weeklyAssessmentRouter,
   providers: providerRouter,
+  offseason: offseasonRouter,
   leagueScoring: router({
     getSettings: publicProcedure
       .input(z.object({ season: z.number().optional() }))

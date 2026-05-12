@@ -4,7 +4,7 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ClipboardList, Star, ArrowLeftRight, Bot, ChevronRight,
-  Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target, BarChart3, Link2,
+  Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target, BarChart3, Link2, Sunrise,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
@@ -14,7 +14,8 @@ const navItems = [
   { href: "/command-center", icon: LayoutDashboard, label: "Command Center", group: "Overview" },
   { href: "/connect", icon: Link2, label: "Connect League", group: "Overview", badge: "NEW" },
   // Draft & Keepers
-  { href: "/draft-war-room", icon: ClipboardList, label: "Draft War Room", group: "Draft & Keepers", badge: "2026" },
+  { href: "/offseason", icon: Sunrise, label: "Offseason Intel", group: "Draft & Keepers", badge: "2026" },
+  { href: "/draft-war-room", icon: ClipboardList, label: "Draft War Room", group: "Draft & Keepers" },
   { href: "/keeper-lab", icon: Star, label: "Keeper Lab", group: "Draft & Keepers" },
   // Decision Tools
   { href: "/trade-lab", icon: ArrowLeftRight, label: "Trade Lab", group: "Decision Tools", badge: "AI" },
