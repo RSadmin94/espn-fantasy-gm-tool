@@ -857,3 +857,12 @@
 - [x] client/src/lib/mockDraftUtils.ts: extracted 5 pure functions from MockDraftSimulator for testability (calcBestFitScore, calcPickSurvivalProbability, calcChampEquityDelta, calcOpponentPickPrediction, calcRunAlerts)
 - [x] server/mockDraftIntelligence.test.ts: 56 tests — all 5 pure mock draft intelligence functions, edge cases, window behavior, scarcity bonuses, DNA archetype weights
 - [x] 467/467 tests passing, 0 TypeScript errors
+
+## BUG: Offseason Intel 404 + Data Blending Fix
+- [x] Diagnose 404 on /offseason route — root cause: Dashboard.tsx had bad link `/offseason-intel` instead of `/offseason`
+- [x] Identify which procedures are mixing 2025 season data with 2026 projections — offseasonRouter used raw `latestSeason` which could be a future year if synced
+- [x] Fix 404: Dashboard.tsx navigate('/offseason') corrected
+- [x] Separate 2025 historical data from 2026 forward-looking data — added `getCompletedSeasonForOffseason()` helper in db.ts that caps at currentYear-1; all 3 offseasonRouter procedures now use it
+- [x] Update OffseasonHub UI: DataSourceBanner component shows "2025 Season → Planning for 2026" with clear visual separation; subtitle and Draft Board tab label are now year-dynamic
+- [x] Verify keeper recommendations only use completed season data (2025) — enforced via `getCompletedSeasonForOffseason()` guard
+- [x] Run all tests and save checkpoint — 467/467 passing, 0 TS errors

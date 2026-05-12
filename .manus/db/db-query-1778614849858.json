@@ -1,0 +1,37 @@
+{
+  "query": "SELECT DISTINCT season FROM espn_season_cache ORDER BY season DESC LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT DISTINCT season FROM espn_season_cache ORDER BY season DESC LIMIT 20;",
+  "rows": [
+    {
+      "season": "2025"
+    },
+    {
+      "season": "2024"
+    },
+    {
+      "season": "2023"
+    },
+    {
+      "season": "2022"
+    },
+    {
+      "season": "2021"
+    },
+    {
+      "season": "2020"
+    },
+    {
+      "season": "2019"
+    },
+    {
+      "season": "2018"
+    },
+    {
+      "season": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "season\n2025\n2024\n2023\n2022\n2021\n2020\n2019\n2018\n0\n",
+  "stderr": "",
+  "execution_time_ms": 577
+}

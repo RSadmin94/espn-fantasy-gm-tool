@@ -14,7 +14,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { buildKeeperRecommendations } from "./keeperRecommendationEngine";
 import { buildLeagueDraftBoard } from "./draftStrategyEngine";
-import { getCachedView, getAllCachedSeasons } from "./db";
+import { getCachedView, getAllCachedSeasons, getCompletedSeasonForOffseason } from "./db";
 import { normalizeDraftPicks, normalizeDraftOrder, normalizeTeams } from "./espnService";
 
 async function getSeasonData(season: number) {
@@ -29,11 +29,17 @@ export const offseasonRouter = router({
     const { calcLeagueDNA } = await import("./leagueDNA");
     const { buildManagerRawData } = await import("./dnaRouter");
 
-    // Get all cached seasons
+    // Always use the last COMPLETED season as the keeper baseline.
+    // getCompletedSeasonForOffseason() caps at currentYear-1, so a partial
+    // 2026 sync never overwrites the 2025 keeper data.
+    const completedSeason = await getCompletedSeasonForOffseason();
+    if (!completedSeason) return { teams: [], leagueSummary: null };
+    const planningYear = completedSeason + 1; // e.g. 2025 → 2026
+
     const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
     if (cachedSeasons.length === 0) return { teams: [], leagueSummary: null };
 
-    const latestSeason = cachedSeasons[cachedSeasons.length - 1];
+    const latestSeason = completedSeason; // explicit alias for clarity
     const data2025 = await getSeasonData(latestSeason);
     if (!data2025) return { teams: [], leagueSummary: null };
 
@@ -164,9 +170,11 @@ export const offseasonRouter = router({
     const allIneligible = eligibilityData.flatMap(t => t.players.filter(p => p.isIneligible));
 
     return {
-      season: latestSeason + 1,
-      deadline: "August 18, 2026",
-      rule: "Players kept in 2024 AND 2025 must return to the draft pool for 2026.",
+      completedSeason: latestSeason,    // e.g. 2025 — the historical data source
+      planningYear,                     // e.g. 2026 — what we're planning for
+      season: planningYear,             // kept for UI backward-compat
+      deadline: `August 18, ${planningYear}`,
+      rule: `Players kept in ${latestSeason - 1} AND ${latestSeason} must return to the draft pool for ${planningYear}.`,
       teams: recommendations,
       leagueSummary: {
         totalEligible: allEligible.length,
@@ -188,10 +196,14 @@ export const offseasonRouter = router({
     const { calcLeagueDNA } = await import("./leagueDNA");
     const { buildManagerRawData } = await import("./dnaRouter");
 
+    // Use the same completed-season guard as keeperRecommendations
+    const completedSeason = await getCompletedSeasonForOffseason();
+    if (!completedSeason) return null;
+
     const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
     if (cachedSeasons.length === 0) return null;
 
-    const latestSeason = cachedSeasons[cachedSeasons.length - 1];
+    const latestSeason = completedSeason;
     const data2025 = await getSeasonData(latestSeason);
     if (!data2025) return null;
 
@@ -271,12 +283,16 @@ export const offseasonRouter = router({
       const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
       const { buildManagerRawData } = await import("./dnaRouter");
 
+      const completedSeason = await getCompletedSeasonForOffseason();
+      if (!completedSeason) return { brief: "No completed season data available." };
+      const planningYear = completedSeason + 1;
+
       const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
       if (cachedSeasons.length === 0) return { brief: "No data available." };
 
-      const latestSeason = cachedSeasons[cachedSeasons.length - 1];
+      const latestSeason = completedSeason;
       const data2025 = await getSeasonData(latestSeason);
-      if (!data2025) return { brief: "No 2025 season data available." };
+      if (!data2025) return { brief: `No ${latestSeason} season data available.` };
 
       // Get this team's keepers
       const picks2025 = normalizeDraftPicks(data2025);
@@ -307,25 +323,27 @@ export const offseasonRouter = router({
         }
       }
 
+      const prevCompletedSeason = latestSeason - 1; // e.g. 2024
       const keeperSummary = teamKeepers.map(k => {
         const pid = k.playerId as number;
-        const keptIn2024 = keepers2024[pid] !== undefined;
-        const roundCost = keptIn2024 ? null : (k.roundId as number) - 1;
-        return `${k.playerName} (${k.position}) — kept at round ${k.roundId} in 2025${keptIn2024 ? " — INELIGIBLE (kept 2 consecutive years, must return to pool)" : `, costs round ${roundCost} to keep in 2026`}`;
+        const keptInPrev = keepers2024[pid] !== undefined;
+        const roundCost = keptInPrev ? null : (k.roundId as number) - 1;
+        return `${k.playerName} (${k.position}) — kept at round ${k.roundId} in ${latestSeason}${keptInPrev ? ` — INELIGIBLE (kept in both ${prevCompletedSeason} AND ${latestSeason}, must return to pool)` : `, costs round ${roundCost} to keep in ${planningYear}`}`;
       }).join("\n");
 
       const dnaBlock = teamDna ? buildDNAPromptBlock([teamDna]) : "";
 
-      const prompt = `You are a fantasy football GM advisor preparing the 2026 offseason briefing for ${input.teamName}.
+      const prompt = `You are a fantasy football GM advisor preparing the ${planningYear} offseason briefing for ${input.teamName}.
+Data source: ${latestSeason} completed season results.
 
-KEEPER ELIGIBILITY (2026):
+KEEPER ELIGIBILITY (${planningYear}):
 ${keeperSummary || "No keepers found for this team."}
 
 ${dnaBlock ? `MANAGER DNA PROFILE:\n${dnaBlock}` : ""}
 
-Write a concise, direct 2026 offseason briefing for this team covering:
+Write a concise, direct ${planningYear} offseason briefing for this team covering:
 1. **Keeper Decision**: Which player(s) should they keep and why — factor in their DNA archetype and draft tendencies
-2. **Draft Strategy**: Given their keeper decision and pick position, what is their optimal 2026 draft approach
+2. **Draft Strategy**: Given their keeper decision and pick position, what is their optimal ${planningYear} draft approach
 3. **Key Risks**: What could go wrong with their keeper choice
 4. **Competitor Intelligence**: Based on their DNA, what will other managers try to do to exploit them in the draft
 

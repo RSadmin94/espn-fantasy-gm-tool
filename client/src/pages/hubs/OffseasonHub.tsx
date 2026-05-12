@@ -518,14 +518,52 @@ function DraftBoardTab() {
   );
 }
 
+// ─── Data Source Banner ───────────────────────────────────────────────────────
+
+function DataSourceBanner({ completedSeason, planningYear }: { completedSeason?: number; planningYear?: number }) {
+  if (!completedSeason || !planningYear) return null;
+  return (
+    <div className="mx-4 mt-3 mb-0 rounded-lg border border-sky-500/20 bg-sky-950/30 px-4 py-2 flex items-center gap-3 text-xs">
+      <div className="flex items-center gap-1.5 text-sky-400 font-semibold shrink-0">
+        <BarChart3 className="w-3.5 h-3.5" />
+        Data Source
+      </div>
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <span className="px-2 py-0.5 rounded bg-muted/40 border border-border text-foreground font-medium">
+          {completedSeason} Season
+        </span>
+        <span className="text-muted-foreground">→ Historical results &amp; keeper eligibility</span>
+      </div>
+      <div className="flex items-center gap-2 text-muted-foreground ml-auto">
+        <span className="text-muted-foreground">Planning for</span>
+        <span className="px-2 py-0.5 rounded bg-primary/15 border border-primary/30 text-primary font-bold">
+          {planningYear} Season
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Hub ─────────────────────────────────────────────────────────────────
 
 export default function OffseasonHub() {
+  // Pull season metadata from the keeper query (lightest query, always runs first)
+  const { data: keeperMeta } = trpc.offseason.keeperRecommendations.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+  const completedSeason = (keeperMeta as { completedSeason?: number })?.completedSeason;
+  const planningYear = (keeperMeta as { planningYear?: number })?.planningYear;
+
   return (
     <AppLayout
       title="Offseason Intelligence"
-      subtitle="2026 keeper recommendations, draft order analysis, and manager behavior predictions"
+      subtitle={planningYear
+        ? `${planningYear} keeper recommendations, draft order analysis, and manager behavior predictions`
+        : "Offseason keeper recommendations, draft order analysis, and manager behavior predictions"}
     >
+      <DataSourceBanner completedSeason={completedSeason} planningYear={planningYear} />
+
       <Tabs defaultValue="keepers" className="w-full">
         <div className="px-6 pt-4 border-b border-border">
           <TabsList className="bg-transparent p-0 h-auto gap-1">
@@ -541,7 +579,7 @@ export default function OffseasonHub() {
               className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium"
             >
               <Calendar className="w-3.5 h-3.5 mr-1.5" />
-              2026 Draft Board
+              {planningYear ? `${planningYear} Draft Board` : "Draft Board"}
             </TabsTrigger>
           </TabsList>
         </div>

@@ -1,4 +1,4 @@
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, gt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users, espnSeasonCache, refreshManifest, chatHistory,
@@ -75,8 +75,24 @@ export async function getAllCachedSeasons(): Promise<number[]> {
   const db = await getDb();
   if (!db) return [];
   const result = await db.selectDistinct({ season: espnSeasonCache.season })
-    .from(espnSeasonCache).orderBy(desc(espnSeasonCache.season));
+    .from(espnSeasonCache)
+    .where(gt(espnSeasonCache.season, 2000)) // filter out sentinel/bad rows (season=0, etc.)
+    .orderBy(desc(espnSeasonCache.season));
   return result.map((r) => r.season);
+}
+
+/**
+ * Returns the most recently completed NFL season that should be used as the
+ * historical baseline for offseason planning. This is always <= current year - 1
+ * so that a partial 2026 sync never overwrites the 2025 keeper baseline.
+ */
+export async function getCompletedSeasonForOffseason(): Promise<number | null> {
+  const currentYear = new Date().getFullYear();
+  const maxCompletedSeason = currentYear - 1; // e.g. in 2026, max is 2025
+  const seasons = await getAllCachedSeasons();
+  // Find the highest cached season that is <= maxCompletedSeason
+  const completed = seasons.filter(s => s <= maxCompletedSeason);
+  return completed.length > 0 ? completed[0] : null; // already sorted desc
 }
 
 export async function getRefreshManifests() {

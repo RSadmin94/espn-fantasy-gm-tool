@@ -598,7 +598,7 @@ export default function Dashboard() {
               </div>
             </div>
             <button
-              onClick={() => navigate('/offseason-intel')}
+              onClick={() => navigate('/offseason')}
               className="text-xs font-semibold text-amber-300 hover:text-amber-200 border border-amber-600/50 hover:border-amber-500 rounded-lg px-3 py-1.5 transition-colors bg-amber-900/20 hover:bg-amber-900/30"
             >
               Review Offseason Intel →
