@@ -95,6 +95,158 @@ function calcBestFit(
   return { score, reason: reasons.slice(0, 2).join(" · ") || "Solid depth" };
 }
 
+// ── Championship Equity delta ───────────────────────────────────────────────
+// Returns a +/- percentage point change in title odds if Rod drafts this player.
+function calcChampEquityDelta(
+  player: MergedPlayer,
+  rodRoster: DraftPick[],
+  availablePlayers: MergedPlayer[],
+  allOwners: MockOwner[]
+): number {
+  // How many non-keeper picks does Rod have so far?
+  const rodNonKeeper = rodRoster.filter(p => !p.isKeeper);
+  // Avg ECR of available players at this position (what Rod could get later)
+  const laterOptions = availablePlayers
+    .filter(p => p.position === player.position)
+    .slice(1, 6); // skip the player itself (index 0 is this player)
+  const avgLaterEcr = laterOptions.length > 0
+    ? laterOptions.reduce((s, p) => s + p.ecrRank, 0) / laterOptions.length
+    : player.ecrRank + 20;
+  const ecrImprovement = Math.max(0, avgLaterEcr - player.ecrRank) / 20; // 0-1
+
+  // Roster balance: does this fill a gap?
+  const posCounts: Record<string, number> = {};
+  for (const p of rodNonKeeper) posCounts[p.player.position] = (posCounts[p.player.position] ?? 0) + 1;
+  const needed: Record<string, number> = { QB: 1, RB: 3, WR: 3, TE: 1, K: 1, DST: 1 };
+  const have = posCounts[player.position] ?? 0;
+  const need = needed[player.position] ?? 2;
+  const balanceBonus = have < need ? 0.4 : have === need ? 0.1 : 0;
+
+  // Scarcity: fewer options left = higher equity
+  const posLeft = availablePlayers.filter(p => p.position === player.position && p.ecrRank <= 80).length;
+  const scarcityBonus = posLeft <= 3 ? 0.3 : posLeft <= 6 ? 0.15 : 0;
+
+  // Relative strength vs. league: how does this player's ECR compare to what other teams have at this pos?
+  const leagueAvgEcrAtPos = allOwners.length > 0
+    ? allOwners.reduce((s, o) => s + (o.biasVsLeague?.[player.position] ?? 0), 0) / allOwners.length
+    : 0;
+  const leagueEdge = Math.max(0, leagueAvgEcrAtPos * 0.05);
+
+  const raw = (ecrImprovement * 0.4 + balanceBonus * 0.35 + scarcityBonus * 0.15 + leagueEdge * 0.1);
+  // Scale to a -5% to +12% range
+  return Math.round((raw * 17 - 1) * 10) / 10;
+}
+
+// ── Rod Opportunity Board ────────────────────────────────────────────────────
+type DraftOpportunity = {
+  type: "DESPERATION" | "VALUE_POCKET" | "RUN_EXPLOIT" | "TILT_ALERT";
+  urgency: "ACT_NOW" | "THIS_ROUND" | "MONITOR";
+  ownerName?: string;
+  position?: string;
+  title: string;
+  detail: string;
+};
+
+function calcOpportunityBoard(
+  picks: DraftPick[],
+  owners: MockOwner[],
+  availablePlayers: MergedPlayer[],
+  currentRound: number,
+  rodSlotIndex: number,
+  totalTeams: number
+): DraftOpportunity[] {
+  const opps: DraftOpportunity[] = [];
+
+  // 1. Positional Desperation: owner has 0 of a key position after round N
+  const desperationThresholds: Record<string, number> = { RB: 3, WR: 3, QB: 5, TE: 6 };
+  for (let slotIdx = 0; slotIdx < owners.length; slotIdx++) {
+    if (slotIdx === rodSlotIndex) continue;
+    const owner = owners[slotIdx];
+    const teamPicks = picks.filter(p => p.owner === owner.ownerName && !p.isKeeper);
+    for (const [pos, threshold] of Object.entries(desperationThresholds)) {
+      if (currentRound >= threshold) {
+        const hasPos = teamPicks.some(p => p.player.position === pos);
+        if (!hasPos) {
+          opps.push({
+            type: "DESPERATION",
+            urgency: currentRound >= threshold + 2 ? "ACT_NOW" : "THIS_ROUND",
+            ownerName: owner.ownerName.split(" ")[0],
+            position: pos,
+            title: `${owner.ownerName.split(" ")[0]} desperate at ${pos}`,
+            detail: `No ${pos} through Rd ${currentRound} — expect a reach soon. Draft ${pos} value before they panic.`,
+          });
+        }
+      }
+    }
+  }
+
+  // 2. Value Pocket: tier of players available 2+ rounds past ADP
+  const posGroups: Record<string, MergedPlayer[]> = {};
+  for (const p of availablePlayers.slice(0, 60)) {
+    if (!posGroups[p.position]) posGroups[p.position] = [];
+    posGroups[p.position].push(p);
+  }
+  for (const [pos, players] of Object.entries(posGroups)) {
+    const pocketPlayers = players.filter(p => {
+      const adpRound = p.adpRank ? Math.ceil(p.adpRank / totalTeams) : null;
+      return adpRound !== null && currentRound > adpRound + 1;
+    });
+    if (pocketPlayers.length >= 2) {
+      opps.push({
+        type: "VALUE_POCKET",
+        urgency: pocketPlayers.length >= 3 ? "ACT_NOW" : "THIS_ROUND",
+        position: pos,
+        title: `${pos} value pocket forming`,
+        detail: `${pocketPlayers.length} ${pos} players available ${Math.round(pocketPlayers.reduce((s, p) => s + (currentRound - Math.ceil((p.adpRank ?? 0) / totalTeams)), 0) / pocketPlayers.length)}+ rounds past ADP — exploit before others notice.`,
+      });
+    }
+  }
+
+  // 3. Run Exploitation: position run happening = value opening elsewhere
+  const last12 = picks.filter(p => !p.isKeeper).slice(-12);
+  const runCounts: Record<string, number> = {};
+  for (const p of last12) runCounts[p.player.position] = (runCounts[p.player.position] ?? 0) + 1;
+  for (const [pos, cnt] of Object.entries(runCounts)) {
+    if (cnt >= 4) {
+      const otherPositions = ["QB", "RB", "WR", "TE"].filter(p => p !== pos && (runCounts[p] ?? 0) <= 1);
+      if (otherPositions.length > 0) {
+        opps.push({
+          type: "RUN_EXPLOIT",
+          urgency: cnt >= 6 ? "ACT_NOW" : "THIS_ROUND",
+          position: pos,
+          title: `${pos} run — exploit ${otherPositions[0]} value`,
+          detail: `${cnt} ${pos}s in last 12 picks. Others overcommitting — ${otherPositions[0]} value opening up. Stay disciplined.`,
+        });
+      }
+    }
+  }
+
+  // 4. Tilt Alert: high-tilt owner just missed a target (their top position not taken by them in last 2 picks)
+  const recentPicks = picks.filter(p => !p.isKeeper).slice(-3);
+  for (const recentPick of recentPicks) {
+    const owner = owners.find(o => o.ownerName === recentPick.owner);
+    if (!owner || owner.isRod) continue;
+    if ((owner.tiltScore ?? 0) >= 65) {
+      const topPos = owner.reachPositions?.[0] ?? (Object.entries(owner.biasVsLeague ?? {}).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0]);
+      if (topPos && recentPick.player.position !== topPos) {
+        opps.push({
+          type: "TILT_ALERT",
+          urgency: "THIS_ROUND",
+          ownerName: owner.ownerName.split(" ")[0],
+          title: `${owner.ownerName.split(" ")[0]} tilt risk`,
+          detail: `High tilt score (${owner.tiltScore}) — just missed ${topPos} target. Expect emotional reach next pick.`,
+        });
+      }
+    }
+  }
+
+  // Deduplicate and limit to top 4 by urgency
+  const urgencyOrder = { ACT_NOW: 0, THIS_ROUND: 1, MONITOR: 2 };
+  return opps
+    .sort((a, b) => urgencyOrder[a.urgency] - urgencyOrder[b.urgency])
+    .slice(0, 4);
+}
+
 // ── Opponent pick prediction ──────────────────────────────────────────────────
 function predictNextPick(
   owner: MockOwner,
@@ -331,7 +483,7 @@ export default function MockDraftSimulator() {
     return setupData.owners as unknown as MockOwner[];
   }, [setupData]);
 
-  const totalTeams = (setupData?.totalTeams as number | undefined) ?? (owners.length || 14);
+  const totalTeams = (setupData?.totalTeams as number | undefined) ?? (owners.length > 0 ? owners.length : 14);
 
   const rodSlotIndex = useMemo(() => {
     const idx = owners.findIndex(o => o.isRod);
@@ -722,6 +874,7 @@ export default function MockDraftSimulator() {
   const [bestFitMode, setBestFitMode] = useState<"available" | "fit">("available");
   const [showOpponentPredictions, setShowOpponentPredictions] = useState(true);
   const [postDraftSort, setPostDraftSort] = useState<"grade" | "ecr" | "vbd">("grade");
+  const [showOpportunityBoard, setShowOpportunityBoard] = useState(true);
 
   const bestAvailablePlayers = useMemo(() => {
     const pool = bestAvailPos === "ALL"
@@ -823,6 +976,22 @@ export default function MockDraftSimulator() {
     }
     return preds;
   }, [boardData, draftStarted, isRodsTurn, draftComplete, currentOverall, totalTeams, snakeOrder, rodSlotIndex, picks, owners, keeperPlayerIds]);
+
+  // ── Rod Opportunity Board (live) ─────────────────────────────────────────────────
+  const opportunityBoard = useMemo(() => {
+    if (!draftStarted || draftComplete || owners.length === 0) return [];
+    return calcOpportunityBoard(picks, owners, availablePlayers, currentRound, rodSlotIndex, totalTeams);
+  }, [draftStarted, draftComplete, picks, owners, availablePlayers, currentRound, rodSlotIndex, totalTeams]);
+
+  // ── Championship Equity delta map ─────────────────────────────────────────────────
+  const champEquityMap = useMemo(() => {
+    if (!isRodsTurn || !draftStarted || draftComplete) return new Map<number, number>();
+    const map = new Map<number, number>();
+    for (const p of bestAvailablePlayers) {
+      map.set(p.fpId, calcChampEquityDelta(p, rodPicks, availablePlayers, owners));
+    }
+    return map;
+  }, [isRodsTurn, draftStarted, draftComplete, bestAvailablePlayers, rodPicks, availablePlayers, owners]);
 
   const saveDraftMutation = trpc.draftBoard.saveDraft.useMutation({
     onSuccess: (data) => {
@@ -1291,6 +1460,7 @@ export default function MockDraftSimulator() {
                   const survival = survivals.get(p.fpId);
                   const fitReason = bestFitReasons.get(p.fpId);
                   const isBestFitTop = bestFitMode === "fit" && idx === 0;
+                  const champDelta = champEquityMap.get(p.fpId);
                   return (
                     <div key={p.fpId} className="space-y-0.5">
                       <div
@@ -1350,6 +1520,29 @@ export default function MockDraftSimulator() {
                           </Tooltip>
                         )}
                       </div>
+                      {/* Championship Equity delta */}
+                      {champDelta !== undefined && isRodsTurn && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className={cn(
+                              "text-[10px] font-semibold shrink-0 px-1.5 py-0.5 rounded border cursor-help",
+                              champDelta >= 3 ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/30" :
+                              champDelta >= 0 ? "text-blue-300 bg-blue-500/10 border-blue-500/30" :
+                              "text-slate-400 bg-slate-700/30 border-slate-600/30"
+                            )}>
+                              {champDelta >= 0 ? "+" : ""}{champDelta}% 🏆
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="max-w-[200px] text-xs">
+                            {champDelta >= 3
+                              ? `Drafting ${p.name} is estimated to improve your championship odds by ${champDelta}% based on roster fit, positional scarcity, and ECR value.`
+                              : champDelta >= 0
+                              ? `Modest equity gain — ${p.name} adds value but doesn't dramatically shift title odds.`
+                              : `Minimal equity impact — consider positional need before drafting.`
+                            }
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                       {/* Best Fit reason row */}
                       {fitReason && (
                         <p className="text-[10px] text-muted-foreground pl-8 pb-0.5">{fitReason}</p>
@@ -1513,6 +1706,55 @@ export default function MockDraftSimulator() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Rod Opportunity Board */}
+            {draftStarted && !draftComplete && opportunityBoard.length > 0 && (
+              <Card className="border-amber-500/30 bg-amber-500/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Target className="w-4 h-4 text-amber-400" />
+                      <span className="text-amber-300">Rod Opportunity Board</span>
+                    </div>
+                    <button
+                      onClick={() => setShowOpportunityBoard(v => !v)}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", !showOpportunityBoard && "-rotate-90")} />
+                    </button>
+                  </CardTitle>
+                </CardHeader>
+                {showOpportunityBoard && (
+                  <CardContent className="p-3 pt-0 space-y-2">
+                    {opportunityBoard.map((opp, i) => {
+                      const urgencyConfig = {
+                        ACT_NOW: { label: "Act Now", cls: "bg-red-500/20 text-red-300 border-red-500/30" },
+                        THIS_ROUND: { label: "This Round", cls: "bg-amber-500/20 text-amber-300 border-amber-500/30" },
+                        MONITOR: { label: "Monitor", cls: "bg-slate-500/20 text-slate-300 border-slate-500/30" },
+                      }[opp.urgency];
+                      const typeIcon = {
+                        DESPERATION: <Flame className="w-3 h-3 text-orange-400" />,
+                        VALUE_POCKET: <TrendingDown className="w-3 h-3 text-emerald-400" />,
+                        RUN_EXPLOIT: <Zap className="w-3 h-3 text-yellow-400" />,
+                        TILT_ALERT: <AlertCircle className="w-3 h-3 text-red-400" />,
+                      }[opp.type];
+                      return (
+                        <div key={i} className="bg-slate-900/40 rounded p-2 space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            {typeIcon}
+                            <span className="text-xs font-semibold text-foreground flex-1">{opp.title}</span>
+                            <span className={cn("text-[10px] px-1.5 py-0.5 rounded border", urgencyConfig.cls)}>
+                              {urgencyConfig.label}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">{opp.detail}</p>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                )}
+              </Card>
+            )}
           </div>
         </div>
       )}
@@ -1555,6 +1797,75 @@ export default function MockDraftSimulator() {
                 ))}
               </div>
             </div>
+
+            {/* Championship Equity League Comparison */}
+            {allTeamRosters.length > 0 && (() => {
+              // Compute a simple championship equity score per team based on avg ECR + VBD
+              const champScores = allTeamRosters.map(t => {
+                const nonKeeper = t.picks.filter(p => !p.isKeeper);
+                const avgEcr = nonKeeper.length > 0
+                  ? nonKeeper.reduce((s, p) => s + p.player.ecrRank, 0) / nonKeeper.length
+                  : 999;
+                const vbd = t.picks.reduce((s, p) => s + (p.player.pfr2025?.vbd ?? 0), 0);
+                // Lower avg ECR = better; higher VBD = better
+                const score = Math.max(0, 100 - avgEcr * 0.5 + vbd * 0.1);
+                return { ownerName: t.owner.ownerName, teamName: t.owner.teamName, isRod: t.isRod, score };
+              });
+              const maxScore = Math.max(...champScores.map(s => s.score), 1);
+              const rodScore = champScores.find(s => s.isRod);
+              const rodRank = [...champScores].sort((a, b) => b.score - a.score).findIndex(s => s.isRod) + 1;
+              return (
+                <div className="mb-4 p-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-emerald-300 flex items-center gap-2">
+                      <Trophy className="w-4 h-4" />
+                      Championship Equity — League Comparison
+                    </h3>
+                    {rodScore && (
+                      <span className="text-xs text-muted-foreground">
+                        Rod ranked <span className={cn("font-bold", rodRank <= 3 ? "text-emerald-400" : rodRank <= 7 ? "text-yellow-400" : "text-red-400")}>
+                          #{rodRank}
+                        </span> of {champScores.length}
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    {[...champScores]
+                      .sort((a, b) => b.score - a.score)
+                      .map((s, i) => (
+                        <div key={s.ownerName} className="flex items-center gap-2">
+                          <span className={cn(
+                            "text-[10px] w-4 text-right shrink-0",
+                            i === 0 ? "text-amber-400 font-bold" : "text-muted-foreground"
+                          )}>#{i + 1}</span>
+                          <span className={cn(
+                            "text-xs w-24 truncate shrink-0",
+                            s.isRod ? "text-primary font-semibold" : "text-foreground"
+                          )}>{s.ownerName.split(" ")[0]}</span>
+                          <div className="flex-1 h-2 rounded-full bg-slate-700/50 overflow-hidden">
+                            <div
+                              className={cn(
+                                "h-full rounded-full transition-all",
+                                s.isRod ? "bg-primary" :
+                                i === 0 ? "bg-amber-400" :
+                                i <= 2 ? "bg-emerald-500" : "bg-slate-500"
+                              )}
+                              style={{ width: `${Math.round((s.score / maxScore) * 100)}%` }}
+                            />
+                          </div>
+                          <span className={cn(
+                            "text-[10px] w-8 text-right shrink-0",
+                            s.isRod ? "text-primary" : "text-muted-foreground"
+                          )}>{Math.round(s.score)}</span>
+                        </div>
+                      ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Score = 100 − (avg ECR × 0.5) + (VBD × 0.1) — higher is better
+                  </p>
+                </div>
+              );
+            })()}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {[...allTeamRosters]

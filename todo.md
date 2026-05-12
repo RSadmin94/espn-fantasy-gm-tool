@@ -813,3 +813,13 @@
 - [x] Sort options: by grade, by avg ECR, by total VBD
 - [x] TypeScript: 0 errors
 - [x] Tests: all passing
+
+## FEATURE: Rod Opportunity Board + Championship Equity
+- [x] Live "Opportunity Board" panel during draft: surfaces exploit opportunities per opponent (e.g., "Mike desperate at RB — 3 rounds of value available", "QB pocket forming at Rd 8")
+- [x] Opportunity types: positional desperation (owner has 0 of a position after X rounds), value pocket (top players at a position still available 2+ rounds past ADP), run exploitation (position run = others overcommitting = value elsewhere), tilt alert (high-tilt owner just missed target = expect emotional reach)
+- [x] Championship Equity metric: per player in Best Available list, show "+X% title odds" based on how adding that player changes Rod's projected finish vs the field
+- [x] Championship Equity factors: ECR rank relative to league average at that position, roster balance score, positional scarcity impact, projected starter quality
+- [x] Show championship equity in both Best Available and Best Fit modes
+- [x] Post-draft summary: show Rod's final championship equity score vs all other teams
+- [x] TypeScript: 0 errors
+- [x] Tests: all passing
