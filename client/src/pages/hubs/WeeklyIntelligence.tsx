@@ -10,7 +10,7 @@
  *   - Deep Dive slide-over: full LLM narrative + action items per team
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import AppLayout from "@/components/AppLayout";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -750,6 +750,48 @@ export default function WeeklyIntelligence() {
   const [activeTab, setActiveTab] = useState("teams");
   const [deepDiveTeam, setDeepDiveTeam] = useState<TeamAssessment | null>(null);
 
+  // ── Batch run state ──
+  const [batchJobId, setBatchJobId] = useState<string | null>(null);
+  const [showBatchPanel, setShowBatchPanel] = useState(false);
+
+  const batchRunMutation = trpc.weeklyAssessment.batchRunAssessment.useMutation({
+    onSuccess: (result) => {
+      setBatchJobId(result.jobId);
+      setShowBatchPanel(true);
+      toast.info(`Batch started — assessing ${result.teamCount} teams…`);
+    },
+    onError: (err) => {
+      toast.error(`Batch failed: ${err.message}`);
+    },
+  });
+
+  const batchStatusQuery = trpc.weeklyAssessment.batchStatus.useQuery(
+    { jobId: batchJobId ?? "" },
+    {
+      enabled: !!batchJobId,
+      refetchInterval: (query) => {
+        const d = query.state.data;
+        if (d?.done) return false;
+        return 2500;
+      },
+      staleTime: 0,
+    }
+  );
+
+  const batchStatus = batchStatusQuery.data;
+  const prevBatchDone = useRef(false);
+  useEffect(() => {
+    if (batchStatus?.done && !prevBatchDone.current) {
+      prevBatchDone.current = true;
+      const success = batchStatus.successCount;
+      const errors = batchStatus.errorCount;
+      toast.success(`Batch complete — ${success} teams assessed${errors > 0 ? `, ${errors} errors` : ""}`);
+      setForceRefresh(true);
+      refetch().then(() => setForceRefresh(false));
+    }
+    if (!batchStatus?.done) prevBatchDone.current = false;
+  }, [batchStatus?.done]);
+
   const { data, isLoading, refetch } = trpc.weeklyAssessment.fullReport.useQuery(
     { season, forceRefresh },
     { staleTime: 30 * 60 * 1000 }
@@ -813,17 +855,111 @@ export default function WeeklyIntelligence() {
               </>
             )}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isLoading}
-            className="gap-1.5"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-            {isLoading ? "Generating…" : "Refresh Report"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isLoading}
+              className="gap-1.5"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+              {isLoading ? "Generating…" : "Refresh Report"}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => batchRunMutation.mutate({ season })}
+              disabled={batchRunMutation.isPending || (!!batchJobId && !batchStatus?.done)}
+              className="gap-1.5 bg-orange-600 hover:bg-orange-500 text-white border-0"
+            >
+              {batchRunMutation.isPending || (!!batchJobId && !batchStatus?.done) ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Running…</>
+              ) : (
+                <><Zap className="w-3.5 h-3.5" /> Run All 14 Teams</>
+              )}
+            </Button>
+            {batchJobId && (
+              <button
+                onClick={() => setShowBatchPanel(v => !v)}
+                className="text-xs text-slate-400 hover:text-slate-200 underline"
+              >
+                {showBatchPanel ? "Hide progress" : "Show progress"}
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* ── Batch Progress Panel ── */}
+        {showBatchPanel && batchJobId && (
+          <Card className="bg-slate-800/60 border-orange-500/30">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {batchStatus?.done ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
+                  )}
+                  <CardTitle className="text-sm text-orange-400">
+                    {batchStatus?.done
+                      ? `Assessment Complete — ${batchStatus.successCount}/${batchStatus.totalCount} teams`
+                      : `Running Assessment — ${batchStatus?.completedCount ?? 0}/${batchStatus?.totalCount ?? 14} teams`
+                    }
+                  </CardTitle>
+                </div>
+                {batchStatus && (
+                  <span className="text-xs text-slate-500">
+                    {batchStatus.done && batchStatus.completedAt
+                      ? `Completed in ${Math.round((batchStatus.completedAt - (batchStatus.completedAt - (batchStatus.elapsedMs ?? 0))) / 1000)}s`
+                      : `${Math.round((batchStatus.elapsedMs ?? 0) / 1000)}s elapsed`
+                    }
+                  </span>
+                )}
+              </div>
+              {/* Progress bar */}
+              {batchStatus && (
+                <div className="mt-2">
+                  <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        batchStatus.done ? "bg-emerald-500" : "bg-orange-500"
+                      }`}
+                      style={{ width: `${Math.round(((batchStatus.completedCount ?? 0) / (batchStatus.totalCount || 14)) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-500 mt-1">
+                    <span>{batchStatus.completedCount ?? 0} done</span>
+                    {batchStatus.errorCount > 0 && (
+                      <span className="text-red-400">{batchStatus.errorCount} errors</span>
+                    )}
+                    <span>{batchStatus.totalCount} total</span>
+                  </div>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1.5">
+                {(batchStatus?.teams ?? []).map(t => (
+                  <div
+                    key={t.teamId}
+                    className={`rounded-md px-2 py-1.5 border text-xs flex items-center gap-1.5 ${
+                      t.status === "done" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" :
+                      t.status === "error" ? "bg-red-500/10 border-red-500/30 text-red-400" :
+                      t.status === "running" ? "bg-orange-500/10 border-orange-500/30 text-orange-400" :
+                      "bg-slate-700/30 border-slate-600/30 text-slate-500"
+                    }`}
+                  >
+                    {t.status === "done" && <CheckCircle2 className="w-3 h-3 shrink-0" />}
+                    {t.status === "error" && <XCircle className="w-3 h-3 shrink-0" />}
+                    {t.status === "running" && <Loader2 className="w-3 h-3 shrink-0 animate-spin" />}
+                    {t.status === "pending" && <Clock className="w-3 h-3 shrink-0" />}
+                    <span className="truncate">{t.ownerName}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ── League Pulse Banner ── */}
         <LeaguePulseBanner season={season} />

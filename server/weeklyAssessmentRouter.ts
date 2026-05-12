@@ -40,6 +40,37 @@ function getCacheKey(season: number, week?: number) {
   return `${season}-${week ?? "current"}`;
 }
 
+// ─── Batch job store ──────────────────────────────────────────────────────────
+// Tracks in-progress batch assessment runs so the frontend can poll for status.
+
+type TeamJobStatus = "pending" | "running" | "done" | "error";
+
+interface BatchJob {
+  jobId: string;
+  season: number;
+  startedAt: number;
+  completedAt: number | null;
+  teams: Array<{
+    teamId: number;
+    ownerName: string;
+    status: TeamJobStatus;
+    error?: string;
+  }>;
+  done: boolean;
+  successCount: number;
+  errorCount: number;
+}
+
+const batchJobs = new Map<string, BatchJob>();
+const BATCH_JOB_TTL = 2 * 60 * 60 * 1000; // 2 hours
+
+function pruneBatchJobs() {
+  const cutoff = Date.now() - BATCH_JOB_TTL;
+  Array.from(batchJobs.entries()).forEach(([id, job]) => {
+    if (job.startedAt < cutoff) batchJobs.delete(id);
+  });
+}
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 export const weeklyAssessmentRouter = router({
@@ -216,6 +247,127 @@ export const weeklyAssessmentRouter = router({
           };
         }),
         currentMatchups: currentMatchupMap,
+      };
+    }),
+
+  /**
+   * Start a batch assessment run for all teams in the league.
+   * Returns a jobId immediately; poll batchStatus with the jobId for progress.
+   * The job runs asynchronously in the background (fire-and-forget Promise).
+   */
+  batchRunAssessment: publicProcedure
+    .input(z.object({ season: z.number().default(2025) }))
+    .mutation(async ({ input }) => {
+      pruneBatchJobs();
+
+      // Get team list from cached data
+      const cached = await getCachedView(input.season, "combined");
+      if (!cached) throw new TRPCError({ code: "NOT_FOUND", message: "No ESPN data cached for this season. Run a data refresh first." });
+
+      const data = cached.payload as Record<string, unknown>;
+      const teams = normalizeTeams(data);
+      const ownerMap: Record<number, string> = {};
+      for (const t of teams) {
+        ownerMap[t.teamId as number] = t.owners as string;
+      }
+
+      // Create job record
+      const jobId = `batch-${input.season}-${Date.now()}`;
+      const job: BatchJob = {
+        jobId,
+        season: input.season,
+        startedAt: Date.now(),
+        completedAt: null,
+        done: false,
+        successCount: 0,
+        errorCount: 0,
+        teams: teams.map(t => ({
+          teamId: t.teamId as number,
+          ownerName: ownerMap[t.teamId as number] || "Unknown",
+          status: "pending" as TeamJobStatus,
+        })),
+      };
+      batchJobs.set(jobId, job);
+
+      // Fire-and-forget: run assessments sequentially in the background
+      (async () => {
+        const teamNameMap: Record<number, string> = {};
+        for (const t of teams) {
+          teamNameMap[t.teamId as number] = (t.teamName as string) || "Unknown";
+        }
+        const rodTeamId = teams.find(t => {
+          const name = ((t.teamName as string) || "").toLowerCase();
+          return name.includes("str8") || name.includes("rodzilla");
+        })?.teamId as number ?? null;
+        const allTeamsData = {
+          teams,
+          rosters: [],
+          matchups: normalizeMatchups(data),
+          transactions: normalizeTransactions(data) as unknown[],
+          settings: normalizeSettings(data),
+          ownerMap,
+          teamNameMap,
+        };
+
+        for (let i = 0; i < job.teams.length; i++) {
+          const entry = job.teams[i];
+          entry.status = "running";
+          try {
+            const { calcManagerDNA: _calcDNA } = await import("./leagueDNA");
+            const managerRawData: ManagerRawData = {
+              memberId: String(entry.teamId),
+              ownerName: entry.ownerName,
+              seasonRecords: [], txnSeasons: [], draftPicks: [],
+              h2hVsRod: { wins: 0, losses: 0 }, currentSeason: null,
+            };
+            const dna = _calcDNA(managerRawData, []);
+            const dnaMap = new Map([[entry.teamId, dna]]);
+            await buildTeamAssessment(entry.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId);
+            entry.status = "done";
+            job.successCount++;
+          } catch (err) {
+            entry.status = "error";
+            entry.error = err instanceof Error ? err.message : "Unknown error";
+            job.errorCount++;
+          }
+        }
+
+        job.done = true;
+        job.completedAt = Date.now();
+
+        // Also invalidate the fullReport cache so next load gets fresh data
+        const cacheKey = getCacheKey(input.season);
+        reportCache.delete(cacheKey);
+      })().catch(() => {
+        job.done = true;
+        job.completedAt = Date.now();
+      });
+
+      return { jobId, teamCount: job.teams.length };
+    }),
+
+  /**
+   * Poll the status of a batch assessment job.
+   * Call every 2-3 seconds while the job is running.
+   */
+  batchStatus: publicProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(({ input }) => {
+      const job = batchJobs.get(input.jobId);
+      if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found or expired." });
+      const elapsedMs = Date.now() - job.startedAt;
+      const completedCount = job.teams.filter(t => t.status === "done" || t.status === "error").length;
+      return {
+        jobId: job.jobId,
+        season: job.season,
+        done: job.done,
+        successCount: job.successCount,
+        errorCount: job.errorCount,
+        totalCount: job.teams.length,
+        completedCount,
+        elapsedMs,
+        completedAt: job.completedAt,
+        teams: job.teams,
       };
     }),
 });

@@ -721,5 +721,11 @@
 - [x] Start/Sit: fetch leaguePulse to find current matchup opponent, pass opponentMemberIds to agents.startSit so DNA block is populated
 - [x] Trade Analyzer: enrich tradeAnalyze LLM prompt with DNA profiles for both trade partners (archetype, desperation score, positional needs)
 - [x] Waiver Intelligence: replace draftBoard.getPlayers with weeklyAssessment.rodOpportunities + leaguePulse to show desperate teams and targeted pickups
-- [ ] Chrome extension: audit and fix ESPN DOM selectors for team ID extraction
+- [x] Chrome extension: audit and fix ESPN DOM selectors for team ID extraction — live DOM audit confirmed span.teamName.truncate + nav-based teamId map strategy; inject.js v1.2.1 deployed
 - [x] 0 TypeScript errors, all 293 tests passing after changes
+
+## Weekly Assessment Batch Trigger
+
+- [x] Add batchRunAssessment mutation + batchStatus query to weeklyAssessmentRouter: fire-and-forget job store, returns jobId immediately, polls per-team status
+- [x] Build batch trigger UI in WeeklyIntelligence.tsx: "Run All 14 Teams" orange button, animated progress bar, per-team status chips (pending/running/done/error), elapsed time, auto-refreshes fullReport on completion
+- [x] 0 TypeScript errors, 293/293 tests passing
