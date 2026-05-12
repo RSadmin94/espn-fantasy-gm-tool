@@ -721,6 +721,7 @@ export default function MockDraftSimulator() {
   const [bestAvailPos, setBestAvailPos] = useState<string>("ALL");
   const [bestFitMode, setBestFitMode] = useState<"available" | "fit">("available");
   const [showOpponentPredictions, setShowOpponentPredictions] = useState(true);
+  const [postDraftSort, setPostDraftSort] = useState<"grade" | "ecr" | "vbd">("grade");
 
   const bestAvailablePlayers = useMemo(() => {
     const pool = bestAvailPos === "ALL"
@@ -1533,77 +1534,233 @@ export default function MockDraftSimulator() {
             </div>
           </div>
           <div>
-            <h2 className="text-base font-semibold text-foreground mb-3 flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-amber-400" />
-              All Teams — Draft Grades
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {allTeamRosters.map(({ owner, picks: teamPicks, grade, isRod }) => (
-                <Card
-                  key={owner.teamId}
-                  className={cn(
-                    "border cursor-pointer transition-colors",
-                    isRod ? "border-primary/40 bg-primary/5" : "border-slate-700/50 bg-slate-800/30 hover:bg-slate-800/50"
-                  )}
-                  onClick={() => setExpandedTeam(expandedTeam === owner.ownerName ? null : owner.ownerName)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {isRod && <span className="text-xs text-primary font-semibold shrink-0">YOU</span>}
-                        <span className="text-sm font-medium text-foreground truncate">{owner.ownerName}</span>
-                      </div>
-                      <span className={cn("text-2xl font-black shrink-0", GRADE_COLORS[grade.grade] ?? "text-foreground")}>
-                        {grade.grade}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>Avg ECR {grade.avgEcr.toFixed(0)}</span>
-                      <span>VBD {grade.totalVbd}</span>
-                      <span>{teamPicks.length} picks</span>
-                    </div>
-                    <div className="flex gap-1 mt-2 flex-wrap">
-                      {(["QB", "RB", "WR", "TE", "K", "DST"] as const).map((pos) => {
-                        const count = teamPicks.filter((p) => p.player.position === pos).length;
-                        if (count === 0) return null;
-                        return (
-                          <span key={pos} className={cn("text-xs px-1.5 py-0.5 rounded border", POS_COLORS[pos])}>
-                            {pos + " x" + count}
+            {/* Sort controls */}
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-amber-400" />
+                All Teams — Draft Summary
+              </h2>
+              <div className="flex rounded-md overflow-hidden border border-slate-700 text-xs">
+                {(["grade", "ecr", "vbd"] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setPostDraftSort(s)}
+                    className={cn(
+                      "px-2.5 py-1 transition-colors border-l border-slate-700 first:border-l-0",
+                      postDraftSort === s ? "bg-primary text-primary-foreground" : "text-slate-400 hover:text-foreground"
+                    )}
+                  >
+                    {s === "grade" ? "Grade" : s === "ecr" ? "Avg ECR" : "VBD"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {[...allTeamRosters]
+                .sort((a, b) => {
+                  if (a.isRod) return -1;
+                  if (b.isRod) return 1;
+                  if (postDraftSort === "grade") {
+                    const gradeOrder = ["A+","A","A-","B+","B","B-","C+","C","C-","D","F"];
+                    return gradeOrder.indexOf(a.grade.grade) - gradeOrder.indexOf(b.grade.grade);
+                  }
+                  if (postDraftSort === "ecr") return a.grade.avgEcr - b.grade.avgEcr;
+                  return b.grade.totalVbd - a.grade.totalVbd;
+                })
+                .map(({ owner, picks: teamPicks, grade, isRod }) => {
+                  const nonKeeperPicks = teamPicks.filter(p => !p.isKeeper);
+                  // Best value: highest (pick slot - ECR rank) = drafted later than ECR suggests
+                  const bestValue = nonKeeperPicks.length > 0
+                    ? nonKeeperPicks.reduce((best, p) => {
+                        const gap = p.overall - p.player.ecrRank;
+                        return gap > (best.overall - best.player.ecrRank) ? p : best;
+                      })
+                    : null;
+                  // Biggest reach: lowest (pick slot - ECR rank)
+                  const biggestReach = nonKeeperPicks.length > 0
+                    ? nonKeeperPicks.reduce((worst, p) => {
+                        const gap = p.overall - p.player.ecrRank;
+                        return gap < (worst.overall - worst.player.ecrRank) ? p : worst;
+                      })
+                    : null;
+                  // Positional strengths/weaknesses by avg ECR of non-keeper picks
+                  const posByAvgEcr: Array<{ pos: string; avgEcr: number; count: number }> = [];
+                  for (const pos of ["QB", "RB", "WR", "TE"]) {
+                    const posPlayers = nonKeeperPicks.filter(p => p.player.position === pos);
+                    if (posPlayers.length > 0) {
+                      const avg = posPlayers.reduce((s, p) => s + p.player.ecrRank, 0) / posPlayers.length;
+                      posByAvgEcr.push({ pos, avgEcr: avg, count: posPlayers.length });
+                    }
+                  }
+                  posByAvgEcr.sort((a, b) => a.avgEcr - b.avgEcr);
+                  const strengths = posByAvgEcr.slice(0, 2).map(p => p.pos);
+                  const weaknesses = posByAvgEcr.slice(-2).reverse().map(p => p.pos);
+                  const keeperPicks = teamPicks.filter(p => p.isKeeper);
+
+                  return (
+                    <Card
+                      key={owner.teamId}
+                      className={cn(
+                        "border cursor-pointer transition-colors",
+                        isRod ? "border-primary/40 bg-primary/5" : "border-slate-700/50 bg-slate-800/30 hover:bg-slate-800/50"
+                      )}
+                      onClick={() => setExpandedTeam(expandedTeam === owner.ownerName ? null : owner.ownerName)}
+                    >
+                      <CardContent className="p-4 space-y-3">
+                        {/* Header row */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {isRod && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">YOU</span>}
+                              <span className="text-sm font-semibold text-foreground truncate">{owner.ownerName}</span>
+                            </div>
+                            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-slate-600 text-slate-400">
+                                {owner.gmArchetype ?? "Unknown"}
+                              </Badge>
+                              <span className="text-[10px] text-muted-foreground">{teamPicks.length} picks</span>
+                            </div>
+                          </div>
+                          <span className={cn("text-3xl font-black shrink-0 leading-none", GRADE_COLORS[grade.grade] ?? "text-foreground")}>
+                            {grade.grade}
                           </span>
-                        );
-                      })}
-                    </div>
-                    {expandedTeam === owner.ownerName && (
-                      <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-1">
-                        {teamPicks.map((pick) => (
-                          <div key={pick.overall} className="flex items-center gap-2 text-xs">
-                            <span className="text-muted-foreground w-10 shrink-0">
-                              {pick.isKeeper ? "KEEP" : "Rd " + pick.round}
-                            </span>
-                            <Badge variant="outline" className={cn("px-1 py-0 h-4 text-[10px] shrink-0", POS_COLORS[pick.player.position] ?? "")}>
-                              {pick.player.position}
-                            </Badge>
-                            <span className="text-foreground truncate flex-1">{pick.player.name}</span>
-                            {!pick.isKeeper && (
-                              <span className={cn(
-                                "shrink-0 font-medium",
-                                (pick.overall - pick.player.ecrRank) >= 5 ? "text-emerald-400" :
-                                (pick.overall - pick.player.ecrRank) <= -5 ? "text-red-400" : "text-muted-foreground"
-                              )}>
-                                {(pick.overall - pick.player.ecrRank) > 0
-                                  ? "+" + (pick.overall - pick.player.ecrRank)
-                                  : (pick.overall - pick.player.ecrRank)}
+                        </div>
+
+                        {/* Stats row */}
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="bg-slate-900/40 rounded p-1.5">
+                            <div className="text-xs font-semibold text-foreground">{grade.avgEcr.toFixed(0)}</div>
+                            <div className="text-[10px] text-muted-foreground">Avg ECR</div>
+                          </div>
+                          <div className="bg-slate-900/40 rounded p-1.5">
+                            <div className="text-xs font-semibold text-foreground">{grade.totalVbd}</div>
+                            <div className="text-[10px] text-muted-foreground">VBD</div>
+                          </div>
+                          <div className="bg-slate-900/40 rounded p-1.5">
+                            <div className="text-xs font-semibold text-foreground">{keeperPicks.length}</div>
+                            <div className="text-[10px] text-muted-foreground">Keepers</div>
+                          </div>
+                        </div>
+
+                        {/* Position counts */}
+                        <div className="flex gap-1 flex-wrap">
+                          {(["QB", "RB", "WR", "TE", "K", "DST"] as const).map((pos) => {
+                            const count = teamPicks.filter((p) => p.player.position === pos).length;
+                            if (count === 0) return null;
+                            return (
+                              <span key={pos} className={cn("text-[10px] px-1.5 py-0.5 rounded border", POS_COLORS[pos])}>
+                                {pos} ×{count}
                               </span>
+                            );
+                          })}
+                        </div>
+
+                        {/* Strengths / Weaknesses */}
+                        {(strengths.length > 0 || weaknesses.length > 0) && (
+                          <div className="grid grid-cols-2 gap-2">
+                            {strengths.length > 0 && (
+                              <div className="bg-emerald-900/20 border border-emerald-500/20 rounded p-1.5">
+                                <div className="text-[10px] text-emerald-400 font-medium mb-0.5">Strengths</div>
+                                <div className="text-xs text-foreground">{strengths.join(", ")}</div>
+                              </div>
+                            )}
+                            {weaknesses.length > 0 && (
+                              <div className="bg-red-900/20 border border-red-500/20 rounded p-1.5">
+                                <div className="text-[10px] text-red-400 font-medium mb-0.5">Weaknesses</div>
+                                <div className="text-xs text-foreground">{weaknesses.join(", ")}</div>
+                              </div>
                             )}
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+                        )}
+
+                        {/* Best value / Biggest reach */}
+                        <div className="space-y-1">
+                          {bestValue && (bestValue.overall - bestValue.player.ecrRank) >= 5 && (
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <TrendingDown className="w-3 h-3 text-emerald-400 shrink-0" />
+                              <span className="text-emerald-400 font-medium shrink-0">Value:</span>
+                              <span className="text-foreground truncate">{bestValue.player.name}</span>
+                              <span className="text-emerald-400 shrink-0 ml-auto">+{bestValue.overall - bestValue.player.ecrRank}</span>
+                            </div>
+                          )}
+                          {biggestReach && (biggestReach.overall - biggestReach.player.ecrRank) <= -5 && (
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <TrendingUp className="w-3 h-3 text-red-400 shrink-0" />
+                              <span className="text-red-400 font-medium shrink-0">Reach:</span>
+                              <span className="text-foreground truncate">{biggestReach.player.name}</span>
+                              <span className="text-red-400 shrink-0 ml-auto">{biggestReach.overall - biggestReach.player.ecrRank}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Keeper badges */}
+                        {keeperPicks.length > 0 && (
+                          <div className="flex gap-1 flex-wrap">
+                            {keeperPicks.map(kp => (
+                              <div key={kp.overall} className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5">
+                                <Lock className="w-2.5 h-2.5 text-amber-400" />
+                                <span className="text-[10px] text-amber-300">{kp.player.name.split(" ").slice(-1)[0]}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Expand indicator */}
+                        <div className="flex items-center justify-center pt-1">
+                          <ChevronDown className={cn(
+                            "w-3.5 h-3.5 text-muted-foreground transition-transform",
+                            expandedTeam === owner.ownerName && "rotate-180"
+                          )} />
+                        </div>
+
+                        {/* Expanded full roster */}
+                        {expandedTeam === owner.ownerName && (
+                          <div className="pt-2 border-t border-slate-700/50 space-y-0.5">
+                            {teamPicks
+                              .slice()
+                              .sort((a, b) => {
+                                const posOrder: Record<string, number> = { QB: 0, RB: 1, WR: 2, TE: 3, K: 4, DST: 5 };
+                                const pa = posOrder[a.player.position] ?? 9;
+                                const pb = posOrder[b.player.position] ?? 9;
+                                return pa !== pb ? pa - pb : a.player.ecrRank - b.player.ecrRank;
+                              })
+                              .map((pick) => {
+                                const surplus = pick.overall - pick.player.ecrRank;
+                                return (
+                                  <div key={pick.overall} className={cn(
+                                    "flex items-center gap-2 text-xs px-1 py-1 rounded",
+                                    pick.isKeeper ? "bg-amber-500/10" : ""
+                                  )}>
+                                    <span className="text-muted-foreground w-10 shrink-0 text-[10px]">
+                                      {pick.isKeeper ? "KEEP" : "Rd " + pick.round}
+                                    </span>
+                                    <Badge variant="outline" className={cn("px-1 py-0 h-4 text-[10px] shrink-0", POS_COLORS[pick.player.position] ?? "")}>
+                                      {pick.player.position}
+                                    </Badge>
+                                    <span className="text-foreground truncate flex-1">{pick.player.name}</span>
+                                    {pick.isKeeper ? (
+                                      <Lock className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                                    ) : (
+                                      <span className={cn(
+                                        "shrink-0 font-medium text-[10px]",
+                                        surplus >= 5 ? "text-emerald-400" :
+                                        surplus <= -5 ? "text-red-400" : "text-muted-foreground"
+                                      )}>
+                                        {surplus > 0 ? "+" + surplus : surplus === 0 ? "—" : surplus}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
             </div>
-            <p className="text-xs text-muted-foreground mt-2">Click any team card to expand their full roster.</p>
+            <p className="text-xs text-muted-foreground mt-2">Click any team card to expand their full roster sorted by position.</p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <Button onClick={handleReset} variant="outline" className="gap-2">

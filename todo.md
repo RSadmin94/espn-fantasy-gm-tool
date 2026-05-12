@@ -801,3 +801,15 @@
 
 - [x] TypeScript: 0 errors
 - [x] Tests: all passing
+
+## FEATURE: Post-Draft All-Teams Summary
+- [x] After draft completes, show a full league summary section with a card per team
+- [x] Each team card shows: owner name, team name, DNA archetype badge, draft grade (A-F), avg ECR, total VBD
+- [x] Roster breakdown by position: QB/RB/WR/TE/K/DST with player names and ECR ranks
+- [x] Positional strengths (top 2 positions by avg ECR) and weaknesses (bottom 2 positions)
+- [x] Best value pick (highest ECR-ADP gap) and biggest reach (lowest ECR-ADP gap)
+- [x] Keeper lock badge on kept players
+- [x] Rod's team card is highlighted/pinned to top
+- [x] Sort options: by grade, by avg ECR, by total VBD
+- [x] TypeScript: 0 errors
+- [x] Tests: all passing
