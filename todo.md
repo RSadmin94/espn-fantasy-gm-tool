@@ -896,3 +896,14 @@
 - [x] Fix extension background.js: DEFAULT_SEASON now auto-detects (currentYear-1) instead of hardcoded 2025
 - [x] Extension repackaged as v1.3.0
 - [x] Run all tests and save checkpoint — 467/467 passing, 0 TS errors
+
+## BUG: Extension 404 when switching to season 2026
+- [x] leaguePulse returns 404/error when called with season=2026 (no cached data yet) — FIXED: now returns empty offseason placeholder
+- [x] Fix server: return graceful offseason placeholder instead of throwing NOT_FOUND
+- [x] Run tests and save checkpoint — 467/467 passing, 0 TS errors
+
+## FEATURE: Extension pulls live ESPN data directly (not DB cache)
+- [x] leaguePulse: fetch live from ESPN first (hasCookies guard), DB cache as fallback, empty placeholder instead of 404 when no data
+- [x] teamBrief: same live-first pattern with DB cache fallback
+- [x] batchRunAssessment: same live-first pattern
+- [x] Run tests and save checkpoint — 467/467 passing, 0 TS errors
