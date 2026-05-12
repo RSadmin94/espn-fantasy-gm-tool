@@ -460,6 +460,7 @@ export default function MockDraftSimulator() {
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const [savedDraftId, setSavedDraftId] = useState<number | null>(null);
+  const [strategyLabel, setStrategyLabel] = useState<string>("BPA");
   const [keeperOverrides, setKeeperOverrides] = useState<Record<number, KeeperOverride>>({});
   const [keeperDropdownOpen, setKeeperDropdownOpen] = useState<number | null>(null);
   const [isPaused, setIsPaused] = useState(false);
@@ -1005,15 +1006,24 @@ export default function MockDraftSimulator() {
 
   const handleSaveDraft = useCallback(() => {
     if (!draftComplete || rodPicks.length === 0) return;
+    // Compute Rod's final championship equity score from the post-draft roster
+    const nonKeeper = rodPicks.filter(p => !p.isKeeper);
+    const avgEcrFinal = nonKeeper.length > 0
+      ? nonKeeper.reduce((s, p) => s + p.player.ecrRank, 0) / nonKeeper.length
+      : 999;
+    const vbdFinal = rodPicks.reduce((s, p) => s + (p.player.pfr2025?.vbd ?? 0), 0);
+    const champEquityScore = Math.max(0, Math.round((100 - avgEcrFinal * 0.5 + vbdFinal * 0.1) * 10) / 10);
     saveDraftMutation.mutate({
       draftSlot: rodOwner?.draftSlot ?? 1,
       grade: rodGrade.grade,
       avgEcr: rodGrade.avgEcr,
       totalVbd: rodGrade.totalVbd,
+      strategyLabel,
+      champEquityScore,
       rodPicksJson: rodPicks as unknown as Record<string, unknown>[],
       allPicksJson: picks as unknown as Record<string, unknown>[],
     });
-  }, [draftComplete, rodPicks, picks, rodOwner, rodGrade, saveDraftMutation]);
+  }, [draftComplete, rodPicks, picks, rodOwner, rodGrade, strategyLabel, saveDraftMutation]);
 
   const isLoading = boardLoading || setupLoading;
 
@@ -2083,14 +2093,28 @@ export default function MockDraftSimulator() {
                 Draft saved (ID #{savedDraftId}) — view in Draft History
               </div>
             ) : (
-              <Button
-                onClick={handleSaveDraft}
-                disabled={saveDraftMutation.isPending || !draftComplete}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                <Save className="w-4 h-4" />
-                {saveDraftMutation.isPending ? "Saving…" : "Save Draft Results"}
-              </Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Strategy:</span>
+                  <select
+                    value={strategyLabel}
+                    onChange={e => setStrategyLabel(e.target.value)}
+                    className="text-xs bg-slate-800 border border-slate-700 rounded px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    {["BPA","RB-Heavy","WR-First","TE-Premium","Zero-RB","Handcuff-Heavy","Balanced","Punt-QB"].map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  onClick={handleSaveDraft}
+                  disabled={saveDraftMutation.isPending || !draftComplete}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <Save className="w-4 h-4" />
+                  {saveDraftMutation.isPending ? "Saving…" : "Save Draft Results"}
+                </Button>
+              </div>
             )}
           </div>
         </div>

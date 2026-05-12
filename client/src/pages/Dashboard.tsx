@@ -572,9 +572,40 @@ export default function Dashboard() {
     ? Math.round(standings.reduce((s: number, t: Record<string, unknown>) => s + Number(t.pointsFor || 0), 0) / standings.length)
     : 0;
 
+  // Keeper deadline countdown — keeper deadline is typically early July before the August draft
+  const keeperDeadlineDate = draftOrder2026?.keeperDeadline
+    ? new Date(draftOrder2026.keeperDeadline)
+    : new Date('2026-07-01T00:00:00');
+  const daysUntilKeeper = Math.max(0, Math.ceil((keeperDeadlineDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  const showKeeperBanner = daysUntilKeeper <= 120;
+
   return (
     <AppLayout title="GM War Room" subtitle="ATLANTAS FINEST FF · Str8FrmHell, RodZilla · Rod Sellers · 2026 Season">
       <div className="p-6">
+        {/* Keeper Deadline Countdown Banner */}
+        {showKeeperBanner && (
+          <div className="mb-4 flex items-center justify-between bg-amber-900/20 border border-amber-600/40 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🔒</span>
+              <div>
+                <span className="text-amber-300 font-semibold text-sm">Keeper Deadline</span>
+                <span className="text-amber-200/80 text-sm ml-2">— </span>
+                <span className={`font-bold text-sm ${
+                  daysUntilKeeper <= 14 ? 'text-red-400' :
+                  daysUntilKeeper <= 30 ? 'text-orange-400' : 'text-amber-300'
+                }`}>{daysUntilKeeper} days remaining</span>
+                <span className="text-slate-400 text-xs ml-2">({keeperDeadlineDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})</span>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/offseason-intel')}
+              className="text-xs font-semibold text-amber-300 hover:text-amber-200 border border-amber-600/50 hover:border-amber-500 rounded-lg px-3 py-1.5 transition-colors bg-amber-900/20 hover:bg-amber-900/30"
+            >
+              Review Offseason Intel →
+            </button>
+          </div>
+        )}
+
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6 bg-card border border-border h-10 p-1 gap-0.5">
             {[

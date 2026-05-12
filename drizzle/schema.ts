@@ -201,6 +201,8 @@ export const mockDraftResults = mysqlTable(
     id: int("id").primaryKey().autoincrement(),
     userId: int("userId").notNull(),
     label: varchar("label", { length: 128 }).notNull().default("Mock Draft"),
+    strategyLabel: varchar("strategyLabel", { length: 64 }).default("BPA"),
+    champEquityScore: int("champEquityScore").default(0), // stored * 10 for one decimal
     draftSlot: int("draftSlot").notNull(),
     totalTeams: int("totalTeams").notNull().default(14),
     totalRounds: int("totalRounds").notNull().default(15),

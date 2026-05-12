@@ -1894,8 +1894,9 @@ Respond with JSON in this exact format:
     .input(z.object({
       sideA: z.array(z.object({ round: z.number(), pickInRound: z.number() })),
       sideB: z.array(z.object({ round: z.number(), pickInRound: z.number() })),
+      counterpartyMemberId: z.string().optional(),
     }))
-    .query(({ input }) => {
+    .query(async ({ input }) => {
       const TEAMS = 14;
       const BASE = 3000;
       const K = 0.028;
@@ -1911,7 +1912,112 @@ Respond with JSON in this exact format:
       if (pct >= 110) verdict = 'WIN';
       else if (pct >= 90) verdict = 'FAIR';
       else verdict = 'LOSS';
-      return { valueA, valueB, diff, pct, verdict };
+
+      // ── DNA-based acceptance probability ──────────────────────────────────
+      let dnaAnalysis: {
+        ownerName: string;
+        draftStyle: string;
+        tradeProfile: string;
+        acceptanceProbability: number;
+        reasoning: string[];
+        historicalContext: string;
+      } | null = null;
+
+      if (input.counterpartyMemberId) {
+        try {
+          type TendencyOwner = {
+            memberId: string; name: string; draftStyle: string;
+            rb1Pct: number; wr1Pct: number; earlyRbPct: number;
+            diversityScore: number; keeperRate: number;
+            qbAvgRound: number; teAvgRound: number;
+          };
+          // Re-use the leagueDraftTendencies cached result by calling getSeasonData
+          // Build a minimal owner profile from the most recent 3 seasons
+          const recentSeasons = (await getAllCachedSeasons()).sort((a, b) => b - a).slice(0, 3);
+          const ownerStats = { rb1Pct: 0, wr1Pct: 0, earlyRbPct: 0, diversityScore: 50, keeperRate: 0, qbAvgRound: 8, teAvgRound: 8, draftStyle: 'BPA', name: input.counterpartyMemberId };
+          let r1Total = 0; let rb1 = 0; let wr1 = 0; let earlyRb = 0; let earlyTotal = 0; let keeperPicks = 0; let totalPicks = 0; let qbRounds: number[] = []; let teRounds: number[] = [];
+          const POS_MAP2: Record<number, string> = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'D/ST', 17: 'D/ST' };
+          for (const season of recentSeasons) {
+            const sd = await getSeasonData(season);
+            if (!sd) continue;
+            const memberNameMap: Record<string, string> = {};
+            for (const m of (sd.members as Record<string, unknown>[]) || []) {
+              const mid = m.id as string;
+              memberNameMap[mid] = `${m.firstName || ''} ${m.lastName || ''}`.trim() || (m.displayName as string) || mid;
+            }
+            if (memberNameMap[input.counterpartyMemberId!]) ownerStats.name = memberNameMap[input.counterpartyMemberId!];
+            const draftDetail = (sd.draftDetail as Record<string, unknown>) || {};
+            const draftPicks = (draftDetail.picks as Record<string, unknown>[]) || [];
+            const playerInfoMap = new Map<number, { position: string }>();
+            for (const t of (sd.teams as Record<string, unknown>[]) || []) {
+              for (const entry of (((t.roster as Record<string, unknown>)?.entries as Record<string, unknown>[]) || [])) {
+                const pl = ((entry.playerPoolEntry as Record<string, unknown>)?.player as Record<string, unknown>) || {};
+                const pid = pl.id as number;
+                if (pid) playerInfoMap.set(pid, { position: POS_MAP2[pl.defaultPositionId as number] || 'UNK' });
+              }
+            }
+            for (const pick of draftPicks) {
+              const memberId = pick.memberId as string;
+              if (memberId !== input.counterpartyMemberId) continue;
+              const round = pick.roundId as number;
+              const pos = playerInfoMap.get(pick.playerId as number)?.position || 'UNK';
+              const isKeeper = !!(pick.keeper as boolean);
+              totalPicks++;
+              if (isKeeper) keeperPicks++;
+              if (round === 1) { r1Total++; if (pos === 'RB') rb1++; if (pos === 'WR') wr1++; }
+              if (round <= 4) { earlyTotal++; if (pos === 'RB') earlyRb++; }
+              if (pos === 'QB') qbRounds.push(round);
+            }
+          }
+          if (r1Total > 0) { ownerStats.rb1Pct = Math.round(rb1 / r1Total * 100); ownerStats.wr1Pct = Math.round(wr1 / r1Total * 100); }
+          if (earlyTotal > 0) ownerStats.earlyRbPct = Math.round(earlyRb / earlyTotal * 100);
+          if (totalPicks > 0) ownerStats.keeperRate = keeperPicks / totalPicks;
+          if (qbRounds.length > 0) ownerStats.qbAvgRound = qbRounds.reduce((s, r) => s + r, 0) / qbRounds.length;
+          ownerStats.draftStyle = ownerStats.rb1Pct > 50 ? 'RB-First' : ownerStats.wr1Pct > 50 ? 'WR-First' : 'BPA';
+          const owner: TendencyOwner | undefined = totalPicks > 0 ? { memberId: input.counterpartyMemberId!, ...ownerStats } : undefined;
+          if (owner) {
+            const reasoning: string[] = [];
+            let acceptanceBase = 50;
+            // Value ratio: are they getting more value?
+            const theirValueRatio = valueB > 0 ? valueA / valueB : 1;
+            if (theirValueRatio >= 1.15) { acceptanceBase += 25; reasoning.push(`Receiving ${Math.round((theirValueRatio - 1) * 100)}% more value`); }
+            else if (theirValueRatio >= 1.05) { acceptanceBase += 12; reasoning.push(`Slight value advantage for them`); }
+            else if (theirValueRatio < 0.90) { acceptanceBase -= 20; reasoning.push(`Giving up ${Math.round((1 - theirValueRatio) * 100)}% more value`); }
+            else if (theirValueRatio < 0.95) { acceptanceBase -= 8; reasoning.push(`Slight value disadvantage for them`); }
+            // Draft style adjustments
+            if (owner.rb1Pct > 50) {
+              const r1Picks = input.sideA.filter(p => p.round === 1);
+              if (r1Picks.length > 0) { acceptanceBase += 10; reasoning.push(`${owner.name} is RB-first — early picks are premium`); }
+            }
+            if (owner.earlyRbPct > 60) reasoning.push(`Historically drafts RB in ${owner.earlyRbPct}% of early rounds`);
+            if (owner.diversityScore < 40) { acceptanceBase += 5; reasoning.push(`Low positional diversity — likely values consolidation`); }
+            if (owner.keeperRate > 0.3) { acceptanceBase -= 8; reasoning.push(`High keeper rate (${Math.round(owner.keeperRate * 100)}%) — values pick flexibility`); }
+            if (owner.qbAvgRound < 4) { acceptanceBase -= 5; reasoning.push(`Early QB drafter — R1/R2 picks are premium to them`); }
+            const acceptanceProbability = Math.min(95, Math.max(5, acceptanceBase));
+            const tradeProfile = owner.keeperRate > 0.25 ? 'Active Trader' : owner.diversityScore > 70 ? 'BPA Purist' : 'Selective Trader';
+            const historicalContext = `${owner.name} has a ${owner.draftStyle} draft style with ${owner.diversityScore}% positional diversity. They are a ${tradeProfile}.`;
+            dnaAnalysis = { ownerName: owner.name, draftStyle: owner.draftStyle, tradeProfile, acceptanceProbability, reasoning, historicalContext };
+          }
+        } catch { /* DNA analysis is optional */ }
+      }
+
+      // ── Championship equity change ──────────────────────────────────────
+      // Rod acquires sideB picks, gives away sideA picks
+      const rodAcquiresRounds = input.sideB.map(p => p.round);
+      const rodGivesRounds = input.sideA.map(p => p.round);
+      function roundEquityImpact(round: number): number {
+        if (round === 1) return 5; if (round === 2) return 3;
+        if (round === 3) return 2; return 1;
+      }
+      const equityGained = rodAcquiresRounds.reduce((s, r) => s + roundEquityImpact(r), 0);
+      const equityLost = rodGivesRounds.reduce((s, r) => s + roundEquityImpact(r), 0);
+      const champEquityDelta = equityGained - equityLost;
+      const champEquityLabel = champEquityDelta > 0
+        ? `+${champEquityDelta}% title odds improvement`
+        : champEquityDelta < 0 ? `${champEquityDelta}% title odds reduction`
+        : 'Neutral championship equity impact';
+
+      return { valueA, valueB, diff, pct, verdict, dnaAnalysis, champEquityDelta, champEquityLabel };
     }),
 
   // ── Draft Pick Trade Tracker ──────────────────────────────────────────────
@@ -4333,6 +4439,8 @@ Be concise, data-driven, and specific. Reference actual team names and player na
     saveDraft: protectedProcedure
       .input(z.object({
         label: z.string().max(128).optional(),
+        strategyLabel: z.string().max(64).optional(),
+        champEquityScore: z.number().optional(),
         draftSlot: z.number().int().min(1).max(14),
         totalTeams: z.number().int().default(14),
         totalRounds: z.number().int().default(15),
@@ -4351,6 +4459,8 @@ Be concise, data-driven, and specific. Reference actual team names and player na
         const result = await dbConn.insert(mockDraftResults).values({
           userId: ctx.user.id,
           label: input.label ?? `Mock Draft — Slot ${input.draftSlot}`,
+          strategyLabel: input.strategyLabel ?? "BPA",
+          champEquityScore: Math.round((input.champEquityScore ?? 0) * 10),
           draftSlot: input.draftSlot,
           totalTeams: input.totalTeams,
           totalRounds: input.totalRounds,
@@ -4376,6 +4486,8 @@ Be concise, data-driven, and specific. Reference actual team names and player na
           .select({
             id: mockDraftResults.id,
             label: mockDraftResults.label,
+            strategyLabel: mockDraftResults.strategyLabel,
+            champEquityScore: mockDraftResults.champEquityScore,
             draftSlot: mockDraftResults.draftSlot,
             totalTeams: mockDraftResults.totalTeams,
             totalRounds: mockDraftResults.totalRounds,
@@ -4388,7 +4500,11 @@ Be concise, data-driven, and specific. Reference actual team names and player na
           .where(eqOp(mockDraftResults.userId, ctx.user.id))
           .orderBy(desc(mockDraftResults.createdAt))
           .limit(50);
-        return rows.map((r) => ({ ...r, avgEcr: r.avgEcr / 10 }));
+        return rows.map((r) => ({
+          ...r,
+          avgEcr: r.avgEcr / 10,
+          champEquityScore: (r.champEquityScore ?? 0) / 10,
+        }));
       }),
 
     /** Get a single saved mock draft with full pick data */
@@ -4409,6 +4525,59 @@ Be concise, data-driven, and specific. Reference actual team names and player na
         if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
         const r = rows[0];
         return { ...r, avgEcr: r.avgEcr / 10 };
+      }),
+
+    /** Compare 2-4 saved mock drafts side-by-side */
+    compareDrafts: protectedProcedure
+      .input(z.object({ ids: z.array(z.number().int()).min(2).max(4) }))
+      .query(async ({ ctx, input }) => {
+        const dbMod = await import("./db");
+        const { getDb } = dbMod;
+        const { mockDraftResults } = await import("../drizzle/schema");
+        const { inArray, eq: eqOp } = await import("drizzle-orm");
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const rows = await dbConn
+          .select()
+          .from(mockDraftResults)
+          .where(inArray(mockDraftResults.id, input.ids))
+          .limit(4);
+        // Ensure all rows belong to this user
+        const owned = rows.filter((r) => r.userId === ctx.user.id);
+        if (owned.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
+        return owned.map((r) => {
+          const rodPicks = (r.rodPicksJson as Array<Record<string, unknown>>) ?? [];
+          // Compute positional breakdown from Rod's picks
+          const posCounts: Record<string, number> = {};
+          let totalEcrSum = 0;
+          let totalVbd = 0;
+          let pickCount = 0;
+          for (const p of rodPicks) {
+            if (p.isKeeper) continue; // exclude keepers from ECR stats
+            const pos = (p.position as string) ?? "?";
+            posCounts[pos] = (posCounts[pos] ?? 0) + 1;
+            const ecr = (p.ecrRank as number) ?? 0;
+            if (ecr > 0) { totalEcrSum += ecr; pickCount++; }
+            totalVbd += (p.vbd as number) ?? 0;
+          }
+          const computedAvgEcr = pickCount > 0 ? Math.round(totalEcrSum / pickCount * 10) / 10 : r.avgEcr / 10;
+          return {
+            id: r.id,
+            label: r.label,
+            strategyLabel: r.strategyLabel ?? "BPA",
+            champEquityScore: (r.champEquityScore ?? 0) / 10,
+            draftSlot: r.draftSlot,
+            totalTeams: r.totalTeams,
+            totalRounds: r.totalRounds,
+            grade: r.grade,
+            avgEcr: r.avgEcr / 10,
+            computedAvgEcr,
+            totalVbd: r.totalVbd,
+            posCounts,
+            rodPicks,
+            createdAt: r.createdAt,
+          };
+        });
       }),
 
     /** Delete a saved mock draft */

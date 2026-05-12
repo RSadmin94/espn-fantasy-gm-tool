@@ -48,6 +48,8 @@ type SavedDraft = {
   avgEcr: number;
   totalVbd: number;
   createdAt: Date;
+  strategyLabel?: string | null;
+  champEquityScore?: number | null;
 };
 
 type PickEntry = {
@@ -360,6 +362,9 @@ function ComparisonView({
 
               <MetricRow label="Avg ECR" valA={draftA.avgEcr} valB={draftB.avgEcr} higherIsBetter={false} />
               <MetricRow label="Total VBD" valA={draftA.totalVbd} valB={draftB.totalVbd} higherIsBetter={true} />
+              {draftA.champEquityScore != null && draftB.champEquityScore != null && (
+                <MetricRow label="🏆 Champ Equity" valA={draftA.champEquityScore} valB={draftB.champEquityScore} higherIsBetter={true} />
+              )}
               <MetricRow label="Avg Value Surplus" valA={avgSurplusA} valB={avgSurplusB} higherIsBetter={true} />
               <MetricRow label="Value Picks (ADP+3)" valA={valuePicksA} valB={valuePicksB} higherIsBetter={true} />
               <MetricRow label="Reaches (ADP−3)" valA={reachesA} valB={reachesB} higherIsBetter={false} />
@@ -873,6 +878,41 @@ export default function SavedDrafts() {
         </div>
       )}
 
+      {/* Championship Equity bar chart — only when 2+ drafts have equity scores */}
+      {drafts.filter(d => d.champEquityScore != null).length >= 2 && (() => {
+        const withEquity = [...drafts]
+          .filter(d => d.champEquityScore != null)
+          .sort((a, b) => (b.champEquityScore ?? 0) - (a.champEquityScore ?? 0));
+        const maxEquity = Math.max(...withEquity.map(d => d.champEquityScore ?? 0), 1);
+        return (
+          <Card className="border-emerald-500/20 bg-emerald-500/5">
+            <CardHeader className="pb-2 pt-4 px-5">
+              <CardTitle className="text-sm font-semibold text-emerald-300 flex items-center gap-2">
+                <Trophy className="w-4 h-4" />
+                Championship Equity — Strategy Comparison
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-4 space-y-2">
+              {withEquity.map((d, i) => (
+                <div key={d.id} className="flex items-center gap-2">
+                  <span className={cn("text-[10px] w-4 text-right shrink-0", i === 0 ? "text-amber-400 font-bold" : "text-muted-foreground")}>#{i + 1}</span>
+                  <span className="text-xs w-20 truncate shrink-0 text-foreground">{d.strategyLabel ?? d.label.slice(0, 10)}</span>
+                  <div className="flex-1 h-2 rounded-full bg-slate-700/50 overflow-hidden">
+                    <div
+                      className={cn("h-full rounded-full transition-all", i === 0 ? "bg-amber-400" : i <= 1 ? "bg-emerald-500" : "bg-slate-500")}
+                      style={{ width: `${Math.round(((d.champEquityScore ?? 0) / maxEquity) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] w-8 text-right shrink-0 text-muted-foreground">{(d.champEquityScore ?? 0).toFixed(1)}</span>
+                  <span className={cn("text-[10px] w-4 shrink-0", GRADE_COLORS[d.grade] ?? "")}>{d.grade}</span>
+                </div>
+              ))}
+              <p className="text-[10px] text-muted-foreground pt-1">Higher equity = stronger championship-caliber roster. Score = 100 − (avg ECR × 0.5) + (VBD × 0.1)</p>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* Draft list */}
       {isLoading ? (
         <div className="text-muted-foreground text-sm py-8 text-center">Loading saved drafts…</div>
@@ -934,6 +974,9 @@ export default function SavedDrafts() {
                         {bestGrade?.id === d.id && (
                           <Badge variant="outline" className="text-xs border-amber-500/40 text-amber-400 bg-amber-500/10">Best</Badge>
                         )}
+                        {d.strategyLabel && (
+                          <Badge variant="outline" className="text-xs border-primary/40 text-primary bg-primary/10">{d.strategyLabel}</Badge>
+                        )}
                         {isSelected && (
                           <Badge variant="outline" className={cn(
                             "text-xs",
@@ -949,6 +992,12 @@ export default function SavedDrafts() {
                         <span>Avg ECR {d.avgEcr.toFixed(1)}</span>
                         <span>·</span>
                         <span>VBD {d.totalVbd}</span>
+                        {d.champEquityScore != null && (
+                          <>
+                            <span>·</span>
+                            <span className="text-emerald-400 font-medium">🏆 {d.champEquityScore.toFixed(1)} equity</span>
+                          </>
+                        )}
                         <span>·</span>
                         <span>{formatDate(d.createdAt)}</span>
                       </div>

@@ -146,11 +146,14 @@ function PickSelector({
 }
 
 // ── Verdict Panel ─────────────────────────────────────────────────────────────
-function VerdictPanel({ sideA, sideB, chart }: { sideA: PickEntry[]; sideB: PickEntry[]; chart: Array<{ round: number; pickInRound: number; value: number }> }) {
-  const [enabled, setEnabled] = useState(false);
-  const { data, isLoading } = trpc.pickTradeEval.useQuery(
-    { sideA, sideB },
-    { enabled: enabled && sideA.length > 0 && sideB.length > 0 }
+function VerdictPanel({ sideA, sideB, chart, counterpartyMemberId }: {
+  sideA: PickEntry[]; sideB: PickEntry[];
+  chart: Array<{ round: number; pickInRound: number; value: number }>;
+  counterpartyMemberId?: string;
+}) {
+  const { data } = trpc.pickTradeEval.useQuery(
+    { sideA, sideB, counterpartyMemberId },
+    { enabled: sideA.length > 0 && sideB.length > 0 }
   );
 
   if (sideA.length === 0 || sideB.length === 0) {
@@ -173,6 +176,14 @@ function VerdictPanel({ sideA, sideB, chart }: { sideA: PickEntry[]; sideB: Pick
   const pct = valueB > 0 ? Math.round((valueA / valueB) * 100) : 0;
   const verdict = pct >= 110 ? "WIN" : pct >= 90 ? "FAIR" : "LOSS";
   const diff = valueA - valueB;
+
+  // Championship equity delta (from server or computed locally)
+  const champDelta = data?.champEquityDelta ?? (() => {
+    const rodAcquires = sideB.map(p => p.round);
+    const rodGives = sideA.map(p => p.round);
+    const impact = (r: number) => r === 1 ? 5 : r === 2 ? 3 : r === 3 ? 2 : 1;
+    return rodAcquires.reduce((s, r) => s + impact(r), 0) - rodGives.reduce((s, r) => s + impact(r), 0);
+  })();
 
   return (
     <div className="space-y-4">
@@ -223,6 +234,65 @@ function VerdictPanel({ sideA, sideB, chart }: { sideA: PickEntry[]; sideB: Pick
           <span>WIN (&gt;110%)</span>
         </div>
       </div>
+
+      {/* Championship Equity Delta */}
+      <div className={`rounded-xl border p-4 flex items-center gap-4 ${
+        champDelta > 0 ? 'bg-emerald-900/20 border-emerald-700/30' :
+        champDelta < 0 ? 'bg-red-900/20 border-red-700/30' :
+        'bg-slate-800/60 border-slate-700/40'
+      }`}>
+        <div className="text-3xl">{champDelta > 0 ? '🏆' : champDelta < 0 ? '📉' : '⚖️'}</div>
+        <div>
+          <div className={`text-lg font-bold ${
+            champDelta > 0 ? 'text-emerald-300' : champDelta < 0 ? 'text-red-300' : 'text-slate-300'
+          }`}>
+            {champDelta > 0 ? `+${champDelta}%` : champDelta < 0 ? `${champDelta}%` : '0%'} Championship Equity
+          </div>
+          <div className="text-xs text-slate-400 mt-0.5">
+            {data?.champEquityLabel ?? (champDelta > 0 ? 'Acquiring earlier picks improves title odds' : champDelta < 0 ? 'Giving up earlier picks reduces title odds' : 'Neutral championship equity impact')}
+          </div>
+        </div>
+      </div>
+
+      {/* DNA Acceptance Analysis */}
+      {data?.dnaAnalysis && (
+        <div className="bg-violet-900/20 border border-violet-700/30 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold text-violet-300">🧬 DNA Acceptance Analysis</div>
+            <Badge className="bg-violet-600/30 text-violet-300 border-violet-500/50 text-xs">{data.dnaAnalysis.draftStyle}</Badge>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div className="flex justify-between text-xs text-slate-400 mb-1">
+                <span>{data.dnaAnalysis.ownerName} acceptance probability</span>
+                <span className={`font-bold ${
+                  data.dnaAnalysis.acceptanceProbability >= 65 ? 'text-emerald-400' :
+                  data.dnaAnalysis.acceptanceProbability >= 40 ? 'text-yellow-400' : 'text-red-400'
+                }`}>{data.dnaAnalysis.acceptanceProbability}%</span>
+              </div>
+              <div className="h-2.5 bg-slate-700 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    data.dnaAnalysis.acceptanceProbability >= 65 ? 'bg-emerald-500' :
+                    data.dnaAnalysis.acceptanceProbability >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+                  }`}
+                  style={{ width: `${data.dnaAnalysis.acceptanceProbability}%` }}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="text-xs text-slate-400">{data.dnaAnalysis.historicalContext}</div>
+          {data.dnaAnalysis.reasoning.length > 0 && (
+            <ul className="space-y-1">
+              {data.dnaAnalysis.reasoning.map((r, i) => (
+                <li key={i} className="text-xs text-violet-200 flex items-start gap-1.5">
+                  <span className="text-violet-400 mt-0.5">›</span>{r}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -287,8 +357,10 @@ function ValueChartTable({ chart }: { chart: Array<{ overall: number; round: num
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function PickValueCalculator() {
   const { data: chart, isLoading } = trpc.pickValueChart.useQuery();
+  const { data: tendencies } = trpc.leagueDraftTendencies.useQuery();
   const [sideA, setSideA] = useState<PickEntry[]>([]);
   const [sideB, setSideB] = useState<PickEntry[]>([]);
+  const [counterpartyMemberId, setCounterpartyMemberId] = useState<string | undefined>(undefined);
 
   return (
     <AppLayout>
@@ -338,12 +410,43 @@ export default function PickValueCalculator() {
                   />
                 </div>
 
+                {/* Counterparty Selector for DNA Analysis */}
+                {tendencies?.owners && tendencies.owners.length > 0 && (
+                  <div className="bg-violet-900/10 border border-violet-700/30 rounded-xl p-4">
+                    <div className="text-xs font-semibold text-violet-300 uppercase tracking-wide mb-2">🧬 DNA Analysis — Select Counterparty</div>
+                    <p className="text-xs text-slate-400 mb-3">Choose the owner you're trading with to see their acceptance probability based on historical DNA patterns.</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setCounterpartyMemberId(undefined)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          counterpartyMemberId === undefined
+                            ? 'bg-violet-600 text-white'
+                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        }`}
+                      >No Analysis</button>
+                      {tendencies.owners.map((o: { memberId: string; name: string; draftStyle: string }) => (
+                        <button
+                          key={o.memberId}
+                          onClick={() => setCounterpartyMemberId(o.memberId)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                            counterpartyMemberId === o.memberId
+                              ? 'bg-violet-600 text-white'
+                              : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                          }`}
+                        >
+                          {o.name} <span className="opacity-60">({o.draftStyle})</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <Card className="bg-slate-900/60 border-slate-700/50">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold text-slate-300 uppercase tracking-wide">Trade Verdict</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <VerdictPanel sideA={sideA} sideB={sideB} chart={chart} />
+                    <VerdictPanel sideA={sideA} sideB={sideB} chart={chart} counterpartyMemberId={counterpartyMemberId} />
                   </CardContent>
                 </Card>
 

@@ -823,3 +823,28 @@
 - [x] Post-draft summary: show Rod's final championship equity score vs all other teams
 - [x] TypeScript: 0 errors
 - [x] Tests: all passing
+
+## FEATURE: Mock Draft Save/Compare
+- [ ] DB schema: mockDraftSaves table (id, name, strategyLabel, picksJson, ownersJson, champEquityScore, grade, avgEcr, totalVbd, createdAt)
+- [ ] tRPC: draftBoard.saveMockDraft mutation — saves full draft result with strategy label
+- [ ] tRPC: draftBoard.listMockDrafts query — returns all saved drafts with summary stats
+- [ ] tRPC: draftBoard.deleteMockDraft mutation
+- [ ] tRPC: draftBoard.compareMockDrafts query — takes 2-4 draft IDs, returns side-by-side comparison data
+- [ ] UI: "Save Draft" button in post-draft summary with strategy label input (e.g., "RB-Heavy", "BPA", "WR-First")
+- [ ] UI: Saved Drafts page showing all saved drafts as cards with equity score, grade, key stats
+- [ ] UI: Compare mode — select 2-4 drafts, show side-by-side table: equity score, grade, avg ECR, VBD, positional breakdown
+- [ ] UI: Equity bar chart comparing all saved drafts (RB-heavy +7.4, BPA +4.1, WR-heavy +6.2)
+- [ ] UI: Best strategy recommendation badge on highest equity draft
+
+## FEATURE: Draft Pick Trade Evaluator
+- [ ] UI: Trade builder — two sides (My Picks / Their Picks), add picks by round/slot
+- [ ] Show pick value chart delta (total value each side)
+- [ ] Show round/overall delta and surplus/deficit
+- [ ] Owner DNA: show acceptance probability for each owner based on trade DNA (tradeFrequency, desperation, archetype)
+- [ ] Championship equity change: show how the trade affects Rod's equity score
+- [ ] Historical context: how many similar trades this owner has made in past seasons
+
+## FEATURE: Keeper Deadline Countdown
+- [ ] Banner on Command Center: "Keeper deadline: X days · Review Offseason Intel →"
+- [ ] Configurable deadline date (default Aug 18, 2026)
+- [ ] Color escalation: green (>60 days), yellow (30-60), orange (14-30), red (<14)
