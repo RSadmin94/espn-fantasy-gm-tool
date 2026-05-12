@@ -881,3 +881,18 @@
 - [x] Sidebar/badges: "LIVE" badge on 2026 Draft Order → "ESPN" (blue); "LIVE DATA" on Keeper History → "CACHED" (slate)
 - [x] League Pulse comment updated from "Live Desperation Strip" to "2025 Final Standings / Offseason Mode"
 - [x] Run all tests and save checkpoint — 467/467 passing, 0 TS errors
+
+## FEATURE: Manual ESPN Refresh Button on Offseason Intel Page
+- [ ] Add offseason.refresh tRPC mutation that re-fetches ESPN league identity (2026 team names + draft order) and invalidates keeper recommendation cache
+- [ ] Add refresh button to OffseasonHub header with loading spinner, success toast, and error state
+- [ ] Show last-synced timestamp next to the refresh button so user knows data freshness
+- [ ] Run all tests and save checkpoint
+
+## BUG: Owner DNA + Extension showing in-season 2025 data — FIXED
+- [x] Audit: root cause is weeklyAssessmentService.ts AI prompt hardcoded "Week X" framing; extension popup.js/inject.js had no isSeasonComplete branch
+- [x] Fix server: buildTeamAssessment now detects isSeasonComplete (week>=14 OR season<currentYear); uses end-of-season AI prompt with final record, standing, offseason trade targets
+- [x] Fix extension inject.js: buildLeaguePulseHTML and buildTeamBriefHTML now branch on data.isSeasonComplete — show tier labels (CHAMPION/CONTENDER/PLAYOFF TEAM/BUBBLE/REBUILDING) instead of desperation scores
+- [x] Fix extension popup.js: header shows "2025 Final Standings" instead of "Week 0 · All 14 Teams"; grid sorted by final rank; bottom section shows Top Finishers + Rebuilding instead of Most Desperate
+- [x] Fix extension background.js: DEFAULT_SEASON now auto-detects (currentYear-1) instead of hardcoded 2025
+- [x] Extension repackaged as v1.3.0
+- [x] Run all tests and save checkpoint — 467/467 passing, 0 TS errors

@@ -14,9 +14,10 @@ import { publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { buildKeeperRecommendations } from "./keeperRecommendationEngine";
 import { buildLeagueDraftBoard } from "./draftStrategyEngine";
-import { getCachedView, getAllCachedSeasons, getCompletedSeasonForOffseason } from "./db";
-import { normalizeDraftPicks } from "./espnService";
-import { getOrFetchLeagueIdentity } from "./leagueIdentityService";
+import { getCachedView, getAllCachedSeasons, getCompletedSeasonForOffseason, upsertCachedView, upsertRefreshManifest, upsertViewHealth } from "./db";
+import { normalizeDraftPicks, fetchEspnViewsHardened, normalizeTeams, normalizeRosters, normalizeMatchups, normalizeTransactions, validateDataQuality } from "./espnService";
+import { getOrFetchLeagueIdentity, upsertLeagueIdentity } from "./leagueIdentityService";
+import { memCache } from "./memCache";
 
 async function getSeasonData(season: number) {
   const cached = await getCachedView(season, "combined");
@@ -379,4 +380,68 @@ Be specific, use the actual player names and round numbers. Write in a direct GM
       const brief = response.choices?.[0]?.message?.content ?? "Brief generation failed.";
       return { brief, teamName: input.teamName, ownerName };
     }),
+
+  // ── Manual ESPN refresh for offseason planning data ──────────────────────
+  refresh: publicProcedure.mutation(async () => {
+    const completedSeason = await getCompletedSeasonForOffseason();
+    const planningYear = completedSeason ? completedSeason + 1 : new Date().getFullYear();
+    const seasonsToRefresh = completedSeason ? [completedSeason, planningYear] : [planningYear];
+    const results: Record<number, { status: string; error?: string; skipped?: boolean }> = {};
+
+    for (const season of seasonsToRefresh) {
+      try {
+        const pipelineResult = await fetchEspnViewsHardened(season);
+        const data = pipelineResult.merged;
+
+        // Persist per-view health
+        for (const vr of pipelineResult.viewResults) {
+          await upsertViewHealth(season, vr.viewName, {
+            status: vr.status === "auth_error" ? "error" : vr.status,
+            errorMessage: vr.error,
+            recordCount: vr.recordCount,
+          });
+        }
+
+        await upsertCachedView(season, "combined", data);
+
+        // Update league identity (team names, draft order, settings)
+        try { await upsertLeagueIdentity(season, data); } catch (_e) { /* non-fatal */ }
+
+        const teams = normalizeTeams(data);
+        const rosters = normalizeRosters(data);
+        const matchups = normalizeMatchups(data);
+        const picks = normalizeDraftPicks(data);
+        const txs = normalizeTransactions(data);
+        const quality = validateDataQuality(season, data);
+        const overallStatus = pipelineResult.allViewsOk && quality.isUsable ? "success"
+          : pipelineResult.hasPartialData || !quality.isUsable ? "partial"
+          : "success";
+
+        await upsertRefreshManifest(season, {
+          teamCount: teams.length, rosterCount: rosters.length,
+          matchupCount: matchups.length, draftPickCount: picks.length,
+          transactionCount: txs.length, status: overallStatus,
+          viewsRefreshed: pipelineResult.viewResults.filter(v => v.status === "ok").map(v => v.viewName),
+          errorMessage: quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
+        });
+
+        results[season] = { status: overallStatus };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        await upsertRefreshManifest(season, { status: "failed", errorMessage: msg });
+        results[season] = { status: "failed", error: msg };
+      }
+    }
+
+    // Bust all in-memory caches so next page load recomputes with fresh data
+    memCache.invalidateAll();
+
+    const anyFailed = Object.values(results).some(r => r.status === "failed");
+    const allSuccess = Object.values(results).every(r => r.status === "success");
+    return {
+      status: anyFailed ? "partial" : allSuccess ? "success" : "partial",
+      seasons: results,
+      refreshedAt: Date.now(),
+    };
+  }),
 });

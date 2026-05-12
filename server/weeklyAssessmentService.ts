@@ -438,7 +438,33 @@ async function generateAIBriefing(
   const recs = team.theirRecommendations.map(r => `- ${r.action}`).join("\n");
   const opps = team.rodOpportunities.map(o => `- ${o.action}`).join("\n");
 
-  const systemPrompt = `You are the GM War Room weekly briefing engine for Rod Sellers in "ATLANTAS FINEST FF" (14-team PPR keeper league, 2025 season, Week ${team.week}).
+  const isComplete = (team as TeamWeeklyAssessment & { isSeasonComplete?: boolean }).isSeasonComplete ?? false;
+
+  const systemPrompt = isComplete
+    ? `You are the GM War Room offseason briefing engine for Rod Sellers in "ATLANTAS FINEST FF" (14-team PPR keeper league, ${team.season} season — COMPLETED).
+
+You are writing an END-OF-SEASON offseason summary for ONE team. The numbers below are final season facts — treat them as ground truth.
+
+TEAM: ${team.ownerName} (${team.teamName})
+FINAL RECORD: ${team.wins}-${team.losses} | Final Standing: #${team.standingRank} | Made Playoffs: ${team.playoffProbability === 100 ? "YES" : "NO"}
+GM ARCHETYPE: ${team.gmArchetype} | Exploitability: ${team.exploitabilityScore}/100 | Tilt pattern: ${team.tiltLabel}
+POINTS FOR: ${team.pointsFor} | POINTS AGAINST: ${team.pointsAgainst}
+POSITIONAL GAPS HEADING INTO ${team.season + 1}: ${team.positionalGaps.join(", ") || "None identified"}
+
+SEASON TRANSACTION SUMMARY:
+${txStr}
+
+ROD'S OFFSEASON OPPORTUNITIES VS THIS TEAM:
+${opps || "None identified"}
+
+Write a concise end-of-season GM summary (4-6 sentences) covering:
+1. How their season went and what their final standing means for their rebuild/contention arc
+2. Their biggest roster needs heading into the ${team.season + 1} draft and keeper decisions
+3. Specific offseason trade or keeper opportunities Rod should target with this manager
+4. Whether now (offseason) is the right time to approach them for a deal
+
+Be direct and forward-looking. Reference final record, standing, and specific roster gaps.`
+    : `You are the GM War Room weekly briefing engine for Rod Sellers in "ATLANTAS FINEST FF" (14-team PPR keeper league, ${team.season} season, Week ${team.week}).
 
 You are writing a GM briefing for ONE opponent team. The numbers below are pre-calculated facts — treat them as ground truth and do not contradict them.
 
@@ -502,6 +528,8 @@ export async function buildTeamAssessment(
 ): Promise<TeamWeeklyAssessment> {
   const { teams, rosters, matchups, transactions, settings, ownerMap, teamNameMap } = allTeamsData;
   const currentWeek = (settings.currentMatchupPeriod as number) || 1;
+  const calendarYear = new Date().getFullYear();
+  const isSeasonComplete = currentWeek >= 14 || season < calendarYear;
 
   const team = teams.find(t => (t.teamId as number) === teamId);
   const ownerName = ownerMap[teamId] || "Unknown";
@@ -613,8 +641,9 @@ export async function buildTeamAssessment(
     ? generateRodOpportunities(partialAssessment, rodRosterGaps, desperationScore, exploitabilityScore)
     : [];
 
-  const assessmentWithoutAI: Omit<TeamWeeklyAssessment, "aiGMBriefing"> = {
+  const assessmentWithoutAI: Omit<TeamWeeklyAssessment, "aiGMBriefing"> & { isSeasonComplete: boolean } = {
     teamId, ownerName, teamName, season, week: currentWeek,
+    isSeasonComplete,
     wins, losses, pointsFor: Math.round(pointsFor * 10) / 10,
     pointsAgainst: Math.round(pointsAgainst * 10) / 10,
     standingRank, playoffProbability,
