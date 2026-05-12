@@ -868,11 +868,11 @@
 - [x] Run all tests and save checkpoint — 467/467 passing, 0 TS errors
 
 ## FEATURE: Offseason Intel — Live ESPN Team Names + Draft Order
-- [ ] Audit current draft order source in offseasonRouter (draftBoard procedure) — identify if it uses cached 2025 data or live ESPN 2026 API
-- [ ] Update draftBoard procedure to fetch live 2026 draft order from ESPN API (mDraftDetail view or equivalent)
-- [ ] Update keeperRecommendations procedure to use live 2026 team names from ESPN API
-- [ ] Update OffseasonHub UI to display live team names and correct 2026 draft order
-- [ ] Run all tests and save checkpoint
+- [x] Audit current draft order source in offseasonRouter — both draftBoard and keeperRecommendations were using normalizeDraftOrder(data2025)
+- [x] Update draftBoard procedure to use getOrFetchLeagueIdentity(2026) for live draft order from ESPN (falls back to 2025 cache if ESPN unavailable)
+- [x] Update keeperRecommendations procedure to use getOrFetchLeagueIdentity(2026) for live 2026 team names
+- [x] OffseasonHub UI already uses the data returned by these procedures — team names and draft order now flow from leagueIdentity
+- [x] Run all tests and save checkpoint — 467/467 passing, 0 TS errors
 
 ## BUG: App showing in-season 2025 data instead of end-of-season 2025 summary
 - [x] Audit all pages showing season data — identified LeaguePulseStrip, LIVE badges, Threat Assessment header as main offenders
