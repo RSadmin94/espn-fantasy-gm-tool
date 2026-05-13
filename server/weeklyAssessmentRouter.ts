@@ -229,9 +229,11 @@ export const weeklyAssessmentRouter = router({
       const isSeasonComplete = currentWeek >= 14 || input.season < calendarYear;
 
       const ownerMap: Record<number, string> = {};
+      const teamNameMap: Record<number, string> = {};
       const memberIdsMap: Record<number, string[]> = {};
       for (const t of teams) {
         ownerMap[t.teamId as number] = t.owners as string;
+        teamNameMap[t.teamId as number] = (t.teamName as string) || (t.owners as string) || "Unknown";
         memberIdsMap[t.teamId as number] = (t.memberIds as string[]) || [];
       }
 
@@ -295,6 +297,7 @@ export const weeklyAssessmentRouter = router({
 
           return {
             teamId: tid,
+            teamName: teamNameMap[tid] || ownerMap[tid] || "Unknown",
             ownerName: ownerMap[tid],
             standingRank: isSeasonComplete ? finalRank : idx + 1,
             wins,
