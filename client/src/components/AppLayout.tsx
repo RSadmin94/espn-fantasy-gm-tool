@@ -8,18 +8,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import AdvisorPanel from "./AdvisorPanel";
 
-type NavItem = {
-  href: string;
-  icon: React.ElementType;
-  label: string;
-  group: string;
-  badge?: string;
-  panel?: string;
-};
-
-const navItems: NavItem[] = [
+const navItems = [
   // Command Center
   { href: "/command-center", icon: LayoutDashboard, label: "Command Center", group: "Overview" },
   { href: "/connect", icon: Link2, label: "Connect League", group: "Overview", badge: "NEW" },
@@ -31,7 +21,7 @@ const navItems: NavItem[] = [
   { href: "/trade-lab", icon: ArrowLeftRight, label: "Trade Lab", group: "Decision Tools", badge: "AI" },
   { href: "/waiver-lab", icon: Zap, label: "Waiver Lab", group: "Decision Tools", badge: "AI" },
   // Intelligence
-  { href: "/advisor", icon: Bot, label: "AI GM Advisor", group: "Intelligence", badge: "AI", panel: "advisor" },
+  { href: "/advisor", icon: Bot, label: "AI GM Advisor", group: "Intelligence", badge: "AI" },
   { href: "/opponent-intel", icon: Microscope, label: "Opponent Intel", group: "Intelligence" },
   // System
   { href: "/data-center", icon: Shield, label: "Data Center", group: "System" },
@@ -56,6 +46,7 @@ function DataHealthBanner() {
 
   const { cookiesPresent, overallHealth, staleSeasons, partialSeasons } = data;
 
+  // Determine which banner to show (most severe wins)
   let variant: "red" | "amber" | "yellow" | null = null;
   if (!cookiesPresent) {
     variant = "red";
@@ -127,6 +118,8 @@ function DataHealthBanner() {
 }
 
 // ── Embedded context ─────────────────────────────────────────────────────────
+// Prevents double sidebar: if AppLayout is already rendered by a parent
+// (e.g. a hub page), any nested AppLayout renders only its children.
 const InsideLayoutContext = createContext(false);
 
 interface AppLayoutProps {
@@ -139,7 +132,6 @@ interface AppLayoutProps {
 export default function AppLayout({ children, title, subtitle, headerRight }: AppLayoutProps) {
   const [location] = useLocation();
   const alreadyInsideLayout = useContext(InsideLayoutContext);
-  const [advisorOpen, setAdvisorOpen] = useState(false);
 
   // Nested call: skip shell, render children only
   if (alreadyInsideLayout) {
@@ -182,18 +174,18 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
                   {group}
                 </p>
                 {items.map((item) => {
-                  const isPanel = item.panel === "advisor";
-                  const active = isPanel
-                    ? advisorOpen
-                    : location === item.href || (item.href !== "/" && location.startsWith(item.href));
-                  const cls = cn(
-                    "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group w-full text-left",
-                    active
-                      ? "bg-primary/15 text-primary shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
-                  );
-                  const inner = (
-                    <>
+                  const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group",
+                        active
+                          ? "bg-primary/15 text-primary shadow-sm"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
+                      )}
+                    >
                       <item.icon className={cn("w-4 h-4 flex-shrink-0 transition-colors", active ? "text-primary" : "group-hover:text-foreground")} />
                       <span className="flex-1 truncate">{item.label}</span>
                       {item.badge && (
@@ -201,20 +193,7 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
                           {item.badge}
                         </Badge>
                       )}
-                      {active && !isPanel && <ChevronRight className="w-3 h-3 text-primary flex-shrink-0" />}
-                    </>
-                  );
-
-                  if (isPanel) {
-                    return (
-                      <button key={item.href} onClick={() => setAdvisorOpen(true)} className={cls}>
-                        {inner}
-                      </button>
-                    );
-                  }
-                  return (
-                    <Link key={item.href} href={item.href} className={cls}>
-                      {inner}
+                      {active && <ChevronRight className="w-3 h-3 text-primary flex-shrink-0" />}
                     </Link>
                   );
                 })}
@@ -257,10 +236,6 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
         </main>
       </div>
     </div>
-
-    {/* AI GM Advisor slide-in panel */}
-    <AdvisorPanel open={advisorOpen} onClose={() => setAdvisorOpen(false)} />
-
     </InsideLayoutContext.Provider>
   );
 }
