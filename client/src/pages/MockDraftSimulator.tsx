@@ -605,13 +605,14 @@ export default function MockDraftSimulator() {
   const makeAIPick = useCallback((
     overallSlot: number,
     currentPicks: DraftPick[],
-    allPlayers: MergedPlayer[]
+    allPlayers: MergedPlayer[],
+    prebuiltPickedSet?: Set<number>
   ): DraftPick | null => {
     const teamIdx = snakeOrder[overallSlot - 1] ?? 0;
     if (teamIdx === rodSlotIndex) return null;
     const owner = owners[teamIdx];
     if (!owner) return null;
-    const pickedSet = new Set(currentPicks.map((p) => p.player.fpId));
+    const pickedSet = prebuiltPickedSet ?? new Set(currentPicks.map((p) => p.player.fpId));
     const available = allPlayers.filter((p) => !pickedSet.has(p.fpId) && !keeperPlayerIds.has(p.fpId));
     const round = Math.ceil(overallSlot / totalTeams);
     const alreadyFilled = currentPicks.some(p => p.overall === overallSlot);
@@ -763,7 +764,8 @@ export default function MockDraftSimulator() {
     setIsAutoRunning(true);
     autoRunRef.current = true;
     let slot = currentOverall;
-    let currentPicksList = [...picks];
+    const currentPicksList: DraftPick[] = [...picks];
+    const pickedSet = new Set<number>(currentPicksList.map(p => p.player.fpId));
     const allPlayers = boardData.players;
     const totalSlots = totalTeams * TOTAL_ROUNDS;
     while (slot <= totalSlots) {
@@ -771,13 +773,14 @@ export default function MockDraftSimulator() {
       if (alreadyFilled) { slot++; continue; }
       const teamIdx = snakeOrder[slot - 1] ?? 0;
       if (teamIdx === rodSlotIndex) break;
-      const pick = makeAIPick(slot, currentPicksList, allPlayers);
+      const pick = makeAIPick(slot, currentPicksList, allPlayers, pickedSet);
       if (!pick) { slot++; continue; }
-      currentPicksList = [...currentPicksList, pick];
+      currentPicksList.push(pick);
+      pickedSet.add(pick.player.fpId);
       slot++;
     }
     if (slot > totalSlots) setDraftComplete(true);
-    setPicks(currentPicksList);
+    setPicks([...currentPicksList]);
     setCurrentOverall(slot);
     setIsAutoRunning(false);
     autoRunRef.current = false;
@@ -787,7 +790,8 @@ export default function MockDraftSimulator() {
     if (!boardData || draftComplete || isPaused) return;
     setIsAutoRunning(true);
     let slot = currentOverall;
-    let currentPicksList = [...picks];
+    const currentPicksList: DraftPick[] = [...picks];
+    const pickedSet = new Set<number>(currentPicksList.map(p => p.player.fpId));
     const allPlayers = boardData.players;
     const totalSlots = totalTeams * TOTAL_ROUNDS;
     while (slot <= totalSlots) {
@@ -795,28 +799,30 @@ export default function MockDraftSimulator() {
       if (alreadyFilled) { slot++; continue; }
       const teamIdx = snakeOrder[slot - 1] ?? 0;
       if (teamIdx === rodSlotIndex) {
-        const pickedSet = new Set(currentPicksList.map((p) => p.player.fpId));
         const available = allPlayers.filter((p) => !pickedSet.has(p.fpId) && !keeperPlayerIds.has(p.fpId));
         const player = available[0];
         if (!player) break;
         const round = Math.ceil(slot / totalTeams);
         const rodOwner = owners[rodSlotIndex];
-        currentPicksList = [...currentPicksList, {
+        const rodPick: DraftPick = {
           round,
           pick: (slot - 1) % totalTeams + 1,
           overall: slot,
           owner: rodOwner?.ownerName ?? "Rod",
           player,
-        }];
+        };
+        currentPicksList.push(rodPick);
+        pickedSet.add(player.fpId);
         slot++;
       } else {
-        const pick = makeAIPick(slot, currentPicksList, allPlayers);
+        const pick = makeAIPick(slot, currentPicksList, allPlayers, pickedSet);
         if (!pick) { slot++; continue; }
-        currentPicksList = [...currentPicksList, pick];
+        currentPicksList.push(pick);
+        pickedSet.add(pick.player.fpId);
         slot++;
       }
     }
-    setPicks(currentPicksList);
+    setPicks([...currentPicksList]);
     setCurrentOverall(Math.min(slot, totalSlots + 1));
     setDraftComplete(true);
     setIsAutoRunning(false);
