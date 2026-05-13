@@ -1,5 +1,5 @@
 // FILE: client/src/components/AppLayout.tsx
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
@@ -91,6 +91,23 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
   const [location] = useLocation();
   const alreadyInsideLayout = useContext(InsideLayoutContext);
   const [advisorOpen, setAdvisorOpen] = useState(false);
+
+  // Listen for Chrome extension toolbar click → open advisor panel
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OPEN_ADVISOR_PANEL') setAdvisorOpen(true);
+    };
+    window.addEventListener('message', handleMessage);
+    // Also handle ?openAdvisor=1 URL param (set when extension opens a new tab)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('openAdvisor') === '1') {
+      setAdvisorOpen(true);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('openAdvisor');
+      window.history.replaceState({}, '', url.toString());
+    }
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   if (alreadyInsideLayout) return <>{children}</>;
 
