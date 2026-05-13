@@ -13,12 +13,12 @@ import { toast } from "sonner";
 import { Streamdown } from "streamdown";
 
 const SUGGESTED_PROMPTS = [
-  "Who should I start this week?",
-  "Is this trade fair: [Player A] for [Player B]?",
-  "Who are the best waiver wire pickups right now?",
-  "Which team has the best chance to win the championship?",
-  "What is the keeper value of [Player Name]?",
-  "Analyze the top 3 teams in the league this season.",
+  "Who are my biggest threats heading into 2026 and how do I neutralize them?",
+  "Which managers should I target for trades and what offers should I make?",
+  "What are the top waiver wire priorities for early-season 2026?",
+  "Analyze my 2025-2026 performance trend and what it means for 2026.",
+  "Who will rise and who will fall in 2026 based on 3-year trajectory?",
+  "What is the keeper value of [Player Name] for 2026?",
 ];
 
 export default function Advisor() {

@@ -3348,9 +3348,15 @@ Be concise, data-driven, and specific. Reference actual team names and player na
               appliedStats: (p.appliedStats as Record<string, number>) || {},
             };
           });
-          leagueContext += `\n\nCurrent Season: ${season}`;
-          leagueContext += `\nStatus: ${settings.isActive ? "Active" : "Offseason"}, Week ${settings.currentMatchupPeriod || "N/A"}`;
-          leagueContext += `\n\nStandings:\n`;
+          const calYear = new Date().getFullYear();
+          const isSeasonComplete = (settings.currentMatchupPeriod as number || 0) >= 14 || season < calYear;
+          const upcomingSeason = season + 1;
+          if (isSeasonComplete) {
+            leagueContext += `\n\nDATA CONTEXT: The ${season} season is COMPLETE (final standings below). The upcoming season is ${upcomingSeason}. When answering questions about "next season", "heading into ${upcomingSeason}", or future planning, base your analysis on these FINAL ${season} standings and rosters. Do NOT say the season is ongoing.`;
+          } else {
+            leagueContext += `\n\nCurrent Season: ${season} (ACTIVE), Week ${settings.currentMatchupPeriod || "N/A"}`;
+          }
+          leagueContext += `\n\n${isSeasonComplete ? `${season} FINAL Standings` : "Current Standings"}:\n`;
           const sorted = teams.sort((a, b) => ((a.rankFinal as number) || 99) - ((b.rankFinal as number) || 99));
           for (const t of sorted) {
             leagueContext += `  ${t.rankFinal}. ${t.teamName} (${t.owners}) W:${t.wins} L:${t.losses} PF:${Number(t.pointsFor || 0).toFixed(1)}\n`;
