@@ -188,7 +188,7 @@ export const weeklyAssessmentRouter = router({
           byeCount: 0,
           starterCount,
         },
-        playoffOdds: Math.round((raw.playoffProbability ?? 0) * 100),
+        playoffOdds: raw.playoffProbability ?? 0,
         record: { wins: raw.wins, losses: raw.losses },
         briefing: raw.aiGMBriefing ?? "",
       };
