@@ -896,3 +896,6 @@
 - [x] Fix extension background.js: DEFAULT_SEASON now auto-detects (currentYear-1) instead of hardcoded 2025
 - [x] Extension repackaged as v1.3.0
 - [x] Run all tests and save checkpoint — 467/467 passing, 0 TS errors
+
+## Extension Bug Fixes
+- [x] Fix teamName showing as "Unknown" in DNA panel — normalizeTeams now falls back to team.name field when location/nickname are missing from ESPN cache data

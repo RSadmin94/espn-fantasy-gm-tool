@@ -677,7 +677,7 @@ export async function buildWeeklyAssessment(season: number): Promise<WeeklyLeagu
   const teamNameMap: Record<number, string> = {};
   for (const t of teams) {
     ownerMap[t.teamId as number] = t.owners as string;
-    teamNameMap[t.teamId as number] = (t.teamName as string) || (t.abbrev as string) || "Unknown";
+    teamNameMap[t.teamId as number] = (t.teamName as string) || (t.abbrev as string) || (t.owners as string) || "Unknown";
   }
 
   const currentWeek = (settings.currentMatchupPeriod as number) || 1;

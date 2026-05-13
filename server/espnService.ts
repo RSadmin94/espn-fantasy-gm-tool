@@ -415,7 +415,7 @@ export function normalizeTeams(data: Record<string, unknown>) {
       season,
       teamId: team.id,
       abbrev: team.abbrev,
-      teamName: `${team.location || ""} ${team.nickname || ""}`.trim(),
+      teamName: `${team.location || ""} ${team.nickname || ""}`.trim() || (team.name as string) || "",
       location: team.location,
       nickname: team.nickname,
       owners: ownerNames.join("; "),
@@ -442,7 +442,7 @@ export function normalizeRosters(data: Record<string, unknown>) {
 
   for (const team of (data.teams as Record<string, unknown>[]) || []) {
     const teamId = team.id;
-    const teamName = `${team.location || ""} ${team.nickname || ""}`.trim();
+    const teamName = `${team.location || ""} ${team.nickname || ""}`.trim() || (team.name as string) || "";
     const entries = ((team.roster as Record<string, unknown>)?.entries as Record<string, unknown>[]) || [];
 
     for (const entry of entries) {

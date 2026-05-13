@@ -120,7 +120,7 @@ export const weeklyAssessmentRouter = router({
       const teamNameMap: Record<number, string> = {};
       for (const t of teams) {
         ownerMap[t.teamId as number] = t.owners as string;
-        teamNameMap[t.teamId as number] = (t.teamName as string) || "Unknown";
+        teamNameMap[t.teamId as number] = (t.teamName as string) || (t.owners as string) || "Unknown";
       }
 
       const managerRawData: ManagerRawData = {
@@ -361,7 +361,7 @@ export const weeklyAssessmentRouter = router({
       (async () => {
         const teamNameMap: Record<number, string> = {};
         for (const t of teams) {
-          teamNameMap[t.teamId as number] = (t.teamName as string) || "Unknown";
+          teamNameMap[t.teamId as number] = (t.teamName as string) || (t.owners as string) || "Unknown";
         }
         const rodTeamId = teams.find(t => {
           const name = ((t.teamName as string) || "").toLowerCase();
