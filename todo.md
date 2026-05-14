@@ -1029,3 +1029,9 @@ This single flow determines conversion, retention, and word-of-mouth.
 ## Bug: AI GM Draft Order Context Wrong
 
 - [x] AI GM context builder injecting wrong 2026 draft order (Rod shown at pick 4 instead of pick 11) — fix context to use correct 2026 ESPN cache data
+
+## Bug: AI GM Draft Order — Root Cause Investigation
+
+- [ ] Add /debug/advisor-context endpoint: dump resolved season, pickOrder array, teamId→owner mapping, formatted prompt section
+- [ ] Compare advisor context vs espn.draftOrder output to find exact divergence point
+- [ ] Apply one clean root-cause fix (no hardcoded years), remove debug endpoint

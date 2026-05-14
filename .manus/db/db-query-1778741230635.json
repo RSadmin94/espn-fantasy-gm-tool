@@ -1,0 +1,15 @@
+{
+  "query": "SELECT viewName, fetchedAt, JSON_LENGTH(payload) as payload_size FROM espn_season_cache WHERE season = 2026 ORDER BY viewName;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT viewName, fetchedAt, JSON_LENGTH(payload) as payload_size FROM espn_season_cache WHERE season = 2026 ORDER BY viewName;",
+  "rows": [
+    {
+      "viewName": "combined",
+      "fetchedAt": "2026-05-14 05:44:00",
+      "payload_size": "12"
+    }
+  ],
+  "messages": [],
+  "stdout": "viewName\tfetchedAt\tpayload_size\ncombined\t2026-05-14 05:44:00\t12\n",
+  "stderr": "",
+  "execution_time_ms": 590
+}

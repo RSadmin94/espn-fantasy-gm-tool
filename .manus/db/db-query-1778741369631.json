@@ -1,0 +1,17 @@
+{
+  "query": "SELECT \n  JSON_KEYS(payload) as top_level_keys,\n  JSON_LENGTH(JSON_EXTRACT(payload, '$.teams')) as teams_count,\n  JSON_LENGTH(JSON_EXTRACT(payload, '$.members')) as members_count,\n  JSON_EXTRACT(payload, '$.settings.draftSettings.pickOrder') as pick_order,\n  JSON_EXTRACT(payload, '$.seasonId') as season_id\nFROM espn_season_cache \nWHERE season = 2026 AND viewName = 'combined' \nLIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT \n  JSON_KEYS(payload) as top_level_keys,\n  JSON_LENGTH(JSON_EXTRACT(payload, '$.teams')) as teams_count,\n  JSON_LENGTH(JSON_EXTRACT(payload, '$.members')) as members_count,\n  JSON_EXTRACT(payload, '$.settings.draftSettings.pickOrder') as pick_order,\n  JSON_EXTRACT(payload, '$.seasonId') as season_id\nFROM espn_season_cache \nWHERE season = 2026 AND viewName = 'combined' \nLIMIT 1;",
+  "rows": [
+    {
+      "top_level_keys": "[\"draftDetail\", \"gameId\", \"id\", \"members\", \"schedule\", \"scoringPeriodId\", \"seasonId\", \"segmentId\", \"settings\", \"status\", \"teams\", \"transactions\"]",
+      "teams_count": "14",
+      "members_count": "14",
+      "pick_order": "[21, 17, 1, 24, 14, 23, 22, 25, 4, 27, 11, 28, 26, 18]",
+      "season_id": "2026"
+    }
+  ],
+  "messages": [],
+  "stdout": "top_level_keys\tteams_count\tmembers_count\tpick_order\tseason_id\n[\"draftDetail\", \"gameId\", \"id\", \"members\", \"schedule\", \"scoringPeriodId\", \"seasonId\", \"segmentId\", \"settings\", \"status\", \"teams\", \"transactions\"]\t14\t14\t[21, 17, 1, 24, 14, 23, 22, 25, 4, 27, 11, 28, 26, 18]\t2026\n",
+  "stderr": "",
+  "execution_time_ms": 1254
+}

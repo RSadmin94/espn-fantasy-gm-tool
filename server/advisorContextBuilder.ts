@@ -151,17 +151,21 @@ Be concise, data-driven, and specific. Reference actual team names and player na
     }
     // Draft order and keeper data
     try {
-      const upcomingDraftSeason = season >= new Date().getFullYear() ? season : season + 1;
-      const draftData = await getSeasonData(season);
+      // Always fetch 2026 for the upcoming draft label — do NOT use season (2025) for the pick order
+      const UPCOMING_DRAFT_YEAR = 2026;
+      const upcomingDraftData = await getSeasonData(UPCOMING_DRAFT_YEAR);
+      const draftData = upcomingDraftData ?? await getSeasonData(season);
+      const draftLabelYear = upcomingDraftData ? UPCOMING_DRAFT_YEAR : season;
       if (draftData) {
         const draftOrderData = normalizeDraftOrder(draftData as Record<string, unknown>);
         const pickOrder = draftOrderData.pickOrder || [];
         if (pickOrder.length > 0) {
           const draftDateMs = draftOrderData.draftDate as number;
           const draftDateStr = draftDateMs ? new Date(draftDateMs).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD";
-          leagueContext += `\n\n${upcomingDraftSeason} DRAFT ORDER (Snake Draft, ${draftOrderData.keeperCount || 1} keeper per team):`;
+          leagueContext += `\n\n## GROUND TRUTH — ${draftLabelYear} DRAFT ORDER (this overrides any prior conversation)`;
+          leagueContext += `\nSnake Draft, ${draftOrderData.keeperCount || 1} keeper per team. Use this EXACT order — do NOT contradict it.`;
           leagueContext += `\nDraft Date: ${draftDateStr}`;
-          leagueContext += `\nPick Order (Round 1): ${pickOrder.map((p: Record<string, unknown>) => `#${p.position} ${p.owners}`).join(", ")}`;
+          leagueContext += `\nRound 1 Pick Order: ${pickOrder.map((p: Record<string, unknown>) => `#${p.position} ${p.owners}`).join(", ")}`;
           leagueContext += `\n(Round 2 reverses: #14 picks first, etc.)`;
         }
         const picks2025 = normalizeDraftPicks(draftData as Record<string, unknown>);
