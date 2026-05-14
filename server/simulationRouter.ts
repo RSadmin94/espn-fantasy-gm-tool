@@ -339,7 +339,7 @@ Deliver a concise START/SIT verdict:
    * Full two-lineup matchup simulation.
    * Used in the Command Center War Room for weekly win probability display.
    */
-  matchup: publicProcedure
+  matchup: protectedProcedure
     .input(z.object({
       myLineup: z.array(SimPlayerInput),
       opponentLineup: z.array(SimPlayerInput),
@@ -368,7 +368,7 @@ Deliver a concise START/SIT verdict:
    *
    * Use in the War Room for the weekly pre-lock briefing.
    */
-  lineupCheck: publicProcedure
+  lineupCheck: protectedProcedure
     .input(z.object({
       myLineup: z.array(SimPlayerInput),
       opponentLineup: z.array(SimPlayerInput).optional().default([]),

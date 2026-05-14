@@ -65,6 +65,8 @@ import {
   getChatHistory,
   addChatMessage,
   clearChatHistory,
+  getUserMemory,
+  upsertUserMemory,
 } from "./db";
 
 const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
@@ -1347,7 +1349,7 @@ export const appRouter = router({
     }); // end memCache
   }),
 
-  ownerPredictions: publicProcedure
+  ownerPredictions: protectedProcedure
     .input(z.object({ memberId: z.string() }))
     .query(async ({ input }) => {
       // Fetch the full owner stats to build context
@@ -1561,7 +1563,7 @@ Generate a JSON prediction report with these exact fields:
     }),
 
   // ── Owner Self-Review (AI-generated scouting report for Rod) ────────────────
-  ownerSelfReview: publicProcedure.query(async () => {
+  ownerSelfReview: protectedProcedure.query(async () => {
     const prompt = `You are an expert fantasy football analyst reviewing the career of Rod Sellers, manager of "Str8FrmHell / RodZilla" in the 18-season keeper league "ATLANTAS FINEST FF" (14 teams, PPR, 1 keeper, 7-team playoffs, snake draft).
 
 Here is Rod's complete career data:
@@ -2042,7 +2044,7 @@ Respond with JSON in this exact format:
       return { trades, acquiredValue, tradedValue, netValue: acquiredValue - tradedValue };
     }),
 
-  addPickTrade: publicProcedure
+  addPickTrade: protectedProcedure
     .input(z.object({
       draftYear: z.number().default(2026),
       type: z.enum(['acquired', 'traded_away']),
@@ -2060,7 +2062,7 @@ Respond with JSON in this exact format:
       return { success: true };
     }),
 
-  removePickTrade: publicProcedure
+  removePickTrade: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       await removePickTrade(input.id);
@@ -2124,7 +2126,7 @@ Respond with JSON in this exact format:
     return { draftOrder, totalPicks: draftOrder.length };
   }),
 
-    opponentProfile: publicProcedure
+    opponentProfile: protectedProcedure
     .input(z.object({ memberId: z.string() }))
     .query(async ({ input }) => {
       const { findLiveOpponentProfile } = await import("./liveOpponentProfile");
@@ -2138,7 +2140,7 @@ Respond with JSON in this exact format:
       // Readiness check — actual generation happens via opponentScoutingReport mutation
       return { ready: true };
     }),
-  opponentScoutingReport: publicProcedure
+  opponentScoutingReport: protectedProcedure
     .input(z.object({ memberId: z.string() }))
     .mutation(async ({ input }) => {
       const { findLiveOpponentProfile } = await import("./liveOpponentProfile");
@@ -3453,6 +3455,21 @@ Be concise, data-driven, and specific. Reference actual team names and player na
             // Draft order unavailable — continue without it
           }
         }
+        // Inject GM memory into system prompt
+        const gmMemory = await getUserMemory(userId);
+        if (gmMemory) {
+          const memParts: string[] = [];
+          if (gmMemory.riskTolerance) memParts.push(`Risk Tolerance: ${gmMemory.riskTolerance}`);
+          if (gmMemory.tradePhilosophy) memParts.push(`Trade Philosophy: ${gmMemory.tradePhilosophy}`);
+          if (gmMemory.keeperPhilosophy) memParts.push(`Keeper Philosophy: ${gmMemory.keeperPhilosophy}`);
+          if (gmMemory.draftStyle) memParts.push(`Draft Style: ${gmMemory.draftStyle}`);
+          if (gmMemory.favoritePlayerTypes) memParts.push(`Favorite Player Types: ${gmMemory.favoritePlayerTypes}`);
+          if (gmMemory.rivalManagers) memParts.push(`Rival Managers to Watch: ${gmMemory.rivalManagers}`);
+          if (gmMemory.notes) memParts.push(`GM Notes: ${gmMemory.notes}`);
+          if (memParts.length > 0) {
+            leagueContext += `\n\n## GM PROFILE (Rod Sellers)\n${memParts.join("\n")}`;
+          }
+        }
         const history = await getChatHistory(userId, season);
         const messages: Message[] = [
           { role: "system", content: leagueContext },
@@ -3461,7 +3478,7 @@ Be concise, data-driven, and specific. Reference actual team names and player na
         ];
 
         await addChatMessage(userId, "user", input.message, season);
-        const response = await invokeLLM({ messages });
+        const response = await invokeLLM({ messages, callType: "advisor" });
         const rawContent = response.choices?.[0]?.message?.content;
         const assistantMessage = typeof rawContent === "string" ? rawContent : (rawContent ? JSON.stringify(rawContent) : "I couldn't generate a response. Please try again.");
         await addChatMessage(userId, "assistant", assistantMessage, season);
@@ -3476,6 +3493,23 @@ Be concise, data-driven, and specific. Reference actual team names and player na
       await clearChatHistory(ctx.user.id);
       return { success: true };
     }),
+    getMemory: protectedProcedure.query(async ({ ctx }) => {
+      return getUserMemory(ctx.user.id);
+    }),
+    updateMemory: protectedProcedure
+      .input(z.object({
+        riskTolerance: z.string().max(32).optional(),
+        tradePhilosophy: z.string().max(1000).optional(),
+        keeperPhilosophy: z.string().max(1000).optional(),
+        draftStyle: z.string().max(64).optional(),
+        favoritePlayerTypes: z.string().max(500).optional(),
+        rivalManagers: z.string().max(500).optional(),
+        notes: z.string().max(2000).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await upsertUserMemory(ctx.user.id, input);
+        return { success: true };
+      }),
   }),
 
   // ── Pipeline Health ────────────────────────────────────────────────────────

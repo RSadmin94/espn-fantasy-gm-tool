@@ -10,7 +10,7 @@
  */
 
 import { z } from "zod";
-import { publicProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { buildKeeperRecommendations } from "./keeperRecommendationEngine";
 import { buildLeagueDraftBoard } from "./draftStrategyEngine";
@@ -27,7 +27,7 @@ async function getSeasonData(season: number) {
 
 export const offseasonRouter = router({
   // ── All 14 teams: DNA-powered keeper recommendations ─────────────────────
-  keeperRecommendations: publicProcedure.query(async () => {
+  keeperRecommendations: protectedProcedure.query(async () => {
     const { calcLeagueDNA } = await import("./leagueDNA");
     const { buildManagerRawData } = await import("./dnaRouter");
 
@@ -205,7 +205,7 @@ export const offseasonRouter = router({
   }),
 
   // ── 2026 draft strategy board ─────────────────────────────────────────────
-  draftBoard: publicProcedure.query(async () => {
+  draftBoard: protectedProcedure.query(async () => {
     const { calcLeagueDNA } = await import("./leagueDNA");
     const { buildManagerRawData } = await import("./dnaRouter");
 
@@ -298,7 +298,7 @@ export const offseasonRouter = router({
   }),
 
   // ── Single team: LLM-generated keeper + draft brief ───────────────────────
-  teamKeeperBrief: publicProcedure
+  teamKeeperBrief: protectedProcedure
     .input(z.object({ teamId: z.number(), teamName: z.string() }))
     .mutation(async ({ input }) => {
       const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
@@ -382,7 +382,7 @@ Be specific, use the actual player names and round numbers. Write in a direct GM
     }),
 
   // ── Manual ESPN refresh for offseason planning data ──────────────────────
-  refresh: publicProcedure.mutation(async () => {
+  refresh: protectedProcedure.mutation(async () => {
     const completedSeason = await getCompletedSeasonForOffseason();
     const planningYear = completedSeason ? completedSeason + 1 : new Date().getFullYear();
     const seasonsToRefresh = completedSeason ? [completedSeason, planningYear] : [planningYear];

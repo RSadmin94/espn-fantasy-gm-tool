@@ -55,6 +55,37 @@ export type ToolChoice =
   | ToolChoiceByName
   | ToolChoiceExplicit;
 
+/**
+ * callType hints help the LLM helper pick a sensible default max_tokens.
+ * Callers can always override with an explicit maxTokens value.
+ *
+ * Defaults:
+ *   chat / advisor        → 1024   (conversational, should be snappy)
+ *   war_room_agent        → 512    (one agent's focused output)
+ *   weekly_briefing       → 2048   (longer narrative report)
+ *   retrospective         → 1536   (career / season review)
+ *   json_structured       → 1024   (JSON schema responses)
+ *   fallback              → 1024
+ */
+export type LLMCallType =
+  | "chat"
+  | "advisor"
+  | "war_room_agent"
+  | "weekly_briefing"
+  | "retrospective"
+  | "json_structured";
+
+const CALL_TYPE_DEFAULTS: Record<LLMCallType, number> = {
+  chat: 1024,
+  advisor: 1024,
+  war_room_agent: 512,
+  weekly_briefing: 2048,
+  retrospective: 1536,
+  json_structured: 1024,
+};
+
+const DEFAULT_MAX_TOKENS = 1024;
+
 export type InvokeParams = {
   messages: Message[];
   tools?: Tool[];
@@ -62,6 +93,12 @@ export type InvokeParams = {
   tool_choice?: ToolChoice;
   maxTokens?: number;
   max_tokens?: number;
+  /** Optional model override. Defaults to "gemini-2.5-flash". */
+  model?: string;
+  /** Optional temperature override (0.0–2.0). */
+  temperature?: number;
+  /** Hint used to pick a sensible default max_tokens when none is specified. */
+  callType?: LLMCallType;
   outputSchema?: OutputSchema;
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
@@ -109,6 +146,10 @@ export type ResponseFormat =
   | { type: "text" }
   | { type: "json_object" }
   | { type: "json_schema"; json_schema: JsonSchema };
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
 
 const ensureArray = (
   value: MessageContent | MessageContent[]
@@ -265,6 +306,45 @@ const normalizeResponseFormat = ({
   };
 };
 
+/**
+ * Resolve the effective max_tokens for a call.
+ * Priority: explicit maxTokens/max_tokens > callType default > global default.
+ */
+function resolveMaxTokens(params: InvokeParams): number {
+  const explicit = params.maxTokens ?? params.max_tokens;
+  if (explicit != null && explicit > 0) return explicit;
+  if (params.callType) return CALL_TYPE_DEFAULTS[params.callType] ?? DEFAULT_MAX_TOKENS;
+  return DEFAULT_MAX_TOKENS;
+}
+
+/**
+ * Safe usage logger — logs model, callType, token counts, and durationMs.
+ * Never logs message content or API keys.
+ */
+function logUsage(opts: {
+  model: string;
+  callType?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  durationMs: number;
+}) {
+  const { model, callType, promptTokens, completionTokens, totalTokens, durationMs } = opts;
+  console.log(
+    `[LLM] model=${model} callType=${callType ?? "unspecified"} ` +
+    `prompt=${promptTokens ?? "?"} completion=${completionTokens ?? "?"} ` +
+    `total=${totalTokens ?? "?"} durationMs=${durationMs}`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Standard (non-streaming) LLM invocation.
+ * All existing callers continue to work without changes.
+ */
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
 
@@ -277,12 +357,24 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     output_schema,
     responseFormat,
     response_format,
+    model,
+    temperature,
+    callType,
   } = params;
 
+  const resolvedModel = model ?? "gemini-2.5-flash";
+  const resolvedMaxTokens = resolveMaxTokens(params);
+
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
+    model: resolvedModel,
     messages: messages.map(normalizeMessage),
+    max_tokens: resolvedMaxTokens,
+    thinking: { budget_tokens: 128 },
   };
+
+  if (temperature != null) {
+    payload.temperature = temperature;
+  }
 
   if (tools && tools.length > 0) {
     payload.tools = tools;
@@ -296,11 +388,6 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
-  }
-
   const normalizedResponseFormat = normalizeResponseFormat({
     responseFormat,
     response_format,
@@ -311,6 +398,8 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   if (normalizedResponseFormat) {
     payload.response_format = normalizedResponseFormat;
   }
+
+  const startMs = Date.now();
 
   const response = await fetch(resolveApiUrl(), {
     method: "POST",
@@ -328,5 +417,156 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     );
   }
 
-  return (await response.json()) as InvokeResult;
+  const result = (await response.json()) as InvokeResult;
+  const durationMs = Date.now() - startMs;
+
+  logUsage({
+    model: result.model ?? resolvedModel,
+    callType,
+    promptTokens: result.usage?.prompt_tokens,
+    completionTokens: result.usage?.completion_tokens,
+    totalTokens: result.usage?.total_tokens,
+    durationMs,
+  });
+
+  return result;
+}
+
+/**
+ * Streaming LLM invocation — yields text delta chunks via an async generator.
+ *
+ * Usage:
+ *   for await (const chunk of invokeLLMStream({ messages, callType: "advisor" })) {
+ *     res.write(`data: ${JSON.stringify({ delta: chunk })}\n\n`);
+ *   }
+ *
+ * Only use this for the GM Advisor chat endpoint. All other callers use invokeLLM.
+ */
+export async function* invokeLLMStream(
+  params: InvokeParams
+): AsyncGenerator<string, void, unknown> {
+  assertApiKey();
+
+  const {
+    messages,
+    tools,
+    toolChoice,
+    tool_choice,
+    model,
+    temperature,
+    callType,
+  } = params;
+
+  const resolvedModel = model ?? "gemini-2.5-flash";
+  const resolvedMaxTokens = resolveMaxTokens(params);
+
+  const payload: Record<string, unknown> = {
+    model: resolvedModel,
+    messages: messages.map(normalizeMessage),
+    max_tokens: resolvedMaxTokens,
+    stream: true,
+    thinking: { budget_tokens: 128 },
+  };
+
+  if (temperature != null) {
+    payload.temperature = temperature;
+  }
+
+  if (tools && tools.length > 0) {
+    payload.tools = tools;
+  }
+
+  const normalizedToolChoice = normalizeToolChoice(
+    toolChoice || tool_choice,
+    tools
+  );
+  if (normalizedToolChoice) {
+    payload.tool_choice = normalizedToolChoice;
+  }
+
+  const startMs = Date.now();
+
+  const response = await fetch(resolveApiUrl(), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${ENV.forgeApiKey}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `LLM stream failed: ${response.status} ${response.statusText} – ${errorText}`
+    );
+  }
+
+  if (!response.body) {
+    throw new Error("LLM stream: response body is null");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let promptTokens: number | undefined;
+  let completionTokens: number | undefined;
+  let totalTokens: number | undefined;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data:")) continue;
+
+        const data = trimmed.slice(5).trim();
+        if (data === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(data) as {
+            choices?: Array<{
+              delta?: { content?: string };
+              finish_reason?: string | null;
+            }>;
+            usage?: {
+              prompt_tokens: number;
+              completion_tokens: number;
+              total_tokens: number;
+            };
+          };
+
+          // Capture usage if present (often on the final chunk)
+          if (parsed.usage) {
+            promptTokens = parsed.usage.prompt_tokens;
+            completionTokens = parsed.usage.completion_tokens;
+            totalTokens = parsed.usage.total_tokens;
+          }
+
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (delta) {
+            yield delta;
+          }
+        } catch {
+          // Malformed SSE chunk — skip silently
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+    logUsage({
+      model: resolvedModel,
+      callType,
+      promptTokens,
+      completionTokens,
+      totalTokens,
+      durationMs: Date.now() - startMs,
+    });
+  }
 }

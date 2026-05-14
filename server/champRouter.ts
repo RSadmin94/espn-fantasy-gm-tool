@@ -161,7 +161,7 @@ export const champRouter = router({
    * Runs the complete 5-metric analysis from the current season data.
    * Simulates 2,000 season paths to produce championship probability.
    */
-  fullReport: publicProcedure
+  fullReport: protectedProcedure
     .input(z.object({
       season: z.number().default(2025),
       simCount: z.number().min(500).max(5000).default(2000),
@@ -268,7 +268,7 @@ Answer Rod's question using the championship equity data above as ground truth.`
    *
    * Pass the "before" and "after" roster states and get the delta in championship %.
    */
-  whatIfDelta: publicProcedure
+  whatIfDelta: protectedProcedure
     .input(z.object({
       season: z.number().default(2025),
       /** Roster BEFORE the decision */

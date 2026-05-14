@@ -9,6 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { espnRefreshHandler } from "../scheduledRefresh";
+import { registerAdvisorStreamRoute } from "../advisorStreamHandler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -45,6 +46,8 @@ async function startServer() {
       createContext,
     })
   );
+  // Streaming advisor SSE endpoint — must be before Vite/static fallthrough
+  registerAdvisorStreamRoute(app);
   // Scheduled job handlers — must be before Vite/static fallthrough
   app.post("/api/scheduled/espn-refresh", espnRefreshHandler);
 

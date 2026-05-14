@@ -5,6 +5,7 @@ import {
   pickTrades, InsertPickTrade, espnViewHealth, InsertEspnViewHealth,
   weeklyPlayerStats, InsertWeeklyPlayerStats,
   scheduledJobs, ScheduledJob,
+  userMemory, UserMemory,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -331,4 +332,38 @@ export async function updateScheduledJobRun(taskUid: string, status: "success" |
   await db.update(scheduledJobs)
     .set({ lastRunAt: new Date(), lastRunStatus: status, lastRunDetails: details ?? null, updatedAt: new Date() })
     .where(eq(scheduledJobs.taskUid, taskUid));
+}
+
+// ── GM Memory helpers ─────────────────────────────────────────────────────────
+export async function getUserMemory(userId: number): Promise<UserMemory | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(userMemory).where(eq(userMemory.userId, userId)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function upsertUserMemory(userId: number, data: {
+  riskTolerance?: string;
+  tradePhilosophy?: string;
+  keeperPhilosophy?: string;
+  draftStyle?: string;
+  favoritePlayerTypes?: string;
+  rivalManagers?: string;
+  notes?: string;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const updateSet = {
+    riskTolerance: data.riskTolerance ?? null,
+    tradePhilosophy: data.tradePhilosophy ?? null,
+    keeperPhilosophy: data.keeperPhilosophy ?? null,
+    draftStyle: data.draftStyle ?? null,
+    favoritePlayerTypes: data.favoritePlayerTypes ?? null,
+    rivalManagers: data.rivalManagers ?? null,
+    notes: data.notes ?? null,
+    updatedAt: new Date(),
+  };
+  await db.insert(userMemory)
+    .values({ userId, ...updateSet })
+    .onDuplicateKeyUpdate({ set: updateSet });
 }

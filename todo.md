@@ -899,3 +899,11 @@
 
 ## Extension Bug Fixes
 - [x] Fix teamName showing as "Unknown" in DNA panel — normalizeTeams now falls back to team.name field when location/nickname are missing from ESPN cache data
+
+## SAAS READINESS PASS (6 ordered items)
+- [ ] Fix llm.ts: remove hardcoded max_tokens=32768, add maxTokens param with per-call-type defaults, add optional model/temperature params, preserve Gemini/Forge compatibility
+- [ ] Add usage logging hooks: log model, call type, prompt/completion/total tokens, durationMs via console (no secrets/content)
+- [ ] Add streaming LLM helper (invokeLLMStream) and wire to GM Advisor chat only; keep invokeLLM as fallback
+- [x] Security audit: convert private-data publicProcedures to protectedProcedure (ownerSelfReview, ownerPredictions, opponentScoutingReport, opponentProfile, addPickTrade, removePickTrade, offseason.teamKeeperBrief, offseason.refresh, injuryRouter.refresh, injuryRouter.waiverScout, simulationRouter.matchup, simulationRouter.lineupCheck, champRouter.fullReport, champRouter.whatIfDelta)
+- [ ] Add user_memory table to drizzle/schema.ts, run pnpm db:push, add gmMemory.get + gmMemory.update tRPC procedures, inject memory into advisor.chat system prompt
+- [ ] Navigation simplification: regroup nav into Win This Week / Win Trades / Win Long Term / Admin/Data (preserve all routes)

@@ -53,7 +53,7 @@ export const injuryRouter = router({
   }),
 
   /** Force re-fetch from ESPN and return fresh records. */
-  refresh: publicProcedure.mutation(async () => {
+  refresh: protectedProcedure.mutation(async () => {
     const injuries = await fetchAndCacheInjuries();
     return {
       count: injuries.length,
@@ -154,7 +154,7 @@ Deliver a concise START/SIT verdict. Lead with the verdict. Explain the injury m
    * Given a player name, fetches their injury data, calculates scores,
    * and generates an AI scouting report grounded in the injury facts.
    */
-  waiverScout: publicProcedure
+  waiverScout: protectedProcedure
     .input(z.object({
       player: PlayerInput,
       context: z.string().optional().default(""),

@@ -593,3 +593,31 @@ export const leagueIdentity = mysqlTable(
 );
 export type LeagueIdentity = typeof leagueIdentity.$inferSelect;
 export type InsertLeagueIdentity = typeof leagueIdentity.$inferInsert;
+
+// ── GM Memory ─────────────────────────────────────────────────────────────────
+/**
+ * Persistent GM memory for the AI Advisor.
+ * One row per user. Injected into advisor system prompts.
+ */
+export const userMemory = mysqlTable(
+  "user_memory",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    riskTolerance: varchar("riskTolerance", { length: 32 }).default("moderate"),
+    tradePhilosophy: text("tradePhilosophy"),
+    keeperPhilosophy: text("keeperPhilosophy"),
+    draftStyle: varchar("draftStyle", { length: 64 }),
+    favoritePlayerTypes: text("favoritePlayerTypes"),
+    rivalManagers: text("rivalManagers"),
+    notes: text("notes"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_um_userId").on(t.userId),
+    index("idx_um_userId").on(t.userId),
+  ]
+);
+export type UserMemory = typeof userMemory.$inferSelect;
+export type InsertUserMemory = typeof userMemory.$inferInsert;

@@ -20,24 +20,28 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { href: "/command-center", icon: LayoutDashboard, label: "Command Center", group: "Overview" },
-  { href: "/connect", icon: Link2, label: "Connect League", group: "Overview", badge: "NEW" },
-  { href: "/offseason", icon: Sunrise, label: "Offseason Intel", group: "Draft & Keepers", badge: "2026" },
-  { href: "/draft-war-room", icon: ClipboardList, label: "Draft War Room", group: "Draft & Keepers" },
-  { href: "/keeper-lab", icon: Star, label: "Keeper Lab", group: "Draft & Keepers" },
-  { href: "/trade-lab", icon: ArrowLeftRight, label: "Trade Lab", group: "Decision Tools", badge: "AI" },
-  { href: "/waiver-lab", icon: Zap, label: "Waiver Lab", group: "Decision Tools", badge: "AI" },
-  { href: "/advisor", icon: Bot, label: "AI GM Advisor", group: "Intelligence", badge: "AI", panel: "advisor" },
-  { href: "/opponent-intel", icon: Microscope, label: "Opponent Intel", group: "Intelligence" },
-  { href: "/data-center", icon: Shield, label: "Data Center", group: "System" },
-  { href: "/weekly-stats", icon: Activity, label: "Weekly Stats", group: "System" },
-  { href: "/backtesting", icon: Target, label: "Backtesting", group: "System", badge: "NEW" },
-  { href: "/gm-memory", icon: Brain, label: "GM Memory", group: "System", badge: "NEW" },
-  { href: "/ml-forecast", icon: BarChart3, label: "ML Forecast", group: "System", badge: "ML" },
-  { href: "/weekly-intelligence", icon: Activity, label: "Weekly Intel", group: "Intelligence", badge: "NEW" },
+  // Win This Week
+  { href: "/command-center", icon: LayoutDashboard, label: "Command Center", group: "Win This Week" },
+  { href: "/advisor", icon: Bot, label: "AI GM Advisor", group: "Win This Week", badge: "AI", panel: "advisor" },
+  { href: "/waiver-lab", icon: Zap, label: "Waiver Lab", group: "Win This Week", badge: "AI" },
+  { href: "/weekly-intelligence", icon: Activity, label: "Weekly Intel", group: "Win This Week", badge: "NEW" },
+  // Win Trades
+  { href: "/trade-lab", icon: ArrowLeftRight, label: "Trade Lab", group: "Win Trades", badge: "AI" },
+  { href: "/opponent-intel", icon: Microscope, label: "Opponent Intel", group: "Win Trades" },
+  // Win Long Term
+  { href: "/offseason", icon: Sunrise, label: "Offseason Intel", group: "Win Long Term", badge: "2026" },
+  { href: "/draft-war-room", icon: ClipboardList, label: "Draft War Room", group: "Win Long Term" },
+  { href: "/keeper-lab", icon: Star, label: "Keeper Lab", group: "Win Long Term" },
+  { href: "/gm-memory", icon: Brain, label: "GM Memory", group: "Win Long Term", badge: "NEW" },
+  // Admin/Data
+  { href: "/data-center", icon: Shield, label: "Data Center", group: "Admin/Data" },
+  { href: "/weekly-stats", icon: Activity, label: "Weekly Stats", group: "Admin/Data" },
+  { href: "/backtesting", icon: Target, label: "Backtesting", group: "Admin/Data", badge: "NEW" },
+  { href: "/ml-forecast", icon: BarChart3, label: "ML Forecast", group: "Admin/Data", badge: "ML" },
+  { href: "/connect", icon: Link2, label: "Connect League", group: "Admin/Data" },
 ];
 
-const groups = ["Overview", "Draft & Keepers", "Decision Tools", "Intelligence", "System"];
+const groups = ["Win This Week", "Win Trades", "Win Long Term", "Admin/Data"];
 
 function DataHealthBanner() {
   const [dismissed, setDismissed] = useState(false);
