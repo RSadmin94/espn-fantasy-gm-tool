@@ -343,7 +343,8 @@ export default function TradeOfferGenerator() {
                             <span className="text-sm font-semibold text-foreground">Option {i + 1}</span>
                             {i === 0 && <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">Recommended</Badge>}
                             <Badge variant="outline" className="text-xs ml-auto">
-                              {gives?.picks?.length ?? 1}-for-{receives?.picks?.length ?? 1}
+                              {/* Always show N-for-N using give count — parity is enforced server-side */}
+                              {gives?.picks?.length ?? 1}-for-{gives?.picks?.length ?? 1}
                             </Badge>
                           </div>
 

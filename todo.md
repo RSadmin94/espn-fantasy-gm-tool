@@ -958,3 +958,9 @@
 - [x] Add hardcoded fallback for rodAllPicks when pickOrderForOffers is empty (ESPN fetch failure)
 - [x] Add hardcoded fallback for targetOwnerPicks when draft order is unavailable
 - [x] Ensures 1-for-1, 2-for-2, 3-for-3 offers always generate instead of showing No available picks
+
+## Trade Offer Generator — Strict Pick Parity Enforcement
+- [x] Enforce equal pick counts on both sides of every offer (1-for-1, 2-for-2, 3-for-3 only)
+- [x] Remove any unequal-count packages from the offer builder
+- [x] Update UI N-for-N badge to always reflect equal counts
+- [x] Verify value-gap card still fires correctly after parity enforcement

@@ -2932,6 +2932,24 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
         if (bestOpt3) balancedOffers.push(bestOpt3);
       }
 
+      // ── Parity guard: discard any offer where give-count ≠ receive-count ──────
+      // Roster spots are fixed — every trade must exchange an equal number of picks.
+      const parityChecked = balancedOffers.filter(bo => {
+        const giveCount = bo.rodGives.picks.length;
+        const receiveCount = bo.rodReceives.picks.length;
+        return giveCount === receiveCount && giveCount > 0;
+      });
+      balancedOffers.length = 0;
+      parityChecked.forEach(o => balancedOffers.push(o));
+
+      // ── Deduplication guard: discard offers where the same pick appears on both sides ──
+      const deduped = balancedOffers.filter(bo => {
+        const givesSet = new Set(bo.rodGives.picks);
+        return !bo.rodReceives.picks.some(p => givesSet.has(p));
+      });
+      balancedOffers.length = 0;
+      deduped.forEach(o => balancedOffers.push(o));
+
       // ── Filter: remove 1-for-1 options below 85% value match (underpay) ──────
       // If a 1-for-1 is underpay, the multi-pick options are better leads
       let noFair1for1 = false;
@@ -2955,13 +2973,31 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       balancedOffers.length = 0;
       filteredOffers.forEach(o => balancedOffers.push(o));
 
-      // Fallback: if no balanced offers found, surface a message
+      // Fallback: if no balanced offers found after all filters, build a best-effort 2-for-2
+      // using Rod's top 2 picks vs target pick + target owner's best remaining pick.
+      // This guarantees at least one equal-count offer is always shown.
       if (balancedOffers.length === 0) {
-        balancedOffers.push({
-          rodGives: { picks: ["No available picks — check Pick Tracker"], pickAssets: [], totalValue: 0 },
-          rodReceives: { picks: [targetPickAsset.label], pickAssets: [targetPickAsset], totalValue: targetValue },
-          valueRatioPct: 0,
-        });
+        const rodTop2 = rodAllPicks.filter(pk => pk.label !== targetPickLabel).slice(0, 2);
+        const targetBonus = targetOwnerPicks.find(pk => pk.label !== targetPickLabel);
+        if (rodTop2.length === 2 && targetBonus) {
+          const rodGivesVal = rodTop2.reduce((s, p) => s + p.value, 0);
+          const receiveTotal = targetValue + targetBonus.value;
+          balancedOffers.push({
+            rodGives: { picks: rodTop2.map(p => p.label), pickAssets: rodTop2, totalValue: rodGivesVal },
+            rodReceives: { picks: [targetPickAsset.label, targetBonus.label], pickAssets: [targetPickAsset, targetBonus], totalValue: receiveTotal },
+            valueRatioPct: receiveTotal > 0 ? Math.round((rodGivesVal / receiveTotal) * 100) : 0,
+          });
+          noFair1for1 = true; // no 1-for-1 was viable
+        } else if (rodTop2.length >= 1) {
+          // Last resort: 1-for-1 with Rod's best pick, even if underpay
+          const rodGivesVal = rodTop2[0].value;
+          balancedOffers.push({
+            rodGives: { picks: [rodTop2[0].label], pickAssets: [rodTop2[0]], totalValue: rodGivesVal },
+            rodReceives: { picks: [targetPickAsset.label], pickAssets: [targetPickAsset], totalValue: targetValue },
+            valueRatioPct: targetValue > 0 ? Math.round((rodGivesVal / targetValue) * 100) : 0,
+          });
+          noFair1for1 = true;
+        }
       }
 
       // ── Compute pick tradability scores for target owner's picks ──────────
