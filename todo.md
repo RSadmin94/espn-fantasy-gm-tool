@@ -1032,6 +1032,6 @@ This single flow determines conversion, retention, and word-of-mouth.
 
 ## Bug: AI GM Draft Order — Root Cause Investigation
 
-- [ ] Add /debug/advisor-context endpoint: dump resolved season, pickOrder array, teamId→owner mapping, formatted prompt section
-- [ ] Compare advisor context vs espn.draftOrder output to find exact divergence point
-- [ ] Apply one clean root-cause fix (no hardcoded years), remove debug endpoint
+- [x] Add /debug/advisor-context endpoint: dump resolved season, pickOrder array, teamId→owner mapping, formatted prompt section
+- [x] Compare advisor context vs espn.draftOrder output to find exact divergence point
+- [x] Apply one clean root-cause fix (no hardcoded years), remove debug endpoint

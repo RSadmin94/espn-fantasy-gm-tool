@@ -151,11 +151,14 @@ Be concise, data-driven, and specific. Reference actual team names and player na
     }
     // Draft order and keeper data
     try {
-      // Always fetch 2026 for the upcoming draft label — do NOT use season (2025) for the pick order
-      const UPCOMING_DRAFT_YEAR = 2026;
-      const upcomingDraftData = await getSeasonData(UPCOMING_DRAFT_YEAR);
+      // Derive the upcoming draft season without hardcoding any year:
+      // If the active season is already the current calendar year or later, use it;
+      // otherwise use season+1 (e.g. active=2025, calendar=2026 → upcoming=2026).
+      // This will work correctly at every season rollover.
+      const upcomingDraftSeason = season >= new Date().getFullYear() ? season : season + 1;
+      const upcomingDraftData = await getSeasonData(upcomingDraftSeason);
       const draftData = upcomingDraftData ?? await getSeasonData(season);
-      const draftLabelYear = upcomingDraftData ? UPCOMING_DRAFT_YEAR : season;
+      const draftLabelYear = upcomingDraftData ? upcomingDraftSeason : season;
       if (draftData) {
         const draftOrderData = normalizeDraftOrder(draftData as Record<string, unknown>);
         const pickOrder = draftOrderData.pickOrder || [];
