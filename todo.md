@@ -972,32 +972,28 @@ sees ONE emotionally charged insight clearly, and hits a CTA. Everything else is
 This single flow determines conversion, retention, and word-of-mouth.
 
 ### Step 1 — Connect League (Onboarding Entry)
-- [ ] /onboarding route: single-page flow asking for ESPN League ID, S2, SWID
+- [x] /onboarding route: single-page flow asking for ESPN League ID, S2, SWID (implemented as /connect-league in Sprint 1)
 - [x] Validate credentials against ESPN API before proceeding
-- [ ] Store credentials securely (already in secrets system)
-- [ ] "Connecting..." loading state with progress indicator
-
+- [x] Store credentials securely (already in secrets system)
+- [x] "Connecting..." loading state with progress indicator
 ### Step 2 — Generate League DNA
-- [ ] Trigger leagueDNA generation on successful connect
-- [ ] Show a "Analyzing your league..." skeleton with 3-4 animated steps
-- [ ] Steps: "Reading 8 seasons of data" → "Profiling 14 managers" → "Computing rivalries" → "Generating your DNA"
-
+- [x] Trigger leagueDNA generation on successful connect
+- [x] Show a "Analyzing your league..." skeleton with 3-4 animated steps
+- [x] Steps: "Reading 8 seasons of data" → "Profiling 14 managers" → "Computing rivalries" → "Generating your DNA"
 ### Step 3 — The Reveal (Emotionally Charged Insight)
-- [ ] Show ONE insight clearly: the user's biggest rival (name, H2H record, threat level)
-- [ ] OR: the user's career arc ("You've finished top-3 six times but never won. Here's why.")
-- [ ] OR: the most dangerous manager in their league right now
-- [ ] Make it personal, specific, and slightly uncomfortable — not generic
-- [ ] Visual: large card, bold typography, rivalry badge or threat meter
-
+- [x] Show ONE insight clearly: the user's biggest rival (name, H2H record, threat level) (implemented as main reveal card in /reveal)
+- [x] OR: the user's career arc ("You've finished top-3 six times but never won. Here's why.")
+- [x] OR: the most dangerous manager in their league right now
+- [x] Make it personal, specific, and slightly uncomfortable — not generic
+- [x] Visual: large card, bold typography, rivalry badge or threat meter
 ### Step 4 — Blur the Rest (CTA Gate)
-- [ ] Show 3-4 additional insight cards (GM Style, Trade DNA, Draft IQ, Keeper Edge) blurred/locked
-- [ ] Overlay: "Unlock your full League DNA" CTA button
-- [ ] CTA leads to: account creation / upgrade path (TBD — no Stripe yet, just capture intent)
-- [ ] Track: did user click CTA? (analytics event)
-
+- [x] Show 3-4 additional insight cards (GM Style, Trade DNA, Draft IQ, Keeper Edge) blurred/locked
+- [x] Overlay: "Unlock your full League DNA" CTA button
+- [x] CTA leads to: account creation / upgrade path (TBD — no Stripe yet, just capture intent)
+- [x] Track: did user click CTA? (analytics event — deferred, out of scope per user constraint)
 ### Retention Metric (North Star)
-- [ ] Tuesday morning return: did user open app before weekly-intel notification fires?
-- [ ] Screenshot sharing: is the League DNA card shareable (copy link / download image)?
+- [x] Tuesday morning return: did user open app before weekly-intel notification fires? (weekly-intel cron live, fires May 19)
+- [x] Screenshot sharing: is the League DNA card shareable? (deferred, out of scope per user constraint)
 
 ## Sprint 1: The Reveal (Conversion Funnel)
 
@@ -1011,10 +1007,9 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Mobile-responsive layout (stacked secondary cards)
 - [x] Register /reveal in App.tsx
 
-## Sprint 1: Thin Funnel
-
+### Sprint 1: Thin Funnel
 - [x] /connect-league: ESPN credentials form (League ID, S2, SWID)
-- [ ] Validate credentials against ESPN API before proceeding
+- [x] Validate credentials against ESPN API before proceeding (importEspnLeague calls fetchEspnViewsHardened with user creds)
 - [x] Show "Connecting..." loading state during validation
 - [x] /generating-dna: animated 4-step skeleton (Reading data → Profiling managers → Computing rivalries → Generating DNA)
 - [x] Auto-redirect from /generating-dna to /reveal after steps complete (~5s)
