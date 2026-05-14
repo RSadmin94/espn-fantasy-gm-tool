@@ -927,3 +927,10 @@
 - [x] Add per-user rate limiting on advisor.chat, streaming SSE, war_room_agent, weekly_briefing
 - [x] Add llm_usage table, persist token counts, add usage query procedure
 - [x] Build GM Memory form UI on /gm-memory page wired to advisor.getMemory + advisor.updateMemory
+
+## TRADE LAB REBUILD
+- [ ] Rewrite TradeAnalyzer.tsx with team selector, player search, multi-asset builder (players + picks), proper teamAId/teamBId wiring
+- [ ] Add DRAFT_2026_COMPLETE flag awareness — show player search when true, picks-only when false (with clear notice)
+- [ ] Wire tradeAnalyze mutation to send actual sideA/sideB player arrays + teamAId/teamBId
+- [ ] Preserve championship equity delta (whatIfDelta) integration
+- [ ] Preserve Trade Offer Generator tab (no changes needed)

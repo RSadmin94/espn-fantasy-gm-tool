@@ -18,6 +18,9 @@ import { toast } from "sonner";
 // Flip to true once the 2026 draft is completed to unlock player trading.
 const DRAFT_2026_COMPLETE = false;
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+const MAX_PICKS_PER_SIDE = 5;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PickEntry { round: number; pick: number; label: string; }
 
@@ -45,21 +48,31 @@ function clientPickValue(round: number, pick: number): number {
 
 // ─── Pick selector widget ─────────────────────────────────────────────────────
 function PickSelector({
-  picks, onAdd, onRemove, accentClass, placeholder,
+  picks, onAdd, onRemove,
+  accentClass, badgeClass, rowClass,
+  placeholder,
 }: {
   picks: PickEntry[];
   onAdd: (p: PickEntry) => void;
   onRemove: (label: string) => void;
   accentClass: string;
+  badgeClass: string;
+  rowClass: string;
   placeholder: string;
 }) {
   const [round, setRound] = useState("1");
   const [slot, setSlot] = useState("1");
+  const atMax = picks.length >= MAX_PICKS_PER_SIDE;
 
   const add = () => {
+    if (atMax) { toast.error(`Max ${MAX_PICKS_PER_SIDE} picks per side`); return; }
     const r = parseInt(round), s = parseInt(slot);
     const lbl = pickLabel(r, s);
-    if (!picks.find(p => p.label === lbl)) onAdd({ round: r, pick: s, label: lbl });
+    if (picks.find(p => p.label === lbl)) {
+      toast.error(`${lbl} is already added to this side`);
+      return;
+    }
+    onAdd({ round: r, pick: s, label: lbl });
   };
 
   return (
@@ -68,10 +81,10 @@ function PickSelector({
       {picks.length > 0 ? (
         <div className="space-y-1.5">
           {picks.map(pk => (
-            <div key={pk.label} className="flex items-center justify-between gap-2 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2.5">
+            <div key={pk.label} className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 ${rowClass}`}>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-[10px] text-cyan-400 border-cyan-500/30 bg-transparent">2026 Pick</Badge>
-                <span className="text-sm font-semibold text-cyan-300">{pk.label}</span>
+                <Badge variant="outline" className={`text-[10px] border bg-transparent ${badgeClass}`}>2026 Pick</Badge>
+                <span className={`text-sm font-semibold ${accentClass}`}>{pk.label}</span>
                 <span className="text-xs text-muted-foreground">≈ {clientPickValue(pk.round, pk.pick).toLocaleString()} pts</span>
               </div>
               <button onClick={() => onRemove(pk.label)} className="text-muted-foreground hover:text-red-400 transition-colors">
@@ -79,8 +92,11 @@ function PickSelector({
               </button>
             </div>
           ))}
-          <div className="text-xs text-muted-foreground text-right">
-            Total: <span className="text-foreground font-semibold">{picks.reduce((s, p) => s + clientPickValue(p.round, p.pick), 0).toLocaleString()} pts</span>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span className={atMax ? "text-amber-400 font-medium" : ""}>
+              {picks.length}/{MAX_PICKS_PER_SIDE} picks{atMax ? " — max reached" : ""}
+            </span>
+            <span>Total: <span className="text-foreground font-semibold">{picks.reduce((s, p) => s + clientPickValue(p.round, p.pick), 0).toLocaleString()} pts</span></span>
           </div>
         </div>
       ) : (
@@ -89,32 +105,34 @@ function PickSelector({
         </div>
       )}
 
-      {/* Add row */}
-      <div className="flex items-center gap-2">
-        <Select value={round} onValueChange={setRound}>
-          <SelectTrigger className="flex-1 h-9 text-xs border-border bg-input">
-            <SelectValue placeholder="Round" />
-          </SelectTrigger>
-          <SelectContent>
-            {Array.from({ length: 14 }, (_, i) => (
-              <SelectItem key={i + 1} value={String(i + 1)}>Round {i + 1}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={slot} onValueChange={setSlot}>
-          <SelectTrigger className="flex-1 h-9 text-xs border-border bg-input">
-            <SelectValue placeholder="Pick slot" />
-          </SelectTrigger>
-          <SelectContent>
-            {Array.from({ length: 14 }, (_, i) => (
-              <SelectItem key={i + 1} value={String(i + 1)}>Pick {i + 1}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button variant="outline" size="sm" onClick={add} className={`h-9 px-3 border-border shrink-0 ${accentClass}`}>
-          <Plus className="w-4 h-4" />
-        </Button>
-      </div>
+      {/* Add row — hidden when at max */}
+      {!atMax && (
+        <div className="flex items-center gap-2">
+          <Select value={round} onValueChange={setRound}>
+            <SelectTrigger className="flex-1 h-9 text-xs border-border bg-input">
+              <SelectValue placeholder="Round" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 14 }, (_, i) => (
+                <SelectItem key={i + 1} value={String(i + 1)}>Round {i + 1}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={slot} onValueChange={setSlot}>
+            <SelectTrigger className="flex-1 h-9 text-xs border-border bg-input">
+              <SelectValue placeholder="Pick slot" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 14 }, (_, i) => (
+                <SelectItem key={i + 1} value={String(i + 1)}>Pick {i + 1}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={add} className={`h-9 px-3 border-border shrink-0 ${accentClass}`}>
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -196,24 +214,81 @@ export default function TradeAnalyzer() {
 
   const canAnalyze = targetPicks.length > 0 && offerPicks.length > 0;
 
-  // Auto-suggest a fair offer based on target pick value
+  // ─── Auto-suggest: tries 1-pick, 2-pick, then 3-pick combos ─────────────────
   const autoSuggestOffer = () => {
     if (targetPicks.length === 0) { toast.error("Add the pick(s) you want to acquire first"); return; }
     const targetTotal = targetPicks.reduce((s, p) => s + clientPickValue(p.round, p.pick), 0);
-    // Find the closest single pick in value
-    let bestRound = 1, bestSlot = 7, bestDiff = Infinity;
+    const targetSet = new Set(targetPicks.map(p => p.label));
+
+    // Build all candidate picks not already in the target side
+    const candidates: PickEntry[] = [];
     for (let r = 1; r <= 14; r++) {
       for (let s = 1; s <= 14; s++) {
-        const v = clientPickValue(r, s);
-        const diff = Math.abs(v - targetTotal);
-        if (diff < bestDiff && !targetPicks.find(p => p.round === r && p.pick === s)) {
-          bestDiff = diff; bestRound = r; bestSlot = s;
+        const lbl = pickLabel(r, s);
+        if (!targetSet.has(lbl)) candidates.push({ round: r, pick: s, label: lbl });
+      }
+    }
+
+    const threshold = targetTotal * 0.15; // ±15% is "fair enough"
+
+    // 1-pick search
+    let best1: PickEntry | null = null;
+    let best1Diff = Infinity;
+    for (const c of candidates) {
+      const diff = Math.abs(clientPickValue(c.round, c.pick) - targetTotal);
+      if (diff < best1Diff) { best1Diff = diff; best1 = c; }
+    }
+    if (best1 && best1Diff <= threshold) {
+      setOfferPicks([best1]);
+      toast.success(`Suggested: ${best1.label} (≈ ${clientPickValue(best1.round, best1.pick).toLocaleString()} pts)`);
+      return;
+    }
+
+    // 2-pick search
+    let best2: [PickEntry, PickEntry] | null = null;
+    let best2Diff = Infinity;
+    for (let i = 0; i < candidates.length; i++) {
+      for (let j = i + 1; j < candidates.length; j++) {
+        const total = clientPickValue(candidates[i].round, candidates[i].pick)
+          + clientPickValue(candidates[j].round, candidates[j].pick);
+        const diff = Math.abs(total - targetTotal);
+        if (diff < best2Diff) { best2Diff = diff; best2 = [candidates[i], candidates[j]]; }
+      }
+    }
+    if (best2 && best2Diff <= threshold) {
+      setOfferPicks(best2);
+      const total = best2.reduce((s, p) => s + clientPickValue(p.round, p.pick), 0);
+      toast.success(`Suggested: ${best2.map(p => p.label).join(" + ")} (≈ ${total.toLocaleString()} pts)`);
+      return;
+    }
+
+    // 3-pick search (cap candidates for performance)
+    const cap = Math.min(candidates.length, 50);
+    let best3: [PickEntry, PickEntry, PickEntry] | null = null;
+    let best3Diff = Infinity;
+    for (let i = 0; i < cap; i++) {
+      for (let j = i + 1; j < cap; j++) {
+        for (let k = j + 1; k < cap; k++) {
+          const total = clientPickValue(candidates[i].round, candidates[i].pick)
+            + clientPickValue(candidates[j].round, candidates[j].pick)
+            + clientPickValue(candidates[k].round, candidates[k].pick);
+          const diff = Math.abs(total - targetTotal);
+          if (diff < best3Diff) { best3Diff = diff; best3 = [candidates[i], candidates[j], candidates[k]]; }
         }
       }
     }
-    const lbl = pickLabel(bestRound, bestSlot);
-    setOfferPicks([{ round: bestRound, pick: bestSlot, label: lbl }]);
-    toast.success(`Suggested: ${lbl} (≈ ${clientPickValue(bestRound, bestSlot).toLocaleString()} pts)`);
+    if (best3) {
+      setOfferPicks(best3);
+      const total = best3.reduce((s, p) => s + clientPickValue(p.round, p.pick), 0);
+      toast.success(`Suggested: ${best3.map(p => p.label).join(" + ")} (≈ ${total.toLocaleString()} pts)`);
+      return;
+    }
+
+    // Absolute fallback: single best pick
+    if (best1) {
+      setOfferPicks([best1]);
+      toast.success(`Suggested: ${best1.label} (≈ ${clientPickValue(best1.round, best1.pick).toLocaleString()} pts)`);
+    }
   };
 
   const analyze = async () => {
@@ -270,7 +345,7 @@ export default function TradeAnalyzer() {
   return (
     <AppLayout
       title="Trade Analyzer"
-      subtitle="2026 draft pick trade builder — select what you want, build your offer, get a full recommendation"
+      subtitle="2026 draft pick trade builder — add up to 5 picks per side, get a full AI recommendation"
     >
       <div className="p-6 space-y-6">
 
@@ -280,7 +355,8 @@ export default function TradeAnalyzer() {
             <Info className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
             <div className="text-sm text-amber-200 leading-relaxed">
               <span className="font-semibold text-amber-300">Pre-draft mode — 2026 picks only.</span>{" "}
-              Player trading unlocks after the 2026 draft. Use this now to evaluate and build pick swap offers before draft day.
+              Player trading unlocks after the 2026 draft. Build complex multi-pick swap offers now before draft day.
+              You can add up to {MAX_PICKS_PER_SIDE} picks on each side.
             </div>
           </div>
         )}
@@ -304,7 +380,9 @@ export default function TradeAnalyzer() {
               onAdd={p => setTargetPicks(prev => [...prev, p])}
               onRemove={lbl => setTargetPicks(prev => prev.filter(p => p.label !== lbl))}
               accentClass="text-cyan-400"
-              placeholder="Add the pick(s) you want to trade for"
+              badgeClass="text-cyan-400 border-cyan-500/30"
+              rowClass="border-cyan-500/20 bg-cyan-500/10"
+              placeholder="Add up to 5 picks you want to trade for"
             />
           </CardContent>
         </Card>
@@ -335,7 +413,9 @@ export default function TradeAnalyzer() {
               onAdd={p => setOfferPicks(prev => [...prev, p])}
               onRemove={lbl => setOfferPicks(prev => prev.filter(p => p.label !== lbl))}
               accentClass="text-emerald-400"
-              placeholder="Add the pick(s) you will give up"
+              badgeClass="text-emerald-400 border-emerald-500/30"
+              rowClass="border-emerald-500/20 bg-emerald-500/10"
+              placeholder="Add up to 5 picks you will give up"
             />
             {targetPicks.length > 0 && (
               <Button
@@ -556,6 +636,16 @@ export default function TradeAnalyzer() {
               </CardContent>
             </Card>
 
+            {/* Log decision */}
+            <div className="flex justify-end">
+              <LogDecisionButton
+                toolSource="trade_analyzer"
+                decisionType="trade_accept"
+                description={`Trade: Give ${offerPicks.map(p => p.label).join(", ")} | Receive ${targetPicks.map(p => p.label).join(", ")} | Grade: ${result.fairnessGrade}`}
+                playersInvolved={[...offerPicks.map(p => p.label), ...targetPicks.map(p => p.label)]}
+                season={2026}
+              />
+            </div>
           </div>
         )}
       </div>
