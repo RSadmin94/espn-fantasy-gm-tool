@@ -907,3 +907,13 @@
 - [x] Security audit: convert private-data publicProcedures to protectedProcedure (ownerSelfReview, ownerPredictions, opponentScoutingReport, opponentProfile, addPickTrade, removePickTrade, offseason.teamKeeperBrief, offseason.refresh, injuryRouter.refresh, injuryRouter.waiverScout, simulationRouter.matchup, simulationRouter.lineupCheck, champRouter.fullReport, champRouter.whatIfDelta)
 - [x] Add user_memory table to drizzle/schema.ts, run pnpm db:push, add gmMemory.get + gmMemory.update tRPC procedures, inject memory into advisor.chat system prompt
 - [x] Navigation simplification: regroup nav into Win This Week / Win Trades / Win Long Term / Admin/Data (preserve all routes)
+
+## SPRINT: SaaS Multi-User Readiness
+- [ ] Per-user ESPN credentials: add importEspnLeague procedure + ESPN form in LeagueConnect
+- [ ] Per-user ESPN credentials: add getActiveEspnCredentials(userId) helper in db.ts
+- [ ] Per-user ESPN credentials: update espnService.ts to accept credential override params
+- [ ] Per-user ESPN credentials: update routers.ts + advisorContextBuilder.ts to use per-user creds
+- [ ] Rate limiting: per-user cooldowns + daily quotas on advisor.chat, war_room_agent, weekly_briefing
+- [ ] Usage metering: llm_usage table + persist token counts + usage query procedure
+- [ ] GM Memory UI: form on /gm-memory wired to advisor.getMemory + advisor.updateMemory
+- [ ] Weekly intelligence automation: scheduled refresh job + owner notification trigger

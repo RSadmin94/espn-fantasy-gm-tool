@@ -14,6 +14,13 @@ const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
 const SWID = process.env.ESPN_SWID || "";
 const ESPN_S2 = process.env.ESPN_S2 || "";
 
+/** Per-user ESPN credentials. When provided, overrides the module-level env vars. */
+export interface EspnCreds {
+  leagueId: string;
+  swid: string;
+  espnS2: string;
+}
+
 export const ALL_VIEWS = [
   "mSettings",
   "mTeam",
@@ -57,20 +64,25 @@ export const PRO_TEAM_MAP: Record<number, string> = {
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
-function buildCookieString(): string {
+function buildCookieStringFor(creds?: EspnCreds): string {
+  const swid = creds?.swid ?? SWID;
+  const s2   = creds?.espnS2 ?? ESPN_S2;
   const parts: string[] = [];
-  if (SWID) parts.push(`SWID=${SWID}`);
-  if (ESPN_S2) parts.push(`espn_s2=${ESPN_S2}`);
+  if (swid) parts.push(`SWID=${swid}`);
+  if (s2)   parts.push(`espn_s2=${s2}`);
   return parts.join("; ");
 }
-
-export function hasCookies(): boolean {
-  return Boolean(SWID && ESPN_S2);
+function buildCookieString(): string { return buildCookieStringFor(); }
+export function hasCookies(creds?: EspnCreds): boolean {
+  const swid = creds?.swid ?? SWID;
+  const s2   = creds?.espnS2 ?? ESPN_S2;
+  return Boolean(swid && s2);
 }
-
-function getBaseUrl(season: number): string {
-  return `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${LEAGUE_ID}`;
+function getBaseUrlFor(season: number, creds?: EspnCreds): string {
+  const lid = creds?.leagueId ?? LEAGUE_ID;
+  return `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${lid}`;
 }
+function getBaseUrl(season: number): string { return getBaseUrlFor(season); }
 
 // ─── Pipeline result types ────────────────────────────────────────────────────
 
@@ -98,9 +110,10 @@ export interface PipelineFetchResult {
 
 async function fetchAllViewsAtOnce(
   season: number,
-  views: string[]
+  views: string[],
+  creds?: EspnCreds
 ): Promise<{ data: Record<string, unknown>; status: number } | { status: number; error: string }> {
-  const url = new URL(getBaseUrl(season));
+  const url = new URL(getBaseUrlFor(season, creds));
   for (const v of views) url.searchParams.append("view", v);
 
   const headers: Record<string, string> = {
@@ -108,7 +121,7 @@ async function fetchAllViewsAtOnce(
     Accept: "application/json,text/plain,*/*",
     Referer: "https://fantasy.espn.com/football/league",
   };
-  const cookieStr = buildCookieString();
+  const cookieStr = buildCookieStringFor(creds);
   if (cookieStr) headers["Cookie"] = cookieStr;
 
   try {
@@ -125,9 +138,10 @@ async function fetchAllViewsAtOnce(
 
 async function fetchSingleView(
   season: number,
-  viewName: string
+  viewName: string,
+  creds?: EspnCreds
 ): Promise<ViewFetchResult> {
-  const url = new URL(getBaseUrl(season));
+  const url = new URL(getBaseUrlFor(season, creds));
   url.searchParams.append("view", viewName);
 
   const headers: Record<string, string> = {
@@ -135,7 +149,7 @@ async function fetchSingleView(
     Accept: "application/json,text/plain,*/*",
     Referer: "https://fantasy.espn.com/football/league",
   };
-  const cookieStr = buildCookieString();
+  const cookieStr = buildCookieStringFor(creds);
   if (cookieStr) headers["Cookie"] = cookieStr;
 
   try {
@@ -283,13 +297,14 @@ export function staleSummary(fetchedAt: Date): string {
  */
 export async function fetchEspnViewsHardened(
   season: number,
-  views: string[] = [...ALL_VIEWS]
+  views: string[] = [...ALL_VIEWS],
+  creds?: EspnCreds
 ): Promise<PipelineFetchResult> {
-  const cookiesPresent = hasCookies();
+  const cookiesPresent = hasCookies(creds);
   const viewResults: ViewFetchResult[] = [];
 
   // Fast path: try all views in one request
-  const bulkResult = await fetchAllViewsAtOnce(season, views);
+  const bulkResult = await fetchAllViewsAtOnce(season, views, creds);
 
   if ("data" in bulkResult) {
     // Bulk succeeded — validate each view's data quality
@@ -327,7 +342,7 @@ export async function fetchEspnViewsHardened(
 
   await Promise.allSettled(
     views.map(async (viewName) => {
-      const result = await fetchSingleView(season, viewName);
+      const result = await fetchSingleView(season, viewName, creds);
       viewResults.push(result);
       if (result.status === "auth_error") authError = true;
       if (result.data) {
@@ -360,9 +375,10 @@ export async function fetchEspnViewsHardened(
  */
 export async function fetchEspnViews(
   season: number,
-  views: string[] = [...ALL_VIEWS]
+  views: string[] = [...ALL_VIEWS],
+  creds?: EspnCreds
 ): Promise<Record<string, unknown>> {
-  const result = await fetchEspnViewsHardened(season, views);
+  const result = await fetchEspnViewsHardened(season, views, creds);
   return result.merged;
 }
 

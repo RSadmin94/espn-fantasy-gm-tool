@@ -12,6 +12,7 @@
  *   Fantasy:   appliedTotal = total fantasy points for the week
  */
 
+import type { EspnCreds } from "./espnService";
 const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
 const SWID = process.env.ESPN_SWID || "";
 const ESPN_S2 = process.env.ESPN_S2 || "";
@@ -62,15 +63,18 @@ export interface WeeklyStatRow {
   fantasyPoints: number;
 }
 
-function buildCookieString(): string {
+function buildCookieStringFor(creds?: EspnCreds): string {
+  const swid = creds?.swid ?? SWID;
+  const s2   = creds?.espnS2 ?? ESPN_S2;
   const parts: string[] = [];
-  if (SWID) parts.push(`SWID=${SWID}`);
-  if (ESPN_S2) parts.push(`espn_s2=${ESPN_S2}`);
+  if (swid) parts.push(`SWID=${swid}`);
+  if (s2)   parts.push(`espn_s2=${s2}`);
   return parts.join("; ");
 }
 
-function getBaseUrl(season: number): string {
-  return `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${LEAGUE_ID}`;
+function getBaseUrlFor(season: number, creds?: EspnCreds): string {
+  const lid = creds?.leagueId ?? LEAGUE_ID;
+  return `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${lid}`;
 }
 
 /**
@@ -79,9 +83,10 @@ function getBaseUrl(season: number): string {
  */
 export async function fetchWeeklyStatsForPeriod(
   season: number,
-  scoringPeriodId: number
+  scoringPeriodId: number,
+  creds?: EspnCreds
 ): Promise<{ rows: WeeklyStatRow[]; error?: string }> {
-  const url = new URL(getBaseUrl(season));
+  const url = new URL(getBaseUrlFor(season, creds));
   url.searchParams.append("view", "mRoster");
   url.searchParams.append("scoringPeriodId", String(scoringPeriodId));
 
@@ -90,7 +95,7 @@ export async function fetchWeeklyStatsForPeriod(
     Accept: "application/json,text/plain,*/*",
     Referer: "https://fantasy.espn.com/football/league",
   };
-  const cookieStr = buildCookieString();
+  const cookieStr = buildCookieStringFor(creds);
   if (cookieStr) headers["Cookie"] = cookieStr;
 
   try {
