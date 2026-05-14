@@ -864,10 +864,17 @@ export default function MockDraftSimulator() {
   );
   const rodGrade = useMemo(() => gradeRoster(rodPicks), [rodPicks]);
 
+  // FIX 3: single-pass Map grouping instead of 14x picks.filter()
   const allTeamRosters = useMemo(() => {
     if (!draftComplete || owners.length === 0) return [];
+    const byOwner = new Map<string, DraftPick[]>();
+    for (const pick of picks) {
+      const arr = byOwner.get(pick.owner) ?? [];
+      arr.push(pick);
+      byOwner.set(pick.owner, arr);
+    }
     return owners.map((owner) => {
-      const teamPicks = picks.filter((p) => p.owner === owner.ownerName);
+      const teamPicks = byOwner.get(owner.ownerName) ?? [];
       const grade = gradeRoster(teamPicks);
       return { owner, picks: teamPicks, grade, isRod: owner.isRod };
     }).sort((a, b) => {
@@ -920,17 +927,16 @@ export default function MockDraftSimulator() {
         alerts.push({ pos, count, window: recentPicks.length, urgency });
       }
     }
-    // Scarcity alerts: top-5 at position all gone
+    // FIX 5: reuse memoized pickedIds instead of rebuilding Set
     if (boardData?.players) {
-      const pickedSet = new Set(picks.map(p => p.player.fpId));
       for (const pos of ["QB", "RB", "WR", "TE"]) {
         const top5 = boardData.players.filter(p => p.position === pos).slice(0, 5);
-        const allGone = top5.length >= 5 && top5.every(p => pickedSet.has(p.fpId));
+        const allGone = top5.length >= 5 && top5.every(p => pickedIds.has(p.fpId));
         if (allGone) alerts.push({ pos, count: 5, window: 0, urgency: "red" });
       }
     }
     return alerts;
-  }, [picks, draftStarted, boardData]);
+  }, [picks, pickedIds, draftStarted, boardData]);
 
   // ── Survival probabilities for best available list ──────────────────────────
   const survivals = useMemo(() => {
@@ -989,6 +995,56 @@ export default function MockDraftSimulator() {
     if (!draftStarted || draftComplete || owners.length === 0) return [];
     return calcOpportunityBoard(picks, owners, availablePlayers, currentRound, rodSlotIndex, totalTeams);
   }, [draftStarted, draftComplete, picks, owners, availablePlayers, currentRound, rodSlotIndex, totalTeams]);
+
+  // FIX 4: memoized post-draft per-team analysis (bestValue, biggestReach, strengths, weaknesses)
+  const postDraftAnalysis = useMemo(() => {
+    if (!draftComplete || allTeamRosters.length === 0) return new Map<number, { bestValue: DraftPick | null; biggestReach: DraftPick | null; strengths: string[]; weaknesses: string[]; keeperPicks: DraftPick[] }>();
+    const map = new Map<number, { bestValue: DraftPick | null; biggestReach: DraftPick | null; strengths: string[]; weaknesses: string[]; keeperPicks: DraftPick[] }>();
+    for (const { owner, picks: teamPicks } of allTeamRosters) {
+      const nonKeeperPicks = teamPicks.filter(p => !p.isKeeper);
+      const bestValue = nonKeeperPicks.length > 0
+        ? nonKeeperPicks.reduce((best, p) => (p.overall - p.player.ecrRank) > (best.overall - best.player.ecrRank) ? p : best)
+        : null;
+      const biggestReach = nonKeeperPicks.length > 0
+        ? nonKeeperPicks.reduce((worst, p) => (p.overall - p.player.ecrRank) < (worst.overall - worst.player.ecrRank) ? p : worst)
+        : null;
+      const posByAvgEcr: Array<{ pos: string; avgEcr: number }> = [];
+      for (const pos of ["QB", "RB", "WR", "TE"]) {
+        const posPlayers = nonKeeperPicks.filter(p => p.player.position === pos);
+        if (posPlayers.length > 0) {
+          const avg = posPlayers.reduce((s, p) => s + p.player.ecrRank, 0) / posPlayers.length;
+          posByAvgEcr.push({ pos, avgEcr: avg });
+        }
+      }
+      posByAvgEcr.sort((a, b) => a.avgEcr - b.avgEcr);
+      map.set(owner.teamId, {
+        bestValue,
+        biggestReach,
+        strengths: posByAvgEcr.slice(0, 2).map(p => p.pos),
+        weaknesses: posByAvgEcr.slice(-2).reverse().map(p => p.pos),
+        keeperPicks: teamPicks.filter(p => p.isKeeper),
+      });
+    }
+    return map;
+  }, [draftComplete, allTeamRosters]);
+
+  // FIX 2: memoized championship equity league comparison (moved out of JSX render)
+  const champEquityLeague = useMemo(() => {
+    if (!draftComplete || allTeamRosters.length === 0) return null;
+    const champScores = allTeamRosters.map(t => {
+      const nonKeeper = t.picks.filter(p => !p.isKeeper);
+      const avgEcr = nonKeeper.length > 0
+        ? nonKeeper.reduce((s, p) => s + p.player.ecrRank, 0) / nonKeeper.length
+        : 999;
+      const vbd = t.picks.reduce((s, p) => s + (p.player.pfr2025?.vbd ?? 0), 0);
+      const score = Math.max(0, 100 - avgEcr * 0.5 + vbd * 0.1);
+      return { ownerName: t.owner.ownerName, teamName: t.owner.teamName, isRod: t.isRod, score };
+    });
+    const maxScore = Math.max(...champScores.map(s => s.score), 1);
+    const rodScore = champScores.find(s => s.isRod);
+    const rodRank = [...champScores].sort((a, b) => b.score - a.score).findIndex(s => s.isRod) + 1;
+    return { champScores, maxScore, rodScore, rodRank };
+  }, [draftComplete, allTeamRosters]);
 
   // ── Championship Equity delta map ─────────────────────────────────────────────────
   const champEquityMap = useMemo(() => {
@@ -1814,22 +1870,9 @@ export default function MockDraftSimulator() {
               </div>
             </div>
 
-            {/* Championship Equity League Comparison */}
-            {allTeamRosters.length > 0 && (() => {
-              // Compute a simple championship equity score per team based on avg ECR + VBD
-              const champScores = allTeamRosters.map(t => {
-                const nonKeeper = t.picks.filter(p => !p.isKeeper);
-                const avgEcr = nonKeeper.length > 0
-                  ? nonKeeper.reduce((s, p) => s + p.player.ecrRank, 0) / nonKeeper.length
-                  : 999;
-                const vbd = t.picks.reduce((s, p) => s + (p.player.pfr2025?.vbd ?? 0), 0);
-                // Lower avg ECR = better; higher VBD = better
-                const score = Math.max(0, 100 - avgEcr * 0.5 + vbd * 0.1);
-                return { ownerName: t.owner.ownerName, teamName: t.owner.teamName, isRod: t.isRod, score };
-              });
-              const maxScore = Math.max(...champScores.map(s => s.score), 1);
-              const rodScore = champScores.find(s => s.isRod);
-              const rodRank = [...champScores].sort((a, b) => b.score - a.score).findIndex(s => s.isRod) + 1;
+            {/* Championship Equity League Comparison — FIX 2: uses memoized champEquityLeague */}
+            {champEquityLeague && (() => {
+              const { champScores, maxScore, rodScore, rodRank } = champEquityLeague;
               return (
                 <div className="mb-4 p-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 space-y-3">
                   <div className="flex items-center justify-between">
@@ -1896,35 +1939,13 @@ export default function MockDraftSimulator() {
                   return b.grade.totalVbd - a.grade.totalVbd;
                 })
                 .map(({ owner, picks: teamPicks, grade, isRod }) => {
-                  const nonKeeperPicks = teamPicks.filter(p => !p.isKeeper);
-                  // Best value: highest (pick slot - ECR rank) = drafted later than ECR suggests
-                  const bestValue = nonKeeperPicks.length > 0
-                    ? nonKeeperPicks.reduce((best, p) => {
-                        const gap = p.overall - p.player.ecrRank;
-                        return gap > (best.overall - best.player.ecrRank) ? p : best;
-                      })
-                    : null;
-                  // Biggest reach: lowest (pick slot - ECR rank)
-                  const biggestReach = nonKeeperPicks.length > 0
-                    ? nonKeeperPicks.reduce((worst, p) => {
-                        const gap = p.overall - p.player.ecrRank;
-                        return gap < (worst.overall - worst.player.ecrRank) ? p : worst;
-                      })
-                    : null;
-                  // Positional strengths/weaknesses by avg ECR of non-keeper picks
-                  const posByAvgEcr: Array<{ pos: string; avgEcr: number; count: number }> = [];
-                  for (const pos of ["QB", "RB", "WR", "TE"]) {
-                    const posPlayers = nonKeeperPicks.filter(p => p.player.position === pos);
-                    if (posPlayers.length > 0) {
-                      const avg = posPlayers.reduce((s, p) => s + p.player.ecrRank, 0) / posPlayers.length;
-                      posByAvgEcr.push({ pos, avgEcr: avg, count: posPlayers.length });
-                    }
-                  }
-                  posByAvgEcr.sort((a, b) => a.avgEcr - b.avgEcr);
-                  const strengths = posByAvgEcr.slice(0, 2).map(p => p.pos);
-                  const weaknesses = posByAvgEcr.slice(-2).reverse().map(p => p.pos);
-                  const keeperPicks = teamPicks.filter(p => p.isKeeper);
-
+                  // FIX 4: use memoized postDraftAnalysis lookup
+                  const analysis = postDraftAnalysis.get(owner.teamId);
+                  const bestValue = analysis?.bestValue ?? null;
+                  const biggestReach = analysis?.biggestReach ?? null;
+                  const strengths = analysis?.strengths ?? [];
+                  const weaknesses = analysis?.weaknesses ?? [];
+                  const keeperPicks = analysis?.keeperPicks ?? [];
                   return (
                     <Card
                       key={owner.teamId}
