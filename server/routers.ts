@@ -2725,6 +2725,23 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
         source: "acquired" as const,
         acquiredFrom: t.counterparty,
       }));
+      // ── Hardcoded fallback: if pickOrderForOffers was empty (ESPN fetch failed),
+      // inject Rod's known 2026 picks based on his draft position (11th in 14-team snake).
+      // This ensures the offer builder always has picks to work with.
+      if (rodOriginalPicks.length === 0 && rodAcquiredPicks.length === 0) {
+        const ROD_DRAFT_POSITION = 11; // Rod's 2026 draft position
+        for (let r = 1; r <= TOTAL_ROUNDS; r++) {
+          // In a 14-team snake: odd rounds pick at position P, even rounds pick at (15-P)
+          const pickInRound = r % 2 === 1 ? ROD_DRAFT_POSITION : TEAMS_COUNT + 1 - ROD_DRAFT_POSITION;
+          rodOriginalPicks.push({
+            label: `Round ${r}.${String(pickInRound).padStart(2, "0")}`,
+            round: r,
+            pickInRound,
+            value: pickValueCanonical(r, pickInRound),
+            source: "original" as const,
+          });
+        }
+      }
       const rodAllPicks = [...rodOriginalPicks, ...rodAcquiredPicks]
         .sort((a, b) => b.value - a.value); // highest value first
 
@@ -2788,6 +2805,28 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
         }
       }
       } // end if (targetTeamId === null) fallback
+
+      // ── Hardcoded fallback for targetOwnerPicks when pickOrderForOffers was empty ──
+      // If we couldn't resolve the target owner's picks from the draft order,
+      // generate a generic set of picks at a mid-range draft position (pick 7 of 14).
+      // This ensures the 2-for-2 and 3-for-3 offer builders always have bonus picks to pair.
+      if (targetOwnerPicks.length === 0) {
+        const FALLBACK_POSITION = 7; // mid-table position for generic target owner
+        for (let r = 1; r <= TOTAL_ROUNDS; r++) {
+          const pickInRound = r % 2 === 1 ? FALLBACK_POSITION : TEAMS_COUNT + 1 - FALLBACK_POSITION;
+          const lbl = `Round ${r}.${String(pickInRound).padStart(2, "0")}`;
+          // Skip the target pick itself
+          if (lbl === targetPickLabel.replace(/ \(2026 Draft\)/, "")) continue;
+          targetOwnerPicks.push({
+            label: lbl,
+            round: r,
+            pickInRound,
+            value: pickValueCanonical(r, pickInRound),
+            source: "original",
+          });
+        }
+      }
+
       // Sort target owner picks by value descending
       targetOwnerPicks.sort((a, b) => b.value - a.value);
 

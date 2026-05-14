@@ -951,5 +951,10 @@
 ## Trade Offer Generator — Value-Gap Explanation Card
 - [x] Show explanation card when 1-for-1 was filtered (no fair 1-for-1 found)
 - [x] Card text: No fair 1-for-1 offer found. Multi-pick packages are shown because they get closer to market value.
-- [ ] Publish app to production
-- [ ] Activate weekly-intel heartbeat cron (Tuesdays 9AM UTC)
+- [x] Publish app to production
+- [x] Activate weekly-intel heartbeat cron (Tuesdays 9AM UTC)
+
+## Trade Offer Generator — Pick Resolution Fallback Fix
+- [x] Add hardcoded fallback for rodAllPicks when pickOrderForOffers is empty (ESPN fetch failure)
+- [x] Add hardcoded fallback for targetOwnerPicks when draft order is unavailable
+- [x] Ensures 1-for-1, 2-for-2, 3-for-3 offers always generate instead of showing No available picks
