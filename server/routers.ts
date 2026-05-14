@@ -2893,6 +2893,25 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
         if (bestOpt3) balancedOffers.push(bestOpt3);
       }
 
+      // ── Filter: remove 1-for-1 options below 85% value match (underpay) ──────
+      // If a 1-for-1 is underpay, the multi-pick options are better leads
+      const filteredOffers = balancedOffers.filter((bo, idx) => {
+        // Only filter the 1-for-1 (first option, rodGives has 1 pick, rodReceives has 1 pick)
+        if (idx === 0 && bo.rodGives.picks.length === 1 && bo.rodReceives.picks.length === 1) {
+          return (bo.valueRatioPct ?? 0) >= 85;
+        }
+        return true;
+      });
+      // Sort by closeness to 100% value match (fairest offer first)
+      filteredOffers.sort((a, b) => {
+        const aDiff = Math.abs((a.valueRatioPct ?? 0) - 100);
+        const bDiff = Math.abs((b.valueRatioPct ?? 0) - 100);
+        return aDiff - bDiff;
+      });
+      // Replace balancedOffers with filtered+sorted version
+      balancedOffers.length = 0;
+      filteredOffers.forEach(o => balancedOffers.push(o));
+
       // Fallback: if no balanced offers found, surface a message
       if (balancedOffers.length === 0) {
         balancedOffers.push({
@@ -3026,7 +3045,7 @@ Always be specific, reference actual stats and values, and give actionable negot
 Respond in JSON with this schema: {
   "dealRating": "EXCELLENT|GOOD|FAIR|TOUGH",
   "targetAnalysis": "string (2-3 sentences on why this player/pick is worth acquiring)",
-  "recommendedOffer": "string (which offer option to lead with and why)",
+  "recommendedOffer": "string (name the ACTUAL picks in the lead offer, e.g. 'Lead with 1.11 + 6.01 for 1.01 — here is why...' — do NOT say 'Option 1' or 'Option 2')",
   "negotiationStrategy": "string (how to approach this specific GM based on their style)",
   "timing": "string (best time to make this offer based on standings/season context)",
   "redFlags": "string (risks or reasons they might decline)",
@@ -3081,7 +3100,14 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
         strategy = {
           dealRating: "FAIR",
           targetAnalysis: `${targetDesc} is a solid acquisition target based on their 2025 performance.`,
-          recommendedOffer: offerOptions[0] ? `Lead with Option 1` : "Build a balanced offer matching target value.",
+          recommendedOffer: offerOptions[0]
+            ? (() => {
+                const o = offerOptions[0];
+                const gives = o.rodGives.picks.map((p: string) => p.replace(/^Round /, '')).join(' + ');
+                const receives = o.rodReceives.picks.map((p: string) => p.replace(/^Round /, '')).join(' + ');
+                return `Lead with ${gives} for ${receives} — best value match at ${o.valueRatioPct ?? '?'}%`;
+              })()
+            : "Build a balanced offer matching target value.",
           negotiationStrategy: gmStyle ? `${gmStyle.archetype} — approach with a value-focused pitch.` : "Be direct and value-focused.",
           timing: "Early in the offseason before keeper decisions lock in.",
           redFlags: "Owner may not be motivated to sell if they have keeper eligibility remaining.",

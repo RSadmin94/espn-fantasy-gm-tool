@@ -934,3 +934,16 @@
 - [x] [POST-DRAFT] Wire tradeAnalyze mutation to send actual sideA/sideB player arrays + teamAId/teamBId
 - [x] [POST-DRAFT] Preserve championship equity delta (whatIfDelta) integration
 - [x] [POST-DRAFT] Preserve Trade Offer Generator tab (no changes needed)
+## Trade Offer Generator — AI Recommendation Fix
+- [x] Filter out sub-85% 1-for-1 options from balancedOffers (underpay guard)
+- [x] Sort balancedOffers by closeness to 100% value match (fairest offer first = Option 1)
+- [x] Update AI system prompt to instruct naming actual picks in recommendedOffer (not "Option 1")
+- [x] Update fallback recommendedOffer to use actual pick labels (e.g. "Lead with 1.11 + 6.01 for 1.01")
+- [x] 0 TypeScript errors, 474/474 tests passing
+
+## Trade Offer Generator — AI Recommendation Fix
+- [x] Filter out sub-85% 1-for-1 options from balancedOffers (underpay guard)
+- [x] Sort balancedOffers by closeness to 100% value match (fairest offer first = Option 1)
+- [x] Update AI system prompt to instruct naming actual picks in recommendedOffer (not Option 1)
+- [x] Update fallback recommendedOffer to use actual pick labels (e.g. Lead with 1.11 + 6.01 for 1.01)
+- [x] 0 TypeScript errors, 474/474 tests passing
