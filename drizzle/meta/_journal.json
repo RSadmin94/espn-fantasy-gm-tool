@@ -141,6 +141,13 @@
       "when": 1778730529376,
       "tag": "0019_fluffy_madame_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1778782689782,
+      "tag": "0020_mute_naoko",
+      "breakpoints": true
     }
   ]
 }

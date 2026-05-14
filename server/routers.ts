@@ -20,6 +20,7 @@ import { gmDecisionRouter } from "./gmDecisionRouter";
 import { mlRouter } from "./mlRouter";
 import { weeklyAssessmentRouter } from "./weeklyAssessmentRouter";
 import { providerRouter } from "./providerRouter";
+import { billingRouter } from "./billingRouter";
 import { offseasonRouter } from "./offseasonRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
@@ -88,6 +89,7 @@ async function getSeasonData(season: number) {
 
 export const appRouter = router({
   system: systemRouter,
+  billing: billingRouter,
   injury: injuryRouter,
   simulation: simulationRouter,
   dna: dnaRouter,

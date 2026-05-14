@@ -22,6 +22,12 @@ export const users = mysqlTable("users", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
   activeLeagueId: int("activeLeagueId").default(0),
+  // Stripe / subscription fields
+  stripeCustomerId: varchar("stripeCustomerId", { length: 128 }),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 128 }),
+  subscriptionStatus: mysqlEnum("subscriptionStatus", ["free", "trialing", "active", "past_due", "canceled"]).default("free").notNull(),
+  trialStartedAt: timestamp("trialStartedAt"),
+  currentPeriodEnd: timestamp("currentPeriodEnd"),
 });
 
 export type User = typeof users.$inferSelect;
@@ -651,3 +657,44 @@ export const llmUsage = mysqlTable(
 );
 export type LlmUsage = typeof llmUsage.$inferSelect;
 export type InsertLlmUsage = typeof llmUsage.$inferInsert;
+
+// ─── Funnel Events ─────────────────────────────────────────────────────────────
+// Tracks the 5-event conversion funnel: connected_league → completed_reveal →
+// clicked_cta → started_checkout → completed_payment
+export const funnelEvents = mysqlTable(
+  "funnel_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId"),                                        // null for anonymous
+    event: varchar("event", { length: 64 }).notNull(),            // connected_league | completed_reveal | clicked_cta | started_checkout | completed_payment
+    metadata: json("metadata"),                                   // provider, leagueId, etc.
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_fe_userId").on(t.userId),
+    index("idx_fe_event").on(t.event),
+    index("idx_fe_createdAt").on(t.createdAt),
+  ]
+);
+export type FunnelEvent = typeof funnelEvents.$inferSelect;
+export type InsertFunnelEvent = typeof funnelEvents.$inferInsert;
+
+// ─── Onboarding State ──────────────────────────────────────────────────────────
+// Tracks which profile the user is on in the sequential reveal (0=self, 1=champion, 2=rival)
+export const onboardingState = mysqlTable(
+  "onboarding_state",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    currentProfile: int("currentProfile").default(0).notNull(),   // 0=self, 1=champion, 2=rival
+    completedAt: timestamp("completedAt"),                         // null until all 3 profiles seen
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_os_userId").on(t.userId),
+    index("idx_os_userId").on(t.userId),
+  ]
+);
+export type OnboardingState = typeof onboardingState.$inferSelect;
+export type InsertOnboardingState = typeof onboardingState.$inferInsert;
