@@ -883,9 +883,9 @@
 - [x] Run all tests and save checkpoint — 467/467 passing, 0 TS errors
 
 ## FEATURE: Manual ESPN Refresh Button on Offseason Intel Page
-- [ ] Add offseason.refresh tRPC mutation that re-fetches ESPN league identity (2026 team names + draft order) and invalidates keeper recommendation cache
-- [ ] Add refresh button to OffseasonHub header with loading spinner, success toast, and error state
-- [ ] Show last-synced timestamp next to the refresh button so user knows data freshness
+- [x] Add offseason.refresh tRPC mutation that re-fetches ESPN league identity (2026 team names + draft order) and invalidates keeper recommendation cache
+- [x] Add refresh button to OffseasonHub header with loading spinner, success toast, and error state
+- [x] Show last-synced timestamp next to the refresh button so user knows data freshness
 - [x] Run all tests and save checkpoint
 
 ## BUG: Owner DNA + Extension showing in-season 2025 data — FIXED
@@ -916,7 +916,7 @@
 - [x] Rate limiting: per-user cooldowns + daily quotas on advisor.chat, war_room_agent, weekly_briefing
 - [x] Usage metering: llm_usage table + persist token counts + usage query procedure
 - [x] GM Memory UI: form on /gm-memory wired to advisor.getMemory + advisor.updateMemory
-- [ ] Weekly intelligence automation: scheduled refresh job + owner notification trigger
+- [x] Weekly intelligence automation: scheduled refresh job + owner notification trigger
 
 ## SPRINT 2 — Foundation (Encryption + Active Context + Rate Limiting + Metering + GM Memory UI)
 - [x] Add AES-256-GCM crypto helper (server/_core/crypto.ts) for credential encryption/decryption

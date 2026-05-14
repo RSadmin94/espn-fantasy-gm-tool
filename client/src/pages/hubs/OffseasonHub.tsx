@@ -6,10 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   Trophy, AlertTriangle, TrendingUp, TrendingDown, Minus,
   Brain, Target, ChevronDown, ChevronUp, Loader2, Sparkles,
-  Calendar, Users, BarChart3,
+  Calendar, Users, BarChart3, RefreshCw,
 } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -548,12 +549,32 @@ function DataSourceBanner({ completedSeason, planningYear }: { completedSeason?:
 
 export default function OffseasonHub() {
   // Pull season metadata from the keeper query (lightest query, always runs first)
+  const utils = trpc.useUtils();
   const { data: keeperMeta } = trpc.offseason.keeperRecommendations.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
   const completedSeason = (keeperMeta as { completedSeason?: number })?.completedSeason;
   const planningYear = (keeperMeta as { planningYear?: number })?.planningYear;
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const refreshMutation = trpc.offseason.refresh.useMutation({
+    onSuccess: (result) => {
+      setLastSyncedAt(result.refreshedAt);
+      utils.offseason.keeperRecommendations.invalidate();
+      utils.offseason.draftBoard.invalidate();
+      const anyFailed = Object.values(result.seasons).some(
+        (r) => (r as { status: string }).status === "failed"
+      );
+      if (anyFailed) {
+        toast.warning("Partial refresh — some seasons failed. Check Data Center.");
+      } else {
+        toast.success("Offseason data refreshed successfully.");
+      }
+    },
+    onError: (err) => {
+      toast.error(err.message || "Refresh failed. Check ESPN credentials.");
+    },
+  });
 
   return (
     <AppLayout
@@ -562,6 +583,26 @@ export default function OffseasonHub() {
         ? `${planningYear} keeper recommendations, draft order analysis, and manager behavior predictions`
         : "Offseason keeper recommendations, draft order analysis, and manager behavior predictions"}
     >
+      {/* Refresh bar */}
+      <div className="flex items-center justify-end gap-3 px-6 py-2 border-b border-border bg-card/30">
+        {lastSyncedAt && (
+          <span className="text-[10px] text-muted-foreground">
+            Synced {new Date(lastSyncedAt).toLocaleTimeString()}
+          </span>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs gap-1.5"
+          onClick={() => refreshMutation.mutate()}
+          disabled={refreshMutation.isPending}
+        >
+          {refreshMutation.isPending
+            ? <Loader2 className="w-3 h-3 animate-spin" />
+            : <RefreshCw className="w-3 h-3" />}
+          {refreshMutation.isPending ? "Refreshing..." : "Refresh ESPN Data"}
+        </Button>
+      </div>
       <DataSourceBanner completedSeason={completedSeason} planningYear={planningYear} />
 
       <Tabs defaultValue="keepers" className="w-full">
