@@ -42,6 +42,8 @@ import WeeklyIntelligence from "@/pages/hubs/WeeklyIntelligence";
 import OffseasonHub from "@/pages/hubs/OffseasonHub";
 import LeagueConnect from "@/pages/LeagueConnect";
 import Reveal from "@/pages/Reveal";
+import BillingSuccess from "./pages/BillingSuccess";
+import BillingCancel from "./pages/BillingCancel";
 
 function Router() {
   return (
@@ -83,6 +85,8 @@ function Router() {
       <Route path="/offseason" component={OffseasonHub} />
       <Route path="/connect" component={LeagueConnect} />
       <Route path="/reveal" component={Reveal} />
+      <Route path="/billing/success" component={BillingSuccess} />
+      <Route path="/billing/cancel" component={BillingCancel} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
