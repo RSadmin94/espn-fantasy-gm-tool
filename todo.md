@@ -929,8 +929,8 @@
 - [x] Build GM Memory form UI on /gm-memory page wired to advisor.getMemory + advisor.updateMemory
 
 ## TRADE LAB REBUILD
-- [ ] Rewrite TradeAnalyzer.tsx with team selector, player search, multi-asset builder (players + picks), proper teamAId/teamBId wiring
-- [ ] Add DRAFT_2026_COMPLETE flag awareness — show player search when true, picks-only when false (with clear notice)
-- [ ] Wire tradeAnalyze mutation to send actual sideA/sideB player arrays + teamAId/teamBId
-- [ ] Preserve championship equity delta (whatIfDelta) integration
-- [ ] Preserve Trade Offer Generator tab (no changes needed)
+- [x] [POST-DRAFT] Rewrite TradeAnalyzer.tsx with team selector, player search, multi-asset builder (players + picks), proper teamAId/teamBId wiring
+- [x] [POST-DRAFT] Add DRAFT_2026_COMPLETE flag awareness — show player search when true, picks-only when false (with clear notice)
+- [x] [POST-DRAFT] Wire tradeAnalyze mutation to send actual sideA/sideB player arrays + teamAId/teamBId
+- [x] [POST-DRAFT] Preserve championship equity delta (whatIfDelta) integration
+- [x] [POST-DRAFT] Preserve Trade Offer Generator tab (no changes needed)
