@@ -3585,22 +3585,25 @@ Be concise, data-driven, and specific. Reference actual team names and player na
           } catch {
             // DNA unavailable — continue without it
           }
-          // Phase 4: inject 2026 draft order and keeper data
+          // Phase 4: inject upcoming draft order and keeper data
           try {
             const upcomingDraftSeason = season >= new Date().getFullYear() ? season : season + 1;
-            const draftData = await getSeasonData(season);
+            // Fetch the upcoming draft season data first; fall back to current season if unavailable
+            const upcomingDraftData = upcomingDraftSeason !== season ? await getSeasonData(upcomingDraftSeason) : null;
+            const draftData = upcomingDraftData ?? await getSeasonData(season);
+            const draftLabelYear = upcomingDraftData ? upcomingDraftSeason : season;
             if (draftData) {
               const draftOrderData = normalizeDraftOrder(draftData as Record<string, unknown>);
               const pickOrder = draftOrderData.pickOrder || [];
               if (pickOrder.length > 0) {
                 const draftDateMs = draftOrderData.draftDate as number;
                 const draftDateStr = draftDateMs ? new Date(draftDateMs).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD";
-                leagueContext += `\n\n${upcomingDraftSeason} DRAFT ORDER (Snake Draft, ${draftOrderData.keeperCount || 1} keeper per team):`;
+                leagueContext += `\n\n${draftLabelYear} DRAFT ORDER (Snake Draft, ${draftOrderData.keeperCount || 1} keeper per team):`;
                 leagueContext += `\nDraft Date: ${draftDateStr}`;
                 leagueContext += `\nPick Order (Round 1): ${pickOrder.map(p => `#${p.position} ${p.owners}`).join(", ")}`;
                 leagueContext += `\n(Round 2 reverses: #14 picks first, etc.)`;
               }
-              // Inject current keeper picks from 2025 draft
+              // Inject current keeper picks from current season draft
               const picks2025 = normalizeDraftPicks(draftData as Record<string, unknown>);
               const keepers = (picks2025 as Array<Record<string, unknown>>).filter(p => p.keeper === true || p.keeper === 1);
               if (keepers.length > 0) {

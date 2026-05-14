@@ -1021,3 +1021,7 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Wire funnel: /connect-league success → /generating-dna → /reveal
 - [x] Update /reveal CTA to navigate to /command-center (already done)
 - [x] Register /connect-league and /generating-dna in App.tsx
+
+## Bug: AI GM Draft Order Year Label
+
+- [x] AI GM showing 2025 draft order data labeled as 2026 — find and fix year label
