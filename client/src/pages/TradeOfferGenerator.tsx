@@ -314,6 +314,17 @@ export default function TradeOfferGenerator() {
                 <p className="text-sm text-muted-foreground">
                   Each offer is <span className="text-foreground font-medium">balanced</span>: Rod gives N picks and receives N picks in return. Values are matched using the 14-team pick value chart.
                 </p>
+                {(result as any).noFair1for1 && (
+                  <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                    <Info className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-amber-300">No fair 1-for-1 offer found</p>
+                      <p className="text-xs text-amber-400/80 mt-0.5">
+                        A straight swap would underpay by more than 15%. Multi-pick packages are shown because they get closer to market value.
+                      </p>
+                    </div>
+                  </div>
+                )}
                 {result.offerOptions.length === 0 ? (
                   <Card className="border-border bg-card/50">
                     <CardContent className="pt-4 text-center text-muted-foreground">

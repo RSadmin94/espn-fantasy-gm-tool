@@ -2895,10 +2895,14 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
 
       // ── Filter: remove 1-for-1 options below 85% value match (underpay) ──────
       // If a 1-for-1 is underpay, the multi-pick options are better leads
+      let noFair1for1 = false;
       const filteredOffers = balancedOffers.filter((bo, idx) => {
         // Only filter the 1-for-1 (first option, rodGives has 1 pick, rodReceives has 1 pick)
         if (idx === 0 && bo.rodGives.picks.length === 1 && bo.rodReceives.picks.length === 1) {
-          return (bo.valueRatioPct ?? 0) >= 85;
+          if ((bo.valueRatioPct ?? 0) < 85) {
+            noFair1for1 = true; // flag: 1-for-1 was filtered out as underpay
+            return false;
+          }
         }
         return true;
       });
@@ -3208,6 +3212,7 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
               (hotRounds.length > 0 ? `Late-round picks (${Array.from(new Set(hotRounds)).join(", ")}) are most tradable.` : ""),
           };
         })(),
+        noFair1for1,
         strategy,
       };
     }),

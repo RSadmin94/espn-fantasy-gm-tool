@@ -947,3 +947,9 @@
 - [x] Update AI system prompt to instruct naming actual picks in recommendedOffer (not Option 1)
 - [x] Update fallback recommendedOffer to use actual pick labels (e.g. Lead with 1.11 + 6.01 for 1.01)
 - [x] 0 TypeScript errors, 474/474 tests passing
+
+## Trade Offer Generator — Value-Gap Explanation Card
+- [x] Show explanation card when 1-for-1 was filtered (no fair 1-for-1 found)
+- [x] Card text: No fair 1-for-1 offer found. Multi-pick packages are shown because they get closer to market value.
+- [ ] Publish app to production
+- [ ] Activate weekly-intel heartbeat cron (Tuesdays 9AM UTC)
