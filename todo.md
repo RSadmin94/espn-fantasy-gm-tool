@@ -973,7 +973,7 @@ This single flow determines conversion, retention, and word-of-mouth.
 
 ### Step 1 — Connect League (Onboarding Entry)
 - [ ] /onboarding route: single-page flow asking for ESPN League ID, S2, SWID
-- [ ] Validate credentials against ESPN API before proceeding
+- [x] Validate credentials against ESPN API before proceeding
 - [ ] Store credentials securely (already in secrets system)
 - [ ] "Connecting..." loading state with progress indicator
 
@@ -1001,12 +1001,23 @@ This single flow determines conversion, retention, and word-of-mouth.
 
 ## Sprint 1: The Reveal (Conversion Funnel)
 
-- [ ] /reveal route: standalone page, no sidebar, no nav
-- [ ] Suspense layer: 4 lines, 4.5-5s total, skip after line 2
-- [ ] Main reveal card: category label + headline + evidence + implication
-- [ ] Three secondary cards: self-insight, rivalry, league pattern
-- [ ] Blur layer: 4 locked cards with visible labels, no lock icons
-- [ ] CTA: "Unlock Your Full League DNA" button + subtext
-- [ ] Staggered fade-in sequence for all elements
-- [ ] Mobile-responsive layout (stacked secondary cards)
-- [ ] Register /reveal in App.tsx
+- [x] /reveal route: standalone page, no sidebar, no nav
+- [x] Suspense layer: 4 lines, 4.5-5s total, skip after line 2
+- [x] Main reveal card: category label + headline + evidence + implication
+- [x] Three secondary cards: self-insight, rivalry, league pattern
+- [x] Blur layer: 4 locked cards with visible labels, no lock icons
+- [x] CTA: "Unlock Your Full League DNA" button + subtext
+- [x] Staggered fade-in sequence for all elements
+- [x] Mobile-responsive layout (stacked secondary cards)
+- [x] Register /reveal in App.tsx
+
+## Sprint 1: Thin Funnel
+
+- [x] /connect-league: ESPN credentials form (League ID, S2, SWID)
+- [ ] Validate credentials against ESPN API before proceeding
+- [x] Show "Connecting..." loading state during validation
+- [x] /generating-dna: animated 4-step skeleton (Reading data → Profiling managers → Computing rivalries → Generating DNA)
+- [x] Auto-redirect from /generating-dna to /reveal after steps complete (~5s)
+- [x] Wire funnel: /connect-league success → /generating-dna → /reveal
+- [x] Update /reveal CTA to navigate to /command-center (already done)
+- [x] Register /connect-league and /generating-dna in App.tsx

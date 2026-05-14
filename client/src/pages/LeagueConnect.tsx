@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -92,20 +93,17 @@ const PROVIDERS: ProviderCard[] = [
 // ─── DNA progress steps ───────────────────────────────────────────────────────
 
 const DNA_STEPS = [
-  "Connecting to Sleeper API...",
-  "Fetching league roster data...",
-  "Analyzing roster compositions...",
-  "Detecting behavioral patterns...",
-  "Mapping trade tendencies...",
-  "Building exploitability models...",
-  "Generating League DNA Profile...",
-  "Finalizing intelligence report...",
+  "Reading 9 seasons of league history…",
+  "Profiling 14 managers…",
+  "Computing rivalries and trade patterns…",
+  "Generating your League DNA…",
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function LeagueConnect() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const [step, setStep] = useState<Step>("choose_provider");
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [leagueId, setLeagueId] = useState("");
@@ -161,7 +159,7 @@ export default function LeagueConnect() {
       });
       setProgressPct(100);
       setProgressStep(DNA_STEPS.length - 1);
-      setTimeout(() => setStep("success"), 800);
+      setTimeout(() => navigate("/reveal"), 800);
     },
     onError: (err) => {
       setError(err.message);
@@ -248,7 +246,7 @@ export default function LeagueConnect() {
         transactionCount: 0,
         dnaProfile: null,
       });
-      setStep("success");
+      navigate("/reveal");
     },
     onError: (err) => {
       setError(err.message || "ESPN import failed");
@@ -267,7 +265,7 @@ export default function LeagueConnect() {
       });
       setProgressPct(100);
       setProgressStep(DNA_STEPS.length - 1);
-      setTimeout(() => setStep("success"), 800);
+      setTimeout(() => navigate("/reveal"), 800);
     },
     onError: (err) => {
       setError(err.message);
