@@ -3587,15 +3587,15 @@ Be concise, data-driven, and specific. Reference actual team names and player na
           }
           // Phase 4: inject upcoming draft order and keeper data
           try {
-            const upcomingDraftSeason = season >= new Date().getFullYear() ? season : season + 1;
-            // Fetch the upcoming draft season data first; fall back to current season if unavailable
-            const upcomingDraftData = upcomingDraftSeason !== season ? await getSeasonData(upcomingDraftSeason) : null;
+            // Always fetch the 2026 draft order explicitly — this is the upcoming draft
+            const UPCOMING_DRAFT_YEAR = 2026;
+            const upcomingDraftData = await getSeasonData(UPCOMING_DRAFT_YEAR);
             const draftData = upcomingDraftData ?? await getSeasonData(season);
-            const draftLabelYear = upcomingDraftData ? upcomingDraftSeason : season;
+            const draftLabelYear = upcomingDraftData ? UPCOMING_DRAFT_YEAR : season;
             if (draftData) {
               const draftOrderData = normalizeDraftOrder(draftData as Record<string, unknown>);
               const pickOrder = draftOrderData.pickOrder || [];
-              if (pickOrder.length > 0) {
+if (pickOrder.length > 0) {
                 const draftDateMs = draftOrderData.draftDate as number;
                 const draftDateStr = draftDateMs ? new Date(draftDateMs).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD";
                 leagueContext += `\n\n## GROUND TRUTH — ${draftLabelYear} DRAFT ORDER (this overrides any prior conversation)`;

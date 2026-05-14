@@ -1,0 +1,79 @@
+{
+  "query": "SHOW TABLES;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SHOW TABLES;",
+  "rows": [
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "__drizzle_migrations"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "adp_trend_snapshots"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "champ_equity_predictions"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "chat_history"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "espn_season_cache"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "espn_view_health"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "fantasy_data_cache"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "gm_decision_tags"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "gm_decisions"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "league_connections"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "league_identity"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "llm_usage"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "mock_draft_results"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "monte_carlo_calibration"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "pick_trades"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "player_news_signals"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "refresh_manifest"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "scheduled_jobs"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "start_sit_decisions"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "trade_decisions"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "user_memory"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "users"
+    },
+    {
+      "Tables_in_D7EDTbt5uXwnUBkJHewERh": "weekly_player_stats"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_D7EDTbt5uXwnUBkJHewERh\n__drizzle_migrations\nadp_trend_snapshots\nchamp_equity_predictions\nchat_history\nespn_season_cache\nespn_view_health\nfantasy_data_cache\ngm_decision_tags\ngm_decisions\nleague_connections\nleague_identity\nllm_usage\nmock_draft_results\nmonte_carlo_calibration\npick_trades\nplayer_news_signals\nrefresh_manifest\nscheduled_jobs\nstart_sit_decisions\ntrade_decisions\nuser_memory\nusers\nweekly_player_stats\n",
+  "stderr": "",
+  "execution_time_ms": 589
+}

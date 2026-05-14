@@ -1,0 +1,13 @@
+{
+  "query": "SELECT JSON_EXTRACT(payload, '$.settings.draftSettings.pickOrder') as pick_order FROM espn_season_cache WHERE season = 2026 AND viewName = 'combined' LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT JSON_EXTRACT(payload, '$.settings.draftSettings.pickOrder') as pick_order FROM espn_season_cache WHERE season = 2026 AND viewName = 'combined' LIMIT 1;",
+  "rows": [
+    {
+      "pick_order": "[21, 17, 1, 24, 14, 23, 22, 25, 4, 27, 11, 28, 26, 18]"
+    }
+  ],
+  "messages": [],
+  "stdout": "pick_order\n[21, 17, 1, 24, 14, 23, 22, 25, 4, 27, 11, 28, 26, 18]\n",
+  "stderr": "",
+  "execution_time_ms": 584
+}
