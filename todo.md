@@ -998,3 +998,15 @@ This single flow determines conversion, retention, and word-of-mouth.
 ### Retention Metric (North Star)
 - [ ] Tuesday morning return: did user open app before weekly-intel notification fires?
 - [ ] Screenshot sharing: is the League DNA card shareable (copy link / download image)?
+
+## Sprint 1: The Reveal (Conversion Funnel)
+
+- [ ] /reveal route: standalone page, no sidebar, no nav
+- [ ] Suspense layer: 4 lines, 4.5-5s total, skip after line 2
+- [ ] Main reveal card: category label + headline + evidence + implication
+- [ ] Three secondary cards: self-insight, rivalry, league pattern
+- [ ] Blur layer: 4 locked cards with visible labels, no lock icons
+- [ ] CTA: "Unlock Your Full League DNA" button + subtext
+- [ ] Staggered fade-in sequence for all elements
+- [ ] Mobile-responsive layout (stacked secondary cards)
+- [ ] Register /reveal in App.tsx

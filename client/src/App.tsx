@@ -41,6 +41,7 @@ import MLForecast from "@/pages/MLForecast";
 import WeeklyIntelligence from "@/pages/hubs/WeeklyIntelligence";
 import OffseasonHub from "@/pages/hubs/OffseasonHub";
 import LeagueConnect from "@/pages/LeagueConnect";
+import Reveal from "@/pages/Reveal";
 
 function Router() {
   return (
@@ -81,6 +82,7 @@ function Router() {
       <Route path="/weekly-intelligence" component={WeeklyIntelligence} />
       <Route path="/offseason" component={OffseasonHub} />
       <Route path="/connect" component={LeagueConnect} />
+      <Route path="/reveal" component={Reveal} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
