@@ -3,11 +3,33 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Send, Trash2, User, Loader2, X } from "lucide-react";
+import { Bot, Send, Trash2, User, Loader2, X, Zap } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
+
+const DAILY_BUDGET = 50_000;
+
+function UsageQuotaBar() {
+  const { data } = trpc.usage.getMyUsage.useQuery(undefined, { staleTime: 60_000 });
+  const totalTokens = data?.totalTokens ?? 0;
+  const pct = Math.min(100, Math.round((totalTokens / DAILY_BUDGET) * 100));
+  const color = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+  const textColor = pct >= 90 ? "text-red-400" : pct >= 70 ? "text-amber-400" : "text-emerald-400";
+  if (!data) return null;
+  return (
+    <div className="mt-1.5 space-y-1">
+      <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+        <span className="flex items-center gap-1"><Zap className="w-2.5 h-2.5" /> AI Budget (30d)</span>
+        <span className={textColor}>{totalTokens.toLocaleString()} / {DAILY_BUDGET.toLocaleString()} tokens</span>
+      </div>
+      <div className="w-full h-1 rounded-full bg-muted overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
 
 const SUGGESTED_PROMPTS = [
   "Who are my biggest threats heading into 2026 and how do I neutralize them?",
@@ -322,6 +344,7 @@ export default function AdvisorPanel({ open, onClose }: AdvisorPanelProps) {
               Enter to send · Shift+Enter for new line
               {isStreaming && <span className="text-primary ml-2">● Streaming...</span>}
             </p>
+            <UsageQuotaBar />
           </div>
         )}
       </div>

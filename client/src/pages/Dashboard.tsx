@@ -141,6 +141,72 @@ function KeeperCountdownCard() {
   );
 }
 
+// ─── AI Usage Card ──────────────────────────────────────────────────────────
+function AIUsageCard() {
+  const { data, isLoading } = trpc.usage.getMyUsage.useQuery();
+  const DAILY_BUDGET = 50_000;
+
+  const totalTokens = data?.totalTokens ?? 0;
+  const totalCalls = data?.totalCalls ?? 0;
+  const pct = Math.min(100, Math.round((totalTokens / DAILY_BUDGET) * 100));
+  const barColor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+
+  const byCallType = (data?.byCallType ?? {}) as Record<string, number>;
+  const topTypes = Object.entries(byCallType)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+
+  return (
+    <Card className="card-glow bg-card border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <Zap className="w-4 h-4 text-primary" />
+          AI Usage — Last 30 Days
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+          </div>
+        ) : (
+          <>
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="text-xl font-bold text-foreground">{totalTokens.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground">tokens used · {totalCalls} calls</p>
+              </div>
+              <Badge
+                className={`text-[9px] px-1.5 py-0 ${
+                  pct >= 90 ? "bg-red-500/20 text-red-400 border-red-500/30 border"
+                  : pct >= 70 ? "bg-amber-500/20 text-amber-400 border-amber-500/30 border"
+                  : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border"
+                }`}
+              >
+                {pct}% of daily budget
+              </Badge>
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+              <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+            </div>
+            {topTypes.length > 0 && (
+              <div className="space-y-1">
+                {topTypes.map(([type, tokens]) => (
+                  <div key={type} className="flex items-center justify-between text-[10px]">
+                    <span className="text-muted-foreground capitalize">{type.replace(/_/g, " ")}</span>
+                    <span className="text-foreground font-medium">{tokens.toLocaleString()} tokens</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Countdown helper ─────────────────────────────────────────────────────────
 function Countdown({ target, label }: { target: Date; label: string }) {
   const now = new Date();
@@ -767,6 +833,8 @@ export default function Dashboard() {
             {/* League Pulse — 2025 Final Standings / Offseason Mode */}
             <LeaguePulseStrip />
 
+            {/* AI Usage */}
+            <AIUsageCard />
             {/* Countdowns + Quick Launch */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="card-glow bg-card border-border">

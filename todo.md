@@ -909,21 +909,21 @@
 - [x] Navigation simplification: regroup nav into Win This Week / Win Trades / Win Long Term / Admin/Data (preserve all routes)
 
 ## SPRINT: SaaS Multi-User Readiness
-- [ ] Per-user ESPN credentials: add importEspnLeague procedure + ESPN form in LeagueConnect
-- [ ] Per-user ESPN credentials: add getActiveEspnCredentials(userId) helper in db.ts
-- [ ] Per-user ESPN credentials: update espnService.ts to accept credential override params
-- [ ] Per-user ESPN credentials: update routers.ts + advisorContextBuilder.ts to use per-user creds
-- [ ] Rate limiting: per-user cooldowns + daily quotas on advisor.chat, war_room_agent, weekly_briefing
-- [ ] Usage metering: llm_usage table + persist token counts + usage query procedure
-- [ ] GM Memory UI: form on /gm-memory wired to advisor.getMemory + advisor.updateMemory
+- [x] Per-user ESPN credentials: add importEspnLeague procedure + ESPN form in LeagueConnect
+- [x] Per-user ESPN credentials: add getActiveEspnCredentials(userId) helper in db.ts
+- [x] Per-user ESPN credentials: update espnService.ts to accept credential override params
+- [x] Per-user ESPN credentials: update routers.ts + advisorContextBuilder.ts to use per-user creds
+- [x] Rate limiting: per-user cooldowns + daily quotas on advisor.chat, war_room_agent, weekly_briefing
+- [x] Usage metering: llm_usage table + persist token counts + usage query procedure
+- [x] GM Memory UI: form on /gm-memory wired to advisor.getMemory + advisor.updateMemory
 - [ ] Weekly intelligence automation: scheduled refresh job + owner notification trigger
 
 ## SPRINT 2 — Foundation (Encryption + Active Context + Rate Limiting + Metering + GM Memory UI)
-- [ ] Add AES-256-GCM crypto helper (server/_core/crypto.ts) for credential encryption/decryption
-- [ ] Add CREDENTIAL_ENCRYPTION_KEY secret and wrap all provider credential writes/reads
-- [ ] Add ESPN credential form to LeagueConnect.tsx wired to importEspnLeague mutation
-- [ ] Add active_league_id to users table, push migration, add setActiveLeague/getActiveLeague procedures
-- [ ] Wire active league context into advisor and command center
-- [ ] Add per-user rate limiting on advisor.chat, streaming SSE, war_room_agent, weekly_briefing
-- [ ] Add llm_usage table, persist token counts, add usage query procedure
-- [ ] Build GM Memory form UI on /gm-memory page wired to advisor.getMemory + advisor.updateMemory
+- [x] Add AES-256-GCM crypto helper (server/_core/crypto.ts) for credential encryption/decryption
+- [x] Add CREDENTIAL_ENCRYPTION_KEY secret and wrap all provider credential writes/reads
+- [x] Add ESPN credential form to LeagueConnect.tsx wired to importEspnLeague mutation
+- [x] Add active_league_id to users table, push migration, add setActiveLeague/getActiveLeague procedures
+- [x] Wire active league context into advisor and command center
+- [x] Add per-user rate limiting on advisor.chat, streaming SSE, war_room_agent, weekly_briefing
+- [x] Add llm_usage table, persist token counts, add usage query procedure
+- [x] Build GM Memory form UI on /gm-memory page wired to advisor.getMemory + advisor.updateMemory

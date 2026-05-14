@@ -23,7 +23,9 @@ import { providerRouter } from "./providerRouter";
 import { offseasonRouter } from "./offseasonRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
-import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob } from "./db";
+import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob, getDb } from "./db";
+import { leagueConnections as lcTable } from "../drizzle/schema";
+import { eq as eqDrizzle } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
 import { parse as parseCookie } from "cookie";
@@ -122,26 +124,22 @@ export const appRouter = router({
       }),
     // List all of the user's connected leagues
     getMyLeagues: protectedProcedure.query(async ({ ctx }) => {
-      const dbMod = await import("./db");
-      const db = await dbMod.getDb();
+      const db = await getDb();
       if (!db) return [];
-      const schemaMod = await import("../drizzle/schema");
-      const lc = schemaMod.leagueConnections;
-      const { eq: eqOp } = await import("drizzle-orm");
       const rows = await db
         .select({
-          id: lc.id,
-          provider: lc.provider,
-          leagueId: lc.leagueId,
-          leagueName: lc.leagueName,
-          season: lc.season,
-          isActive: lc.isActive,
-          syncStatus: lc.syncStatus,
-          lastSyncedAt: lc.lastSyncedAt,
+          id: lcTable.id,
+          provider: lcTable.provider,
+          leagueId: lcTable.leagueId,
+          leagueName: lcTable.leagueName,
+          season: lcTable.season,
+          isActive: lcTable.isActive,
+          syncStatus: lcTable.syncStatus,
+          lastSyncedAt: lcTable.lastSyncedAt,
         })
-        .from(lc)
-        .where(eqOp(lc.userId, ctx.user.id))
-        .orderBy(lc.updatedAt);
+        .from(lcTable)
+        .where(eqDrizzle(lcTable.userId, ctx.user.id))
+        .orderBy(lcTable.updatedAt);
       return rows;
     }),
   }),
