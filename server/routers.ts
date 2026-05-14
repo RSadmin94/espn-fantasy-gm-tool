@@ -3598,10 +3598,11 @@ Be concise, data-driven, and specific. Reference actual team names and player na
               if (pickOrder.length > 0) {
                 const draftDateMs = draftOrderData.draftDate as number;
                 const draftDateStr = draftDateMs ? new Date(draftDateMs).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD";
-                leagueContext += `\n\n${draftLabelYear} DRAFT ORDER (Snake Draft, ${draftOrderData.keeperCount || 1} keeper per team):`;
+                leagueContext += `\n\n## GROUND TRUTH — ${draftLabelYear} DRAFT ORDER (this overrides any prior conversation)`;
+                leagueContext += `\nSnake Draft, ${draftOrderData.keeperCount || 1} keeper per team. Use this EXACT order — do NOT contradict it regardless of what was said earlier.`;
                 leagueContext += `\nDraft Date: ${draftDateStr}`;
-                leagueContext += `\nPick Order (Round 1): ${pickOrder.map(p => `#${p.position} ${p.owners}`).join(", ")}`;
-                leagueContext += `\n(Round 2 reverses: #14 picks first, etc.)`;
+                leagueContext += `\nRound 1 Pick Order: ${pickOrder.map(p => `#${p.position} ${p.owners}`).join(", ")}`;
+                leagueContext += `\n(Round 2 reverses: last pick goes first, etc.)`;
               }
               // Inject current keeper picks from current season draft
               const picks2025 = normalizeDraftPicks(draftData as Record<string, unknown>);

@@ -1025,3 +1025,7 @@ This single flow determines conversion, retention, and word-of-mouth.
 ## Bug: AI GM Draft Order Year Label
 
 - [x] AI GM showing 2025 draft order data labeled as 2026 — find and fix year label
+
+## Bug: AI GM Draft Order Context Wrong
+
+- [x] AI GM context builder injecting wrong 2026 draft order (Rod shown at pick 4 instead of pick 11) — fix context to use correct 2026 ESPN cache data
