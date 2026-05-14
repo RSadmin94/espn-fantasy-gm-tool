@@ -18,6 +18,7 @@
  */
 
 import type { Request, Response } from "express";
+import { sdk } from "./_core/sdk";
 import {
   fetchEspnViewsHardened,
   normalizeTeams,
@@ -40,10 +41,17 @@ import { memCache } from "./memCache";
 const CURRENT_SEASON = 2025;
 
 export async function weeklyIntelHandler(req: Request, res: Response) {
-  const taskUid = req.headers["x-manus-cron-task-uid"] as string | undefined;
   const startedAt = Date.now();
+  let taskUid: string | undefined;
 
   try {
+    // ── 0. Authenticate the cron caller ───────────────────────────────────
+    const user = await sdk.authenticateRequest(req);
+    if (!user.isCron) {
+      return res.status(403).json({ error: "cron-only endpoint" });
+    }
+    taskUid = user.taskUid;
+
     // ── 1. Fetch ESPN data for the current season ──────────────────────────
     const pipelineResult = await fetchEspnViewsHardened(CURRENT_SEASON);
     const data = pipelineResult.merged;

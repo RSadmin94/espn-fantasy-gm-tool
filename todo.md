@@ -964,3 +964,37 @@
 - [x] Remove any unequal-count packages from the offer builder
 - [x] Update UI N-for-N badge to always reflect equal counts
 - [x] Verify value-gap card still fires correctly after parity enforcement
+
+## NEXT SPRINT: Conversion Funnel (Single Flow — Obsess Over This)
+
+The goal: a new user connects their ESPN league, gets their League DNA generated,
+sees ONE emotionally charged insight clearly, and hits a CTA. Everything else is blurred.
+This single flow determines conversion, retention, and word-of-mouth.
+
+### Step 1 — Connect League (Onboarding Entry)
+- [ ] /onboarding route: single-page flow asking for ESPN League ID, S2, SWID
+- [ ] Validate credentials against ESPN API before proceeding
+- [ ] Store credentials securely (already in secrets system)
+- [ ] "Connecting..." loading state with progress indicator
+
+### Step 2 — Generate League DNA
+- [ ] Trigger leagueDNA generation on successful connect
+- [ ] Show a "Analyzing your league..." skeleton with 3-4 animated steps
+- [ ] Steps: "Reading 8 seasons of data" → "Profiling 14 managers" → "Computing rivalries" → "Generating your DNA"
+
+### Step 3 — The Reveal (Emotionally Charged Insight)
+- [ ] Show ONE insight clearly: the user's biggest rival (name, H2H record, threat level)
+- [ ] OR: the user's career arc ("You've finished top-3 six times but never won. Here's why.")
+- [ ] OR: the most dangerous manager in their league right now
+- [ ] Make it personal, specific, and slightly uncomfortable — not generic
+- [ ] Visual: large card, bold typography, rivalry badge or threat meter
+
+### Step 4 — Blur the Rest (CTA Gate)
+- [ ] Show 3-4 additional insight cards (GM Style, Trade DNA, Draft IQ, Keeper Edge) blurred/locked
+- [ ] Overlay: "Unlock your full League DNA" CTA button
+- [ ] CTA leads to: account creation / upgrade path (TBD — no Stripe yet, just capture intent)
+- [ ] Track: did user click CTA? (analytics event)
+
+### Retention Metric (North Star)
+- [ ] Tuesday morning return: did user open app before weekly-intel notification fires?
+- [ ] Screenshot sharing: is the League DNA card shareable (copy link / download image)?
