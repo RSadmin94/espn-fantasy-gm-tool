@@ -18,7 +18,8 @@ import { z } from "zod";
 import { sdk } from "./_core/sdk";
 import { invokeLLMStream } from "./_core/llm";
 import { buildAdvisorMessages } from "./advisorContextBuilder";
-import { addChatMessage, getUserMemory } from "./db";
+import { addChatMessage, getUserMemory, persistLlmUsage } from "./db";
+import { checkRateLimit, recordUsage } from "./rateLimiter";
 
 const bodySchema = z.object({
   message: z.string().min(1).max(2000),
@@ -44,6 +45,13 @@ export function registerAdvisorStreamRoute(app: Express) {
     const parsed = bodySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: "Invalid request body" });
+      return;
+    }
+
+    // --- Rate limit ---
+    const rl = checkRateLimit({ userId: user.id, callType: "advisor", isAdmin: user.role === "admin" });
+    if (!rl.allowed) {
+      res.status(429).json({ error: rl.reason ?? "Rate limit exceeded" });
       return;
     }
     const { message, season: rawSeason } = parsed.data;
@@ -88,13 +96,20 @@ export function registerAdvisorStreamRoute(app: Express) {
 
       // Stream the response
       let fullResponse = "";
-      for await (const chunk of invokeLLMStream({ messages, callType: "advisor" })) {
+      for await (const chunk of invokeLLMStream({
+        messages,
+        callType: "advisor",
+        persistUsage: (u) => persistLlmUsage({ userId: user!.id, ...u }),
+      })) {
         fullResponse += chunk;
         sendEvent({ delta: chunk });
       }
 
       // Persist the complete assistant message
       await addChatMessage(user.id, "assistant", fullResponse || "No response generated.", season);
+
+      // Record usage for rate limiter (token count not available from stream, use estimate)
+      recordUsage({ userId: user.id, callType: "advisor", tokensUsed: Math.ceil(fullResponse.length / 4) });
 
       sendEvent({ done: true });
     } catch (err) {

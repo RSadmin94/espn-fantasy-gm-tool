@@ -917,3 +917,13 @@
 - [ ] Usage metering: llm_usage table + persist token counts + usage query procedure
 - [ ] GM Memory UI: form on /gm-memory wired to advisor.getMemory + advisor.updateMemory
 - [ ] Weekly intelligence automation: scheduled refresh job + owner notification trigger
+
+## SPRINT 2 — Foundation (Encryption + Active Context + Rate Limiting + Metering + GM Memory UI)
+- [ ] Add AES-256-GCM crypto helper (server/_core/crypto.ts) for credential encryption/decryption
+- [ ] Add CREDENTIAL_ENCRYPTION_KEY secret and wrap all provider credential writes/reads
+- [ ] Add ESPN credential form to LeagueConnect.tsx wired to importEspnLeague mutation
+- [ ] Add active_league_id to users table, push migration, add setActiveLeague/getActiveLeague procedures
+- [ ] Wire active league context into advisor and command center
+- [ ] Add per-user rate limiting on advisor.chat, streaming SSE, war_room_agent, weekly_briefing
+- [ ] Add llm_usage table, persist token counts, add usage query procedure
+- [ ] Build GM Memory form UI on /gm-memory page wired to advisor.getMemory + advisor.updateMemory

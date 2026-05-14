@@ -5,7 +5,7 @@
  * Shows accuracy stats, outcome timeline, pattern analysis,
  * and a full searchable decision feed with outcome resolution.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +38,12 @@ import {
   AlertTriangle,
   Activity,
   Trophy,
+  User,
+  Save,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 const SEASONS = [2025, 2024, 2023, 2022, 2021];
 
@@ -314,6 +319,42 @@ export default function GMDecisionMemory() {
     { enabled: activeTab === "retrospective" }
   );
 
+  // ── GM Profile (user_memory) ──────────────────────────────────────────────
+  const memoryQuery = trpc.advisor.getMemory.useQuery();
+  const updateMemoryMutation = trpc.advisor.updateMemory.useMutation({
+    onSuccess: () => toast.success("GM Profile saved — the Advisor will use this in future chats"),
+    onError: (err) => toast.error(`Failed to save: ${err.message}`),
+  });
+  const [memForm, setMemForm] = useState({
+    riskTolerance: "moderate",
+    tradePhilosophy: "",
+    keeperPhilosophy: "",
+    draftStyle: "",
+    favoritePlayerTypes: "",
+    rivalManagers: "",
+    notes: "",
+  });
+  const [memDirty, setMemDirty] = useState(false);
+  useEffect(() => {
+    if (memoryQuery.data) {
+      setMemForm({
+        riskTolerance: memoryQuery.data.riskTolerance ?? "moderate",
+        tradePhilosophy: memoryQuery.data.tradePhilosophy ?? "",
+        keeperPhilosophy: memoryQuery.data.keeperPhilosophy ?? "",
+        draftStyle: memoryQuery.data.draftStyle ?? "",
+        favoritePlayerTypes: memoryQuery.data.favoritePlayerTypes ?? "",
+        rivalManagers: memoryQuery.data.rivalManagers ?? "",
+        notes: memoryQuery.data.notes ?? "",
+      });
+      setMemDirty(false);
+    }
+  }, [memoryQuery.data]);
+  const handleMemChange = (field: keyof typeof memForm, value: string) => {
+    setMemForm(prev => ({ ...prev, [field]: value }));
+    setMemDirty(true);
+  };
+  const handleMemSave = () => updateMemoryMutation.mutate(memForm);
+
   const resolveMutation = trpc.gmDecision.resolveOutcome.useMutation({
     onSuccess: () => {
       toast.success("Outcome recorded");
@@ -441,6 +482,9 @@ export default function GMDecisionMemory() {
             </TabsTrigger>
             <TabsTrigger value="retrospective" className="text-xs">
               Retrospective
+            </TabsTrigger>
+            <TabsTrigger value="profile" className="text-xs">
+              GM Profile
             </TabsTrigger>
           </TabsList>
 
@@ -807,6 +851,133 @@ export default function GMDecisionMemory() {
                       </p>
                     </div>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── GM Profile ─────────────────────────────────────────────────────────────── */}
+          <TabsContent value="profile" className="mt-4 space-y-4">
+            <Card className="bg-card border-border">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <User className="h-4 w-4 text-primary" />
+                    GM Profile
+                  </CardTitle>
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    disabled={!memDirty || updateMemoryMutation.isPending}
+                    onClick={handleMemSave}
+                  >
+                    {updateMemoryMutation.isPending ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Save className="h-3 w-3" />
+                    )}
+                    {memDirty ? "Save Changes" : "Saved"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  This profile is injected into every AI Advisor conversation so the AI understands your
+                  playstyle, priorities, and league context.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {memoryQuery.isLoading ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Skeleton key={i} className="h-10 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    {/* Risk Tolerance */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Risk Tolerance</Label>
+                      <Select
+                        value={memForm.riskTolerance}
+                        onValueChange={(v) => handleMemChange("riskTolerance", v)}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="conservative">Conservative — protect the floor</SelectItem>
+                          <SelectItem value="moderate">Moderate — balanced approach</SelectItem>
+                          <SelectItem value="aggressive">Aggressive — swing for upside</SelectItem>
+                          <SelectItem value="contrarian">Contrarian — fade consensus</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Trade Philosophy */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Trade Philosophy</Label>
+                      <Textarea
+                        className="text-xs min-h-[72px] resize-none"
+                        placeholder="e.g. I prefer selling high on WRs in October and buying RBs after injuries. I never trade away my QB."
+                        value={memForm.tradePhilosophy}
+                        onChange={(e) => handleMemChange("tradePhilosophy", e.target.value)}
+                      />
+                    </div>
+
+                    {/* Keeper Philosophy */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Keeper Philosophy</Label>
+                      <Textarea
+                        className="text-xs min-h-[72px] resize-none"
+                        placeholder="e.g. I always keep elite RBs regardless of round cost. I avoid keeping QBs unless they're available in round 10+."
+                        value={memForm.keeperPhilosophy}
+                        onChange={(e) => handleMemChange("keeperPhilosophy", e.target.value)}
+                      />
+                    </div>
+
+                    {/* Draft Style */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Draft Style</Label>
+                      <Input
+                        className="h-8 text-xs"
+                        placeholder="e.g. Zero RB, Best Player Available, Robust RB, Positional scarcity"
+                        value={memForm.draftStyle}
+                        onChange={(e) => handleMemChange("draftStyle", e.target.value)}
+                      />
+                    </div>
+
+                    {/* Favorite Player Types */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Favorite Player Types</Label>
+                      <Input
+                        className="h-8 text-xs"
+                        placeholder="e.g. Workhorse RBs, slot WRs, dual-threat QBs, high-target TEs"
+                        value={memForm.favoritePlayerTypes}
+                        onChange={(e) => handleMemChange("favoritePlayerTypes", e.target.value)}
+                      />
+                    </div>
+
+                    {/* Rival Managers */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Rival Managers to Watch</Label>
+                      <Input
+                        className="h-8 text-xs"
+                        placeholder="e.g. Marcus (aggressive trader), DeShawn (waiver hawk)"
+                        value={memForm.rivalManagers}
+                        onChange={(e) => handleMemChange("rivalManagers", e.target.value)}
+                      />
+                    </div>
+
+                    {/* Notes */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Additional Notes</Label>
+                      <Textarea
+                        className="text-xs min-h-[80px] resize-none"
+                        placeholder="Anything else the AI should know about your league, history, or strategy..."
+                        value={memForm.notes}
+                        onChange={(e) => handleMemChange("notes", e.target.value)}
+                      />
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>

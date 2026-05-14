@@ -127,6 +127,10 @@ export default function LeagueConnect() {
   const [yahooLeagues, setYahooLeagues] = useState<Array<{ leagueKey: string; leagueId: string; name: string; season: string; teamCount: number }>>([]);
   const [selectedYahooLeagueId, setSelectedYahooLeagueId] = useState("");
   const [selectedYahooLeagueName, setSelectedYahooLeagueName] = useState("");
+  // ESPN state
+  const [espnLeagueId, setEspnLeagueId] = useState("");
+  const [espnSwid, setEspnSwid] = useState("");
+  const [espnS2, setEspnS2] = useState("");
   // Check if Yahoo OAuth is configured
   const yahooConfigured = trpc.providers.isYahooConfigured.useQuery();
   // Check if we have a pending Yahoo auth (post-callback)
@@ -234,6 +238,23 @@ export default function LeagueConnect() {
   );
 
   // Import mutation
+  const importEspnMutation = trpc.providers.importEspnLeague.useMutation({
+    onSuccess: (data) => {
+      setResult({
+        leagueName: data.league.leagueName,
+        teamCount: data.league.teamCount,
+        scoringType: "ESPN",
+        matchupCount: 0,
+        transactionCount: 0,
+        dnaProfile: null,
+      });
+      setStep("success");
+    },
+    onError: (err) => {
+      setError(err.message || "ESPN import failed");
+      setStep("enter_credentials");
+    },
+  });
   const importMutation = trpc.providers.importSleeperLeague.useMutation({
     onSuccess: (data) => {
       setResult({
@@ -509,6 +530,117 @@ export default function LeagueConnect() {
     );
   }
 
+  // ── Step: ESPN enter credentials ─────────────────────────────────────────
+  if (step === "enter_credentials" && selectedProvider === "espn") {
+    const provider = PROVIDERS.find(p => p.id === "espn")!;
+    const handleEspnImport = () => {
+      if (!espnLeagueId.trim()) { setError("League ID is required"); return; }
+      if (!espnSwid.trim()) { setError("SWID cookie is required"); return; }
+      if (!espnS2.trim()) { setError("espn_s2 cookie is required"); return; }
+      setError(null);
+      importEspnMutation.mutate({
+        leagueId: espnLeagueId.trim(),
+        swid: espnSwid.trim(),
+        espnS2: espnS2.trim(),
+        season: 2025,
+      });
+    };
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-2xl mx-auto px-4 py-12">
+          <button
+            onClick={() => { setStep("choose_provider"); setError(null); }}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to providers
+          </button>
+          <div className="flex items-center gap-3 mb-8">
+            <div className="text-4xl">{provider.emoji}</div>
+            <div>
+              <h2 className="text-2xl font-bold">{provider.name}</h2>
+              <p className="text-muted-foreground text-sm">{provider.description}</p>
+            </div>
+          </div>
+          {importEspnMutation.error && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertDescription>{importEspnMutation.error.message}</AlertDescription>
+            </Alert>
+          )}
+          {error && !importEspnMutation.error && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Connect Your ESPN League</CardTitle>
+              <CardDescription>
+                {provider.instructions}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4 text-sm text-amber-700 dark:text-amber-300">
+                <strong>How to find your cookies:</strong> Log into{" "}
+                <a href="https://fantasy.espn.com" target="_blank" rel="noopener noreferrer" className="underline">
+                  fantasy.espn.com
+                </a>{" "}
+                → open DevTools (F12) → Application tab → Cookies →{" "}
+                <code className="font-mono text-xs bg-black/10 px-1 rounded">fantasy.espn.com</code> → copy{" "}
+                <code className="font-mono text-xs bg-black/10 px-1 rounded">SWID</code> and{" "}
+                <code className="font-mono text-xs bg-black/10 px-1 rounded">espn_s2</code>.
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">League ID</label>
+                <Input
+                  placeholder="e.g. 457622"
+                  value={espnLeagueId}
+                  onChange={e => setEspnLeagueId(e.target.value)}
+                  disabled={importEspnMutation.isPending}
+                />
+                <p className="text-xs text-muted-foreground">Found in your ESPN league URL: /football/league?leagueId=<strong>457622</strong></p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">SWID Cookie</label>
+                <Input
+                  placeholder="{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
+                  value={espnSwid}
+                  onChange={e => setEspnSwid(e.target.value)}
+                  disabled={importEspnMutation.isPending}
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">espn_s2 Cookie</label>
+                <Input
+                  placeholder="AEBxxxxxxxxxxxxxxxxxxxxxxxx..."
+                  value={espnS2}
+                  onChange={e => setEspnS2(e.target.value)}
+                  disabled={importEspnMutation.isPending}
+                  className="font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  Credentials are encrypted with AES-256-GCM before storage. Never shared or logged.
+                </p>
+              </div>
+              <Button
+                onClick={handleEspnImport}
+                disabled={!espnLeagueId.trim() || !espnSwid.trim() || !espnS2.trim() || importEspnMutation.isPending}
+                className="w-full"
+              >
+                {importEspnMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Validating & Connecting...</>
+                ) : (
+                  <><Zap className="w-4 h-4 mr-2" />Connect ESPN League</>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
   // ── Step: Yahoo pick league ───────────────────────────────────────────────
   if (step === "yahoo_pick_league") {
     return (

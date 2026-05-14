@@ -6,7 +6,11 @@ import {
   weeklyPlayerStats, InsertWeeklyPlayerStats,
   scheduledJobs, ScheduledJob,
   userMemory, UserMemory,
+  leagueConnections,
+  llmUsage,
 } from "../drizzle/schema";
+import type { EspnCreds } from "./espnService";
+import { decryptCredentialsFromDb } from "./_core/crypto";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -366,4 +370,146 @@ export async function upsertUserMemory(userId: number, data: {
   await db.insert(userMemory)
     .values({ userId, ...updateSet })
     .onDuplicateKeyUpdate({ set: updateSet });
+}
+
+// ── Per-user ESPN credentials ─────────────────────────────────────────────────
+/**
+ * Look up the active ESPN league connection for a user and return EspnCreds.
+ * Falls back gracefully (returns undefined) if no connection found.
+ * Callers should fall back to env vars when undefined is returned.
+ */
+export async function getActiveEspnCredentials(userId: number): Promise<EspnCreds | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(leagueConnections)
+    .where(and(
+      eq(leagueConnections.userId, userId),
+      eq(leagueConnections.provider, "espn"),
+      eq(leagueConnections.isActive, true)
+    ))
+    .orderBy(desc(leagueConnections.updatedAt))
+    .limit(1);
+  if (!rows.length) return undefined;
+  const row = rows[0];
+  // Decrypt credentials (supports both encrypted enc:v1 and legacy plain-object formats)
+  const creds = decryptCredentialsFromDb(row.credentials) as Record<string, string> | null;
+  if (!creds?.swid || !creds?.espnS2) return undefined;
+  return {
+    leagueId: (creds.leagueId as string) ?? row.leagueId,
+    swid: creds.swid,
+    espnS2: creds.espnS2,
+  };
+}
+
+// ─── Active League Context ─────────────────────────────────────────────────
+
+/**
+ * Get the user's active league connection record.
+ * Falls back to the most recently updated active connection if activeLeagueId is 0/null.
+ */
+export async function getActiveLeagueForUser(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // Get user's activeLeagueId
+  const userRows = await db
+    .select({ activeLeagueId: users.activeLeagueId })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  const activeId = userRows[0]?.activeLeagueId;
+
+  if (activeId && activeId > 0) {
+    const rows = await db
+      .select()
+      .from(leagueConnections)
+      .where(and(eq(leagueConnections.id, activeId), eq(leagueConnections.userId, userId)))
+      .limit(1);
+    if (rows.length) return rows[0];
+  }
+
+  // Fallback: most recently updated active connection
+  const rows = await db
+    .select()
+    .from(leagueConnections)
+    .where(and(eq(leagueConnections.userId, userId), eq(leagueConnections.isActive, true)))
+    .orderBy(desc(leagueConnections.updatedAt))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+/**
+ * Set the user's active league connection.
+ */
+export async function setActiveLeagueForUser(userId: number, leagueConnectionId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  await db
+    .update(users)
+    .set({ activeLeagueId: leagueConnectionId, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+  return true;
+}
+
+// ─── LLM Usage Metering ────────────────────────────────────────────────────
+
+/**
+ * Persist one LLM call's usage metrics to the llm_usage table.
+ * Fire-and-forget safe — errors are swallowed to never affect the caller.
+ */
+export async function persistLlmUsage(opts: {
+  userId?: number | null;
+  callType: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  durationMs: number;
+  streaming: boolean;
+}): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    await db.insert(llmUsage).values({
+      userId: opts.userId ?? null,
+      callType: opts.callType,
+      model: opts.model,
+      promptTokens: opts.promptTokens,
+      completionTokens: opts.completionTokens,
+      totalTokens: opts.totalTokens,
+      durationMs: opts.durationMs,
+      streaming: opts.streaming,
+      createdAt: new Date(),
+    });
+  } catch {
+    // Never throw — usage logging must not break the main request
+  }
+}
+
+/**
+ * Get LLM usage summary for a user (last 30 days).
+ */
+export async function getLlmUsageSummary(userId: number) {
+  const db = await getDb();
+  if (!db) return { totalTokens: 0, totalCalls: 0, byCallType: {} as Record<string, number> };
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select()
+    .from(llmUsage)
+    .where(and(eq(llmUsage.userId, userId), gt(llmUsage.createdAt, thirtyDaysAgo)))
+    .orderBy(desc(llmUsage.createdAt))
+    .limit(500);
+
+  const totalTokens = rows.reduce((s, r) => s + (r.totalTokens ?? 0), 0);
+  const totalCalls = rows.length;
+  const byCallType: Record<string, number> = {};
+  for (const r of rows) {
+    byCallType[r.callType] = (byCallType[r.callType] ?? 0) + (r.totalTokens ?? 0);
+  }
+  return { totalTokens, totalCalls, byCallType };
 }

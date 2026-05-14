@@ -6,6 +6,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
+import { checkRateLimit, recordUsage } from "./rateLimiter";
 import { injuryRouter } from "./injuryRouter";
 import { buildAdvisorInjuryContext } from "./injuryAnalytics";
 import { simulationRouter } from "./simulationRouter";
@@ -67,6 +68,10 @@ import {
   clearChatHistory,
   getUserMemory,
   upsertUserMemory,
+  getActiveLeagueForUser,
+  setActiveLeagueForUser,
+  persistLlmUsage,
+  getLlmUsageSummary,
 } from "./db";
 
 const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
@@ -93,6 +98,53 @@ export const appRouter = router({
   ml: mlRouter,
   weeklyAssessment: weeklyAssessmentRouter,
   providers: providerRouter,
+  league: router({
+    // Get the user's active league connection
+    getActive: protectedProcedure.query(async ({ ctx }) => {
+      const row = await getActiveLeagueForUser(ctx.user.id);
+      if (!row) return null;
+      return {
+        id: row.id,
+        provider: row.provider,
+        leagueId: row.leagueId,
+        leagueName: row.leagueName,
+        season: row.season,
+        syncStatus: row.syncStatus,
+        lastSyncedAt: row.lastSyncedAt,
+      };
+    }),
+    // Set the user's active league
+    setActive: protectedProcedure
+      .input(z.object({ leagueConnectionId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const ok = await setActiveLeagueForUser(ctx.user.id, input.leagueConnectionId);
+        return { success: ok };
+      }),
+    // List all of the user's connected leagues
+    getMyLeagues: protectedProcedure.query(async ({ ctx }) => {
+      const dbMod = await import("./db");
+      const db = await dbMod.getDb();
+      if (!db) return [];
+      const schemaMod = await import("../drizzle/schema");
+      const lc = schemaMod.leagueConnections;
+      const { eq: eqOp } = await import("drizzle-orm");
+      const rows = await db
+        .select({
+          id: lc.id,
+          provider: lc.provider,
+          leagueId: lc.leagueId,
+          leagueName: lc.leagueName,
+          season: lc.season,
+          isActive: lc.isActive,
+          syncStatus: lc.syncStatus,
+          lastSyncedAt: lc.lastSyncedAt,
+        })
+        .from(lc)
+        .where(eqOp(lc.userId, ctx.user.id))
+        .orderBy(lc.updatedAt);
+      return rows;
+    }),
+  }),
   offseason: offseasonRouter,
   leagueScoring: router({
     getSettings: publicProcedure
@@ -3321,6 +3373,9 @@ Provide:
       .mutation(async ({ input, ctx }) => {
         const userId = ctx.user.id;
         const season = input.season ?? 2025;
+        // Rate limit check
+        const rl = checkRateLimit({ userId, callType: "advisor", isAdmin: ctx.user.role === "admin" });
+        if (!rl.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: rl.reason ?? "Rate limit exceeded" });
         let leagueContext = `You are an expert Fantasy Football GM advisor for the league "ATLANTAS FINEST FF" (League ID: ${LEAGUE_ID}).
 This is an 18-season keeper league running from 2009 to 2026 with 14 teams.
 Format: Head-to-Head Points, PPR (Point Per Reception), Snake Draft, 1 keeper per team.
@@ -3478,10 +3533,16 @@ Be concise, data-driven, and specific. Reference actual team names and player na
         ];
 
         await addChatMessage(userId, "user", input.message, season);
-        const response = await invokeLLM({ messages, callType: "advisor" });
+        const response = await invokeLLM({
+          messages,
+          callType: "advisor",
+          persistUsage: (u) => persistLlmUsage({ userId, ...u }),
+        });
         const rawContent = response.choices?.[0]?.message?.content;
         const assistantMessage = typeof rawContent === "string" ? rawContent : (rawContent ? JSON.stringify(rawContent) : "I couldn't generate a response. Please try again.");
         await addChatMessage(userId, "assistant", assistantMessage, season);
+        // Record usage for rate limiter
+        recordUsage({ userId, callType: "advisor", tokensUsed: response.usage?.total_tokens ?? 0 });
         return { message: assistantMessage };
       }),
 
@@ -3512,6 +3573,16 @@ Be concise, data-driven, and specific. Reference actual team names and player na
       }),
   }),
 
+  // ── Usage Metering ─────────────────────────────────────────────────────────
+  usage: router({
+    /**
+     * Get the current user's LLM usage summary for the last 30 days.
+     * Used for cost visibility and quota display on the command center.
+     */
+    getMyUsage: protectedProcedure.query(async ({ ctx }) => {
+      return getLlmUsageSummary(ctx.user.id);
+    }),
+  }),
   // ── Pipeline Health ────────────────────────────────────────────────────────
   pipeline: router({
     health: publicProcedure

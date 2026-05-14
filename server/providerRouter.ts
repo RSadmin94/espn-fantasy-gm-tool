@@ -16,6 +16,8 @@ import { invokeLLM } from "./_core/llm";
 import { getDb } from "./db";
 import { leagueConnections } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { fetchEspnViewsHardened, normalizeTeams, normalizeSettings, type EspnCreds } from "./espnService";
+import { encryptCredentialsForDb } from "./_core/crypto";
 
 // ─── Provider info ────────────────────────────────────────────────────────────
 
@@ -502,14 +504,10 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
       }
 
       steps.push("League DNA Profile complete.");
-
       // Persist the real league connection (replace __pending__)
-      const latestCreds = {
-        accessToken: adapter["credentials" as keyof typeof adapter] as unknown as { accessToken: string; refreshToken: string; expiresAt: number },
-      };
       // Use the adapter's current credentials (may have been refreshed)
       const adapterCreds = (adapter as unknown as { credentials: { accessToken: string; refreshToken: string; expiresAt: number } }).credentials;
-
+      const encryptedYahooCreds = encryptCredentialsForDb(adapterCreds as unknown as Record<string, unknown>);
       await database
         .insert(leagueConnections)
         .values({
@@ -519,7 +517,7 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
           leagueName: league.settings.leagueName,
           season: input.season,
           isActive: true,
-          credentials: adapterCreds,
+          credentials: encryptedYahooCreds,
           syncStatus: "ok",
           dnaProfile,
         })
@@ -527,13 +525,12 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
           set: {
             leagueName: league.settings.leagueName,
             isActive: true,
-            credentials: adapterCreds,
+            credentials: encryptedYahooCreds,
             syncStatus: "ok",
             dnaProfile,
             lastSyncedAt: new Date(),
           },
         });
-
       return {
         success: true,
         steps,
@@ -550,6 +547,99 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
         matchupCount: league.matchups.length,
         transactionCount: league.transactions.length,
         dnaProfile,
+      };
+    }),
+
+  // ─── ESPN import ────────────────────────────────────────────────────────────────────────────────
+  /**
+   * Validate and import an ESPN league using per-user SWID + espn_s2 cookies.
+   * Stores credentials in league_connections.credentials (JSON) so all subsequent
+   * ESPN fetches for this user use their own cookies instead of the global env vars.
+   */
+  importEspnLeague: protectedProcedure
+    .input(z.object({
+      leagueId: z.string().min(1, "League ID is required"),
+      swid: z.string().min(1, "SWID cookie is required"),
+      espnS2: z.string().min(1, "espn_s2 cookie is required"),
+      season: z.number().default(2025),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const steps: string[] = [];
+      steps.push("Validating ESPN credentials...");
+
+      const creds: EspnCreds = {
+        leagueId: input.leagueId,
+        swid: input.swid,
+        espnS2: input.espnS2,
+      };
+
+      // Validate by fetching mSettings + mTeam
+      let fetchResult;
+      try {
+        fetchResult = await fetchEspnViewsHardened(input.season, ["mSettings", "mTeam"], creds);
+      } catch (err) {
+        throw new Error(
+          err instanceof Error
+            ? `ESPN auth failed: ${err.message}`
+            : "ESPN auth failed — check your SWID and espn_s2 cookies."
+        );
+      }
+
+      if (fetchResult.authError) {
+        throw new Error("ESPN returned an auth error — your SWID or espn_s2 may be expired.");
+      }
+
+      const rawSettings = normalizeSettings(fetchResult.merged);
+      const rawTeams = normalizeTeams(fetchResult.merged);
+      const leagueName = (rawSettings.leagueName as string) || `ESPN League ${input.leagueId}`;
+      const teamCount = rawTeams.length;
+
+      steps.push(`Connected to "${leagueName}" (${teamCount} teams, ${input.season} season)`);
+      steps.push("Saving credentials...");
+
+      // Persist to league_connections (credentials encrypted at rest)
+      const db = await getDb();
+      if (db) {
+        const encryptedCreds = encryptCredentialsForDb({
+          leagueId: input.leagueId,
+          swid: input.swid,
+          espnS2: input.espnS2,
+        });
+        await db.insert(leagueConnections)
+          .values({
+            userId: ctx.user.id,
+            provider: "espn",
+            leagueId: input.leagueId,
+            leagueName,
+            season: input.season,
+            isActive: true,
+            credentials: encryptedCreds,
+            syncStatus: "ok",
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              leagueName,
+              isActive: true,
+              credentials: encryptedCreds,
+              syncStatus: "ok",
+              syncError: null,
+              updatedAt: new Date(),
+            },
+          });
+      }
+
+      steps.push("ESPN league connected successfully.");
+
+      return {
+        success: true,
+        steps,
+        league: {
+          leagueId: input.leagueId,
+          leagueName,
+          season: input.season,
+          teamCount,
+          provider: "espn" as const,
+        },
       };
     }),
 });

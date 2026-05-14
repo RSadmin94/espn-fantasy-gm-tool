@@ -21,6 +21,7 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  activeLeagueId: int("activeLeagueId").default(0),
 });
 
 export type User = typeof users.$inferSelect;
@@ -621,3 +622,32 @@ export const userMemory = mysqlTable(
 );
 export type UserMemory = typeof userMemory.$inferSelect;
 export type InsertUserMemory = typeof userMemory.$inferInsert;
+
+// ── LLM Usage Metering ────────────────────────────────────────────────────────
+/**
+ * One row per LLM call. Tracks model, call type, token counts, and latency.
+ * Used for cost visibility, quota enforcement, and abuse detection.
+ * No message content is stored here.
+ */
+export const llmUsage = mysqlTable(
+  "llm_usage",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId"),                                        // null for system/background calls
+    callType: varchar("callType", { length: 64 }).notNull(),      // advisor, war_room_agent, weekly_briefing, etc.
+    model: varchar("model", { length: 128 }),
+    promptTokens: int("promptTokens").default(0).notNull(),
+    completionTokens: int("completionTokens").default(0).notNull(),
+    totalTokens: int("totalTokens").default(0).notNull(),
+    durationMs: int("durationMs").default(0).notNull(),
+    streaming: boolean("streaming").default(false).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_lu_userId").on(t.userId),
+    index("idx_lu_callType").on(t.callType),
+    index("idx_lu_createdAt").on(t.createdAt),
+  ]
+);
+export type LlmUsage = typeof llmUsage.$inferSelect;
+export type InsertLlmUsage = typeof llmUsage.$inferInsert;

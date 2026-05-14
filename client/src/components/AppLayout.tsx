@@ -91,6 +91,37 @@ interface AppLayoutProps {
   headerRight?: React.ReactNode;
 }
 
+function ActiveLeagueFooter() {
+  const activeLeague = trpc.league.getActive.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+  const league = activeLeague.data;
+  return (
+    <div className="px-5 py-3 border-t border-border">
+      <div className="flex items-center gap-2">
+        <Brain className="w-3 h-3 text-primary/60" />
+        {league ? (
+          <p className="text-[10px] text-muted-foreground truncate">
+            {league.leagueName || `League ${league.leagueId}`}
+          </p>
+        ) : (
+          <p className="text-[10px] text-muted-foreground">AI-Powered · No league</p>
+        )}
+      </div>
+      {league ? (
+        <p className="text-[10px] text-muted-foreground/50 mt-0.5">
+          {league.provider?.toUpperCase()} · Season {league.season}
+          {" · "}
+          <Link href="/connect" className="hover:text-primary underline underline-offset-2">Switch</Link>
+        </p>
+      ) : (
+        <Link href="/connect" className="text-[10px] text-primary hover:underline">Connect a league →</Link>
+      )}
+    </div>
+  );
+}
+
 export default function AppLayout({ children, title, subtitle, headerRight }: AppLayoutProps) {
   const [location] = useLocation();
   const alreadyInsideLayout = useContext(InsideLayoutContext);
@@ -168,13 +199,7 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
             })}
           </nav>
 
-          <div className="px-5 py-3 border-t border-border">
-            <div className="flex items-center gap-2">
-              <Brain className="w-3 h-3 text-primary/60" />
-              <p className="text-[10px] text-muted-foreground">AI-Powered · League ID: 457622</p>
-            </div>
-            <p className="text-[10px] text-muted-foreground/50 mt-0.5">18 Seasons of Data</p>
-          </div>
+          <ActiveLeagueFooter />
         </aside>
 
         {/* Main content */}

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { resetRateLimiter } from "./rateLimiter";
 
 // Mock the LLM and DB helpers to avoid real API calls in tests
 vi.mock("./_core/llm", () => ({
@@ -45,6 +46,7 @@ function createAuthContext(): TrpcContext {
 describe("advisor.chat", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetRateLimiter(); // clear per-user cooldowns between tests
   });
 
   it("returns an AI message for a valid input", async () => {

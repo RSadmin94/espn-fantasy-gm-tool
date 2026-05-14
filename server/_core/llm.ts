@@ -99,6 +99,20 @@ export type InvokeParams = {
   temperature?: number;
   /** Hint used to pick a sensible default max_tokens when none is specified. */
   callType?: LLMCallType;
+  /**
+   * Optional callback to persist usage metrics to the DB.
+   * Keeps llm.ts infrastructure-free — callers decide whether to persist.
+   * Called after the response completes (or after the stream closes).
+   */
+  persistUsage?: (usage: {
+    callType: string;
+    model: string;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    durationMs: number;
+    streaming: boolean;
+  }) => void;
   outputSchema?: OutputSchema;
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
@@ -420,14 +434,29 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   const result = (await response.json()) as InvokeResult;
   const durationMs = Date.now() - startMs;
 
-  logUsage({
+  const usageData = {
+    callType: callType ?? "unspecified",
     model: result.model ?? resolvedModel,
+    promptTokens: result.usage?.prompt_tokens ?? 0,
+    completionTokens: result.usage?.completion_tokens ?? 0,
+    totalTokens: result.usage?.total_tokens ?? 0,
+    durationMs,
+    streaming: false,
+  };
+
+  logUsage({
+    model: usageData.model,
     callType,
-    promptTokens: result.usage?.prompt_tokens,
-    completionTokens: result.usage?.completion_tokens,
-    totalTokens: result.usage?.total_tokens,
+    promptTokens: usageData.promptTokens,
+    completionTokens: usageData.completionTokens,
+    totalTokens: usageData.totalTokens,
     durationMs,
   });
+
+  // Fire-and-forget DB persistence if caller provided a hook
+  if (params.persistUsage) {
+    try { params.persistUsage(usageData); } catch { /* never throw */ }
+  }
 
   return result;
 }
@@ -560,13 +589,29 @@ export async function* invokeLLMStream(
     }
   } finally {
     reader.releaseLock();
+    const finalDurationMs = Date.now() - startMs;
     logUsage({
       model: resolvedModel,
       callType,
       promptTokens,
       completionTokens,
       totalTokens,
-      durationMs: Date.now() - startMs,
+      durationMs: finalDurationMs,
     });
+
+    // Fire-and-forget DB persistence if caller provided a hook
+    if (params.persistUsage) {
+      try {
+        params.persistUsage({
+          callType: callType ?? "unspecified",
+          model: resolvedModel,
+          promptTokens: promptTokens ?? 0,
+          completionTokens: completionTokens ?? 0,
+          totalTokens: totalTokens ?? 0,
+          durationMs: finalDurationMs,
+          streaming: true,
+        });
+      } catch { /* never throw */ }
+    }
   }
 }
