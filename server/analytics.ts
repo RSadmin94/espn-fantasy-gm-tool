@@ -400,7 +400,8 @@ export function calcManagerBehavior(
 
     const adds = teamTxs.filter(t => t.itemType === "ADD" || t.type === "WAIVER" || t.type === "FREE_AGENT");
     const drops = teamTxs.filter(t => t.itemType === "DROP");
-    const trades = teamTxs.filter(t => t.type === "TRADE");
+    // 2026+ ESPN format: accepted trades appear as TRADE_UPHOLD or TRADE_ACCEPT
+    const trades = teamTxs.filter(t => t.type === "TRADE" || t.type === "TRADE_UPHOLD" || t.type === "TRADE_ACCEPT");
 
     const avgAdds = Math.round((adds.length / seasonsAnalyzed) * 10) / 10;
     const avgDrops = Math.round((drops.length / seasonsAnalyzed) * 10) / 10;

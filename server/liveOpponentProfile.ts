@@ -164,7 +164,8 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
       );
       const acquisitions = teamTxns.filter(t => t.itemType === "ADD").length;
       const drops = teamTxns.filter(t => t.itemType === "DROP").length;
-      const trades = teamTxns.filter(t => t.type === "TRADE").length;
+      // 2026+ ESPN format: accepted trades appear as TRADE_UPHOLD or TRADE_ACCEPT
+      const trades = teamTxns.filter(t => t.type === "TRADE" || t.type === "TRADE_UPHOLD" || t.type === "TRADE_ACCEPT").length;
 
       // H2H vs Rod
       const rodTeamId = rodMemberId

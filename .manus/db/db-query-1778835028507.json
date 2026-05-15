@@ -1,0 +1,9 @@
+{
+  "query": "\nSELECT season, viewName, fetchedAt,\n  JSON_LENGTH(payload) as top_keys\nFROM espn_season_cache \nWHERE viewName = 'mTransactions2'\nORDER BY season DESC\nLIMIT 4;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT season, viewName, fetchedAt,\n  JSON_LENGTH(payload) as top_keys\nFROM espn_season_cache \nWHERE viewName = 'mTransactions2'\nORDER BY season DESC\nLIMIT 4;\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 593
+}

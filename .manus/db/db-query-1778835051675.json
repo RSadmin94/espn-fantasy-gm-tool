@@ -1,0 +1,14 @@
+{
+  "query": "SELECT season, JSON_KEYS(payload) as top_keys FROM espn_season_cache WHERE viewName = 'combined' AND season = 2026 ORDER BY fetchedAt DESC LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT season, JSON_KEYS(payload) as top_keys FROM espn_season_cache WHERE viewName = 'combined' AND season = 2026 ORDER BY fetchedAt DESC LIMIT 1;",
+  "rows": [
+    {
+      "season": "2026",
+      "top_keys": "[\"draftDetail\", \"gameId\", \"id\", \"members\", \"schedule\", \"scoringPeriodId\", \"seasonId\", \"segmentId\", \"settings\", \"status\", \"teams\", \"transactions\"]"
+    }
+  ],
+  "messages": [],
+  "stdout": "season\ttop_keys\n2026\t[\"draftDetail\", \"gameId\", \"id\", \"members\", \"schedule\", \"scoringPeriodId\", \"seasonId\", \"segmentId\", \"settings\", \"status\", \"teams\", \"transactions\"]\n",
+  "stderr": "",
+  "execution_time_ms": 610
+}

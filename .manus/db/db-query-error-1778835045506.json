@@ -1,0 +1,13 @@
+{
+  "query": "\nSELECT \n  season,\n  JSON_UNQUOTE(JSON_EXTRACT(t.value, '$.type')) as tx_type,\n  JSON_UNQUOTE(JSON_EXTRACT(t.value, '$.status')) as tx_status,\n  COUNT(*) as cnt\nFROM espn_season_cache c,\nJSON_TABLE(c.payload, '$.transactions[*]' COLUMNS (value JSON PATH '$')) t\nWHERE c.viewName = 'combined' \n  AND c.season IN (2025, 2026)\n  AND c.fetchedAt = (SELECT MAX(c2.fetchedAt) FROM espn_season_cache c2 WHERE c2.season = c.season AND c2.viewName = 'combined')\nGROUP BY season, tx_type, tx_status\nORDER BY season DESC, cnt DESC;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT \n  season,\n  JSON_UNQUOTE(JSON_EXTRACT(t.value, '$.type')) as tx_type,\n  JSON_UNQUOTE(JSON_EXTRACT(t.value, '$.status')) as tx_status,\n  COUNT(*) as cnt\nFROM espn_season_cache c,\nJSON_TABLE(c.payload, '$.transactions[*]' COLUMNS (value JSON PATH '$')) t\nWHERE c.viewName = 'combined' \n  AND c.season IN (2025, 2026)\n  AND c.fetchedAt = (SELECT MAX(c2.fetchedAt) FROM espn_season_cache c2 WHERE c2.season = c.season AND c2.viewName = 'combined')\nGROUP BY season, tx_type, tx_status\nORDER BY season DESC, cnt DESC;\n",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1064 (42000) at line 2: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 7 column 12 near \"(c.payload, '$.transactions[*]' COLUMNS (value JSON PATH '$')) t",
+    "WHERE c.viewName = 'combined' ",
+    "  AND c.season IN (2025, 2026)",
+    "  AND c.fetchedAt = (SELECT MAX(c2.fetchedAt) FROM espn_season_cache c2 WHERE c2.season = c.season AND c2.viewName = 'combined')",
+    "GROUP BY season, tx_type, tx_status",
+    "ORDER BY season DESC, cnt DESC\""
+  ]
+}

@@ -184,7 +184,9 @@ function getWeekTransactions(
       let txType: WeeklyTransaction["type"] = "ADD";
       if (type === "WAIVER" || type === "FREE_AGENT") {
         txType = itemType === "ADD" ? "ADD" : "DROP";
-      } else if (type === "TRADE") {
+      } else if (type === "TRADE" || type === "TRADE_UPHOLD" || type === "TRADE_ACCEPT") {
+        // 2026+ ESPN format: TRADE_UPHOLD/TRADE_ACCEPT are accepted trades (no items)
+        // For these, teamId is the approving team; use teamId as the reference
         txType = (tx.toTeamId as number) === teamId ? "TRADE_IN" : "TRADE_OUT";
       }
 

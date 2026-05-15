@@ -690,6 +690,8 @@ export function normalizeTransactions(data: Record<string, unknown>) {
         playerName: null,
         fromTeamId: null,
         toTeamId: null,
+        // 2026+: TRADE_UPHOLD/TRADE_ACCEPT records have no items but link to a TRADE_PROPOSAL
+        relatedTransactionId: tx.relatedTransactionId ?? null,
       });
       continue;
     }
@@ -707,6 +709,8 @@ export function normalizeTransactions(data: Record<string, unknown>) {
         fromTeamId: item.fromTeamId,
         toTeamId: item.toTeamId,
         itemType: item.type,
+        // 2026+: pass relatedTransactionId on item rows too (for TRADE_PROPOSAL items)
+        relatedTransactionId: tx.relatedTransactionId ?? null,
       });
     }
   }
