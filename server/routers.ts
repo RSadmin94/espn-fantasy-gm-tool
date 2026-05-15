@@ -24,6 +24,7 @@ import { providerRouter } from "./providerRouter";
 import { billingRouter } from "./billingRouter";
 import { onboardingRouter } from "./onboardingRouter";
 import { offseasonRouter } from "./offseasonRouter";
+import { tradeHistoryRouter } from "./tradeHistoryRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob, getDb } from "./db";
@@ -160,6 +161,7 @@ export const appRouter = router({
     }),
   }),
   offseason: offseasonRouter,
+  tradeHistory: tradeHistoryRouter,
   identity: router({
     /**
      * Returns the deterministic ESPN team claim for the current user.

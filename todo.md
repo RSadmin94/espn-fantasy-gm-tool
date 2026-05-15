@@ -1197,3 +1197,13 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Fix hardcoded "Rod's Opportunities" label in inject.js
 - [x] Rebuild extension zip v1.4.0, upload, update LeagueConnect.tsx download URL
 - [x] Checkpoint and push to GitHub
+
+## Feature: League Trade History Evaluator (May 15 2026)
+- [x] Audit ESPN transaction cache to understand accepted trade data shape
+- [x] Build tRPC endpoint: tradeHistory — fetch all accepted trades from ESPN transaction cache, parse players sent/received per team, include season selector
+- [x] Add AI grade endpoint: gradeTrade — takes a single trade (players sent/received, teams, date) and returns WIN/FAIR/LOSS grade with reasoning
+- [x] Add "League Trade History" tab to existing Trade Lab page
+- [x] Trade cards: date, Team A → Team B, players exchanged, AI grade badge (WIN/FAIR/LOSS), expandable reasoning
+- [x] Season selector to filter trades by year
+- [x] Write vitest for tradeHistory endpoint
+- [x] Checkpoint and push to GitHub

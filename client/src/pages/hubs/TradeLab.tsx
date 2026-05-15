@@ -5,6 +5,7 @@ import TradeAnalyzer from "@/pages/TradeAnalyzer";
 import TradeOfferGenerator from "@/pages/TradeOfferGenerator";
 import PickValueCalculator from "@/pages/PickValueCalculator";
 import DraftPickTracker from "@/pages/DraftPickTracker";
+import LeagueTradeHistory from "@/pages/LeagueTradeHistory";
 
 export default function TradeLab() {
   return (
@@ -24,6 +25,9 @@ export default function TradeLab() {
         <TabsTrigger value="pick-tracker" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium">
           Pick Tracker
         </TabsTrigger>
+        <TabsTrigger value="trade-history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium">
+          League Trade History
+        </TabsTrigger>
           </TabsList>
         </div>
     <TabsContent value="trade-analyzer" className="mt-0">
@@ -37,6 +41,9 @@ export default function TradeLab() {
     </TabsContent>
     <TabsContent value="pick-tracker" className="mt-0">
       <DraftPickTracker />
+    </TabsContent>
+    <TabsContent value="trade-history" className="mt-0">
+      <LeagueTradeHistory />
     </TabsContent>
       </Tabs>
     </AppLayout>
