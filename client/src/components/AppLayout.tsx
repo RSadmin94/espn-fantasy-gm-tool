@@ -4,7 +4,7 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ClipboardList, Star, ArrowLeftRight, Bot, ChevronRight,
-  Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target, BarChart3, Link2, Sunrise, TrendingUp,
+  Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target, BarChart3, Link2, Sunrise,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
@@ -29,7 +29,6 @@ const navItems: NavItem[] = [
   { href: "/weekly-intelligence", icon: Activity, label: "Weekly Intel", group: "Win This Week", badge: "NEW" },
   // Win Trades
   { href: "/trade-lab", icon: ArrowLeftRight, label: "Trade Lab", group: "Win Trades", badge: "AI" },
-  { href: "/trade-aging", icon: TrendingUp, label: "Trade Aging", group: "Win Trades", badge: "NEW" },
   { href: "/opponent-intel", icon: Microscope, label: "Opponent Intel", group: "Win Trades" },
   // Win Long Term
   { href: "/offseason", icon: Sunrise, label: "Offseason Intel", group: "Win Long Term", badge: "2026" },
@@ -149,35 +148,9 @@ function UserFooter() {
   );
 }
 
-function SidebarHeader() {
-  const activeLeague = trpc.league.getActive.useQuery(undefined, {
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
-  const leagueName = activeLeague.data?.leagueName ?? "GM Command Center";
-  return (
-    <div className="px-5 py-4 border-b border-border">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl espn-gradient flex items-center justify-center flex-shrink-0 shadow-lg">
-          <Activity className="w-5 h-5 text-white" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-bold text-foreground leading-tight tracking-tight truncate">{leagueName}</p>
-          <p className="text-[11px] text-muted-foreground leading-tight">GM Command Center</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 mt-3">
-        <div className="flex-1 h-px bg-border" />
-        <Badge variant="outline" className="text-[9px] px-2 border-primary/30 text-primary font-mono">2009 – 2026</Badge>
-        <div className="flex-1 h-px bg-border" />
-      </div>
-    </div>
-  );
-}
-
 export default function AppLayout({ children, title, subtitle, headerRight }: AppLayoutProps) {
-  const alreadyInsideLayout = useContext(InsideLayoutContext);
   const [location] = useLocation();
+  const alreadyInsideLayout = useContext(InsideLayoutContext);
   const [advisorOpen, setAdvisorOpen] = useState(false);
 
   // Listen for Chrome extension toolbar click → open advisor panel
@@ -197,7 +170,6 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // All hooks are above this point — safe to early-return here
   if (alreadyInsideLayout) return <>{children}</>;
 
   return (
@@ -205,7 +177,22 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
       <div className="flex h-screen bg-background overflow-hidden">
         {/* Sidebar */}
         <aside className="flex-shrink-0 flex flex-col border-r border-border bg-card h-full overflow-hidden" style={{ width: "15.5rem" }}>
-          <SidebarHeader />
+          <div className="px-5 py-4 border-b border-border">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl espn-gradient flex items-center justify-center flex-shrink-0 shadow-lg">
+                <Activity className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-foreground leading-tight tracking-tight">ATLANTAS FINEST</p>
+                <p className="text-[11px] text-muted-foreground leading-tight">GM Command Center</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+              <div className="flex-1 h-px bg-border" />
+              <Badge variant="outline" className="text-[9px] px-2 border-primary/30 text-primary font-mono">2009 – 2026</Badge>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+          </div>
 
           <nav className="flex-1 overflow-y-auto py-3 px-3" style={{ minHeight: 0 }}>
             {groups.map((group) => {

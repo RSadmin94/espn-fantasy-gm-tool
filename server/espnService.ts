@@ -682,7 +682,6 @@ export function normalizeTransactions(data: Record<string, unknown>) {
       rows.push({
         season,
         transactionId: tx.id,
-        relatedTransactionId: tx.relatedTransactionId ?? null,
         type: tx.type,
         status: tx.status,
         proposedDate: tx.proposedDate,
@@ -696,24 +695,15 @@ export function normalizeTransactions(data: Record<string, unknown>) {
     }
     for (const item of items) {
       const player = (item.player as Record<string, unknown>) || {};
-      // Generate a display name for draft pick items (no player.fullName)
-      let playerName: string | null = (player.fullName as string) ?? null;
-      if (!playerName && item.type === "DRAFT_PICK") {
-        const pick = (item.draftPick as Record<string, unknown>) || {};
-        const pickSeason = (pick.seasonId as number) || (tx.proposedDate ? new Date(tx.proposedDate as number).getFullYear() : season);
-        const round = (pick.roundId as number) || (item.overallPickNumber ? Math.ceil((item.overallPickNumber as number) / 14) : null);
-        playerName = round ? `${pickSeason} Round ${round} Pick` : `${pickSeason} Draft Pick`;
-      }
       rows.push({
         season,
         transactionId: tx.id,
-        relatedTransactionId: tx.relatedTransactionId ?? null,
         type: tx.type,
         status: tx.status,
         proposedDate: tx.proposedDate,
         teamId: tx.teamId,
         playerId: player.id || item.playerId,
-        playerName,
+        playerName: player.fullName,
         fromTeamId: item.fromTeamId,
         toTeamId: item.toTeamId,
         itemType: item.type,

@@ -1078,7 +1078,7 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] 0 TypeScript errors
 - [x] git push github main
 - [x] webdev_save_checkpoint
-- [x] Publish (click Publish button in Management UI — user action)
+- [ ] Publish (click Publish button in Management UI)
 
 ## Multi-League ESPN Cache Isolation
 
@@ -1197,49 +1197,3 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Fix hardcoded "Rod's Opportunities" label in inject.js
 - [x] Rebuild extension zip v1.4.0, upload, update LeagueConnect.tsx download URL
 - [x] Checkpoint and push to GitHub
-
-## Feature: League Trade History Evaluator (May 15 2026)
-- [x] Audit ESPN transaction cache to understand accepted trade data shape
-- [x] Build tRPC endpoint: tradeHistory — fetch all accepted trades from ESPN transaction cache, parse players sent/received per team, include season selector
-- [x] Add AI grade endpoint: gradeTrade — takes a single trade (players sent/received, teams, date) and returns WIN/FAIR/LOSS grade with reasoning
-- [x] Add "League Trade History" tab to existing Trade Lab page
-- [x] Trade cards: date, Team A → Team B, players exchanged, AI grade badge (WIN/FAIR/LOSS), expandable reasoning
-- [x] Season selector to filter trades by year
-- [x] Write vitest for tradeHistory endpoint
-- [x] Checkpoint and push to GitHub
-
-## Feature: Trade Aging Evaluator — "How Did This Trade Age?" (May 15 2026)
-- [x] Review available player stats sources in ESPN cache (roster scoring, player stats by week) — covered by Trade Aging screen
-- [x] Build tradeHistory.ageEval endpoint: fetch actual season stats — covered by Trade Aging screen
-- [x] Add "How Did This Age?" button to each trade card in LeagueTradeHistory.tsx — deferred, Trade Aging screen is sufficient
-- [x] Expanded aging panel: per-player actual stats table — deferred, Trade Aging screen is sufficient
-- [x] Write vitest for ageEval endpoint
-- [x] Checkpoint and push to GitHub
-
-## Feature: Trade Aging Screen (May 15 2026)
-- [x] Build tradeHistory.ageEval endpoint: for each player in the trade, look up their actual fantasy points (appliedTotal from roster cache) for the season, compute total points per side, determine aging grade (AGED WELL / FAIR / AGED POORLY), AI explains WHY the trade is aging that way (injuries, breakouts, busts, usage shifts)
-- [x] Build TradeAging.tsx dedicated page: all trades in a scrollable list with aging grade badge, points per side bar chart, AI weekly narrative, last-updated timestamp
-- [x] Register Trade Aging as a nav item in AppLayout sidebar under WIN TRADES section
-- [x] Register /trade-aging route in App.tsx
-- [x] Write vitest for ageEval endpoint
-- [x] Checkpoint and push to GitHub
-
-## Bug Fix: Production Crash — "An unexpected error occurred" (May 15 2026)
-- [x] Diagnose runtime crash from ErrorBoundary on production site
-- [x] Fix the crash (React hook violation in App.tsx inline redirect component)
-- [x] Test, checkpoint, push
-
-## Bug Fix: Extension Not Opening GM Tool Site (May 15 2026)
-- [x] Diff extension files vs last working version to find breaking change
-- [x] Fix the breaking change (React hook #310 in AppLayout.tsx)
-- [x] Rebuild zip, upload, checkpoint
-
-## Bug Fix: Remove InsideLayoutContext + Add Open Advisor Button (May 15 2026)
-- [x] Remove InsideLayoutContext and alreadyInsideLayout guard entirely from AppLayout
-- [x] Add a simple "Open Advisor" button in the sidebar nav instead (AI GM Advisor nav item opens advisor panel via setAdvisorOpen)
-- [x] Ensure no nested layout issues remain (InsideLayoutContext fully removed, AppLayout is now a single component with no nested guard)
-
-## Bug Fix: Missing Trade in Trade History (May 15 2026)
-- [x] Identify which trade is missing and from which season (May 14 2026 draft pick trade, relatedTransactionId d3731d04, ESPN 2026 TRADE_PROPOSAL/EXECUTED format)
-- [x] Check transaction parsing logic in tradeHistoryRouter for the missing trade (buildTradesForSeason updated to accept TRADE_PROPOSAL with status=EXECUTED)
-- [x] Fix the parsing so all accepted trades appear (code fix deployed — user needs to do Data Center refresh to pull the accepted proposal into cache)

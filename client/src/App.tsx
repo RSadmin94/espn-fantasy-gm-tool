@@ -41,28 +41,19 @@ import MLForecast from "@/pages/MLForecast";
 import WeeklyIntelligence from "@/pages/hubs/WeeklyIntelligence";
 import OffseasonHub from "@/pages/hubs/OffseasonHub";
 import LeagueConnect from "@/pages/LeagueConnect";
-import TradeAging from "@/pages/TradeAging";
 import Reveal from "@/pages/Reveal";
 import BillingSuccess from "@/pages/BillingSuccess";
 import BillingCancel from "@/pages/BillingCancel";
 
-function RedirectToCommandCenter() {
-  useEffect(() => {
-    window.location.replace("/command-center");
-  }, []);
-  return null;
-}
-
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={RedirectToCommandCenter} />
+      <Route path="/" component={() => { useEffect(() => { window.location.replace("/command-center"); }, []); return null; }} />
       <Route path="/command-center" component={CommandCenter} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/draft-war-room" component={DraftWarRoom} />
       <Route path="/keeper-lab" component={KeeperLab} />
       <Route path="/trade-lab" component={TradeLab} />
-      <Route path="/trade-aging" component={TradeAging} />
       <Route path="/waiver-lab" component={WaiverLab} />
       <Route path="/opponent-intel" component={OpponentIntel} />
       <Route path="/data-center" component={DataCenter} />
