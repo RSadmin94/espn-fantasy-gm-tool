@@ -1148,3 +1148,17 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Package extension as espn_dna_extension_v1.3.0.zip
 - [x] Run TypeScript check and full test suite (504/504 passing, 0 TS errors)
 - [x] Save checkpoint (3ae15e66)
+
+## NEW: 9-Feature Core Audit (May 2026)
+- [x] League DNA profiles: leagueDNA.ts + calcLeagueDNA + gmArchetype + exploitabilityScore — fully wired, 12 client pages consume DNA data
+- [x] Rival detection: onboardingRouter.ts uses h2hVsRod field (confirmed present in leagueDNA.ts) — rival scoring algorithm verified correct
+- [x] Weekly intelligence: weeklyAssessmentRouter.ts + weeklyAssessmentService.ts — all 4 endpoints live, hub page + TodaysMission + StartSit consume data
+- [x] AI GM advisor: advisor.chat procedure with invokeLLM + rate limiting + GM memory injection — AdvisorPanel + Advisor page + GMDecisionMemory hub all wired
+- [x] Trade analysis: tradeAnalyze protectedProcedure with VORP + calcTradeValue + championshipDelta — TradeAnalyzer.tsx fully wired
+- [x] Trade aging: tradeAging publicProcedure with 2026 acceptance-row reconstruction fix — TradeAging.tsx wired in TradeLab hub
+- [x] Multi-season league history: ALL_SEASONS = [2009..2026], allSeasons endpoint, smart refresh (skip closed seasons), 18-season context in AI advisor
+- [x] ESPN league integration: espnService.ts with ESPN_S2/ESPN_SWID env vars, 14 API views, per-view error isolation, cookie expiry detection
+- [x] Persistent league memory: user_memory DB table, getUserMemory/updateMemory, memory injected into advisor system prompt, GMDecisionMemory hub page
+- [x] Fix: Rosters page was orphaned — added Rosters nav link to AppLayout sidebar under Team Tools group
+- [x] Run TypeScript check and full test suite (504/504 passing, 0 TS errors)
+- [ ] Save checkpoint and push to GitHub

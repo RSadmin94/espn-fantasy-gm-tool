@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ClipboardList, Star, ArrowLeftRight, Bot, ChevronRight,
   Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target, BarChart3, Link2, Sunrise,
-  ChevronDown, Settings2,
+  ChevronDown, Settings2, Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
@@ -36,6 +36,7 @@ const navItems: NavItem[] = [
   { href: "/keeper-lab", icon: Star, label: "Keepers", group: "Team Tools" },
   { href: "/draft-war-room", icon: ClipboardList, label: "Draft Room", group: "Team Tools" },
   { href: "/offseason", icon: Sunrise, label: "Offseason", group: "Team Tools", badge: "2026" },
+  { href: "/rosters", icon: Users, label: "Rosters", group: "Team Tools" },
   // System
   { href: "/data-center", icon: Shield, label: "Data Center", group: "System" },
   { href: "/connect", icon: Link2, label: "Connect League", group: "System" },
