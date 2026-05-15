@@ -1,4 +1,6 @@
 // FILE: client/src/pages/hubs/KeeperLab.tsx
+import { useEffect } from "react";
+import { trackEvent } from "@/lib/trackEvent";
 import AppLayout from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Keepers from "@/pages/Keepers";
@@ -6,6 +8,7 @@ import KeeperROI from "@/pages/KeeperROI";
 import KeeperFutureValue from "@/pages/KeeperFutureValue";
 
 export default function KeeperLab() {
+  useEffect(() => { trackEvent("feature_open", "keeper_lab"); }, []);
   return (
     <AppLayout title="Keeper Lab" subtitle="Who's worth keeping? The math decides.">
       <Tabs defaultValue="keeper-tracker" className="w-full">

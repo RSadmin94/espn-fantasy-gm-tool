@@ -30,7 +30,8 @@ import {
   Zap,
   Info,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { trackEvent } from "@/lib/trackEvent";
 import { toast } from "sonner";
 
 // ─── Heat label config ────────────────────────────────────────────────────────
@@ -304,6 +305,7 @@ function RankMedal({ rank }: { rank: number }) {
 // ─── Main widget ──────────────────────────────────────────────────────────────
 
 export function FearIndexWidget({ season = 2025 }: { season?: number }) {
+  useEffect(() => { trackEvent("feature_open", "fear_index"); }, []);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { data: entries = [], isLoading, refetch } = trpc.fearIndex.getLatest.useQuery(

@@ -1,9 +1,11 @@
 // FILE: client/src/App.tsx
 import { useEffect } from "react";
+import { useLocation } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
+import { trackEvent, checkReturnVisit } from "@/lib/trackEvent";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Dashboard from "./pages/Dashboard";
@@ -46,8 +48,18 @@ import Reveal from "@/pages/Reveal";
 import BillingSuccess from "@/pages/BillingSuccess";
 import BillingCancel from "@/pages/BillingCancel";
 
+function PageTracker() {
+  const [location] = useLocation();
+  useEffect(() => {
+    trackEvent("page_view", location, { page: location });
+  }, [location]);
+  return null;
+}
+
 function Router() {
   return (
+    <>
+    <PageTracker />
     <Switch>
       <Route path="/" component={() => { useEffect(() => { window.location.replace("/command-center"); }, []); return null; }} />
       <Route path="/command-center" component={CommandCenter} />
@@ -92,10 +104,22 @@ function Router() {
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
+    </>
   );
 }
 
 function App() {
+  // Session start tracking — fires once per browser session
+  useEffect(() => {
+    const key = "ff_gm_session_tracked";
+    if (!sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, "1");
+      trackEvent("session_start", "app");
+      if (checkReturnVisit()) {
+        trackEvent("return_visit", "app");
+      }
+    }
+  }, []);
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">

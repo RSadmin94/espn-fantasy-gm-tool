@@ -14,7 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Award, AlertTriangle, TrendingUp, Target, Zap, Shield, Swords, Clock } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { trackEvent } from "@/lib/trackEvent";
 import { toast } from "sonner";
 
 // ─── Event type config ────────────────────────────────────────────────────────
@@ -164,6 +165,7 @@ export function ReputationTimeline({
   mode = "timeline",
   limit = 20,
 }: ReputationTimelineProps) {
+  useEffect(() => { trackEvent("feature_open", "reputation"); }, []);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Fetch events based on mode

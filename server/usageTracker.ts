@@ -314,3 +314,233 @@ export async function getCostSummary(days = 30): Promise<{
     return { totalCostUsd: 0, totalCalls: 0, llmCostUsd: 0, llmCalls: 0, espnCalls: 0, trpcCalls: 0 };
   }
 }
+
+// ─── UI Event tracking (client-side events) ───────────────────────────────────
+
+export interface UIUsageEvent {
+  eventType: "page_view" | "feature_open" | "ai_action" | "cta_click" | "session_start" | "return_visit";
+  featureName: string;
+  page: string | null;
+  action: string | null;
+  sessionId: string | null;
+  userId: string | null;
+  metadata: string | null;
+}
+
+/**
+ * Track a client-side UI event (page_view, feature_open, ai_action, cta_click, etc.)
+ * Called from the logUIEvent tRPC mutation.
+ */
+export async function trackUIEvent(event: UIUsageEvent): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    await db.insert(usageEvents).values({
+      eventCategory: "ui",
+      eventType: event.eventType,
+      featureName: event.featureName,
+      page: event.page ?? undefined,
+      action: event.action ?? undefined,
+      sessionId: event.sessionId ?? undefined,
+      callType: event.eventType,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      estimatedCostUsd: 0,
+      durationMs: 0,
+      userId: event.userId ?? undefined,
+      model: null,
+      streaming: false,
+      metadata: event.metadata ?? undefined,
+    });
+  } catch {
+    // Silently swallow — tracking must never break the main flow
+  }
+}
+
+// ─── Feature utilization queries ──────────────────────────────────────────────
+
+/** All known features — used to surface "ignored" features with 0 events */
+const ALL_FEATURES = [
+  "ai_gm",
+  "weekly_intel",
+  "trade_lab",
+  "trade_aging",
+  "draft_helper",
+  "keeper_lab",
+  "rivalry",
+  "fear_index",
+  "reputation",
+  "reveal",
+  "checkout",
+  "subscription",
+] as const;
+
+export interface FeatureUtilizationRow {
+  featureName: string;
+  totalEvents: number;
+  uniqueUsers: number;
+  lastSeenAt: Date | null;
+  isIgnored: boolean;
+}
+
+export interface AIByFeatureRow {
+  featureName: string;
+  llmCalls: number;
+  totalTokens: number;
+  totalCostUsd: number;
+  avgDurationMs: number;
+}
+
+export interface RetentionWeekRow {
+  week: string;       // "YYYY-WW"
+  uniqueUsers: number;
+  totalEvents: number;
+}
+
+export interface FunnelStepRow {
+  step: string;
+  featureName: string;
+  completions: number;
+  uniqueUsers: number;
+}
+
+/** Feature utilization: top-used and ignored features by UI event count */
+export async function getFeatureUtilization(days = 30): Promise<FeatureUtilizationRow[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const { sql } = await import("drizzle-orm");
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        featureName: usageEvents.featureName,
+        totalEvents: sql<number>`COUNT(*)`,
+        uniqueUsers: sql<number>`COUNT(DISTINCT ${usageEvents.userId})`,
+        lastSeenAt: sql<Date>`MAX(${usageEvents.createdAt})`,
+      })
+      .from(usageEvents)
+      .where(sql`${usageEvents.eventCategory} = 'ui' AND ${usageEvents.createdAt} >= ${cutoff}`)
+      .groupBy(usageEvents.featureName)
+      .orderBy(sql`COUNT(*) DESC`);
+
+    const seen = new Set(rows.map((r) => r.featureName));
+    const result: FeatureUtilizationRow[] = rows.map((r) => ({
+      featureName: r.featureName,
+      totalEvents: Number(r.totalEvents),
+      uniqueUsers: Number(r.uniqueUsers),
+      lastSeenAt: r.lastSeenAt,
+      isIgnored: false,
+    }));
+
+    // Append features with 0 events
+    for (const f of ALL_FEATURES) {
+      if (!seen.has(f)) {
+        result.push({ featureName: f, totalEvents: 0, uniqueUsers: 0, lastSeenAt: null, isIgnored: true });
+      }
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+/** AI usage broken down by feature name (LLM events only) */
+export async function getAIUsageByFeature(days = 30): Promise<AIByFeatureRow[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const { sql } = await import("drizzle-orm");
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        featureName: usageEvents.featureName,
+        llmCalls: sql<number>`COUNT(*)`,
+        totalTokens: sql<number>`SUM(${usageEvents.totalTokens})`,
+        totalCostUsd: sql<number>`SUM(${usageEvents.estimatedCostUsd})`,
+        avgDurationMs: sql<number>`AVG(${usageEvents.durationMs})`,
+      })
+      .from(usageEvents)
+      .where(sql`${usageEvents.eventCategory} = 'llm' AND ${usageEvents.createdAt} >= ${cutoff}`)
+      .groupBy(usageEvents.featureName)
+      .orderBy(sql`SUM(${usageEvents.estimatedCostUsd}) DESC`);
+    return rows.map((r) => ({
+      featureName: r.featureName,
+      llmCalls: Number(r.llmCalls),
+      totalTokens: Number(r.totalTokens),
+      totalCostUsd: Number(r.totalCostUsd),
+      avgDurationMs: Number(r.avgDurationMs),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** User retention: unique users per ISO week for the last N weeks */
+export async function getRetentionByWeek(weeks = 12): Promise<RetentionWeekRow[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const { sql } = await import("drizzle-orm");
+    const cutoff = new Date(Date.now() - weeks * 7 * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        week: sql<string>`DATE_FORMAT(${usageEvents.createdAt}, '%Y-%u')`,
+        uniqueUsers: sql<number>`COUNT(DISTINCT ${usageEvents.userId})`,
+        totalEvents: sql<number>`COUNT(*)`,
+      })
+      .from(usageEvents)
+      .where(sql`${usageEvents.createdAt} >= ${cutoff}`)
+      .groupBy(sql`DATE_FORMAT(${usageEvents.createdAt}, '%Y-%u')`)
+      .orderBy(sql`DATE_FORMAT(${usageEvents.createdAt}, '%Y-%u') ASC`);
+    return rows.map((r) => ({
+      week: r.week,
+      uniqueUsers: Number(r.uniqueUsers),
+      totalEvents: Number(r.totalEvents),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Onboarding funnel: ordered step completion counts */
+export async function getOnboardingFunnel(): Promise<FunnelStepRow[]> {
+  const FUNNEL_STEPS: Array<{ step: string; featureName: string }> = [
+    { step: "1. Session Started",          featureName: "session_start" },
+    { step: "2. AI GM Opened",             featureName: "ai_gm" },
+    { step: "3. Weekly Intel Viewed",      featureName: "weekly_intel" },
+    { step: "4. Trade Lab Opened",         featureName: "trade_lab" },
+    { step: "5. Draft Helper Opened",      featureName: "draft_helper" },
+    { step: "6. Checkout Clicked",         featureName: "checkout" },
+    { step: "7. Subscription Activated",   featureName: "subscription" },
+  ];
+
+  try {
+    const db = await getDb();
+    if (!db) return FUNNEL_STEPS.map((s) => ({ ...s, completions: 0, uniqueUsers: 0 }));
+    const { sql } = await import("drizzle-orm");
+
+    const results: FunnelStepRow[] = [];
+    for (const step of FUNNEL_STEPS) {
+      const rows = await db
+        .select({
+          completions: sql<number>`COUNT(*)`,
+          uniqueUsers: sql<number>`COUNT(DISTINCT ${usageEvents.userId})`,
+        })
+        .from(usageEvents)
+        .where(sql`${usageEvents.featureName} = ${step.featureName}`);
+      results.push({
+        step: step.step,
+        featureName: step.featureName,
+        completions: Number(rows[0]?.completions ?? 0),
+        uniqueUsers: Number(rows[0]?.uniqueUsers ?? 0),
+      });
+    }
+    return results;
+  } catch {
+    return FUNNEL_STEPS.map((s) => ({ ...s, completions: 0, uniqueUsers: 0 }));
+  }
+}
+
+// ─── Exported cost estimator (used in tests) ──────────────────────────────────
+export { estimateCost };

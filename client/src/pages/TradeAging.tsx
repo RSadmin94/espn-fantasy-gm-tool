@@ -3,7 +3,8 @@
 // and renders a verdict (who won the trade based on season stats).
 // Sprint 2: Narrative badge added to each trade card.
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { trackEvent } from "@/lib/trackEvent";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -245,6 +246,7 @@ function SummaryBar({ trades }: { trades: TradeRecord[] }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function TradeAging() {
+  useEffect(() => { trackEvent("feature_open", "trade_aging"); }, []);
   const [seasonFilter, setSeasonFilter] = useState<string>("all");
 
   const { data: cachedSeasons } = trpc.espn.cachedSeasons.useQuery();

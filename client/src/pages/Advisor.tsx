@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { trackEvent } from "@/lib/trackEvent";
 import AppLayout from "@/components/AppLayout";
 import SeasonSelector from "@/components/SeasonSelector";
 import { trpc } from "@/lib/trpc";
@@ -22,6 +23,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 export default function Advisor() {
+  useEffect(() => { trackEvent("feature_open", "ai_gm"); }, []);
   const [season, setSeason] = useState(2025);
   const [message, setMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -52,6 +54,7 @@ export default function Advisor() {
       window.location.href = getLoginUrl();
       return;
     }
+    trackEvent("ai_action", "ai_gm", { action: "message_sent" });
     chatMutation.mutate({ message: message.trim(), season });
   };
 

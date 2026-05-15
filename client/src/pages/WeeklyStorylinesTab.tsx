@@ -8,7 +8,8 @@
  * that triggers LLM generation for any uncached stories.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { trackEvent } from "@/lib/trackEvent";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -221,6 +222,7 @@ interface WeeklyStorylinesTabProps {
 }
 
 export default function WeeklyStorylinesTab({ season = 2025 }: WeeklyStorylinesTabProps) {
+  useEffect(() => { trackEvent("feature_open", "weekly_intel"); }, []);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { data: stories, isLoading, refetch } = trpc.weeklyStorylines.getLatest.useQuery(

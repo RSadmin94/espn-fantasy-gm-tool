@@ -1,12 +1,15 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { trackEvent } from "@/lib/trackEvent";
 
 export default function BillingSuccess() {
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
 
   useEffect(() => {
+    // Track subscription activation
+    trackEvent("cta_click", "subscription", { action: "subscription_activated", page: "/billing/success" });
     // Invalidate subscription status so trial banners disappear immediately
     utils.billing.getSubscriptionStatus.invalidate();
     utils.auth.me.invalidate();

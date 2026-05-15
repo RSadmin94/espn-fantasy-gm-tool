@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { trackEvent } from "@/lib/trackEvent";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -90,6 +91,8 @@ const SURVIVAL_COLOR = (risk: number) => {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function AIDraftHelper() {
+  // Track feature open
+  useEffect(() => { trackEvent("feature_open", "draft_helper"); }, []);
   // ── Draft configuration ──────────────────────────────────────────────────
   const [totalTeams,  setTotalTeams]  = useState(14);
   const [totalRounds, setTotalRounds] = useState(15);
@@ -137,6 +140,7 @@ export default function AIDraftHelper() {
 
   const handleGetRecommendation = useCallback(() => {
     if (!ctx) return;
+    trackEvent("ai_action", "draft_helper", { action: "recommendation_requested" });
     setIsLoadingRec(true);
     setRecommendation(null);
     recMutation.mutate({

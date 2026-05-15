@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { trackEvent } from "@/lib/trackEvent";
 import { trpc } from "@/lib/trpc";
 
 // ─── Suspense animation ───────────────────────────────────────────────────────
@@ -81,6 +82,7 @@ export default function Reveal() {
   }, [data]);
 
   const handleCheckout = async () => {
+    trackEvent("cta_click", "checkout", { action: "checkout_clicked", page: "/reveal" });
     try {
       const result = await checkoutMutation.mutateAsync({ origin: window.location.origin });
       if (result?.url) window.open(result.url, "_blank");

@@ -197,6 +197,13 @@
       "when": 1778874397736,
       "tag": "0027_sweet_gorgon",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "5",
+      "when": 1778877257683,
+      "tag": "0028_parallel_hulk",
+      "breakpoints": true
     }
   ]
 }

@@ -141,3 +141,227 @@ describe("MODEL_PRICING table", () => {
     }
   });
 });
+
+// ─── Feature Utilization Analytics (pure logic tests) ────────────────────────
+// These tests exercise the deterministic logic in the analytics functions
+// without requiring a live DB. We test the data-shaping and ignored-feature
+// detection by replicating the same logic used in the real functions.
+
+/** Mirrors the ALL_FEATURES constant from usageTracker.ts */
+const ALL_FEATURES = [
+  "ai_gm", "weekly_intel", "trade_lab", "trade_aging", "draft_helper",
+  "keeper_lab", "rivalry", "fear_index", "reputation", "reveal",
+  "checkout", "subscription",
+] as const;
+
+type FeatureUtilizationRow = {
+  featureName: string;
+  totalEvents: number;
+  uniqueUsers: number;
+  lastSeenAt: Date | null;
+  isIgnored: boolean;
+};
+
+/** Simulates the ignored-feature detection logic from getFeatureUtilization */
+function buildFeatureUtilizationResult(
+  dbRows: Array<{ featureName: string; totalEvents: number; uniqueUsers: number; lastSeenAt: Date | null }>
+): FeatureUtilizationRow[] {
+  const seen = new Set(dbRows.map(r => r.featureName));
+  const result: FeatureUtilizationRow[] = dbRows.map(r => ({ ...r, isIgnored: false }));
+  for (const f of ALL_FEATURES) {
+    if (!seen.has(f)) {
+      result.push({ featureName: f, totalEvents: 0, uniqueUsers: 0, lastSeenAt: null, isIgnored: true });
+    }
+  }
+  return result;
+}
+
+describe("getFeatureUtilization (logic)", () => {
+  it("marks features with 0 events as ignored", () => {
+    // Only ai_gm and trade_lab have events; the rest should be ignored
+    const dbRows = [
+      { featureName: "ai_gm", totalEvents: 42, uniqueUsers: 5, lastSeenAt: new Date() },
+      { featureName: "trade_lab", totalEvents: 10, uniqueUsers: 2, lastSeenAt: new Date() },
+    ];
+    const result = buildFeatureUtilizationResult(dbRows);
+    const ignored = result.filter(r => r.isIgnored);
+    const active = result.filter(r => !r.isIgnored);
+
+    expect(active).toHaveLength(2);
+    expect(ignored.length).toBeGreaterThan(0);
+    expect(ignored.every(r => r.totalEvents === 0)).toBe(true);
+    expect(ignored.every(r => r.lastSeenAt === null)).toBe(true);
+  });
+
+  it("does not mark active features as ignored", () => {
+    const dbRows = ALL_FEATURES.map(f => ({
+      featureName: f,
+      totalEvents: 1,
+      uniqueUsers: 1,
+      lastSeenAt: new Date(),
+    }));
+    const result = buildFeatureUtilizationResult(dbRows);
+    expect(result.filter(r => r.isIgnored)).toHaveLength(0);
+    expect(result.filter(r => !r.isIgnored)).toHaveLength(ALL_FEATURES.length);
+  });
+
+  it("returns all 12 known features in the result (active + ignored)", () => {
+    const dbRows = [
+      { featureName: "ai_gm", totalEvents: 5, uniqueUsers: 1, lastSeenAt: new Date() },
+    ];
+    const result = buildFeatureUtilizationResult(dbRows);
+    const names = result.map(r => r.featureName);
+    for (const f of ALL_FEATURES) {
+      expect(names).toContain(f);
+    }
+  });
+
+  it("handles empty DB result — all features are ignored", () => {
+    const result = buildFeatureUtilizationResult([]);
+    expect(result).toHaveLength(ALL_FEATURES.length);
+    expect(result.every(r => r.isIgnored)).toBe(true);
+  });
+
+  it("preserves event counts from DB rows", () => {
+    const dbRows = [
+      { featureName: "draft_helper", totalEvents: 99, uniqueUsers: 7, lastSeenAt: new Date() },
+    ];
+    const result = buildFeatureUtilizationResult(dbRows);
+    const row = result.find(r => r.featureName === "draft_helper");
+    expect(row?.totalEvents).toBe(99);
+    expect(row?.uniqueUsers).toBe(7);
+    expect(row?.isIgnored).toBe(false);
+  });
+});
+
+// ─── Onboarding funnel step ordering ─────────────────────────────────────────
+
+const FUNNEL_STEPS = [
+  { step: "1. Session Started",          featureName: "session_start" },
+  { step: "2. AI GM Opened",             featureName: "ai_gm" },
+  { step: "3. Weekly Intel Viewed",      featureName: "weekly_intel" },
+  { step: "4. Trade Lab Opened",         featureName: "trade_lab" },
+  { step: "5. Draft Helper Opened",      featureName: "draft_helper" },
+  { step: "6. Checkout Clicked",         featureName: "checkout" },
+  { step: "7. Subscription Activated",   featureName: "subscription" },
+];
+
+describe("getOnboardingFunnel (step ordering)", () => {
+  it("has exactly 7 funnel steps", () => {
+    expect(FUNNEL_STEPS).toHaveLength(7);
+  });
+
+  it("first step is session_start", () => {
+    expect(FUNNEL_STEPS[0].featureName).toBe("session_start");
+  });
+
+  it("last step is subscription", () => {
+    expect(FUNNEL_STEPS[FUNNEL_STEPS.length - 1].featureName).toBe("subscription");
+  });
+
+  it("checkout comes before subscription", () => {
+    const checkoutIdx = FUNNEL_STEPS.findIndex(s => s.featureName === "checkout");
+    const subIdx = FUNNEL_STEPS.findIndex(s => s.featureName === "subscription");
+    expect(checkoutIdx).toBeLessThan(subIdx);
+  });
+
+  it("all step labels include a numeric prefix", () => {
+    for (const step of FUNNEL_STEPS) {
+      expect(step.step).toMatch(/^\d+\./);
+    }
+  });
+
+  it("step numbers are sequential starting at 1", () => {
+    FUNNEL_STEPS.forEach((step, i) => {
+      expect(step.step.startsWith(`${i + 1}.`)).toBe(true);
+    });
+  });
+
+  it("fallback result has 0 completions for all steps", () => {
+    const fallback = FUNNEL_STEPS.map(s => ({ ...s, completions: 0, uniqueUsers: 0 }));
+    expect(fallback.every(s => s.completions === 0)).toBe(true);
+    expect(fallback.every(s => s.uniqueUsers === 0)).toBe(true);
+  });
+});
+
+// ─── AI usage by feature (LLM-only filter logic) ─────────────────────────────
+
+describe("getAIUsageByFeature (LLM-only filter)", () => {
+  type AIByFeatureRow = {
+    featureName: string;
+    llmCalls: number;
+    totalTokens: number;
+    totalCostUsd: number;
+    avgDurationMs: number;
+    eventCategory?: string;
+  };
+
+  /** Simulates the LLM-only filter applied in getAIUsageByFeature */
+  function filterLLMOnly(rows: AIByFeatureRow[]): AIByFeatureRow[] {
+    return rows.filter(r => !r.eventCategory || r.eventCategory === "llm");
+  }
+
+  it("returns only LLM rows when mixed categories are present", () => {
+    const rows: AIByFeatureRow[] = [
+      { featureName: "tradeNarrative", llmCalls: 5, totalTokens: 1000, totalCostUsd: 0.001, avgDurationMs: 200, eventCategory: "llm" },
+      { featureName: "espn.fetchViews", llmCalls: 0, totalTokens: 0, totalCostUsd: 0, avgDurationMs: 50, eventCategory: "espn" },
+      { featureName: "advisor.chat", llmCalls: 3, totalTokens: 500, totalCostUsd: 0.0005, avgDurationMs: 150, eventCategory: "llm" },
+    ];
+    const result = filterLLMOnly(rows);
+    expect(result).toHaveLength(2);
+    expect(result.every(r => r.eventCategory === "llm")).toBe(true);
+  });
+
+  it("returns empty array when no LLM rows exist", () => {
+    const rows: AIByFeatureRow[] = [
+      { featureName: "espn.fetchViews", llmCalls: 0, totalTokens: 0, totalCostUsd: 0, avgDurationMs: 50, eventCategory: "espn" },
+    ];
+    expect(filterLLMOnly(rows)).toHaveLength(0);
+  });
+
+  it("cost is always non-negative", () => {
+    const rows: AIByFeatureRow[] = [
+      { featureName: "draftHelper", llmCalls: 2, totalTokens: 800, totalCostUsd: 0.0008, avgDurationMs: 300, eventCategory: "llm" },
+    ];
+    const result = filterLLMOnly(rows);
+    expect(result[0].totalCostUsd).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ─── Retention by week (data shaping) ────────────────────────────────────────
+
+describe("getRetentionByWeek (data shaping)", () => {
+  type RetentionWeekRow = { week: string; uniqueUsers: number; totalEvents: number };
+
+  it("week strings follow YYYY-WW format", () => {
+    const rows: RetentionWeekRow[] = [
+      { week: "2026-01", uniqueUsers: 3, totalEvents: 15 },
+      { week: "2026-02", uniqueUsers: 5, totalEvents: 22 },
+    ];
+    for (const row of rows) {
+      expect(row.week).toMatch(/^\d{4}-\d{2}$/);
+    }
+  });
+
+  it("uniqueUsers is always <= totalEvents", () => {
+    const rows: RetentionWeekRow[] = [
+      { week: "2026-01", uniqueUsers: 3, totalEvents: 15 },
+      { week: "2026-02", uniqueUsers: 5, totalEvents: 22 },
+    ];
+    for (const row of rows) {
+      expect(row.uniqueUsers).toBeLessThanOrEqual(row.totalEvents);
+    }
+  });
+
+  it("empty result is valid (no events in period)", () => {
+    const rows: RetentionWeekRow[] = [];
+    expect(rows).toHaveLength(0);
+  });
+
+  it("uniqueUsers is non-negative", () => {
+    const rows: RetentionWeekRow[] = [
+      { week: "2026-05", uniqueUsers: 0, totalEvents: 0 },
+    ];
+    expect(rows[0].uniqueUsers).toBeGreaterThanOrEqual(0);
+  });
+});

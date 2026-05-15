@@ -1,4 +1,6 @@
 // FILE: client/src/pages/hubs/TradeLab.tsx
+import { useEffect } from "react";
+import { trackEvent } from "@/lib/trackEvent";
 import AppLayout from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TradeAnalyzer from "@/pages/TradeAnalyzer";
@@ -12,6 +14,7 @@ const TAB_CLASS =
   "rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium";
 
 export default function TradeLab() {
+  useEffect(() => { trackEvent("feature_open", "trade_lab"); }, []);
   return (
     <AppLayout title="Trade Lab" subtitle="Win every trade before you make it">
       <Tabs defaultValue="trade-analyzer" className="w-full">

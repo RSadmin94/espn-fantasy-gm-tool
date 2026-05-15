@@ -287,6 +287,68 @@ export const appRouter = router({
         const { getLLMCallLog } = await import("./usageTracker");
         return getLLMCallLog(input.limit);
       }),
+
+    /**
+     * Public mutation — logs a client-side UI event.
+     * Fire-and-forget from the client; never returns sensitive data.
+     */
+    logUIEvent: publicProcedure
+      .input(z.object({
+        eventType: z.enum(["page_view", "feature_open", "ai_action", "cta_click", "session_start", "return_visit"]),
+        featureName: z.string().max(128),
+        page: z.string().max(256).nullable().optional(),
+        action: z.string().max(128).nullable().optional(),
+        sessionId: z.string().max(64).nullable().optional(),
+        metadata: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { trackUIEvent } = await import("./usageTracker");
+        await trackUIEvent({
+          eventType: input.eventType,
+          featureName: input.featureName,
+          page: input.page ?? null,
+          action: input.action ?? null,
+          sessionId: input.sessionId ?? null,
+          userId: ctx.user?.openId ?? null,
+          metadata: input.metadata ?? null,
+        });
+        return { ok: true };
+      }),
+
+    /** Feature utilization: top/ignored features by UI event count */
+    getFeatureUtilization: protectedProcedure
+      .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getFeatureUtilization } = await import("./usageTracker");
+        return getFeatureUtilization(input.days);
+      }),
+
+    /** AI usage broken down by feature name */
+    getAIUsageByFeature: protectedProcedure
+      .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getAIUsageByFeature } = await import("./usageTracker");
+        return getAIUsageByFeature(input.days);
+      }),
+
+    /** User retention: unique users per ISO week */
+    getRetentionByWeek: protectedProcedure
+      .input(z.object({ weeks: z.number().int().min(1).max(52).default(12) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getRetentionByWeek } = await import("./usageTracker");
+        return getRetentionByWeek(input.weeks);
+      }),
+
+    /** Onboarding funnel: ordered step completion counts */
+    getOnboardingFunnel: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getOnboardingFunnel } = await import("./usageTracker");
+        return getOnboardingFunnel();
+      }),
   }),
 
   draftHelper: router({

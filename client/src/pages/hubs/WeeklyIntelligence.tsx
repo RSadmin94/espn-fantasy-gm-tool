@@ -11,6 +11,7 @@
  */
 
 import { useState, useMemo, useEffect, useRef } from "react";
+import { trackEvent } from "@/lib/trackEvent";
 import AppLayout from "@/components/AppLayout";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -740,6 +741,7 @@ function TeamCard({
 // ─── Rivalry Heat Panel ─────────────────────────────────────────────────────
 
 function RivalryHeatPanel() {
+  useEffect(() => { trackEvent("feature_open", "rivalry"); }, []);
   const { data: scores, isLoading } = trpc.rivalry.getScores.useQuery(undefined, {
     staleTime: 1000 * 60 * 10,
   });
@@ -855,6 +857,8 @@ type SortKey = "standing" | "desperation" | "exploitability" | "health";
 type FilterKey = "all" | "open_window" | "desperate" | "opportunity";
 
 export default function WeeklyIntelligence() {
+  // Track feature open
+  useEffect(() => { trackEvent("feature_open", "weekly_intel"); }, []);
   const [season] = useState(2025);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("standing");

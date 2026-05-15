@@ -893,9 +893,13 @@ export type InsertReputationEvent = typeof reputationEvents.$inferInsert;
  * One row per tracked event (LLM call, ESPN fetch, tRPC procedure hit).
  * Used by the backend usage & cost monitor dashboard.
  *
- * eventCategory:  "llm" | "espn" | "trpc"
- * featureName:    human-readable feature (e.g. "advisor.chat", "tradeNarrative.refresh")
+ * eventCategory:  "llm" | "espn" | "trpc" | "ui"
+ * eventType:      "page_view" | "feature_open" | "ai_action" | "cta_click" | "session_start" | "return_visit" (null for server-side events)
+ * featureName:    human-readable feature (e.g. "advisor.chat", "weekly_intel", "trade_lab")
  * callType:       LLM callType or ESPN view name or tRPC procedure path
+ * page:           URL path for UI events (null for server-side events)
+ * action:         specific action label for UI events (null for server-side events)
+ * sessionId:      client session UUID (null for server-side events)
  * promptTokens / completionTokens / totalTokens: LLM token counts (0 for non-LLM)
  * estimatedCostUsd: rough cost estimate based on model pricing
  * durationMs:     wall-clock time for the call
@@ -919,6 +923,11 @@ export const usageEvents = mysqlTable(
     userId: varchar("userId", { length: 64 }),
     model: varchar("model", { length: 64 }),
     streaming: boolean("streaming").notNull().default(false),
+    // UI event fields (null for server-side LLM/ESPN/tRPC events)
+    eventType: varchar("eventType", { length: 32 }),
+    page: varchar("page", { length: 256 }),
+    action: varchar("action", { length: 128 }),
+    sessionId: varchar("sessionId", { length: 64 }),
     metadata: text("metadata"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
@@ -927,6 +936,8 @@ export const usageEvents = mysqlTable(
     index("idx_ue_category").on(t.eventCategory),
     index("idx_ue_created").on(t.createdAt),
     index("idx_ue_user").on(t.userId),
+    index("idx_ue_event_type").on(t.eventType),
+    index("idx_ue_session").on(t.sessionId),
   ]
 );
 export type UsageEvent = typeof usageEvents.$inferSelect;

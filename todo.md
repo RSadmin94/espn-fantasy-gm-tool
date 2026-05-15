@@ -1238,3 +1238,20 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Write vitest for draftHelperService (scorePositionalNeed, calcSurvivalRisk, detectPositionRun, parsePickRecommendation, buildPickRecommendationPrompt) — 26 tests
 - [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (641/641 passing)
 - [x] Save checkpoint and push to GitHub
+
+## Feature Utilization Analytics (Option A — extend usage_events)
+- [x] Extend usage_events schema: add eventType (varchar 32), sessionId (varchar 64), page (varchar 128), action (varchar 128) columns; run pnpm db:push
+- [x] Build client/src/lib/trackEvent.ts: client-side helper that fires usageMonitor.logUIEvent mutation (fire-and-forget, never throws)
+- [x] Generate sessionId on app load (uuid, stored in sessionStorage) and expose via useSession hook
+- [x] Wire page_view tracking in App.tsx: fire trackEvent on every route change
+- [x] Add feature_open events: AI GM Chat, Weekly Intel, Trade Lab, Trade Aging, Draft Helper, Keeper Lab, Rivalry tab, Fear Index, Reputation tab
+- [x] Add ai_action events: AI GM message sent, Draft recommendation requested, Start/Sit call, Trade analysis, Waiver scouting
+- [x] Add cta_click events: Checkout clicked, Subscription activated, Reveal completed
+- [x] Add session_start event on app mount (once per session)
+- [x] Add return_visit detection: compare last_seen timestamp in localStorage, fire return_visit event if > 24h gap
+- [x] Add server-side usageMonitor.logUIEvent tRPC mutation (public procedure — no auth required for page views)
+- [x] Extend usageTracker.ts: getFeatureUtilization (top/ignored features by page_view count), getAIUsageByFeature (ai_action grouped by featureName), getRetentionByWeek (unique users by ISO week), getOnboardingFunnel (ordered funnel step completion counts)
+- [x] Expand UsageMonitor.tsx: add Feature Usage tab, AI by Feature tab, User Retention tab, Onboarding Funnel tab, Ignored Features panel
+- [x] Write vitest for new usageTracker queries (funnel ordering, retention bucketing)
+- [x] Run pnpm tsc --noEmit (0 errors) and pnpm test
+- [x] Save checkpoint and push to GitHub
