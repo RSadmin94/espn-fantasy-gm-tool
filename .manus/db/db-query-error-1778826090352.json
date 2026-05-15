@@ -1,0 +1,8 @@
+{
+  "query": "\nSELECT \n  season,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.seasonId')) as seasonId,\n  view_name,\n  fetched_at,\n  CHAR_LENGTH(CAST(payload AS CHAR)) as payload_size\nFROM espn_cached_views \nWHERE season >= 2025\nORDER BY season DESC, fetched_at DESC\nLIMIT 10;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT \n  season,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.seasonId')) as seasonId,\n  view_name,\n  fetched_at,\n  CHAR_LENGTH(CAST(payload AS CHAR)) as payload_size\nFROM espn_cached_views \nWHERE season >= 2025\nORDER BY season DESC, fetched_at DESC\nLIMIT 10;\n",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1146 (42S02) at line 2: Table 'd7edtbt5uxwnubkjhewerh.espn_cached_views' doesn't exist"
+  ]
+}

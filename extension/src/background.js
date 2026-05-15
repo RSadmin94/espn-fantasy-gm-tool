@@ -160,14 +160,19 @@ chrome.action.onClicked?.addListener(async (tab) => {
     try {
       await chrome.tabs.sendMessage(tab.id, { type: "OPEN_PANEL" });
     } catch (_) {
-      // Content script may not be ready yet — try scripting.executeScript as fallback
+      // Content script not ready yet — set a flag that inject.js checks on init
+      // Also try FAB click as immediate fallback if it already exists
       try {
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           func: () => {
-            // Trigger the FAB click if it exists
             const fab = document.getElementById("af-league-pulse-fab");
-            if (fab) fab.click();
+            if (fab) {
+              fab.click();
+            } else {
+              // FAB not yet injected — set flag so init() opens panel when ready
+              window.__afOpenPanelOnReady = true;
+            }
           },
         });
       } catch (e2) {

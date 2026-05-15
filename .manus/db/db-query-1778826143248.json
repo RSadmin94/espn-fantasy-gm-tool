@@ -1,0 +1,190 @@
+{
+  "query": "\nSELECT \n  JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].id'))) as tx_id,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].type'))) as tx_type,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].status'))) as tx_status,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].relatedTransactionId'))) as related_tx_id,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].teamId'))) as team_id,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].proposedDate'))) as proposed_date,\n  JSON_LENGTH(payload, CONCAT('$.transactions[', n, '].items')) as item_count\nFROM espn_season_cache\nCROSS JOIN (\n  SELECT 0 n UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5\n  UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10\n  UNION SELECT 11 UNION SELECT 12 UNION SELECT 13 UNION SELECT 14 UNION SELECT 15\n  UNION SELECT 16 UNION SELECT 17 UNION SELECT 18 UNION SELECT 19 UNION SELECT 20\n  UNION SELECT 21 UNION SELECT 22 UNION SELECT 23 UNION SELECT 24 UNION SELECT 25\n  UNION SELECT 26 UNION SELECT 27 UNION SELECT 28 UNION SELECT 29 UNION SELECT 30\n  UNION SELECT 31 UNION SELECT 32 UNION SELECT 33 UNION SELECT 34 UNION SELECT 35\n  UNION SELECT 36 UNION SELECT 37 UNION SELECT 38 UNION SELECT 39 UNION SELECT 40\n  UNION SELECT 41 UNION SELECT 42 UNION SELECT 43 UNION SELECT 44 UNION SELECT 45\n  UNION SELECT 46 UNION SELECT 47 UNION SELECT 48 UNION SELECT 49 UNION SELECT 50\n  UNION SELECT 51 UNION SELECT 52 UNION SELECT 53 UNION SELECT 54 UNION SELECT 55\n  UNION SELECT 56 UNION SELECT 57 UNION SELECT 58 UNION SELECT 59 UNION SELECT 60\n  UNION SELECT 61 UNION SELECT 62 UNION SELECT 63 UNION SELECT 64 UNION SELECT 65\n  UNION SELECT 66 UNION SELECT 67 UNION SELECT 68 UNION SELECT 69 UNION SELECT 70\n  UNION SELECT 71 UNION SELECT 72\n) nums\nWHERE season = 2026\n  AND viewName = 'combined'\n  AND JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].type'))) IN ('TRADE_ACCEPT', 'TRADE_UPHOLD', 'TRADE_PROPOSAL')\n  AND JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].status'))) != 'CANCELED'\nORDER BY proposed_date DESC\nLIMIT 20;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT \n  JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].id'))) as tx_id,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].type'))) as tx_type,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].status'))) as tx_status,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].relatedTransactionId'))) as related_tx_id,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].teamId'))) as team_id,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].proposedDate'))) as proposed_date,\n  JSON_LENGTH(payload, CONCAT('$.transactions[', n, '].items')) as item_count\nFROM espn_season_cache\nCROSS JOIN (\n  SELECT 0 n UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5\n  UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10\n  UNION SELECT 11 UNION SELECT 12 UNION SELECT 13 UNION SELECT 14 UNION SELECT 15\n  UNION SELECT 16 UNION SELECT 17 UNION SELECT 18 UNION SELECT 19 UNION SELECT 20\n  UNION SELECT 21 UNION SELECT 22 UNION SELECT 23 UNION SELECT 24 UNION SELECT 25\n  UNION SELECT 26 UNION SELECT 27 UNION SELECT 28 UNION SELECT 29 UNION SELECT 30\n  UNION SELECT 31 UNION SELECT 32 UNION SELECT 33 UNION SELECT 34 UNION SELECT 35\n  UNION SELECT 36 UNION SELECT 37 UNION SELECT 38 UNION SELECT 39 UNION SELECT 40\n  UNION SELECT 41 UNION SELECT 42 UNION SELECT 43 UNION SELECT 44 UNION SELECT 45\n  UNION SELECT 46 UNION SELECT 47 UNION SELECT 48 UNION SELECT 49 UNION SELECT 50\n  UNION SELECT 51 UNION SELECT 52 UNION SELECT 53 UNION SELECT 54 UNION SELECT 55\n  UNION SELECT 56 UNION SELECT 57 UNION SELECT 58 UNION SELECT 59 UNION SELECT 60\n  UNION SELECT 61 UNION SELECT 62 UNION SELECT 63 UNION SELECT 64 UNION SELECT 65\n  UNION SELECT 66 UNION SELECT 67 UNION SELECT 68 UNION SELECT 69 UNION SELECT 70\n  UNION SELECT 71 UNION SELECT 72\n) nums\nWHERE season = 2026\n  AND viewName = 'combined'\n  AND JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].type'))) IN ('TRADE_ACCEPT', 'TRADE_UPHOLD', 'TRADE_PROPOSAL')\n  AND JSON_UNQUOTE(JSON_EXTRACT(payload, CONCAT('$.transactions[', n, '].status'))) != 'CANCELED'\nORDER BY proposed_date DESC\nLIMIT 20;\n",
+  "rows": [
+    {
+      "tx_id": "c1986f18-e750-4b7c-b18d-3e92db4da059",
+      "tx_type": "TRADE_UPHOLD",
+      "tx_status": "EXECUTED",
+      "related_tx_id": "d3731d04-107d-415a-8c25-f5530b88dddf",
+      "team_id": "1",
+      "proposed_date": "1778814507468",
+      "item_count": "NULL"
+    },
+    {
+      "tx_id": "29d4a5c4-e82e-4ca7-a413-627c6441d15a",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777966914613",
+      "item_count": "8"
+    },
+    {
+      "tx_id": "29d4a5c4-e82e-4ca7-a413-627c6441d15a",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777966914613",
+      "item_count": "8"
+    },
+    {
+      "tx_id": "4d87f929-7363-406c-9697-c1bc44043bd8",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777564399272",
+      "item_count": "10"
+    },
+    {
+      "tx_id": "4d87f929-7363-406c-9697-c1bc44043bd8",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777564399272",
+      "item_count": "10"
+    },
+    {
+      "tx_id": "a77945df-4f5a-4823-bf00-f0a61c545d7e",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777523348900",
+      "item_count": "4"
+    },
+    {
+      "tx_id": "a77945df-4f5a-4823-bf00-f0a61c545d7e",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777523348900",
+      "item_count": "4"
+    },
+    {
+      "tx_id": "29b1481a-a932-483c-b806-9d0ca4b4e271",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777523272859",
+      "item_count": "4"
+    },
+    {
+      "tx_id": "29b1481a-a932-483c-b806-9d0ca4b4e271",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777523272859",
+      "item_count": "4"
+    },
+    {
+      "tx_id": "7df50218-e0dc-46c8-a940-887170db5a97",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777494672719",
+      "item_count": "8"
+    },
+    {
+      "tx_id": "7df50218-e0dc-46c8-a940-887170db5a97",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777494672719",
+      "item_count": "8"
+    },
+    {
+      "tx_id": "6fb9a2b3-336b-4547-a1f3-c04272bcca42",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777494578297",
+      "item_count": "8"
+    },
+    {
+      "tx_id": "6fb9a2b3-336b-4547-a1f3-c04272bcca42",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777494578297",
+      "item_count": "8"
+    },
+    {
+      "tx_id": "f211d274-6d4a-4760-899e-6387f6c0d6d9",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777494502552",
+      "item_count": "8"
+    },
+    {
+      "tx_id": "f211d274-6d4a-4760-899e-6387f6c0d6d9",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777494502552",
+      "item_count": "8"
+    },
+    {
+      "tx_id": "3cc13b2a-f92f-4d6b-97da-9e757a7964ae",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777493349117",
+      "item_count": "10"
+    },
+    {
+      "tx_id": "3cc13b2a-f92f-4d6b-97da-9e757a7964ae",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "11",
+      "proposed_date": "1777493349117",
+      "item_count": "10"
+    },
+    {
+      "tx_id": "20632aab-b32c-4649-a4b7-df3562bf842b",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "17",
+      "proposed_date": "1777488802264",
+      "item_count": "4"
+    },
+    {
+      "tx_id": "20632aab-b32c-4649-a4b7-df3562bf842b",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "17",
+      "proposed_date": "1777488802264",
+      "item_count": "4"
+    },
+    {
+      "tx_id": "8ab11ee0-38cc-48bc-8207-71acce967236",
+      "tx_type": "TRADE_PROPOSAL",
+      "tx_status": "PENDING",
+      "related_tx_id": "NULL",
+      "team_id": "17",
+      "proposed_date": "1777437839003",
+      "item_count": "6"
+    }
+  ],
+  "messages": [],
+  "stdout": "tx_id\ttx_type\ttx_status\trelated_tx_id\tteam_id\tproposed_date\titem_count\nc1986f18-e750-4b7c-b18d-3e92db4da059\tTRADE_UPHOLD\tEXECUTED\td3731d04-107d-415a-8c25-f5530b88dddf\t1\t1778814507468\tNULL\n29d4a5c4-e82e-4ca7-a413-627c6441d15a\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777966914613\t8\n29d4a5c4-e82e-4ca7-a413-627c6441d15a\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777966914613\t8\n4d87f929-7363-406c-9697-c1bc44043bd8\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777564399272\t10\n4d87f929-7363-406c-9697-c1bc44043bd8\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777564399272\t10\na77945df-4f5a-4823-bf00-f0a61c545d7e\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777523348900\t4\na77945df-4f5a-4823-bf00-f0a61c545d7e\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777523348900\t4\n29b1481a-a932-483c-b806-9d0ca4b4e271\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777523272859\t4\n29b1481a-a932-483c-b806-9d0ca4b4e271\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777523272859\t4\n7df50218-e0dc-46c8-a940-887170db5a97\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777494672719\t8\n7df50218-e0dc-46c8-a940-887170db5a97\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777494672719\t8\n6fb9a2b3-336b-4547-a1f3-c04272bcca42\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777494578297\t8\n6fb9a2b3-336b-4547-a1f3-c04272bcca42\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777494578297\t8\nf211d274-6d4a-4760-899e-6387f6c0d6d9\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777494502552\t8\nf211d274-6d4a-4760-899e-6387f6c0d6d9\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777494502552\t8\n3cc13b2a-f92f-4d6b-97da-9e757a7964ae\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777493349117\t10\n3cc13b2a-f92f-4d6b-97da-9e757a7964ae\tTRADE_PROPOSAL\tPENDING\tNULL\t11\t1777493349117\t10\n20632aab-b32c-4649-a4b7-df3562bf842b\tTRADE_PROPOSAL\tPENDING\tNULL\t17\t1777488802264\t4\n20632aab-b32c-4649-a4b7-df3562bf842b\tTRADE_PROPOSAL\tPENDING\tNULL\t17\t1777488802264\t4\n8ab11ee0-38cc-48bc-8207-71acce967236\tTRADE_PROPOSAL\tPENDING\tNULL\t17\t1777437839003\t6\n",
+  "stderr": "",
+  "execution_time_ms": 737
+}

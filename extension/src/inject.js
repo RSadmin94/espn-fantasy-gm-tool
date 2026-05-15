@@ -1,5 +1,5 @@
 /**
- * ESPN GM Tool — Fantasy DNA Advisor Content Script v1.5.0
+ * ESPN GM Tool — Fantasy DNA Advisor Content Script v1.6.0
  *
  * ESPN-first release. Sleeper/Yahoo stubs retained for future expansion.
  *
@@ -167,9 +167,9 @@
     }
 
     // ── Strategy 2: Standings / Scoreboard / League pages ───────────────────
-    // Target: span.teamName.truncate (confirmed in live DOM audit)
-    // Also target: a.team--link > span.teamName (same element, different parent)
-    const teamNameEls = document.querySelectorAll("span.teamName.truncate, span.teamName");
+    // Target: span.teamName.truncate (older ESPN) + [class*='teamName'] (2026 ESPN)
+    // Widen selectors to catch ESPN class renames (Fix 2)
+    const teamNameEls = document.querySelectorAll("span.teamName.truncate, span.teamName, [class*='teamName']:not(button):not(a)");
     teamNameEls.forEach(el => {
       if (el.getAttribute(BADGE_ATTR)) return;
       const rawName = el.textContent?.trim() || "";
@@ -598,26 +598,22 @@
     `;
   }
 
-  // ─── Message listener (from background.js toolbar click) ──────────────────────
+  // ─── Message listener (from background.js toolbar click) ──────────────────
+  // Fix 1 (race condition): If background sends OPEN_PANEL before inject.js is
+  // ready, the message is dropped. We set window.__afOpenPanelOnReady = true
+  // as a flag that init() checks — so a late-arriving click still opens the panel.
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "OPEN_PANEL") {
-      // Toolbar icon clicked while on ESPN — open the League Pulse slide-out
       openPanel(null, "League Pulse");
       sendResponse({ ok: true });
+      return false;
     }
     return false;
   });
 
-  // ─── Message listener (from background.js toolbar click) ──────────────────────
-  // When the user clicks the extension toolbar icon on an ESPN tab, background.js
-  // sends OPEN_PANEL here to open the League Pulse slide-out directly.
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message.type === "OPEN_PANEL") {
-      openPanel(null, "League Pulse");
-      sendResponse({ ok: true });
-    }
-    return false;
-  });
+  // Fix 3 (SW state loss): Re-read config from chrome.storage on every handler
+  // invocation (already done via getConfig() in background.js — no inject.js
+  // changes needed for this fix).
 
   // ─── SPA navigation handling ─────────────────────────────────────────────────
   let lastUrl = window.location.href;
@@ -645,20 +641,39 @@
   window.addEventListener("popstate", onUrlChange);
 
   // MutationObserver for DOM changes (React renders)
+  // Fix 2 (debounce): Increase to 800ms to give ESPN's React app time to render
+  // after a route change. Also add a second retry at 2500ms for slow renders.
   let injectTimeout = null;
+  let injectRetryTimeout = null;
   const observer = new MutationObserver(() => {
     clearTimeout(injectTimeout);
-    injectTimeout = setTimeout(injectBadges, 400);
+    clearTimeout(injectRetryTimeout);
+    injectTimeout = setTimeout(() => {
+      injectBadges();
+      // Retry once more in case React re-renders after the first injection
+      injectRetryTimeout = setTimeout(injectBadges, 1700);
+    }, 800);
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
   // ─── Init ─────────────────────────────────────────────────────────────────────
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => setTimeout(injectBadges, 500));
-  } else {
-    setTimeout(injectBadges, 500);
+  function init() {
+    injectBadges();
+    // Fix 1 (race condition): If the toolbar was clicked before this script was
+    // ready, background.js sets window.__afOpenPanelOnReady via executeScript.
+    // Check the flag here and open the panel if it was set.
+    if (window.__afOpenPanelOnReady) {
+      window.__afOpenPanelOnReady = false;
+      openPanel(null, "League Pulse");
+    }
   }
 
-  console.log(`[ESPN GM Tool DNA Advisor v1.5.0] Provider: ${PROVIDER} | URL: ${window.location.pathname}`);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => setTimeout(init, 500));
+  } else {
+    setTimeout(init, 500);
+  }
+
+  console.log(`[ESPN GM Tool DNA Advisor v1.6.0] Provider: ${PROVIDER} | URL: ${window.location.pathname}`);
 
 })();

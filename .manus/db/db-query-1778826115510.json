@@ -1,0 +1,34 @@
+{
+  "query": "\nSELECT \n  season,\n  viewName,\n  fetchedAt,\n  JSON_LENGTH(payload, '$.transactions') as tx_count,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.transactions[0].type')) as first_tx_type,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.transactions[0].status')) as first_tx_status,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.transactions[1].type')) as second_tx_type,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.transactions[1].status')) as second_tx_status,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.transactions[2].type')) as third_tx_type,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.transactions[2].status')) as third_tx_status\nFROM espn_season_cache\nWHERE season = 2026\nORDER BY fetchedAt DESC\nLIMIT 3;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT \n  season,\n  viewName,\n  fetchedAt,\n  JSON_LENGTH(payload, '$.transactions') as tx_count,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.transactions[0].type')) as first_tx_type,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.transactions[0].status')) as first_tx_status,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.transactions[1].type')) as second_tx_type,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.transactions[1].status')) as second_tx_status,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.transactions[2].type')) as third_tx_type,\n  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.transactions[2].status')) as third_tx_status\nFROM espn_season_cache\nWHERE season = 2026\nORDER BY fetchedAt DESC\nLIMIT 3;\n",
+  "rows": [
+    {
+      "season": "2026",
+      "viewName": "combined",
+      "fetchedAt": "2026-05-15 05:34:52",
+      "tx_count": "73",
+      "first_tx_type": "ROSTER",
+      "first_tx_status": "EXECUTED",
+      "second_tx_type": "ROSTER",
+      "second_tx_status": "EXECUTED",
+      "third_tx_type": "ROSTER",
+      "third_tx_status": "EXECUTED"
+    },
+    {
+      "season": "2026",
+      "viewName": "combined",
+      "fetchedAt": "2026-05-14 05:44:00",
+      "tx_count": "61",
+      "first_tx_type": "ROSTER",
+      "first_tx_status": "EXECUTED",
+      "second_tx_type": "ROSTER",
+      "second_tx_status": "EXECUTED",
+      "third_tx_type": "ROSTER",
+      "third_tx_status": "EXECUTED"
+    }
+  ],
+  "messages": [],
+  "stdout": "season\tviewName\tfetchedAt\ttx_count\tfirst_tx_type\tfirst_tx_status\tsecond_tx_type\tsecond_tx_status\tthird_tx_type\tthird_tx_status\n2026\tcombined\t2026-05-15 05:34:52\t73\tROSTER\tEXECUTED\tROSTER\tEXECUTED\tROSTER\tEXECUTED\n2026\tcombined\t2026-05-14 05:44:00\t61\tROSTER\tEXECUTED\tROSTER\tEXECUTED\tROSTER\tEXECUTED\n",
+  "stderr": "",
+  "execution_time_ms": 648
+}
