@@ -20,7 +20,7 @@ import { getOrFetchLeagueIdentity, upsertLeagueIdentity } from "./leagueIdentity
 import { memCache } from "./memCache";
 
 async function getSeasonData(season: number) {
-  const cached = await getCachedView(season, "combined");
+  const cached = await getCachedView(season, "combined", null);
   if (cached) return cached.payload as Record<string, unknown>;
   return null;
 }
@@ -38,7 +38,7 @@ export const offseasonRouter = router({
     if (!completedSeason) return { teams: [], leagueSummary: null };
     const planningYear = completedSeason + 1; // e.g. 2025 → 2026
 
-    const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
+    const cachedSeasons = (await getAllCachedSeasons(null)).sort((a: number, b: number) => a - b);
     if (cachedSeasons.length === 0) return { teams: [], leagueSummary: null };
 
     const latestSeason = completedSeason; // explicit alias for clarity
@@ -156,7 +156,7 @@ export const offseasonRouter = router({
     });
 
     // Get DNA profiles
-    const managers = await buildManagerRawData();
+    const managers = await buildManagerRawData(null);
     const dnaProfiles = calcLeagueDNA(managers);
 
     // Get 2026 draft order and team names from leagueIdentity (live ESPN, cached in DB)
@@ -213,14 +213,14 @@ export const offseasonRouter = router({
     const completedSeason = await getCompletedSeasonForOffseason();
     if (!completedSeason) return null;
 
-    const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
+    const cachedSeasons = (await getAllCachedSeasons(null)).sort((a: number, b: number) => a - b);
     if (cachedSeasons.length === 0) return null;
 
     const latestSeason = completedSeason;
     const data2025 = await getSeasonData(latestSeason);
     if (!data2025) return null;
 
-    const managers = await buildManagerRawData();
+    const managers = await buildManagerRawData(null);
     const dnaProfiles = calcLeagueDNA(managers);
 
     // Get keeper recommendations (reuse the same logic)
@@ -308,7 +308,7 @@ export const offseasonRouter = router({
       if (!completedSeason) return { brief: "No completed season data available." };
       const planningYear = completedSeason + 1;
 
-      const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
+      const cachedSeasons = (await getAllCachedSeasons(null)).sort((a: number, b: number) => a - b);
       if (cachedSeasons.length === 0) return { brief: "No data available." };
 
       const latestSeason = completedSeason;
@@ -320,7 +320,7 @@ export const offseasonRouter = router({
       const teamKeepers = picks2025.filter(p => p.keeper && p.teamId === input.teamId);
 
       // Get DNA — use live 2026 identity for owner name if available
-      const managers = await buildManagerRawData();
+      const managers = await buildManagerRawData(null);
       const dnaProfiles = calcLeagueDNA(managers);
       const identity2026brief = await getOrFetchLeagueIdentity(planningYear);
       const liveTeam = identity2026brief?.teams?.find(t => t.teamId === input.teamId);

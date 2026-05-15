@@ -16,10 +16,12 @@ import { router, protectedProcedure } from "./_core/trpc";
 import { buildManagerRawData } from "./dnaRouter";
 import { calcLeagueDNA, type ManagerRawData, type ManagerDNA } from "./leagueDNA";
 import { recordFunnelEvent } from "./funnelService";
+import { getActiveEspnLeagueConnectionId } from "./db";
 
 export const onboardingRouter = router({
   getRevealData: protectedProcedure.query(async ({ ctx }) => {
-    const managers: ManagerRawData[] = await buildManagerRawData();
+    const lcId = await getActiveEspnLeagueConnectionId(ctx.user.id);
+    const managers: ManagerRawData[] = await buildManagerRawData(lcId);
     const dnaProfiles: ManagerDNA[] = calcLeagueDNA(managers);
 
     // ── 1. Find the logged-in user's manager ──────────────────────────────

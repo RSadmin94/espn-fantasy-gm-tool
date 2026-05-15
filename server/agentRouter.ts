@@ -41,11 +41,11 @@ async function getInjuryBlock(playerNames: string[]): Promise<string> {
 
 async function getDNABlock(focusMemberIds?: string[]): Promise<string> {
   try {
-    const cachedSeasons = (await getAllCachedSeasons()).filter(s => s >= 2018);
+    const cachedSeasons = (await getAllCachedSeasons(null)).filter(s => s >= 2018);
     if (cachedSeasons.length === 0) return "";
     const { buildManagerRawData } = await import("./dnaRouter");
     const { calcLeagueDNA, buildDNAPromptBlock: buildBlock } = await import("./leagueDNA");
-    const allManagers = await buildManagerRawData();
+    const allManagers = await buildManagerRawData(null);
     if (allManagers.length === 0) return "";
     const dnaProfiles = calcLeagueDNA(allManagers);
     const focused = focusMemberIds && focusMemberIds.length > 0

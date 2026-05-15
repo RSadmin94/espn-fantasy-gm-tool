@@ -14,6 +14,7 @@ import {
   type InsertGmDecision,
 } from "../drizzle/schema";
 import { invokeLLM } from "./_core/llm";
+import { ENV } from "./_core/env";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -364,7 +365,7 @@ export async function getRetrospectiveAnalysis(season?: number): Promise<string>
     .map((r) => `- [${r.outcome.toUpperCase()}] ${r.description} (${r.toolSource}, Week ${r.weekNum ?? "?"})${r.outcomeNotes ? ` → ${r.outcomeNotes}` : ""}`)
     .join("\n");
 
-  const prompt = `You are analyzing the GM decision history for Rod Sellers, owner of "Atlantas Finest" in an ESPN 14-team fantasy football league.
+  const prompt = `You are analyzing the GM decision history for ${ENV.ownerName}, owner in an ESPN 14-team fantasy football league.
 
 DECISION STATISTICS:
 - Total decisions logged: ${stats.total}

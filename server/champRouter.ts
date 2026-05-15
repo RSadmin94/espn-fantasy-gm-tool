@@ -18,6 +18,7 @@
 
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
+import { ENV } from "./_core/env";
 import { invokeLLM } from "./_core/llm";
 import { TRPCError } from "@trpc/server";
 import {
@@ -72,7 +73,7 @@ async function buildTeamStandings(season: number): Promise<{
   currentWeek: number;
   playoffWeekStart: number;
 }> {
-  const cached = await getCachedView(season, "combined");
+  const cached = await getCachedView(season, "combined", null);
   if (!cached) return { teams: [], rodTeamId: null, currentWeek: 1, playoffWeekStart: 15 };
 
   const data = cached.payload as Record<string, unknown>;
@@ -131,8 +132,10 @@ async function buildTeamStandings(season: number): Promise<{
   for (const t of rawTeams) {
     const name = ((t.teamName as string) || "").toLowerCase();
     const owner = ((t.owners as string) || "").toLowerCase();
+    const _ownerFirst = ENV.ownerName.split(" ")[0].toLowerCase();
+    const _ownerLast = (ENV.ownerName.split(" ")[1] ?? "").toLowerCase();
     if (name.includes("str8") || name.includes("rodzilla") ||
-        owner.includes("rod") || owner.includes("sellers")) {
+        owner.includes(_ownerFirst) || (_ownerLast && owner.includes(_ownerLast))) {
       rodTeamId = t.teamId as number;
       break;
     }

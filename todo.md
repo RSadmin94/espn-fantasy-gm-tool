@@ -1076,6 +1076,28 @@ This single flow determines conversion, retention, and word-of-mouth.
 ### Phase 7 — Tests + GitHub Sync + Publish
 - [x] Run full test suite (474/474 passing)
 - [x] 0 TypeScript errors
-- [ ] git push github main
-- [ ] webdev_save_checkpoint
-- [ ] Publish
+- [x] git push github main
+- [x] webdev_save_checkpoint
+- [ ] Publish (click Publish button in Management UI)
+
+## Multi-League ESPN Cache Isolation
+
+- [x] Schema: add leagueConnectionId to espnSeasonCache, update unique index
+- [x] Migration: drizzle/0021_league_cache_isolation.sql
+- [x] db.ts: update getCachedView, upsertCachedView, getAllCachedSeasons; add getActiveEspnLeagueConnectionId
+- [x] dnaRouter.ts: buildManagerRawData(lcId?) + remove Rod name matching
+- [x] onboardingRouter.ts: resolve and pass lcId
+- [x] advisorContextBuilder.ts: resolve and pass lcId
+- [x] agentRouter.ts: pass lcId to buildManagerRawData
+- [x] routers.ts: resolve and pass lcId in all relevant procedures; fix getSeasonData helper
+- [x] providerRouter.ts: capture leagueConnectionId after insert and pass to upsertCachedView
+- [x] offseasonRouter.ts: pass lcId
+- [x] champRouter.ts: remove Rod name matching; pass lcId
+- [x] weeklyAssessmentRouter.ts: remove Rod name matching; pass lcId
+- [x] weeklyAssessmentService.ts: remove detectRodTeamId(); replace with user-based matching
+- [x] liveOpponentProfile.ts: remove ROD_NAMES matching
+- [x] scheduledRefresh.ts: pass null explicitly with comment
+- [x] weeklyIntelHandler.ts: pass null explicitly with comment
+- [x] providers/espnAdapter.ts: pass lcId to getCachedView
+- [x] leagueScoringService.ts: pass lcId to getCachedView
+- [x] NEW: server/leagueCacheIsolation.test.ts — 5 isolation tests

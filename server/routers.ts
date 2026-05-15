@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { memCache } from "./memCache";
+import { ENV } from "./_core/env";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -76,6 +77,7 @@ import {
   setActiveLeagueForUser,
   persistLlmUsage,
   getLlmUsageSummary,
+  getActiveEspnLeagueConnectionId,
 } from "./db";
 
 const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
@@ -83,7 +85,7 @@ const ALL_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020
 
 async function getSeasonData(season: number) {
   return memCache(`seasonData:${season}`, 10 * 60_000, async () => {
-    const cached = await getCachedView(season, "combined");
+    const cached = await getCachedView(season, "combined", null);
     return cached ? (cached.payload as Record<string, unknown>) : null;
   });
 }
@@ -259,7 +261,7 @@ export const appRouter = router({
       }),
 
     manifests: publicProcedure.query(async () => getRefreshManifests()),
-    cachedSeasons: publicProcedure.query(async () => getAllCachedSeasons()),
+    cachedSeasons: publicProcedure.query(async () => getAllCachedSeasons(null)),
     allSeasons: publicProcedure.query(() => ALL_SEASONS),
 
     settings: publicProcedure
@@ -345,7 +347,7 @@ export const appRouter = router({
       }),
 
     allStandings: publicProcedure.query(async () => {
-      const cachedSeasons = await getAllCachedSeasons();
+      const cachedSeasons = await getAllCachedSeasons(null);
       const result: Record<number, unknown[]> = {};
       for (const season of cachedSeasons) {
         const data = await getSeasonData(season);
@@ -384,7 +386,7 @@ export const appRouter = router({
       }),
 
     keeperHistory: publicProcedure.query(async () => {
-      const cachedSeasons = await getAllCachedSeasons();
+      const cachedSeasons = await getAllCachedSeasons(null);
       const keepers: unknown[] = [];
       for (const season of cachedSeasons) {
         const data = await getSeasonData(season);
@@ -408,7 +410,7 @@ export const appRouter = router({
 
     keeperAnalysis: publicProcedure.query(async () => {
       // Build keeper eligibility per team with 2-consecutive-year rule
-      const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+      const cachedSeasons = (await getAllCachedSeasons(null)).sort((a, b) => a - b);
       // Map: teamId -> list of { season, playerId, playerName, position, roundId }
       const keepersByTeam: Record<number, Array<{ season: number; playerId: number; playerName: string; position: string; roundId: number; teamName: string }>> = {};
 
@@ -509,7 +511,7 @@ export const appRouter = router({
       // Full 2026 keeper eligibility calculator with 2-consecutive-year rule enforcement
       // Rule: a player kept in BOTH 2024 AND 2025 must return to the draft pool in 2026
       // Round cost: if kept in round R in 2025, cost to keep in 2026 = R - 1
-      const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+      const cachedSeasons = (await getAllCachedSeasons(null)).sort((a, b) => a - b);
 
       // Build per-team, per-player keeper history across all seasons
       const keepersByPlayerByTeam: Record<number, Record<number, Array<{ season: number; roundId: number; playerName: string; position: string }>>> = {};
@@ -852,7 +854,7 @@ export const appRouter = router({
           };
 
           return {
-            ownerName: "Rod Sellers",
+            ownerName: ENV.ownerName,
             teamName: ROD_TEAM_NAME,
             teamId: ROD_TEAM_ID,
             careerSeasons,
@@ -887,7 +889,7 @@ export const appRouter = router({
 
   playerProfiles: publicProcedure.query(async () => {
     // Aggregate per-player draft + keeper + transaction history across all cached seasons
-    const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+    const cachedSeasons = (await getAllCachedSeasons(null)).sort((a, b) => a - b);
 
     const POS_MAP: Record<number, string> = {
       1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST", 17: "D/ST",
@@ -1083,7 +1085,7 @@ export const appRouter = router({
 
   ownerCareerStats: publicProcedure.query(() => {
     return memCache("ownerCareerStats", 10 * 60_000, async () => {
-    const cachedSeasons = await getAllCachedSeasons();
+    const cachedSeasons = await getAllCachedSeasons(null);
 
     // ── Per-owner aggregated stats ──────────────────────────────────────────
     // memberId → owner profile
@@ -1150,7 +1152,7 @@ export const appRouter = router({
     }
 
     for (const season of cachedSeasons) {
-      const row = await getCachedView(season, 'combined');
+      const row = await getCachedView(season, 'combined', null);
       if (!row) continue;
       const data = row.payload as any;
 
@@ -1407,7 +1409,7 @@ export const appRouter = router({
     .input(z.object({ memberId: z.string() }))
     .query(async ({ input }) => {
       // Fetch the full owner stats to build context
-      const cachedSeasons = await getAllCachedSeasons();
+      const cachedSeasons = await getAllCachedSeasons(null);
 
       // Collect all owner data for this member across seasons
       let ownerName = '';
@@ -1423,7 +1425,7 @@ export const appRouter = router({
       let seasonsActive = 0;
 
       for (const season of cachedSeasons) {
-        const row = await getCachedView(season, 'combined');
+        const row = await getCachedView(season, 'combined', null);
         if (!row) continue;
         const data = row.payload as any;
 
@@ -1700,7 +1702,7 @@ Respond with JSON in this exact format:
     const POS_MAP: Record<number, string> = {
       1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST", 17: "D/ST",
     };
-    const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+    const cachedSeasons = (await getAllCachedSeasons(null)).sort((a, b) => a - b);
 
     // owner key -> stats
     const ownerMap = new Map<string, {
@@ -1993,7 +1995,7 @@ Respond with JSON in this exact format:
           };
           // Re-use the leagueDraftTendencies cached result by calling getSeasonData
           // Build a minimal owner profile from the most recent 3 seasons
-          const recentSeasons = (await getAllCachedSeasons()).sort((a, b) => b - a).slice(0, 3);
+          const recentSeasons = (await getAllCachedSeasons(null)).sort((a, b) => b - a).slice(0, 3);
           const ownerStats = { rb1Pct: 0, wr1Pct: 0, earlyRbPct: 0, diversityScore: 50, keeperRate: 0, qbAvgRound: 8, teAvgRound: 8, draftStyle: 'BPA', name: input.counterpartyMemberId };
           let r1Total = 0; let rb1 = 0; let wr1 = 0; let earlyRb = 0; let earlyTotal = 0; let keeperPicks = 0; let totalPicks = 0; let qbRounds: number[] = []; let teRounds: number[] = [];
           const POS_MAP2: Record<number, string> = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'D/ST', 17: 'D/ST' };
@@ -2136,7 +2138,7 @@ Respond with JSON in this exact format:
     // Load 2026 draft order from ESPN cache
     let draftOrder: Array<{ teamId: number; teamName: string; round: number; pickInRound: number; overall: number }> = [];
     try {
-      const cached = await getCachedView(2026, 'combined');
+      const cached = await getCachedView(2026, 'combined', null);
       if (cached?.payload) {
         const raw = cached.payload as Record<string, unknown>;
         const normalized = normalizeDraftOrder(raw);
@@ -2212,7 +2214,7 @@ Respond with JSON in this exact format:
       const prompt = `You are an expert fantasy football analyst scouting ${data.ownerName} for the ATLANTAS FINEST FF league (14-team PPR keeper league, 2026 season).
 
 Career Record: ${totalW}W-${totalL}L (${winPct}% win rate) over ${data.seasons.length} seasons
-H2H vs Rod Sellers (the user): ${h2hW}W-${h2hL}L
+H2H vs ${ENV.ownerName} (the user): ${h2hW}W-${h2hL}L
 Recent 3 seasons: ${recentRecord}
 GM Archetype: ${data.gmArchetype} — ${data.gmArchetypeDesc}
 Avg Activity: ${data.avgAcquisitions} adds/season, ${data.avgTrades} trades/season
@@ -2222,11 +2224,11 @@ Strengths: ${data.strengthsWeaknesses.filter(s => s.type === "strength").map(s =
 Weaknesses: ${data.strengthsWeaknesses.filter(s => s.type === "weakness").map(s => s.text).join("; ")}
 Blind Spots: ${data.strengthsWeaknesses.filter(s => s.type === "blindspot").map(s => s.text).join("; ")}
 
-Write a detailed scouting report for Rod Sellers to use against this opponent in 2026. Include:
+Write a detailed scouting report for ${ENV.ownerName} to use against this opponent in 2026. Include:
 1. THREAT LEVEL (Elite/High/Medium/Low) with one-sentence justification
 2. CAREER NARRATIVE (2-3 sentences on their arc and what defines them)
-3. HOW TO BEAT THEM (3 specific tactical recommendations for Rod)
-4. TRADE STRATEGY (should Rod trade with them? What to offer? What to demand?)
+3. HOW TO BEAT THEM (3 specific tactical recommendations for ${ENV.ownerName.split(" ")[0]})
+4. TRADE STRATEGY (should ${ENV.ownerName.split(" ")[0]} trade with them? What to offer? What to demand?)
 5. DRAFT DAY INTEL (what positions do they prioritize? How does that affect the draft board?)
 6. 2026 PREDICTION (one bold prediction about their season)
 
@@ -2252,7 +2254,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
     // We approximate market round using: if kept in Rd X, they were worth at least Rd X-1 (the cost)
     // Better approximation: use pick value chart to compute value ratio
 
-    const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+    const cachedSeasons = (await getAllCachedSeasons(null)).sort((a, b) => a - b);
 
     // Pick value chart (14-team PPR, same as pickValueChart endpoint)
     const TOTAL_TEAMS = 14;
@@ -2678,12 +2680,13 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       // Find Rod's team — prefer live 2026 team map, fall back to 2025 teamMap
       const rodTeamId: number = (() => {
         // First try live 2026 data
+        const _ownerFirstRouters = ENV.ownerName.split(" ")[0].toLowerCase();
         for (const [tid, info] of Object.entries(live2026TeamMap)) {
-          if (info.owner.toLowerCase().includes("rod")) return Number(tid);
+          if (info.owner.toLowerCase().includes(_ownerFirstRouters)) return Number(tid);
         }
         // Fall back to 2025 teamMap
         const rodTeam2025 = Object.values(teamMap).find(t =>
-          t.ownerName.toLowerCase().includes("rod") || t.teamId === 11
+          t.ownerName.toLowerCase().includes(_ownerFirstRouters) || t.teamId === 11
         );
         return rodTeam2025?.teamId ?? 11;
       })();
@@ -3079,7 +3082,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       try {
         const { calcLeagueDNA } = await import("./leagueDNA");
         const { buildManagerRawData } = await import("./dnaRouter");
-        const allManagers = await buildManagerRawData();
+        const allManagers = await buildManagerRawData(null);
         const dnaProfiles = calcLeagueDNA(allManagers);
         const found = dnaProfiles.find(p => p.memberId === targetMemberId);
         if (found) {
@@ -3419,7 +3422,7 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       try {
         const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
         const { buildManagerRawData } = await import("./dnaRouter");
-        const managerRawData = await buildManagerRawData();
+        const managerRawData = await buildManagerRawData(null);
         if (managerRawData.length > 0) {
           const dnaProfiles = calcLeagueDNA(managerRawData);
           const teamsData = normalizeTeams(data);
@@ -3580,7 +3583,7 @@ Be concise, data-driven, and specific. Reference actual team names and player na
           try {
             const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
             const { buildManagerRawData } = await import("./dnaRouter");
-            const managerRawData = await buildManagerRawData();
+            const managerRawData = await buildManagerRawData(null);
             if (managerRawData.length > 0) {
               const dnaProfiles = calcLeagueDNA(managerRawData);
               const dnaBlock = buildDNAPromptBlock(dnaProfiles);
@@ -3634,7 +3637,7 @@ if (pickOrder.length > 0) {
           if (gmMemory.rivalManagers) memParts.push(`Rival Managers to Watch: ${gmMemory.rivalManagers}`);
           if (gmMemory.notes) memParts.push(`GM Notes: ${gmMemory.notes}`);
           if (memParts.length > 0) {
-            leagueContext += `\n\n## GM PROFILE (Rod Sellers)\n${memParts.join("\n")}`;
+            leagueContext += `\n\n## GM PROFILE (${ENV.ownerName})\n${memParts.join("\n")}`;
           }
         }
         const history = await getChatHistory(userId, season);
@@ -3701,7 +3704,7 @@ if (pickOrder.length > 0) {
       .input(z.object({ season: z.number().optional() }))
       .query(async ({ input }) => {
         const manifests = await getRefreshManifests();
-        const cachedSeasons = await getAllCachedSeasons();
+        const cachedSeasons = await getAllCachedSeasons(null);
         const cookiesPresent = hasCookies();
 
         // Build per-season health summary
@@ -3771,7 +3774,7 @@ if (pickOrder.length > 0) {
     validate: publicProcedure
       .input(z.object({ season: z.number() }))
       .query(async ({ input }) => {
-        const data = await getCachedView(input.season, "combined");
+        const data = await getCachedView(input.season, "combined", null);
         if (!data) return { isUsable: false, issues: ["No cached data for this season"], warnings: [], season: input.season };
         return validateDataQuality(input.season, data.payload as Record<string, unknown>);
       }),
@@ -3935,7 +3938,7 @@ if (pickOrder.length > 0) {
     managerBehavior: publicProcedure
       .input(z.object({ seasons: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
-        const cachedSeasons = input.seasons ?? await getAllCachedSeasons();
+        const cachedSeasons = input.seasons ?? await getAllCachedSeasons(null);
         const allTransactions: TransactionRow[] = [];
         const allDraftPicks: DraftPickRow[] = [];
         const teamMap: Record<number, TeamRow> = {};
@@ -4521,7 +4524,7 @@ if (pickOrder.length > 0) {
       const { calcLeagueDNA } = await import("./leagueDNA");
       const { buildManagerRawData } = await import("./dnaRouter");
       const { buildKeeperRecommendations } = await import("./keeperRecommendationEngine");
-      const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
+      const cachedSeasons = (await getAllCachedSeasons(null)).sort((a: number, b: number) => a - b);
       if (cachedSeasons.length === 0) return { owners: [], totalTeams: 0 };
       const latestSeason = cachedSeasons[cachedSeasons.length - 1];
       const data2025 = await getSeasonData(latestSeason);
@@ -4531,7 +4534,7 @@ if (pickOrder.length > 0) {
       const pickOrder = draftOrderRaw?.pickOrder ?? [];
       const totalTeams = pickOrder.length || 14;
       // 2. DNA profiles
-      const managers = await buildManagerRawData();
+      const managers = await buildManagerRawData(null);
       const dnaProfiles = calcLeagueDNA(managers);
       // 3. Keeper eligibility
       const keepers2025: Record<number, Array<{ playerId: number; playerName: string; position: string; roundId: number }>> = {};
@@ -4602,9 +4605,10 @@ if (pickOrder.length > 0) {
           d.ownerName && ownerName.toLowerCase().includes(d.ownerName.toLowerCase().split(" ")[0].toLowerCase())
         ) ?? null;
         const rec = keeperRecs.find(r => r.teamId === tid) ?? null;
+        const _ownerFirstDraft = ENV.ownerName.split(" ")[0].toLowerCase();
         const isRod = teamName.toLowerCase().includes("str8") ||
           teamName.toLowerCase().includes("rodzilla") ||
-          ownerName.toLowerCase().includes("rod");
+          ownerName.toLowerCase().includes(_ownerFirstDraft);
         return {
           teamId: tid,
           teamName,
@@ -4874,9 +4878,9 @@ if (pickOrder.length > 0) {
         for (const season of seasons) {
           try {
             const [draftRow, teamsRow, membersRow] = await Promise.all([
-              getCachedView(season, "draftDetail"),
-              getCachedView(season, "teams"),
-              getCachedView(season, "members"),
+              getCachedView(season, "draftDetail", null),
+              getCachedView(season, "teams", null),
+              getCachedView(season, "members", null),
             ]);
             if (!draftRow || !teamsRow || !membersRow) continue;
             const draftPayload = draftRow.payload as Record<string, unknown>;

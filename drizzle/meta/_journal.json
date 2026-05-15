@@ -148,6 +148,13 @@
       "when": 1778782689782,
       "tag": "0020_mute_naoko",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1778809396282,
+      "tag": "0021_wise_red_hulk",
+      "breakpoints": true
     }
   ]
 }

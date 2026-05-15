@@ -30,6 +30,7 @@ import { calcVORP, calcRosterGaps, calcROSValue, type PlayerRow } from "./analyt
 import { getInjuries, calcInjuryScores, buildInjuryPromptBlock } from "./injuryService";
 import { calcManagerDNA, calcTradeDesperationScore, type ManagerRawData, type DraftPickRecord } from "./leagueDNA";
 import { invokeLLM } from "./_core/llm";
+import { ENV } from "./_core/env";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -142,7 +143,7 @@ export interface WeeklyLeagueAssessment {
 // ─── Data helpers ─────────────────────────────────────────────────────────────
 
 async function getSeasonData(season: number) {
-  const cached = await getCachedView(season, "combined");
+  const cached = await getCachedView(season, "combined", null);
   if (!cached) return null;
   return cached.payload as Record<string, unknown>;
 }
@@ -152,9 +153,11 @@ function detectRodTeamId(teams: ReturnType<typeof normalizeTeams>): number | nul
     const name = ((t.teamName as string) || "").toLowerCase();
     const abbrev = ((t.abbrev as string) || "").toLowerCase();
     const owner = ((t.owners as string) || "").toLowerCase();
+    const _ownerFirst = ENV.ownerName.split(" ")[0].toLowerCase();
+    const _ownerLast = (ENV.ownerName.split(" ")[1] ?? "").toLowerCase();
     if (name.includes("str8") || name.includes("rodzilla") ||
-        owner.includes("rod") || owner.includes("sellers") ||
-        abbrev.includes("rod")) {
+        owner.includes(_ownerFirst) || (_ownerLast && owner.includes(_ownerLast)) ||
+        abbrev.includes(_ownerFirst)) {
       return t.teamId as number;
     }
   }
@@ -410,9 +413,9 @@ function generateRodOpportunities(
         type: "SELL_HIGH",
         targetTeamId: teamId,
         targetOwner: owner,
-        action: `Target ${p.playerName} from ${owner} — fills Rod's ${p.position} gap and ${owner}'s desperation makes them tradeable`,
+        action: `Target ${p.playerName} from ${owner} — fills ${ENV.ownerName.split(" ")[0]}'s ${p.position} gap and ${owner}'s desperation makes them tradeable`,
         urgency: "THIS_WEEK",
-        reasoning: `${p.playerName} fills a positional gap in Rod's roster. ${owner} may be willing to move pieces for win-now help given their record.`,
+        reasoning: `${p.playerName} fills a positional gap in ${ENV.ownerName.split(" ")[0]}'s roster. ${owner} may be willing to move pieces for win-now help given their record.`,
         desperationScore,
       });
     }
@@ -684,7 +687,7 @@ export async function buildWeeklyAssessment(season: number): Promise<WeeklyLeagu
   const rodTeamId = detectRodTeamId(teams);
 
   // Build DNA profiles for all managers
-  const cachedSeasons = (await getAllCachedSeasons()).filter(s => s >= 2018);
+  const cachedSeasons = (await getAllCachedSeasons(null)).filter(s => s >= 2018);
   const allLeaguePicks: DraftPickRecord[] = [];
   const managerRawData: ManagerRawData[] = teams.map(t => ({
     memberId: String(t.teamId as number),
@@ -710,7 +713,7 @@ export async function buildWeeklyAssessment(season: number): Promise<WeeklyLeagu
     playerName: (r.playerName as string) || "Unknown",
     position: (r.position as string) || "?",
     teamId: r.teamId as number,
-    ownerName: rodTeamId ? ownerMap[rodTeamId] : "Rod",
+    ownerName: rodTeamId ? ownerMap[rodTeamId] : ENV.ownerName.split(" ")[0],
     seasonPoints: (r.appliedTotal as number) || 0,
     avgPoints: (r.appliedAverage as number) || 0,
     projectedTotal: null,
