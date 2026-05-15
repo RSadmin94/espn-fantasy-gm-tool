@@ -13,7 +13,7 @@ const TAB_CLASS = "rounded-none border-b-2 border-transparent data-[state=active
 
 export default function DraftWarRoom() {
   return (
-    <AppLayout title="Draft War Room" subtitle="2026 draft board, keeper decisions, and opponent-aware mock drafts">
+    <AppLayout title="Draft War Room" subtitle="Draft day is decided before you sit down">
       <Tabs defaultValue="draft-board" className="w-full">
         <div className="px-6 pt-4 border-b border-border overflow-x-auto">
           <TabsList className="bg-transparent p-0 h-auto gap-1 flex-nowrap min-w-max">

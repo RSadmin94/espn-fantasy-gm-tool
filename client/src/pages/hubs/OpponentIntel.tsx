@@ -7,7 +7,7 @@ import LeagueAnalytics from "@/pages/LeagueAnalytics";
 
 export default function OpponentIntel() {
   return (
-    <AppLayout title="Opponent Intel" subtitle="Calculated GM profiles and league-wide analytics">
+    <AppLayout title="Opponent Intel" subtitle="Know who you're playing before they know themselves">
       <Tabs defaultValue="owner-career-stats" className="w-full">
         <div className="px-6 pt-4 border-b border-border">
           <TabsList className="bg-transparent p-0 h-auto gap-1">

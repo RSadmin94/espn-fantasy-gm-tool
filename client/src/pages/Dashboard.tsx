@@ -1033,7 +1033,7 @@ export default function Dashboard() {
               <ChevronRight className="w-3 h-3" /> Click any card for a full deep-dive profile
             </p>
             {ownerStatsLoading && (
-              <div className="py-12 text-center text-muted-foreground text-sm">Loading opponent profiles…</div>
+              <div className="py-12 text-center text-muted-foreground text-sm">Profiling every GM in your league…</div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {liveOpponents.map((opp: LiveOpp) => (
@@ -1194,7 +1194,7 @@ export default function Dashboard() {
                 {draftTendenciesLoading ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Loading draft history...
+                    Scanning 18 seasons of draft history…
                   </div>
                 ) : leagueDraftData ? (() => {
                   type DraftOwner = {

@@ -1099,3 +1099,20 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Add vitest tests for tradeAging procedure
 - [x] Run full TypeScript check and test suite
 - [x] Save checkpoint
+
+## NEW: Targeted Missing Proposal Recovery (2026 Trade Fix)
+- [ ] Add fetchTransactionById(season, transactionId, creds?) to espnService.ts
+- [ ] Wire targeted recovery into scheduledRefresh.ts (collect missing IDs, fetch, merge)
+- [ ] Wire targeted recovery into espn.refresh router
+- [ ] Add regression tests (missing proposal, targeted fetch succeeds, targeted fetch fails gracefully, legacy TRADE)
+- [ ] Run full TypeScript check and test suite
+- [ ] Push to GitHub and save checkpoint
+
+## NEW: UX Redesign — Mission-Driven Command Center
+- [x] Redesign sidebar navigation into grouped sections: Intelligence (Weekly Intel, Opponent DNA, Rivalry) and Team Tools (Start/Sit, Waivers, Keeper, Trades)
+- [x] Rebuild Command Center top section as "Today's Mission" — 5 cards: biggest exploit, biggest threat, recommended move, rival status, weekly confidence score
+- [x] Add skeleton loading states across all AI-heavy pages (replace blank screens and "Loading..." spinners)
+- [x] Apply emotional hierarchy framing: "Who to beat", "Who is vulnerable", "What move matters most"
+- [x] Progressive reveal on AI response pages (stream-style appearance, not all-at-once pop)
+- [x] Run TypeScript check and full test suite
+- [ ] Save checkpoint

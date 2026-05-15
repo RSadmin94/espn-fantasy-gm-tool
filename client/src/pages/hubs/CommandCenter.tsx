@@ -1,5 +1,6 @@
 // FILE: client/src/pages/hubs/CommandCenter.tsx
 import AppLayout from "@/components/AppLayout";
+import TodaysMission from "@/components/TodaysMission";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Dashboard from "@/pages/Dashboard";
 import Standings from "@/pages/Standings";
@@ -82,8 +83,9 @@ function TrialBanner() {
 
 export default function CommandCenter() {
   return (
-    <AppLayout title="Command Center" subtitle="Your league at a glance">
+    <AppLayout title="Command Center" subtitle="What matters most this week — and what to do about it">
       <TrialBanner />
+      <TodaysMission season={2026} />
       <Tabs defaultValue="war-room" className="w-full">
         <div className="px-6 pt-4 border-b border-border">
           <TabsList className="bg-transparent p-0 h-auto gap-1">

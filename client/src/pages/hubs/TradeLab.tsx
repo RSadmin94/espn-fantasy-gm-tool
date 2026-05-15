@@ -9,7 +9,7 @@ import TradeAging from "@/pages/TradeAging";
 
 export default function TradeLab() {
   return (
-    <AppLayout title="Trade Lab" subtitle="Math-first trade analysis and pick portfolio">
+    <AppLayout title="Trade Lab" subtitle="Win every trade before you make it">
       <Tabs defaultValue="trade-analyzer" className="w-full">
         <div className="px-6 pt-4 border-b border-border">
           <TabsList className="bg-transparent p-0 h-auto gap-1">

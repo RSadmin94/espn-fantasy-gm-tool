@@ -12,7 +12,7 @@ const TAB_CLASS = "rounded-none border-b-2 border-transparent data-[state=active
 
 export default function WaiverLab() {
   return (
-    <AppLayout title="Waiver Lab" subtitle="Weekly decisions, projections, and opponent-aware waiver intelligence">
+    <AppLayout title="Waiver Lab" subtitle="The wire is where championships are won. Move first.">
       <Tabs defaultValue="waiver-intel" className="w-full">
         <div className="px-6 pt-4 border-b border-border overflow-x-auto">
           <TabsList className="bg-transparent p-0 h-auto gap-1 flex-nowrap min-w-max">

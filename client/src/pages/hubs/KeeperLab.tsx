@@ -7,7 +7,7 @@ import KeeperFutureValue from "@/pages/KeeperFutureValue";
 
 export default function KeeperLab() {
   return (
-    <AppLayout title="Keeper Lab" subtitle="2-year ROI scoring and keeper decision engine">
+    <AppLayout title="Keeper Lab" subtitle="Who's worth keeping? The math decides.">
       <Tabs defaultValue="keeper-tracker" className="w-full">
         <div className="px-6 pt-4 border-b border-border">
           <TabsList className="bg-transparent p-0 h-auto gap-1">

@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ClipboardList, Star, ArrowLeftRight, Bot, ChevronRight,
   Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target, BarChart3, Link2, Sunrise,
+  ChevronDown, Settings2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
@@ -19,29 +20,33 @@ type NavItem = {
   panel?: string;
 };
 
+// ─── Navigation Groups ──────────────────────────────────────────────────────
+// Intelligence: what's happening in the league
+// Team Tools: actions you can take
+// System: admin / data plumbing (collapsed by default)
 const navItems: NavItem[] = [
-  // Win This Week
-  { href: "/command-center", icon: LayoutDashboard, label: "Command Center", group: "Win This Week" },
-  { href: "/advisor", icon: Bot, label: "AI GM Advisor", group: "Win This Week", badge: "AI", panel: "advisor" },
-  { href: "/waiver-lab", icon: Zap, label: "Waiver Lab", group: "Win This Week", badge: "AI" },
-  { href: "/weekly-intelligence", icon: Activity, label: "Weekly Intel", group: "Win This Week", badge: "NEW" },
-  // Win Trades
-  { href: "/trade-lab", icon: ArrowLeftRight, label: "Trade Lab", group: "Win Trades", badge: "AI" },
-  { href: "/opponent-intel", icon: Microscope, label: "Opponent Intel", group: "Win Trades" },
-  // Win Long Term
-  { href: "/offseason", icon: Sunrise, label: "Offseason Intel", group: "Win Long Term", badge: "2026" },
-  { href: "/draft-war-room", icon: ClipboardList, label: "Draft War Room", group: "Win Long Term" },
-  { href: "/keeper-lab", icon: Star, label: "Keeper Lab", group: "Win Long Term" },
-  { href: "/gm-memory", icon: Brain, label: "GM Memory", group: "Win Long Term", badge: "NEW" },
-  // Admin/Data
-  { href: "/data-center", icon: Shield, label: "Data Center", group: "Admin/Data" },
-  { href: "/weekly-stats", icon: Activity, label: "Weekly Stats", group: "Admin/Data" },
-  { href: "/backtesting", icon: Target, label: "Backtesting", group: "Admin/Data", badge: "NEW" },
-  { href: "/ml-forecast", icon: BarChart3, label: "ML Forecast", group: "Admin/Data", badge: "ML" },
-  { href: "/connect", icon: Link2, label: "Connect League", group: "Admin/Data" },
+  // Intelligence
+  { href: "/command-center", icon: LayoutDashboard, label: "Command Center", group: "Intelligence" },
+  { href: "/weekly-intelligence", icon: Activity, label: "Weekly Intel", group: "Intelligence", badge: "LIVE" },
+  { href: "/opponent-intel", icon: Microscope, label: "Opponent DNA", group: "Intelligence" },
+  { href: "/gm-memory", icon: Brain, label: "GM Memory", group: "Intelligence" },
+  // Team Tools
+  { href: "/waiver-lab", icon: Zap, label: "Waivers", group: "Team Tools", badge: "AI" },
+  { href: "/trade-lab", icon: ArrowLeftRight, label: "Trades", group: "Team Tools", badge: "AI" },
+  { href: "/keeper-lab", icon: Star, label: "Keepers", group: "Team Tools" },
+  { href: "/draft-war-room", icon: ClipboardList, label: "Draft Room", group: "Team Tools" },
+  { href: "/offseason", icon: Sunrise, label: "Offseason", group: "Team Tools", badge: "2026" },
+  // System
+  { href: "/data-center", icon: Shield, label: "Data Center", group: "System" },
+  { href: "/connect", icon: Link2, label: "Connect League", group: "System" },
+  { href: "/weekly-stats", icon: Activity, label: "Weekly Stats", group: "System" },
+  { href: "/backtesting", icon: Target, label: "Backtesting", group: "System" },
+  { href: "/ml-forecast", icon: BarChart3, label: "ML Forecast", group: "System" },
 ];
 
-const groups = ["Win This Week", "Win Trades", "Win Long Term", "Admin/Data"];
+const primaryGroups = ["Intelligence", "Team Tools"];
+const systemGroup = "System";
+const groups = [...primaryGroups, systemGroup];
 
 function DataHealthBanner() {
   const [dismissed, setDismissed] = useState(false);
@@ -126,6 +131,7 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
   const [location] = useLocation();
   const alreadyInsideLayout = useContext(InsideLayoutContext);
   const [advisorOpen, setAdvisorOpen] = useState(false);
+  const [systemExpanded, setSystemExpanded] = useState(false);
 
   // Listen for Chrome extension toolbar click → open advisor panel
   useEffect(() => {
@@ -169,34 +175,72 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
           </div>
 
           <nav className="flex-1 overflow-y-auto py-3 px-3">
-            {groups.map((group) => {
+            {/* Primary groups: Intelligence + Team Tools */}
+            {primaryGroups.map((group) => {
               const items = navItems.filter((n) => n.group === group);
               return (
-                <div key={group} className="mb-4">
-                  <p className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest px-2 mb-1">{group}</p>
+                <div key={group} className="mb-5">
+                  <p className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-widest px-2 mb-1.5">{group}</p>
                   {items.map((item) => {
-                    const isPanel = item.panel === "advisor";
-                    const active = isPanel ? advisorOpen : (location === item.href || (item.href !== "/" && location.startsWith(item.href)));
+                    const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
                     const cls = cn(
                       "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group w-full text-left",
                       active ? "bg-primary/15 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
                     );
-                    const inner = (
-                      <>
+                    return (
+                      <Link key={item.href} href={item.href} className={cls}>
                         <item.icon className={cn("w-4 h-4 flex-shrink-0 transition-colors", active ? "text-primary" : "group-hover:text-foreground")} />
                         <span className="flex-1 truncate">{item.label}</span>
                         {item.badge && <Badge className="text-[8px] px-1 py-0 h-3.5 espn-gradient text-white border-0 font-bold">{item.badge}</Badge>}
-                        {active && !isPanel && <ChevronRight className="w-3 h-3 text-primary flex-shrink-0" />}
-                      </>
+                        {active && <ChevronRight className="w-3 h-3 text-primary flex-shrink-0" />}
+                      </Link>
                     );
-                    if (isPanel) {
-                      return <button key={item.href} onClick={() => setAdvisorOpen(true)} className={cls}>{inner}</button>;
-                    }
-                    return <Link key={item.href} href={item.href} className={cls}>{inner}</Link>;
                   })}
                 </div>
               );
             })}
+
+            {/* AI GM Advisor — prominent CTA */}
+            <div className="mb-5 px-1">
+              <button
+                onClick={() => setAdvisorOpen(true)}
+                className={cn(
+                  "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-semibold transition-all duration-150",
+                  advisorOpen
+                    ? "bg-primary text-primary-foreground shadow-md"
+                    : "bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20"
+                )}
+              >
+                <Bot className="w-4 h-4 flex-shrink-0" />
+                <span className="flex-1 truncate">AI GM Advisor</span>
+                <Badge className="text-[8px] px-1 py-0 h-3.5 espn-gradient text-white border-0 font-bold">AI</Badge>
+              </button>
+            </div>
+
+            {/* System group — collapsible */}
+            <div className="mb-2">
+              <button
+                onClick={() => setSystemExpanded(v => !v)}
+                className="flex items-center gap-1.5 px-2 mb-1.5 w-full group"
+              >
+                <p className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest flex-1">System</p>
+                <ChevronDown className={cn("w-3 h-3 text-muted-foreground/40 transition-transform", systemExpanded ? "rotate-180" : "")} />
+              </button>
+              {systemExpanded && navItems.filter(n => n.group === systemGroup).map((item) => {
+                const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+                const cls = cn(
+                  "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-150 mb-0.5 group w-full text-left",
+                  active ? "bg-primary/15 text-primary" : "text-muted-foreground/70 hover:text-foreground hover:bg-accent/60"
+                );
+                return (
+                  <Link key={item.href} href={item.href} className={cls}>
+                    <item.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {active && <ChevronRight className="w-3 h-3 text-primary flex-shrink-0" />}
+                  </Link>
+                );
+              })}
+            </div>
           </nav>
 
           <ActiveLeagueFooter />
