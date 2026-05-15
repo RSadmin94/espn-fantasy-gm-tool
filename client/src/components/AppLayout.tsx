@@ -35,7 +35,7 @@ const navItems: NavItem[] = [
   { href: "/waiver-lab", icon: Zap, label: "Waivers", group: "Team Tools", badge: "AI" },
   { href: "/trade-lab", icon: ArrowLeftRight, label: "Trades", group: "Team Tools", badge: "AI" },
   { href: "/keeper-lab", icon: Star, label: "Keepers", group: "Team Tools" },
-  { href: "/draft-war-room", icon: ClipboardList, label: "Draft Room", group: "Team Tools" },
+  { href: "/draft-war-room", icon: ClipboardList, label: "Draft Room", group: "Team Tools", badge: "AI" },
   { href: "/offseason", icon: Sunrise, label: "Offseason", group: "Team Tools", badge: "2026" },
   { href: "/rosters", icon: Users, label: "Rosters", group: "Team Tools" },
   // System
