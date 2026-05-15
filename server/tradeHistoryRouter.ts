@@ -11,7 +11,8 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { getCachedView, getAllCachedSeasons } from "./db";
-import { normalizeTransactions, normalizeTeams } from "./espnService";
+import { normalizeTransactions, normalizeTeams, normalizeRosters } from "./espnService";
+import { getPFRStats } from "./fantasyDataService";
 import { memCache } from "./memCache";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -145,6 +146,174 @@ export function buildTradesForSeason(season: number, data: Record<string, unknow
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
+// ─── Age Eval Helpers ────────────────────────────────────────────────────────
+
+interface PlayerAgeStat {
+  name: string;
+  position: string;
+  fantasyPoints: number | null;
+  pprPoints: number | null;
+  games: number | null;
+  rushYds: number | null;
+  recYds: number | null;
+  tds: number | null;
+  targets: number | null;
+  passYds: number | null;
+  passTDs: number | null;
+}
+
+interface TradeSideAge {
+  ownerName: string;
+  players: PlayerAgeStat[];
+  totalFantasyPoints: number;
+}
+
+export interface TradeAgeResult {
+  transactionId: string;
+  season: number;
+  dateLabel: string;
+  weekEvaluated: number;
+  lastUpdated: number;
+  teamA: TradeSideAge;
+  teamB: TradeSideAge;
+  pointDifferential: number;
+  agingGrade: "AGED WELL" | "FAIR" | "AGED POORLY";
+  agingScore: number;
+  verdict: string;
+  narrative: string;
+  teamANarrative: string;
+  teamBNarrative: string;
+  keyFactor: string;
+}
+
+function buildPlayerStatsMap(data: Record<string, unknown>): Map<string, { appliedTotal: number | null; position: string }> {
+  const rosters = normalizeRosters(data) as Array<{ playerName: string; position: string; appliedTotal: number | null }>;
+  const map = new Map<string, { appliedTotal: number | null; position: string }>();
+  for (const r of rosters) {
+    if (!r.playerName) continue;
+    const key = r.playerName.toLowerCase();
+    const existing = map.get(key);
+    if (!existing || (r.appliedTotal ?? 0) > (existing.appliedTotal ?? 0)) {
+      map.set(key, { appliedTotal: r.appliedTotal, position: r.position });
+    }
+  }
+  return map;
+}
+
+async function computeAgeEval(
+  trade: TradeRecord,
+  statsMap: Map<string, { appliedTotal: number | null; position: string }>,
+  currentWeek: number,
+): Promise<TradeAgeResult> {
+  async function resolvePlayerStats(name: string): Promise<PlayerAgeStat> {
+    const espnStats = statsMap.get(name.toLowerCase());
+    let pfrData: Awaited<ReturnType<typeof getPFRStats>> = null;
+    try { pfrData = await getPFRStats(name); } catch { /* non-fatal */ }
+    return {
+      name,
+      position: espnStats?.position ?? pfrData?.position ?? "?",
+      fantasyPoints: espnStats?.appliedTotal ?? null,
+      pprPoints: pfrData?.pfr2025?.pprPoints ?? null,
+      games: pfrData?.pfr2025?.games ?? null,
+      rushYds: pfrData?.pfr2025?.rushYds ?? null,
+      recYds: pfrData?.pfr2025?.recYds ?? null,
+      tds: pfrData?.pfr2025?.totalTDs ?? null,
+      targets: pfrData?.pfr2025?.targets ?? null,
+      passYds: pfrData?.pfr2025?.passYds ?? null,
+      passTDs: pfrData?.pfr2025?.passTDs ?? null,
+    };
+  }
+
+  const teamAPlayers = await Promise.all(trade.teamA.playersReceived.map(resolvePlayerStats));
+  const teamBPlayers = await Promise.all(trade.teamB.playersReceived.map(resolvePlayerStats));
+  const teamATotalPts = teamAPlayers.reduce((s, p) => s + (p.fantasyPoints ?? p.pprPoints ?? 0), 0);
+  const teamBTotalPts = teamBPlayers.reduce((s, p) => s + (p.fantasyPoints ?? p.pprPoints ?? 0), 0);
+  const diff = teamATotalPts - teamBTotalPts;
+
+  let agingGrade: "AGED WELL" | "FAIR" | "AGED POORLY";
+  if (diff > 30) agingGrade = "AGED WELL";
+  else if (diff < -30) agingGrade = "AGED POORLY";
+  else agingGrade = "FAIR";
+  const agingScore = Math.max(1, Math.min(10, Math.round(5 + diff / 25)));
+
+  function playerLine(p: PlayerAgeStat): string {
+    const pts = p.fantasyPoints != null ? `${p.fantasyPoints.toFixed(1)} fantasy pts` : (p.pprPoints != null ? `${p.pprPoints.toFixed(1)} PPR pts` : "no stats");
+    const extras: string[] = [];
+    if (p.games != null) extras.push(`${p.games} games`);
+    if (p.tds != null && p.tds > 0) extras.push(`${p.tds} TDs`);
+    if (p.rushYds != null && p.rushYds > 0) extras.push(`${p.rushYds} rush yds`);
+    if (p.recYds != null && p.recYds > 0) extras.push(`${p.recYds} rec yds`);
+    if (p.passYds != null && p.passYds > 0) extras.push(`${p.passYds} pass yds`);
+    if (p.targets != null && p.targets > 0) extras.push(`${p.targets} targets`);
+    return `  - ${p.name} (${p.position}): ${pts}${extras.length ? " | " + extras.join(", ") : ""}`;
+  }
+
+  const contextBlock = `TRADE DATE: ${trade.dateLabel} (${trade.season} season)\nEVALUATED AT: Week ${currentWeek}\n\n${trade.teamA.ownerName} RECEIVED (${teamATotalPts.toFixed(1)} total pts):\n${teamAPlayers.map(playerLine).join("\n") || "  (no players)"}\n\n${trade.teamB.ownerName} RECEIVED (${teamBTotalPts.toFixed(1)} total pts):\n${teamBPlayers.map(playerLine).join("\n") || "  (no players)"}\n\nPOINT DIFFERENTIAL: ${trade.teamA.ownerName} is ${Math.abs(diff).toFixed(1)} pts ${diff >= 0 ? "ahead" : "behind"}`;
+
+  const prompt = `You are an expert fantasy football analyst doing a weekly trade aging report for a 14-team PPR ESPN league.\n\nExplain WHY this trade is aging the way it is — specific reasons: injuries, breakouts, busts, role changes, coaching decisions, usage shifts, or unexpected performance.\n${contextBlock}\n\nRespond with JSON:\n{\n  "verdict": "<one punchy headline>",\n  "narrative": "<2-3 sentences on overall aging and key reasons>",\n  "teamANarrative": "<1-2 sentences on how Team A's received players performed and why>",\n  "teamBNarrative": "<1-2 sentences on how Team B's received players performed and why>",\n  "keyFactor": "<single biggest reason this trade aged this way>"\n}`;
+
+  let verdict = agingGrade === "AGED WELL" ? `${trade.teamA.ownerName} is winning this trade` : agingGrade === "AGED POORLY" ? `${trade.teamA.ownerName} is losing this trade` : "This trade is roughly even so far";
+  let narrative = "AI analysis unavailable.";
+  let teamANarrative = "Analysis unavailable.";
+  let teamBNarrative = "Analysis unavailable.";
+  let keyFactor = "N/A";
+
+  try {
+    const response = await invokeLLM({
+      messages: [
+        { role: "system", content: "You are an expert fantasy football trade aging analyst. Always respond with valid JSON only." },
+        { role: "user", content: prompt },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "trade_age_eval",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              verdict: { type: "string" },
+              narrative: { type: "string" },
+              teamANarrative: { type: "string" },
+              teamBNarrative: { type: "string" },
+              keyFactor: { type: "string" },
+            },
+            required: ["verdict", "narrative", "teamANarrative", "teamBNarrative", "keyFactor"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+    const content = response.choices?.[0]?.message?.content;
+    if (content) {
+      const parsed = typeof content === "string" ? JSON.parse(content) : content;
+      verdict = parsed.verdict ?? verdict;
+      narrative = parsed.narrative ?? narrative;
+      teamANarrative = parsed.teamANarrative ?? teamANarrative;
+      teamBNarrative = parsed.teamBNarrative ?? teamBNarrative;
+      keyFactor = parsed.keyFactor ?? keyFactor;
+    }
+  } catch { /* use defaults */ }
+
+  return {
+    transactionId: trade.transactionId,
+    season: trade.season,
+    dateLabel: trade.dateLabel,
+    weekEvaluated: currentWeek,
+    lastUpdated: Date.now(),
+    teamA: { ownerName: trade.teamA.ownerName, players: teamAPlayers, totalFantasyPoints: teamATotalPts },
+    teamB: { ownerName: trade.teamB.ownerName, players: teamBPlayers, totalFantasyPoints: teamBTotalPts },
+    pointDifferential: diff,
+    agingGrade,
+    agingScore,
+    verdict,
+    narrative,
+    teamANarrative,
+    teamBNarrative,
+    keyFactor,
+  };
+}
+
 export const tradeHistoryRouter = router({
   /**
    * Returns all trades for a given season (or all cached seasons if season = 0).
@@ -261,5 +430,60 @@ Return a JSON object with this exact structure:
           };
         }
       });
+    }),
+
+  /**
+   * Age-evaluate a single trade using actual season stats.
+   * Cached 6 hours (refreshes weekly with new stats).
+   */
+  ageEval: publicProcedure
+    .input(z.object({
+      transactionId: z.string(),
+      season: z.number(),
+    }))
+    .query(async ({ input }) => {
+      const cacheKey = `tradeAge:${input.transactionId}:${input.season}`;
+      return memCache(cacheKey, 6 * 60 * 60_000, async () => {
+        const data = await getSeasonDataRaw(input.season);
+        if (!data) return null;
+        const trades = buildTradesForSeason(input.season, data);
+        const trade = trades.find(t => t.transactionId === input.transactionId);
+        if (!trade) return null;
+        const statsMap = buildPlayerStatsMap(data);
+        const currentWeek = (data.status as Record<string, unknown>)?.latestScoringPeriod as number ?? 1;
+        return computeAgeEval(trade, statsMap, currentWeek);
+      });
+    }),
+
+  /**
+   * Age-evaluate ALL trades for a season (or all seasons) in one call.
+   * Returns array sorted by absolute point differential (biggest movers first).
+   * Cached per-season for 6 hours.
+   */
+  allAged: publicProcedure
+    .input(z.object({
+      season: z.number(),  // 0 = all seasons
+    }))
+    .query(async ({ input }) => {
+      const results: TradeAgeResult[] = [];
+      const seasons = input.season === 0
+        ? await getAllCachedSeasons(null)
+        : [input.season];
+
+      for (const s of seasons) {
+        const cacheKey = `tradeAllAged:${s}`;
+        const seasonResults = await memCache(cacheKey, 6 * 60 * 60_000, async () => {
+          const data = await getSeasonDataRaw(s);
+          if (!data) return [];
+          const trades = buildTradesForSeason(s, data);
+          if (trades.length === 0) return [];
+          const statsMap = buildPlayerStatsMap(data);
+          const currentWeek = (data.status as Record<string, unknown>)?.latestScoringPeriod as number ?? 1;
+          return Promise.all(trades.map(t => computeAgeEval(t, statsMap, currentWeek)));
+        });
+        results.push(...(seasonResults as TradeAgeResult[]));
+      }
+
+      return results.sort((a, b) => Math.abs(b.pointDifferential) - Math.abs(a.pointDifferential));
     }),
 });

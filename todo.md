@@ -1207,3 +1207,19 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Season selector to filter trades by year
 - [x] Write vitest for tradeHistory endpoint
 - [x] Checkpoint and push to GitHub
+
+## Feature: Trade Aging Evaluator — "How Did This Trade Age?" (May 15 2026)
+- [ ] Review available player stats sources in ESPN cache (roster scoring, player stats by week)
+- [ ] Build tradeHistory.ageEval endpoint: fetch actual season stats for all players in a trade, compute total fantasy points scored for each side, AI re-grades with hindsight verdict
+- [ ] Add "How Did This Age?" button to each trade card in LeagueTradeHistory.tsx
+- [ ] Expanded aging panel: per-player actual stats table, total points per side, aging grade (AGED WELL / FAIR / AGED POORLY), AI hindsight narrative
+- [x] Write vitest for ageEval endpoint
+- [x] Checkpoint and push to GitHub
+
+## Feature: Trade Aging Screen (May 15 2026)
+- [x] Build tradeHistory.ageEval endpoint: for each player in the trade, look up their actual fantasy points (appliedTotal from roster cache) for the season, compute total points per side, determine aging grade (AGED WELL / FAIR / AGED POORLY), AI explains WHY the trade is aging that way (injuries, breakouts, busts, usage shifts)
+- [x] Build TradeAging.tsx dedicated page: all trades in a scrollable list with aging grade badge, points per side bar chart, AI weekly narrative, last-updated timestamp
+- [x] Register Trade Aging as a nav item in AppLayout sidebar under WIN TRADES section
+- [x] Register /trade-aging route in App.tsx
+- [x] Write vitest for ageEval endpoint
+- [x] Checkpoint and push to GitHub

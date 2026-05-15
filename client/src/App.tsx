@@ -41,6 +41,7 @@ import MLForecast from "@/pages/MLForecast";
 import WeeklyIntelligence from "@/pages/hubs/WeeklyIntelligence";
 import OffseasonHub from "@/pages/hubs/OffseasonHub";
 import LeagueConnect from "@/pages/LeagueConnect";
+import TradeAging from "@/pages/TradeAging";
 import Reveal from "@/pages/Reveal";
 import BillingSuccess from "@/pages/BillingSuccess";
 import BillingCancel from "@/pages/BillingCancel";
@@ -54,6 +55,7 @@ function Router() {
       <Route path="/draft-war-room" component={DraftWarRoom} />
       <Route path="/keeper-lab" component={KeeperLab} />
       <Route path="/trade-lab" component={TradeLab} />
+      <Route path="/trade-aging" component={TradeAging} />
       <Route path="/waiver-lab" component={WaiverLab} />
       <Route path="/opponent-intel" component={OpponentIntel} />
       <Route path="/data-center" component={DataCenter} />

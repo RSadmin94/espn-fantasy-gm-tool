@@ -4,7 +4,7 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ClipboardList, Star, ArrowLeftRight, Bot, ChevronRight,
-  Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target, BarChart3, Link2, Sunrise,
+  Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target, BarChart3, Link2, Sunrise, TrendingUp,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
@@ -29,6 +29,7 @@ const navItems: NavItem[] = [
   { href: "/weekly-intelligence", icon: Activity, label: "Weekly Intel", group: "Win This Week", badge: "NEW" },
   // Win Trades
   { href: "/trade-lab", icon: ArrowLeftRight, label: "Trade Lab", group: "Win Trades", badge: "AI" },
+  { href: "/trade-aging", icon: TrendingUp, label: "Trade Aging", group: "Win Trades", badge: "NEW" },
   { href: "/opponent-intel", icon: Microscope, label: "Opponent Intel", group: "Win Trades" },
   // Win Long Term
   { href: "/offseason", icon: Sunrise, label: "Offseason Intel", group: "Win Long Term", badge: "2026" },
