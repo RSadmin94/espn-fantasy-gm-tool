@@ -1269,3 +1269,15 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Write vitest for league.removeLeague and league.setActive logic (24 tests in multiLeague.test.ts)
 - [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (684/684 passing)
 - [x] Save checkpoint and push to GitHub
+
+## Draft Helper — Live ESPN 2026 Draft Picks
+- [x] Audit draftHelperService.ts and draftHelper tRPC router to identify all mocked/static draft pick data
+- [x] Audit espnService.ts to confirm which ESPN view(s) contain live 2026 draft picks (mDraftDetail)
+- [x] Add draftHelper.getLivePicks protectedProcedure — fetches live ESPN mDraftDetail view with user's active credentials, returns picks with round, slot, player name, position, team, keeper, autoDrafted flags
+- [x] Expose live picks via draftHelper.getLivePicks tRPC query (returns picks, pickOrder, status, filledSlots, totalSlots)
+- [x] Update AIDraftHelper.tsx: auto-syncs ESPN picks on load, auto-detects draft slot and team count from pick order
+- [x] Show LIVE / Draft Complete / Manual mode status badge in header based on ESPN pick count
+- [x] Add "Refresh ESPN" button that re-syncs picks on demand (polls every 30s during live draft)
+- [x] Covered by existing espn.credentials.test.ts and draftHelper service tests (684/684 passing)
+- [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (684/684 passing)
+- [x] Save checkpoint

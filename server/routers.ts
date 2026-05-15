@@ -353,6 +353,97 @@ export const appRouter = router({
 
   draftHelper: router({
     /**
+     * Fetch live 2026 ESPN draft picks from the ESPN API.
+     * Returns all picks already made in the current-year draft,
+     * normalized into the DraftPick shape used by the Draft Helper.
+     * Falls back to an empty array if the draft has not started yet.
+     */
+    getLivePicks: protectedProcedure
+      .input(z.object({
+        season: z.number().int().min(2020).max(2030).default(2026),
+      }))
+      .query(async ({ ctx, input }) => {
+        try {
+          // Resolve the user's active ESPN credentials so this works for any connected league
+          const { getActiveEspnCredentials } = await import("./db");
+          const userCreds = await getActiveEspnCredentials(ctx.user.id);
+          const season = input.season;
+          const raw = await fetchEspnViews(season, ["mDraftDetail", "mTeam", "mSettings"], userCreds) as Record<string, unknown>;
+          const normalizedPicks = normalizeDraftPicks(raw);
+
+          // Build teamId → owner name map from live data
+          const memberMap: Record<string, string> = {};
+          for (const m of (raw.members as Record<string, unknown>[]) || []) {
+            memberMap[m.id as string] = `${m.firstName || ""} ${m.lastName || ""}`.trim();
+          }
+          const teamOwnerMap: Record<number, string> = {};
+          for (const t of (raw.teams as Record<string, unknown>[]) || []) {
+            const tid = t.id as number;
+            const ownerId = (t.primaryOwner as string) || ((t.owners as string[])?.[0] ?? "");
+            teamOwnerMap[tid] = memberMap[ownerId] || `Team ${tid}`;
+          }
+
+          // Filter to only picks that have actually been made (playerName is set)
+          const madePicks = normalizedPicks
+            .filter((p) => p.playerName && p.playerName.trim() !== "")
+            .map((p) => ({
+              overall: (p.overallPickNumber as number) ?? 0,
+              round: (p.roundId as number) ?? 1,
+              pickInRound: (p.roundPickNumber as number) ?? 1,
+              teamId: (p.teamId as number) ?? 0,
+              ownerName: teamOwnerMap[p.teamId as number] || `Team ${p.teamId}`,
+              playerName: p.playerName,
+              position: p.position || "?",
+              keeper: !!(p.keeper),
+              autoDrafted: !!(p.autoDrafted),
+              proTeam: p.proTeam || "",
+            }))
+            .sort((a, b) => a.overall - b.overall);
+
+          // Draft status: not_started | in_progress | complete
+          const draftDetail = (raw.draftDetail as Record<string, unknown>) || {};
+          const allPicks = ((draftDetail.picks as Record<string, unknown>[]) || []);
+          const totalSlots = allPicks.length;
+          const filledSlots = madePicks.length;
+          const status: "not_started" | "in_progress" | "complete" =
+            filledSlots === 0 ? "not_started" :
+            filledSlots >= totalSlots && totalSlots > 0 ? "complete" :
+            "in_progress";
+
+          // Draft order (pick order for 2026)
+          const draftOrder = normalizeDraftOrder(raw);
+          const pickOrder = draftOrder.pickOrder.map((slot) => ({
+            slot: slot.position,
+            teamId: slot.teamId,
+            ownerName: slot.owners || `Team ${slot.teamId}`,
+            teamName: slot.name || `Team ${slot.teamId}`,
+          }));
+
+          return {
+            picks: madePicks,
+            totalSlots,
+            filledSlots,
+            status,
+            pickOrder,
+            draftDate: draftOrder.draftDate,
+            season,
+          };
+        } catch (err) {
+          // Draft not started yet or ESPN credentials not configured
+          return {
+            picks: [],
+            totalSlots: 0,
+            filledSlots: 0,
+            status: "not_started" as const,
+            pickOrder: [],
+            draftDate: null,
+            season: input.season,
+            error: err instanceof Error ? err.message : "Failed to fetch ESPN draft data",
+          };
+        }
+      }),
+
+    /**
      * Get the full draft context for Rod's current pick:
      * available players, positional needs, owner tendencies, recent picks.
      */

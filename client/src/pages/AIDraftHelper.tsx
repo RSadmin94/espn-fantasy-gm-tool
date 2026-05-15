@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { trackEvent } from "@/lib/trackEvent";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,13 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -65,14 +59,14 @@ interface PickRecommendation {
 // ─── Position badge colours ──────────────────────────────────────────────────
 
 const POS_COLORS: Record<string, string> = {
-  QB: "bg-red-500/20 text-red-300 border-red-500/30",
-  RB: "bg-green-500/20 text-green-300 border-green-500/30",
-  WR: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  TE: "bg-orange-500/20 text-orange-300 border-orange-500/30",
-  K:  "bg-gray-500/20 text-gray-300 border-gray-500/30",
-  DST:"bg-purple-500/20 text-purple-300 border-purple-500/30",
-  DEF:"bg-purple-500/20 text-purple-300 border-purple-500/30",
-  FLEX:"bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
+  QB:   "bg-red-500/20 text-red-300 border-red-500/30",
+  RB:   "bg-green-500/20 text-green-300 border-green-500/30",
+  WR:   "bg-blue-500/20 text-blue-300 border-blue-500/30",
+  TE:   "bg-orange-500/20 text-orange-300 border-orange-500/30",
+  K:    "bg-gray-500/20 text-gray-300 border-gray-500/30",
+  DST:  "bg-purple-500/20 text-purple-300 border-purple-500/30",
+  DEF:  "bg-purple-500/20 text-purple-300 border-purple-500/30",
+  FLEX: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
 };
 
 const CONFIDENCE_COLORS: Record<string, string> = {
@@ -93,17 +87,74 @@ const SURVIVAL_COLOR = (risk: number) => {
 export default function AIDraftHelper() {
   // Track feature open
   useEffect(() => { trackEvent("feature_open", "draft_helper"); }, []);
+  const { user } = useAuth();
+
   // ── Draft configuration ──────────────────────────────────────────────────
-  const [totalTeams,  setTotalTeams]  = useState(14);
-  const [totalRounds, setTotalRounds] = useState(15);
-  const [rodDraftSlot, setRodDraftSlot] = useState(1);
+  const [totalTeams,    setTotalTeams]    = useState(14);
+  const [totalRounds,   setTotalRounds]   = useState(15);
+  const [rodDraftSlot,  setRodDraftSlot]  = useState(1);
   const [currentOverall, setCurrentOverall] = useState(1);
 
   // ── Live draft state ─────────────────────────────────────────────────────
   const [picksAlreadyMade, setPicksAlreadyMade] = useState<DraftPick[]>([]);
-  const [rodRoster, setRodRoster] = useState<RosterSlot[]>([]);
-  const [recommendation, setRecommendation] = useState<PickRecommendation | null>(null);
-  const [isLoadingRec, setIsLoadingRec] = useState(false);
+  const [rodRoster,        setRodRoster]        = useState<RosterSlot[]>([]);
+  const [recommendation,   setRecommendation]   = useState<PickRecommendation | null>(null);
+  const [isLoadingRec,     setIsLoadingRec]     = useState(false);
+  const [livePicksSynced,  setLivePicksSynced]  = useState(false);
+
+  // ── Live ESPN picks query (auto-loads real 2026 draft picks) ─────────────
+  const livePicksQuery = trpc.draftHelper.getLivePicks.useQuery(
+    { season: 2026 },
+    {
+      enabled: !!user,
+      staleTime: 60_000,
+      refetchInterval: 30_000, // poll every 30 s during a live draft
+    }
+  );
+
+  // Auto-sync ESPN picks into local state when they first load
+  useEffect(() => {
+    if (!livePicksQuery.data || livePicksSynced) return;
+    const espnPicks = livePicksQuery.data.picks;
+    if (espnPicks.length === 0) return;
+
+    const converted: DraftPick[] = espnPicks.map(p => ({
+      overall:    p.overall,
+      round:      p.round,
+      pickInRound: p.pickInRound,
+      teamId:     p.teamId,
+      ownerName:  p.ownerName,
+      playerName: p.playerName,
+      position:   p.position,
+    }));
+
+    setPicksAlreadyMade(converted);
+    setCurrentOverall(espnPicks.length + 1);
+
+    // Infer the user's roster from picks by owner name
+    const firstName = (user?.name ?? "rod").toLowerCase().split(" ")[0];
+    const myPicks = converted.filter(p =>
+      p.ownerName.toLowerCase().includes(firstName) ||
+      p.ownerName.toLowerCase().includes("rod")
+    );
+    setRodRoster(myPicks.map(p => ({ position: p.position, playerName: p.playerName, round: p.round })));
+
+    // Auto-detect draft slot from pick order
+    const pickOrder = livePicksQuery.data.pickOrder;
+    if (pickOrder.length > 0) {
+      const mySlot = pickOrder.find(s =>
+        s.ownerName.toLowerCase().includes(firstName) ||
+        s.ownerName.toLowerCase().includes("rod")
+      );
+      if (mySlot) setRodDraftSlot(mySlot.slot);
+      setTotalTeams(pickOrder.length);
+    }
+
+    setLivePicksSynced(true);
+    toast.success("ESPN draft board loaded", {
+      description: `${espnPicks.length} pick${espnPicks.length !== 1 ? "s" : ""} synced from your ESPN league`,
+    });
+  }, [livePicksQuery.data, livePicksSynced, user]);
 
   // ── Add-pick form ────────────────────────────────────────────────────────
   const [newPickOwner,  setNewPickOwner]  = useState("");
@@ -145,16 +196,16 @@ export default function AIDraftHelper() {
     setRecommendation(null);
     recMutation.mutate({
       currentOverall,
-      currentRound: ctx.currentRound,
-      pickInRound: ctx.pickInRound,
+      currentRound:    ctx.currentRound,
+      pickInRound:     ctx.pickInRound,
       totalTeams,
       totalRounds,
       rodRoster,
       positionalNeeds: ctx.positionalNeeds,
-      topAvailable: ctx.availablePlayers.slice(0, 20),
+      topAvailable:    ctx.availablePlayers.slice(0, 20),
       ownerTendencies: ctx.ownerTendencies,
-      recentPicks: picksAlreadyMade.slice(-10),
-      positionRun: ctx.positionRun,
+      recentPicks:     picksAlreadyMade.slice(-10),
+      positionRun:     ctx.positionRun,
     });
   }, [ctx, currentOverall, totalTeams, totalRounds, rodRoster, picksAlreadyMade, recMutation]);
 
@@ -170,13 +221,12 @@ export default function AIDraftHelper() {
       overall: currentOverall,
       round,
       pickInRound,
-      teamId: newPickTeamId,
-      ownerName: newPickOwner,
+      teamId:     newPickTeamId,
+      ownerName:  newPickOwner,
       playerName: newPickPlayer,
-      position: newPickPos,
+      position:   newPickPos,
     };
     setPicksAlreadyMade(prev => [...prev, newPick]);
-    // If Rod drafted this, add to roster
     const isSnakeEven = round % 2 === 0;
     const slot = isSnakeEven ? totalTeams - pickInRound + 1 : pickInRound;
     if (slot === rodDraftSlot) {
@@ -186,7 +236,7 @@ export default function AIDraftHelper() {
     setNewPickPlayer("");
     setNewPickOwner("");
     setRecommendation(null);
-  }, [currentOverall, totalTeams, newPickOwner, newPickPlayer, newPickPos, newPickTeamId, rodDraftSlot, toast]);
+  }, [currentOverall, totalTeams, newPickOwner, newPickPlayer, newPickPos, newPickTeamId, rodDraftSlot]);
 
   // ── Undo last pick ───────────────────────────────────────────────────────
   const handleUndoPick = useCallback(() => {
@@ -198,7 +248,7 @@ export default function AIDraftHelper() {
     setRecommendation(null);
   }, [picksAlreadyMade]);
 
-  // ── Is it Rod's pick? ────────────────────────────────────────────────────
+  // ── Is it the user's pick? ───────────────────────────────────────────────
   const isRodsPick = useMemo(() => {
     const round = Math.ceil(currentOverall / totalTeams);
     const pickInRound = ((currentOverall - 1) % totalTeams) + 1;
@@ -220,7 +270,39 @@ export default function AIDraftHelper() {
               Live draft assistant — tracks picks, analyzes tendencies, recommends your next move
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* ESPN live picks status badge */}
+            {user && (
+              livePicksQuery.isLoading ? (
+                <Badge variant="outline" className="border-blue-500/50 text-blue-400 animate-pulse">
+                  📡 Loading ESPN…
+                </Badge>
+              ) : livePicksQuery.data?.status === "in_progress" ? (
+                <Badge variant="outline" className="border-green-500 text-green-400 animate-pulse">
+                  🟢 LIVE — {livePicksQuery.data.filledSlots}/{livePicksQuery.data.totalSlots} picks
+                </Badge>
+              ) : livePicksQuery.data?.status === "complete" ? (
+                <Badge variant="outline" className="border-blue-500 text-blue-400">
+                  ✅ Draft Complete ({livePicksQuery.data.filledSlots} picks)
+                </Badge>
+              ) : (livePicksQuery.data as { error?: string } | undefined)?.error ? (
+                <Badge variant="outline" className="border-yellow-500/50 text-yellow-400">
+                  ⚠️ Manual mode
+                </Badge>
+              ) : null
+            )}
+            {/* Refresh from ESPN button */}
+            {user && livePicksQuery.data && livePicksQuery.data.picks.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => { setLivePicksSynced(false); livePicksQuery.refetch(); }}
+                disabled={livePicksQuery.isFetching}
+              >
+                {livePicksQuery.isFetching ? "🔄 Syncing…" : "📡 Refresh ESPN"}
+              </Button>
+            )}
             <Badge variant="outline" className={isRodsPick ? "border-green-500 text-green-400 animate-pulse" : "border-muted"}>
               {isRodsPick ? "⚡ YOUR PICK" : `Pick ${currentOverall}`}
             </Badge>
@@ -253,7 +335,7 @@ export default function AIDraftHelper() {
                 </Select>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Rod's Draft Slot</Label>
+                <Label className="text-xs text-muted-foreground">Your Draft Slot</Label>
                 <Select value={String(rodDraftSlot)} onValueChange={v => setRodDraftSlot(Number(v))}>
                   <SelectTrigger className="h-8 text-sm mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -406,7 +488,12 @@ export default function AIDraftHelper() {
             {picksAlreadyMade.length > 0 && (
               <Card className="border-border/50">
                 <CardHeader className="pb-2 pt-4 px-4">
-                  <CardTitle className="text-sm font-semibold">Recent Picks (last 10)</CardTitle>
+                  <CardTitle className="text-sm font-semibold">
+                    Recent Picks (last 10)
+                    {livePicksSynced && (
+                      <span className="ml-2 text-[10px] font-normal text-green-400">● ESPN live</span>
+                    )}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 pb-4">
                   <div className="space-y-1">
@@ -535,22 +622,22 @@ export default function AIDraftHelper() {
                 <CardContent className="px-4 pb-4">
                   <div className="space-y-2">
                     {ctx.positionalNeeds.slice(0, 6).map((need) => (
-                        <Tooltip key={need.position}>
-                          <TooltipTrigger asChild>
-                            <div className="flex items-center gap-2 cursor-help">
-                              <Badge className={`text-[10px] px-1.5 py-0 border w-10 justify-center ${POS_COLORS[need.position] ?? "bg-muted/30"}`}>
-                                {need.position}
-                              </Badge>
-                              <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full transition-all ${
-                                    need.urgency === "critical" ? "bg-red-500" :
-                                    need.urgency === "high" ? "bg-orange-500" :
-                                    need.urgency === "medium" ? "bg-yellow-500" : "bg-green-500"
-                                  }`}
-                                  style={{ width: `${need.urgencyScore}%` }}
-                                />
-                              </div>
+                      <Tooltip key={need.position}>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-2 cursor-help">
+                            <Badge className={`text-[10px] px-1.5 py-0 border w-10 justify-center ${POS_COLORS[need.position] ?? "bg-muted/30"}`}>
+                              {need.position}
+                            </Badge>
+                            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  need.urgency === "critical" ? "bg-red-500" :
+                                  need.urgency === "high"     ? "bg-orange-500" :
+                                  need.urgency === "medium"   ? "bg-yellow-500" : "bg-green-500"
+                                }`}
+                                style={{ width: `${need.urgencyScore}%` }}
+                              />
+                            </div>
                             <span className="text-xs text-muted-foreground w-16 text-right">
                               {need.currentCount}/{need.targetCount} filled
                             </span>
@@ -626,7 +713,7 @@ export default function AIDraftHelper() {
               </Card>
             )}
 
-            {/* Rod's Roster */}
+            {/* Your Roster */}
             {rodRoster.length > 0 && (
               <Card className="border-border/50">
                 <CardHeader className="pb-2 pt-4 px-4">
