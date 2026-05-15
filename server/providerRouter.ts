@@ -14,7 +14,7 @@ import { YahooAdapter, getYahooLeaguesForUser } from "./providers/yahooAdapter";
 import { isYahooConfigured } from "./providers/yahooOAuth";
 import { invokeLLM } from "./_core/llm";
 import { getDb } from "./db";
-import { leagueConnections } from "../drizzle/schema";
+import { leagueConnections, users } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { fetchEspnViewsHardened, normalizeTeams, normalizeSettings, type EspnCreds } from "./espnService";
 import { encryptCredentialsForDb } from "./_core/crypto";
@@ -629,6 +629,22 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
       }
 
       steps.push("ESPN league connected successfully.");
+
+      // Activate 7-day trial if user is still on 'free' plan
+      if (db) {
+        const [userRow] = await db
+          .select({ subscriptionStatus: users.subscriptionStatus, trialStartedAt: users.trialStartedAt })
+          .from(users)
+          .where(eq(users.id, ctx.user.id))
+          .limit(1);
+        if (userRow && userRow.subscriptionStatus === 'free' && !userRow.trialStartedAt) {
+          await db
+            .update(users)
+            .set({ subscriptionStatus: 'trialing', trialStartedAt: new Date() })
+            .where(eq(users.id, ctx.user.id));
+          steps.push("7-day free trial activated.");
+        }
+      }
 
       return {
         success: true,
