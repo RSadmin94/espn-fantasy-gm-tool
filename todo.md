@@ -1138,3 +1138,23 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] routers.ts mockSetup: uses ctx.user.name (protectedProcedure)
 - [x] Write vitest: server/teamOwnership.test.ts (7 tests passing)
 - [x] Graceful fallback: useMyTeam hook falls back to name-matching when no claim exists
+
+## Browser Extension ESPN Connect Flow
+
+- [ ] Audit existing LeagueConnect.tsx and providerRouter.ts for integration points
+- [ ] Build Chrome extension: manifest v3, content script captures leagueId/teamId/SWID/ESPN_S2 from ESPN pages
+- [ ] Build extension popup UI: shows detected league/team, one-click "Connect to GM Tool" button
+- [ ] Extension sends payload to backend /api/espn/connect-via-extension over HTTPS with auth token
+- [ ] Backend endpoint: validate ESPN credentials, encrypt and store, return success
+- [ ] Redesign LeagueConnect.tsx: extension as primary path, manual cookie entry as Advanced/fallback
+- [ ] Package extension as .zip, upload to static assets, add download button on LeagueConnect page
+- [ ] Write vitest for new /api/espn/connect-via-extension endpoint
+- [ ] Save checkpoint and push to GitHub
+
+## Browser Extension ESPN Connect Flow
+- [x] Chrome extension: manifest.json (MV3), content.js, background.js, popup.html, popup.js, icons
+- [x] Extension popup: 9 states (loading, not-on-espn, no-cookies, no-league, ready, connecting, success, error, not-logged-in)
+- [x] Backend: providers.connectViaExtension (protectedProcedure) in providerRouter.ts
+- [x] LeagueConnect.tsx: extension as primary path, manual entry as advanced/fallback (collapsible)
+- [x] Extension download: packaged as .zip, hosted via manus-upload-file --webdev
+- [x] vitest: server/extensionConnect.test.ts (9 tests passing)

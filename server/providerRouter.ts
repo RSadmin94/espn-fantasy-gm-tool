@@ -658,4 +658,105 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
         },
       };
     }),
+
+  /**
+   * connectViaExtension — called by the Chrome/Edge browser extension.
+   * Accepts the same ESPN credentials as importEspnLeague but also
+   * accepts an optional teamId (extracted from the ESPN URL by the extension)
+   * which is used to pre-populate the team ownership claim.
+   *
+   * The extension sends this as a tRPC mutation with the user's session
+   * cookie attached (credentials: "include"), so ctx.user is populated.
+   */
+  connectViaExtension: protectedProcedure
+    .input(z.object({
+      leagueId: z.string().min(1, "League ID is required"),
+      swid: z.string().min(1, "SWID cookie is required"),
+      espnS2: z.string().min(1, "espn_s2 cookie is required"),
+      season: z.number().default(2025),
+      teamId: z.number().optional(), // pre-detected from ESPN URL
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const creds: EspnCreds = {
+        leagueId: input.leagueId,
+        swid: input.swid,
+        espnS2: input.espnS2,
+      };
+
+      // Validate credentials by fetching mSettings + mTeam
+      let fetchResult;
+      try {
+        fetchResult = await fetchEspnViewsHardened(input.season, ["mSettings", "mTeam"], creds);
+      } catch (err) {
+        throw new Error(
+          err instanceof Error
+            ? `ESPN auth failed: ${err.message}`
+            : "ESPN auth failed — your session may have expired. Please log in to ESPN and try again."
+        );
+      }
+
+      if (fetchResult.authError) {
+        throw new Error("ESPN returned an auth error — your session may be expired. Please log in to ESPN and try again.");
+      }
+
+      const rawSettings = normalizeSettings(fetchResult.merged);
+      const rawTeams = normalizeTeams(fetchResult.merged);
+      const leagueName = (rawSettings.leagueName as string) || `ESPN League ${input.leagueId}`;
+      const teamCount = rawTeams.length;
+
+      // Persist credentials (encrypted at rest)
+      const db = await getDb();
+      if (db) {
+        const encryptedCreds = encryptCredentialsForDb({
+          leagueId: input.leagueId,
+          swid: input.swid,
+          espnS2: input.espnS2,
+        });
+        await db.insert(leagueConnections)
+          .values({
+            userId: ctx.user.id,
+            provider: "espn",
+            leagueId: input.leagueId,
+            leagueName,
+            season: input.season,
+            isActive: true,
+            credentials: encryptedCreds,
+            syncStatus: "ok",
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              leagueName,
+              isActive: true,
+              credentials: encryptedCreds,
+              syncStatus: "ok",
+              syncError: null,
+              updatedAt: new Date(),
+            },
+          });
+
+        // Activate 7-day trial if user is still on 'free' plan
+        const [userRow] = await db
+          .select({ subscriptionStatus: users.subscriptionStatus, trialStartedAt: users.trialStartedAt })
+          .from(users)
+          .where(eq(users.id, ctx.user.id))
+          .limit(1);
+        if (userRow && userRow.subscriptionStatus === 'free' && !userRow.trialStartedAt) {
+          await db
+            .update(users)
+            .set({ subscriptionStatus: 'trialing', trialStartedAt: new Date() })
+            .where(eq(users.id, ctx.user.id));
+        }
+      }
+
+      return {
+        success: true,
+        leagueName,
+        teamCount,
+        leagueId: input.leagueId,
+        season: input.season,
+        // Return the detected teamId so the frontend can pre-select it in the claim picker
+        detectedTeamId: input.teamId ?? null,
+        source: "extension" as const,
+      };
+    }),
 });

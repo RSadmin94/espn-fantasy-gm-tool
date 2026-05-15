@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle, Circle, Loader2, ChevronRight, ArrowLeft, ExternalLink, Zap, Lock, RefreshCw } from "lucide-react";
+import { CheckCircle, Circle, Loader2, ChevronRight, ArrowLeft, ExternalLink, Zap, Lock, RefreshCw, Download, Puzzle, ChevronDown } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 
@@ -130,6 +130,15 @@ export default function LeagueConnect() {
   const [espnLeagueId, setEspnLeagueId] = useState("");
   const [espnSwid, setEspnSwid] = useState("");
   const [espnS2, setEspnS2] = useState("");
+  const [showManualEspn, setShowManualEspn] = useState(false);
+  // Pre-fill from URL params (e.g. ?leagueId=158918&teamId=6)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const lid = params.get("leagueId");
+    if (lid) setEspnLeagueId(lid);
+    // If mode=manual is in URL, open manual form immediately
+    if (params.get("mode") === "manual") setShowManualEspn(true);
+  }, []);
   // Check if Yahoo OAuth is configured
   const yahooConfigured = trpc.providers.isYahooConfigured.useQuery();
   // Check if we have a pending Yahoo auth (post-callback)
@@ -531,7 +540,6 @@ export default function LeagueConnect() {
 
   // ── Step: ESPN enter credentials ─────────────────────────────────────────
   if (step === "enter_credentials" && selectedProvider === "espn") {
-    const provider = PROVIDERS.find(p => p.id === "espn")!;
     const handleEspnImport = () => {
       if (!espnLeagueId.trim()) { setError("League ID is required"); return; }
       if (!espnSwid.trim()) { setError("SWID cookie is required"); return; }
@@ -554,88 +562,133 @@ export default function LeagueConnect() {
             <ArrowLeft className="w-4 h-4" />
             Back to providers
           </button>
-          <div className="flex items-center gap-3 mb-8">
-            <div className="text-4xl">{provider.emoji}</div>
+
+          <div className="flex items-center gap-3 mb-2">
+            <div className="text-4xl">🏈</div>
             <div>
-              <h2 className="text-2xl font-bold">{provider.name}</h2>
-              <p className="text-muted-foreground text-sm">{provider.description}</p>
+              <h2 className="text-2xl font-bold">Connect ESPN Fantasy</h2>
+              <p className="text-muted-foreground text-sm">The easiest way is the browser extension — no cookie hunting required.</p>
             </div>
           </div>
-          {importEspnMutation.error && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertDescription>{importEspnMutation.error.message}</AlertDescription>
+
+          {(importEspnMutation.error || error) && (
+            <Alert variant="destructive" className="mb-6 mt-6">
+              <AlertDescription>{importEspnMutation.error?.message || error}</AlertDescription>
             </Alert>
           )}
-          {error && !importEspnMutation.error && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Connect Your ESPN League</CardTitle>
-              <CardDescription>
-                {provider.instructions}
+
+          {/* ── PRIMARY: Extension path ── */}
+          <Card className="mt-6 border-primary/40 bg-primary/5">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Puzzle className="w-5 h-5 text-primary" />
+                <CardTitle className="text-base">Use the Browser Extension</CardTitle>
+                <Badge className="text-xs bg-emerald-500/20 text-emerald-400 border-emerald-500/30 ml-auto">Recommended</Badge>
+              </div>
+              <CardDescription className="text-sm">
+                Install the GM Tool Connector extension, navigate to your ESPN league, and click the extension icon. It captures everything automatically — no DevTools, no copy-pasting.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4 text-sm text-amber-700 dark:text-amber-300">
-                <strong>How to find your cookies:</strong> Log into{" "}
-                <a href="https://fantasy.espn.com" target="_blank" rel="noopener noreferrer" className="underline">
-                  fantasy.espn.com
-                </a>{" "}
-                → open DevTools (F12) → Application tab → Cookies →{" "}
-                <code className="font-mono text-xs bg-black/10 px-1 rounded">fantasy.espn.com</code> → copy{" "}
-                <code className="font-mono text-xs bg-black/10 px-1 rounded">SWID</code> and{" "}
-                <code className="font-mono text-xs bg-black/10 px-1 rounded">espn_s2</code>.
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">League ID</label>
-                <Input
-                  placeholder="e.g. 457622"
-                  value={espnLeagueId}
-                  onChange={e => setEspnLeagueId(e.target.value)}
-                  disabled={importEspnMutation.isPending}
-                />
-                <p className="text-xs text-muted-foreground">Found in your ESPN league URL: /football/league?leagueId=<strong>457622</strong></p>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">SWID Cookie</label>
-                <Input
-                  placeholder="{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
-                  value={espnSwid}
-                  onChange={e => setEspnSwid(e.target.value)}
-                  disabled={importEspnMutation.isPending}
-                  className="font-mono text-xs"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">espn_s2 Cookie</label>
-                <Input
-                  placeholder="AEBxxxxxxxxxxxxxxxxxxxxxxxx..."
-                  value={espnS2}
-                  onChange={e => setEspnS2(e.target.value)}
-                  disabled={importEspnMutation.isPending}
-                  className="font-mono text-xs"
-                />
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Lock className="w-3 h-3" />
-                  Credentials are encrypted with AES-256-GCM before storage. Never shared or logged.
-                </p>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-3 gap-3 text-center">
+                {[
+                  { step: "1", label: "Install extension", icon: "⬇️" },
+                  { step: "2", label: "Open your ESPN league", icon: "🏈" },
+                  { step: "3", label: "Click the extension", icon: "🔌" },
+                ].map(s => (
+                  <div key={s.step} className="rounded-lg bg-background border border-border p-3">
+                    <div className="text-2xl mb-1">{s.icon}</div>
+                    <div className="text-xs text-muted-foreground leading-tight">{s.label}</div>
+                  </div>
+                ))}
               </div>
               <Button
-                onClick={handleEspnImport}
-                disabled={!espnLeagueId.trim() || !espnSwid.trim() || !espnS2.trim() || importEspnMutation.isPending}
                 className="w-full"
+                size="lg"
+                onClick={() => {
+                  const a = document.createElement("a");
+                  a.href = "/manus-storage/espn-gm-tool-connector_be0fa0fa.zip";
+                  a.download = "espn-gm-tool-connector.zip";
+                  a.click();
+                }}
               >
-                {importEspnMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Validating & Connecting...</>
-                ) : (
-                  <><Zap className="w-4 h-4 mr-2" />Connect ESPN League</>
-                )}
+                <Download className="w-4 h-4 mr-2" />
+                Download Extension (.zip)
               </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Chrome / Edge · Load unpacked from chrome://extensions · Developer mode on
+              </p>
             </CardContent>
           </Card>
+
+          {/* ── FALLBACK: Manual cookie entry ── */}
+          <div className="mt-4">
+            <button
+              onClick={() => setShowManualEspn(v => !v)}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full py-2"
+            >
+              <ChevronDown className={`w-4 h-4 transition-transform ${showManualEspn ? "rotate-180" : ""}`} />
+              Advanced: enter cookies manually
+            </button>
+
+            {showManualEspn && (
+              <Card className="mt-3">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium">Manual Cookie Entry</CardTitle>
+                  <CardDescription className="text-xs">
+                    Log into <a href="https://fantasy.espn.com" target="_blank" rel="noopener noreferrer" className="underline">fantasy.espn.com</a> → DevTools (F12) → Application → Cookies → copy <code className="font-mono bg-muted px-1 rounded">SWID</code> and <code className="font-mono bg-muted px-1 rounded">espn_s2</code>.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">League ID</label>
+                    <Input
+                      placeholder="e.g. 158918"
+                      value={espnLeagueId}
+                      onChange={e => setEspnLeagueId(e.target.value)}
+                      disabled={importEspnMutation.isPending}
+                    />
+                    <p className="text-xs text-muted-foreground">Found in your ESPN league URL: ?leagueId=<strong>158918</strong></p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">SWID Cookie</label>
+                    <Input
+                      placeholder="{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
+                      value={espnSwid}
+                      onChange={e => setEspnSwid(e.target.value)}
+                      disabled={importEspnMutation.isPending}
+                      className="font-mono text-xs"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">espn_s2 Cookie</label>
+                    <Input
+                      placeholder="AEBxxxxxxxxxxxxxxxxxxxxxxxx..."
+                      value={espnS2}
+                      onChange={e => setEspnS2(e.target.value)}
+                      disabled={importEspnMutation.isPending}
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      Encrypted with AES-256-GCM before storage. Never shared or logged.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleEspnImport}
+                    disabled={!espnLeagueId.trim() || !espnSwid.trim() || !espnS2.trim() || importEspnMutation.isPending}
+                    className="w-full"
+                  >
+                    {importEspnMutation.isPending ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Validating & Connecting...</>
+                    ) : (
+                      <><Zap className="w-4 h-4 mr-2" />Connect ESPN League</>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
       </div>
     );
