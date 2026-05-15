@@ -1,5 +1,5 @@
 /**
- * Background Service Worker — ESPN GM Tool v1.5.0
+ * Background Service Worker — ESPN GM Tool v1.4.0
  *
  * Responsibilities:
  *  1. Connector flow: capture ESPN page context + cookies for popup.js
@@ -104,39 +104,32 @@ async function handleDnaMessage(msg) {
       return { ok: true };
 
     case "LEAGUE_PULSE": {
-      const cacheKey = `leaguePulse:espn:${config.leagueId}:${config.season}`;
+      const cacheKey = `leaguePulse:espn:${config.season}`;
       const hit = cache.get(cacheKey);
       if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return { data: hit.data, fromCache: true };
-      const data = await trpcGet(config.backendUrl, "weeklyAssessment.leaguePulse", {
-        season: config.season,
-        leagueId: config.leagueId || undefined,
-      });
+      const data = await trpcGet(config.backendUrl, "weeklyAssessment.leaguePulse", { season: config.season });
       cache.set(cacheKey, { data, ts: Date.now() });
       return { data, fromCache: false };
     }
 
     case "TEAM_BRIEF": {
       const { teamId } = msg;
-      const cacheKey = `teamBrief:espn:${config.leagueId}:${config.season}:${teamId}`;
+      const cacheKey = `teamBrief:espn:${config.season}:${teamId}`;
       const hit = cache.get(cacheKey);
       if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return { data: hit.data, fromCache: true };
       const data = await trpcGet(config.backendUrl, "weeklyAssessment.teamBrief", {
         teamId: Number(teamId),
         season: config.season,
-        leagueId: config.leagueId || undefined,
       });
       cache.set(cacheKey, { data, ts: Date.now() });
       return { data, fromCache: false };
     }
 
     case "ROD_OPPORTUNITIES": {
-      const cacheKey = `rodOpp:espn:${config.leagueId}:${config.season}`;
+      const cacheKey = `rodOpp:espn:${config.season}`;
       const hit = cache.get(cacheKey);
       if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return { data: hit.data, fromCache: true };
-      const data = await trpcGet(config.backendUrl, "weeklyAssessment.rodOpportunities", {
-        season: config.season,
-        leagueId: config.leagueId || undefined,
-      });
+      const data = await trpcGet(config.backendUrl, "weeklyAssessment.rodOpportunities", { season: config.season });
       cache.set(cacheKey, { data, ts: Date.now() });
       return { data, fromCache: false };
     }
@@ -151,62 +144,17 @@ async function handleDnaMessage(msg) {
   }
 }
 
-// ─── Toolbar icon click → open the DNA slide-out panel on the current ESPN tab ──
-// If the active tab is on fantasy.espn.com, send OPEN_PANEL to inject.js.
-// If not on ESPN, open fantasy.espn.com so the user can use the DNA badges there.
-// We NEVER navigate to the GM Tool website from this handler.
+// ─── Toolbar icon click → open/focus the GM Tool web app ─────────────────────
+const WEB_APP_URL = DEFAULT_BACKEND;
 
-chrome.action.onClicked.addListener(async () => {
-  const [tab] = await chrome.tabs.query({
-    active: true,
-    currentWindow: true,
-  });
-
-  if (!tab?.id) return;
-
-  const isEspnTab = tab.url?.includes("fantasy.espn.com");
-
-  if (!isEspnTab) {
-    const espnTabs = await chrome.tabs.query({
-      url: "https://fantasy.espn.com/*",
-    });
-
-    if (espnTabs[0]?.id) {
-      await chrome.tabs.update(espnTabs[0].id, { active: true });
-      await chrome.windows.update(espnTabs[0].windowId, { focused: true });
-    } else {
-      await chrome.tabs.create({
-        url: "https://fantasy.espn.com/football/",
-      });
-    }
-
-    return;
-  }
-
-  try {
-    await chrome.tabs.sendMessage(tab.id, { type: "OPEN_PANEL" });
-    return;
-  } catch {}
-
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => {
-        if (typeof window.__AF_OPEN_PANEL__ === "function") {
-          window.__AF_OPEN_PANEL__();
-          return;
-        }
-
-        const fab = document.getElementById("af-league-pulse-fab");
-        if (fab) {
-          fab.click();
-          return;
-        }
-
-        window.__afOpenPanelOnReady = true;
-      },
-    });
-  } catch (err) {
-    console.warn("[AF Extension] Could not open panel", err);
+chrome.action.onClicked?.addListener(async () => {
+  const tabs = await chrome.tabs.query({ url: `${WEB_APP_URL}/*` });
+  if (tabs.length > 0) {
+    const tab = tabs[0];
+    await chrome.tabs.update(tab.id, { active: true });
+    await chrome.windows.update(tab.windowId, { focused: true });
+    chrome.tabs.sendMessage(tab.id, { type: "OPEN_ADVISOR_PANEL" });
+  } else {
+    chrome.tabs.create({ url: `${WEB_APP_URL}/command-center?openAdvisor=1` });
   }
 });

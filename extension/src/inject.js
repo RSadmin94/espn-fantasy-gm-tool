@@ -1,5 +1,5 @@
 /**
- * ESPN GM Tool — Fantasy DNA Advisor Content Script v1.6.0
+ * ESPN GM Tool — Fantasy DNA Advisor Content Script v1.4.0
  *
  * ESPN-first release. Sleeper/Yahoo stubs retained for future expansion.
  *
@@ -167,9 +167,9 @@
     }
 
     // ── Strategy 2: Standings / Scoreboard / League pages ───────────────────
-    // Target: span.teamName.truncate (older ESPN) + [class*='teamName'] (2026 ESPN)
-    // Widen selectors to catch ESPN class renames (Fix 2)
-    const teamNameEls = document.querySelectorAll("span.teamName.truncate, span.teamName, [class*='teamName']:not(button):not(a)");
+    // Target: span.teamName.truncate (confirmed in live DOM audit)
+    // Also target: a.team--link > span.teamName (same element, different parent)
+    const teamNameEls = document.querySelectorAll("span.teamName.truncate, span.teamName");
     teamNameEls.forEach(el => {
       if (el.getAttribute(BADGE_ATTR)) return;
       const rawName = el.textContent?.trim() || "";
@@ -364,6 +364,12 @@
     panelEl?.querySelector(".af-retry-btn")?.addEventListener("click", () => {
       const retryFn = panelEl?._retryFn;
       if (retryFn) retryFn();
+    });
+    panelEl?.querySelector("#af-view-trades-btn")?.addEventListener("click", () => {
+      // Push current pulse view onto history so back button works
+      panelHistory.push({ type: 'pulse', teamLabel: 'League Pulse' });
+      panelEl.innerHTML = buildLoadingHTML("Trade History");
+      loadLiveTrades();
     });
   }
 
@@ -593,22 +599,159 @@
         <p style="font-size:10px;color:#475569;text-align:center;margin-top:8px">
           ${isComplete ? `${season} season complete · Click any team for their offseason profile` : "Click any team for their full DNA profile"}
         </p>
+
+        <!-- Live Trades shortcut -->
+        <div style="border-top:1px solid #1e293b;margin-top:12px;padding-top:12px">
+          <button id="af-view-trades-btn" style="width:100%;background:#1e293b;border:1px solid #334155;border-radius:8px;color:#94a3b8;font-size:11px;padding:8px 12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+            <span style="display:flex;align-items:center;gap:6px">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+              View Live Trades
+            </span>
+            <span style="color:#475569">›</span>
+          </button>
+        </div>
       </div>
       ${buildPanelFooter()}
     `;
   }
 
-  // ─── Global open function + message listener (from background.js toolbar click)
-  window.__AF_OPEN_PANEL__ = () => openPanel(null, "League Pulse");
+  // ─── Live ESPN trade fetching ──────────────────────────────────────────────────
+  // Fetches mTransactions2 directly from ESPN using the browser's own cookies.
+  // No backend, no cache — always live.
+  async function fetchLiveTrades(leagueId, season) {
+    const url = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=mTransactions2`;
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) throw new Error(`ESPN API ${res.status}`);
+    const json = await res.json();
+    const transactions = json.transactions || [];
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type === "OPEN_PANEL") {
-      window.__AF_OPEN_PANEL__();
-      sendResponse({ ok: true });
-      return true;
+    // Build proposal lookup: id → transaction
+    const proposalMap = new Map();
+    for (const tx of transactions) {
+      if (tx.type === "TRADE_PROPOSAL" || tx.type === "TRADE") {
+        proposalMap.set(tx.id, tx);
+      }
     }
-    return false;
-  });
+
+    // Build team name map from json.teams
+    const teamNameMap = new Map();
+    for (const t of (json.teams || [])) {
+      const name = t.location && t.nickname ? `${t.location} ${t.nickname}` : (t.name || `Team ${t.id}`);
+      teamNameMap.set(t.id, name);
+    }
+
+    const trades = [];
+
+    // 2026+: TRADE_UPHOLD / TRADE_ACCEPT → linked TRADE_PROPOSAL
+    for (const tx of transactions) {
+      if (tx.type !== "TRADE_UPHOLD" && tx.type !== "TRADE_ACCEPT") continue;
+      const proposal = proposalMap.get(tx.relatedTransactionId);
+      if (!proposal) continue;
+      trades.push(buildLiveTradeRecord(proposal, tx.processDate || tx.proposedDate, teamNameMap));
+    }
+
+    // Legacy: type=TRADE status=EXECUTED
+    for (const tx of transactions) {
+      if (tx.type === "TRADE" && tx.status === "EXECUTED") {
+        trades.push(buildLiveTradeRecord(tx, tx.processDate || tx.proposedDate, teamNameMap));
+      }
+    }
+
+    // Sort newest first
+    trades.sort((a, b) => (b.date || 0) - (a.date || 0));
+    return trades;
+  }
+
+  function buildLiveTradeRecord(proposal, date, teamNameMap) {
+    const items = proposal.items || [];
+    const sides = new Map();
+    for (const item of items) {
+      const from = item.fromTeamId;
+      const to = item.toTeamId;
+      const name = item.playerName || (item.playerId ? `Player ${item.playerId}` : null);
+      if (!name) continue;
+      if (from != null) {
+        if (!sides.has(from)) sides.set(from, { sent: [], received: [] });
+        sides.get(from).sent.push(name);
+      }
+      if (to != null) {
+        if (!sides.has(to)) sides.set(to, { sent: [], received: [] });
+        sides.get(to).received.push(name);
+      }
+    }
+    const teamIds = Array.from(sides.keys());
+    const dateLabel = date
+      ? new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : "Unknown Date";
+    return { id: proposal.id, date, dateLabel, teamIds, sides, teamNameMap };
+  }
+
+  function buildTradesHTML(trades) {
+    if (!trades || trades.length === 0) {
+      return `
+        ${buildPanelHeader("Trade History", "Live from ESPN", "")}
+        <div class="af-panel-body">
+          <div class="af-error-state" style="padding:24px 0">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="1.5"><path d="M8 7h12M8 12h12M8 17h12M3 7h.01M3 12h.01M3 17h.01"/></svg>
+            <strong style="color:#94a3b8">No trades found</strong>
+            <span style="color:#475569;font-size:11px">No accepted trades in the current season view.</span>
+          </div>
+        </div>
+        ${buildPanelFooter()}
+      `;
+    }
+
+    const rows = trades.map(t => {
+      const teamIds = t.teamIds || [];
+      const sidesHtml = teamIds.map(tid => {
+        const side = t.sides.get(tid);
+        const teamName = t.teamNameMap.get(tid) || `Team ${tid}`;
+        const received = (side?.received || []).join(", ") || "—";
+        const sent = (side?.sent || []).join(", ") || "—";
+        return `
+          <div style="flex:1;min-width:0">
+            <div style="font-size:10px;font-weight:600;color:#94a3b8;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(teamName)}</div>
+            <div style="font-size:10px;color:#34d399">Got: ${escapeHtml(received)}</div>
+            <div style="font-size:10px;color:#f87171">Gave: ${escapeHtml(sent)}</div>
+          </div>
+        `;
+      }).join(`<div style="color:#475569;font-size:11px;padding:0 6px;align-self:center">⇄</div>`);
+
+      return `
+        <div style="border:1px solid #1e293b;border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#0f172a">
+          <div style="font-size:10px;color:#475569;margin-bottom:6px">${escapeHtml(t.dateLabel)}</div>
+          <div style="display:flex;align-items:flex-start;gap:4px">${sidesHtml}</div>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      ${buildPanelHeader("Trade History", `${trades.length} trade${trades.length !== 1 ? "s" : ""} · Live from ESPN`, "")}
+      <div class="af-panel-body">${rows}</div>
+      ${buildPanelFooter()}
+    `;
+  }
+
+  async function loadLiveTrades() {
+    const leagueId = getLeagueIdFromUrl();
+    const season = new Date().getFullYear();
+    if (!leagueId) {
+      if (!panelEl) return;
+      panelEl.innerHTML = buildErrorHTML("Trade History", "No league ID found in URL. Navigate to your ESPN fantasy league page first.", loadLiveTrades);
+      attachPanelListeners();
+      return;
+    }
+    try {
+      const trades = await fetchLiveTrades(leagueId, season);
+      if (!panelEl) return;
+      panelEl.innerHTML = buildTradesHTML(trades);
+      attachPanelListeners();
+    } catch (err) {
+      if (!panelEl) return;
+      panelEl.innerHTML = buildErrorHTML("Trade History", err.message, loadLiveTrades);
+      attachPanelListeners();
+    }
+  }
 
   // ─── SPA navigation handling ─────────────────────────────────────────────────
   let lastUrl = window.location.href;
@@ -636,36 +779,20 @@
   window.addEventListener("popstate", onUrlChange);
 
   // MutationObserver for DOM changes (React renders)
-  // Fix 2 (debounce): Increase to 800ms to give ESPN's React app time to render
-  // after a route change. Also add a second retry at 2500ms for slow renders.
   let injectTimeout = null;
-  let injectRetryTimeout = null;
   const observer = new MutationObserver(() => {
     clearTimeout(injectTimeout);
-    clearTimeout(injectRetryTimeout);
-    injectTimeout = setTimeout(() => {
-      injectBadges();
-      // Retry once more in case React re-renders after the first injection
-      injectRetryTimeout = setTimeout(injectBadges, 1700);
-    }, 800);
+    injectTimeout = setTimeout(injectBadges, 400);
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
   // ─── Init ─────────────────────────────────────────────────────────────────────
-  function init() {
-    injectBadges();
-    if (window.__afOpenPanelOnReady) {
-      window.__afOpenPanelOnReady = false;
-      setTimeout(() => window.__AF_OPEN_PANEL__(), 0);
-    }
-  }
-
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => setTimeout(init, 500));
+    document.addEventListener("DOMContentLoaded", () => setTimeout(injectBadges, 500));
   } else {
-    setTimeout(init, 500);
+    setTimeout(injectBadges, 500);
   }
 
-  console.log(`[ESPN GM Tool DNA Advisor v1.8.0] Provider: ${PROVIDER} | URL: ${window.location.pathname}`);
+  console.log(`[ESPN GM Tool DNA Advisor v1.4.0] Provider: ${PROVIDER} | URL: ${window.location.pathname}`);
 
 })();
