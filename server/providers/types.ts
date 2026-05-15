@@ -100,7 +100,15 @@ export interface UniversalMatchup {
   isPlayoff?: boolean;
 }
 
-export type TransactionType = "ADD" | "DROP" | "TRADE" | "WAIVER" | "FREE_AGENT";
+export type TransactionType =
+  | "ADD"
+  | "DROP"
+  | "TRADE"
+  | "TRADE_PROPOSAL"
+  | "TRADE_UPHOLD"
+  | "TRADE_ACCEPT"
+  | "WAIVER"
+  | "FREE_AGENT";
 
 export interface UniversalTransaction {
   transactionId: string;
