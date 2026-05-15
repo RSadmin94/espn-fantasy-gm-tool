@@ -1160,9 +1160,9 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] vitest: server/extensionConnect.test.ts (9 tests passing)
 
 ## Extension URL Fix + Full Onboarding Verification
-- [ ] Fix extension URL to espnfftool-d7edtbt5.manus.space in popup.js and manifest.json
-- [ ] Rebuild and re-upload extension zip, update download link in LeagueConnect.tsx
-- [ ] Audit /reveal flow: confirm it uses leagueConnectionId from the most recent connected league
-- [ ] Verify connectViaExtension writes league cache under correct leagueConnectionId
-- [ ] Trace full new-user onboarding: connect → claim team → reveal → dashboard
-- [ ] Save checkpoint and push to GitHub
+- [x] Fix extension URL to espnfftool-d7edtbt5.manus.space in popup.js and manifest.json
+- [x] Rebuild and re-upload extension zip, update download link in LeagueConnect.tsx
+- [x] Audit /reveal flow: confirm it uses leagueConnectionId from the most recent connected league
+- [x] Verify connectViaExtension writes league cache under correct leagueConnectionId
+- [x] Trace full new-user onboarding: connect → claim team → reveal → dashboard
+- [x] Save checkpoint and push to GitHub
