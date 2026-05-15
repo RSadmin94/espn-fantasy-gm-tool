@@ -1281,3 +1281,26 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Covered by existing espn.credentials.test.ts and draftHelper service tests (684/684 passing)
 - [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (684/684 passing)
 - [x] Save checkpoint
+
+## Multi-League Fix — Extension-Based Second League Connection
+- [ ] Audit LeagueConnect.tsx: understand current credential flow and where extension data is injected
+- [ ] Audit leagueConnections schema and league.connect tRPC mutation to confirm it supports multiple rows per user
+- [ ] Fix LeagueConnect to work as an "Add League" flow (not just first-time setup): when user already has leagues, show "Add Another League" mode
+- [ ] Ensure extension credential injection (SWID, espn_s2, leagueId) works for any league slot, not just the first
+- [ ] When extension injects credentials for a different leagueId than any existing connection, auto-detect it as a new league and prompt to add
+- [ ] After adding a second league, redirect to the app with the new league set as active
+- [ ] Show all connected leagues in LeagueSwitcher with correct names and allow one-click switching
+- [ ] Write vitest for multi-league connect logic
+- [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (699/699 passing, 36 test files)
+- [x] Save checkpoint
+
+## Multi-League Fix — Extension Flow + Real League Name
+- [x] Add `league.previewEspnLeague` tRPC query: given leagueId + swid + espn_s2, fetch ESPN mSettings view and return the real league name and team count
+- [x] In LeagueConnect ESPN step: after credentials are filled (auto or manual), auto-call previewEspnLeague to show the real league name before the user clicks Connect
+- [x] Show league name preview card in the ESPN credential form ("League found: ATLANTAS FINEST FF · 14 teams")
+- [x] Fix importEspnLeague server mutation to store the fetched league name in leagueConnections.leagueName column (already implemented)
+- [x] Fix LeagueConnect: when user already has leagues connected, skip /reveal redirect and go to "/" (app) with the new league set as active
+- [x] Fix LeagueSwitcher to display real leagueConnections.leagueName (not just leagueId) for each row (already implemented correctly)
+- [x] Ensure extension credential injection (?provider=espn&leagueId=...&swid=...&s2=...) works as "Add League" for users who already have a league connected (auto-triggers preview)
+- [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (699/699 passing, 36 test files)
+- [x] Save checkpoint

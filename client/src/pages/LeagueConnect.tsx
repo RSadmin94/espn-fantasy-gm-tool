@@ -129,6 +129,15 @@ export default function LeagueConnect() {
   const [espnLeagueId, setEspnLeagueId] = useState("");
   const [espnSwid, setEspnSwid] = useState("");
   const [espnS2, setEspnS2] = useState("");
+  const [espnPreviewReady, setEspnPreviewReady] = useState(false);
+  // Fetch existing leagues to detect add-league vs first-time mode
+  const myLeaguesQuery = trpc.league.getMyLeagues.useQuery(undefined, { enabled: !!user });
+  const isAddLeagueMode = (myLeaguesQuery.data?.length ?? 0) > 0;
+  // Preview ESPN league name when all 3 fields are filled
+  const espnPreviewQuery = trpc.providers.previewEspnLeague.useQuery(
+    { leagueId: espnLeagueId.trim(), swid: espnSwid.trim(), espnS2: espnS2.trim(), season: 2025 },
+    { enabled: espnPreviewReady && !!espnLeagueId.trim() && !!espnSwid.trim() && !!espnS2.trim() }
+  );
   // Check if Yahoo OAuth is configured
   const yahooConfigured = trpc.providers.isYahooConfigured.useQuery();
   // Check if we have a pending Yahoo auth (post-callback)
@@ -188,6 +197,8 @@ export default function LeagueConnect() {
         if (swid) setEspnSwid(swid);
         if (s2)   setEspnS2(s2);
         setStep("enter_credentials");
+        // Auto-trigger preview since all fields are filled by the extension
+        if (lid && swid && s2) setEspnPreviewReady(true);
         window.history.replaceState({}, "", window.location.pathname);
       }
     }
@@ -261,7 +272,9 @@ export default function LeagueConnect() {
       });
       setProgressPct(100);
       setProgressStep(DNA_STEPS.length - 1);
-      setTimeout(() => navigate("/reveal"), 800);
+      // If user already had leagues, go straight to the app (not the reveal/onboarding page)
+      const hadLeagues = (myLeaguesQuery.data?.length ?? 0) > 0;
+      setTimeout(() => navigate(hadLeagues ? "/" : "/reveal"), 800);
     },
     onError: (err) => {
       setError(err.message || "ESPN import failed");
@@ -581,6 +594,7 @@ export default function LeagueConnect() {
   // ── Step: ESPN enter credentials ─────────────────────────────────────────
   if (step === "enter_credentials" && selectedProvider === "espn") {
     const provider = PROVIDERS.find(p => p.id === "espn")!;
+    const allFilled = !!espnLeagueId.trim() && !!espnSwid.trim() && !!espnS2.trim();
     const handleEspnImport = () => {
       if (!espnLeagueId.trim()) { setError("League ID is required"); return; }
       if (!espnSwid.trim()) { setError("SWID cookie is required"); return; }
@@ -610,16 +624,28 @@ export default function LeagueConnect() {
       <div className="min-h-screen bg-background">
         <div className="max-w-2xl mx-auto px-4 py-12">
           <button
-            onClick={() => { setStep("choose_provider"); setError(null); }}
+            onClick={() => { setStep("choose_provider"); setError(null); setEspnPreviewReady(false); }}
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to providers
+            {isAddLeagueMode ? "Back to providers" : "Back to providers"}
           </button>
+
+          {/* Add-league mode banner */}
+          {isAddLeagueMode && (
+            <div className="rounded-lg bg-primary/10 border border-primary/20 p-4 text-sm text-primary flex items-start gap-2 mb-6">
+              <Zap className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <div>
+                <strong>Adding a second league.</strong>{" "}
+                Your existing leagues stay connected. After connecting, you can switch between them in the sidebar.
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-3 mb-8">
             <div className="text-4xl">{provider.emoji}</div>
             <div>
-              <h2 className="text-2xl font-bold">{provider.name}</h2>
+              <h2 className="text-2xl font-bold">{isAddLeagueMode ? "Add Another ESPN League" : provider.name}</h2>
               <p className="text-muted-foreground text-sm">{provider.description}</p>
             </div>
           </div>
@@ -635,7 +661,7 @@ export default function LeagueConnect() {
           )}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Connect Your ESPN League</CardTitle>
+              <CardTitle className="text-lg">{isAddLeagueMode ? "Connect Another ESPN League" : "Connect Your ESPN League"}</CardTitle>
               <CardDescription>
                 {provider.instructions}
               </CardDescription>
@@ -646,7 +672,7 @@ export default function LeagueConnect() {
                   <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <div>
                     <strong>Auto-filled by the DNA Advisor extension.</strong>{" "}
-                    Your SWID and espn_s2 cookies were detected automatically. Just verify your League ID and click Connect.
+                    Your SWID and espn_s2 cookies were detected automatically. Verify your League ID below and click Connect.
                   </div>
                 </div>
               ) : (
@@ -666,7 +692,7 @@ export default function LeagueConnect() {
                 <Input
                   placeholder="e.g. 457622"
                   value={espnLeagueId}
-                  onChange={e => setEspnLeagueId(e.target.value)}
+                  onChange={e => { setEspnLeagueId(e.target.value); setEspnPreviewReady(false); }}
                   disabled={importEspnMutation.isPending}
                 />
                 <p className="text-xs text-muted-foreground">Found in your ESPN league URL: /football/league?leagueId=<strong>457622</strong></p>
@@ -676,7 +702,7 @@ export default function LeagueConnect() {
                 <Input
                   placeholder="{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
                   value={espnSwid}
-                  onChange={e => setEspnSwid(e.target.value)}
+                  onChange={e => { setEspnSwid(e.target.value); setEspnPreviewReady(false); }}
                   disabled={importEspnMutation.isPending}
                   className="font-mono text-xs"
                 />
@@ -686,7 +712,8 @@ export default function LeagueConnect() {
                 <Input
                   placeholder="AEBxxxxxxxxxxxxxxxxxxxxxxxx..."
                   value={espnS2}
-                  onChange={e => setEspnS2(e.target.value)}
+                  onChange={e => { setEspnS2(e.target.value); setEspnPreviewReady(false); }}
+                  onBlur={() => { if (allFilled) setEspnPreviewReady(true); }}
                   disabled={importEspnMutation.isPending}
                   className="font-mono text-xs"
                 />
@@ -695,6 +722,47 @@ export default function LeagueConnect() {
                   Credentials are encrypted with AES-256-GCM before storage. Never shared or logged.
                 </p>
               </div>
+
+              {/* League name preview card */}
+              {allFilled && (
+                <div>
+                  {espnPreviewQuery.isFetching && (
+                    <div className="rounded-lg border border-border bg-muted/30 p-4 flex items-center gap-3 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Verifying league credentials with ESPN…
+                    </div>
+                  )}
+                  {!espnPreviewQuery.isFetching && espnPreviewQuery.data?.valid && (
+                    <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-4 flex items-center gap-3">
+                      <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                      <div>
+                        <div className="font-semibold text-foreground">{espnPreviewQuery.data.leagueName}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {espnPreviewQuery.data.teamCount} teams · ESPN Fantasy · 2025 season
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {!espnPreviewQuery.isFetching && espnPreviewQuery.data && !espnPreviewQuery.data.valid && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{espnPreviewQuery.data.error || "Could not verify league — check your credentials."}</AlertDescription>
+                    </Alert>
+                  )}
+                  {/* Trigger preview if not yet triggered */}
+                  {!espnPreviewReady && !espnPreviewQuery.isFetching && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setEspnPreviewReady(true)}
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 mr-2" />
+                      Verify League
+                    </Button>
+                  )}
+                </div>
+              )}
+
               <Button
                 onClick={handleEspnImport}
                 disabled={!espnLeagueId.trim() || !espnSwid.trim() || !espnS2.trim() || importEspnMutation.isPending}
@@ -703,7 +771,7 @@ export default function LeagueConnect() {
                 {importEspnMutation.isPending ? (
                   <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Validating & Connecting...</>
                 ) : (
-                  <><Zap className="w-4 h-4 mr-2" />Connect ESPN League</>
+                  <><Zap className="w-4 h-4 mr-2" />{isAddLeagueMode ? "Add This League" : "Connect ESPN League"}</>
                 )}
               </Button>
             </CardContent>

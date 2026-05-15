@@ -556,6 +556,41 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
    * Stores credentials in league_connections.credentials (JSON) so all subsequent
    * ESPN fetches for this user use their own cookies instead of the global env vars.
    */
+  /**
+   * Preview an ESPN league before connecting — fetches the real league name and team count.
+   * Used by the LeagueConnect form to show a confirmation card before the user clicks Connect.
+   */
+  previewEspnLeague: protectedProcedure
+    .input(z.object({
+      leagueId: z.string().min(1),
+      swid: z.string().min(1),
+      espnS2: z.string().min(1),
+      season: z.number().default(2025),
+    }))
+    .query(async ({ input }) => {
+      try {
+        const creds: EspnCreds = {
+          leagueId: input.leagueId,
+          swid: input.swid,
+          espnS2: input.espnS2,
+        };
+        const result = await fetchEspnViewsHardened(input.season, ["mSettings", "mTeam"], creds);
+        if (result.authError) {
+          return { valid: false, error: "ESPN auth failed — check your SWID and espn_s2 cookies." };
+        }
+        const rawSettings = normalizeSettings(result.merged);
+        const rawTeams = normalizeTeams(result.merged);
+        const leagueName = (rawSettings.leagueName as string) || `ESPN League ${input.leagueId}`;
+        const teamCount = rawTeams.length;
+        return { valid: true, leagueName, teamCount };
+      } catch (err) {
+        return {
+          valid: false,
+          error: err instanceof Error ? err.message : "Could not reach ESPN — check your credentials.",
+        };
+      }
+    }),
+
   importEspnLeague: protectedProcedure
     .input(z.object({
       leagueId: z.string().min(1, "League ID is required"),
