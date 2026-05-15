@@ -458,6 +458,21 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     try { params.persistUsage(usageData); } catch { /* never throw */ }
   }
 
+  // Global usage tracking — always fires, zero changes needed at call sites
+  try {
+    const { trackLLMEvent } = await import("../usageTracker");
+    trackLLMEvent({
+      featureName: callType ?? "llm.unspecified",
+      callType: callType ?? "unspecified",
+      model: usageData.model,
+      promptTokens: usageData.promptTokens,
+      completionTokens: usageData.completionTokens,
+      totalTokens: usageData.totalTokens,
+      durationMs: usageData.durationMs,
+      streaming: false,
+    });
+  } catch { /* never block */ }
+
   return result;
 }
 
@@ -613,5 +628,19 @@ export async function* invokeLLMStream(
         });
       } catch { /* never throw */ }
     }
+    // Global usage tracking for streaming calls
+    try {
+      const { trackLLMEvent } = await import("../usageTracker");
+      trackLLMEvent({
+        featureName: callType ?? "llm.unspecified",
+        callType: callType ?? "unspecified",
+        model: resolvedModel,
+        promptTokens: promptTokens ?? 0,
+        completionTokens: completionTokens ?? 0,
+        totalTokens: totalTokens ?? 0,
+        durationMs: finalDurationMs,
+        streaming: true,
+      });
+    } catch { /* never block */ }
   }
 }

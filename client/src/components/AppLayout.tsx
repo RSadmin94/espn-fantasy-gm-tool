@@ -43,6 +43,7 @@ const navItems: NavItem[] = [
   { href: "/weekly-stats", icon: Activity, label: "Weekly Stats", group: "System" },
   { href: "/backtesting", icon: Target, label: "Backtesting", group: "System" },
   { href: "/ml-forecast", icon: BarChart3, label: "ML Forecast", group: "System" },
+  { href: "/usage-monitor", icon: Settings2, label: "Usage Monitor", group: "System" },
 ];
 
 const primaryGroups = ["Intelligence", "Team Tools"];
@@ -237,6 +238,7 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
                   <Link key={item.href} href={item.href} className={cls}>
                     <item.icon className="w-3.5 h-3.5 flex-shrink-0" />
                     <span className="flex-1 truncate">{item.label}</span>
+                    {item.badge && <Badge className="text-[8px] px-1 py-0 h-3.5 bg-zinc-700 text-zinc-300 border-0 font-bold">{item.badge}</Badge>}
                     {active && <ChevronRight className="w-3 h-3 text-primary flex-shrink-0" />}
                   </Link>
                 );

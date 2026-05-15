@@ -300,6 +300,7 @@ export async function fetchEspnViewsHardened(
   views: string[] = [...ALL_VIEWS],
   creds?: EspnCreds
 ): Promise<PipelineFetchResult> {
+  const _espnStartMs = Date.now();
   const cookiesPresent = hasCookies(creds);
   const viewResults: ViewFetchResult[] = [];
 
@@ -318,7 +319,7 @@ export async function fetchEspnViewsHardened(
         error: count === 0 ? "View returned empty data" : undefined,
       });
     }
-    return {
+    const result: PipelineFetchResult = {
       season,
       merged: bulkResult.data,
       viewResults,
@@ -327,6 +328,12 @@ export async function fetchEspnViewsHardened(
       allViewsOk: viewResults.every(v => v.status === "ok"),
       cookiesPresent,
     };
+    // Fire-and-forget usage tracking
+    try {
+      const { trackEspnEvent } = await import("./usageTracker");
+      trackEspnEvent({ featureName: "espn.fetchViews", viewNames: [...views], season, durationMs: Date.now() - _espnStartMs });
+    } catch { /* never block */ }
+    return result;
   }
 
   // Bulk failed — check if auth error
@@ -358,7 +365,7 @@ export async function fetchEspnViewsHardened(
     );
   }
 
-  return {
+  const fallbackResult: PipelineFetchResult = {
     season,
     merged,
     viewResults,
@@ -367,6 +374,12 @@ export async function fetchEspnViewsHardened(
     allViewsOk: viewResults.every(v => v.status === "ok"),
     cookiesPresent,
   };
+  // Fire-and-forget usage tracking
+  try {
+    const { trackEspnEvent } = await import("./usageTracker");
+    trackEspnEvent({ featureName: "espn.fetchViews", viewNames: [...views], season, durationMs: Date.now() - _espnStartMs });
+  } catch { /* never block */ }
+  return fallbackResult;
 }
 
 /**

@@ -1,0 +1,316 @@
+/**
+ * usageTracker.ts
+ * ───────────────
+ * Single write path for all backend usage events.
+ *
+ * Three event categories:
+ *   "llm"   — every invokeLLM / invokeLLMStream call
+ *   "espn"  — every fetchEspnViewsHardened call
+ *   "trpc"  — key tRPC procedure hits (advisor.chat, refresh pipelines, etc.)
+ *
+ * Cost model (Gemini 2.5 Flash, May 2026 pricing):
+ *   Input:  $0.15 / 1M tokens  → $0.00000015 / token
+ *   Output: $0.60 / 1M tokens  → $0.00000060 / token
+ *
+ * All writes are fire-and-forget (never throw, never block the caller).
+ */
+
+import { getDb } from "./db";
+import { usageEvents } from "../drizzle/schema";
+
+// ─── Cost model ───────────────────────────────────────────────────────────────
+
+/** Per-token USD cost for known models. Falls back to Gemini Flash pricing. */
+const MODEL_PRICING: Record<string, { inputPerToken: number; outputPerToken: number }> = {
+  "gemini-2.5-flash":       { inputPerToken: 0.00000015, outputPerToken: 0.00000060 },
+  "gemini-2.0-flash":       { inputPerToken: 0.00000010, outputPerToken: 0.00000040 },
+  "gemini-1.5-flash":       { inputPerToken: 0.000000075, outputPerToken: 0.00000030 },
+  "gpt-4o":                 { inputPerToken: 0.0000025,  outputPerToken: 0.000010   },
+  "gpt-4o-mini":            { inputPerToken: 0.00000015, outputPerToken: 0.00000060 },
+  "claude-3-5-sonnet":      { inputPerToken: 0.000003,   outputPerToken: 0.000015   },
+  "claude-3-haiku":         { inputPerToken: 0.00000025, outputPerToken: 0.00000125 },
+};
+
+function estimateCost(model: string, promptTokens: number, completionTokens: number): number {
+  const pricing = MODEL_PRICING[model] ?? MODEL_PRICING["gemini-2.5-flash"];
+  return promptTokens * pricing.inputPerToken + completionTokens * pricing.outputPerToken;
+}
+
+// ─── Event types ──────────────────────────────────────────────────────────────
+
+export interface LLMUsageEvent {
+  featureName: string;       // e.g. "tradeNarrative.generateSentence"
+  callType?: string;         // e.g. "json_structured"
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  durationMs: number;
+  streaming: boolean;
+  userId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface EspnUsageEvent {
+  featureName: string;       // e.g. "espn.fetchViews"
+  viewNames: string[];       // e.g. ["mMatchup", "mTeam"]
+  season: number;
+  durationMs: number;
+  userId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TrpcUsageEvent {
+  featureName: string;       // e.g. "advisor.chat"
+  durationMs?: number;
+  userId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+// ─── Write helpers ────────────────────────────────────────────────────────────
+
+/** Fire-and-forget: never throws, never awaited by callers. */
+async function writeEvent(row: typeof usageEvents.$inferInsert): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    await db.insert(usageEvents).values(row);
+  } catch {
+    // Silently swallow — usage tracking must never break the main flow
+  }
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Track an LLM call. Call this from the persistUsage hook in invokeLLM,
+ * or directly from streaming handlers.
+ */
+export function trackLLMEvent(event: LLMUsageEvent): void {
+  const cost = estimateCost(event.model, event.promptTokens, event.completionTokens);
+  void writeEvent({
+    eventCategory: "llm",
+    featureName: event.featureName,
+    callType: event.callType ?? "unspecified",
+    promptTokens: event.promptTokens,
+    completionTokens: event.completionTokens,
+    totalTokens: event.totalTokens,
+    estimatedCostUsd: cost,
+    durationMs: event.durationMs,
+    userId: event.userId,
+    model: event.model,
+    streaming: event.streaming,
+    metadata: event.metadata ? JSON.stringify(event.metadata) : undefined,
+  });
+}
+
+/**
+ * Track an ESPN API fetch. Call this from fetchEspnViewsHardened.
+ */
+export function trackEspnEvent(event: EspnUsageEvent): void {
+  void writeEvent({
+    eventCategory: "espn",
+    featureName: event.featureName,
+    callType: event.viewNames.join(","),
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    estimatedCostUsd: 0,
+    durationMs: event.durationMs,
+    userId: event.userId,
+    model: null,
+    streaming: false,
+    metadata: JSON.stringify({ season: event.season, views: event.viewNames, ...event.metadata }),
+  });
+}
+
+/**
+ * Track a tRPC procedure hit. Call this at the start of key procedures.
+ */
+export function trackTrpcEvent(event: TrpcUsageEvent): void {
+  void writeEvent({
+    eventCategory: "trpc",
+    featureName: event.featureName,
+    callType: null,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    estimatedCostUsd: 0,
+    durationMs: event.durationMs ?? 0,
+    userId: event.userId,
+    model: null,
+    streaming: false,
+    metadata: event.metadata ? JSON.stringify(event.metadata) : undefined,
+  });
+}
+
+// ─── Aggregation helpers (used by the monitor router) ─────────────────────────
+
+export interface FeatureSummaryRow {
+  featureName: string;
+  eventCategory: string;
+  callCount: number;
+  totalTokens: number;
+  totalCostUsd: number;
+  avgDurationMs: number;
+  lastUsedAt: Date | null;
+}
+
+export interface DailyTrendRow {
+  date: string;       // "YYYY-MM-DD"
+  callCount: number;
+  totalTokens: number;
+  totalCostUsd: number;
+}
+
+export interface TopCallerRow {
+  userId: string;
+  callCount: number;
+  totalCostUsd: number;
+}
+
+export interface LLMCallLogRow {
+  id: number;
+  featureName: string;
+  model: string | null;
+  callType: string | null;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+  durationMs: number;
+  streaming: boolean;
+  userId: string | null;
+  createdAt: Date;
+}
+
+/** Aggregate per-feature stats for the last N days. */
+export async function getFeatureSummary(days = 30): Promise<FeatureSummaryRow[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const { sql } = await import("drizzle-orm");
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        featureName: usageEvents.featureName,
+        eventCategory: usageEvents.eventCategory,
+        callCount: sql<number>`COUNT(*)`,
+        totalTokens: sql<number>`SUM(${usageEvents.totalTokens})`,
+        totalCostUsd: sql<number>`SUM(${usageEvents.estimatedCostUsd})`,
+        avgDurationMs: sql<number>`AVG(${usageEvents.durationMs})`,
+        lastUsedAt: sql<Date>`MAX(${usageEvents.createdAt})`,
+      })
+      .from(usageEvents)
+      .where(sql`${usageEvents.createdAt} >= ${cutoff}`)
+      .groupBy(usageEvents.featureName, usageEvents.eventCategory)
+      .orderBy(sql`SUM(${usageEvents.estimatedCostUsd}) DESC`);
+    return rows as FeatureSummaryRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Daily aggregation for trend charts. */
+export async function getDailyTrend(days = 30): Promise<DailyTrendRow[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const { sql } = await import("drizzle-orm");
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        date: sql<string>`DATE(${usageEvents.createdAt})`,
+        callCount: sql<number>`COUNT(*)`,
+        totalTokens: sql<number>`SUM(${usageEvents.totalTokens})`,
+        totalCostUsd: sql<number>`SUM(${usageEvents.estimatedCostUsd})`,
+      })
+      .from(usageEvents)
+      .where(sql`${usageEvents.createdAt} >= ${cutoff}`)
+      .groupBy(sql`DATE(${usageEvents.createdAt})`)
+      .orderBy(sql`DATE(${usageEvents.createdAt}) ASC`);
+    return rows as DailyTrendRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Top callers by cost. */
+export async function getTopCallers(days = 30, limit = 20): Promise<TopCallerRow[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const { sql, isNotNull } = await import("drizzle-orm");
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        userId: usageEvents.userId,
+        callCount: sql<number>`COUNT(*)`,
+        totalCostUsd: sql<number>`SUM(${usageEvents.estimatedCostUsd})`,
+      })
+      .from(usageEvents)
+      .where(sql`${usageEvents.createdAt} >= ${cutoff} AND ${isNotNull(usageEvents.userId)}`)
+      .groupBy(usageEvents.userId)
+      .orderBy(sql`SUM(${usageEvents.estimatedCostUsd}) DESC`)
+      .limit(limit);
+    return rows as TopCallerRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Recent LLM call log. */
+export async function getLLMCallLog(limit = 100): Promise<LLMCallLogRow[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const { eq } = await import("drizzle-orm");
+    const rows = await db
+      .select()
+      .from(usageEvents)
+      .where(eq(usageEvents.eventCategory, "llm"))
+      .orderBy(usageEvents.createdAt)
+      .limit(limit);
+    return rows as LLMCallLogRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Total cost and call count for a given period. */
+export async function getCostSummary(days = 30): Promise<{
+  totalCostUsd: number;
+  totalCalls: number;
+  llmCostUsd: number;
+  llmCalls: number;
+  espnCalls: number;
+  trpcCalls: number;
+}> {
+  try {
+    const db = await getDb();
+    if (!db) return { totalCostUsd: 0, totalCalls: 0, llmCostUsd: 0, llmCalls: 0, espnCalls: 0, trpcCalls: 0 };
+    const { sql } = await import("drizzle-orm");
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        eventCategory: usageEvents.eventCategory,
+        callCount: sql<number>`COUNT(*)`,
+        totalCostUsd: sql<number>`SUM(${usageEvents.estimatedCostUsd})`,
+      })
+      .from(usageEvents)
+      .where(sql`${usageEvents.createdAt} >= ${cutoff}`)
+      .groupBy(usageEvents.eventCategory);
+
+    let totalCostUsd = 0, totalCalls = 0, llmCostUsd = 0, llmCalls = 0, espnCalls = 0, trpcCalls = 0;
+    for (const row of rows) {
+      totalCalls += Number(row.callCount);
+      totalCostUsd += Number(row.totalCostUsd);
+      if (row.eventCategory === "llm") { llmCostUsd = Number(row.totalCostUsd); llmCalls = Number(row.callCount); }
+      if (row.eventCategory === "espn") espnCalls = Number(row.callCount);
+      if (row.eventCategory === "trpc") trpcCalls = Number(row.callCount);
+    }
+    return { totalCostUsd, totalCalls, llmCostUsd, llmCalls, espnCalls, trpcCalls };
+  } catch {
+    return { totalCostUsd: 0, totalCalls: 0, llmCostUsd: 0, llmCalls: 0, espnCalls: 0, trpcCalls: 0 };
+  }
+}

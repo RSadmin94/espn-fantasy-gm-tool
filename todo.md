@@ -1213,3 +1213,17 @@ This single flow determines conversion, retention, and word-of-mouth.
 
 ## Fear Index Widget — Tooltip Enhancement
 - [x] Add interactive hover tooltips to FearIndexWidget.tsx showing 5-component formula breakdown per team row
+
+## Backend Usage & Cost Monitor
+- [x] Add usage_events table to drizzle/schema.ts and run pnpm db:push
+- [x] Build server/usageTracker.ts: trackEvent() helper that records feature name, event type, token counts, cost estimate, userId, timestamp
+- [x] Wrap invokeLLM in server/_core/llm.ts with automatic token/cost tracking (global persistUsage hook)
+- [x] Wrap invokeLLMStream in server/_core/llm.ts with automatic token/cost tracking (finally block)
+- [x] Instrument fetchEspnViewsHardened with ESPN event tracking
+- [x] Build usageMonitor tRPC router: getCostSummary, getFeatureSummary, getDailyTrend, getTopCallers, getLLMCallLog
+- [x] Build client/src/pages/UsageMonitor.tsx: owner-only admin page with cost cards, feature table, daily trend chart, LLM call log
+- [x] Add /usage-monitor route to App.tsx (owner-only guard)
+- [x] Add "Usage Monitor" nav link in AppLayout sidebar under System section
+- [x] Write vitest for usageTracker cost estimation (17 tests in usageTracker.test.ts)
+- [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (615/615 passing)
+- [x] Save checkpoint and push to GitHub

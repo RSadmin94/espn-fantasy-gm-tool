@@ -1,5 +1,7 @@
 import {
   int,
+  bigint,
+  float,
   boolean,
   mysqlEnum,
   mysqlTable,
@@ -885,3 +887,47 @@ export const reputationEvents = mysqlTable(
 );
 export type ReputationEvent = typeof reputationEvents.$inferSelect;
 export type InsertReputationEvent = typeof reputationEvents.$inferInsert;
+
+// ─── Usage Events ──────────────────────────────────────────────────────────────
+/**
+ * One row per tracked event (LLM call, ESPN fetch, tRPC procedure hit).
+ * Used by the backend usage & cost monitor dashboard.
+ *
+ * eventCategory:  "llm" | "espn" | "trpc"
+ * featureName:    human-readable feature (e.g. "advisor.chat", "tradeNarrative.refresh")
+ * callType:       LLM callType or ESPN view name or tRPC procedure path
+ * promptTokens / completionTokens / totalTokens: LLM token counts (0 for non-LLM)
+ * estimatedCostUsd: rough cost estimate based on model pricing
+ * durationMs:     wall-clock time for the call
+ * userId:         Manus user ID (null = unauthenticated / background job)
+ * model:          LLM model name (null for non-LLM events)
+ * streaming:      true if the LLM call was a streaming call
+ * metadata:       JSON blob for extra context (e.g. season, week, tradeId)
+ */
+export const usageEvents = mysqlTable(
+  "usage_events",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    eventCategory: varchar("eventCategory", { length: 16 }).notNull(),
+    featureName: varchar("featureName", { length: 128 }).notNull(),
+    callType: varchar("callType", { length: 64 }),
+    promptTokens: int("promptTokens").notNull().default(0),
+    completionTokens: int("completionTokens").notNull().default(0),
+    totalTokens: int("totalTokens").notNull().default(0),
+    estimatedCostUsd: float("estimatedCostUsd").notNull().default(0),
+    durationMs: int("durationMs").notNull().default(0),
+    userId: varchar("userId", { length: 64 }),
+    model: varchar("model", { length: 64 }),
+    streaming: boolean("streaming").notNull().default(false),
+    metadata: text("metadata"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_ue_feature").on(t.featureName),
+    index("idx_ue_category").on(t.eventCategory),
+    index("idx_ue_created").on(t.createdAt),
+    index("idx_ue_user").on(t.userId),
+  ]
+);
+export type UsageEvent = typeof usageEvents.$inferSelect;
+export type InsertUsageEvent = typeof usageEvents.$inferInsert;

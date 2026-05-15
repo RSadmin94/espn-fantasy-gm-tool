@@ -20,6 +20,7 @@ import StartSit from "./pages/StartSit";
 import KeeperCalculator from "./pages/KeeperCalculator";
 import PlayerProfiles from "./pages/PlayerProfiles";
 import OwnerStats from "./pages/OwnerStats";
+import UsageMonitor from "./pages/UsageMonitor";
 import PickValueCalculator from "./pages/PickValueCalculator";
 import DraftPickTracker from "./pages/DraftPickTracker";
 import KeeperROI from "./pages/KeeperROI";
@@ -72,6 +73,7 @@ function Router() {
       <Route path="/startsit" component={StartSit} />
       <Route path="/player-profiles" component={PlayerProfiles} />
       <Route path="/owner-stats" component={OwnerStats} />
+      <Route path="/usage-monitor" component={UsageMonitor} />
       <Route path="/pick-value" component={PickValueCalculator} />
       <Route path="/pick-tracker" component={DraftPickTracker} />
       <Route path="/keeper-roi" component={KeeperROI} />

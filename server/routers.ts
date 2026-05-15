@@ -244,6 +244,51 @@ export const appRouter = router({
         return { ok: true, ...result };
       }),
   }),
+
+  // ─── Usage Monitor (admin-only) ─────────────────────────────────────────────
+  usageMonitor: router({
+    /** Cost + call count summary for the last N days */
+    getCostSummary: protectedProcedure
+      .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getCostSummary } = await import("./usageTracker");
+        return getCostSummary(input.days);
+      }),
+    /** Per-feature aggregated stats */
+    getFeatureSummary: protectedProcedure
+      .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getFeatureSummary } = await import("./usageTracker");
+        return getFeatureSummary(input.days);
+      }),
+    /** Daily trend data for charts */
+    getDailyTrend: protectedProcedure
+      .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getDailyTrend } = await import("./usageTracker");
+        return getDailyTrend(input.days);
+      }),
+    /** Top callers by cost */
+    getTopCallers: protectedProcedure
+      .input(z.object({ days: z.number().int().min(1).max(365).default(30), limit: z.number().int().min(1).max(100).default(20) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getTopCallers } = await import("./usageTracker");
+        return getTopCallers(input.days, input.limit);
+      }),
+    /** Recent LLM call log */
+    getLLMCallLog: protectedProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(500).default(100) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getLLMCallLog } = await import("./usageTracker");
+        return getLLMCallLog(input.limit);
+      }),
+  }),
+
   league: router({
     // Get the user's active league connection
     getActive: protectedProcedure.query(async ({ ctx }) => {
