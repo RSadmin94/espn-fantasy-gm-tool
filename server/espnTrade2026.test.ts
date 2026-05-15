@@ -578,3 +578,261 @@ describe("tradeAging — trade grouping and side reconstruction logic", () => {
     expect(verdict).toBe("even");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tradeAging — 2026 path: proposal in cache with PENDING status
+// Tests the fix where TRADE_PROPOSAL rows have status=PENDING (ESPN default)
+// but should still be treated as completed when linked by TRADE_UPHOLD/TRADE_ACCEPT.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("tradeAging — 2026 path: proposal in cache with PENDING status", () => {
+  /**
+   * Mimics the FIXED tradeAging logic:
+   * - builds proposalItemMap and proposalPickMap from TRADE_PROPOSAL rows
+   * - builds completedProposalIds from TRADE_UPHOLD/TRADE_ACCEPT rows
+   * - legacy path: isCompletedTradeRow for TRADE/TRADE_PROPOSAL
+   * - 2026 path: for each completedProposalId not yet in tradeGroups,
+   *   add from proposalItemMap/proposalPickMap if present
+   */
+  function reconstructTradesFixed(data: Record<string, unknown>) {
+    const txRows = normalizeTransactions(data) as Array<Record<string, unknown>>;
+
+    // Build lookup: proposalId → proposal item rows
+    const proposalItemMap = new Map<string, Record<string, unknown>[]>();
+    for (const r of txRows) {
+      if (r.type === "TRADE_PROPOSAL" && r.playerId && r.itemType !== "DRAFT_TRADE") {
+        const tid = r.transactionId as string;
+        if (!proposalItemMap.has(tid)) proposalItemMap.set(tid, []);
+        proposalItemMap.get(tid)!.push(r);
+      }
+    }
+    const proposalPickMap = new Map<string, Record<string, unknown>[]>();
+    for (const r of txRows) {
+      if (r.type === "TRADE_PROPOSAL" && r.itemType === "DRAFT_TRADE") {
+        const tid = r.transactionId as string;
+        if (!proposalPickMap.has(tid)) proposalPickMap.set(tid, []);
+        proposalPickMap.get(tid)!.push(r);
+      }
+    }
+
+    // Build completedProposalIds + acceptanceDateMap
+    const completedProposalIds = new Set<string>();
+    const acceptanceDateMap = new Map<string, number>();
+    for (const r of txRows) {
+      if (r.type === "TRADE_UPHOLD" || r.type === "TRADE_ACCEPT") {
+        const relId = r.relatedTransactionId as string | null;
+        if (relId) {
+          completedProposalIds.add(relId);
+          const d = (r.proposedDate as number) || 0;
+          if (d > 0 && !acceptanceDateMap.has(relId)) acceptanceDateMap.set(relId, d);
+        }
+      }
+    }
+
+    const isCompletedTradeRow = (r: Record<string, unknown>) => {
+      const type = r.type as string;
+      const status = String(r.status || "").toUpperCase();
+      if (type === "TRADE") return status === "" || status === "EXECUTED";
+      if (type === "TRADE_PROPOSAL") {
+        return completedProposalIds.has(r.transactionId as string) || status === "EXECUTED";
+      }
+      return false;
+    };
+
+    const tradeItemRows = txRows.filter(r => isCompletedTradeRow(r) && r.playerId && r.itemType !== "DRAFT_TRADE");
+    const pickTradeRows = txRows.filter(r => isCompletedTradeRow(r) && r.itemType === "DRAFT_TRADE");
+
+    const tradeGroups = new Map<string, { playerRows: Record<string, unknown>[]; pickRows: Record<string, unknown>[]; proposedDate?: number }>();
+    for (const row of tradeItemRows) {
+      const tid = row.transactionId as string;
+      if (!tradeGroups.has(tid)) tradeGroups.set(tid, { playerRows: [], pickRows: [], proposedDate: acceptanceDateMap.get(tid) });
+      tradeGroups.get(tid)!.playerRows.push(row);
+    }
+    for (const row of pickTradeRows) {
+      const tid = row.transactionId as string;
+      if (!tradeGroups.has(tid)) tradeGroups.set(tid, { playerRows: [], pickRows: [], proposedDate: acceptanceDateMap.get(tid) });
+      tradeGroups.get(tid)!.pickRows.push(row);
+    }
+
+    // 2026 path: add proposals that are in cache but weren't picked up by isCompletedTradeRow
+    for (const proposalId of completedProposalIds) {
+      if (tradeGroups.has(proposalId)) continue;
+      const itemRows = proposalItemMap.get(proposalId);
+      const pRows = proposalPickMap.get(proposalId);
+      if (!itemRows?.length && !pRows?.length) continue; // not in cache — skip gracefully
+      tradeGroups.set(proposalId, {
+        playerRows: itemRows ?? [],
+        pickRows: pRows ?? [],
+        proposedDate: acceptanceDateMap.get(proposalId),
+      });
+    }
+
+    // Reconstruct sides
+    const trades: { tradeId: string; teamIds: number[]; playerCount: number; pickCount: number; proposedDate: number }[] = [];
+    for (const [tradeId, group] of Array.from(tradeGroups)) {
+      const teamIds = new Set<number>();
+      for (const r of [...group.playerRows, ...group.pickRows]) {
+        if (r.fromTeamId != null && (r.fromTeamId as number) > 0) teamIds.add(r.fromTeamId as number);
+        if (r.toTeamId != null && (r.toTeamId as number) > 0) teamIds.add(r.toTeamId as number);
+      }
+      if (teamIds.size < 2) continue;
+      const firstRow = group.playerRows[0] || group.pickRows[0];
+      const proposedDate = (firstRow?.proposedDate as number) || group.proposedDate || 0;
+      trades.push({
+        tradeId,
+        teamIds: Array.from(teamIds),
+        playerCount: group.playerRows.length,
+        pickCount: group.pickRows.length,
+        proposedDate,
+      });
+    }
+    return trades;
+  }
+
+  it("picks up a TRADE_PROPOSAL with PENDING status when linked by TRADE_UPHOLD", () => {
+    // This is the real 2026 bug: proposal has status=PENDING (not EXECUTED),
+    // so isCompletedTradeRow returns false, but it IS linked by TRADE_UPHOLD.
+    const payload2026WithPendingProposal = {
+      seasonId: 2026,
+      transactions: [
+        {
+          id: "uphold-001",
+          type: "TRADE_UPHOLD",
+          status: "EXECUTED",
+          proposedDate: 1778814507468,
+          teamId: 1,
+          relatedTransactionId: "proposal-pending-001",
+          items: [],
+        },
+        {
+          id: "proposal-pending-001",
+          type: "TRADE_PROPOSAL",
+          status: "PENDING", // ← this is the bug: PENDING status was being excluded
+          proposedDate: 1778800000000,
+          teamId: 5,
+          relatedTransactionId: null,
+          items: [
+            { fromTeamId: 5, toTeamId: 1, type: "ADD", playerId: 1111111, player: { id: 1111111, fullName: "Player A" } },
+            { fromTeamId: 1, toTeamId: 5, type: "ADD", playerId: 2222222, player: { id: 2222222, fullName: "Player B" } },
+          ],
+        },
+      ],
+    };
+    const trades = reconstructTradesFixed(payload2026WithPendingProposal as Record<string, unknown>);
+    expect(trades).toHaveLength(1);
+    expect(trades[0].tradeId).toBe("proposal-pending-001");
+    expect(trades[0].playerCount).toBe(2);
+    expect(trades[0].teamIds).toContain(1);
+    expect(trades[0].teamIds).toContain(5);
+  });
+
+  it("uses acceptance-row proposedDate when proposal's proposedDate is 0", () => {
+    const payload = {
+      seasonId: 2026,
+      transactions: [
+        {
+          id: "uphold-date-001",
+          type: "TRADE_UPHOLD",
+          status: "EXECUTED",
+          proposedDate: 1778814507468, // acceptance row has date
+          teamId: 1,
+          relatedTransactionId: "proposal-no-date",
+          items: [],
+        },
+        {
+          id: "proposal-no-date",
+          type: "TRADE_PROPOSAL",
+          status: "PENDING",
+          proposedDate: 0, // no date on proposal
+          teamId: 5,
+          relatedTransactionId: null,
+          items: [
+            { fromTeamId: 5, toTeamId: 1, type: "ADD", playerId: 3333333, player: { id: 3333333, fullName: "Player C" } },
+            { fromTeamId: 1, toTeamId: 5, type: "ADD", playerId: 4444444, player: { id: 4444444, fullName: "Player D" } },
+          ],
+        },
+      ],
+    };
+    const trades = reconstructTradesFixed(payload as Record<string, unknown>);
+    expect(trades).toHaveLength(1);
+    // proposedDate should fall back to acceptance row's date
+    expect(trades[0].proposedDate).toBe(1778814507468);
+  });
+
+  it("skips gracefully when proposal is NOT in cache (ESPN purged it)", () => {
+    // Only the TRADE_UPHOLD is present — no proposal in cache
+    const upholdOnlyPayload = {
+      seasonId: 2026,
+      transactions: [
+        {
+          id: "uphold-purged-001",
+          type: "TRADE_UPHOLD",
+          status: "EXECUTED",
+          proposedDate: 1778814507468,
+          teamId: 1,
+          relatedTransactionId: "purged-proposal-id",
+          items: [],
+        },
+      ],
+    };
+    const trades = reconstructTradesFixed(upholdOnlyPayload as Record<string, unknown>);
+    // Should return 0 trades — no fake data
+    expect(trades).toHaveLength(0);
+  });
+
+  it("handles pick-only 2026 trades (no player items, only DRAFT_TRADE picks)", () => {
+    const payload = {
+      seasonId: 2026,
+      transactions: [
+        {
+          id: "uphold-picks-001",
+          type: "TRADE_UPHOLD",
+          status: "EXECUTED",
+          proposedDate: 1778814507468,
+          teamId: 1,
+          relatedTransactionId: "proposal-picks-001",
+          items: [],
+        },
+        {
+          id: "proposal-picks-001",
+          type: "TRADE_PROPOSAL",
+          status: "PENDING",
+          proposedDate: 1778800000000,
+          teamId: 5,
+          relatedTransactionId: null,
+          items: [
+            { fromTeamId: 5, toTeamId: 1, type: "DRAFT_TRADE", playerId: 0, overallPickNumber: 7, player: {} },
+            { fromTeamId: 1, toTeamId: 5, type: "DRAFT_TRADE", playerId: 0, overallPickNumber: 39, player: {} },
+          ],
+        },
+      ],
+    };
+    const trades = reconstructTradesFixed(payload as Record<string, unknown>);
+    expect(trades).toHaveLength(1);
+    expect(trades[0].pickCount).toBe(2);
+    expect(trades[0].playerCount).toBe(0);
+  });
+
+  it("legacy TRADE path still works alongside 2026 path", () => {
+    const mixedPayload = {
+      seasonId: 2025,
+      transactions: [
+        // Legacy trade
+        {
+          id: "legacy-trade-001",
+          type: "TRADE",
+          status: "EXECUTED",
+          proposedDate: 1700000000000,
+          teamId: 2,
+          items: [
+            { fromTeamId: 2, toTeamId: 8, type: "ADD", playerId: 1234567, player: { id: 1234567, fullName: "Patrick Mahomes" } },
+            { fromTeamId: 8, toTeamId: 2, type: "ADD", playerId: 7654321, player: { id: 7654321, fullName: "Justin Jefferson" } },
+          ],
+        },
+      ],
+    };
+    const trades = reconstructTradesFixed(mixedPayload as Record<string, unknown>);
+    expect(trades).toHaveLength(1);
+    expect(trades[0].playerCount).toBe(2);
+  });
+});

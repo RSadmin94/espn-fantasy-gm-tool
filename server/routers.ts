@@ -446,15 +446,47 @@ export const appRouter = router({
           const ownerMap = new Map<number, string>();
           for (const t of teams) ownerMap.set(t.teamId as number, (t.owners as string) || `Team ${t.teamId}`);
 
-          // Collect completed trade item rows. A 2026 TRADE_PROPOSAL is only a
-          // completed trade when linked by TRADE_UPHOLD/TRADE_ACCEPT or marked executed.
+          // Collect completed trade item rows.
+          // Legacy path: type === "TRADE" && status === "EXECUTED" (or empty)
+          // 2026 path: TRADE_UPHOLD/TRADE_ACCEPT rows link to TRADE_PROPOSAL via relatedTransactionId
           const txRows = normalizeTransactions(data) as Record<string, unknown>[];
-          const completedProposalIds = new Set(
-            txRows
-              .filter(r => r.type === "TRADE_UPHOLD" || r.type === "TRADE_ACCEPT")
-              .map(r => r.relatedTransactionId as string | null)
-              .filter((id): id is string => Boolean(id))
-          );
+
+          // Build lookup: proposalId → proposal item rows (may be empty if ESPN purged the proposal)
+          // Note: pick items have playerId=0 (falsy), so use !playerId to detect them
+          const proposalItemMap = new Map<string, Record<string, unknown>[]>();
+          for (const r of txRows) {
+            if (r.type === "TRADE_PROPOSAL" && r.playerId && r.itemType !== "DRAFT_TRADE") {
+              const tid = r.transactionId as string;
+              if (!proposalItemMap.has(tid)) proposalItemMap.set(tid, []);
+              proposalItemMap.get(tid)!.push(r);
+            }
+          }
+          // Also collect pick rows from proposals (playerId=0 or null + itemType=DRAFT_TRADE)
+          const proposalPickMap = new Map<string, Record<string, unknown>[]>();
+          for (const r of txRows) {
+            if (r.type === "TRADE_PROPOSAL" && r.itemType === "DRAFT_TRADE") {
+              const tid = r.transactionId as string;
+              if (!proposalPickMap.has(tid)) proposalPickMap.set(tid, []);
+              proposalPickMap.get(tid)!.push(r);
+            }
+          }
+
+          // Build set of completed proposal IDs from acceptance rows
+          const completedProposalIds = new Set<string>();
+          // Also track acceptance row metadata (proposedDate) keyed by proposalId
+          const acceptanceDateMap = new Map<string, number>();
+          for (const r of txRows) {
+            if (r.type === "TRADE_UPHOLD" || r.type === "TRADE_ACCEPT") {
+              const relId = r.relatedTransactionId as string | null;
+              if (relId) {
+                completedProposalIds.add(relId);
+                // Use the acceptance row's proposedDate as fallback trade date
+                const d = (r.proposedDate as number) || 0;
+                if (d > 0 && !acceptanceDateMap.has(relId)) acceptanceDateMap.set(relId, d);
+              }
+            }
+          }
+
           const isCompletedTradeRow = (r: Record<string, unknown>) => {
             const type = r.type as string;
             const status = String(r.status || "").toUpperCase();
@@ -464,26 +496,41 @@ export const appRouter = router({
             }
             return false;
           };
-          const tradeItemRows = txRows.filter(r => {
-            return isCompletedTradeRow(r) && r.playerId != null;
-          });
 
-          // Also collect pick-trade item rows (DRAFT_TRADE items inside TRADE_PROPOSAL)
-          const pickTradeRows = txRows.filter(r => {
-            return isCompletedTradeRow(r) && r.playerId == null && r.itemType === "DRAFT_TRADE";
-          });
+          // Legacy path: collect item rows from TRADE / TRADE_PROPOSAL rows that are in cache
+          // playerId=0 is a pick item (falsy), so use truthy check for player rows
+          const tradeItemRows = txRows.filter(r => isCompletedTradeRow(r) && r.playerId && r.itemType !== "DRAFT_TRADE");
+          const pickTradeRows = txRows.filter(r => isCompletedTradeRow(r) && r.itemType === "DRAFT_TRADE");
 
-          // Group by transactionId
-          const tradeGroups = new Map<string, { playerRows: Record<string, unknown>[]; pickRows: Record<string, unknown>[] }>();
+          // Group by transactionId (legacy path)
+          // Also seed proposedDate from acceptanceDateMap so 2026 proposals with date=0 get the right date
+          const tradeGroups = new Map<string, { playerRows: Record<string, unknown>[]; pickRows: Record<string, unknown>[]; proposedDate?: number }>();
           for (const row of tradeItemRows) {
             const tid = row.transactionId as string;
-            if (!tradeGroups.has(tid)) tradeGroups.set(tid, { playerRows: [], pickRows: [] });
+            if (!tradeGroups.has(tid)) tradeGroups.set(tid, { playerRows: [], pickRows: [], proposedDate: acceptanceDateMap.get(tid) });
             tradeGroups.get(tid)!.playerRows.push(row);
           }
           for (const row of pickTradeRows) {
             const tid = row.transactionId as string;
-            if (!tradeGroups.has(tid)) tradeGroups.set(tid, { playerRows: [], pickRows: [] });
+            if (!tradeGroups.has(tid)) tradeGroups.set(tid, { playerRows: [], pickRows: [], proposedDate: acceptanceDateMap.get(tid) });
             tradeGroups.get(tid)!.pickRows.push(row);
+          }
+
+          // 2026 path: for each completed proposal ID, if the proposal item rows are NOT already
+          // in the cache (ESPN purged them), reconstruct from the acceptance row's relatedTransactionId.
+          // If proposal IS in cache, it's already handled above via isCompletedTradeRow.
+          // If proposal is NOT in cache, skip gracefully (no fake data).
+          for (const proposalId of Array.from(completedProposalIds)) {
+            if (tradeGroups.has(proposalId)) continue; // already covered by legacy path
+            const itemRows = proposalItemMap.get(proposalId);
+            const pickRows = proposalPickMap.get(proposalId);
+            if (!itemRows?.length && !pickRows?.length) continue; // proposal not in cache — skip gracefully
+            // Proposal IS in cache but wasn't picked up by isCompletedTradeRow (e.g. status mismatch)
+            tradeGroups.set(proposalId, {
+              playerRows: itemRows ?? [],
+              pickRows: pickRows ?? [],
+              proposedDate: acceptanceDateMap.get(proposalId),
+            });
           }
 
           // For each trade group, reconstruct both sides
@@ -563,9 +610,9 @@ export const appRouter = router({
             const verdict: TradeRecord["verdict"] =
               Math.abs(margin) < 50 ? "even" : margin > 0 ? "sideA" : "sideB";
 
-            // Get proposedDate from first row
+            // Get proposedDate from first row, or fall back to acceptance-row date (2026 path)
             const firstRow = group.playerRows[0] || group.pickRows[0];
-            const proposedDate = (firstRow?.proposedDate as number) || 0;
+            const proposedDate = (firstRow?.proposedDate as number) || group.proposedDate || 0;
 
             allTrades.push({
               season,

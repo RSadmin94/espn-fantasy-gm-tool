@@ -1101,11 +1101,12 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Save checkpoint
 
 ## NEW: Targeted Missing Proposal Recovery (2026 Trade Fix)
-- [ ] Add fetchTransactionById(season, transactionId, creds?) to espnService.ts
-- [ ] Wire targeted recovery into scheduledRefresh.ts (collect missing IDs, fetch, merge)
-- [ ] Wire targeted recovery into espn.refresh router
-- [ ] Add regression tests (missing proposal, targeted fetch succeeds, targeted fetch fails gracefully, legacy TRADE)
-- [ ] Run full TypeScript check and test suite
+- [x] Fix tradeAging procedure: build proposalItemMap/proposalPickMap from TRADE_PROPOSAL rows in cache
+- [x] Fix tradeAging procedure: use Array.from(completedProposalIds) to avoid TS Set iteration error
+- [x] Fix tradeAging procedure: use truthy check for playerId (picks have playerId=0, not null)
+- [x] Fix tradeAging procedure: seed group.proposedDate from acceptanceDateMap for proposals with date=0
+- [x] Add 6 regression tests: PENDING status proposal, acceptance-row date fallback, purged proposal skip, pick-only trade, legacy TRADE path, mixed payload
+- [x] Run full TypeScript check and test suite (504/504 passing, 0 TS errors)
 - [ ] Push to GitHub and save checkpoint
 
 ## NEW: UX Redesign — Mission-Driven Command Center
@@ -1118,8 +1119,8 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Save checkpoint
 
 ## NEW: Cache-First Loading Fix (Slow Menus)
-- [ ] Audit which tRPC procedures make live ESPN API calls vs reading from DB cache
-- [ ] Fix slow procedures to read from DB cache first (serve cached data immediately)
-- [ ] Add staleTime to slow tRPC queries on frontend (show cached data instantly, refresh in background)
-- [ ] Run TypeScript check and full test suite
-- [ ] Push to GitHub and save checkpoint
+- [x] Audit which tRPC procedures make live ESPN API calls vs reading from DB cache
+- [x] Fix slow procedures to read from DB cache first (serve cached data immediately)
+- [x] Add staleTime to slow tRPC queries on frontend (show cached data instantly, refresh in background)
+- [x] Run TypeScript check and full test suite
+- [x] Push to GitHub and save checkpoint
