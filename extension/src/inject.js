@@ -1,5 +1,5 @@
 /**
- * ESPN GM Tool — Fantasy DNA Advisor Content Script v1.4.0
+ * ESPN GM Tool — Fantasy DNA Advisor Content Script v1.5.0
  *
  * ESPN-first release. Sleeper/Yahoo stubs retained for future expansion.
  *
@@ -598,6 +598,27 @@
     `;
   }
 
+  // ─── Message listener (from background.js toolbar click) ──────────────────────
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message.type === "OPEN_PANEL") {
+      // Toolbar icon clicked while on ESPN — open the League Pulse slide-out
+      openPanel(null, "League Pulse");
+      sendResponse({ ok: true });
+    }
+    return false;
+  });
+
+  // ─── Message listener (from background.js toolbar click) ──────────────────────
+  // When the user clicks the extension toolbar icon on an ESPN tab, background.js
+  // sends OPEN_PANEL here to open the League Pulse slide-out directly.
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message.type === "OPEN_PANEL") {
+      openPanel(null, "League Pulse");
+      sendResponse({ ok: true });
+    }
+    return false;
+  });
+
   // ─── SPA navigation handling ─────────────────────────────────────────────────
   let lastUrl = window.location.href;
 
@@ -638,6 +659,6 @@
     setTimeout(injectBadges, 500);
   }
 
-  console.log(`[ESPN GM Tool DNA Advisor v1.4.0] Provider: ${PROVIDER} | URL: ${window.location.pathname}`);
+  console.log(`[ESPN GM Tool DNA Advisor v1.5.0] Provider: ${PROVIDER} | URL: ${window.location.pathname}`);
 
 })();

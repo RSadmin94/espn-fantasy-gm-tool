@@ -1,5 +1,5 @@
 /**
- * Background Service Worker — ESPN GM Tool v1.4.0
+ * Background Service Worker — ESPN GM Tool v1.5.0
  *
  * Responsibilities:
  *  1. Connector flow: capture ESPN page context + cookies for popup.js
@@ -144,17 +144,44 @@ async function handleDnaMessage(msg) {
   }
 }
 
-// ─── Toolbar icon click → open/focus the GM Tool web app ─────────────────────
-const WEB_APP_URL = DEFAULT_BACKEND;
+// ─── Toolbar icon click → open the DNA slide-out panel on the current ESPN tab ──
+// If the active tab is on fantasy.espn.com, send OPEN_PANEL to inject.js.
+// If not on ESPN, open fantasy.espn.com so the user can use the DNA badges there.
+// We NEVER navigate to the GM Tool website from this handler.
 
-chrome.action.onClicked?.addListener(async () => {
-  const tabs = await chrome.tabs.query({ url: `${WEB_APP_URL}/*` });
-  if (tabs.length > 0) {
-    const tab = tabs[0];
-    await chrome.tabs.update(tab.id, { active: true });
-    await chrome.windows.update(tab.windowId, { focused: true });
-    chrome.tabs.sendMessage(tab.id, { type: "OPEN_ADVISOR_PANEL" });
+chrome.action.onClicked?.addListener(async (tab) => {
+  const isEspnTab = tab?.url && (
+    tab.url.includes("fantasy.espn.com") ||
+    tab.url.includes("www.espn.com/fantasy")
+  );
+
+  if (isEspnTab) {
+    // Inject.js is already running — tell it to open the League Pulse panel
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: "OPEN_PANEL" });
+    } catch (_) {
+      // Content script may not be ready yet — try scripting.executeScript as fallback
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            // Trigger the FAB click if it exists
+            const fab = document.getElementById("af-league-pulse-fab");
+            if (fab) fab.click();
+          },
+        });
+      } catch (e2) {
+        console.warn("[GM Tool] Could not open panel:", e2);
+      }
+    }
   } else {
-    chrome.tabs.create({ url: `${WEB_APP_URL}/command-center?openAdvisor=1` });
+    // Not on ESPN — open ESPN fantasy home so user can use DNA badges
+    const espnTabs = await chrome.tabs.query({ url: "https://fantasy.espn.com/*" });
+    if (espnTabs.length > 0) {
+      await chrome.tabs.update(espnTabs[0].id, { active: true });
+      await chrome.windows.update(espnTabs[0].windowId, { focused: true });
+    } else {
+      chrome.tabs.create({ url: "https://fantasy.espn.com/football/" });
+    }
   }
 });
