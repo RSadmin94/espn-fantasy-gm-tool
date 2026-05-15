@@ -189,6 +189,61 @@ export const appRouter = router({
         return { ok: true, count: rows.length, season };
       }),
   }),
+  fearIndex: router({
+    /** Get fear index for a specific season + week */
+    getByWeek: publicProcedure
+      .input(z.object({ season: z.number().int(), week: z.number().int() }))
+      .query(async ({ input }) => {
+        const { getFearIndexFromDb } = await import("./fearIndexService");
+        return getFearIndexFromDb(input.season, input.week);
+      }),
+    /** Get the latest fear index for a season (most recent week with data) */
+    getLatest: publicProcedure
+      .input(z.object({ season: z.number().int().optional() }))
+      .query(async ({ input }) => {
+        const { getLatestFearIndexFromDb } = await import("./fearIndexService");
+        const season = input.season ?? 2025;
+        return getLatestFearIndexFromDb(season);
+      }),
+    /** Manually trigger fear index refresh (no new ESPN calls) */
+    refresh: publicProcedure
+      .input(z.object({ season: z.number().int().optional() }))
+      .mutation(async ({ input }) => {
+        const { refreshFearIndex } = await import("./fearIndexService");
+        const season = input.season ?? 2025;
+        const entries = await refreshFearIndex(season);
+        return { ok: true, count: entries.length, season };
+      }),
+  }),
+  reputation: router({
+    /** Get all reputation events for a specific member */
+    getByMember: publicProcedure
+      .input(z.object({ memberId: z.string() }))
+      .query(async ({ input }) => {
+        const { getReputationEventsFromDb } = await import("./reputationService");
+        return getReputationEventsFromDb(input.memberId);
+      }),
+    /** Get all reputation events for a season */
+    getBySeason: publicProcedure
+      .input(z.object({ season: z.number().int() }))
+      .query(async ({ input }) => {
+        const { getSeasonReputationEventsFromDb } = await import("./reputationService");
+        return getSeasonReputationEventsFromDb(input.season);
+      }),
+    /** Get all reputation events across all seasons */
+    getAll: publicProcedure
+      .query(async () => {
+        const { getAllReputationEventsFromDb } = await import("./reputationService");
+        return getAllReputationEventsFromDb();
+      }),
+    /** Manually trigger reputation event detection (no new ESPN calls) */
+    refresh: publicProcedure
+      .mutation(async () => {
+        const { refreshReputationEvents } = await import("./reputationService");
+        const result = await refreshReputationEvents({ generateLLM: false });
+        return { ok: true, ...result };
+      }),
+  }),
   league: router({
     // Get the user's active league connection
     getActive: protectedProcedure.query(async ({ ctx }) => {

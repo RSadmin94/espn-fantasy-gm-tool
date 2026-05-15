@@ -814,3 +814,74 @@ export const weeklyStorylines = mysqlTable(
 );
 export type WeeklyStoryline = typeof weeklyStorylines.$inferSelect;
 export type InsertWeeklyStoryline = typeof weeklyStorylines.$inferInsert;
+
+// ─── Fear Index ────────────────────────────────────────────────────────────────
+/**
+ * One row per team per season+week. Stores the deterministic fear score and
+ * heat label. Recomputed on every data refresh — no LLM required.
+ *
+ * fearScore = (avgPF_last4 * 0.3) + (winStreak * 8) + (rosterHealthScore * 0.2)
+ *           + (tradeAggressionScore * 0.15) + (exploitabilityInverse * 0.15)
+ *
+ * Heat labels: UNTOUCHABLE | RISING THREAT | DANGEROUS | NEUTRAL | DECLINING | COLLAPSING
+ */
+export const fearIndex = mysqlTable(
+  "fear_index",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    season: int("season").notNull(),
+    week: int("week").notNull(),
+    teamId: int("teamId").notNull(),
+    memberId: varchar("memberId", { length: 64 }).notNull(),
+    ownerName: varchar("ownerName", { length: 128 }).notNull(),
+    fearScore: int("fearScore").notNull().default(0),
+    heatLabel: varchar("heatLabel", { length: 32 }).notNull().default("NEUTRAL"),
+    avgPfLast4: int("avgPfLast4").notNull().default(0),
+    winStreak: int("winStreak").notNull().default(0),
+    rosterHealthScore: int("rosterHealthScore").notNull().default(0),
+    tradeAggressionScore: int("tradeAggressionScore").notNull().default(0),
+    exploitabilityInverse: int("exploitabilityInverse").notNull().default(0),
+    computedAt: timestamp("computedAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_fear_team_week").on(t.season, t.week, t.teamId),
+    index("idx_fi_season_week").on(t.season, t.week),
+    index("idx_fi_score").on(t.fearScore),
+  ]
+);
+export type FearIndex = typeof fearIndex.$inferSelect;
+export type InsertFearIndex = typeof fearIndex.$inferInsert;
+
+// ─── Reputation Events ─────────────────────────────────────────────────────────
+/**
+ * One row per reputation event per manager per season.
+ * Reputation events are behaviours that modify the GM archetype label over time.
+ *
+ * Event types: PANIC_SELLER | SILENT_ASSASSIN | TRADE_SHARK | WAIVER_GRINDER |
+ *              PLAYOFF_CHOKER | DYNASTY_BUILDER | REVENGE_SEEKER | CHAOS_AGENT
+ */
+export const reputationEvents = mysqlTable(
+  "reputation_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    memberId: varchar("memberId", { length: 64 }).notNull(),
+    ownerName: varchar("ownerName", { length: 128 }).notNull(),
+    season: int("season").notNull(),
+    eventType: varchar("eventType", { length: 64 }).notNull(),
+    eventLabel: varchar("eventLabel", { length: 128 }).notNull(),
+    eventSentence: text("eventSentence"),
+    supportingStat: varchar("supportingStat", { length: 256 }),
+    severity: varchar("severity", { length: 16 }).notNull().default("NOTABLE"),
+    detectedAt: timestamp("detectedAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_rep_event").on(t.memberId, t.season, t.eventType),
+    index("idx_re_member").on(t.memberId),
+    index("idx_re_season").on(t.season),
+    index("idx_re_type").on(t.eventType),
+  ]
+);
+export type ReputationEvent = typeof reputationEvents.$inferSelect;
+export type InsertReputationEvent = typeof reputationEvents.$inferInsert;

@@ -1197,3 +1197,16 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Write vitest tests for all 8 deterministic triggers and general behavior — 24 tests
 - [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (562/562 passing)
 - [x] Save checkpoint and push to GitHub
+
+## Sprint 4: League Fear Index + Reputation System
+- [x] Add fear_index and reputation_events tables to drizzle/schema.ts and run pnpm db:push
+- [x] Build server/fearIndexService.ts: 5-component fear score formula (avgPF×0.30, winStreak×8, rosterHealth×0.20, tradeAggression×0.15, exploitabilityInverse×0.15), 6 heat labels (UNTOUCHABLE→COLLAPSING), DB persist/read
+- [x] Build server/reputationService.ts: 8 event types (SILENT_ASSASSIN, CHAOS_AGENT, PANIC_SELLER, WAIVER_GRINDER, PLAYOFF_CHOKER, TRADE_SHARK, DYNASTY_BUILDER, REVENGE_SEEKER), LLM sentence generation, DB persist/read
+- [x] Add fearIndex and reputation routers to appRouter; hook refreshFearIndex + refreshReputationEvents into weeklyIntelHandler
+- [x] Build client/src/pages/FearIndexWidget.tsx — ranked fear index sidebar for Weekly Intelligence Storylines tab
+- [x] Build client/src/pages/ReputationTimeline.tsx — reputation event timeline for Owner Stats
+- [x] Add FearIndexWidget sidebar to WeeklyStorylinesTab.tsx (2-column grid layout)
+- [x] Add Reputation 🏅 tab to OwnerStats.tsx detail sub-tabs
+- [x] Write fearIndexService.test.ts (21 tests) and reputationService.test.ts (17 tests)
+- [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (598/598 passing)
+- [x] Save checkpoint and push to GitHub

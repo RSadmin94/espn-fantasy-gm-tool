@@ -105,6 +105,18 @@ export async function weeklyIntelHandler(req: Request, res: Response) {
       await refreshWeeklyStorylines(CURRENT_SEASON);
     } catch (_e) { /* non-fatal — storylines are supplemental */ }
 
+    // ── 5c. Refresh fear index (deterministic, no LLM) ────────────────────
+    try {
+      const { refreshFearIndex } = await import("./fearIndexService");
+      await refreshFearIndex(CURRENT_SEASON);
+    } catch (_e) { /* non-fatal — fear index is supplemental */ }
+
+    // ── 5d. Refresh reputation events (deterministic labels only, no LLM) ──
+    try {
+      const { refreshReputationEvents } = await import("./reputationService");
+      await refreshReputationEvents({ generateLLM: false });
+    } catch (_e) { /* non-fatal — reputation events are supplemental */ }
+
     // ── 6. Build owner notification ───────────────────────────────────────
     const durationSec = ((Date.now() - startedAt) / 1000).toFixed(1);
     const failedViews = pipelineResult.viewResults

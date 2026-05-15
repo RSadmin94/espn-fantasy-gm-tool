@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flame, RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { ReputationTimeline } from "./ReputationTimeline";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface TxnSeason {
@@ -332,6 +333,7 @@ function OwnerDetailPanel({ owner, allOwners }: { owner: Owner; allOwners: Owner
             { value: "seasons", label: "Seasons" },
             { value: "h2h", label: "H2H" },
             { value: "prediction", label: "2026 Prediction 🔮" },
+            { value: "reputation", label: "Reputation 🏅" },
           ].map((t) => (
             <TabsTrigger key={t.value} value={t.value}
               className="text-xs data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400 h-7 px-3">
@@ -520,6 +522,10 @@ function OwnerDetailPanel({ owner, allOwners }: { owner: Owner; allOwners: Owner
         {/* 2026 Prediction */}
         <TabsContent value="prediction" className="mt-3">
           <PredictionPanel owner={owner} />
+        </TabsContent>
+        {/* Reputation Timeline */}
+        <TabsContent value="reputation" className="mt-3">
+          <ReputationTimeline memberId={owner.memberId} mode="timeline" />
         </TabsContent>
       </Tabs>
     </div>

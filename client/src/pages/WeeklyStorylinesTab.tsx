@@ -19,6 +19,7 @@ import {
   Activity, TrendingUp, Flame, Swords, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { FearIndexWidget } from "./FearIndexWidget";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -250,9 +251,11 @@ export default function WeeklyStorylinesTab({ season = 2025 }: WeeklyStorylinesT
   const hasStories = (stories?.length ?? 0) > 0;
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="grid gap-4 lg:grid-cols-[1fr_300px] items-start">
+      {/* Main storylines column */}
+      <div className="space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
         <div>
           <h2 className="text-slate-100 font-bold text-base">
             This Week's Storylines
@@ -325,6 +328,11 @@ export default function WeeklyStorylinesTab({ season = 2025 }: WeeklyStorylinesT
           </div>
         </>
       )}
+      </div>
+      {/* Fear Index sidebar */}
+      <div className="lg:sticky lg:top-4">
+        <FearIndexWidget season={season} />
+      </div>
     </div>
   );
 }
