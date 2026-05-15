@@ -8,15 +8,19 @@ import DraftBoard from "@/pages/DraftBoard";
 import PlayerComparison from "@/pages/PlayerComparison";
 import MockDraftSimulator from "@/pages/MockDraftSimulator";
 import SavedDrafts from "@/pages/SavedDrafts";
+import AIDraftHelper from "@/pages/AIDraftHelper";
 
 const TAB_CLASS = "rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-3 text-sm font-medium whitespace-nowrap";
 
 export default function DraftWarRoom() {
   return (
     <AppLayout title="Draft War Room" subtitle="Draft day is decided before you sit down">
-      <Tabs defaultValue="draft-board" className="w-full">
+      <Tabs defaultValue="ai-helper" className="w-full">
         <div className="px-6 pt-4 border-b border-border overflow-x-auto">
           <TabsList className="bg-transparent p-0 h-auto gap-1 flex-nowrap min-w-max">
+            <TabsTrigger value="ai-helper" className={TAB_CLASS}>
+              🤖 AI Draft Helper
+            </TabsTrigger>
             <TabsTrigger value="draft-board" className={TAB_CLASS}>
               2026 Draft Board
             </TabsTrigger>
@@ -40,6 +44,9 @@ export default function DraftWarRoom() {
             </TabsTrigger>
           </TabsList>
         </div>
+        <TabsContent value="ai-helper" className="mt-0">
+          <AIDraftHelper />
+        </TabsContent>
         <TabsContent value="draft-board" className="mt-0">
           <DraftBoard />
         </TabsContent>

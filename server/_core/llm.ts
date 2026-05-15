@@ -73,7 +73,8 @@ export type LLMCallType =
   | "war_room_agent"
   | "weekly_briefing"
   | "retrospective"
-  | "json_structured";
+  | "json_structured"
+  | "draft_helper";
 
 const CALL_TYPE_DEFAULTS: Record<LLMCallType, number> = {
   chat: 1024,
@@ -82,6 +83,7 @@ const CALL_TYPE_DEFAULTS: Record<LLMCallType, number> = {
   weekly_briefing: 2048,
   retrospective: 1536,
   json_structured: 1024,
+  draft_helper: 1024,
 };
 
 const DEFAULT_MAX_TOKENS = 1024;

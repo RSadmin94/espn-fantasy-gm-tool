@@ -289,6 +289,210 @@ export const appRouter = router({
       }),
   }),
 
+  draftHelper: router({
+    /**
+     * Get the full draft context for Rod's current pick:
+     * available players, positional needs, owner tendencies, recent picks.
+     */
+    getDraftContext: publicProcedure
+      .input(z.object({
+        currentOverall: z.number().int().min(1),
+        totalTeams: z.number().int().min(2).max(20).default(14),
+        totalRounds: z.number().int().min(1).max(20).default(15),
+        rodDraftSlot: z.number().int().min(1).max(20).default(1),
+        picksAlreadyMade: z.array(z.object({
+          overall: z.number(),
+          round: z.number(),
+          pickInRound: z.number(),
+          teamId: z.number(),
+          ownerName: z.string(),
+          playerName: z.string(),
+          position: z.string(),
+        })).default([]),
+        rodRoster: z.array(z.object({
+          position: z.string(),
+          playerName: z.string(),
+          round: z.number(),
+        })).default([]),
+      }))
+      .query(async ({ input }) => {
+        const {
+          scorePositionalNeed, buildOwnerTendencies, calcSurvivalRisk,
+          detectPositionRun,
+        } = await import("./draftHelperService");
+
+        // 1. Get available players from the draft board
+        const board = await getDraftBoard(false);
+        const draftedNames = new Set(input.picksAlreadyMade.map((p: { playerName: string }) => p.playerName.toLowerCase()));
+        const available = board.players
+          .filter((p: MergedPlayer) => !draftedNames.has(p.name.toLowerCase()))
+          .slice(0, 200);
+
+        // 2. Get owner tendencies from DNA profiles
+        const { calcLeagueDNA } = await import("./leagueDNA");
+        const { buildManagerRawData } = await import("./dnaRouter");
+        const managers = await buildManagerRawData();
+        const dnaProfiles = calcLeagueDNA(managers);
+
+        const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
+        const latestSeason = cachedSeasons[cachedSeasons.length - 1];
+        const latestData = latestSeason ? await getSeasonData(latestSeason) : null;
+        const pickOrder: Record<string, unknown>[] = latestData ? (normalizeDraftOrder(latestData)?.pickOrder ?? []) : [];
+
+        const ownerInputs = pickOrder.map((slot: Record<string, unknown>) => {
+          const tid = slot.teamId as number;
+          const ownerName = (slot.owners as string) || `Team ${tid}`;
+          const dna = dnaProfiles.find((d: { ownerName?: string }) =>
+            d.ownerName && ownerName.toLowerCase().includes(d.ownerName.toLowerCase().split(" ")[0].toLowerCase())
+          ) ?? null;
+          const dnaAny = dna as Record<string, unknown> | null;
+          return {
+            teamId: tid,
+            ownerName,
+            draftSlot: slot.position as number,
+            gmArchetype: (dnaAny?.gmArchetype as string) ?? "Balanced Manager",
+            reachPositions: ((dnaAny?.draft as Record<string, unknown>)?.reachPositions as string[]) ?? [],
+            valuePositions: ((dnaAny?.draft as Record<string, unknown>)?.valuePositions as string[]) ?? [],
+            round1Distribution: ((dnaAny?.draft as Record<string, unknown>)?.round1Distribution as Record<string, number>) ?? {},
+            keeperRate: ((dnaAny?.draft as Record<string, unknown>)?.keeperRate as number) ?? 0,
+            tiltScore: ((dnaAny?.tilt as Record<string, unknown>)?.tiltScore as number) ?? 50,
+            exploitabilityScore: (dnaAny?.exploitabilityScore as number) ?? 50,
+          };
+        });
+
+        const ownerTendencies = buildOwnerTendencies(
+          ownerInputs as Array<{ teamId: number; ownerName: string; draftSlot: number; gmArchetype: string; reachPositions: string[]; valuePositions: string[]; round1Distribution: Record<string, number>; keeperRate: number; tiltScore: number; exploitabilityScore: number; }>,
+          input.picksAlreadyMade,
+          input.currentOverall,
+          input.totalTeams,
+          input.totalRounds
+        );
+
+        // 3. Positional needs
+        const currentRound = Math.ceil(input.currentOverall / input.totalTeams);
+        const positionalNeeds = scorePositionalNeed(input.rodRoster, currentRound, input.totalRounds);
+
+        // 4. Enrich available players with survival risk
+        const picksUntilRodNext = (() => {
+          const rodSlot = input.rodDraftSlot;
+          let count = 0;
+          let overall = input.currentOverall;
+          while (overall <= input.totalTeams * input.totalRounds) {
+            overall++;
+            const round = Math.ceil(overall / input.totalTeams);
+            const isEven = round % 2 === 0;
+            const pickInRound = ((overall - 1) % input.totalTeams) + 1;
+            const slot = isEven ? input.totalTeams - pickInRound + 1 : pickInRound;
+            if (slot === rodSlot) break;
+            count++;
+          }
+          return count;
+        })();
+
+        const enrichedAvailable = available.slice(0, 50).map((p: MergedPlayer) => ({
+          playerName: p.name,
+          position: p.position,
+          ecrRank: p.ecrRank ?? 999,
+          adpRank: p.adpRank ?? 999,
+          ecrAdpGap: (p.adpRank ?? 999) - (p.ecrRank ?? 999),
+          vbd: (p.pfr2025 as Record<string, number> | null)?.vbd ?? 0,
+          survivalRisk: calcSurvivalRisk(
+            p.ecrRank ?? 999,
+            picksUntilRodNext,
+            ownerTendencies,
+            p.position
+          ),
+          leagueHistoryCount: 0,
+          avgLeagueRound: 0,
+          isLeagueFavorite: false,
+        }));
+
+        // 5. Position run detection
+        const positionRun = detectPositionRun(input.picksAlreadyMade);
+
+        return {
+          currentRound,
+          pickInRound: ((input.currentOverall - 1) % input.totalTeams) + 1,
+          positionalNeeds,
+          availablePlayers: enrichedAvailable,
+          ownerTendencies,
+          positionRun,
+        };
+      }),
+
+    /**
+     * LLM-powered pick recommendation for Rod's current draft position.
+     */
+    getPickRecommendation: protectedProcedure
+      .input(z.object({
+        currentOverall: z.number().int().min(1),
+        currentRound: z.number().int().min(1),
+        pickInRound: z.number().int().min(1),
+        totalTeams: z.number().int().min(2).max(20).default(14),
+        totalRounds: z.number().int().min(1).max(20).default(15),
+        rodRoster: z.array(z.object({ position: z.string(), playerName: z.string(), round: z.number() })),
+        positionalNeeds: z.array(z.object({
+          position: z.string(), urgency: z.string(), urgencyScore: z.number(),
+          currentCount: z.number(), targetCount: z.number(), reasoning: z.string(),
+        })),
+        topAvailable: z.array(z.object({
+          playerName: z.string(), position: z.string(), ecrRank: z.number(),
+          adpRank: z.number(), ecrAdpGap: z.number(), vbd: z.number(),
+          survivalRisk: z.number(), leagueHistoryCount: z.number(),
+          avgLeagueRound: z.number(), isLeagueFavorite: z.boolean(),
+        })),
+        ownerTendencies: z.array(z.object({
+          ownerName: z.string(), teamId: z.number(), draftSlot: z.number(),
+          gmArchetype: z.string(), reachPositions: z.array(z.string()),
+          valuePositions: z.array(z.string()), round1Distribution: z.record(z.string(), z.number()),
+          keeperRate: z.number(), tiltScore: z.number(), exploitabilityScore: z.number(),
+          nextPickOverall: z.number().nullable(), predictedPositions: z.array(z.string()),
+        })),
+        recentPicks: z.array(z.object({
+          overall: z.number(), round: z.number(), pickInRound: z.number(),
+          teamId: z.number(), ownerName: z.string(), playerName: z.string(), position: z.string(),
+        })),
+        positionRun: z.object({ position: z.string(), count: z.number(), alert: z.string() }).nullable(),
+      }))
+      .mutation(async ({ input }) => {
+        const { buildPickRecommendationPrompt, parsePickRecommendation } = await import("./draftHelperService");
+        const { invokeLLM: llm } = await import("./_core/llm");
+
+        const leagueContext = "14-team PPR snake draft, 15 rounds. Rod Sellers (Str8 Jacket / Rodzilla) is the user. This is the ATLANTAS FINEST FF league running since 2009. Rod has won multiple championships and is a top-tier manager.";
+
+        const prompt = buildPickRecommendationPrompt({
+          currentOverall: input.currentOverall,
+          currentRound: input.currentRound,
+          pickInRound: input.pickInRound,
+          totalTeams: input.totalTeams,
+          totalRounds: input.totalRounds,
+          rodRoster: input.rodRoster,
+          positionalNeeds: input.positionalNeeds as import("./draftHelperService").PositionalNeed[],
+          topAvailable: input.topAvailable,
+          ownerTendencies: input.ownerTendencies as import("./draftHelperService").OwnerTendency[],
+          recentPicks: input.recentPicks,
+          positionRun: input.positionRun,
+          leagueContext,
+        });
+
+        const response = await llm({
+          messages: [
+            { role: "system", content: "You are an elite fantasy football draft advisor. Always respond with valid JSON only." },
+            { role: "user", content: prompt },
+          ],
+          callType: "draft_helper",
+        });
+
+        const rawContent = response?.choices?.[0]?.message?.content ?? "";
+        const raw = typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent);
+        const recommendation = parsePickRecommendation(raw);
+        if (!recommendation) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to parse LLM recommendation" });
+        }
+        return recommendation;
+      }),
+  }),
+
   league: router({
     // Get the user's active league connection
     getActive: protectedProcedure.query(async ({ ctx }) => {

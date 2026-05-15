@@ -1227,3 +1227,14 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Write vitest for usageTracker cost estimation (17 tests in usageTracker.test.ts)
 - [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (615/615 passing)
 - [x] Save checkpoint and push to GitHub
+
+## AI Draft Helper
+- [x] Audit existing draft data (draftHistory, draftBoard.getPlayers, draftBoard.mockSetup, analytics.rosterGaps) for available inputs
+- [x] Build server/draftHelperService.ts: scorePositionalNeed, buildOwnerTendencies, calcSurvivalRisk, detectPositionRun, buildPickRecommendationPrompt, parsePickRecommendation
+- [x] Add draftHelper tRPC router: getPickRecommendation (LLM), getDraftContext, getAvailablePlayers
+- [x] Wire draftHelper router into appRouter
+- [x] Build client/src/pages/AIDraftHelper.tsx: live draft board, pick recommendations, owner tendency alerts, roster needs, survival risk
+- [x] Integrate AIDraftHelper as default first tab in Draft War Room hub
+- [x] Write vitest for draftHelperService (scorePositionalNeed, calcSurvivalRisk, detectPositionRun, parsePickRecommendation, buildPickRecommendationPrompt) — 26 tests
+- [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (641/641 passing)
+- [x] Save checkpoint and push to GitHub
