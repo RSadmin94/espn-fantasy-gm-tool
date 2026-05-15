@@ -128,20 +128,22 @@ function UserFooter() {
   const { user, isAuthenticated, logout } = useAuth();
   if (!isAuthenticated) return null;
   return (
-    <div className="px-4 py-3 border-t border-border">
-      <div className="flex items-center gap-2.5">
+    <div className="px-3 py-3 border-t border-border bg-card">
+      {/* User name row */}
+      <div className="flex items-center gap-2.5 mb-2">
         <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
           <User className="w-3.5 h-3.5 text-primary" />
         </div>
         <span className="flex-1 text-[11px] text-muted-foreground truncate min-w-0">{user?.name ?? "Signed in"}</span>
-        <button
-          onClick={() => logout()}
-          title="Log out"
-          className="flex-shrink-0 p-1 rounded hover:bg-red-500/15 text-muted-foreground hover:text-red-400 transition-colors"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-        </button>
       </div>
+      {/* Logout button — full width, always visible */}
+      <button
+        onClick={() => logout()}
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[12px] font-medium text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 hover:border-red-500/50 transition-all"
+      >
+        <LogOut className="w-3.5 h-3.5" />
+        Log Out
+      </button>
     </div>
   );
 }
@@ -174,7 +176,7 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
     <InsideLayoutContext.Provider value={true}>
       <div className="flex h-screen bg-background overflow-hidden">
         {/* Sidebar */}
-        <aside className="flex-shrink-0 flex flex-col border-r border-border bg-card" style={{ width: "15.5rem" }}>
+        <aside className="flex-shrink-0 flex flex-col border-r border-border bg-card h-full overflow-hidden" style={{ width: "15.5rem" }}>
           <div className="px-5 py-4 border-b border-border">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl espn-gradient flex items-center justify-center flex-shrink-0 shadow-lg">
@@ -192,7 +194,7 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
             </div>
           </div>
 
-          <nav className="flex-1 overflow-y-auto py-3 px-3">
+          <nav className="flex-1 overflow-y-auto py-3 px-3" style={{ minHeight: 0 }}>
             {groups.map((group) => {
               const items = navItems.filter((n) => n.group === group);
               return (
@@ -223,8 +225,11 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
             })}
           </nav>
 
-          <ActiveLeagueFooter />
-          <UserFooter />
+          {/* Sticky footer — always visible at the bottom of the sidebar */}
+          <div className="flex-shrink-0">
+            <ActiveLeagueFooter />
+            <UserFooter />
+          </div>
         </aside>
 
         {/* Main content */}

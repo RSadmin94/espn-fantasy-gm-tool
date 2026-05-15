@@ -1168,6 +1168,18 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Save checkpoint and push to GitHub
 
 ## Bug Fixes (May 15 2026)
-- [ ] Fix remaining "Rod's Opportunity Board" hardcoded label in WeeklyIntelligence/MockDraftSimulator
-- [ ] Fix extension: detect ESPN credentials from any fantasy.espn.com page (not just /team URL)
-- [ ] Rebuild extension zip after fix
+- [x] Fix remaining "Rod's Opportunity Board" hardcoded label in WeeklyIntelligence/MockDraftSimulator
+- [x] Fix extension: detect ESPN credentials from any fantasy.espn.com page (not just /team URL)
+- [x] Rebuild extension zip after fix
+
+## Bug Fix: Side Menu Not Appearing (May 15 2026)
+- [x] Diagnose why AppLayout sidebar is not rendering
+- [x] Fix sidebar rendering issue
+- [x] Test, checkpoint, push to GitHub
+
+## Bug Fix: Sidebar Not Visible + Logout Button (May 15 2026)
+- [x] Diagnose why AppLayout sidebar is not rendering (identity.getMyTeam 404 crash, useMyTeam hook throwing, ErrorBoundary swallowing sidebar)
+- [x] Fix identity router registration or remove dependency that blocks sidebar render
+- [x] Ensure logout button is always visible in the sidebar footer
+- [x] Test sidebar renders on all main pages
+- [x] Checkpoint and push to GitHub
