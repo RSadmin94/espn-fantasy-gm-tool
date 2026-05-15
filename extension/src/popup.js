@@ -15,7 +15,7 @@
 
 // ─── GM Tool app URL (auto-detects dev vs prod) ───────────────────────────────
 const GM_TOOL_ORIGINS = [
-  "https://espn-ff-gm-tool-d7edtbt5.manus.space",
+  "https://espnfftool-d7edtbt5.manus.space",
   "http://localhost:3000",
 ];
 
@@ -273,11 +273,11 @@ document.addEventListener("DOMContentLoaded", () => {
     init();
   });
 
-  // success
+  // success — send user to claim-team step so they can identify their team
   document.getElementById("btn-open-app")?.addEventListener("click", async () => {
     const stored = await chrome.storage.local.get("lastConnectedOrigin");
     const origin = stored.lastConnectedOrigin || gmToolOrigin;
-    chrome.tabs.create({ url: `${origin}/dashboard` });
+    chrome.tabs.create({ url: `${origin}/connect?step=claim_team` });
   });
 
   // footer privacy

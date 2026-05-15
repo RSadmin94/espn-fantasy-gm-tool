@@ -81,13 +81,20 @@ import {
   getMyTeamOwnership,
   getLatestTeamOwnership,
   upsertTeamOwnership,
+  getActiveEspnCredentials,
 } from "./db";
 
 const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
 const ALL_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026];
 
-async function getSeasonData(season: number) {
-  return memCache(`seasonData:${season}`, 10 * 60_000, async () => {
+async function getSeasonData(season: number, lcId?: number | null) {
+  const cacheKey = lcId != null ? `seasonData:${season}:lc${lcId}` : `seasonData:${season}`;
+  return memCache(cacheKey, 10 * 60_000, async () => {
+    // Try user-scoped cache first, then fall back to global (null) cache
+    if (lcId != null) {
+      const scoped = await getCachedView(season, "combined", lcId);
+      if (scoped) return scoped.payload as Record<string, unknown>;
+    }
     const cached = await getCachedView(season, "combined", null);
     return cached ? (cached.payload as Record<string, unknown>) : null;
   });
@@ -249,30 +256,38 @@ export const appRouter = router({
   }),
 
   espn: router({
-    refresh: publicProcedure
+    refresh: protectedProcedure
       .input(z.object({
         season: z.number().optional(),
         seasons: z.array(z.number()).optional(),
         forceRefresh: z.boolean().optional(), // override closed-season skip
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const CURRENT_SEASON = 2025;
         const CLOSED_SEASONS = ALL_SEASONS.filter(s => s < CURRENT_SEASON); // 2009–2024 are closed
         const seasonsToRefresh = input.seasons ?? (input.season ? [input.season] : [ALL_SEASONS[ALL_SEASONS.length - 1]]);
         const results: Record<number, { status: string; error?: string; viewHealth?: Record<string, string>; qualityWarnings?: string[]; skipped?: boolean }> = {};
+
+        // Resolve per-user credentials and leagueConnectionId
+        // Falls back to ENV credentials (owner's global creds) if user has no stored connection
+        const userCreds = await getActiveEspnCredentials(ctx.user.id);
+        const lcId = await getActiveEspnLeagueConnectionId(ctx.user.id);
+        const creds = userCreds ?? undefined; // undefined → fetchEspnViewsHardened uses ENV fallback
+
         for (const season of seasonsToRefresh) {
           // Skip closed seasons that are already successfully cached (unless forceRefresh)
           if (!input.forceRefresh && CLOSED_SEASONS.includes(season)) {
             const existing = await getRefreshManifests();
             const manifest = (existing as { season: number; status: string }[]).find(m => m.season === season);
-            if (manifest?.status === "success") {
+            if (manifest?.status === "success" && !lcId) {
+              // Only skip for global cache; always refresh for user-scoped cache
               results[season] = { status: "skipped", skipped: true };
               continue;
             }
           }
           try {
-            // Use hardened pipeline with per-view error isolation
-            const pipelineResult = await fetchEspnViewsHardened(season);
+            // Use hardened pipeline with per-view error isolation, using user's credentials
+            const pipelineResult = await fetchEspnViewsHardened(season, undefined, creds);
             const data = pipelineResult.merged;
 
             // Persist per-view health records
@@ -284,7 +299,8 @@ export const appRouter = router({
               });
             }
 
-            await upsertCachedView(season, "combined", data);
+            // Write to user-scoped cache if we have a leagueConnectionId, else global cache
+            await upsertCachedView(season, "combined", data, lcId);
             // Persist static identity data (team names, draft order, settings) to league_identity table.
             // All consumers (offseasonRouter, draftBoard, etc.) read from here instead of re-fetching ESPN.
             try { await upsertLeagueIdentity(season, data); } catch (_e) { /* non-fatal — don't block the refresh */ }

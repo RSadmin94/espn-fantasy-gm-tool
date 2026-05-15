@@ -132,12 +132,17 @@ export default function LeagueConnect() {
   const [espnS2, setEspnS2] = useState("");
   const [showManualEspn, setShowManualEspn] = useState(false);
   // Pre-fill from URL params (e.g. ?leagueId=158918&teamId=6)
+  // Also handle ?step=claim_team from extension success redirect
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const lid = params.get("leagueId");
     if (lid) setEspnLeagueId(lid);
     // If mode=manual is in URL, open manual form immediately
     if (params.get("mode") === "manual") setShowManualEspn(true);
+    // Extension success redirect: jump straight to claim-team step
+    if (params.get("step") === "claim_team") {
+      setStep("claim_team");
+    }
   }, []);
   // Check if Yahoo OAuth is configured
   const yahooConfigured = trpc.providers.isYahooConfigured.useQuery();
@@ -607,7 +612,7 @@ export default function LeagueConnect() {
                 size="lg"
                 onClick={() => {
                   const a = document.createElement("a");
-                  a.href = "/manus-storage/espn-gm-tool-connector_be0fa0fa.zip";
+                  a.href = "/manus-storage/espn-gm-tool-connector_aed17398.zip";
                   a.download = "espn-gm-tool-connector.zip";
                   a.click();
                 }}

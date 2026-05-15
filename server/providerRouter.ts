@@ -13,7 +13,7 @@ import { getSleeperLeague } from "./providers/sleeperAdapter";
 import { YahooAdapter, getYahooLeaguesForUser } from "./providers/yahooAdapter";
 import { isYahooConfigured } from "./providers/yahooOAuth";
 import { invokeLLM } from "./_core/llm";
-import { getDb } from "./db";
+import { getDb, setActiveLeagueForUser, upsertCachedView } from "./db";
 import { leagueConnections, users } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { fetchEspnViewsHardened, normalizeTeams, normalizeSettings, type EspnCreds } from "./espnService";
@@ -626,6 +626,22 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
               updatedAt: new Date(),
             },
           });
+
+        // Fetch the connection ID and set it as the user's active league
+        const [lcRow] = await db
+          .select({ id: leagueConnections.id })
+          .from(leagueConnections)
+          .where(
+            and(
+              eq(leagueConnections.userId, ctx.user.id),
+              eq(leagueConnections.provider, "espn"),
+              eq(leagueConnections.leagueId, input.leagueId)
+            )
+          )
+          .limit(1);
+        if (lcRow?.id) {
+          await setActiveLeagueForUser(ctx.user.id, lcRow.id);
+        }
       }
 
       steps.push("ESPN league connected successfully.");
@@ -734,6 +750,23 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
             },
           });
 
+        // Fetch the connection ID and set it as the user's active league
+        const [lcRow] = await db
+          .select({ id: leagueConnections.id })
+          .from(leagueConnections)
+          .where(
+            and(
+              eq(leagueConnections.userId, ctx.user.id),
+              eq(leagueConnections.provider, "espn"),
+              eq(leagueConnections.leagueId, input.leagueId)
+            )
+          )
+          .limit(1);
+        const newLcId = lcRow?.id ?? null;
+        if (newLcId) {
+          await setActiveLeagueForUser(ctx.user.id, newLcId);
+        }
+
         // Activate 7-day trial if user is still on 'free' plan
         const [userRow] = await db
           .select({ subscriptionStatus: users.subscriptionStatus, trialStartedAt: users.trialStartedAt })
@@ -746,15 +779,43 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
             .set({ subscriptionStatus: 'trialing', trialStartedAt: new Date() })
             .where(eq(users.id, ctx.user.id));
         }
+
+        // Trigger a background full-season refresh using the user's credentials.
+        // Fire-and-forget: don't await so the response returns immediately.
+        // The refresh writes to the user-scoped cache (newLcId) so /reveal has data.
+        if (newLcId) {
+          (async () => {
+            try {
+              const fullResult = await fetchEspnViewsHardened(input.season, undefined, creds);
+              await upsertCachedView(input.season, "combined", fullResult.merged, newLcId);
+              console.log(`[connectViaExtension] Background refresh complete for lcId=${newLcId}, season=${input.season}`);
+            } catch (err) {
+              console.error(`[connectViaExtension] Background refresh failed for lcId=${newLcId}:`, err);
+            }
+          })();
+        }
+
+        return {
+          success: true,
+          leagueName,
+          teamCount,
+          leagueId: input.leagueId,
+          season: input.season,
+          leagueConnectionId: newLcId,
+          // Return the detected teamId so the frontend can pre-select it in the claim picker
+          detectedTeamId: input.teamId ?? null,
+          source: "extension" as const,
+        };
       }
 
+      // Fallback if db is unavailable
       return {
         success: true,
         leagueName,
         teamCount,
         leagueId: input.leagueId,
         season: input.season,
-        // Return the detected teamId so the frontend can pre-select it in the claim picker
+        leagueConnectionId: null,
         detectedTeamId: input.teamId ?? null,
         source: "extension" as const,
       };

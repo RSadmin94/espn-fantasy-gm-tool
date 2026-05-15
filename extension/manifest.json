@@ -12,7 +12,7 @@
   "host_permissions": [
     "https://fantasy.espn.com/*",
     "https://www.espn.com/*",
-    "https://espn-ff-gm-tool-d7edtbt5.manus.space/*",
+    "https://espnfftool-d7edtbt5.manus.space/*",
     "https://*.manus.space/*",
     "http://localhost:3000/*"
   ],

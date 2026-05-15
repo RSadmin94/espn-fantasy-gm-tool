@@ -137,25 +137,54 @@ export async function getActiveEspnLeagueConnectionId(
 ): Promise<number | null> {
   const db = await getDb();
   if (!db) return null;
+
+  // 1. Try the explicit activeLeagueId pointer on the user row
   const userRows = await db
     .select({ activeLeagueId: users.activeLeagueId })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
   const activeId = userRows[0]?.activeLeagueId;
-  if (!activeId) return null;
-  const lcRows = await db
+
+  if (activeId) {
+    const lcRows = await db
+      .select({ id: leagueConnections.id })
+      .from(leagueConnections)
+      .where(
+        and(
+          eq(leagueConnections.id, activeId),
+          eq(leagueConnections.userId, userId),
+          eq(leagueConnections.provider, "espn")
+        )
+      )
+      .limit(1);
+    if (lcRows[0]?.id) return lcRows[0].id;
+  }
+
+  // 2. Fallback: most recently updated active ESPN connection for this user
+  const fallbackRows = await db
     .select({ id: leagueConnections.id })
     .from(leagueConnections)
     .where(
       and(
-        eq(leagueConnections.id, activeId),
         eq(leagueConnections.userId, userId),
-        eq(leagueConnections.provider, "espn")
+        eq(leagueConnections.provider, "espn"),
+        eq(leagueConnections.isActive, true)
       )
     )
+    .orderBy(desc(leagueConnections.updatedAt))
     .limit(1);
-  return lcRows[0]?.id ?? null;
+
+  if (fallbackRows[0]?.id) {
+    // Auto-repair: set activeLeagueId so future calls are fast
+    await db
+      .update(users)
+      .set({ activeLeagueId: fallbackRows[0].id, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+    return fallbackRows[0].id;
+  }
+
+  return null;
 }
 
 /**

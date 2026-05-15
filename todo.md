@@ -1141,15 +1141,15 @@ This single flow determines conversion, retention, and word-of-mouth.
 
 ## Browser Extension ESPN Connect Flow
 
-- [ ] Audit existing LeagueConnect.tsx and providerRouter.ts for integration points
-- [ ] Build Chrome extension: manifest v3, content script captures leagueId/teamId/SWID/ESPN_S2 from ESPN pages
-- [ ] Build extension popup UI: shows detected league/team, one-click "Connect to GM Tool" button
-- [ ] Extension sends payload to backend /api/espn/connect-via-extension over HTTPS with auth token
-- [ ] Backend endpoint: validate ESPN credentials, encrypt and store, return success
-- [ ] Redesign LeagueConnect.tsx: extension as primary path, manual cookie entry as Advanced/fallback
-- [ ] Package extension as .zip, upload to static assets, add download button on LeagueConnect page
-- [ ] Write vitest for new /api/espn/connect-via-extension endpoint
-- [ ] Save checkpoint and push to GitHub
+- [x] Audit existing LeagueConnect.tsx and providerRouter.ts for integration points
+- [x] Build Chrome extension: manifest v3, content script captures leagueId/teamId/SWID/ESPN_S2 from ESPN pages
+- [x] Build extension popup UI: shows detected league/team, one-click "Connect to GM Tool" button
+- [x] Extension sends payload to backend via providers.connectViaExtension tRPC procedure with session cookie
+- [x] Backend endpoint: validate ESPN credentials, encrypt and store, return success
+- [x] Redesign LeagueConnect.tsx: extension as primary path, manual cookie entry as Advanced/fallback
+- [x] Package extension as .zip, upload to static assets, add download button on LeagueConnect page
+- [x] Write vitest for new providers.connectViaExtension (9 tests passing)
+- [x] Save checkpoint and push to GitHub
 
 ## Browser Extension ESPN Connect Flow
 - [x] Chrome extension: manifest.json (MV3), content.js, background.js, popup.html, popup.js, icons
@@ -1158,3 +1158,11 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] LeagueConnect.tsx: extension as primary path, manual entry as advanced/fallback (collapsible)
 - [x] Extension download: packaged as .zip, hosted via manus-upload-file --webdev
 - [x] vitest: server/extensionConnect.test.ts (9 tests passing)
+
+## Extension URL Fix + Full Onboarding Verification
+- [ ] Fix extension URL to espnfftool-d7edtbt5.manus.space in popup.js and manifest.json
+- [ ] Rebuild and re-upload extension zip, update download link in LeagueConnect.tsx
+- [ ] Audit /reveal flow: confirm it uses leagueConnectionId from the most recent connected league
+- [ ] Verify connectViaExtension writes league cache under correct leagueConnectionId
+- [ ] Trace full new-user onboarding: connect → claim team → reveal → dashboard
+- [ ] Save checkpoint and push to GitHub
