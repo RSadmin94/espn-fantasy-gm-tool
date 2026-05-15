@@ -234,7 +234,7 @@ export class EspnAdapter implements ProviderAdapter {
   }
 
   async normalizeFromCache(leagueId: string, season: number): Promise<UniversalLeague | null> {
-    const cached = await getCachedView(season, "combined", null);
+    const cached = await getCachedView(season, "combined");
     if (!cached) return null;
     const data = cached.payload as Record<string, unknown>;
     return buildUniversalLeague(data, leagueId || this.config.leagueId);
@@ -249,7 +249,7 @@ export const defaultEspnAdapter = new EspnAdapter();
 /**
  * Quick helper: get a UniversalLeague from cache for a given season.
  * Drop-in replacement for the pattern:
- *   const cached = await getCachedView(season, "combined", null);
+ *   const cached = await getCachedView(season, "combined");
  *   const data = cached.payload as Record<string, unknown>;
  *   const teams = normalizeTeams(data);
  *   ...

@@ -6,8 +6,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { TrendingUp, TrendingDown, Trophy, AlertTriangle, BarChart3, Users, Star } from "lucide-react";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { useMyTeam } from "@/hooks/useMyTeam";
 
 const ROI_COLORS: Record<string, string> = {
   ELITE: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
@@ -42,7 +40,6 @@ function PosBadge({ pos }: { pos: string }) {
 }
 
 export default function KeeperROI() {
-  const { user } = useAuth();
   const { data, isLoading } = trpc.keeperROI.useQuery();
   const [filterSeason, setFilterSeason] = useState<string>("all");
   const [filterTeam, setFilterTeam] = useState<string>("all");
@@ -77,9 +74,8 @@ export default function KeeperROI() {
   const uniqueTeams = Array.from(new Set(allKeepers.map(k => k.teamName))).sort();
   const uniquePositions = Array.from(new Set(allKeepers.map(k => k.position))).sort();
 
-  // Current user's keepers — deterministic via espn_team_ownership, fallback to name-matching
-  const { isMyTeam } = useMyTeam();
-  const rodKeepers = allKeepers.filter(k => isMyTeam(0, k.teamName, ""));
+  // Rod's keepers (team 11)
+  const rodKeepers = allKeepers.filter(k => k.teamId === 11);
 
   return (
     <div className="p-6 space-y-6 max-w-7xl">
@@ -194,13 +190,13 @@ export default function KeeperROI() {
               </thead>
               <tbody>
                 {filtered.map((k, i) => (
-                  <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${isMyTeam(0, k.teamName, "") ? "bg-blue-500/5" : ""}`}>
+                  <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${k.teamId === 11 ? "bg-blue-500/5" : ""}`}>
                     <td className="p-3 text-gray-300">{k.season}</td>
                     <td className="p-3 font-medium text-white">
                       {k.playerName.startsWith("Player#") ? (
                         <span className="text-gray-500 italic text-xs">{k.playerName}</span>
                       ) : k.playerName}
-                      {isMyTeam(0, k.teamName, "") && <span className="ml-1 text-blue-400 text-xs">★</span>}
+                      {k.teamId === 11 && <span className="ml-1 text-blue-400 text-xs">★</span>}
                     </td>
                     <td className="p-3"><PosBadge pos={k.position} /></td>
                     <td className="p-3 text-gray-300 text-xs">{k.teamName}</td>
@@ -225,7 +221,7 @@ export default function KeeperROI() {
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-gray-500">★ = Your team. Kept Rd = round used in draft. Cost Rd = round you paid (Kept − 1). Surplus = rounds saved vs. cost.</p>
+          <p className="text-xs text-gray-500">★ = Your team (Str8FrmHell / RodZilla). Kept Rd = round used in draft. Cost Rd = round you paid (Kept − 1). Surplus = rounds saved vs. cost.</p>
         </TabsContent>
 
         {/* MY KEEPERS TAB */}
@@ -442,10 +438,10 @@ export default function KeeperROI() {
                   const grade = elitePct >= 60 ? "A" : elitePct >= 40 ? "B" : elitePct >= 25 ? "C" : "D";
                   const gradeColor = grade === "A" ? "text-green-400" : grade === "B" ? "text-blue-400" : grade === "C" ? "text-orange-400" : "text-red-400";
                   return (
-                    <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${isMyTeam(0, t.teamName, "") ? "bg-blue-500/5" : ""}`}>
+                    <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${t.teamId === 11 ? "bg-blue-500/5" : ""}`}>
                       <td className="p-3 font-medium text-white text-sm">
                         {t.teamName}
-                        {isMyTeam(0, t.teamName, "") && <span className="ml-1 text-blue-400 text-xs">★ You</span>}
+                        {t.teamId === 11 && <span className="ml-1 text-blue-400 text-xs">★ You</span>}
                       </td>
                       <td className="p-3 text-center text-white font-bold">{t.totalKeepers}</td>
                       <td className="p-3 text-center text-yellow-400">{t.eliteKeepers}</td>

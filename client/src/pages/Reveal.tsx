@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-import { trpc } from "@/lib/trpc";
+import { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 
-// ─── Suspense animation ───────────────────────────────────────────────────────
+// ─── Suspense layer copy ──────────────────────────────────────────────────────
 const SUSPENSE_LINES = [
   "Analyzing 9 seasons of league history…",
   "Mapping rivalry patterns across 126 matchups…",
@@ -9,9 +9,41 @@ const SUSPENSE_LINES = [
   "Identifying your most actionable opponent…",
 ];
 
-const LINE_DURATION_MS = 1150;
-const SKIP_AVAILABLE_AFTER_LINE = 1; // 0-indexed
+const LINE_DURATION_MS = 1150; // 4 lines × 1.15s ≈ 4.6s total
+const SKIP_AVAILABLE_AFTER_LINE = 1; // 0-indexed: after line 2 (index 1)
 
+// ─── Reveal content ───────────────────────────────────────────────────────────
+const MAIN_REVEAL = {
+  label: "YOUR MOST ACTIONABLE OPPONENT",
+  headline: "Christian Is Vulnerable Right Now.",
+  evidence:
+    "Over the last 3 seasons, Christian's trade activity spikes after consecutive losses — and he consistently overpays in those windows.",
+  implication: "You have a small window before Week 4. He'll be motivated to deal.",
+};
+
+const SECONDARY_CARDS = [
+  {
+    label: "YOUR DRAFT TENDENCIES",
+    copy: "You consistently reach for aging RBs in rounds 3–5 after strong playoff finishes. This pattern appears consistently in your draft history.",
+  },
+  {
+    label: "MOST LIKELY TO DEAL RIGHT NOW",
+    copy: "Snake has initiated 3 of his last 4 trades within 48 hours of a primetime loss. He's your best trade partner in this window.",
+  },
+  {
+    label: "LEAGUE MARKET PATTERN",
+    copy: "Future 2nd-round picks are consistently undervalued in your league after Week 5. This is your most repeatable edge.",
+  },
+];
+
+const BLURRED_CARDS = [
+  { label: "FULL MANAGER PROFILES", meta: "14 managers analyzed" },
+  { label: "TRADE NEGOTIATION PATTERNS", meta: "Your optimal timing windows" },
+  { label: "BEHAVIORAL TIMELINES", meta: "Season-by-season tendencies" },
+  { label: "CHAMPIONSHIP WINDOW ANALYSIS", meta: "Your realistic title path" },
+];
+
+// ─── Animation helpers ────────────────────────────────────────────────────────
 type Phase = "suspense" | "reveal";
 
 export default function Reveal() {
@@ -23,14 +55,7 @@ export default function Reveal() {
   const [blurVisible, setBlurVisible] = useState(false);
   const [ctaVisible, setCtaVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Pre-fetch during suspense so data is ready when reveal starts
-  const { data, isLoading, isError } = trpc.onboarding.getRevealData.useQuery(undefined, {
-    retry: 1,
-    staleTime: 1000 * 60 * 5,
-  });
-
-  const checkoutMutation = trpc.billing.createCheckoutSession.useMutation();
+  const [, navigate] = useLocation();
 
   // ── Suspense sequencing ──────────────────────────────────────────────────
   useEffect(() => {
@@ -42,45 +67,31 @@ export default function Reveal() {
         return;
       }
       setActiveLine(lineIndex);
-      if (lineIndex >= SKIP_AVAILABLE_AFTER_LINE) setShowSkip(true);
+      if (lineIndex >= SKIP_AVAILABLE_AFTER_LINE) {
+        setShowSkip(true);
+      }
       timerRef.current = setTimeout(() => advance(lineIndex + 1), LINE_DURATION_MS);
     };
 
     timerRef.current = setTimeout(() => advance(0), 300);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
   const transitionToReveal = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     setPhase("reveal");
+    // Staggered fade-in sequence
     setTimeout(() => setRevealVisible(true), 100);
     setTimeout(() => setSecondaryVisible(true), 700);
     setTimeout(() => setBlurVisible(true), 1200);
     setTimeout(() => setCtaVisible(true), 1700);
   };
 
-  // ── Blurred profiles: exclude self, champion, rival ─────────────────────
-  const blurredProfiles = useMemo(() => {
-    if (!data) return [];
-    return data.allProfiles
-      .filter(
-        (p) =>
-          p.ownerName !== data.self.ownerName &&
-          p.ownerName !== data.champion.ownerName &&
-          p.ownerName !== data.rival.ownerName,
-      )
-      .slice(0, 4);
-  }, [data]);
-
-  const handleCheckout = async () => {
-    try {
-      const result = await checkoutMutation.mutateAsync({ origin: window.location.origin });
-      if (result?.url) window.open(result.url, "_blank");
-    } catch (err) {
-      console.error("[Reveal] Checkout error:", err);
-    }
-  };
+  const handleSkip = () => transitionToReveal();
 
   // ─── Suspense screen ────────────────────────────────────────────────────────
   if (phase === "suspense") {
@@ -103,18 +114,23 @@ export default function Reveal() {
             <p
               key={i}
               className={`text-lg font-mono transition-all duration-500 ${
-                i === activeLine ? "text-white opacity-100" : "text-white/40 opacity-100"
+                i === activeLine
+                  ? "text-white opacity-100"
+                  : "text-white/40 opacity-100"
               }`}
-              style={{ animation: i === activeLine ? "fadeIn 0.4s ease-out" : undefined }}
+              style={{
+                animation: i === activeLine ? "fadeIn 0.4s ease-out" : undefined,
+              }}
             >
               {line}
             </p>
           ))}
         </div>
 
+        {/* Skip */}
         {showSkip && (
           <button
-            onClick={transitionToReveal}
+            onClick={handleSkip}
             className="absolute bottom-8 right-8 text-white/25 text-sm font-mono hover:text-white/50 transition-colors"
           >
             Skip →
@@ -131,46 +147,12 @@ export default function Reveal() {
     );
   }
 
-  // ─── Loading skeleton ────────────────────────────────────────────────────────
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center px-6 py-16 overflow-y-auto">
-        <div className="max-w-2xl w-full flex flex-col items-center gap-12 animate-pulse">
-          <div className="w-full h-64 rounded-2xl bg-white/[0.04] border border-white/8" />
-          <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="h-40 rounded-xl bg-white/[0.025] border border-white/8" />
-            <div className="h-40 rounded-xl bg-white/[0.025] border border-white/8" />
-            <div className="h-40 rounded-xl bg-white/[0.025] border border-white/8" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ─── Error state ─────────────────────────────────────────────────────────────
-  if (isError || !data) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-6 text-center">
-        <div className="space-y-4">
-          <h1 className="text-3xl font-bold text-white">Could not load your league profile.</h1>
-          <p className="text-white/40">Try refreshing.</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-4 px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 transition-colors text-sm text-white"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // ─── Reveal screen ──────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center px-6 py-16 overflow-y-auto">
       <div className="max-w-2xl w-full flex flex-col items-center gap-12">
 
-        {/* ── Main Rival Card ── */}
+        {/* ── Main Reveal Card ── */}
         <div
           className={`w-full transition-all duration-700 ${
             revealVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
@@ -178,19 +160,16 @@ export default function Reveal() {
         >
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-8 py-12 text-center">
             <p className="text-[11px] tracking-[0.2em] uppercase text-white/40 mb-5 font-mono">
-              Your Most Actionable Opponent
+              {MAIN_REVEAL.label}
             </p>
             <h1 className="text-4xl sm:text-5xl font-bold text-white leading-tight mb-6">
-              {data.rival.ownerName} Is Vulnerable Right Now.
+              {MAIN_REVEAL.headline}
             </h1>
             <p className="text-white/70 text-lg leading-relaxed mb-5">
-              {data.rival.exploitWindows?.[0]
-                ? data.rival.exploitWindows[0]
-                : `${data.rival.ownerName} has a trade loss ratio of ${(data.rival.lossTradeRatio * 100).toFixed(0)}% — they consistently give up value in deals.`}
+              {MAIN_REVEAL.evidence}
             </p>
             <p className="text-white/45 text-sm italic">
-              H2H record: {data.rival.h2hRecord.wins}W–{data.rival.h2hRecord.losses}L.
-              {" "}Exploitability: {data.rival.exploitabilityLabel}.
+              {MAIN_REVEAL.implication}
             </p>
           </div>
         </div>
@@ -202,82 +181,55 @@ export default function Reveal() {
           }`}
         >
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Your GM Style */}
-            <div className="rounded-xl border border-white/8 bg-white/[0.025] px-5 py-6">
-              <p className="text-[10px] tracking-[0.18em] uppercase text-white/35 mb-3 font-mono">
-                Your GM Style
-              </p>
-              <p className="text-white font-semibold mb-2">{data.self.gmArchetype}</p>
-              <p className="text-white/65 text-sm leading-relaxed">
-                {data.self.dnaSummary.split(".")[0]}.
-              </p>
-            </div>
-
-            {/* League Champion */}
-            <div className="rounded-xl border border-white/8 bg-white/[0.025] px-5 py-6">
-              <p className="text-[10px] tracking-[0.18em] uppercase text-white/35 mb-3 font-mono">
-                League Champion
-              </p>
-              <p className="text-white/65 text-sm leading-relaxed">
-                <span className="text-white font-semibold">{data.champion.ownerName}</span> has won{" "}
-                {data.champion.championshipCount} title{data.champion.championshipCount !== 1 ? "s" : ""}.
-                Most recent: {data.champion.mostRecentTitle}.
-                Style: {data.champion.gmArchetype}.
-              </p>
-            </div>
-
-            {/* Rival's Edge */}
-            <div className="rounded-xl border border-white/8 bg-white/[0.025] px-5 py-6">
-              <p className="text-[10px] tracking-[0.18em] uppercase text-white/35 mb-3 font-mono">
-                Your Rival's Edge
-              </p>
-              <p className="text-white/65 text-sm leading-relaxed">
-                {data.rival.exploitWindows?.[1]
-                  ? data.rival.exploitWindows[1]
-                  : `${data.rival.ownerName} is ${data.rival.exploitabilityLabel} — ${data.rival.exploitabilityScore}/100 exploitability score.`}
-              </p>
-            </div>
+            {SECONDARY_CARDS.map((card, i) => (
+              <div
+                key={i}
+                className="rounded-xl border border-white/8 bg-white/[0.025] px-5 py-6"
+              >
+                <p className="text-[10px] tracking-[0.18em] uppercase text-white/35 mb-3 font-mono">
+                  {card.label}
+                </p>
+                <p className="text-white/65 text-sm leading-relaxed">
+                  {card.copy}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* ── Blurred Cards (locked profiles) ── */}
-        {blurredProfiles.length > 0 && (
-          <div
-            className={`w-full transition-all duration-700 ${
-              blurVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-            }`}
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {blurredProfiles.map((profile) => (
+        {/* ── Blurred Cards ── */}
+        <div
+          className={`w-full transition-all duration-700 ${
+            blurVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+          }`}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {BLURRED_CARDS.map((card, i) => (
+              <div
+                key={i}
+                className="rounded-xl border border-white/8 bg-white/[0.025] px-5 py-6 relative overflow-hidden"
+              >
+                {/* Visible label */}
+                <p className="text-[10px] tracking-[0.18em] uppercase text-white/35 mb-3 font-mono">
+                  {card.label}
+                </p>
+                <p className="text-white/50 text-xs font-mono mb-4">
+                  → {card.meta}
+                </p>
+                {/* Blurred content placeholder */}
                 <div
-                  key={profile.ownerName}
-                  className="rounded-xl border border-white/8 bg-white/[0.025] px-5 py-6 relative overflow-hidden"
+                  className="space-y-2"
+                  style={{ filter: "blur(4px)", opacity: 0.55, userSelect: "none" }}
+                  aria-hidden="true"
                 >
-                  <p className="text-[10px] tracking-[0.18em] uppercase text-white/35 mb-2 font-mono">
-                    {profile.ownerName}
-                  </p>
-                  <p className="text-white/50 text-xs font-mono mb-4">
-                    → {profile.gmArchetype}
-                  </p>
-                  <div
-                    className="space-y-2"
-                    style={{ filter: "blur(4px)", opacity: 0.55, userSelect: "none" }}
-                    aria-hidden="true"
-                  >
-                    <div className="h-3 bg-white/20 rounded w-full" />
-                    <div className="h-3 bg-white/15 rounded w-4/5" />
-                    <div className="h-3 bg-white/10 rounded w-3/5" />
-                  </div>
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-xl">
-                    <span className="text-white/25 text-xs font-mono tracking-widest uppercase">
-                      🔒 Locked
-                    </span>
-                  </div>
+                  <div className="h-3 bg-white/20 rounded w-full" />
+                  <div className="h-3 bg-white/15 rounded w-4/5" />
+                  <div className="h-3 bg-white/10 rounded w-3/5" />
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-        )}
+        </div>
 
         {/* ── CTA ── */}
         <div
@@ -286,11 +238,10 @@ export default function Reveal() {
           }`}
         >
           <button
-            onClick={handleCheckout}
-            disabled={checkoutMutation.isPending}
-            className="w-full sm:w-80 py-4 px-8 rounded-xl bg-white text-[#0a0a0a] font-semibold text-base tracking-wide hover:bg-white/90 transition-colors shadow-[0_0_32px_rgba(255,255,255,0.12)] disabled:opacity-60 disabled:cursor-not-allowed"
+            onClick={() => navigate("/command-center")}
+            className="w-full sm:w-80 py-4 px-8 rounded-xl bg-white text-[#0a0a0a] font-semibold text-base tracking-wide hover:bg-white/90 transition-colors shadow-[0_0_32px_rgba(255,255,255,0.12)]"
           >
-            {checkoutMutation.isPending ? "Opening Checkout…" : "Unlock Your Full League DNA"}
+            Unlock Your Full League DNA
           </button>
           <p className="text-white/30 text-xs text-center max-w-xs leading-relaxed">
             See every manager's behavioral profile, trade patterns, and your full

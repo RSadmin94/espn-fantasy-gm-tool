@@ -1,4 +1,4 @@
-import { eq, desc, and, gt, isNull } from "drizzle-orm";
+import { eq, desc, and, gt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users, espnSeasonCache, refreshManifest, chatHistory,
@@ -8,7 +8,6 @@ import {
   userMemory, UserMemory,
   leagueConnections,
   llmUsage,
-  espnTeamOwnership, EspnTeamOwnership,
 } from "../drizzle/schema";
 import type { EspnCreds } from "./espnService";
 import { decryptCredentialsFromDb } from "./_core/crypto";
@@ -56,135 +55,35 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function getCachedView(
-  season: number,
-  viewName: string,
-  leagueConnectionId?: number | null
-) {
+export async function getCachedView(season: number, viewName: string) {
   const db = await getDb();
   if (!db) return null;
-  const conditions = [
-    eq(espnSeasonCache.season, season),
-    eq(espnSeasonCache.viewName, viewName),
-    leagueConnectionId != null
-      ? eq(espnSeasonCache.leagueConnectionId, leagueConnectionId)
-      : isNull(espnSeasonCache.leagueConnectionId),
-  ];
+  // ORDER BY fetchedAt DESC ensures we always get the most recent row.
+  // Without this, duplicate rows (from missing unique constraint) could
+  // return stale data from an earlier refresh instead of the latest one.
   const result = await db.select().from(espnSeasonCache)
-    .where(and(...conditions))
+    .where(and(eq(espnSeasonCache.season, season), eq(espnSeasonCache.viewName, viewName)))
     .orderBy(desc(espnSeasonCache.fetchedAt))
     .limit(1);
   return result[0] ?? null;
 }
 
-export async function upsertCachedView(
-  season: number,
-  viewName: string,
-  payload: unknown,
-  leagueConnectionId?: number | null
-) {
+export async function upsertCachedView(season: number, viewName: string, payload: unknown) {
   const db = await getDb();
   if (!db) return;
-  if (leagueConnectionId != null) {
-    // Scoped path: ON DUPLICATE KEY UPDATE works cleanly with non-null unique index
-    await db.insert(espnSeasonCache)
-      .values({ leagueConnectionId, season, viewName, payload: payload as Record<string, unknown> })
-      .onDuplicateKeyUpdate({ set: { payload: payload as Record<string, unknown>, updatedAt: new Date() } });
-  } else {
-    // Legacy path: MySQL ON DUPLICATE KEY UPDATE doesn't work with NULL in unique index
-    // Use explicit check-then-update for leagueConnectionId = NULL rows
-    const existing = await getCachedView(season, viewName, null);
-    if (existing) {
-      await db.update(espnSeasonCache)
-        .set({ payload: payload as Record<string, unknown>, updatedAt: new Date() })
-        .where(and(
-          isNull(espnSeasonCache.leagueConnectionId),
-          eq(espnSeasonCache.season, season),
-          eq(espnSeasonCache.viewName, viewName)
-        ));
-    } else {
-      await db.insert(espnSeasonCache)
-        .values({ leagueConnectionId: null, season, viewName, payload: payload as Record<string, unknown> });
-    }
-  }
+  await db.insert(espnSeasonCache)
+    .values({ season, viewName, payload: payload as Record<string, unknown> })
+    .onDuplicateKeyUpdate({ set: { payload: payload as Record<string, unknown>, updatedAt: new Date() } });
 }
 
-export async function getAllCachedSeasons(
-  leagueConnectionId?: number | null
-): Promise<number[]> {
+export async function getAllCachedSeasons(): Promise<number[]> {
   const db = await getDb();
   if (!db) return [];
-  const conditions = [
-    gt(espnSeasonCache.season, 2000),
-    leagueConnectionId != null
-      ? eq(espnSeasonCache.leagueConnectionId, leagueConnectionId)
-      : isNull(espnSeasonCache.leagueConnectionId),
-  ];
   const result = await db.selectDistinct({ season: espnSeasonCache.season })
     .from(espnSeasonCache)
-    .where(and(...conditions))
+    .where(gt(espnSeasonCache.season, 2000)) // filter out sentinel/bad rows (season=0, etc.)
     .orderBy(desc(espnSeasonCache.season));
   return result.map((r) => r.season);
-}
-
-/**
- * Returns the leagueConnectionId for a user's active ESPN league connection.
- * Uses users.activeLeagueId → leagueConnections.id where provider = 'espn'.
- * Returns null if no ESPN connection is active (falls back to legacy global cache).
- */
-export async function getActiveEspnLeagueConnectionId(
-  userId: number
-): Promise<number | null> {
-  const db = await getDb();
-  if (!db) return null;
-
-  // 1. Try the explicit activeLeagueId pointer on the user row
-  const userRows = await db
-    .select({ activeLeagueId: users.activeLeagueId })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  const activeId = userRows[0]?.activeLeagueId;
-
-  if (activeId) {
-    const lcRows = await db
-      .select({ id: leagueConnections.id })
-      .from(leagueConnections)
-      .where(
-        and(
-          eq(leagueConnections.id, activeId),
-          eq(leagueConnections.userId, userId),
-          eq(leagueConnections.provider, "espn")
-        )
-      )
-      .limit(1);
-    if (lcRows[0]?.id) return lcRows[0].id;
-  }
-
-  // 2. Fallback: most recently updated active ESPN connection for this user
-  const fallbackRows = await db
-    .select({ id: leagueConnections.id })
-    .from(leagueConnections)
-    .where(
-      and(
-        eq(leagueConnections.userId, userId),
-        eq(leagueConnections.provider, "espn"),
-        eq(leagueConnections.isActive, true)
-      )
-    )
-    .orderBy(desc(leagueConnections.updatedAt))
-    .limit(1);
-
-  if (fallbackRows[0]?.id) {
-    // Auto-repair: set activeLeagueId so future calls are fast
-    await db
-      .update(users)
-      .set({ activeLeagueId: fallbackRows[0].id, updatedAt: new Date() })
-      .where(eq(users.id, userId));
-    return fallbackRows[0].id;
-  }
-
-  return null;
 }
 
 /**
@@ -613,92 +512,4 @@ export async function getLlmUsageSummary(userId: number) {
     byCallType[r.callType] = (byCallType[r.callType] ?? 0) + (r.totalTokens ?? 0);
   }
   return { totalTokens, totalCalls, byCallType };
-}
-
-// ─── ESPN Team Ownership helpers ──────────────────────────────────────────────
-
-/**
- * Returns the deterministic team claim for a user in a specific league+season.
- * Returns null if the user has not yet claimed their team.
- */
-export async function getMyTeamOwnership(
-  userId: number,
-  leagueConnectionId: number,
-  season: number
-): Promise<EspnTeamOwnership | null> {
-  const db = await getDb();
-  if (!db) return null;
-  const rows = await db
-    .select()
-    .from(espnTeamOwnership)
-    .where(
-      and(
-        eq(espnTeamOwnership.userId, userId),
-        eq(espnTeamOwnership.leagueConnectionId, leagueConnectionId),
-        eq(espnTeamOwnership.season, season)
-      )
-    )
-    .limit(1);
-  return rows[0] ?? null;
-}
-
-/**
- * Returns the most recent team claim for a user across all seasons in a league.
- * Useful when you need the teamId but don't know the exact season.
- */
-export async function getLatestTeamOwnership(
-  userId: number,
-  leagueConnectionId: number
-): Promise<EspnTeamOwnership | null> {
-  const db = await getDb();
-  if (!db) return null;
-  const rows = await db
-    .select()
-    .from(espnTeamOwnership)
-    .where(
-      and(
-        eq(espnTeamOwnership.userId, userId),
-        eq(espnTeamOwnership.leagueConnectionId, leagueConnectionId)
-      )
-    )
-    .orderBy(desc(espnTeamOwnership.season))
-    .limit(1);
-  return rows[0] ?? null;
-}
-
-/**
- * Saves or updates a user's team claim for a specific league+season.
- * Uses INSERT ... ON DUPLICATE KEY UPDATE (via Drizzle's onDuplicateKeyUpdate).
- */
-export async function upsertTeamOwnership(params: {
-  userId: number;
-  leagueConnectionId: number;
-  season: number;
-  espnTeamId: number;
-  espnMemberId: string;
-  teamName?: string;
-  ownerDisplayName?: string;
-}): Promise<void> {
-  const db = await getDb();
-  if (!db) { console.warn("[Database] Cannot upsert team ownership"); return; }
-  await db
-    .insert(espnTeamOwnership)
-    .values({
-      userId: params.userId,
-      leagueConnectionId: params.leagueConnectionId,
-      season: params.season,
-      espnTeamId: params.espnTeamId,
-      espnMemberId: params.espnMemberId,
-      teamName: params.teamName ?? "",
-      ownerDisplayName: params.ownerDisplayName ?? "",
-    })
-    .onDuplicateKeyUpdate({
-      set: {
-        espnTeamId: params.espnTeamId,
-        espnMemberId: params.espnMemberId,
-        teamName: params.teamName ?? "",
-        ownerDisplayName: params.ownerDisplayName ?? "",
-        updatedAt: new Date(),
-      },
-    });
 }

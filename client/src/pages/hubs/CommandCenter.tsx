@@ -5,85 +5,10 @@ import Dashboard from "@/pages/Dashboard";
 import Standings from "@/pages/Standings";
 import Matchups from "@/pages/Matchups";
 import ChampionshipEquity from "@/pages/ChampionshipEquity";
-import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
-
-const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
-
-function TrialBanner() {
-  const { user } = useAuth();
-  const checkoutMutation = trpc.billing.createCheckoutSession.useMutation();
-
-  if (!user) return null;
-
-  const subscriptionStatus = (user as { subscriptionStatus?: string }).subscriptionStatus ?? "free";
-  const trialStartedAt = (user as { trialStartedAt?: string | Date | null }).trialStartedAt ?? null;
-
-  // Active subscribers — no banner
-  if (subscriptionStatus === "active") return null;
-
-  const handleUpgrade = async () => {
-    try {
-      const result = await checkoutMutation.mutateAsync({ origin: window.location.origin });
-      if (result?.url) window.open(result.url, "_blank");
-    } catch (err) {
-      console.error("[TrialBanner] Checkout error:", err);
-    }
-  };
-
-  // Trial active — show days remaining
-  if (subscriptionStatus === "trialing" && trialStartedAt) {
-    const elapsed = Date.now() - new Date(trialStartedAt).getTime();
-    const daysLeft = Math.max(0, Math.ceil((TRIAL_DURATION_MS - elapsed) / (1000 * 60 * 60 * 24)));
-
-    if (daysLeft === 0) {
-      return (
-        <div className="bg-red-950/60 border-b border-red-800/50 px-6 py-3 flex items-center justify-between gap-4">
-          <p className="text-red-300 text-sm font-medium">
-            Your free trial has ended. Upgrade to restore full access.
-          </p>
-          <button
-            onClick={handleUpgrade}
-            disabled={checkoutMutation.isPending}
-            className="shrink-0 px-4 py-1.5 rounded-lg bg-white text-[#0a0a0a] text-xs font-semibold hover:bg-white/90 transition-colors disabled:opacity-60"
-          >
-            {checkoutMutation.isPending ? "Opening…" : "Upgrade Now →"}
-          </button>
-        </div>
-      );
-    }
-
-    return (
-      <div className="bg-zinc-900/80 border-b border-zinc-700/50 px-6 py-2.5 flex items-center justify-between gap-4">
-        <p className="text-zinc-400 text-sm">
-          <span className="text-white font-semibold">{daysLeft} day{daysLeft !== 1 ? "s" : ""}</span> left in your free trial.
-        </p>
-        <button
-          onClick={handleUpgrade}
-          disabled={checkoutMutation.isPending}
-          className="shrink-0 px-4 py-1.5 rounded-lg bg-white text-[#0a0a0a] text-xs font-semibold hover:bg-white/90 transition-colors disabled:opacity-60"
-        >
-          {checkoutMutation.isPending ? "Opening…" : "Upgrade — $29/mo →"}
-        </button>
-      </div>
-    );
-  }
-
-  // Free tier — no trial started yet
-  return (
-    <div className="bg-zinc-900/80 border-b border-zinc-700/50 px-6 py-2.5 flex items-center gap-2">
-      <p className="text-zinc-400 text-sm">
-        Connect your ESPN league to start your{" "}
-        <span className="text-white font-semibold">7-day free trial</span>.
-      </p>
-    </div>
-  );
-}
 
 export default function CommandCenter() {
   return (
     <AppLayout title="Command Center" subtitle="Your league at a glance">
-      <TrialBanner />
       <Tabs defaultValue="war-room" className="w-full">
         <div className="px-6 pt-4 border-b border-border">
           <TabsList className="bg-transparent p-0 h-auto gap-1">

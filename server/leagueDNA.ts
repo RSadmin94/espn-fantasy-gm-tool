@@ -19,8 +19,6 @@
  *   and into the GM Advisor system prompt via buildDNAPromptBlock().
  */
 
-import { ENV } from "./_core/env";
-
 // ─── Input types (from ESPN cache / ownerCareerStats) ────────────────────────
 
 export interface SeasonRecord {
@@ -378,7 +376,7 @@ function buildExploitWindows(
 
   // H2H advantage
   if (trade.h2hVsRod.losses > trade.h2hVsRod.wins && trade.h2hVsRod.losses >= 2) {
-    windows.push(`${ownerName} is ${trade.h2hVsRod.losses}-${trade.h2hVsRod.wins} vs ${ENV.ownerName.split(" ")[0]} head-to-head — psychological edge. They may concede value in trades to avoid conflict.`);
+    windows.push(`${ownerName} is ${trade.h2hVsRod.losses}-${trade.h2hVsRod.wins} vs Rod head-to-head — psychological edge. They may concede value in trades to avoid conflict.`);
   }
 
   // Keeper rate exploit

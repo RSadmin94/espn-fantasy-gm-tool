@@ -17,8 +17,7 @@
 
 import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
-import { ENV } from "./_core/env";
-import { getCachedView, getAllCachedSeasons, getActiveEspnLeagueConnectionId } from "./db";
+import { getCachedView, getAllCachedSeasons } from "./db";
 import {
   calcLeagueDNA,
   calcManagerDNA,
@@ -34,10 +33,8 @@ const POS_MAP: Record<number, string> = {
   1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST", 17: "D/ST",
 };
 
-export async function buildManagerRawData(
-  leagueConnectionId?: number | null
-): Promise<ManagerRawData[]> {
-  const cachedSeasons = (await getAllCachedSeasons(leagueConnectionId)).sort((a, b) => a - b);
+export async function buildManagerRawData(): Promise<ManagerRawData[]> {
+  const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
   const ANALYSIS_SEASONS = cachedSeasons.filter(s => s >= 2018); // sufficient data from 2018+
 
   // memberId → accumulated data
@@ -62,7 +59,7 @@ export async function buildManagerRawData(
   let rodMemberId: string | null = null;
 
   for (const season of ANALYSIS_SEASONS) {
-    const row = await getCachedView(season, "combined", leagueConnectionId);
+    const row = await getCachedView(season, "combined");
     if (!row) continue;
     const data = row.payload as Record<string, unknown>;
 
@@ -82,8 +79,7 @@ export async function buildManagerRawData(
       for (const team of teams) {
         const name = ((team.name as string) || "").toLowerCase();
         const abbrev = ((team.abbrev as string) || "").toLowerCase();
-        const ownerFirstName = ENV.ownerName.split(" ")[0].toLowerCase();
-        if (name.includes("str8") || name.includes("rodzilla") || abbrev.includes(ownerFirstName) || name.includes(ownerFirstName)) {
+        if (name.includes("str8") || name.includes("rodzilla") || abbrev.includes("rod")) {
           rodMemberId = (team.primaryOwner as string) || ((team.owners as string[])?.[0] ?? null);
           break;
         }
@@ -195,7 +191,7 @@ export const dnaRouter = router({
    * because ESPN data is already cached in DB.
    */
   leagueProfiles: publicProcedure.query(async () => {
-    const managers = await buildManagerRawData(null);
+    const managers = await buildManagerRawData();
     const dnaProfiles = calcLeagueDNA(managers);
     return dnaProfiles;
   }),
@@ -206,7 +202,7 @@ export const dnaRouter = router({
   managerProfile: publicProcedure
     .input(z.object({ memberId: z.string() }))
     .query(async ({ input }) => {
-      const managers = await buildManagerRawData(null);
+      const managers = await buildManagerRawData();
       const allPicks: DraftPickRecord[] = managers.flatMap(m => m.draftPicks);
       const manager = managers.find(m => m.memberId === input.memberId);
       if (!manager) return null;
@@ -235,7 +231,7 @@ export const dnaRouter = router({
       })).optional().default([]),
     }))
     .query(async ({ input }) => {
-      const managers = await buildManagerRawData(null);
+      const managers = await buildManagerRawData();
       const allPicks: DraftPickRecord[] = managers.flatMap(m => m.draftPicks);
 
       const results = managers.map(mgr => {
@@ -276,7 +272,7 @@ export const dnaRouter = router({
       leagueAvgScore: z.number().default(130),
     }))
     .query(async ({ input }) => {
-      const managers = await buildManagerRawData(null);
+      const managers = await buildManagerRawData();
       const allPicks: DraftPickRecord[] = managers.flatMap(m => m.draftPicks);
       const manager = managers.find(m => m.memberId === input.memberId);
       if (!manager) return null;
@@ -317,7 +313,7 @@ export const dnaRouter = router({
       })).optional().default([]),
     }))
     .query(async ({ input }) => {
-      const managers = await buildManagerRawData(null);
+      const managers = await buildManagerRawData();
       const allPicks: DraftPickRecord[] = managers.flatMap(m => m.draftPicks);
 
       const board = managers.map(mgr => {
@@ -372,7 +368,7 @@ export const dnaRouter = router({
       memberIds: z.array(z.string()).optional(),
     }))
     .query(async ({ input }) => {
-      const managers = await buildManagerRawData(null);
+      const managers = await buildManagerRawData();
       const dnaProfiles = calcLeagueDNA(managers);
       return buildDNAPromptBlock(dnaProfiles, input.memberIds);
     }),

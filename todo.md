@@ -1034,152 +1034,48 @@ This single flow determines conversion, retention, and word-of-mouth.
 ## COMMERCIAL LAUNCH SPRINT
 
 ### Phase 1 — Stripe + Subscription Schema
-- [x] Add stripeCustomerId, subscriptionStatus (free|trialing|active|past_due|canceled), trialStartedAt, currentPeriodEnd to users table
-- [x] Add funnel_events table (userId, event, metadata, createdAt) for 5-event funnel tracking
-- [x] Run pnpm db:push
-- [x] Add Stripe via webdev_add_feature
-- [x] Wire Stripe checkout session creation (billing.createCheckoutSession tRPC mutation)
-- [x] Wire Stripe webhook handler: checkout.session.completed, customer.subscription.updated, customer.subscription.deleted
-- [x] Add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID secrets
+- [ ] Add stripeCustomerId, subscriptionStatus (free|trialing|active|past_due|canceled), trialStartedAt, currentPeriodEnd to users table
+- [ ] Add funnel_events table (userId, event, metadata, createdAt) for 5-event funnel tracking
+- [ ] Run pnpm db:push
+- [ ] Add Stripe via webdev_add_feature
+- [ ] Wire Stripe checkout session creation (billing.createCheckoutSession tRPC mutation)
+- [ ] Wire Stripe webhook handler: checkout.session.completed, customer.subscription.updated, customer.subscription.deleted
+- [ ] Add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID secrets
 
 ### Phase 2 — Live Reveal Wiring
-- [x] Build onboarding.getRevealData tRPC endpoint: calls buildManagerRawData + calcLeagueDNA for active league, identifies rival (H2H loss count v1, exploitability tiebreaker), champion (isChampion most recent season), self profile
-- [x] Replace static copy in /reveal with live tRPC data (real rival name, real H2H record, real DNA evidence)
-- [x] Write onboarding_state row on first reveal view
-- [x] Add funnel event: completed_reveal
+- [ ] Build onboarding.getRevealData tRPC endpoint: calls buildManagerRawData + calcLeagueDNA for active league, identifies rival (H2H loss count v1, exploitability tiebreaker), champion (isChampion most recent season), self profile
+- [ ] Replace static copy in /reveal with live tRPC data (real rival name, real H2H record, real DNA evidence)
+- [ ] Write onboarding_state row on first reveal view
+- [ ] Add funnel event: completed_reveal
 
 ### Phase 3 — CTA → Stripe Checkout
-- [x] Replace navigate('/command-center') in /reveal CTA with billing.createCheckoutSession mutation → redirect to Stripe checkout URL
-- [x] Add /billing/success return page (confirmation + redirect to /command-center)
-- [x] Add /billing/cancel return page (back to /reveal)
-- [x] Add funnel events: clicked_cta, started_checkout, completed_payment (on webhook)
+- [ ] Replace navigate('/command-center') in /reveal CTA with billing.createCheckoutSession mutation → redirect to Stripe checkout URL
+- [ ] Add /billing/success return page (confirmation + redirect to /command-center)
+- [ ] Add /billing/cancel return page (back to /reveal)
+- [ ] Add funnel events: clicked_cta, started_checkout, completed_payment (on webhook)
 
 ### Phase 4 — Trial-State Logic
-- [x] On ESPN/Sleeper/Yahoo league connect success: set subscriptionStatus='trialing', trialStartedAt=now()
-- [x] Add subscribedProcedure middleware: allows trialing (within 7 days) + active, blocks free/past_due/canceled
-- [x] Gate AI GM streaming, Trade Offer Generator, weekly intelligence behind subscribedProcedure
-- [x] Add trial banner to Command Center: "X days left in your free trial" → upgrade CTA
-- [x] After trial expiry: intelligence layer goes dark, browsing (standings, rosters, draft history) stays open
+- [ ] On ESPN/Sleeper/Yahoo league connect success: set subscriptionStatus='trialing', trialStartedAt=now()
+- [ ] Add subscribedProcedure middleware: allows trialing (within 7 days) + active, blocks free/past_due/canceled
+- [ ] Gate AI GM streaming, Trade Offer Generator, weekly intelligence behind subscribedProcedure
+- [ ] Add trial banner to Command Center: "X days left in your free trial" → upgrade CTA
+- [ ] After trial expiry: intelligence layer goes dark, browsing (standings, rosters, draft history) stays open
 
 ### Phase 5 — Sequential 3-Profile Reveal
-- [x] Add onboarding_state table: userId, currentProfile (0=self,1=champion,2=rival), completedAt
-- [x] Wire sequential reveal: self profile → champion profile → rival profile, one at a time with animation
-- [x] After 3rd profile: show blur layer with remaining 11 profiles locked
-- [x] CTA: "Unlock all 14 profiles" → Stripe checkout
+- [ ] Add onboarding_state table: userId, currentProfile (0=self,1=champion,2=rival), completedAt
+- [ ] Wire sequential reveal: self profile → champion profile → rival profile, one at a time with animation
+- [ ] After 3rd profile: show blur layer with remaining 11 profiles locked
+- [ ] CTA: "Unlock all 14 profiles" → Stripe checkout
 
 ### Phase 6 — Route/Paywall Audit
-- [x] Audit all 38 routes: classify each as free (browsing) or paid (intelligence)
-- [x] Apply subscribedProcedure to all intelligence tRPC endpoints (advisor.chat, tradeOfferGenerator, agents.startSit/trade/keeper/draftPick)
-- [x] Frontend: trial banner shows upgrade prompt when trial is expired
-- [x] Ensure standings, rosters, draft history, matchups remain accessible on free tier
+- [ ] Audit all 38 routes: classify each as free (browsing) or paid (intelligence)
+- [ ] Apply subscribedProcedure to all intelligence tRPC endpoints
+- [ ] Frontend: show upgrade prompt instead of content when subscription is expired/free
+- [ ] Ensure standings, rosters, draft history, matchups remain accessible on free tier
 
 ### Phase 7 — Tests + GitHub Sync + Publish
-- [x] Run full test suite (474/474 passing)
-- [x] 0 TypeScript errors
-- [x] git push github main
-- [x] webdev_save_checkpoint
-- [ ] Publish (click Publish button in Management UI)
-
-## Multi-League ESPN Cache Isolation
-
-- [x] Schema: add leagueConnectionId to espnSeasonCache, update unique index
-- [x] Migration: drizzle/0021_league_cache_isolation.sql
-- [x] db.ts: update getCachedView, upsertCachedView, getAllCachedSeasons; add getActiveEspnLeagueConnectionId
-- [x] dnaRouter.ts: buildManagerRawData(lcId?) + remove Rod name matching
-- [x] onboardingRouter.ts: resolve and pass lcId
-- [x] advisorContextBuilder.ts: resolve and pass lcId
-- [x] agentRouter.ts: pass lcId to buildManagerRawData
-- [x] routers.ts: resolve and pass lcId in all relevant procedures; fix getSeasonData helper
-- [x] providerRouter.ts: capture leagueConnectionId after insert and pass to upsertCachedView
-- [x] offseasonRouter.ts: pass lcId
-- [x] champRouter.ts: remove Rod name matching; pass lcId
-- [x] weeklyAssessmentRouter.ts: remove Rod name matching; pass lcId
-- [x] weeklyAssessmentService.ts: remove detectRodTeamId(); replace with user-based matching
-- [x] liveOpponentProfile.ts: remove ROD_NAMES matching
-- [x] scheduledRefresh.ts: pass null explicitly with comment
-- [x] weeklyIntelHandler.ts: pass null explicitly with comment
-- [x] providers/espnAdapter.ts: pass lcId to getCachedView
-- [x] leagueScoringService.ts: pass lcId to getCachedView
-- [x] NEW: server/leagueCacheIsolation.test.ts — 5 isolation tests
-
-## Remaining Hardcoded Rod Name Fixes (Phase 2)
-
-- [x] routers.ts: mockSetup — change publicProcedure to protectedProcedure, use ctx.user.name for isRod matching
-- [x] Dashboard.tsx: replace ROD_KEYWORDS/isRod/isYou with user.name from useAuth(); fix subtitle hardcode
-- [x] Dashboard.tsx: fix "Counter-Strategy for Rod" label to use user first name
-- [x] MockDraftSimulator.tsx: fix "Rod Opportunity Board" UI label and "Rod" fallback strings to use user.name
-- [x] weeklyAssessmentService.ts: fix remaining LLM prompt strings (Rod Sellers, for Rod, Rod should, Rod wait)
-- [x] champRouter.ts: fix remaining LLM prompt strings (Rod Sellers, Rod's question)
-- [x] routers.ts: fix remaining LLM prompt strings (Rod Sellers in narrative, Rod's arc)
-- [x] gmDecisionService.ts: fix remaining LLM prompt string (Rod covering)
-- [x] KeeperROI.tsx: replace teamId===11 hardcoded checks with user.name matching via useAuth
-- [x] KeeperCalculator.tsx: replace str8/rod team name checks with user.name matching via useAuth
-- [x] DraftPickTracker.tsx: replace hardcoded LEAGUE_TEAMS[0]=Roderick Sellers with dynamic standings data
-- [x] WeeklyIntelligence.tsx: replace "Rod's Opportunities" tab/section labels with user first name from useAuth
-
-## Logout Button
-- [x] Add Logout button to AppLayout sidebar (bottom of nav, shows user name + logout icon)
-
-## Deterministic ESPN Team Identity Mapping
-
-- [x] Audit ESPN data: confirm memberId/ownerId fields available in cached season data
-- [x] Schema: add espnTeamOwnership table (userId, season, espnTeamId, espnMemberId, teamName, ownerDisplayName)
-- [x] Migration: pnpm db:push for new table
-- [x] server/db.ts: add getMyTeamOwnership, getLatestTeamOwnership, upsertTeamOwnership helpers
-- [x] routers.ts: add identity sub-router (getMyTeam, claimTeam, listTeamsForClaim)
-- [x] LeagueConnect.tsx: add claim_team step after league import success with team picker UI
-- [x] Dashboard.tsx: replace myNameParts name-matching with useMyTeam hook (memberId + teamId)
-- [x] WeeklyIntelligence.tsx: already uses server-side rodTeamId; no client-side name matching
-- [x] MockDraftSimulator.tsx: no remaining name-matching after previous session cleanup
-- [x] KeeperROI.tsx: replace name-matching with useMyTeam hook
-- [x] KeeperCalculator.tsx: replace name-matching with useMyTeam hook
-- [x] DraftPickTracker.tsx: already uses dynamic standings; no name-matching
-- [x] weeklyAssessmentService.ts / weeklyAssessmentRouter.ts: detectRodTeamId uses ENV.ownerName (server-side)
-- [x] routers.ts mockSetup: uses ctx.user.name (protectedProcedure)
-- [x] Write vitest: server/teamOwnership.test.ts (7 tests passing)
-- [x] Graceful fallback: useMyTeam hook falls back to name-matching when no claim exists
-
-## Browser Extension ESPN Connect Flow
-
-- [x] Audit existing LeagueConnect.tsx and providerRouter.ts for integration points
-- [x] Build Chrome extension: manifest v3, content script captures leagueId/teamId/SWID/ESPN_S2 from ESPN pages
-- [x] Build extension popup UI: shows detected league/team, one-click "Connect to GM Tool" button
-- [x] Extension sends payload to backend via providers.connectViaExtension tRPC procedure with session cookie
-- [x] Backend endpoint: validate ESPN credentials, encrypt and store, return success
-- [x] Redesign LeagueConnect.tsx: extension as primary path, manual cookie entry as Advanced/fallback
-- [x] Package extension as .zip, upload to static assets, add download button on LeagueConnect page
-- [x] Write vitest for new providers.connectViaExtension (9 tests passing)
-- [x] Save checkpoint and push to GitHub
-
-## Browser Extension ESPN Connect Flow
-- [x] Chrome extension: manifest.json (MV3), content.js, background.js, popup.html, popup.js, icons
-- [x] Extension popup: 9 states (loading, not-on-espn, no-cookies, no-league, ready, connecting, success, error, not-logged-in)
-- [x] Backend: providers.connectViaExtension (protectedProcedure) in providerRouter.ts
-- [x] LeagueConnect.tsx: extension as primary path, manual entry as advanced/fallback (collapsible)
-- [x] Extension download: packaged as .zip, hosted via manus-upload-file --webdev
-- [x] vitest: server/extensionConnect.test.ts (9 tests passing)
-
-## Extension URL Fix + Full Onboarding Verification
-- [x] Fix extension URL to espnfftool-d7edtbt5.manus.space in popup.js and manifest.json
-- [x] Rebuild and re-upload extension zip, update download link in LeagueConnect.tsx
-- [x] Audit /reveal flow: confirm it uses leagueConnectionId from the most recent connected league
-- [x] Verify connectViaExtension writes league cache under correct leagueConnectionId
-- [x] Trace full new-user onboarding: connect → claim team → reveal → dashboard
-- [x] Save checkpoint and push to GitHub
-
-## Bug Fixes (May 15 2026)
-- [x] Fix remaining "Rod's Opportunity Board" hardcoded label in WeeklyIntelligence/MockDraftSimulator
-- [x] Fix extension: detect ESPN credentials from any fantasy.espn.com page (not just /team URL)
-- [x] Rebuild extension zip after fix
-
-## Bug Fix: Side Menu Not Appearing (May 15 2026)
-- [x] Diagnose why AppLayout sidebar is not rendering
-- [x] Fix sidebar rendering issue
-- [x] Test, checkpoint, push to GitHub
-
-## Bug Fix: Sidebar Not Visible + Logout Button (May 15 2026)
-- [x] Diagnose why AppLayout sidebar is not rendering (identity.getMyTeam 404 crash, useMyTeam hook throwing, ErrorBoundary swallowing sidebar)
-- [x] Fix identity router registration or remove dependency that blocks sidebar render
-- [x] Ensure logout button is always visible in the sidebar footer
-- [x] Test sidebar renders on all main pages
-- [x] Checkpoint and push to GitHub
+- [ ] Run full test suite (474+ passing)
+- [ ] 0 TypeScript errors
+- [ ] git push github main
+- [ ] webdev_save_checkpoint
+- [ ] Publish

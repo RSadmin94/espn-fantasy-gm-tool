@@ -16,7 +16,6 @@
 
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
-import { ENV } from "./_core/env";
 import { TRPCError } from "@trpc/server";
 import {
   buildWeeklyAssessment,
@@ -133,10 +132,9 @@ export const weeklyAssessmentRouter = router({
       const dna = calcManagerDNA(managerRawData, []);
       const dnaMap = new Map([[input.teamId, dna]]);
 
-      const _ownerFirstWar = ENV.ownerName.split(" ")[0].toLowerCase();
       const rodTeamId = teams.find(t => {
         const name = ((t.teamName as string) || "").toLowerCase();
-        return name.includes("str8") || name.includes("rodzilla") || name.includes(_ownerFirstWar);
+        return name.includes("str8") || name.includes("rodzilla");
       })?.teamId as number ?? null;
 
       const allTeamsData = {
@@ -368,10 +366,9 @@ export const weeklyAssessmentRouter = router({
         for (const t of teams) {
           teamNameMap[t.teamId as number] = (t.teamName as string) || (t.owners as string) || "Unknown";
         }
-        const _ownerFirstPulse = ENV.ownerName.split(" ")[0].toLowerCase();
         const rodTeamId = teams.find(t => {
           const name = ((t.teamName as string) || "").toLowerCase();
-          return name.includes("str8") || name.includes("rodzilla") || name.includes(_ownerFirstPulse);
+          return name.includes("str8") || name.includes("rodzilla");
         })?.teamId as number ?? null;
         const allTeamsData = {
           teams,

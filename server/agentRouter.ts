@@ -16,7 +16,7 @@
  */
 
 import { z } from "zod";
-import { router, protectedProcedure, subscribedProcedure, publicProcedure } from "./_core/trpc";
+import { router, protectedProcedure, publicProcedure } from "./_core/trpc";
 import { runAgentDebate, buildAgentContext } from "./agentWarRoom";
 import { getInjuries, calcInjuryScores, buildInjuryPromptBlock } from "./injuryService";
 import { buildDNAPromptBlock, calcLeagueDNA } from "./leagueDNA";
@@ -41,11 +41,11 @@ async function getInjuryBlock(playerNames: string[]): Promise<string> {
 
 async function getDNABlock(focusMemberIds?: string[]): Promise<string> {
   try {
-    const cachedSeasons = (await getAllCachedSeasons(null)).filter(s => s >= 2018);
+    const cachedSeasons = (await getAllCachedSeasons()).filter(s => s >= 2018);
     if (cachedSeasons.length === 0) return "";
     const { buildManagerRawData } = await import("./dnaRouter");
     const { calcLeagueDNA, buildDNAPromptBlock: buildBlock } = await import("./leagueDNA");
-    const allManagers = await buildManagerRawData(null);
+    const allManagers = await buildManagerRawData();
     if (allManagers.length === 0) return "";
     const dnaProfiles = calcLeagueDNA(allManagers);
     const focused = focusMemberIds && focusMemberIds.length > 0
@@ -70,7 +70,7 @@ export const agentRouter = router({
    *
    * Returns: verdicts from all 5 agents + consensus + disagreements
    */
-  startSit: subscribedProcedure
+  startSit: protectedProcedure
     .input(z.object({
       playerA: z.object({ name: z.string(), position: z.string(), projectedPoints: z.number().optional() }),
       playerB: z.object({ name: z.string(), position: z.string(), projectedPoints: z.number().optional() }),
@@ -117,7 +117,7 @@ export const agentRouter = router({
    * Most useful for close trades where you're unsure — the disagreement
    * reveals the tradeoffs.
    */
-  trade: subscribedProcedure
+  trade: protectedProcedure
     .input(z.object({
       /** What Rod is giving up */
       giving: z.array(z.object({ name: z.string(), position: z.string() })),
@@ -163,7 +163,7 @@ export const agentRouter = router({
    * Keeper Agent has maximum weight here — but other agents ensure the
    * weekly and playoff implications aren't ignored.
    */
-  keeper: subscribedProcedure
+  keeper: protectedProcedure
     .input(z.object({
       playerA: z.object({
         name: z.string(),
@@ -213,7 +213,7 @@ export const agentRouter = router({
    * Designed for use during the Mock Draft Simulator or live draft day.
    * Pass the current board state and the agents will debate the best pick.
    */
-  draftPick: subscribedProcedure
+  draftPick: protectedProcedure
     .input(z.object({
       round: z.number(),
       pickNumber: z.number(),

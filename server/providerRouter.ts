@@ -13,8 +13,8 @@ import { getSleeperLeague } from "./providers/sleeperAdapter";
 import { YahooAdapter, getYahooLeaguesForUser } from "./providers/yahooAdapter";
 import { isYahooConfigured } from "./providers/yahooOAuth";
 import { invokeLLM } from "./_core/llm";
-import { getDb, setActiveLeagueForUser, upsertCachedView } from "./db";
-import { leagueConnections, users } from "../drizzle/schema";
+import { getDb } from "./db";
+import { leagueConnections } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { fetchEspnViewsHardened, normalizeTeams, normalizeSettings, type EspnCreds } from "./espnService";
 import { encryptCredentialsForDb } from "./_core/crypto";
@@ -626,41 +626,9 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
               updatedAt: new Date(),
             },
           });
-
-        // Fetch the connection ID and set it as the user's active league
-        const [lcRow] = await db
-          .select({ id: leagueConnections.id })
-          .from(leagueConnections)
-          .where(
-            and(
-              eq(leagueConnections.userId, ctx.user.id),
-              eq(leagueConnections.provider, "espn"),
-              eq(leagueConnections.leagueId, input.leagueId)
-            )
-          )
-          .limit(1);
-        if (lcRow?.id) {
-          await setActiveLeagueForUser(ctx.user.id, lcRow.id);
-        }
       }
 
       steps.push("ESPN league connected successfully.");
-
-      // Activate 7-day trial if user is still on 'free' plan
-      if (db) {
-        const [userRow] = await db
-          .select({ subscriptionStatus: users.subscriptionStatus, trialStartedAt: users.trialStartedAt })
-          .from(users)
-          .where(eq(users.id, ctx.user.id))
-          .limit(1);
-        if (userRow && userRow.subscriptionStatus === 'free' && !userRow.trialStartedAt) {
-          await db
-            .update(users)
-            .set({ subscriptionStatus: 'trialing', trialStartedAt: new Date() })
-            .where(eq(users.id, ctx.user.id));
-          steps.push("7-day free trial activated.");
-        }
-      }
 
       return {
         success: true,
@@ -672,152 +640,6 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
           teamCount,
           provider: "espn" as const,
         },
-      };
-    }),
-
-  /**
-   * connectViaExtension — called by the Chrome/Edge browser extension.
-   * Accepts the same ESPN credentials as importEspnLeague but also
-   * accepts an optional teamId (extracted from the ESPN URL by the extension)
-   * which is used to pre-populate the team ownership claim.
-   *
-   * The extension sends this as a tRPC mutation with the user's session
-   * cookie attached (credentials: "include"), so ctx.user is populated.
-   */
-  connectViaExtension: protectedProcedure
-    .input(z.object({
-      leagueId: z.string().min(1, "League ID is required"),
-      swid: z.string().min(1, "SWID cookie is required"),
-      espnS2: z.string().min(1, "espn_s2 cookie is required"),
-      season: z.number().default(2025),
-      teamId: z.number().optional(), // pre-detected from ESPN URL
-    }))
-    .mutation(async ({ input, ctx }) => {
-      const creds: EspnCreds = {
-        leagueId: input.leagueId,
-        swid: input.swid,
-        espnS2: input.espnS2,
-      };
-
-      // Validate credentials by fetching mSettings + mTeam
-      let fetchResult;
-      try {
-        fetchResult = await fetchEspnViewsHardened(input.season, ["mSettings", "mTeam"], creds);
-      } catch (err) {
-        throw new Error(
-          err instanceof Error
-            ? `ESPN auth failed: ${err.message}`
-            : "ESPN auth failed — your session may have expired. Please log in to ESPN and try again."
-        );
-      }
-
-      if (fetchResult.authError) {
-        throw new Error("ESPN returned an auth error — your session may be expired. Please log in to ESPN and try again.");
-      }
-
-      const rawSettings = normalizeSettings(fetchResult.merged);
-      const rawTeams = normalizeTeams(fetchResult.merged);
-      const leagueName = (rawSettings.leagueName as string) || `ESPN League ${input.leagueId}`;
-      const teamCount = rawTeams.length;
-
-      // Persist credentials (encrypted at rest)
-      const db = await getDb();
-      if (db) {
-        const encryptedCreds = encryptCredentialsForDb({
-          leagueId: input.leagueId,
-          swid: input.swid,
-          espnS2: input.espnS2,
-        });
-        await db.insert(leagueConnections)
-          .values({
-            userId: ctx.user.id,
-            provider: "espn",
-            leagueId: input.leagueId,
-            leagueName,
-            season: input.season,
-            isActive: true,
-            credentials: encryptedCreds,
-            syncStatus: "ok",
-          })
-          .onDuplicateKeyUpdate({
-            set: {
-              leagueName,
-              isActive: true,
-              credentials: encryptedCreds,
-              syncStatus: "ok",
-              syncError: null,
-              updatedAt: new Date(),
-            },
-          });
-
-        // Fetch the connection ID and set it as the user's active league
-        const [lcRow] = await db
-          .select({ id: leagueConnections.id })
-          .from(leagueConnections)
-          .where(
-            and(
-              eq(leagueConnections.userId, ctx.user.id),
-              eq(leagueConnections.provider, "espn"),
-              eq(leagueConnections.leagueId, input.leagueId)
-            )
-          )
-          .limit(1);
-        const newLcId = lcRow?.id ?? null;
-        if (newLcId) {
-          await setActiveLeagueForUser(ctx.user.id, newLcId);
-        }
-
-        // Activate 7-day trial if user is still on 'free' plan
-        const [userRow] = await db
-          .select({ subscriptionStatus: users.subscriptionStatus, trialStartedAt: users.trialStartedAt })
-          .from(users)
-          .where(eq(users.id, ctx.user.id))
-          .limit(1);
-        if (userRow && userRow.subscriptionStatus === 'free' && !userRow.trialStartedAt) {
-          await db
-            .update(users)
-            .set({ subscriptionStatus: 'trialing', trialStartedAt: new Date() })
-            .where(eq(users.id, ctx.user.id));
-        }
-
-        // Trigger a background full-season refresh using the user's credentials.
-        // Fire-and-forget: don't await so the response returns immediately.
-        // The refresh writes to the user-scoped cache (newLcId) so /reveal has data.
-        if (newLcId) {
-          (async () => {
-            try {
-              const fullResult = await fetchEspnViewsHardened(input.season, undefined, creds);
-              await upsertCachedView(input.season, "combined", fullResult.merged, newLcId);
-              console.log(`[connectViaExtension] Background refresh complete for lcId=${newLcId}, season=${input.season}`);
-            } catch (err) {
-              console.error(`[connectViaExtension] Background refresh failed for lcId=${newLcId}:`, err);
-            }
-          })();
-        }
-
-        return {
-          success: true,
-          leagueName,
-          teamCount,
-          leagueId: input.leagueId,
-          season: input.season,
-          leagueConnectionId: newLcId,
-          // Return the detected teamId so the frontend can pre-select it in the claim picker
-          detectedTeamId: input.teamId ?? null,
-          source: "extension" as const,
-        };
-      }
-
-      // Fallback if db is unavailable
-      return {
-        success: true,
-        leagueName,
-        teamCount,
-        leagueId: input.leagueId,
-        season: input.season,
-        leagueConnectionId: null,
-        detectedTeamId: input.teamId ?? null,
-        source: "extension" as const,
       };
     }),
 });

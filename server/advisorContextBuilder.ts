@@ -28,7 +28,7 @@ const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
 
 async function getSeasonData(season: number) {
   return memCache(`seasonData:${season}`, 10 * 60_000, async () => {
-    const cached = await getCachedView(season, "combined", null);
+    const cached = await getCachedView(season, "combined");
     return cached ? (cached.payload as Record<string, unknown>) : null;
   });
 }
@@ -140,7 +140,7 @@ Be concise, data-driven, and specific. Reference actual team names and player na
     try {
       const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
       const { buildManagerRawData } = await import("./dnaRouter");
-      const managerRawData = await buildManagerRawData(null);
+      const managerRawData = await buildManagerRawData();
       if (managerRawData.length > 0) {
         const dnaProfiles = calcLeagueDNA(managerRawData);
         const dnaBlock = buildDNAPromptBlock(dnaProfiles);

@@ -34,19 +34,18 @@ function valueColor(value: number) {
   return "text-slate-400";
 }
 
-// Fallback list only used when standings haven't loaded yet
-const LEAGUE_TEAMS_FALLBACK = [
-  "Tony Dorsey", "Nate West", "LOZELL STYLES",
+const LEAGUE_TEAMS = [
+  "Roderick Sellers", "Tony Dorsey", "Nate West", "LOZELL STYLES",
   "Bruce Edwards", "Mark DeRoux", "Randy Broner", "Marcus Reese",
   "Team 9", "Team 10", "Team 11", "Team 12", "Team 13", "Team 14",
 ];
 
 // ── Add Trade Form ─────────────────────────────────────────────────────────────
-function AddTradeForm({ onSuccess, leagueTeams }: { onSuccess: () => void; leagueTeams: string[] }) {
+function AddTradeForm({ onSuccess }: { onSuccess: () => void }) {
   const [type, setType] = useState<"acquired" | "traded_away">("acquired");
   const [round, setRound] = useState("1");
   const [pickInRound, setPickInRound] = useState("1");
-  const [counterparty, setCounterparty] = useState(leagueTeams[0] ?? "");
+  const [counterparty, setCounterparty] = useState(LEAGUE_TEAMS[1]);
   const [notes, setNotes] = useState("");
 
   const addMutation = trpc.addPickTrade.useMutation({
@@ -136,7 +135,7 @@ function AddTradeForm({ onSuccess, leagueTeams }: { onSuccess: () => void; leagu
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {leagueTeams.map((t) => (
+              {LEAGUE_TEAMS.map((t) => (
                 <SelectItem key={t} value={t}>{t}</SelectItem>
               ))}
             </SelectContent>
@@ -209,13 +208,6 @@ function PickRow({
 export default function DraftPickTracker() {
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.getPickTrades.useQuery({ draftYear: DRAFT_YEAR });
-  const { data: standingsData } = trpc.espn.standings.useQuery({ season: 2025 });
-  // Build team list from live standings; fall back to static list if not loaded yet
-  const LEAGUE_TEAMS = standingsData && standingsData.length > 0
-    ? (standingsData as { owners?: string; teamName?: string }[])
-        .map(t => (t.owners?.split(";")[0]?.trim() || t.teamName || ""))
-        .filter(Boolean)
-    : LEAGUE_TEAMS_FALLBACK;
   const [removingId, setRemovingId] = useState<number | null>(null);
 
   const removeMutation = trpc.removePickTrade.useMutation({
@@ -392,7 +384,7 @@ export default function DraftPickTracker() {
 
           {/* Right: Add form + legend */}
           <div className="space-y-4">
-            <AddTradeForm leagueTeams={LEAGUE_TEAMS} onSuccess={() => utils.getPickTrades.invalidate()} />
+            <AddTradeForm onSuccess={() => utils.getPickTrades.invalidate()} />
 
             {/* Value legend */}
             <Card className="bg-slate-900/60 border-slate-700/50">

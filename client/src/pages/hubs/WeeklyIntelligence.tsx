@@ -11,7 +11,6 @@
  */
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useAuth } from "@/_core/hooks/useAuth";
 import AppLayout from "@/components/AppLayout";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -551,11 +550,11 @@ function DeepDiveSheet({
               </div>
             )}
 
-            {/* Your opportunities vs this team */}
+            {/* Rod's opportunities vs this team */}
             {team.rodOpportunities.length > 0 && (
               <div>
                 <div className="text-xs font-semibold text-orange-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <Target className="w-3.5 h-3.5" /> Your Opportunities
+                  <Target className="w-3.5 h-3.5" /> Rod's Opportunities
                 </div>
                 <div className="space-y-2">
                   {team.rodOpportunities.map((opp, i) => (
@@ -708,7 +707,7 @@ function TeamCard({
           <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">{team.lastWeekSummary}</p>
         )}
 
-        {/* Your opportunities teaser */}
+        {/* Rod opportunities teaser */}
         {!isRod && team.rodOpportunities.length > 0 && (
           <div className="bg-orange-500/5 border border-orange-500/20 rounded-lg p-2">
             <div className="flex items-center gap-1 mb-1">
@@ -743,8 +742,6 @@ type SortKey = "standing" | "desperation" | "exploitability" | "health";
 type FilterKey = "all" | "open_window" | "desperate" | "opportunity";
 
 export default function WeeklyIntelligence() {
-  const { user } = useAuth();
-  const myFirstName = user?.name?.split(" ")[0] ?? "My";
   const [season] = useState(2025);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("standing");
@@ -1015,7 +1012,7 @@ export default function WeeklyIntelligence() {
               <Users className="w-3.5 h-3.5" /> All Teams
             </TabsTrigger>
             <TabsTrigger value="opportunities" className="text-xs gap-1.5">
-              <Target className="w-3.5 h-3.5" /> {myFirstName}&apos;s Opportunities
+              <Target className="w-3.5 h-3.5" /> Rod's Opportunities
             </TabsTrigger>
           </TabsList>
 
@@ -1111,7 +1108,7 @@ export default function WeeklyIntelligence() {
             )}
           </TabsContent>
 
-          {/* ── Your Opportunities tab ── */}
+          {/* ── Rod's Opportunities tab ── */}
           <TabsContent value="opportunities" className="mt-4">
             {isLoading ? (
               <div className="space-y-3">

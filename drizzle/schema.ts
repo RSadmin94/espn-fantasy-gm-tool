@@ -38,7 +38,6 @@ export const espnSeasonCache = mysqlTable(
   "espn_season_cache",
   {
     id: int("id").autoincrement().primaryKey(),
-    leagueConnectionId: int("leagueConnectionId"),          // NULL = legacy global (single-league dev)
     season: int("season").notNull(),
     viewName: varchar("viewName", { length: 64 }).notNull(),
     payload: json("payload").notNull(),
@@ -46,10 +45,8 @@ export const espnSeasonCache = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (t) => [
-    // Scoped to league connection; NULL leagueConnectionId = legacy global rows
-    uniqueIndex("uq_lc_season_view").on(t.leagueConnectionId, t.season, t.viewName),
-    // Backward-compat index for reads without leagueConnectionId
-    index("idx_esc_season_view").on(t.season, t.viewName),
+    // unique constraint enables onDuplicateKeyUpdate to work as a true upsert
+    uniqueIndex("uq_season_view").on(t.season, t.viewName),
   ]
 );
 
@@ -701,40 +698,3 @@ export const onboardingState = mysqlTable(
 );
 export type OnboardingState = typeof onboardingState.$inferSelect;
 export type InsertOnboardingState = typeof onboardingState.$inferInsert;
-
-// ─── ESPN Team Ownership ───────────────────────────────────────────────────────
-/**
- * Deterministic identity mapping: links a Manus user to their ESPN team.
- *
- * Populated during onboarding when the user explicitly selects "Which team is
- * yours?" after connecting their ESPN league. This replaces all fragile
- * name-string matching (ROD_KEYWORDS, isRod, etc.) with a verified DB lookup.
- *
- * espnMemberId: the ESPN member GUID (e.g. "{A1B2C3D4-...}") — the true
- *   identity anchor from ESPN's members[] array. Stable across seasons.
- * espnTeamId:   the integer team slot (1–14) for the current season.
- *   Can change year-to-year if teams are reassigned, so we store per-season.
- */
-export const espnTeamOwnership = mysqlTable(
-  "espn_team_ownership",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-    leagueConnectionId: int("leagueConnectionId").notNull(),
-    season: int("season").notNull(),
-    espnTeamId: int("espnTeamId").notNull(),
-    espnMemberId: varchar("espnMemberId", { length: 128 }).notNull(),
-    teamName: varchar("teamName", { length: 256 }).default(""),
-    ownerDisplayName: varchar("ownerDisplayName", { length: 256 }).default(""),
-    claimedAt: timestamp("claimedAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  (t) => [
-    // One claim per user per league per season
-    uniqueIndex("uq_eto_user_lc_season").on(t.userId, t.leagueConnectionId, t.season),
-    index("idx_eto_user").on(t.userId),
-    index("idx_eto_lc").on(t.leagueConnectionId),
-  ]
-);
-export type EspnTeamOwnership = typeof espnTeamOwnership.$inferSelect;
-export type InsertEspnTeamOwnership = typeof espnTeamOwnership.$inferInsert;

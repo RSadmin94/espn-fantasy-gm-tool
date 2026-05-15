@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { useMyTeam } from "@/hooks/useMyTeam";
 import {
   Card,
   CardContent,
@@ -540,9 +538,6 @@ function OwnerProfilePanel({ profile }: { profile: OwnerProfileData }) {
 // -- main page --------------------------------------------------------------
 
 export default function KeeperCalculator() {
-  const { user } = useAuth();
-  const { isMyTeam: isMyTeamHook } = useMyTeam();
-  const isMyTeam = (teamName: string) => isMyTeamHook(0, teamName, "");
   const { data, isLoading, error } = trpc.espn.keeperEligibility2026.useQuery();
 
   const daysUntilDeadline = () => {
@@ -729,7 +724,7 @@ export default function KeeperCalculator() {
                         <Card
                           key={team.teamId}
                           className={`bg-card border-border transition-all ${
-                            isMyTeam(team.teamName ?? "")
+                            team.teamName?.toLowerCase().includes("str8") || team.teamName?.toLowerCase().includes("rod")
                               ? "border-primary/40 ring-1 ring-primary/20"
                               : ""
                           }`}
@@ -739,7 +734,7 @@ export default function KeeperCalculator() {
                               <div className="flex-1 min-w-0">
                                 <CardTitle className="text-sm font-semibold text-foreground truncate">
                                   {team.teamName}
-                                  {isMyTeam(team.teamName ?? "") && (
+                                  {(team.teamName?.toLowerCase().includes("str8") || team.teamName?.toLowerCase().includes("rod")) && (
                                     <Badge className="ml-2 text-[9px] px-1.5 bg-primary/20 text-primary border-primary/30">YOUR TEAM</Badge>
                                   )}
                                 </CardTitle>

@@ -13,7 +13,6 @@
  */
 
 import { getAllCachedSeasons, getCachedView } from "./db";
-import { ENV } from "./_core/env";
 import {
   normalizeTeams,
   normalizeMatchups,
@@ -78,7 +77,7 @@ const ROD_MEMBER_IDS = [
 // ── Main builder ──────────────────────────────────────────────────────────────
 
 export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOpponentData>> {
-  const cachedSeasons = await getAllCachedSeasons(null);
+  const cachedSeasons = await getAllCachedSeasons();
   if (cachedSeasons.length === 0) return new Map();
 
   // memberId → accumulated data
@@ -95,13 +94,10 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
 
   // Identify Rod's member ID from the first available season
   let rodMemberId: string | null = null;
-  const _ownerNameLower = ENV.ownerName.toLowerCase();
-  const _ownerFirstLower = ENV.ownerName.split(" ")[0].toLowerCase();
-  const _ownerLastLower = (ENV.ownerName.split(" ")[1] ?? "").toLowerCase();
-  const ROD_NAMES = [_ownerNameLower, "rodzilla", "str8frmhell", _ownerFirstLower, _ownerLastLower].filter(Boolean);
+  const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
 
   for (const season of cachedSeasons.sort((a, b) => b - a)) {
-    const row = await getCachedView(season, "combined", null);
+    const row = await getCachedView(season, "combined");
     if (!row) continue;
     const data = row.payload as Record<string, unknown>;
     const members = (data.members as Record<string, unknown>[]) || [];
@@ -118,7 +114,7 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
       const mid = m.id as string;
       const name = `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || mid;
       memberIdToName.set(mid, name);
-      if (!rodMemberId && ROD_NAMES.some(n => n && name.toLowerCase().includes(n))) {
+      if (!rodMemberId && ROD_NAMES.some(n => name.toLowerCase().includes(n))) {
         rodMemberId = mid;
       }
     }

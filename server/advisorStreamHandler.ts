@@ -20,7 +20,6 @@ import { invokeLLMStream } from "./_core/llm";
 import { buildAdvisorMessages } from "./advisorContextBuilder";
 import { addChatMessage, getUserMemory, persistLlmUsage } from "./db";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
-import { ENV } from "./_core/env";
 
 const bodySchema = z.object({
   message: z.string().min(1).max(2000),
@@ -82,7 +81,7 @@ export function registerAdvisorStreamRoute(app: Express) {
         if (gmMem.favoritePlayerTypes) parts.push(`Favorite Player Types: ${gmMem.favoritePlayerTypes}`);
         if (gmMem.rivalManagers) parts.push(`Rival Managers to Watch: ${gmMem.rivalManagers}`);
         if (gmMem.notes) parts.push(`GM Notes: ${gmMem.notes}`);
-        if (parts.length > 0) gmMemoryBlock = `## GM PROFILE (${ENV.ownerName})\n${parts.join("\n")}`;
+        if (parts.length > 0) gmMemoryBlock = `## GM PROFILE (Rod Sellers)\n${parts.join("\n")}`;
       }
       // Build messages (same context as tRPC advisor.chat)
       const messages = await buildAdvisorMessages({
