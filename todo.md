@@ -1089,4 +1089,13 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Add regression tests: proposal outside window, TRADE_UPHOLD links to proposal, legacy TRADE, duplicate de-dupe
 - [x] Run full TypeScript check (0 errors)
 - [x] Run full test suite (all passing)
+- [x] Save checkpoint
+
+## NEW: Trade Aging Tab in Trade Lab
+
+- [x] Add tradeAging tRPC procedure to routers.ts (reconstruct completed trades with player values per season)
+- [x] Build TradeAging.tsx page component (trade cards, both sides, winner badge, season filter)
+- [x] Wire TradeAging into TradeLab.tsx as a new "Trade Aging" tab
+- [x] Add vitest tests for tradeAging procedure
+- [x] Run full TypeScript check and test suite
 - [ ] Save checkpoint

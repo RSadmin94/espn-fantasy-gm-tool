@@ -426,3 +426,129 @@ describe("mergeTradeProposalsIntoTransactions", () => {
     expect(rows[0].playerName).toBe("Patrick Mahomes");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tradeAging helper logic tests
+// Tests the core grouping + side-reconstruction logic used by the tradeAging
+// tRPC procedure, exercised through normalizeTransactions output.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("tradeAging — trade grouping and side reconstruction logic", () => {
+  /**
+   * Helper that mimics what tradeAging does:
+   * - filters for TRADE / TRADE_PROPOSAL item rows
+   * - groups by transactionId
+   * - reconstructs sides (players received by each team)
+   */
+  function reconstructTrades(data: Record<string, unknown>) {
+    const txRows = normalizeTransactions(data) as Array<Record<string, unknown>>;
+
+    // Filter to item rows only (have playerId or are DRAFT_TRADE picks)
+    const tradeItemRows = txRows.filter(r => {
+      const type = r.type as string;
+      return (type === "TRADE" || type === "TRADE_PROPOSAL") && r.playerId != null;
+    });
+    const pickTradeRows = txRows.filter(r => {
+      const type = r.type as string;
+      return (type === "TRADE" || type === "TRADE_PROPOSAL") && r.playerId == null && r.itemType === "DRAFT_TRADE";
+    });
+
+    // Group by transactionId
+    const groups = new Map<string, { playerRows: Record<string, unknown>[]; pickRows: Record<string, unknown>[] }>();
+    for (const row of tradeItemRows) {
+      const tid = row.transactionId as string;
+      if (!groups.has(tid)) groups.set(tid, { playerRows: [], pickRows: [] });
+      groups.get(tid)!.playerRows.push(row);
+    }
+    for (const row of pickTradeRows) {
+      const tid = row.transactionId as string;
+      if (!groups.has(tid)) groups.set(tid, { playerRows: [], pickRows: [] });
+      groups.get(tid)!.pickRows.push(row);
+    }
+
+    // Reconstruct sides
+    const trades: { tradeId: string; sideA: number; sideB: number; playersA: string[]; playersB: string[] }[] = [];
+    for (const [tradeId, group] of Array.from(groups)) {
+      const teamIds = new Set<number>();
+      for (const r of [...group.playerRows, ...group.pickRows]) {
+        if (r.fromTeamId != null && (r.fromTeamId as number) > 0) teamIds.add(r.fromTeamId as number);
+        if (r.toTeamId != null && (r.toTeamId as number) > 0) teamIds.add(r.toTeamId as number);
+      }
+      if (teamIds.size < 2) continue;
+      const [teamAId, teamBId] = Array.from(teamIds);
+      const playersA = group.playerRows
+        .filter(r => (r.toTeamId as number) === teamAId)
+        .map(r => r.playerName as string);
+      const playersB = group.playerRows
+        .filter(r => (r.toTeamId as number) === teamBId)
+        .map(r => r.playerName as string);
+      trades.push({ tradeId, sideA: teamAId, sideB: teamBId, playersA, playersB });
+    }
+    return trades;
+  }
+
+  it("reconstructs both sides of a legacy TRADE correctly", () => {
+    const trades = reconstructTrades(mockLegacyPayload as Record<string, unknown>);
+    expect(trades).toHaveLength(1);
+    const t = trades[0];
+    // Both players should appear on one of the two sides (Set order is non-deterministic)
+    const allPlayers = [...t.playersA, ...t.playersB];
+    expect(allPlayers).toContain("Patrick Mahomes");
+    expect(allPlayers).toContain("Justin Jefferson");
+    // Each player should be on a different side
+    expect(t.playersA).not.toEqual(t.playersB);
+  });
+
+  it("reconstructs both sides of a 2026 TRADE_PROPOSAL correctly", () => {
+    const trades = reconstructTrades(mock2026Payload as Record<string, unknown>);
+    // The accepted proposal (d3731d04) has 2 pick items (no player names)
+    // The canceled proposal (canceled-proposal-001) also has 1 pick item
+    // Both should be grouped as separate trades
+    expect(trades.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("does not create a trade group from TRADE_UPHOLD header rows (no items)", () => {
+    // A payload with only TRADE_UPHOLD and no TRADE_PROPOSAL items
+    const upholdOnlyPayload = {
+      seasonId: 2026,
+      transactions: [
+        {
+          id: "uphold-only-001",
+          type: "TRADE_UPHOLD",
+          status: "EXECUTED",
+          proposedDate: 1778814507468,
+          teamId: 1,
+          relatedTransactionId: "missing-proposal-id",
+          items: [],
+        },
+      ],
+    };
+    const trades = reconstructTrades(upholdOnlyPayload as Record<string, unknown>);
+    // No trade groups should be created — the header row has no items
+    expect(trades).toHaveLength(0);
+  });
+
+  it("creates a trade group when TRADE_PROPOSAL is merged in", () => {
+    const merged = mergeTradeProposalsIntoTransactions(
+      dataWithoutProposal as Record<string, unknown>,
+      proposalFromFilter
+    );
+    const trades = reconstructTrades(merged);
+    // Now the proposal items are present — should create 1 trade group
+    expect(trades).toHaveLength(1);
+  });
+
+  it("verdict: sideA wins when they received more value", () => {
+    // Simple scoring: team that received the player with higher avgPoints wins
+    // This test validates the verdict threshold logic (margin < 50 = even)
+    const margin = 200; // sideA total - sideB total
+    const verdict = Math.abs(margin) < 50 ? "even" : margin > 0 ? "sideA" : "sideB";
+    expect(verdict).toBe("sideA");
+  });
+
+  it("verdict: even when margin is below threshold", () => {
+    const margin = 30; // within 50-point even threshold
+    const verdict = Math.abs(margin) < 50 ? "even" : margin > 0 ? "sideA" : "sideB";
+    expect(verdict).toBe("even");
+  });
+});

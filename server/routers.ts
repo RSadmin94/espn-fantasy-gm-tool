@@ -355,6 +355,220 @@ export const appRouter = router({
         return txs;
       }),
 
+    // ── Trade Aging ─────────────────────────────────────────────────────────────
+    // Reconstructs completed trades from all cached seasons, scores each side
+    // using season-specific player stats, and returns a verdict (winner).
+    //
+    // Data sources:
+    //   - normalizeTransactions: TRADE / TRADE_PROPOSAL item rows (player movement)
+    //   - normalizeRosters: season-specific avgPoints for scoring
+    //   - normalizeTeams: owner names per season
+    //
+    // 2026 support: TRADE_PROPOSAL items (merged by fetchTradeProposals) are used
+    // directly; TRADE_UPHOLD/TRADE_ACCEPT header rows are skipped (no items).
+    tradeAging: publicProcedure
+      .input(z.object({ season: z.number().optional() }))
+      .query(async ({ input }) => {
+        const { calcVORP, calcROSValue, calcPickValue } = await import("./analytics");
+        // Helper: compute a single player's ROS composite value
+        const playerCompositeValue = (avgPoints: number, position: string, vorp: number): number => {
+          const fakePlayer = { playerId: 0, playerName: "", position, teamId: 0, ownerName: "", seasonPoints: 0, avgPoints, projectedTotal: null, keeperValue: 0, keeperValueFuture: 0, injuryStatus: "", appliedStats: {} };
+          const rosResults = calcROSValue([fakePlayer], 10);
+          const rosAdjusted = rosResults[0]?.rosAdjusted ?? (avgPoints * 10);
+          return Math.round(rosAdjusted + (vorp * 5));
+        };
+        const seasons = input.season
+          ? [input.season]
+          : (await getAllCachedSeasons()).sort((a, b) => a - b);
+
+        // ── Types ──────────────────────────────────────────────────────────────
+        interface TradeSide {
+          teamId: number;
+          ownerName: string;
+          players: { playerId: number; playerName: string; position: string; avgPoints: number; seasonPoints: number; compositeValue: number }[];
+          picks: { label: string; round: number; pickInRound: number; value: number }[];
+          totalValue: number;
+        }
+        interface TradeRecord {
+          season: number;
+          tradeId: string;         // transactionId of the TRADE / TRADE_PROPOSAL
+          proposedDate: number;
+          sideA: TradeSide;
+          sideB: TradeSide;
+          verdict: "sideA" | "sideB" | "even";  // who got more value
+          verdictMargin: number;   // abs difference in composite value
+        }
+
+        const allTrades: TradeRecord[] = [];
+
+        for (const season of seasons) {
+          const data = await getSeasonData(season);
+          if (!data) continue;
+
+          // Build player value map for this season
+          const rosters = normalizeRosters(data) as Record<string, unknown>[];
+          const playerMap = new Map<number, { avgPoints: number; seasonPoints: number; position: string; playerName: string }>();
+          for (const r of rosters) {
+            const pid = r.playerId as number;
+            if (pid && !playerMap.has(pid)) {
+              playerMap.set(pid, {
+                avgPoints: (r.appliedAverage as number) || (r.avgPoints as number) || 0,
+                seasonPoints: (r.appliedTotal as number) || (r.seasonPoints as number) || 0,
+                position: r.position as string || "?",
+                playerName: r.playerName as string || "Unknown",
+              });
+            }
+          }
+
+          // Build VORP for composite scoring
+          const playerRows = rosters.map(r => ({
+            playerId: r.playerId as number,
+            playerName: r.playerName as string || "",
+            position: r.position as string || "?",
+            teamId: r.teamId as number,
+            ownerName: "",
+            seasonPoints: (r.appliedTotal as number) || 0,
+            avgPoints: (r.appliedAverage as number) || 0,
+            projectedTotal: null,
+            keeperValue: 0,
+            keeperValueFuture: 0,
+            injuryStatus: "",
+            appliedStats: {},
+          }));
+          const vorpMap = new Map<number, number>();
+          try {
+            const vorpResults = calcVORP(playerRows);
+            for (const v of vorpResults) { if (v.playerId) vorpMap.set(v.playerId, v.vorp); }
+          } catch { /* non-fatal */ }
+
+          // Build owner name map
+          const teams = normalizeTeams(data) as Record<string, unknown>[];
+          const ownerMap = new Map<number, string>();
+          for (const t of teams) ownerMap.set(t.teamId as number, (t.owners as string) || `Team ${t.teamId}`);
+
+          // Collect all trade item rows (TRADE or TRADE_PROPOSAL with items)
+          const txRows = normalizeTransactions(data) as Record<string, unknown>[];
+          const tradeItemRows = txRows.filter(r => {
+            const type = r.type as string;
+            return (type === "TRADE" || type === "TRADE_PROPOSAL") && r.playerId != null;
+          });
+
+          // Also collect pick-trade item rows (DRAFT_TRADE items inside TRADE_PROPOSAL)
+          const pickTradeRows = txRows.filter(r => {
+            const type = r.type as string;
+            return (type === "TRADE" || type === "TRADE_PROPOSAL") && r.playerId == null && r.itemType === "DRAFT_TRADE";
+          });
+
+          // Group by transactionId
+          const tradeGroups = new Map<string, { playerRows: Record<string, unknown>[]; pickRows: Record<string, unknown>[] }>();
+          for (const row of tradeItemRows) {
+            const tid = row.transactionId as string;
+            if (!tradeGroups.has(tid)) tradeGroups.set(tid, { playerRows: [], pickRows: [] });
+            tradeGroups.get(tid)!.playerRows.push(row);
+          }
+          for (const row of pickTradeRows) {
+            const tid = row.transactionId as string;
+            if (!tradeGroups.has(tid)) tradeGroups.set(tid, { playerRows: [], pickRows: [] });
+            tradeGroups.get(tid)!.pickRows.push(row);
+          }
+
+          // For each trade group, reconstruct both sides
+          for (const [tradeId, group] of Array.from(tradeGroups)) {
+            // Determine the two team IDs involved
+            const teamIdsSet = new Set<number>();
+            for (const r of [...group.playerRows, ...group.pickRows]) {
+              if (r.fromTeamId != null && (r.fromTeamId as number) > 0) teamIdsSet.add(r.fromTeamId as number);
+              if (r.toTeamId != null && (r.toTeamId as number) > 0) teamIdsSet.add(r.toTeamId as number);
+            }
+            if (teamIdsSet.size < 2) continue; // can't reconstruct a 1-sided trade
+
+            const [teamAId, teamBId] = Array.from(teamIdsSet);
+
+            // Build sides: each side receives what was sent TO them
+            const buildSide = (receivingTeamId: number): TradeSide => {
+              const players: TradeSide["players"] = [];
+              const picks: TradeSide["picks"] = [];
+
+              for (const r of group.playerRows) {
+                if ((r.toTeamId as number) === receivingTeamId) {
+                  const pid = r.playerId as number;
+                  const pInfo = playerMap.get(pid);
+                  const avgPts = pInfo?.avgPoints ?? 0;
+                  const vorp = vorpMap.get(pid) ?? 0;
+                  const pos = (r.position as string) || pInfo?.position || "?";
+                  const compositeValue = playerCompositeValue(avgPts, pos, vorp);
+                  players.push({
+                    playerId: pid,
+                    playerName: (r.playerName as string) || pInfo?.playerName || `Player ${pid}`,
+                    position: (r.position as string) || pInfo?.position || "?",
+                    avgPoints: avgPts,
+                    seasonPoints: pInfo?.seasonPoints ?? 0,
+                    compositeValue,
+                  });
+                }
+              }
+
+              for (const r of group.pickRows) {
+                if ((r.toTeamId as number) === receivingTeamId) {
+                  const round = (r.round as number) || 1;
+                  const pickInRound = (r.pickInRound as number) || 7;
+                  const overall = (r.overallPickNumber as number);
+                  // Derive round/pickInRound from overallPickNumber if available
+                  const derivedRound = overall ? Math.ceil(overall / 14) : round;
+                  const derivedPick = overall ? ((overall - 1) % 14) + 1 : pickInRound;
+                  const value = calcPickValue(derivedRound, derivedPick);
+                  picks.push({
+                    label: `${derivedRound}.${String(derivedPick).padStart(2, "0")}`,
+                    round: derivedRound,
+                    pickInRound: derivedPick,
+                    value,
+                  });
+                }
+              }
+
+              const totalValue =
+                players.reduce((s, p) => s + p.compositeValue, 0) +
+                picks.reduce((s, p) => s + p.value, 0);
+
+              return {
+                teamId: receivingTeamId,
+                ownerName: ownerMap.get(receivingTeamId) || `Team ${receivingTeamId}`,
+                players,
+                picks,
+                totalValue,
+              };
+            };
+
+            const sideA = buildSide(teamAId);
+            const sideB = buildSide(teamBId);
+
+            // Skip trades where both sides are empty (e.g. header-only rows)
+            if (sideA.players.length + sideA.picks.length + sideB.players.length + sideB.picks.length === 0) continue;
+
+            const margin = sideA.totalValue - sideB.totalValue;
+            const verdict: TradeRecord["verdict"] =
+              Math.abs(margin) < 50 ? "even" : margin > 0 ? "sideA" : "sideB";
+
+            // Get proposedDate from first row
+            const firstRow = group.playerRows[0] || group.pickRows[0];
+            const proposedDate = (firstRow?.proposedDate as number) || 0;
+
+            allTrades.push({
+              season,
+              tradeId,
+              proposedDate,
+              sideA,
+              sideB,
+              verdict,
+              verdictMargin: Math.abs(margin),
+            });
+          }
+        }
+
+        // Sort by most recent first
+        return allTrades.sort((a, b) => b.proposedDate - a.proposedDate);
+      }),
+
     allStandings: publicProcedure.query(async () => {
       const cachedSeasons = await getAllCachedSeasons();
       const result: Record<number, unknown[]> = {};
