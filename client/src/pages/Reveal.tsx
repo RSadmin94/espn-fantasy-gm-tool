@@ -24,6 +24,13 @@ export default function Reveal() {
   const [ctaVisible, setCtaVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Pre-fetch rivalry scores during suspense
+  const { data: rivalryData } = trpc.rivalry.getScores.useQuery(undefined, {
+    staleTime: 1000 * 60 * 10,
+  });
+  // The biggest rival (highest score)
+  const biggestRival = rivalryData?.[0] ?? null;
+
   // Pre-fetch during suspense so data is ready when reveal starts
   const { data, isLoading, isError } = trpc.onboarding.getRevealData.useQuery(undefined, {
     retry: 1,
@@ -234,16 +241,41 @@ export default function Reveal() {
               </p>
             </div>
 
-            {/* Rival's Edge */}
+            {/* Rivalry Heat */}
             <div className="rounded-xl border border-white/8 bg-white/[0.025] px-5 py-6">
               <p className="text-[10px] tracking-[0.18em] uppercase text-white/35 mb-3 font-mono">
-                Your Rival's Edge
+                Rivalry Heat
               </p>
-              <p className="text-white/65 text-sm leading-relaxed">
-                {data.rival.exploitWindows?.[1]
-                  ? data.rival.exploitWindows[1]
-                  : `${data.rival.ownerName} is ${data.rival.exploitabilityLabel} — ${data.rival.exploitabilityScore}/100 exploitability score.`}
-              </p>
+              {biggestRival ? (
+                <>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                      biggestRival.heatLabel === "Inferno" ? "bg-red-500/20 text-red-400" :
+                      biggestRival.heatLabel === "Burning" ? "bg-orange-500/20 text-orange-400" :
+                      biggestRival.heatLabel === "Heated" ? "bg-yellow-500/20 text-yellow-400" :
+                      biggestRival.heatLabel === "Simmering" ? "bg-amber-500/20 text-amber-400" :
+                      "bg-white/10 text-white/40"
+                    }`}>{biggestRival.heatLabel}</span>
+                    <span className="text-white font-semibold text-sm">{biggestRival.rivalName}</span>
+                  </div>
+                  <p className="text-white/65 text-sm leading-relaxed">
+                    {biggestRival.loreSentence
+                      ? biggestRival.loreSentence
+                      : `${biggestRival.h2hLosses}L vs ${biggestRival.rivalName}. Score: ${biggestRival.rivalryScore}.`}
+                  </p>
+                  {biggestRival.painfulLossSeason && (
+                    <p className="text-white/35 text-xs mt-2 font-mono">
+                      Most painful: {biggestRival.painfulLossSeason} · lost by {biggestRival.painfulLossMargin?.toFixed(1)} pts
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-white/65 text-sm leading-relaxed">
+                  {data.rival.exploitWindows?.[1]
+                    ? data.rival.exploitWindows[1]
+                    : `${data.rival.ownerName} is ${data.rival.exploitabilityLabel} — ${data.rival.exploitabilityScore}/100 exploitability score.`}
+                </p>
+              )}
             </div>
           </div>
         </div>

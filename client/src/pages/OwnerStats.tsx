@@ -5,6 +5,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Flame, RefreshCw, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface TxnSeason {
@@ -695,6 +698,9 @@ export default function OwnerStats() {
             <TabsTrigger value="leaderboard" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400">Career Leaderboard</TabsTrigger>
             <TabsTrigger value="profile" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-slate-400">Owner Profile</TabsTrigger>
             <TabsTrigger value="h2h" className="data-[state=active]:bg-slate-600 data-[state=active]:text-white text-slate-400">H2H Matrix</TabsTrigger>
+            <TabsTrigger value="rivals" className="data-[state=active]:bg-red-700 data-[state=active]:text-white text-slate-400 gap-1.5">
+              <Flame className="w-3.5 h-3.5" /> Rivals
+            </TabsTrigger>
           </TabsList>
 
           {/* Leaderboard */}
@@ -777,6 +783,11 @@ export default function OwnerStats() {
               </div>
             )}
           </TabsContent>
+
+          {/* Rivals */}
+          <TabsContent value="rivals" className="mt-4">
+            <RivalsTab />
+          </TabsContent>
         </Tabs>
 
         {/* Data Notes */}
@@ -790,5 +801,187 @@ export default function OwnerStats() {
         </div>
       </div>
     </AppLayout>
+  );
+}
+
+// ─── Rivals Tab ───────────────────────────────────────────────────────────────
+
+function RivalsTab() {
+  const { data: scores, isLoading } = trpc.rivalry.getScores.useQuery(undefined, {
+    staleTime: 1000 * 60 * 10,
+  });
+  const refreshMutation = trpc.rivalry.refresh.useMutation({
+    onSuccess: (res: { ok: boolean; count: number }) =>
+      toast.success(`Rivalry scores updated (${res.count} pairs)`),
+    onError: () => toast.error("Failed to refresh rivalry scores"),
+  });
+
+  const heatColor = (label: string) => {
+    if (label === "Inferno") return "bg-red-500/20 text-red-400 border-red-500/30";
+    if (label === "Burning") return "bg-orange-500/20 text-orange-400 border-orange-500/30";
+    if (label === "Heated") return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+    if (label === "Simmering") return "bg-amber-500/20 text-amber-400 border-amber-500/30";
+    return "bg-slate-700/40 text-slate-400 border-slate-600/30";
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-28 w-full rounded-xl" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!scores || scores.length === 0) {
+    return (
+      <div className="text-center py-16 text-slate-500">
+        <Flame className="w-10 h-10 mx-auto mb-3 opacity-30" />
+        <p className="text-sm font-medium mb-1">No rivalry data yet</p>
+        <p className="text-xs mb-4">
+          Rivalry scores are computed automatically after each data refresh.
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => refreshMutation.mutate()}
+          disabled={refreshMutation.isPending}
+        >
+          {refreshMutation.isPending ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+          ) : (
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+          )}
+          Compute Now
+        </Button>
+      </div>
+    );
+  }
+
+  const top = scores[0];
+
+  return (
+    <div className="space-y-5">
+      {/* Biggest Rival hero card */}
+      <div className="rounded-xl border border-red-500/25 bg-red-500/5 p-5">
+        <p className="text-[10px] tracking-[0.18em] uppercase text-red-400/70 mb-2 font-mono">
+          Biggest Rival
+        </p>
+        <div className="flex items-center gap-3 mb-3">
+          <span className="text-xl font-bold text-slate-100">{top.rivalName}</span>
+          <span
+            className={`text-xs font-bold px-2 py-0.5 rounded border ${heatColor(top.heatLabel)}`}
+          >
+            {top.heatLabel}
+          </span>
+          <span className="ml-auto text-2xl font-bold text-red-400">{top.rivalryScore}</span>
+        </div>
+        {top.loreSentence && (
+          <p className="text-slate-400 text-sm italic mb-3">"{top.loreSentence}"</p>
+        )}
+        <div className="flex flex-wrap gap-4 text-xs text-slate-500">
+          <span>
+            H2H:{" "}
+            <span className="text-slate-300">
+              {top.h2hWins}W–{top.h2hLosses}L
+            </span>
+          </span>
+          {top.playoffEliminations > 0 && (
+            <span>
+              Playoff elims:{" "}
+              <span className="text-red-400">{top.playoffEliminations}</span>
+            </span>
+          )}
+          {top.closeLossCount > 0 && (
+            <span>
+              Close losses:{" "}
+              <span className="text-orange-400">{top.closeLossCount}</span>
+            </span>
+          )}
+          {top.tradeVerdictLosses > 0 && (
+            <span>
+              Trade losses:{" "}
+              <span className="text-yellow-400">{top.tradeVerdictLosses}</span>
+            </span>
+          )}
+          {top.painfulLossSeason && (
+            <span>
+              Most painful:{" "}
+              <span className="text-slate-300">
+                {top.painfulLossSeason} (–{top.painfulLossMargin?.toFixed(1)} pts)
+              </span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Full rankings */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-300">All Rivalries</h3>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs"
+          onClick={() => refreshMutation.mutate()}
+          disabled={refreshMutation.isPending}
+        >
+          {refreshMutation.isPending ? (
+            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+          ) : (
+            <RefreshCw className="w-3 h-3 mr-1" />
+          )}
+          Refresh
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        {scores.map((r, idx) => (
+          <Card key={r.rivalId} className="bg-slate-800/40 border-slate-700/40">
+            <CardContent className="pt-3 pb-3">
+              <div className="flex items-center gap-3">
+                <span className="text-slate-500 text-xs font-mono w-5 shrink-0">
+                  #{idx + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-100 font-semibold text-sm truncate">
+                      {r.rivalName}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${heatColor(r.heatLabel)}`}
+                    >
+                      {r.heatLabel}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-3 text-xs text-slate-500 mt-1">
+                    <span>
+                      H2H:{" "}
+                      <span className="text-slate-300">
+                        {r.h2hWins}W–{r.h2hLosses}L
+                      </span>
+                    </span>
+                    {r.playoffEliminations > 0 && (
+                      <span>
+                        Elims: <span className="text-red-400">{r.playoffEliminations}</span>
+                      </span>
+                    )}
+                    {r.closeLossCount > 0 && (
+                      <span>
+                        Close: <span className="text-orange-400">{r.closeLossCount}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-base font-bold text-slate-200">{r.rivalryScore}</div>
+                  <div className="text-[10px] text-slate-500">score</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }

@@ -698,3 +698,85 @@ export const onboardingState = mysqlTable(
 );
 export type OnboardingState = typeof onboardingState.$inferSelect;
 export type InsertOnboardingState = typeof onboardingState.$inferInsert;
+
+// ─── Rivalry System ────────────────────────────────────────────────────────────
+/**
+ * Stores the computed rivalry score between every pair of managers.
+ * Recomputed on each full data refresh. memberId is always Rod's memberId
+ * (the logged-in owner); rivalId is the opponent.
+ *
+ * Heat labels:
+ *   Cold       (score < 10)
+ *   Heating Up (10–24)
+ *   Hot        (25–44)
+ *   Inferno    (45+)
+ */
+export const rivalryScores = mysqlTable(
+  "rivalry_scores",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    memberId: varchar("memberId", { length: 64 }).notNull(),
+    rivalId: varchar("rivalId", { length: 64 }).notNull(),
+    rivalName: varchar("rivalName", { length: 128 }).notNull(),
+    rivalryScore: int("rivalryScore").notNull().default(0),
+    h2hLosses: int("h2hLosses").notNull().default(0),
+    h2hWins: int("h2hWins").notNull().default(0),
+    h2hTies: int("h2hTies").notNull().default(0),
+    playoffEliminations: int("playoffEliminations").notNull().default(0),
+    closeLossCount: int("closeLossCount").notNull().default(0),   // losses by < 5 pts
+    tradeVerdictLosses: int("tradeVerdictLosses").notNull().default(0),
+    recentLosses: int("recentLosses").notNull().default(0),       // last 3 seasons
+    heatLabel: varchar("heatLabel", { length: 32 }).notNull().default("Cold"),
+    // Most painful loss: season + margin
+    painfulLossSeason: int("painfulLossSeason"),
+    painfulLossMargin: int("painfulLossMargin"),                  // stored as integer (pts * 10)
+    painfulLossOpponentScore: int("painfulLossOpponentScore"),    // pts * 10
+    // Revenge status: did Rod beat this rival in the most recent season they played?
+    revengeAchieved: boolean("revengeAchieved").notNull().default(false),
+    lastMatchupSeason: int("lastMatchupSeason"),
+    // LLM-generated lore sentence (cached, regenerated only when score changes materially)
+    loreSentence: text("loreSentence"),
+    loreGeneratedAt: timestamp("loreGeneratedAt"),
+    computedAt: timestamp("computedAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_rivalry_pair").on(t.memberId, t.rivalId),
+    index("idx_rivalry_member").on(t.memberId),
+    index("idx_rivalry_score").on(t.rivalryScore),
+  ]
+);
+export type RivalryScore = typeof rivalryScores.$inferSelect;
+export type InsertRivalryScore = typeof rivalryScores.$inferInsert;
+
+// ─── Trade Narratives ──────────────────────────────────────────────────────────
+/**
+ * One row per completed trade. Stores the deterministic narrative label and
+ * the LLM-generated narrative sentence. Populated during data refresh.
+ */
+export const tradeNarratives = mysqlTable(
+  "trade_narratives",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tradeId: varchar("tradeId", { length: 128 }).notNull(),
+    season: int("season").notNull(),
+    proposedDate: int("proposedDate").notNull(),
+    sideAOwner: varchar("sideAOwner", { length: 128 }).notNull(),
+    sideBOwner: varchar("sideBOwner", { length: 128 }).notNull(),
+    verdict: varchar("verdict", { length: 8 }).notNull(),         // 'sideA' | 'sideB' | 'even'
+    verdictMargin: int("verdictMargin").notNull().default(0),      // stored as integer (value * 10)
+    narrativeLabel: varchar("narrativeLabel", { length: 64 }).notNull(),
+    narrativeSentence: text("narrativeSentence"),                  // LLM-generated, cached
+    sideADesperation: int("sideADesperation"),
+    sideBDesperation: int("sideBDesperation"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_trade_narrative").on(t.tradeId),
+    index("idx_tn_season").on(t.season),
+    index("idx_tn_label").on(t.narrativeLabel),
+  ]
+);
+export type TradeNarrative = typeof tradeNarratives.$inferSelect;
+export type InsertTradeNarrative = typeof tradeNarratives.$inferInsert;

@@ -106,6 +106,33 @@ export const appRouter = router({
   ml: mlRouter,
   weeklyAssessment: weeklyAssessmentRouter,
   providers: providerRouter,
+  rivalry: router({
+    /** Get cached rivalry scores for the current user (Rod) from DB */
+    getScores: publicProcedure.query(async () => {
+      const { getRivalryScoresFromDb } = await import("./rivalryService");
+      const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
+      const seasons = await getAllCachedSeasons();
+      if (seasons.length === 0) return [];
+      const latestSeason = Math.max(...seasons);
+      const row = await getCachedView(latestSeason, "combined");
+      if (!row) return [];
+      const data = row.payload as Record<string, unknown>;
+      const members = (data.members as Record<string, unknown>[]) || [];
+      let rodMemberId: string | null = null;
+      for (const m of members) {
+        const name = `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || "";
+        if (ROD_NAMES.some(n => name.toLowerCase().includes(n))) { rodMemberId = m.id as string; break; }
+      }
+      if (!rodMemberId) return [];
+      return getRivalryScoresFromDb(rodMemberId);
+    }),
+    /** Compute and persist rivalry scores (manual trigger) */
+    refresh: protectedProcedure.mutation(async () => {
+      const { refreshRivalryScores } = await import("./rivalryService");
+      const pairs = await refreshRivalryScores();
+      return { ok: true, count: pairs.length };
+    }),
+  }),
   league: router({
     // Get the user's active league connection
     getActive: protectedProcedure.query(async ({ ctx }) => {
@@ -266,6 +293,11 @@ export const appRouter = router({
         }
         // Bust all in-memory caches so next page load recomputes with fresh data
         memCache.invalidateAll();
+        // Recompute rivalry scores after data refresh (non-fatal)
+        try {
+          const { refreshRivalryScores } = await import("./rivalryService");
+          await refreshRivalryScores();
+        } catch (_e) { /* non-fatal — rivalry scores are a bonus layer */ }
         return results;
       }),
 

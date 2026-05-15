@@ -1161,4 +1161,18 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Persistent league memory: user_memory DB table, getUserMemory/updateMemory, memory injected into advisor system prompt, GMDecisionMemory hub page
 - [x] Fix: Rosters page was orphaned — added Rosters nav link to AppLayout sidebar under Team Tools group
 - [x] Run TypeScript check and full test suite (504/504 passing, 0 TS errors)
+- [x] Save checkpoint (d38ce659) and push to GitHub
+
+## Sprint 1: Rivalry System
+- [x] Add rivalry_scores and trade_narratives tables to drizzle/schema.ts and run pnpm db:push
+- [x] Build server/rivalryService.ts: deterministic rivalry score engine (h2h, playoff eliminations, close matchups, trade verdicts, recency)
+- [x] Build rivalry router (rivalry.getScores, rivalry.refresh) in rivalryService.ts
+- [x] Wire rivalry score computation into ESPN data refresh pipeline (after all seasons processed)
+- [x] Expose rivalry router in server/routers.ts appRouter
+- [x] Enhance Reveal page rival card: show H2H record, rivalry heat label, Revenge Opportunity badge, lore sentence
+- [x] Add Rivalry Alert tab to Weekly Intelligence hub with RivalryHeatPanel component
+- [x] Add Rivals tab to Owner Stats page: hero card for biggest rival, full ranked list with H2H, playoff elims, close losses
+- [x] Generate lore sentences via LLM for top rivalry pairs (cached in rivalry_scores.lore_sentence)
+- [x] Write 16 vitest tests for rivalryService score engine (heatLabel, computeScore, ordering invariants)
+- [x] Run TypeScript check (0 errors) and full test suite (520/520 passing)
 - [ ] Save checkpoint and push to GitHub

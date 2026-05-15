@@ -736,6 +736,118 @@ function TeamCard({
   );
 }
 
+// ─── Rivalry Heat Panel ─────────────────────────────────────────────────────
+
+function RivalryHeatPanel() {
+  const { data: scores, isLoading } = trpc.rivalry.getScores.useQuery(undefined, {
+    staleTime: 1000 * 60 * 10,
+  });
+  const refreshMutation = trpc.rivalry.refresh.useMutation({
+    onSuccess: (res) => toast.success(`Rivalry scores updated (${res.count} pairs)`),
+    onError: () => toast.error("Failed to refresh rivalry scores"),
+  });
+
+  const heatColor = (label: string) => {
+    if (label === "Inferno") return "bg-red-500/20 text-red-400 border-red-500/30";
+    if (label === "Burning") return "bg-orange-500/20 text-orange-400 border-orange-500/30";
+    if (label === "Heated") return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+    if (label === "Simmering") return "bg-amber-500/20 text-amber-400 border-amber-500/30";
+    return "bg-slate-700/40 text-slate-400 border-slate-600/30";
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-28 w-full" />)}
+      </div>
+    );
+  }
+
+  if (!scores || scores.length === 0) {
+    return (
+      <div className="text-center py-16 text-slate-500">
+        <Flame className="w-10 h-10 mx-auto mb-3 opacity-30" />
+        <p className="text-sm font-medium mb-1">No rivalry data yet</p>
+        <p className="text-xs mb-4">Rivalry scores are computed after each data refresh.</p>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => refreshMutation.mutate()}
+          disabled={refreshMutation.isPending}
+        >
+          {refreshMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+          Compute Now
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-200">Rivalry Rankings</h3>
+          <p className="text-xs text-slate-500">Sorted by rivalry score — based on H2H losses, playoff eliminations, close matchups, and trade outcomes.</p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs"
+          onClick={() => refreshMutation.mutate()}
+          disabled={refreshMutation.isPending}
+        >
+          {refreshMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+          Refresh
+        </Button>
+      </div>
+
+      <div className="space-y-3">
+        {scores.map((r, idx) => (
+          <Card key={r.rivalId} className="bg-slate-800/40 border-slate-700/40">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-slate-500 text-xs font-mono w-5 shrink-0">#{idx + 1}</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-slate-100 font-semibold text-sm truncate">{r.rivalName}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${heatColor(r.heatLabel)}`}>
+                        {r.heatLabel}
+                      </span>
+                    </div>
+                    {r.loreSentence && (
+                      <p className="text-slate-400 text-xs leading-relaxed italic mb-2">"{r.loreSentence}"</p>
+                    )}
+                    <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+                      <span>H2H: <span className="text-slate-300">{r.h2hWins}W–{r.h2hLosses}L</span></span>
+                      {r.playoffEliminations > 0 && (
+                        <span>Playoff elims: <span className="text-red-400">{r.playoffEliminations}</span></span>
+                      )}
+                      {r.closeLossCount > 0 && (
+                        <span>Close losses: <span className="text-orange-400">{r.closeLossCount}</span></span>
+                      )}
+                      {r.tradeVerdictLosses > 0 && (
+                        <span>Trade losses: <span className="text-yellow-400">{r.tradeVerdictLosses}</span></span>
+                      )}
+                      {r.painfulLossSeason && (
+                        <span>Worst: <span className="text-slate-300">{r.painfulLossSeason} (–{r.painfulLossMargin?.toFixed(1)} pts)</span></span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-lg font-bold text-slate-100">{r.rivalryScore}</div>
+                  <div className="text-[10px] text-slate-500">score</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 type SortKey = "standing" | "desperation" | "exploitability" | "health";
@@ -1014,6 +1126,9 @@ export default function WeeklyIntelligence() {
             <TabsTrigger value="opportunities" className="text-xs gap-1.5">
               <Target className="w-3.5 h-3.5" /> Rod's Opportunities
             </TabsTrigger>
+            <TabsTrigger value="rivalry" className="text-xs gap-1.5">
+              <Flame className="w-3.5 h-3.5" /> Rivalry Heat
+            </TabsTrigger>
           </TabsList>
 
           {/* ── All Teams tab ── */}
@@ -1117,6 +1232,11 @@ export default function WeeklyIntelligence() {
             ) : (
               <RodOpportunityBoard season={season} />
             )}
+          </TabsContent>
+
+          {/* ── Rivalry Heat tab ── */}
+          <TabsContent value="rivalry" className="mt-4">
+            <RivalryHeatPanel />
           </TabsContent>
         </Tabs>
 
