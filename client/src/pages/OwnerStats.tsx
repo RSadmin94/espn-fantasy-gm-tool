@@ -642,7 +642,7 @@ function LeaderboardRow({ owner, rank, onClick, selected }: {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function OwnerStats() {
-  const { data, isLoading, error } = trpc.ownerCareerStats.useQuery();
+  const { data, isLoading, error } = trpc.ownerCareerStats.useQuery(undefined, { staleTime: 10 * 60_000 });
   const [selectedOwner, setSelectedOwner] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("leaderboard");
 

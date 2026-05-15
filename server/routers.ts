@@ -4021,6 +4021,7 @@ if (pickOrder.length > 0) {
     vorp: publicProcedure
       .input(z.object({ season: z.number() }))
       .query(async ({ input }) => {
+        return memCache(`vorp:${input.season}`, 10 * 60_000, async () => {
         const data = await getSeasonData(input.season);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
@@ -4047,11 +4048,13 @@ if (pickOrder.length > 0) {
         });
 
         return calcVORP(players);
+        });
       }),
 
     scarcity: publicProcedure
       .input(z.object({ season: z.number() }))
       .query(async ({ input }) => {
+        return memCache(`scarcity:${input.season}`, 10 * 60_000, async () => {
         const data = await getSeasonData(input.season);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
@@ -4106,11 +4109,13 @@ if (pickOrder.length > 0) {
           });
 
         return calcPositionalScarcity(rosteredPlayers, freeAgents);
+        });
       }),
 
     rosterGaps: publicProcedure
       .input(z.object({ season: z.number() }))
       .query(async ({ input }) => {
+        return memCache(`rosterGaps:${input.season}`, 10 * 60_000, async () => {
         const data = await getSeasonData(input.season);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
@@ -4137,11 +4142,13 @@ if (pickOrder.length > 0) {
         });
 
         return calcRosterGaps(players);
+        });
       }),
 
     keeperEfficiency: publicProcedure
       .input(z.object({ season: z.number() }))
       .query(async ({ input }) => {
+        return memCache(`keeperEfficiency:${input.season}`, 10 * 60_000, async () => {
         const data = await getSeasonData(input.season);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
@@ -4169,11 +4176,14 @@ if (pickOrder.length > 0) {
 
         const vorp = calcVORP(players);
         return calcKeeperEfficiency(players, vorp);
+        });
       }),
 
     managerBehavior: publicProcedure
       .input(z.object({ seasons: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
+        const seasonKey = (input.seasons ?? []).join("-") || "all";
+        return memCache(`managerBehavior:${seasonKey}`, 10 * 60_000, async () => {
         const cachedSeasons = input.seasons ?? await getAllCachedSeasons();
         const allTransactions: TransactionRow[] = [];
         const allDraftPicks: DraftPickRow[] = [];
@@ -4227,6 +4237,7 @@ if (pickOrder.length > 0) {
           allDraftPicks,
           ownerNameMap
         );
+        });
       }),
 
     rosValues: publicProcedure

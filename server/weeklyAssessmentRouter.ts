@@ -202,7 +202,27 @@ export const weeklyAssessmentRouter = router({
   rodOpportunities: publicProcedure
     .input(z.object({ season: z.number().default(2025) }))
     .query(async ({ input }) => {
-      return buildRodOpportunityBoard(input.season);
+      // Check the reportCache first — buildWeeklyAssessment runs 14+ LLM calls;
+      // if fullReport already ran this season, reuse its result instead of re-running.
+      const cacheKey = getCacheKey(input.season);
+      const cached = reportCache.get(cacheKey);
+      if (cached && Date.now() - cached.cachedAt < REPORT_CACHE_TTL) {
+        const full = cached.report;
+        return {
+          week: full.week,
+          opportunities: full.topOpportunities,
+          summary: full.leagueSummary,
+        };
+      }
+      // Cache miss — run the full assessment and populate the shared cache so
+      // subsequent calls to fullReport or rodOpportunities are both served instantly.
+      const full = await buildWeeklyAssessment(input.season);
+      reportCache.set(cacheKey, { report: full, cachedAt: Date.now() });
+      return {
+        week: full.week,
+        opportunities: full.topOpportunities,
+        summary: full.leagueSummary,
+      };
     }),
 
   /**

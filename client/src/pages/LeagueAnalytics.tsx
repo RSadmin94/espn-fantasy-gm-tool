@@ -44,10 +44,10 @@ export default function LeagueAnalytics() {
   const [season, setSeason] = useState(CURRENT_SEASON);
   const [posFilter, setPosFilter] = useState("ALL");
 
-  const { data: vorp, isLoading: vorpLoading } = trpc.analytics.vorp.useQuery({ season });
-  const { data: scarcity, isLoading: scarcityLoading } = trpc.analytics.scarcity.useQuery({ season });
-  const { data: rosterGaps, isLoading: gapsLoading } = trpc.analytics.rosterGaps.useQuery({ season });
-  const { data: keeperEff, isLoading: keeperLoading } = trpc.analytics.keeperEfficiency.useQuery({ season });
+  const { data: vorp, isLoading: vorpLoading } = trpc.analytics.vorp.useQuery({ season }, { staleTime: 10 * 60_000 });
+  const { data: scarcity, isLoading: scarcityLoading } = trpc.analytics.scarcity.useQuery({ season }, { staleTime: 10 * 60_000 });
+  const { data: rosterGaps, isLoading: gapsLoading } = trpc.analytics.rosterGaps.useQuery({ season }, { staleTime: 10 * 60_000 });
+  const { data: keeperEff, isLoading: keeperLoading } = trpc.analytics.keeperEfficiency.useQuery({ season }, { staleTime: 10 * 60_000 });
 
   const filteredVorp = (vorp ?? []).filter(p =>
     posFilter === "ALL" || p.position === posFilter

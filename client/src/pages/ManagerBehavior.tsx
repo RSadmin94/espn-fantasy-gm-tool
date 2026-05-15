@@ -23,7 +23,7 @@ const STAT_BAR_COLOR = (val: number, max: number) => {
 };
 
 export default function ManagerBehavior() {
-  const { data: managers, isLoading } = trpc.analytics.managerBehavior.useQuery({});
+  const { data: managers, isLoading } = trpc.analytics.managerBehavior.useQuery({}, { staleTime: 10 * 60_000 });
 
   if (isLoading) {
     return (

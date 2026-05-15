@@ -1116,3 +1116,10 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Progressive reveal on AI response pages (stream-style appearance, not all-at-once pop)
 - [x] Run TypeScript check and full test suite
 - [x] Save checkpoint
+
+## NEW: Cache-First Loading Fix (Slow Menus)
+- [ ] Audit which tRPC procedures make live ESPN API calls vs reading from DB cache
+- [ ] Fix slow procedures to read from DB cache first (serve cached data immediately)
+- [ ] Add staleTime to slow tRPC queries on frontend (show cached data instantly, refresh in background)
+- [ ] Run TypeScript check and full test suite
+- [ ] Push to GitHub and save checkpoint
