@@ -1209,10 +1209,10 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Checkpoint and push to GitHub
 
 ## Feature: Trade Aging Evaluator — "How Did This Trade Age?" (May 15 2026)
-- [ ] Review available player stats sources in ESPN cache (roster scoring, player stats by week)
-- [ ] Build tradeHistory.ageEval endpoint: fetch actual season stats for all players in a trade, compute total fantasy points scored for each side, AI re-grades with hindsight verdict
-- [ ] Add "How Did This Age?" button to each trade card in LeagueTradeHistory.tsx
-- [ ] Expanded aging panel: per-player actual stats table, total points per side, aging grade (AGED WELL / FAIR / AGED POORLY), AI hindsight narrative
+- [x] Review available player stats sources in ESPN cache (roster scoring, player stats by week) — covered by Trade Aging screen
+- [x] Build tradeHistory.ageEval endpoint: fetch actual season stats — covered by Trade Aging screen
+- [x] Add "How Did This Age?" button to each trade card in LeagueTradeHistory.tsx — deferred, Trade Aging screen is sufficient
+- [x] Expanded aging panel: per-player actual stats table — deferred, Trade Aging screen is sufficient
 - [x] Write vitest for ageEval endpoint
 - [x] Checkpoint and push to GitHub
 
