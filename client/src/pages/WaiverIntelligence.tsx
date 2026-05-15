@@ -4,6 +4,7 @@
 // alongside the league desperation snapshot so Rod can act before opponents do.
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,10 +129,13 @@ export default function WaiverIntelligence() {
   const nowCount      = (oppData?.opportunities as RodOpportunity[] | undefined)?.filter(o => o.urgency === "NOW").length ?? 0;
   const thisWeekCount = (oppData?.opportunities as RodOpportunity[] | undefined)?.filter(o => o.urgency === "THIS_WEEK").length ?? 0;
 
+  const { user } = useAuth();
+  const myFirstName = user?.name?.split(" ")[0] ?? "Your";
+
   return (
     <AppLayout
       title="Waiver Intelligence"
-      subtitle={`Week ${pulseData?.week ?? "—"} · ${season} Season · Rod's Opportunity Board`}
+      subtitle={`Week ${pulseData?.week ?? "—"} · ${season} Season · ${myFirstName}'s Opportunity Board`}
     >
       <div className="space-y-6">
 
@@ -191,7 +195,7 @@ export default function WaiverIntelligence() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Target className="w-4 h-4 text-primary" />
-                  Rod's Opportunity Board
+                  {myFirstName}'s Opportunity Board
                   {oppData && (
                     <span className="text-xs font-normal text-muted-foreground ml-1">
                       Week {oppData.week}

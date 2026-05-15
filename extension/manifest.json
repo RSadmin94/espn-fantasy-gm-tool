@@ -7,7 +7,9 @@
   "permissions": [
     "cookies",
     "activeTab",
-    "storage"
+    "storage",
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
     "https://fantasy.espn.com/*",

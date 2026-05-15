@@ -1166,3 +1166,8 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Verify connectViaExtension writes league cache under correct leagueConnectionId
 - [x] Trace full new-user onboarding: connect → claim team → reveal → dashboard
 - [x] Save checkpoint and push to GitHub
+
+## Bug Fixes (May 15 2026)
+- [ ] Fix remaining "Rod's Opportunity Board" hardcoded label in WeeklyIntelligence/MockDraftSimulator
+- [ ] Fix extension: detect ESPN credentials from any fantasy.espn.com page (not just /team URL)
+- [ ] Rebuild extension zip after fix

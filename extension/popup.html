@@ -295,7 +295,7 @@
     <div id="state-no-league" class="state">
       <div class="status-row warning">
         <div class="dot yellow"></div>
-        <span>ESPN session found — navigate to your league</span>
+        <span>ESPN session found — league not detected</span>
       </div>
       <div class="data-card">
         <div class="data-row">
@@ -308,17 +308,26 @@
         </div>
         <div class="data-row">
           <span class="data-label">League ID</span>
-          <span class="data-value missing">Not detected yet</span>
+          <span class="data-value missing">Not detected</span>
         </div>
       </div>
       <div class="instructions">
         <ol>
-          <li>Go to your ESPN Fantasy league page</li>
-          <li>The URL should contain <code style="color:#fbbf24">leagueId=XXXXXX</code></li>
-          <li>Return here — it will auto-detect</li>
+          <li>Navigate to <a href="https://fantasy.espn.com/football" target="_blank">fantasy.espn.com/football</a> and open your league</li>
+          <li>Click “Retry” below — the extension will re-scan the page</li>
+          <li>Or paste your League ID manually:</li>
         </ol>
       </div>
-      <button class="btn btn-primary" id="btn-retry-league">↺ Retry</button>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <input
+          id="manual-league-id"
+          type="text"
+          placeholder="League ID (e.g. 158918)"
+          style="flex:1;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#0f1117;color:#e2e8f0;font-size:12px;outline:none"
+        />
+        <button class="btn btn-primary" id="btn-use-manual-league" style="width:auto;padding:8px 12px;font-size:12px">→</button>
+      </div>
+      <button class="btn btn-primary" id="btn-retry-league">↺ Retry Detection</button>
     </div>
 
     <!-- STATE: ready -->

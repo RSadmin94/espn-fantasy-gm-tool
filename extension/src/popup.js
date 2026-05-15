@@ -69,6 +69,7 @@ async function init() {
     }
 
     if (!capturedData.leagueId) {
+      // Show no-league state but allow manual entry
       showState("no-league");
       return;
     }
@@ -245,6 +246,22 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-retry-league")?.addEventListener("click", () => {
     chrome.storage.local.remove("espnPageContext");
     init();
+  });
+
+  document.getElementById("btn-use-manual-league")?.addEventListener("click", () => {
+    const input = document.getElementById("manual-league-id");
+    const val = input?.value?.trim();
+    if (!val || !/^\d{4,}$/.test(val)) {
+      input.style.borderColor = "#ef4444";
+      return;
+    }
+    input.style.borderColor = "#334155";
+    capturedData.leagueId = val;
+    // Show ready state with manually entered league ID
+    document.getElementById("ready-league-id").textContent = capturedData.leagueId;
+    document.getElementById("ready-team-id").textContent = capturedData.teamId || "Auto-detect";
+    document.getElementById("btn-connect").disabled = false;
+    showState("ready");
   });
 
   // ready
