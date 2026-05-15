@@ -1230,6 +1230,16 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Test, checkpoint, push
 
 ## Bug Fix: Extension Not Opening GM Tool Site (May 15 2026)
-- [ ] Diff extension files vs last working version to find breaking change
-- [ ] Fix the breaking change
-- [ ] Rebuild zip, upload, checkpoint
+- [x] Diff extension files vs last working version to find breaking change
+- [x] Fix the breaking change (React hook #310 in AppLayout.tsx)
+- [x] Rebuild zip, upload, checkpoint
+
+## Bug Fix: Remove InsideLayoutContext + Add Open Advisor Button (May 15 2026)
+- [ ] Remove InsideLayoutContext and alreadyInsideLayout guard entirely from AppLayout
+- [ ] Add a simple "Open Advisor" button in the sidebar nav instead
+- [ ] Ensure no nested layout issues remain
+
+## Bug Fix: Missing Trade in Trade History (May 15 2026)
+- [ ] Identify which trade is missing and from which season
+- [ ] Check transaction parsing logic in tradeHistoryRouter for the missing trade
+- [ ] Fix the parsing so all accepted trades appear

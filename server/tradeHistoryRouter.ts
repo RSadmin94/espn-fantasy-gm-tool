@@ -70,8 +70,13 @@ export function buildTradesForSeason(season: number, data: Record<string, unknow
     itemType?: string;
   }>;
 
-  // Filter to TRADE type only
-  const tradeTxs = txRows.filter(t => t.type === "TRADE");
+  // Filter to accepted trades:
+  // - type === "TRADE" (older seasons)
+  // - type === "TRADE_PROPOSAL" with status === "EXECUTED" (2026+ seasons)
+  const tradeTxs = txRows.filter(t =>
+    t.type === "TRADE" ||
+    (t.type === "TRADE_PROPOSAL" && t.status === "EXECUTED")
+  );
 
   // Group by transactionId
   const grouped = new Map<string, typeof tradeTxs>();
