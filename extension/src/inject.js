@@ -1,5 +1,5 @@
 /**
- * ESPN GM Tool — Fantasy DNA Advisor Content Script v1.4.0
+ * ATLANTAS FINEST — Fantasy DNA Advisor Content Script v1.3.1
  *
  * ESPN-first release. Sleeper/Yahoo stubs retained for future expansion.
  *
@@ -427,7 +427,7 @@
     const providerInfo = PROVIDER_LABELS[PROVIDER] || PROVIDER_LABELS.unknown;
     return `
       <div class="af-panel-footer">
-        <span>ESPN GM Tool DNA Advisor</span>
+        <span>ATLANTAS FINEST DNA Advisor</span>
         <span class="af-footer-dot">·</span>
         <span>${providerInfo.name}</span>
         <span class="af-footer-dot">·</span>
@@ -512,7 +512,7 @@
         <!-- Opportunities -->
         ${opportunities.length > 0 ? `
         <div class="af-section">
-          <div class="af-section-title">Your Opportunities</div>
+          <div class="af-section-title">Rod's Opportunities</div>
           ${opportunities.slice(0, 4).map(op => `
             <div class="af-opportunity-item af-urgency-${(op.urgency || "monitor").toLowerCase()}">
               <div class="af-opp-type">${escapeHtml(op.type || "")}</div>
@@ -638,6 +638,6 @@
     setTimeout(injectBadges, 500);
   }
 
-  console.log(`[ESPN GM Tool DNA Advisor v1.4.0] Provider: ${PROVIDER} | URL: ${window.location.pathname}`);
+  console.log(`[DNA Advisor v1.3.1] Provider: ${PROVIDER} | URL: ${window.location.pathname}`);
 
 })();
