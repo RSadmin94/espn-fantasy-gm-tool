@@ -246,7 +246,9 @@ export default function LeagueConnect() {
         transactionCount: 0,
         dnaProfile: null,
       });
-      navigate("/reveal");
+      setProgressPct(100);
+      setProgressStep(DNA_STEPS.length - 1);
+      setTimeout(() => navigate("/reveal"), 800);
     },
     onError: (err) => {
       setError(err.message || "ESPN import failed");
@@ -275,6 +277,11 @@ export default function LeagueConnect() {
 
   const handleProviderSelect = (provider: ProviderCard) => {
     if (provider.status === "coming_soon") return;
+    // Require login for providers that need auth
+    if (provider.authRequired && !user) {
+      window.location.href = getLoginUrl();
+      return;
+    }
     setSelectedProvider(provider.id);
     setError(null);
     if (provider.id === "yahoo") {
@@ -536,6 +543,19 @@ export default function LeagueConnect() {
       if (!espnSwid.trim()) { setError("SWID cookie is required"); return; }
       if (!espnS2.trim()) { setError("espn_s2 cookie is required"); return; }
       setError(null);
+      setStep("generating");
+      setProgressStep(0);
+      setProgressPct(0);
+      let espnStep = 0;
+      const espnInterval = setInterval(() => {
+        espnStep++;
+        if (espnStep < DNA_STEPS.length - 1) {
+          setProgressStep(espnStep);
+          setProgressPct(Math.round((espnStep / (DNA_STEPS.length - 1)) * 85));
+        } else {
+          clearInterval(espnInterval);
+        }
+      }, 900);
       importEspnMutation.mutate({
         leagueId: espnLeagueId.trim(),
         swid: espnSwid.trim(),
@@ -878,11 +898,9 @@ export default function LeagueConnect() {
 
           {/* Actions */}
           <div className="flex gap-3 mt-8">
-            <Button className="flex-1" asChild>
-              <a href="/weekly-intelligence">
-                Open Weekly Intelligence Hub
-                <ChevronRight className="w-4 h-4 ml-2" />
-              </a>
+            <Button className="flex-1" onClick={() => navigate("/weekly-intelligence")}>
+              Open Weekly Intelligence Hub
+              <ChevronRight className="w-4 h-4 ml-2" />
             </Button>
             <Button
               variant="outline"

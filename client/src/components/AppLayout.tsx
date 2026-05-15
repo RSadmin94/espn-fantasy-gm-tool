@@ -163,7 +163,7 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
                 <Activity className="w-5 h-5 text-white" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-bold text-foreground leading-tight tracking-tight">ATLANTAS FINEST</p>
+                <p className="text-sm font-bold text-foreground leading-tight tracking-tight">{import.meta.env.VITE_APP_TITLE || "GM WAR ROOM"}</p>
                 <p className="text-[11px] text-muted-foreground leading-tight">GM Command Center</p>
               </div>
             </div>

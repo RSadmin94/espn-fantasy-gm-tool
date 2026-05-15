@@ -1,15 +1,20 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 
 export default function BillingSuccess() {
   const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
 
   useEffect(() => {
+    // Invalidate subscription status so trial banners disappear immediately
+    utils.billing.getSubscriptionStatus.invalidate();
+    utils.auth.me.invalidate();
     const timer = setTimeout(() => {
       navigate("/command-center");
     }, 4000);
     return () => clearTimeout(timer);
-  }, [navigate]);
+  }, [navigate, utils]);
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4">

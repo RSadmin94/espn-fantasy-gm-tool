@@ -1107,7 +1107,7 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Fix tradeAging procedure: seed group.proposedDate from acceptanceDateMap for proposals with date=0
 - [x] Add 6 regression tests: PENDING status proposal, acceptance-row date fallback, purged proposal skip, pick-only trade, legacy TRADE path, mixed payload
 - [x] Run full TypeScript check and test suite (504/504 passing, 0 TS errors)
-- [ ] Push to GitHub and save checkpoint
+- [x] Push to GitHub and save checkpoint
 
 ## NEW: UX Redesign — Mission-Driven Command Center
 - [x] Redesign sidebar navigation into grouped sections: Intelligence (Weekly Intel, Opponent DNA, Rivalry) and Team Tools (Start/Sit, Waivers, Keeper, Trades)
@@ -1124,3 +1124,14 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Add staleTime to slow tRPC queries on frontend (show cached data instantly, refresh in background)
 - [x] Run TypeScript check and full test suite
 - [x] Push to GitHub and save checkpoint
+
+## NEW: Onboarding Flow Audit & Fixes
+- [x] ESPN connect: after importEspnLeague succeeds, navigate to /reveal (currently stays on /connect success step with no CTA to /reveal)
+- [x] ESPN connect: show DNA progress animation before navigating to /reveal (same as Sleeper flow)
+- [x] Reveal page: error state has no link back to /connect — add "Reconnect" button
+- [x] BillingSuccess: invalidate subscription cache so trial banner disappears immediately after payment
+- [x] AppLayout sidebar: "ATLANTAS FINEST" hardcoded — use VITE_APP_TITLE env var dynamically
+- [x] Connect page: unauthenticated users who pick ESPN/Sleeper should be prompted to sign in before the credential form (not after the import fails)
+- [x] Connect page: success step "Open Weekly Intelligence Hub" uses hard <a> tag (full reload) — replace with wouter navigate
+- [x] Run TypeScript check and full test suite (504/504 passing, 0 TS errors)
+- [ ] Save checkpoint and push to GitHub
