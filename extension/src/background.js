@@ -148,8 +148,31 @@ async function handleMessage(msg) {
       cache.clear();
       return { ok: true };
 
+    case "ESPN_CONTEXT_DETECTED":
+      // content.js broadcasts the ESPN page context — store it for popup to read
+      await chrome.storage.local.set({ espnPageContext: msg.payload });
+      return { ok: true };
+
+    case "GET_ESPN_COOKIES": {
+      // popup.js requests ESPN auth cookies so it can connect the league
+      // In MV3 we can read cookies via chrome.cookies API
+      try {
+        const [swid, s2] = await Promise.all([
+          chrome.cookies.get({ url: "https://fantasy.espn.com", name: "SWID" }),
+          chrome.cookies.get({ url: "https://fantasy.espn.com", name: "espn_s2" }),
+        ]);
+        return {
+          swid: swid?.value || null,
+          espnS2: s2?.value || null,
+        };
+      } catch (_) {
+        return { swid: null, espnS2: null };
+      }
+    }
+
     default:
-      throw new Error(`Unknown message type: ${msg.type}`);
+      // Silently ignore unknown messages instead of throwing — avoids console noise
+      return { ok: false, error: `Unknown message type: ${msg.type}` };
   }
 }
 
