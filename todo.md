@@ -1147,4 +1147,4 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Update options.js to check for ESPN cookies and show Connect button when found
 - [x] Package extension as espn_dna_extension_v1.3.0.zip
 - [x] Run TypeScript check and full test suite (504/504 passing, 0 TS errors)
-- [ ] Save checkpoint
+- [x] Save checkpoint (3ae15e66)
