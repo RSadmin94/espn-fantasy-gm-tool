@@ -612,7 +612,7 @@ export default function LeagueConnect() {
                 size="lg"
                 onClick={() => {
                   const a = document.createElement("a");
-                  a.href = "/manus-storage/espn-gm-tool-connector-v1.4.0_969aaa64.zip";
+                  a.href = "/manus-storage/espn-gm-tool-connector-v1.4.0_7d6518c4.zip";
                   a.download = "espn-gm-tool-connector.zip";
                   a.click();
                 }}
