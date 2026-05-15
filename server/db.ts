@@ -8,6 +8,7 @@ import {
   userMemory, UserMemory,
   leagueConnections,
   llmUsage,
+  espnTeamOwnership, EspnTeamOwnership,
 } from "../drizzle/schema";
 import type { EspnCreds } from "./espnService";
 import { decryptCredentialsFromDb } from "./_core/crypto";
@@ -583,4 +584,92 @@ export async function getLlmUsageSummary(userId: number) {
     byCallType[r.callType] = (byCallType[r.callType] ?? 0) + (r.totalTokens ?? 0);
   }
   return { totalTokens, totalCalls, byCallType };
+}
+
+// ─── ESPN Team Ownership helpers ──────────────────────────────────────────────
+
+/**
+ * Returns the deterministic team claim for a user in a specific league+season.
+ * Returns null if the user has not yet claimed their team.
+ */
+export async function getMyTeamOwnership(
+  userId: number,
+  leagueConnectionId: number,
+  season: number
+): Promise<EspnTeamOwnership | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select()
+    .from(espnTeamOwnership)
+    .where(
+      and(
+        eq(espnTeamOwnership.userId, userId),
+        eq(espnTeamOwnership.leagueConnectionId, leagueConnectionId),
+        eq(espnTeamOwnership.season, season)
+      )
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Returns the most recent team claim for a user across all seasons in a league.
+ * Useful when you need the teamId but don't know the exact season.
+ */
+export async function getLatestTeamOwnership(
+  userId: number,
+  leagueConnectionId: number
+): Promise<EspnTeamOwnership | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select()
+    .from(espnTeamOwnership)
+    .where(
+      and(
+        eq(espnTeamOwnership.userId, userId),
+        eq(espnTeamOwnership.leagueConnectionId, leagueConnectionId)
+      )
+    )
+    .orderBy(desc(espnTeamOwnership.season))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Saves or updates a user's team claim for a specific league+season.
+ * Uses INSERT ... ON DUPLICATE KEY UPDATE (via Drizzle's onDuplicateKeyUpdate).
+ */
+export async function upsertTeamOwnership(params: {
+  userId: number;
+  leagueConnectionId: number;
+  season: number;
+  espnTeamId: number;
+  espnMemberId: string;
+  teamName?: string;
+  ownerDisplayName?: string;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) { console.warn("[Database] Cannot upsert team ownership"); return; }
+  await db
+    .insert(espnTeamOwnership)
+    .values({
+      userId: params.userId,
+      leagueConnectionId: params.leagueConnectionId,
+      season: params.season,
+      espnTeamId: params.espnTeamId,
+      espnMemberId: params.espnMemberId,
+      teamName: params.teamName ?? "",
+      ownerDisplayName: params.ownerDisplayName ?? "",
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        espnTeamId: params.espnTeamId,
+        espnMemberId: params.espnMemberId,
+        teamName: params.teamName ?? "",
+        ownerDisplayName: params.ownerDisplayName ?? "",
+        updatedAt: new Date(),
+      },
+    });
 }

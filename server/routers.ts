@@ -78,6 +78,9 @@ import {
   persistLlmUsage,
   getLlmUsageSummary,
   getActiveEspnLeagueConnectionId,
+  getMyTeamOwnership,
+  getLatestTeamOwnership,
+  upsertTeamOwnership,
 } from "./db";
 
 const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
@@ -150,6 +153,71 @@ export const appRouter = router({
     }),
   }),
   offseason: offseasonRouter,
+  identity: router({
+    /**
+     * Returns the deterministic ESPN team claim for the current user.
+     * Returns null if the user has not yet claimed their team.
+     */
+    getMyTeam: protectedProcedure
+      .input(z.object({ season: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        const lcId = await getActiveEspnLeagueConnectionId(ctx.user.id);
+        if (!lcId) return null;
+        const season = input.season ?? 2025;
+        const ownership = await getMyTeamOwnership(ctx.user.id, lcId, season);
+        if (ownership) return ownership;
+        // Fall back to latest season claim if exact season not found
+        return await getLatestTeamOwnership(ctx.user.id, lcId);
+      }),
+    /**
+     * Returns all teams in the user's active league for the claim picker UI.
+     * Each team includes teamId, teamName, owners (display), and memberIds (ESPN GUIDs).
+     */
+    listTeamsForClaim: protectedProcedure
+      .input(z.object({ season: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        const season = input.season ?? 2025;
+        const data = await getSeasonData(season);
+        if (!data) return [];
+        const teams = normalizeTeams(data) as Array<Record<string, unknown>>;
+        // Also return the current claim so the UI can pre-select
+        const lcId = await getActiveEspnLeagueConnectionId(ctx.user.id);
+        const currentClaim = lcId ? await getMyTeamOwnership(ctx.user.id, lcId, season) : null;
+        return teams.map(t => ({
+          teamId: t.teamId as number,
+          teamName: t.teamName as string,
+          owners: t.owners as string,
+          memberIds: t.memberIds as string[],
+          isClaimed: currentClaim?.espnTeamId === (t.teamId as number),
+        }));
+      }),
+    /**
+     * Saves the user's explicit team claim.
+     * Called when the user selects "This is my team" in the onboarding picker.
+     */
+    claimTeam: protectedProcedure
+      .input(z.object({
+        season: z.number(),
+        espnTeamId: z.number(),
+        espnMemberId: z.string(),
+        teamName: z.string().optional(),
+        ownerDisplayName: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const lcId = await getActiveEspnLeagueConnectionId(ctx.user.id);
+        if (!lcId) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'No active league connection found. Connect your ESPN league first.' });
+        await upsertTeamOwnership({
+          userId: ctx.user.id,
+          leagueConnectionId: lcId,
+          season: input.season,
+          espnTeamId: input.espnTeamId,
+          espnMemberId: input.espnMemberId,
+          teamName: input.teamName,
+          ownerDisplayName: input.ownerDisplayName,
+        });
+        return { success: true, espnTeamId: input.espnTeamId };
+      }),
+  }),
   leagueScoring: router({
     getSettings: publicProcedure
       .input(z.object({ season: z.number().optional() }))

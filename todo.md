@@ -1119,3 +1119,22 @@ This single flow determines conversion, retention, and word-of-mouth.
 
 ## Logout Button
 - [x] Add Logout button to AppLayout sidebar (bottom of nav, shows user name + logout icon)
+
+## Deterministic ESPN Team Identity Mapping
+
+- [x] Audit ESPN data: confirm memberId/ownerId fields available in cached season data
+- [x] Schema: add espnTeamOwnership table (userId, season, espnTeamId, espnMemberId, teamName, ownerDisplayName)
+- [x] Migration: pnpm db:push for new table
+- [x] server/db.ts: add getMyTeamOwnership, getLatestTeamOwnership, upsertTeamOwnership helpers
+- [x] routers.ts: add identity sub-router (getMyTeam, claimTeam, listTeamsForClaim)
+- [x] LeagueConnect.tsx: add claim_team step after league import success with team picker UI
+- [x] Dashboard.tsx: replace myNameParts name-matching with useMyTeam hook (memberId + teamId)
+- [x] WeeklyIntelligence.tsx: already uses server-side rodTeamId; no client-side name matching
+- [x] MockDraftSimulator.tsx: no remaining name-matching after previous session cleanup
+- [x] KeeperROI.tsx: replace name-matching with useMyTeam hook
+- [x] KeeperCalculator.tsx: replace name-matching with useMyTeam hook
+- [x] DraftPickTracker.tsx: already uses dynamic standings; no name-matching
+- [x] weeklyAssessmentService.ts / weeklyAssessmentRouter.ts: detectRodTeamId uses ENV.ownerName (server-side)
+- [x] routers.ts mockSetup: uses ctx.user.name (protectedProcedure)
+- [x] Write vitest: server/teamOwnership.test.ts (7 tests passing)
+- [x] Graceful fallback: useMyTeam hook falls back to name-matching when no claim exists

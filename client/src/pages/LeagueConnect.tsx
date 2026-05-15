@@ -23,7 +23,7 @@ import { getLoginUrl } from "@/const";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Step = "choose_provider" | "enter_credentials" | "yahoo_pick_league" | "generating" | "success";
+type Step = "choose_provider" | "enter_credentials" | "yahoo_pick_league" | "generating" | "claim_team" | "success";
 type Provider = "espn" | "sleeper" | "yahoo" | "nfl" | "fleaflicker" | "fantrax";
 
 interface ProviderCard {
@@ -125,6 +125,7 @@ export default function LeagueConnect() {
   const [yahooLeagues, setYahooLeagues] = useState<Array<{ leagueKey: string; leagueId: string; name: string; season: string; teamCount: number }>>([]);
   const [selectedYahooLeagueId, setSelectedYahooLeagueId] = useState("");
   const [selectedYahooLeagueName, setSelectedYahooLeagueName] = useState("");
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   // ESPN state
   const [espnLeagueId, setEspnLeagueId] = useState("");
   const [espnSwid, setEspnSwid] = useState("");
@@ -159,7 +160,7 @@ export default function LeagueConnect() {
       });
       setProgressPct(100);
       setProgressStep(DNA_STEPS.length - 1);
-      setTimeout(() => navigate("/reveal"), 800);
+      setTimeout(() => setStep("claim_team"), 800);
     },
     onError: (err) => {
       setError(err.message);
@@ -246,7 +247,7 @@ export default function LeagueConnect() {
         transactionCount: 0,
         dnaProfile: null,
       });
-      navigate("/reveal");
+      setStep("claim_team");
     },
     onError: (err) => {
       setError(err.message || "ESPN import failed");
@@ -265,7 +266,7 @@ export default function LeagueConnect() {
       });
       setProgressPct(100);
       setProgressStep(DNA_STEPS.length - 1);
-      setTimeout(() => navigate("/reveal"), 800);
+      setTimeout(() => setStep("claim_team"), 800);
     },
     onError: (err) => {
       setError(err.message);
@@ -779,6 +780,107 @@ export default function LeagueConnect() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Step: Claim Team ────────────────────────────────────────────────────────
+  const teamsForClaimQuery = trpc.identity.listTeamsForClaim.useQuery(
+    { season: 2025 },
+    { enabled: step === "claim_team" && !!user }
+  );
+  const claimTeamMutation = trpc.identity.claimTeam.useMutation({
+    onSuccess: () => { navigate("/reveal"); },
+    onError: (err) => { setError(err.message); },
+  });
+
+  if (step === "claim_team") {
+    const teams = teamsForClaimQuery.data ?? [];
+    const selectedTeam = teams.find(t => t.teamId === selectedTeamId);
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-2xl mx-auto px-4 py-12">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/20 mb-4">
+              <span className="text-3xl">🏈</span>
+            </div>
+            <h2 className="text-3xl font-bold mb-2">Which team is yours?</h2>
+            <p className="text-muted-foreground text-sm max-w-md mx-auto">
+              Select your team so the app can highlight your roster, track your performance, and personalize every analysis to you.
+            </p>
+          </div>
+
+          {error && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {teamsForClaimQuery.isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="space-y-2 mb-8">
+              {teams.map(t => (
+                <button
+                  key={t.teamId}
+                  onClick={() => setSelectedTeamId(t.teamId)}
+                  className={`w-full text-left rounded-xl border p-4 transition-all duration-150 ${
+                    selectedTeamId === t.teamId
+                      ? "border-primary bg-primary/10 shadow-sm"
+                      : "border-border bg-card hover:border-primary/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-semibold text-sm">{t.teamName}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{t.owners}</div>
+                    </div>
+                    {selectedTeamId === t.teamId && (
+                      <CheckCircle className="w-5 h-5 text-primary shrink-0" />
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <Button
+              className="flex-1"
+              size="lg"
+              disabled={!selectedTeam || claimTeamMutation.isPending}
+              onClick={() => {
+                if (!selectedTeam) return;
+                const memberId = selectedTeam.memberIds?.[0] ?? "";
+                claimTeamMutation.mutate({
+                  season: 2025,
+                  espnTeamId: selectedTeam.teamId,
+                  espnMemberId: memberId,
+                  teamName: selectedTeam.teamName,
+                  ownerDisplayName: selectedTeam.owners,
+                });
+              }}
+            >
+              {claimTeamMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+              ) : (
+                <>This is my team <ChevronRight className="w-4 h-4 ml-2" /></>
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="lg"
+              onClick={() => navigate("/reveal")}
+            >
+              Skip for now
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground text-center mt-4">
+            You can change this later in Settings.
+          </p>
         </div>
       </div>
     );

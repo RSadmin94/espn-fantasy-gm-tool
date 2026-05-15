@@ -5,6 +5,7 @@ import { MyProfileTab } from "./MyProfileTabContent";
 import { OpponentProfileModal } from "./OpponentProfileModal";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useMyTeam } from "@/hooks/useMyTeam";
 import { getLoginUrl } from "@/const";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -328,6 +329,7 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const { isAuthenticated, user } = useAuth();
   const myName = user?.name ?? "";
+  const { myTeamId, myMemberId, isMyTeam: isMyTeamById } = useMyTeam(2025);
 
   const { data: standings, isLoading: standingsLoading } = trpc.espn.standings.useQuery({ season: 2025 });
   const { data: manifests } = trpc.espn.manifests.useQuery();
@@ -355,11 +357,18 @@ export default function Dashboard() {
     totalAcquisitions: number; totalTrades: number;
   };
   const owners: LiveOwner[] = (ownerStatsData?.owners as LiveOwner[] | undefined) ?? [];
-  // Identify the current user's team by matching their Manus display name
+  // Identify the current user's team — deterministic via espn_team_ownership, fallback to name-matching
   const myNameParts = myName.toLowerCase().split(" ").filter(Boolean);
-  const isRod = (o: LiveOwner) => myNameParts.length > 0
-    ? myNameParts.some(k => o.fullName.toLowerCase().includes(k) || o.displayName.toLowerCase().includes(k))
-    : false;
+  const isRod = (o: LiveOwner) => {
+    // Deterministic path: match by ESPN member GUID (stable across seasons)
+    if (myMemberId && o.memberId) {
+      return o.memberId === myMemberId;
+    }
+    // Fallback: name-based matching for users who haven't claimed yet
+    return myNameParts.length > 0
+      ? myNameParts.some(k => o.fullName.toLowerCase().includes(k) || o.displayName.toLowerCase().includes(k))
+      : false;
+  };
   // Inactive/former owners who left the league — exclude from current opponent cards
   const INACTIVE_KEYWORDS = ["teco", "browning", "tecostix", "maurice", "welch", "dallas727", "vince"];
   const isInactive = (o: LiveOwner) => INACTIVE_KEYWORDS.some(k => o.fullName.toLowerCase().includes(k) || o.displayName.toLowerCase().includes(k));
@@ -650,11 +659,11 @@ export default function Dashboard() {
   const chartData = standings?.map((t: Record<string, unknown>, i: number) => ({
     name: String(t.teamName || "").split(" ").slice(-1)[0]?.slice(0, 8) || `T${i + 1}`,
     pf: Math.round(Number(t.pointsFor || 0)),
-    isYou: myNameParts.length > 0 && myNameParts.some(k => String(t.owners || "").toLowerCase().includes(k) || String(t.teamName || "").toLowerCase().includes(k)),
+    isYou: isMyTeamById(t.teamId as number, String(t.teamName || ""), String(t.owners || "")),
   })) ?? [];
 
   const myTeam = standings?.find((t: Record<string, unknown>) =>
-    myNameParts.length > 0 && myNameParts.some(k => String(t.owners || "").toLowerCase().includes(k) || String(t.teamName || "").toLowerCase().includes(k))
+    isMyTeamById(t.teamId as number, String(t.teamName || ""), String(t.owners || ""))
   ) as Record<string, unknown> | undefined;
 
   const leagueAvgPF = standings && standings.length > 0
@@ -919,9 +928,7 @@ export default function Dashboard() {
                   ) : standings && standings.length > 0 ? (
                     <div className="divide-y divide-border">
                       {standings.map((team: Record<string, unknown>, i: number) => {
-                        const isYou = myNameParts.length > 0
-                          ? myNameParts.some(k => String(team.owners || "").toLowerCase().includes(k) || String(team.teamName || "").toLowerCase().includes(k))
-                          : false;
+                        const isYou = isMyTeamById(team.teamId as number, String(team.teamName || ""), String(team.owners || ""));
                         const tier = i < 3 ? "Elite" : i < 6 ? "Strong" : i < 9 ? "Rising" : "Trade Target";
                         const tierColor = i < 3 ? "border-yellow-500/30 text-yellow-400" : i < 6 ? "border-emerald-500/30 text-emerald-400" : i < 9 ? "border-blue-500/30 text-blue-400" : "border-slate-500/30 text-slate-400";
                         return (
@@ -1286,7 +1293,7 @@ export default function Dashboard() {
                   };
 
                   const opponents = (leagueDraftData.owners as DraftOwner[])
-                    .filter(o => o.totalPicks > 0 && !(myNameParts.length > 0 && myNameParts.some(k => o.name.toLowerCase().includes(k))))
+                    .filter(o => o.totalPicks > 0 && !isMyTeamById(0, o.name, o.name))
                     .filter(o => !(["teco","browning","tecostix","maurice","welch","dallas727","vince"].some(k => o.name.toLowerCase().includes(k))))
                     .sort((a, b) => b.seasons - a.seasons || b.totalPicks - a.totalPicks);
 
@@ -1570,7 +1577,7 @@ export default function Dashboard() {
                       <div
                         key={entry.position}
                         className={`flex flex-col items-center p-2.5 rounded-lg border text-center ${
-                          (myNameParts.length > 0 && myNameParts.some(k => entry.name?.toLowerCase().includes(k) || entry.owners?.toLowerCase().includes(k)))
+                          isMyTeamById(entry.teamId as number, entry.name ?? "", entry.owners ?? "")
                             ? "border-primary/50 bg-primary/10"
                             : "border-border bg-accent/30"
                         }`}
@@ -1721,7 +1728,7 @@ export default function Dashboard() {
                             <tr
                               key={i}
                               className={`border-b border-border/50 hover:bg-accent/30 transition-colors ${
-                                (myNameParts.length > 0 && myNameParts.some(k2 => k.teamName?.toLowerCase().includes(k2)))
+                                isMyTeamById(k.teamId as number, k.teamName ?? "", "")
                                   ? "bg-primary/5"
                                   : ""
                               }`}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useMyTeam } from "@/hooks/useMyTeam";
 import {
   Card,
   CardContent,
@@ -540,9 +541,8 @@ function OwnerProfilePanel({ profile }: { profile: OwnerProfileData }) {
 
 export default function KeeperCalculator() {
   const { user } = useAuth();
-  const myNameParts = (user?.name ?? "").toLowerCase().split(" ").filter(Boolean);
-  const isMyTeam = (teamName: string) =>
-    myNameParts.length > 0 && myNameParts.some(p => teamName.toLowerCase().includes(p));
+  const { isMyTeam: isMyTeamHook } = useMyTeam();
+  const isMyTeam = (teamName: string) => isMyTeamHook(0, teamName, "");
   const { data, isLoading, error } = trpc.espn.keeperEligibility2026.useQuery();
 
   const daysUntilDeadline = () => {

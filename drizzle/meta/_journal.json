@@ -155,6 +155,13 @@
       "when": 1778809396282,
       "tag": "0021_wise_red_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1778812550330,
+      "tag": "0022_noisy_otto_octavius",
+      "breakpoints": true
     }
   ]
 }

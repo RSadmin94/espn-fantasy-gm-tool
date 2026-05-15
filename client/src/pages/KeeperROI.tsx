@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { TrendingUp, TrendingDown, Trophy, AlertTriangle, BarChart3, Users, Star } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useMyTeam } from "@/hooks/useMyTeam";
 
 const ROI_COLORS: Record<string, string> = {
   ELITE: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
@@ -76,11 +77,9 @@ export default function KeeperROI() {
   const uniqueTeams = Array.from(new Set(allKeepers.map(k => k.teamName))).sort();
   const uniquePositions = Array.from(new Set(allKeepers.map(k => k.position))).sort();
 
-  // Current user's keepers — match by name parts from Manus login
-  const myNameParts = (user?.name ?? "").toLowerCase().split(" ").filter(Boolean);
-  const isMyTeam = (teamName: string) =>
-    myNameParts.length > 0 && myNameParts.some(p => teamName.toLowerCase().includes(p));
-  const rodKeepers = allKeepers.filter(k => isMyTeam(k.teamName));
+  // Current user's keepers — deterministic via espn_team_ownership, fallback to name-matching
+  const { isMyTeam } = useMyTeam();
+  const rodKeepers = allKeepers.filter(k => isMyTeam(0, k.teamName, ""));
 
   return (
     <div className="p-6 space-y-6 max-w-7xl">
@@ -195,13 +194,13 @@ export default function KeeperROI() {
               </thead>
               <tbody>
                 {filtered.map((k, i) => (
-                  <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${isMyTeam(k.teamName) ? "bg-blue-500/5" : ""}`}>
+                  <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${isMyTeam(0, k.teamName, "") ? "bg-blue-500/5" : ""}`}>
                     <td className="p-3 text-gray-300">{k.season}</td>
                     <td className="p-3 font-medium text-white">
                       {k.playerName.startsWith("Player#") ? (
                         <span className="text-gray-500 italic text-xs">{k.playerName}</span>
                       ) : k.playerName}
-                      {isMyTeam(k.teamName) && <span className="ml-1 text-blue-400 text-xs">★</span>}
+                      {isMyTeam(0, k.teamName, "") && <span className="ml-1 text-blue-400 text-xs">★</span>}
                     </td>
                     <td className="p-3"><PosBadge pos={k.position} /></td>
                     <td className="p-3 text-gray-300 text-xs">{k.teamName}</td>
@@ -443,10 +442,10 @@ export default function KeeperROI() {
                   const grade = elitePct >= 60 ? "A" : elitePct >= 40 ? "B" : elitePct >= 25 ? "C" : "D";
                   const gradeColor = grade === "A" ? "text-green-400" : grade === "B" ? "text-blue-400" : grade === "C" ? "text-orange-400" : "text-red-400";
                   return (
-                    <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${isMyTeam(t.teamName) ? "bg-blue-500/5" : ""}`}>
+                    <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${isMyTeam(0, t.teamName, "") ? "bg-blue-500/5" : ""}`}>
                       <td className="p-3 font-medium text-white text-sm">
                         {t.teamName}
-                        {isMyTeam(t.teamName) && <span className="ml-1 text-blue-400 text-xs">★ You</span>}
+                        {isMyTeam(0, t.teamName, "") && <span className="ml-1 text-blue-400 text-xs">★ You</span>}
                       </td>
                       <td className="p-3 text-center text-white font-bold">{t.totalKeepers}</td>
                       <td className="p-3 text-center text-yellow-400">{t.eliteKeepers}</td>
