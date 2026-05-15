@@ -34,6 +34,8 @@ import { parse as parseCookie } from "cookie";
 import {
   fetchEspnViews,
   fetchEspnViewsHardened,
+  fetchTradeProposals,
+  mergeTradeProposalsIntoTransactions,
   normalizeSettings,
   normalizeTeams,
   normalizeRosters,
@@ -214,15 +216,24 @@ export const appRouter = router({
               });
             }
 
-            await upsertCachedView(season, "combined", data);
+            // Enrich transactions: fetch all TRADE_PROPOSAL records via x-fantasy-filter.
+            // mTransactions2 only returns ~50 recent transactions, so proposals for
+            // trades accepted before the cache window are missing (2026 root cause).
+            let enrichedData = data;
+            try {
+              const proposals = await fetchTradeProposals(season);
+              enrichedData = mergeTradeProposalsIntoTransactions(data, proposals);
+            } catch (_e) { /* non-fatal — fall back to unmerged data */ }
+
+            await upsertCachedView(season, "combined", enrichedData);
             // Persist static identity data (team names, draft order, settings) to league_identity table.
             // All consumers (offseasonRouter, draftBoard, etc.) read from here instead of re-fetching ESPN.
-            try { await upsertLeagueIdentity(season, data); } catch (_e) { /* non-fatal — don't block the refresh */ }
-            const teams = normalizeTeams(data);
-            const rosters = normalizeRosters(data);
-            const matchups = normalizeMatchups(data);
-            const picks = normalizeDraftPicks(data);
-            const txs = normalizeTransactions(data);
+            try { await upsertLeagueIdentity(season, enrichedData); } catch (_e) { /* non-fatal — don't block the refresh */ }
+            const teams = normalizeTeams(enrichedData);
+            const rosters = normalizeRosters(enrichedData);
+            const matchups = normalizeMatchups(enrichedData);
+            const picks = normalizeDraftPicks(enrichedData);
+            const txs = normalizeTransactions(enrichedData);
 
             // Data quality validation
             const quality = validateDataQuality(season, data);

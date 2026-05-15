@@ -1,0 +1,30 @@
+{
+  "query": "SELECT viewName, season, fetchedAt FROM espn_season_cache WHERE season >= 2025 ORDER BY fetchedAt DESC LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT viewName, season, fetchedAt FROM espn_season_cache WHERE season >= 2025 ORDER BY fetchedAt DESC LIMIT 10",
+  "rows": [
+    {
+      "viewName": "combined",
+      "season": "2025",
+      "fetchedAt": "2026-05-15 07:32:55"
+    },
+    {
+      "viewName": "combined",
+      "season": "2026",
+      "fetchedAt": "2026-05-15 05:34:52"
+    },
+    {
+      "viewName": "combined",
+      "season": "2026",
+      "fetchedAt": "2026-05-14 05:44:00"
+    },
+    {
+      "viewName": "combined",
+      "season": "2025",
+      "fetchedAt": "2026-05-09 16:21:39"
+    }
+  ],
+  "messages": [],
+  "stdout": "viewName\tseason\tfetchedAt\ncombined\t2025\t2026-05-15 07:32:55\ncombined\t2026\t2026-05-15 05:34:52\ncombined\t2026\t2026-05-14 05:44:00\ncombined\t2025\t2026-05-09 16:21:39\n",
+  "stderr": "",
+  "execution_time_ms": 560
+}

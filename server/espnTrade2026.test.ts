@@ -15,8 +15,8 @@
  *   4. Legacy TRADE format still works (backward compatibility)
  */
 
-import { describe, it, expect } from "vitest";
-import { normalizeTransactions } from "./espnService";
+import { describe, it, expect, vi } from "vitest";
+import { normalizeTransactions, mergeTradeProposalsIntoTransactions } from "./espnService";
 
 // ── Mock 2026-style payload ───────────────────────────────────────────────────
 
@@ -270,5 +270,159 @@ describe("normalizeTransactions — edge cases", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].type).toBe("TRADE_UPHOLD");
     expect(rows[0].relatedTransactionId).toBe("some-proposal-id");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// mergeTradeProposalsIntoTransactions tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A 2026 combined-cache data object that only has the TRADE_UPHOLD (proposal aged out) */
+const dataWithoutProposal = {
+  seasonId: 2026,
+  transactions: [
+    {
+      id: "c1986f18-e750-4b7c-b18d-3e92db4da059",
+      type: "TRADE_UPHOLD",
+      status: "EXECUTED",
+      proposedDate: 1778814507468,
+      teamId: 1,
+      relatedTransactionId: "d3731d04-107d-415a-8c25-f5530b88dddf",
+      items: [],
+    },
+  ],
+};
+
+/** The TRADE_PROPOSAL fetched separately via x-fantasy-filter */
+const proposalFromFilter: Record<string, unknown>[] = [
+  {
+    id: "d3731d04-107d-415a-8c25-f5530b88dddf",
+    type: "TRADE_PROPOSAL",
+    status: "EXECUTED",
+    proposedDate: 1778800000000,
+    teamId: 5,
+    relatedTransactionId: null,
+    items: [
+      { fromTeamId: 5, toTeamId: 1, type: "DRAFT_TRADE", playerId: 0, overallPickNumber: 7, player: {} },
+      { fromTeamId: 1, toTeamId: 5, type: "DRAFT_TRADE", playerId: 0, overallPickNumber: 39, player: {} },
+    ],
+  },
+];
+
+describe("mergeTradeProposalsIntoTransactions", () => {
+  it("appends a proposal that is outside the recent-activity window", () => {
+    const merged = mergeTradeProposalsIntoTransactions(
+      dataWithoutProposal as Record<string, unknown>,
+      proposalFromFilter
+    );
+    const txs = merged.transactions as Record<string, unknown>[];
+    expect(txs).toHaveLength(2); // TRADE_UPHOLD + TRADE_PROPOSAL
+    const proposal = txs.find(t => t.type === "TRADE_PROPOSAL");
+    expect(proposal).toBeDefined();
+    expect(proposal!.id).toBe("d3731d04-107d-415a-8c25-f5530b88dddf");
+  });
+
+  it("normalizer can reconstruct player items from merged proposal", () => {
+    const merged = mergeTradeProposalsIntoTransactions(
+      dataWithoutProposal as Record<string, unknown>,
+      proposalFromFilter
+    );
+    const rows = normalizeTransactions(merged) as Array<Record<string, unknown>>;
+    // Should have 1 TRADE_UPHOLD header row + 2 TRADE_PROPOSAL item rows
+    const proposalRows = rows.filter(r => r.type === "TRADE_PROPOSAL");
+    expect(proposalRows).toHaveLength(2);
+    // TRADE_UPHOLD should still be present
+    const upholdRow = rows.find(r => r.type === "TRADE_UPHOLD");
+    expect(upholdRow).toBeDefined();
+    expect(upholdRow!.relatedTransactionId).toBe("d3731d04-107d-415a-8c25-f5530b88dddf");
+  });
+
+  it("does not double-count a proposal already in the recent-activity window", () => {
+    // Data already has the proposal (it was recent enough to appear in mTransactions2)
+    const dataWithProposal = {
+      seasonId: 2026,
+      transactions: [
+        {
+          id: "c1986f18-e750-4b7c-b18d-3e92db4da059",
+          type: "TRADE_UPHOLD",
+          status: "EXECUTED",
+          proposedDate: 1778814507468,
+          teamId: 1,
+          relatedTransactionId: "d3731d04-107d-415a-8c25-f5530b88dddf",
+          items: [],
+        },
+        // Proposal already present
+        {
+          id: "d3731d04-107d-415a-8c25-f5530b88dddf",
+          type: "TRADE_PROPOSAL",
+          status: "EXECUTED",
+          proposedDate: 1778800000000,
+          teamId: 5,
+          relatedTransactionId: null,
+          items: [
+            { fromTeamId: 5, toTeamId: 1, type: "DRAFT_TRADE", playerId: 0, overallPickNumber: 7, player: {} },
+          ],
+        },
+      ],
+    };
+    const merged = mergeTradeProposalsIntoTransactions(
+      dataWithProposal as Record<string, unknown>,
+      proposalFromFilter // same proposal id — should be de-duped
+    );
+    const txs = merged.transactions as Record<string, unknown>[];
+    // Still only 2 records, not 3
+    expect(txs).toHaveLength(2);
+    const proposals = txs.filter(t => t.type === "TRADE_PROPOSAL");
+    expect(proposals).toHaveLength(1);
+  });
+
+  it("returns data unchanged when proposals array is empty", () => {
+    const merged = mergeTradeProposalsIntoTransactions(
+      dataWithoutProposal as Record<string, unknown>,
+      [] // no proposals fetched (e.g. ESPN returned empty or fetch failed)
+    );
+    // Should be the exact same object reference
+    expect(merged).toBe(dataWithoutProposal);
+  });
+
+  it("preserves all existing non-trade transactions when merging", () => {
+    const dataWithMixed = {
+      seasonId: 2026,
+      transactions: [
+        { id: "waiver-001", type: "WAIVER", status: "EXECUTED", teamId: 3, items: [] },
+        { id: "c1986f18-e750-4b7c-b18d-3e92db4da059", type: "TRADE_UPHOLD", status: "EXECUTED", teamId: 1, relatedTransactionId: "d3731d04-107d-415a-8c25-f5530b88dddf", items: [] },
+      ],
+    };
+    const merged = mergeTradeProposalsIntoTransactions(
+      dataWithMixed as Record<string, unknown>,
+      proposalFromFilter
+    );
+    const txs = merged.transactions as Record<string, unknown>[];
+    expect(txs).toHaveLength(3); // WAIVER + TRADE_UPHOLD + TRADE_PROPOSAL
+    expect(txs.find(t => t.type === "WAIVER")).toBeDefined();
+  });
+
+  it("legacy 2025 TRADE format still normalizes correctly after a no-op merge", () => {
+    // Merging empty proposals into a legacy payload should not break anything
+    const legacyData = {
+      seasonId: 2025,
+      transactions: [
+        {
+          id: "legacy-trade-001",
+          type: "TRADE",
+          status: "EXECUTED",
+          proposedDate: 1700000000000,
+          teamId: 2,
+          items: [
+            { fromTeamId: 2, toTeamId: 8, type: "ADD", playerId: 1234567, player: { id: 1234567, fullName: "Patrick Mahomes" } },
+          ],
+        },
+      ],
+    };
+    const merged = mergeTradeProposalsIntoTransactions(legacyData as Record<string, unknown>, []);
+    const rows = normalizeTransactions(merged) as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].type).toBe("TRADE");
+    expect(rows[0].playerName).toBe("Patrick Mahomes");
   });
 });

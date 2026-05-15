@@ -671,6 +671,78 @@ export function normalizeMatchups(data: Record<string, unknown>) {
   });
 }
 
+// ─── Trade Proposal Enrichment ──────────────────────────────────────────────
+
+/**
+ * Fetches ALL TRADE_PROPOSAL records for a season using ESPN's x-fantasy-filter.
+ * This is a supplemental call — the standard mTransactions2 view only returns the
+ * most recent ~50 transactions, so accepted proposals may have aged out of the
+ * window before the cache was populated (the 2026 root cause).
+ *
+ * ESPN filter syntax:
+ *   x-fantasy-filter: {"transactions":{"filterType":{"value":["TRADE_PROPOSAL"]}}}
+ *
+ * Returns the raw transactions array from the ESPN response, or [] on failure.
+ */
+export async function fetchTradeProposals(
+  season: number,
+  creds?: EspnCreds
+): Promise<Record<string, unknown>[]> {
+  const url = new URL(getBaseUrlFor(season, creds));
+  url.searchParams.append("view", "mTransactions2");
+
+  const headers: Record<string, string> = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+    Accept: "application/json,text/plain,*/*",
+    Referer: "https://fantasy.espn.com/football/league",
+    "x-fantasy-filter": JSON.stringify({
+      transactions: { filterType: { value: ["TRADE_PROPOSAL"] } },
+    }),
+  };
+  const cookieStr = buildCookieStringFor(creds);
+  if (cookieStr) headers["Cookie"] = cookieStr;
+
+  try {
+    const res = await fetch(url.toString(), { headers, signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return [];
+    const data = await res.json() as Record<string, unknown>;
+    return (data.transactions as Record<string, unknown>[]) || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Merges supplemental TRADE_PROPOSAL records into the combined data object's
+ * transactions array, de-duplicating by transaction id.
+ *
+ * Strategy:
+ *   1. Build a Set of existing transaction ids from data.transactions.
+ *   2. Append any proposal record whose id is NOT already present.
+ *   3. Leave the original array untouched if proposals is empty.
+ *
+ * This is a pure in-memory merge — it does not mutate the DB cache row.
+ * The caller (scheduledRefresh / espn.refresh) should call this before
+ * upsertCachedView so the enriched payload is persisted.
+ */
+export function mergeTradeProposalsIntoTransactions(
+  data: Record<string, unknown>,
+  proposals: Record<string, unknown>[]
+): Record<string, unknown> {
+  if (!proposals.length) return data;
+
+  const existing = (data.transactions as Record<string, unknown>[]) || [];
+  const existingIds = new Set(existing.map((tx) => tx.id as string));
+
+  const newProposals = proposals.filter((p) => !existingIds.has(p.id as string));
+  if (!newProposals.length) return data; // nothing to add — already de-duped
+
+  return {
+    ...data,
+    transactions: [...existing, ...newProposals],
+  };
+}
+
 export function normalizeTransactions(data: Record<string, unknown>) {
   const season = data.seasonId as number;
   const txs = (data.transactions as Record<string, unknown>[]) || [];

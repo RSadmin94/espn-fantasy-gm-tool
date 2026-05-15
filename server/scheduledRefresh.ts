@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { sdk } from "./_core/sdk";
-import { fetchEspnViewsHardened } from "./espnService";
+import { fetchEspnViewsHardened, fetchTradeProposals, mergeTradeProposalsIntoTransactions } from "./espnService";
 import {
   upsertViewHealth,
   upsertCachedView,
@@ -55,15 +55,24 @@ export async function espnRefreshHandler(req: Request, res: Response) {
           });
         }
 
-        await upsertCachedView(season, "combined", data);
-        // Persist static identity data (team names, draft order, settings) to league_identity table
-        try { await upsertLeagueIdentity(season, data); } catch (_e) { /* non-fatal */ }
+        // Enrich transactions: fetch all TRADE_PROPOSAL records via x-fantasy-filter.
+        // mTransactions2 only returns ~50 recent transactions, so proposals for
+        // trades accepted before the cache window are missing (2026 root cause).
+        let enrichedData = data;
+        try {
+          const proposals = await fetchTradeProposals(season);
+          enrichedData = mergeTradeProposalsIntoTransactions(data, proposals);
+        } catch (_e) { /* non-fatal — fall back to unmerged data */ }
 
-        const teams = normalizeTeams(data);
-        const rosters = normalizeRosters(data);
-        const matchups = normalizeMatchups(data);
-        const picks = normalizeDraftPicks(data);
-        const txs = normalizeTransactions(data);
+        await upsertCachedView(season, "combined", enrichedData);
+        // Persist static identity data (team names, draft order, settings) to league_identity table
+        try { await upsertLeagueIdentity(season, enrichedData); } catch (_e) { /* non-fatal */ }
+
+        const teams = normalizeTeams(enrichedData);
+        const rosters = normalizeRosters(enrichedData);
+        const matchups = normalizeMatchups(enrichedData);
+        const picks = normalizeDraftPicks(enrichedData);
+        const txs = normalizeTransactions(enrichedData);
 
         const quality = validateDataQuality(season, data);
         const overallStatus =

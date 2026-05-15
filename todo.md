@@ -1076,6 +1076,17 @@ This single flow determines conversion, retention, and word-of-mouth.
 ### Phase 7 — Tests + GitHub Sync + Publish
 - [x] Run full test suite (474/474 passing)
 - [x] 0 TypeScript errors
-- [ ] git push github main
-- [ ] webdev_save_checkpoint
+- [x] git push github main
+- [x] webdev_save_checkpoint
 - [ ] Publish
+
+## NEW: fetchTradeProposals Pipeline Fix (2026 Trade Data)
+
+- [x] Add fetchTradeProposals(season, creds?) to espnService.ts using x-fantasy-filter TRADE_PROPOSAL
+- [x] Add mergeTradeProposalsIntoTransactions() de-dupe helper in espnService.ts
+- [x] Wire fetchTradeProposals into scheduledRefresh.ts before cache write
+- [x] Wire fetchTradeProposals into espn.refresh router procedure
+- [x] Add regression tests: proposal outside window, TRADE_UPHOLD links to proposal, legacy TRADE, duplicate de-dupe
+- [x] Run full TypeScript check (0 errors)
+- [x] Run full test suite (all passing)
+- [ ] Save checkpoint
