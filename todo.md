@@ -1210,3 +1210,6 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Write fearIndexService.test.ts (21 tests) and reputationService.test.ts (17 tests)
 - [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (598/598 passing)
 - [x] Save checkpoint and push to GitHub
+
+## Fear Index Widget — Tooltip Enhancement
+- [x] Add interactive hover tooltips to FearIndexWidget.tsx showing 5-component formula breakdown per team row
