@@ -10,6 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import AdvisorPanel from "./AdvisorPanel";
+import LeagueSwitcher from "./LeagueSwitcher";
 
 type NavItem = {
   href: string;
@@ -246,7 +247,7 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
             </div>
           </nav>
 
-          <ActiveLeagueFooter />
+          <LeagueSwitcher />
         </aside>
 
         {/* Main content */}

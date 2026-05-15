@@ -356,6 +356,36 @@ export default function LeagueConnect() {
   if (step === "choose_provider") {
     return (
       <div className="min-h-screen bg-background">
+        {/* Top auth bar */}
+        <div className="border-b border-border bg-card/50 px-6 py-2.5 flex items-center justify-between">
+          <span className="text-xs text-muted-foreground font-medium">GM War Room</span>
+          {user ? (
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground">
+                Signed in as <strong className="text-foreground">{user.name ?? user.email}</strong>
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs h-7 gap-1.5 text-muted-foreground hover:text-destructive"
+                onClick={() => window.location.href = "/"}
+              >
+                ← Back to app
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground">Not signed in</span>
+              <Button
+                size="sm"
+                className="text-xs h-7 gap-1.5"
+                onClick={() => (window.location.href = getLoginUrl())}
+              >
+                Sign In
+              </Button>
+            </div>
+          )}
+        </div>
         <div className="max-w-4xl mx-auto px-4 py-12">
           {/* Header */}
           <div className="text-center mb-10">

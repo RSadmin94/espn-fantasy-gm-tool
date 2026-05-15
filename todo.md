@@ -1255,3 +1255,17 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Write vitest for new usageTracker queries (funnel ordering, retention bucketing)
 - [x] Run pnpm tsc --noEmit (0 errors) and pnpm test
 - [x] Save checkpoint and push to GitHub
+
+## Login/Logout Button + Multi-League Support
+- [x] Add UserMenu component: avatar/name, login button (if unauthenticated), logout button (if authenticated)
+- [x] Embed UserMenu in AppLayout sidebar footer (replace or augment ActiveLeagueFooter)
+- [x] Add login button to LeagueConnect page header for unauthenticated users
+- [x] Build LeagueSwitcher component: dropdown listing all connected leagues with Add League + Remove League actions
+- [x] Replace ActiveLeagueFooter in AppLayout with LeagueSwitcher (shows all leagues, highlights active one)
+- [x] Add league.removeLeague tRPC mutation (hard-delete with ownership guard + auto-reassign active)
+- [x] Wire LeagueSwitcher to league.getMyLeagues, league.setActive, league.removeLeague
+- [x] After setActive, invalidate all league-dependent queries so the whole app reflects the new league
+- [x] Show "Add Another League" CTA in LeagueSwitcher → navigates to /connect
+- [x] Write vitest for league.removeLeague and league.setActive logic (24 tests in multiLeague.test.ts)
+- [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (684/684 passing)
+- [x] Save checkpoint and push to GitHub

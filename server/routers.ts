@@ -27,7 +27,7 @@ import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob, getDb } from "./db";
 import { leagueConnections as lcTable } from "../drizzle/schema";
-import { eq as eqDrizzle } from "drizzle-orm";
+import { eq as eqDrizzle, and as andDrizzle } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
 import { parse as parseCookie } from "cookie";
@@ -597,6 +597,43 @@ export const appRouter = router({
         .orderBy(lcTable.updatedAt);
       return rows;
     }),
+    // Remove a league connection (hard delete — user owns the row)
+    removeLeague: protectedProcedure
+      .input(z.object({ leagueConnectionId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { success: false };
+        // Only delete rows owned by this user
+        await db
+          .delete(lcTable)
+          .where(
+            andDrizzle(
+              eqDrizzle(lcTable.id, input.leagueConnectionId),
+              eqDrizzle(lcTable.userId, ctx.user.id)
+            )
+          );
+        // If the deleted row was the active one, clear activeLeagueId
+        const usersTable = (await import("../drizzle/schema")).users;
+        const userRow = await db
+          .select({ activeLeagueId: usersTable.activeLeagueId })
+          .from(usersTable)
+          .where(eqDrizzle(usersTable.id, ctx.user.id))
+          .then(r => r[0]);
+        if (userRow?.activeLeagueId === input.leagueConnectionId) {
+          // Pick the next available league, or set to 0
+          const remaining = await db
+            .select({ id: lcTable.id })
+            .from(lcTable)
+            .where(eqDrizzle(lcTable.userId, ctx.user.id))
+            .limit(1);
+          const nextId = remaining[0]?.id ?? 0;
+          await db
+            .update(usersTable)
+            .set({ activeLeagueId: nextId })
+            .where(eqDrizzle(usersTable.id, ctx.user.id));
+        }
+        return { success: true };
+      }),
   }),
   offseason: offseasonRouter,
   leagueScoring: router({
