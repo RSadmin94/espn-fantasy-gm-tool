@@ -104,32 +104,39 @@ async function handleDnaMessage(msg) {
       return { ok: true };
 
     case "LEAGUE_PULSE": {
-      const cacheKey = `leaguePulse:espn:${config.season}`;
+      const cacheKey = `leaguePulse:espn:${config.leagueId}:${config.season}`;
       const hit = cache.get(cacheKey);
       if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return { data: hit.data, fromCache: true };
-      const data = await trpcGet(config.backendUrl, "weeklyAssessment.leaguePulse", { season: config.season });
+      const data = await trpcGet(config.backendUrl, "weeklyAssessment.leaguePulse", {
+        season: config.season,
+        leagueId: config.leagueId || undefined,
+      });
       cache.set(cacheKey, { data, ts: Date.now() });
       return { data, fromCache: false };
     }
 
     case "TEAM_BRIEF": {
       const { teamId } = msg;
-      const cacheKey = `teamBrief:espn:${config.season}:${teamId}`;
+      const cacheKey = `teamBrief:espn:${config.leagueId}:${config.season}:${teamId}`;
       const hit = cache.get(cacheKey);
       if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return { data: hit.data, fromCache: true };
       const data = await trpcGet(config.backendUrl, "weeklyAssessment.teamBrief", {
         teamId: Number(teamId),
         season: config.season,
+        leagueId: config.leagueId || undefined,
       });
       cache.set(cacheKey, { data, ts: Date.now() });
       return { data, fromCache: false };
     }
 
     case "ROD_OPPORTUNITIES": {
-      const cacheKey = `rodOpp:espn:${config.season}`;
+      const cacheKey = `rodOpp:espn:${config.leagueId}:${config.season}`;
       const hit = cache.get(cacheKey);
       if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return { data: hit.data, fromCache: true };
-      const data = await trpcGet(config.backendUrl, "weeklyAssessment.rodOpportunities", { season: config.season });
+      const data = await trpcGet(config.backendUrl, "weeklyAssessment.rodOpportunities", {
+        season: config.season,
+        leagueId: config.leagueId || undefined,
+      });
       cache.set(cacheKey, { data, ts: Date.now() });
       return { data, fromCache: false };
     }

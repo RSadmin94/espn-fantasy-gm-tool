@@ -184,7 +184,9 @@ async function connectLeague() {
           teamId: capturedData.teamId ? parseInt(capturedData.teamId, 10) : undefined,
           swid: capturedData.swid,
           espnS2: capturedData.espnS2,
-          season: 2025,
+          // Pass current year so backend fetches the active season;
+          // backend is responsible for also fetching historical seasons.
+          season: new Date().getFullYear(),
         },
       }),
     });

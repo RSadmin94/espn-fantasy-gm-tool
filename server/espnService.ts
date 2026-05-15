@@ -682,6 +682,7 @@ export function normalizeTransactions(data: Record<string, unknown>) {
       rows.push({
         season,
         transactionId: tx.id,
+        relatedTransactionId: tx.relatedTransactionId ?? null,
         type: tx.type,
         status: tx.status,
         proposedDate: tx.proposedDate,
@@ -706,6 +707,7 @@ export function normalizeTransactions(data: Record<string, unknown>) {
       rows.push({
         season,
         transactionId: tx.id,
+        relatedTransactionId: tx.relatedTransactionId ?? null,
         type: tx.type,
         status: tx.status,
         proposedDate: tx.proposedDate,
