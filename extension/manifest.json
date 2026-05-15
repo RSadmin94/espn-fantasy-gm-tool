@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "ESPN GM Tool — League Connector",
+  "name": "ESPN GM Tool — League Connector & DNA Advisor",
   "short_name": "GM Connector",
-  "version": "1.0.0",
-  "description": "Automatically captures your ESPN Fantasy credentials and connects your league to the GM Tool — no cookie hunting required.",
+  "version": "1.4.0",
+  "description": "Connects your ESPN Fantasy league to the GM Tool and injects DNA Advisor badges on ESPN pages — click any badge to see a team's full DNA profile.",
   "permissions": [
     "cookies",
     "activeTab",
@@ -39,9 +39,21 @@
       "matches": ["https://fantasy.espn.com/*"],
       "js": ["src/content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://fantasy.espn.com/*"],
+      "js": ["src/inject.js"],
+      "css": ["src/inject.css"],
+      "run_at": "document_idle"
     }
   ],
   "background": {
     "service_worker": "src/background.js"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*.png"],
+      "matches": ["https://fantasy.espn.com/*"]
+    }
+  ]
 }

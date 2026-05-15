@@ -1183,3 +1183,17 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Ensure logout button is always visible in the sidebar footer
 - [x] Test sidebar renders on all main pages
 - [x] Checkpoint and push to GitHub
+
+## Bug Fixes (May 15 2026 — Session 2)
+- [x] Fix side menu navigation links not working (clicking nav items does not navigate)
+- [x] Fix DNA badges not showing on ESPN pages (extension content script or dnaRouter issue)
+- [x] Test, checkpoint, push to GitHub
+
+## Restore DNA Badge Injection in Extension (May 15 2026)
+- [x] Recover inject.js and inject.css from uploaded old extension zip
+- [x] Restore inject.js and inject.css into extension/src/
+- [x] Update manifest.json to include inject.js and inject.css as content_scripts
+- [x] Merge old background.js DNA handlers (TEAM_BRIEF, LEAGUE_PULSE) into current background.js
+- [x] Fix hardcoded "Rod's Opportunities" label in inject.js
+- [x] Rebuild extension zip v1.4.0, upload, update LeagueConnect.tsx download URL
+- [x] Checkpoint and push to GitHub
