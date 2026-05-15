@@ -1225,6 +1225,11 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Checkpoint and push to GitHub
 
 ## Bug Fix: Production Crash — "An unexpected error occurred" (May 15 2026)
-- [ ] Diagnose runtime crash from ErrorBoundary on production site
-- [ ] Fix the crash
-- [ ] Test, checkpoint, push
+- [x] Diagnose runtime crash from ErrorBoundary on production site
+- [x] Fix the crash (React hook violation in App.tsx inline redirect component)
+- [x] Test, checkpoint, push
+
+## Bug Fix: Extension Not Opening GM Tool Site (May 15 2026)
+- [ ] Diff extension files vs last working version to find breaking change
+- [ ] Fix the breaking change
+- [ ] Rebuild zip, upload, checkpoint

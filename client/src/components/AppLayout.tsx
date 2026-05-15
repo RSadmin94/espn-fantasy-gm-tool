@@ -149,9 +149,8 @@ function UserFooter() {
   );
 }
 
-export default function AppLayout({ children, title, subtitle, headerRight }: AppLayoutProps) {
+function AppLayoutInner({ children, title, subtitle, headerRight }: AppLayoutProps) {
   const [location] = useLocation();
-  const alreadyInsideLayout = useContext(InsideLayoutContext);
   const [advisorOpen, setAdvisorOpen] = useState(false);
 
   // Listen for Chrome extension toolbar click → open advisor panel
@@ -170,8 +169,6 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
     }
     return () => window.removeEventListener('message', handleMessage);
   }, []);
-
-  if (alreadyInsideLayout) return <>{children}</>;
 
   return (
     <InsideLayoutContext.Provider value={true}>
@@ -254,4 +251,10 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
       <AdvisorPanel open={advisorOpen} onClose={() => setAdvisorOpen(false)} />
     </InsideLayoutContext.Provider>
   );
+}
+
+export default function AppLayout({ children, title, subtitle, headerRight }: AppLayoutProps) {
+  const alreadyInsideLayout = useContext(InsideLayoutContext);
+  if (alreadyInsideLayout) return <>{children}</>;
+  return <AppLayoutInner title={title} subtitle={subtitle} headerRight={headerRight}>{children}</AppLayoutInner>;
 }
