@@ -1,5 +1,5 @@
 // FILE: client/src/components/AppLayout.tsx
-import React, { useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
@@ -84,6 +84,8 @@ function DataHealthBanner() {
     </div>
   );
 }
+
+const InsideLayoutContext = createContext(false);
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -174,6 +176,7 @@ function SidebarHeader() {
 }
 
 export default function AppLayout({ children, title, subtitle, headerRight }: AppLayoutProps) {
+  const alreadyInsideLayout = useContext(InsideLayoutContext);
   const [location] = useLocation();
   const [advisorOpen, setAdvisorOpen] = useState(false);
 
@@ -194,8 +197,11 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
+  // All hooks are above this point — safe to early-return here
+  if (alreadyInsideLayout) return <>{children}</>;
+
   return (
-    <>
+    <InsideLayoutContext.Provider value={true}>
       <div className="flex h-screen bg-background overflow-hidden">
         {/* Sidebar */}
         <aside className="flex-shrink-0 flex flex-col border-r border-border bg-card h-full overflow-hidden" style={{ width: "15.5rem" }}>
@@ -258,6 +264,6 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
       </div>
 
       <AdvisorPanel open={advisorOpen} onClose={() => setAdvisorOpen(false)} />
-    </>
+    </InsideLayoutContext.Provider>
   );
 }
