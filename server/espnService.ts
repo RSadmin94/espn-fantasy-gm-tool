@@ -747,10 +747,12 @@ export function normalizeTransactions(data: Record<string, unknown>) {
   const season = data.seasonId as number;
   const txs = (data.transactions as Record<string, unknown>[]) || [];
   const rows: unknown[] = [];
+  const headerTransactionTypes = new Set(["TRADE_UPHOLD", "TRADE_ACCEPT"]);
 
   for (const tx of txs) {
     const items = (tx.items as Record<string, unknown>[]) || [];
     if (items.length === 0) {
+      if (!headerTransactionTypes.has(String(tx.type || "").toUpperCase())) continue;
       rows.push({
         season,
         transactionId: tx.id,
@@ -781,6 +783,9 @@ export function normalizeTransactions(data: Record<string, unknown>) {
         fromTeamId: item.fromTeamId,
         toTeamId: item.toTeamId,
         itemType: item.type,
+        overallPickNumber: item.overallPickNumber ?? null,
+        round: item.round ?? item.roundId ?? null,
+        pickInRound: item.pickInRound ?? item.roundPickNumber ?? null,
         // 2026+: pass relatedTransactionId on item rows too (for TRADE_PROPOSAL items)
         relatedTransactionId: tx.relatedTransactionId ?? null,
       });

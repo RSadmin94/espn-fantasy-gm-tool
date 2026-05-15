@@ -178,11 +178,11 @@ All tests are in `server/espnTrade2026.test.ts`. The file contains **four `descr
 |---|---|---|
 | `normalizeTransactions — 2026 format` | 6 | TRADE_UPHOLD/TRADE_ACCEPT rows, relatedTransactionId passthrough, header rows with null playerId |
 | `normalizeTransactions — legacy 2025` | 4 | Backward compatibility: legacy TRADE rows, WAIVER rows, season field |
-| `normalizeTransactions — edge cases` | 2 | Empty transactions array, transaction with no items field |
+| `normalizeTransactions — edge cases` | 3 | Empty transactions array, transaction with no items field, non-header empty transaction suppression |
 | `mergeTradeProposalsIntoTransactions` | 6 | Proposal outside window appended, normalizer reconstructs items, no double-count, empty proposals no-op, non-trade transactions preserved, legacy format unaffected |
 | `tradeAging — grouping and reconstruction` | 6 | Legacy TRADE both sides, 2026 TRADE_PROPOSAL both sides, TRADE_UPHOLD header rows produce no groups, merged proposal creates group, verdict math |
 
-**Total: 498 tests passing, 0 TypeScript errors** (verified with `pnpm tsc --noEmit` and `pnpm test`).
+**Total: 499 tests passing, 0 TypeScript errors** (verified with `pnpm tsc --noEmit` and `pnpm test`).
 
 > **Note on the TypeScript watcher panel:** The LSP/typescript health-check panel in the management UI shows a stale snapshot from before the `tradeAging` procedure was added (6:00 AM). The `pnpm tsc --noEmit` command returns 0 errors. The stale snapshot is a known incremental-build cache artifact and does not affect the build or runtime.
 
@@ -221,7 +221,7 @@ The `filterType: TRADE_PROPOSAL` filter returns all proposals ESPN has indexed f
 | `server/routers.ts` | Modified | Same enrichment wired into `espn.refresh` mutation; `tradeAging` procedure added inside `espn` router |
 | `client/src/pages/TradeAging.tsx` | **New** | Trade Aging UI component |
 | `client/src/pages/hubs/TradeLab.tsx` | Modified | Trade Aging tab added as 5th tab |
-| `server/espnTrade2026.test.ts` | **New** | 24 regression tests across all four describe blocks |
+| `server/espnTrade2026.test.ts` | **New** | 25 regression tests across all four describe blocks |
 
 ---
 
@@ -229,7 +229,7 @@ The `filterType: TRADE_PROPOSAL` filter returns all proposals ESPN has indexed f
 
 1. Clone the repo and check out commit `5f54e803` (or the latest checkpoint from the management UI).
 2. Run `pnpm install` and `pnpm db:push` to sync the schema.
-3. Run `pnpm test` — all 498 tests should pass.
+3. Run `pnpm test` — all 499 tests should pass.
 4. Run `pnpm tsc --noEmit` — should return 0 errors.
 5. Start the dev server with `pnpm dev` and navigate to **Trade Lab → Trade Aging** to verify the UI.
 6. To test 2026 trade reconstruction end-to-end, trigger a data refresh via **Data Center → Refresh** for season 2026. The `fetchTradeProposals` call will run automatically and merge any proposals into the cache.

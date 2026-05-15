@@ -63,9 +63,9 @@ function mapTxType(type: unknown, itemType: unknown): TransactionType {
   const t = String(type || "").toUpperCase();
   const it = String(itemType || "").toUpperCase();
   if (t === "TRADE") return "TRADE";
-  // 2026+ ESPN format: accepted trades are TRADE_UPHOLD or TRADE_ACCEPT (no items)
-  // linked to a TRADE_PROPOSAL via relatedTransactionId
-  if (t === "TRADE_UPHOLD" || t === "TRADE_ACCEPT") return "TRADE";
+  if (t === "TRADE_PROPOSAL") return "TRADE_PROPOSAL";
+  if (t === "TRADE_UPHOLD") return "TRADE_UPHOLD";
+  if (t === "TRADE_ACCEPT") return "TRADE_ACCEPT";
   if (t === "WAIVER") return "WAIVER";
   if (t === "FREE_AGENT") return "FREE_AGENT";
   if (it === "ADD") return "ADD";

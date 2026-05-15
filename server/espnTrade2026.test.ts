@@ -70,7 +70,7 @@ const mock2026Payload = {
         },
       ],
     },
-    // A CANCELED TRADE_PROPOSAL — should still be included
+    // A CANCELED TRADE_PROPOSAL — normalized, but not treated as a completed trade
     {
       id: "canceled-proposal-001",
       type: "TRADE_PROPOSAL",
@@ -183,6 +183,8 @@ describe("normalizeTransactions — 2026 TRADE_UPHOLD/TRADE_ACCEPT format", () =
     const proposalRows = rows.filter(r => r.type === "TRADE_PROPOSAL" && r.transactionId === "d3731d04-107d-415a-8c25-f5530b88dddf");
     // 2 items in the proposal
     expect(proposalRows).toHaveLength(2);
+    expect(proposalRows[0].overallPickNumber).toBe(7);
+    expect(proposalRows[1].overallPickNumber).toBe(39);
     // relatedTransactionId should be null for the proposal itself
     for (const row of proposalRows) {
       expect(row.relatedTransactionId).toBeNull();
@@ -270,6 +272,17 @@ describe("normalizeTransactions — edge cases", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].type).toBe("TRADE_UPHOLD");
     expect(rows[0].relatedTransactionId).toBe("some-proposal-id");
+  });
+
+  it("does not emit header rows for non-header transactions with no items", () => {
+    const payload = {
+      seasonId: 2026,
+      transactions: [
+        { id: "empty-waiver", type: "WAIVER", status: "EXECUTED", proposedDate: 1778814507468, teamId: 1, items: [] },
+      ],
+    };
+    const rows = normalizeTransactions(payload as Record<string, unknown>) as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(0);
   });
 });
 
@@ -442,15 +455,28 @@ describe("tradeAging — trade grouping and side reconstruction logic", () => {
    */
   function reconstructTrades(data: Record<string, unknown>) {
     const txRows = normalizeTransactions(data) as Array<Record<string, unknown>>;
+    const completedProposalIds = new Set(
+      txRows
+        .filter(r => r.type === "TRADE_UPHOLD" || r.type === "TRADE_ACCEPT")
+        .map(r => r.relatedTransactionId as string | null)
+        .filter((id): id is string => Boolean(id))
+    );
+    const isCompletedTradeRow = (r: Record<string, unknown>) => {
+      const type = r.type as string;
+      const status = String(r.status || "").toUpperCase();
+      if (type === "TRADE") return status === "" || status === "EXECUTED";
+      if (type === "TRADE_PROPOSAL") {
+        return completedProposalIds.has(r.transactionId as string) || status === "EXECUTED";
+      }
+      return false;
+    };
 
     // Filter to item rows only (have playerId or are DRAFT_TRADE picks)
     const tradeItemRows = txRows.filter(r => {
-      const type = r.type as string;
-      return (type === "TRADE" || type === "TRADE_PROPOSAL") && r.playerId != null;
+      return isCompletedTradeRow(r) && r.playerId != null;
     });
     const pickTradeRows = txRows.filter(r => {
-      const type = r.type as string;
-      return (type === "TRADE" || type === "TRADE_PROPOSAL") && r.playerId == null && r.itemType === "DRAFT_TRADE";
+      return isCompletedTradeRow(r) && r.playerId == null && r.itemType === "DRAFT_TRADE";
     });
 
     // Group by transactionId
@@ -501,10 +527,10 @@ describe("tradeAging — trade grouping and side reconstruction logic", () => {
 
   it("reconstructs both sides of a 2026 TRADE_PROPOSAL correctly", () => {
     const trades = reconstructTrades(mock2026Payload as Record<string, unknown>);
-    // The accepted proposal (d3731d04) has 2 pick items (no player names)
-    // The canceled proposal (canceled-proposal-001) also has 1 pick item
-    // Both should be grouped as separate trades
-    expect(trades.length).toBeGreaterThanOrEqual(1);
+    // The accepted proposal has linked TRADE_UPHOLD/TRADE_ACCEPT headers.
+    // The canceled proposal has no completed header and should be excluded.
+    expect(trades).toHaveLength(1);
+    expect(trades[0].tradeId).toBe("d3731d04-107d-415a-8c25-f5530b88dddf");
   });
 
   it("does not create a trade group from TRADE_UPHOLD header rows (no items)", () => {

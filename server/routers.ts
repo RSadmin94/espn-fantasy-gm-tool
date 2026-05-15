@@ -446,17 +446,31 @@ export const appRouter = router({
           const ownerMap = new Map<number, string>();
           for (const t of teams) ownerMap.set(t.teamId as number, (t.owners as string) || `Team ${t.teamId}`);
 
-          // Collect all trade item rows (TRADE or TRADE_PROPOSAL with items)
+          // Collect completed trade item rows. A 2026 TRADE_PROPOSAL is only a
+          // completed trade when linked by TRADE_UPHOLD/TRADE_ACCEPT or marked executed.
           const txRows = normalizeTransactions(data) as Record<string, unknown>[];
-          const tradeItemRows = txRows.filter(r => {
+          const completedProposalIds = new Set(
+            txRows
+              .filter(r => r.type === "TRADE_UPHOLD" || r.type === "TRADE_ACCEPT")
+              .map(r => r.relatedTransactionId as string | null)
+              .filter((id): id is string => Boolean(id))
+          );
+          const isCompletedTradeRow = (r: Record<string, unknown>) => {
             const type = r.type as string;
-            return (type === "TRADE" || type === "TRADE_PROPOSAL") && r.playerId != null;
+            const status = String(r.status || "").toUpperCase();
+            if (type === "TRADE") return status === "" || status === "EXECUTED";
+            if (type === "TRADE_PROPOSAL") {
+              return completedProposalIds.has(r.transactionId as string) || status === "EXECUTED";
+            }
+            return false;
+          };
+          const tradeItemRows = txRows.filter(r => {
+            return isCompletedTradeRow(r) && r.playerId != null;
           });
 
           // Also collect pick-trade item rows (DRAFT_TRADE items inside TRADE_PROPOSAL)
           const pickTradeRows = txRows.filter(r => {
-            const type = r.type as string;
-            return (type === "TRADE" || type === "TRADE_PROPOSAL") && r.playerId == null && r.itemType === "DRAFT_TRADE";
+            return isCompletedTradeRow(r) && r.playerId == null && r.itemType === "DRAFT_TRADE";
           });
 
           // Group by transactionId
