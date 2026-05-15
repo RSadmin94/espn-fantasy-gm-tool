@@ -1101,3 +1101,18 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] providers/espnAdapter.ts: pass lcId to getCachedView
 - [x] leagueScoringService.ts: pass lcId to getCachedView
 - [x] NEW: server/leagueCacheIsolation.test.ts — 5 isolation tests
+
+## Remaining Hardcoded Rod Name Fixes (Phase 2)
+
+- [x] routers.ts: mockSetup — change publicProcedure to protectedProcedure, use ctx.user.name for isRod matching
+- [x] Dashboard.tsx: replace ROD_KEYWORDS/isRod/isYou with user.name from useAuth(); fix subtitle hardcode
+- [x] Dashboard.tsx: fix "Counter-Strategy for Rod" label to use user first name
+- [x] MockDraftSimulator.tsx: fix "Rod Opportunity Board" UI label and "Rod" fallback strings to use user.name
+- [x] weeklyAssessmentService.ts: fix remaining LLM prompt strings (Rod Sellers, for Rod, Rod should, Rod wait)
+- [x] champRouter.ts: fix remaining LLM prompt strings (Rod Sellers, Rod's question)
+- [x] routers.ts: fix remaining LLM prompt strings (Rod Sellers in narrative, Rod's arc)
+- [x] gmDecisionService.ts: fix remaining LLM prompt string (Rod covering)
+- [x] KeeperROI.tsx: replace teamId===11 hardcoded checks with user.name matching via useAuth
+- [x] KeeperCalculator.tsx: replace str8/rod team name checks with user.name matching via useAuth
+- [x] DraftPickTracker.tsx: replace hardcoded LEAGUE_TEAMS[0]=Roderick Sellers with dynamic standings data
+- [x] WeeklyIntelligence.tsx: replace "Rod's Opportunities" tab/section labels with user first name from useAuth

@@ -4,6 +4,7 @@
 // - AI picks driven by DNA archetype + historical biases
 // - Keepers pre-selected from offseason engine, manually overridable before draft starts
 import { useState, useMemo, useCallback, useRef } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -452,6 +453,8 @@ function gradeRoster(picks: DraftPick[]): { grade: string; avgEcr: number; total
 }
 
 export default function MockDraftSimulator() {
+  const { user } = useAuth();
+  const myFirstName = user?.name?.split(" ")[0] ?? "Your";
   const [picks, setPicks] = useState<DraftPick[]>([]);
   const [draftComplete, setDraftComplete] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -646,7 +649,7 @@ export default function MockDraftSimulator() {
       round: currentRound,
       pick: (currentOverall - 1) % totalTeams + 1,
       overall: currentOverall,
-      owner: rodOwner?.ownerName ?? "Rod",
+      owner: rodOwner?.ownerName ?? myFirstName,
       player,
     };
     setPicks((prev) => [...prev, pick]);
@@ -808,7 +811,7 @@ export default function MockDraftSimulator() {
           round,
           pick: (slot - 1) % totalTeams + 1,
           overall: slot,
-          owner: rodOwner?.ownerName ?? "Rod",
+          owner: rodOwner?.ownerName ?? myFirstName,
           player,
         };
         currentPicksList.push(rodPick);
@@ -859,7 +862,7 @@ export default function MockDraftSimulator() {
 
   const rodOwner = owners[rodSlotIndex];
   const rodPicks = useMemo(
-    () => picks.filter((p) => p.owner === (rodOwner?.ownerName ?? "Rod")),
+    () => picks.filter((p) => p.owner === (rodOwner?.ownerName ?? myFirstName)),
     [picks, rodOwner]
   );
   const rodGrade = useMemo(() => gradeRoster(rodPicks), [rodPicks]);
@@ -1444,7 +1447,7 @@ export default function MockDraftSimulator() {
                 )}
                 {rodPicks.length > 0 && (
                   <div className="flex items-center gap-2 pt-1 border-t border-slate-700/50">
-                    <span className="text-xs text-muted-foreground">Rod&apos;s grade:</span>
+                    <span className="text-xs text-muted-foreground">{myFirstName}&apos;s grade:</span>
                     <span className={cn("text-xl font-black", GRADE_COLORS[rodGrade.grade] ?? "text-foreground")}>
                       {rodGrade.grade}
                     </span>
@@ -1715,7 +1718,7 @@ export default function MockDraftSimulator() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Trophy className="w-4 h-4 text-amber-400" />
-                  {rodOwner?.ownerName ?? "Rod"}&apos;s Roster ({rodPicks.length} picks)
+                  {rodOwner?.ownerName ?? myFirstName}&apos;s Roster ({rodPicks.length} picks)
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-3 pt-0">
@@ -1762,7 +1765,7 @@ export default function MockDraftSimulator() {
                 {[...picks].reverse().slice(0, 10).map((pick) => (
                   <div key={pick.overall + "-" + pick.player.fpId} className={cn(
                     "flex items-center gap-2 px-2 py-1 rounded text-xs",
-                    pick.owner === (rodOwner?.ownerName ?? "Rod") ? "bg-primary/10" : ""
+                    pick.owner === (rodOwner?.ownerName ?? myFirstName) ? "bg-primary/10" : ""
                   )}>
                     <span className="text-muted-foreground w-8 shrink-0">{"#" + pick.overall}</span>
                     <Badge variant="outline" className={cn("px-1 py-0 h-4 text-[10px] shrink-0", POS_COLORS[pick.player.position] ?? "")}>
@@ -1786,7 +1789,7 @@ export default function MockDraftSimulator() {
                   <CardTitle className="text-sm flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Target className="w-4 h-4 text-amber-400" />
-                      <span className="text-amber-300">Rod Opportunity Board</span>
+                      <span className="text-amber-300">{myFirstName}&apos;s Opportunity Board</span>
                     </div>
                     <button
                       onClick={() => setShowOpportunityBoard(v => !v)}
@@ -1839,7 +1842,7 @@ export default function MockDraftSimulator() {
             <div>
               <h2 className="text-xl font-bold text-foreground">Draft Complete</h2>
               <p className="text-sm text-muted-foreground">
-                {rodOwner?.ownerName ?? "Rod"}&apos;s grade:{" "}
+                {rodOwner?.ownerName ?? myFirstName}&apos;s grade:{" "}
                 <span className={cn("font-black text-lg", GRADE_COLORS[rodGrade.grade] ?? "")}>
                   {rodGrade.grade}
                 </span>

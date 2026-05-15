@@ -326,7 +326,8 @@ export default function Dashboard() {
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const myName = user?.name ?? "";
 
   const { data: standings, isLoading: standingsLoading } = trpc.espn.standings.useQuery({ season: 2025 });
   const { data: manifests } = trpc.espn.manifests.useQuery();
@@ -354,8 +355,11 @@ export default function Dashboard() {
     totalAcquisitions: number; totalTrades: number;
   };
   const owners: LiveOwner[] = (ownerStatsData?.owners as LiveOwner[] | undefined) ?? [];
-  const ROD_KEYWORDS = ["rod", "sellers", "str8"];
-  const isRod = (o: LiveOwner) => ROD_KEYWORDS.some(k => o.fullName.toLowerCase().includes(k) || o.displayName.toLowerCase().includes(k));
+  // Identify the current user's team by matching their Manus display name
+  const myNameParts = myName.toLowerCase().split(" ").filter(Boolean);
+  const isRod = (o: LiveOwner) => myNameParts.length > 0
+    ? myNameParts.some(k => o.fullName.toLowerCase().includes(k) || o.displayName.toLowerCase().includes(k))
+    : false;
   // Inactive/former owners who left the league — exclude from current opponent cards
   const INACTIVE_KEYWORDS = ["teco", "browning", "tecostix", "maurice", "welch", "dallas727", "vince"];
   const isInactive = (o: LiveOwner) => INACTIVE_KEYWORDS.some(k => o.fullName.toLowerCase().includes(k) || o.displayName.toLowerCase().includes(k));
@@ -646,11 +650,11 @@ export default function Dashboard() {
   const chartData = standings?.map((t: Record<string, unknown>, i: number) => ({
     name: String(t.teamName || "").split(" ").slice(-1)[0]?.slice(0, 8) || `T${i + 1}`,
     pf: Math.round(Number(t.pointsFor || 0)),
-    isYou: String(t.owners || "").toLowerCase().includes("rod") || String(t.teamName || "").toLowerCase().includes("str8"),
+    isYou: myNameParts.length > 0 && myNameParts.some(k => String(t.owners || "").toLowerCase().includes(k) || String(t.teamName || "").toLowerCase().includes(k)),
   })) ?? [];
 
   const myTeam = standings?.find((t: Record<string, unknown>) =>
-    String(t.owners || "").toLowerCase().includes("rod") || String(t.teamName || "").toLowerCase().includes("str8")
+    myNameParts.length > 0 && myNameParts.some(k => String(t.owners || "").toLowerCase().includes(k) || String(t.teamName || "").toLowerCase().includes(k))
   ) as Record<string, unknown> | undefined;
 
   const leagueAvgPF = standings && standings.length > 0
@@ -665,7 +669,7 @@ export default function Dashboard() {
   const showKeeperBanner = daysUntilKeeper <= 120;
 
   return (
-    <AppLayout title="GM War Room" subtitle="ATLANTAS FINEST FF · Str8FrmHell, RodZilla · Rod Sellers · 2026 Season">
+    <AppLayout title="GM War Room" subtitle={`ATLANTAS FINEST FF · ${myName || "GM"} · 2026 Season`}>
       <div className="p-6">
         {/* Keeper Deadline Countdown Banner */}
         {showKeeperBanner && (
@@ -915,7 +919,9 @@ export default function Dashboard() {
                   ) : standings && standings.length > 0 ? (
                     <div className="divide-y divide-border">
                       {standings.map((team: Record<string, unknown>, i: number) => {
-                        const isYou = String(team.owners || "").toLowerCase().includes("rod") || String(team.teamName || "").toLowerCase().includes("str8");
+                        const isYou = myNameParts.length > 0
+                          ? myNameParts.some(k => String(team.owners || "").toLowerCase().includes(k) || String(team.teamName || "").toLowerCase().includes(k))
+                          : false;
                         const tier = i < 3 ? "Elite" : i < 6 ? "Strong" : i < 9 ? "Rising" : "Trade Target";
                         const tierColor = i < 3 ? "border-yellow-500/30 text-yellow-400" : i < 6 ? "border-emerald-500/30 text-emerald-400" : i < 9 ? "border-blue-500/30 text-blue-400" : "border-slate-500/30 text-slate-400";
                         return (
@@ -1280,7 +1286,7 @@ export default function Dashboard() {
                   };
 
                   const opponents = (leagueDraftData.owners as DraftOwner[])
-                    .filter(o => o.totalPicks > 0 && !o.name.toLowerCase().includes("rod") && !o.name.toLowerCase().includes("str8"))
+                    .filter(o => o.totalPicks > 0 && !(myNameParts.length > 0 && myNameParts.some(k => o.name.toLowerCase().includes(k))))
                     .filter(o => !(["teco","browning","tecostix","maurice","welch","dallas727","vince"].some(k => o.name.toLowerCase().includes(k))))
                     .sort((a, b) => b.seasons - a.seasons || b.totalPicks - a.totalPicks);
 
@@ -1531,7 +1537,7 @@ export default function Dashboard() {
                                 <div className="flex items-start gap-2 p-2.5 rounded-lg bg-primary/10 border border-primary/20">
                                   <Crosshair className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
                                   <div>
-                                    <p className="text-[9px] text-primary font-bold uppercase tracking-wider mb-0.5">Counter-Strategy for Rod</p>
+                                    <p className="text-[9px] text-primary font-bold uppercase tracking-wider mb-0.5">Counter-Strategy for You</p>
                                     <p className="text-[10px] text-foreground leading-relaxed">{counterStrategy}</p>
                                   </div>
                                 </div>
@@ -1564,7 +1570,7 @@ export default function Dashboard() {
                       <div
                         key={entry.position}
                         className={`flex flex-col items-center p-2.5 rounded-lg border text-center ${
-                          entry.name?.toLowerCase().includes("str8") || entry.owners?.toLowerCase().includes("rod")
+                          (myNameParts.length > 0 && myNameParts.some(k => entry.name?.toLowerCase().includes(k) || entry.owners?.toLowerCase().includes(k)))
                             ? "border-primary/50 bg-primary/10"
                             : "border-border bg-accent/30"
                         }`}
@@ -1715,7 +1721,7 @@ export default function Dashboard() {
                             <tr
                               key={i}
                               className={`border-b border-border/50 hover:bg-accent/30 transition-colors ${
-                                k.teamName?.toLowerCase().includes("str8") || k.teamName?.toLowerCase().includes("rod")
+                                (myNameParts.length > 0 && myNameParts.some(k2 => k.teamName?.toLowerCase().includes(k2)))
                                   ? "bg-primary/5"
                                   : ""
                               }`}
