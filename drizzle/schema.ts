@@ -780,3 +780,37 @@ export const tradeNarratives = mysqlTable(
 );
 export type TradeNarrative = typeof tradeNarratives.$inferSelect;
 export type InsertTradeNarrative = typeof tradeNarratives.$inferInsert;
+
+// ─── Weekly Storylines ─────────────────────────────────────────────────────────
+/**
+ * One row per story per week per season.
+ * Deterministic trigger assigns storyType + emotionalTag; LLM generates headline + body.
+ * Cached forever — only regenerated if the trigger fires again with different data.
+ */
+export const weeklyStorylines = mysqlTable(
+  "weekly_storylines",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    season: int("season").notNull(),
+    week: int("week").notNull(),
+    storyType: varchar("storyType", { length: 64 }).notNull(),
+    emotionalTag: varchar("emotionalTag", { length: 64 }).notNull(),
+    teamId: int("teamId").notNull(),
+    ownerName: varchar("ownerName", { length: 128 }).notNull(),
+    record: varchar("record", { length: 16 }).notNull(),
+    intensityScore: int("intensityScore").notNull().default(0),
+    headline: varchar("headline", { length: 256 }),
+    bodyText: text("bodyText"),
+    supportingStat: varchar("supportingStat", { length: 256 }),
+    opponentName: varchar("opponentName", { length: 128 }),
+    generatedAt: timestamp("generatedAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    index("idx_ws_season_week").on(t.season, t.week),
+    index("idx_ws_story_type").on(t.storyType),
+    index("idx_ws_intensity").on(t.intensityScore),
+  ]
+);
+export type WeeklyStoryline = typeof weeklyStorylines.$inferSelect;
+export type InsertWeeklyStoryline = typeof weeklyStorylines.$inferInsert;

@@ -99,6 +99,12 @@ export async function weeklyIntelHandler(req: Request, res: Response) {
     // ── 5. Bust in-memory caches ───────────────────────────────────────────
     memCache.invalidateAll();
 
+    // ── 5b. Refresh weekly storylines (deterministic labels only, no LLM) ──
+    try {
+      const { refreshWeeklyStorylines } = await import("./weeklyStorylinesService");
+      await refreshWeeklyStorylines(CURRENT_SEASON);
+    } catch (_e) { /* non-fatal — storylines are supplemental */ }
+
     // ── 6. Build owner notification ───────────────────────────────────────
     const durationSec = ((Date.now() - startedAt) / 1000).toFixed(1);
     const failedViews = pipelineResult.viewResults

@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
+import WeeklyStorylinesTab from "@/pages/WeeklyStorylinesTab";
 
 // ─── Types (mirrors server interfaces) ───────────────────────────────────────
 
@@ -859,7 +860,7 @@ export default function WeeklyIntelligence() {
   const [sortBy, setSortBy] = useState<SortKey>("standing");
   const [filterBy, setFilterBy] = useState<FilterKey>("all");
   const [forceRefresh, setForceRefresh] = useState(false);
-  const [activeTab, setActiveTab] = useState("teams");
+  const [activeTab, setActiveTab] = useState("storylines");
   const [deepDiveTeam, setDeepDiveTeam] = useState<TeamAssessment | null>(null);
 
   // ── Batch run state ──
@@ -1120,6 +1121,9 @@ export default function WeeklyIntelligence() {
         {/* ── Main tabs ── */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-slate-800/60 border border-slate-700/40">
+            <TabsTrigger value="storylines" className="text-xs gap-1.5">
+              <Zap className="w-3.5 h-3.5" /> Storylines
+            </TabsTrigger>
             <TabsTrigger value="teams" className="text-xs gap-1.5">
               <Users className="w-3.5 h-3.5" /> All Teams
             </TabsTrigger>
@@ -1131,6 +1135,10 @@ export default function WeeklyIntelligence() {
             </TabsTrigger>
           </TabsList>
 
+          {/* ── Storylines tab (Sprint 3 landing view) ── */}
+          <TabsContent value="storylines" className="mt-4">
+            <WeeklyStorylinesTab season={season} />
+          </TabsContent>
           {/* ── All Teams tab ── */}
           <TabsContent value="teams" className="mt-4 space-y-4">
 

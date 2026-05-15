@@ -163,6 +163,32 @@ export const appRouter = router({
       return { ok: true, ...result };
     }),
   }),
+  weeklyStorylines: router({
+    /** Get cached storylines for a specific season + week */
+    getByWeek: publicProcedure
+      .input(z.object({ season: z.number().int(), week: z.number().int() }))
+      .query(async ({ input }) => {
+        const { getWeeklyStorylinesFromDb } = await import("./weeklyStorylinesService");
+        return getWeeklyStorylinesFromDb(input.season, input.week);
+      }),
+    /** Get the latest cached storylines for a season (most recent week) */
+    getLatest: publicProcedure
+      .input(z.object({ season: z.number().int().optional() }))
+      .query(async ({ input }) => {
+        const { getLatestWeeklyStorylinesFromDb } = await import("./weeklyStorylinesService");
+        const season = input.season ?? 2025;
+        return getLatestWeeklyStorylinesFromDb(season);
+      }),
+    /** Manually trigger storylines refresh for a season (no new ESPN calls) */
+    refresh: publicProcedure
+      .input(z.object({ season: z.number().int().optional() }))
+      .mutation(async ({ input }) => {
+        const { refreshWeeklyStorylines } = await import("./weeklyStorylinesService");
+        const season = input.season ?? 2025;
+        const rows = await refreshWeeklyStorylines(season);
+        return { ok: true, count: rows.length, season };
+      }),
+  }),
   league: router({
     // Get the user's active league connection
     getActive: protectedProcedure.query(async ({ ctx }) => {

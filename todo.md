@@ -1186,3 +1186,14 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Write vitest tests for deterministic label engine (all 8 labels, edge cases) — 18 tests
 - [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (538/538 passing)
 - [x] Save checkpoint and push to GitHub
+
+## Sprint 3: Weekly Storylines Feed
+- [x] Add weekly_storylines table to drizzle/schema.ts and run pnpm db:push
+- [x] Build server/weeklyStorylinesService.ts: 8 deterministic story triggers (REVENGE_GAME, COLLAPSE, SILENT_THREAT, DESPERATION_WINDOW, PLAYOFF_BUBBLE, MOMENTUM_SHIFT, FEAR_RISING, HEARTBREAK_PENDING), LLM headline/body generation, DB persist/read helpers
+- [x] Add weeklyStorylines router to appRouter (getByWeek, getLatest, refresh procedures)
+- [x] Hook refreshWeeklyStorylines into weeklyIntelHandler.ts refresh pipeline
+- [x] Build client/src/pages/WeeklyStorylinesTab.tsx — journalist-voice storylines feed component
+- [x] Add Storylines tab to WeeklyIntelligence.tsx as the new default landing tab
+- [x] Write vitest tests for all 8 deterministic triggers and general behavior — 24 tests
+- [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (562/562 passing)
+- [x] Save checkpoint and push to GitHub
