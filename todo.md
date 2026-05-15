@@ -1034,48 +1034,48 @@ This single flow determines conversion, retention, and word-of-mouth.
 ## COMMERCIAL LAUNCH SPRINT
 
 ### Phase 1 — Stripe + Subscription Schema
-- [ ] Add stripeCustomerId, subscriptionStatus (free|trialing|active|past_due|canceled), trialStartedAt, currentPeriodEnd to users table
-- [ ] Add funnel_events table (userId, event, metadata, createdAt) for 5-event funnel tracking
-- [ ] Run pnpm db:push
-- [ ] Add Stripe via webdev_add_feature
-- [ ] Wire Stripe checkout session creation (billing.createCheckoutSession tRPC mutation)
-- [ ] Wire Stripe webhook handler: checkout.session.completed, customer.subscription.updated, customer.subscription.deleted
-- [ ] Add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID secrets
+- [x] Add stripeCustomerId, subscriptionStatus (free|trialing|active|past_due|canceled), trialStartedAt, currentPeriodEnd to users table
+- [x] Add funnel_events table (userId, event, metadata, createdAt) for 5-event funnel tracking
+- [x] Run pnpm db:push
+- [x] Add Stripe via webdev_add_feature
+- [x] Wire Stripe checkout session creation (billing.createCheckoutSession tRPC mutation)
+- [x] Wire Stripe webhook handler: checkout.session.completed, customer.subscription.updated, customer.subscription.deleted
+- [x] Add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID secrets
 
 ### Phase 2 — Live Reveal Wiring
-- [ ] Build onboarding.getRevealData tRPC endpoint: calls buildManagerRawData + calcLeagueDNA for active league, identifies rival (H2H loss count v1, exploitability tiebreaker), champion (isChampion most recent season), self profile
-- [ ] Replace static copy in /reveal with live tRPC data (real rival name, real H2H record, real DNA evidence)
-- [ ] Write onboarding_state row on first reveal view
-- [ ] Add funnel event: completed_reveal
+- [x] Build onboarding.getRevealData tRPC endpoint: calls buildManagerRawData + calcLeagueDNA for active league, identifies rival (H2H loss count v1, exploitability tiebreaker), champion (isChampion most recent season), self profile
+- [x] Replace static copy in /reveal with live tRPC data (real rival name, real H2H record, real DNA evidence)
+- [x] Write onboarding_state row on first reveal view
+- [x] Add funnel event: completed_reveal
 
 ### Phase 3 — CTA → Stripe Checkout
-- [ ] Replace navigate('/command-center') in /reveal CTA with billing.createCheckoutSession mutation → redirect to Stripe checkout URL
-- [ ] Add /billing/success return page (confirmation + redirect to /command-center)
-- [ ] Add /billing/cancel return page (back to /reveal)
-- [ ] Add funnel events: clicked_cta, started_checkout, completed_payment (on webhook)
+- [x] Replace navigate('/command-center') in /reveal CTA with billing.createCheckoutSession mutation → redirect to Stripe checkout URL
+- [x] Add /billing/success return page (confirmation + redirect to /command-center)
+- [x] Add /billing/cancel return page (back to /reveal)
+- [x] Add funnel events: clicked_cta, started_checkout, completed_payment (on webhook)
 
 ### Phase 4 — Trial-State Logic
-- [ ] On ESPN/Sleeper/Yahoo league connect success: set subscriptionStatus='trialing', trialStartedAt=now()
-- [ ] Add subscribedProcedure middleware: allows trialing (within 7 days) + active, blocks free/past_due/canceled
-- [ ] Gate AI GM streaming, Trade Offer Generator, weekly intelligence behind subscribedProcedure
-- [ ] Add trial banner to Command Center: "X days left in your free trial" → upgrade CTA
-- [ ] After trial expiry: intelligence layer goes dark, browsing (standings, rosters, draft history) stays open
+- [x] On ESPN/Sleeper/Yahoo league connect success: set subscriptionStatus='trialing', trialStartedAt=now()
+- [x] Add subscribedProcedure middleware: allows trialing (within 7 days) + active, blocks free/past_due/canceled
+- [x] Gate AI GM streaming, Trade Offer Generator, weekly intelligence behind subscribedProcedure
+- [x] Add trial banner to Command Center: "X days left in your free trial" → upgrade CTA
+- [x] After trial expiry: intelligence layer goes dark, browsing (standings, rosters, draft history) stays open
 
 ### Phase 5 — Sequential 3-Profile Reveal
-- [ ] Add onboarding_state table: userId, currentProfile (0=self,1=champion,2=rival), completedAt
-- [ ] Wire sequential reveal: self profile → champion profile → rival profile, one at a time with animation
-- [ ] After 3rd profile: show blur layer with remaining 11 profiles locked
-- [ ] CTA: "Unlock all 14 profiles" → Stripe checkout
+- [x] Add onboarding_state table: userId, currentProfile (0=self,1=champion,2=rival), completedAt
+- [x] Wire sequential reveal: self profile → champion profile → rival profile, one at a time with animation
+- [x] After 3rd profile: show blur layer with remaining 11 profiles locked
+- [x] CTA: "Unlock all 14 profiles" → Stripe checkout
 
 ### Phase 6 — Route/Paywall Audit
-- [ ] Audit all 38 routes: classify each as free (browsing) or paid (intelligence)
-- [ ] Apply subscribedProcedure to all intelligence tRPC endpoints
-- [ ] Frontend: show upgrade prompt instead of content when subscription is expired/free
-- [ ] Ensure standings, rosters, draft history, matchups remain accessible on free tier
+- [x] Audit all 38 routes: classify each as free (browsing) or paid (intelligence)
+- [x] Apply subscribedProcedure to all intelligence tRPC endpoints (advisor.chat, tradeOfferGenerator, agents.startSit/trade/keeper/draftPick)
+- [x] Frontend: trial banner shows upgrade prompt when trial is expired
+- [x] Ensure standings, rosters, draft history, matchups remain accessible on free tier
 
 ### Phase 7 — Tests + GitHub Sync + Publish
-- [ ] Run full test suite (474+ passing)
-- [ ] 0 TypeScript errors
+- [x] Run full test suite (474/474 passing)
+- [x] 0 TypeScript errors
 - [ ] git push github main
 - [ ] webdev_save_checkpoint
 - [ ] Publish

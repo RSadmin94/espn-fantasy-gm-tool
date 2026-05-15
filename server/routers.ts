@@ -4,7 +4,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, subscribedProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 import { injuryRouter } from "./injuryRouter";
@@ -21,6 +21,7 @@ import { mlRouter } from "./mlRouter";
 import { weeklyAssessmentRouter } from "./weeklyAssessmentRouter";
 import { providerRouter } from "./providerRouter";
 import { billingRouter } from "./billingRouter";
+import { onboardingRouter } from "./onboardingRouter";
 import { offseasonRouter } from "./offseasonRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
@@ -90,6 +91,7 @@ async function getSeasonData(season: number) {
 export const appRouter = router({
   system: systemRouter,
   billing: billingRouter,
+  onboarding: onboardingRouter,
   injury: injuryRouter,
   simulation: simulationRouter,
   dna: dnaRouter,
@@ -2415,7 +2417,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
     };
   }),
 
-  tradeOfferGenerator: protectedProcedure
+  tradeOfferGenerator: subscribedProcedure
     .input(z.object({
       targetInput: z.string().min(1).max(100), // player name or pick like "2.03"
       targetType: z.enum(["player", "pick"]),
@@ -3474,7 +3476,7 @@ Provide:
     }),
 
   advisor: router({
-    chat: protectedProcedure
+    chat: subscribedProcedure
       .input(z.object({ message: z.string().min(1).max(2000), season: z.number().optional() }))
       .mutation(async ({ input, ctx }) => {
         const userId = ctx.user.id;
