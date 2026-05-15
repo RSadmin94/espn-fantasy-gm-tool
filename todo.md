@@ -1116,3 +1116,6 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] KeeperCalculator.tsx: replace str8/rod team name checks with user.name matching via useAuth
 - [x] DraftPickTracker.tsx: replace hardcoded LEAGUE_TEAMS[0]=Roderick Sellers with dynamic standings data
 - [x] WeeklyIntelligence.tsx: replace "Rod's Opportunities" tab/section labels with user first name from useAuth
+
+## Logout Button
+- [x] Add Logout button to AppLayout sidebar (bottom of nav, shows user name + logout icon)

@@ -9,6 +9,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import AdvisorPanel from "./AdvisorPanel";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { LogOut, User } from "lucide-react";
 
 type NavItem = {
   href: string;
@@ -122,6 +124,28 @@ function ActiveLeagueFooter() {
   );
 }
 
+function UserFooter() {
+  const { user, isAuthenticated, logout } = useAuth();
+  if (!isAuthenticated) return null;
+  return (
+    <div className="px-4 py-3 border-t border-border">
+      <div className="flex items-center gap-2.5">
+        <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+          <User className="w-3.5 h-3.5 text-primary" />
+        </div>
+        <span className="flex-1 text-[11px] text-muted-foreground truncate min-w-0">{user?.name ?? "Signed in"}</span>
+        <button
+          onClick={() => logout()}
+          title="Log out"
+          className="flex-shrink-0 p-1 rounded hover:bg-red-500/15 text-muted-foreground hover:text-red-400 transition-colors"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AppLayout({ children, title, subtitle, headerRight }: AppLayoutProps) {
   const [location] = useLocation();
   const alreadyInsideLayout = useContext(InsideLayoutContext);
@@ -200,6 +224,7 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
           </nav>
 
           <ActiveLeagueFooter />
+          <UserFooter />
         </aside>
 
         {/* Main content */}
