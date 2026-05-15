@@ -1235,11 +1235,11 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Rebuild zip, upload, checkpoint
 
 ## Bug Fix: Remove InsideLayoutContext + Add Open Advisor Button (May 15 2026)
-- [ ] Remove InsideLayoutContext and alreadyInsideLayout guard entirely from AppLayout
-- [ ] Add a simple "Open Advisor" button in the sidebar nav instead
-- [ ] Ensure no nested layout issues remain
+- [x] Remove InsideLayoutContext and alreadyInsideLayout guard entirely from AppLayout
+- [x] Add a simple "Open Advisor" button in the sidebar nav instead (AI GM Advisor nav item opens advisor panel via setAdvisorOpen)
+- [x] Ensure no nested layout issues remain (InsideLayoutContext fully removed, AppLayout is now a single component with no nested guard)
 
 ## Bug Fix: Missing Trade in Trade History (May 15 2026)
-- [ ] Identify which trade is missing and from which season
-- [ ] Check transaction parsing logic in tradeHistoryRouter for the missing trade
-- [ ] Fix the parsing so all accepted trades appear
+- [x] Identify which trade is missing and from which season (May 14 2026 draft pick trade, relatedTransactionId d3731d04, ESPN 2026 TRADE_PROPOSAL/EXECUTED format)
+- [x] Check transaction parsing logic in tradeHistoryRouter for the missing trade (buildTradesForSeason updated to accept TRADE_PROPOSAL with status=EXECUTED)
+- [x] Fix the parsing so all accepted trades appear (code fix deployed — user needs to do Data Center refresh to pull the accepted proposal into cache)

@@ -1,5 +1,5 @@
 // FILE: client/src/components/AppLayout.tsx
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
@@ -85,8 +85,6 @@ function DataHealthBanner() {
   );
 }
 
-const InsideLayoutContext = createContext(false);
-
 interface AppLayoutProps {
   children: React.ReactNode;
   title?: string;
@@ -149,7 +147,33 @@ function UserFooter() {
   );
 }
 
-function AppLayoutInner({ children, title, subtitle, headerRight }: AppLayoutProps) {
+function SidebarHeader() {
+  const activeLeague = trpc.league.getActive.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+  const leagueName = activeLeague.data?.leagueName ?? "GM Command Center";
+  return (
+    <div className="px-5 py-4 border-b border-border">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl espn-gradient flex items-center justify-center flex-shrink-0 shadow-lg">
+          <Activity className="w-5 h-5 text-white" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-foreground leading-tight tracking-tight truncate">{leagueName}</p>
+          <p className="text-[11px] text-muted-foreground leading-tight">GM Command Center</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 mt-3">
+        <div className="flex-1 h-px bg-border" />
+        <Badge variant="outline" className="text-[9px] px-2 border-primary/30 text-primary font-mono">2009 – 2026</Badge>
+        <div className="flex-1 h-px bg-border" />
+      </div>
+    </div>
+  );
+}
+
+export default function AppLayout({ children, title, subtitle, headerRight }: AppLayoutProps) {
   const [location] = useLocation();
   const [advisorOpen, setAdvisorOpen] = useState(false);
 
@@ -171,26 +195,11 @@ function AppLayoutInner({ children, title, subtitle, headerRight }: AppLayoutPro
   }, []);
 
   return (
-    <InsideLayoutContext.Provider value={true}>
+    <>
       <div className="flex h-screen bg-background overflow-hidden">
         {/* Sidebar */}
         <aside className="flex-shrink-0 flex flex-col border-r border-border bg-card h-full overflow-hidden" style={{ width: "15.5rem" }}>
-          <div className="px-5 py-4 border-b border-border">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl espn-gradient flex items-center justify-center flex-shrink-0 shadow-lg">
-                <Activity className="w-5 h-5 text-white" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-foreground leading-tight tracking-tight">ATLANTAS FINEST</p>
-                <p className="text-[11px] text-muted-foreground leading-tight">GM Command Center</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 mt-3">
-              <div className="flex-1 h-px bg-border" />
-              <Badge variant="outline" className="text-[9px] px-2 border-primary/30 text-primary font-mono">2009 – 2026</Badge>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-          </div>
+          <SidebarHeader />
 
           <nav className="flex-1 overflow-y-auto py-3 px-3" style={{ minHeight: 0 }}>
             {groups.map((group) => {
@@ -249,12 +258,6 @@ function AppLayoutInner({ children, title, subtitle, headerRight }: AppLayoutPro
       </div>
 
       <AdvisorPanel open={advisorOpen} onClose={() => setAdvisorOpen(false)} />
-    </InsideLayoutContext.Provider>
+    </>
   );
-}
-
-export default function AppLayout({ children, title, subtitle, headerRight }: AppLayoutProps) {
-  const alreadyInsideLayout = useContext(InsideLayoutContext);
-  if (alreadyInsideLayout) return <>{children}</>;
-  return <AppLayoutInner title={title} subtitle={subtitle} headerRight={headerRight}>{children}</AppLayoutInner>;
 }
