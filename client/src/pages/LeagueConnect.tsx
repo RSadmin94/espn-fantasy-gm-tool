@@ -167,16 +167,29 @@ export default function LeagueConnect() {
     },
   });
   // Detect Yahoo OAuth callback (yahoo_auth=success in URL)
+  // Also detect ESPN credential auto-fill from Chrome extension (?provider=espn&leagueId=...&swid=...&s2=...)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("yahoo_auth") === "success") {
       setSelectedProvider("yahoo");
       setStep("yahoo_pick_league");
-      // Clean up URL
       window.history.replaceState({}, "", window.location.pathname);
     } else if (params.get("yahoo_error")) {
       setError(`Yahoo authorization failed: ${params.get("yahoo_error")}`);
       window.history.replaceState({}, "", window.location.pathname);
+    } else if (params.get("provider") === "espn") {
+      // Extension auto-fill: pre-populate ESPN credential fields and jump to the form
+      const lid  = params.get("leagueId") || "";
+      const swid = params.get("swid") || "";
+      const s2   = params.get("s2") || "";
+      if (lid || swid || s2) {
+        setSelectedProvider("espn");
+        if (lid)  setEspnLeagueId(lid);
+        if (swid) setEspnSwid(swid);
+        if (s2)   setEspnS2(s2);
+        setStep("enter_credentials");
+        window.history.replaceState({}, "", window.location.pathname);
+      }
     }
   }, []);
   const handleYahooConnect = () => {
@@ -598,16 +611,26 @@ export default function LeagueConnect() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4 text-sm text-amber-700 dark:text-amber-300">
-                <strong>How to find your cookies:</strong> Log into{" "}
-                <a href="https://fantasy.espn.com" target="_blank" rel="noopener noreferrer" className="underline">
-                  fantasy.espn.com
-                </a>{" "}
-                → open DevTools (F12) → Application tab → Cookies →{" "}
-                <code className="font-mono text-xs bg-black/10 px-1 rounded">fantasy.espn.com</code> → copy{" "}
-                <code className="font-mono text-xs bg-black/10 px-1 rounded">SWID</code> and{" "}
-                <code className="font-mono text-xs bg-black/10 px-1 rounded">espn_s2</code>.
-              </div>
+              {(espnSwid || espnS2) ? (
+                <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-4 text-sm text-emerald-700 dark:text-emerald-300 flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <strong>Auto-filled by the DNA Advisor extension.</strong>{" "}
+                    Your SWID and espn_s2 cookies were detected automatically. Just verify your League ID and click Connect.
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4 text-sm text-amber-700 dark:text-amber-300">
+                  <strong>How to find your cookies:</strong> Log into{" "}
+                  <a href="https://fantasy.espn.com" target="_blank" rel="noopener noreferrer" className="underline">
+                    fantasy.espn.com
+                  </a>{" "}
+                  → open DevTools (F12) → Application tab → Cookies →{" "}
+                  <code className="font-mono text-xs bg-black/10 px-1 rounded">fantasy.espn.com</code> → copy{" "}
+                  <code className="font-mono text-xs bg-black/10 px-1 rounded">SWID</code> and{" "}
+                  <code className="font-mono text-xs bg-black/10 px-1 rounded">espn_s2</code>.
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium">League ID</label>
                 <Input

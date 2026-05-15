@@ -1134,4 +1134,17 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Connect page: unauthenticated users who pick ESPN/Sleeper should be prompted to sign in before the credential form (not after the import fails)
 - [x] Connect page: success step "Open Weekly Intelligence Hub" uses hard <a> tag (full reload) — replace with wouter navigate
 - [x] Run TypeScript check and full test suite (504/504 passing, 0 TS errors)
-- [ ] Save checkpoint and push to GitHub
+- [x] Save checkpoint and push to GitHub
+
+## NEW: Extension ESPN Credential Auto-Fill
+- [x] Add cookies + tabs permissions + host_permissions for *.espn.com to manifest.json (v1.3.0)
+- [x] Add GET_ESPN_CREDENTIALS message handler to background.js (reads cookies via chrome.cookies API)
+- [x] Add OPEN_CONNECT_PAGE message handler to background.js (opens /connect with pre-filled URL params)
+- [x] Add "Connect to War Room" button in popup.js when on ESPN page with credentials detected
+- [x] Update LeagueConnect.tsx to read ?provider=espn&leagueId=&swid=&s2= URL params and auto-fill form
+- [x] Show green "Auto-filled by extension" banner when credentials are pre-populated
+- [x] Update options.html ESPN tab to show credential extraction status and "Connect" button
+- [x] Update options.js to check for ESPN cookies and show Connect button when found
+- [x] Package extension as espn_dna_extension_v1.3.0.zip
+- [x] Run TypeScript check and full test suite (504/504 passing, 0 TS errors)
+- [ ] Save checkpoint
