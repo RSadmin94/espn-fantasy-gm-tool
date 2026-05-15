@@ -45,6 +45,7 @@ import {
   User,
   Loader2,
 } from "lucide-react";
+import { trackEvent } from "@/lib/trackEvent";
 
 const PROVIDER_EMOJI: Record<string, string> = {
   espn: "🏈",
@@ -68,7 +69,17 @@ export default function LeagueSwitcher() {
   });
 
   const setActive = trpc.league.setActive.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      // Track league switch event
+      const switched = leagues.find(l => l.id === variables.leagueConnectionId);
+      trackEvent("league_switch", "league_switcher", {
+        action: "switch_league",
+        metadata: {
+          toLeagueId: switched?.leagueId ?? "unknown",
+          toLeagueName: switched?.leagueName ?? "unknown",
+          provider: switched?.provider ?? "unknown",
+        },
+      });
       // Invalidate all league-dependent queries so the whole app reflects the switch
       utils.league.getActive.invalidate();
       utils.league.getMyLeagues.invalidate();

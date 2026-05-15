@@ -1304,3 +1304,48 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Ensure extension credential injection (?provider=espn&leagueId=...&swid=...&s2=...) works as "Add League" for users who already have a league connected (auto-triggers preview)
 - [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (699/699 passing, 36 test files)
 - [x] Save checkpoint
+
+## Behavioral Analytics Dashboard — 6 Questions
+- [ ] Audit usage_events schema: confirm eventType, sessionId, page, action, featureName, metadata columns exist
+- [ ] Add league_switch event tracking: fire when user calls setActive mutation (client-side, LeagueSwitcher)
+- [ ] Add tab_view event tracking: fire on every tab click across all hub pages (WeeklyIntelligence, TradeLab, KeeperLab, AIDraftHelper)
+- [ ] Add drop_off event: fire on visibilitychange/beforeunload with last page + time-on-page
+- [ ] Add return_visit attribution: record what page/feature the user visited in the session before returning
+- [ ] Server: getActiveLeagueStats — leagues ranked by unique active users + session count in last 30 days
+- [ ] Server: getFeatureRetention — for each feature, % of users who returned within 7 days after first use
+- [ ] Server: getIgnoredTabs — all tab_view events grouped by tabName, sorted ascending (least viewed first)
+- [ ] Server: getLeagueSwitchFrequency — league_switch events per user per week, avg switches, top switchers
+- [ ] Server: getReturnVisitDrivers — last feature_open/tab_view before each return_visit event, ranked by frequency
+- [ ] Server: getDropOffMap — page_view sequences where session ends (no next event within 30 min), ranked by exit page
+- [ ] Build BehavioralAnalytics.tsx page with 6 answer panels (one per question), using recharts for visualizations
+- [ ] Panel 1 — Active Leagues: bar chart of leagues by active user count + session count
+- [ ] Panel 2 — Feature Retention: horizontal bar chart of 7-day return rate per feature
+- [ ] Panel 3 — Ignored Tabs: red-highlighted table of tabs with <5% view rate
+- [ ] Panel 4 — League Switching: line chart of switch frequency over time + top switchers table
+- [ ] Panel 5 — Return Visit Drivers: ranked list of features that precede return visits
+- [ ] Panel 6 — Drop-off Map: funnel/table of exit pages with exit rate %
+- [ ] Add /admin/behavioral route to App.tsx
+- [ ] Add "Behavioral Analytics" link to admin sidebar (admin-only)
+- [ ] Write vitest for all 6 server queries
+- [ ] Run pnpm tsc --noEmit (0 errors) and pnpm test
+- [ ] Save checkpoint
+
+## Behavioral Analytics Dashboard (6-Question)
+
+- [x] Extend UIUsageEvent union with league_switch, tab_view, drop_off event types
+- [x] Extend logUIEvent z.enum to accept league_switch, tab_view, drop_off
+- [x] Add getActiveLeagueStats() query: leagues ranked by unique users + session count
+- [x] Add getFeatureRetention() query: % users returning within 7d after first feature use
+- [x] Add getIgnoredTabs() query: tab_view events sorted ascending (lowest = most ignored)
+- [x] Add getLeagueSwitchFrequency() query: league_switch events per week
+- [x] Add getReturnVisitDrivers() query: last feature before each return_visit event
+- [x] Add getDropOffMap() query: pages where sessions end, ranked by exit count
+- [x] Add 6 corresponding tRPC procedures to usageMonitor router (admin-only)
+- [x] Add league_switch tracking to LeagueSwitcher.tsx setActive mutation
+- [x] Add drop_off tracking via visibilitychange + beforeunload in App.tsx (sendBeacon)
+- [x] Create BehavioralAnalytics.tsx page with 6 answer panels
+- [x] Add /admin/behavioral route to App.tsx
+- [x] Add Behavioral Analytics nav item to System group in AppLayout.tsx sidebar
+- [x] Write 37 unit tests in behavioralAnalytics.test.ts covering all 6 query functions
+- [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (726/726 passing, 37 test files)
+- [x] Save checkpoint

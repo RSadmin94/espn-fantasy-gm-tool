@@ -47,6 +47,7 @@ import LeagueConnect from "@/pages/LeagueConnect";
 import Reveal from "@/pages/Reveal";
 import BillingSuccess from "@/pages/BillingSuccess";
 import BillingCancel from "@/pages/BillingCancel";
+import BehavioralAnalytics from "@/pages/BehavioralAnalytics";
 
 function PageTracker() {
   const [location] = useLocation();
@@ -101,6 +102,7 @@ function Router() {
       <Route path="/reveal" component={Reveal} />
       <Route path="/billing/success" component={BillingSuccess} />
       <Route path="/billing/cancel" component={BillingCancel} />
+      <Route path="/admin/behavioral" component={BehavioralAnalytics} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -119,6 +121,41 @@ function App() {
         trackEvent("return_visit", "app");
       }
     }
+  }, []);
+
+  // Drop-off tracking — fires when user leaves the page
+  useEffect(() => {
+    const handleDropOff = () => {
+      const page = window.location.pathname;
+      const timeOnPage = Date.now() - (parseInt(sessionStorage.getItem("ff_gm_page_entered") ?? "0", 10) || Date.now());
+      // Use sendBeacon for reliability on page unload
+      const payload = JSON.stringify({
+        json: {
+          eventType: "drop_off",
+          featureName: "app",
+          page,
+          action: "page_exit",
+          sessionId: sessionStorage.getItem("ff_gm_session_id"),
+          metadata: JSON.stringify({ timeOnPageMs: timeOnPage }),
+        },
+      });
+      navigator.sendBeacon("/api/trpc/usageMonitor.logUIEvent", new Blob([payload], { type: "application/json" }));
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") handleDropOff();
+    };
+    const handlePageEnter = () => {
+      sessionStorage.setItem("ff_gm_page_entered", String(Date.now()));
+    };
+    window.addEventListener("beforeunload", handleDropOff);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handlePageEnter);
+    handlePageEnter();
+    return () => {
+      window.removeEventListener("beforeunload", handleDropOff);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handlePageEnter);
+    };
   }, []);
   return (
     <ErrorBoundary>

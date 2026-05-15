@@ -294,7 +294,7 @@ export const appRouter = router({
      */
     logUIEvent: publicProcedure
       .input(z.object({
-        eventType: z.enum(["page_view", "feature_open", "ai_action", "cta_click", "session_start", "return_visit"]),
+        eventType: z.enum(["page_view", "feature_open", "ai_action", "cta_click", "session_start", "return_visit", "league_switch", "tab_view", "drop_off"]),
         featureName: z.string().max(128),
         page: z.string().max(256).nullable().optional(),
         action: z.string().max(128).nullable().optional(),
@@ -348,6 +348,62 @@ export const appRouter = router({
         if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
         const { getOnboardingFunnel } = await import("./usageTracker");
         return getOnboardingFunnel();
+      }),
+
+    // ── Behavioral analytics (6-question dashboard) ──────────────────────────
+
+    /** Active leagues: ranked by unique users + session count in last N days */
+    getActiveLeagueStats: protectedProcedure
+      .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getActiveLeagueStats } = await import("./usageTracker");
+        return getActiveLeagueStats(input.days);
+      }),
+
+    /** Feature retention: % of users who returned within 7 days after first use */
+    getFeatureRetention: protectedProcedure
+      .input(z.object({ days: z.number().int().min(1).max(365).default(60) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getFeatureRetention } = await import("./usageTracker");
+        return getFeatureRetention(input.days);
+      }),
+
+    /** Ignored tabs: tab_view events sorted by view count ascending */
+    getIgnoredTabs: protectedProcedure
+      .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getIgnoredTabs } = await import("./usageTracker");
+        return getIgnoredTabs(input.days);
+      }),
+
+    /** League switch frequency: switches per week over last N weeks */
+    getLeagueSwitchFrequency: protectedProcedure
+      .input(z.object({ weeks: z.number().int().min(1).max(52).default(12) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getLeagueSwitchFrequency } = await import("./usageTracker");
+        return getLeagueSwitchFrequency(input.weeks);
+      }),
+
+    /** Return visit drivers: features that precede return visits */
+    getReturnVisitDrivers: protectedProcedure
+      .input(z.object({ days: z.number().int().min(1).max(365).default(60) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getReturnVisitDrivers } = await import("./usageTracker");
+        return getReturnVisitDrivers(input.days);
+      }),
+
+    /** Drop-off map: pages where sessions end, ranked by exit count */
+    getDropOffMap: protectedProcedure
+      .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getDropOffMap } = await import("./usageTracker");
+        return getDropOffMap(input.days);
       }),
   }),
 

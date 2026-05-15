@@ -17,7 +17,10 @@ export type UIEventType =
   | "ai_action"
   | "cta_click"
   | "session_start"
-  | "return_visit";
+  | "return_visit"
+  | "league_switch"
+  | "tab_view"
+  | "drop_off";
 
 export interface TrackEventOptions {
   page?: string;

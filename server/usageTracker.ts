@@ -318,7 +318,7 @@ export async function getCostSummary(days = 30): Promise<{
 // ─── UI Event tracking (client-side events) ───────────────────────────────────
 
 export interface UIUsageEvent {
-  eventType: "page_view" | "feature_open" | "ai_action" | "cta_click" | "session_start" | "return_visit";
+  eventType: "page_view" | "feature_open" | "ai_action" | "cta_click" | "session_start" | "return_visit" | "league_switch" | "tab_view" | "drop_off";
   featureName: string;
   page: string | null;
   action: string | null;
@@ -539,6 +539,310 @@ export async function getOnboardingFunnel(): Promise<FunnelStepRow[]> {
     return results;
   } catch {
     return FUNNEL_STEPS.map((s) => ({ ...s, completions: 0, uniqueUsers: 0 }));
+  }
+}
+
+// ─── Behavioral analytics queries (6-question dashboard) ─────────────────────
+
+export interface ActiveLeagueStatRow {
+  leagueId: string;
+  leagueName: string;
+  provider: string;
+  uniqueUsers: number;
+  sessionCount: number;
+  lastActiveAt: Date | null;
+}
+
+export interface FeatureRetentionRow {
+  featureName: string;
+  totalUsers: number;
+  returnedWithin7d: number;
+  retentionRate: number; // 0-100
+}
+
+export interface IgnoredTabRow {
+  tabName: string;
+  viewCount: number;
+  uniqueUsers: number;
+  viewRate: number; // % of sessions that viewed this tab
+}
+
+export interface LeagueSwitchRow {
+  week: string;       // "YYYY-WW"
+  switchCount: number;
+  uniqueSwitchers: number;
+}
+
+export interface ReturnVisitDriverRow {
+  featureName: string;
+  precedingReturnVisits: number;
+  pct: number; // % of all return_visit events preceded by this feature
+}
+
+export interface DropOffRow {
+  exitPage: string;
+  exitCount: number;
+  exitRate: number; // % of sessions that ended on this page
+}
+
+/** Active leagues: ranked by unique users + session count in last 30 days */
+export async function getActiveLeagueStats(days = 30): Promise<ActiveLeagueStatRow[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const { sql } = await import("drizzle-orm");
+    const { leagueConnections } = await import("../drizzle/schema");
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    // Join usage_events with league_connections to get per-league activity
+    const rows = await db
+      .select({
+        leagueId: leagueConnections.leagueId,
+        leagueName: leagueConnections.leagueName,
+        provider: leagueConnections.provider,
+        uniqueUsers: sql<number>`COUNT(DISTINCT ${usageEvents.userId})`,
+        sessionCount: sql<number>`COUNT(DISTINCT ${usageEvents.sessionId})`,
+        lastActiveAt: sql<Date>`MAX(${usageEvents.createdAt})`,
+      })
+      .from(usageEvents)
+      .innerJoin(
+        leagueConnections,
+        sql`JSON_UNQUOTE(JSON_EXTRACT(${usageEvents.metadata}, '$.leagueId')) = ${leagueConnections.leagueId}
+            AND ${usageEvents.userId} = CAST(${leagueConnections.userId} AS CHAR)`
+      )
+      .where(sql`${usageEvents.createdAt} >= ${cutoff} AND ${usageEvents.eventCategory} = 'ui'`)
+      .groupBy(leagueConnections.leagueId, leagueConnections.leagueName, leagueConnections.provider)
+      .orderBy(sql`COUNT(DISTINCT ${usageEvents.userId}) DESC`)
+      .limit(20);
+    return rows.map(r => ({
+      leagueId: r.leagueId,
+      leagueName: r.leagueName || `League ${r.leagueId}`,
+      provider: r.provider,
+      uniqueUsers: Number(r.uniqueUsers),
+      sessionCount: Number(r.sessionCount),
+      lastActiveAt: r.lastActiveAt,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Feature retention: % of users who returned within 7 days after first using each feature */
+export async function getFeatureRetention(days = 60): Promise<FeatureRetentionRow[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const { sql } = await import("drizzle-orm");
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    // Get first use per user per feature
+    const firstUseRows = await db
+      .select({
+        featureName: usageEvents.featureName,
+        userId: usageEvents.userId,
+        firstUsedAt: sql<Date>`MIN(${usageEvents.createdAt})`,
+      })
+      .from(usageEvents)
+      .where(sql`${usageEvents.eventCategory} = 'ui' AND ${usageEvents.eventType} = 'feature_open' AND ${usageEvents.createdAt} >= ${cutoff} AND ${usageEvents.userId} IS NOT NULL`)
+      .groupBy(usageEvents.featureName, usageEvents.userId);
+
+    // Group by feature and check if user returned within 7 days
+    const featureMap = new Map<string, { total: number; returned: number }>();
+    for (const row of firstUseRows) {
+      if (!row.featureName || !row.userId) continue;
+      const entry = featureMap.get(row.featureName) ?? { total: 0, returned: 0 };
+      entry.total++;
+      // Check if this user had any event after firstUsedAt + 1h and within 7 days
+      const windowStart = new Date(new Date(row.firstUsedAt).getTime() + 60 * 60 * 1000);
+      const windowEnd = new Date(new Date(row.firstUsedAt).getTime() + 7 * 24 * 60 * 60 * 1000);
+      const returnRows = await db
+        .select({ cnt: sql<number>`COUNT(*)` })
+        .from(usageEvents)
+        .where(sql`${usageEvents.userId} = ${row.userId} AND ${usageEvents.eventCategory} = 'ui' AND ${usageEvents.createdAt} > ${windowStart} AND ${usageEvents.createdAt} <= ${windowEnd}`);
+      if (Number(returnRows[0]?.cnt ?? 0) > 0) entry.returned++;
+      featureMap.set(row.featureName, entry);
+    }
+
+    return Array.from(featureMap.entries()).map(([featureName, { total, returned }]) => ({
+      featureName,
+      totalUsers: total,
+      returnedWithin7d: returned,
+      retentionRate: total > 0 ? Math.round((returned / total) * 100) : 0,
+    })).sort((a, b) => b.retentionRate - a.retentionRate);
+  } catch {
+    return [];
+  }
+}
+
+/** Ignored tabs: tab_view events grouped by tabName, sorted by view count ascending */
+export async function getIgnoredTabs(days = 30): Promise<IgnoredTabRow[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const { sql } = await import("drizzle-orm");
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    // Total sessions for rate calculation
+    const totalSessionsRows = await db
+      .select({ cnt: sql<number>`COUNT(DISTINCT ${usageEvents.sessionId})` })
+      .from(usageEvents)
+      .where(sql`${usageEvents.createdAt} >= ${cutoff} AND ${usageEvents.eventCategory} = 'ui'`);
+    const totalSessions = Number(totalSessionsRows[0]?.cnt ?? 1);
+
+    const rows = await db
+      .select({
+        tabName: usageEvents.action,
+        viewCount: sql<number>`COUNT(*)`,
+        uniqueUsers: sql<number>`COUNT(DISTINCT ${usageEvents.userId})`,
+      })
+      .from(usageEvents)
+      .where(sql`${usageEvents.eventType} = 'tab_view' AND ${usageEvents.createdAt} >= ${cutoff}`)
+      .groupBy(usageEvents.action)
+      .orderBy(sql`COUNT(*) ASC`);
+
+    return rows
+      .filter(r => r.tabName)
+      .map(r => ({
+        tabName: r.tabName!,
+        viewCount: Number(r.viewCount),
+        uniqueUsers: Number(r.uniqueUsers),
+        viewRate: Math.round((Number(r.viewCount) / totalSessions) * 100),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/** League switch frequency: switches per week over last N weeks */
+export async function getLeagueSwitchFrequency(weeks = 12): Promise<LeagueSwitchRow[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const { sql } = await import("drizzle-orm");
+    const cutoff = new Date(Date.now() - weeks * 7 * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        week: sql<string>`DATE_FORMAT(${usageEvents.createdAt}, '%Y-%u')`,
+        switchCount: sql<number>`COUNT(*)`,
+        uniqueSwitchers: sql<number>`COUNT(DISTINCT ${usageEvents.userId})`,
+      })
+      .from(usageEvents)
+      .where(sql`${usageEvents.eventType} = 'league_switch' AND ${usageEvents.createdAt} >= ${cutoff}`)
+      .groupBy(sql`DATE_FORMAT(${usageEvents.createdAt}, '%Y-%u')`)
+      .orderBy(sql`DATE_FORMAT(${usageEvents.createdAt}, '%Y-%u') ASC`);
+    return rows.map(r => ({
+      week: r.week,
+      switchCount: Number(r.switchCount),
+      uniqueSwitchers: Number(r.uniqueSwitchers),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Return visit drivers: what feature was last opened before each return_visit event */
+export async function getReturnVisitDrivers(days = 60): Promise<ReturnVisitDriverRow[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const { sql } = await import("drizzle-orm");
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    // Get all return_visit events with userId + sessionId
+    const returnVisits = await db
+      .select({
+        userId: usageEvents.userId,
+        sessionId: usageEvents.sessionId,
+        returnedAt: usageEvents.createdAt,
+      })
+      .from(usageEvents)
+      .where(sql`${usageEvents.eventType} = 'return_visit' AND ${usageEvents.createdAt} >= ${cutoff} AND ${usageEvents.userId} IS NOT NULL`);
+
+    // For each return visit, find the last feature_open in the PREVIOUS session
+    const driverMap = new Map<string, number>();
+    for (const rv of returnVisits) {
+      if (!rv.userId) continue;
+      const prevFeature = await db
+        .select({ featureName: usageEvents.featureName })
+        .from(usageEvents)
+        .where(sql`${usageEvents.userId} = ${rv.userId} AND ${usageEvents.eventType} = 'feature_open' AND ${usageEvents.createdAt} < ${rv.returnedAt}`)
+        .orderBy(sql`${usageEvents.createdAt} DESC`)
+        .limit(1);
+      const name = prevFeature[0]?.featureName;
+      if (name) driverMap.set(name, (driverMap.get(name) ?? 0) + 1);
+    }
+    const total = returnVisits.length || 1;
+    return Array.from(driverMap.entries())
+      .map(([featureName, count]) => ({
+        featureName,
+        precedingReturnVisits: count,
+        pct: Math.round((count / total) * 100),
+      }))
+      .sort((a, b) => b.precedingReturnVisits - a.precedingReturnVisits)
+      .slice(0, 15);
+  } catch {
+    return [];
+  }
+}
+
+/** Drop-off map: pages where sessions end (no event within 30 min), ranked by exit count */
+export async function getDropOffMap(days = 30): Promise<DropOffRow[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const { sql } = await import("drizzle-orm");
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    // Use drop_off events if available (fired on page unload)
+    const dropOffRows = await db
+      .select({
+        exitPage: usageEvents.page,
+        exitCount: sql<number>`COUNT(*)`,
+      })
+      .from(usageEvents)
+      .where(sql`${usageEvents.eventType} = 'drop_off' AND ${usageEvents.createdAt} >= ${cutoff}`)
+      .groupBy(usageEvents.page)
+      .orderBy(sql`COUNT(*) DESC`)
+      .limit(20);
+
+    if (dropOffRows.length > 0) {
+      // Total sessions for rate calculation
+      const totalSessionsRows = await db
+        .select({ cnt: sql<number>`COUNT(DISTINCT ${usageEvents.sessionId})` })
+        .from(usageEvents)
+        .where(sql`${usageEvents.createdAt} >= ${cutoff} AND ${usageEvents.eventCategory} = 'ui'`);
+      const totalSessions = Number(totalSessionsRows[0]?.cnt ?? 1);
+      return dropOffRows
+        .filter(r => r.exitPage)
+        .map(r => ({
+          exitPage: r.exitPage!,
+          exitCount: Number(r.exitCount),
+          exitRate: Math.round((Number(r.exitCount) / totalSessions) * 100),
+        }));
+    }
+
+    // Fallback: use last page_view per session as the exit page
+    const lastPageRows = await db
+      .select({
+        exitPage: sql<string>`SUBSTRING_INDEX(GROUP_CONCAT(${usageEvents.page} ORDER BY ${usageEvents.createdAt} DESC), ',', 1)`,
+        exitCount: sql<number>`COUNT(DISTINCT ${usageEvents.sessionId})`,
+      })
+      .from(usageEvents)
+      .where(sql`${usageEvents.eventType} = 'page_view' AND ${usageEvents.createdAt} >= ${cutoff} AND ${usageEvents.sessionId} IS NOT NULL`)
+      .groupBy(usageEvents.sessionId)
+      .having(sql`COUNT(*) >= 1`);
+
+    // Aggregate by exitPage
+    const pageMap = new Map<string, number>();
+    for (const row of lastPageRows) {
+      if (row.exitPage) pageMap.set(row.exitPage, (pageMap.get(row.exitPage) ?? 0) + Number(row.exitCount));
+    }
+    const totalSessions2 = lastPageRows.length || 1;
+    return Array.from(pageMap.entries())
+      .map(([exitPage, exitCount]) => ({
+        exitPage,
+        exitCount,
+        exitRate: Math.round((exitCount / totalSessions2) * 100),
+      }))
+      .sort((a, b) => b.exitCount - a.exitCount)
+      .slice(0, 20);
+  } catch {
+    return [];
   }
 }
 

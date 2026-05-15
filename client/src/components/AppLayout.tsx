@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ClipboardList, Star, ArrowLeftRight, Bot, ChevronRight,
   Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target, BarChart3, Link2, Sunrise,
-  ChevronDown, Settings2, Users,
+  ChevronDown, Settings2, Users, LineChart,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
@@ -45,6 +45,7 @@ const navItems: NavItem[] = [
   { href: "/backtesting", icon: Target, label: "Backtesting", group: "System" },
   { href: "/ml-forecast", icon: BarChart3, label: "ML Forecast", group: "System" },
   { href: "/usage-monitor", icon: Settings2, label: "Usage Monitor", group: "System" },
+  { href: "/admin/behavioral", icon: LineChart, label: "Behavioral Analytics", group: "System" },
 ];
 
 const primaryGroups = ["Intelligence", "Team Tools"];
