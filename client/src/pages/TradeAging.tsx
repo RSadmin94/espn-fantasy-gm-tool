@@ -1,13 +1,15 @@
 // FILE: client/src/pages/TradeAging.tsx
 // Trade Aging — shows all completed trades across seasons, scores each side,
 // and renders a verdict (who won the trade based on season stats).
+// Sprint 2: Narrative badge added to each trade card.
 
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowLeftRight, TrendingUp, TrendingDown, Minus, Trophy, Calendar } from "lucide-react";
 
 // ── Types inferred from the tradeAging procedure ──────────────────────────────
@@ -27,6 +29,47 @@ type TradeRecord = {
   verdict: "sideA" | "sideB" | "even";
   verdictMargin: number;
 };
+
+// ── Narrative label meta (mirrors server/tradeNarrativeService.ts) ────────────
+const NARRATIVE_META: Record<string, { color: string; bg: string; border: string; emoji: string }> = {
+  "Quiet Fleece":          { color: "text-emerald-300", bg: "bg-emerald-500/15", border: "border-emerald-500/30", emoji: "🤫" },
+  "Panic Move":            { color: "text-red-300",     bg: "bg-red-500/15",     border: "border-red-500/30",     emoji: "😱" },
+  "Future Sacrificed":     { color: "text-orange-300",  bg: "bg-orange-500/15",  border: "border-orange-500/30",  emoji: "⏳" },
+  "Win-Now Desperation":   { color: "text-yellow-300",  bg: "bg-yellow-500/15",  border: "border-yellow-500/30",  emoji: "🔥" },
+  "Calculated Gamble":     { color: "text-blue-300",    bg: "bg-blue-500/15",    border: "border-blue-500/30",    emoji: "🎯" },
+  "League-Altering Trade": { color: "text-purple-300",  bg: "bg-purple-500/15",  border: "border-purple-500/30",  emoji: "⚡" },
+  "Mutual Destruction":    { color: "text-slate-300",   bg: "bg-slate-500/15",   border: "border-slate-500/30",   emoji: "💥" },
+  "Phantom Trade":         { color: "text-slate-400",   bg: "bg-slate-700/30",   border: "border-slate-600/30",   emoji: "👻" },
+};
+
+// ── Narrative badge ───────────────────────────────────────────────────────────
+function NarrativeBadge({ label, sentence }: { label: string; sentence?: string | null }) {
+  const meta = NARRATIVE_META[label];
+  if (!meta) return null;
+
+  const badge = (
+    <span
+      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${meta.bg} ${meta.border} ${meta.color} cursor-default`}
+    >
+      <span>{meta.emoji}</span>
+      <span>{label}</span>
+    </span>
+  );
+
+  if (!sentence) return badge;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{badge}</TooltipTrigger>
+      <TooltipContent
+        side="top"
+        className="max-w-xs text-xs text-slate-200 bg-slate-800 border-slate-700 shadow-xl"
+      >
+        {sentence}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 // ── Position badge color ──────────────────────────────────────────────────────
 const POS_COLOR: Record<string, string> = {
@@ -80,7 +123,15 @@ function PickItem({ pk }: { pk: TradeSide["picks"][number] }) {
 }
 
 // ── Trade card ────────────────────────────────────────────────────────────────
-function TradeCard({ trade }: { trade: TradeRecord }) {
+function TradeCard({
+  trade,
+  narrativeLabel,
+  narrativeSentence,
+}: {
+  trade: TradeRecord;
+  narrativeLabel?: string | null;
+  narrativeSentence?: string | null;
+}) {
   const winner: "A" | "B" | null =
     trade.verdict === "sideA" ? "A" : trade.verdict === "sideB" ? "B" : null;
 
@@ -94,13 +145,16 @@ function TradeCard({ trade }: { trade: TradeRecord }) {
   return (
     <Card className="bg-slate-900/60 border-slate-700/50 hover:border-slate-600/70 transition-colors">
       <CardHeader className="pb-2 pt-4 px-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-slate-400 text-xs">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2 text-slate-400 text-xs flex-wrap">
             <Calendar className="w-3 h-3" />
             <span>{date}</span>
             <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-600 text-slate-400">
               {trade.season}
             </Badge>
+            {narrativeLabel && (
+              <NarrativeBadge label={narrativeLabel} sentence={narrativeSentence} />
+            )}
           </div>
           <VerdictBadge verdict={trade.verdict} sideA={trade.sideA} sideB={trade.sideB} winner={winner} />
         </div>
@@ -201,6 +255,22 @@ export default function TradeAging() {
 
   const trades = useMemo(() => rawTrades ?? [], [rawTrades]);
 
+  // Fetch narrative batch for all visible trades
+  const tradeIds = useMemo(() => trades.map(t => t.tradeId), [trades]);
+  const { data: narrativeBatch } = trpc.tradeNarrative.getBatch.useQuery(
+    { tradeIds },
+    { enabled: tradeIds.length > 0, staleTime: 10 * 60_000 }
+  );
+
+  // Build a map for O(1) lookup
+  const narrativeMap = useMemo(() => {
+    const map = new Map<string, { narrativeLabel: string; narrativeSentence: string | null }>();
+    for (const n of narrativeBatch ?? []) {
+      map.set(n.tradeId, { narrativeLabel: n.narrativeLabel, narrativeSentence: n.narrativeSentence });
+    }
+    return map;
+  }, [narrativeBatch]);
+
   const seasonOptions = useMemo(() => {
     const seasons = cachedSeasons ? [...cachedSeasons].sort((a, b) => b - a) : [];
     return seasons;
@@ -275,9 +345,17 @@ export default function TradeAging() {
       {!isLoading && trades.length > 0 && (
         <div className="space-y-3">
           <p className="text-xs text-slate-500">{trades.length} trade{trades.length !== 1 ? "s" : ""} found</p>
-          {trades.map((trade) => (
-            <TradeCard key={`${trade.season}-${trade.tradeId}`} trade={trade} />
-          ))}
+          {trades.map((trade) => {
+            const narrative = narrativeMap.get(trade.tradeId);
+            return (
+              <TradeCard
+                key={`${trade.season}-${trade.tradeId}`}
+                trade={trade}
+                narrativeLabel={narrative?.narrativeLabel}
+                narrativeSentence={narrative?.narrativeSentence}
+              />
+            );
+          })}
         </div>
       )}
     </div>

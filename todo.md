@@ -1175,4 +1175,14 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Generate lore sentences via LLM for top rivalry pairs (cached in rivalry_scores.lore_sentence)
 - [x] Write 16 vitest tests for rivalryService score engine (heatLabel, computeScore, ordering invariants)
 - [x] Run TypeScript check (0 errors) and full test suite (520/520 passing)
-- [ ] Save checkpoint and push to GitHub
+- [x] Save checkpoint (db6e5bd4) and push to GitHub
+
+## Sprint 2: Emotional Trade Narratives
+- [x] Build server/tradeNarrativeService.ts: deterministic label engine (8 labels), LLM sentence generation, DB persist/read helpers
+- [x] Add tradeNarrative router (tradeNarrative.getForTrade, tradeNarrative.getNotorious, tradeNarrative.refresh) and wire into appRouter
+- [x] Hook tradeNarrative.refresh into ESPN data refresh pipeline (after tradeAging, no new ESPN calls)
+- [x] Add narrative badge (label + color) to Trade Aging cards in TradeAging.tsx
+- [x] Add Most Notorious Trades section to Trade Lab hub (NotoriousTrades.tsx + ⚡ Notorious tab in TradeLab)
+- [x] Write vitest tests for deterministic label engine (all 8 labels, edge cases) — 18 tests
+- [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (538/538 passing)
+- [x] Save checkpoint and push to GitHub

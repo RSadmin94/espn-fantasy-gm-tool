@@ -133,6 +133,36 @@ export const appRouter = router({
       return { ok: true, count: pairs.length };
     }),
   }),
+  tradeNarrative: router({
+    /** Get narrative for a single trade by tradeId */
+    getByTradeId: publicProcedure
+      .input(z.object({ tradeId: z.string() }))
+      .query(async ({ input }) => {
+        const { getTradeNarrativeFromDb } = await import("./tradeNarrativeService");
+        return getTradeNarrativeFromDb(input.tradeId);
+      }),
+    /** Get narratives for a batch of tradeIds */
+    getBatch: publicProcedure
+      .input(z.object({ tradeIds: z.array(z.string()) }))
+      .query(async ({ input }) => {
+        if (input.tradeIds.length === 0) return [];
+        const { getTradeNarrativesFromDb } = await import("./tradeNarrativeService");
+        return getTradeNarrativesFromDb(input.tradeIds);
+      }),
+    /** Get the most notorious trades (League-Altering, Quiet Fleece, etc.) */
+    getNarratives: publicProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(50).optional() }))
+      .query(async ({ input }) => {
+        const { getNotoriousTradesFromDb } = await import("./tradeNarrativeService");
+        return getNotoriousTradesFromDb(input.limit ?? 20);
+      }),
+    /** Manually trigger narrative refresh for all cached seasons */
+    refresh: publicProcedure.mutation(async () => {
+      const { refreshTradeNarratives } = await import("./tradeNarrativeService");
+      const result = await refreshTradeNarratives([], { generateLLM: false });
+      return { ok: true, ...result };
+    }),
+  }),
   league: router({
     // Get the user's active league connection
     getActive: protectedProcedure.query(async ({ ctx }) => {
@@ -298,6 +328,68 @@ export const appRouter = router({
           const { refreshRivalryScores } = await import("./rivalryService");
           await refreshRivalryScores();
         } catch (_e) { /* non-fatal — rivalry scores are a bonus layer */ }
+        // Recompute trade narratives after data refresh (non-fatal, deterministic labels only — LLM deferred)
+        try {
+          const { refreshTradeNarratives } = await import("./tradeNarrativeService");
+          // Build lightweight NarrativeTradeInput list from all cached seasons
+          const narrativeInputs: import("./tradeNarrativeService").NarrativeTradeInput[] = [];
+          for (const season of await getAllCachedSeasons()) {
+            try {
+              const raw = await getCachedView(season, "combined");
+              if (!raw) continue;
+              const payload = raw.payload as Record<string, unknown>;
+              const teams = normalizeTeams(payload);
+              type TxnRow = { type: string; transactionId: string; relatedTransactionId?: string; playerId?: number; playerName?: string; position?: string; teamId: number; fromTeamId?: number; proposedDate?: number };
+              const txns = normalizeTransactions(payload) as TxnRow[];
+              const ownerMap = new Map<number, { ownerName: string; teamName: string }>();
+              for (const t of teams) ownerMap.set(t.teamId as number, { ownerName: (t as unknown as { ownerName?: string }).ownerName || t.owners || "", teamName: t.teamName });
+              // Identify completed trades (TRADE_UPHOLD / TRADE_ACCEPT rows)
+              const acceptRows = txns.filter(r => r.type === "TRADE_UPHOLD" || r.type === "TRADE_ACCEPT");
+              const completedProposalIds = new Set<string>(acceptRows.map(r => r.relatedTransactionId).filter(Boolean) as string[]);
+              // Build proposal item map
+              const proposalItemMap = new Map<string, { playerId: number; playerName: string; position: string; teamId: number; fromTeamId: number }[]>();
+              for (const r of txns) {
+                if (r.type !== "TRADE_PROPOSAL") continue;
+                if (!completedProposalIds.has(r.transactionId)) continue;
+                const items = proposalItemMap.get(r.transactionId) || [];
+                if (r.playerId) items.push({ playerId: r.playerId, playerName: r.playerName || "", position: r.position || "?", teamId: r.teamId, fromTeamId: r.fromTeamId || r.teamId });
+                proposalItemMap.set(r.transactionId, items);
+              }
+              for (const proposalId of Array.from(completedProposalIds)) {
+                const items = proposalItemMap.get(proposalId);
+                if (!items || items.length === 0) continue;
+                const teamsInvolved = Array.from(new Set(items.map(i => i.fromTeamId)));
+                if (teamsInvolved.length < 2) continue;
+                const [teamA, teamB] = teamsInvolved;
+                const sideAItems = items.filter(i => i.fromTeamId === teamA);
+                const sideBItems = items.filter(i => i.fromTeamId === teamB);
+                const ownerA = ownerMap.get(teamA);
+                const ownerB = ownerMap.get(teamB);
+                if (!ownerA || !ownerB) continue;
+                const acceptRow = acceptRows.find(r => r.relatedTransactionId === proposalId);
+                const proposedDate = acceptRow?.proposedDate || Date.now();
+                const toNarrativeSide = (sideItems: typeof sideAItems, owner: { ownerName: string; teamName: string }, teamId: number): import("./tradeNarrativeService").NarrativeTradeSide => ({
+                  teamId,
+                  ownerName: owner.ownerName,
+                  players: sideItems.map(i => ({ playerId: i.playerId, playerName: i.playerName, position: i.position, avgPoints: 0, seasonPoints: 0, compositeValue: 0 })),
+                  picks: [],
+                  totalValue: 0,
+                });
+                narrativeInputs.push({
+                  season,
+                  tradeId: proposalId,
+                  proposedDate: typeof proposedDate === "number" ? proposedDate : Date.now(),
+                  sideA: toNarrativeSide(sideAItems, ownerA, teamA),
+                  sideB: toNarrativeSide(sideBItems, ownerB, teamB),
+                  verdict: "even",
+                  verdictMargin: 0,
+                });
+              }
+            } catch { /* skip season */ }
+          }
+          // Deterministic labels only (no LLM during auto-refresh to keep it fast)
+          await refreshTradeNarratives(narrativeInputs, { generateLLM: false });
+        } catch (_e) { /* non-fatal — trade narratives are a bonus layer */ }
         return results;
       }),
 
