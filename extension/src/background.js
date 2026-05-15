@@ -156,44 +156,57 @@ async function handleDnaMessage(msg) {
 // If not on ESPN, open fantasy.espn.com so the user can use the DNA badges there.
 // We NEVER navigate to the GM Tool website from this handler.
 
-chrome.action.onClicked?.addListener(async (tab) => {
-  const isEspnTab = tab?.url && (
-    tab.url.includes("fantasy.espn.com") ||
-    tab.url.includes("www.espn.com/fantasy")
-  );
+chrome.action.onClicked.addListener(async () => {
+  const [tab] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
 
-  if (isEspnTab) {
-    // Inject.js is already running — tell it to open the League Pulse panel
-    try {
-      await chrome.tabs.sendMessage(tab.id, { type: "OPEN_PANEL" });
-    } catch (_) {
-      // Content script not ready yet — set a flag that inject.js checks on init
-      // Also try FAB click as immediate fallback if it already exists
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: () => {
-            const fab = document.getElementById("af-league-pulse-fab");
-            if (fab) {
-              fab.click();
-            } else {
-              // FAB not yet injected — set flag so init() opens panel when ready
-              window.__afOpenPanelOnReady = true;
-            }
-          },
-        });
-      } catch (e2) {
-        console.warn("[GM Tool] Could not open panel:", e2);
-      }
-    }
-  } else {
-    // Not on ESPN — open ESPN fantasy home so user can use DNA badges
-    const espnTabs = await chrome.tabs.query({ url: "https://fantasy.espn.com/*" });
-    if (espnTabs.length > 0) {
+  if (!tab?.id) return;
+
+  const isEspnTab = tab.url?.includes("fantasy.espn.com");
+
+  if (!isEspnTab) {
+    const espnTabs = await chrome.tabs.query({
+      url: "https://fantasy.espn.com/*",
+    });
+
+    if (espnTabs[0]?.id) {
       await chrome.tabs.update(espnTabs[0].id, { active: true });
       await chrome.windows.update(espnTabs[0].windowId, { focused: true });
     } else {
-      chrome.tabs.create({ url: "https://fantasy.espn.com/football/" });
+      await chrome.tabs.create({
+        url: "https://fantasy.espn.com/football/",
+      });
     }
+
+    return;
+  }
+
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: "OPEN_PANEL" });
+    return;
+  } catch {}
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        if (typeof window.__AF_OPEN_PANEL__ === "function") {
+          window.__AF_OPEN_PANEL__();
+          return;
+        }
+
+        const fab = document.getElementById("af-league-pulse-fab");
+        if (fab) {
+          fab.click();
+          return;
+        }
+
+        window.__afOpenPanelOnReady = true;
+      },
+    });
+  } catch (err) {
+    console.warn("[AF Extension] Could not open panel", err);
   }
 });

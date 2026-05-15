@@ -598,22 +598,17 @@
     `;
   }
 
-  // ─── Message listener (from background.js toolbar click) ──────────────────
-  // Fix 1 (race condition): If background sends OPEN_PANEL before inject.js is
-  // ready, the message is dropped. We set window.__afOpenPanelOnReady = true
-  // as a flag that init() checks — so a late-arriving click still opens the panel.
+  // ─── Global open function + message listener (from background.js toolbar click)
+  window.__AF_OPEN_PANEL__ = () => openPanel(null, "League Pulse");
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message.type === "OPEN_PANEL") {
-      openPanel(null, "League Pulse");
+    if (message?.type === "OPEN_PANEL") {
+      window.__AF_OPEN_PANEL__();
       sendResponse({ ok: true });
-      return false;
+      return true;
     }
     return false;
   });
-
-  // Fix 3 (SW state loss): Re-read config from chrome.storage on every handler
-  // invocation (already done via getConfig() in background.js — no inject.js
-  // changes needed for this fix).
 
   // ─── SPA navigation handling ─────────────────────────────────────────────────
   let lastUrl = window.location.href;
@@ -659,12 +654,9 @@
   // ─── Init ─────────────────────────────────────────────────────────────────────
   function init() {
     injectBadges();
-    // Fix 1 (race condition): If the toolbar was clicked before this script was
-    // ready, background.js sets window.__afOpenPanelOnReady via executeScript.
-    // Check the flag here and open the panel if it was set.
     if (window.__afOpenPanelOnReady) {
       window.__afOpenPanelOnReady = false;
-      openPanel(null, "League Pulse");
+      setTimeout(() => window.__AF_OPEN_PANEL__(), 0);
     }
   }
 
@@ -674,6 +666,6 @@
     setTimeout(init, 500);
   }
 
-  console.log(`[ESPN GM Tool DNA Advisor v1.6.0] Provider: ${PROVIDER} | URL: ${window.location.pathname}`);
+  console.log(`[ESPN GM Tool DNA Advisor v1.8.0] Provider: ${PROVIDER} | URL: ${window.location.pathname}`);
 
 })();

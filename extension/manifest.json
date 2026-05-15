@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ESPN GM Tool — League Connector & DNA Advisor",
   "short_name": "GM Connector",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Connects your ESPN Fantasy league to the GM Tool and injects DNA Advisor badges on ESPN pages — click any badge to see a team's full DNA profile.",
   "permissions": [
     "cookies",

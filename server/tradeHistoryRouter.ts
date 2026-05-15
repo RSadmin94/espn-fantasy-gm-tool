@@ -54,11 +54,71 @@ function buildOwnerMap(data: Record<string, unknown>): Map<number, string> {
   return map;
 }
 
+// ─── Shared helper: build a TradeRecord from a set of item rows ───────────────
+function buildTradeRecord(
+  txId: string,
+  season: number,
+  proposedDate: number | null,
+  itemRows: Array<{
+    playerName: string | null;
+    fromTeamId: number | null;
+    toTeamId: number | null;
+  }>,
+  ownerMap: Map<number, string>,
+): TradeRecord | null {
+  const playerRows = itemRows.filter(r => r.playerName);
+  if (playerRows.length === 0) return null;
+
+  const teamIds = new Set<number>();
+  for (const r of playerRows) {
+    if (r.fromTeamId != null) teamIds.add(r.fromTeamId);
+    if (r.toTeamId != null) teamIds.add(r.toTeamId);
+  }
+  if (teamIds.size < 2) return null;
+
+  const teamArr = Array.from(teamIds);
+  const sides: Record<number, TradeSide> = {};
+  for (const tid of teamArr) {
+    sides[tid] = {
+      teamId: tid,
+      ownerName: ownerMap.get(tid) ?? `Team ${tid}`,
+      playersReceived: [],
+      playersSent: [],
+    };
+  }
+
+  for (const r of playerRows) {
+    if (!r.playerName) continue;
+    const name = r.playerName;
+    if (r.fromTeamId && sides[r.fromTeamId]) sides[r.fromTeamId].playersSent.push(name);
+    if (r.toTeamId && sides[r.toTeamId]) sides[r.toTeamId].playersReceived.push(name);
+  }
+
+  for (const side of Object.values(sides)) {
+    side.playersReceived = Array.from(new Set(side.playersReceived));
+    side.playersSent = Array.from(new Set(side.playersSent));
+  }
+
+  const dateLabel = proposedDate
+    ? new Date(proposedDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "Unknown Date";
+
+  return {
+    transactionId: txId,
+    season,
+    proposedDate,
+    dateLabel,
+    teamA: sides[teamArr[0]],
+    teamB: sides[teamArr[1]],
+  };
+}
+
 export function buildTradesForSeason(season: number, data: Record<string, unknown>): TradeRecord[] {
   const ownerMap = buildOwnerMap(data);
   const txRows = normalizeTransactions(data) as Array<{
     season: number;
     transactionId: string | number;
+    relatedTransactionId?: string | number | null;
     type: string;
     status: string;
     proposedDate: number | null;
@@ -70,79 +130,47 @@ export function buildTradesForSeason(season: number, data: Record<string, unknow
     itemType?: string;
   }>;
 
-  // Filter to accepted trades:
-  // - type === "TRADE" (older seasons)
-  // - type === "TRADE_PROPOSAL" with status === "EXECUTED" (2026+ seasons)
-  const tradeTxs = txRows.filter(t =>
-    t.type === "TRADE" ||
-    (t.type === "TRADE_PROPOSAL" && t.status === "EXECUTED")
-  );
-
-  // Group by transactionId
-  const grouped = new Map<string, typeof tradeTxs>();
-  for (const tx of tradeTxs) {
-    const key = String(tx.transactionId);
-    if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key)!.push(tx);
-  }
-
   const trades: TradeRecord[] = [];
 
-  for (const [txId, rows] of Array.from(grouped.entries())) {
-    // Skip if no player rows (header-only rows with no items)
-    const playerRows = rows.filter(r => r.playerName);
-    if (playerRows.length === 0) continue;
+  // ── Path 1: Legacy (2017–2025) ─────────────────────────────────────────────
+  // type="TRADE" with status="EXECUTED" — items are directly on the transaction.
+  const legacyTxs = txRows.filter(t => t.type === "TRADE" && t.status === "EXECUTED");
+  const legacyGrouped = new Map<string, typeof legacyTxs>();
+  for (const tx of legacyTxs) {
+    const key = String(tx.transactionId);
+    if (!legacyGrouped.has(key)) legacyGrouped.set(key, []);
+    legacyGrouped.get(key)!.push(tx);
+  }
+  for (const [txId, rows] of Array.from(legacyGrouped)) {
+    const record = buildTradeRecord(txId, season, rows[0].proposedDate ?? null, rows, ownerMap);
+    if (record) trades.push(record);
+  }
 
-    const proposedDate = rows[0].proposedDate ?? null;
-    const dateLabel = proposedDate
-      ? new Date(proposedDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-      : "Unknown Date";
-
-    // Collect all team IDs involved
-    const teamIds = new Set<number>();
-    for (const r of playerRows) {
-      if (r.fromTeamId != null) teamIds.add(r.fromTeamId);
-      if (r.toTeamId != null) teamIds.add(r.toTeamId);
+  // ── Path 2: 2026+ format ───────────────────────────────────────────────────
+  // Acceptance signal: TRADE_UPHOLD or TRADE_ACCEPT row (no items).
+  // Items live on the linked TRADE_PROPOSAL row (relatedTransactionId → proposal id).
+  const proposalsByTxId = new Map<string, typeof txRows>();
+  for (const tx of txRows) {
+    if (tx.type === "TRADE_PROPOSAL") {
+      const key = String(tx.transactionId);
+      if (!proposalsByTxId.has(key)) proposalsByTxId.set(key, []);
+      proposalsByTxId.get(key)!.push(tx);
     }
+  }
 
-    if (teamIds.size < 2) continue; // need at least 2 teams
+  const acceptanceRows = txRows.filter(
+    t => (t.type === "TRADE_UPHOLD" || t.type === "TRADE_ACCEPT") &&
+         t.relatedTransactionId != null
+  );
 
-    const teamArr = Array.from(teamIds);
-    const teamAId = teamArr[0];
-    const teamBId = teamArr[1];
+  for (const acceptance of Array.from(acceptanceRows)) {
+    const proposalId = String(acceptance.relatedTransactionId);
+    const proposalRows = proposalsByTxId.get(proposalId);
+    if (!proposalRows || proposalRows.length === 0) continue; // proposal not in cache — skip
 
-    const sides: Record<number, TradeSide> = {};
-    for (const tid of teamArr) {
-      sides[tid] = {
-        teamId: tid,
-        ownerName: ownerMap.get(tid) ?? `Team ${tid}`,
-        playersReceived: [],
-        playersSent: [],
-      };
-    }
-
-    for (const r of playerRows) {
-      if (!r.playerName) continue;
-      const name = r.playerName;
-      // fromTeamId sent the player, toTeamId received it
-      if (r.fromTeamId && sides[r.fromTeamId]) sides[r.fromTeamId].playersSent.push(name);
-      if (r.toTeamId && sides[r.toTeamId]) sides[r.toTeamId].playersReceived.push(name);
-    }
-
-    // Deduplicate player lists
-    for (const side of Object.values(sides)) {
-      side.playersReceived = Array.from(new Set(side.playersReceived));
-      side.playersSent = Array.from(new Set(side.playersSent));
-    }
-
-    trades.push({
-      transactionId: txId,
-      season,
-      proposedDate,
-      dateLabel,
-      teamA: sides[teamAId],
-      teamB: sides[teamBId],
-    });
+    const acceptanceDate = acceptance.proposedDate ?? proposalRows[0].proposedDate ?? null;
+    const record = buildTradeRecord(proposalId, season, acceptanceDate, proposalRows, ownerMap);
+    if (record) trades.push(record);
   }
 
   // Sort newest first
