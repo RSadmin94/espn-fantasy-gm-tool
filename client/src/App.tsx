@@ -46,10 +46,17 @@ import Reveal from "@/pages/Reveal";
 import BillingSuccess from "@/pages/BillingSuccess";
 import BillingCancel from "@/pages/BillingCancel";
 
+function RedirectToCommandCenter() {
+  useEffect(() => {
+    window.location.replace("/command-center");
+  }, []);
+  return null;
+}
+
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={() => { useEffect(() => { window.location.replace("/command-center"); }, []); return null; }} />
+      <Route path="/" component={RedirectToCommandCenter} />
       <Route path="/command-center" component={CommandCenter} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/draft-war-room" component={DraftWarRoom} />

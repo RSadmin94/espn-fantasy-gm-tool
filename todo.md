@@ -1078,7 +1078,7 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] 0 TypeScript errors
 - [x] git push github main
 - [x] webdev_save_checkpoint
-- [ ] Publish (click Publish button in Management UI)
+- [x] Publish (click Publish button in Management UI — user action)
 
 ## Multi-League ESPN Cache Isolation
 
@@ -1223,3 +1223,8 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Register /trade-aging route in App.tsx
 - [x] Write vitest for ageEval endpoint
 - [x] Checkpoint and push to GitHub
+
+## Bug Fix: Production Crash — "An unexpected error occurred" (May 15 2026)
+- [ ] Diagnose runtime crash from ErrorBoundary on production site
+- [ ] Fix the crash
+- [ ] Test, checkpoint, push
