@@ -1,0 +1,25 @@
+{
+  "query": "\nSELECT \n  JSON_EXTRACT(payload, '$.teams[0].id') as t0_id,\n  JSON_EXTRACT(payload, '$.teams[0].rankFinal') as t0_rankFinal,\n  JSON_EXTRACT(payload, '$.teams[0].rankCalculatedFinal') as t0_rankCalcFinal,\n  JSON_EXTRACT(payload, '$.teams[1].id') as t1_id,\n  JSON_EXTRACT(payload, '$.teams[1].rankCalculatedFinal') as t1_rankCalcFinal,\n  JSON_EXTRACT(payload, '$.teams[2].id') as t2_id,\n  JSON_EXTRACT(payload, '$.teams[2].rankCalculatedFinal') as t2_rankCalcFinal,\n  JSON_EXTRACT(payload, '$.teams[3].id') as t3_id,\n  JSON_EXTRACT(payload, '$.teams[3].rankCalculatedFinal') as t3_rankCalcFinal,\n  JSON_EXTRACT(payload, '$.teams[4].id') as t4_id,\n  JSON_EXTRACT(payload, '$.teams[4].rankCalculatedFinal') as t4_rankCalcFinal,\n  JSON_EXTRACT(payload, '$.teams[5].id') as t5_id,\n  JSON_EXTRACT(payload, '$.teams[5].rankCalculatedFinal') as t5_rankCalcFinal\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT \n  JSON_EXTRACT(payload, '$.teams[0].id') as t0_id,\n  JSON_EXTRACT(payload, '$.teams[0].rankFinal') as t0_rankFinal,\n  JSON_EXTRACT(payload, '$.teams[0].rankCalculatedFinal') as t0_rankCalcFinal,\n  JSON_EXTRACT(payload, '$.teams[1].id') as t1_id,\n  JSON_EXTRACT(payload, '$.teams[1].rankCalculatedFinal') as t1_rankCalcFinal,\n  JSON_EXTRACT(payload, '$.teams[2].id') as t2_id,\n  JSON_EXTRACT(payload, '$.teams[2].rankCalculatedFinal') as t2_rankCalcFinal,\n  JSON_EXTRACT(payload, '$.teams[3].id') as t3_id,\n  JSON_EXTRACT(payload, '$.teams[3].rankCalculatedFinal') as t3_rankCalcFinal,\n  JSON_EXTRACT(payload, '$.teams[4].id') as t4_id,\n  JSON_EXTRACT(payload, '$.teams[4].rankCalculatedFinal') as t4_rankCalcFinal,\n  JSON_EXTRACT(payload, '$.teams[5].id') as t5_id,\n  JSON_EXTRACT(payload, '$.teams[5].rankCalculatedFinal') as t5_rankCalcFinal\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "rows": [
+    {
+      "t0_id": "1",
+      "t0_rankFinal": "0",
+      "t0_rankCalcFinal": "3",
+      "t1_id": "4",
+      "t1_rankCalcFinal": "1",
+      "t2_id": "11",
+      "t2_rankCalcFinal": "13",
+      "t3_id": "14",
+      "t3_rankCalcFinal": "2",
+      "t4_id": "17",
+      "t4_rankCalcFinal": "8",
+      "t5_id": "18",
+      "t5_rankCalcFinal": "4"
+    }
+  ],
+  "messages": [],
+  "stdout": "t0_id\tt0_rankFinal\tt0_rankCalcFinal\tt1_id\tt1_rankCalcFinal\tt2_id\tt2_rankCalcFinal\tt3_id\tt3_rankCalcFinal\tt4_id\tt4_rankCalcFinal\tt5_id\tt5_rankCalcFinal\n1\t0\t3\t4\t1\t11\t13\t14\t2\t17\t8\t18\t4\n",
+  "stderr": "",
+  "execution_time_ms": 1402
+}

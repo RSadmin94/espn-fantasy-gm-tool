@@ -2415,30 +2415,31 @@ export const appRouter = router({
         if (primaryOwner) teamToMember.set(team.id, primaryOwner);
       }
 
-      // Determine champion: team with rankFinal === 1, or winner of the championship matchup
-      // ESPN sets rankFinal after season ends; fall back to highest playoff seed winner
+      // Determine champion and runner-up.
+      // Priority 1: rankCalculatedFinal — ESPN's authoritative final ranking
+      //   (populated in leagueHistory API and in the combined cache payload).
+      // Priority 2: findChampionshipMatchup — bracket-tracing from schedule data
+      //   (used when rankCalculatedFinal is missing or 0 for older seasons).
       let championTeamId: number | null = null;
       let runnerUpTeamId: number | null = null;
 
-      // Look for championship matchup — use bracket-tracing to distinguish
-      // the true championship from the 3rd-place game when both appear as
-      // WINNERS_BRACKET in the same final period.
-      const champMatchup = findChampionshipMatchup(schedule);
-      if (champMatchup) {
-        if (champMatchup.winner === 'HOME') {
-          championTeamId = champMatchup.home?.teamId ?? null;
-          runnerUpTeamId = champMatchup.away?.teamId ?? null;
-        } else if (champMatchup.winner === 'AWAY') {
-          championTeamId = champMatchup.away?.teamId ?? null;
-          runnerUpTeamId = champMatchup.home?.teamId ?? null;
+      const champByRank = teams.find((t: any) => t.rankCalculatedFinal === 1);
+      const ruByRank    = teams.find((t: any) => t.rankCalculatedFinal === 2);
+      if (champByRank) {
+        championTeamId = champByRank.id;
+        runnerUpTeamId = ruByRank?.id ?? null;
+      } else {
+        // Fallback: bracket-trace the schedule to find the championship game
+        const champMatchup = findChampionshipMatchup(schedule);
+        if (champMatchup) {
+          if (champMatchup.winner === 'HOME') {
+            championTeamId = champMatchup.home?.teamId ?? null;
+            runnerUpTeamId = champMatchup.away?.teamId ?? null;
+          } else if (champMatchup.winner === 'AWAY') {
+            championTeamId = champMatchup.away?.teamId ?? null;
+            runnerUpTeamId = champMatchup.home?.teamId ?? null;
+          }
         }
-      }
-      // Fallback: rankFinal === 1
-      if (!championTeamId) {
-        const champ = teams.find((t: any) => t.rankFinal === 1);
-        if (champ) championTeamId = champ.id;
-        const ru = teams.find((t: any) => t.rankFinal === 2);
-        if (ru) runnerUpTeamId = ru.id;
       }
 
       // Process each team's season record
@@ -2704,15 +2705,21 @@ export const appRouter = router({
         totalLosses += losses;
         seasonsActive++;
 
-        // Determine if champion this season using bracket-tracing
+        // Determine if champion: rankCalculatedFinal=1 is authoritative;
+        // fall back to bracket-tracing if unavailable.
         let isChamp = false;
         {
-          const champM = findChampionshipMatchup(schedule);
-          if (champM) {
-            const champTeamId = champM.winner === 'HOME'
-              ? champM.home?.teamId
-              : champM.away?.teamId;
-            isChamp = champTeamId === team.id;
+          const champByRankP = teams.find((t: any) => t.rankCalculatedFinal === 1);
+          if (champByRankP) {
+            isChamp = champByRankP.id === team.id;
+          } else {
+            const champM = findChampionshipMatchup(schedule);
+            if (champM) {
+              const champTeamId = champM.winner === 'HOME'
+                ? champM.home?.teamId
+                : champM.away?.teamId;
+              isChamp = champTeamId === team.id;
+            }
           }
         }
         if (isChamp) championships++;
