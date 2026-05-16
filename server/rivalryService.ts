@@ -50,6 +50,9 @@ export interface RivalryPair {
   revengeAchieved: boolean;
   lastMatchupSeason: number | null;
   loreSentence: string | null;
+  // Rival's all-time playoff record (for narrative context)
+  rivalPlayoffWins?: number;
+  rivalPlayoffLosses?: number;
 }
 
 interface MatchupRow {
@@ -294,6 +297,13 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
 
   if (!rodMemberId) return [];
 
+  // Fetch rival playoff W/L from live opponent profiles
+  let liveProfiles: Map<string, { career: { playoffWins: number; playoffLosses: number } }> | null = null;
+  try {
+    const { buildLiveOpponentProfiles } = await import('./liveOpponentProfile');
+    liveProfiles = await buildLiveOpponentProfiles() as Map<string, { career: { playoffWins: number; playoffLosses: number } }>;
+  } catch { /* non-fatal */ }
+
   // ── Build final rivalry pairs ─────────────────────────────────────────────
   const pairs: RivalryPair[] = [];
   for (const [rivalId, a] of Array.from(acc)) {
@@ -307,6 +317,7 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
       a.tradeVerdictLosses * 10 +
       a.recentLossSeasons.size * 5;
 
+    const rivalProfile = liveProfiles?.get(rivalId);
     pairs.push({
       memberId: rodMemberId,
       rivalId,
@@ -326,6 +337,8 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
       revengeAchieved: a.revengeAchieved,
       lastMatchupSeason: a.lastMatchupSeason,
       loreSentence: null, // populated separately
+      rivalPlayoffWins: rivalProfile?.career.playoffWins,
+      rivalPlayoffLosses: rivalProfile?.career.playoffLosses,
     });
   }
 
@@ -346,6 +359,7 @@ Rivalry data:
 - Rod Sellers vs ${pair.rivalName}
 - H2H record: Rod ${pair.h2hWins}W-${pair.h2hLosses}L-${pair.h2hTies}T
 - Playoff eliminations by ${pair.rivalName}: ${pair.playoffEliminations}
+${(pair.rivalPlayoffWins !== undefined && pair.rivalPlayoffLosses !== undefined && (pair.rivalPlayoffWins + pair.rivalPlayoffLosses) > 0) ? `- ${pair.rivalName} all-time playoff record: ${pair.rivalPlayoffWins}W-${pair.rivalPlayoffLosses}L` : ''}
 - Close losses (< 5 pts): ${pair.closeLossCount}
 - Heat level: ${pair.heatLabel}
 ${pair.painfulLossSeason ? `- Most painful loss: ${pair.painfulLossSeason} season, lost by ${pair.painfulLossMargin} pts` : ""}

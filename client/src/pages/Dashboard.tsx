@@ -392,23 +392,36 @@ export default function Dashboard() {
     const winPctDisplay = o.winPct.toFixed(1);
     const playoffRateDisplay = Math.round(o.playoffRate);
 
+    // Playoff W-L context
+    const poWins = o.playoffWins ?? 0;
+    const poLosses = o.playoffLosses ?? 0;
+    const poTotal = poWins + poLosses;
+    const poRecordStr = poTotal > 0 ? `${poWins}W-${poLosses}L in playoff matchups` : '';
+    const isPlayoffDangerous = poTotal >= 4 && poWins / poTotal >= 0.6;
+    const isPlayoffLiability = poTotal >= 4 && poWins / poTotal < 0.4;
+
     // Part 1: Career narrative — championship pedigree or best finish
     let part1 = '';
     if (o.championships >= 2) {
-      part1 = `${firstName} is a multi-time champion with ${o.championships} titles across ${o.seasonsActive} seasons — one of the most decorated managers in league history.`;
+      const poNote = poRecordStr ? ` (${poRecordStr})` : '';
+      part1 = `${firstName} is a multi-time champion with ${o.championships} titles across ${o.seasonsActive} seasons — one of the most decorated managers in league history${poNote}.`;
     } else if (o.championships === 1) {
       const champYear = validRecords.find(s => s.rank === 1)?.season;
+      const poNote = isPlayoffDangerous ? ` A proven playoff performer at ${poRecordStr}.` : isPlayoffLiability && poRecordStr ? ` Despite the title, carries a ${poRecordStr} all-time record.` : '';
       part1 = champYear
-        ? `${firstName} won the championship in ${champYear} and has been a consistent contender, finishing top-7 in ${playoffSeasons} of ${validRecords.length} seasons.`
-        : `${firstName} is a former champion who has made the playoffs in ${playoffSeasons} of ${validRecords.length} seasons.`;
+        ? `${firstName} won the championship in ${champYear} and has been a consistent contender, finishing top-7 in ${playoffSeasons} of ${validRecords.length} seasons.${poNote}`
+        : `${firstName} is a former champion who has made the playoffs in ${playoffSeasons} of ${validRecords.length} seasons.${poNote}`;
     } else if (bestRank <= 3 && bestSeason) {
-      part1 = `${firstName} has never won a title but finished as high as #${bestRank} in ${bestSeason.season} — a perennial contender who hasn't closed the deal.`;
+      const poNote = isPlayoffLiability && poRecordStr ? ` Career playoff record of ${poRecordStr} tells the story.` : poRecordStr ? ` Carries a ${poRecordStr} all-time playoff record.` : '';
+      part1 = `${firstName} has never won a title but finished as high as #${bestRank} in ${bestSeason.season} — a perennial contender who hasn't closed the deal.${poNote}`;
     } else if (playoffSeasons >= 4) {
-      part1 = `${firstName} is a steady playoff presence, reaching the postseason in ${playoffSeasons} of ${validRecords.length} seasons with a ${winPctDisplay}% career win rate.`;
+      const poNote = isPlayoffDangerous && poRecordStr ? ` Dangerous in elimination weeks at ${poRecordStr}.` : isPlayoffLiability && poRecordStr ? ` Struggles when it matters: ${poRecordStr} all-time in playoffs.` : poRecordStr ? ` Playoff record: ${poRecordStr}.` : '';
+      part1 = `${firstName} is a steady playoff presence, reaching the postseason in ${playoffSeasons} of ${validRecords.length} seasons with a ${winPctDisplay}% career win rate.${poNote}`;
     } else if (playoffSeasons <= 1 && validRecords.length >= 4) {
       part1 = `${firstName} has struggled to reach the playoffs, making it just ${playoffSeasons} time${playoffSeasons === 1 ? '' : 's'} in ${validRecords.length} seasons — a chronic underperformer relative to league average.`;
     } else {
-      part1 = `${firstName} carries a ${winPctDisplay}% career win rate over ${o.seasonsActive} seasons, with ${playoffSeasons} playoff appearances in ${validRecords.length} tracked seasons.`;
+      const poNote = poRecordStr ? ` Playoff record: ${poRecordStr}.` : '';
+      part1 = `${firstName} carries a ${winPctDisplay}% career win rate over ${o.seasonsActive} seasons, with ${playoffSeasons} playoff appearances in ${validRecords.length} tracked seasons.${poNote}`;
     }
 
     // Part 2: Recent trajectory
@@ -463,14 +476,24 @@ export default function Dashboard() {
     const validRecords = o.seasonRecords.filter(s => s.rank < 99 && s.season >= 2018);
     const bestRank = validRecords.length > 0 ? Math.min(...validRecords.map(s => s.rank)) : 99;
 
+    const poWins2 = o.playoffWins ?? 0;
+    const poLosses2 = o.playoffLosses ?? 0;
+    const poTotal2 = poWins2 + poLosses2;
+    const isDangerousInPlayoffs = poTotal2 >= 4 && poWins2 / poTotal2 >= 0.6;
+    const isPlayoffLiability2 = poTotal2 >= 4 && poWins2 / poTotal2 < 0.4;
+    const poRecordStr2 = poTotal2 > 0 ? `${poWins2}W-${poLosses2}L in playoffs` : '';
+
     if (threat >= 80 && trajectory === 'up') {
-      return `Elite-tier threat on a hot streak — do NOT trade with ${firstName} unless you're winning the deal by 2+ rounds of value. Beat him on the field.`;
+      const poNote = isDangerousInPlayoffs ? ` Also ${poRecordStr2} all-time — dangerous when it counts.` : '';
+      return `Elite-tier threat on a hot streak — do NOT trade with ${firstName} unless you're winning the deal by 2+ rounds of value. Beat him on the field.${poNote}`;
     }
     if (threat >= 80 && o.championships >= 1) {
-      return `Championship pedigree makes ${firstName} the most dangerous trade partner in the league. Only deal from a position of strength.`;
+      const poNote = poRecordStr2 ? ` (${poRecordStr2} all-time in playoffs)` : '';
+      return `Championship pedigree${poNote} makes ${firstName} the most dangerous trade partner in the league. Only deal from a position of strength.`;
     }
     if (threat >= 80) {
-      return `Top-tier threat. Avoid lopsided trades — ${firstName} knows his roster's value. Target him in head-to-head matchups instead.`;
+      const poNote = isDangerousInPlayoffs ? ` Playoff record of ${poRecordStr2} — a proven closer.` : isPlayoffLiability2 && poRecordStr2 ? ` Note: ${poRecordStr2} all-time — a regular-season bully who struggles in elimination games.` : '';
+      return `Top-tier threat. Avoid lopsided trades — ${firstName} knows his roster's value. Target him in head-to-head matchups instead.${poNote}`;
     }
     if (threat >= 65 && trajectory === 'up') {
       return `Rising fast — ${firstName} is improving year-over-year. Strike a trade now before his asking price goes up further.`;

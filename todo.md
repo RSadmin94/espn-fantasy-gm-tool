@@ -1439,3 +1439,6 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Add playoff W/L to Owner Stats page career summary
 - [x] Write vitest for playoff W/L computation logic
 - [x] Push playoff W/L changes to GitHub
+- [ ] Inject playoffWins/playoffLosses into server-side AI prompts (opponent scouting, rivalry lore, weekly storylines, GM advisor context)
+- [ ] Inject playoffWins/playoffLosses into client-side narrative helpers (generatePersonalizedInsight, generateStrategicDirective, reputation sentences)
+- [ ] Push AI narrative playoff W-L changes to GitHub

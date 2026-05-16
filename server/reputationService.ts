@@ -355,18 +355,22 @@ export function detectRevengeSeeker(
 
 /** Generate a 1-sentence narrative for a reputation event. */
 export async function generateReputationSentence(
-  event: ReputationEventDetected
+  event: ReputationEventDetected,
+  careerPlayoffRecord?: { playoffWins: number; playoffLosses: number }
 ): Promise<string> {
   try {
+    const playoffContext = careerPlayoffRecord && (careerPlayoffRecord.playoffWins + careerPlayoffRecord.playoffLosses) > 0
+      ? `\nCareer Playoff Record: ${careerPlayoffRecord.playoffWins}W-${careerPlayoffRecord.playoffLosses}L all-time in playoff matchups`
+      : '';
     const prompt = `You are writing a one-sentence reputation entry for a fantasy football league history book.
 
 Manager: ${event.ownerName}
 Season: ${event.season}
 Reputation Event: ${event.eventLabel}
 Supporting Stat: ${event.supportingStat}
-Severity: ${event.severity}
+Severity: ${event.severity}${playoffContext}
 
-Write exactly one sentence (max 25 words) in the voice of a sports journalist. Be specific, punchy, and slightly dramatic. Use the manager's name. Do not use quotes.`;
+Write exactly one sentence (max 25 words) in the voice of a sports journalist. Be specific, punchy, and slightly dramatic. Use the manager's name. Reference playoff record only if it directly reinforces the reputation event (e.g., PLAYOFF_CHOKER). Do not use quotes.`;
 
     const response = await invokeLLM({
       messages: [
@@ -610,6 +614,19 @@ export async function refreshReputationEvents(
     allDetected.push(...revengeEvents);
   } catch (_e) { /* non-fatal */ }
 
+  // Build career playoff W/L records for narrative context
+  const careerPlayoffRecords: Record<string, { playoffWins: number; playoffLosses: number }> = {};
+  try {
+    const { buildLiveOpponentProfiles } = await import('./liveOpponentProfile');
+    const profiles = await buildLiveOpponentProfiles() as Map<string, { career: { playoffWins: number; playoffLosses: number } }>;
+    for (const [memberId, profile] of Array.from(profiles.entries())) {
+      careerPlayoffRecords[memberId] = {
+        playoffWins: profile.career.playoffWins ?? 0,
+        playoffLosses: profile.career.playoffLosses ?? 0,
+      };
+    }
+  } catch { /* non-fatal */ }
+
   // Persist events with LLM sentences
   let processed = 0;
   let newLLM = 0;
@@ -626,7 +643,8 @@ export async function refreshReputationEvents(
       sentence = existing.eventSentence;
       skipped++;
     } else if (generateLLM) {
-      sentence = await generateReputationSentence(event);
+      const careerPoRec = careerPlayoffRecords[event.memberId];
+      sentence = await generateReputationSentence(event, careerPoRec);
       newLLM++;
     } else {
       sentence = `${event.ownerName} earned the "${event.eventLabel}" reputation in ${event.season}: ${event.supportingStat}.`;

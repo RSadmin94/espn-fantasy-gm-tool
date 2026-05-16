@@ -196,12 +196,15 @@ export interface StorylinesInput {
   rodTeamId: number | null;
   rodMemberIds: string[];
   prevSeasonRanks: Record<number, number>; // teamId → final rank last season
+  // memberId → { playoffWins, playoffLosses } for narrative context
+  ownerPlayoffRecords?: Record<string, { playoffWins: number; playoffLosses: number }>;
 }
 
 export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] {
   const {
     season, week, teams, matchups, transactions, ownerMap, teamNameMap,
     rivalryPairs, rodTeamId, rodMemberIds, prevSeasonRanks,
+    ownerPlayoffRecords = {},
   } = input;
 
   const stories: StoryTrigger[] = [];
@@ -312,6 +315,11 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
         (rp) => opponentMids.includes(rp.rivalId) && rp.h2hLosses >= 3
       );
       if (matchingRivalry) {
+        const opponentMids2 = (teams.find(t => (t.teamId as number) === opponentTid)?.memberIds as string[]) || [];
+        const rivalPoRec = opponentMids2.map(mid => ownerPlayoffRecords[mid]).find(Boolean);
+        const rivalPoStr = rivalPoRec && (rivalPoRec.playoffWins + rivalPoRec.playoffLosses) > 0
+          ? ` ${matchingRivalry.rivalName} is ${rivalPoRec.playoffWins}W-${rivalPoRec.playoffLosses}L all-time in the playoffs.`
+          : '';
         stories.push({
           storyType: "REVENGE_GAME",
           emotionalTag: "REVENGE GAME",
@@ -321,7 +329,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
           intensityScore: Math.min(100, 50 + matchingRivalry.h2hLosses * 5),
           supportingStat: `H2H record: ${matchingRivalry.h2hLosses} losses vs ${matchingRivalry.rivalName}`,
           opponentName,
-          llmContext: `Rod Sellers (${record}) faces ${matchingRivalry.rivalName} this week. Rod has lost to them ${matchingRivalry.h2hLosses} times head-to-head. This is a revenge opportunity.`,
+          llmContext: `Rod Sellers (${record}) faces ${matchingRivalry.rivalName} this week. Rod has lost to them ${matchingRivalry.h2hLosses} times head-to-head.${rivalPoStr} This is a revenge opportunity.`,
         });
       }
     }
@@ -334,6 +342,11 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
         const elimRival = rivalryPairs.find(
           (rp) => opponentMids.includes(rp.rivalId) && rp.playoffEliminations > 0
         );
+        const elimMids = (teams.find(t => (t.teamId as number) === opponentTid)?.memberIds as string[]) || [];
+        const elimPoRec = elimMids.map(mid => ownerPlayoffRecords[mid]).find(Boolean);
+        const elimPoStr = elimPoRec && (elimPoRec.playoffWins + elimPoRec.playoffLosses) > 0
+          ? ` ${opponentName} is ${elimPoRec.playoffWins}W-${elimPoRec.playoffLosses}L all-time in the playoffs.`
+          : '';
         stories.push({
           storyType: "HEARTBREAK_PENDING",
           emotionalTag: "UNFINISHED BUSINESS",
@@ -343,13 +356,18 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
           intensityScore: Math.min(100, 60 + (elimRival?.playoffEliminations ?? 1) * 15),
           supportingStat: `${elimRival?.rivalName ?? opponentName} eliminated Rod from playoffs ${elimRival?.playoffEliminations ?? 1}x`,
           opponentName,
-          llmContext: `Rod Sellers (${record}) faces ${opponentName} this week — the same manager who has eliminated Rod from the playoffs ${elimRival?.playoffEliminations ?? 1} time(s). This is unfinished business.`,
+          llmContext: `Rod Sellers (${record}) faces ${opponentName} this week — the same manager who has eliminated Rod from the playoffs ${elimRival?.playoffEliminations ?? 1} time(s).${elimPoStr} This is unfinished business.`,
         });
       }
     }
 
-    // ── 3. COLLAPSE ───────────────────────────────────────────────────────
+     // ── 3. COLLAPSE ─────────────────────────────────────────────────────
     if (prevRank !== null && prevRank <= 3 && rank >= 10) {
+      const teamMids3 = (team.memberIds as string[]) || [];
+      const collapsePoRec = teamMids3.map(mid => ownerPlayoffRecords[mid]).find(Boolean);
+      const collapsePoStr = collapsePoRec && (collapsePoRec.playoffWins + collapsePoRec.playoffLosses) > 0
+        ? ` Their playoff record is ${collapsePoRec.playoffWins}W-${collapsePoRec.playoffLosses}L all-time.`
+        : '';
       stories.push({
         storyType: "COLLAPSE",
         emotionalTag: "COLLAPSE IN PROGRESS",
@@ -359,7 +377,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
         intensityScore: Math.min(100, 40 + (rank - prevRank) * 5),
         supportingStat: `Was #${prevRank} last season, now #${rank}`,
         opponentName,
-        llmContext: `${ownerName} finished #${prevRank} in the league last season but is currently ranked #${rank} at ${record}. A dramatic collapse is underway.`,
+        llmContext: `${ownerName} finished #${prevRank} in the league last season but is currently ranked #${rank} at ${record}.${collapsePoStr} A dramatic collapse is underway.`,
       });
     }
 
@@ -392,11 +410,15 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
         llmContext: `${ownerName} is ${record} with a desperation score of ${despScore}/100. Their trade window is wide open — they need to make moves to save their season.`,
       });
     }
-
-    // ── 6. PLAYOFF_BUBBLE ────────────────────────────────────────────────
+    // ── 6. PLAYOFF_BUBBLE ───────────────────────────────────────────────────
     // Top 7 make playoffs. A team is on the bubble if they are rank 7 or 8.
     if (rank === 7 || rank === 8) {
       const gamesLeft = 14 - (wins + losses);
+      const teamMids6 = (team.memberIds as string[]) || [];
+      const bubblePoRec = teamMids6.map(mid => ownerPlayoffRecords[mid]).find(Boolean);
+      const bubblePoStr = bubblePoRec && (bubblePoRec.playoffWins + bubblePoRec.playoffLosses) > 0
+        ? ` ${ownerName} is ${bubblePoRec.playoffWins}W-${bubblePoRec.playoffLosses}L all-time in the playoffs.`
+        : '';
       stories.push({
         storyType: "PLAYOFF_BUBBLE",
         emotionalTag: "PLAYOFF BUBBLE",
@@ -406,12 +428,11 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
         intensityScore: Math.min(100, 50 + (14 - gamesLeft) * 3),
         supportingStat: `Ranked #${rank} — ${rank === 7 ? "last playoff spot" : "first out"}`,
         opponentName,
-        llmContext: `${ownerName} is ${record} and ranked #${rank} — ${rank === 7 ? "holding the last playoff spot" : "one game out of the playoffs"} with ${gamesLeft} weeks remaining.`,
+        llmContext: `${ownerName} is ${record} and ranked #${rank} — ${rank === 7 ? "holding the last playoff spot" : "one game out of the playoffs"} with ${gamesLeft} weeks remaining.${bubblePoStr}`,
       });
     }
 
-    // ── 7. MOMENTUM_SHIFT ────────────────────────────────────────────────
-    // Won 3+ in a row after a previous losing streak
+    // ── 7. MOMENTUM_SHIFT ──────────────────────────────────────────────────────/ Won 3+ in a row after a previous losing streak
     if (streak >= 3) {
       // Check that before this streak there was a losing period
       // (approximate: if they have more losses than wins overall, it's a comeback)
@@ -651,6 +672,19 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
     });
   }
 
+  // Build owner playoff W/L records for narrative context (memberId → { playoffWins, playoffLosses })
+  const ownerPlayoffRecords: Record<string, { playoffWins: number; playoffLosses: number }> = {};
+  try {
+    const { buildLiveOpponentProfiles } = await import('./liveOpponentProfile');
+    const profiles = await buildLiveOpponentProfiles() as Map<string, { career: { playoffWins: number; playoffLosses: number } }>;
+    for (const [memberId, profile] of Array.from(profiles.entries())) {
+      ownerPlayoffRecords[memberId] = {
+        playoffWins: profile.career.playoffWins ?? 0,
+        playoffLosses: profile.career.playoffLosses ?? 0,
+      };
+    }
+  } catch { /* non-fatal: narrative context only */ }
+
   // Compute deterministic triggers
   const triggers = computeWeeklyStorylines({
     season,
@@ -666,6 +700,7 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
     rodTeamId,
     rodMemberIds,
     prevSeasonRanks,
+    ownerPlayoffRecords,
   });
 
   // Generate LLM content for each trigger (skip if already cached for this week)

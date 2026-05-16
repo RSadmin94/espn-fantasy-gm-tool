@@ -148,6 +148,8 @@ Rules: Always reference actual team names, owner names, and player names. Be con
         wins: number; losses: number;
         championships: number; runnerUps: number;
         playoffAppearances: number;
+        playoffWins: number;
+        playoffLosses: number;
         seasons: number;
         bestFinish: number;
         worstFinish: number;
@@ -197,7 +199,7 @@ Rules: Always reference actual team names, owner names, and player names. Be con
           const isRunnerUp = t.id === runnerUpTeamId;
 
           if (!careerMap.has(primaryOwner)) {
-            careerMap.set(primaryOwner, { name: displayName, wins: 0, losses: 0, championships: 0, runnerUps: 0, playoffAppearances: 0, seasons: 0, bestFinish: 99, worstFinish: 0 });
+            careerMap.set(primaryOwner, { name: displayName, wins: 0, losses: 0, championships: 0, runnerUps: 0, playoffAppearances: 0, playoffWins: 0, playoffLosses: 0, seasons: 0, bestFinish: 99, worstFinish: 0 });
           }
           const c = careerMap.get(primaryOwner)!;
           c.wins += wins;
@@ -208,6 +210,33 @@ Rules: Always reference actual team names, owner names, and player names. Be con
           if (isRunnerUp) c.runnerUps++;
           if (rankFinal > 0 && rankFinal < c.bestFinish) c.bestFinish = rankFinal;
           if (rankFinal > c.worstFinish) c.worstFinish = rankFinal;
+        }
+
+        // Accumulate playoff W/L from schedule matchups
+        const settingsD = d.settings as Record<string, unknown> || {};
+        const schedSettings = settingsD.scheduleSettings as Record<string, unknown> || {};
+        const playoffStartPeriod = ((schedSettings.matchupPeriodCount as number) || 14) + 1;
+        const teamToMemberAdv = new Map<number, string>();
+        for (const team of teams) {
+          const t2 = team as Record<string, unknown>;
+          const po2 = (t2.primaryOwner as string) || ((t2.owners as string[])?.[0] ?? '');
+          if (po2) teamToMemberAdv.set(t2.id as number, po2);
+        }
+        for (const m of schedule) {
+          const mm = m as Record<string, unknown>;
+          if ((mm.matchupPeriodId as number) < playoffStartPeriod) continue;
+          if (!mm.playoffTierType || mm.playoffTierType === 'NONE') continue;
+          if (!mm.winner || mm.winner === 'UNDECIDED') continue;
+          const homeTeamId = (mm.home as Record<string, unknown>)?.teamId as number;
+          const awayTeamId = (mm.away as Record<string, unknown>)?.teamId as number;
+          const homeMember = teamToMemberAdv.get(homeTeamId);
+          const awayMember = teamToMemberAdv.get(awayTeamId);
+          if (!homeMember || !awayMember) continue;
+          if (!careerMap.has(homeMember) || !careerMap.has(awayMember)) continue;
+          const hc = careerMap.get(homeMember)!;
+          const ac = careerMap.get(awayMember)!;
+          if (mm.winner === 'HOME') { hc.playoffWins++; ac.playoffLosses++; }
+          else if (mm.winner === 'AWAY') { ac.playoffWins++; hc.playoffLosses++; }
         }
       }
 
@@ -222,7 +251,9 @@ Rules: Always reference actual team names, owner names, and player names. Be con
           const champStr = c.championships > 0 ? ` 🏆×${c.championships}` : '';
           const rrStr = c.runnerUps > 0 ? ` 🥈×${c.runnerUps}` : '';
           const playoffStr = `${c.playoffAppearances}/${c.seasons} playoff appearances`;
-          leagueContext += `\n  ${c.name}: ${c.wins}W-${c.losses}L (${winPct}% win rate)${champStr}${rrStr} | ${playoffStr} | Best finish: #${c.bestFinish}`;
+          const poTotal = c.playoffWins + c.playoffLosses;
+          const poRecord = poTotal > 0 ? ` | Playoff record: ${c.playoffWins}W-${c.playoffLosses}L` : '';
+          leagueContext += `\n  ${c.name}: ${c.wins}W-${c.losses}L (${winPct}% win rate)${champStr}${rrStr} | ${playoffStr}${poRecord} | Best finish: #${c.bestFinish}`;
         }
 
         // Highlight dynasty / drought narratives

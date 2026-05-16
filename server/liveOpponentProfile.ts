@@ -50,7 +50,7 @@ export interface LiveOpponentData {
   memberId: string;
   ownerName: string;
   teamIds: number[];
-  career: { wins: number; losses: number; pf: number; pa: number; playoffSeasons: number };
+  career: { wins: number; losses: number; pf: number; pa: number; playoffSeasons: number; playoffWins: number; playoffLosses: number };
   seasons: LiveOpponentSeason[];
   h2hVsRod: { wins: number; losses: number };
   gmArchetype: string;
@@ -87,6 +87,8 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
     teamIds: Set<number>;
     seasons: LiveOpponentSeason[];
     h2hVsRod: { wins: number; losses: number };
+    playoffWins: number;
+    playoffLosses: number;
     allTeamRows: TeamRow[];
     allTransactions: TransactionRow[];
     allDraftPicks: DraftPickRow[];
@@ -199,6 +201,8 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
           teamIds: new Set(),
           seasons: [],
           h2hVsRod: { wins: 0, losses: 0 },
+          playoffWins: 0,
+          playoffLosses: 0,
           allTeamRows: [],
           allTransactions: [],
           allDraftPicks: [],
@@ -209,6 +213,24 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
       profile.teamIds.add(tid);
       profile.h2hVsRod.wins += h2hWins;
       profile.h2hVsRod.losses += h2hLosses;
+
+      // Accumulate playoff W/L from schedule matchups for this season
+      const scheduleData = (data.schedule as Record<string, unknown>[]) || [];
+      const settingsData = data.settings as Record<string, unknown> || {};
+      const schedSettingsData = settingsData.scheduleSettings as Record<string, unknown> || {};
+      const playoffStartPd = ((schedSettingsData.matchupPeriodCount as number) || 14) + 1;
+      for (const mm of scheduleData) {
+        const m2 = mm as Record<string, unknown>;
+        if ((m2.matchupPeriodId as number) < playoffStartPd) continue;
+        if (!m2.playoffTierType || m2.playoffTierType === 'NONE') continue;
+        if (!m2.winner || m2.winner === 'UNDECIDED') continue;
+        const homeId2 = (m2.home as Record<string, unknown>)?.teamId as number;
+        const awayId2 = (m2.away as Record<string, unknown>)?.teamId as number;
+        if (homeId2 !== tid && awayId2 !== tid) continue;
+        if (m2.winner === 'HOME' && homeId2 === tid) profile.playoffWins++;
+        else if (m2.winner === 'AWAY' && awayId2 === tid) profile.playoffWins++;
+        else if (m2.winner !== 'UNDECIDED') profile.playoffLosses++;
+      }
 
       profile.seasons.push({
         season,
@@ -339,7 +361,7 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
       memberId,
       ownerName: profile.displayName,
       teamIds: Array.from(profile.teamIds),
-      career: { wins: totalWins, losses: totalLosses, pf: totalPF, pa: totalPA, playoffSeasons },
+      career: { wins: totalWins, losses: totalLosses, pf: totalPF, pa: totalPA, playoffSeasons, playoffWins: profile.playoffWins, playoffLosses: profile.playoffLosses },
       seasons,
       h2hVsRod: profile.h2hVsRod,
       gmArchetype: behavior?.gmArchetype ?? "Balanced",

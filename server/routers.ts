@@ -3490,9 +3490,17 @@ Respond with JSON in this exact format:
       const recentSeasons = data.seasons.slice(-3);
       const recentRecord = recentSeasons.map(s => `${s.season}: ${s.wins}-${s.losses}`).join(", ");
 
+      const poW = (data.career as Record<string, unknown>).playoffWins as number ?? 0;
+      const poL = (data.career as Record<string, unknown>).playoffLosses as number ?? 0;
+      const poTotal = poW + poL;
+      const poStr = poTotal > 0
+        ? `Playoff Record: ${poW}W-${poL}L all-time (${Math.round(poW / poTotal * 100)}% win rate in elimination games)`
+        : 'Playoff Record: No completed playoff matchup data available';
+
       const prompt = `You are an expert fantasy football analyst scouting ${data.ownerName} for the ATLANTAS FINEST FF league (14-team PPR keeper league, 2026 season).
 
 Career Record: ${totalW}W-${totalL}L (${winPct}% win rate) over ${data.seasons.length} seasons
+${poStr}
 H2H vs Rod Sellers (the user): ${h2hW}W-${h2hL}L
 Recent 3 seasons: ${recentRecord}
 GM Archetype: ${data.gmArchetype} — ${data.gmArchetypeDesc}
