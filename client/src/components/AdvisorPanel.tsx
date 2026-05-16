@@ -32,12 +32,12 @@ function UsageQuotaBar() {
 }
 
 const SUGGESTED_PROMPTS = [
-  "Who are my biggest threats heading into 2026 and how do I neutralize them?",
-  "Which managers should I target for trades and what offers should I make?",
-  "What are the top waiver wire priorities for early-season 2026?",
-  "Analyze my 2025-2026 performance trend and what it means for 2026.",
-  "Who will rise and who will fall in 2026 based on 3-year trajectory?",
-  "What is the current 2026 draft order?",
+  "Who should I be scared of in 2026 and what's my plan to take them down?",
+  "Which managers are ripe for a trade heist right now? Give me the pitch.",
+  "Who are the best waiver wire steals before anyone else wakes up?",
+  "Roast my 2025 season and tell me exactly what I need to fix for 2026.",
+  "Who rises and who falls in 2026 based on the last 3 years of data?",
+  "Break down the 2026 draft order and who has the biggest advantage.",
 ];
 
 interface ChatMessage {
@@ -206,8 +206,8 @@ export default function AdvisorPanel({ open, onClose }: AdvisorPanelProps) {
               <Bot className="w-3.5 h-3.5 text-white" />
             </div>
             <div>
-              <p className="text-sm font-bold text-foreground leading-tight">AI GM Advisor</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">ATLANTAS FINEST FF · 2025 Season</p>
+              <p className="text-sm font-bold text-foreground leading-tight">War Room AI</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">ATLANTAS FINEST FF · 2026 Season</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
@@ -261,8 +261,8 @@ export default function AdvisorPanel({ open, onClose }: AdvisorPanelProps) {
                 <Bot className="w-6 h-6 text-white" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-semibold text-foreground">GM Advisor Ready</p>
-                <p className="text-xs text-muted-foreground mt-1">Ask anything about ATLANTAS FINEST FF</p>
+                <p className="text-sm font-semibold text-foreground">War Room AI — Ready</p>
+                <p className="text-xs text-muted-foreground mt-1">Ruthlessly honest. Data-driven. No sugarcoating.</p>
               </div>
               <div className="w-full space-y-2">
                 {SUGGESTED_PROMPTS.map((prompt, i) => (

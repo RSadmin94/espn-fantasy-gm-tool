@@ -812,3 +812,111 @@ export function normalizeTransactions(data: Record<string, unknown>) {
   }
   return rows;
 }
+
+// ─── Recent Activity trade reconstruction (2026+) ────────────────────────────
+//
+// ESPN 2026 changed the transaction model: once a trade is accepted, the
+// TRADE_PROPOSAL record disappears from mTransactions2. Accepted trades are
+// only visible in the league communication endpoint as ACTIVITY_TRANSACTIONS
+// topics where messageTypeId === 246 (executed trade).
+//
+// This function fetches those topics, cross-references the targetId (pick slot
+// ID) against the mDraftDetail picks array, and synthesises TRADE_PROPOSAL
+// records with status="EXECUTED" that the Trade Aging router can process.
+
+export async function fetchRecentActivityTrades(
+  season: number,
+  combinedData: Record<string, unknown>,
+  creds?: EspnCreds
+): Promise<Record<string, unknown>[]> {
+  const lid = creds?.leagueId ?? LEAGUE_ID;
+  const commUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${lid}/communication/?view=kona_league_messageboard&limit=200`;
+
+  const headers: Record<string, string> = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+    Accept: "application/json,text/plain,*/*",
+    Referer: "https://fantasy.espn.com/football/league",
+  };
+  const cookieStr = buildCookieStringFor(creds);
+  if (cookieStr) headers["Cookie"] = cookieStr;
+
+  try {
+    const res = await fetch(commUrl, { headers, signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return [];
+    const commData = await res.json() as Record<string, unknown>;
+    const topics = (commData.topicsByType as Record<string, unknown[]>) || {};
+    const actTx = (topics.ACTIVITY_TRANSACTIONS as Record<string, unknown>[]) || [];
+
+    // Build pick slot ID → pick info map from mDraftDetail
+    const draftDetail = (combinedData.draftDetail as Record<string, unknown>) || {};
+    const draftPicks = (draftDetail.picks as Record<string, unknown>[]) || [];
+    const pickMap = new Map<number, { round: number; pickInRound: number; teamId: number }>();
+    for (const p of draftPicks) {
+      pickMap.set(p.id as number, {
+        round: p.roundId as number,
+        pickInRound: p.roundPickNumber as number,
+        teamId: p.teamId as number,
+      });
+    }
+
+    // messageTypeId 246 = trade executed
+    // Each topic with a 246 message represents one completed trade.
+    // Messages in the topic: each message has from=teamId, to=teamId, targetId=pickSlotId
+    const syntheticTrades: Record<string, unknown>[] = [];
+
+    for (const topic of actTx) {
+      const msgs = (topic.messages as Record<string, unknown>[]) || [];
+      const executedMsgs = msgs.filter(m => m.messageTypeId === 246);
+      if (executedMsgs.length === 0) continue;
+
+      const topicDate = topic.date as number;
+      // Derive a stable synthetic transaction ID from the topic id
+      const syntheticId = `activity_trade_${topic.id as string}`;
+
+      // Group messages by from team to reconstruct items
+      const items: Record<string, unknown>[] = [];
+      for (const m of executedMsgs) {
+        const fromTeamId = m.from as number;
+        const toTeamId = m.to as number;
+        const targetId = m.targetId as number;
+
+        // Look up pick info
+        const pickInfo = pickMap.get(targetId);
+        items.push({
+          type: "DRAFT_TRADE",
+          fromTeamId,
+          toTeamId,
+          // Use targetId as a synthetic playerId so the normalizer can process it
+          playerId: null,
+          playerName: null,
+          overallPickNumber: targetId,
+          round: pickInfo?.round ?? null,
+          pickInRound: pickInfo?.pickInRound ?? null,
+          // Store original pick owner for display
+          originalTeamId: pickInfo?.teamId ?? null,
+        });
+      }
+
+      if (items.length === 0) continue;
+
+      // Determine the primary teamId (the team that initiated — use the 'from' of the first item)
+      const primaryTeamId = (executedMsgs[0]?.from as number) ?? null;
+
+      syntheticTrades.push({
+        id: syntheticId,
+        type: "TRADE_PROPOSAL",
+        status: "EXECUTED",
+        proposedDate: topicDate,
+        executionDate: topicDate,
+        teamId: primaryTeamId,
+        items,
+        // Mark as reconstructed from activity feed so we can distinguish if needed
+        _source: "activity_feed",
+      });
+    }
+
+    return syntheticTrades;
+  } catch {
+    return [];
+  }
+}

@@ -36,6 +36,7 @@ import {
   fetchEspnViewsHardened,
   fetchTradeProposals,
   mergeTradeProposalsIntoTransactions,
+  fetchRecentActivityTrades,
   normalizeSettings,
   normalizeTeams,
   normalizeRosters,
@@ -849,14 +850,22 @@ export const appRouter = router({
               });
             }
 
-            // Enrich transactions: fetch all TRADE_PROPOSAL records via x-fantasy-filter.
-            // mTransactions2 only returns ~50 recent transactions, so proposals for
-            // trades accepted before the cache window are missing (2026 root cause).
+            // Enrich transactions:
+            // 1. Fetch all TRADE_PROPOSAL records via x-fantasy-filter (fills in aged-out proposals)
+            // 2. Fetch executed trades from the communication/activity feed (2026+: accepted trades
+            //    disappear from mTransactions2 once executed — they only exist in the activity feed
+            //    as messageTypeId 246 topics, which we reconstruct into synthetic TRADE_PROPOSAL rows)
             let enrichedData = data;
             try {
               const proposals = await fetchTradeProposals(season);
               enrichedData = mergeTradeProposalsIntoTransactions(data, proposals);
             } catch (_e) { /* non-fatal — fall back to unmerged data */ }
+            try {
+              const activityTrades = await fetchRecentActivityTrades(season, enrichedData);
+              if (activityTrades.length > 0) {
+                enrichedData = mergeTradeProposalsIntoTransactions(enrichedData, activityTrades);
+              }
+            } catch (_e) { /* non-fatal — fall back without activity trades */ }
 
             await upsertCachedView(season, "combined", enrichedData);
             // Persist static identity data (team names, draft order, settings) to league_identity table.

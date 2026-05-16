@@ -1418,3 +1418,15 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Fix duplicate espn_season_cache rows (deduplication + unique index added)
 - [x] Fix championship count to skip empty-payload seasons (2009-2016)
 - [ ] Verify 2026 executed trades appear in Trade Aging after fresh sync
+
+## Session — 2026 Trade Fix + AI Personality (May 16 2026)
+- [x] Fixed ESPN 2026 trade fetch: added fetchRecentActivityTrades using communication endpoint (messageTypeId 246 = executed trades)
+- [x] Wired fetchRecentActivityTrades into the refresh pipeline after fetchTradeProposals
+- [x] Added unique index on espn_season_cache(season, viewName) to prevent duplicate rows on refresh
+- [x] Deduped existing duplicate 2025/2026 rows in DB
+- [x] Updated CURRENT_SEASON to 2026 in DataRefresh.tsx
+- [x] Moved Data Center to always-visible Team Tools section in sidebar
+- [x] Made System collapsible button more prominent
+- [x] Updated GM Advisor system prompt with War Room AI personality (confident, direct, entertaining)
+- [x] Updated AdvisorPanel suggested prompts to match War Room AI tone
+- [x] Renamed "AI GM Advisor" to "War Room AI" in panel header
