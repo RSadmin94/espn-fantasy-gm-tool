@@ -942,3 +942,32 @@ export const usageEvents = mysqlTable(
 );
 export type UsageEvent = typeof usageEvents.$inferSelect;
 export type InsertUsageEvent = typeof usageEvents.$inferInsert;
+
+// ─── Scraped Trades (from Chrome extension) ──────────────────────────────────
+// Stores completed trades scraped from the ESPN transactions page via the
+// Chrome extension. Each row is one trade (two sides). The extension POSTs
+// raw ESPN API transaction data; the backend normalises and upserts here.
+export const scrapedTrades = mysqlTable(
+  "scraped_trades",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    // Stable dedup key: ESPN transaction ID or synthetic hash
+    tradeKey:       varchar("tradeKey", { length: 128 }).notNull(),
+    season:         int("season").notNull(),
+    // Unix ms timestamp of trade execution
+    executedAt:     bigint("executedAt", { mode: "number" }).notNull(),
+    // JSON blobs for each side: { teamId, ownerName, players: [...], picks: [...] }
+    sideAJson:      text("sideAJson").notNull(),
+    sideBJson:      text("sideBJson").notNull(),
+    // Raw ESPN transaction payload (for debugging / re-processing)
+    rawJson:        text("rawJson"),
+    scrapedAt:      timestamp("scrapedAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_st_tradeKey").on(t.tradeKey),
+    index("idx_st_season").on(t.season),
+    index("idx_st_executedAt").on(t.executedAt),
+  ]
+);
+export type ScrapedTrade = typeof scrapedTrades.$inferSelect;
+export type InsertScrapedTrade = typeof scrapedTrades.$inferInsert;

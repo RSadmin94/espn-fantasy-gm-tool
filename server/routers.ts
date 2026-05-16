@@ -25,7 +25,7 @@ import { onboardingRouter } from "./onboardingRouter";
 import { offseasonRouter } from "./offseasonRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
-import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob, getDb } from "./db";
+import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob, getDb, upsertScrapedTrades, getScrapedTrades } from "./db";
 import { leagueConnections as lcTable } from "../drizzle/schema";
 import { eq as eqDrizzle, and as andDrizzle } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
@@ -815,6 +815,66 @@ export const appRouter = router({
   }),
 
   espn: router({
+    diagnoseTrades: publicProcedure
+      .input(z.object({ season: z.number() }))
+      .query(async ({ input }) => {
+        const data = await getSeasonData(input.season);
+        if (!data) return { error: "no data", season: input.season };
+        const txs = (data.transactions as Record<string, unknown>[]) || [];
+        const typeCounts: Record<string, number> = {};
+        const statusCounts: Record<string, number> = {};
+        for (const tx of txs) {
+          const type = String(tx.type || "null");
+          const status = String(tx.status || "null");
+          typeCounts[type] = (typeCounts[type] || 0) + 1;
+          statusCounts[`${type}::${status}`] = (statusCounts[`${type}::${status}`] || 0) + 1;
+        }
+        const sampleTrade = txs.find(t => t.type === "TRADE_PROPOSAL" || t.type === "TRADE");
+        const sampleUphold = txs.find(t => t.type === "TRADE_UPHOLD" || t.type === "TRADE_ACCEPT");
+        return {
+          season: input.season,
+          totalTxs: txs.length,
+          typeCounts,
+          statusCounts,
+          sampleTrade: sampleTrade ? { ...sampleTrade, items: `[${((sampleTrade.items as unknown[]) || []).length} items]`, firstItem: ((sampleTrade.items as Record<string, unknown>[]) || [])[0] } : null,
+          sampleUphold: sampleUphold || null,
+        };
+      }),
+
+    ingestScrapedTrades: publicProcedure
+      .input(z.object({
+        season: z.number().int().min(2000).max(2100),
+        trades: z.array(z.object({
+          tradeKey: z.string(),
+          executedAt: z.number(),
+          sideA: z.object({
+            teamId: z.number(),
+            ownerName: z.string(),
+            players: z.array(z.object({ playerId: z.number(), playerName: z.string(), position: z.string() })),
+            picks: z.array(z.object({ label: z.string(), round: z.number(), pickInRound: z.number() })),
+          }),
+          sideB: z.object({
+            teamId: z.number(),
+            ownerName: z.string(),
+            players: z.array(z.object({ playerId: z.number(), playerName: z.string(), position: z.string() })),
+            picks: z.array(z.object({ label: z.string(), round: z.number(), pickInRound: z.number() })),
+          }),
+          rawJson: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ input }) => {
+        const rows = input.trades.map(t => ({
+          tradeKey: t.tradeKey,
+          season: input.season,
+          executedAt: t.executedAt,
+          sideAJson: JSON.stringify(t.sideA),
+          sideBJson: JSON.stringify(t.sideB),
+          rawJson: t.rawJson ?? null,
+        }));
+        const count = await upsertScrapedTrades(rows);
+        return { ok: true, upserted: count };
+      }),
+
     refresh: publicProcedure
       .input(z.object({
         season: z.number().optional(),
@@ -1365,6 +1425,52 @@ export const appRouter = router({
               verdict,
               verdictMargin: Math.abs(margin),
             });
+          }
+        }
+
+        // ── Scraped trades fallback (Chrome extension data) ─────────────────
+        // If the ESPN cache produced no trades for any season, pull from the
+        // scraped_trades table (populated by the Chrome extension when the user
+        // visits the ESPN transactions page).
+        if (allTrades.length === 0) {
+          const scrapedRows = await getScrapedTrades(input.season);
+          for (const row of scrapedRows) {
+            try {
+              const sideA = JSON.parse(row.sideAJson) as { teamId: number; ownerName: string; players: { playerId: number; playerName: string; position: string; avgPoints?: number }[]; picks: { label: string; round: number; pickInRound: number }[] };
+              const sideB = JSON.parse(row.sideBJson) as typeof sideA;
+              const buildScrapedSide = (side: typeof sideA) => {
+                const players = side.players.map(p => {
+                  const pInfo = undefined; // no season data available for scraped trades
+                  const avgPts = p.avgPoints ?? 0;
+                  const vorp = 0;
+                  const compositeValue = Math.round(avgPts * 10);
+                  return { playerId: p.playerId, playerName: p.playerName, position: p.position, avgPoints: avgPts, seasonPoints: 0, compositeValue };
+                });
+                const picks = side.picks.map(pk => ({
+                  label: pk.label,
+                  round: pk.round,
+                  pickInRound: pk.pickInRound,
+                  value: calcPickValue(pk.round, pk.pickInRound),
+                }));
+                const totalValue = players.reduce((s, p) => s + p.compositeValue, 0) + picks.reduce((s, p) => s + p.value, 0);
+                return { teamId: side.teamId, ownerName: side.ownerName, players, picks, totalValue };
+              };
+              const builtA = buildScrapedSide(sideA);
+              const builtB = buildScrapedSide(sideB);
+              const margin = builtA.totalValue - builtB.totalValue;
+              const verdict: "sideA" | "sideB" | "even" = Math.abs(margin) < 50 ? "even" : margin > 0 ? "sideA" : "sideB";
+              allTrades.push({
+                season: row.season,
+                tradeId: row.tradeKey,
+                proposedDate: row.executedAt,
+                sideA: builtA,
+                sideB: builtB,
+                verdict,
+                verdictMargin: Math.abs(margin),
+              });
+            } catch {
+              // skip malformed rows
+            }
           }
         }
 

@@ -8,6 +8,7 @@ import {
   userMemory, UserMemory,
   leagueConnections,
   llmUsage,
+  scrapedTrades, InsertScrapedTrade,
 } from "../drizzle/schema";
 import type { EspnCreds } from "./espnService";
 import { decryptCredentialsFromDb } from "./_core/crypto";
@@ -512,4 +513,47 @@ export async function getLlmUsageSummary(userId: number) {
     byCallType[r.callType] = (byCallType[r.callType] ?? 0) + (r.totalTokens ?? 0);
   }
   return { totalTokens, totalCalls, byCallType };
+}
+
+// ─── Scraped Trades helpers ────────────────────────────────────────────────────
+
+/**
+ * Upsert a batch of scraped trades from the Chrome extension.
+ * Deduplicates on tradeKey — safe to call multiple times with the same data.
+ */
+export async function upsertScrapedTrades(rows: InsertScrapedTrade[]): Promise<number> {
+  const db = await getDb();
+  if (!db || rows.length === 0) return 0;
+  let inserted = 0;
+  for (const row of rows) {
+    try {
+      await db.insert(scrapedTrades)
+        .values(row)
+        .onDuplicateKeyUpdate({
+          set: {
+            sideAJson: row.sideAJson,
+            sideBJson: row.sideBJson,
+            rawJson: row.rawJson ?? null,
+            scrapedAt: new Date(),
+          },
+        });
+      inserted++;
+    } catch (err) {
+      console.warn("[DB] upsertScrapedTrades row error:", err);
+    }
+  }
+  return inserted;
+}
+
+/**
+ * Get all scraped trades for a season (or all seasons if season=0).
+ */
+export async function getScrapedTrades(season?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const query = db.select().from(scrapedTrades);
+  if (season && season > 0) {
+    return query.where(eq(scrapedTrades.season, season)).orderBy(desc(scrapedTrades.executedAt));
+  }
+  return query.orderBy(desc(scrapedTrades.executedAt));
 }

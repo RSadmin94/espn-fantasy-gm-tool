@@ -1430,3 +1430,4 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Updated GM Advisor system prompt with War Room AI personality (confident, direct, entertaining)
 - [x] Updated AdvisorPanel suggested prompts to match War Room AI tone
 - [x] Renamed "AI GM Advisor" to "War Room AI" in panel header
+- [ ] Fix Trade Aging tab showing empty — no completed trades found despite trade history existing in league
