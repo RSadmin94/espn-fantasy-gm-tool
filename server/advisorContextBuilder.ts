@@ -275,6 +275,58 @@ Rules: Always reference actual team names, owner names, and player names. Be con
     // Career history unavailable — continue without it
   }
 
+  // ── Enriched H2H context for current week's opponent ──────────────────────
+  try {
+    const { resolveRodMemberId, computeRichH2H, buildH2HPromptBlock } = await import("./h2hContextBuilder");
+    const rodId = await resolveRodMemberId();
+    if (rodId && data) {
+      // Find Rod's current-week opponent from the active season schedule
+      const teams = (data as Record<string, unknown>).teams as Record<string, unknown>[] ?? [];
+      const schedule = (data as Record<string, unknown>).schedule as Record<string, unknown>[] ?? [];
+      const settings2 = (data as Record<string, unknown>).settings as Record<string, unknown> ?? {};
+      const schedSettings2 = settings2.scheduleSettings as Record<string, unknown> ?? {};
+      const currentPeriod = (settings2.currentMatchupPeriod as number) ?? 0;
+      const playoffStart2 = ((schedSettings2.matchupPeriodCount as number) ?? 14) + 1;
+      if (currentPeriod > 0 && currentPeriod < playoffStart2) {
+        // Find Rod's team ID
+        const rodTeam = teams.find(t => (t.primaryOwner as string) === rodId || ((t.owners as string[])?.[0]) === rodId);
+        const rodTeamId = rodTeam?.id as number | undefined;
+        if (rodTeamId) {
+          const currentMatchup = schedule.find(m => {
+            const mm = m as Record<string, unknown>;
+            if ((mm.matchupPeriodId as number) !== currentPeriod) return false;
+            const homeId = (mm.home as Record<string, unknown>)?.teamId as number;
+            const awayId = (mm.away as Record<string, unknown>)?.teamId as number;
+            return homeId === rodTeamId || awayId === rodTeamId;
+          });
+          if (currentMatchup) {
+            const mm = currentMatchup as Record<string, unknown>;
+            const homeId = (mm.home as Record<string, unknown>)?.teamId as number;
+            const awayId = (mm.away as Record<string, unknown>)?.teamId as number;
+            const oppTeamId = homeId === rodTeamId ? awayId : homeId;
+            // Find opponent's member ID
+            const oppTeam = teams.find(t => (t.id as number) === oppTeamId);
+            const oppMemberId = (oppTeam?.primaryOwner as string) || ((oppTeam?.owners as string[])?.[0] ?? "");
+            if (oppMemberId && oppMemberId !== rodId) {
+              const members2 = (data as Record<string, unknown>).members as Record<string, unknown>[] ?? [];
+              const oppMember = members2.find(m => (m.id as string) === oppMemberId);
+              const oppName = oppMember ? `${oppMember.firstName || ""} ${oppMember.lastName || ""}`.trim() || (oppMember.displayName as string) || oppMemberId : oppMemberId;
+              const rodMember = members2.find(m => (m.id as string) === rodId);
+              const rodName = rodMember ? `${rodMember.firstName || ""} ${rodMember.lastName || ""}`.trim() || "Rod Sellers" : "Rod Sellers";
+              const h2h = await computeRichH2H(rodId, oppMemberId, rodName, oppName);
+              if (h2h.rsTotalGames > 0) {
+                leagueContext += `\n\n## THIS WEEK'S OPPONENT — H2H HISTORY vs ${oppName.toUpperCase()} (treat as ground truth):\n`;
+                leagueContext += buildH2HPromptBlock(h2h, `Rod vs ${oppName}`);
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // H2H context unavailable — continue without it
+  }
+
   // League DNA behavioral intelligence
   try {
     const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");

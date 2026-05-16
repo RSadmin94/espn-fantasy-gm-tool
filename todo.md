@@ -1442,3 +1442,11 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [ ] Inject playoffWins/playoffLosses into server-side AI prompts (opponent scouting, rivalry lore, weekly storylines, GM advisor context)
 - [ ] Inject playoffWins/playoffLosses into client-side narrative helpers (generatePersonalizedInsight, generateStrategicDirective, reputation sentences)
 - [ ] Push AI narrative playoff W-L changes to GitHub
+
+## Enriched H2H Context Propagation
+- [ ] Build shared enrichedH2HContext helper (avg PF/PA, biggest win/loss, streaks, season breakdown) in server/h2hContextBuilder.ts
+- [ ] Inject enriched H2H into GM Advisor context builder (advisorContextBuilder.ts) — per-opponent breakdown for current week's matchup
+- [ ] Inject enriched H2H into Weekly Storylines (weeklyStorylinesService.ts) — REVENGE_GAME, HEARTBREAK_PENDING, SILENT_THREAT contexts
+- [ ] Inject enriched H2H into Opponent Intel scouting prompt (routers.ts) — full H2H history block
+- [ ] Inject enriched H2H into liveOpponentProfile.ts career object — expose via tRPC for future League Mythology use
+- [ ] Write vitest for enrichedH2HContext helper

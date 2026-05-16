@@ -3497,11 +3497,24 @@ Respond with JSON in this exact format:
         ? `Playoff Record: ${poW}W-${poL}L all-time (${Math.round(poW / poTotal * 100)}% win rate in elimination games)`
         : 'Playoff Record: No completed playoff matchup data available';
 
+      // Build enriched H2H block
+      let enrichedH2HBlock = `H2H vs Rod Sellers: ${h2hW}W-${h2hL}L (career)`;
+      try {
+        const { resolveRodMemberId, computeRichH2H, buildH2HPromptBlock } = await import('./h2hContextBuilder');
+        const rodId = await resolveRodMemberId();
+        if (rodId && input.memberId && rodId !== input.memberId) {
+          const h2h = await computeRichH2H(rodId, input.memberId, 'Rod Sellers', data.ownerName);
+          if (h2h.rsTotalGames > 0) {
+            enrichedH2HBlock = buildH2HPromptBlock(h2h, `H2H vs Rod Sellers`);
+          }
+        }
+      } catch { /* non-fatal */ }
+
       const prompt = `You are an expert fantasy football analyst scouting ${data.ownerName} for the ATLANTAS FINEST FF league (14-team PPR keeper league, 2026 season).
 
 Career Record: ${totalW}W-${totalL}L (${winPct}% win rate) over ${data.seasons.length} seasons
 ${poStr}
-H2H vs Rod Sellers (the user): ${h2hW}W-${h2hL}L
+${enrichedH2HBlock}
 Recent 3 seasons: ${recentRecord}
 GM Archetype: ${data.gmArchetype} — ${data.gmArchetypeDesc}
 Avg Activity: ${data.avgAcquisitions} adds/season, ${data.avgTrades} trades/season

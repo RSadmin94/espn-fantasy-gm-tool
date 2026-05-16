@@ -198,6 +198,8 @@ export interface StorylinesInput {
   prevSeasonRanks: Record<number, number>; // teamId → final rank last season
   // memberId → { playoffWins, playoffLosses } for narrative context
   ownerPlayoffRecords?: Record<string, { playoffWins: number; playoffLosses: number }>;
+  // rivalId → rich H2H stats block string (pre-built by refreshWeeklyStorylines)
+  rivalH2HBlocks?: Record<string, string>;
 }
 
 export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] {
@@ -205,6 +207,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
     season, week, teams, matchups, transactions, ownerMap, teamNameMap,
     rivalryPairs, rodTeamId, rodMemberIds, prevSeasonRanks,
     ownerPlayoffRecords = {},
+    rivalH2HBlocks = {},
   } = input;
 
   const stories: StoryTrigger[] = [];
@@ -329,7 +332,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
           intensityScore: Math.min(100, 50 + matchingRivalry.h2hLosses * 5),
           supportingStat: `H2H record: ${matchingRivalry.h2hLosses} losses vs ${matchingRivalry.rivalName}`,
           opponentName,
-          llmContext: `Rod Sellers (${record}) faces ${matchingRivalry.rivalName} this week. Rod has lost to them ${matchingRivalry.h2hLosses} times head-to-head.${rivalPoStr} This is a revenge opportunity.`,
+          llmContext: `Rod Sellers (${record}) faces ${matchingRivalry.rivalName} this week. Rod has lost to them ${matchingRivalry.h2hLosses} times head-to-head.${rivalPoStr} This is a revenge opportunity.${rivalH2HBlocks[matchingRivalry.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[matchingRivalry.rivalId]}` : ''}`,
         });
       }
     }
@@ -356,7 +359,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
           intensityScore: Math.min(100, 60 + (elimRival?.playoffEliminations ?? 1) * 15),
           supportingStat: `${elimRival?.rivalName ?? opponentName} eliminated Rod from playoffs ${elimRival?.playoffEliminations ?? 1}x`,
           opponentName,
-          llmContext: `Rod Sellers (${record}) faces ${opponentName} this week — the same manager who has eliminated Rod from the playoffs ${elimRival?.playoffEliminations ?? 1} time(s).${elimPoStr} This is unfinished business.`,
+          llmContext: `Rod Sellers (${record}) faces ${opponentName} this week — the same manager who has eliminated Rod from the playoffs ${elimRival?.playoffEliminations ?? 1} time(s).${elimPoStr} This is unfinished business.${elimRival && rivalH2HBlocks[elimRival.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[elimRival.rivalId]}` : ''}`,
         });
       }
     }
@@ -685,6 +688,33 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
     }
   } catch { /* non-fatal: narrative context only */ }
 
+  // Build enriched H2H blocks for Rod's rivalry pairs
+  const rivalH2HBlocks: Record<string, string> = {};
+  if (rodMemberIds.length > 0) {
+    try {
+      const { resolveRodMemberId, computeRichH2H, buildH2HPromptBlock } = await import('./h2hContextBuilder');
+      const rodId = await resolveRodMemberId();
+      if (rodId) {
+        // Resolve member names from current season data
+        const membersArr = (payload.members as Record<string, unknown>[]) || [];
+        const memberNameMap = new Map<string, string>();
+        for (const m of membersArr) {
+          const mid = m.id as string;
+          const name = `${m.firstName || ''} ${m.lastName || ''}`.trim() || (m.displayName as string) || mid;
+          memberNameMap.set(mid, name);
+        }
+        const rodName = memberNameMap.get(rodId) || 'Rod Sellers';
+        for (const rp of rivalryPairs) {
+          const rivalName = memberNameMap.get(rp.rivalId) || rp.rivalName;
+          const h2h = await computeRichH2H(rodId, rp.rivalId, rodName, rivalName);
+          if (h2h.rsTotalGames > 0) {
+            rivalH2HBlocks[rp.rivalId] = buildH2HPromptBlock(h2h, `Rod vs ${rivalName}`);
+          }
+        }
+      }
+    } catch { /* non-fatal */ }
+  }
+
   // Compute deterministic triggers
   const triggers = computeWeeklyStorylines({
     season,
@@ -701,6 +731,7 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
     rodMemberIds,
     prevSeasonRanks,
     ownerPlayoffRecords,
+    rivalH2HBlocks,
   });
 
   // Generate LLM content for each trigger (skip if already cached for this week)
