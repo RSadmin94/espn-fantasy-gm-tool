@@ -212,3 +212,126 @@ describe("rivalry score ordering invariants", () => {
     expect(withClose).toBeGreaterThan(withH2H);
   });
 });
+
+// ── Rich H2H stat computation tests ──────────────────────────────────────────
+
+// Inline the H2H stat accumulator logic (mirrors rivalryService.ts Acc)
+interface H2HAcc {
+  h2hWins: number;
+  h2hLosses: number;
+  totalRodPF: number;
+  totalRivalPF: number;
+  biggestRodWinMargin: number | null;
+  biggestRodWinSeason: number | null;
+  biggestRodLossMargin: number | null;
+  biggestRodLossSeason: number | null;
+  currentWinStreak: number;
+  longestWinStreak: number;
+  longestLossStreak: number;
+  seasonBreakdown: Array<{ season: number; rodWins: number; rodLosses: number }>;
+}
+
+function makeAcc(): H2HAcc {
+  return {
+    h2hWins: 0, h2hLosses: 0,
+    totalRodPF: 0, totalRivalPF: 0,
+    biggestRodWinMargin: null, biggestRodWinSeason: null,
+    biggestRodLossMargin: null, biggestRodLossSeason: null,
+    currentWinStreak: 0, longestWinStreak: 0, longestLossStreak: 0,
+    seasonBreakdown: [],
+  };
+}
+
+function applyMatchup(acc: H2HAcc, season: number, rodScore: number, rivalScore: number): void {
+  const margin = Math.abs(rodScore - rivalScore);
+  const rodWon = rodScore > rivalScore;
+  acc.totalRodPF += rodScore;
+  acc.totalRivalPF += rivalScore;
+  let sb = acc.seasonBreakdown.find(s => s.season === season);
+  if (!sb) { sb = { season, rodWins: 0, rodLosses: 0 }; acc.seasonBreakdown.push(sb); }
+  if (rodWon) {
+    acc.h2hWins++;
+    sb.rodWins++;
+    if (acc.biggestRodWinMargin === null || margin > acc.biggestRodWinMargin) {
+      acc.biggestRodWinMargin = Math.round(margin * 10) / 10;
+      acc.biggestRodWinSeason = season;
+    }
+    if (acc.currentWinStreak >= 0) acc.currentWinStreak++;
+    else acc.currentWinStreak = 1;
+    if (acc.currentWinStreak > acc.longestWinStreak) acc.longestWinStreak = acc.currentWinStreak;
+  } else {
+    acc.h2hLosses++;
+    sb.rodLosses++;
+    if (acc.biggestRodLossMargin === null || margin > acc.biggestRodLossMargin) {
+      acc.biggestRodLossMargin = Math.round(margin * 10) / 10;
+      acc.biggestRodLossSeason = season;
+    }
+    if (acc.currentWinStreak <= 0) acc.currentWinStreak--;
+    else acc.currentWinStreak = -1;
+    if (Math.abs(acc.currentWinStreak) > acc.longestLossStreak) acc.longestLossStreak = Math.abs(acc.currentWinStreak);
+  }
+}
+
+describe("rich H2H stat accumulator", () => {
+  it("computes correct avg PF after multiple matchups", () => {
+    const acc = makeAcc();
+    applyMatchup(acc, 2022, 120, 100); // Rod wins
+    applyMatchup(acc, 2022, 80, 110);  // Rod loses
+    applyMatchup(acc, 2023, 130, 90);  // Rod wins
+    const totalGames = acc.h2hWins + acc.h2hLosses;
+    const avgRodPF = Math.round((acc.totalRodPF / totalGames) * 10) / 10;
+    const avgRivalPF = Math.round((acc.totalRivalPF / totalGames) * 10) / 10;
+    expect(totalGames).toBe(3);
+    expect(avgRodPF).toBeCloseTo(110.0, 1); // (120+80+130)/3
+    expect(avgRivalPF).toBeCloseTo(100.0, 1); // (100+110+90)/3
+  });
+
+  it("tracks biggest Rod win correctly", () => {
+    const acc = makeAcc();
+    applyMatchup(acc, 2021, 150, 100); // +50 win
+    applyMatchup(acc, 2022, 140, 80);  // +60 win — should be biggest
+    applyMatchup(acc, 2023, 120, 110); // +10 win
+    expect(acc.biggestRodWinMargin).toBe(60);
+    expect(acc.biggestRodWinSeason).toBe(2022);
+  });
+
+  it("tracks biggest Rod loss correctly", () => {
+    const acc = makeAcc();
+    applyMatchup(acc, 2021, 90, 130);  // -40 loss
+    applyMatchup(acc, 2022, 100, 160); // -60 loss — should be biggest
+    applyMatchup(acc, 2023, 110, 120); // -10 loss
+    expect(acc.biggestRodLossMargin).toBe(60);
+    expect(acc.biggestRodLossSeason).toBe(2022);
+  });
+
+  it("tracks win streak correctly", () => {
+    const acc = makeAcc();
+    applyMatchup(acc, 2021, 100, 90);  // win
+    applyMatchup(acc, 2022, 110, 95);  // win
+    applyMatchup(acc, 2022, 120, 80);  // win — streak = 3
+    applyMatchup(acc, 2023, 80, 110);  // loss — breaks streak
+    expect(acc.longestWinStreak).toBe(3);
+    expect(acc.currentWinStreak).toBe(-1); // currently on 1-game loss streak
+  });
+
+  it("tracks loss streak correctly", () => {
+    const acc = makeAcc();
+    applyMatchup(acc, 2021, 80, 110);  // loss
+    applyMatchup(acc, 2022, 70, 120);  // loss
+    applyMatchup(acc, 2022, 90, 130);  // loss — streak = 3
+    applyMatchup(acc, 2023, 130, 80);  // win — breaks streak
+    expect(acc.longestLossStreak).toBe(3);
+    expect(acc.currentWinStreak).toBe(1); // currently on 1-game win streak
+  });
+
+  it("builds season breakdown correctly", () => {
+    const acc = makeAcc();
+    applyMatchup(acc, 2022, 120, 100); // 2022 win
+    applyMatchup(acc, 2022, 80, 110);  // 2022 loss
+    applyMatchup(acc, 2023, 130, 90);  // 2023 win
+    const sorted = [...acc.seasonBreakdown].sort((a, b) => a.season - b.season);
+    expect(sorted).toHaveLength(2);
+    expect(sorted[0]).toEqual({ season: 2022, rodWins: 1, rodLosses: 1 });
+    expect(sorted[1]).toEqual({ season: 2023, rodWins: 1, rodLosses: 0 });
+  });
+});

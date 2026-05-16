@@ -53,6 +53,22 @@ export interface RivalryPair {
   // Rival's all-time playoff record (for narrative context)
   rivalPlayoffWins?: number;
   rivalPlayoffLosses?: number;
+  // Rich regular-season H2H stats (computed, not persisted)
+  avgRodPF?: number;            // Rod's avg score in RS matchups vs this rival
+  avgRivalPF?: number;          // Rival's avg score in RS matchups vs Rod
+  biggestRodWinMargin?: number | null;
+  biggestRodWinSeason?: number | null;
+  biggestRodWinRodScore?: number | null;
+  biggestRodWinRivalScore?: number | null;
+  biggestRodLossMargin?: number | null;
+  biggestRodLossSeason?: number | null;
+  biggestRodLossRodScore?: number | null;
+  biggestRodLossRivalScore?: number | null;
+  longestWinStreak?: number;
+  longestLossStreak?: number;
+  currentStreakDirection?: 'winning' | 'losing' | 'neutral';
+  currentStreakLength?: number;
+  seasonBreakdown?: Array<{ season: number; rodWins: number; rodLosses: number }>;
 }
 
 interface MatchupRow {
@@ -115,6 +131,21 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
     painfulLossOpponentScore: number | null;
     lastMatchupSeason: number | null;
     revengeAchieved: boolean;
+    // Rich regular-season H2H stats
+    totalRodPF: number;           // sum of Rod's scores in RS matchups
+    totalRivalPF: number;         // sum of rival's scores in RS matchups
+    biggestRodWinMargin: number | null;
+    biggestRodWinSeason: number | null;
+    biggestRodWinRodScore: number | null;
+    biggestRodWinRivalScore: number | null;
+    biggestRodLossMargin: number | null;
+    biggestRodLossSeason: number | null;
+    biggestRodLossRodScore: number | null;
+    biggestRodLossRivalScore: number | null;
+    currentWinStreak: number;     // positive = Rod winning streak, negative = loss streak
+    longestWinStreak: number;
+    longestLossStreak: number;
+    seasonBreakdown: Array<{ season: number; rodWins: number; rodLosses: number }>;
   }
   const acc = new Map<string, Acc>();
 
@@ -126,6 +157,13 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
         recentLossSeasons: new Set(),
         painfulLossSeason: null, painfulLossMargin: null, painfulLossOpponentScore: null,
         lastMatchupSeason: null, revengeAchieved: false,
+        totalRodPF: 0, totalRivalPF: 0,
+        biggestRodWinMargin: null, biggestRodWinSeason: null,
+        biggestRodWinRodScore: null, biggestRodWinRivalScore: null,
+        biggestRodLossMargin: null, biggestRodLossSeason: null,
+        biggestRodLossRodScore: null, biggestRodLossRivalScore: null,
+        currentWinStreak: 0, longestWinStreak: 0, longestLossStreak: 0,
+        seasonBreakdown: [],
       });
     }
     return acc.get(rivalId)!;
@@ -201,10 +239,31 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
       const margin = Math.abs(rodScore - rivalScore);
 
       if (isRegular) {
+        // Accumulate scoring totals
+        rivalA.totalRodPF += rodScore;
+        rivalA.totalRivalPF += rivalScore;
+
+        // Season breakdown
+        let sb = rivalA.seasonBreakdown.find(s => s.season === season);
+        if (!sb) { sb = { season, rodWins: 0, rodLosses: 0 }; rivalA.seasonBreakdown.push(sb); }
+
         if (rodWon) {
           rivalA.h2hWins++;
+          sb.rodWins++;
+          // Biggest Rod win
+          if (rivalA.biggestRodWinMargin === null || margin > rivalA.biggestRodWinMargin) {
+            rivalA.biggestRodWinMargin = Math.round(margin * 10) / 10;
+            rivalA.biggestRodWinSeason = season;
+            rivalA.biggestRodWinRodScore = Math.round(rodScore * 10) / 10;
+            rivalA.biggestRodWinRivalScore = Math.round(rivalScore * 10) / 10;
+          }
+          // Streak tracking
+          if (rivalA.currentWinStreak >= 0) rivalA.currentWinStreak++;
+          else rivalA.currentWinStreak = 1;
+          if (rivalA.currentWinStreak > rivalA.longestWinStreak) rivalA.longestWinStreak = rivalA.currentWinStreak;
         } else {
           rivalA.h2hLosses++;
+          sb.rodLosses++;
           // Close loss: margin < 5 pts
           if (margin < 5) rivalA.closeLossCount++;
           // Most painful loss: highest opponent score when Rod lost
@@ -213,6 +272,17 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
             rivalA.painfulLossMargin = Math.round(margin * 10) / 10;
             rivalA.painfulLossOpponentScore = Math.round(rivalScore * 10) / 10;
           }
+          // Biggest Rod loss
+          if (rivalA.biggestRodLossMargin === null || margin > rivalA.biggestRodLossMargin) {
+            rivalA.biggestRodLossMargin = Math.round(margin * 10) / 10;
+            rivalA.biggestRodLossSeason = season;
+            rivalA.biggestRodLossRodScore = Math.round(rodScore * 10) / 10;
+            rivalA.biggestRodLossRivalScore = Math.round(rivalScore * 10) / 10;
+          }
+          // Streak tracking
+          if (rivalA.currentWinStreak <= 0) rivalA.currentWinStreak--;
+          else rivalA.currentWinStreak = -1;
+          if (Math.abs(rivalA.currentWinStreak) > rivalA.longestLossStreak) rivalA.longestLossStreak = Math.abs(rivalA.currentWinStreak);
           // Recent losses
           if (season >= recentThreshold) rivalA.recentLossSeasons.add(season);
         }
@@ -318,6 +388,13 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
       a.recentLossSeasons.size * 5;
 
     const rivalProfile = liveProfiles?.get(rivalId);
+    const totalRSGames = a.h2hWins + a.h2hLosses + a.h2hTies;
+    const avgRodPF = totalRSGames > 0 ? Math.round((a.totalRodPF / totalRSGames) * 10) / 10 : undefined;
+    const avgRivalPF = totalRSGames > 0 ? Math.round((a.totalRivalPF / totalRSGames) * 10) / 10 : undefined;
+    const currentStreakDirection: RivalryPair['currentStreakDirection'] =
+      a.currentWinStreak > 0 ? 'winning' : a.currentWinStreak < 0 ? 'losing' : 'neutral';
+    const currentStreakLength = Math.abs(a.currentWinStreak);
+    const sortedBreakdown = [...a.seasonBreakdown].sort((x, y) => x.season - y.season);
     pairs.push({
       memberId: rodMemberId,
       rivalId,
@@ -339,6 +416,21 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
       loreSentence: null, // populated separately
       rivalPlayoffWins: rivalProfile?.career.playoffWins,
       rivalPlayoffLosses: rivalProfile?.career.playoffLosses,
+      avgRodPF,
+      avgRivalPF,
+      biggestRodWinMargin: a.biggestRodWinMargin,
+      biggestRodWinSeason: a.biggestRodWinSeason,
+      biggestRodWinRodScore: a.biggestRodWinRodScore,
+      biggestRodWinRivalScore: a.biggestRodWinRivalScore,
+      biggestRodLossMargin: a.biggestRodLossMargin,
+      biggestRodLossSeason: a.biggestRodLossSeason,
+      biggestRodLossRodScore: a.biggestRodLossRodScore,
+      biggestRodLossRivalScore: a.biggestRodLossRivalScore,
+      longestWinStreak: a.longestWinStreak,
+      longestLossStreak: a.longestLossStreak,
+      currentStreakDirection,
+      currentStreakLength,
+      seasonBreakdown: sortedBreakdown,
     });
   }
 
@@ -353,17 +445,59 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
  * Result is cached in the DB.
  */
 export async function generateLoreSentence(pair: RivalryPair): Promise<string> {
-  const prompt = `You are writing flavor text for a fantasy football rivalry tracker. Write exactly ONE sentence (max 25 words) that captures the emotional essence of this rivalry. Be dramatic, specific, and personal. Do NOT use generic phrases like "fierce rivalry" or "heated battle."
+  const totalRSGames = pair.h2hWins + pair.h2hLosses + pair.h2hTies;
+
+  // Season-by-season breakdown string (last 6 seasons max)
+  const sbLines = (pair.seasonBreakdown ?? [])
+    .slice(-6)
+    .map(s => `${s.season}: Rod ${s.rodWins}-${s.rodLosses}`)
+    .join(', ');
+
+  // Scoring context
+  const scoringCtx = (pair.avgRodPF && pair.avgRivalPF)
+    ? `Rod averages ${pair.avgRodPF} pts vs ${pair.avgRivalPF} pts allowed in these matchups.`
+    : '';
+
+  // Biggest win/loss lines
+  const bigWinLine = (pair.biggestRodWinMargin && pair.biggestRodWinSeason)
+    ? `Rod's biggest win: ${pair.biggestRodWinRodScore}–${pair.biggestRodWinRivalScore} in ${pair.biggestRodWinSeason} (+${pair.biggestRodWinMargin} pts).`
+    : '';
+  const bigLossLine = (pair.biggestRodLossMargin && pair.biggestRodLossSeason)
+    ? `Rod's biggest loss: ${pair.biggestRodLossRodScore}–${pair.biggestRodLossRivalScore} in ${pair.biggestRodLossSeason} (-${pair.biggestRodLossMargin} pts).`
+    : '';
+
+  // Streak context
+  const streakLine = (pair.currentStreakLength && pair.currentStreakLength >= 2)
+    ? `Rod is currently on a ${pair.currentStreakLength}-game ${pair.currentStreakDirection} streak vs ${pair.rivalName}.`
+    : '';
+  const longestStreakLine = [
+    pair.longestWinStreak && pair.longestWinStreak >= 3 ? `Longest win streak: ${pair.longestWinStreak} in a row.` : '',
+    pair.longestLossStreak && pair.longestLossStreak >= 3 ? `Longest loss streak: ${pair.longestLossStreak} in a row.` : '',
+  ].filter(Boolean).join(' ');
+
+  // Rival playoff record
+  const rivalPoLine = (pair.rivalPlayoffWins !== undefined && pair.rivalPlayoffLosses !== undefined &&
+    (pair.rivalPlayoffWins + pair.rivalPlayoffLosses) > 0)
+    ? `${pair.rivalName} all-time playoff record: ${pair.rivalPlayoffWins}W-${pair.rivalPlayoffLosses}L.`
+    : '';
+
+  const prompt = `You are writing flavor text for a fantasy football rivalry tracker. Write exactly ONE sentence (max 30 words) that captures the emotional essence of this rivalry. Be dramatic, specific, and personal. Reference actual scores or seasons when they make the sentence more vivid. Do NOT use generic phrases like "fierce rivalry" or "heated battle."
 
 Rivalry data:
 - Rod Sellers vs ${pair.rivalName}
-- H2H record: Rod ${pair.h2hWins}W-${pair.h2hLosses}L-${pair.h2hTies}T
+- All-time regular-season H2H: Rod ${pair.h2hWins}W-${pair.h2hLosses}L-${pair.h2hTies}T (${totalRSGames} games)
 - Playoff eliminations by ${pair.rivalName}: ${pair.playoffEliminations}
-${(pair.rivalPlayoffWins !== undefined && pair.rivalPlayoffLosses !== undefined && (pair.rivalPlayoffWins + pair.rivalPlayoffLosses) > 0) ? `- ${pair.rivalName} all-time playoff record: ${pair.rivalPlayoffWins}W-${pair.rivalPlayoffLosses}L` : ''}
+${rivalPoLine}
 - Close losses (< 5 pts): ${pair.closeLossCount}
 - Heat level: ${pair.heatLabel}
-${pair.painfulLossSeason ? `- Most painful loss: ${pair.painfulLossSeason} season, lost by ${pair.painfulLossMargin} pts` : ""}
-${pair.revengeAchieved ? "- Rod got revenge in the most recent matchup" : "- Rod has not yet gotten revenge"}
+${scoringCtx}
+${bigWinLine}
+${bigLossLine}
+${streakLine}
+${longestStreakLine}
+${sbLines ? `- Season breakdown: ${sbLines}` : ''}
+${pair.painfulLossSeason ? `- Most painful loss: ${pair.painfulLossSeason} season, lost by ${pair.painfulLossMargin} pts (rival scored ${pair.painfulLossOpponentScore})` : ''}
+${pair.revengeAchieved ? '- Rod got revenge in the most recent matchup' : '- Rod has not yet gotten revenge'}
 
 Output: One sentence only. No quotes. No explanation.`;
 
