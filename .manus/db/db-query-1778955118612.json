@@ -1,0 +1,25 @@
+{
+  "query": "\nSELECT \n  season,\n  JSON_EXTRACT(payload, '$.mSchedule[0].playoffTierType') as sample_tier_type,\n  JSON_LENGTH(JSON_EXTRACT(payload, '$.mSchedule')) as schedule_count\nFROM espn_season_cache \nWHERE season IN (2023, 2024, 2025)\nLIMIT 10;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT \n  season,\n  JSON_EXTRACT(payload, '$.mSchedule[0].playoffTierType') as sample_tier_type,\n  JSON_LENGTH(JSON_EXTRACT(payload, '$.mSchedule')) as schedule_count\nFROM espn_season_cache \nWHERE season IN (2023, 2024, 2025)\nLIMIT 10;\n",
+  "rows": [
+    {
+      "season": "2024",
+      "sample_tier_type": "NULL",
+      "schedule_count": "NULL"
+    },
+    {
+      "season": "2023",
+      "sample_tier_type": "NULL",
+      "schedule_count": "NULL"
+    },
+    {
+      "season": "2025",
+      "sample_tier_type": "NULL",
+      "schedule_count": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "season\tsample_tier_type\tschedule_count\n2024\tNULL\tNULL\n2023\tNULL\tNULL\n2025\tNULL\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 1486
+}

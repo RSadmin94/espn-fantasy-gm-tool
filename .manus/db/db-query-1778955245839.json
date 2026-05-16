@@ -1,0 +1,24 @@
+{
+  "query": "\nSELECT \n  JSON_EXTRACT(payload, '$.teams[0].id') as t0_id,\n  JSON_EXTRACT(payload, '$.teams[0].rankFinal') as t0_rank,\n  JSON_EXTRACT(payload, '$.teams[1].id') as t1_id,\n  JSON_EXTRACT(payload, '$.teams[1].rankFinal') as t1_rank,\n  JSON_EXTRACT(payload, '$.teams[2].id') as t2_id,\n  JSON_EXTRACT(payload, '$.teams[2].rankFinal') as t2_rank,\n  JSON_EXTRACT(payload, '$.teams[3].id') as t3_id,\n  JSON_EXTRACT(payload, '$.teams[3].rankFinal') as t3_rank,\n  JSON_EXTRACT(payload, '$.teams[4].id') as t4_id,\n  JSON_EXTRACT(payload, '$.teams[4].rankFinal') as t4_rank,\n  JSON_EXTRACT(payload, '$.teams[5].id') as t5_id,\n  JSON_EXTRACT(payload, '$.teams[5].rankFinal') as t5_rank\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT \n  JSON_EXTRACT(payload, '$.teams[0].id') as t0_id,\n  JSON_EXTRACT(payload, '$.teams[0].rankFinal') as t0_rank,\n  JSON_EXTRACT(payload, '$.teams[1].id') as t1_id,\n  JSON_EXTRACT(payload, '$.teams[1].rankFinal') as t1_rank,\n  JSON_EXTRACT(payload, '$.teams[2].id') as t2_id,\n  JSON_EXTRACT(payload, '$.teams[2].rankFinal') as t2_rank,\n  JSON_EXTRACT(payload, '$.teams[3].id') as t3_id,\n  JSON_EXTRACT(payload, '$.teams[3].rankFinal') as t3_rank,\n  JSON_EXTRACT(payload, '$.teams[4].id') as t4_id,\n  JSON_EXTRACT(payload, '$.teams[4].rankFinal') as t4_rank,\n  JSON_EXTRACT(payload, '$.teams[5].id') as t5_id,\n  JSON_EXTRACT(payload, '$.teams[5].rankFinal') as t5_rank\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "rows": [
+    {
+      "t0_id": "1",
+      "t0_rank": "0",
+      "t1_id": "4",
+      "t1_rank": "0",
+      "t2_id": "11",
+      "t2_rank": "0",
+      "t3_id": "14",
+      "t3_rank": "0",
+      "t4_id": "17",
+      "t4_rank": "0",
+      "t5_id": "18",
+      "t5_rank": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "t0_id\tt0_rank\tt1_id\tt1_rank\tt2_id\tt2_rank\tt3_id\tt3_rank\tt4_id\tt4_rank\tt5_id\tt5_rank\n1\t0\t4\t0\t11\t0\t14\t0\t17\t0\t18\t0\n",
+  "stderr": "",
+  "execution_time_ms": 620
+}

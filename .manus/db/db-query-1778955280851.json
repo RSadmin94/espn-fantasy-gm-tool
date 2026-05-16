@@ -1,0 +1,20 @@
+{
+  "query": "\nSELECT \n  JSON_EXTRACT(payload, '$.schedule[100].matchupPeriodId') as p100,\n  JSON_EXTRACT(payload, '$.schedule[100].winner') as w100,\n  JSON_EXTRACT(payload, '$.schedule[100].home.teamId') as h100,\n  JSON_EXTRACT(payload, '$.schedule[100].away.teamId') as a100,\n  JSON_EXTRACT(payload, '$.schedule[101].matchupPeriodId') as p101,\n  JSON_EXTRACT(payload, '$.schedule[101].winner') as w101,\n  JSON_EXTRACT(payload, '$.schedule[101].home.teamId') as h101,\n  JSON_EXTRACT(payload, '$.schedule[101].away.teamId') as a101\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT \n  JSON_EXTRACT(payload, '$.schedule[100].matchupPeriodId') as p100,\n  JSON_EXTRACT(payload, '$.schedule[100].winner') as w100,\n  JSON_EXTRACT(payload, '$.schedule[100].home.teamId') as h100,\n  JSON_EXTRACT(payload, '$.schedule[100].away.teamId') as a100,\n  JSON_EXTRACT(payload, '$.schedule[101].matchupPeriodId') as p101,\n  JSON_EXTRACT(payload, '$.schedule[101].winner') as w101,\n  JSON_EXTRACT(payload, '$.schedule[101].home.teamId') as h101,\n  JSON_EXTRACT(payload, '$.schedule[101].away.teamId') as a101\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "rows": [
+    {
+      "p100": "15",
+      "w100": "\"AWAY\"",
+      "h100": "21",
+      "a100": "4",
+      "p101": "15",
+      "w101": "\"HOME\"",
+      "h101": "1",
+      "a101": "27"
+    }
+  ],
+  "messages": [],
+  "stdout": "p100\tw100\th100\ta100\tp101\tw101\th101\ta101\n15\t\"AWAY\"\t21\t4\t15\t\"HOME\"\t1\t27\n",
+  "stderr": "",
+  "execution_time_ms": 603
+}

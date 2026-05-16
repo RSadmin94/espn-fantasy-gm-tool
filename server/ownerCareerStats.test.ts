@@ -14,22 +14,78 @@ function computePlayoffRate(appearances: number, seasons: number): number {
   return seasons > 0 ? Math.round((appearances / seasons) * 1000) / 10 : 0;
 }
 
-function determineChampion(
-  schedule: Array<{ matchupPeriodId: number; playoffTierType: string; winner: string; home?: { teamId: number }; away?: { teamId: number } }>
-): { championTeamId: number | null; runnerUpTeamId: number | null } {
-  const completedPlayoffs = schedule.filter(
+/**
+ * Mirror of the findChampionshipMatchup function from routers.ts.
+ * Identifies the true championship game by tracing semi-final winners,
+ * distinguishing it from the 3rd-place game when both appear as
+ * WINNERS_BRACKET in the same final period.
+ */
+function findChampionshipMatchup(
+  schedule: Array<{
+    matchupPeriodId: number;
+    playoffTierType: string;
+    winner: string;
+    home?: { teamId: number };
+    away?: { teamId: number };
+  }>
+): typeof schedule[number] | null {
+  const completed = schedule.filter(
     (m) => m.playoffTierType === "WINNERS_BRACKET" && m.winner && m.winner !== "UNDECIDED"
   );
-  if (completedPlayoffs.length === 0) return { championTeamId: null, runnerUpTeamId: null };
+  if (completed.length === 0) return null;
 
-  const champMatchup = completedPlayoffs.reduce((a, b) =>
-    a.matchupPeriodId >= b.matchupPeriodId ? a : b
-  );
+  const maxPeriod = Math.max(...completed.map((m) => m.matchupPeriodId));
+  const finalRound = completed.filter((m) => m.matchupPeriodId === maxPeriod);
+
+  if (finalRound.length === 1) return finalRound[0];
+
+  const semiFinalPeriod = maxPeriod - 1;
+  const semiFinals = completed.filter((m) => m.matchupPeriodId === semiFinalPeriod);
+  if (semiFinals.length > 0) {
+    const semiFinalWinners = new Set<number>();
+    for (const sf of semiFinals) {
+      const winnerId = sf.winner === "HOME" ? sf.home?.teamId : sf.away?.teamId;
+      if (winnerId != null) semiFinalWinners.add(winnerId);
+    }
+    for (const m of finalRound) {
+      const homeId = m.home?.teamId;
+      const awayId = m.away?.teamId;
+      if (
+        homeId != null &&
+        awayId != null &&
+        semiFinalWinners.has(homeId) &&
+        semiFinalWinners.has(awayId)
+      ) {
+        return m;
+      }
+    }
+  }
+
+  return finalRound[finalRound.length - 1];
+}
+
+function determineChampion(
+  schedule: Array<{
+    matchupPeriodId: number;
+    playoffTierType: string;
+    winner: string;
+    home?: { teamId: number };
+    away?: { teamId: number };
+  }>
+): { championTeamId: number | null; runnerUpTeamId: number | null } {
+  const champMatchup = findChampionshipMatchup(schedule);
+  if (!champMatchup) return { championTeamId: null, runnerUpTeamId: null };
 
   if (champMatchup.winner === "HOME") {
-    return { championTeamId: champMatchup.home?.teamId ?? null, runnerUpTeamId: champMatchup.away?.teamId ?? null };
+    return {
+      championTeamId: champMatchup.home?.teamId ?? null,
+      runnerUpTeamId: champMatchup.away?.teamId ?? null,
+    };
   } else if (champMatchup.winner === "AWAY") {
-    return { championTeamId: champMatchup.away?.teamId ?? null, runnerUpTeamId: champMatchup.home?.teamId ?? null };
+    return {
+      championTeamId: champMatchup.away?.teamId ?? null,
+      runnerUpTeamId: champMatchup.home?.teamId ?? null,
+    };
   }
   return { championTeamId: null, runnerUpTeamId: null };
 }
@@ -98,6 +154,70 @@ describe("ownerCareerStats endpoint logic", () => {
     const { championTeamId } = determineChampion(schedule);
     expect(championTeamId).toBeNull();
   });
+
+  // ── New: 3rd-place game disambiguation ─────────────────────────────────────
+
+  it("correctly identifies champion when championship and 3rd-place game are both WINNERS_BRACKET in the same period", () => {
+    // Semi-finals (period 15): team 4 beats team 21, team 1 beats team 27
+    // Finals (period 16): team 1 vs team 4 (championship), team 18 vs team 14 (3rd place)
+    const schedule = [
+      // Semi-finals
+      { matchupPeriodId: 15, playoffTierType: "WINNERS_BRACKET", winner: "AWAY", home: { teamId: 21 }, away: { teamId: 4 } },
+      { matchupPeriodId: 15, playoffTierType: "WINNERS_BRACKET", winner: "HOME", home: { teamId: 1 }, away: { teamId: 27 } },
+      // Finals — championship (semi-final winners: 4 and 1)
+      { matchupPeriodId: 16, playoffTierType: "WINNERS_BRACKET", winner: "AWAY", home: { teamId: 1 }, away: { teamId: 4 } },
+      // Finals — 3rd place (semi-final losers: 21 and 27)
+      { matchupPeriodId: 16, playoffTierType: "WINNERS_BRACKET", winner: "AWAY", home: { teamId: 18 }, away: { teamId: 14 } },
+    ];
+    const { championTeamId, runnerUpTeamId } = determineChampion(schedule);
+    // Team 4 (AWAY winner of the championship matchup) should be champion
+    expect(championTeamId).toBe(4);
+    // Team 1 (HOME of the championship matchup) should be runner-up
+    expect(runnerUpTeamId).toBe(1);
+  });
+
+  it("does NOT credit the 3rd-place game winner as champion", () => {
+    const schedule = [
+      // Semi-finals
+      { matchupPeriodId: 15, playoffTierType: "WINNERS_BRACKET", winner: "AWAY", home: { teamId: 21 }, away: { teamId: 4 } },
+      { matchupPeriodId: 15, playoffTierType: "WINNERS_BRACKET", winner: "HOME", home: { teamId: 1 }, away: { teamId: 27 } },
+      // Championship
+      { matchupPeriodId: 16, playoffTierType: "WINNERS_BRACKET", winner: "AWAY", home: { teamId: 1 }, away: { teamId: 4 } },
+      // 3rd place — team 14 wins
+      { matchupPeriodId: 16, playoffTierType: "WINNERS_BRACKET", winner: "AWAY", home: { teamId: 18 }, away: { teamId: 14 } },
+    ];
+    const { championTeamId } = determineChampion(schedule);
+    // Team 14 won the 3rd-place game — should NOT be champion
+    expect(championTeamId).not.toBe(14);
+    // Team 18 lost the 3rd-place game — should NOT be champion
+    expect(championTeamId).not.toBe(18);
+  });
+
+  it("falls back gracefully when semi-final data is missing", () => {
+    // Only final round matchups, no semi-finals to trace
+    const schedule = [
+      { matchupPeriodId: 16, playoffTierType: "WINNERS_BRACKET", winner: "HOME", home: { teamId: 5 }, away: { teamId: 9 } },
+      { matchupPeriodId: 16, playoffTierType: "WINNERS_BRACKET", winner: "AWAY", home: { teamId: 3 }, away: { teamId: 7 } },
+    ];
+    // Without semi-finals, falls back to last matchup in the final round
+    const champMatchup = findChampionshipMatchup(schedule);
+    expect(champMatchup).not.toBeNull();
+    // Should return one of the two final-round matchups
+    const validTeams = new Set([5, 9, 3, 7]);
+    expect(validTeams.has(champMatchup!.home?.teamId ?? -1) || validTeams.has(champMatchup!.away?.teamId ?? -1)).toBe(true);
+  });
+
+  it("handles single-game final (no 3rd-place game) correctly", () => {
+    const schedule = [
+      { matchupPeriodId: 15, playoffTierType: "WINNERS_BRACKET", winner: "HOME", home: { teamId: 2 }, away: { teamId: 8 } },
+      { matchupPeriodId: 16, playoffTierType: "WINNERS_BRACKET", winner: "HOME", home: { teamId: 2 }, away: { teamId: 6 } },
+    ];
+    const { championTeamId, runnerUpTeamId } = determineChampion(schedule);
+    expect(championTeamId).toBe(2);
+    expect(runnerUpTeamId).toBe(6);
+  });
+
+  // ── Existing tests ──────────────────────────────────────────────────────────
 
   it("builds H2H record correctly for two teams", () => {
     const matchups = [

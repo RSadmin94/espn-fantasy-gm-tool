@@ -91,6 +91,56 @@ async function getSeasonData(season: number) {
   });
 }
 
+/**
+ * Identify the true championship matchup from a season's schedule.
+ *
+ * ESPN stores both the championship game AND the 3rd-place game as
+ * `playoffTierType === 'WINNERS_BRACKET'` in the same final matchup period.
+ * The correct approach is to trace which teams won the semi-finals (the
+ * WINNERS_BRACKET matchups in the second-to-last playoff period) and then
+ * find the final-period matchup that contains exactly those two teams.
+ *
+ * Falls back to the last WINNERS_BRACKET matchup if tracing fails.
+ */
+function findChampionshipMatchup(schedule: any[]): any | null {
+  const completed = schedule.filter(
+    (m: any) => m.playoffTierType === 'WINNERS_BRACKET' && m.winner && m.winner !== 'UNDECIDED'
+  );
+  if (completed.length === 0) return null;
+
+  // Find the highest matchup period that has WINNERS_BRACKET games
+  const maxPeriod = Math.max(...completed.map((m: any) => m.matchupPeriodId as number));
+  const finalRound = completed.filter((m: any) => m.matchupPeriodId === maxPeriod);
+
+  // If only one matchup in the final round, that IS the championship
+  if (finalRound.length === 1) return finalRound[0];
+
+  // Multiple matchups in the final round (e.g. championship + 3rd-place game).
+  // Identify the semi-final winners: teams that won a WINNERS_BRACKET matchup
+  // in the period immediately before the final round.
+  const semiFinalPeriod = maxPeriod - 1;
+  const semiFinals = completed.filter((m: any) => m.matchupPeriodId === semiFinalPeriod);
+  if (semiFinals.length > 0) {
+    const semiFinalWinners = new Set<number>();
+    for (const sf of semiFinals) {
+      const winnerId = sf.winner === 'HOME' ? sf.home?.teamId : sf.away?.teamId;
+      if (winnerId != null) semiFinalWinners.add(winnerId);
+    }
+    // The championship matchup is the one where both teams are semi-final winners
+    for (const m of finalRound) {
+      const homeId = m.home?.teamId;
+      const awayId = m.away?.teamId;
+      if (homeId != null && awayId != null &&
+          semiFinalWinners.has(homeId) && semiFinalWinners.has(awayId)) {
+        return m;
+      }
+    }
+  }
+
+  // Fallback: return the last matchup in the final round
+  return finalRound[finalRound.length - 1];
+}
+
 export const appRouter = router({
   system: systemRouter,
   billing: billingRouter,
@@ -2370,15 +2420,11 @@ export const appRouter = router({
       let championTeamId: number | null = null;
       let runnerUpTeamId: number | null = null;
 
-      // Look for championship matchup (WINNERS_BRACKET in the last matchup period)
-      const completedPlayoffs = schedule.filter(
-        (m: any) => m.playoffTierType === 'WINNERS_BRACKET' && m.winner && m.winner !== 'UNDECIDED'
-      );
-      if (completedPlayoffs.length > 0) {
-        // The championship is the last completed winners bracket matchup
-        const champMatchup = completedPlayoffs.reduce((a: any, b: any) =>
-          a.matchupPeriodId >= b.matchupPeriodId ? a : b
-        );
+      // Look for championship matchup — use bracket-tracing to distinguish
+      // the true championship from the 3rd-place game when both appear as
+      // WINNERS_BRACKET in the same final period.
+      const champMatchup = findChampionshipMatchup(schedule);
+      if (champMatchup) {
         if (champMatchup.winner === 'HOME') {
           championTeamId = champMatchup.home?.teamId ?? null;
           runnerUpTeamId = champMatchup.away?.teamId ?? null;
@@ -2658,19 +2704,16 @@ export const appRouter = router({
         totalLosses += losses;
         seasonsActive++;
 
-        // Determine if champion this season
-        const completedPlayoffs = schedule.filter(
-          (m: any) => m.playoffTierType === 'WINNERS_BRACKET' && m.winner && m.winner !== 'UNDECIDED'
-        );
+        // Determine if champion this season using bracket-tracing
         let isChamp = false;
-        if (completedPlayoffs.length > 0) {
-          const champMatchup = completedPlayoffs.reduce((a: any, b: any) =>
-            a.matchupPeriodId >= b.matchupPeriodId ? a : b
-          );
-          const champTeamId = champMatchup.winner === 'HOME'
-            ? champMatchup.home?.teamId
-            : champMatchup.away?.teamId;
-          isChamp = champTeamId === team.id;
+        {
+          const champM = findChampionshipMatchup(schedule);
+          if (champM) {
+            const champTeamId = champM.winner === 'HOME'
+              ? champM.home?.teamId
+              : champM.away?.teamId;
+            isChamp = champTeamId === team.id;
+          }
         }
         if (isChamp) championships++;
 

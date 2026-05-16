@@ -1,0 +1,24 @@
+{
+  "query": "\nSELECT \n  JSON_EXTRACT(payload, '$.schedule[100].playoffTierType') as t100,\n  JSON_EXTRACT(payload, '$.schedule[100].matchupPeriodId') as p100,\n  JSON_EXTRACT(payload, '$.schedule[100].winner') as w100,\n  JSON_EXTRACT(payload, '$.schedule[101].playoffTierType') as t101,\n  JSON_EXTRACT(payload, '$.schedule[101].matchupPeriodId') as p101,\n  JSON_EXTRACT(payload, '$.schedule[101].winner') as w101,\n  JSON_EXTRACT(payload, '$.schedule[102].playoffTierType') as t102,\n  JSON_EXTRACT(payload, '$.schedule[102].matchupPeriodId') as p102,\n  JSON_EXTRACT(payload, '$.schedule[102].winner') as w102,\n  JSON_EXTRACT(payload, '$.schedule[103].playoffTierType') as t103,\n  JSON_EXTRACT(payload, '$.schedule[103].matchupPeriodId') as p103,\n  JSON_EXTRACT(payload, '$.schedule[103].winner') as w103\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT \n  JSON_EXTRACT(payload, '$.schedule[100].playoffTierType') as t100,\n  JSON_EXTRACT(payload, '$.schedule[100].matchupPeriodId') as p100,\n  JSON_EXTRACT(payload, '$.schedule[100].winner') as w100,\n  JSON_EXTRACT(payload, '$.schedule[101].playoffTierType') as t101,\n  JSON_EXTRACT(payload, '$.schedule[101].matchupPeriodId') as p101,\n  JSON_EXTRACT(payload, '$.schedule[101].winner') as w101,\n  JSON_EXTRACT(payload, '$.schedule[102].playoffTierType') as t102,\n  JSON_EXTRACT(payload, '$.schedule[102].matchupPeriodId') as p102,\n  JSON_EXTRACT(payload, '$.schedule[102].winner') as w102,\n  JSON_EXTRACT(payload, '$.schedule[103].playoffTierType') as t103,\n  JSON_EXTRACT(payload, '$.schedule[103].matchupPeriodId') as p103,\n  JSON_EXTRACT(payload, '$.schedule[103].winner') as w103\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "rows": [
+    {
+      "t100": "\"WINNERS_BRACKET\"",
+      "p100": "15",
+      "w100": "\"AWAY\"",
+      "t101": "\"WINNERS_BRACKET\"",
+      "p101": "15",
+      "w101": "\"HOME\"",
+      "t102": "\"LOSERS_CONSOLATION_LADDER\"",
+      "p102": "15",
+      "w102": "\"AWAY\"",
+      "t103": "\"LOSERS_CONSOLATION_LADDER\"",
+      "p103": "15",
+      "w103": "\"AWAY\""
+    }
+  ],
+  "messages": [],
+  "stdout": "t100\tp100\tw100\tt101\tp101\tw101\tt102\tp102\tw102\tt103\tp103\tw103\n\"WINNERS_BRACKET\"\t15\t\"AWAY\"\t\"WINNERS_BRACKET\"\t15\t\"HOME\"\t\"LOSERS_CONSOLATION_LADDER\"\t15\t\"AWAY\"\t\"LOSERS_CONSOLATION_LADDER\"\t15\t\"AWAY\"\n",
+  "stderr": "",
+  "execution_time_ms": 597
+}

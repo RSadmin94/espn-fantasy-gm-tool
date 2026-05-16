@@ -1,0 +1,17 @@
+{
+  "query": "\nSELECT \n  JSON_EXTRACT(payload, '$.schedule[118].playoffTierType') as last_playoff_type,\n  JSON_EXTRACT(payload, '$.schedule[118].winner') as last_winner,\n  JSON_EXTRACT(payload, '$.schedule[118].matchupPeriodId') as last_period,\n  JSON_EXTRACT(payload, '$.schedule[117].playoffTierType') as prev_playoff_type,\n  JSON_EXTRACT(payload, '$.schedule[117].winner') as prev_winner\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT \n  JSON_EXTRACT(payload, '$.schedule[118].playoffTierType') as last_playoff_type,\n  JSON_EXTRACT(payload, '$.schedule[118].winner') as last_winner,\n  JSON_EXTRACT(payload, '$.schedule[118].matchupPeriodId') as last_period,\n  JSON_EXTRACT(payload, '$.schedule[117].playoffTierType') as prev_playoff_type,\n  JSON_EXTRACT(payload, '$.schedule[117].winner') as prev_winner\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "rows": [
+    {
+      "last_playoff_type": "\"LOSERS_CONSOLATION_LADDER\"",
+      "last_winner": "\"HOME\"",
+      "last_period": "17",
+      "prev_playoff_type": "\"LOSERS_CONSOLATION_LADDER\"",
+      "prev_winner": "\"AWAY\""
+    }
+  ],
+  "messages": [],
+  "stdout": "last_playoff_type\tlast_winner\tlast_period\tprev_playoff_type\tprev_winner\n\"LOSERS_CONSOLATION_LADDER\"\t\"HOME\"\t17\t\"LOSERS_CONSOLATION_LADDER\"\t\"AWAY\"\n",
+  "stderr": "",
+  "execution_time_ms": 598
+}

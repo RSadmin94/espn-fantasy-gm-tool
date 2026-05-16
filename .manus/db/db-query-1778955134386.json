@@ -1,0 +1,25 @@
+{
+  "query": "\nSELECT season, viewName, CHAR_LENGTH(payload) as size\nFROM espn_season_cache \nWHERE season IN (2023, 2024, 2025)\nORDER BY season, viewName;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT season, viewName, CHAR_LENGTH(payload) as size\nFROM espn_season_cache \nWHERE season IN (2023, 2024, 2025)\nORDER BY season, viewName;\n",
+  "rows": [
+    {
+      "season": "2023",
+      "viewName": "combined",
+      "size": "2417357"
+    },
+    {
+      "season": "2024",
+      "viewName": "combined",
+      "size": "2293211"
+    },
+    {
+      "season": "2025",
+      "viewName": "combined",
+      "size": "2408608"
+    }
+  ],
+  "messages": [],
+  "stdout": "season\tviewName\tsize\n2023\tcombined\t2417357\n2024\tcombined\t2293211\n2025\tcombined\t2408608\n",
+  "stderr": "",
+  "execution_time_ms": 697
+}

@@ -1432,3 +1432,5 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Renamed "AI GM Advisor" to "War Room AI" in panel header
 - [x] Fix Trade Aging tab showing empty — added Chrome extension trade scraper + scraped_trades DB table + tradeAging fallback
 - [x] ESPN Activity Capture V1 — passive transaction capture via extension, league_events DB table, admin debug view at /admin/activity-capture
+- [x] Fix Opponent Intel showing incorrect championship count (findChampionshipMatchup: traces semi-final winners to distinguish championship from 3rd-place game when both are WINNERS_BRACKET in the same period)
+- [ ] Fix Trade Aging showing wrong/extra trades — should only show valid completed trades

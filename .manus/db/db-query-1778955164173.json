@@ -1,0 +1,27 @@
+{
+  "query": "\nSELECT \n  JSON_EXTRACT(payload, '$.schedule[104].playoffTierType') as t104,\n  JSON_EXTRACT(payload, '$.schedule[104].matchupPeriodId') as p104,\n  JSON_EXTRACT(payload, '$.schedule[104].winner') as w104,\n  JSON_EXTRACT(payload, '$.schedule[104].home.teamId') as h104,\n  JSON_EXTRACT(payload, '$.schedule[104].away.teamId') as a104,\n  JSON_EXTRACT(payload, '$.schedule[105].playoffTierType') as t105,\n  JSON_EXTRACT(payload, '$.schedule[105].matchupPeriodId') as p105,\n  JSON_EXTRACT(payload, '$.schedule[105].winner') as w105,\n  JSON_EXTRACT(payload, '$.schedule[105].home.teamId') as h105,\n  JSON_EXTRACT(payload, '$.schedule[105].away.teamId') as a105,\n  JSON_EXTRACT(payload, '$.schedule[106].playoffTierType') as t106,\n  JSON_EXTRACT(payload, '$.schedule[106].matchupPeriodId') as p106,\n  JSON_EXTRACT(payload, '$.schedule[106].winner') as w106,\n  JSON_EXTRACT(payload, '$.schedule[106].home.teamId') as h106,\n  JSON_EXTRACT(payload, '$.schedule[106].away.teamId') as a106\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT \n  JSON_EXTRACT(payload, '$.schedule[104].playoffTierType') as t104,\n  JSON_EXTRACT(payload, '$.schedule[104].matchupPeriodId') as p104,\n  JSON_EXTRACT(payload, '$.schedule[104].winner') as w104,\n  JSON_EXTRACT(payload, '$.schedule[104].home.teamId') as h104,\n  JSON_EXTRACT(payload, '$.schedule[104].away.teamId') as a104,\n  JSON_EXTRACT(payload, '$.schedule[105].playoffTierType') as t105,\n  JSON_EXTRACT(payload, '$.schedule[105].matchupPeriodId') as p105,\n  JSON_EXTRACT(payload, '$.schedule[105].winner') as w105,\n  JSON_EXTRACT(payload, '$.schedule[105].home.teamId') as h105,\n  JSON_EXTRACT(payload, '$.schedule[105].away.teamId') as a105,\n  JSON_EXTRACT(payload, '$.schedule[106].playoffTierType') as t106,\n  JSON_EXTRACT(payload, '$.schedule[106].matchupPeriodId') as p106,\n  JSON_EXTRACT(payload, '$.schedule[106].winner') as w106,\n  JSON_EXTRACT(payload, '$.schedule[106].home.teamId') as h106,\n  JSON_EXTRACT(payload, '$.schedule[106].away.teamId') as a106\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "rows": [
+    {
+      "t104": "\"LOSERS_CONSOLATION_LADDER\"",
+      "p104": "15",
+      "w104": "\"AWAY\"",
+      "h104": "23",
+      "a104": "17",
+      "t105": "\"WINNERS_BRACKET\"",
+      "p105": "16",
+      "w105": "\"AWAY\"",
+      "h105": "18",
+      "a105": "14",
+      "t106": "\"WINNERS_BRACKET\"",
+      "p106": "16",
+      "w106": "\"AWAY\"",
+      "h106": "1",
+      "a106": "4"
+    }
+  ],
+  "messages": [],
+  "stdout": "t104\tp104\tw104\th104\ta104\tt105\tp105\tw105\th105\ta105\tt106\tp106\tw106\th106\ta106\n\"LOSERS_CONSOLATION_LADDER\"\t15\t\"AWAY\"\t23\t17\t\"WINNERS_BRACKET\"\t16\t\"AWAY\"\t18\t14\t\"WINNERS_BRACKET\"\t16\t\"AWAY\"\t1\t4\n",
+  "stderr": "",
+  "execution_time_ms": 583
+}
