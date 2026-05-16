@@ -279,6 +279,51 @@ describe("calcManagerBehavior", () => {
     expect(result.length).toBe(1);
     expect(result[0].earlyQbTendency).toBe(true);
   });
+
+  it("computes pick-based keeper efficiency: positive when kept pick > ADP pick", () => {
+    // 12-team league: keeper kept at overall pick 11 (round 1, pick 11)
+    // Player has 22 avg pts (elite RB) → estimateAdpRound gives round 1
+    // adpOverallPick ≈ 1-3 (very early pick)
+    // efficiency = 11 - adpOverallPick → should be positive (good deal)
+    const teams: TeamRow[] = Array.from({ length: 12 }, (_, i) => makeTeam({ teamId: i + 1 }));
+    const picks: DraftPickRow[] = [
+      { season: 2024, teamId: 1, roundId: 1, roundPickNumber: 11, overallPickNumber: 11, position: "RB", keeper: true, playerId: 999 },
+    ];
+    const playerScoreMap = new Map<number, { avgPoints: number; position: string }>();
+    playerScoreMap.set(999, { avgPoints: 22, position: "RB" });
+    const result = calcManagerBehavior(teams, [], picks, { 1: "Smart Keeper" }, playerScoreMap);
+    expect(result.length).toBeGreaterThan(0);
+    const m = result.find(r => r.teamId === 1)!;
+    expect(m.keeperEfficiencyAvg).toBeGreaterThan(0);
+  });
+
+  it("computes pick-based keeper efficiency: negative when kept pick < ADP pick", () => {
+    // 12-team league: keeper kept at overall pick 1 (round 1, pick 1)
+    // Player has 8 avg pts (low-value QB) → estimateAdpRound gives round 8+
+    // adpOverallPick ≈ round 8 * 12 = 96+
+    // efficiency = 1 - 96 → very negative (overpaying)
+    const teams: TeamRow[] = Array.from({ length: 12 }, (_, i) => makeTeam({ teamId: i + 1 }));
+    const picks: DraftPickRow[] = [
+      { season: 2024, teamId: 1, roundId: 1, roundPickNumber: 1, overallPickNumber: 1, position: "QB", keeper: true, playerId: 888 },
+    ];
+    const playerScoreMap = new Map<number, { avgPoints: number; position: string }>();
+    playerScoreMap.set(888, { avgPoints: 8, position: "QB" });
+    const result = calcManagerBehavior(teams, [], picks, { 1: "Bad Keeper" }, playerScoreMap);
+    const m = result.find(r => r.teamId === 1)!;
+    expect(m.keeperEfficiencyAvg).toBeLessThan(0);
+  });
+
+  it("falls back to round-based heuristic when no playerScoreMap provided", () => {
+    // Keeper in round 1 with no scoring data → fallback: (7 - 1) * leagueSize/2 = positive
+    const teams: TeamRow[] = Array.from({ length: 12 }, (_, i) => makeTeam({ teamId: i + 1 }));
+    const picks: DraftPickRow[] = [
+      { season: 2024, teamId: 1, roundId: 1, roundPickNumber: 5, overallPickNumber: 5, position: "RB", keeper: true },
+    ];
+    const result = calcManagerBehavior(teams, [], picks, { 1: "Keeper Guy" });
+    const m = result.find(r => r.teamId === 1)!;
+    // Round 1 keeper → (7 - 1) * 6 = 36 picks of value (fallback formula)
+    expect(m.keeperEfficiencyAvg).toBeGreaterThan(0);
+  });
 });
 
 // ── calcROSValue ──────────────────────────────────────────────────────────────

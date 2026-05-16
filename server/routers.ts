@@ -4975,32 +4975,72 @@ if (pickOrder.length > 0) {
         const seasonKey = (input.seasons ?? []).join("-") || "all";
         return memCache(`managerBehavior:${seasonKey}`, 10 * 60_000, async () => {
         const cachedSeasons = input.seasons ?? await getAllCachedSeasons();
+        // Aggregate by OWNER NAME (not teamId) to avoid cross-owner data mixing
+        // ESPN reuses team slot IDs across seasons when owners change
+        // Key: normalized owner name (lowercase, trimmed)
+        const ownerTeamMap: Record<string, TeamRow & { canonicalName: string }> = {};
+        // Maps (season, teamId) -> ownerName for transaction/pick lookup
+        const seasonTeamOwnerMap: Record<string, string> = {};
+
+        for (const season of cachedSeasons) {
+          const data = await getSeasonData(season);
+          if (!data) continue;
+          // Skip seasons with no real data (empty payload)
+          const teams = normalizeTeams(data);
+          if (!teams || teams.length === 0) continue;
+
+          for (const t of teams) {
+            const tid = t.teamId as number;
+            const ownerRaw = (t.owners as string) || "Unknown";
+            const ownerKey = ownerRaw.toLowerCase().trim();
+            seasonTeamOwnerMap[`${season}:${tid}`] = ownerKey;
+
+            if (!ownerTeamMap[ownerKey]) {
+              // Use a synthetic teamId (hash of owner name) so calcManagerBehavior can key by it
+              const syntheticId = ownerKey.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
+              ownerTeamMap[ownerKey] = { teamId: syntheticId, ownerName: ownerRaw, canonicalName: ownerRaw, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0 };
+            }
+            ownerTeamMap[ownerKey].wins += (t.wins as number) || 0;
+            ownerTeamMap[ownerKey].losses += (t.losses as number) || 0;
+            ownerTeamMap[ownerKey].pointsFor += (t.pointsFor as number) || 0;
+            ownerTeamMap[ownerKey].pointsAgainst += (t.pointsAgainst as number) || 0;
+          }
+        }
+
+        // Build ownerNameMap: syntheticId -> canonical name
+        const ownerNameMap: Record<number, string> = {};
+        for (const entry of Object.values(ownerTeamMap)) {
+          ownerNameMap[entry.teamId] = entry.canonicalName;
+        }
+
+        // Now collect transactions and picks, keyed to the owner's synthetic teamId
         const allTransactions: TransactionRow[] = [];
         const allDraftPicks: DraftPickRow[] = [];
-        const teamMap: Record<number, TeamRow> = {};
-        const ownerNameMap: Record<number, string> = {};
 
         for (const season of cachedSeasons) {
           const data = await getSeasonData(season);
           if (!data) continue;
           const teams = normalizeTeams(data);
+          if (!teams || teams.length === 0) continue;
+
+          // Build season-local teamId -> syntheticId map
+          const localIdToSynthetic: Record<number, number> = {};
           for (const t of teams) {
             const tid = t.teamId as number;
-            if (!teamMap[tid]) {
-              teamMap[tid] = { teamId: tid, ownerName: t.owners as string, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0 };
-              ownerNameMap[tid] = t.owners as string;
+            const ownerKey = seasonTeamOwnerMap[`${season}:${tid}`];
+            if (ownerKey && ownerTeamMap[ownerKey]) {
+              localIdToSynthetic[tid] = ownerTeamMap[ownerKey].teamId;
             }
-            teamMap[tid].wins += (t.wins as number) || 0;
-            teamMap[tid].losses += (t.losses as number) || 0;
-            teamMap[tid].pointsFor += (t.pointsFor as number) || 0;
-            teamMap[tid].pointsAgainst += (t.pointsAgainst as number) || 0;
           }
+
           const txs = normalizeTransactions(data) as unknown[];
           for (const tx of txs) {
             const t = tx as Record<string, unknown>;
+            const origTid = t.teamId as number;
+            const syntheticId = localIdToSynthetic[origTid] ?? origTid;
             allTransactions.push({
               season: t.season as number,
-              teamId: t.teamId as number,
+              teamId: syntheticId,
               type: t.type as string,
               itemType: t.itemType as string,
               proposedDate: t.proposedDate as number,
@@ -5009,23 +5049,50 @@ if (pickOrder.length > 0) {
           const picks = normalizeDraftPicks(data) as unknown[];
           for (const pick of picks) {
             const p = pick as Record<string, unknown>;
+            const origTid = p.teamId as number;
+            const syntheticId = localIdToSynthetic[origTid] ?? origTid;
             allDraftPicks.push({
               season: p.season as number,
-              teamId: p.teamId as number,
+              teamId: syntheticId,
               roundId: p.roundId as number,
               roundPickNumber: p.roundPickNumber as number,
               overallPickNumber: p.overallPickNumber as number,
               position: (p.position as string) || "?",
               keeper: (p.keeper as boolean) || false,
+              playerId: (p.playerId as number) || undefined,
             });
           }
         }
 
+        // Build playerScoreMap from the most recent cached season's roster data.
+        // This is used by calcManagerBehavior to estimate current ADP for keeper efficiency.
+        const playerScoreMap = new Map<number, { avgPoints: number; position: string }>();
+        const latestCachedSeason = [...cachedSeasons].sort((a, b) => b - a)[0];
+        if (latestCachedSeason) {
+          const latestData = await getSeasonData(latestCachedSeason);
+          if (latestData) {
+            const latestRosters = normalizeRosters(latestData) as Record<string, unknown>[];
+            for (const r of latestRosters) {
+              const pid = r.playerId as number;
+              const avg = (r.appliedAverage as number) || 0;
+              const pos = (r.position as string) || "?";
+              if (pid && avg > 0) {
+                // Keep the highest avgPoints entry if a player appears on multiple rosters
+                const existing = playerScoreMap.get(pid);
+                if (!existing || avg > existing.avgPoints) {
+                  playerScoreMap.set(pid, { avgPoints: avg, position: pos });
+                }
+              }
+            }
+          }
+        }
+
         return calcManagerBehavior(
-          Object.values(teamMap),
+          Object.values(ownerTeamMap).map(e => ({ teamId: e.teamId, ownerName: e.canonicalName, wins: e.wins, losses: e.losses, pointsFor: e.pointsFor, pointsAgainst: e.pointsAgainst })),
           allTransactions,
           allDraftPicks,
-          ownerNameMap
+          ownerNameMap,
+          playerScoreMap
         );
         });
       }),

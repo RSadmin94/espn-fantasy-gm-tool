@@ -66,6 +66,7 @@ export interface DraftPickRow {
   overallPickNumber: number;
   position: string;
   keeper: boolean;
+  playerId?: number;   // ESPN player ID — used for keeper efficiency cross-reference
 }
 
 // ─── Replacement level baselines (PPR, 14-team, 1 QB, 2 RB, 2 WR, 1 TE, 1 FLEX) ──
@@ -373,7 +374,7 @@ export interface ManagerBehaviorStats {
   earlyQbTendency: boolean;        // drafts QB in rounds 1-3
   earlyTeTendency: boolean;        // drafts TE in rounds 1-4
   // Keeper behavior
-  keeperEfficiencyAvg: number;     // avg round savings on keepers
+  keeperEfficiencyAvg: number;     // avg pick savings on keepers: costOverallPick - adpOverallPick (positive = good value)
   // Derived archetypes
   gmArchetype: string;
   gmArchetypeDesc: string;
@@ -381,11 +382,17 @@ export interface ManagerBehaviorStats {
   rosterStabilityScore: number;    // 100 - (drops/adds ratio × 100)
 }
 
+/**
+ * playerScoreMap: playerId -> { avgPoints, position } from the most recent season's roster.
+ * Used to estimate current ADP for keeper efficiency calculations.
+ * Without this map the function falls back to a round-based heuristic.
+ */
 export function calcManagerBehavior(
   teams: TeamRow[],
   transactions: TransactionRow[],
   draftPicks: DraftPickRow[],
-  ownerNameMap: Record<number, string>  // teamId -> ownerName
+  ownerNameMap: Record<number, string>,  // teamId -> ownerName
+  playerScoreMap?: Map<number, { avgPoints: number; position: string }>
 ): ManagerBehaviorStats[] {
   const results: ManagerBehaviorStats[] = [];
 
@@ -451,6 +458,105 @@ export function calcManagerBehavior(
       gmArchetypeDesc = "Rarely drops players — builds through the draft and selective adds.";
     }
 
+    // ── Keeper efficiency (pick-based formula) ──────────────────────────────────
+    //
+    // Keeper COST  = the overall pick number the keeper was drafted at last year.
+    //   e.g. kept at round 1, pick 11 in a 12-team league → cost = overall pick 11
+    //   We use overallPickNumber from the draft pick row directly.
+    //
+    // Keeper VALUE = estimated current ADP expressed as an overall pick number.
+    //   Step 1: estimateAdpRound(avgPoints, position) → draft round
+    //   Step 2: estimate pick-within-round from scoring rank at that position
+    //   Step 3: adpOverallPick = (adpRound - 1) * leagueSize + pickWithinRound
+    //
+    // Efficiency = costOverallPick - adpOverallPick
+    //   Positive → getting better pick than you paid (good value)
+    //   Negative → paying more than the player is worth (bad deal)
+    //
+    // Example: McCaffrey kept at pick 1.11 (overall 11), current ADP = pick 2
+    //   efficiency = 11 - 2 = +9 picks of value
+    //
+    const leagueSize = Math.max(teams.length, 10);
+    const keeperPicks = teamPicks.filter(p => p.keeper);
+    let keeperEfficiencyAvg = 0;
+
+    if (keeperPicks.length > 0 && playerScoreMap && playerScoreMap.size > 0) {
+      // Build position scoring rank arrays so we can estimate pick-within-round
+      const positionScores = new Map<string, number[]>();
+      Array.from(playerScoreMap.values()).forEach(info => {
+        const arr = positionScores.get(info.position) ?? [];
+        arr.push(info.avgPoints);
+        positionScores.set(info.position, arr);
+      });
+      Array.from(positionScores.entries()).forEach(([pos, arr]) => {
+        positionScores.set(pos, arr.sort((a: number, b: number) => b - a));
+      });
+
+      const pickSavings: number[] = [];
+      for (const kp of keeperPicks) {
+        const costOverallPick = kp.overallPickNumber;
+        if (!costOverallPick || costOverallPick <= 0) continue;
+
+        // Look up current scoring for this player
+        const pinfo = kp.playerId ? playerScoreMap.get(kp.playerId) : undefined;
+        const avgPoints = pinfo?.avgPoints ?? 0;
+        const position = pinfo?.position ?? kp.position;
+        if (avgPoints <= 0) continue; // no scoring data — skip
+
+        // Step 1: estimate ADP round from scoring
+        const adpRound = estimateAdpRound(avgPoints, position);
+
+        // Step 2: estimate pick-within-round from position rank
+        // Rank 1 at position = first pick of that position in the draft
+        const posRanks = positionScores.get(position) ?? [];
+        const posRankIdx = posRanks.findIndex(pts => pts <= avgPoints + 0.01);
+        const posRank = posRankIdx >= 0 ? posRankIdx + 1 : posRanks.length + 1;
+        // Roughly 2-3 picks of each position per round in a 12-team PPR league
+        const picksPerRound = Math.max(1, Math.round(leagueSize / 4));
+        const pickWithinRound = Math.min(leagueSize, Math.max(1, Math.ceil(posRank / picksPerRound)));
+
+        // Step 3: compute ADP overall pick
+        const adpOverallPick = (adpRound - 1) * leagueSize + pickWithinRound;
+
+        // Efficiency = how many picks better is their value vs what you paid
+        pickSavings.push(costOverallPick - adpOverallPick);
+      }
+
+      if (pickSavings.length > 0) {
+        keeperEfficiencyAvg = Math.round(
+          (pickSavings.reduce((s, v) => s + v, 0) / pickSavings.length) * 10
+        ) / 10;
+      }
+    } else if (keeperPicks.length > 0) {
+      // Fallback: no scoring data — compare keeper round vs league average round 7
+      // Scale to picks so the number is comparable (rough: 1 round ≈ leagueSize/2 picks)
+      const avgKeeperRound = keeperPicks.reduce((s, p) => s + p.roundId, 0) / keeperPicks.length;
+      keeperEfficiencyAvg = Math.round((7 - avgKeeperRound) * (leagueSize / 2) * 10) / 10;
+    }
+
+    // Personalized archetype description using actual stats
+    const tradesStr = avgTrades.toFixed(1);
+    const waiverStr = avgAdds.toFixed(1);
+    const keeperStr = keeperEfficiencyAvg > 0 ? `+${keeperEfficiencyAvg.toFixed(0)}` : keeperEfficiencyAvg.toFixed(0);
+    const keeperLabel = keeperEfficiencyAvg >= 5 ? "elite keeper value" : keeperEfficiencyAvg >= 1 ? "smart keeper decisions" : keeperEfficiencyAvg >= -3 ? "fair keeper value" : "tends to overpay for keepers";
+    const seasonsStr = seasonsAnalyzed === 1 ? "1 season" : `${seasonsAnalyzed} seasons`;
+
+    if (gmArchetype === "Dealmaker") {
+      gmArchetypeDesc = `${tradesStr} trades/yr + ${waiverStr} waiver adds/yr over ${seasonsStr}. Never sits still — always hunting an angle. High activity can be exploited when they overpay in desperation.`;
+    } else if (gmArchetype === "Waiver Grinder") {
+      gmArchetypeDesc = `${waiverStr} waiver adds/yr over ${seasonsStr}. Builds through the wire, not the trade market (${tradesStr} trades/yr). Keeper efficiency: ${keeperStr} picks avg — ${keeperLabel}.`;
+    } else if (gmArchetype === "Trade Shark") {
+      gmArchetypeDesc = `${tradesStr} trades/yr over ${seasonsStr}. Moves players constantly — watch for low-ball offers and desperation windows. Waiver activity is low (${waiverStr}/yr), so they rely on trades to improve.`;
+    } else if (gmArchetype === "Set & Forget") {
+      gmArchetypeDesc = `${tradesStr} trades/yr + ${waiverStr} waiver adds/yr over ${seasonsStr}. Minimal roster moves — either extremely confident in their team or checked out. Keeper efficiency: ${keeperStr} picks avg.`;
+    } else if (gmArchetype === "QB-First Drafter") {
+      gmArchetypeDesc = `Avg QB draft round: ${avgDraftRoundByPosition["QB"]?.toFixed(1) ?? "N/A"} over ${seasonsStr}. Prioritizes QB early — creates RB/WR scarcity that can be exploited in trades. ${tradesStr} trades/yr.`;
+    } else if (gmArchetype === "Roster Builder") {
+      gmArchetypeDesc = `${avgDrops.toFixed(1)} drops/yr over ${seasonsStr} — rarely releases players. Builds through the draft (keeper eff: ${keeperStr} picks). Low trade activity (${tradesStr}/yr) means patience is their strategy.`;
+    } else {
+      gmArchetypeDesc = `${tradesStr} trades/yr + ${waiverStr} waiver adds/yr over ${seasonsStr}. Keeper efficiency: ${keeperStr} picks avg. Balanced approach — no dominant tendency to exploit.`;
+    }
+
     results.push({
       teamId: team.teamId,
       ownerName,
@@ -463,7 +569,7 @@ export function calcManagerBehavior(
       avgDraftRoundByPosition,
       earlyQbTendency,
       earlyTeTendency,
-      keeperEfficiencyAvg: 0, // filled in by calcKeeperEfficiency caller
+      keeperEfficiencyAvg,
       gmArchetype,
       gmArchetypeDesc,
       rosterStabilityScore,
