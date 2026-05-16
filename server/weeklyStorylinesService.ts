@@ -200,6 +200,8 @@ export interface StorylinesInput {
   ownerPlayoffRecords?: Record<string, { playoffWins: number; playoffLosses: number }>;
   // rivalId → rich H2H stats block string (pre-built by refreshWeeklyStorylines)
   rivalH2HBlocks?: Record<string, string>;
+  // memberId → trophy summary sentence
+  ownerTrophyBlocks?: Record<string, string>;
 }
 
 export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] {
@@ -208,6 +210,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
     rivalryPairs, rodTeamId, rodMemberIds, prevSeasonRanks,
     ownerPlayoffRecords = {},
     rivalH2HBlocks = {},
+    ownerTrophyBlocks = {},
   } = input;
 
   const stories: StoryTrigger[] = [];
@@ -332,7 +335,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
           intensityScore: Math.min(100, 50 + matchingRivalry.h2hLosses * 5),
           supportingStat: `H2H record: ${matchingRivalry.h2hLosses} losses vs ${matchingRivalry.rivalName}`,
           opponentName,
-          llmContext: `Rod Sellers (${record}) faces ${matchingRivalry.rivalName} this week. Rod has lost to them ${matchingRivalry.h2hLosses} times head-to-head.${rivalPoStr} This is a revenge opportunity.${rivalH2HBlocks[matchingRivalry.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[matchingRivalry.rivalId]}` : ''}`,
+          llmContext: `Rod Sellers (${record}) faces ${matchingRivalry.rivalName} this week. Rod has lost to them ${matchingRivalry.h2hLosses} times head-to-head.${rivalPoStr} This is a revenge opportunity.${rivalH2HBlocks[matchingRivalry.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[matchingRivalry.rivalId]}` : ''}${(() => { const mids = (teams.find(t => opponentMids.includes((t.memberIds as string[])?.[0]))?.memberIds as string[]) || []; const trophyStr = mids.map(mid => ownerTrophyBlocks[mid]).find(Boolean); return trophyStr ? `\n\nOpponent prestige: ${trophyStr}` : ''; })()}`,
         });
       }
     }
@@ -359,7 +362,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
           intensityScore: Math.min(100, 60 + (elimRival?.playoffEliminations ?? 1) * 15),
           supportingStat: `${elimRival?.rivalName ?? opponentName} eliminated Rod from playoffs ${elimRival?.playoffEliminations ?? 1}x`,
           opponentName,
-          llmContext: `Rod Sellers (${record}) faces ${opponentName} this week — the same manager who has eliminated Rod from the playoffs ${elimRival?.playoffEliminations ?? 1} time(s).${elimPoStr} This is unfinished business.${elimRival && rivalH2HBlocks[elimRival.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[elimRival.rivalId]}` : ''}`,
+          llmContext: `Rod Sellers (${record}) faces ${opponentName} this week — the same manager who has eliminated Rod from the playoffs ${elimRival?.playoffEliminations ?? 1} time(s).${elimPoStr} This is unfinished business.${elimRival && rivalH2HBlocks[elimRival.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[elimRival.rivalId]}` : ''}${(() => { const trophyStr = opponentMids.map(mid => ownerTrophyBlocks[mid]).find(Boolean); return trophyStr ? `\n\nOpponent prestige: ${trophyStr}` : ''; })()}`,
         });
       }
     }
@@ -395,7 +398,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
         intensityScore: Math.min(100, 50 + wins * 5),
         supportingStat: `${wins}-${losses} with only ${totalTx} total transactions`,
         opponentName,
-        llmContext: `${ownerName} is ${record} and ranked #${rank} in the league while making only ${totalTx} total transactions. They are winning without making noise — the most dangerous kind of threat.`,
+        llmContext: `${ownerName} is ${record} and ranked #${rank} in the league while making only ${totalTx} total transactions. They are winning without making noise — the most dangerous kind of threat.${(() => { const teamMids4 = (team.memberIds as string[]) || []; const trophyStr = teamMids4.map(mid => ownerTrophyBlocks[mid]).find(Boolean); return trophyStr ? ` ${trophyStr}` : ''; })()}`,
       });
     }
 
@@ -688,6 +691,16 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
     }
   } catch { /* non-fatal: narrative context only */ }
 
+  // Build trophy/championship history for all owners
+  const ownerTrophyBlocks: Record<string, string> = {};
+  try {
+    const { computeAllTrophyHistory, buildTrophySummary } = await import('./championshipHistoryBuilder');
+    const trophyMap = await computeAllTrophyHistory();
+    for (const [memberId, rec] of Array.from(trophyMap.entries())) {
+      ownerTrophyBlocks[memberId] = buildTrophySummary(rec);
+    }
+  } catch { /* non-fatal */ }
+
   // Build enriched H2H blocks for Rod's rivalry pairs
   const rivalH2HBlocks: Record<string, string> = {};
   if (rodMemberIds.length > 0) {
@@ -732,6 +745,7 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
     prevSeasonRanks,
     ownerPlayoffRecords,
     rivalH2HBlocks,
+    ownerTrophyBlocks,
   });
 
   // Generate LLM content for each trigger (skip if already cached for this week)

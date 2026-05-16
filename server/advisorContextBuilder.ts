@@ -269,6 +269,18 @@ Rules: Always reference actual team names, owner names, and player names. Be con
         if (dominantPlayoff.length > 0) {
           leagueContext += `\nPLAYOFF MACHINES: ${dominantPlayoff.map(p => `${p.name} (${p.playoffAppearances}/${p.seasons} seasons)`).join(', ')} — consistently dangerous.`;
         }
+
+        // ── Detailed trophy history with exact years ──────────────────────────
+        try {
+          const { computeAllTrophyHistory, buildLeagueTrophyLeaderboard } = await import('./championshipHistoryBuilder');
+          const trophyMap = await computeAllTrophyHistory();
+          const trophyBlock = buildLeagueTrophyLeaderboard(trophyMap);
+          if (trophyBlock) {
+            leagueContext += `\n\n${trophyBlock}`;
+          }
+        } catch {
+          // Trophy history unavailable — counts already shown above
+        }
       }
     }
   } catch {
@@ -317,6 +329,18 @@ Rules: Always reference actual team names, owner names, and player names. Be con
               if (h2h.rsTotalGames > 0) {
                 leagueContext += `\n\n## THIS WEEK'S OPPONENT — H2H HISTORY vs ${oppName.toUpperCase()} (treat as ground truth):\n`;
                 leagueContext += buildH2HPromptBlock(h2h, `Rod vs ${oppName}`);
+              }
+              // Add opponent's trophy/prestige history
+              try {
+                const { computeAllTrophyHistory, buildTrophyPromptBlock } = await import('./championshipHistoryBuilder');
+                const trophyMap = await computeAllTrophyHistory();
+                const oppTrophy = trophyMap.get(oppMemberId);
+                if (oppTrophy) {
+                  leagueContext += `\n\n## THIS WEEK'S OPPONENT — TROPHY HISTORY:\n`;
+                  leagueContext += buildTrophyPromptBlock(oppTrophy, `${oppName} Trophy History`);
+                }
+              } catch {
+                // Trophy history unavailable
               }
             }
           }
