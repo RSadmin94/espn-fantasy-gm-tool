@@ -971,3 +971,39 @@ export const scrapedTrades = mysqlTable(
 );
 export type ScrapedTrade = typeof scrapedTrades.$inferSelect;
 export type InsertScrapedTrade = typeof scrapedTrades.$inferInsert;
+
+// ─── League Events (ESPN Activity Capture — Chrome extension passive layer) ───
+// Append-only table. Each row is one ESPN transaction event (add, drop, trade,
+// waiver claim) captured passively as the user browses ESPN. Deduped on
+// espnTxId (ESPN's own transaction ID). No AI processing — raw capture only.
+export const leagueEvents = mysqlTable(
+  "league_events",
+  {
+    id:           int("id").autoincrement().primaryKey(),
+    // ESPN's own transaction ID — primary dedup key
+    espnTxId:     varchar("espnTxId", { length: 64 }).notNull(),
+    leagueId:     varchar("leagueId", { length: 32 }).notNull(),
+    season:       int("season").notNull(),
+    // Event type: TRADE | ADD | DROP | WAIVER | TRADE_PROPOSAL
+    eventType:    varchar("eventType", { length: 32 }).notNull(),
+    // Unix ms timestamp from ESPN
+    processedAt:  bigint("processedAt", { mode: "number" }).notNull(),
+    // Team involved (primary actor)
+    teamId:       int("teamId").notNull().default(0),
+    ownerName:    varchar("ownerName", { length: 128 }).notNull().default(""),
+    // Compact JSON summary: { players: [{id, name, pos, action}], picks: [{label}] }
+    payloadJson:  text("payloadJson").notNull(),
+    // Raw ESPN transaction object (for debugging / re-processing)
+    rawJson:      text("rawJson"),
+    capturedAt:   timestamp("capturedAt").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("idx_le_espnTxId").on(t.espnTxId),
+    index("idx_le_league_season").on(t.leagueId, t.season),
+    index("idx_le_eventType").on(t.eventType),
+    index("idx_le_processedAt").on(t.processedAt),
+    index("idx_le_teamId").on(t.teamId),
+  ]
+);
+export type LeagueEvent = typeof leagueEvents.$inferSelect;
+export type InsertLeagueEvent = typeof leagueEvents.$inferInsert;

@@ -1,0 +1,19 @@
+{
+  "query": "SELECT COUNT(*) as total FROM scraped_trades; SELECT id, tradeKey, season, executedAt FROM scraped_trades;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT COUNT(*) as total FROM scraped_trades; SELECT id, tradeKey, season, executedAt FROM scraped_trades;",
+  "rows": [
+    {
+      "total": "1"
+    },
+    {
+      "total": "id\ttradeKey\tseason\texecutedAt"
+    },
+    {
+      "total": "1\ttest-123\t2024\t1700000000000"
+    }
+  ],
+  "messages": [],
+  "stdout": "total\n1\nid\ttradeKey\tseason\texecutedAt\n1\ttest-123\t2024\t1700000000000\n",
+  "stderr": "",
+  "execution_time_ms": 630
+}

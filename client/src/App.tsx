@@ -48,6 +48,7 @@ import Reveal from "@/pages/Reveal";
 import BillingSuccess from "@/pages/BillingSuccess";
 import BillingCancel from "@/pages/BillingCancel";
 import BehavioralAnalytics from "@/pages/BehavioralAnalytics";
+import ActivityCaptureDashboard from "@/pages/ActivityCaptureDashboard";
 
 function PageTracker() {
   const [location] = useLocation();
@@ -103,6 +104,7 @@ function Router() {
       <Route path="/billing/success" component={BillingSuccess} />
       <Route path="/billing/cancel" component={BillingCancel} />
       <Route path="/admin/behavioral" component={BehavioralAnalytics} />
+      <Route path="/admin/activity-capture" component={ActivityCaptureDashboard} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

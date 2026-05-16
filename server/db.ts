@@ -9,6 +9,7 @@ import {
   leagueConnections,
   llmUsage,
   scrapedTrades, InsertScrapedTrade,
+  leagueEvents, InsertLeagueEvent,
 } from "../drizzle/schema";
 import type { EspnCreds } from "./espnService";
 import { decryptCredentialsFromDb } from "./_core/crypto";
@@ -556,4 +557,70 @@ export async function getScrapedTrades(season?: number) {
     return query.where(eq(scrapedTrades.season, season)).orderBy(desc(scrapedTrades.executedAt));
   }
   return query.orderBy(desc(scrapedTrades.executedAt));
+}
+
+// ── League Events helpers (ESPN Activity Capture) ────────────────────────────
+
+/**
+ * Upsert a batch of league event rows. Dedupes on espnTxId.
+ * Returns the number of rows actually inserted (skips duplicates).
+ */
+export async function upsertLeagueEvents(rows: InsertLeagueEvent[]): Promise<number> {
+  const db = await getDb();
+  if (!db || rows.length === 0) return 0;
+  let inserted = 0;
+  for (const row of rows) {
+    try {
+      await db.insert(leagueEvents)
+        .values(row)
+        .onDuplicateKeyUpdate({
+          set: {
+            // On duplicate espnTxId: update payload in case we get richer data later
+            payloadJson: row.payloadJson,
+            rawJson: row.rawJson ?? null,
+            capturedAt: new Date(),
+          },
+        });
+      inserted++;
+    } catch (err) {
+      console.warn("[DB] upsertLeagueEvents row error:", err);
+    }
+  }
+  return inserted;
+}
+
+/**
+ * Get league events for a league+season, newest first.
+ * Optionally filter by eventType.
+ */
+export async function getLeagueEvents(
+  leagueId: string,
+  season?: number,
+  eventType?: string,
+  limit = 200
+) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  conditions.push(eq(leagueEvents.leagueId, leagueId));
+  if (season && season > 0) conditions.push(eq(leagueEvents.season, season));
+  if (eventType) conditions.push(eq(leagueEvents.eventType, eventType));
+  return db.select().from(leagueEvents)
+    .where(and(...conditions as [ReturnType<typeof eq>, ...ReturnType<typeof eq>[]]))
+    .orderBy(desc(leagueEvents.processedAt))
+    .limit(limit);
+}
+
+/**
+ * Get a count summary of league events by type for a league+season.
+ */
+export async function getLeagueEventsSummary(leagueId: string, season?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [eq(leagueEvents.leagueId, leagueId)];
+  if (season && season > 0) conditions.push(eq(leagueEvents.season, season));
+  return db.select().from(leagueEvents)
+    .where(and(...conditions as [ReturnType<typeof eq>, ...ReturnType<typeof eq>[]]))
+    .orderBy(desc(leagueEvents.processedAt))
+    .limit(500);
 }

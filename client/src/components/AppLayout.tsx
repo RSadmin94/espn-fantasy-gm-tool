@@ -43,6 +43,7 @@ const navItems: NavItem[] = [
   { href: "/ml-forecast", icon: BarChart3, label: "ML Forecast", group: "System" },
   { href: "/usage-monitor", icon: Settings2, label: "Usage Monitor", group: "System" },
   { href: "/admin/behavioral", icon: LineChart, label: "Behavioral Analytics", group: "System" },
+  { href: "/admin/activity-capture", icon: Activity, label: "Activity Capture", group: "System" },
 ];
 
 const primaryGroups = ["Intelligence", "Team Tools"];

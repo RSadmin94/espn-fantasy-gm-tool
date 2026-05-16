@@ -1,0 +1,13 @@
+{
+  "query": "SELECT COUNT(*) as total FROM scraped_trades; SELECT id, tradeKey, season, executedAt, LEFT(sideAJson, 200) as sideA_preview FROM scraped_trades ORDER BY scrapedAt DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT COUNT(*) as total FROM scraped_trades; SELECT id, tradeKey, season, executedAt, LEFT(sideAJson, 200) as sideA_preview FROM scraped_trades ORDER BY scrapedAt DESC LIMIT 5;",
+  "rows": [
+    {
+      "total": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "total\n0\n",
+  "stderr": "",
+  "execution_time_ms": 617
+}

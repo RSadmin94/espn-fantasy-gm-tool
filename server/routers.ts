@@ -25,7 +25,7 @@ import { onboardingRouter } from "./onboardingRouter";
 import { offseasonRouter } from "./offseasonRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
-import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob, getDb, upsertScrapedTrades, getScrapedTrades } from "./db";
+import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob, getDb, upsertScrapedTrades, getScrapedTrades, upsertLeagueEvents, getLeagueEvents, getLeagueEventsSummary } from "./db";
 import { leagueConnections as lcTable } from "../drizzle/schema";
 import { eq as eqDrizzle, and as andDrizzle } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
@@ -873,6 +873,67 @@ export const appRouter = router({
         }));
         const count = await upsertScrapedTrades(rows);
         return { ok: true, upserted: count };
+      }),
+
+    /**
+     * ESPN Activity Capture — called by the Chrome extension on every ESPN page nav.
+     * Receives normalised transaction events, dedupes by espnTxId, stores in league_events.
+     * No AI, no narratives — raw capture only.
+     */
+    captureActivity: publicProcedure
+      .input(z.object({
+        leagueId: z.string().max(32),
+        season: z.number().int().min(2000).max(2100),
+        events: z.array(z.object({
+          espnTxId: z.string().max(64),
+          eventType: z.enum(["TRADE", "ADD", "DROP", "WAIVER", "TRADE_PROPOSAL"]),
+          processedAt: z.number(),
+          teamId: z.number().int().default(0),
+          ownerName: z.string().max(128).default(""),
+          payloadJson: z.string(),
+          rawJson: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ input }) => {
+        const rows = input.events.map(e => ({
+          espnTxId: e.espnTxId,
+          leagueId: input.leagueId,
+          season: input.season,
+          eventType: e.eventType,
+          processedAt: e.processedAt,
+          teamId: e.teamId,
+          ownerName: e.ownerName,
+          payloadJson: e.payloadJson,
+          rawJson: e.rawJson ?? null,
+        }));
+        const count = await upsertLeagueEvents(rows);
+        return { ok: true, captured: input.events.length, newEvents: count };
+      }),
+
+    /** Get recent league events for a league+season (admin debug + future Activity Feed). */
+    getActivityEvents: publicProcedure
+      .input(z.object({
+        season: z.number().int().min(2000).max(2100).optional(),
+        eventType: z.string().optional(),
+        limit: z.number().int().min(1).max(500).default(50),
+        offset: z.number().int().min(0).default(0),
+      }))
+      .query(async ({ input }) => {
+        const all = await getLeagueEvents(LEAGUE_ID, input.season, input.eventType, (input.offset + input.limit));
+        const paged = all.slice(input.offset, input.offset + input.limit);
+        return { events: paged, total: all.length };
+      }),
+
+    /** Summary count of events by type for a league+season (admin debug). */
+    getActivitySummary: publicProcedure
+      .input(z.object({
+        season: z.number().int().min(2000).max(2100).optional(),
+      }))
+      .query(async ({ input }) => {
+        const rows = await getLeagueEventsSummary(LEAGUE_ID, input.season);
+        const byType: Record<string, number> = {};
+        for (const row of rows) byType[row.eventType] = (byType[row.eventType] ?? 0) + 1;
+        return { total: rows.length, byType };
       }),
 
     refresh: publicProcedure
