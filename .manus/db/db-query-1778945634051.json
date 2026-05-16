@@ -1,0 +1,50 @@
+{
+  "query": "SHOW INDEX FROM espn_season_cache; SELECT DISTINCT season, viewName FROM espn_season_cache ORDER BY season DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SHOW INDEX FROM espn_season_cache; SELECT DISTINCT season, viewName FROM espn_season_cache ORDER BY season DESC;",
+  "rows": [
+    {
+      "Table": "espn_season_cache",
+      "Non_unique": "0",
+      "Key_name": "PRIMARY",
+      "Seq_in_index": "1",
+      "Column_name": "id",
+      "Collation": "A",
+      "Cardinality": "0",
+      "Sub_part": "NULL",
+      "Packed": "NULL",
+      "Null": "",
+      "Index_type": "BTREE",
+      "Comment": "",
+      "Index_comment": "",
+      "Visible": "YES",
+      "Expression": "NULL",
+      "Clustered": "YES",
+      "Global": "NO"
+    }
+  ],
+  "messages": [
+    "season\tviewName",
+    "2026\tcombined",
+    "2025\tcombined",
+    "2024\tcombined",
+    "2023\tcombined",
+    "2022\tcombined",
+    "2021\tcombined",
+    "2020\tcombined",
+    "2019\tcombined",
+    "2018\tcombined",
+    "2017\tcombined",
+    "2016\tcombined",
+    "2015\tcombined",
+    "2014\tcombined",
+    "2013\tcombined",
+    "2012\tcombined",
+    "2011\tcombined",
+    "2010\tcombined",
+    "2009\tcombined",
+    "0\tinjury_cache"
+  ],
+  "stdout": "Table\tNon_unique\tKey_name\tSeq_in_index\tColumn_name\tCollation\tCardinality\tSub_part\tPacked\tNull\tIndex_type\tComment\tIndex_comment\tVisible\tExpression\tClustered\tGlobal\nespn_season_cache\t0\tPRIMARY\t1\tid\tA\t0\tNULL\tNULL\t\tBTREE\t\t\tYES\tNULL\tYES\tNO\nseason\tviewName\n2026\tcombined\n2025\tcombined\n2024\tcombined\n2023\tcombined\n2022\tcombined\n2021\tcombined\n2020\tcombined\n2019\tcombined\n2018\tcombined\n2017\tcombined\n2016\tcombined\n2015\tcombined\n2014\tcombined\n2013\tcombined\n2012\tcombined\n2011\tcombined\n2010\tcombined\n2009\tcombined\n0\tinjury_cache\n",
+  "stderr": "",
+  "execution_time_ms": 620
+}

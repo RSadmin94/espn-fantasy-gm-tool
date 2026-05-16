@@ -2175,6 +2175,8 @@ export const appRouter = router({
 
       const members: any[] = data.members || [];
       const teams: any[] = data.teams || [];
+      // Skip seasons with empty/stub payloads (ESPN returned {} for old seasons like 2009-2016)
+      if (teams.length === 0) continue;
       const schedule: any[] = data.schedule || [];
       const settings: any = data.settings || {};
       const playoffMatchupPeriodStart: number =

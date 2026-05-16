@@ -687,13 +687,17 @@ export function normalizeMatchups(data: Record<string, unknown>) {
 // ─── Trade Proposal Enrichment ──────────────────────────────────────────────
 
 /**
- * Fetches ALL TRADE_PROPOSAL records for a season using ESPN's x-fantasy-filter.
+ * Fetches ALL trade-related transaction records for a season using ESPN's x-fantasy-filter.
  * This is a supplemental call — the standard mTransactions2 view only returns the
- * most recent ~50 transactions, so accepted proposals may have aged out of the
- * window before the cache was populated (the 2026 root cause).
+ * most recent ~50 transactions, so accepted proposals may have aged out of the window.
+ *
+ * ESPN 2026+ behavior change: once a trade is accepted, the TRADE_PROPOSAL record
+ * disappears from the standard feed. Only a TRADE_UPHOLD/TRADE_ACCEPT header row
+ * remains, linking back to the original proposal via relatedTransactionId. We therefore
+ * fetch ALL trade-related types in one call so nothing is missed.
  *
  * ESPN filter syntax:
- *   x-fantasy-filter: {"transactions":{"filterType":{"value":["TRADE_PROPOSAL"]}}}
+ *   x-fantasy-filter: {"transactions":{"filterType":{"value":["TRADE_PROPOSAL","TRADE_UPHOLD","TRADE_ACCEPT"]}}}
  *
  * Returns the raw transactions array from the ESPN response, or [] on failure.
  */
@@ -708,8 +712,10 @@ export async function fetchTradeProposals(
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     Accept: "application/json,text/plain,*/*",
     Referer: "https://fantasy.espn.com/football/league",
+    // Fetch all trade-related types: proposals (pending/canceled) + uphold/accept (executed)
+    // In 2026+, executed trades only appear as TRADE_UPHOLD rows, not TRADE_PROPOSAL rows
     "x-fantasy-filter": JSON.stringify({
-      transactions: { filterType: { value: ["TRADE_PROPOSAL"] } },
+      transactions: { filterType: { value: ["TRADE_PROPOSAL", "TRADE_UPHOLD", "TRADE_ACCEPT"] } },
     }),
   };
   const cookieStr = buildCookieStringFor(creds);

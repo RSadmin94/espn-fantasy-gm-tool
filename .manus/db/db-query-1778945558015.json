@@ -1,0 +1,105 @@
+{
+  "query": "SELECT season, viewName, COUNT(*) as row_count FROM espn_season_cache GROUP BY season, viewName ORDER BY season DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT season, viewName, COUNT(*) as row_count FROM espn_season_cache GROUP BY season, viewName ORDER BY season DESC;",
+  "rows": [
+    {
+      "season": "2026",
+      "viewName": "combined",
+      "row_count": "4"
+    },
+    {
+      "season": "2025",
+      "viewName": "combined",
+      "row_count": "4"
+    },
+    {
+      "season": "2024",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2023",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2022",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2021",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2020",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2019",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2018",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2017",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2016",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2015",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2014",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2013",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2012",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2011",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2010",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "2009",
+      "viewName": "combined",
+      "row_count": "1"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "row_count": "26"
+    }
+  ],
+  "messages": [],
+  "stdout": "season\tviewName\trow_count\n2026\tcombined\t4\n2025\tcombined\t4\n2024\tcombined\t1\n2023\tcombined\t1\n2022\tcombined\t1\n2021\tcombined\t1\n2020\tcombined\t1\n2019\tcombined\t1\n2018\tcombined\t1\n2017\tcombined\t1\n2016\tcombined\t1\n2015\tcombined\t1\n2014\tcombined\t1\n2013\tcombined\t1\n2012\tcombined\t1\n2011\tcombined\t1\n2010\tcombined\t1\n2009\tcombined\t1\n0\tinjury_cache\t26\n",
+  "stderr": "",
+  "execution_time_ms": 592
+}

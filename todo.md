@@ -1410,3 +1410,11 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Fix 2026 pick-only trade detection: seed completedProposalIds from TRADE_PROPOSAL rows with status EXECUTED
 - [x] Add supplemental scan of proposalItemMap and proposalPickMap for EXECUTED proposals not covered by TRADE_UPHOLD rows
 - [x] Fix DraftBoard.tsx mobile card en-dash parse error (replaced UTF-8 en-dash with plain hyphen)
+
+## May 16 — Trade Fix + Nav Fix
+- [x] Move Data Center to always-visible Team Tools section in sidebar
+- [x] Update fetchTradeProposals to also request TRADE_UPHOLD + TRADE_ACCEPT types
+- [x] Update CURRENT_SEASON to 2026 in DataRefresh.tsx (default selected season)
+- [x] Fix duplicate espn_season_cache rows (deduplication + unique index added)
+- [x] Fix championship count to skip empty-payload seasons (2009-2016)
+- [ ] Verify 2026 executed trades appear in Trade Aging after fresh sync

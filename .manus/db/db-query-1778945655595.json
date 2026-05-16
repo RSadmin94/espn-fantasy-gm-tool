@@ -1,0 +1,15 @@
+{
+  "query": "SELECT season, viewName, COUNT(*) as cnt FROM espn_season_cache GROUP BY season, viewName HAVING cnt > 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT season, viewName, COUNT(*) as cnt FROM espn_season_cache GROUP BY season, viewName HAVING cnt > 1;",
+  "rows": [
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "cnt": "26"
+    }
+  ],
+  "messages": [],
+  "stdout": "season\tviewName\tcnt\n0\tinjury_cache\t26\n",
+  "stderr": "",
+  "execution_time_ms": 592
+}

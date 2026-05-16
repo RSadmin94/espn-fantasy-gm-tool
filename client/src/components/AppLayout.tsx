@@ -35,8 +35,8 @@ const navItems: NavItem[] = [
   { href: "/draft-war-room", icon: ClipboardList, label: "Draft Room", group: "Team Tools", badge: "AI" },
   { href: "/offseason", icon: Sunrise, label: "Offseason", group: "Team Tools", badge: "2026" },
   { href: "/rosters", icon: Users, label: "Rosters", group: "Team Tools" },
+  { href: "/data-center", icon: Shield, label: "Data Center", group: "Team Tools" },
   // System
-  { href: "/data-center", icon: Shield, label: "Data Center", group: "System" },
   { href: "/connect", icon: Link2, label: "Connect League", group: "System" },
   { href: "/weekly-stats", icon: Activity, label: "Weekly Stats", group: "System" },
   { href: "/backtesting", icon: Target, label: "Backtesting", group: "System" },
@@ -188,10 +188,11 @@ function SidebarNav({
         <div className="mb-2">
           <button
             onClick={() => setSystemExpanded(v => !v)}
-            className="flex items-center gap-1.5 px-2 mb-1.5 w-full group"
+            className="flex items-center gap-2 px-3 py-2 mb-1.5 w-full rounded-lg border border-border/60 bg-accent/30 hover:bg-accent/60 hover:border-border transition-all duration-150 group"
           >
-            <p className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest flex-1">System</p>
-            <ChevronDown className={cn("w-3 h-3 text-muted-foreground/40 transition-transform", systemExpanded ? "rotate-180" : "")} />
+            <Settings2 className="w-3.5 h-3.5 text-muted-foreground/70 group-hover:text-foreground transition-colors" />
+            <p className="text-[11px] font-semibold text-muted-foreground/70 group-hover:text-foreground uppercase tracking-wider flex-1 text-left transition-colors">System</p>
+            <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground/60 transition-transform", systemExpanded ? "rotate-180" : "")} />
           </button>
           {systemExpanded && navItems.filter(n => n.group === systemGroup).map((item) => {
             const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));

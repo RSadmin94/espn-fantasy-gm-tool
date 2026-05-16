@@ -1,0 +1,260 @@
+{
+  "query": "SELECT season, viewName, LENGTH(payload) as payload_size FROM espn_season_cache ORDER BY season DESC, viewName LIMIT 50;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT season, viewName, LENGTH(payload) as payload_size FROM espn_season_cache ORDER BY season DESC, viewName LIMIT 50;",
+  "rows": [
+    {
+      "season": "2026",
+      "viewName": "combined",
+      "payload_size": "1927226"
+    },
+    {
+      "season": "2026",
+      "viewName": "combined",
+      "payload_size": "1854907"
+    },
+    {
+      "season": "2026",
+      "viewName": "combined",
+      "payload_size": "1864543"
+    },
+    {
+      "season": "2026",
+      "viewName": "combined",
+      "payload_size": "1864532"
+    },
+    {
+      "season": "2025",
+      "viewName": "combined",
+      "payload_size": "2408611"
+    },
+    {
+      "season": "2025",
+      "viewName": "combined",
+      "payload_size": "2408611"
+    },
+    {
+      "season": "2025",
+      "viewName": "combined",
+      "payload_size": "2408611"
+    },
+    {
+      "season": "2025",
+      "viewName": "combined",
+      "payload_size": "2408611"
+    },
+    {
+      "season": "2024",
+      "viewName": "combined",
+      "payload_size": "2293214"
+    },
+    {
+      "season": "2023",
+      "viewName": "combined",
+      "payload_size": "2417360"
+    },
+    {
+      "season": "2022",
+      "viewName": "combined",
+      "payload_size": "2472596"
+    },
+    {
+      "season": "2021",
+      "viewName": "combined",
+      "payload_size": "2411356"
+    },
+    {
+      "season": "2020",
+      "viewName": "combined",
+      "payload_size": "2415867"
+    },
+    {
+      "season": "2019",
+      "viewName": "combined",
+      "payload_size": "2065280"
+    },
+    {
+      "season": "2018",
+      "viewName": "combined",
+      "payload_size": "1253333"
+    },
+    {
+      "season": "2017",
+      "viewName": "combined",
+      "payload_size": "2"
+    },
+    {
+      "season": "2016",
+      "viewName": "combined",
+      "payload_size": "2"
+    },
+    {
+      "season": "2015",
+      "viewName": "combined",
+      "payload_size": "2"
+    },
+    {
+      "season": "2014",
+      "viewName": "combined",
+      "payload_size": "2"
+    },
+    {
+      "season": "2013",
+      "viewName": "combined",
+      "payload_size": "2"
+    },
+    {
+      "season": "2012",
+      "viewName": "combined",
+      "payload_size": "2"
+    },
+    {
+      "season": "2011",
+      "viewName": "combined",
+      "payload_size": "2"
+    },
+    {
+      "season": "2010",
+      "viewName": "combined",
+      "payload_size": "2"
+    },
+    {
+      "season": "2009",
+      "viewName": "combined",
+      "payload_size": "2"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305750"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305750"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305750"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305750"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305750"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305750"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305750"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305750"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305750"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305775"
+    },
+    {
+      "season": "0",
+      "viewName": "injury_cache",
+      "payload_size": "305750"
+    }
+  ],
+  "messages": [],
+  "stdout": "season\tviewName\tpayload_size\n2026\tcombined\t1927226\n2026\tcombined\t1854907\n2026\tcombined\t1864543\n2026\tcombined\t1864532\n2025\tcombined\t2408611\n2025\tcombined\t2408611\n2025\tcombined\t2408611\n2025\tcombined\t2408611\n2024\tcombined\t2293214\n2023\tcombined\t2417360\n2022\tcombined\t2472596\n2021\tcombined\t2411356\n2020\tcombined\t2415867\n2019\tcombined\t2065280\n2018\tcombined\t1253333\n2017\tcombined\t2\n2016\tcombined\t2\n2015\tcombined\t2\n2014\tcombined\t2\n2013\tcombined\t2\n2012\tcombined\t2\n2011\tcombined\t2\n2010\tcombined\t2\n2009\tcombined\t2\n0\tinjury_cache\t305775\n0\tinjury_cache\t305775\n0\tinjury_cache\t305775\n0\tinjury_cache\t305775\n0\tinjury_cache\t305775\n0\tinjury_cache\t305775\n0\tinjury_cache\t305750\n0\tinjury_cache\t305750\n0\tinjury_cache\t305775\n0\tinjury_cache\t305750\n0\tinjury_cache\t305750\n0\tinjury_cache\t305775\n0\tinjury_cache\t305750\n0\tinjury_cache\t305750\n0\tinjury_cache\t305775\n0\tinjury_cache\t305775\n0\tinjury_cache\t305775\n0\tinjury_cache\t305750\n0\tinjury_cache\t305750\n0\tinjury_cache\t305775\n0\tinjury_cache\t305750\n0\tinjury_cache\t305775\n0\tinjury_cache\t305775\n0\tinjury_cache\t305775\n0\tinjury_cache\t305775\n0\tinjury_cache\t305750\n",
+  "stderr": "",
+  "execution_time_ms": 3027
+}

@@ -1,0 +1,22 @@
+{
+  "query": "SELECT season, viewName, COUNT(*) as row_count, MAX(LENGTH(payload)) as max_payload FROM espn_season_cache WHERE season IN (2025, 2026) GROUP BY season, viewName;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute SELECT season, viewName, COUNT(*) as row_count, MAX(LENGTH(payload)) as max_payload FROM espn_season_cache WHERE season IN (2025, 2026) GROUP BY season, viewName;",
+  "rows": [
+    {
+      "season": "2026",
+      "viewName": "combined",
+      "row_count": "1",
+      "max_payload": "1927226"
+    },
+    {
+      "season": "2025",
+      "viewName": "combined",
+      "row_count": "1",
+      "max_payload": "2408611"
+    }
+  ],
+  "messages": [],
+  "stdout": "season\tviewName\trow_count\tmax_payload\n2026\tcombined\t1\t1927226\n2025\tcombined\t1\t2408611\n",
+  "stderr": "",
+  "execution_time_ms": 755
+}

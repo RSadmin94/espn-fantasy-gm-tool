@@ -11,11 +11,11 @@ import { RefreshCw, CheckCircle2, XCircle, Clock, Database, Lock, SkipForward } 
 import { toast } from "sonner";
 
 const ALL_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026];
-const CURRENT_SEASON = 2025;
-const CLOSED_SEASONS = ALL_SEASONS.filter(s => s < CURRENT_SEASON); // 2009–2024 are final
+const CURRENT_SEASON = 2026;
+const CLOSED_SEASONS = ALL_SEASONS.filter(s => s < CURRENT_SEASON); // 2009–2025 are final
 
 export default function DataRefresh() {
-  const [selectedSeasons, setSelectedSeasons] = useState<number[]>([2025]);
+  const [selectedSeasons, setSelectedSeasons] = useState<number[]>([2026]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [forceRefresh, setForceRefresh] = useState(false);
   const [refreshLog, setRefreshLog] = useState<{ season: number; status: "success" | "error" | "skipped"; message: string }[]>([]);
@@ -34,7 +34,7 @@ export default function DataRefresh() {
   const selectOpenOnly = () => setSelectedSeasons([2025, 2026]);
   const selectUncached = () => {
     const uncached = ALL_SEASONS.filter(s => !cachedSeasons.includes(s));
-    setSelectedSeasons(uncached.length > 0 ? uncached : [2025]);
+    setSelectedSeasons(uncached.length > 0 ? uncached : [2026]);
   };
 
   const handleRefresh = async () => {
@@ -121,7 +121,7 @@ export default function DataRefresh() {
           <CardContent className="space-y-4">
             <div className="flex gap-2 flex-wrap">
               <Button variant="outline" size="sm" onClick={selectAll}>All Seasons</Button>
-              <Button variant="outline" size="sm" onClick={selectOpenOnly}>Open Only (2025–2026)</Button>
+              <Button variant="outline" size="sm" onClick={selectOpenOnly}>Open Only (2026)</Button>
               <Button variant="outline" size="sm" onClick={selectUncached}>Uncached Only</Button>
               <Button variant="outline" size="sm" onClick={selectNone}>Clear</Button>
             </div>
