@@ -958,7 +958,7 @@ export default function WeeklyIntelligence() {
       title="Weekly Intelligence"
       subtitle={`Season ${season} — Week ${data?.week ?? "…"} GM Briefing`}
     >
-      <div className="space-y-5">
+      <div className="space-y-4 sm:space-y-5">
 
         {/* ── Header controls ── */}
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1124,18 +1124,22 @@ export default function WeeklyIntelligence() {
 
         {/* ── Main tabs ── */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="bg-slate-800/60 border border-slate-700/40">
-            <TabsTrigger value="storylines" className="text-xs gap-1.5">
-              <Zap className="w-3.5 h-3.5" /> Storylines
+          <TabsList className="bg-slate-800/60 border border-slate-700/40 h-auto flex-wrap gap-0.5 p-1">
+            <TabsTrigger value="storylines" className="text-xs gap-1 h-8">
+              <Zap className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Storylines</span><span className="sm:hidden">Stories</span>
             </TabsTrigger>
-            <TabsTrigger value="teams" className="text-xs gap-1.5">
-              <Users className="w-3.5 h-3.5" /> All Teams
+            <TabsTrigger value="teams" className="text-xs gap-1 h-8">
+              <Users className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">All Teams</span><span className="sm:hidden">Teams</span>
             </TabsTrigger>
-            <TabsTrigger value="opportunities" className="text-xs gap-1.5">
-              <Target className="w-3.5 h-3.5" /> Rod's Opportunities
+            <TabsTrigger value="opportunities" className="text-xs gap-1 h-8">
+              <Target className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Rod's Opportunities</span><span className="sm:hidden">Opps</span>
             </TabsTrigger>
-            <TabsTrigger value="rivalry" className="text-xs gap-1.5">
-              <Flame className="w-3.5 h-3.5" /> Rivalry Heat
+            <TabsTrigger value="rivalry" className="text-xs gap-1 h-8">
+              <Flame className="w-3.5 h-3.5" />
+              <span>Rivalry</span>
             </TabsTrigger>
           </TabsList>
 

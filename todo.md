@@ -1376,3 +1376,37 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Fix BehavioralAnalytics.tsx useAuth import path (@/_core/hooks/useAuth)
 - [x] Run pnpm test (726/726 passing, 37 test files)
 - [x] Save checkpoint
+
+## Chrome Extension v1.5.0 — Credential Transfer Fix
+- [x] Audit v1.4.0 extension: identified GET_ESPN_CREDENTIALS + OPEN_CONNECT_PAGE handlers missing from background.js, popup.js had no credential capture CTA
+- [x] Add GET_ESPN_CREDENTIALS handler to background.js (reads SWID + espn_s2 cookies via chrome.cookies API)
+- [x] Add OPEN_CONNECT_PAGE handler to background.js (opens /connect?provider=espn&leagueId=...&swid=...&s2=...)
+- [x] Add "cookies" permission to manifest.json
+- [x] Bump manifest.json version to 1.5.0
+- [x] Restore getLeagueIdFromTabUrl() helper in popup.js
+- [x] Restore renderConnectCta() function in popup.js (shows Connect to War Room button when credentials found)
+- [x] Restore wireConnectBtn() function in popup.js (sends OPEN_CONNECT_PAGE message on click)
+- [x] Inject renderConnectCta() and wireConnectBtn() in both success and error branches of popup.js
+- [x] Package as espn_dna_extension_v1.5.0.zip
+- [x] Verify LeagueConnect.tsx already handles ?provider=espn&leagueId=...&swid=...&s2=... URL params (confirmed)
+
+## Mobile Optimization — Critical Pages
+- [ ] AppLayout: Add hamburger menu + slide-out drawer for mobile (sidebar hidden on <lg screens)
+- [ ] DraftWarRoom hub: Make tab bar horizontally scrollable on mobile, reduce tab label text on small screens
+- [ ] DraftBoard.tsx: Replace 12-column fixed-width grid with mobile card layout (stacked cards on <md, table on md+)
+- [ ] AIDraftHelper.tsx: Already mostly responsive (grid-cols-1 lg:grid-cols-3) — verify padding and button sizes on mobile
+- [ ] WeeklyIntelligence hub: Outer space-y-5 wrapper needs px-4 on mobile; tab bar needs overflow-x-auto
+- [ ] WeeklyIntelligence: Header controls (Refresh + Run All buttons) need to stack vertically on mobile
+- [ ] WeeklyIntelligence: LeaguePulseBanner grid (grid-cols-7) needs to collapse to 2-3 cols on mobile
+- [ ] WeeklyStorylinesTab.tsx: Trade card grid-cols-[1fr_auto_1fr] too narrow on mobile — stack vertically
+- [ ] TradeAging.tsx: Trade card grid-cols-[1fr_auto_1fr] same issue — stack on mobile
+- [ ] RivalryHeatPanel: Already card-based — verify touch targets and text size on mobile
+- [ ] TradeLab hub: Tab bar has 6 tabs — needs overflow-x-auto + icon-only on mobile
+- [ ] All pages: Ensure minimum touch target size (44px) for all buttons
+- [ ] All pages: Add px-4 sm:px-6 padding to page wrappers (currently some have no mobile padding)
+
+## Trade Aging 2026 Fix
+- [x] Fix CURRENT_SEASON from 2025 to 2026 in espn.refresh router
+- [x] Fix 2026 pick-only trade detection: seed completedProposalIds from TRADE_PROPOSAL rows with status EXECUTED
+- [x] Add supplemental scan of proposalItemMap and proposalPickMap for EXECUTED proposals not covered by TRADE_UPHOLD rows
+- [x] Fix DraftBoard.tsx mobile card en-dash parse error (replaced UTF-8 en-dash with plain hyphen)

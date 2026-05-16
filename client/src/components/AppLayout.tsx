@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ClipboardList, Star, ArrowLeftRight, Bot, ChevronRight,
   Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target, BarChart3, Link2, Sunrise,
-  ChevronDown, Settings2, Users, LineChart,
+  ChevronDown, Settings2, Users, LineChart, Menu,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
@@ -22,9 +22,6 @@ type NavItem = {
 };
 
 // ─── Navigation Groups ──────────────────────────────────────────────────────
-// Intelligence: what's happening in the league
-// Team Tools: actions you can take
-// System: admin / data plumbing (collapsed by default)
 const navItems: NavItem[] = [
   // Intelligence
   { href: "/command-center", icon: LayoutDashboard, label: "Command Center", group: "Intelligence" },
@@ -50,7 +47,6 @@ const navItems: NavItem[] = [
 
 const primaryGroups = ["Intelligence", "Team Tools"];
 const systemGroup = "System";
-const groups = [...primaryGroups, systemGroup];
 
 function DataHealthBanner() {
   const [dismissed, setDismissed] = useState(false);
@@ -81,7 +77,7 @@ function DataHealthBanner() {
   };
   const { wrapper, icon, message } = config[variant];
   return (
-    <div className={cn("flex-shrink-0 border-b px-6 py-2.5 flex items-center gap-3 text-xs", wrapper)}>
+    <div className={cn("flex-shrink-0 border-b px-4 py-2.5 flex items-center gap-3 text-xs", wrapper)}>
       {icon}
       <span className="flex-1">{message}</span>
       <button onClick={() => setDismissed(true)} className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity" aria-label="Dismiss">
@@ -131,11 +127,102 @@ function ActiveLeagueFooter() {
   );
 }
 
+// ─── Shared sidebar nav content ──────────────────────────────────────────────
+function SidebarNav({
+  location,
+  advisorOpen,
+  onAdvisorOpen,
+  onNavClick,
+}: {
+  location: string;
+  advisorOpen: boolean;
+  onAdvisorOpen: () => void;
+  onNavClick?: () => void;
+}) {
+  const [systemExpanded, setSystemExpanded] = useState(false);
+  return (
+    <>
+      <nav className="flex-1 overflow-y-auto py-3 px-3">
+        {primaryGroups.map((group) => {
+          const items = navItems.filter((n) => n.group === group);
+          return (
+            <div key={group} className="mb-5">
+              <p className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-widest px-2 mb-1.5">{group}</p>
+              {items.map((item) => {
+                const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+                const cls = cn(
+                  "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group w-full text-left",
+                  active ? "bg-primary/15 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
+                );
+                return (
+                  <Link key={item.href} href={item.href} className={cls} onClick={onNavClick}>
+                    <item.icon className={cn("w-4 h-4 flex-shrink-0 transition-colors", active ? "text-primary" : "group-hover:text-foreground")} />
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {item.badge && <Badge className="text-[8px] px-1 py-0 h-3.5 espn-gradient text-white border-0 font-bold">{item.badge}</Badge>}
+                    {active && <ChevronRight className="w-3 h-3 text-primary flex-shrink-0" />}
+                  </Link>
+                );
+              })}
+            </div>
+          );
+        })}
+
+        {/* AI GM Advisor — prominent CTA */}
+        <div className="mb-5 px-1">
+          <button
+            onClick={() => { onAdvisorOpen(); onNavClick?.(); }}
+            className={cn(
+              "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-semibold transition-all duration-150",
+              advisorOpen
+                ? "bg-primary text-primary-foreground shadow-md"
+                : "bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20"
+            )}
+          >
+            <Bot className="w-4 h-4 flex-shrink-0" />
+            <span className="flex-1 truncate">AI GM Advisor</span>
+            <Badge className="text-[8px] px-1 py-0 h-3.5 espn-gradient text-white border-0 font-bold">AI</Badge>
+          </button>
+        </div>
+
+        {/* System group — collapsible */}
+        <div className="mb-2">
+          <button
+            onClick={() => setSystemExpanded(v => !v)}
+            className="flex items-center gap-1.5 px-2 mb-1.5 w-full group"
+          >
+            <p className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest flex-1">System</p>
+            <ChevronDown className={cn("w-3 h-3 text-muted-foreground/40 transition-transform", systemExpanded ? "rotate-180" : "")} />
+          </button>
+          {systemExpanded && navItems.filter(n => n.group === systemGroup).map((item) => {
+            const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+            const cls = cn(
+              "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] font-medium transition-all duration-150 mb-0.5 group w-full text-left",
+              active ? "bg-primary/15 text-primary" : "text-muted-foreground/70 hover:text-foreground hover:bg-accent/60"
+            );
+            return (
+              <Link key={item.href} href={item.href} className={cls} onClick={onNavClick}>
+                <item.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="flex-1 truncate">{item.label}</span>
+                {item.badge && <Badge className="text-[8px] px-1 py-0 h-3.5 bg-zinc-700 text-zinc-300 border-0 font-bold">{item.badge}</Badge>}
+                {active && <ChevronRight className="w-3 h-3 text-primary flex-shrink-0" />}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+      <LeagueSwitcher />
+    </>
+  );
+}
+
 export default function AppLayout({ children, title, subtitle, headerRight }: AppLayoutProps) {
   const [location] = useLocation();
   const alreadyInsideLayout = useContext(InsideLayoutContext);
   const [advisorOpen, setAdvisorOpen] = useState(false);
-  const [systemExpanded, setSystemExpanded] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Close mobile nav on route change
+  useEffect(() => { setMobileNavOpen(false); }, [location]);
 
   // Listen for Chrome extension toolbar click → open advisor panel
   useEffect(() => {
@@ -143,7 +230,6 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
       if (event.data?.type === 'OPEN_ADVISOR_PANEL') setAdvisorOpen(true);
     };
     window.addEventListener('message', handleMessage);
-    // Also handle ?openAdvisor=1 URL param (set when extension opens a new tab)
     const params = new URLSearchParams(window.location.search);
     if (params.get('openAdvisor') === '1') {
       setAdvisorOpen(true);
@@ -154,13 +240,24 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
+  // Prevent body scroll when mobile nav is open
+  useEffect(() => {
+    if (mobileNavOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileNavOpen]);
+
   if (alreadyInsideLayout) return <>{children}</>;
 
   return (
     <InsideLayoutContext.Provider value={true}>
       <div className="flex h-screen bg-background overflow-hidden">
-        {/* Sidebar */}
-        <aside className="flex-shrink-0 flex flex-col border-r border-border bg-card" style={{ width: "15.5rem" }}>
+
+        {/* ── Desktop sidebar (hidden on mobile) ── */}
+        <aside className="hidden lg:flex flex-shrink-0 flex-col border-r border-border bg-card" style={{ width: "15.5rem" }}>
           <div className="px-5 py-4 border-b border-border">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl espn-gradient flex items-center justify-center flex-shrink-0 shadow-lg">
@@ -177,85 +274,79 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
               <div className="flex-1 h-px bg-border" />
             </div>
           </div>
-
-          <nav className="flex-1 overflow-y-auto py-3 px-3">
-            {/* Primary groups: Intelligence + Team Tools */}
-            {primaryGroups.map((group) => {
-              const items = navItems.filter((n) => n.group === group);
-              return (
-                <div key={group} className="mb-5">
-                  <p className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-widest px-2 mb-1.5">{group}</p>
-                  {items.map((item) => {
-                    const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
-                    const cls = cn(
-                      "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group w-full text-left",
-                      active ? "bg-primary/15 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
-                    );
-                    return (
-                      <Link key={item.href} href={item.href} className={cls}>
-                        <item.icon className={cn("w-4 h-4 flex-shrink-0 transition-colors", active ? "text-primary" : "group-hover:text-foreground")} />
-                        <span className="flex-1 truncate">{item.label}</span>
-                        {item.badge && <Badge className="text-[8px] px-1 py-0 h-3.5 espn-gradient text-white border-0 font-bold">{item.badge}</Badge>}
-                        {active && <ChevronRight className="w-3 h-3 text-primary flex-shrink-0" />}
-                      </Link>
-                    );
-                  })}
-                </div>
-              );
-            })}
-
-            {/* AI GM Advisor — prominent CTA */}
-            <div className="mb-5 px-1">
-              <button
-                onClick={() => setAdvisorOpen(true)}
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-semibold transition-all duration-150",
-                  advisorOpen
-                    ? "bg-primary text-primary-foreground shadow-md"
-                    : "bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20"
-                )}
-              >
-                <Bot className="w-4 h-4 flex-shrink-0" />
-                <span className="flex-1 truncate">AI GM Advisor</span>
-                <Badge className="text-[8px] px-1 py-0 h-3.5 espn-gradient text-white border-0 font-bold">AI</Badge>
-              </button>
-            </div>
-
-            {/* System group — collapsible */}
-            <div className="mb-2">
-              <button
-                onClick={() => setSystemExpanded(v => !v)}
-                className="flex items-center gap-1.5 px-2 mb-1.5 w-full group"
-              >
-                <p className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest flex-1">System</p>
-                <ChevronDown className={cn("w-3 h-3 text-muted-foreground/40 transition-transform", systemExpanded ? "rotate-180" : "")} />
-              </button>
-              {systemExpanded && navItems.filter(n => n.group === systemGroup).map((item) => {
-                const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
-                const cls = cn(
-                  "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-150 mb-0.5 group w-full text-left",
-                  active ? "bg-primary/15 text-primary" : "text-muted-foreground/70 hover:text-foreground hover:bg-accent/60"
-                );
-                return (
-                  <Link key={item.href} href={item.href} className={cls}>
-                    <item.icon className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span className="flex-1 truncate">{item.label}</span>
-                    {item.badge && <Badge className="text-[8px] px-1 py-0 h-3.5 bg-zinc-700 text-zinc-300 border-0 font-bold">{item.badge}</Badge>}
-                    {active && <ChevronRight className="w-3 h-3 text-primary flex-shrink-0" />}
-                  </Link>
-                );
-              })}
-            </div>
-          </nav>
-
-          <LeagueSwitcher />
+          <SidebarNav
+            location={location}
+            advisorOpen={advisorOpen}
+            onAdvisorOpen={() => setAdvisorOpen(true)}
+          />
         </aside>
 
-        {/* Main content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        {/* ── Mobile drawer overlay ── */}
+        {mobileNavOpen && (
+          <div
+            className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+            onClick={() => setMobileNavOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        {/* ── Mobile slide-out drawer ── */}
+        <aside
+          className={cn(
+            "lg:hidden fixed inset-y-0 left-0 z-50 flex flex-col bg-card border-r border-border transition-transform duration-300 ease-in-out",
+            mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+          )}
+          style={{ width: "16rem" }}
+        >
+          {/* Drawer header */}
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl espn-gradient flex items-center justify-center flex-shrink-0 shadow-lg">
+                <Activity className="w-4 h-4 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-foreground leading-tight tracking-tight">{import.meta.env.VITE_APP_TITLE || "GM WAR ROOM"}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">GM Command Center</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setMobileNavOpen(false)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
+              aria-label="Close navigation"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <SidebarNav
+            location={location}
+            advisorOpen={advisorOpen}
+            onAdvisorOpen={() => setAdvisorOpen(true)}
+            onNavClick={() => setMobileNavOpen(false)}
+          />
+        </aside>
+
+        {/* ── Main content ── */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {/* Mobile top bar (always visible on mobile) */}
+          <div className="lg:hidden flex-shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm">
+            <button
+              onClick={() => setMobileNavOpen(true)}
+              className="w-10 h-10 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
+              aria-label="Open navigation"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="flex-1 min-w-0">
+              {title && <h1 className="text-sm font-bold text-foreground truncate">{title}</h1>}
+              {subtitle && <p className="text-[10px] text-muted-foreground truncate">{subtitle}</p>}
+            </div>
+            {headerRight && <div className="flex-shrink-0">{headerRight}</div>}
+          </div>
+
+          {/* Desktop page header */}
           {(title || subtitle) && (
-            <header className="flex-shrink-0 px-8 py-4 border-b border-border bg-card/50 backdrop-blur-sm">
-              <div className="flex items-center justify-between">
+            <header className="hidden lg:flex flex-shrink-0 px-8 py-4 border-b border-border bg-card/50 backdrop-blur-sm">
+              <div className="flex items-center justify-between w-full">
                 <div>
                   {title && <h1 className="text-lg font-bold text-foreground tracking-tight">{title}</h1>}
                   {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
@@ -264,6 +355,7 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
               </div>
             </header>
           )}
+
           <DataHealthBanner />
           <main className="flex-1 overflow-y-auto">{children}</main>
         </div>

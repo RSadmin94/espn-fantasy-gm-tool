@@ -161,11 +161,11 @@ function TradeCard({
         </div>
       </CardHeader>
       <CardContent className="px-4 pb-4">
-        <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-start">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-start">
           {/* Side A */}
           <div className={`rounded-lg p-3 border ${sideAWon ? "border-emerald-500/40 bg-emerald-500/5" : "border-slate-700/40 bg-slate-800/30"}`}>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-slate-300 truncate max-w-[120px]">
+              <span className="text-xs font-semibold text-slate-300 truncate max-w-[160px]">
                 {trade.sideA.ownerName.split(";")[0].trim()}
               </span>
               {sideAWon && <Trophy className="w-3 h-3 text-yellow-400 flex-shrink-0" />}
@@ -185,15 +185,20 @@ function TradeCard({
             </div>
           </div>
 
-          {/* Arrow */}
-          <div className="flex flex-col items-center justify-center pt-8">
+          {/* Arrow — row on mobile, column on desktop */}
+          <div className="hidden sm:flex flex-col items-center justify-center pt-8">
             <ArrowLeftRight className="w-4 h-4 text-slate-600" />
+          </div>
+          <div className="sm:hidden flex items-center justify-center gap-2 py-0.5">
+            <div className="flex-1 border-t border-slate-700/40" />
+            <ArrowLeftRight className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />
+            <div className="flex-1 border-t border-slate-700/40" />
           </div>
 
           {/* Side B */}
           <div className={`rounded-lg p-3 border ${sideBWon ? "border-emerald-500/40 bg-emerald-500/5" : "border-slate-700/40 bg-slate-800/30"}`}>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-slate-300 truncate max-w-[120px]">
+              <span className="text-xs font-semibold text-slate-300 truncate max-w-[160px]">
                 {trade.sideB.ownerName.split(";")[0].trim()}
               </span>
               {sideBWon && <Trophy className="w-3 h-3 text-yellow-400 flex-shrink-0" />}

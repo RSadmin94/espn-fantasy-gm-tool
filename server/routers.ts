@@ -821,8 +821,8 @@ export const appRouter = router({
         forceRefresh: z.boolean().optional(), // override closed-season skip
       }))
       .mutation(async ({ input }) => {
-        const CURRENT_SEASON = 2025;
-        const CLOSED_SEASONS = ALL_SEASONS.filter(s => s < CURRENT_SEASON); // 2009–2024 are closed
+        const CURRENT_SEASON = 2026;
+        const CLOSED_SEASONS = ALL_SEASONS.filter(s => s < CURRENT_SEASON); // 2009–2025 are closed
         const seasonsToRefresh = input.seasons ?? (input.season ? [input.season] : [ALL_SEASONS[ALL_SEASONS.length - 1]]);
         const results: Record<number, { status: string; error?: string; viewHealth?: Record<string, string>; qualityWarnings?: string[]; skipped?: boolean }> = {};
         for (const season of seasonsToRefresh) {
@@ -1185,6 +1185,16 @@ export const appRouter = router({
                 if (d > 0 && !acceptanceDateMap.has(relId)) acceptanceDateMap.set(relId, d);
               }
             }
+            // 2026 path: ESPN may not emit TRADE_UPHOLD rows for pick-only trades.
+            // Treat TRADE_PROPOSAL rows with status EXECUTED as completed directly.
+            if (r.type === "TRADE_PROPOSAL" && String(r.status || "").toUpperCase() === "EXECUTED") {
+              const tid = r.transactionId as string;
+              if (tid) {
+                completedProposalIds.add(tid);
+                const d = (r.proposedDate as number) || 0;
+                if (d > 0 && !acceptanceDateMap.has(tid)) acceptanceDateMap.set(tid, d);
+              }
+            }
           }
 
           const isCompletedTradeRow = (r: Record<string, unknown>) => {
@@ -1229,6 +1239,29 @@ export const appRouter = router({
             tradeGroups.set(proposalId, {
               playerRows: itemRows ?? [],
               pickRows: pickRows ?? [],
+              proposedDate: acceptanceDateMap.get(proposalId),
+            });
+          }
+
+          // 2026 supplemental path: scan ALL proposal maps for EXECUTED proposals that
+          // were not caught by either the legacy path or the completedProposalIds loop.
+          // This handles pick-only trades where ESPN emits no TRADE_UPHOLD header row.
+          for (const [proposalId, itemRows] of Array.from(proposalItemMap)) {
+            if (tradeGroups.has(proposalId)) continue;
+            const pickRows = proposalPickMap.get(proposalId) ?? [];
+            if (!itemRows.length && !pickRows.length) continue;
+            tradeGroups.set(proposalId, {
+              playerRows: itemRows,
+              pickRows,
+              proposedDate: acceptanceDateMap.get(proposalId),
+            });
+          }
+          for (const [proposalId, pickRows] of Array.from(proposalPickMap)) {
+            if (tradeGroups.has(proposalId)) continue;
+            if (!pickRows.length) continue;
+            tradeGroups.set(proposalId, {
+              playerRows: [],
+              pickRows,
               proposedDate: acceptanceDateMap.get(proposalId),
             });
           }
