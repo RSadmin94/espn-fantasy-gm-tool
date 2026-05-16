@@ -800,7 +800,7 @@ export default function OwnerStats() {
         <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-4">
           <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Data Notes</div>
           <div className="text-xs text-slate-500 space-y-1">
-            <div>Records compiled from ESPN API data for seasons 2018–2025 (8 seasons). Seasons 2009–2017 are not available via the ESPN v3 API.</div>
+            <div>Records compiled from ESPN API data across all available seasons (2009–2026 — full 18-season history loaded).</div>
             <div>Transaction counters (adds, drops, trades) are season-end totals from ESPN — individual transaction details are not available for historical seasons.</div>
             <div>GM Style archetypes and 2026 predictions are AI-generated based on career patterns and should be treated as analytical insights, not guarantees.</div>
           </div>

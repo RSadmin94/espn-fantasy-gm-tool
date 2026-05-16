@@ -4734,9 +4734,8 @@ if (pickOrder.length > 0) {
         );
 
         const totalSeasons = cachedSeasons.length;
-        // Only count seasons ESPN API actually supports (2018+) for health scoring.
-        // Pre-2018 seasons fail by design (ESPN API limitation) and must not pollute the banner.
-        const scoredHealth = seasonHealth.filter(s => s.season >= 2018);
+        // Count all cached seasons for health scoring — 2009–2026 are all now supported.
+        const scoredHealth = seasonHealth;
         const staleSeasons = scoredHealth.filter(s => s.staleFlag).length;
         const failedSeasons = scoredHealth.filter(s => s.status === "failed").length;
         const partialSeasons = scoredHealth.filter(s => s.status === "partial").length;

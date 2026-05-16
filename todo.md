@@ -1283,14 +1283,14 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Save checkpoint
 
 ## Multi-League Fix — Extension-Based Second League Connection
-- [ ] Audit LeagueConnect.tsx: understand current credential flow and where extension data is injected
-- [ ] Audit leagueConnections schema and league.connect tRPC mutation to confirm it supports multiple rows per user
-- [ ] Fix LeagueConnect to work as an "Add League" flow (not just first-time setup): when user already has leagues, show "Add Another League" mode
-- [ ] Ensure extension credential injection (SWID, espn_s2, leagueId) works for any league slot, not just the first
-- [ ] When extension injects credentials for a different leagueId than any existing connection, auto-detect it as a new league and prompt to add
-- [ ] After adding a second league, redirect to the app with the new league set as active
-- [ ] Show all connected leagues in LeagueSwitcher with correct names and allow one-click switching
-- [ ] Write vitest for multi-league connect logic
+- [x] Audit LeagueConnect.tsx: understand current credential flow and where extension data is injected
+- [x] Audit leagueConnections schema and league.connect tRPC mutation to confirm it supports multiple rows per user
+- [x] Fix LeagueConnect to work as an "Add League" flow (not just first-time setup): when user already has leagues, show "Add Another League" mode
+- [x] Ensure extension credential injection (SWID, espn_s2, leagueId) works for any league slot, not just the first
+- [x] When extension injects credentials for a different leagueId than any existing connection, auto-detect it as a new league and prompt to add
+- [x] After adding a second league, redirect to the app with the new league set as active
+- [x] Show all connected leagues in LeagueSwitcher with correct names and allow one-click switching
+- [x] Write vitest for multi-league connect logic (24 tests in multiLeague.test.ts)
 - [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (699/699 passing, 36 test files)
 - [x] Save checkpoint
 
@@ -1306,29 +1306,29 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Save checkpoint
 
 ## Behavioral Analytics Dashboard — 6 Questions
-- [ ] Audit usage_events schema: confirm eventType, sessionId, page, action, featureName, metadata columns exist
-- [ ] Add league_switch event tracking: fire when user calls setActive mutation (client-side, LeagueSwitcher)
-- [ ] Add tab_view event tracking: fire on every tab click across all hub pages (WeeklyIntelligence, TradeLab, KeeperLab, AIDraftHelper)
-- [ ] Add drop_off event: fire on visibilitychange/beforeunload with last page + time-on-page
-- [ ] Add return_visit attribution: record what page/feature the user visited in the session before returning
-- [ ] Server: getActiveLeagueStats — leagues ranked by unique active users + session count in last 30 days
-- [ ] Server: getFeatureRetention — for each feature, % of users who returned within 7 days after first use
-- [ ] Server: getIgnoredTabs — all tab_view events grouped by tabName, sorted ascending (least viewed first)
-- [ ] Server: getLeagueSwitchFrequency — league_switch events per user per week, avg switches, top switchers
-- [ ] Server: getReturnVisitDrivers — last feature_open/tab_view before each return_visit event, ranked by frequency
-- [ ] Server: getDropOffMap — page_view sequences where session ends (no next event within 30 min), ranked by exit page
-- [ ] Build BehavioralAnalytics.tsx page with 6 answer panels (one per question), using recharts for visualizations
-- [ ] Panel 1 — Active Leagues: bar chart of leagues by active user count + session count
-- [ ] Panel 2 — Feature Retention: horizontal bar chart of 7-day return rate per feature
-- [ ] Panel 3 — Ignored Tabs: red-highlighted table of tabs with <5% view rate
-- [ ] Panel 4 — League Switching: line chart of switch frequency over time + top switchers table
-- [ ] Panel 5 — Return Visit Drivers: ranked list of features that precede return visits
-- [ ] Panel 6 — Drop-off Map: funnel/table of exit pages with exit rate %
-- [ ] Add /admin/behavioral route to App.tsx
-- [ ] Add "Behavioral Analytics" link to admin sidebar (admin-only)
-- [ ] Write vitest for all 6 server queries
-- [ ] Run pnpm tsc --noEmit (0 errors) and pnpm test
-- [ ] Save checkpoint
+- [x] Audit usage_events schema: confirm eventType, sessionId, page, action, featureName, metadata columns exist
+- [x] Add league_switch event tracking: fire when user calls setActive mutation (client-side, LeagueSwitcher)
+- [x] Add tab_view event tracking: fire on every tab click across all hub pages (WeeklyIntelligence, TradeLab, KeeperLab, AIDraftHelper)
+- [x] Add drop_off event: fire on visibilitychange/beforeunload with last page + time-on-page
+- [x] Add return_visit attribution: record what page/feature the user visited in the session before returning
+- [x] Server: getActiveLeagueStats — leagues ranked by unique active users + session count in last 30 days
+- [x] Server: getFeatureRetention — for each feature, % of users who returned within 7 days after first use
+- [x] Server: getIgnoredTabs — all tab_view events grouped by tabName, sorted ascending (least viewed first)
+- [x] Server: getLeagueSwitchFrequency — league_switch events per user per week, avg switches, top switchers
+- [x] Server: getReturnVisitDrivers — last feature_open/tab_view before each return_visit event, ranked by frequency
+- [x] Server: getDropOffMap — page_view sequences where session ends (no next event within 30 min), ranked by exit page
+- [x] Build BehavioralAnalytics.tsx page with 6 answer panels (one per question), using recharts for visualizations
+- [x] Panel 1 — Active Leagues: bar chart of leagues by active user count + session count
+- [x] Panel 2 — Feature Retention: horizontal bar chart of 7-day return rate per feature
+- [x] Panel 3 — Ignored Tabs: red-highlighted table of tabs with <5% view rate
+- [x] Panel 4 — League Switching: line chart of switch frequency over time + top switchers table
+- [x] Panel 5 — Return Visit Drivers: ranked list of features that precede return visits
+- [x] Panel 6 — Drop-off Map: funnel/table of exit pages with exit rate %
+- [x] Add /admin/behavioral route to App.tsx
+- [x] Add "Behavioral Analytics" link to admin sidebar (admin-only)
+- [x] Write vitest for all 6 server queries (37 tests in behavioralAnalytics.test.ts)
+- [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (726/726 passing, 37 test files)
+- [x] Save checkpoint (8ac0e448)
 
 ## Behavioral Analytics Dashboard (6-Question)
 
@@ -1348,4 +1348,31 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] Add Behavioral Analytics nav item to System group in AppLayout.tsx sidebar
 - [x] Write 37 unit tests in behavioralAnalytics.test.ts covering all 6 query functions
 - [x] Run pnpm tsc --noEmit (0 errors) and pnpm test (726/726 passing, 37 test files)
+- [x] Save checkpoint
+
+## League History Fix — All Seasons + Full Details
+- [ ] Audit ESPN history URL (leagueId=457622) to determine the actual first available season
+- [ ] Audit ALL_SEASONS constant in espnService.ts and routers.ts — confirm range matches ESPN
+- [ ] Audit refresh_manifest table to see which seasons are actually cached in the DB
+- [ ] Audit Owner Stats, League History, and DNA profile pages to find where history is truncated
+- [ ] Fix ALL_SEASONS to cover every available season (ESPN typically goes back to league founding year)
+- [ ] Fix espn.allSeasons tRPC procedure to return all seasons with champion, standings, and record data
+- [ ] Fix espn.refresh to fetch all missing seasons (not just 2025+2026)
+- [ ] Build or fix LeagueHistory.tsx page: season-by-season champion, final standings, records, transactions
+- [ ] Ensure DNA profiles (leagueDNA.ts) consume all available seasons for archetype scoring
+- [ ] Ensure AI advisor context includes all seasons (not just recent ones)
+- [ ] Run pnpm tsc --noEmit (0 errors) and pnpm test
+- [ ] Save checkpoint
+
+## Full History Integration — All 18 Seasons (2009–2026)
+- [x] Remove 2018+ season cap in dnaRouter.ts so all cached seasons feed DNA profiles
+- [x] Remove 2018+ season cap in agentRouter.ts getDNABlock for War Room agents
+- [x] Remove 2018+ season cap in weeklyAssessmentService.ts DNA builder
+- [x] Remove 2018+ season cap in routers.ts scoredHealth filter
+- [x] Enrich advisorContextBuilder.ts with full career history block (all-time W/L, championships, playoff rates, H2H records, historical patterns)
+- [x] Fix hardcoded 2018-2025 copy in OwnerStats.tsx, MyProfileTabContent.tsx, Dashboard.tsx, DraftHistory.tsx, KeeperCalculator.tsx, PlayerProfiles.tsx
+- [x] Update DraftHistory.tsx SEASONS array to include 2009-2017
+- [x] Update PlayerProfiles.tsx RoundTimeline seasons array to include 2009-2017
+- [x] Fix BehavioralAnalytics.tsx useAuth import path (@/_core/hooks/useAuth)
+- [x] Run pnpm test (726/726 passing, 37 test files)
 - [x] Save checkpoint

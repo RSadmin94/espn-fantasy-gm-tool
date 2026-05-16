@@ -686,7 +686,7 @@ export async function buildWeeklyAssessment(season: number): Promise<WeeklyLeagu
   const rodTeamId = detectRodTeamId(teams);
 
   // Build DNA profiles for all managers
-  const cachedSeasons = (await getAllCachedSeasons()).filter(s => s >= 2018);
+  const cachedSeasons = await getAllCachedSeasons();
   const allLeaguePicks: DraftPickRecord[] = [];
   const managerRawData: ManagerRawData[] = teams.map(t => ({
     memberId: String(t.teamId as number),

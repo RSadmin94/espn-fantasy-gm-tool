@@ -145,7 +145,7 @@ export function MyProfileTab() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
               <BarChart2 className="w-4 h-4 text-blue-400" />
-              Draft Tendencies — {dt.totalPicks} Picks (2018–2025)
+              Draft Tendencies — {dt.totalPicks} Picks (All Seasons)
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -400,7 +400,7 @@ export function MyProfileTab() {
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
             <BarChart2 className="w-4 h-4 text-primary" />
-            Season-by-Season Record (2018–2025)
+            Season-by-Season Record (2009–2026)
           </CardTitle>
         </CardHeader>
         <CardContent>

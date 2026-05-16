@@ -136,19 +136,126 @@ Be concise, data-driven, and specific. Reference actual team names and player na
         // Injury fetch failed — continue without it
       }
     }
-    // League DNA behavioral intelligence
-    try {
-      const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
-      const { buildManagerRawData } = await import("./dnaRouter");
-      const managerRawData = await buildManagerRawData();
-      if (managerRawData.length > 0) {
-        const dnaProfiles = calcLeagueDNA(managerRawData);
-        const dnaBlock = buildDNAPromptBlock(dnaProfiles);
-        leagueContext += "\n\n" + dnaBlock;
+  // ── Full career history block (all cached seasons) ──────────────────────────
+  try {
+    const { getAllCachedSeasons, getCachedView } = await import("./db");
+    const allSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+    if (allSeasons.length > 0) {
+      // Aggregate career W/L, championships, playoff appearances per owner
+      const careerMap = new Map<string, {
+        name: string;
+        wins: number; losses: number;
+        championships: number; runnerUps: number;
+        playoffAppearances: number;
+        seasons: number;
+        bestFinish: number;
+        worstFinish: number;
+      }>();
+
+      for (const s of allSeasons) {
+        const row = await getCachedView(s, 'combined');
+        if (!row) continue;
+        const d = row.payload as Record<string, unknown>;
+        const members = (d.members as Record<string, unknown>[]) ?? [];
+        const teams = (d.teams as Record<string, unknown>[]) ?? [];
+        const schedule = (d.schedule as Record<string, unknown>[]) ?? [];
+
+        // Determine champion from completed winners bracket
+        let championTeamId: number | null = null;
+        let runnerUpTeamId: number | null = null;
+        const completedPlayoffs = (schedule as Record<string, unknown>[]).filter(
+          (m) => m.playoffTierType === 'WINNERS_BRACKET' && m.winner && m.winner !== 'UNDECIDED'
+        );
+        if (completedPlayoffs.length > 0) {
+          const champMatchup = completedPlayoffs.reduce((a, b) =>
+            (a.matchupPeriodId as number) >= (b.matchupPeriodId as number) ? a : b
+          );
+          if (champMatchup.winner === 'HOME') {
+            championTeamId = (champMatchup.home as Record<string, unknown>)?.teamId as number ?? null;
+            runnerUpTeamId = (champMatchup.away as Record<string, unknown>)?.teamId as number ?? null;
+          } else if (champMatchup.winner === 'AWAY') {
+            championTeamId = (champMatchup.away as Record<string, unknown>)?.teamId as number ?? null;
+            runnerUpTeamId = (champMatchup.home as Record<string, unknown>)?.teamId as number ?? null;
+          }
+        }
+
+        for (const team of teams) {
+          const t = team as Record<string, unknown>;
+          const primaryOwner = (t.primaryOwner as string) || ((t.owners as string[])?.[0] ?? '');
+          if (!primaryOwner) continue;
+          const memberInfo = members.find((m) => (m as Record<string, unknown>).id === primaryOwner) as Record<string, unknown> | undefined;
+          const displayName = [memberInfo?.firstName, memberInfo?.lastName].filter(Boolean).join(' ') ||
+            (memberInfo?.displayName as string) || primaryOwner;
+          const overall = ((t.record as Record<string, unknown>)?.overall ?? {}) as Record<string, unknown>;
+          const wins = (overall.wins as number) ?? 0;
+          const losses = (overall.losses as number) ?? 0;
+          const rankFinal = (t.rankFinal as number) ?? 0;
+          const playoffSeed = (t.playoffSeed as number) ?? 0;
+          const madePlayoffs = playoffSeed > 0;
+          const isChamp = t.id === championTeamId;
+          const isRunnerUp = t.id === runnerUpTeamId;
+
+          if (!careerMap.has(primaryOwner)) {
+            careerMap.set(primaryOwner, { name: displayName, wins: 0, losses: 0, championships: 0, runnerUps: 0, playoffAppearances: 0, seasons: 0, bestFinish: 99, worstFinish: 0 });
+          }
+          const c = careerMap.get(primaryOwner)!;
+          c.wins += wins;
+          c.losses += losses;
+          c.seasons++;
+          if (madePlayoffs) c.playoffAppearances++;
+          if (isChamp) c.championships++;
+          if (isRunnerUp) c.runnerUps++;
+          if (rankFinal > 0 && rankFinal < c.bestFinish) c.bestFinish = rankFinal;
+          if (rankFinal > c.worstFinish) c.worstFinish = rankFinal;
+        }
       }
-    } catch {
-      // DNA unavailable — continue without it
+
+      if (careerMap.size > 0) {
+        const entries = Array.from(careerMap.values())
+          .filter(c => c.seasons >= 1)
+          .sort((a, b) => b.championships - a.championships || b.wins - a.wins);
+
+        leagueContext += `\n\n## CAREER HISTORY (${allSeasons[0]}–${allSeasons[allSeasons.length - 1]}, ${allSeasons.length} seasons — treat as ground truth):`;
+        for (const c of entries) {
+          const winPct = (c.wins + c.losses) > 0 ? ((c.wins / (c.wins + c.losses)) * 100).toFixed(0) : '0';
+          const champStr = c.championships > 0 ? ` 🏆×${c.championships}` : '';
+          const rrStr = c.runnerUps > 0 ? ` 🥈×${c.runnerUps}` : '';
+          const playoffStr = `${c.playoffAppearances}/${c.seasons} playoff appearances`;
+          leagueContext += `\n  ${c.name}: ${c.wins}W-${c.losses}L (${winPct}% win rate)${champStr}${rrStr} | ${playoffStr} | Best finish: #${c.bestFinish}`;
+        }
+
+        // Highlight dynasty / drought narratives
+        const dynasties = entries.filter(c => c.championships >= 2);
+        const neverWon = entries.filter(c => c.championships === 0 && c.seasons >= 5);
+        const dominantPlayoff = entries.filter(c => c.seasons >= 5 && c.playoffAppearances / c.seasons >= 0.7);
+        if (dynasties.length > 0) {
+          leagueContext += `\n\nDYNASTY ALERT: ${dynasties.map(d => `${d.name} (${d.championships} championships)`).join(', ')} — multi-time champions, proven winners.`;
+        }
+        if (neverWon.length > 0) {
+          leagueContext += `\nCHAMPIONSHIP DROUGHT: ${neverWon.map(n => `${n.name} (0 titles in ${n.seasons} seasons)`).join(', ')} — historically motivated to break through.`;
+        }
+        if (dominantPlayoff.length > 0) {
+          leagueContext += `\nPLAYOFF MACHINES: ${dominantPlayoff.map(p => `${p.name} (${p.playoffAppearances}/${p.seasons} seasons)`).join(', ')} — consistently dangerous.`;
+        }
+      }
     }
+  } catch {
+    // Career history unavailable — continue without it
+  }
+
+  // League DNA behavioral intelligence
+  try {
+    const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
+    const { buildManagerRawData } = await import("./dnaRouter");
+    const managerRawData = await buildManagerRawData();
+    if (managerRawData.length > 0) {
+      const dnaProfiles = calcLeagueDNA(managerRawData);
+      const dnaBlock = buildDNAPromptBlock(dnaProfiles);
+      leagueContext += "\n\n" + dnaBlock;
+    }
+  } catch {
+    // DNA unavailable — continue without it
+  }
     // Draft order and keeper data
     try {
       // Derive the upcoming draft season without hardcoding any year:

@@ -35,7 +35,12 @@ const POS_MAP: Record<number, string> = {
 
 export async function buildManagerRawData(): Promise<ManagerRawData[]> {
   const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
-  const ANALYSIS_SEASONS = cachedSeasons.filter(s => s >= 2018); // sufficient data from 2018+
+  // Use ALL cached seasons for career-level DNA analysis.
+  // Older seasons (2009-2017) have less granular transaction data but still
+  // contribute valid W/L records, draft picks, and H2H matchup history.
+  // The DNA scoring functions weight recent seasons more heavily via recency
+  // multipliers, so early seasons don't distort current behavioral profiles.
+  const ANALYSIS_SEASONS = cachedSeasons; // full 2009-2026 history
 
   // memberId → accumulated data
   const managerMap = new Map<string, ManagerRawData>();

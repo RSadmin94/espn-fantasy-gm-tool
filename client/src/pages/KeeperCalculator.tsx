@@ -398,7 +398,7 @@ function OwnerProfilePanel({ profile }: { profile: OwnerProfileData }) {
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
             <BarChart2 className="w-4 h-4 text-primary" />
-            Season-by-Season Record (2018–2025)
+            Season-by-Season Record (2009–2026)
           </CardTitle>
         </CardHeader>
         <CardContent>

@@ -1187,7 +1187,7 @@ export default function Dashboard() {
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Brain className="w-4 h-4 text-primary" />
                   Competitor Draft Intelligence
-                  <Badge className="ml-auto text-[9px] px-1.5 bg-blue-500/20 text-blue-400 border-blue-500/30">REAL DATA · 2018–2025</Badge>
+                  <Badge className="ml-auto text-[9px] px-1.5 bg-blue-500/20 text-blue-400 border-blue-500/30">REAL DATA · 2009–2026</Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>

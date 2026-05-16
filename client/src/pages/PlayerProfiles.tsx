@@ -75,7 +75,7 @@ function prominenceBadge(score: number) {
 
 // ── Round Timeline Component ──────────────────────────────────────────────────
 function RoundTimeline({ history }: { history: DraftEntry[] }) {
-  const seasons = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+  const seasons = [2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
   return (
     <div className="flex items-end gap-1 h-10">
       {seasons.map((season) => {
@@ -273,7 +273,7 @@ export default function PlayerProfiles() {
   }), [profiles]);
 
   return (
-    <AppLayout title="Player Profiles" subtitle="ATLANTAS FINEST FF — 2018–2025 Historical Database">
+    <AppLayout title="Player Profiles" subtitle="ATLANTAS FINEST FF — 2009–2026 Historical Database">
       <div className="space-y-6">
 
         {/* Header Stats */}
@@ -397,7 +397,7 @@ export default function PlayerProfiles() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-400">
             <div>
               <div className="font-medium text-slate-300 mb-1">Round Timeline (bar chart)</div>
-              <div>Each bar represents a season (2018–2025). Taller bars = earlier round = higher value. Gold bars = player was kept that season. Hover for details.</div>
+              <div>Each bar represents a season (2009–2026). Taller bars = earlier round = higher value. Gold bars = player was kept that season. Hover for details.</div>
             </div>
             <div>
               <div className="font-medium text-slate-300 mb-1">Prominence Score</div>

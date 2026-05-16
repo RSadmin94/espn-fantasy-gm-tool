@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader2, Trophy, Star, Search, Filter, Calendar } from "lucide-react";
 
-const SEASONS = [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018];
+const SEASONS = [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010, 2009];
 
 const POS_COLORS: Record<string, string> = {
   QB: "bg-red-500/20 text-red-300 border-red-500/30",
@@ -91,7 +91,7 @@ export default function DraftHistory() {
   const keeperCount = typedPicks.filter((p) => p.keeper).length;
 
   return (
-    <AppLayout title="Draft History" subtitle="Pick-by-pick draft recaps · 2018–2025">
+    <AppLayout title="Draft History" subtitle="Pick-by-pick draft recaps · 2009–2026">
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
 
         {/* Header Row */}
