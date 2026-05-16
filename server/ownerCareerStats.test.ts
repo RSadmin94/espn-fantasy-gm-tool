@@ -282,6 +282,61 @@ describe("ownerCareerStats endpoint logic", () => {
     expect(sorted[2].displayName).toBe("Alice");
   });
 
+  // ── Playoff wins/losses computation ─────────────────────────────────────────
+
+  it("computes playoff wins and losses correctly from schedule matchups", () => {
+    const playoffMatchupPeriodStart = 15;
+    const teamToMember = new Map([[1, "OWNER_A"], [2, "OWNER_B"], [3, "OWNER_C"], [4, "OWNER_D"]]);
+    const schedule = [
+      // Semi-finals (period 15)
+      { matchupPeriodId: 15, playoffTierType: "WINNERS_BRACKET", winner: "HOME", home: { teamId: 1 }, away: { teamId: 2 } }, // A wins, B loses
+      { matchupPeriodId: 15, playoffTierType: "WINNERS_BRACKET", winner: "AWAY", home: { teamId: 3 }, away: { teamId: 4 } }, // D wins, C loses
+      // Finals (period 16)
+      { matchupPeriodId: 16, playoffTierType: "WINNERS_BRACKET", winner: "AWAY", home: { teamId: 1 }, away: { teamId: 4 } }, // D wins, A loses
+      { matchupPeriodId: 16, playoffTierType: "WINNERS_BRACKET", winner: "HOME", home: { teamId: 2 }, away: { teamId: 3 } }, // B wins 3rd place, C loses
+    ];
+
+    const playoffCounts: Record<string, { wins: number; losses: number }> = {};
+    for (const m of schedule) {
+      if (m.matchupPeriodId < playoffMatchupPeriodStart) continue;
+      const hm = teamToMember.get(m.home.teamId);
+      const am = teamToMember.get(m.away.teamId);
+      if (!hm || !am) continue;
+      if (!playoffCounts[hm]) playoffCounts[hm] = { wins: 0, losses: 0 };
+      if (!playoffCounts[am]) playoffCounts[am] = { wins: 0, losses: 0 };
+      if (m.winner === "HOME") { playoffCounts[hm].wins++; playoffCounts[am].losses++; }
+      else if (m.winner === "AWAY") { playoffCounts[am].wins++; playoffCounts[hm].losses++; }
+    }
+
+    // OWNER_A: won semi, lost final → 1W-1L
+    expect(playoffCounts["OWNER_A"]).toEqual({ wins: 1, losses: 1 });
+    // OWNER_B: lost semi, won 3rd place → 1W-1L
+    expect(playoffCounts["OWNER_B"]).toEqual({ wins: 1, losses: 1 });
+    // OWNER_C: lost semi, lost 3rd place → 0W-2L
+    expect(playoffCounts["OWNER_C"]).toEqual({ wins: 0, losses: 2 });
+    // OWNER_D: won semi, won final (champion) → 2W-0L
+    expect(playoffCounts["OWNER_D"]).toEqual({ wins: 2, losses: 0 });
+  });
+
+  it("champion has highest playoff wins and zero playoff losses", () => {
+    // A champion who wins all 3 rounds (quarterfinal, semi, final)
+    const teamToMember = new Map([[1, "CHAMP"], [2, "OPP1"], [3, "OPP2"], [4, "OPP3"]]);
+    const schedule = [
+      { matchupPeriodId: 14, playoffTierType: "WINNERS_BRACKET", winner: "HOME", home: { teamId: 1 }, away: { teamId: 2 } },
+      { matchupPeriodId: 15, playoffTierType: "WINNERS_BRACKET", winner: "HOME", home: { teamId: 1 }, away: { teamId: 3 } },
+      { matchupPeriodId: 16, playoffTierType: "WINNERS_BRACKET", winner: "HOME", home: { teamId: 1 }, away: { teamId: 4 } },
+    ];
+    const counts: Record<string, { wins: number; losses: number }> = {};
+    for (const m of schedule) {
+      const hm = teamToMember.get(m.home.teamId)!;
+      const am = teamToMember.get(m.away.teamId)!;
+      if (!counts[hm]) counts[hm] = { wins: 0, losses: 0 };
+      if (!counts[am]) counts[am] = { wins: 0, losses: 0 };
+      if (m.winner === "HOME") { counts[hm].wins++; counts[am].losses++; }
+    }
+    expect(counts["CHAMP"]).toEqual({ wins: 3, losses: 0 });
+  });
+
   // ── rankCalculatedFinal + primaryOwner attribution ──────────────────────────
 
   it("uses rankCalculatedFinal to identify champion team and ties it to owner via primaryOwner", () => {

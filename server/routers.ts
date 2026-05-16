@@ -2344,6 +2344,8 @@ export const appRouter = router({
       totalPF: number;
       totalPA: number;
       playoffAppearances: number;
+      playoffWins: number;
+      playoffLosses: number;
       championships: number;
       runnerUps: number;
       // season-by-season
@@ -2385,7 +2387,7 @@ export const appRouter = router({
           displayName: m.displayName || memberId,
           totalWins: 0, totalLosses: 0, totalTies: 0,
           totalPF: 0, totalPA: 0,
-          playoffAppearances: 0, championships: 0, runnerUps: 0,
+          playoffAppearances: 0, playoffWins: 0, playoffLosses: 0, championships: 0, runnerUps: 0,
           seasonRecords: [],
           h2h: new Map(),
           txnSeasons: [],
@@ -2488,6 +2490,36 @@ export const appRouter = router({
           moveToActive: tc.moveToActive ?? 0,
           moveToIR: tc.moveToIR ?? 0,
         });
+      }
+
+      // Process playoff wins/losses for each owner
+      // Include WINNERS_BRACKET and LOSERS_BRACKET matchups (but not BYEs)
+      const playoffMatchups = schedule.filter(
+        (m: any) => m.matchupPeriodId >= playoffMatchupPeriodStart &&
+          m.playoffTierType && m.playoffTierType !== 'NONE' &&
+          m.winner && m.winner !== 'UNDECIDED'
+      );
+
+      for (const matchup of playoffMatchups) {
+        const homeTeamId: number = matchup.home?.teamId;
+        const awayTeamId: number = matchup.away?.teamId;
+        if (!homeTeamId || !awayTeamId) continue;
+
+        const homeMember = teamToMember.get(homeTeamId);
+        const awayMember = teamToMember.get(awayTeamId);
+        if (!homeMember || !awayMember) continue;
+
+        const homeOwner = getOrCreateOwner(homeMember, members);
+        const awayOwner = getOrCreateOwner(awayMember, members);
+
+        if (matchup.winner === 'HOME') {
+          homeOwner.playoffWins++;
+          awayOwner.playoffLosses++;
+        } else if (matchup.winner === 'AWAY') {
+          awayOwner.playoffWins++;
+          homeOwner.playoffLosses++;
+        }
+        // TIE in playoffs is extremely rare but handle gracefully (no increment)
       }
 
       // Process head-to-head from regular-season matchups
@@ -2610,6 +2642,8 @@ export const appRouter = router({
         avgPA,
         pointDiff: Math.round((o.totalPF - o.totalPA) * 10) / 10,
         playoffAppearances: o.playoffAppearances,
+        playoffWins: o.playoffWins,
+        playoffLosses: o.playoffLosses,
         championships: o.championships,
         runnerUps: o.runnerUps,
         seasonsActive: o.seasonRecords.length,

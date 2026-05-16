@@ -1434,3 +1434,8 @@ This single flow determines conversion, retention, and word-of-mouth.
 - [x] ESPN Activity Capture V1 — passive transaction capture via extension, league_events DB table, admin debug view at /admin/activity-capture
 - [x] Fix Opponent Intel showing incorrect championship count (findChampionshipMatchup: traces semi-final winners to distinguish championship from 3rd-place game when both are WINNERS_BRACKET in the same period)
 - [ ] Fix Trade Aging showing wrong/extra trades — should only show valid completed trades
+- [x] Add playoffWins and playoffLosses fields to ownerCareerStats endpoint (computed from schedule playoff matchups per owner)
+- [x] Display playoff W/L record in Opponent Intel owner profile cards
+- [x] Add playoff W/L to Owner Stats page career summary
+- [x] Write vitest for playoff W/L computation logic
+- [x] Push playoff W/L changes to GitHub

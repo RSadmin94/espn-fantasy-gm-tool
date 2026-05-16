@@ -59,6 +59,8 @@ interface Owner {
   avgPA: number;
   pointDiff: number;
   playoffAppearances: number;
+  playoffWins: number;
+  playoffLosses: number;
   championships: number;
   runnerUps: number;
   seasonsActive: number;
@@ -350,7 +352,7 @@ function OwnerDetailPanel({ owner, allOwners }: { owner: Owner; allOwners: Owner
               { label: "Record", value: `${owner.totalWins}–${owner.totalLosses}`, color: "text-white" },
               { label: "Avg PF/Szn", value: owner.avgPF.toLocaleString(), color: "text-blue-400" },
               { label: "Playoff Apps", value: owner.playoffAppearances, color: "text-purple-400" },
-              { label: "Playoff Rate", value: `${owner.playoffRate}%`, color: "text-purple-300" },
+              { label: "Playoff W–L", value: `${owner.playoffWins ?? 0}–${owner.playoffLosses ?? 0}`, color: "text-purple-300" },
               { label: "Championships", value: owner.championships, color: "text-yellow-400" },
             ].map((s) => (
               <div key={s.label} className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3 text-center">

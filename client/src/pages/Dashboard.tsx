@@ -347,7 +347,7 @@ export default function Dashboard() {
     memberId: string; fullName: string; displayName: string;
     totalWins: number; totalLosses: number; winPct: number;
     totalPF: number; avgPF: number; championships: number;
-    playoffAppearances: number; playoffRate: number; seasonsActive: number;
+    playoffAppearances: number; playoffWins: number; playoffLosses: number; playoffRate: number; seasonsActive: number;
     gmArchetype: string; gmArchetypeDesc: string;
     waiverAggression: number; tradeFrequency: number; rosterStability: number;
     seasonRecords: { season: number; wins: number; losses: number; pf: number; rank: number }[];
@@ -511,7 +511,7 @@ export default function Dashboard() {
     return "steady";
   };
 
-  type LiveOpp = { memberId: string; name: string; team: string; abbr: string; threat: number; badge: string; badgeColor: string; tierColor: string; trajectory: "up" | "down" | "steady"; pf25: number; rank23: number; rank24: number; rank25: number; behavioral: string; directive: string; wins25: number; losses25: number; careerRecord: string; bestRank: number; playoffRatePct: number; seasonsActive: number; championships: number };
+  type LiveOpp = { memberId: string; name: string; team: string; abbr: string; threat: number; badge: string; badgeColor: string; tierColor: string; trajectory: "up" | "down" | "steady"; pf25: number; rank23: number; rank24: number; rank25: number; behavioral: string; directive: string; wins25: number; losses25: number; careerRecord: string; bestRank: number; playoffRatePct: number; seasonsActive: number; championships: number; playoffWins: number; playoffLosses: number };
   type LiveRank = { manager: string; rank23: number; rank24: number; rank25: number; label: string; you: boolean };
   type LiveDraftItem = { name: string; record: string; intel: string; risk: string };
   // Merge duplicate Jan Graham accounts (same person, two ESPN member IDs)
@@ -571,7 +571,7 @@ export default function Dashboard() {
         const rank25 = o.seasonRecords.find(s => s.season === 2025)?.rank ?? 99;
         const validRecords = o.seasonRecords.filter(s => s.rank < 99 && s.season >= 2018);
         const bestRank = validRecords.length > 0 ? Math.min(...validRecords.map(s => s.rank)) : 99;
-        return { memberId: o.memberId, name: o.fullName || o.displayName, team: o.displayName, abbr, threat, badge, badgeColor, tierColor, trajectory, pf25, rank23, rank24, rank25, behavioral: generatePersonalizedInsight(o), directive: generateStrategicDirective(o, threat, trajectory), wins25: rec25?.wins ?? 0, losses25: rec25?.losses ?? 0, careerRecord: `${o.totalWins}W–${o.totalLosses}L`, bestRank, playoffRatePct: Math.round(o.playoffRate), seasonsActive: o.seasonsActive, championships: o.championships };
+        return { memberId: o.memberId, name: o.fullName || o.displayName, team: o.displayName, abbr, threat, badge, badgeColor, tierColor, trajectory, pf25, rank23, rank24, rank25, behavioral: generatePersonalizedInsight(o), directive: generateStrategicDirective(o, threat, trajectory), wins25: rec25?.wins ?? 0, losses25: rec25?.losses ?? 0, careerRecord: `${o.totalWins}W–${o.totalLosses}L`, bestRank, playoffRatePct: Math.round(o.playoffRate), seasonsActive: o.seasonsActive, championships: o.championships, playoffWins: o.playoffWins ?? 0, playoffLosses: o.playoffLosses ?? 0 };
       })
       .sort((a, b) => b.threat - a.threat),
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1103,6 +1103,11 @@ export default function Dashboard() {
                       <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${opp.playoffRatePct >= 60 ? 'bg-emerald-500/15 text-emerald-400' : opp.playoffRatePct >= 40 ? 'bg-blue-500/15 text-blue-400' : 'bg-muted/60 text-muted-foreground'}`}>
                         <Star className="w-2.5 h-2.5" />{opp.playoffRatePct}% playoff
                       </span>
+                      {(opp.playoffWins > 0 || opp.playoffLosses > 0) && (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400">
+                          <Trophy className="w-2.5 h-2.5" />PO: {opp.playoffWins}W–{opp.playoffLosses}L
+                        </span>
+                      )}
                       {opp.trajectory !== 'steady' && (
                         <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${opp.trajectory === 'up' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
                           {opp.trajectory === 'up' ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}

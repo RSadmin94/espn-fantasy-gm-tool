@@ -1,0 +1,17 @@
+{
+  "query": "\nSELECT \n  JSON_EXTRACT(payload, '$.settings.scheduleSettings.matchupPeriodCount') as reg_season_periods,\n  JSON_LENGTH(JSON_EXTRACT(payload, '$.schedule')) as total_matchups,\n  (SELECT COUNT(*) FROM JSON_TABLE(\n    JSON_EXTRACT(payload, '$.schedule'),\n    '$[*]' COLUMNS (\n      period INT PATH '$.matchupPeriodId',\n      tier VARCHAR(50) PATH '$.playoffTierType',\n      winner VARCHAR(20) PATH '$.winner'\n    )\n  ) jt WHERE period >= 15 AND winner != 'UNDECIDED' AND winner IS NOT NULL) as playoff_completed_matchups\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yMVuFXFfyKno5zd.8bace71a6706 --database D7EDTbt5uXwnUBkJHewERh --execute \nSELECT \n  JSON_EXTRACT(payload, '$.settings.scheduleSettings.matchupPeriodCount') as reg_season_periods,\n  JSON_LENGTH(JSON_EXTRACT(payload, '$.schedule')) as total_matchups,\n  (SELECT COUNT(*) FROM JSON_TABLE(\n    JSON_EXTRACT(payload, '$.schedule'),\n    '$[*]' COLUMNS (\n      period INT PATH '$.matchupPeriodId',\n      tier VARCHAR(50) PATH '$.playoffTierType',\n      winner VARCHAR(20) PATH '$.winner'\n    )\n  ) jt WHERE period >= 15 AND winner != 'UNDECIDED' AND winner IS NOT NULL) as playoff_completed_matchups\nFROM espn_season_cache \nWHERE season = 2024 AND viewName = 'combined';\n",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1064 (42000) at line 2: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 4 column 36 near \"(",
+    "    JSON_EXTRACT(payload, '$.schedule'),",
+    "    '$[*]' COLUMNS (",
+    "      period INT PATH '$.matchupPeriodId',",
+    "      tier VARCHAR(50) PATH '$.playoffTierType',",
+    "      winner VARCHAR(20) PATH '$.winner'",
+    "    )",
+    "  ) jt WHERE period >= 15 AND winner != 'UNDECIDED' AND winner IS NOT NULL) as playoff_completed_matchups",
+    "FROM espn_season_cache ",
+    "WHERE season = 2024 AND viewName ="
+  ]
+}
