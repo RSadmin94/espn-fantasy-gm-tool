@@ -2396,27 +2396,61 @@ export const appRouter = router({
       return ownerMap.get(memberId)!;
     }
 
+     // Fetch championship data from ESPN leagueHistory API — the ONLY reliable source
+    // for pre-2018 seasons where the combined cache has empty teams arrays.
+    let leagueHistoryChampMap = new Map<number, { season: number; championMemberId: string; runnerUpMemberId: string | null; championTeamName: string }>();
+    try {
+      const { fetchLeagueHistoryChampions } = await import('./espnService');
+      leagueHistoryChampMap = await fetchLeagueHistoryChampions(cachedSeasons);
+    } catch {
+      // If the API call fails (e.g. no credentials), fall back to cache-based detection
+    }
+
     for (const season of cachedSeasons) {
       const row = await getCachedView(season, 'combined');
       if (!row) continue;
       const data = row.payload as any;
-
       const members: any[] = data.members || [];
       const teams: any[] = data.teams || [];
-      // Skip seasons with empty/stub payloads (ESPN returned {} for old seasons like 2009-2016)
-      if (teams.length === 0) continue;
+      const hasTeamData = teams.length > 0;
+
+      // For seasons with no team data (pre-2018 cache gap), still credit championships
+      // using the leagueHistory API data, but skip W/L/record processing.
+      if (!hasTeamData) {
+        const histEntry = leagueHistoryChampMap.get(season);
+        if (histEntry) {
+          const champOwner = getOrCreateOwner(histEntry.championMemberId, []);
+          champOwner.championships++;
+          champOwner.seasonRecords.push({
+            season, teamName: histEntry.championTeamName,
+            wins: 0, losses: 0, ties: 0, pf: 0, pa: 0,
+            rank: 1, playoffSeed: 0, madePlayoffs: true,
+            isChampion: true, isRunnerUp: false,
+          });
+          if (histEntry.runnerUpMemberId) {
+            const ruOwner = getOrCreateOwner(histEntry.runnerUpMemberId, []);
+            ruOwner.runnerUps++;
+            ruOwner.seasonRecords.push({
+              season, teamName: '',
+              wins: 0, losses: 0, ties: 0, pf: 0, pa: 0,
+              rank: 2, playoffSeed: 0, madePlayoffs: true,
+              isChampion: false, isRunnerUp: true,
+            });
+          }
+        }
+        continue;
+      }
+
       const schedule: any[] = data.schedule || [];
       const settings: any = data.settings || {};
       const playoffMatchupPeriodStart: number =
         (settings.scheduleSettings?.matchupPeriodCount ?? 14) + 1;
-
       // Build teamId → memberId map for this season
       const teamToMember = new Map<number, string>();
       for (const team of teams) {
         const primaryOwner: string = team.primaryOwner || (team.owners?.[0] ?? '');
-        if (primaryOwner) teamToMember.set(team.id, primaryOwner);
+         if (primaryOwner) teamToMember.set(team.id, primaryOwner);
       }
-
       // Determine champion and runner-up.
       // Priority 1: rankCalculatedFinal — ESPN's authoritative final ranking
       //   (populated in leagueHistory API and in the combined cache payload).

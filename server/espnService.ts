@@ -920,3 +920,69 @@ export async function fetchRecentActivityTrades(
     return [];
   }
 }
+
+// ─── League History Champions ─────────────────────────────────────────────────
+/**
+ * Fetches the ESPN leagueHistory API for all given seasons and returns a map
+ * of season → { championMemberId, runnerUpMemberId, championTeamName }.
+ *
+ * The leagueHistory endpoint is the ONLY reliable source for rankCalculatedFinal
+ * in pre-2018 seasons where the per-season combined cache has empty teams arrays.
+ *
+ * URL: https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/leagueHistory/{leagueId}?seasonId={season}&view=mTeam
+ */
+export interface SeasonChampion {
+  season: number;
+  championMemberId: string;
+  runnerUpMemberId: string | null;
+  championTeamName: string;
+}
+
+export async function fetchLeagueHistoryChampions(
+  seasons: number[],
+  creds?: EspnCreds
+): Promise<Map<number, SeasonChampion>> {
+  const lid    = creds?.leagueId ?? LEAGUE_ID;
+  const cookie = buildCookieStringFor(creds);
+  const result = new Map<number, SeasonChampion>();
+
+  for (const season of seasons) {
+    try {
+      const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/leagueHistory/${lid}?seasonId=${season}&view=mTeam`;
+      const res = await fetch(url, {
+        headers: {
+          Accept: "application/json",
+          Cookie: cookie,
+          "X-Fantasy-Source": "kona",
+          "X-Fantasy-Platform": "kona-PROD-m.fantasy.espn.com",
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) continue;
+
+      const data = await res.json() as unknown;
+      const league = (Array.isArray(data) ? data[0] : data) as Record<string, unknown>;
+      const teams  = (league?.teams as Record<string, unknown>[]) ?? [];
+
+      const champion = teams.find((t) => (t.rankCalculatedFinal as number) === 1);
+      const runnerUp = teams.find((t) => (t.rankCalculatedFinal as number) === 2);
+      if (!champion) continue;
+
+      const champOwner = (champion.primaryOwner as string) || ((champion.owners as string[])?.[0] ?? "");
+      const ruOwner    = runnerUp
+        ? ((runnerUp.primaryOwner as string) || ((runnerUp.owners as string[])?.[0] ?? ""))
+        : null;
+
+      result.set(season, {
+        season,
+        championMemberId: champOwner,
+        runnerUpMemberId: ruOwner || null,
+        championTeamName: (champion.name as string) ?? "",
+      });
+    } catch {
+      // Network error for this season — skip silently
+    }
+  }
+
+  return result;
+}
