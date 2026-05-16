@@ -1,4 +1,4 @@
-import { eq, desc, and, gt } from "drizzle-orm";
+import { eq, desc, and, gt, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users, espnSeasonCache, refreshManifest, chatHistory,
@@ -57,33 +57,56 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function getCachedView(season: number, viewName: string) {
+export async function getCachedView(season: number, viewName: string, leagueId?: string) {
   const db = await getDb();
   if (!db) return null;
+  const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
   // ORDER BY fetchedAt DESC ensures we always get the most recent row.
   // Without this, duplicate rows (from missing unique constraint) could
   // return stale data from an earlier refresh instead of the latest one.
   const result = await db.select().from(espnSeasonCache)
-    .where(and(eq(espnSeasonCache.season, season), eq(espnSeasonCache.viewName, viewName)))
+    .where(and(
+      eq(espnSeasonCache.leagueId, lid),
+      eq(espnSeasonCache.season, season),
+      eq(espnSeasonCache.viewName, viewName)
+    ))
     .orderBy(desc(espnSeasonCache.fetchedAt))
     .limit(1);
+  // Fallback: if no row found with leagueId, try the legacy "default" row (backward compat)
+  if (!result[0] && lid !== "default") {
+    const legacy = await db.select().from(espnSeasonCache)
+      .where(and(
+        eq(espnSeasonCache.leagueId, "default"),
+        eq(espnSeasonCache.season, season),
+        eq(espnSeasonCache.viewName, viewName)
+      ))
+      .orderBy(desc(espnSeasonCache.fetchedAt))
+      .limit(1);
+    return legacy[0] ?? null;
+  }
   return result[0] ?? null;
 }
 
-export async function upsertCachedView(season: number, viewName: string, payload: unknown) {
+export async function upsertCachedView(season: number, viewName: string, payload: unknown, leagueId?: string) {
   const db = await getDb();
   if (!db) return;
+  const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
   await db.insert(espnSeasonCache)
-    .values({ season, viewName, payload: payload as Record<string, unknown> })
+    .values({ leagueId: lid, season, viewName, payload: payload as Record<string, unknown> })
     .onDuplicateKeyUpdate({ set: { payload: payload as Record<string, unknown>, updatedAt: new Date() } });
 }
 
-export async function getAllCachedSeasons(): Promise<number[]> {
+export async function getAllCachedSeasons(leagueId?: string): Promise<number[]> {
   const db = await getDb();
   if (!db) return [];
+  const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
+  // Include both the exact leagueId and "default" (legacy rows) for backward compat
   const result = await db.selectDistinct({ season: espnSeasonCache.season })
     .from(espnSeasonCache)
-    .where(gt(espnSeasonCache.season, 2000)) // filter out sentinel/bad rows (season=0, etc.)
+    .where(and(
+      gt(espnSeasonCache.season, 2000),
+      or(eq(espnSeasonCache.leagueId, lid), eq(espnSeasonCache.leagueId, "default"))
+    ))
     .orderBy(desc(espnSeasonCache.season));
   return result.map((r) => r.season);
 }

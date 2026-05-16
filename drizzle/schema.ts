@@ -40,6 +40,7 @@ export const espnSeasonCache = mysqlTable(
   "espn_season_cache",
   {
     id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull().default("default"),
     season: int("season").notNull(),
     viewName: varchar("viewName", { length: 64 }).notNull(),
     payload: json("payload").notNull(),
@@ -47,8 +48,8 @@ export const espnSeasonCache = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (t) => [
-    // unique constraint enables onDuplicateKeyUpdate to work as a true upsert
-    uniqueIndex("uq_season_view").on(t.season, t.viewName),
+    // unique constraint scoped per league — enables multi-league isolation
+    uniqueIndex("uq_league_season_view").on(t.leagueId, t.season, t.viewName),
   ]
 );
 

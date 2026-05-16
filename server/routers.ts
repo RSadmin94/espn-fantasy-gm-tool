@@ -27,7 +27,7 @@ import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
 import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob, getDb, upsertScrapedTrades, getScrapedTrades, upsertLeagueEvents, getLeagueEvents, getLeagueEventsSummary } from "./db";
 import { leagueConnections as lcTable } from "../drizzle/schema";
-import { eq as eqDrizzle, and as andDrizzle } from "drizzle-orm";
+import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
 import { parse as parseCookie } from "cookie";
@@ -84,9 +84,10 @@ import {
 const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
 const ALL_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026];
 
-async function getSeasonData(season: number) {
-  return memCache(`seasonData:${season}`, 10 * 60_000, async () => {
-    const cached = await getCachedView(season, "combined");
+async function getSeasonData(season: number, leagueId?: string) {
+  const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
+  return memCache(`seasonData:${lid}:${season}`, 10 * 60_000, async () => {
+    const cached = await getCachedView(season, "combined", lid);
     return cached ? (cached.payload as Record<string, unknown>) : null;
   });
 }
@@ -997,6 +998,34 @@ export const appRouter = router({
         const CLOSED_SEASONS = ALL_SEASONS.filter(s => s < CURRENT_SEASON); // 2009–2025 are closed
         const seasonsToRefresh = input.seasons ?? (input.season ? [input.season] : [ALL_SEASONS[ALL_SEASONS.length - 1]]);
         const results: Record<number, { status: string; error?: string; viewHealth?: Record<string, string>; qualityWarnings?: string[]; skipped?: boolean }> = {};
+
+        // Resolve active league credentials for multi-league isolation.
+        // For public procedures (no ctx.user), we read the first active ESPN connection.
+        let activeCreds: import('./espnService').EspnCreds | undefined;
+        try {
+          const db = await getDb();
+          if (db) {
+            const activeRows = await db
+              .select()
+              .from(lcTable)
+              .where(andDrizzle(eqDrizzle(lcTable.isActive, true), eqDrizzle(lcTable.provider, 'espn')))
+              .orderBy(descDrizzle(lcTable.updatedAt))
+              .limit(1);
+            if (activeRows[0]) {
+              const { decryptCredentialsFromDb } = await import('./_core/crypto');
+              const rawCreds = decryptCredentialsFromDb(activeRows[0].credentials) as Record<string, string> | null;
+              if (rawCreds?.swid && rawCreds?.espnS2) {
+                activeCreds = {
+                  leagueId: (rawCreds.leagueId as string) ?? activeRows[0].leagueId,
+                  swid: rawCreds.swid,
+                  espnS2: rawCreds.espnS2,
+                };
+              }
+            }
+          }
+        } catch (_e) { /* non-fatal — fall back to env-var league */ }
+        const activeLeagueId = activeCreds?.leagueId ?? LEAGUE_ID;
+
         for (const season of seasonsToRefresh) {
           // Skip closed seasons that are already successfully cached (unless forceRefresh)
           if (!input.forceRefresh && CLOSED_SEASONS.includes(season)) {
@@ -1009,7 +1038,7 @@ export const appRouter = router({
           }
           try {
             // Use hardened pipeline with per-view error isolation
-            const pipelineResult = await fetchEspnViewsHardened(season);
+            const pipelineResult = await fetchEspnViewsHardened(season, undefined, activeCreds);
             const data = pipelineResult.merged;
 
             // Persist per-view health records
@@ -1038,7 +1067,7 @@ export const appRouter = router({
               }
             } catch (_e) { /* non-fatal — fall back without activity trades */ }
 
-            await upsertCachedView(season, "combined", enrichedData);
+            await upsertCachedView(season, "combined", enrichedData, activeLeagueId);
             // Persist static identity data (team names, draft order, settings) to league_identity table.
             // All consumers (offseasonRouter, draftBoard, etc.) read from here instead of re-fetching ESPN.
             try { await upsertLeagueIdentity(season, enrichedData); } catch (_e) { /* non-fatal — don't block the refresh */ }
@@ -2328,7 +2357,33 @@ export const appRouter = router({
 
   ownerCareerStats: publicProcedure.query(() => {
     return memCache("ownerCareerStats", 10 * 60_000, async () => {
-    const cachedSeasons = await getAllCachedSeasons();
+    // Resolve active league credentials for multi-league isolation
+    let ownerStatsCreds: import('./espnService').EspnCreds | undefined;
+    try {
+      const db = await getDb();
+      if (db) {
+        const activeRows = await db
+          .select()
+          .from(lcTable)
+          .where(andDrizzle(eqDrizzle(lcTable.isActive, true), eqDrizzle(lcTable.provider, 'espn')))
+          .orderBy(descDrizzle(lcTable.updatedAt))
+          .limit(1);
+        if (activeRows[0]) {
+          const { decryptCredentialsFromDb } = await import('./_core/crypto');
+          const rawCreds = decryptCredentialsFromDb(activeRows[0].credentials) as Record<string, string> | null;
+          if (rawCreds?.swid && rawCreds?.espnS2) {
+            ownerStatsCreds = {
+              leagueId: (rawCreds.leagueId as string) ?? activeRows[0].leagueId,
+              swid: rawCreds.swid,
+              espnS2: rawCreds.espnS2,
+            };
+          }
+        }
+      }
+    } catch (_e) { /* non-fatal — fall back to env-var league */ }
+    const ownerStatsLeagueId = ownerStatsCreds?.leagueId ?? LEAGUE_ID;
+
+    const cachedSeasons = await getAllCachedSeasons(ownerStatsLeagueId);
 
     // ── Per-owner aggregated stats ──────────────────────────────────────────
     // memberId → owner profile
@@ -2396,18 +2451,18 @@ export const appRouter = router({
       return ownerMap.get(memberId)!;
     }
 
-     // Fetch championship data from ESPN leagueHistory API — the ONLY reliable source
+    // Fetch championship data from ESPN leagueHistory API — the ONLY reliable source
     // for pre-2018 seasons where the combined cache has empty teams arrays.
     let leagueHistoryChampMap = new Map<number, { season: number; championMemberId: string; runnerUpMemberId: string | null; championTeamName: string }>();
     try {
       const { fetchLeagueHistoryChampions } = await import('./espnService');
-      leagueHistoryChampMap = await fetchLeagueHistoryChampions(cachedSeasons);
+      leagueHistoryChampMap = await fetchLeagueHistoryChampions(cachedSeasons, ownerStatsCreds);
     } catch {
       // If the API call fails (e.g. no credentials), fall back to cache-based detection
     }
 
     for (const season of cachedSeasons) {
-      const row = await getCachedView(season, 'combined');
+      const row = await getCachedView(season, 'combined', ownerStatsLeagueId);
       if (!row) continue;
       const data = row.payload as any;
       const members: any[] = data.members || [];
