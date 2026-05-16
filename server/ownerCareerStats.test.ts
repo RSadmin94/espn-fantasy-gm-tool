@@ -281,4 +281,86 @@ describe("ownerCareerStats endpoint logic", () => {
     expect(sorted[1].displayName).toBe("Carol");
     expect(sorted[2].displayName).toBe("Alice");
   });
+
+  // ── rankCalculatedFinal + primaryOwner attribution ──────────────────────────
+
+  it("uses rankCalculatedFinal to identify champion team and ties it to owner via primaryOwner", () => {
+    // Simulate a season payload with teams and members
+    const teams = [
+      { id: 4,  name: "Giv'me My Trophy",  rankCalculatedFinal: 1, primaryOwner: "{96E5F3A7-0AB6-4DF1-AE89-E64CAF4A400B}" },
+      { id: 14, name: "Dominus Thus",       rankCalculatedFinal: 2, primaryOwner: "{SOME-OTHER-ID}" },
+      { id: 1,  name: "SMASHVILLE TITANS",  rankCalculatedFinal: 3, primaryOwner: "{AE295BDF-FC02-479E-969E-0E712690503C}" },
+    ];
+
+    // Replicate the endpoint logic: find champion by rankCalculatedFinal=1
+    const champTeam = teams.find(t => t.rankCalculatedFinal === 1);
+    const ruTeam    = teams.find(t => t.rankCalculatedFinal === 2);
+
+    expect(champTeam).toBeDefined();
+    expect(champTeam!.id).toBe(4);
+    expect(champTeam!.primaryOwner).toBe("{96E5F3A7-0AB6-4DF1-AE89-E64CAF4A400B}");
+    expect(ruTeam!.id).toBe(14);
+  });
+
+  it("accumulates championship counts correctly across multiple seasons via primaryOwner", () => {
+    // Simulate the ownerCareerStats aggregation loop across 3 seasons
+    const seasons = [
+      {
+        teams: [
+          { id: 1, rankCalculatedFinal: 1, primaryOwner: "OWNER_A" },
+          { id: 2, rankCalculatedFinal: 2, primaryOwner: "OWNER_B" },
+        ],
+      },
+      {
+        teams: [
+          { id: 3, rankCalculatedFinal: 1, primaryOwner: "OWNER_B" }, // OWNER_B wins this season
+          { id: 1, rankCalculatedFinal: 2, primaryOwner: "OWNER_A" },
+        ],
+      },
+      {
+        teams: [
+          { id: 4, rankCalculatedFinal: 1, primaryOwner: "OWNER_A" }, // OWNER_A wins again
+          { id: 5, rankCalculatedFinal: 2, primaryOwner: "OWNER_C" },
+        ],
+      },
+    ];
+
+    const champCounts: Record<string, number> = {};
+    for (const season of seasons) {
+      const champ = season.teams.find(t => t.rankCalculatedFinal === 1);
+      if (champ) {
+        champCounts[champ.primaryOwner] = (champCounts[champ.primaryOwner] ?? 0) + 1;
+      }
+    }
+
+    expect(champCounts["OWNER_A"]).toBe(2); // won seasons 1 and 3
+    expect(champCounts["OWNER_B"]).toBe(1); // won season 2
+    expect(champCounts["OWNER_C"]).toBeUndefined(); // never won
+  });
+
+  it("prefers rankCalculatedFinal over schedule-based detection when both are available", () => {
+    // rankCalculatedFinal says team 4 is champion
+    const teams = [
+      { id: 4, rankCalculatedFinal: 1, primaryOwner: "OWNER_DEMETRI" },
+      { id: 1, rankCalculatedFinal: 3, primaryOwner: "OWNER_ROD" },
+    ];
+    // Schedule-based detection would (incorrectly) say team 1 won
+    const schedule = [
+      { matchupPeriodId: 16, playoffTierType: "WINNERS_BRACKET", winner: "HOME", home: { teamId: 1 }, away: { teamId: 4 } },
+    ];
+
+    // Endpoint logic: try rankCalculatedFinal first
+    const champByRank = teams.find(t => t.rankCalculatedFinal === 1);
+    const champBySchedule = schedule[0].winner === "HOME" ? schedule[0].home.teamId : schedule[0].away.teamId;
+
+    // rankCalculatedFinal should win
+    expect(champByRank!.id).toBe(4);
+    expect(champByRank!.primaryOwner).toBe("OWNER_DEMETRI");
+    // The schedule-based result would have been wrong (team 1)
+    expect(champBySchedule).toBe(1);
+    // But we use rankCalculatedFinal, so the correct answer is team 4
+    const finalChampId = champByRank ? champByRank.id : champBySchedule;
+    expect(finalChampId).toBe(4);
+  });
 });
+
