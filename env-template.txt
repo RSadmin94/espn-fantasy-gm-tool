@@ -1,0 +1,63 @@
+# ============================================================
+# ESPN Fantasy Football GM Tool — Environment Variables
+# Rename this file to .env and fill in all required values.
+# [REQUIRED] = must be set before the app will start
+# [OPTIONAL] = feature-specific, app works without them
+# ============================================================
+
+# ── Database ─────────────────────────────────────────────────
+# [REQUIRED] MySQL connection string
+# Railway: copy from your MySQL plugin's DATABASE_URL variable
+DATABASE_URL=mysql://user:password@host:3306/dbname
+
+# ── App Identity ─────────────────────────────────────────────
+# [REQUIRED] Random 64-char hex secret for JWT session cookies
+# Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+JWT_SECRET=replace_with_64_hex_chars
+
+# [OPTIONAL] Manus OAuth — only needed if using Manus login portal
+VITE_APP_ID=
+OAUTH_SERVER_URL=
+VITE_OAUTH_PORTAL_URL=
+OWNER_OPEN_ID=
+OWNER_NAME=
+
+# ── Anthropic (AI Features) ───────────────────────────────────
+# [REQUIRED] Anthropic API key — powers GM Advisor, Weekly Intel, DNA profiles
+ANTHROPIC_API_KEY=sk-ant-api03-...
+# [OPTIONAL] Override default model (claude-3-5-sonnet-20241022)
+ANTHROPIC_MODEL=
+
+# ── ESPN Credentials ─────────────────────────────────────────
+# [REQUIRED] League ID — the number in your ESPN league URL
+ESPN_LEAGUE_ID=123456
+# [REQUIRED] ESPN auth cookie — DevTools > Application > Cookies > espn_s2
+ESPN_S2=AE...
+# [REQUIRED] ESPN auth cookie — DevTools > Application > Cookies > SWID
+ESPN_SWID={XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}
+# [REQUIRED] 64-char hex key for encrypting stored league credentials
+# Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+CREDENTIAL_ENCRYPTION_KEY=replace_with_64_hex_chars
+
+# ── Stripe (Payments) ─────────────────────────────────────────
+# [OPTIONAL] Required only if enabling subscription payments
+STRIPE_SECRET_KEY=sk_live_...
+VITE_STRIPE_PUBLISHABLE_KEY=pk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_ID_MONTHLY=price_...
+
+# ── The Odds API (Vegas Lines) ────────────────────────────────
+# [OPTIONAL] Required for Vegas odds features in Weekly Intel
+THE_ODDS_API_KEY=
+
+# ── Manus Built-in APIs ───────────────────────────────────────
+# [OPTIONAL] Only needed when running inside Manus platform
+BUILT_IN_FORGE_API_URL=
+BUILT_IN_FORGE_API_KEY=
+VITE_FRONTEND_FORGE_API_KEY=
+VITE_FRONTEND_FORGE_API_URL=
+
+# ── Runtime ───────────────────────────────────────────────────
+# [OPTIONAL] Railway sets PORT automatically; NODE_ENV is set by Railway
+PORT=3000
+NODE_ENV=production
