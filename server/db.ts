@@ -96,10 +96,13 @@ export async function upsertCachedView(season: number, viewName: string, payload
     .onDuplicateKeyUpdate({ set: { payload: payload as Record<string, unknown>, updatedAt: new Date() } });
 }
 
-export async function getAllCachedSeasons(leagueId?: string): Promise<number[]> {
+export async function getAllCachedSeasons(
+  leagueId?: string,
+  userId?: number
+): Promise<number[]> {
   const db = await getDb();
   if (!db) return [];
-  const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
+  const lid = leagueId ?? (await resolveActiveLeagueId(userId));
   // Include both the exact leagueId and "default" (legacy rows) for backward compat
   const result = await db.selectDistinct({ season: espnSeasonCache.season })
     .from(espnSeasonCache)
@@ -192,6 +195,32 @@ export async function removePickTrade(id: number) {
 }
 
 // ── ESPN View Health helpers ──────────────────────────────────────────────────
+
+/** Active ESPN league id for cron/global jobs (first active DB connection, else env). */
+export async function getDefaultEspnLeagueId(): Promise<string> {
+  const db = await getDb();
+  if (db) {
+    const rows = await db
+      .select({
+        leagueId: leagueConnections.leagueId,
+        credentials: leagueConnections.credentials,
+      })
+      .from(leagueConnections)
+      .where(
+        and(
+          eq(leagueConnections.isActive, true),
+          eq(leagueConnections.provider, "espn")
+        )
+      )
+      .orderBy(desc(leagueConnections.updatedAt))
+      .limit(1);
+    if (rows[0]) {
+      const creds = decryptCredentialsFromDb(rows[0].credentials) as Record<string, string> | null;
+      return (creds?.leagueId as string) ?? rows[0].leagueId;
+    }
+  }
+  return process.env.ESPN_LEAGUE_ID ?? "default";
+}
 
 export async function upsertViewHealth(
   season: number,
@@ -429,6 +458,48 @@ export async function getActiveEspnCredentials(userId: number): Promise<EspnCred
 }
 
 // ─── Active League Context ─────────────────────────────────────────────────
+
+let _cachedDefaultLeagueId: { id: string; expiresAt: number } | null = null;
+
+/**
+ * Resolve ESPN cache league id: user's active connection, then any active ESPN
+ * connection, then ESPN_LEAGUE_ID env, then "default".
+ */
+export async function resolveActiveLeagueId(userId?: number): Promise<string> {
+  const now = Date.now();
+  if (!userId && _cachedDefaultLeagueId && _cachedDefaultLeagueId.expiresAt > now) {
+    return _cachedDefaultLeagueId.id;
+  }
+
+  const db = await getDb();
+  let leagueId: string | undefined;
+
+  if (userId && db) {
+    const row = await getActiveLeagueForUser(userId);
+    if (row?.leagueId) leagueId = row.leagueId;
+  }
+
+  if (!leagueId && db) {
+    const rows = await db
+      .select({ leagueId: leagueConnections.leagueId })
+      .from(leagueConnections)
+      .where(
+        and(
+          eq(leagueConnections.isActive, true),
+          eq(leagueConnections.provider, "espn")
+        )
+      )
+      .orderBy(desc(leagueConnections.updatedAt))
+      .limit(1);
+    leagueId = rows[0]?.leagueId;
+  }
+
+  const resolved = leagueId || process.env.ESPN_LEAGUE_ID || "default";
+  if (!userId) {
+    _cachedDefaultLeagueId = { id: resolved, expiresAt: now + 60_000 };
+  }
+  return resolved;
+}
 
 /**
  * Get the user's active league connection record.

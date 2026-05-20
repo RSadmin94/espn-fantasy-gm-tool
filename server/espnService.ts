@@ -64,6 +64,56 @@ export const PRO_TEAM_MAP: Record<number, string> = {
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
+/**
+ * Resolve ESPN credentials for a request:
+ * 1. If explicit creds are passed, use them.
+ * 2. Otherwise query league_connections for the active user's stored credentials.
+ * 3. Fall back to process.env.ESPN_SWID / ESPN_S2.
+ */
+export async function resolveEspnCreds(
+  explicitCreds?: EspnCreds,
+  userId?: number
+): Promise<EspnCreds> {
+  // Explicit creds always win
+  if (explicitCreds?.swid && explicitCreds?.espnS2) return explicitCreds;
+
+  // Try DB credentials for the user
+  if (userId) {
+    try {
+      const { getActiveEspnCredentials } = await import("./db");
+      const dbCreds = await getActiveEspnCredentials(userId);
+      if (dbCreds?.swid && dbCreds?.espnS2) return dbCreds;
+    } catch { /* non-fatal — fall through to env */ }
+  }
+
+  // Fall back to env vars
+  return {
+    leagueId: LEAGUE_ID,
+    swid: SWID,
+    espnS2: ESPN_S2,
+  };
+}
+
+/**
+ * Mark a user's league credentials as expired in the DB after a 401.
+ */
+async function markCredsExpired(userId: number): Promise<void> {
+  try {
+    const { getDb } = await import("./db");
+    const { leagueConnections } = await import("../drizzle/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return;
+    await db.update(leagueConnections)
+      .set({ syncStatus: "error", syncError: "ESPN credentials expired (401)", updatedAt: new Date() })
+      .where(and(
+        eq(leagueConnections.userId, userId),
+        eq(leagueConnections.provider, "espn"),
+        eq(leagueConnections.isActive, true)
+      ));
+  } catch { /* non-fatal */ }
+}
+
 function buildCookieStringFor(creds?: EspnCreds): string {
   const swid = creds?.swid ?? SWID;
   const s2   = creds?.espnS2 ?? ESPN_S2;
@@ -298,7 +348,8 @@ export function staleSummary(fetchedAt: Date): string {
 export async function fetchEspnViewsHardened(
   season: number,
   views: string[] = [...ALL_VIEWS],
-  creds?: EspnCreds
+  creds?: EspnCreds,
+  userId?: number
 ): Promise<PipelineFetchResult> {
   const _espnStartMs = Date.now();
   const cookiesPresent = hasCookies(creds);
@@ -338,6 +389,7 @@ export async function fetchEspnViewsHardened(
 
   // Bulk failed — check if auth error
   if (bulkResult.status === 401 || bulkResult.status === 403) {
+    if (userId) markCredsExpired(userId); // fire-and-forget
     throw new Error(
       `ESPN API returned ${bulkResult.status}. Cookies may be expired. Please update ESPN_SWID and ESPN_S2 in your secrets.`
     );
@@ -360,6 +412,7 @@ export async function fetchEspnViewsHardened(
   );
 
   if (authError) {
+    if (userId) markCredsExpired(userId); // fire-and-forget
     throw new Error(
       `ESPN API authentication failed. Cookies may be expired. Please update ESPN_SWID and ESPN_S2 in your secrets.`
     );
@@ -762,13 +815,92 @@ export function mergeTradeProposalsIntoTransactions(
   };
 }
 
+function txProposalMeta(tx: Record<string, unknown>) {
+  return {
+    teamActions: tx.teamActions ?? null,
+    executionType: tx.executionType ?? null,
+    isPending: tx.isPending ?? null,
+  };
+}
+
+/** True when teamActions contains an ACCEPTED action (string or object form). */
+export function hasAcceptedTeamAction(teamActions: unknown): boolean {
+  if (teamActions == null) return false;
+  const actions = Array.isArray(teamActions) ? teamActions : [teamActions];
+  return actions.some(action => {
+    if (typeof action === "string") {
+      return action.toUpperCase().includes("ACCEPTED");
+    }
+    if (typeof action === "object" && action !== null) {
+      const obj = action as Record<string, unknown>;
+      const label = String(obj.type ?? obj.action ?? obj.status ?? "");
+      return label.toUpperCase().includes("ACCEPTED");
+    }
+    return false;
+  });
+}
+
+/**
+ * TRADE_PROPOSAL is completed when linked by TRADE_UPHOLD/TRADE_ACCEPT, status EXECUTED,
+ * executionType EXECUTE, or teamActions contains ACCEPTED.
+ */
+export function isCompletedTradeProposal(
+  row: Record<string, unknown>,
+  linkedProposalIds?: Set<string>
+): boolean {
+  if (String(row.type || "") !== "TRADE_PROPOSAL") return false;
+  const proposalId = row.transactionId as string;
+  if (!proposalId) return false;
+  if (linkedProposalIds?.has(proposalId)) return true;
+  if (String(row.status || "").toUpperCase() === "EXECUTED") return true;
+  if (String(row.executionType || "").toUpperCase() === "EXECUTE") return true;
+  if (hasAcceptedTeamAction(row.teamActions)) return true;
+  return false;
+}
+
+/** Build completed TRADE_PROPOSAL id set from normalized transaction rows. */
+export function buildCompletedProposalIds(
+  txRows: Record<string, unknown>[]
+): { completedProposalIds: Set<string>; acceptanceDateMap: Map<string, number> } {
+  const completedProposalIds = new Set<string>();
+  const acceptanceDateMap = new Map<string, number>();
+
+  for (const r of txRows) {
+    if (r.type === "TRADE_UPHOLD" || r.type === "TRADE_ACCEPT") {
+      const relId = r.relatedTransactionId as string | null;
+      if (relId) {
+        completedProposalIds.add(relId);
+        const d = (r.proposedDate as number) || 0;
+        if (d > 0 && !acceptanceDateMap.has(relId)) acceptanceDateMap.set(relId, d);
+      }
+    }
+  }
+
+  const seenProposalIds = new Set<string>();
+  for (const r of txRows) {
+    if (r.type !== "TRADE_PROPOSAL") continue;
+    const tid = r.transactionId as string;
+    if (!tid || seenProposalIds.has(tid)) continue;
+    seenProposalIds.add(tid);
+    if (isCompletedTradeProposal(r, completedProposalIds)) {
+      completedProposalIds.add(tid);
+      const d = (r.proposedDate as number) || 0;
+      if (d > 0 && !acceptanceDateMap.has(tid)) acceptanceDateMap.set(tid, d);
+    }
+  }
+
+  return { completedProposalIds, acceptanceDateMap };
+}
+
 export function normalizeTransactions(data: Record<string, unknown>) {
   const season = data.seasonId as number;
   const txs = (data.transactions as Record<string, unknown>[]) || [];
   const rows: unknown[] = [];
   const headerTransactionTypes = new Set(["TRADE_UPHOLD", "TRADE_ACCEPT"]);
+  const proposalMeta = txProposalMeta;
 
   for (const tx of txs) {
+    const meta = proposalMeta(tx);
     const items = (tx.items as Record<string, unknown>[]) || [];
     if (items.length === 0) {
       if (!headerTransactionTypes.has(String(tx.type || "").toUpperCase())) continue;
@@ -783,8 +915,8 @@ export function normalizeTransactions(data: Record<string, unknown>) {
         playerName: null,
         fromTeamId: null,
         toTeamId: null,
-        // 2026+: TRADE_UPHOLD/TRADE_ACCEPT records have no items but link to a TRADE_PROPOSAL
         relatedTransactionId: tx.relatedTransactionId ?? null,
+        ...meta,
       });
       continue;
     }
@@ -805,8 +937,8 @@ export function normalizeTransactions(data: Record<string, unknown>) {
         overallPickNumber: item.overallPickNumber ?? null,
         round: item.round ?? item.roundId ?? null,
         pickInRound: item.pickInRound ?? item.roundPickNumber ?? null,
-        // 2026+: pass relatedTransactionId on item rows too (for TRADE_PROPOSAL items)
         relatedTransactionId: tx.relatedTransactionId ?? null,
+        ...meta,
       });
     }
   }

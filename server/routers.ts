@@ -44,6 +44,8 @@ import {
   normalizeDraftOrder,
   normalizeMatchups,
   normalizeTransactions,
+  buildCompletedProposalIds,
+  isCompletedTradeProposal,
   resolveUnknownPlayerIds,
   validateDataQuality,
   isStale,
@@ -77,6 +79,7 @@ import {
   upsertUserMemory,
   getActiveLeagueForUser,
   setActiveLeagueForUser,
+  resolveActiveLeagueId,
   persistLlmUsage,
   getLlmUsageSummary,
 } from "./db";
@@ -84,8 +87,8 @@ import {
 const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
 const ALL_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026];
 
-async function getSeasonData(season: number, leagueId?: string) {
-  const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
+async function getSeasonData(season: number, leagueId?: string, userId?: number) {
+  const lid = leagueId ?? (await resolveActiveLeagueId(userId));
   return memCache(`seasonData:${lid}:${season}`, 10 * 60_000, async () => {
     const cached = await getCachedView(season, "combined", lid);
     return cached ? (cached.payload as Record<string, unknown>) : null;
@@ -1026,6 +1029,15 @@ export const appRouter = router({
         } catch (_e) { /* non-fatal — fall back to env-var league */ }
         const activeLeagueId = activeCreds?.leagueId ?? LEAGUE_ID;
 
+        // ─── DIAGNOSTIC LOGGING ───
+        console.log('[ESPN Refresh] Credential resolution:', JSON.stringify({
+          credSource: activeCreds ? 'db' : 'env',
+          leagueId: activeLeagueId,
+          swidPrefix: activeCreds?.swid ? activeCreds.swid.slice(0, 10) + '...' : (process.env.ESPN_SWID ? process.env.ESPN_SWID.slice(0, 10) + '...' : '(empty)'),
+          espnS2Present: !!(activeCreds?.espnS2 || process.env.ESPN_S2),
+          seasonsToRefresh,
+        }));
+
         for (const season of seasonsToRefresh) {
           // Skip closed seasons that are already successfully cached (unless forceRefresh)
           if (!input.forceRefresh && CLOSED_SEASONS.includes(season)) {
@@ -1380,38 +1392,15 @@ export const appRouter = router({
             }
           }
 
-          // Build set of completed proposal IDs from acceptance rows
-          const completedProposalIds = new Set<string>();
-          // Also track acceptance row metadata (proposedDate) keyed by proposalId
-          const acceptanceDateMap = new Map<string, number>();
-          for (const r of txRows) {
-            if (r.type === "TRADE_UPHOLD" || r.type === "TRADE_ACCEPT") {
-              const relId = r.relatedTransactionId as string | null;
-              if (relId) {
-                completedProposalIds.add(relId);
-                // Use the acceptance row's proposedDate as fallback trade date
-                const d = (r.proposedDate as number) || 0;
-                if (d > 0 && !acceptanceDateMap.has(relId)) acceptanceDateMap.set(relId, d);
-              }
-            }
-            // 2026 path: ESPN may not emit TRADE_UPHOLD rows for pick-only trades.
-            // Treat TRADE_PROPOSAL rows with status EXECUTED as completed directly.
-            if (r.type === "TRADE_PROPOSAL" && String(r.status || "").toUpperCase() === "EXECUTED") {
-              const tid = r.transactionId as string;
-              if (tid) {
-                completedProposalIds.add(tid);
-                const d = (r.proposedDate as number) || 0;
-                if (d > 0 && !acceptanceDateMap.has(tid)) acceptanceDateMap.set(tid, d);
-              }
-            }
-          }
+          const { completedProposalIds, acceptanceDateMap } =
+            buildCompletedProposalIds(txRows);
 
           const isCompletedTradeRow = (r: Record<string, unknown>) => {
             const type = r.type as string;
             const status = String(r.status || "").toUpperCase();
             if (type === "TRADE") return status === "" || status === "EXECUTED";
             if (type === "TRADE_PROPOSAL") {
-              return completedProposalIds.has(r.transactionId as string) || status === "EXECUTED";
+              return isCompletedTradeProposal(r, completedProposalIds);
             }
             return false;
           };
@@ -1452,11 +1441,10 @@ export const appRouter = router({
             });
           }
 
-          // 2026 supplemental path: scan ALL proposal maps for EXECUTED proposals that
-          // were not caught by either the legacy path or the completedProposalIds loop.
-          // This handles pick-only trades where ESPN emits no TRADE_UPHOLD header row.
+          // Supplemental path: completed proposals not yet in tradeGroups (e.g. pick-only trades).
           for (const [proposalId, itemRows] of Array.from(proposalItemMap)) {
             if (tradeGroups.has(proposalId)) continue;
+            if (!completedProposalIds.has(proposalId)) continue;
             const pickRows = proposalPickMap.get(proposalId) ?? [];
             if (!itemRows.length && !pickRows.length) continue;
             tradeGroups.set(proposalId, {
@@ -1467,6 +1455,7 @@ export const appRouter = router({
           }
           for (const [proposalId, pickRows] of Array.from(proposalPickMap)) {
             if (tradeGroups.has(proposalId)) continue;
+            if (!completedProposalIds.has(proposalId)) continue;
             if (!pickRows.length) continue;
             tradeGroups.set(proposalId, {
               playerRows: [],
@@ -2157,11 +2146,185 @@ export const appRouter = router({
         })(),
       };
     }),
+
+    // ─── saveCredentials — called by Chrome extension to securely store ESPN cookies ───
+    saveCredentials: publicProcedure
+      .input(z.object({
+        swid: z.string().min(1, "SWID is required"),
+        espnS2: z.string().min(1, "espn_s2 is required"),
+        // Accept leagueId as string or number (extension may send either)
+        // Note: transform handles 0 explicitly — Number(0) is falsy but valid
+        leagueId: z.union([z.string(), z.number()]).optional().transform(v => {
+          if (v === undefined || v === null || v === '' || v === 0) return undefined;
+          return String(v);
+        }),
+        season: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { swid, espnS2 } = input;
+        // Use provided leagueId if non-empty, otherwise fall back to env var
+        const testLeagueId = (input.leagueId && input.leagueId !== '0') ? input.leagueId : (process.env.ESPN_LEAGUE_ID || "");
+        // Try current season first, then fall back to previous
+        const currentYear = new Date().getFullYear();
+        const seasonsToTry = input.season
+          ? [input.season]
+          : [currentYear, currentYear - 1, 2026, 2025];
+
+        // Always guarantee a non-empty leagueName
+        let leagueName = testLeagueId ? `ESPN League ${testLeagueId}` : "ESPN League";
+
+        // Try to fetch league name from ESPN (non-blocking — failure just uses fallback)
+        if (testLeagueId) {
+          for (const season of seasonsToTry) {
+            try {
+              const settingsUrl = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${testLeagueId}?view=mSettings`;
+              const settingsRes = await fetch(settingsUrl, {
+                headers: { Cookie: `SWID=${swid}; espn_s2=${espnS2}` },
+                signal: AbortSignal.timeout(8000),
+              });
+              if (settingsRes.status === 401) {
+                throw new Error("ESPN credentials are invalid or expired. Please log into ESPN and try again.");
+              }
+              if (settingsRes.ok) {
+                const data = await settingsRes.json() as Record<string, unknown>;
+                const settings = (data.settings as Record<string, unknown>) || {};
+                if (settings.name) { leagueName = String(settings.name); break; }
+              }
+            } catch (err) {
+              if (err instanceof Error && err.message.includes("expired")) throw err;
+              // Network/404 errors are non-fatal — try next season
+            }
+          }
+        }
+
+        // If user is authenticated, save to their league_connections
+        if (ctx.user) {
+          const db = await getDb();
+          if (db) {
+            const { encryptCredentialsForDb } = await import('./_core/crypto');
+            const encryptedCreds = encryptCredentialsForDb({ leagueId: testLeagueId, swid, espnS2 });
+
+            await db.insert(lcTable)
+              .values({
+                userId: ctx.user.id,
+                provider: "espn",
+                leagueId: testLeagueId || "default",
+                leagueName,
+                season: 2025,
+                isActive: true,
+                credentials: encryptedCreds,
+                syncStatus: "pending",
+              })
+              .onDuplicateKeyUpdate({
+                set: {
+                  leagueName,
+                  isActive: true,
+                  credentials: encryptedCreds,
+                  syncStatus: "pending",
+                  syncError: null,
+                  updatedAt: new Date(),
+                },
+              });
+
+            // Invalidate active league cache
+            const usersTable = (await import("../drizzle/schema")).users;
+            const [userRow] = await db.select({ activeLeagueId: usersTable.activeLeagueId })
+              .from(usersTable)
+              .where(eqDrizzle(usersTable.id, ctx.user.id))
+              .limit(1);
+            if (!userRow?.activeLeagueId) {
+              const [newConn] = await db.select({ id: lcTable.id })
+                .from(lcTable)
+                .where(andDrizzle(eqDrizzle(lcTable.userId, ctx.user.id), eqDrizzle(lcTable.provider, "espn")))
+                .limit(1);
+              if (newConn) {
+                await db.update(usersTable)
+                  .set({ activeLeagueId: newConn.id })
+                  .where(eqDrizzle(usersTable.id, ctx.user.id));
+              }
+            }
+          }
+
+          const refreshSeason =
+            input.season ?? new Date().getFullYear();
+          const creds = {
+            leagueId: testLeagueId,
+            swid,
+            espnS2,
+          };
+          void (async () => {
+            const { refreshSingleSeason } = await import("./espnSeasonRefresh");
+            await refreshSingleSeason({
+              season: refreshSeason,
+              leagueId: testLeagueId || "default",
+              creds,
+              userId: ctx.user!.id,
+            });
+          })().catch(err => {
+            console.error("[saveCredentials] Background refresh failed:", err);
+          });
+        }
+
+        return {
+          success: true,
+          leagueId: testLeagueId,
+          syncing: true,
+          syncStatus: "pending" as const,
+        };
+      }),
+
+    // ─── testFetch — diagnostic endpoint: proves DB creds + ESPN API in one shot ───
+    testFetch: publicProcedure
+      .input(z.object({
+        leagueId: z.string().optional(),
+        season: z.number().optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        const { resolveEspnCreds } = await import('./espnService');
+        const creds = await resolveEspnCreds(undefined, ctx.user?.id);
+        const leagueId = input?.leagueId || creds.leagueId || process.env.ESPN_LEAGUE_ID || "1589110";
+        const season = input?.season || 2025;
+
+        const url = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=mSettings`;
+        let httpStatus = 0;
+        let isValidJson = false;
+        let leagueName: string | null = null;
+        let error: string | null = null;
+
+        try {
+          const res = await fetch(url, {
+            headers: { Cookie: `SWID=${creds.swid}; espn_s2=${creds.espnS2}` },
+            signal: AbortSignal.timeout(10000),
+          });
+          httpStatus = res.status;
+          if (res.ok) {
+            const data = await res.json() as Record<string, unknown>;
+            isValidJson = true;
+            const settings = (data.settings as Record<string, unknown>) || {};
+            leagueName = String(settings.name || '');
+          }
+        } catch (err) {
+          error = err instanceof Error ? err.message : String(err);
+        }
+
+        return {
+          httpStatus,
+          isValidJson,
+          leagueName,
+          leagueId,
+          season,
+          swidPrefix: creds.swid ? creds.swid.slice(0, 10) + '...' : '(empty)',
+          espnS2Prefix: creds.espnS2 ? creds.espnS2.slice(0, 10) + '...' : '(empty)',
+          credSource: creds.swid === (process.env.ESPN_SWID || '') ? 'env' : 'db',
+          userId: ctx.user?.id ?? null,
+          error,
+        };
+      }),
   }),
 
   playerProfiles: publicProcedure.query(async () => {
-    // Aggregate per-player draft + keeper + transaction history across all cached seasons
-    const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+    const leagueId = await resolveActiveLeagueId();
+    const cachedSeasons = (await getAllCachedSeasons(leagueId)).sort((a, b) => a - b);
 
     const POS_MAP: Record<number, string> = {
       1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST", 17: "D/ST",
@@ -2186,10 +2349,9 @@ export const appRouter = router({
     }> = [];
 
     for (const season of cachedSeasons) {
-      const data = await getSeasonData(season);
+      const data = await getSeasonData(season, leagueId);
       if (!data) continue;
 
-      // Build team name map for this season
       teamNamesBySeason[season] = {};
       const members: Record<string, Record<string, unknown>> = {};
       for (const m of (data.members as Record<string, unknown>[]) || []) {
@@ -2773,8 +2935,8 @@ export const appRouter = router({
   ownerPredictions: protectedProcedure
     .input(z.object({ memberId: z.string() }))
     .query(async ({ input }) => {
-      // Fetch the full owner stats to build context
-      const cachedSeasons = await getAllCachedSeasons();
+      const leagueId = await resolveActiveLeagueId();
+      const cachedSeasons = await getAllCachedSeasons(leagueId);
 
       // Collect all owner data for this member across seasons
       let ownerName = '';
@@ -2789,8 +2951,11 @@ export const appRouter = router({
       let playoffAppearances = 0;
       let seasonsActive = 0;
 
+      const draftRoundLines: string[] = [];
+      const repeatedDraftPlayers = new Map<string, number[]>();
+
       for (const season of cachedSeasons) {
-        const row = await getCachedView(season, 'combined');
+        const row = await getCachedView(season, "combined", leagueId);
         if (!row) continue;
         const data = row.payload as any;
 
@@ -2857,7 +3022,38 @@ export const appRouter = router({
           `Seed: ${playoffSeed || 'Missed'} | ${isChamp ? 'CHAMPION' : madePlayoffs ? 'Playoff' : 'Missed Playoffs'} | ` +
           `Adds: ${acq}, Drops: ${drops}, Trades: ${trades}`
         );
+
+        const draft = (data.draftDetail as Record<string, unknown>) || {};
+        const picks = (draft.picks as Record<string, unknown>[]) || [];
+        const teamPicks = picks.filter(p => p.teamId === team.id);
+        const roundPos: Record<number, string[]> = {};
+        for (const pick of teamPicks) {
+          const round = (pick.roundId as number) || 0;
+          const player = ((pick.playerPoolEntry as Record<string, unknown>)?.player as Record<string, unknown>) || {};
+          const posMap: Record<number, string> = { 1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST" };
+          const pos = posMap[player.defaultPositionId as number] || "?";
+          const pname = (player.fullName as string) || `Player ${pick.playerId}`;
+          if (!roundPos[round]) roundPos[round] = [];
+          roundPos[round].push(`${pos}:${pname}`);
+          if (pname && !pname.startsWith("Player ")) {
+            const arr = repeatedDraftPlayers.get(pname) || [];
+            if (!arr.includes(season)) arr.push(season);
+            repeatedDraftPlayers.set(pname, arr);
+          }
+        }
+        const roundSummary = Object.entries(roundPos)
+          .sort(([a], [b]) => Number(a) - Number(b))
+          .map(([r, items]) => `R${r}=${items.join(", ")}`)
+          .join(" | ");
+        if (roundSummary) draftRoundLines.push(`${season}: ${roundSummary}`);
       }
+
+      const repeatedPlayerSummary = Array.from(repeatedDraftPlayers.entries())
+        .filter(([, seasons]) => seasons.length >= 2)
+        .sort((a, b) => b[1].length - a[1].length)
+        .slice(0, 10)
+        .map(([name, seasons]) => `${name} (${seasons.sort((a, b) => a - b).join(", ")})`)
+        .join("; ");
 
       // Guard: if no seasons found for this memberId, return NOT_FOUND
       if (seasonsActive === 0) {
@@ -2901,6 +3097,12 @@ Waiver aggression score: ${waiverAggression}/100 | Trade frequency score: ${trad
 
 SEASON-BY-SEASON HISTORY:
 ${seasonSummaries.join('\n')}
+
+DRAFT BEHAVIOR (round-by-round tendencies):
+${draftRoundLines.length ? draftRoundLines.join('\n') : 'No draft pick data cached yet.'}
+
+REPEATEDLY DRAFTED PLAYERS:
+${repeatedPlayerSummary || 'No repeat targets identified across seasons.'}
 
 Generate a JSON prediction report with these exact fields:
 {
@@ -3065,12 +3267,13 @@ Respond with JSON in this exact format:
 
   // ── League Draft Tendencies ──────────────────────────────────────────────
   // Aggregates all 14 managers' draft picks by round and position from 2018-2025
-  leagueDraftTendencies: publicProcedure.query(() => {
-    return memCache("leagueDraftTendencies", 10 * 60_000, async () => {
+  leagueDraftTendencies: publicProcedure.query(async () => {
+    const leagueId = await resolveActiveLeagueId();
+    return memCache(`leagueDraftTendencies:${leagueId}`, 10 * 60_000, async () => {
     const POS_MAP: Record<number, string> = {
       1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST", 17: "D/ST",
     };
-    const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+    const cachedSeasons = (await getAllCachedSeasons(leagueId)).sort((a, b) => a - b);
 
     // owner key -> stats
     const ownerMap = new Map<string, {
@@ -3086,10 +3289,9 @@ Respond with JSON in this exact format:
     const seenPickKeys = new Set<string>();
 
     for (const season of cachedSeasons) {
-      const data = await getSeasonData(season);
+      const data = await getSeasonData(season, leagueId);
       if (!data) continue;
 
-      // Build member name map
       const memberNameMap: Record<string, string> = {};
       for (const m of (data.members as Record<string, unknown>[]) || []) {
         const mid = m.id as string;
@@ -5333,9 +5535,10 @@ if (pickOrder.length > 0) {
     managerBehavior: publicProcedure
       .input(z.object({ seasons: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
-        const seasonKey = (input.seasons ?? []).join("-") || "all";
+        const leagueId = await resolveActiveLeagueId();
+        const seasonKey = `${leagueId}:${(input.seasons ?? []).join("-") || "all"}`;
         return memCache(`managerBehavior:${seasonKey}`, 10 * 60_000, async () => {
-        const cachedSeasons = input.seasons ?? await getAllCachedSeasons();
+        const cachedSeasons = input.seasons ?? await getAllCachedSeasons(leagueId);
         // Aggregate by OWNER NAME (not teamId) to avoid cross-owner data mixing
         // ESPN reuses team slot IDs across seasons when owners change
         // Key: normalized owner name (lowercase, trimmed)
@@ -5344,9 +5547,8 @@ if (pickOrder.length > 0) {
         const seasonTeamOwnerMap: Record<string, string> = {};
 
         for (const season of cachedSeasons) {
-          const data = await getSeasonData(season);
+          const data = await getSeasonData(season, leagueId);
           if (!data) continue;
-          // Skip seasons with no real data (empty payload)
           const teams = normalizeTeams(data);
           if (!teams || teams.length === 0) continue;
 
@@ -5379,12 +5581,11 @@ if (pickOrder.length > 0) {
         const allDraftPicks: DraftPickRow[] = [];
 
         for (const season of cachedSeasons) {
-          const data = await getSeasonData(season);
+          const data = await getSeasonData(season, leagueId);
           if (!data) continue;
           const teams = normalizeTeams(data);
           if (!teams || teams.length === 0) continue;
 
-          // Build season-local teamId -> syntheticId map
           const localIdToSynthetic: Record<number, number> = {};
           for (const t of teams) {
             const tid = t.teamId as number;
@@ -5421,6 +5622,7 @@ if (pickOrder.length > 0) {
               position: (p.position as string) || "?",
               keeper: (p.keeper as boolean) || false,
               playerId: (p.playerId as number) || undefined,
+              playerName: (p.playerName as string) || undefined,
             });
           }
         }
@@ -5430,7 +5632,7 @@ if (pickOrder.length > 0) {
         const playerScoreMap = new Map<number, { avgPoints: number; position: string }>();
         const latestCachedSeason = [...cachedSeasons].sort((a, b) => b - a)[0];
         if (latestCachedSeason) {
-          const latestData = await getSeasonData(latestCachedSeason);
+          const latestData = await getSeasonData(latestCachedSeason, leagueId);
           if (latestData) {
             const latestRosters = normalizeRosters(latestData) as Record<string, unknown>[];
             for (const r of latestRosters) {
