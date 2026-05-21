@@ -3,10 +3,16 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
-import { createServer as createViteServer } from "vite";
-import viteConfig from "../../vite.config";
+// vite and vite.config are dynamically imported inside setupVite() only.
+// This prevents vite-plugin-manus-runtime from being bundled into the
+// production server build, which crashes on Railway (Node 18) where
+// import.meta.dirname is undefined at module init time.
 
 export async function setupVite(app: Express, server: Server) {
+  // Dynamic imports — only executed in development, never in production
+  const { createServer: createViteServer } = await import("vite");
+  const { default: viteConfig } = await import("../../vite.config");
+
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
