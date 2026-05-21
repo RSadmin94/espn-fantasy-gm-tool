@@ -3,6 +3,12 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
+import { fileURLToPath } from "url";
+
+// Node 18 ESM compatibility: import.meta.dirname is undefined in Node < 21.2
+// Use fileURLToPath(import.meta.url) + dirname instead
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 // vite and vite.config are dynamically imported inside setupVite() only.
 // This prevents vite-plugin-manus-runtime from being bundled into the
 // production server build, which crashes on Railway (Node 18) where
@@ -32,7 +38,7 @@ export async function setupVite(app: Express, server: Server) {
 
     try {
       const clientTemplate = path.resolve(
-        import.meta.dirname,
+        __dirname,
         "../..",
         "client",
         "index.html"
@@ -56,8 +62,8 @@ export async function setupVite(app: Express, server: Server) {
 export function serveStatic(app: Express) {
   const distPath =
     process.env.NODE_ENV === "development"
-      ? path.resolve(import.meta.dirname, "../..", "dist", "public")
-      : path.resolve(import.meta.dirname, "public");
+      ? path.resolve(__dirname, "../..", "dist", "public")
+      : path.resolve(__dirname, "public");
   if (!fs.existsSync(distPath)) {
     console.error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`
