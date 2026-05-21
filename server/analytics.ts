@@ -67,6 +67,7 @@ export interface DraftPickRow {
   position: string;
   keeper: boolean;
   playerId?: number;   // ESPN player ID — used for keeper efficiency cross-reference
+  playerName?: string;  // Player display name — used for draft history UI and AI profiles
 }
 
 // ─── Replacement level baselines (PPR, 14-team, 1 QB, 2 RB, 2 WR, 1 TE, 1 FLEX) ──
