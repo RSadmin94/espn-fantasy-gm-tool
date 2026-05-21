@@ -78,10 +78,6 @@ const REQUIRED_VARS = [
     hint: 'Random 64-char hex: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
   },
   {
-    key: "ANTHROPIC_API_KEY",
-    hint: "Get from https://console.anthropic.com — powers all AI features",
-  },
-  {
     key: "ESPN_LEAGUE_ID",
     hint: "Number in your ESPN league URL: fantasy.espn.com/football/league?leagueId=XXXXX",
   },
@@ -109,6 +105,22 @@ for (const { key, hint } of REQUIRED_VARS) {
 
 // ── 4. Optional but recommended env vars ──────────────────────
 section("4. Optional environment variables (warnings only)");
+
+// LLM provider check — at least one API key must be set
+const llmProvider = process.env.LLM_PROVIDER ?? "anthropic";
+const llmKeyMap = {
+  anthropic: process.env.ANTHROPIC_API_KEY,
+  openai: process.env.OPENAI_API_KEY,
+  gemini: process.env.GEMINI_API_KEY,
+};
+const activeKey = llmKeyMap[llmProvider];
+if (activeKey) {
+  ok(`LLM_PROVIDER=${llmProvider} — API key is set`);
+} else {
+  console.log(`  ${YELLOW}⚠${RESET}  LLM_PROVIDER=${llmProvider} but ${llmProvider.toUpperCase().replace('OPENAI','OPENAI').replace('GEMINI','GEMINI').replace('ANTHROPIC','ANTHROPIC')}_API_KEY is not set — AI features will be disabled`);
+  console.log(`    ${YELLOW}→ Set LLM_PROVIDER to: anthropic | openai | gemini${RESET}`);
+  console.log(`    ${YELLOW}→ Then set the matching API key: ANTHROPIC_API_KEY | OPENAI_API_KEY | GEMINI_API_KEY${RESET}`);
+}
 
 const OPTIONAL_VARS = [
   { key: "STRIPE_SECRET_KEY", note: "Stripe payments will be disabled" },
