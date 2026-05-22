@@ -15,10 +15,10 @@
 
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
-import { sdk } from "./_core/sdk";
+import { getAuth } from "@clerk/express";
 import { invokeLLMStream } from "./_core/llm";
 import { buildAdvisorMessages } from "./advisorContextBuilder";
-import { addChatMessage, getUserMemory, persistLlmUsage } from "./db";
+import { addChatMessage, getUserMemory, getUserByOpenId, persistLlmUsage } from "./db";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 
 const bodySchema = z.object({
@@ -29,13 +29,12 @@ const bodySchema = z.object({
 export function registerAdvisorStreamRoute(app: Express) {
   app.post("/api/advisor/stream", async (req: Request, res: Response) => {
     // --- Auth ---
-    let user: Awaited<ReturnType<typeof sdk.authenticateRequest>> | null = null;
-    try {
-      user = await sdk.authenticateRequest(req);
-    } catch {
+    const { userId } = getAuth(req);
+    if (!userId) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
+    const user = await getUserByOpenId(userId) ?? null;
     if (!user) {
       res.status(401).json({ error: "Unauthorized" });
       return;

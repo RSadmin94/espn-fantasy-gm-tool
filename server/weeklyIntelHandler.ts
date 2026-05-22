@@ -18,7 +18,6 @@
  */
 
 import type { Request, Response } from "express";
-import { sdk } from "./_core/sdk";
 import {
   fetchEspnViewsHardened,
   normalizeTeams,
@@ -46,11 +45,11 @@ export async function weeklyIntelHandler(req: Request, res: Response) {
 
   try {
     // ── 0. Authenticate the cron caller ───────────────────────────────────
-    const user = await sdk.authenticateRequest(req);
-    if (!user.isCron) {
+    const cronSecret = process.env.CRON_SECRET ?? "";
+    if (!cronSecret || req.headers["x-cron-secret"] !== cronSecret) {
       return res.status(403).json({ error: "cron-only endpoint" });
     }
-    taskUid = user.taskUid;
+    taskUid = req.headers["x-task-uid"] as string | undefined;
 
     // ── 1. Fetch ESPN data for the current season ──────────────────────────
     const pipelineResult = await fetchEspnViewsHardened(CURRENT_SEASON);

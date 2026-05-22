@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import { sdk } from "./_core/sdk";
 import { fetchEspnViewsHardened, fetchTradeProposals, mergeTradeProposalsIntoTransactions } from "./espnService";
 import {
   upsertViewHealth,
@@ -28,12 +27,12 @@ const AUTO_REFRESH_SEASONS = [2025, 2026];
 export async function espnRefreshHandler(req: Request, res: Response) {
   const startedAt = Date.now();
   try {
-    const user = await sdk.authenticateRequest(req);
-    if (!user.isCron) {
+    const cronSecret = process.env.CRON_SECRET ?? "";
+    if (!cronSecret || req.headers["x-cron-secret"] !== cronSecret) {
       return res.status(403).json({ error: "cron-only endpoint" });
     }
 
-    const taskUid = user.taskUid;
+    const taskUid = req.headers["x-task-uid"] as string | undefined;
     const results: Record<number, {
       status: string;
       viewHealth?: Record<string, string>;
