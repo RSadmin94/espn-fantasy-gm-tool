@@ -1,0 +1,125 @@
+# patch.yml — apply a patch zip uploaded as a GitHub release asset
+#
+# HOW TO USE:
+#   1. Go to github.com/RSadmin94/espn-fantasy-gm-tool/releases
+#   2. Click "Create a new release"
+#   3. Tag it: patch-YYYY-MM-DD (e.g. patch-2026-05-22)
+#   4. Upload your patch zip as a release asset
+#   5. Click "Publish release"
+#   6. This workflow runs automatically, applies the patch, tests, and pushes
+#
+# No PowerShell. No Cursor. No manual file copying. Ever again.
+
+name: Apply Patch
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  apply-patch:
+    name: Apply + Test + Deploy
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.release.tag_name, 'patch-')
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testpass
+          MYSQL_DATABASE: espn_gm_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: mysql://root:testpass@127.0.0.1:3306/espn_gm_test
+      JWT_SECRET: ci-test-secret-32-characters-long
+      NODE_ENV: test
+      ESPN_LEAGUE_ID: "1589110"
+      ESPN_CRED_ENCRYPTION_KEY: ci-test-encryption-key-32-chars!!
+      ANTHROPIC_API_KEY: sk-ant-test-key
+      VITE_APP_ID: ci-test-app-id
+      OWNER_OPEN_ID: ci-test-owner
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Download patch zip from release
+        run: |
+          ASSET_URL=$(echo '${{ toJson(github.event.release.assets) }}' | \
+            python3 -c "import json,sys; assets=json.load(sys.stdin); \
+            print(next((a['browser_download_url'] for a in assets if a['name'].endswith('.zip')), ''))")
+          if [ -z "$ASSET_URL" ]; then
+            echo "No zip found in release assets"
+            exit 1
+          fi
+          echo "Downloading: $ASSET_URL"
+          curl -L -o patch.zip "$ASSET_URL"
+
+      - name: Extract and apply patch
+        run: |
+          unzip -o patch.zip -d /tmp/patch
+          # Support both flat zip and patch_files/ subfolder
+          if [ -d "/tmp/patch/patch_files" ]; then
+            SRC="/tmp/patch/patch_files"
+          else
+            SRC="/tmp/patch"
+          fi
+          echo "Applying from: $SRC"
+          find "$SRC" -type f | while read f; do
+            REL="${f#$SRC/}"
+            DEST="./$REL"
+            mkdir -p "$(dirname $DEST)"
+            cp "$f" "$DEST"
+            echo "  ✓ $REL"
+          done
+
+      - name: Setup Node + pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript check
+        run: pnpm check
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Commit and push patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --name-only
+          git commit -m "patch: apply ${{ github.event.release.tag_name }}
+
+          Applied via GitHub Actions patch workflow.
+          Release: ${{ github.event.release.html_url }}
+          $(git diff --cached --name-only | wc -l) files changed."
+          git push origin main
+
+      - name: Summary
+        run: |
+          echo "## Patch Applied ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ github.event.release.tag_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** $(git rev-parse HEAD)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Railway will auto-deploy in ~2 minutes." >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,83 @@
+# scheduled-refresh.yml — triggers ESPN data refresh nightly
+# and monitors ESPN cookie health, alerting when they expire
+
+name: Scheduled ESPN Refresh
+
+on:
+  schedule:
+    # 2:00 AM Eastern every night
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Season to refresh (e.g. 2026)'
+        required: false
+        default: '2026'
+
+jobs:
+  refresh:
+    name: Nightly ESPN Data Refresh
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger refresh on Railway
+        id: refresh
+        run: |
+          SEASON="${{ github.event.inputs.season || '2026' }}"
+          RAILWAY_URL="${{ secrets.RAILWAY_URL }}"
+
+          if [ -z "$RAILWAY_URL" ]; then
+            echo "RAILWAY_URL secret not set — skipping refresh"
+            exit 0
+          fi
+
+          echo "Triggering refresh for season $SEASON on $RAILWAY_URL"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST "$RAILWAY_URL/api/scheduled/espn-refresh" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.SCHEDULED_REFRESH_SECRET }}" \
+            -d "{\"seasons\": [$SEASON]}" \
+            --max-time 120)
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -1)
+
+          echo "HTTP $HTTP_CODE"
+          echo "$BODY"
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "body=$BODY" >> $GITHUB_OUTPUT
+          elif echo "$BODY" | grep -q "401\|expired\|cookie"; then
+            echo "status=expired" >> $GITHUB_OUTPUT
+            echo "ESPN cookies have expired"
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "Refresh failed with HTTP $HTTP_CODE"
+          fi
+
+      - name: Alert on cookie expiry
+        if: steps.refresh.outputs.status == 'expired'
+        run: |
+          echo "## ⚠️ ESPN Cookies Expired" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Your ESPN SWID and espn_s2 cookies have expired." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**To fix:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Log into ESPN Fantasy on your browser" >> $GITHUB_STEP_SUMMARY
+          echo "2. Open the Chrome extension" >> $GITHUB_STEP_SUMMARY
+          echo "3. Click Reconnect ESPN" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Live URL: ${{ secrets.RAILWAY_URL }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Report refresh status
+        run: |
+          STATUS="${{ steps.refresh.outputs.status }}"
+          if [ "$STATUS" = "success" ]; then
+            echo "## ✅ ESPN Refresh Complete" >> $GITHUB_STEP_SUMMARY
+          elif [ "$STATUS" = "expired" ]; then
+            echo "## ⚠️ ESPN Cookies Expired — Action Required" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ ESPN Refresh Failed" >> $GITHUB_STEP_SUMMARY
+          fi
