@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 // vite and vite.config are dynamically imported inside setupVite() only.
 // This prevents vite-plugin-manus-runtime from being bundled into the
 // production server build, which crashes on Railway (Node 18) where
-// import.meta.dirname is undefined at module init time.
+// import.meta.dirname is undefined at module init time.h
 
 export async function setupVite(app: Express, server: Server) {
   // Dynamic imports — only executed in development, never in production
@@ -60,10 +60,7 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath =
-    process.env.NODE_ENV === "development"
-      ? path.resolve(__dirname, "../..", "dist", "public")
-      : path.resolve(__dirname, "public");
+const distPath = path.resolve(process.cwd(), "dist", "public");
   if (!fs.existsSync(distPath)) {
     console.error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`
