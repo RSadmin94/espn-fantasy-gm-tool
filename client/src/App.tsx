@@ -1,6 +1,7 @@
 // FILE: client/src/App.tsx
 import { useEffect } from "react";
 import { useLocation } from "wouter";
+import { SignIn, SignedIn, SignedOut, RedirectToSignIn } from "@clerk/clerk-react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -63,6 +64,11 @@ function Router() {
     <>
     <PageTracker />
     <Switch>
+      <Route path="/sign-in" component={() => (
+        <div className="flex items-center justify-center min-h-screen bg-background">
+          <SignIn routing="path" path="/sign-in" />
+        </div>
+      )} />
       <Route path="/" component={() => { useEffect(() => { window.location.replace("/command-center"); }, []); return null; }} />
       <Route path="/command-center" component={CommandCenter} />
       <Route path="/dashboard" component={Dashboard} />
@@ -164,7 +170,12 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <SignedIn>
+            <Router />
+          </SignedIn>
+          <SignedOut>
+            <RedirectToSignIn />
+          </SignedOut>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
