@@ -67,6 +67,7 @@ export interface DraftPickRow {
   position: string;
   keeper: boolean;
   playerId?: number;   // ESPN player ID — used for keeper efficiency cross-reference
+  playerName?: string;
 }
 
 // ─── Replacement level baselines (PPR, 14-team, 1 QB, 2 RB, 2 WR, 1 TE, 1 FLEX) ──
@@ -371,6 +372,10 @@ export interface ManagerBehaviorStats {
   tradeFrequencyScore: number;     // 0-100
   // Draft behavior
   avgDraftRoundByPosition: Record<string, number>;
+  favoritePositionsByRound: Record<number, string>;
+  roundTendencies: Array<{ round: number; topPosition: string; pickCount: number }>;
+  repeatedPlayers: Array<{ playerName: string; draftCount: number; seasons: number[] }>;
+  draftStyleEvolution: string;
   earlyQbTendency: boolean;        // drafts QB in rounds 1-3
   earlyTeTendency: boolean;        // drafts TE in rounds 1-4
   // Keeper behavior
@@ -433,6 +438,64 @@ export function calcManagerBehavior(
 
     const earlyQbTendency = (avgDraftRoundByPosition["QB"] ?? 10) <= 3;
     const earlyTeTendency = (avgDraftRoundByPosition["TE"] ?? 10) <= 4;
+
+    const nonKeeperPicks = teamPicks.filter(p => !p.keeper);
+    const byRoundPos: Record<number, Record<string, number>> = {};
+    for (const p of nonKeeperPicks) {
+      if (!byRoundPos[p.roundId]) byRoundPos[p.roundId] = {};
+      byRoundPos[p.roundId][p.position] = (byRoundPos[p.roundId][p.position] || 0) + 1;
+    }
+    const favoritePositionsByRound: Record<number, string> = {};
+    const roundTendencies: Array<{ round: number; topPosition: string; pickCount: number }> = [];
+    for (const [roundStr, posCounts] of Object.entries(byRoundPos)) {
+      const round = Number(roundStr);
+      const sorted = Object.entries(posCounts).sort((a, b) => b[1] - a[1]);
+      if (!sorted.length) continue;
+      const [topPosition, pickCount] = sorted[0];
+      favoritePositionsByRound[round] = topPosition;
+      roundTendencies.push({ round, topPosition, pickCount });
+    }
+    roundTendencies.sort((a, b) => a.round - b.round);
+
+    const playerSeasons = new Map<string, Set<number>>();
+    for (const p of nonKeeperPicks) {
+      const name = (p.playerName || `Player ${p.playerId || "?"}`).trim();
+      if (!name || name.startsWith("Player ")) continue;
+      if (!playerSeasons.has(name)) playerSeasons.set(name, new Set());
+      playerSeasons.get(name)!.add(p.season);
+    }
+    const repeatedPlayers = Array.from(playerSeasons.entries())
+      .filter(([, seasons]) => seasons.size >= 2)
+      .map(([playerName, seasons]) => ({
+        playerName,
+        draftCount: seasons.size,
+        seasons: Array.from(seasons).sort((a, b) => a - b),
+      }))
+      .sort((a, b) => b.draftCount - a.draftCount)
+      .slice(0, 8);
+
+    const seasonsWithPicks = Array.from(new Set(nonKeeperPicks.map(p => p.season))).sort((a, b) => a - b);
+    let draftStyleEvolution = "Insufficient draft history for evolution analysis.";
+    if (seasonsWithPicks.length >= 2) {
+      const earlySeason = seasonsWithPicks[0];
+      const lateSeason = seasonsWithPicks[seasonsWithPicks.length - 1];
+      const earlyRounds = nonKeeperPicks.filter(p => p.season === earlySeason).map(p => p.roundId);
+      const lateRounds = nonKeeperPicks.filter(p => p.season === lateSeason).map(p => p.roundId);
+      const earlyAvg = earlyRounds.length
+        ? earlyRounds.reduce((s, r) => s + r, 0) / earlyRounds.length
+        : 0;
+      const lateAvg = lateRounds.length
+        ? lateRounds.reduce((s, r) => s + r, 0) / lateRounds.length
+        : 0;
+      const delta = lateAvg - earlyAvg;
+      if (Math.abs(delta) < 0.5) {
+        draftStyleEvolution = `Draft strategy stable from ${earlySeason} to ${lateSeason} (avg round ~${lateAvg.toFixed(1)}).`;
+      } else if (delta < 0) {
+        draftStyleEvolution = `Drafting earlier over time (${earlySeason} avg round ${earlyAvg.toFixed(1)} → ${lateSeason} ${lateAvg.toFixed(1)}).`;
+      } else {
+        draftStyleEvolution = `Drafting later over time (${earlySeason} avg round ${earlyAvg.toFixed(1)} → ${lateSeason} ${lateAvg.toFixed(1)}).`;
+      }
+    }
 
     // GM Archetype derivation
     let gmArchetype = "Balanced Manager";
@@ -567,6 +630,10 @@ export function calcManagerBehavior(
       avgTradesPerSeason: avgTrades,
       tradeFrequencyScore,
       avgDraftRoundByPosition,
+      favoritePositionsByRound,
+      roundTendencies,
+      repeatedPlayers,
+      draftStyleEvolution,
       earlyQbTendency,
       earlyTeTendency,
       keeperEfficiencyAvg,

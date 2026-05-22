@@ -68,11 +68,10 @@ const QUICK_PROMPTS_CHAT = [
 ];
 
 // ─── Keeper Deadline Countdown Card ──────────────────────────────────────────
-const KEEPER_DEADLINE = new Date("2026-08-18T23:59:00-04:00");
-
-function KeeperCountdownCard() {
+function KeeperCountdownCard({ keeperDeadlineMs }: { keeperDeadlineMs?: number }) {
+  if (!keeperDeadlineMs) return null; // hide when no real data
   const now = new Date();
-  const msRemaining = KEEPER_DEADLINE.getTime() - now.getTime();
+  const msRemaining = keeperDeadlineMs - now.getTime();
   const daysRemaining = Math.max(0, Math.floor(msRemaining / (1000 * 60 * 60 * 24)));
   const isPast = msRemaining <= 0;
 
@@ -143,7 +142,7 @@ function KeeperCountdownCard() {
 
 // ─── AI Usage Card ──────────────────────────────────────────────────────────
 function AIUsageCard() {
-  const { data, isLoading } = trpc.usage.getMyUsage.useQuery();
+  const { data, isLoading } = trpc.usage.getMyUsage.useQuery(undefined, { retry: false });
   const DAILY_BUDGET = 50_000;
 
   const totalTokens = data?.totalTokens ?? 0;
@@ -225,7 +224,7 @@ function Countdown({ target, label }: { target: Date; label: string }) {
 
 // ─── League Pulse Strip ─────────────────────────────────────────────────────
 function LeaguePulseStrip() {
-  const { data, isLoading } = trpc.weeklyAssessment.leaguePulse.useQuery({ season: 2025 });
+  const { data, isLoading } = trpc.weeklyAssessment.leaguePulse.useQuery({ season: 2025 }, { retry: false });
 
   if (isLoading) {
     return (
@@ -328,12 +327,12 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth();
 
-  const { data: standings, isLoading: standingsLoading } = trpc.espn.standings.useQuery({ season: 2025 });
-  const { data: manifests } = trpc.espn.manifests.useQuery();
-  const { data: draftOrder2026Raw } = trpc.espn.draftOrder.useQuery({ season: 2026 });
-  const { data: keeperHistoryRaw } = trpc.espn.keeperHistory.useQuery();
-  const { data: leagueDraftData, isLoading: draftTendenciesLoading } = trpc.leagueDraftTendencies.useQuery();
-  const { data: ownerStatsData, isLoading: ownerStatsLoading } = trpc.ownerCareerStats.useQuery();
+  const { data: standings, isLoading: standingsLoading } = trpc.espn.standings.useQuery({ season: 2025 }, { retry: false });
+  const { data: manifests } = trpc.espn.manifests.useQuery(undefined, { retry: false });
+  const { data: draftOrder2026Raw } = trpc.espn.draftOrder.useQuery({ season: 2026 }, { retry: false });
+  const { data: keeperHistoryRaw } = trpc.espn.keeperHistory.useQuery(undefined, { retry: false });
+  const { data: leagueDraftData, isLoading: draftTendenciesLoading } = trpc.leagueDraftTendencies.useQuery(undefined, { retry: false });
+  const { data: ownerStatsData, isLoading: ownerStatsLoading } = trpc.ownerCareerStats.useQuery(undefined, { retry: false });
   const chatMutation = trpc.advisor.chat.useMutation();
 
   type DraftOrderEntry = { position: number; teamId: number; name?: string; owners?: string };
@@ -683,9 +682,12 @@ export default function Dashboard() {
   // Keeper deadline countdown — keeper deadline is typically early July before the August draft
   const keeperDeadlineDate = draftOrder2026?.keeperDeadline
     ? new Date(draftOrder2026.keeperDeadline)
-    : new Date('2026-07-01T00:00:00');
-  const daysUntilKeeper = Math.max(0, Math.ceil((keeperDeadlineDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-  const showKeeperBanner = daysUntilKeeper <= 120;
+    : null;
+  const daysUntilKeeper = keeperDeadlineDate
+    ? Math.max(0, Math.ceil((keeperDeadlineDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
+  // Only show banner when we have real data from ESPN and deadline is within 120 days
+  const showKeeperBanner = keeperDeadlineDate !== null && daysUntilKeeper !== null && daysUntilKeeper <= 120;
 
   return (
     <AppLayout title="GM War Room" subtitle="ATLANTAS FINEST FF · Str8FrmHell, RodZilla · Rod Sellers · 2026 Season">
@@ -699,10 +701,10 @@ export default function Dashboard() {
                 <span className="text-amber-300 font-semibold text-sm">Keeper Deadline</span>
                 <span className="text-amber-200/80 text-sm ml-2">— </span>
                 <span className={`font-bold text-sm ${
-                  daysUntilKeeper <= 14 ? 'text-red-400' :
-                  daysUntilKeeper <= 30 ? 'text-orange-400' : 'text-amber-300'
+                  (daysUntilKeeper ?? 999) <= 14 ? 'text-red-400' :
+                  (daysUntilKeeper ?? 999) <= 30 ? 'text-orange-400' : 'text-amber-300'
                 }`}>{daysUntilKeeper} days remaining</span>
-                <span className="text-slate-400 text-xs ml-2">({keeperDeadlineDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})</span>
+                <span className="text-slate-400 text-xs ml-2">({keeperDeadlineDate?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})</span>
               </div>
             </div>
             <button
@@ -745,12 +747,12 @@ export default function Dashboard() {
             {/* 6 Metric Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
               {[
-                { label: "2025 Rank", value: myTeam ? `#${myTeam.rankFinal || 1}` : "#1", sub: "Final Standings", icon: <Trophy className="w-4 h-4 text-yellow-400" />, color: "text-yellow-400" },
-                { label: "Points Scored", value: myTeam ? `${Math.round(Number(myTeam.pointsFor || 1921))}` : "1,921", sub: "Total PF 2025", icon: <TrendingUp className="w-4 h-4 text-emerald-400" />, color: "text-emerald-400" },
-                { label: "Points Allowed", value: myTeam ? `${Math.round(Number(myTeam.pointsAgainst || 1693))}` : "1,693", sub: "Total PA 2025", icon: <Shield className="w-4 h-4 text-blue-400" />, color: "text-blue-400" },
-                { label: "Point Differential", value: myTeam ? `+${Math.round(Number(myTeam.pointsFor || 1921) - Number(myTeam.pointsAgainst || 1693))}` : "+228", sub: "+16.3 per game", icon: <Activity className="w-4 h-4 text-primary" />, color: "text-primary" },
-                { label: "vs League Avg PF", value: leagueAvgPF > 0 ? `+${Math.round(Number(myTeam?.pointsFor || 1921) - leagueAvgPF)}` : "+124", sub: `Avg: ${leagueAvgPF || 1797} pts`, icon: <BarChart3 className="w-4 h-4 text-purple-400" />, color: "text-purple-400" },
-                { label: "Playoff Spots", value: "7 / 14", sub: "50% entry rate", icon: <Star className="w-4 h-4 text-orange-400" />, color: "text-orange-400" },
+                { label: "2025 Rank", value: myTeam ? `#${myTeam.rankFinal || 1}` : "—", sub: "Final Standings", icon: <Trophy className="w-4 h-4 text-yellow-400" />, color: myTeam ? "text-yellow-400" : "text-muted-foreground" },
+                { label: "Points Scored", value: myTeam ? `${Math.round(Number(myTeam.pointsFor || 0)).toLocaleString()}` : "—", sub: "Total PF 2025", icon: <TrendingUp className="w-4 h-4 text-emerald-400" />, color: myTeam ? "text-emerald-400" : "text-muted-foreground" },
+                { label: "Points Allowed", value: myTeam ? `${Math.round(Number(myTeam.pointsAgainst || 0)).toLocaleString()}` : "—", sub: "Total PA 2025", icon: <Shield className="w-4 h-4 text-blue-400" />, color: myTeam ? "text-blue-400" : "text-muted-foreground" },
+                { label: "Point Differential", value: myTeam ? `+${Math.round(Number(myTeam.pointsFor || 0) - Number(myTeam.pointsAgainst || 0))}` : "—", sub: myTeam ? "+16.3 per game" : "Sync data to view", icon: <Activity className="w-4 h-4 text-primary" />, color: myTeam ? "text-primary" : "text-muted-foreground" },
+                { label: "vs League Avg PF", value: myTeam && leagueAvgPF > 0 ? `+${Math.round(Number(myTeam.pointsFor || 0) - leagueAvgPF)}` : "—", sub: leagueAvgPF > 0 ? `Avg: ${leagueAvgPF} pts` : "Sync data to view", icon: <BarChart3 className="w-4 h-4 text-purple-400" />, color: myTeam ? "text-purple-400" : "text-muted-foreground" },
+                { label: "Playoff Spots", value: standings && standings.length > 0 ? "7 / 14" : "—", sub: standings && standings.length > 0 ? "50% entry rate" : "Sync data to view", icon: <Star className="w-4 h-4 text-orange-400" />, color: standings && standings.length > 0 ? "text-orange-400" : "text-muted-foreground" },
               ].map((card) => (
                 <Card key={card.label} className="card-glow bg-card border-border">
                   <CardContent className="p-4">
@@ -763,7 +765,7 @@ export default function Dashboard() {
                   </CardContent>
                 </Card>
               ))}
-              <KeeperCountdownCard />
+              <KeeperCountdownCard keeperDeadlineMs={draftOrder2026?.keeperDeadline} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -776,6 +778,12 @@ export default function Dashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
+                  {liveOpponents.length === 0 ? (
+                    <div className="px-5 py-8 text-center">
+                      <p className="text-sm text-muted-foreground">No league data yet.</p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">Connect your league via the Chrome extension to see threat analysis.</p>
+                    </div>
+                  ) : (
                   <div className="divide-y divide-border">
                     {liveOpponents.slice(0, 6).map((opp: LiveOpp) => (
                       <div key={opp.name} className="flex items-center gap-3 px-5 py-3">
@@ -798,8 +806,9 @@ export default function Dashboard() {
                           <p className="text-[10px] text-muted-foreground text-right mt-0.5">{opp.threat}%</p>
                         </div>
                       </div>
-                    ))}
+                    )                    )}
                   </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -812,7 +821,12 @@ export default function Dashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {[
+                  {!ownerStatsData ? (
+                    <div className="py-6 text-center">
+                      <p className="text-sm text-muted-foreground">No league data yet.</p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">Connect your league to see personalized action items.</p>
+                    </div>
+                  ) : [
                     {
                       priority: "CRITICAL", color: "bg-red-500/15 border-red-500/30 text-red-400",
                       title: "Lock Your Keeper",
@@ -871,16 +885,28 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between py-2 border-b border-border">
                     <div>
                       <p className="text-sm font-medium text-foreground">Keeper Deadline</p>
-                      <p className="text-xs text-muted-foreground">August 18, 2026</p>
+                      <p className="text-xs text-muted-foreground">
+                        {draftOrder2026?.keeperDeadline
+                          ? new Date(draftOrder2026.keeperDeadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                          : <span className="text-muted-foreground/50">Sync data to view</span>}
+                      </p>
                     </div>
-                    <Countdown target={new Date("2026-08-18")} label="Keeper Deadline" />
+                    {draftOrder2026?.keeperDeadline
+                      ? <Countdown target={new Date(draftOrder2026.keeperDeadline)} label="Keeper Deadline" />
+                      : <span className="text-sm font-bold text-muted-foreground/50">—</span>}
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-border">
                     <div>
                       <p className="text-sm font-medium text-foreground">Draft Day</p>
-                      <p className="text-xs text-muted-foreground">August 29, 2026 @ 3:30 PM EDT</p>
+                      <p className="text-xs text-muted-foreground">
+                        {draftOrder2026?.draftDate
+                          ? new Date(draftOrder2026.draftDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+                          : <span className="text-muted-foreground/50">Sync data to view</span>}
+                      </p>
                     </div>
-                    <Countdown target={new Date("2026-08-29T15:30:00")} label="Draft Day" />
+                    {draftOrder2026?.draftDate
+                      ? <Countdown target={new Date(draftOrder2026.draftDate)} label="Draft Day" />
+                      : <span className="text-sm font-bold text-muted-foreground/50">—</span>}
                   </div>
                   <div className="flex items-center justify-between py-2">
                     <div>

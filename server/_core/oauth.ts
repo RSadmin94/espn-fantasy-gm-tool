@@ -141,7 +141,10 @@ export function registerOAuthRoutes(app: Express) {
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      res.redirect(302, "/");
+      // Redirect back to where user was before login, or home
+      const returnPath = req.cookies?.["espn_return_path"] || "/";
+      res.clearCookie("espn_return_path");
+      res.redirect(302, returnPath);
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });

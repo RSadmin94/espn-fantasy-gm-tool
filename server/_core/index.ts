@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { clerkMiddleware } from "@clerk/express";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -39,6 +40,9 @@ async function startServer() {
 
   // Stripe webhook MUST be registered before express.json() to preserve raw body for signature verification
   registerStripeWebhook(app);
+
+  // Clerk auth middleware — must be before tRPC and OAuth routes
+  app.use(clerkMiddleware());
 
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));

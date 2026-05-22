@@ -11,6 +11,7 @@
  */
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
+import { useClerk } from "@clerk/clerk-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
@@ -95,11 +96,18 @@ export default function LeagueSwitcher() {
     },
   });
 
-  const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: () => {
+  const { signOut } = useClerk();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await signOut();
       window.location.href = "/";
-    },
-  });
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   const leagues = myLeagues.data ?? [];
   const activeLeague = leagues.find((l) => l.isActive) ?? leagues[0] ?? null;
@@ -153,10 +161,10 @@ export default function LeagueSwitcher() {
             size="icon"
             className="w-6 h-6 flex-shrink-0 text-muted-foreground/50 hover:text-destructive"
             title="Sign out"
-            onClick={() => logoutMutation.mutate()}
-            disabled={logoutMutation.isPending}
+            onClick={handleSignOut}
+            disabled={isSigningOut}
           >
-            {logoutMutation.isPending ? (
+            {isSigningOut ? (
               <Loader2 className="w-3 h-3 animate-spin" />
             ) : (
               <LogOut className="w-3 h-3" />

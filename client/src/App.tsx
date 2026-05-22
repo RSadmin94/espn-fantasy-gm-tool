@@ -12,6 +12,8 @@ import Dashboard from "./pages/Dashboard";
 import Standings from "./pages/Standings";
 import Rosters from "./pages/Rosters";
 import DraftHistory from "./pages/DraftHistory";
+import Transactions from "./pages/Transactions";
+import DynastyValues from "./pages/DynastyValues";
 import Keepers from "./pages/Keepers";
 import Matchups from "./pages/Matchups";
 import TradeAnalyzer from "./pages/TradeAnalyzer";
@@ -90,6 +92,8 @@ function Router() {
       <Route path="/usage-monitor" component={UsageMonitor} />
       <Route path="/pick-value" component={PickValueCalculator} />
       <Route path="/pick-tracker" component={DraftPickTracker} />
+      <Route path="/transactions" component={Transactions} />
+      <Route path="/dynasty-values" component={DynastyValues} />
       <Route path="/keeper-roi" component={KeeperROI} />
       <Route path="/trade-offer" component={TradeOfferGenerator} />
       <Route path="/data-health" component={DataHealth} />

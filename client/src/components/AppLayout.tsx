@@ -5,12 +5,21 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ClipboardList, Star, ArrowLeftRight, Bot, ChevronRight,
   Activity, Brain, Zap, Shield, Microscope, AlertTriangle, XCircle, X, Target, BarChart3, Link2, Sunrise,
-  ChevronDown, Settings2, Users, LineChart, Menu,
+  ChevronDown, Settings2, Users, LineChart, Menu, Loader2, RefreshCw, TrendingUp,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import AdvisorPanel from "./AdvisorPanel";
 import LeagueSwitcher from "./LeagueSwitcher";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 type NavItem = {
   href: string;
@@ -20,6 +29,87 @@ type NavItem = {
   badge?: string;
   panel?: string;
 };
+
+const PROVIDER_EMOJI: Record<string, string> = {
+  espn: "🏈",
+  sleeper: "😴",
+  yahoo: "🟣",
+};
+
+// ─── Compact League Switcher (header) ────────────────────────────────────────
+function CompactLeagueSwitcher() {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const utils = trpc.useUtils();
+
+  const myLeagues = trpc.league.getMyLeagues.useQuery(undefined, {
+    enabled: !!user,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const setActive = trpc.league.setActive.useMutation({
+    onSuccess: () => {
+      utils.league.getActive.invalidate();
+      utils.league.getMyLeagues.invalidate();
+      utils.pipeline.health.invalidate();
+    },
+  });
+
+  const leagues = myLeagues.data ?? [];
+  const activeLeague = leagues.find((l) => l.isActive) ?? leagues[0] ?? null;
+
+  // Hide when unauthenticated or only one league — no need to switch
+  if (!user || leagues.length <= 1) return null;
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-accent/40 hover:bg-accent/70 transition-colors text-left whitespace-nowrap">
+          <span className="text-sm flex-shrink-0">
+            {PROVIDER_EMOJI[activeLeague?.provider ?? ""] ?? "🏆"}
+          </span>
+          <span className="hidden lg:block text-xs font-medium text-foreground truncate max-w-[160px] leading-tight">
+            {activeLeague?.leagueName || `League ${activeLeague?.leagueId}`}
+          </span>
+          <ChevronDown className={cn("w-3 h-3 text-muted-foreground/50 flex-shrink-0 transition-transform", open && "rotate-180")} />
+        </button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent side="bottom" align="end" className="w-60">
+        <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">My Leagues</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {myLeagues.isLoading && (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+          </div>
+        )}
+        {!myLeagues.isLoading && leagues.map((league) => {
+          const isActive = league.isActive;
+          return (
+            <DropdownMenuItem
+              key={league.id}
+              className={cn("flex items-center gap-2.5 px-3 py-2 cursor-pointer", isActive && "bg-primary/10")}
+              onSelect={(e) => {
+                e.preventDefault();
+                if (!isActive) setActive.mutate({ leagueConnectionId: league.id });
+                setOpen(false);
+              }}
+            >
+              <span className="text-sm flex-shrink-0">{PROVIDER_EMOJI[league.provider] ?? "🏆"}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium truncate">{league.leagueName || `League ${league.leagueId}`}</p>
+                <p className="text-[10px] text-muted-foreground/70">{league.provider?.toUpperCase()} · {league.season}</p>
+              </div>
+              {isActive && <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />}
+              {setActive.isPending && !isActive && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 // ─── Navigation Groups ──────────────────────────────────────────────────────
 const navItems: NavItem[] = [
@@ -31,6 +121,8 @@ const navItems: NavItem[] = [
   // Team Tools
   { href: "/waiver-lab", icon: Zap, label: "Waivers", group: "Team Tools", badge: "AI" },
   { href: "/trade-lab", icon: ArrowLeftRight, label: "Trades", group: "Team Tools", badge: "AI" },
+  { href: "/transactions", icon: RefreshCw, label: "Transactions", group: "Team Tools" },
+  { href: "/dynasty-values", icon: TrendingUp, label: "Dynasty Values", group: "Research", badge: "Live" },
   { href: "/keeper-lab", icon: Star, label: "Keepers", group: "Team Tools" },
   { href: "/draft-war-room", icon: ClipboardList, label: "Draft Room", group: "Team Tools", badge: "AI" },
   { href: "/offseason", icon: Sunrise, label: "Offseason", group: "Team Tools", badge: "2026" },
@@ -51,7 +143,7 @@ const systemGroup = "System";
 
 function DataHealthBanner() {
   const [dismissed, setDismissed] = useState(false);
-  const { data } = trpc.pipeline.health.useQuery({}, { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 });
+  const { data } = trpc.pipeline.health.useQuery({}, { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000, retry: false });
   if (dismissed || !data) return null;
   const { cookiesPresent, overallHealth, staleSeasons, partialSeasons } = data;
   let variant: "red" | "amber" | "yellow" | null = null;
@@ -345,18 +437,17 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
             {headerRight && <div className="flex-shrink-0">{headerRight}</div>}
           </div>
 
-          {/* Desktop page header */}
-          {(title || subtitle) && (
-            <header className="hidden lg:flex flex-shrink-0 px-8 py-4 border-b border-border bg-card/50 backdrop-blur-sm">
-              <div className="flex items-center justify-between w-full">
-                <div>
-                  {title && <h1 className="text-lg font-bold text-foreground tracking-tight">{title}</h1>}
-                  {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
-                </div>
-                {headerRight && <div>{headerRight}</div>}
-              </div>
-            </header>
-          )}
+          {/* Desktop page header — always visible so CompactLeagueSwitcher is accessible on every page */}
+          <header className="hidden lg:flex flex-shrink-0 px-8 py-3 border-b border-border bg-card/50 backdrop-blur-sm items-center justify-between min-h-[56px]">
+            <div className="flex-1 min-w-0">
+              {title && <h1 className="text-lg font-bold text-foreground tracking-tight">{title}</h1>}
+              {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <CompactLeagueSwitcher />
+              {headerRight && <div>{headerRight}</div>}
+            </div>
+          </header>
 
           <DataHealthBanner />
           <main className="flex-1 overflow-y-auto">{children}</main>
