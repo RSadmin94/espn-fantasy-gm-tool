@@ -4,20 +4,11 @@
  * Project-level Heartbeat handler for the weekly intelligence refresh.
  * Registered at POST /api/scheduled/weekly-intel
  *
- * Schedule: Tuesdays 09:00 UTC ("0 0 9 * * 2") — after MNF settles.
- * Created via CLI (after deploy):
- *   manus-heartbeat create \
- *     --name weekly-intel \
- *     --cron "0 0 9 * * 2" \
- *     --path /api/scheduled/weekly-intel \
- *     --description "Weekly ESPN data refresh + owner notification"
- *
- * Auth: platform POSTs with x-manus-cron-task-uid header.
- * We trust the platform gateway (which restricts /api/scheduled/* to cron callers only)
- * and read the task UID from the header for logging.
+ * Auth: pass SCHEDULED_JOB_SECRET via x-scheduled-job-secret or ?secret=.
  */
 
 import type { Request, Response } from "express";
+import { authenticateScheduledRequest } from "./_core/scheduledAuth";
 import {
   fetchEspnViewsHardened,
   normalizeTeams,
@@ -45,11 +36,11 @@ export async function weeklyIntelHandler(req: Request, res: Response) {
 
   try {
     // ── 0. Authenticate the cron caller ───────────────────────────────────
-    const cronSecret = process.env.CRON_SECRET ?? "";
-    if (!cronSecret || req.headers["x-cron-secret"] !== cronSecret) {
+    const scheduledRequest = authenticateScheduledRequest(req);
+    if (!scheduledRequest?.isCron) {
       return res.status(403).json({ error: "cron-only endpoint" });
     }
-    taskUid = req.headers["x-task-uid"] as string | undefined;
+    taskUid = scheduledRequest.jobId;
 
     // ── 1. Fetch ESPN data for the current season ──────────────────────────
     const pipelineResult = await fetchEspnViewsHardened(CURRENT_SEASON);

@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { authenticateScheduledRequest } from "./_core/scheduledAuth";
 import { fetchEspnViewsHardened, fetchTradeProposals, mergeTradeProposalsIntoTransactions } from "./espnService";
 import {
   upsertViewHealth,
@@ -20,19 +21,18 @@ const AUTO_REFRESH_SEASONS = [2025, 2026];
 
 /**
  * POST /api/scheduled/espn-refresh
- * Called by the Manus Heartbeat platform every Monday at 06:00 UTC.
- * Authenticates the cron caller, then refreshes ESPN data for the
- * current and upcoming seasons (2025, 2026).
+ * Authenticates the scheduled caller, then refreshes ESPN data for the current
+ * and upcoming seasons (2025, 2026).
  */
 export async function espnRefreshHandler(req: Request, res: Response) {
   const startedAt = Date.now();
   try {
-    const cronSecret = process.env.CRON_SECRET ?? "";
-    if (!cronSecret || req.headers["x-cron-secret"] !== cronSecret) {
+    const scheduledRequest = authenticateScheduledRequest(req);
+    if (!scheduledRequest?.isCron) {
       return res.status(403).json({ error: "cron-only endpoint" });
     }
 
-    const taskUid = req.headers["x-task-uid"] as string | undefined;
+    const taskUid = scheduledRequest.jobId;
     const results: Record<number, {
       status: string;
       viewHealth?: Record<string, string>;
@@ -134,7 +134,7 @@ export async function espnRefreshHandler(req: Request, res: Response) {
       stack,
       context: {
         url: req.url,
-        taskUid: req.headers["x-manus-cron-task-uid"],
+        taskUid: req.headers["x-scheduled-job-id"],
       },
       timestamp: new Date().toISOString(),
     });
