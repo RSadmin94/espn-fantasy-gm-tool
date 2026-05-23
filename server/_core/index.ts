@@ -26,7 +26,7 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
   // Clerk auth middleware — reads session token from cookie/header, populates getAuth(req)
-  app.use(clerkMiddleware());
+  app.use(clerkMiddleware({ authorizedParties: ["https://gmwarroom.online"] }));
 
   registerHealthRoute(app);
   registerStorageProxy(app);
