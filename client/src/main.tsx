@@ -12,6 +12,8 @@ import {
 import { AppShell } from "./components/AppShell";
 import { ConnectESPN } from "./pages/ConnectESPN";
 import { SyncData } from "./pages/SyncData";
+import { Dashboard } from "./pages/Dashboard";
+import { Transactions } from "./pages/Transactions";
 import { trpc } from "@/lib/trpc";
 import "./index.css";
 
@@ -95,10 +97,10 @@ const router = createBrowserRouter([
         children: [
           // ── Active routes ─────────────────────────────────────────────
           { path: "/", element: <Navigate to="/dashboard" replace /> },
-          { path: "/dashboard", element: <PlaceholderPage title="Dashboard" /> },
+          { path: "/dashboard", element: <Dashboard /> },
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/sync", element: <SyncData /> },
-          { path: "/transactions", element: <PlaceholderPage title="Transactions" /> },
+          { path: "/transactions", element: <Transactions /> },
           { path: "/standings", element: <PlaceholderPage title="Standings" /> },
           { path: "/roster", element: <PlaceholderPage title="Roster" /> },
           { path: "/trades", element: <PlaceholderPage title="Trades" /> },
