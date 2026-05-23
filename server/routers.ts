@@ -1277,9 +1277,17 @@ export const appRouter = router({
       }),
 
     syncAllSeasons: protectedProcedure
-      .mutation(async ({ ctx }) => {
+      .input(z.object({ season: z.number().int().min(2009).max(2026) }))
+      .mutation(async ({ ctx, input }) => {
         const { getActiveEspnCredentials } = await import("./db");
         const creds = await getActiveEspnCredentials(ctx.user.id);
+
+        console.log('[ESPN syncAllSeasons] credential check:', JSON.stringify({
+          userId: ctx.user.id,
+          season: input.season,
+          hasCredentials: !!(creds?.swid && creds?.espnS2),
+          leagueId: creds?.leagueId ?? null,
+        }));
 
         if (!creds?.swid || !creds?.espnS2) {
           throw new TRPCError({
@@ -1288,29 +1296,28 @@ export const appRouter = router({
           });
         }
 
-        const seasons = Array.from({ length: 2026 - 2009 + 1 }, (_, index) => 2009 + index);
-        const results: Array<{
+        type SyncSeasonResult = {
           season: number;
           status: "success" | "failed";
           transactionCount?: number;
           teamCount?: number;
           error?: string;
-        }> = [];
+        };
 
-        for (const season of seasons) {
+        const syncSeason = async (): Promise<SyncSeasonResult> => {
           try {
-            const pipelineResult = await fetchEspnViewsHardened(season, undefined, creds, ctx.user.id);
+            const pipelineResult = await fetchEspnViewsHardened(input.season, undefined, creds, ctx.user.id);
             let data = pipelineResult.merged;
 
             try {
-              const proposals = await fetchTradeProposals(season, creds);
+              const proposals = await fetchTradeProposals(input.season, creds);
               data = mergeTradeProposalsIntoTransactions(data, proposals);
             } catch {
               /* non-fatal; keep standard mTransactions2 data */
             }
 
             try {
-              const activityTrades = await fetchRecentActivityTrades(season, data, creds);
+              const activityTrades = await fetchRecentActivityTrades(input.season, data, creds);
               if (activityTrades.length > 0) {
                 data = mergeTradeProposalsIntoTransactions(data, activityTrades);
               }
@@ -1318,38 +1325,38 @@ export const appRouter = router({
               /* non-fatal; keep standard mTransactions2 data */
             }
 
-            await upsertCachedView(season, "combined", data, creds.leagueId);
+            await upsertCachedView(input.season, "combined", data, creds.leagueId);
+            memCache.invalidateAll();
 
             const txs = normalizeTransactions(data) as unknown[];
             const teams = normalizeTeams(data) as unknown[];
-            results.push({
-              season,
+
+            return {
+              season: input.season,
               status: "success",
               transactionCount: txs.length,
               teamCount: teams.length,
-            });
+            };
           } catch (error) {
-            results.push({
-              season,
+            return {
+              season: input.season,
               status: "failed",
               error: error instanceof Error ? error.message : String(error),
-            });
+            };
           }
-        }
-
-        memCache.invalidateAll();
-
-        const seasonsLoaded = results.filter(result => result.status === "success").length;
-        const seasonsFailed = results.filter(result => result.status === "failed").length;
-
-        return {
-          success: seasonsFailed === 0,
-          leagueId: creds.leagueId,
-          seasonsTotal: seasons.length,
-          seasonsLoaded,
-          seasonsFailed,
-          results,
         };
+
+        const timeout = new Promise<SyncSeasonResult>(resolve => {
+          setTimeout(() => {
+            resolve({
+              season: input.season,
+              status: "failed",
+              error: "Timed out after 30 seconds",
+            });
+          }, 30_000);
+        });
+
+        return Promise.race([syncSeason(), timeout]);
       }),
 
     liveTransactions: protectedProcedure

@@ -22,28 +22,56 @@ export default function Sync() {
   const [status, setStatus] = useState<SyncStatus>("idle");
   const [results, setResults] = useState<SyncResult[]>([]);
   const [startedAt, setStartedAt] = useState<Date | null>(null);
+  const [currentSeason, setCurrentSeason] = useState<number | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-  const syncMutation = trpc.espn.syncAllSeasons.useMutation({
-    onMutate: () => {
-      setStatus("syncing");
-      setStartedAt(new Date());
-      setResults([]);
-    },
-    onSuccess: data => {
-      setResults(data.results as SyncResult[]);
-      setStatus("complete");
-    },
-    onError: () => {
-      setStatus("complete");
-    },
-  });
+  const syncMutation = trpc.espn.syncAllSeasons.useMutation();
+
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const handleSyncAll = async () => {
+    setStatus("syncing");
+    setStartedAt(new Date());
+    setResults([]);
+    setCurrentSeason(null);
+    setCurrentIndex(0);
+
+    const nextResults: SyncResult[] = [];
+
+    for (let index = 0; index < HISTORICAL_SEASONS.length; index++) {
+      const season = HISTORICAL_SEASONS[index];
+      setCurrentSeason(season);
+      setCurrentIndex(index);
+
+      try {
+        const result = await syncMutation.mutateAsync({ season });
+        const typedResult = result as SyncResult;
+        nextResults.push(typedResult);
+        setResults([...nextResults]);
+      } catch (error) {
+        const failedResult: SyncResult = {
+          season,
+          status: "failed",
+          error: error instanceof Error ? error.message : String(error),
+        };
+        nextResults.push(failedResult);
+        setResults([...nextResults]);
+      }
+
+      if (index < HISTORICAL_SEASONS.length - 1) {
+        await delay(2_000);
+      }
+    }
+
+    setCurrentSeason(null);
+    setCurrentIndex(HISTORICAL_SEASONS.length);
+    setStatus("complete");
+  };
 
   const completedCount = results.filter(result => result.status === "success").length;
   const failedCount = results.filter(result => result.status === "failed").length;
-  const displayedCompleteCount = status === "syncing" ? 0 : completedCount;
-  const progressPct = status === "syncing"
-    ? 12
-    : Math.round(((completedCount + failedCount) / HISTORICAL_SEASONS.length) * 100);
+  const processedCount = completedCount + failedCount;
+  const progressPct = Math.round((processedCount / HISTORICAL_SEASONS.length) * 100);
 
   const resultMap = useMemo(() => new Map(results.map(result => [result.season, result])), [results]);
 
@@ -64,11 +92,11 @@ export default function Sync() {
               )}
             </div>
             <Button
-              onClick={() => syncMutation.mutate()}
-              disabled={syncMutation.isPending}
+              onClick={handleSyncAll}
+              disabled={status === "syncing"}
               className="shrink-0"
             >
-              {syncMutation.isPending ? (
+              {status === "syncing" ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Syncing...</>
               ) : (
                 "Sync All Historical Data"
@@ -80,7 +108,7 @@ export default function Sync() {
             <div className="flex items-center justify-between text-xs text-slate-400">
               <span>
                 {status === "syncing"
-                  ? `Fetching historical seasons... ${displayedCompleteCount}/${HISTORICAL_SEASONS.length} seasons`
+                  ? `Fetching ${currentSeason ?? "next season"}... ${processedCount}/${HISTORICAL_SEASONS.length} seasons`
                   : `${completedCount}/${HISTORICAL_SEASONS.length} seasons loaded`}
               </span>
               <span>{progressPct}%</span>
@@ -88,13 +116,7 @@ export default function Sync() {
             <Progress value={progressPct} />
           </div>
 
-          {syncMutation.error && (
-            <div className="rounded-lg border border-red-800/40 bg-red-950/30 p-3 text-sm text-red-300">
-              {syncMutation.error.message}
-            </div>
-          )}
-
-          {status === "complete" && !syncMutation.error && (
+          {status === "complete" && (
             <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/30 p-3 text-sm text-emerald-300">
               All data synced -- {completedCount} seasons loaded{failedCount > 0 ? `, ${failedCount} failed` : ""}.
             </div>
@@ -105,7 +127,8 @@ export default function Sync() {
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {HISTORICAL_SEASONS.map(season => {
           const result = resultMap.get(season);
-          const isPending = status === "syncing" && !result;
+          const isPending = status === "syncing" && season === currentSeason;
+          const isQueued = status === "syncing" && HISTORICAL_SEASONS.indexOf(season) > currentIndex;
           return (
             <Card key={season} className="bg-slate-900/60 border-slate-700/50">
               <CardContent className="flex items-start gap-3 p-4">
@@ -127,7 +150,9 @@ export default function Sync() {
                   ) : result?.status === "failed" ? (
                     <div className="text-xs text-red-300 truncate" title={result.error}>{result.error}</div>
                   ) : isPending ? (
-                    <div className="text-xs text-blue-300">Waiting in sync queue...</div>
+                    <div className="text-xs text-blue-300">Fetching this season now...</div>
+                  ) : isQueued ? (
+                    <div className="text-xs text-slate-500">Waiting in sync queue...</div>
                   ) : (
                     <div className="text-xs text-slate-500">Not synced this run</div>
                   )}
