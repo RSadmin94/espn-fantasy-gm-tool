@@ -16,6 +16,7 @@ export async function createContext(
 
   try {
     const auth = getAuth(opts.req);
+    console.log('[Context Auth]', JSON.stringify(getAuth(opts.req)));
     const { userId } = auth;
     if (userId) {
       let found = await db.getUserByOpenId(userId);

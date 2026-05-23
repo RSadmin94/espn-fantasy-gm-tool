@@ -79,8 +79,7 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
-  const redirectUrl = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
-  window.location.href = `/sign-in?redirect_url=${redirectUrl}`;
+  console.error('[Auth Redirect Suppressed]', error.message);
 };
 
 queryClient.getQueryCache().subscribe(event => {
@@ -183,6 +182,7 @@ function ProtectedLayout() {
   const { isLoaded, isSignedIn } = useAuth();
   const [redirecting, setRedirecting] = useState(false);
 
+  console.log('[ProtectedLayout Auth State]', { isLoaded, isSignedIn, redirecting });
 
   useEffect(() => {
     if (isLoaded && !isSignedIn && !redirecting) {
