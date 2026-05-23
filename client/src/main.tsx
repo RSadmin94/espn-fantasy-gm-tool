@@ -1,11 +1,10 @@
 import { AuthenticateWithRedirectCallback, ClerkProvider, SignIn, SignUp, useAuth } from "@clerk/react-router";
-import { rootAuthLoader } from "@clerk/react-router/ssr.server";
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
-import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLoaderData } from "react-router";
+import { createBrowserRouter, Navigate, Outlet, RouterProvider } from "react-router";
 import superjson from "superjson";
 import App from "./App";
 import Dashboard from "./pages/Dashboard";
@@ -166,11 +165,8 @@ function AuthLoadingPage() {
 }
 
 function RootLayout() {
-  const loaderData = useLoaderData();
-
   return (
     <ClerkProvider
-      loaderData={loaderData}
       publishableKey={PUBLISHABLE_KEY ?? ""}
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
@@ -194,7 +190,6 @@ function ProtectedLayout() {
 const router = createBrowserRouter([
   {
     path: "/",
-    loader: args => rootAuthLoader(args, { publishableKey: PUBLISHABLE_KEY ?? "" }),
     element: <RootLayout />,
     children: [
       { path: "sign-in/*", element: <SignInPage /> },
