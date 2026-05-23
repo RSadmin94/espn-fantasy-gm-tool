@@ -52,6 +52,7 @@ import BillingCancel from "@/pages/BillingCancel";
 import BehavioralAnalytics from "@/pages/BehavioralAnalytics";
 import ActivityCaptureDashboard from "@/pages/ActivityCaptureDashboard";
 import NotFound from "@/pages/NotFound";
+import Sync from "@/pages/Sync";
 import "./index.css";
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -237,6 +238,7 @@ const router = createBrowserRouter([
           { path: "pick-value", element: <PickValueCalculator /> },
           { path: "pick-tracker", element: <DraftPickTracker /> },
           { path: "transactions", element: <Transactions /> },
+          { path: "sync", element: <Sync /> },
           { path: "dynasty-values", element: <DynastyValues /> },
           { path: "keeper-roi", element: <KeeperROI /> },
           { path: "trade-offer", element: <TradeOfferGenerator /> },

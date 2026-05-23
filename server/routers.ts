@@ -1276,6 +1276,82 @@ export const appRouter = router({
         return txs;
       }),
 
+    syncAllSeasons: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const { getActiveEspnCredentials } = await import("./db");
+        const creds = await getActiveEspnCredentials(ctx.user.id);
+
+        if (!creds?.swid || !creds?.espnS2) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "No ESPN credentials found for this user. Connect your ESPN league first.",
+          });
+        }
+
+        const seasons = Array.from({ length: 2026 - 2009 + 1 }, (_, index) => 2009 + index);
+        const results: Array<{
+          season: number;
+          status: "success" | "failed";
+          transactionCount?: number;
+          teamCount?: number;
+          error?: string;
+        }> = [];
+
+        for (const season of seasons) {
+          try {
+            const pipelineResult = await fetchEspnViewsHardened(season, undefined, creds, ctx.user.id);
+            let data = pipelineResult.merged;
+
+            try {
+              const proposals = await fetchTradeProposals(season, creds);
+              data = mergeTradeProposalsIntoTransactions(data, proposals);
+            } catch {
+              /* non-fatal; keep standard mTransactions2 data */
+            }
+
+            try {
+              const activityTrades = await fetchRecentActivityTrades(season, data, creds);
+              if (activityTrades.length > 0) {
+                data = mergeTradeProposalsIntoTransactions(data, activityTrades);
+              }
+            } catch {
+              /* non-fatal; keep standard mTransactions2 data */
+            }
+
+            await upsertCachedView(season, "combined", data, creds.leagueId);
+
+            const txs = normalizeTransactions(data) as unknown[];
+            const teams = normalizeTeams(data) as unknown[];
+            results.push({
+              season,
+              status: "success",
+              transactionCount: txs.length,
+              teamCount: teams.length,
+            });
+          } catch (error) {
+            results.push({
+              season,
+              status: "failed",
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+
+        memCache.invalidateAll();
+
+        const seasonsLoaded = results.filter(result => result.status === "success").length;
+        const seasonsFailed = results.filter(result => result.status === "failed").length;
+
+        return {
+          success: seasonsFailed === 0,
+          leagueId: creds.leagueId,
+          seasonsTotal: seasons.length,
+          seasonsLoaded,
+          seasonsFailed,
+          results,
+        };
+      }),
+
     liveTransactions: protectedProcedure
       .input(z.object({
         season: z.number().int().min(2009).max(2035).default(new Date().getFullYear()),
