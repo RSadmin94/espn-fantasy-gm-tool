@@ -72,22 +72,24 @@ const trpcClient = trpc.createClient({
 const router = createBrowserRouter([
   {
     path: "*",
-    element: <App />,
+    element: (
+      <ClerkProvider
+        publishableKey={PUBLISHABLE_KEY ?? ""}
+        signInUrl="/sign-in"
+        signUpUrl="/sign-up"
+        signInFallbackRedirectUrl="/command-center"
+        signUpFallbackRedirectUrl="/command-center"
+      >
+        <App />
+      </ClerkProvider>
+    ),
   },
 ]);
 
 createRoot(document.getElementById("root")!).render(
-  <ClerkProvider
-    publishableKey={PUBLISHABLE_KEY ?? ""}
-    signInUrl="/sign-in"
-    signUpUrl="/sign-up"
-    signInFallbackRedirectUrl="/command-center"
-    signUpFallbackRedirectUrl="/command-center"
-  >
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    </trpc.Provider>
-  </ClerkProvider>
+  <trpc.Provider client={trpcClient} queryClient={queryClient}>
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  </trpc.Provider>
 );
