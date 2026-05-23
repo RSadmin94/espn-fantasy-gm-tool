@@ -1,7 +1,7 @@
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router";
 
 export default function BillingCancel() {
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4">

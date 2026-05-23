@@ -3,7 +3,7 @@
 // Powered by leaguePulse (fast, no LLM) + rodOpportunities (async, LLM).
 // Cards: Exploit Opportunity | Biggest Threat | Recommended Move | Rival Status | Confidence Score
 
-import { Link } from "wouter";
+import { Link } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -114,7 +114,7 @@ function MissionCard({ icon: Icon, iconColor, label, title, subtitle, badge, bad
     </div>
   );
 
-  if (href) return <Link href={href}>{inner}</Link>;
+  if (href) return <Link to={href}>{inner}</Link>;
   return inner;
 }
 

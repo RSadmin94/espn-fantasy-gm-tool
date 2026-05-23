@@ -1,6 +1,6 @@
 // FILE: client/src/components/AppLayout.tsx
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ClipboardList, Star, ArrowLeftRight, Bot, ChevronRight,
@@ -63,17 +63,17 @@ function DataHealthBanner() {
     red: {
       wrapper: "bg-red-950/60 border-red-500/40 text-red-200",
       icon: <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />,
-      message: (<>ESPN cookies are missing or expired. Live data is unavailable.{" "}<Link href="/data-center" className="underline underline-offset-2 hover:text-red-100 font-semibold">Go to Data Center → Credentials</Link>{" "}to update.</>),
+      message: (<>ESPN cookies are missing or expired. Live data is unavailable.{" "}<Link to="/data-center" className="underline underline-offset-2 hover:text-red-100 font-semibold">Go to Data Center → Credentials</Link>{" "}to update.</>),
     },
     amber: {
       wrapper: "bg-amber-950/60 border-amber-500/40 text-amber-200",
       icon: <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />,
-      message: (<>League data is stale ({staleSeasons} season{staleSeasons !== 1 ? "s" : ""} not refreshed in 7+ days).{" "}<Link href="/data-center" className="underline underline-offset-2 hover:text-amber-100 font-semibold">Go to Data Center</Link>{" "}to sync.</>),
+      message: (<>League data is stale ({staleSeasons} season{staleSeasons !== 1 ? "s" : ""} not refreshed in 7+ days).{" "}<Link to="/data-center" className="underline underline-offset-2 hover:text-amber-100 font-semibold">Go to Data Center</Link>{" "}to sync.</>),
     },
     yellow: {
       wrapper: "bg-yellow-950/40 border-yellow-500/30 text-yellow-200",
       icon: <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0" />,
-      message: (<>Some league data may be incomplete ({partialSeasons} partial season{partialSeasons !== 1 ? "s" : ""}).{" "}<Link href="/data-center" className="underline underline-offset-2 hover:text-yellow-100 font-semibold">Go to Data Center</Link>{" "}to review.</>),
+      message: (<>Some league data may be incomplete ({partialSeasons} partial season{partialSeasons !== 1 ? "s" : ""}).{" "}<Link to="/data-center" className="underline underline-offset-2 hover:text-yellow-100 font-semibold">Go to Data Center</Link>{" "}to review.</>),
     },
   };
   const { wrapper, icon, message } = config[variant];
@@ -119,10 +119,10 @@ function ActiveLeagueFooter() {
         <p className="text-[10px] text-muted-foreground/50 mt-0.5">
           {league.provider?.toUpperCase()} · Season {league.season}
           {" · "}
-          <Link href="/connect" className="hover:text-primary underline underline-offset-2">Switch</Link>
+          <Link to="/connect" className="hover:text-primary underline underline-offset-2">Switch</Link>
         </p>
       ) : (
-        <Link href="/connect" className="text-[10px] text-primary hover:underline">Connect a league →</Link>
+        <Link to="/connect" className="text-[10px] text-primary hover:underline">Connect a league →</Link>
       )}
     </div>
   );
@@ -156,7 +156,7 @@ function SidebarNav({
                   active ? "bg-primary/15 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
                 );
                 return (
-                  <Link key={item.href} href={item.href} className={cls} onClick={onNavClick}>
+                  <Link key={item.href} to={item.href} className={cls} onClick={onNavClick}>
                     <item.icon className={cn("w-4 h-4 flex-shrink-0 transition-colors", active ? "text-primary" : "group-hover:text-foreground")} />
                     <span className="flex-1 truncate">{item.label}</span>
                     {item.badge && <Badge className="text-[8px] px-1 py-0 h-3.5 espn-gradient text-white border-0 font-bold">{item.badge}</Badge>}
@@ -202,7 +202,7 @@ function SidebarNav({
               active ? "bg-primary/15 text-primary" : "text-muted-foreground/70 hover:text-foreground hover:bg-accent/60"
             );
             return (
-              <Link key={item.href} href={item.href} className={cls} onClick={onNavClick}>
+              <Link key={item.href} to={item.href} className={cls} onClick={onNavClick}>
                 <item.icon className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="flex-1 truncate">{item.label}</span>
                 {item.badge && <Badge className="text-[8px] px-1 py-0 h-3.5 bg-zinc-700 text-zinc-300 border-0 font-bold">{item.badge}</Badge>}
@@ -218,7 +218,7 @@ function SidebarNav({
 }
 
 export default function AppLayout({ children, title, subtitle, headerRight }: AppLayoutProps) {
-  const [location] = useLocation();
+  const { pathname: location } = useLocation();
   const alreadyInsideLayout = useContext(InsideLayoutContext);
   const [advisorOpen, setAdvisorOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);

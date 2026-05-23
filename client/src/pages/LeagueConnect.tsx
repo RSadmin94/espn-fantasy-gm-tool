@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -103,7 +103,7 @@ const DNA_STEPS = [
 
 export default function LeagueConnect() {
   const { user } = useAuth();
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const [step, setStep] = useState<Step>("choose_provider");
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [leagueId, setLeagueId] = useState("");

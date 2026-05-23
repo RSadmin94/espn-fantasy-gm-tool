@@ -10,7 +10,7 @@
  *  - Login button when unauthenticated
  */
 import { useState } from "react";
-import { useLocation, Link } from "wouter";
+import { Link, useNavigate } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
@@ -56,7 +56,7 @@ const PROVIDER_EMOJI: Record<string, string> = {
 
 export default function LeagueSwitcher() {
   const { user } = useAuth();
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{ id: number; name: string } | null>(null);
 

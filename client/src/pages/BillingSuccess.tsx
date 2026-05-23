@@ -1,10 +1,10 @@
 import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { trackEvent } from "@/lib/trackEvent";
 
 export default function BillingSuccess() {
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const utils = trpc.useUtils();
 
   useEffect(() => {

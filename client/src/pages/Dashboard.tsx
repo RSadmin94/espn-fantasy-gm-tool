@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Link } from "wouter";
 import AppLayout from "@/components/AppLayout";
 import { MyProfileTab } from "./MyProfileTabContent";
 import { OpponentProfileModal } from "./OpponentProfileModal";
@@ -27,7 +26,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
   LineChart, Line, Legend,
 } from "recharts";
-import { useLocation } from "wouter";
+import { Link, useNavigate } from "react-router";
 
 // ─── Static strategy content (non-person-specific) ─────────────────────────
 
@@ -133,7 +132,7 @@ function KeeperCountdownCard() {
             <p className="text-[10px] text-muted-foreground">days until Aug 18, 2026</p>
           </>
         )}
-        <Link href="/keeper-lab" className="text-[10px] text-primary hover:underline mt-1 block">
+        <Link to="/keeper-lab" className="text-[10px] text-primary hover:underline mt-1 block">
           Open Keeper Lab →
         </Link>
       </CardContent>
@@ -325,7 +324,7 @@ export default function Dashboard() {
   // Draft intel: track which manager+round combos are expanded (key = "name:2" or "name:3")
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
 
   const { data: standings, isLoading: standingsLoading } = trpc.espn.standings.useQuery({ season: 2025 });

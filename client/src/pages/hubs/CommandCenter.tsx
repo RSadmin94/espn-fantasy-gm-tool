@@ -1,6 +1,6 @@
 // FILE: client/src/pages/hubs/CommandCenter.tsx
 import { useEffect, useMemo } from "react";
-import { useLocation } from "wouter";
+import { useLocation } from "react-router";
 import AppLayout from "@/components/AppLayout";
 import TodaysMission from "@/components/TodaysMission";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -106,7 +106,8 @@ function UpgradeStrip({
 }
 
 function LeagueSyncBanner() {
-  const [location] = useLocation();
+  const { pathname, search } = useLocation();
+  const location = `${pathname}${search}`;
   const connected = useMemo(() => {
     const q = location.includes("?") ? location.split("?")[1] : "";
     return new URLSearchParams(q).get("connected") === "1";
@@ -150,7 +151,8 @@ function LeagueSyncBanner() {
 }
 
 export default function CommandCenter() {
-  const [location] = useLocation();
+  const { pathname, search } = useLocation();
+  const location = `${pathname}${search}`;
 
   useEffect(() => {
     if (!location.includes("connected=1")) return;
