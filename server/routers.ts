@@ -1276,6 +1276,80 @@ export const appRouter = router({
         return txs;
       }),
 
+    liveTransactions: protectedProcedure
+      .input(z.object({
+        season: z.number().int().min(2009).max(2035).default(new Date().getFullYear()),
+        teamId: z.number().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { getActiveEspnCredentials } = await import("./db");
+        const creds = await getActiveEspnCredentials(ctx.user.id);
+
+        if (!creds?.swid || !creds?.espnS2) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "No ESPN credentials found for this user. Connect your ESPN league first.",
+          });
+        }
+
+        const pipelineResult = await fetchEspnViewsHardened(
+          input.season,
+          ["mSettings", "mTeam", "mTransactions2", "mDraftDetail"],
+          creds,
+          ctx.user.id
+        );
+
+        let data = pipelineResult.merged;
+        try {
+          const proposals = await fetchTradeProposals(input.season, creds);
+          data = mergeTradeProposalsIntoTransactions(data, proposals);
+        } catch {
+          /* non-fatal; return the standard transaction feed */
+        }
+        try {
+          const activityTrades = await fetchRecentActivityTrades(input.season, data, creds);
+          if (activityTrades.length > 0) {
+            data = mergeTradeProposalsIntoTransactions(data, activityTrades);
+          }
+        } catch {
+          /* non-fatal; return the standard transaction feed */
+        }
+
+        const teams = normalizeTeams(data) as Array<Record<string, unknown>>;
+        const teamMap = new Map<number, { teamName: string; ownerName: string }>();
+        for (const team of teams) {
+          const teamId = team.teamId as number;
+          teamMap.set(teamId, {
+            teamName: (team.teamName as string) || `Team ${teamId}`,
+            ownerName: (team.owners as string) || `Team ${teamId}`,
+          });
+        }
+
+        const txs = normalizeTransactions(data) as Array<Record<string, unknown>>;
+        const rows: Array<Record<string, unknown>> = txs.map(tx => {
+          const teamId = tx.teamId as number | undefined;
+          const fromTeamId = tx.fromTeamId as number | undefined;
+          const toTeamId = tx.toTeamId as number | undefined;
+          const team = teamId ? teamMap.get(teamId) : undefined;
+          const fromTeam = fromTeamId ? teamMap.get(fromTeamId) : undefined;
+          const toTeam = toTeamId ? teamMap.get(toTeamId) : undefined;
+
+          return {
+            ...tx,
+            teamName: team?.teamName ?? (teamId ? `Team ${teamId}` : "Unknown Team"),
+            ownerName: team?.ownerName ?? (teamId ? `Team ${teamId}` : "Unknown Team"),
+            fromTeamName: fromTeam?.teamName ?? (fromTeamId ? `Team ${fromTeamId}` : null),
+            toTeamName: toTeam?.teamName ?? (toTeamId ? `Team ${toTeamId}` : null),
+          };
+        });
+
+        if (input.teamId !== undefined) {
+          return rows.filter(tx => tx.teamId === input.teamId || tx.fromTeamId === input.teamId || tx.toTeamId === input.teamId);
+        }
+
+        return rows;
+      }),
+
     // ── Trade Aging ─────────────────────────────────────────────────────────────
     // Reconstructs completed trades from all cached seasons, scores each side
     // using season-specific player stats, and returns a verdict (winner).

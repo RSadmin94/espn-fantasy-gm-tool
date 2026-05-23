@@ -1,223 +1,194 @@
 // FILE: client/src/pages/Transactions.tsx
-// Transaction log — shows all ESPN transactions across seasons with
-// filtering by type (trades, waivers, drops, adds), team, and season.
+// Live ESPN transaction log — fetches directly from ESPN using the signed-in user's stored credentials.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import AppLayout from "@/components/AppLayout";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import {
-  ArrowLeftRight, UserPlus, UserMinus, RefreshCw,
-  TrendingUp, Search, Filter, Calendar,
-} from "lucide-react";
+import { Calendar, Filter } from "lucide-react";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 type TxRow = {
-  transactionId: string;
+  transactionId?: string;
+  type?: string;
+  status?: string;
+  proposedDate?: number;
+  season?: number;
+  teamId?: number;
+  playerId?: number | null;
+  playerName?: string | null;
+  position?: string | null;
+  fromTeamId?: number | null;
+  toTeamId?: number | null;
+  itemType?: string | null;
+  overallPickNumber?: number | null;
+  round?: number | null;
+  pickInRound?: number | null;
+  teamName?: string;
+  ownerName?: string;
+  fromTeamName?: string | null;
+  toTeamName?: string | null;
+};
+
+type TxGroup = {
+  key: string;
+  rows: TxRow[];
+  date: number;
   type: string;
-  status: string;
-  proposedDate: number;
-  season: number;
-  teamId: number;
-  playerId: number;
-  playerName: string;
-  position: string;
-  fromTeamId: number | null;
-  toTeamId: number | null;
-  itemType: string;
-  overallPickNumber: number | null;
-  round: number | null;
-  pickInRound: number | null;
+  teamIds: number[];
 };
 
-// ── Transaction type metadata ─────────────────────────────────────────────────
-const TX_META: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
-  TRADE:          { label: "Trade",    icon: <ArrowLeftRight className="w-3 h-3" />, color: "text-blue-300",   bg: "bg-blue-500/15 border-blue-500/30"   },
-  TRADE_PROPOSAL: { label: "Trade",    icon: <ArrowLeftRight className="w-3 h-3" />, color: "text-blue-300",   bg: "bg-blue-500/15 border-blue-500/30"   },
-  WAIVER:         { label: "Waiver",   icon: <RefreshCw className="w-3 h-3" />,      color: "text-yellow-300", bg: "bg-yellow-500/15 border-yellow-500/30" },
-  FREEAGENT:      { label: "Add",      icon: <UserPlus className="w-3 h-3" />,       color: "text-green-300",  bg: "bg-green-500/15 border-green-500/30"  },
-  DROP:           { label: "Drop",     icon: <UserMinus className="w-3 h-3" />,      color: "text-red-300",    bg: "bg-red-500/15 border-red-500/30"      },
-};
+const TYPE_OPTIONS = [
+  { value: "ALL", label: "All Types" },
+  { value: "TRADE", label: "Trades" },
+  { value: "ADD", label: "Adds" },
+  { value: "DROP", label: "Drops" },
+  { value: "WAIVER", label: "Waivers" },
+];
 
-const POS_COLOR: Record<string, string> = {
-  QB: "bg-red-900/50 text-red-300",
-  RB: "bg-green-900/50 text-green-300",
-  WR: "bg-blue-900/50 text-blue-300",
-  TE: "bg-orange-900/50 text-orange-300",
-  K:  "bg-purple-900/50 text-purple-300",
-  DST:"bg-pink-900/50 text-pink-300",
-};
+function normalizeType(row: TxRow): string {
+  const type = String(row.type ?? "").toUpperCase();
+  const itemType = String(row.itemType ?? "").toUpperCase();
 
-function posTag(pos: string) {
-  return `inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold ${POS_COLOR[pos] ?? "bg-slate-700 text-slate-300"}`;
+  if (type.includes("TRADE")) return "TRADE";
+  if (type.includes("WAIVER")) return "WAIVER";
+  if (type.includes("FREE") || itemType === "ADD") return "ADD";
+  if (itemType === "DROP" || type === "DROP") return "DROP";
+  return type || "UNKNOWN";
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function formatDate(ts: number) {
+function typeLabel(type: string): string {
+  switch (type) {
+    case "TRADE": return "Trade";
+    case "WAIVER": return "Waiver";
+    case "ADD": return "Add";
+    case "DROP": return "Drop";
+    default: return type;
+  }
+}
+
+function typeBadgeClass(type: string): string {
+  switch (type) {
+    case "TRADE": return "bg-blue-500/15 text-blue-300 border-blue-500/30";
+    case "WAIVER": return "bg-yellow-500/15 text-yellow-300 border-yellow-500/30";
+    case "ADD": return "bg-green-500/15 text-green-300 border-green-500/30";
+    case "DROP": return "bg-red-500/15 text-red-300 border-red-500/30";
+    default: return "bg-slate-500/15 text-slate-300 border-slate-500/30";
+  }
+}
+
+function formatDate(ts?: number) {
   if (!ts) return "—";
   return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function groupByTransaction(rows: TxRow[]) {
+function playerLabel(row: TxRow): string {
+  if (row.playerName) return row.position ? `${row.playerName} (${row.position})` : row.playerName;
+  if (row.round) return `${row.season ?? ""} Round ${row.round} Pick ${row.pickInRound ?? "?"}`.trim();
+  if (row.overallPickNumber) return `Pick ${row.overallPickNumber}`;
+  return "Unknown player/pick";
+}
+
+function groupTransactions(rows: TxRow[]): TxGroup[] {
   const groups = new Map<string, TxRow[]>();
+
   for (const row of rows) {
-    const key = `${row.transactionId}-${row.type}-${row.season}`;
+    const key = `${row.transactionId ?? "unknown"}-${normalizeType(row)}-${row.proposedDate ?? 0}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(row);
   }
-  return Array.from(groups.values()).sort((a, b) => (b[0].proposedDate ?? 0) - (a[0].proposedDate ?? 0));
+
+  return Array.from(groups.entries())
+    .map(([key, groupRows]) => {
+      const teamIds = Array.from(new Set(groupRows.flatMap(row => [row.teamId, row.fromTeamId, row.toTeamId].filter((id): id is number => typeof id === "number"))));
+      return {
+        key,
+        rows: groupRows,
+        date: groupRows[0]?.proposedDate ?? 0,
+        type: normalizeType(groupRows[0] ?? {}),
+        teamIds,
+      };
+    })
+    .sort((a, b) => b.date - a.date);
 }
 
-// ── Transaction Card ──────────────────────────────────────────────────────────
-function TxCard({ rows, ownerMap }: { rows: TxRow[]; ownerMap: Record<number, string> }) {
-  const first = rows[0];
-  const meta = TX_META[first.type] ?? TX_META.FREEAGENT;
-  const isTrade = first.type === "TRADE" || first.type === "TRADE_PROPOSAL";
-
-  if (isTrade) {
-    // Group by teamId for trade display
-    const sides = new Map<number, TxRow[]>();
-    for (const r of rows) {
-      const team = r.toTeamId ?? r.teamId;
-      if (!sides.has(team)) sides.set(team, []);
-      sides.get(team)!.push(r);
-    }
-    const sideArr = Array.from(sides.entries());
-
-    return (
-      <Card className="bg-slate-900/60 border-slate-700/50">
-        <CardHeader className="pb-2 pt-3 px-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${meta.bg} ${meta.color}`}>
-                {meta.icon} {meta.label}
-              </span>
-              <span className="text-slate-500 text-xs">{formatDate(first.proposedDate)}</span>
-            </div>
-            <span className="text-slate-600 text-xs">S{first.season}</span>
-          </div>
-        </CardHeader>
-        <CardContent className="px-4 pb-3">
-          <div className={`grid gap-3 ${sideArr.length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
-            {sideArr.map(([teamId, teamRows]) => (
-              <div key={teamId} className="bg-slate-800/50 rounded-lg p-2.5">
-                <div className="text-xs font-semibold text-slate-400 mb-2">
-                  {ownerMap[teamId] ?? `Team ${teamId}`} receives
-                </div>
-                <div className="space-y-1">
-                  {teamRows.map((r, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className={posTag(r.position)}>{r.position}</span>
-                      <span className="text-slate-200 text-sm truncate">
-                        {r.playerName || (r.round ? `${r.season} R${r.round} P${r.pickInRound}` : "Unknown")}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    );
+function teamNames(group: TxGroup): string {
+  const names = new Set<string>();
+  for (const row of group.rows) {
+    if (row.ownerName) names.add(row.ownerName);
+    else if (row.teamName) names.add(row.teamName);
+    if (row.fromTeamName) names.add(row.fromTeamName);
+    if (row.toTeamName) names.add(row.toTeamName);
   }
-
-  // Waiver / Add / Drop
-  return (
-    <Card className="bg-slate-900/60 border-slate-700/50">
-      <CardContent className="px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border shrink-0 ${meta.bg} ${meta.color}`}>
-              {meta.icon} {meta.label}
-            </span>
-            <span className={posTag(first.position)}>{first.position}</span>
-            <span className="text-slate-200 text-sm truncate font-medium">{first.playerName}</span>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <span className="text-slate-400 text-xs">{ownerMap[first.teamId] ?? `Team ${first.teamId}`}</span>
-            <span className="text-slate-600 text-xs">{formatDate(first.proposedDate)}</span>
-            <span className="text-slate-600 text-xs">S{first.season}</span>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  return Array.from(names).join(" / ") || "Unknown team";
 }
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
-function TxSkeleton() {
+function playersInvolved(group: TxGroup): string {
+  const players = Array.from(new Set(group.rows.map(playerLabel)));
+  return players.join(", ");
+}
+
+function details(group: TxGroup): string {
+  const status = group.rows[0]?.status ? `Status: ${group.rows[0].status}` : "Status: unknown";
+  const id = group.rows[0]?.transactionId ? `Transaction: ${group.rows[0].transactionId}` : "";
+  return [status, id].filter(Boolean).join(" • ");
+}
+
+function LoadingRows() {
   return (
     <div className="space-y-2">
       {Array.from({ length: 8 }).map((_, i) => (
-        <Skeleton key={i} className="h-14 w-full bg-slate-800/50 rounded-lg" />
+        <Skeleton key={i} className="h-12 w-full bg-slate-800/50 rounded-lg" />
       ))}
     </div>
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Transactions() {
   const currentYear = new Date().getFullYear();
   const [season, setSeason] = useState(currentYear);
-  const [typeFilter, setTypeFilter] = useState<string>("ALL");
-  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [teamFilter, setTeamFilter] = useState("ALL");
 
-  const txQuery = trpc.espn.transactions.useQuery(
+  const liveTransactionsQuery = trpc.espn.liveTransactions.useQuery(
     { season },
-    { retry: false, staleTime: 5 * 60_000 }
+    { retry: false, staleTime: 0, refetchOnWindowFocus: false }
   );
 
-  const standingsQuery = trpc.espn.standings.useQuery(
-    { season },
-    { retry: false, staleTime: 10 * 60_000 }
-  );
+  const rows = (liveTransactionsQuery.data ?? []) as TxRow[];
+  const groups = useMemo(() => groupTransactions(rows), [rows]);
 
-  // Build owner name map from standings
-  const ownerMap: Record<number, string> = {};
-  for (const team of standingsQuery.data ?? []) {
-    ownerMap[(team as Record<string, unknown>).teamId as number] =
-      (team as Record<string, unknown>).ownerName as string ?? `Team ${(team as Record<string, unknown>).teamId}`;
-  }
+  const teamOptions = useMemo(() => {
+    const teams = new Map<number, string>();
+    for (const row of rows) {
+      if (typeof row.teamId === "number") teams.set(row.teamId, row.ownerName || row.teamName || `Team ${row.teamId}`);
+      if (typeof row.fromTeamId === "number") teams.set(row.fromTeamId, row.fromTeamName || `Team ${row.fromTeamId}`);
+      if (typeof row.toTeamId === "number") teams.set(row.toTeamId, row.toTeamName || `Team ${row.toTeamId}`);
+    }
+    return Array.from(teams.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [rows]);
 
-  const allTx = (txQuery.data ?? []) as TxRow[];
-
-  // Filter
-  const filtered = allTx.filter(r => {
-    const matchType = typeFilter === "ALL" || r.type === typeFilter ||
-      (typeFilter === "TRADE" && (r.type === "TRADE" || r.type === "TRADE_PROPOSAL"));
-    const matchSearch = !search ||
-      r.playerName?.toLowerCase().includes(search.toLowerCase()) ||
-      ownerMap[r.teamId]?.toLowerCase().includes(search.toLowerCase());
-    return matchType && matchSearch;
+  const filteredGroups = groups.filter(group => {
+    const matchesType = typeFilter === "ALL" || group.type === typeFilter;
+    const matchesTeam = teamFilter === "ALL" || group.teamIds.includes(Number(teamFilter));
+    return matchesType && matchesTeam;
   });
 
-  const groups = groupByTransaction(filtered);
-
-  // Stats
-  const tradeCount   = groups.filter(g => g[0].type === "TRADE" || g[0].type === "TRADE_PROPOSAL").length;
-  const waiverCount  = groups.filter(g => g[0].type === "WAIVER").length;
-  const addDropCount = groups.filter(g => g[0].type === "FREEAGENT" || g[0].type === "DROP").length;
-
-  const seasons = Array.from({ length: 9 }, (_, i) => currentYear - i);
+  const seasons = Array.from({ length: 4 }, (_, i) => currentYear - i);
 
   return (
-    <AppLayout title="Transactions" subtitle="Every move across all seasons — trades, waivers, adds and drops">
-
-      {/* Controls */}
+    <AppLayout title="Transactions" subtitle="Live ESPN transaction feed — fetched directly with your connected ESPN account">
       <div className="flex flex-wrap gap-3 mb-5">
-        <Select value={String(season)} onValueChange={v => setSeason(Number(v))}>
+        <Select value={String(season)} onValueChange={value => setSeason(Number(value))}>
           <SelectTrigger className="w-32 bg-slate-900 border-slate-700 text-slate-200">
             <Calendar className="w-3.5 h-3.5 mr-1.5 text-slate-400" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="bg-slate-900 border-slate-700">
-            {seasons.map(s => (
-              <SelectItem key={s} value={String(s)} className="text-slate-200">{s}</SelectItem>
+            {seasons.map(option => (
+              <SelectItem key={option} value={String(option)} className="text-slate-200">{option}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -228,65 +199,67 @@ export default function Transactions() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="bg-slate-900 border-slate-700">
-            <SelectItem value="ALL" className="text-slate-200">All Types</SelectItem>
-            <SelectItem value="TRADE" className="text-slate-200">Trades</SelectItem>
-            <SelectItem value="WAIVER" className="text-slate-200">Waivers</SelectItem>
-            <SelectItem value="FREEAGENT" className="text-slate-200">Free Agents</SelectItem>
-            <SelectItem value="DROP" className="text-slate-200">Drops</SelectItem>
+            {TYPE_OPTIONS.map(option => (
+              <SelectItem key={option.value} value={option.value} className="text-slate-200">{option.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-          <Input
-            placeholder="Search player or owner..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-9 bg-slate-900 border-slate-700 text-slate-200 placeholder:text-slate-500"
-          />
-        </div>
+        <Select value={teamFilter} onValueChange={setTeamFilter}>
+          <SelectTrigger className="w-56 bg-slate-900 border-slate-700 text-slate-200">
+            <SelectValue placeholder="All Teams" />
+          </SelectTrigger>
+          <SelectContent className="bg-slate-900 border-slate-700">
+            <SelectItem value="ALL" className="text-slate-200">All Teams</SelectItem>
+            {teamOptions.map(([teamId, label]) => (
+              <SelectItem key={teamId} value={String(teamId)} className="text-slate-200">{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
-        {[
-          { label: "Trades",    value: tradeCount,   icon: <ArrowLeftRight className="w-4 h-4" />, color: "text-blue-400"   },
-          { label: "Waivers",   value: waiverCount,  icon: <RefreshCw className="w-4 h-4" />,      color: "text-yellow-400" },
-          { label: "Adds/Drops",value: addDropCount, icon: <TrendingUp className="w-4 h-4" />,     color: "text-green-400"  },
-        ].map(s => (
-          <Card key={s.label} className="bg-slate-900/60 border-slate-700/50">
-            <CardContent className="flex items-center gap-3 p-4">
-              <span className={s.color}>{s.icon}</span>
-              <div>
-                <div className="text-2xl font-bold text-slate-100">{s.value}</div>
-                <div className="text-xs text-slate-400">{s.label}</div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Transaction list */}
-      {txQuery.isLoading ? (
-        <TxSkeleton />
-      ) : txQuery.isError ? (
+      {liveTransactionsQuery.isLoading ? (
+        <LoadingRows />
+      ) : liveTransactionsQuery.isError ? (
         <Card className="bg-slate-900/60 border-red-800/40">
           <CardContent className="py-8 text-center">
-            <p className="text-red-400 text-sm">Failed to load transactions. Trigger a data refresh first.</p>
+            <p className="text-red-400 text-sm">Failed to load live ESPN transactions.</p>
+            <p className="text-slate-500 text-xs mt-2">{liveTransactionsQuery.error.message}</p>
           </CardContent>
         </Card>
-      ) : groups.length === 0 ? (
+      ) : filteredGroups.length === 0 ? (
         <Card className="bg-slate-900/60 border-slate-700/50">
           <CardContent className="py-12 text-center">
-            <p className="text-slate-400">No transactions found for {season}.</p>
-            <p className="text-slate-600 text-sm mt-1">Try refreshing ESPN data from the Data Center.</p>
+            <p className="text-slate-400">No live ESPN transactions found for {season}.</p>
+            <p className="text-slate-600 text-sm mt-1">Try a different season, type, or team filter.</p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-2">
-          {groups.map((rows, i) => (
-            <TxCard key={i} rows={rows} ownerMap={ownerMap} />
-          ))}
+        <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/50">
+          <table className="w-full min-w-[900px] text-sm">
+            <thead className="bg-slate-900/80 text-slate-400">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium">Date</th>
+                <th className="px-4 py-3 text-left font-medium">Type</th>
+                <th className="px-4 py-3 text-left font-medium">Team</th>
+                <th className="px-4 py-3 text-left font-medium">Players Involved</th>
+                <th className="px-4 py-3 text-left font-medium">Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {filteredGroups.map(group => (
+                <tr key={group.key} className="text-slate-200 hover:bg-slate-900/40">
+                  <td className="px-4 py-3 whitespace-nowrap text-slate-400">{formatDate(group.date)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <Badge variant="outline" className={typeBadgeClass(group.type)}>{typeLabel(group.type)}</Badge>
+                  </td>
+                  <td className="px-4 py-3 text-slate-300">{teamNames(group)}</td>
+                  <td className="px-4 py-3">{playersInvolved(group)}</td>
+                  <td className="px-4 py-3 text-slate-400">{details(group)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </AppLayout>
