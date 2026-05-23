@@ -1,7 +1,7 @@
 // FILE: client/src/App.tsx
 import { useEffect } from "react";
 import { useLocation } from "wouter";
-import { SignIn, SignedIn, SignedOut, RedirectToSignIn } from "@clherk/clerk-react";
+import { SignIn, SignedIn, SignedOut, RedirectToSignIn, AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
