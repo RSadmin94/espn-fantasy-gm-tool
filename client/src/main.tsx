@@ -11,11 +11,20 @@ import "./index.css";
 
 const queryClient = new QueryClient();
 
+const isUnauthorizedTrpcError = (error: TRPCClientError<any>) => {
+  const data = error.data as { code?: string; httpStatus?: number } | undefined;
+
+  if (data?.code === "UNAUTHORIZED" || data?.httpStatus === 401) return true;
+  if (data?.code || data?.httpStatus) return false;
+
+  return error.message === UNAUTHED_ERR_MSG;
+};
+
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
 
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
+  const isUnauthorized = isUnauthorizedTrpcError(error);
 
   if (!isUnauthorized) return;
 
