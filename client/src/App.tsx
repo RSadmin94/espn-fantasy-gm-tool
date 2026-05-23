@@ -1,4 +1,5 @@
 // FILE: client/src/App.tsx
+import { AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
@@ -109,6 +110,7 @@ function Router() {
       <Route path="/billing/cancel" component={BillingCancel} />
       <Route path="/admin/behavioral" component={BehavioralAnalytics} />
       <Route path="/admin/activity-capture" component={ActivityCaptureDashboard} />
+      <Route path="/sso-callback" component={AuthenticateWithRedirectCallback} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
