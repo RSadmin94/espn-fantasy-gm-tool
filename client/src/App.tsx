@@ -72,7 +72,7 @@ function Router() {
             <SignIn routing="path" path="/sign-in" afterSignInUrl="/command-center" />
           </div>
         )} />
-        <Route path="/sso-callback" component={AuthenticateWithRedirectCallback} />
+        <Route path="/sso-callback" component={() => <AuthenticateWithRedirectCallback />} />
         <Route component={() => (
           <>
             <SignedIn>
