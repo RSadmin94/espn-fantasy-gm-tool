@@ -13,6 +13,7 @@ import { weeklyIntelHandler } from "../weeklyIntelHandler";
 import { registerAdvisorStreamRoute } from "../advisorStreamHandler";
 import { registerStripeWebhook } from "../stripeWebhook";
 import { registerHealthRoute } from "./healthRoute";
+import { ENV } from "./env";
 
 async function startServer() {
   const app = express();
@@ -26,7 +27,11 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
   // Clerk auth middleware — reads session token from cookie/header, populates getAuth(req)
-  app.use(clerkMiddleware());
+  app.use(clerkMiddleware({
+    authorizedParties: ["https://gmwarroom.online"],
+    publishableKey: ENV.clerkPublishableKey || undefined,
+    secretKey: ENV.clerkSecretKey || undefined,
+  }));
 
   registerHealthRoute(app);
   registerStorageProxy(app);
