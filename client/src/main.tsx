@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
-import { ClerkProvider } from "@clerk/clerk-react";
+import { AppClerkProvider } from "@/auth";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { useState } from "react";
@@ -81,7 +81,7 @@ function TrpcProviderRoot() {
 }
 
 createRoot(document.getElementById("root")!).render(
-  <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} signInUrl="/sign-in">
+  <AppClerkProvider>
     <TrpcProviderRoot />
-  </ClerkProvider>
+  </AppClerkProvider>
 );
