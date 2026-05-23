@@ -10,6 +10,8 @@ import {
   useAuth,
 } from "@clerk/react-router";
 import { AppShell } from "./components/AppShell";
+import { ConnectESPN } from "./pages/ConnectESPN";
+import { SyncData } from "./pages/SyncData";
 import { trpc } from "@/lib/trpc";
 import "./index.css";
 
@@ -93,8 +95,8 @@ const router = createBrowserRouter([
         children: [
           { path: "/", element: <Navigate to="/dashboard" replace /> },
           { path: "/dashboard", element: <PlaceholderPage title="Dashboard" /> },
-          { path: "/connect", element: <PlaceholderPage title="Connect ESPN" /> },
-          { path: "/sync", element: <PlaceholderPage title="Sync Data" /> },
+          { path: "/connect", element: <ConnectESPN /> },
+          { path: "/sync", element: <SyncData /> },
           { path: "/transactions", element: <PlaceholderPage title="Transactions" /> },
           { path: "/standings", element: <PlaceholderPage title="Standings" /> },
           { path: "/roster", element: <PlaceholderPage title="Roster" /> },
