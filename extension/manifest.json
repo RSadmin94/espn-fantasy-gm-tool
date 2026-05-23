@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "ESPN GM Tool \u2014 League Connector",
+  "short_name": "GM Connector",
+  "version": "1.7.8",
+  "description": "Automatically captures your ESPN Fantasy credentials and connects your league to the GM Tool \u2014 no cookie hunting required.",
+  "permissions": [
+    "cookies",
+    "activeTab",
+    "storage",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://fantasy.espn.com/*",
+    "https://www.espn.com/*",
+    "https://gmwarroom.online/*",
+    "http://localhost:3000/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ESPN GM Tool Connector",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://fantasy.espn.com/*"
+      ],
+      "js": [
+        "src/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  }
+}
