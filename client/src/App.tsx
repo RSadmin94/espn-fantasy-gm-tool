@@ -1,5 +1,5 @@
 // FILE: client/src/App.tsx
-import { AuthenticateWithRedirectCallback, SignedIn, SignedOut, RedirectToSignIn, SignIn } from "@clerk/clerk-react";
+import { AuthenticateWithRedirectCallback, SignedIn, SignedOut, RedirectToSignIn, SignIn, useAuth } from "@clerk/clerk-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
@@ -84,6 +84,10 @@ function SsoCallbackRoute() {
 }
 
 function Router() {
+  const { isLoaded } = useAuth();
+
+  if (!isLoaded) return null;
+
   return (
     <>
       <PageTracker />
