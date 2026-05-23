@@ -5,7 +5,7 @@ import { useLocation } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 import { trackEvent, checkReturnVisit } from "@/lib/trackEvent";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -94,7 +94,7 @@ function Router() {
           <>
             <SignedIn>
               <Switch>
-                <Route path="/" component={() => { useEffect(() => { window.location.replace("/command-center"); }, []); return null; }} />
+                <Route path="/" component={() => <Redirect to="/command-center" />} />
                 <Route path="/command-center" component={CommandCenter} />
                 <Route path="/dashboard" component={Dashboard} />
                 <Route path="/draft-war-room" component={DraftWarRoom} />
