@@ -1,15 +1,14 @@
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
-import { ClerkProvider } from "@clerk/clerk-react";
+import { ClerkProvider, useAuth } from "@clerk/clerk-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
+import { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
-
-const queryClient = new QueryClient();
 
 const isUnauthorizedTrpcError = (error: TRPCClientError<any>) => {
   const data = error.data as { code?: string; httpStatus?: number } | undefined;
@@ -31,27 +30,37 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   window.location.href = getLoginUrl();
 };
 
-queryClient.getQueryCache().subscribe(event => {
-  if (event.type === "updated" && event.action.type === "error") {
-    const error = event.query.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Query Error]", error);
-  }
-});
+const createQueryClient = () => {
+  const client = new QueryClient();
 
-queryClient.getMutationCache().subscribe(event => {
-  if (event.type === "updated" && event.action.type === "error") {
-    const error = event.mutation.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Mutation Error]", error);
-  }
-});
+  client.getQueryCache().subscribe(event => {
+    if (event.type === "updated" && event.action.type === "error") {
+      const error = event.query.state.error;
+      redirectToLoginIfUnauthorized(error);
+      console.error("[API Query Error]", error);
+    }
+  });
 
-const trpcClient = trpc.createClient({
+  client.getMutationCache().subscribe(event => {
+    if (event.type === "updated" && event.action.type === "error") {
+      const error = event.mutation.state.error;
+      redirectToLoginIfUnauthorized(error);
+      console.error("[API Mutation Error]", error);
+    }
+  });
+
+  return client;
+};
+
+const createTrpcClient = (getToken: () => Promise<string | null>) => trpc.createClient({
   links: [
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
+      async headers() {
+        const token = await getToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+      },
       fetch(input, init) {
         return globalThis.fetch(input, {
           ...(init ?? {}),
@@ -62,12 +71,25 @@ const trpcClient = trpc.createClient({
   ],
 });
 
-createRoot(document.getElementById("root")!).render(
-  <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} signInUrl="/sign-in">
+function TrpcProviderRoot() {
+  const { getToken } = useAuth();
+  const [queryClient] = useState(createQueryClient);
+  const trpcClient = useMemo(
+    () => createTrpcClient(() => getToken()),
+    [getToken]
+  );
+
+  return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <App />
       </QueryClientProvider>
     </trpc.Provider>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(
+  <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} signInUrl="/sign-in">
+    <TrpcProviderRoot />
   </ClerkProvider>
 );
