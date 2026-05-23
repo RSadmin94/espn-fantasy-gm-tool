@@ -1,6 +1,5 @@
 // FILE: client/src/App.tsx
-import { AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
-import { SignedIn, SignedOut, RedirectToSignIn, SignIn } from "@clerk/clerk-react";
+import { AuthenticateWithRedirectCallback, SignedIn, SignedOut, RedirectToSignIn, SignIn } from "@clerk/clerk-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
@@ -72,7 +71,7 @@ function Router() {
             <SignIn routing="path" path="/sign-in" afterSignInUrl="/command-center" />
           </div>
         )} />
-        <Route path="/sso-callback" component={() => <AuthenticateWithRedirectCallback />} />
+        <Route path="/sso-callback" component={AuthenticateWithRedirectCallback} />
         <Route component={() => (
           <>
             <SignedIn>
