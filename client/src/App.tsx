@@ -61,17 +61,35 @@ function PageTracker() {
   return null;
 }
 
+function SignInRoute() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
+      <SignIn
+        routing="path"
+        path="/sign-in"
+        fallbackRedirectUrl="/command-center"
+        forceRedirectUrl="/command-center"
+      />
+    </div>
+  );
+}
+
+function SsoCallbackRoute() {
+  return (
+    <AuthenticateWithRedirectCallback
+      signInFallbackRedirectUrl="/command-center"
+      signUpFallbackRedirectUrl="/command-center"
+    />
+  );
+}
+
 function Router() {
   return (
     <>
       <PageTracker />
       <Switch>
-        <Route path="/sign-in" component={() => (
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
-            <SignIn routing="path" path="/sign-in" afterSignInUrl="/command-center" />
-          </div>
-        )} />
-        <Route path="/sso-callback" component={AuthenticateWithRedirectCallback} />
+        <Route path={/^\/sign-in(?:\/.*)?$/} component={SignInRoute} />
+        <Route path="/sso-callback" component={SsoCallbackRoute} />
         <Route component={() => (
           <>
             <SignedIn>
@@ -125,7 +143,7 @@ function Router() {
               </Switch>
             </SignedIn>
             <SignedOut>
-              <RedirectToSignIn redirectUrl={window.location.pathname} />
+              <RedirectToSignIn redirectUrl={`${window.location.pathname}${window.location.search}`} />
             </SignedOut>
           </>
         )} />
