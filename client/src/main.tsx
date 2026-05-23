@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, Navigate, Outlet, RouterProvider } from "react-router";
 import superjson from "superjson";
@@ -180,9 +181,18 @@ function RootLayout() {
 
 function ProtectedLayout() {
   const { isLoaded, isSignedIn } = useAuth();
+  const [redirecting, setRedirecting] = useState(false);
+
+  useEffect(() => {
+    if (isLoaded && !isSignedIn && !redirecting) {
+      const timer = setTimeout(() => setRedirecting(true), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoaded, isSignedIn, redirecting]);
 
   if (!isLoaded) return <AuthLoadingPage />;
-  if (!isSignedIn) return <Navigate to="/sign-in" replace />;
+  if (isLoaded && !isSignedIn && redirecting) return <Navigate to="/sign-in" replace />;
+  if (isLoaded && !isSignedIn && !redirecting) return <AuthLoadingPage />;
 
   return <Outlet />;
 }
