@@ -93,6 +93,7 @@ const router = createBrowserRouter([
       {
         element: <ProtectedLayout />,
         children: [
+          // ── Active routes ─────────────────────────────────────────────
           { path: "/", element: <Navigate to="/dashboard" replace /> },
           { path: "/dashboard", element: <PlaceholderPage title="Dashboard" /> },
           { path: "/connect", element: <ConnectESPN /> },
@@ -103,6 +104,51 @@ const router = createBrowserRouter([
           { path: "/trades", element: <PlaceholderPage title="Trades" /> },
           { path: "/advisor", element: <PlaceholderPage title="AI Advisor" /> },
           { path: "/settings", element: <PlaceholderPage title="Settings" /> },
+
+          // ── Legacy route redirects ────────────────────────────────────
+          // Chrome extension posts here after ESPN connect
+          { path: "/command-center", element: <Navigate to="/dashboard" replace /> },
+          // Renamed routes
+          { path: "/rosters", element: <Navigate to="/roster" replace /> },
+          { path: "/refresh", element: <Navigate to="/sync" replace /> },
+          { path: "/data-center", element: <Navigate to="/sync" replace /> },
+          { path: "/data-health", element: <Navigate to="/sync" replace /> },
+          // Trade-related old paths
+          { path: "/trade", element: <Navigate to="/trades" replace /> },
+          { path: "/trade-lab", element: <Navigate to="/trades" replace /> },
+          { path: "/trade-offer", element: <Navigate to="/trades" replace /> },
+          // Billing routes now live under settings
+          { path: "/billing/success", element: <Navigate to="/settings" replace /> },
+          { path: "/billing/cancel", element: <Navigate to="/settings" replace /> },
+          // All other old hub/feature paths → dashboard
+          { path: "/draft-war-room", element: <Navigate to="/dashboard" replace /> },
+          { path: "/keeper-lab", element: <Navigate to="/dashboard" replace /> },
+          { path: "/waiver-lab", element: <Navigate to="/dashboard" replace /> },
+          { path: "/waiver", element: <Navigate to="/dashboard" replace /> },
+          { path: "/opponent-intel", element: <Navigate to="/dashboard" replace /> },
+          { path: "/backtesting", element: <Navigate to="/dashboard" replace /> },
+          { path: "/gm-memory", element: <Navigate to="/dashboard" replace /> },
+          { path: "/draft", element: <Navigate to="/dashboard" replace /> },
+          { path: "/keepers", element: <Navigate to="/dashboard" replace /> },
+          { path: "/keeper-calculator", element: <Navigate to="/dashboard" replace /> },
+          { path: "/keeper-roi", element: <Navigate to="/dashboard" replace /> },
+          { path: "/matchups", element: <Navigate to="/dashboard" replace /> },
+          { path: "/startsit", element: <Navigate to="/dashboard" replace /> },
+          { path: "/player-profiles", element: <Navigate to="/dashboard" replace /> },
+          { path: "/owner-stats", element: <Navigate to="/dashboard" replace /> },
+          { path: "/usage-monitor", element: <Navigate to="/settings" replace /> },
+          { path: "/pick-value", element: <Navigate to="/dashboard" replace /> },
+          { path: "/pick-tracker", element: <Navigate to="/dashboard" replace /> },
+          { path: "/dynasty-values", element: <Navigate to="/dashboard" replace /> },
+          { path: "/weekly-stats", element: <Navigate to="/dashboard" replace /> },
+          { path: "/analytics", element: <Navigate to="/dashboard" replace /> },
+          { path: "/manager-behavior", element: <Navigate to="/dashboard" replace /> },
+          { path: "/ml-forecast", element: <Navigate to="/dashboard" replace /> },
+          { path: "/weekly-intelligence", element: <Navigate to="/dashboard" replace /> },
+          { path: "/offseason", element: <Navigate to="/dashboard" replace /> },
+          { path: "/reveal", element: <Navigate to="/dashboard" replace /> },
+          { path: "/admin/behavioral", element: <Navigate to="/dashboard" replace /> },
+          { path: "/admin/activity-capture", element: <Navigate to="/dashboard" replace /> },
         ],
       },
     ],
