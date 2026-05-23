@@ -1,7 +1,8 @@
 // FILE: client/src/App.tsx
+import { AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, RedirectToSignIn, SignIn } from "@clerk/clerk-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
-import { SignIn, SignedIn, SignedOut, RedirectToSignIn, AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -13,6 +14,8 @@ import Dashboard from "./pages/Dashboard";
 import Standings from "./pages/Standings";
 import Rosters from "./pages/Rosters";
 import DraftHistory from "./pages/DraftHistory";
+import Transactions from "./pages/Transactions";
+import DynastyValues from "./pages/DynastyValues";
 import Keepers from "./pages/Keepers";
 import Matchups from "./pages/Matchups";
 import TradeAnalyzer from "./pages/TradeAnalyzer";
@@ -62,54 +65,72 @@ function PageTracker() {
 function Router() {
   return (
     <>
-    <PageTracker />
-    <Switch>
-      <Route path="/" component={() => { useEffect(() => { window.location.replace("/command-center"); }, []); return null; }} />
-      <Route path="/command-center" component={CommandCenter} />
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/draft-war-room" component={DraftWarRoom} />
-      <Route path="/keeper-lab" component={KeeperLab} />
-      <Route path="/trade-lab" component={TradeLab} />
-      <Route path="/waiver-lab" component={WaiverLab} />
-      <Route path="/opponent-intel" component={OpponentIntel} />
-      <Route path="/data-center" component={DataCenter} />
-      <Route path="/backtesting" component={BacktestingHub} />
-      <Route path="/gm-memory" component={GMDecisionMemory} />
-      <Route path="/standings" component={Standings} />
-      <Route path="/rosters" component={Rosters} />
-      <Route path="/draft" component={DraftHistory} />
-      <Route path="/keepers" component={Keepers} />
-      <Route path="/keeper-calculator" component={KeeperCalculator} />
-      <Route path="/matchups" component={Matchups} />
-      <Route path="/trade" component={TradeAnalyzer} />
-      <Route path="/waiver" component={WaiverWire} />
-      <Route path="/advisor" component={Advisor} />
-      <Route path="/refresh" component={DataRefresh} />
-      <Route path="/startsit" component={StartSit} />
-      <Route path="/player-profiles" component={PlayerProfiles} />
-      <Route path="/owner-stats" component={OwnerStats} />
-      <Route path="/usage-monitor" component={UsageMonitor} />
-      <Route path="/pick-value" component={PickValueCalculator} />
-      <Route path="/pick-tracker" component={DraftPickTracker} />
-      <Route path="/keeper-roi" component={KeeperROI} />
-      <Route path="/trade-offer" component={TradeOfferGenerator} />
-      <Route path="/data-health" component={DataHealth} />
-      <Route path="/weekly-stats" component={WeeklyStats} />
-      <Route path="/analytics" component={LeagueAnalytics} />
-      <Route path="/manager-behavior" component={ManagerBehavior} />
-      <Route path="/ml-forecast" component={MLForecast} />
-      <Route path="/weekly-intelligence" component={WeeklyIntelligence} />
-      <Route path="/offseason" component={OffseasonHub} />
-      <Route path="/connect" component={LeagueConnect} />
-      <Route path="/reveal" component={Reveal} />
-      <Route path="/billing/success" component={BillingSuccess} />
-      <Route path="/billing/cancel" component={BillingCancel} />
-      <Route path="/admin/behavioral" component={BehavioralAnalytics} />
-      <Route path="/admin/activity-capture" component={ActivityCaptureDashboard} />
-      <Route path="/sso-callback" component={() => <AuthenticateWithRedirectCallback />} />
-      <Route path="/404" component={NotFound} />
-      <Route component={NotFound} />
-    </Switch>
+      <PageTracker />
+      <Switch>
+        <Route path="/sign-in" component={() => (
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
+            <SignIn routing="path" path="/sign-in" afterSignInUrl="/command-center" />
+          </div>
+        )} />
+        <Route path="/sso-callback" component={AuthenticateWithRedirectCallback} />
+        <Route component={() => (
+          <>
+            <SignedIn>
+              <Switch>
+                <Route path="/" component={() => { useEffect(() => { window.location.replace("/command-center"); }, []); return null; }} />
+                <Route path="/command-center" component={CommandCenter} />
+                <Route path="/dashboard" component={Dashboard} />
+                <Route path="/draft-war-room" component={DraftWarRoom} />
+                <Route path="/keeper-lab" component={KeeperLab} />
+                <Route path="/trade-lab" component={TradeLab} />
+                <Route path="/waiver-lab" component={WaiverLab} />
+                <Route path="/opponent-intel" component={OpponentIntel} />
+                <Route path="/data-center" component={DataCenter} />
+                <Route path="/backtesting" component={BacktestingHub} />
+                <Route path="/gm-memory" component={GMDecisionMemory} />
+                <Route path="/standings" component={Standings} />
+                <Route path="/rosters" component={Rosters} />
+                <Route path="/draft" component={DraftHistory} />
+                <Route path="/keepers" component={Keepers} />
+                <Route path="/keeper-calculator" component={KeeperCalculator} />
+                <Route path="/matchups" component={Matchups} />
+                <Route path="/trade" component={TradeAnalyzer} />
+                <Route path="/waiver" component={WaiverWire} />
+                <Route path="/advisor" component={Advisor} />
+                <Route path="/refresh" component={DataRefresh} />
+                <Route path="/startsit" component={StartSit} />
+                <Route path="/player-profiles" component={PlayerProfiles} />
+                <Route path="/owner-stats" component={OwnerStats} />
+                <Route path="/usage-monitor" component={UsageMonitor} />
+                <Route path="/pick-value" component={PickValueCalculator} />
+                <Route path="/pick-tracker" component={DraftPickTracker} />
+                <Route path="/transactions" component={Transactions} />
+                <Route path="/dynasty-values" component={DynastyValues} />
+                <Route path="/keeper-roi" component={KeeperROI} />
+                <Route path="/trade-offer" component={TradeOfferGenerator} />
+                <Route path="/data-health" component={DataHealth} />
+                <Route path="/weekly-stats" component={WeeklyStats} />
+                <Route path="/analytics" component={LeagueAnalytics} />
+                <Route path="/manager-behavior" component={ManagerBehavior} />
+                <Route path="/ml-forecast" component={MLForecast} />
+                <Route path="/weekly-intelligence" component={WeeklyIntelligence} />
+                <Route path="/offseason" component={OffseasonHub} />
+                <Route path="/connect" component={LeagueConnect} />
+                <Route path="/reveal" component={Reveal} />
+                <Route path="/billing/success" component={BillingSuccess} />
+                <Route path="/billing/cancel" component={BillingCancel} />
+                <Route path="/admin/behavioral" component={BehavioralAnalytics} />
+                <Route path="/admin/activity-capture" component={ActivityCaptureDashboard} />
+                <Route path="/404" component={NotFound} />
+                <Route component={NotFound} />
+              </Switch>
+            </SignedIn>
+            <SignedOut>
+              <RedirectToSignIn redirectUrl={window.location.pathname} />
+            </SignedOut>
+          </>
+        )} />
+      </Switch>
     </>
   );
 }
@@ -166,34 +187,7 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
-          <Switch>
-            <Route path="/sign-in" component={() => (
-              <div className="flex items-center justify-center min-h-screen bg-background">
-                <SignIn routing="path" path="/sign-in" />
-              </div>
-            )} />
-            <Route path="/sign-in/sso-callback" component={() => (
-              <div className="flex items-center justify-center min-h-screen bg-background">
-                <SignIn routing="path" path="/sign-in" />
-              </div>
-            )} />
-            <Route path="/sign-in/create/sso-callback" component={() => (
-              <div className="flex items-center justify-center min-h-screen bg-background">
-                <SignIn routing="path" path="/sign-in" />
-              </div>
-            )} />
-            <Route path="/sso-callback" component={() => <AuthenticateWithRedirectCallback />} />
-            <Route>
-              <>
-                <SignedIn>
-                  <Router />
-                </SignedIn>
-                <SignedOut>
-                  <RedirectToSignIn />
-                </SignedOut>
-              </>
-            </Route>
-          </Switch>
+          <Router />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
