@@ -172,6 +172,7 @@ function App() {
                 <SignIn routing="path" path="/sign-in" />
               </div>
             )} />
+            <Route path="/sso-callback" component={() => <AuthenticateWithRedirectCallback />} />
             <Route>
               <>
                 <SignedIn>
