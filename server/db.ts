@@ -1,6 +1,6 @@
 import { eq, desc, and, gt, or, like, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import type { EspnRawCache, EspnSeasonCache, FantasyDataCache } from "../drizzle/schema";
+import type { EspnRawCache, EspnSeasonCache, FantasyDataCache, RefreshManifest } from "../drizzle/schema";
 import {
   InsertUser, users, fantasyDataCache, refreshManifest, chatHistory,
   pickTrades, InsertPickTrade, espnViewHealth,
@@ -330,10 +330,27 @@ export async function getCompletedSeasonForOffseason(): Promise<number | null> {
   return completed.length > 0 ? completed[0] : null; // already sorted desc
 }
 
-export async function getRefreshManifests() {
+export async function getRefreshManifests(): Promise<RefreshManifest[]> {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(refreshManifest).orderBy(desc(refreshManifest.season));
+
+  // Latest sync_runs row per season (highest id wins — most recent run).
+  const runRows = await db.select().from(syncRuns).orderBy(desc(syncRuns.id));
+  const latestRunBySeason = new Map<number, typeof syncRuns.$inferSelect>();
+  for (const row of runRows) {
+    if (!latestRunBySeason.has(row.season)) latestRunBySeason.set(row.season, row);
+  }
+
+  const manifestRows = await db.select().from(refreshManifest).orderBy(desc(refreshManifest.season));
+  const bySeason = new Map<number, RefreshManifest>();
+  for (const m of manifestRows) {
+    bySeason.set(m.season, m);
+  }
+  for (const run of Array.from(latestRunBySeason.values())) {
+    bySeason.set(run.season, mapSyncRunToRefreshManifest(run));
+  }
+
+  return Array.from(bySeason.values()).sort((a, b) => b.season - a.season);
 }
 
 /** Coerce manifest status so MySQL enum never receives undefined / garbage (avoids bad bindings on ODKU). */
@@ -350,6 +367,31 @@ function truncateRefreshManifestError(msg: string | null): string | null {
   if (msg == null) return null;
   if (msg.length <= MAX_REFRESH_MANIFEST_ERROR_LEN) return msg;
   return `${msg.slice(0, MAX_REFRESH_MANIFEST_ERROR_LEN)}…(truncated)`;
+}
+
+function mapSyncRunToRefreshManifest(r: typeof syncRuns.$inferSelect): RefreshManifest {
+  const lastAt = r.finishedAt ?? r.startedAt;
+  const manifestStatus: "success" | "partial" | "failed" =
+    r.status === "success"
+      ? "success"
+      : r.status === "failed"
+        ? "failed"
+        : "partial"; // running | partial → partial for legacy enum
+  const views =
+    r.rawViewsSaved > 0 ? (["combined"] as unknown as RefreshManifest["viewsRefreshed"]) : null;
+  return {
+    id: r.id,
+    season: r.season,
+    lastRefreshedAt: lastAt,
+    viewsRefreshed: views,
+    teamCount: r.teamsSaved,
+    rosterCount: r.rosterEntriesSaved,
+    matchupCount: r.matchupsSaved,
+    draftPickCount: r.draftPicksSaved,
+    transactionCount: r.transactionsSaved,
+    status: manifestStatus,
+    errorMessage: truncateRefreshManifestError(r.errorMessage ?? null),
+  };
 }
 
 /**

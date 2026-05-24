@@ -892,52 +892,94 @@ export function buildCompletedProposalIds(
   return { completedProposalIds, acceptanceDateMap };
 }
 
+function txMillis(v: unknown): number | null {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+function txBidAmount(item: Record<string, unknown>, tx: Record<string, unknown>): number {
+  const fromItem =
+    item.bidAmount ?? item.faabAmount ?? item.amount ?? item.biddingAmount ?? item.waiverBidAmount;
+  const fromTx = tx.bidAmount ?? tx.faabAmount ?? tx.waiverBidAmount;
+  const raw = fromItem ?? fromTx;
+  if (raw == null) return 0;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function txProcessedDate(tx: Record<string, unknown>): number | null {
+  return (
+    txMillis(tx.processingDate) ??
+    txMillis(tx.processDate) ??
+    txMillis(tx.executionDate) ??
+    txMillis(tx.processedDate) ??
+    null
+  );
+}
+
+/** ESPN player id on a line item; null when only draft slot / pick movement. */
+function txLinePlayerId(player: Record<string, unknown>, item: Record<string, unknown>): number | null {
+  const pid = player.id ?? item.playerId;
+  if (pid == null || pid === "") return null;
+  const n = Number(pid);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
 export function normalizeTransactions(data: Record<string, unknown>) {
   const season = data.seasonId as number;
   const txs = (data.transactions as Record<string, unknown>[]) || [];
   const rows: unknown[] = [];
-  const headerTransactionTypes = new Set(["TRADE_UPHOLD", "TRADE_ACCEPT"]);
   const proposalMeta = txProposalMeta;
 
   for (const tx of txs) {
     const meta = proposalMeta(tx);
     const items = (tx.items as Record<string, unknown>[]) || [];
+    const relId = (tx.relatedTransactionId as string | null | undefined) ?? null;
+    const processedDate = txProcessedDate(tx);
+    const txId = tx.id as string | undefined;
     if (items.length === 0) {
-      if (!headerTransactionTypes.has(String(tx.type || "").toUpperCase())) continue;
+      if (!txId) continue;
       rows.push({
         season,
-        transactionId: tx.id,
+        transactionId: txId,
         type: tx.type,
         status: tx.status,
         proposedDate: tx.proposedDate,
+        processedDate,
         teamId: tx.teamId,
         playerId: null,
         playerName: null,
         fromTeamId: null,
         toTeamId: null,
-        relatedTransactionId: tx.relatedTransactionId ?? null,
+        bidAmount: txBidAmount({}, tx),
+        relatedTransactionId: relId,
         ...meta,
       });
       continue;
     }
     for (const item of items) {
       const player = (item.player as Record<string, unknown>) || {};
+      const pid = txLinePlayerId(player, item);
       rows.push({
         season,
-        transactionId: tx.id,
+        transactionId: txId,
         type: tx.type,
         status: tx.status,
         proposedDate: tx.proposedDate,
+        processedDate,
         teamId: tx.teamId,
-        playerId: player.id || item.playerId,
-        playerName: player.fullName,
+        playerId: pid,
+        playerName: (player.fullName as string | undefined) ?? (item.playerName as string | undefined) ?? null,
         fromTeamId: item.fromTeamId,
         toTeamId: item.toTeamId,
+        bidAmount: txBidAmount(item, tx),
         itemType: item.type,
         overallPickNumber: item.overallPickNumber ?? null,
         round: item.round ?? item.roundId ?? null,
         pickInRound: item.pickInRound ?? item.roundPickNumber ?? null,
-        relatedTransactionId: tx.relatedTransactionId ?? null,
+        relatedTransactionId: relId,
         ...meta,
       });
     }

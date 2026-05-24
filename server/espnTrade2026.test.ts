@@ -274,7 +274,7 @@ describe("normalizeTransactions — edge cases", () => {
     expect(rows[0].relatedTransactionId).toBe("some-proposal-id");
   });
 
-  it("does not emit header rows for non-header transactions with no items", () => {
+  it("emits a parent row for non-header transactions with no items (full raw preserved at persist)", () => {
     const payload = {
       seasonId: 2026,
       transactions: [
@@ -282,7 +282,9 @@ describe("normalizeTransactions — edge cases", () => {
       ],
     };
     const rows = normalizeTransactions(payload as Record<string, unknown>) as Array<Record<string, unknown>>;
-    expect(rows).toHaveLength(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].type).toBe("WAIVER");
+    expect(rows[0].transactionId).toBe("empty-waiver");
   });
 });
 

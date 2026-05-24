@@ -437,10 +437,17 @@ export async function upsertTransactions(
 ): Promise<number> {
   const lid = String(leagueId).slice(0, 32);
   const yr = Math.floor(Number(season));
+  const rawList = (payload.transactions as Record<string, unknown>[]) || [];
+  const rawById = new Map<string, Record<string, unknown>>();
+  for (const t of rawList) {
+    const id = t.id != null ? String(t.id) : "";
+    if (id) rawById.set(id, t);
+  }
   let txs: unknown[] = [];
   try {
     txs = normalizeTransactions(payload) as unknown[];
-  } catch {
+  } catch (e) {
+    console.warn("[upsertTransactions] normalizeTransactions failed:", e);
     return 0;
   }
   const now = new Date();
@@ -450,49 +457,70 @@ export async function upsertTransactions(
     const tx = row as Record<string, unknown>;
     const tid = String(tx.transactionId ?? tx.id ?? "");
     if (!tid) continue;
-    const seq = (seqByTid.get(tid) ?? 0) + 1;
-    seqByTid.set(tid, seq);
-    const playerKey = txPlayerKey(tid, seq);
-    const pid = tx.playerId != null && Number.isFinite(Number(tx.playerId)) ? Number(tx.playerId) : null;
-    await db
-      .insert(schema.gmTransactions)
-      .values({
-        leagueId: lid,
-        season: yr,
-        transactionId: tid.slice(0, 64),
-        type: String(tx.type ?? ""),
-        status: String(tx.status ?? ""),
-        playerId: pid,
-        playerKey,
-        playerName: tx.playerName != null ? String(tx.playerName) : null,
-        fromTeamId: tx.fromTeamId != null ? Number(tx.fromTeamId) : null,
-        toTeamId: tx.toTeamId != null ? Number(tx.toTeamId) : tx.teamId != null ? Number(tx.teamId) : null,
-        bidAmount: 0,
-        proposedDate:
-          tx.proposedDate != null && Number.isFinite(Number(tx.proposedDate))
-            ? Math.floor(Number(tx.proposedDate))
-            : null,
-        processedDate: null,
-        rawTransaction: safeStringify(tx),
-        updatedAt: now,
-      })
-      .onDuplicateKeyUpdate({
-        set: {
+    try {
+      const seq = (seqByTid.get(tid) ?? 0) + 1;
+      seqByTid.set(tid, seq);
+      const playerKey = txPlayerKey(tid, seq);
+      const pid =
+        tx.playerId != null && Number.isFinite(Number(tx.playerId)) && Number(tx.playerId) > 0
+          ? Number(tx.playerId)
+          : null;
+      const parent = rawById.get(tid) ?? tx;
+      const rawTransaction = safeStringify(parent);
+      const rel =
+        tx.relatedTransactionId != null && String(tx.relatedTransactionId).trim() !== ""
+          ? String(tx.relatedTransactionId).slice(0, 64)
+          : null;
+      const bidAmount =
+        tx.bidAmount != null && Number.isFinite(Number(tx.bidAmount)) ? Number(tx.bidAmount) : 0;
+      const proposedDate =
+        tx.proposedDate != null && Number.isFinite(Number(tx.proposedDate))
+          ? Math.floor(Number(tx.proposedDate))
+          : null;
+      const processedDate =
+        tx.processedDate != null && Number.isFinite(Number(tx.processedDate))
+          ? Math.floor(Number(tx.processedDate))
+          : null;
+      await db
+        .insert(schema.gmTransactions)
+        .values({
+          leagueId: lid,
+          season: yr,
+          transactionId: tid.slice(0, 64),
+          relatedTransactionId: rel,
           type: String(tx.type ?? ""),
           status: String(tx.status ?? ""),
           playerId: pid,
+          playerKey,
           playerName: tx.playerName != null ? String(tx.playerName) : null,
           fromTeamId: tx.fromTeamId != null ? Number(tx.fromTeamId) : null,
           toTeamId: tx.toTeamId != null ? Number(tx.toTeamId) : tx.teamId != null ? Number(tx.teamId) : null,
-          proposedDate:
-            tx.proposedDate != null && Number.isFinite(Number(tx.proposedDate))
-              ? Math.floor(Number(tx.proposedDate))
-              : null,
-          rawTransaction: safeStringify(tx),
+          bidAmount,
+          proposedDate,
+          processedDate,
+          rawTransaction,
           updatedAt: now,
-        },
-      });
-    n++;
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            relatedTransactionId: rel,
+            type: String(tx.type ?? ""),
+            status: String(tx.status ?? ""),
+            playerId: pid,
+            playerName: tx.playerName != null ? String(tx.playerName) : null,
+            fromTeamId: tx.fromTeamId != null ? Number(tx.fromTeamId) : null,
+            toTeamId: tx.toTeamId != null ? Number(tx.toTeamId) : tx.teamId != null ? Number(tx.teamId) : null,
+            bidAmount,
+            proposedDate,
+            processedDate,
+            rawTransaction,
+            updatedAt: now,
+          },
+        });
+      n++;
+    } catch (e) {
+      console.warn("[upsertTransactions] row upsert failed:", tid, e);
+    }
   }
   return n;
 }
