@@ -51,12 +51,14 @@ interface TradePlayer {
   teamId: number;
 }
 
-/** Matches tradeAnalyze picksA / picksB schema exactly (year and key are UI-only) */
+/** Matches tradeAnalyze picksA / picksB schema exactly (year, via, and key are UI-only) */
 interface TradePick {
   round: number;
   pick: number;
   /** Draft year — UI display only, not sent to backend */
   year: number;
+  /** Acquiring team name — UI display only, not sent to backend */
+  via?: string;
   /** UI-only unique key for list rendering */
   key: string;
 }
@@ -85,13 +87,14 @@ interface TradeResult {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const ORDINALS = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th"];
-/** "2027 R1.05" */
-function formatPick(year: number, round: number, pick: number) {
-  return `${year} R${round}.${String(pick).padStart(2, "0")}`;
+/** "2027 R1.05" or "2027 R1.05 (via Team Alpha)" */
+function formatPick(year: number, round: number, pick: number, via?: string) {
+  const base = `${year} R${round}.${String(pick).padStart(2, "0")}`;
+  return via ? `${base} (via ${via})` : base;
 }
 /** Kept for backward-compat callsites — same output as formatPick */
-function pickLabel(year: number, round: number, pick: number) { return formatPick(year, round, pick); }
-function pickShort(year: number, round: number, pick: number) { return formatPick(year, round, pick); }
+function pickLabel(year: number, round: number, pick: number, via?: string) { return formatPick(year, round, pick, via); }
+function pickShort(year: number, round: number, pick: number, via?: string) { return formatPick(year, round, pick, via); }
 
 const GRADE_CONFIG: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
   "FAIR":          { label: "Fair Trade",        className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400", icon: <Scale className="h-4 w-4" /> },
@@ -129,12 +132,14 @@ function PickAdder({
   onRemove,
   teamCount,
   season,
+  teams,
 }: {
   picks: TradePick[];
   onAdd: (p: TradePick) => void;
   onRemove: (key: string) => void;
   teamCount: number;
   season: number;
+  teams: TeamRow[];
 }) {
   const maxPick = teamCount > 0 ? teamCount : 14;
   const midPick = teamCount > 0 ? Math.ceil(teamCount / 2) : 7;
@@ -142,6 +147,8 @@ function PickAdder({
   const [round, setRound] = useState("1");
   const [pick, setPick] = useState(String(midPick));
   const [isFuture, setIsFuture] = useState(false);
+  const [pickMode, setPickMode] = useState<"original" | "acquired">("original");
+  const [viaTeam, setViaTeam] = useState("");
 
   // When team count resolves, snap default pick to the true midpoint
   // only if the user hasn't changed it from the previous default
@@ -158,7 +165,8 @@ function PickAdder({
   const handleAdd = () => {
     const r = Number(round);
     const p = Math.max(1, Math.min(maxPick, Number(pick) || midPick));
-    onAdd({ round: r, pick: p, year: pickYear, key: `${pickYear}-${r}-${p}-${Date.now()}` });
+    const via = pickMode === "acquired" && viaTeam ? viaTeam : undefined;
+    onAdd({ round: r, pick: p, year: pickYear, via, key: `${pickYear}-${r}-${p}-${Date.now()}` });
   };
 
   return (
@@ -176,7 +184,7 @@ function PickAdder({
               key={pk.key}
               className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-xs text-primary"
             >
-              {pickShort(pk.year, pk.round, pk.pick)}
+              {pickShort(pk.year, pk.round, pk.pick, pk.via)}
               <button
                 onClick={() => onRemove(pk.key)}
                 className="ml-0.5 hover:text-destructive transition-colors"
@@ -232,6 +240,49 @@ function PickAdder({
         </Button>
       </div>
 
+      {/* Ownership mode */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="radio"
+              name={`pickMode-${season}`}
+              value="original"
+              checked={pickMode === "original"}
+              onChange={() => { setPickMode("original"); setViaTeam(""); }}
+              className="h-3.5 w-3.5 accent-primary"
+            />
+            <span className="text-xs text-muted-foreground">Original owner</span>
+          </label>
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="radio"
+              name={`pickMode-${season}`}
+              value="acquired"
+              checked={pickMode === "acquired"}
+              onChange={() => setPickMode("acquired")}
+              className="h-3.5 w-3.5 accent-primary"
+            />
+            <span className="text-xs text-muted-foreground">Acquired pick</span>
+          </label>
+        </div>
+
+        {pickMode === "acquired" && (
+          <Select value={viaTeam} onValueChange={setViaTeam}>
+            <SelectTrigger className="h-7 text-xs">
+              <SelectValue placeholder="Select original team…" />
+            </SelectTrigger>
+            <SelectContent>
+              {teams.map(t => (
+                <SelectItem key={t.teamId} value={t.teamName || `Team ${t.teamId}`} className="text-xs">
+                  {t.teamName || `Team ${t.teamId}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
       {/* Future pick checkbox */}
       <label className="flex items-center gap-2 cursor-pointer">
         <input
@@ -248,7 +299,7 @@ function PickAdder({
       <p className="text-xs text-muted-foreground/60">
         {picks.length === 0
           ? `e.g. ${formatPick(season, 1, midPick)} = mid-1st`
-          : picks.map(pk => pickLabel(pk.year, pk.round, pk.pick)).join(" · ")}
+          : picks.map(pk => pickLabel(pk.year, pk.round, pk.pick, pk.via)).join(" · ")}
       </p>
     </div>
   );
@@ -365,7 +416,7 @@ function RosterPicker({
                     PICK
                   </span>
                   <span className="text-sm font-medium text-foreground truncate">
-                    {pickLabel(pk.year, pk.round, pk.pick)}
+                    {pickLabel(pk.year, pk.round, pk.pick, pk.via)}
                   </span>
                 </div>
                 <button
@@ -432,6 +483,7 @@ function RosterPicker({
           onRemove={onRemovePick}
           teamCount={teamCount}
           season={season}
+          teams={teams}
         />
       </CardContent>
     </Card>
@@ -502,7 +554,7 @@ function TradeResults({
               ))}
               {picks.map((pk, i) => (
                 <span key={i} className="text-xs text-muted-foreground">
-                  <span className="text-primary font-medium">{pickShort(pk.year, pk.round, pk.pick)}</span>
+                  <span className="text-primary font-medium">{pickShort(pk.year, pk.round, pk.pick, pk.via)}</span>
                   {pickVal > 0 && picks.length === 1 && (
                     <span className="text-foreground font-medium"> +{Math.round(pickVal)}</span>
                   )}
