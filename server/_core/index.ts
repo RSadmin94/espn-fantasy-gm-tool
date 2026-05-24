@@ -5,7 +5,7 @@ import { createServer } from "http";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
-import { appRouter } from "../routers";
+import { appRouter, createWarRoomCorsMiddleware } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { espnRefreshHandler } from "../scheduledRefresh";
@@ -22,15 +22,13 @@ async function startServer() {
   // Stripe webhook MUST be registered before express.json() to preserve raw body for signature verification
   registerStripeWebhook(app);
 
-  // Clerk auth middleware — must be before tRPC and OAuth routes
-  app.use(clerkMiddleware());
-
-  // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  registerHealthRoute(app);
-  registerStorageProxy(app);
-  registerOAuthRoutes(app);
+
+  app.use(createWarRoomCorsMiddleware());
+
+  app.use(clerkMiddleware());
+
   // tRPC API
   app.use(
     "/api/trpc",
@@ -39,6 +37,10 @@ async function startServer() {
       createContext,
     })
   );
+
+  registerHealthRoute(app);
+  registerStorageProxy(app);
+  registerOAuthRoutes(app);
   // Streaming advisor SSE endpoint — must be before Vite/static fallthrough
   registerAdvisorStreamRoute(app);
   // Scheduled job handlers — must be before Vite/static fallthrough

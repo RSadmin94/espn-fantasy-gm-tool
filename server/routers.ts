@@ -25,7 +25,37 @@ import { onboardingRouter } from "./onboardingRouter";
 import { offseasonRouter } from "./offseasonRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
-import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob, getDb, upsertScrapedTrades, getScrapedTrades, upsertLeagueEvents, getLeagueEvents, getLeagueEventsSummary } from "./db";
+import {
+  getPickTrades,
+  addPickTrade,
+  removePickTrade,
+  upsertViewHealth,
+  getViewHealthForSeason,
+  getAllViewHealth,
+  getScheduledJobs,
+  upsertScheduledJob,
+  getDb,
+  upsertScrapedTrades,
+  getScrapedTrades,
+  upsertLeagueEvents,
+  getLeagueEvents,
+  getLeagueEventsSummary,
+  getCachedView,
+  upsertCachedView,
+  getAllCachedSeasons,
+  getRefreshManifests,
+  upsertRefreshManifest,
+  getChatHistory,
+  addChatMessage,
+  clearChatHistory,
+  getUserMemory,
+  upsertUserMemory,
+  getActiveLeagueForUser,
+  setActiveLeagueForUser,
+  resolveActiveLeagueId,
+  persistLlmUsage,
+  getLlmUsageSummary,
+} from "./db";
 import { leagueConnections as lcTable } from "../drizzle/schema";
 import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
@@ -67,23 +97,48 @@ import {
   type DraftPickRow,
   type ManagerBehaviorStats,
 } from "./analytics";
-import {
-  getCachedView,
-  upsertCachedView,
-  getAllCachedSeasons,
-  getRefreshManifests,
-  upsertRefreshManifest,
-  getChatHistory,
-  addChatMessage,
-  clearChatHistory,
-  getUserMemory,
-  upsertUserMemory,
-  getActiveLeagueForUser,
-  setActiveLeagueForUser,
-  resolveActiveLeagueId,
-  persistLlmUsage,
-  getLlmUsageSummary,
-} from "./db";
+import type { RequestHandler } from "express";
+
+/** Exact origins allowed for credentialed browser requests (e.g. extension / cross-site tRPC). */
+const WAR_ROOM_CORS_ORIGINS = new Set([
+  "https://gmwarroom.online",
+  "http://gmwarroom.online",
+]);
+
+const GM_WAR_ROOM_ORIGIN_RE = /^https?:\/\/([\w-]+\.)*gmwarroom\.online$/;
+
+function isAllowedGmWarRoomOrigin(origin: string): boolean {
+  if (WAR_ROOM_CORS_ORIGINS.has(origin)) return true;
+  return GM_WAR_ROOM_ORIGIN_RE.test(origin);
+}
+
+/**
+ * Express CORS middleware for GM War Room production origins.
+ * Defined here per server routing config; wired in `server/_core/index.ts`.
+ */
+export function createWarRoomCorsMiddleware(): RequestHandler {
+  return (req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && isAllowedGmWarRoomOrigin(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Vary", "Origin");
+    }
+
+    if (req.method === "OPTIONS") {
+      res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS");
+      const reqHdr = req.headers["access-control-request-headers"];
+      res.setHeader(
+        "Access-Control-Allow-Headers",
+        typeof reqHdr === "string" ? reqHdr : "Authorization,Content-Type,X-Requested-With,x-trpc-source"
+      );
+      res.status(204).end();
+      return;
+    }
+
+    next();
+  };
+}
 
 const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
 const ALL_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026];
@@ -991,7 +1046,7 @@ export const appRouter = router({
         return { total: rows.length, byType };
       }),
 
-    refresh: protectedProcedure
+    refresh: publicProcedure
       .input(z.object({
         season: z.number().optional(),
         seasons: z.array(z.number()).optional(),
@@ -1003,7 +1058,7 @@ export const appRouter = router({
         const seasonsToRefresh = input.seasons ?? (input.season ? [input.season] : [ALL_SEASONS[ALL_SEASONS.length - 1]]);
         const results: Record<number, { status: string; error?: string; viewHealth?: Record<string, string>; qualityWarnings?: string[]; skipped?: boolean }> = {};
 
-        const activeCreds = await resolveEspnCreds(undefined, ctx.user.id);
+        const activeCreds = await resolveEspnCreds(undefined, ctx.user?.id);
         const activeLeagueId = activeCreds?.leagueId ?? LEAGUE_ID;
 
         if (!activeCreds?.swid || !activeCreds?.espnS2) {
