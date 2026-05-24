@@ -156,8 +156,8 @@ function isMysqlDuplicateKeyError(err: unknown): boolean {
 }
 
 /**
- * Upsert `refresh_manifest` by unique `season` (table has no leagueId — one row per season).
- * Uses UPDATE-or-INSERT instead of MySQL ODKU to avoid driver/JSON edge cases with nested errors.
+ * Upsert `refresh_manifest` by unique `season`.
+ * Insert-first + duplicate-key retry: no separate SELECT (avoids failures on some hosts) and no MySQL ODKU.
  * `viewsRefreshed` is intentionally omitted until MySQL JSON array serialization is fixed.
  */
 export async function upsertRefreshManifest(season: number, data: {
@@ -167,6 +167,12 @@ export async function upsertRefreshManifest(season: number, data: {
 }) {
   const db = await getDb();
   if (!db) return;
+
+  const yr = Math.floor(Number(season));
+  if (!Number.isFinite(yr) || yr < 1900 || yr > 2200) {
+    console.warn("[upsertRefreshManifest] invalid season:", season);
+    return;
+  }
 
   const status = normalizeManifestStatus(data.status);
   const errorMessage = truncateRefreshManifestError(data.errorMessage ?? null);
@@ -179,44 +185,9 @@ export async function upsertRefreshManifest(season: number, data: {
     typeof data.draftPickCount === "number" &&
     typeof data.transactionCount === "number";
 
-  const existing = await db
-    .select({ id: refreshManifest.id })
-    .from(refreshManifest)
-    .where(eq(refreshManifest.season, season))
-    .limit(1);
-
-  if (existing.length > 0) {
-    if (hasFullCounts) {
-      await db
-        .update(refreshManifest)
-        .set({
-          lastRefreshedAt: now,
-          teamCount: data.teamCount!,
-          rosterCount: data.rosterCount!,
-          matchupCount: data.matchupCount!,
-          draftPickCount: data.draftPickCount!,
-          transactionCount: data.transactionCount!,
-          status,
-          errorMessage,
-        })
-        .where(eq(refreshManifest.season, season));
-    } else {
-      await db
-        .update(refreshManifest)
-        .set({
-          lastRefreshedAt: now,
-          status,
-          errorMessage,
-        })
-        .where(eq(refreshManifest.season, season));
-    }
-    return;
-  }
-
-  if (hasFullCounts) {
-    try {
-      await db.insert(refreshManifest).values({
-        season,
+  const insertRow = hasFullCounts
+    ? {
+        season: yr,
         lastRefreshedAt: now,
         teamCount: data.teamCount!,
         rosterCount: data.rosterCount!,
@@ -225,49 +196,51 @@ export async function upsertRefreshManifest(season: number, data: {
         transactionCount: data.transactionCount!,
         status,
         errorMessage,
-      });
-    } catch (err) {
-      if (!isMysqlDuplicateKeyError(err)) throw err;
-      await db
-        .update(refreshManifest)
-        .set({
-          lastRefreshedAt: now,
-          teamCount: data.teamCount!,
-          rosterCount: data.rosterCount!,
-          matchupCount: data.matchupCount!,
-          draftPickCount: data.draftPickCount!,
-          transactionCount: data.transactionCount!,
-          status,
-          errorMessage,
-        })
-        .where(eq(refreshManifest.season, season));
-    }
-    return;
-  }
+      }
+    : {
+        season: yr,
+        lastRefreshedAt: now,
+        teamCount: 0,
+        rosterCount: 0,
+        matchupCount: 0,
+        draftPickCount: 0,
+        transactionCount: 0,
+        status,
+        errorMessage,
+      };
 
   try {
-    await db.insert(refreshManifest).values({
-      season,
-      lastRefreshedAt: now,
-      teamCount: 0,
-      rosterCount: 0,
-      matchupCount: 0,
-      draftPickCount: 0,
-      transactionCount: 0,
-      status,
-      errorMessage,
-    });
+    await db.insert(refreshManifest).values(insertRow);
+    return;
   } catch (err) {
     if (!isMysqlDuplicateKeyError(err)) throw err;
+  }
+
+  if (hasFullCounts) {
     await db
       .update(refreshManifest)
       .set({
         lastRefreshedAt: now,
+        teamCount: data.teamCount!,
+        rosterCount: data.rosterCount!,
+        matchupCount: data.matchupCount!,
+        draftPickCount: data.draftPickCount!,
+        transactionCount: data.transactionCount!,
         status,
         errorMessage,
       })
-      .where(eq(refreshManifest.season, season));
+      .where(eq(refreshManifest.season, yr));
+    return;
   }
+
+  await db
+    .update(refreshManifest)
+    .set({
+      lastRefreshedAt: now,
+      status,
+      errorMessage,
+    })
+    .where(eq(refreshManifest.season, yr));
 }
 
 export async function getChatHistory(userId: number, season?: number) {
