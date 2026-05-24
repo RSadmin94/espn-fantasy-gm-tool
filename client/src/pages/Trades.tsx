@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import React from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -50,10 +51,12 @@ interface TradePlayer {
   teamId: number;
 }
 
-/** Matches tradeAnalyze picksA / picksB schema exactly */
+/** Matches tradeAnalyze picksA / picksB schema exactly (year and key are UI-only) */
 interface TradePick {
   round: number;
   pick: number;
+  /** Draft year — UI display only, not sent to backend */
+  year: number;
   /** UI-only unique key for list rendering */
   key: string;
 }
@@ -82,12 +85,13 @@ interface TradeResult {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const ORDINALS = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th"];
-function pickLabel(round: number, pick: number) {
-  return `${ORDINALS[round] ?? `R${round}`} Rd, Pick ${pick}`;
+/** "2027 R1.05" */
+function formatPick(year: number, round: number, pick: number) {
+  return `${year} R${round}.${String(pick).padStart(2, "0")}`;
 }
-function pickShort(round: number, pick: number) {
-  return `R${round}P${pick}`;
-}
+/** Kept for backward-compat callsites — same output as formatPick */
+function pickLabel(year: number, round: number, pick: number) { return formatPick(year, round, pick); }
+function pickShort(year: number, round: number, pick: number) { return formatPick(year, round, pick); }
 
 const GRADE_CONFIG: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
   "FAIR":          { label: "Fair Trade",        className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400", icon: <Scale className="h-4 w-4" /> },
@@ -123,18 +127,38 @@ function PickAdder({
   picks,
   onAdd,
   onRemove,
+  teamCount,
+  season,
 }: {
   picks: TradePick[];
   onAdd: (p: TradePick) => void;
   onRemove: (key: string) => void;
+  teamCount: number;
+  season: number;
 }) {
+  const maxPick = teamCount > 0 ? teamCount : 14;
+  const midPick = teamCount > 0 ? Math.ceil(teamCount / 2) : 7;
+
   const [round, setRound] = useState("1");
-  const [pick, setPick] = useState("7");
+  const [pick, setPick] = useState(String(midPick));
+  const [isFuture, setIsFuture] = useState(false);
+
+  // When team count resolves, snap default pick to the true midpoint
+  // only if the user hasn't changed it from the previous default
+  const prevMidRef = React.useRef(midPick);
+  React.useEffect(() => {
+    if (prevMidRef.current !== midPick) {
+      setPick(String(midPick));
+      prevMidRef.current = midPick;
+    }
+  }, [midPick]);
+
+  const pickYear = isFuture ? season + 1 : season;
 
   const handleAdd = () => {
     const r = Number(round);
-    const p = Math.max(1, Math.min(14, Number(pick) || 7));
-    onAdd({ round: r, pick: p, key: `${r}-${p}-${Date.now()}` });
+    const p = Math.max(1, Math.min(maxPick, Number(pick) || midPick));
+    onAdd({ round: r, pick: p, year: pickYear, key: `${pickYear}-${r}-${p}-${Date.now()}` });
   };
 
   return (
@@ -144,7 +168,7 @@ function PickAdder({
         Draft Picks
       </p>
 
-      {/* Selected picks */}
+      {/* Selected picks chips */}
       {picks.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {picks.map(pk => (
@@ -152,7 +176,7 @@ function PickAdder({
               key={pk.key}
               className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-xs text-primary"
             >
-              {pickShort(pk.round, pk.pick)}
+              {pickShort(pk.year, pk.round, pk.pick)}
               <button
                 onClick={() => onRemove(pk.key)}
                 className="ml-0.5 hover:text-destructive transition-colors"
@@ -166,7 +190,7 @@ function PickAdder({
       )}
 
       {/* Add row */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         {/* Round */}
         <Select value={round} onValueChange={setRound}>
           <SelectTrigger className="h-7 w-20 text-xs">
@@ -187,11 +211,14 @@ function PickAdder({
           <input
             type="number"
             min={1}
-            max={14}
+            max={maxPick}
             value={pick}
             onChange={e => setPick(e.target.value)}
             className="h-7 w-12 rounded border border-border bg-muted/30 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
+          {teamCount > 0 && (
+            <span className="text-xs text-muted-foreground/60">/{maxPick}</span>
+          )}
         </div>
 
         <Button
@@ -204,10 +231,24 @@ function PickAdder({
           <Plus className="h-3 w-3" /> Add
         </Button>
       </div>
+
+      {/* Future pick checkbox */}
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={isFuture}
+          onChange={e => setIsFuture(e.target.checked)}
+          className="h-3.5 w-3.5 rounded border-border accent-primary"
+        />
+        <span className="text-xs text-muted-foreground">
+          Future pick — next season ({season + 1})
+        </span>
+      </label>
+
       <p className="text-xs text-muted-foreground/60">
         {picks.length === 0
-          ? `e.g. ${ORDINALS[1]} Rd Pick 7 = mid-1st`
-          : picks.map(pk => pickLabel(pk.round, pk.pick)).join(" · ")}
+          ? `e.g. ${formatPick(season, 1, midPick)} = mid-1st`
+          : picks.map(pk => pickLabel(pk.year, pk.round, pk.pick)).join(" · ")}
       </p>
     </div>
   );
@@ -223,6 +264,7 @@ function RosterPicker({
   teams,
   selectedPlayers,
   picks,
+  teamCount,
   onTeamChange,
   onTogglePlayer,
   onAddPick,
@@ -235,6 +277,7 @@ function RosterPicker({
   teams: TeamRow[];
   selectedPlayers: TradePlayer[];
   picks: TradePick[];
+  teamCount: number;
   onTeamChange: (id: number) => void;
   onTogglePlayer: (p: TradePlayer) => void;
   onAddPick: (p: TradePick) => void;
@@ -322,7 +365,7 @@ function RosterPicker({
                     PICK
                   </span>
                   <span className="text-sm font-medium text-foreground truncate">
-                    {pickLabel(pk.round, pk.pick)}
+                    {pickLabel(pk.year, pk.round, pk.pick)}
                   </span>
                 </div>
                 <button
@@ -387,6 +430,8 @@ function RosterPicker({
           picks={picks}
           onAdd={onAddPick}
           onRemove={onRemovePick}
+          teamCount={teamCount}
+          season={season}
         />
       </CardContent>
     </Card>
@@ -457,7 +502,7 @@ function TradeResults({
               ))}
               {picks.map((pk, i) => (
                 <span key={i} className="text-xs text-muted-foreground">
-                  <span className="text-primary font-medium">{pickShort(pk.round, pk.pick)}</span>
+                  <span className="text-primary font-medium">{pickShort(pk.year, pk.round, pk.pick)}</span>
                   {pickVal > 0 && picks.length === 1 && (
                     <span className="text-foreground font-medium"> +{Math.round(pickVal)}</span>
                   )}
@@ -639,6 +684,7 @@ export function Trades() {
           teams={teams}
           selectedPlayers={sideA}
           picks={picksA}
+          teamCount={teams.length}
           onTeamChange={id => { setTeamAId(id); setSideA([]); setPicksA([]); setResult(null); }}
           onTogglePlayer={p => { setSideA(prev => prev.some(x => x.playerId === p.playerId) ? prev.filter(x => x.playerId !== p.playerId) : [...prev, p]); setResult(null); }}
           onAddPick={pk => { setPicksA(prev => [...prev, pk]); setResult(null); }}
@@ -659,6 +705,7 @@ export function Trades() {
           teams={teams}
           selectedPlayers={sideB}
           picks={picksB}
+          teamCount={teams.length}
           onTeamChange={id => { setTeamBId(id); setSideB([]); setPicksB([]); setResult(null); }}
           onTogglePlayer={p => { setSideB(prev => prev.some(x => x.playerId === p.playerId) ? prev.filter(x => x.playerId !== p.playerId) : [...prev, p]); setResult(null); }}
           onAddPick={pk => { setPicksB(prev => [...prev, pk]); setResult(null); }}
