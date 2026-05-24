@@ -68,16 +68,18 @@ const TX_TYPES = [
   { value: "ADD", label: "Add" },
   { value: "DROP", label: "Drop" },
   { value: "WAIVER", label: "Waiver" },
+  { value: "TRADES", label: "Trade" },
   { value: "TRADE", label: "Trade (legacy)" },
-  { value: "TRADE_PROPOSAL", label: "Trade" },
-  { value: "TRADE_UPHOLD", label: "Trade Accepted" },
-  { value: "TRADE_ACCEPT", label: "Trade Accepted (alt)" },
+  { value: "TRADE_PROPOSAL", label: "Trade proposal" },
+  { value: "TRADE_UPHOLD", label: "Trade accepted" },
+  { value: "TRADE_ACCEPT", label: "Trade accepted (alt)" },
 ];
 
 const TX_TYPE_LABELS: Record<string, string> = {
   ADD: "Add",
   DROP: "Drop",
   WAIVER: "Waiver",
+  TRADES: "Trade",
   TRADE: "Trade",
   TRADE_PROPOSAL: "Trade",
   TRADE_UPHOLD: "Trade",
@@ -312,10 +314,6 @@ function dominantTradeType(rows: TxnRow[]): string {
   return rows[0]?.type || "TRADE";
 }
 
-function rowMatchesTeam(r: TxnRow, tid: number): boolean {
-  return r.teamId === tid || r.fromTeamId === tid || r.toTeamId === tid;
-}
-
 function rowMatchesSearch(r: TxnRow, q: string): boolean {
   if (r.playerName?.toLowerCase().includes(q)) return true;
   if (r.rawTransaction?.toLowerCase().includes(q)) return true;
@@ -427,9 +425,15 @@ export function Transactions() {
   const [search, setSearch] = useState("");
 
   const enabled = cachedSeasons.includes(season);
-  const txQ = trpc.espn.transactions.useQuery({ season }, { enabled });
-  const teamsQ = trpc.espn.teams.useQuery({ season }, { enabled });
-  const rostersQ = trpc.espn.rosters.useQuery({ season }, { enabled });
+  const teamIdArg = teamFilter !== "ALL" && Number.isFinite(Number(teamFilter)) ? Number(teamFilter) : undefined;
+  const typeFilterArg = typeFilter !== "ALL" ? typeFilter : undefined;
+
+  const txQ = trpc.espn.transactions.useQuery(
+    { season, typeFilter: typeFilterArg, teamId: teamIdArg },
+    { enabled, staleTime: 0 }
+  );
+  const teamsQ = trpc.espn.teams.useQuery({ season }, { enabled, staleTime: 0 });
+  const rostersQ = trpc.espn.rosters.useQuery({ season }, { enabled, staleTime: 0 });
 
   const teams = (teamsQ.data as TeamRow[] | undefined) ?? [];
   const rawTxns = (txQ.data as TxnRow[] | undefined) ?? [];
@@ -457,12 +461,7 @@ export function Transactions() {
 
   const displayList = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const tidFilter = teamFilter !== "ALL" ? Number(teamFilter) : null;
-
     let rows = rawTxns;
-    if (tidFilter != null && Number.isFinite(tidFilter)) {
-      rows = rows.filter(r => rowMatchesTeam(r, tidFilter));
-    }
     if (q) {
       rows = rows.filter(r => rowMatchesSearch(r, q));
     }
@@ -489,15 +488,7 @@ export function Transactions() {
       entries.push({ kind: "simple", row: r });
     }
 
-    const passesType = (e: DisplayEntry): boolean => {
-      if (typeFilter === "ALL") return true;
-      if (e.kind === "trade") {
-        return e.rows.some(r => r.type === typeFilter);
-      }
-      return e.row.type === typeFilter;
-    };
-
-    const filtered = entries.filter(passesType);
+    const filtered = entries;
     filtered.sort((a, b) => {
       const ma =
         a.kind === "trade" ? Math.max(0, ...a.rows.map(eventMs)) : eventMs(a.row);
@@ -506,7 +497,7 @@ export function Transactions() {
       return mb - ma;
     });
     return filtered;
-  }, [rawTxns, typeFilter, teamFilter, search]);
+  }, [rawTxns, search]);
 
   const isNotCached = !cachedSeasons.includes(season);
 

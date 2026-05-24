@@ -2,7 +2,7 @@ import { eq, desc, and, gt, or, like, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import type { EspnRawCache, EspnSeasonCache, FantasyDataCache, RefreshManifest } from "../drizzle/schema";
 import {
-  InsertUser, users, fantasyDataCache, refreshManifest, chatHistory,
+  InsertUser, users, fantasyDataCache, chatHistory,
   pickTrades, InsertPickTrade, espnViewHealth,
   weeklyPlayerStats, InsertWeeklyPlayerStats,
   scheduledJobs, ScheduledJob,
@@ -333,32 +333,11 @@ export async function getCompletedSeasonForOffseason(): Promise<number | null> {
 export async function getRefreshManifests(): Promise<RefreshManifest[]> {
   const db = await getDb();
   if (!db) return [];
-
-  // Latest sync_runs row per season (highest id wins — most recent run).
-  const runRows = await db.select().from(syncRuns).orderBy(desc(syncRuns.id));
-  const latestRunBySeason = new Map<number, typeof syncRuns.$inferSelect>();
-  for (const row of runRows) {
-    if (!latestRunBySeason.has(row.season)) latestRunBySeason.set(row.season, row);
-  }
-
-  const manifestRows = await db.select().from(refreshManifest).orderBy(desc(refreshManifest.season));
-  const bySeason = new Map<number, RefreshManifest>();
-  for (const m of manifestRows) {
-    bySeason.set(m.season, m);
-  }
-  for (const run of Array.from(latestRunBySeason.values())) {
-    bySeason.set(run.season, mapSyncRunToRefreshManifest(run));
-  }
-
-  return Array.from(bySeason.values()).sort((a, b) => b.season - a.season);
-}
-
-/** Coerce manifest status so MySQL enum never receives undefined / garbage (avoids bad bindings on ODKU). */
-function normalizeManifestStatus(
-  s: unknown
-): "success" | "partial" | "failed" {
-  if (s === "success" || s === "partial" || s === "failed") return s;
-  return "failed";
+  const runs = await db
+    .select()
+    .from(syncRuns)
+    .orderBy(desc(syncRuns.season));
+  return runs.map(mapSyncRunToRefreshManifest);
 }
 
 const MAX_REFRESH_MANIFEST_ERROR_LEN = 16_000;
@@ -394,93 +373,21 @@ function mapSyncRunToRefreshManifest(r: typeof syncRuns.$inferSelect): RefreshMa
   };
 }
 
-/**
- * Upsert `refresh_manifest` by unique `season` using raw SQL + `ON DUPLICATE KEY UPDATE`.
- * Ensures Railway MySQL always runs a real upsert (Drizzle-logged SQL may still show `INSERT` only).
- */
-export async function upsertRefreshManifest(season: number, data: {
-  teamCount?: number; rosterCount?: number; matchupCount?: number;
-  draftPickCount?: number; transactionCount?: number;
-  status: "success" | "partial" | "failed"; errorMessage?: string; viewsRefreshed?: string[];
-}) {
-  const db = await getDb();
-  if (!db) return;
-
-  const yr = Math.floor(Number(season));
-  if (!Number.isFinite(yr) || yr < 1900 || yr > 2200) {
-    console.warn("[upsertRefreshManifest] invalid season:", season);
-    return;
+/** @deprecated No-op — `refresh_manifest` retired; pipeline persists to `sync_runs` only. */
+export async function upsertRefreshManifest(
+  _season: number,
+  _data: {
+    teamCount?: number;
+    rosterCount?: number;
+    matchupCount?: number;
+    draftPickCount?: number;
+    transactionCount?: number;
+    status: "success" | "partial" | "failed";
+    errorMessage?: string;
+    viewsRefreshed?: string[];
   }
-
-  const status = normalizeManifestStatus(data.status);
-  const errorMessage = truncateRefreshManifestError(data.errorMessage ?? null);
-  const now = new Date();
-
-  const hasFullCounts =
-    typeof data.teamCount === "number" &&
-    typeof data.rosterCount === "number" &&
-    typeof data.matchupCount === "number" &&
-    typeof data.draftPickCount === "number" &&
-    typeof data.transactionCount === "number";
-
-  const viewsRefreshed =
-    data.viewsRefreshed !== undefined && data.viewsRefreshed !== null
-      ? data.viewsRefreshed
-      : null;
-
-  if (hasFullCounts) {
-    await db.execute(sql`
-      INSERT INTO \`refresh_manifest\` (
-        \`season\`, \`lastRefreshedAt\`, \`viewsRefreshed\`, \`teamCount\`, \`rosterCount\`,
-        \`matchupCount\`, \`draftPickCount\`, \`transactionCount\`, \`status\`, \`errorMessage\`
-      ) VALUES (
-        ${yr}, ${now}, ${viewsRefreshed}, ${data.teamCount!}, ${data.rosterCount!},
-        ${data.matchupCount!}, ${data.draftPickCount!}, ${data.transactionCount!}, ${status}, ${errorMessage}
-      )
-      ON DUPLICATE KEY UPDATE
-        \`lastRefreshedAt\` = VALUES(\`lastRefreshedAt\`),
-        \`viewsRefreshed\` = VALUES(\`viewsRefreshed\`),
-        \`teamCount\` = VALUES(\`teamCount\`),
-        \`rosterCount\` = VALUES(\`rosterCount\`),
-        \`matchupCount\` = VALUES(\`matchupCount\`),
-        \`draftPickCount\` = VALUES(\`draftPickCount\`),
-        \`transactionCount\` = VALUES(\`transactionCount\`),
-        \`status\` = VALUES(\`status\`),
-        \`errorMessage\` = VALUES(\`errorMessage\`)
-    `);
-    return;
-  }
-
-  if (data.viewsRefreshed !== undefined) {
-    const vr = data.viewsRefreshed ?? null;
-    await db.execute(sql`
-      INSERT INTO \`refresh_manifest\` (
-        \`season\`, \`lastRefreshedAt\`, \`viewsRefreshed\`, \`teamCount\`, \`rosterCount\`,
-        \`matchupCount\`, \`draftPickCount\`, \`transactionCount\`, \`status\`, \`errorMessage\`
-      ) VALUES (
-        ${yr}, ${now}, ${vr}, 0, 0, 0, 0, 0, ${status}, ${errorMessage}
-      )
-      ON DUPLICATE KEY UPDATE
-        \`lastRefreshedAt\` = VALUES(\`lastRefreshedAt\`),
-        \`viewsRefreshed\` = VALUES(\`viewsRefreshed\`),
-        \`status\` = VALUES(\`status\`),
-        \`errorMessage\` = VALUES(\`errorMessage\`)
-    `);
-    return;
-  }
-
-  await db.execute(sql`
-    INSERT INTO \`refresh_manifest\` (
-      \`season\`, \`lastRefreshedAt\`, \`viewsRefreshed\`, \`teamCount\`, \`rosterCount\`,
-      \`matchupCount\`, \`draftPickCount\`, \`transactionCount\`, \`status\`, \`errorMessage\`
-    ) VALUES (
-      ${yr}, ${now}, ${viewsRefreshed}, 0, 0, 0, 0, 0, ${status}, ${errorMessage}
-    )
-    ON DUPLICATE KEY UPDATE
-      \`lastRefreshedAt\` = VALUES(\`lastRefreshedAt\`),
-      \`status\` = VALUES(\`status\`),
-      \`errorMessage\` = VALUES(\`errorMessage\`)
-  `);
+): Promise<void> {
+  return;
 }
 
 export async function getChatHistory(userId: number, season?: number) {

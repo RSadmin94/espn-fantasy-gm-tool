@@ -43,7 +43,6 @@ import {
   getCachedView,
   getAllCachedSeasons,
   getRefreshManifests,
-  upsertRefreshManifest,
   getChatHistory,
   addChatMessage,
   clearChatHistory,
@@ -1131,28 +1130,11 @@ export const appRouter = router({
             // Persist static identity data (team names, draft order, settings) to league_identity table.
             // All consumers (offseasonRouter, draftBoard, etc.) read from here instead of re-fetching ESPN.
             try { await upsertLeagueIdentity(season, enrichedData); } catch (_e) { /* non-fatal — don't block the refresh */ }
-            const teams = normalizeTeams(enrichedData);
-            const rosters = normalizeRosters(enrichedData);
-            const matchups = normalizeMatchups(enrichedData);
-            const picks = normalizeDraftPicks(enrichedData);
-            const txs = normalizeTransactions(enrichedData);
 
             // Data quality validation (meta already passed into pipeline; counts use enriched payload)
             const overallStatus = pipelineResult.allViewsOk && quality.isUsable ? "success"
               : pipelineResult.hasPartialData || !quality.isUsable ? "partial"
               : "success";
-
-            try {
-              await upsertRefreshManifest(season, {
-                teamCount: teams.length, rosterCount: rosters.length,
-                matchupCount: matchups.length, draftPickCount: picks.length,
-                transactionCount: txs.length, status: overallStatus,
-                viewsRefreshed: pipelineResult.viewResults.filter(v => v.status === "ok").map(v => v.viewName),
-                errorMessage: quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
-              });
-            } catch (mfErr) {
-              console.warn("[ESPN Refresh] upsertRefreshManifest failed:", season, mfErr);
-            }
 
             const viewHealth: Record<string, string> = {};
             for (const vr of pipelineResult.viewResults) viewHealth[vr.viewName] = vr.status;
@@ -1164,11 +1146,6 @@ export const appRouter = router({
             };
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            try {
-              await upsertRefreshManifest(season, { status: "failed", errorMessage: msg });
-            } catch (mfErr) {
-              console.warn("[ESPN Refresh] upsertRefreshManifest (failed) failed:", season, mfErr);
-            }
             results[season] = { status: "failed", error: msg };
           }
         }
@@ -1323,12 +1300,32 @@ export const appRouter = router({
       }),
 
     transactions: publicProcedure
-      .input(z.object({ season: z.number(), teamId: z.number().optional() }))
+      .input(
+        z.object({
+          season: z.number(),
+          teamId: z.number().optional(),
+          /** ALL omitted; TRADES = TRADE + TRADE_* ; else exact `type` match */
+          typeFilter: z.string().optional(),
+        })
+      )
       .query(async ({ ctx, input }) => {
         const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
-        const txs = normalizeTransactions(data);
-        if (input.teamId !== undefined) return txs.filter((t: unknown) => (t as Record<string, unknown>).teamId === input.teamId);
+        let txs = normalizeTransactions(data) as Record<string, unknown>[];
+        const tf = input.typeFilter?.trim();
+        if (tf && tf !== "ALL") {
+          txs = txs.filter((t) => {
+            const typ = String(t.type ?? "");
+            if (tf === "TRADES") return typ === "TRADE" || typ.startsWith("TRADE_");
+            return typ === tf;
+          });
+        }
+        if (input.teamId !== undefined) {
+          const tid = input.teamId;
+          txs = txs.filter(
+            (t) => t.teamId === tid || t.fromTeamId === tid || t.toTeamId === tid
+          );
+        }
         return txs;
       }),
 
