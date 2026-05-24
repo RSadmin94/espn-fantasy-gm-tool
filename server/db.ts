@@ -183,16 +183,16 @@ export async function upsertRefreshManifest(season: number, data: {
     return;
   }
 
-  // Partial row (e.g. status: "failed" + errorMessage only): insert minimal row for first insert;
-  // on duplicate, update only status fields so existing counts are not nulled.
+  // Partial row (e.g. status: "failed" + errorMessage only): insert with 0 counts (NOT NULL safe);
+  // on duplicate, update only status fields so existing counts are not overwritten.
   const insertRow = {
     season,
     lastRefreshedAt: now,
-    teamCount: null as number | null,
-    rosterCount: null as number | null,
-    matchupCount: null as number | null,
-    draftPickCount: null as number | null,
-    transactionCount: null as number | null,
+    teamCount: 0,
+    rosterCount: 0,
+    matchupCount: 0,
+    draftPickCount: 0,
+    transactionCount: 0,
     status,
     errorMessage,
     viewsRefreshed,
