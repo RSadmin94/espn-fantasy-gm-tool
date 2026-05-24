@@ -51,6 +51,7 @@ import {
   isStale,
   staleSummary,
   hasCookies,
+  resolveEspnCreds,
 } from "./espnService";
 import {
   calcVORP,
@@ -990,44 +991,24 @@ export const appRouter = router({
         return { total: rows.length, byType };
       }),
 
-    refresh: publicProcedure
+    refresh: protectedProcedure
       .input(z.object({
         season: z.number().optional(),
         seasons: z.array(z.number()).optional(),
         forceRefresh: z.boolean().optional(), // override closed-season skip
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const CURRENT_SEASON = 2026;
         const CLOSED_SEASONS = ALL_SEASONS.filter(s => s < CURRENT_SEASON); // 2009–2025 are closed
         const seasonsToRefresh = input.seasons ?? (input.season ? [input.season] : [ALL_SEASONS[ALL_SEASONS.length - 1]]);
         const results: Record<number, { status: string; error?: string; viewHealth?: Record<string, string>; qualityWarnings?: string[]; skipped?: boolean }> = {};
 
-        // Resolve active league credentials for multi-league isolation.
-        // For public procedures (no ctx.user), we read the first active ESPN connection.
-        let activeCreds: import('./espnService').EspnCreds | undefined;
-        try {
-          const db = await getDb();
-          if (db) {
-            const activeRows = await db
-              .select()
-              .from(lcTable)
-              .where(andDrizzle(eqDrizzle(lcTable.isActive, true), eqDrizzle(lcTable.provider, 'espn')))
-              .orderBy(descDrizzle(lcTable.updatedAt))
-              .limit(1);
-            if (activeRows[0]) {
-              const { decryptCredentialsFromDb } = await import('./_core/crypto');
-              const rawCreds = decryptCredentialsFromDb(activeRows[0].credentials) as Record<string, string> | null;
-              if (rawCreds?.swid && rawCreds?.espnS2) {
-                activeCreds = {
-                  leagueId: (rawCreds.leagueId as string) ?? activeRows[0].leagueId,
-                  swid: rawCreds.swid,
-                  espnS2: rawCreds.espnS2,
-                };
-              }
-            }
-          }
-        } catch (_e) { /* non-fatal — fall back to env-var league */ }
+        const activeCreds = await resolveEspnCreds(undefined, ctx.user.id);
         const activeLeagueId = activeCreds?.leagueId ?? LEAGUE_ID;
+
+        if (!activeCreds?.swid || !activeCreds?.espnS2) {
+          throw new Error("No ESPN credentials found. Please connect your ESPN account first.");
+        }
 
         // ─── DIAGNOSTIC LOGGING ───
         console.log('[ESPN Refresh] Credential resolution:', JSON.stringify({
@@ -2210,7 +2191,7 @@ export const appRouter = router({
                 provider: "espn",
                 leagueId: testLeagueId || "default",
                 leagueName,
-                season: 2025,
+                season: new Date().getFullYear(),
                 isActive: true,
                 credentials: encryptedCreds,
                 syncStatus: "pending",
