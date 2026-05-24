@@ -16,6 +16,8 @@ import { Dashboard } from "./pages/Dashboard";
 import { Transactions } from "./pages/Transactions";
 import { Standings } from "./pages/Standings";
 import { Roster } from "./pages/Roster";
+import { Trades } from "./pages/Trades";
+import { Advisor } from "./pages/Advisor";
 import { trpc } from "@/lib/trpc";
 import "./index.css";
 
@@ -105,8 +107,8 @@ const router = createBrowserRouter([
           { path: "/transactions", element: <Transactions /> },
           { path: "/standings", element: <Standings /> },
           { path: "/roster", element: <Roster /> },
-          { path: "/trades", element: <PlaceholderPage title="Trades" /> },
-          { path: "/advisor", element: <PlaceholderPage title="AI Advisor" /> },
+          { path: "/trades", element: <Trades /> },
+          { path: "/advisor", element: <Advisor /> },
           { path: "/settings", element: <PlaceholderPage title="Settings" /> },
 
           // ── Legacy route redirects ────────────────────────────────────
