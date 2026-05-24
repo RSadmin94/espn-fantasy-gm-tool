@@ -195,7 +195,9 @@ export function DraftHistory() {
 
       {!draftQ.isLoading && !draftQ.isError && picks.length === 0 && (
         <div className="rounded-lg border border-dashed border-border px-4 py-16 text-center text-sm text-muted-foreground">
-          No draft history found for this season. Sync the season first.
+          <p>
+            {`No draft picks found for ${season}. Draft history is available from 2010 onwards. The 2009 season was the league's inaugural year with no draft data.`}
+          </p>
         </div>
       )}
 
