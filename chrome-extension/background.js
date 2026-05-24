@@ -1,6 +1,6 @@
 /**
  * GM War Room extension — background service worker.
- * Reads ESPN cookies + gmwarroom session cookies, discovers 2026 leagues via ESPN API,
+ * Reads ESPN cookies + gmwarroom session cookies, discovers 2026 leagues via ESPN profile API,
  * POSTs espn.saveCredentials per selected league. War Room cookies are injected via DNR
  * (fetch cannot set a Cookie header from a SW); ESPN discovery uses the same for SWID/espn_s2.
  */
@@ -8,15 +8,16 @@
 const WAR_ROOM_ORIGIN = "https://gmwarroom.online";
 const TRPC_SAVE_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.saveCredentials`;
 const SYNC_AUTOSYNC_URL = `${WAR_ROOM_ORIGIN}/sync?autoSync=2026`;
-const ESPN_DISCOVER_URL =
-  "https://fantasy.espn.com/apis/v3/games/ffl/seasons/2026/segments/0/leagues?view=mLeagueSettings";
+/** User profile / teams for 2026 — more reliable than the leagues list endpoint for some accounts. */
+const ESPN_PROFILE_DISCOVER_URL =
+  "https://fantasy.espn.com/apis/v3/games/ffl/seasons/2026?view=proTeam";
 
 const MSG_DISCOVER_LEAGUES = "GMWR_DISCOVER_LEAGUES_2026";
 const MSG_SYNC_SELECTED_LEAGUES = "GMWR_SYNC_SELECTED_LEAGUES";
 
 /** Session rules: inject Cookie only for matching requests, then removed. */
 const DNR_SAVE_COOKIE_RULE_ID = 8844201;
-const DNR_ESPN_DISCOVER_RULE_ID = 8844202;
+const DNR_ESPN_PROFILE_RULE_ID = 8844202;
 
 const ESPN_COOKIE_BASE_URLS = ["https://fantasy.espn.com/", "https://www.espn.com/"];
 
@@ -128,19 +129,82 @@ function extractLeaguesFromDiscoverJson(data) {
   return dedupeLeaguesById(out);
 }
 
-async function applyEspnDiscoverCookieRule(cookieHeader) {
+/** Pull league ids from proTeam-style payload (teams map, member teams, etc.). */
+function extractLeaguesFromProTeamPayload(data) {
+  const fromGeneric = extractLeaguesFromDiscoverJson(data);
+  if (fromGeneric.length > 0) return fromGeneric;
+
+  const out = [];
+  function pushLeague(obj) {
+    if (!obj || typeof obj !== "object") return;
+    const rawId = obj.leagueId ?? obj.league_id;
+    if (rawId === undefined || rawId === null || rawId === "") return;
+    const id = String(rawId).trim();
+    if (!id || !/^\d+$/.test(id)) return;
+    const settings = obj.settings && typeof obj.settings === "object" ? obj.settings : null;
+    let name = "";
+    if (settings?.name) name = String(settings.name);
+    if (!name && obj.name) name = String(obj.name);
+    if (!name && obj.location && obj.nickname) name = `${obj.location} ${obj.nickname}`.trim();
+    if (!name) name = `League ${id}`;
+    out.push({ id, name });
+  }
+
+  if (data?.teams && typeof data.teams === "object") {
+    for (const t of Object.values(data.teams)) pushLeague(t);
+  }
+  if (Array.isArray(data?.memberTeams)) {
+    for (const t of data.memberTeams) pushLeague(t);
+  }
+  if (Array.isArray(data?.teams)) {
+    for (const t of data.teams) pushLeague(t);
+  }
+
+  return dedupeLeaguesById(out);
+}
+
+/** leagueId from fantasy.espn.com league/team URLs. */
+function extractLeagueIdFromEspnFantasyUrl(urlStr) {
+  if (!urlStr || typeof urlStr !== "string") return null;
+  try {
+    const u = new URL(urlStr);
+    const qp = u.searchParams.get("leagueId") || u.searchParams.get("league_id");
+    if (qp && /^\d+$/.test(String(qp).trim())) return String(qp).trim();
+  } catch {
+    /* fall through */
+  }
+  const m =
+    urlStr.match(/[?&]leagueId=(\d+)/i) ||
+    urlStr.match(/[?&]league_id=(\d+)/i) ||
+    urlStr.match(/\/leagues\/(\d+)/i);
+  return m?.[1] ?? null;
+}
+
+async function getLeagueIdFromActiveEspnTab() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const url = tabs[0]?.url;
+    if (!url || typeof url !== "string") return null;
+    if (!url.includes("espn.com")) return null;
+    return extractLeagueIdFromEspnFantasyUrl(url);
+  } catch {
+    return null;
+  }
+}
+
+async function applyEspnProfileDiscoverCookieRule(cookieHeader) {
   await chrome.declarativeNetRequest.updateSessionRules({
-    removeRuleIds: [DNR_ESPN_DISCOVER_RULE_ID],
+    removeRuleIds: [DNR_ESPN_PROFILE_RULE_ID],
     addRules: [
       {
-        id: DNR_ESPN_DISCOVER_RULE_ID,
+        id: DNR_ESPN_PROFILE_RULE_ID,
         priority: 1,
         action: {
           type: "modifyHeaders",
           requestHeaders: [{ header: "Cookie", operation: "set", value: cookieHeader }],
         },
         condition: {
-          urlFilter: "https://fantasy.espn.com/apis/v3/games/ffl/seasons/2026/segments/0/leagues*",
+          urlFilter: "https://fantasy.espn.com/apis/v3/games/ffl/seasons/2026*",
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -148,20 +212,27 @@ async function applyEspnDiscoverCookieRule(cookieHeader) {
   });
 }
 
-async function removeEspnDiscoverCookieRule() {
+async function removeEspnProfileDiscoverCookieRule() {
   try {
     await chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: [DNR_ESPN_DISCOVER_RULE_ID],
+      removeRuleIds: [DNR_ESPN_PROFILE_RULE_ID],
     });
   } catch {
     /* ignore */
   }
 }
 
+/**
+ * GET profile (proTeam) for 2026; on empty/failed parse, fall back to leagueId from active ESPN tab URL.
+ */
 async function discoverLeaguesWithEspnCookie(espnCookieHeader) {
-  await applyEspnDiscoverCookieRule(espnCookieHeader);
+  const tabLeagueId = await getLeagueIdFromActiveEspnTab();
+
+  await applyEspnProfileDiscoverCookieRule(espnCookieHeader);
+  let httpStatus = 0;
+  let parsed = null;
   try {
-    const res = await fetch(ESPN_DISCOVER_URL, {
+    const res = await fetch(ESPN_PROFILE_DISCOVER_URL, {
       method: "GET",
       credentials: "omit",
       headers: {
@@ -169,8 +240,7 @@ async function discoverLeaguesWithEspnCookie(espnCookieHeader) {
         Referer: "https://fantasy.espn.com/",
       },
     });
-    const status = res.status;
-    let parsed = null;
+    httpStatus = res.status;
     const ct = res.headers.get("content-type") || "";
     try {
       if (ct.includes("application/json")) {
@@ -182,23 +252,36 @@ async function discoverLeaguesWithEspnCookie(espnCookieHeader) {
       /* ignore */
     }
 
-    if (!res.ok) {
+    let leagues = [];
+    if (res.ok && parsed) {
+      leagues = extractLeaguesFromProTeamPayload(parsed);
+    }
+
+    console.info("[GMWR] ESPN profile discovery", {
+      httpStatus,
+      leagueCount: leagues.length,
+      tabLeagueIdPresent: Boolean(tabLeagueId),
+    });
+
+    if (leagues.length === 0 && tabLeagueId) {
+      leagues = [{ id: tabLeagueId, name: `League ${tabLeagueId}` }];
+    }
+
+    if (leagues.length === 0 && !tabLeagueId) {
       return {
         ok: false,
         leagues: [],
-        error: safeErrorSummary(status, parsed),
-        httpStatus: status,
+        tabLeagueId: null,
+        error: res.ok
+          ? "No leagues found from ESPN profile or your current tab URL."
+          : safeErrorSummary(httpStatus, parsed),
+        httpStatus,
       };
     }
 
-    const leagues = extractLeaguesFromDiscoverJson(parsed);
-    console.info("[GMWR] ESPN league discovery", {
-      httpStatus: status,
-      leagueCount: leagues.length,
-    });
-    return { ok: true, leagues, httpStatus: status };
+    return { ok: true, leagues, tabLeagueId, httpStatus };
   } finally {
-    await removeEspnDiscoverCookieRule();
+    await removeEspnProfileDiscoverCookieRule();
   }
 }
 

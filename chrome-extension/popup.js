@@ -34,6 +34,7 @@ let state = {
   hasSwid: false,
   hasS2: false,
   leagues: /** @type {{ id: string, name: string }[]} */ ([]),
+  tabLeagueId: /** @type {string | null} */ (null),
   selectedIds: /** @type {Set<string>} */ (new Set()),
   discoverBusy: false,
   syncBusy: false,
@@ -43,6 +44,18 @@ let state = {
 
 function selectedArray() {
   return [...state.selectedIds];
+}
+
+function displayRows() {
+  const rows = /** @type {{ id: string, name?: string, currentTab: boolean }[]} */ ([]);
+  if (state.tabLeagueId) {
+    rows.push({ id: state.tabLeagueId, currentTab: true });
+  }
+  for (const L of state.leagues) {
+    if (state.tabLeagueId && L.id === state.tabLeagueId) continue;
+    rows.push({ id: L.id, name: L.name, currentTab: false });
+  }
+  return rows;
 }
 
 function render(root) {
@@ -58,6 +71,7 @@ function render(root) {
   } = state;
   const credsOk = hasSwid && hasS2;
   const busy = discoverBusy || syncBusy;
+  const rows = displayRows();
   let html = "";
 
   html += `<p class="meta">ESPN session: SWID ${hasSwid ? "ok" : "missing"} · espn_s2 ${hasS2 ? "ok" : "missing"}</p>`;
@@ -67,26 +81,29 @@ function render(root) {
     html += `<button type="button" class="secondary" disabled>Refresh leagues</button>`;
     html += `<button type="button" disabled>Sync Selected Leagues</button>`;
   } else {
-    html += `<p>2026 leagues from ESPN. Stay signed in at <strong>gmwarroom.online</strong> so sync can use your War Room session.</p>`;
+    html += `<p>2026 leagues from ESPN profile (or your open league tab). Stay signed in at <strong>gmwarroom.online</strong> so sync can use your War Room session.</p>`;
     html += `<button type="button" class="secondary" id="refresh" ${busy ? "disabled" : ""}>Refresh leagues</button>`;
 
     if (discoverBusy) {
       html += `<p>Loading leagues…</p>`;
-    } else if (leagues.length === 0) {
-      html += `<p>No 2026 leagues found (or none parsed). Tap Refresh after visiting ESPN Fantasy.</p>`;
+    } else if (rows.length === 0) {
+      html += `<p>No leagues found. Open your league on ESPN (URL contains leagueId=) or tap Refresh.</p>`;
     } else {
       html += `<div class="league-list" id="list">`;
-      for (const L of leagues) {
-        const checked = selectedIds.has(L.id) ? " checked" : "";
+      for (const row of rows) {
+        const checked = selectedIds.has(row.id) ? " checked" : "";
+        const label = row.currentTab
+          ? `Current ESPN League (ID: ${escapeHtml(row.id)})`
+          : `${escapeHtml(row.name || `League ${row.id}`)}<span class="lid"> · ID ${escapeHtml(row.id)}</span>`;
         html += `<div class="league-row">`;
-        html += `<input type="checkbox" id="cb-${escapeHtml(L.id)}" data-lid="${escapeHtml(L.id)}"${checked} />`;
-        html += `<label for="cb-${escapeHtml(L.id)}">${escapeHtml(L.name)}<span class="lid"> · ID ${escapeHtml(L.id)}</span></label>`;
+        html += `<input type="checkbox" id="cb-${escapeHtml(row.id)}" data-lid="${escapeHtml(row.id)}"${checked} />`;
+        html += `<label for="cb-${escapeHtml(row.id)}">${label}</label>`;
         html += `</div>`;
       }
       html += `</div>`;
     }
 
-    const canSync = leagues.length > 0 && selectedIds.size > 0 && !busy;
+    const canSync = rows.length > 0 && selectedIds.size > 0 && !busy;
     html += `<button type="button" id="sync" ${canSync ? "" : "disabled"}>Sync Selected Leagues</button>`;
   }
 
@@ -126,12 +143,20 @@ async function runDiscover() {
   render(root);
   try {
     const reply = await chrome.runtime.sendMessage({ type: MSG_DISCOVER_LEAGUES });
+    const tabId =
+      reply?.tabLeagueId != null && String(reply.tabLeagueId).trim() !== ""
+        ? String(reply.tabLeagueId).trim()
+        : null;
+
     if (!reply?.ok || !Array.isArray(reply.leagues)) {
+      const initial = new Set();
+      if (tabId) initial.add(tabId);
       state = {
         ...state,
         discoverBusy: false,
         leagues: [],
-        selectedIds: new Set(),
+        tabLeagueId: tabId,
+        selectedIds: initial,
         discoverError: reply?.error || "Could not load leagues.",
       };
     } else {
@@ -139,11 +164,14 @@ async function runDiscover() {
         id: String(L.id),
         name: String(L.name || `League ${L.id}`),
       }));
+      const initial = new Set();
+      if (tabId) initial.add(tabId);
       state = {
         ...state,
         discoverBusy: false,
         leagues,
-        selectedIds: new Set(),
+        tabLeagueId: tabId,
+        selectedIds: initial,
         discoverError: "",
       };
     }
@@ -152,6 +180,7 @@ async function runDiscover() {
       ...state,
       discoverBusy: false,
       leagues: [],
+      tabLeagueId: null,
       selectedIds: new Set(),
       discoverError: e instanceof Error ? e.message : String(e),
     };
