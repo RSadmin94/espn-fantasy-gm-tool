@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "GM War Room — ESPN",
+  "version": "1.0.0",
+  "description": "Connect ESPN Fantasy credentials to GM War Room using your logged-in session.",
+  "permissions": ["cookies", "tabs"],
+  "host_permissions": [
+    "https://fantasy.espn.com/*",
+    "https://*.espn.com/*",
+    "https://gmwarroom.online/*"
+  ],
+  "action": {
+    "default_title": "GM War Room",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://gmwarroom.online/*"],
+      "js": ["content-gmwarroom.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
