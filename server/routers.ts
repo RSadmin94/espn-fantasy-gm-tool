@@ -54,8 +54,8 @@ import {
   persistLlmUsage,
   getLlmUsageSummary,
 } from "./db";
-import { leagueConnections as lcTable } from "../drizzle/schema";
-import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle } from "drizzle-orm";
+import { leagueConnections as lcTable, gmDraftPicks, gmTeams } from "../drizzle/schema";
+import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle, asc as ascDrizzle } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
 import { parse as parseCookie } from "cookie";
@@ -1287,6 +1287,64 @@ export const appRouter = router({
         }
         if (input.teamId !== undefined) return picks.filter((p: unknown) => (p as Record<string, unknown>).teamId === input.teamId);
         return picks;
+      }),
+
+    /** Normalized `draft_picks` + `teams` for the active league (DB — requires season sync). */
+    draftHistory: protectedProcedure
+      .input(z.object({ season: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          input.season
+        );
+        const db = await getDb();
+        if (!db) return [];
+
+        const rows = await db
+          .select({
+            overallPick: gmDraftPicks.overallPick,
+            round: gmDraftPicks.roundId,
+            roundPick: gmDraftPicks.roundPick,
+            teamId: gmDraftPicks.teamId,
+            teamName: gmTeams.name,
+            ownerName: gmTeams.ownerName,
+            playerId: gmDraftPicks.playerId,
+            playerName: gmDraftPicks.playerName,
+            position: gmDraftPicks.position,
+            isKeeper: gmDraftPicks.isKeeper,
+            bidAmount: gmDraftPicks.bidAmount,
+          })
+          .from(gmDraftPicks)
+          .innerJoin(
+            gmTeams,
+            andDrizzle(
+              eqDrizzle(gmDraftPicks.leagueId, gmTeams.leagueId),
+              eqDrizzle(gmDraftPicks.season, gmTeams.season),
+              eqDrizzle(gmDraftPicks.teamId, gmTeams.teamId)
+            )
+          )
+          .where(
+            andDrizzle(
+              eqDrizzle(gmDraftPicks.leagueId, leagueId),
+              eqDrizzle(gmDraftPicks.season, input.season)
+            )
+          )
+          .orderBy(ascDrizzle(gmDraftPicks.overallPick));
+
+        return rows.map((r) => ({
+          overallPick: r.overallPick,
+          round: r.round,
+          roundPick: r.roundPick,
+          teamId: r.teamId,
+          teamName: (r.teamName && String(r.teamName).trim() !== "") ? String(r.teamName) : `Team ${r.teamId}`,
+          ownerName: (r.ownerName && String(r.ownerName).trim() !== "") ? String(r.ownerName) : "",
+          playerId: r.playerId,
+          playerName: r.playerName ?? null,
+          position: r.position ?? null,
+          isKeeper: Boolean(r.isKeeper),
+          bidAmount: r.bidAmount != null ? Number(r.bidAmount) : 0,
+        }));
       }),
 
     matchups: publicProcedure

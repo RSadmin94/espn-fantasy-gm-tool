@@ -19,6 +19,7 @@ import { Roster } from "./pages/Roster";
 import { Trades } from "./pages/Trades";
 import { Advisor } from "./pages/Advisor";
 import { Settings } from "./pages/Settings";
+import { DraftHistory } from "./pages/DraftHistory";
 import { trpc } from "@/lib/trpc";
 import "./index.css";
 
@@ -106,6 +107,7 @@ const router = createBrowserRouter([
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/sync", element: <SyncData /> },
           { path: "/transactions", element: <Transactions /> },
+          { path: "/draft-history", element: <DraftHistory /> },
           { path: "/standings", element: <Standings /> },
           { path: "/roster", element: <Roster /> },
           { path: "/trades", element: <Trades /> },
