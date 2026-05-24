@@ -141,8 +141,8 @@ export interface WeeklyLeagueAssessment {
 
 // ─── Data helpers ─────────────────────────────────────────────────────────────
 
-async function getSeasonData(season: number) {
-  const cached = await getCachedView(season, "combined");
+async function getSeasonData(season: number, userId?: number) {
+  const cached = await getCachedView(season, "combined", undefined, { userId });
   if (!cached) return null;
   return cached.payload as Record<string, unknown>;
 }
@@ -665,8 +665,8 @@ export async function buildTeamAssessment(
  * Builds the full 14-team weekly assessment report.
  * This is the main export — call once per week to generate the full briefing.
  */
-export async function buildWeeklyAssessment(season: number): Promise<WeeklyLeagueAssessment> {
-  const data = await getSeasonData(season);
+export async function buildWeeklyAssessment(season: number, userId?: number): Promise<WeeklyLeagueAssessment> {
+  const data = await getSeasonData(season, userId);
   if (!data) throw new Error(`No cached data for season ${season}`);
 
   const teams = normalizeTeams(data);
@@ -686,7 +686,7 @@ export async function buildWeeklyAssessment(season: number): Promise<WeeklyLeagu
   const rodTeamId = detectRodTeamId(teams);
 
   // Build DNA profiles for all managers
-  const cachedSeasons = await getAllCachedSeasons();
+  const cachedSeasons = await getAllCachedSeasons(undefined, userId);
   const allLeaguePicks: DraftPickRecord[] = [];
   const managerRawData: ManagerRawData[] = teams.map(t => ({
     memberId: String(t.teamId as number),
@@ -783,12 +783,12 @@ Write a 3-4 sentence executive summary of the league this week. Identify the big
  * Rod's opportunity board only — faster than the full assessment.
  * Use for the Command Center quick-launch.
  */
-export async function buildRodOpportunityBoard(season: number): Promise<{
+export async function buildRodOpportunityBoard(season: number, userId?: number): Promise<{
   week: number;
   opportunities: RodOpportunity[];
   summary: string;
 }> {
-  const full = await buildWeeklyAssessment(season);
+  const full = await buildWeeklyAssessment(season, userId);
   return {
     week: full.week,
     opportunities: full.topOpportunities,

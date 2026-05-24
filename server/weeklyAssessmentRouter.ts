@@ -87,7 +87,7 @@ export const weeklyAssessmentRouter = router({
       season: z.number().default(2025),
       forceRefresh: z.boolean().default(false),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const cacheKey = getCacheKey(input.season);
       const cached = reportCache.get(cacheKey);
 
@@ -95,7 +95,7 @@ export const weeklyAssessmentRouter = router({
         return { ...cached.report, fromCache: true };
       }
 
-      const report = await buildWeeklyAssessment(input.season);
+      const report = await buildWeeklyAssessment(input.season, ctx.user?.id);
       reportCache.set(cacheKey, { report, cachedAt: Date.now() });
       return { ...report, fromCache: false };
     }),
@@ -110,8 +110,8 @@ export const weeklyAssessmentRouter = router({
       teamId: z.number(),
       season: z.number().default(2025),
     }))
-    .query(async ({ input }) => {
-      const cached = await getCachedView(input.season, "combined");
+    .query(async ({ ctx, input }) => {
+      const cached = await getCachedView(input.season, "combined", undefined, { userId: ctx.user?.id });
       if (!cached) throw new TRPCError({ code: "NOT_FOUND", message: "No data for this season." });
 
       const data = cached.payload as Record<string, unknown>;
@@ -201,7 +201,7 @@ export const weeklyAssessmentRouter = router({
    */
   rodOpportunities: publicProcedure
     .input(z.object({ season: z.number().default(2025) }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       // Check the reportCache first — buildWeeklyAssessment runs 14+ LLM calls;
       // if fullReport already ran this season, reuse its result instead of re-running.
       const cacheKey = getCacheKey(input.season);
@@ -216,7 +216,7 @@ export const weeklyAssessmentRouter = router({
       }
       // Cache miss — run the full assessment and populate the shared cache so
       // subsequent calls to fullReport or rodOpportunities are both served instantly.
-      const full = await buildWeeklyAssessment(input.season);
+      const full = await buildWeeklyAssessment(input.season, ctx.user?.id);
       reportCache.set(cacheKey, { report: full, cachedAt: Date.now() });
       return {
         week: full.week,
@@ -232,9 +232,9 @@ export const weeklyAssessmentRouter = router({
    */
   leaguePulse: publicProcedure
     .input(z.object({ season: z.number().default(2025) }))
-    .query(({ input }) => {
+    .query(({ ctx, input }) => {
       return memCache(`leaguePulse:${input.season}`, 5 * 60_000, async () => {
-      const cached = await getCachedView(input.season, "combined");
+      const cached = await getCachedView(input.season, "combined", undefined, { userId: ctx.user?.id });
       if (!cached) throw new TRPCError({ code: "NOT_FOUND", message: "No data." });
 
       const data = cached.payload as Record<string, unknown>;
@@ -348,11 +348,11 @@ export const weeklyAssessmentRouter = router({
    */
   batchRunAssessment: publicProcedure
     .input(z.object({ season: z.number().default(2025) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       pruneBatchJobs();
 
       // Get team list from cached data
-      const cached = await getCachedView(input.season, "combined");
+      const cached = await getCachedView(input.season, "combined", undefined, { userId: ctx.user?.id });
       if (!cached) throw new TRPCError({ code: "NOT_FOUND", message: "No ESPN data cached for this season. Run a data refresh first." });
 
       const data = cached.payload as Record<string, unknown>;

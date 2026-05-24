@@ -39,13 +39,13 @@ async function getInjuryBlock(playerNames: string[]): Promise<string> {
   }
 }
 
-async function getDNABlock(focusMemberIds?: string[]): Promise<string> {
+async function getDNABlock(focusMemberIds?: string[], userId?: number): Promise<string> {
   try {
-    const cachedSeasons = await getAllCachedSeasons();
+    const cachedSeasons = await getAllCachedSeasons(undefined, userId);
     if (cachedSeasons.length === 0) return "";
     const { buildManagerRawData } = await import("./dnaRouter");
     const { calcLeagueDNA, buildDNAPromptBlock: buildBlock } = await import("./leagueDNA");
-    const allManagers = await buildManagerRawData();
+    const allManagers = await buildManagerRawData(userId);
     if (allManagers.length === 0) return "";
     const dnaProfiles = calcLeagueDNA(allManagers);
     const focused = focusMemberIds && focusMemberIds.length > 0
@@ -81,10 +81,10 @@ export const agentRouter = router({
       /** Target memberIds for DNA focus (trade opponent, current matchup opponent) */
       opponentMemberIds: z.array(z.string()).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const [injuryBlock, dnaBlock] = await Promise.all([
         getInjuryBlock([input.playerA.name, input.playerB.name]),
-        input.opponentMemberIds ? getDNABlock(input.opponentMemberIds) : Promise.resolve(""),
+        input.opponentMemberIds ? getDNABlock(input.opponentMemberIds, ctx.user?.id) : Promise.resolve(""),
       ]);
 
       const extraFacts = [
@@ -129,7 +129,7 @@ export const agentRouter = router({
       targetMemberId: z.string().optional(),
       leagueContext: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const allPlayerNames = [
         ...input.giving.map(p => p.name),
         ...input.receiving.map(p => p.name),
@@ -137,7 +137,7 @@ export const agentRouter = router({
 
       const [injuryBlock, dnaBlock] = await Promise.all([
         getInjuryBlock(allPlayerNames),
-        input.targetMemberId ? getDNABlock([input.targetMemberId]) : Promise.resolve(""),
+        input.targetMemberId ? getDNABlock([input.targetMemberId], ctx.user?.id) : Promise.resolve(""),
       ]);
 
       const givingDesc = input.giving.map(p => `${p.name} (${p.position})`).join(" + ");

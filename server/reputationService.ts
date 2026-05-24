@@ -494,10 +494,10 @@ export async function getAllReputationEventsFromDb(): Promise<Array<{
  * LLM sentences are generated once per event and cached.
  */
 export async function refreshReputationEvents(
-  opts: { generateLLM?: boolean } = {}
+  opts: { generateLLM?: boolean; userId?: number } = {}
 ): Promise<{ processed: number; newLLM: number; skipped: number }> {
-  const { generateLLM = true } = opts;
-  const cachedSeasons = await getAllCachedSeasons();
+  const { generateLLM = true, userId } = opts;
+  const cachedSeasons = await getAllCachedSeasons(undefined, userId);
   if (cachedSeasons.length === 0) return { processed: 0, newLLM: 0, skipped: 0 };
 
   // Load existing events to avoid re-generating LLM sentences
@@ -537,7 +537,7 @@ export async function refreshReputationEvents(
 
   for (const season of cachedSeasons) {
     try {
-      const payload = await getCachedView(season, "combined");
+      const payload = await getCachedView(season, "combined", undefined, { userId });
       if (!payload) continue;
 
       const teams = normalizeTeams(payload as Record<string, unknown>);

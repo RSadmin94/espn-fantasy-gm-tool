@@ -66,13 +66,13 @@ const TeamStandingInput = z.object({
 
 // ─── ESPN data helper ─────────────────────────────────────────────────────────
 
-async function buildTeamStandings(season: number): Promise<{
+async function buildTeamStandings(season: number, userId?: number): Promise<{
   teams: TeamStanding[];
   rodTeamId: number | null;
   currentWeek: number;
   playoffWeekStart: number;
 }> {
-  const cached = await getCachedView(season, "combined");
+  const cached = await getCachedView(season, "combined", undefined, { userId });
   if (!cached) return { teams: [], rodTeamId: null, currentWeek: 1, playoffWeekStart: 15 };
 
   const data = cached.payload as Record<string, unknown>;
@@ -166,8 +166,8 @@ export const champRouter = router({
       season: z.number().default(2025),
       simCount: z.number().min(500).max(5000).default(2000),
     }))
-    .query(async ({ input }) => {
-      const { teams, rodTeamId, playoffWeekStart } = await buildTeamStandings(input.season);
+    .query(async ({ ctx, input }) => {
+      const { teams, rodTeamId, playoffWeekStart } = await buildTeamStandings(input.season, ctx.user?.id);
       if (teams.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season." });
       if (!rodTeamId) throw new TRPCError({ code: "NOT_FOUND", message: "Could not identify Rod's team." });
 
@@ -198,8 +198,8 @@ export const champRouter = router({
    */
   leagueRankings: publicProcedure
     .input(z.object({ season: z.number().default(2025), simCount: z.number().default(1000) }))
-    .query(async ({ input }) => {
-      const { teams } = await buildTeamStandings(input.season);
+    .query(async ({ ctx, input }) => {
+      const { teams } = await buildTeamStandings(input.season, ctx.user?.id);
       if (teams.length === 0) return [];
       return calcChampionshipEquity(teams, input.simCount);
     }),
@@ -217,8 +217,8 @@ export const champRouter = router({
       season: z.number().default(2025),
       specificQuestion: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
-      const { teams, rodTeamId } = await buildTeamStandings(input.season);
+    .mutation(async ({ ctx, input }) => {
+      const { teams, rodTeamId } = await buildTeamStandings(input.season, ctx.user?.id);
       if (!rodTeamId || teams.length === 0) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Season data unavailable." });
       }
@@ -278,8 +278,8 @@ Answer Rod's question using the championship equity data above as ground truth.`
       decisionDescription: z.string(),
       simCount: z.number().min(200).max(2000).default(500),
     }))
-    .mutation(async ({ input }) => {
-      const { teams, rodTeamId } = await buildTeamStandings(input.season);
+    .mutation(async ({ ctx, input }) => {
+      const { teams, rodTeamId } = await buildTeamStandings(input.season, ctx.user?.id);
       if (!rodTeamId || teams.length === 0) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Season data unavailable." });
       }

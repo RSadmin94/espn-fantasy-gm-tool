@@ -85,10 +85,9 @@ const STAT_ID_TO_FIELD: Record<number, keyof RawStatLine> = {
   20: "fumblesLost",
 };
 
-// ─── In-memory cache ──────────────────────────────────────────────────────────
+// ─── In-memory cache (per season + user league resolution) ────────────────────
 
-let cachedSettings: LeagueScoringSettings | null = null;
-let cacheLoadedAt: Date | null = null;
+const scoringSettingsCache = new Map<string, { settings: LeagueScoringSettings; loadedAt: number }>();
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 // ─── Fallback defaults (standard half-PPR) ────────────────────────────────────
@@ -112,20 +111,21 @@ const FALLBACK_SCORING_MAP: Record<number, number> = {
  * Load league scoring settings from the ESPN mSettings cache.
  * Falls back to standard half-PPR defaults if cache is unavailable.
  */
-export async function getLeagueScoringSettings(season?: number): Promise<LeagueScoringSettings> {
-  // Return cached if fresh
-  if (cachedSettings && cacheLoadedAt && Date.now() - cacheLoadedAt.getTime() < CACHE_TTL_MS) {
-    return cachedSettings;
+export async function getLeagueScoringSettings(season?: number, userId?: number): Promise<LeagueScoringSettings> {
+  const targetSeason = season ?? new Date().getFullYear();
+  const cacheKey = `${targetSeason}:${userId ?? "anon"}`;
+  const cachedRow = scoringSettingsCache.get(cacheKey);
+  if (cachedRow && Date.now() - cachedRow.loadedAt < CACHE_TTL_MS) {
+    return cachedRow.settings;
   }
 
   try {
     // Try current season first, then fall back to most recent cached season
-    const targetSeason = season ?? new Date().getFullYear();
-    let cached = await getCachedView(targetSeason, "mSettings");
+    let cached = await getCachedView(targetSeason, "mSettings", undefined, { userId });
 
     // Try previous season if current not cached
     if (!cached) {
-      cached = await getCachedView(targetSeason - 1, "mSettings");
+      cached = await getCachedView(targetSeason - 1, "mSettings", undefined, { userId });
     }
 
     if (cached?.payload) {
@@ -143,8 +143,7 @@ export async function getLeagueScoringSettings(season?: number): Promise<LeagueS
       }
 
       const result = buildScoringSettings(scoringType, scoringMap, rawItems);
-      cachedSettings = result;
-      cacheLoadedAt = new Date();
+      scoringSettingsCache.set(cacheKey, { settings: result, loadedAt: Date.now() });
       return result;
     }
   } catch (err) {
@@ -214,7 +213,7 @@ export function calculateLeaguePoints(
   stats: RawStatLine,
   scoringMap?: Record<number, number>
 ): number {
-  const map = scoringMap ?? cachedSettings?.scoringMap ?? FALLBACK_SCORING_MAP;
+  const map = scoringMap ?? FALLBACK_SCORING_MAP;
   let total = 0;
 
   // Map RawStatLine fields back to ESPN stat IDs and apply scoring
@@ -254,7 +253,7 @@ export function calculateLeaguePointsFromAppliedStats(
   appliedStats: Record<string, number>,
   scoringMap?: Record<number, number>
 ): number {
-  const map = scoringMap ?? cachedSettings?.scoringMap ?? FALLBACK_SCORING_MAP;
+  const map = scoringMap ?? FALLBACK_SCORING_MAP;
   let total = 0;
   for (const [statIdStr, value] of Object.entries(appliedStats)) {
     const statId = Number(statIdStr);
@@ -353,6 +352,5 @@ export function getScoringBreakdown(settings: LeagueScoringSettings): {
  * Invalidate the in-memory cache (call after a settings refresh).
  */
 export function invalidateScoringCache(): void {
-  cachedSettings = null;
-  cacheLoadedAt = null;
+  scoringSettingsCache.clear();
 }

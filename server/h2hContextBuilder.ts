@@ -78,11 +78,12 @@ export async function computeRichH2H(
   memberAId: string,
   memberBId: string,
   memberAName = "Owner A",
-  memberBName = "Owner B"
+  memberBName = "Owner B",
+  userId?: number
 ): Promise<RichH2HStats> {
-  const cacheKey = `richH2H:${memberAId}:${memberBId}`;
+  const cacheKey = `richH2H:${memberAId}:${memberBId}:${userId ?? "anon"}`;
   return memCache(cacheKey, 10 * 60_000, async () => {
-    return _computeRichH2H(memberAId, memberBId, memberAName, memberBName);
+    return _computeRichH2H(memberAId, memberBId, memberAName, memberBName, userId);
   });
 }
 
@@ -90,15 +91,16 @@ async function _computeRichH2H(
   memberAId: string,
   memberBId: string,
   memberAName: string,
-  memberBName: string
+  memberBName: string,
+  userId?: number
 ): Promise<RichH2HStats> {
-  const cachedSeasons = await getAllCachedSeasons();
+  const cachedSeasons = await getAllCachedSeasons(undefined, userId);
   const sortedSeasons = [...cachedSeasons].sort((a, b) => a - b);
 
   const matchups: H2HMatchup[] = [];
 
   for (const season of sortedSeasons) {
-    const row = await getCachedView(season, "combined");
+    const row = await getCachedView(season, "combined", undefined, { userId });
     if (!row) continue;
     const data = row.payload as Record<string, unknown>;
 
@@ -305,11 +307,11 @@ export function buildH2HPromptBlock(stats: RichH2HStats, label = "H2H vs Rod Sel
 
 const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
 
-export async function resolveRodMemberId(): Promise<string | null> {
-  return memCache("rodMemberId", 60 * 60_000, async () => {
-    const seasons = await getAllCachedSeasons();
+export async function resolveRodMemberId(userId?: number): Promise<string | null> {
+  return memCache(`rodMemberId:${userId ?? "anon"}`, 60 * 60_000, async () => {
+    const seasons = await getAllCachedSeasons(undefined, userId);
     for (const season of seasons.sort((a, b) => b - a)) {
-      const row = await getCachedView(season, "combined");
+      const row = await getCachedView(season, "combined", undefined, { userId });
       if (!row) continue;
       const data = row.payload as Record<string, unknown>;
       const members = (data.members as Record<string, unknown>[]) || [];

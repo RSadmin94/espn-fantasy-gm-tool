@@ -144,7 +144,11 @@ const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
 const ALL_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026];
 
 async function getSeasonData(season: number, leagueId?: string, userId?: number) {
-  const lid = leagueId ?? (await resolveActiveLeagueId(userId));
+  const { leagueId: lid } = await resolveActiveLeagueId(
+    { user: userId != null ? { id: userId } : undefined },
+    leagueId ?? null,
+    season
+  );
   return memCache(`seasonData:${lid}:${season}`, 10 * 60_000, async () => {
     const cached = await getCachedView(season, "combined", lid);
     return cached ? (cached.payload as Record<string, unknown>) : null;
@@ -219,13 +223,13 @@ export const appRouter = router({
   providers: providerRouter,
   rivalry: router({
     /** Get cached rivalry scores for the current user (Rod) from DB */
-    getScores: publicProcedure.query(async () => {
+    getScores: publicProcedure.query(async ({ ctx }) => {
       const { getRivalryScoresFromDb } = await import("./rivalryService");
       const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
-      const seasons = await getAllCachedSeasons();
+      const seasons = await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined);
       if (seasons.length === 0) return [];
       const latestSeason = Math.max(...seasons);
-      const row = await getCachedView(latestSeason, "combined");
+      const row = await getCachedView(latestSeason, "combined", undefined, { userId: ctx.user?.id });
       if (!row) return [];
       const data = row.payload as Record<string, unknown>;
       const members = (data.members as Record<string, unknown>[]) || [];
@@ -238,9 +242,9 @@ export const appRouter = router({
       return getRivalryScoresFromDb(rodMemberId);
     }),
     /** Compute and persist rivalry scores (manual trigger) */
-    refresh: protectedProcedure.mutation(async () => {
+    refresh: protectedProcedure.mutation(async ({ ctx }) => {
       const { refreshRivalryScores } = await import("./rivalryService");
-      const pairs = await refreshRivalryScores();
+      const pairs = await refreshRivalryScores(ctx.user.id);
       return { ok: true, count: pairs.length };
     }),
   }),
@@ -293,10 +297,10 @@ export const appRouter = router({
     /** Manually trigger storylines refresh for a season (no new ESPN calls) */
     refresh: publicProcedure
       .input(z.object({ season: z.number().int().optional() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const { refreshWeeklyStorylines } = await import("./weeklyStorylinesService");
         const season = input.season ?? 2025;
-        const rows = await refreshWeeklyStorylines(season);
+        const rows = await refreshWeeklyStorylines(season, ctx.user?.id);
         return { ok: true, count: rows.length, season };
       }),
   }),
@@ -319,10 +323,10 @@ export const appRouter = router({
     /** Manually trigger fear index refresh (no new ESPN calls) */
     refresh: publicProcedure
       .input(z.object({ season: z.number().int().optional() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const { refreshFearIndex } = await import("./fearIndexService");
         const season = input.season ?? 2025;
-        const entries = await refreshFearIndex(season);
+        const entries = await refreshFearIndex(season, undefined, ctx.user?.id);
         return { ok: true, count: entries.length, season };
       }),
   }),
@@ -349,9 +353,9 @@ export const appRouter = router({
       }),
     /** Manually trigger reputation event detection (no new ESPN calls) */
     refresh: publicProcedure
-      .mutation(async () => {
+      .mutation(async ({ ctx }) => {
         const { refreshReputationEvents } = await import("./reputationService");
-        const result = await refreshReputationEvents({ generateLLM: false });
+        const result = await refreshReputationEvents({ generateLLM: false, userId: ctx.user?.id });
         return { ok: true, ...result };
       }),
   }),
@@ -635,14 +639,9 @@ export const appRouter = router({
           round: z.number(),
         })).default([]),
       }))
-      .query(async ({ input }) => {
-        const {
-          scorePositionalNeed, buildOwnerTendencies, calcSurvivalRisk,
-          detectPositionRun,
-        } = await import("./draftHelperService");
-
-        // 1. Get available players from the draft board
-        const board = await getDraftBoard(false);
+      .query(async ({ ctx, input }) => {
+        const { buildOwnerTendencies, scorePositionalNeed, calcSurvivalRisk, detectPositionRun } = await import("./draftHelperService");
+        const board = await getDraftBoard();
         const draftedNames = new Set(input.picksAlreadyMade.map((p: { playerName: string }) => p.playerName.toLowerCase()));
         const available = board.players
           .filter((p: MergedPlayer) => !draftedNames.has(p.name.toLowerCase()))
@@ -651,12 +650,12 @@ export const appRouter = router({
         // 2. Get owner tendencies from DNA profiles
         const { calcLeagueDNA } = await import("./leagueDNA");
         const { buildManagerRawData } = await import("./dnaRouter");
-        const managers = await buildManagerRawData();
+        const managers = await buildManagerRawData(ctx.user?.id);
         const dnaProfiles = calcLeagueDNA(managers);
 
-        const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
+        const cachedSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a: number, b: number) => a - b);
         const latestSeason = cachedSeasons[cachedSeasons.length - 1];
-        const latestData = latestSeason ? await getSeasonData(latestSeason) : null;
+        const latestData = latestSeason ? await getSeasonData(latestSeason, undefined, ctx.user?.id) : null;
         const pickOrder: Record<string, unknown>[] = latestData ? (normalizeDraftOrder(latestData)?.pickOrder ?? []) : [];
 
         const ownerInputs = pickOrder.map((slot: Record<string, unknown>) => {
@@ -897,8 +896,8 @@ export const appRouter = router({
   leagueScoring: router({
     getSettings: publicProcedure
       .input(z.object({ season: z.number().optional() }))
-      .query(async ({ input }) => {
-        const settings = await getLeagueScoringSettings(input.season);
+      .query(async ({ ctx, input }) => {
+        const settings = await getLeagueScoringSettings(input.season, ctx.user?.id);
         return {
           scoringType: settings.scoringType,
           scoringDescription: settings.scoringDescription,
@@ -927,8 +926,8 @@ export const appRouter = router({
   espn: router({
     diagnoseTrades: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return { error: "no data", season: input.season };
         const txs = (data.transactions as Record<string, unknown>[]) || [];
         const typeCounts: Record<string, number> = {};
@@ -1178,16 +1177,16 @@ export const appRouter = router({
         // Recompute rivalry scores after data refresh (non-fatal)
         try {
           const { refreshRivalryScores } = await import("./rivalryService");
-          await refreshRivalryScores();
+          await refreshRivalryScores(ctx.user?.id);
         } catch (_e) { /* non-fatal — rivalry scores are a bonus layer */ }
         // Recompute trade narratives after data refresh (non-fatal, deterministic labels only — LLM deferred)
         try {
           const { refreshTradeNarratives } = await import("./tradeNarrativeService");
           // Build lightweight NarrativeTradeInput list from all cached seasons
           const narrativeInputs: import("./tradeNarrativeService").NarrativeTradeInput[] = [];
-          for (const season of await getAllCachedSeasons()) {
+          for (const season of await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)) {
             try {
-              const raw = await getCachedView(season, "combined");
+              const raw = await getCachedView(season, "combined", undefined, { userId: ctx.user?.id });
               if (!raw) continue;
               const payload = raw.payload as Record<string, unknown>;
               const teams = normalizeTeams(payload);
@@ -1246,29 +1245,31 @@ export const appRouter = router({
       }),
 
     manifests: publicProcedure.query(async () => getRefreshManifests()),
-    cachedSeasons: publicProcedure.query(async () => getAllCachedSeasons()),
+    cachedSeasons: publicProcedure.query(async ({ ctx }) =>
+      getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)
+    ),
     allSeasons: publicProcedure.query(() => ALL_SEASONS),
 
     settings: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return null;
         return normalizeSettings(data);
       }),
 
     teams: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         return normalizeTeams(data);
       }),
 
     standings: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const teams = normalizeTeams(data);
         return teams.sort((a, b) => ((a.rankFinal as number) || 99) - ((b.rankFinal as number) || 99));
@@ -1276,8 +1277,8 @@ export const appRouter = router({
 
     rosters: publicProcedure
       .input(z.object({ season: z.number(), teamId: z.number().optional() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data);
         if (input.teamId !== undefined) return rosters.filter((r: unknown) => (r as Record<string, unknown>).teamId === input.teamId);
@@ -1286,8 +1287,8 @@ export const appRouter = router({
 
     draftPicks: publicProcedure
       .input(z.object({ season: z.number(), teamId: z.number().optional() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rawPicks = normalizeDraftPicks(data) as unknown[];
         // Resolve any player IDs that weren't in the roster map
@@ -1313,8 +1314,8 @@ export const appRouter = router({
 
     matchups: publicProcedure
       .input(z.object({ season: z.number(), matchupPeriodId: z.number().optional() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const matchups = normalizeMatchups(data);
         if (input.matchupPeriodId !== undefined) return matchups.filter((m: unknown) => (m as Record<string, unknown>).matchupPeriodId === input.matchupPeriodId);
@@ -1323,8 +1324,8 @@ export const appRouter = router({
 
     transactions: publicProcedure
       .input(z.object({ season: z.number(), teamId: z.number().optional() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const txs = normalizeTransactions(data);
         if (input.teamId !== undefined) return txs.filter((t: unknown) => (t as Record<string, unknown>).teamId === input.teamId);
@@ -1344,7 +1345,7 @@ export const appRouter = router({
     // directly; TRADE_UPHOLD/TRADE_ACCEPT header rows are skipped (no items).
     tradeAging: publicProcedure
       .input(z.object({ season: z.number().optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { calcVORP, calcROSValue, calcPickValue } = await import("./analytics");
         // Helper: compute a single player's ROS composite value
         const playerCompositeValue = (avgPoints: number, position: string, vorp: number): number => {
@@ -1355,7 +1356,7 @@ export const appRouter = router({
         };
         const seasons = input.season
           ? [input.season]
-          : (await getAllCachedSeasons()).sort((a, b) => a - b);
+          : (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a, b) => a - b);
 
         // ── Types ──────────────────────────────────────────────────────────────
         interface TradeSide {
@@ -1378,7 +1379,7 @@ export const appRouter = router({
         const allTrades: TradeRecord[] = [];
 
         for (const season of seasons) {
-          const data = await getSeasonData(season);
+          const data = await getSeasonData(season, undefined, ctx.user?.id);
           if (!data) continue;
 
           // Build player value map for this season
@@ -1662,11 +1663,11 @@ export const appRouter = router({
         return allTrades.sort((a, b) => b.proposedDate - a.proposedDate);
       }),
 
-    allStandings: publicProcedure.query(async () => {
-      const cachedSeasons = await getAllCachedSeasons();
+    allStandings: publicProcedure.query(async ({ ctx }) => {
+      const cachedSeasons = await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined);
       const result: Record<number, unknown[]> = {};
       for (const season of cachedSeasons) {
-        const data = await getSeasonData(season);
+        const data = await getSeasonData(season, undefined, ctx.user?.id);
         if (data) {
           const teams = normalizeTeams(data);
           result[season] = teams.sort((a, b) => ((a.rankFinal as number) || 99) - ((b.rankFinal as number) || 99));
@@ -1677,8 +1678,8 @@ export const appRouter = router({
 
     freeAgents: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const players = (data.players as Record<string, unknown>[]) || [];
         const POS_MAP: Record<number, string> = { 1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST" };
@@ -1701,11 +1702,11 @@ export const appRouter = router({
           .slice(0, 100);
       }),
 
-    keeperHistory: publicProcedure.query(async () => {
-      const cachedSeasons = await getAllCachedSeasons();
+    keeperHistory: publicProcedure.query(async ({ ctx }) => {
+      const cachedSeasons = await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined);
       const keepers: unknown[] = [];
       for (const season of cachedSeasons) {
-        const data = await getSeasonData(season);
+        const data = await getSeasonData(season, undefined, ctx.user?.id);
         if (!data) continue;
         const picks = normalizeDraftPicks(data);
         for (const pick of picks) {
@@ -1718,20 +1719,20 @@ export const appRouter = router({
 
     draftOrder: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return null;
         return normalizeDraftOrder(data);
       }),
 
-    keeperAnalysis: publicProcedure.query(async () => {
+    keeperAnalysis: publicProcedure.query(async ({ ctx }) => {
       // Build keeper eligibility per team with 2-consecutive-year rule
-      const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+      const cachedSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a, b) => a - b);
       // Map: teamId -> list of { season, playerId, playerName, position, roundId }
       const keepersByTeam: Record<number, Array<{ season: number; playerId: number; playerName: string; position: string; roundId: number; teamName: string }>> = {};
 
       for (const season of cachedSeasons) {
-        const data = await getSeasonData(season);
+        const data = await getSeasonData(season, undefined, ctx.user?.id);
         if (!data) continue;
         const picks = normalizeDraftPicks(data);
         for (const pick of picks) {
@@ -1764,7 +1765,7 @@ export const appRouter = router({
       }> = [];
 
       // Get current season rosters for eligible player list
-      const currentData = await getSeasonData(latestSeason);
+      const currentData = await getSeasonData(latestSeason, undefined, ctx.user?.id);
       const currentRosters = currentData ? normalizeRosters(currentData) : [];
       const currentTeams = currentData ? normalizeTeams(currentData) : [];
 
@@ -1823,18 +1824,18 @@ export const appRouter = router({
 
       return { latestSeason, nextSeason, teams: result };
     }),
-    keeperEligibility2026: publicProcedure.query(async () => {
+    keeperEligibility2026: publicProcedure.query(async ({ ctx }) => {
       // Full 2026 keeper eligibility calculator with 2-consecutive-year rule enforcement
       // Rule: a player kept in BOTH 2024 AND 2025 must return to the draft pool in 2026
       // Round cost: if kept in round R in 2025, cost to keep in 2026 = R - 1
-      const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+      const cachedSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a, b) => a - b);
 
       // Build per-team, per-player keeper history across all seasons
       const keepersByPlayerByTeam: Record<number, Record<number, Array<{ season: number; roundId: number; playerName: string; position: string }>>> = {};
       const teamNames: Record<number, string> = {};
 
       for (const season of cachedSeasons) {
-        const data = await getSeasonData(season);
+        const data = await getSeasonData(season, undefined, ctx.user?.id);
         if (!data) continue;
         const picks = normalizeDraftPicks(data);
         for (const pick of picks) {
@@ -1856,8 +1857,8 @@ export const appRouter = router({
 
       // Get 2025 keepers as the baseline for 2026 eligibility
       const latestSeason = 2025;
-      const data2025 = await getSeasonData(latestSeason);
-      const data2024 = await getSeasonData(2024);
+      const data2025 = await getSeasonData(latestSeason, undefined, ctx.user?.id);
+      const data2024 = await getSeasonData(2024, undefined, ctx.user?.id);
       const teams2025 = data2025 ? normalizeTeams(data2025) : [];
 
       // Build 2024 keeper set: playerId -> roundId (for consecutive check)
@@ -2377,8 +2378,12 @@ export const appRouter = router({
       }),
   }),
 
-  playerProfiles: publicProcedure.query(async () => {
-    const leagueId = await resolveActiveLeagueId();
+  playerProfiles: publicProcedure.query(async ({ ctx }) => {
+    const { leagueId } = await resolveActiveLeagueId(
+      { user: ctx.user ? { id: ctx.user.id } : undefined },
+      null,
+      undefined
+    );
     const cachedSeasons = (await getAllCachedSeasons(leagueId)).sort((a, b) => a - b);
 
     const POS_MAP: Record<number, string> = {
@@ -2404,7 +2409,7 @@ export const appRouter = router({
     }> = [];
 
     for (const season of cachedSeasons) {
-      const data = await getSeasonData(season, leagueId);
+      const data = await getSeasonData(season, leagueId, ctx.user?.id);
       if (!data) continue;
 
       teamNamesBySeason[season] = {};
@@ -2989,8 +2994,8 @@ export const appRouter = router({
 
   ownerPredictions: protectedProcedure
     .input(z.object({ memberId: z.string() }))
-    .query(async ({ input }) => {
-      const leagueId = await resolveActiveLeagueId();
+    .query(async ({ ctx, input }) => {
+      const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
       const cachedSeasons = await getAllCachedSeasons(leagueId);
 
       // Collect all owner data for this member across seasons
@@ -3322,8 +3327,12 @@ Respond with JSON in this exact format:
 
   // ── League Draft Tendencies ──────────────────────────────────────────────
   // Aggregates all 14 managers' draft picks by round and position from 2018-2025
-  leagueDraftTendencies: publicProcedure.query(async () => {
-    const leagueId = await resolveActiveLeagueId();
+  leagueDraftTendencies: publicProcedure.query(async ({ ctx }) => {
+    const { leagueId } = await resolveActiveLeagueId(
+      { user: ctx.user ? { id: ctx.user.id } : undefined },
+      null,
+      undefined
+    );
     return memCache(`leagueDraftTendencies:${leagueId}`, 10 * 60_000, async () => {
     const POS_MAP: Record<number, string> = {
       1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST", 17: "D/ST",
@@ -3344,7 +3353,7 @@ Respond with JSON in this exact format:
     const seenPickKeys = new Set<string>();
 
     for (const season of cachedSeasons) {
-      const data = await getSeasonData(season, leagueId);
+      const data = await getSeasonData(season, leagueId, ctx.user?.id);
       if (!data) continue;
 
       const memberNameMap: Record<string, string> = {};
@@ -3583,7 +3592,7 @@ Respond with JSON in this exact format:
       sideB: z.array(z.object({ round: z.number(), pickInRound: z.number() })),
       counterpartyMemberId: z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const TEAMS = 14;
       const BASE = 3000;
       const K = 0.028;
@@ -3620,12 +3629,12 @@ Respond with JSON in this exact format:
           };
           // Re-use the leagueDraftTendencies cached result by calling getSeasonData
           // Build a minimal owner profile from the most recent 3 seasons
-          const recentSeasons = (await getAllCachedSeasons()).sort((a, b) => b - a).slice(0, 3);
+          const recentSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a, b) => b - a).slice(0, 3);
           const ownerStats = { rb1Pct: 0, wr1Pct: 0, earlyRbPct: 0, diversityScore: 50, keeperRate: 0, qbAvgRound: 8, teAvgRound: 8, draftStyle: 'BPA', name: input.counterpartyMemberId };
           let r1Total = 0; let rb1 = 0; let wr1 = 0; let earlyRb = 0; let earlyTotal = 0; let keeperPicks = 0; let totalPicks = 0; let qbRounds: number[] = []; let teRounds: number[] = [];
           const POS_MAP2: Record<number, string> = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'D/ST', 17: 'D/ST' };
           for (const season of recentSeasons) {
-            const sd = await getSeasonData(season);
+            const sd = await getSeasonData(season, undefined, ctx.user?.id);
             if (!sd) continue;
             const memberNameMap: Record<string, string> = {};
             for (const m of (sd.members as Record<string, unknown>[]) || []) {
@@ -3751,7 +3760,7 @@ Respond with JSON in this exact format:
     }),
 
   // Returns the 2026 draft order from ESPN
-  draftPickPortfolio: publicProcedure.query(async () => {
+  draftPickPortfolio: publicProcedure.query(async ({ ctx }) => {
     const TEAMS = 14;
     const BASE = 3000;
     const K = 0.028;
@@ -3763,7 +3772,7 @@ Respond with JSON in this exact format:
     // Load 2026 draft order from ESPN cache
     let draftOrder: Array<{ teamId: number; teamName: string; round: number; pickInRound: number; overall: number }> = [];
     try {
-      const cached = await getCachedView(2026, 'combined');
+      const cached = await getCachedView(2026, "combined", undefined, { userId: ctx.user?.id });
       if (cached?.payload) {
         const raw = cached.payload as Record<string, unknown>;
         const normalized = normalizeDraftOrder(raw);
@@ -3809,9 +3818,9 @@ Respond with JSON in this exact format:
 
     opponentProfile: protectedProcedure
     .input(z.object({ memberId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const { findLiveOpponentProfile } = await import("./liveOpponentProfile");
-      const data = await findLiveOpponentProfile(input.memberId);
+      const data = await findLiveOpponentProfile(input.memberId, ctx.user?.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Opponent not found — sync ESPN data first" });
       return data;
     }),
@@ -3823,9 +3832,9 @@ Respond with JSON in this exact format:
     }),
   opponentScoutingReport: protectedProcedure
     .input(z.object({ memberId: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { findLiveOpponentProfile } = await import("./liveOpponentProfile");
-      const data = await findLiveOpponentProfile(input.memberId);
+      const data = await findLiveOpponentProfile(input.memberId, ctx.user?.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Opponent not found — sync ESPN data first" });
 
       const totalW = data.career.wins;
@@ -3847,9 +3856,9 @@ Respond with JSON in this exact format:
       let enrichedH2HBlock = `H2H vs Rod Sellers: ${h2hW}W-${h2hL}L (career)`;
       try {
         const { resolveRodMemberId, computeRichH2H, buildH2HPromptBlock } = await import('./h2hContextBuilder');
-        const rodId = await resolveRodMemberId();
+        const rodId = await resolveRodMemberId(ctx.user?.id);
         if (rodId && input.memberId && rodId !== input.memberId) {
-          const h2h = await computeRichH2H(rodId, input.memberId, 'Rod Sellers', data.ownerName);
+          const h2h = await computeRichH2H(rodId, input.memberId, 'Rod Sellers', data.ownerName, ctx.user?.id);
           if (h2h.rsTotalGames > 0) {
             enrichedH2HBlock = buildH2HPromptBlock(h2h, `H2H vs Rod Sellers`);
           }
@@ -3891,7 +3900,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       return { report, ownerName: data.ownerName };
     }),
 
-  keeperROI: publicProcedure.query(async () => {
+  keeperROI: publicProcedure.query(async ({ ctx }) => {
     // Aggregate all keeper picks across 2022-2025 with ROI analysis
     // ROI = round saved vs. what you'd have to spend in a normal draft
     // A keeper kept in round N costs round N-1 in the next draft
@@ -3900,7 +3909,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
     // We approximate market round using: if kept in Rd X, they were worth at least Rd X-1 (the cost)
     // Better approximation: use pick value chart to compute value ratio
 
-    const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+    const cachedSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a, b) => a - b);
 
     // Pick value chart (14-team PPR, same as pickValueChart endpoint)
     const TOTAL_TEAMS = 14;
@@ -3945,7 +3954,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
     const playerConsecutiveTracker: Record<string, number> = {}; // `${teamId}-${playerId}` -> years kept
 
     for (const season of cachedSeasons) {
-      const data = await getSeasonData(season);
+      const data = await getSeasonData(season, undefined, ctx.user?.id);
       if (!data) continue;
       const picks = normalizeDraftPicks(data);
 
@@ -4071,9 +4080,9 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       targetType: z.enum(["player", "pick"]),
       targetOwnerId: z.string().optional(), // memberId of owner if known
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       // ── 1. Load latest season data (2025) ──────────────────────────────────
-      const seasonData = await getSeasonData(2025) as any;
+      const seasonData = await getSeasonData(2025, undefined, ctx.user.id) as any;
       if (!seasonData) throw new TRPCError({ code: "NOT_FOUND", message: "Season data not available" });
 
       const teams: any[] = seasonData.teams || [];
@@ -4110,7 +4119,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       }
 
       // ── 2. League scoring settings (from leagueScoringService) ──────────────
-      const leagueScoringSettings = await getLeagueScoringSettings().catch(() => null);
+      const leagueScoringSettings = await getLeagueScoringSettings(undefined, ctx.user?.id).catch(() => null);
       const scoringMap: Record<number, number> = leagueScoringSettings?.scoringMap ?? {};
       const scoringDesc = leagueScoringSettings?.scoringDescription ?? `Half PPR (0.5/rec), 6pts/TD, 4pts/pass TD, 1pt/25 pass yds, 1pt/10 rush yds, 1pt/10 rec yds`;
 
@@ -4261,7 +4270,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       if (!targetMemberId && targetOwnerName && targetOwnerName !== "Unknown") {
         try {
           const { buildLiveOpponentProfiles } = await import("./liveOpponentProfile");
-          const profiles = await buildLiveOpponentProfiles();
+          const profiles = await buildLiveOpponentProfiles(ctx.user?.id);
           const cleanTarget = targetOwnerName.toLowerCase().replace(/[^a-z0-9 ]/g, "");
           for (const [mid, prof] of Array.from(profiles.entries())) {
             const cleanProf = prof.ownerName.toLowerCase().replace(/[^a-z0-9 ]/g, "");
@@ -4720,14 +4729,14 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
 
       // ── 8. Pull GM style context for target owner ─────────────────────────
       const { getGmStyleForTradeGenerator } = await import("./liveOpponentProfile");
-      const gmStyle = await getGmStyleForTradeGenerator(targetMemberId);
+      const gmStyle = await getGmStyleForTradeGenerator(targetMemberId, ctx.user?.id);
       // ── 8b. Pull Phase 3 DNA profile for target owner ────────────────────
       let dnaProfile: import("./leagueDNA").ManagerDNA | null = null;
       let dnaPromptBlock = "";
       try {
         const { calcLeagueDNA } = await import("./leagueDNA");
         const { buildManagerRawData } = await import("./dnaRouter");
-        const allManagers = await buildManagerRawData();
+        const allManagers = await buildManagerRawData(ctx.user?.id);
         const dnaProfiles = calcLeagueDNA(allManagers);
         const found = dnaProfiles.find(p => p.memberId === targetMemberId);
         if (found) {
@@ -4967,9 +4976,9 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       picksA: z.array(z.object({ round: z.number(), pick: z.number().default(7) })).optional(),
       picksB: z.array(z.object({ round: z.number(), pick: z.number().default(7) })).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { calcVORP, calcPositionalScarcity, calcKeeperEfficiency, calcROSValue, calcTradeValue, calcPickValue } = await import("./analytics");
-      const data = await getSeasonData(input.season);
+      const data = await getSeasonData(input.season, undefined, ctx.user?.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season. Sync ESPN first." });
 
       // Build full roster player list for context
@@ -5067,7 +5076,7 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       try {
         const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
         const { buildManagerRawData } = await import("./dnaRouter");
-        const managerRawData = await buildManagerRawData();
+        const managerRawData = await buildManagerRawData(ctx.user?.id);
         if (managerRawData.length > 0) {
           const dnaProfiles = calcLeagueDNA(managerRawData);
           const teamsData = normalizeTeams(data);
@@ -5138,7 +5147,7 @@ Format: Head-to-Head Points, PPR (Point Per Reception), Snake Draft, 1 keeper pe
 Scoring positions: QB, RB, WR, TE, K, D/ST. Playoffs: 7 teams.
 Be concise, data-driven, and specific. Reference actual team names and player names when possible.`;
 
-        const data = await getSeasonData(season);
+        const data = await getSeasonData(season, undefined, ctx.user?.id);
         if (data) {
           const teams = normalizeTeams(data);
           const settings = normalizeSettings(data);
@@ -5228,7 +5237,7 @@ Be concise, data-driven, and specific. Reference actual team names and player na
           try {
             const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
             const { buildManagerRawData } = await import("./dnaRouter");
-            const managerRawData = await buildManagerRawData();
+            const managerRawData = await buildManagerRawData(ctx.user?.id);
             if (managerRawData.length > 0) {
               const dnaProfiles = calcLeagueDNA(managerRawData);
               const dnaBlock = buildDNAPromptBlock(dnaProfiles);
@@ -5241,8 +5250,8 @@ Be concise, data-driven, and specific. Reference actual team names and player na
           try {
             // Always fetch the 2026 draft order explicitly — this is the upcoming draft
             const UPCOMING_DRAFT_YEAR = 2026;
-            const upcomingDraftData = await getSeasonData(UPCOMING_DRAFT_YEAR);
-            const draftData = upcomingDraftData ?? await getSeasonData(season);
+            const upcomingDraftData = await getSeasonData(UPCOMING_DRAFT_YEAR, undefined, ctx.user.id);
+            const draftData = upcomingDraftData ?? await getSeasonData(season, undefined, ctx.user.id);
             const draftLabelYear = upcomingDraftData ? UPCOMING_DRAFT_YEAR : season;
             if (draftData) {
               const draftOrderData = normalizeDraftOrder(draftData as Record<string, unknown>);
@@ -5347,9 +5356,9 @@ if (pickOrder.length > 0) {
   pipeline: router({
     health: publicProcedure
       .input(z.object({ season: z.number().optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const manifests = await getRefreshManifests();
-        const cachedSeasons = await getAllCachedSeasons();
+        const cachedSeasons = await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined);
         const cookiesPresent = hasCookies();
 
         // Build per-season health summary
@@ -5417,8 +5426,8 @@ if (pickOrder.length > 0) {
 
     validate: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getCachedView(input.season, "combined");
+      .query(async ({ ctx, input }) => {
+        const data = await getCachedView(input.season, "combined", undefined, { userId: ctx.user?.id });
         if (!data) return { isUsable: false, issues: ["No cached data for this season"], warnings: [], season: input.season };
         return validateDataQuality(input.season, data.payload as Record<string, unknown>);
       }),
@@ -5428,9 +5437,9 @@ if (pickOrder.length > 0) {
   analytics: router({
     vorp: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         return memCache(`vorp:${input.season}`, 10 * 60_000, async () => {
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
         const teams = normalizeTeams(data);
@@ -5461,9 +5470,9 @@ if (pickOrder.length > 0) {
 
     scarcity: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         return memCache(`scarcity:${input.season}`, 10 * 60_000, async () => {
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
         const teams = normalizeTeams(data);
@@ -5522,9 +5531,9 @@ if (pickOrder.length > 0) {
 
     rosterGaps: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         return memCache(`rosterGaps:${input.season}`, 10 * 60_000, async () => {
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
         const teams = normalizeTeams(data);
@@ -5555,9 +5564,9 @@ if (pickOrder.length > 0) {
 
     keeperEfficiency: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         return memCache(`keeperEfficiency:${input.season}`, 10 * 60_000, async () => {
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
         const teams = normalizeTeams(data);
@@ -5589,8 +5598,12 @@ if (pickOrder.length > 0) {
 
     managerBehavior: publicProcedure
       .input(z.object({ seasons: z.array(z.number()).optional() }))
-      .query(async ({ input }) => {
-        const leagueId = await resolveActiveLeagueId();
+      .query(async ({ ctx, input }) => {
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: ctx.user ? { id: ctx.user.id } : undefined },
+          null,
+          undefined
+        );
         const seasonKey = `${leagueId}:${(input.seasons ?? []).join("-") || "all"}`;
         return memCache(`managerBehavior:${seasonKey}`, 10 * 60_000, async () => {
         const cachedSeasons = input.seasons ?? await getAllCachedSeasons(leagueId);
@@ -5602,7 +5615,7 @@ if (pickOrder.length > 0) {
         const seasonTeamOwnerMap: Record<string, string> = {};
 
         for (const season of cachedSeasons) {
-          const data = await getSeasonData(season, leagueId);
+          const data = await getSeasonData(season, leagueId, ctx.user?.id);
           if (!data) continue;
           const teams = normalizeTeams(data);
           if (!teams || teams.length === 0) continue;
@@ -5636,7 +5649,7 @@ if (pickOrder.length > 0) {
         const allDraftPicks: DraftPickRow[] = [];
 
         for (const season of cachedSeasons) {
-          const data = await getSeasonData(season, leagueId);
+          const data = await getSeasonData(season, leagueId, ctx.user?.id);
           if (!data) continue;
           const teams = normalizeTeams(data);
           if (!teams || teams.length === 0) continue;
@@ -5687,7 +5700,7 @@ if (pickOrder.length > 0) {
         const playerScoreMap = new Map<number, { avgPoints: number; position: string }>();
         const latestCachedSeason = [...cachedSeasons].sort((a, b) => b - a)[0];
         if (latestCachedSeason) {
-          const latestData = await getSeasonData(latestCachedSeason, leagueId);
+          const latestData = await getSeasonData(latestCachedSeason, leagueId, ctx.user?.id);
           if (latestData) {
             const latestRosters = normalizeRosters(latestData) as Record<string, unknown>[];
             for (const r of latestRosters) {
@@ -5717,8 +5730,8 @@ if (pickOrder.length > 0) {
 
     rosValues: publicProcedure
       .input(z.object({ season: z.number(), weeksRemaining: z.number().optional() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
         const teams = normalizeTeams(data);
@@ -5753,9 +5766,9 @@ if (pickOrder.length > 0) {
         weeksRemaining: z.number().optional().default(10),
         teamId: z.number().optional(),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { calc3DProjections } = await import("./analytics_additions");
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as Record<string, unknown>[];
         const teams = normalizeTeams(data);
@@ -5795,9 +5808,9 @@ if (pickOrder.length > 0) {
     // ── KEEPER FUTURE VALUE ─────────────────────────────────────────────────────
     keeperFutureValue: publicProcedure
       .input(z.object({ season: z.number(), teamId: z.number().optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { calcKeeperFutureValue } = await import("./analytics_additions");
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as Record<string, unknown>[];
         const teams = normalizeTeams(data);
@@ -5835,9 +5848,9 @@ if (pickOrder.length > 0) {
         currentWeek: z.number().optional().default(1),
         playoffStartWeek: z.number().optional().default(15),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { calcStrengthOfSchedule } = await import("./analytics_additions");
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rawTeams = normalizeTeams(data);
         const ownerNameMap: Record<number, string> = {};
@@ -5874,7 +5887,7 @@ if (pickOrder.length > 0) {
     // ── OPPONENT OVERVALUATION ──────────────────────────────────────────────────
     opponentOvervaluation: publicProcedure
       .input(z.object({ seasons: z.array(z.number()).optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { calcOpponentOvervaluation } = await import("./analytics_additions");
         const seasons = input.seasons || [2023, 2024, 2025];
         const allDraftPicks: DraftPickRow[] = [];
@@ -5883,7 +5896,7 @@ if (pickOrder.length > 0) {
         const allTransactions: TransactionRow[] = [];
         const allDraftPickRows: DraftPickRow[] = [];
         for (const season of seasons) {
-          const data = await getSeasonData(season);
+          const data = await getSeasonData(season, undefined, ctx.user?.id);
           if (!data) continue;
           const picks = normalizeDraftPicks(data) as Record<string, unknown>[];
           for (const p of picks) {
@@ -5910,9 +5923,9 @@ if (pickOrder.length > 0) {
     // ── WAIVER REPLACEMENT COST ─────────────────────────────────────────────────
     waiverReplacementCost: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { calcWaiverReplacementCost } = await import("./analytics_additions");
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as Record<string, unknown>[];
         const rosteredIds = new Set(rosters.map(r => r.playerId as number));
@@ -5927,9 +5940,9 @@ if (pickOrder.length > 0) {
     // ── STRATEGY MODE CONTEXT ───────────────────────────────────────────────────
     strategyMode: publicProcedure
       .input(z.object({ season: z.number(), teamId: z.number(), currentWeek: z.number().optional().default(1), manualOverride: z.enum(["win_now", "long_term", "balanced"]).optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { buildStrategyModeContext } = await import("./analytics_additions");
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return null;
         const teams = normalizeTeams(data);
         const team = teams.find(t => t.teamId === input.teamId);
@@ -5945,8 +5958,8 @@ if (pickOrder.length > 0) {
       draftSlot: z.number().optional().default(11),
       weeksRemaining: z.number().optional().default(10),
     }))
-    .query(async ({ input }) => {
-      const data = await getSeasonData(input.season);
+    .query(async ({ ctx, input }) => {
+      const data = await getSeasonData(input.season, undefined, ctx.user?.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season. Sync ESPN first." });
       const rosters = normalizeRosters(data) as Record<string, unknown>[];
       const teams = normalizeTeams(data);
@@ -6242,21 +6255,21 @@ if (pickOrder.length > 0) {
      * Mock draft setup — returns all league owners with DNA, keeper recs, and draft order.
      * Used by MockDraftSimulator to pre-populate the setup screen.
      */
-    mockSetup: publicProcedure.query(async () => {
+    mockSetup: publicProcedure.query(async ({ ctx }) => {
       const { calcLeagueDNA } = await import("./leagueDNA");
       const { buildManagerRawData } = await import("./dnaRouter");
       const { buildKeeperRecommendations } = await import("./keeperRecommendationEngine");
-      const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
+      const cachedSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a: number, b: number) => a - b);
       if (cachedSeasons.length === 0) return { owners: [], totalTeams: 0 };
       const latestSeason = cachedSeasons[cachedSeasons.length - 1];
-      const data2025 = await getSeasonData(latestSeason);
+      const data2025 = await getSeasonData(latestSeason, undefined, ctx.user?.id);
       if (!data2025) return { owners: [], totalTeams: 0 };
       // 1. Draft order
       const draftOrderRaw = normalizeDraftOrder(data2025);
       const pickOrder = draftOrderRaw?.pickOrder ?? [];
       const totalTeams = pickOrder.length || 14;
       // 2. DNA profiles
-      const managers = await buildManagerRawData();
+      const managers = await buildManagerRawData(ctx.user?.id);
       const dnaProfiles = calcLeagueDNA(managers);
       // 3. Keeper eligibility
       const keepers2025: Record<number, Array<{ playerId: number; playerName: string; position: string; roundId: number }>> = {};
@@ -6276,7 +6289,7 @@ if (pickOrder.length > 0) {
       const prevSeason = latestSeason - 1;
       const keepers2024: Record<number, Record<number, number>> = {};
       if (cachedSeasons.includes(prevSeason)) {
-        const data2024 = await getSeasonData(prevSeason);
+        const data2024 = await getSeasonData(prevSeason, undefined, ctx.user?.id);
         if (data2024) {
           const picks2024 = normalizeDraftPicks(data2024);
           for (const p of picks2024) {
@@ -6584,7 +6597,7 @@ if (pickOrder.length > 0) {
     /** Get draft history for a player across all seasons — which owners drafted them, what round/year */
     getPlayerDraftHistory: publicProcedure
       .input(z.object({ playerName: z.string().min(2) }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const seasons = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
         const normInput = input.playerName.toLowerCase().replace(/[*+'.,]/g, "").trim();
         const nameParts = normInput.split(" ").filter(Boolean);
@@ -6599,9 +6612,9 @@ if (pickOrder.length > 0) {
         for (const season of seasons) {
           try {
             const [draftRow, teamsRow, membersRow] = await Promise.all([
-              getCachedView(season, "draftDetail"),
-              getCachedView(season, "teams"),
-              getCachedView(season, "members"),
+              getCachedView(season, "draftDetail", undefined, { userId: ctx.user?.id }),
+              getCachedView(season, "teams", undefined, { userId: ctx.user?.id }),
+              getCachedView(season, "members", undefined, { userId: ctx.user?.id }),
             ]);
             if (!draftRow || !teamsRow || !membersRow) continue;
             const draftPayload = draftRow.payload as Record<string, unknown>;

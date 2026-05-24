@@ -13,6 +13,7 @@ import {
   leagueEvents, InsertLeagueEvent,
   espnRawCache,
   espnSeasonCache,
+  syncRuns,
 } from "../drizzle/schema";
 import { upsertRawEspnCache, writeLegacyEspnCaches } from "./espnPersistence";
 import type { EspnCreds } from "./espnService";
@@ -152,13 +153,24 @@ function espnSeasonCacheRowToCached(row: EspnSeasonCache): CachedEspnSeasonRow {
 export async function getCachedView(
   season: number,
   viewName: string,
-  leagueId?: string
+  leagueId?: string,
+  opts?: { userId?: number }
 ): Promise<CachedEspnSeasonRow | null> {
   const db = await getDb();
   if (!db) return null;
-  const lid = String(leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default").slice(0, 32);
   const yr = Math.floor(Number(season));
   const vn = String(viewName).slice(0, 64);
+  let lid: string;
+  if (leagueId != null && String(leagueId).trim() !== "") {
+    lid = String(leagueId).trim().slice(0, 32);
+  } else {
+    const resolved = await resolveActiveLeagueId(
+      { user: opts?.userId != null ? { id: opts.userId } : undefined },
+      null,
+      yr
+    );
+    lid = resolved.leagueId;
+  }
 
   const rawPrimary = await db
     .select()
@@ -249,7 +261,12 @@ export async function getAllCachedSeasons(
 ): Promise<number[]> {
   const db = await getDb();
   if (!db) return [];
-  const lid = String(leagueId ?? (await resolveActiveLeagueId(userId))).slice(0, 32);
+  const { leagueId: resolvedLid } = await resolveActiveLeagueId(
+    { user: userId != null ? { id: userId } : undefined },
+    leagueId ?? null,
+    undefined
+  );
+  const lid = String(resolvedLid).slice(0, 32);
   const esc = escapeMysqlLikePattern(lid);
   const rows = await db
     .select({ cacheKey: fantasyDataCache.cacheKey })
@@ -751,46 +768,198 @@ export async function getActiveEspnCredentials(userId: number): Promise<EspnCred
 
 // ─── Active League Context ─────────────────────────────────────────────────
 
-let _cachedDefaultLeagueId: { id: string; expiresAt: number } | null = null;
+export type ActiveLeagueResolveCtx = { user?: { id: number } | null };
+
+export type ResolvedActiveLeagueId = { leagueId: string; source: string };
+
+function logActiveLeagueResolve(opts: {
+  requestedSeason: number | null;
+  inputLeagueId: string | null;
+  resolvedLeagueId: string;
+  source: string;
+}) {
+  console.warn("[resolveActiveLeagueId]", JSON.stringify(opts));
+}
+
+async function getUserEspnLeagueIds(userId: number): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({ leagueId: leagueConnections.leagueId })
+    .from(leagueConnections)
+    .where(
+      and(
+        eq(leagueConnections.userId, userId),
+        eq(leagueConnections.provider, "espn"),
+        eq(leagueConnections.isActive, true)
+      )
+    );
+  const out = new Set<string>();
+  for (const r of rows) {
+    if (r.leagueId) out.add(String(r.leagueId).trim().slice(0, 32));
+  }
+  return Array.from(out);
+}
+
+/** Latest successful sync row's league (any season) — for anonymous reads on single-league installs. */
+async function resolveLatestSuccessfulLeagueFromSyncRuns(): Promise<{ leagueId: string; source: string } | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const row = await db
+    .select({ leagueId: syncRuns.leagueId })
+    .from(syncRuns)
+    .where(eq(syncRuns.status, "success"))
+    .orderBy(desc(syncRuns.finishedAt))
+    .limit(1);
+  const lid = row[0]?.leagueId != null ? String(row[0].leagueId).trim().slice(0, 32) : "";
+  if (!lid) return null;
+  return { leagueId: lid, source: "sync_runs_latest_success" };
+}
 
 /**
- * Resolve ESPN cache league id: user's active connection, then any active ESPN
- * connection, then ESPN_LEAGUE_ID env, then "default".
+ * For a season: pick leagueId from recent successful sync_runs, preferring rows
+ * whose league matches the user's ESPN connections, then a single-league season, then most recent.
  */
-export async function resolveActiveLeagueId(userId?: number): Promise<string> {
-  const now = Date.now();
-  if (!userId && _cachedDefaultLeagueId && _cachedDefaultLeagueId.expiresAt > now) {
-    return _cachedDefaultLeagueId.id;
-  }
-
+async function resolveLeagueFromSyncRunsForSeason(
+  season: number,
+  userId?: number
+): Promise<{ leagueId: string; source: string } | null> {
   const db = await getDb();
-  let leagueId: string | undefined;
+  if (!db) return null;
+  const yr = Math.floor(Number(season));
+  if (!Number.isFinite(yr) || yr < 1900 || yr > 2200) return null;
 
-  if (userId && db) {
-    const row = await getActiveLeagueForUser(userId);
-    if (row?.leagueId) leagueId = row.leagueId;
+  const runs = await db
+    .select({ leagueId: syncRuns.leagueId })
+    .from(syncRuns)
+    .where(and(eq(syncRuns.season, yr), eq(syncRuns.status, "success")))
+    .orderBy(desc(syncRuns.finishedAt))
+    .limit(40);
+
+  if (!runs.length) return null;
+
+  if (userId != null) {
+    const allowed = new Set(await getUserEspnLeagueIds(userId));
+    for (const r of runs) {
+      const id = String(r.leagueId).trim().slice(0, 32);
+      if (allowed.has(id)) return { leagueId: id, source: "sync_runs_user_recent" };
+    }
   }
 
-  if (!leagueId && db) {
-    const rows = await db
-      .select({ leagueId: leagueConnections.leagueId })
-      .from(leagueConnections)
-      .where(
-        and(
-          eq(leagueConnections.isActive, true),
-          eq(leagueConnections.provider, "espn")
-        )
-      )
-      .orderBy(desc(leagueConnections.updatedAt))
-      .limit(1);
-    leagueId = rows[0]?.leagueId;
+  const distinct = Array.from(new Set(runs.map(r => String(r.leagueId).trim().slice(0, 32))));
+  if (distinct.length === 1) return { leagueId: distinct[0]!, source: "sync_runs_single_league" };
+
+  const first = String(runs[0].leagueId).trim().slice(0, 32);
+  return { leagueId: first, source: "sync_runs_recent_any" };
+}
+
+/**
+ * Resolve ESPN cache / normalized-table league id for reads.
+ *
+ * Order: explicit input → user's ESPN credentials leagueId → sync_runs for season
+ * (prefer user's leagues, else single-league season, else most recent) → latest
+ * successful sync (no season) → ESPN_LEAGUE_ID → non-production dev fallback → default.
+ */
+export async function resolveActiveLeagueId(
+  ctx: ActiveLeagueResolveCtx,
+  inputLeagueId?: string | null,
+  season?: number
+): Promise<ResolvedActiveLeagueId> {
+  const inL =
+    inputLeagueId != null && String(inputLeagueId).trim() !== ""
+      ? String(inputLeagueId).trim().slice(0, 32)
+      : null;
+  if (inL) {
+    const r = { leagueId: inL, source: "input" };
+    logActiveLeagueResolve({
+      requestedSeason: season ?? null,
+      inputLeagueId: inputLeagueId ?? null,
+      resolvedLeagueId: r.leagueId,
+      source: r.source,
+    });
+    return r;
   }
 
-  const resolved = leagueId || process.env.ESPN_LEAGUE_ID || "default";
-  if (!userId) {
-    _cachedDefaultLeagueId = { id: resolved, expiresAt: now + 60_000 };
+  const uid = ctx.user?.id ?? undefined;
+  if (uid != null) {
+    const creds = await getActiveEspnCredentials(uid);
+    const cid = creds?.leagueId ? String(creds.leagueId).trim().slice(0, 32) : "";
+    if (cid) {
+      const r = { leagueId: cid, source: "credentials" };
+      logActiveLeagueResolve({
+        requestedSeason: season ?? null,
+        inputLeagueId: inputLeagueId ?? null,
+        resolvedLeagueId: r.leagueId,
+        source: r.source,
+      });
+      return r;
+    }
   }
-  return resolved;
+
+  const syncSeason =
+    season != null && Number.isFinite(Number(season)) ? Math.floor(Number(season)) : null;
+  const allowSeasonScopedSync = syncSeason != null && syncSeason >= 2000;
+  const allowLatestSyncFallback =
+    season === null || season === undefined || allowSeasonScopedSync;
+
+  if (allowSeasonScopedSync) {
+    const fromRuns = await resolveLeagueFromSyncRunsForSeason(syncSeason!, uid);
+    if (fromRuns) {
+      logActiveLeagueResolve({
+        requestedSeason: season ?? null,
+        inputLeagueId: inputLeagueId ?? null,
+        resolvedLeagueId: fromRuns.leagueId,
+        source: fromRuns.source,
+      });
+      return { leagueId: fromRuns.leagueId, source: fromRuns.source };
+    }
+  }
+
+  if (allowLatestSyncFallback) {
+    const latest = await resolveLatestSuccessfulLeagueFromSyncRuns();
+    if (latest) {
+      logActiveLeagueResolve({
+        requestedSeason: season ?? null,
+        inputLeagueId: inputLeagueId ?? null,
+        resolvedLeagueId: latest.leagueId,
+        source: latest.source,
+      });
+      return latest;
+    }
+  }
+
+  const envId = process.env.ESPN_LEAGUE_ID?.trim().slice(0, 32);
+  if (envId) {
+    const r = { leagueId: envId, source: "env_espn_league_id" };
+    logActiveLeagueResolve({
+      requestedSeason: season ?? null,
+      inputLeagueId: inputLeagueId ?? null,
+      resolvedLeagueId: r.leagueId,
+      source: r.source,
+    });
+    return r;
+  }
+
+  const isNonProd = process.env.NODE_ENV !== "production";
+  if (isNonProd) {
+    const r = { leagueId: "457622", source: "dev_fallback_league" };
+    logActiveLeagueResolve({
+      requestedSeason: season ?? null,
+      inputLeagueId: inputLeagueId ?? null,
+      resolvedLeagueId: r.leagueId,
+      source: r.source,
+    });
+    return r;
+  }
+
+  const r = { leagueId: "default", source: "fallback_default" };
+  logActiveLeagueResolve({
+    requestedSeason: season ?? null,
+    inputLeagueId: inputLeagueId ?? null,
+    resolvedLeagueId: r.leagueId,
+    source: r.source,
+  });
+  return r;
 }
 
 /**
