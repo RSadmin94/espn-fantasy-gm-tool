@@ -855,3 +855,62 @@ export async function syncEspnCombinedFullPipeline(
     throw e;
   }
 }
+
+/**
+ * Re-run only normalized tables (matchups, transactions, roster_entries, standings_snapshots)
+ * from an existing combined payload — no ESPN fetch. Creates a sync_runs row with rawViewsSaved=0.
+ */
+export async function backfillNormalizedTablesFromPayload(
+  leagueId: string,
+  season: number,
+  payload: Record<string, unknown>
+): Promise<{
+  matchupsSaved: number;
+  transactionsSaved: number;
+  rosterEntriesSaved: number;
+  standingsSaved: number;
+  errors: string[];
+  syncRunId: number | null;
+}> {
+  const db = await getDbConn();
+  if (!db) throw new Error("Database unavailable");
+  const lid = String(leagueId).slice(0, 32);
+  const yr = Math.floor(Number(season));
+  const errors: string[] = [];
+  const syncRunId = await createSyncRun(lid, yr);
+
+  const run = async (label: string, fn: () => Promise<number>) => {
+    try {
+      return await fn();
+    } catch (e) {
+      errors.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
+      return 0;
+    }
+  };
+
+  const matchupsSaved = await run("upsertMatchups", () => upsertMatchups(db, lid, yr, payload));
+  const transactionsSaved = await run("upsertTransactions", () => upsertTransactions(db, lid, yr, payload));
+  const rosterEntriesSaved = await run("upsertRosterEntries", () => upsertRosterEntries(db, lid, yr, payload));
+  const standingsSaved = await run("upsertStandingsSnapshots", () =>
+    upsertStandingsSnapshots(db, lid, yr, payload)
+  );
+
+  const status = errors.length > 0 ? "partial" : "success";
+  await finishSyncRun(
+    syncRunId,
+    status,
+    {
+      rawViewsSaved: 0,
+      teamsSaved: 0,
+      draftPicksSaved: 0,
+      playersSaved: 0,
+      matchupsSaved,
+      transactionsSaved,
+      rosterEntriesSaved,
+      standingsSaved,
+    },
+    errors.length ? errors.join("; ") : null
+  );
+
+  return { matchupsSaved, transactionsSaved, rosterEntriesSaved, standingsSaved, errors, syncRunId };
+}

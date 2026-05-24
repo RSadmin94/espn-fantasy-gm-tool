@@ -54,7 +54,7 @@ import {
   persistLlmUsage,
   getLlmUsageSummary,
 } from "./db";
-import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmMatchups } from "../drizzle/schema";
+import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmMatchups, syncRuns } from "../drizzle/schema";
 import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle, asc as ascDrizzle, sql } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
@@ -81,7 +81,7 @@ import {
   hasCookies,
   resolveEspnCreds,
 } from "./espnService";
-import { syncEspnCombinedFullPipeline } from "./espnPersistence";
+import { backfillNormalizedTablesFromPayload, syncEspnCombinedFullPipeline } from "./espnPersistence";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -1230,6 +1230,175 @@ export const appRouter = router({
           await refreshTradeNarratives(narrativeInputs, { generateLLM: false });
         } catch (_e) { /* non-fatal — trade narratives are a bonus layer */ }
         return results;
+      }),
+
+    backfillNormalized: protectedProcedure
+      .input(
+        z.object({
+          seasons: z.array(z.number().int().min(2000).max(2100)).min(1).max(32),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        type Row = {
+          status: "success" | "partial" | "failed" | "skipped";
+          error?: string;
+          matchupsSaved?: number;
+          transactionsSaved?: number;
+          rosterEntriesSaved?: number;
+          standingsSaved?: number;
+          errors?: string[];
+          syncRunId?: number | null;
+        };
+        const out: Record<number, Row> = {};
+        for (const season of input.seasons) {
+          const { leagueId } = await resolveActiveLeagueId(
+            { user: { id: ctx.user.id } },
+            null,
+            season
+          );
+          const cached = await getCachedView(season, "combined", leagueId, { userId: ctx.user.id });
+          const rawPayload = cached?.payload;
+          if (rawPayload == null || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+            out[season] = {
+              status: "skipped",
+              error:
+                "No combined payload in fantasy_data_cache / espn_raw_cache / espn_season_cache for this league and season.",
+            };
+            continue;
+          }
+          const payload = rawPayload as Record<string, unknown>;
+          try {
+            const r = await backfillNormalizedTablesFromPayload(leagueId, season, payload);
+            out[season] = {
+              status: r.errors.length > 0 ? "partial" : "success",
+              matchupsSaved: r.matchupsSaved,
+              transactionsSaved: r.transactionsSaved,
+              rosterEntriesSaved: r.rosterEntriesSaved,
+              standingsSaved: r.standingsSaved,
+              errors: r.errors.length ? r.errors : undefined,
+              syncRunId: r.syncRunId,
+            };
+          } catch (e) {
+            out[season] = {
+              status: "failed",
+              error: e instanceof Error ? e.message : String(e),
+            };
+          }
+        }
+        memCache.invalidateAll();
+        return out;
+      }),
+
+    /**
+     * Re-run full combined persistence (raw cache + all normalized upserts + sync_runs)
+     * from existing combined JSON — no ESPN API calls.
+     */
+    reprocessCachedSeasons: publicProcedure
+      .input(
+        z.object({
+          seasons: z.array(z.number().int().min(2000).max(2100)).min(1).max(32),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user?.id;
+        const db = await getDb();
+        type Counts = {
+          rawViewsSaved: number;
+          teamsSaved: number;
+          matchupsSaved: number;
+          draftPicksSaved: number;
+          transactionsSaved: number;
+          rosterEntriesSaved: number;
+          playersSaved: number;
+          standingsSaved: number;
+        };
+        type Item = {
+          season: number;
+          status: "success" | "partial" | "failed" | "skipped";
+          counts?: Counts;
+          error?: string;
+        };
+        const results: Item[] = [];
+
+        for (const season of input.seasons) {
+          const cached = await getCachedView(season, "combined", undefined, { userId });
+          const rawPayload = cached?.payload;
+          if (!cached || rawPayload == null || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+            results.push({
+              season,
+              status: "skipped",
+              error:
+                "No combined cache for this league/season (fantasy_data_cache / espn_raw_cache / espn_season_cache).",
+            });
+            continue;
+          }
+          const leagueId = String(cached.leagueId).trim().slice(0, 32) || "default";
+          const payload = rawPayload as Record<string, unknown>;
+          try {
+            await syncEspnCombinedFullPipeline(leagueId, season, payload, {
+              pipelineAllOk: true,
+              qualityUsable: true,
+            });
+            if (!db) {
+              results.push({
+                season,
+                status: "failed",
+                error: "Database unavailable when reading sync run counts.",
+              });
+              continue;
+            }
+            const rows = await db
+              .select({
+                status: syncRuns.status,
+                rawViewsSaved: syncRuns.rawViewsSaved,
+                teamsSaved: syncRuns.teamsSaved,
+                matchupsSaved: syncRuns.matchupsSaved,
+                draftPicksSaved: syncRuns.draftPicksSaved,
+                transactionsSaved: syncRuns.transactionsSaved,
+                rosterEntriesSaved: syncRuns.rosterEntriesSaved,
+                playersSaved: syncRuns.playersSaved,
+                standingsSaved: syncRuns.standingsSaved,
+              })
+              .from(syncRuns)
+              .where(andDrizzle(eqDrizzle(syncRuns.leagueId, leagueId), eqDrizzle(syncRuns.season, season)))
+              .orderBy(descDrizzle(syncRuns.id))
+              .limit(1);
+            const r = rows[0];
+            if (!r) {
+              results.push({
+                season,
+                status: "partial",
+                error: "Pipeline finished but no sync_runs row was found for this league and season.",
+              });
+              continue;
+            }
+            const counts: Counts = {
+              rawViewsSaved: r.rawViewsSaved ?? 0,
+              teamsSaved: r.teamsSaved ?? 0,
+              matchupsSaved: r.matchupsSaved ?? 0,
+              draftPicksSaved: r.draftPicksSaved ?? 0,
+              transactionsSaved: r.transactionsSaved ?? 0,
+              rosterEntriesSaved: r.rosterEntriesSaved ?? 0,
+              playersSaved: r.playersSaved ?? 0,
+              standingsSaved: r.standingsSaved ?? 0,
+            };
+            const st =
+              r.status === "failed"
+                ? "failed"
+                : r.status === "partial" || r.status === "running"
+                  ? "partial"
+                  : "success";
+            results.push({ season, status: st, counts });
+          } catch (e) {
+            results.push({
+              season,
+              status: "failed",
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+        memCache.invalidateAll();
+        return { results };
       }),
 
     manifests: publicProcedure.query(async () => getRefreshManifests()),

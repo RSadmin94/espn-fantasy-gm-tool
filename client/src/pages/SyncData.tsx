@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,8 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Database,
+  Layers,
   Loader2,
   RefreshCw,
   SkipForward,
@@ -187,6 +189,9 @@ function ManifestCard({ manifest, refreshResult }: {
 /** Avoid duplicate auto-sync under React Strict Mode remount (same URL). */
 let gmwrAutoSync2026LastKey = "";
 
+const BACKFILL_NORMALIZED_SEASONS = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+const REPROCESS_MANIFEST_RANGE = BACKFILL_NORMALIZED_SEASONS;
+
 function trpcLikeErrorMessage(err: Error | { message: string } | null | undefined): string {
   if (!err) return "";
   const nested = (err as { data?: { json?: { message?: string } } }).data?.json?.message;
@@ -208,6 +213,20 @@ export function SyncData() {
   const refreshMutation = trpc.espn.refresh.useMutation({
     onSuccess: (data) => {
       setRunResults(data as Record<number, RefreshResult>);
+      void utils.espn.manifests.invalidate();
+      void utils.espn.cachedSeasons.invalidate();
+    },
+  });
+
+  const backfillNormalizedMutation = trpc.espn.backfillNormalized.useMutation({
+    onSuccess: () => {
+      void utils.espn.manifests.invalidate();
+      void utils.espn.cachedSeasons.invalidate();
+    },
+  });
+
+  const reprocessCachedMutation = trpc.espn.reprocessCachedSeasons.useMutation({
+    onSuccess: () => {
       void utils.espn.manifests.invalidate();
       void utils.espn.cachedSeasons.invalidate();
     },
@@ -256,6 +275,18 @@ export function SyncData() {
   };
 
   const isLoading = refreshMutation.isPending;
+  const isBackfillLoading = backfillNormalizedMutation.isPending;
+  const isReprocessLoading = reprocessCachedMutation.isPending;
+
+  const seasonsToReprocessCached = useMemo(() => {
+    return REPROCESS_MANIFEST_RANGE.filter((s) => {
+      const m = manifests.find((x) => x.season === s);
+      if (!m) return false;
+      const teams = m.teamCount ?? 0;
+      const matchups = m.matchupCount ?? 0;
+      return teams > 0 && matchups === 0;
+    });
+  }, [manifests]);
   const autoSync2026RefreshDone =
     autoSync2026 && refreshMutation.isSuccess && cachedSeasons.includes(2026);
 
@@ -320,7 +351,7 @@ export function SyncData() {
           </div>
           <Button
             onClick={handleRefreshLatest}
-            disabled={isLoading || !latestSeason}
+            disabled={isLoading || isBackfillLoading || isReprocessLoading || !latestSeason}
             className="gap-2"
           >
             {isLoading && !selectedSeasons.length ? (
@@ -330,6 +361,98 @@ export function SyncData() {
             )}
             {isLoading && !selectedSeasons.length ? "Syncing…" : `Sync ${latestSeason ?? "…"}`}
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Re-normalize from cache (no ESPN fetch) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Backfill Normalized Data</CardTitle>
+          <CardDescription>
+            Re-run matchups, transactions, roster entries, and standings from the existing combined cache for
+            seasons {BACKFILL_NORMALIZED_SEASONS[0]}–{BACKFILL_NORMALIZED_SEASONS[BACKFILL_NORMALIZED_SEASONS.length - 1]} without re-fetching ESPN.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button
+            variant="secondary"
+            className="gap-2"
+            disabled={isLoading || isBackfillLoading || isReprocessLoading}
+            onClick={() => backfillNormalizedMutation.mutate({ seasons: BACKFILL_NORMALIZED_SEASONS })}
+          >
+            {isBackfillLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Database className="h-4 w-4" />
+            )}
+            {isBackfillLoading ? "Backfilling…" : "Backfill Normalized Data"}
+          </Button>
+          {backfillNormalizedMutation.isSuccess && backfillNormalizedMutation.data && (
+            <pre className="max-h-64 overflow-auto rounded-lg border border-border bg-muted/30 p-3 text-xs text-foreground">
+              {JSON.stringify(backfillNormalizedMutation.data, null, 2)}
+            </pre>
+          )}
+          {backfillNormalizedMutation.isError && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="whitespace-pre-wrap break-words">
+                {trpcLikeErrorMessage(backfillNormalizedMutation.error)}
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Full re-persist from combined cache (no ESPN fetch) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Reprocess Cached Data</CardTitle>
+          <CardDescription>
+            Runs the full normalization pipeline (teams, matchups, transactions, rosters, draft picks, standings)
+            from the stored combined JSON for seasons in {REPROCESS_MANIFEST_RANGE[0]}–
+            {REPROCESS_MANIFEST_RANGE[REPROCESS_MANIFEST_RANGE.length - 1]} that show teams in the manifest but
+            zero matchups — without calling the ESPN API.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            {seasonsToReprocessCached.length > 0
+              ? `Will reprocess: ${seasonsToReprocessCached.sort((a, b) => a - b).join(", ")}`
+              : `No seasons in ${REPROCESS_MANIFEST_RANGE[0]}–${REPROCESS_MANIFEST_RANGE[REPROCESS_MANIFEST_RANGE.length - 1]} currently match (teams > 0 and matchups = 0).`}
+          </p>
+          <Button
+            variant="secondary"
+            className="gap-2"
+            disabled={
+              isLoading ||
+              isBackfillLoading ||
+              isReprocessLoading ||
+              seasonsToReprocessCached.length === 0
+            }
+            onClick={() =>
+              reprocessCachedMutation.mutate({ seasons: [...seasonsToReprocessCached].sort((a, b) => a - b) })
+            }
+          >
+            {isReprocessLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Layers className="h-4 w-4" />
+            )}
+            {isReprocessLoading ? "Reprocessing…" : "Reprocess Cached Data"}
+          </Button>
+          {reprocessCachedMutation.isSuccess && reprocessCachedMutation.data && (
+            <pre className="max-h-64 overflow-auto rounded-lg border border-border bg-muted/30 p-3 text-xs text-foreground">
+              {JSON.stringify(reprocessCachedMutation.data, null, 2)}
+            </pre>
+          )}
+          {reprocessCachedMutation.isError && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="whitespace-pre-wrap break-words">
+                {trpcLikeErrorMessage(reprocessCachedMutation.error)}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -384,7 +507,7 @@ export function SyncData() {
               <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   onClick={handleRefreshSelected}
-                  disabled={isLoading}
+                  disabled={isLoading || isBackfillLoading || isReprocessLoading}
                   size="sm"
                   className="gap-2"
                 >
