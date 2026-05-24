@@ -18,6 +18,7 @@ import { Standings } from "./pages/Standings";
 import { Roster } from "./pages/Roster";
 import { Trades } from "./pages/Trades";
 import { Advisor } from "./pages/Advisor";
+import { Settings } from "./pages/Settings";
 import { trpc } from "@/lib/trpc";
 import "./index.css";
 
@@ -109,7 +110,7 @@ const router = createBrowserRouter([
           { path: "/roster", element: <Roster /> },
           { path: "/trades", element: <Trades /> },
           { path: "/advisor", element: <Advisor /> },
-          { path: "/settings", element: <PlaceholderPage title="Settings" /> },
+          { path: "/settings", element: <Settings /> },
 
           // ── Legacy route redirects ────────────────────────────────────
           // Chrome extension posts here after ESPN connect
