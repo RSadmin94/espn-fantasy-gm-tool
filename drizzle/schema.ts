@@ -323,6 +323,7 @@ export const gmTransactions = mysqlTable(
     leagueId: varchar("leagueId", { length: 32 }).notNull(),
     season: int("season").notNull(),
     transactionId: varchar("transactionId", { length: 64 }).notNull(),
+    relatedTransactionId: varchar("relatedTransactionId", { length: 64 }),
     type: varchar("type", { length: 64 }).notNull().default(""),
     status: varchar("status", { length: 64 }).notNull().default(""),
     playerId: int("playerId"),
