@@ -32,11 +32,14 @@ async function getEspnCookieValues() {
   return { swid: swidRow?.value ?? "", espnS2: s2Row?.value ?? "" };
 }
 
-function logSaveIntent({ hasSwid, hasS2, leagueId }) {
-  console.info("[GMWR] save credentials intent", {
+function logConnectIntent({ hasSwid, hasS2, leagueId }) {
+  console.info("[GMWR] ESPN extension pipeline", {
+    espnUrlOpened: null,
+    leagueIdDetected: leagueId ? String(leagueId).trim() : null,
     swidPresent: hasSwid,
     espnS2Present: hasS2,
-    leagueId: leagueId || "(none)",
+    saveCredentialsHttpStatus: null,
+    refreshStarted: null,
   });
 }
 
@@ -117,7 +120,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const { swid, espnS2 } = await getEspnCookieValues();
     const hasSwid = Boolean(swid);
     const hasS2 = Boolean(espnS2);
-    logSaveIntent({ hasSwid, hasS2, leagueId });
+    logConnectIntent({ hasSwid, hasS2, leagueId });
 
     if (!hasSwid || !hasS2) {
       sendResponse({ ok: false, error: "ESPN cookies not found. Open fantasy.espn.com and sign in, then try again." });

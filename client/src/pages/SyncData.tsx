@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -183,7 +184,17 @@ function ManifestCard({ manifest, refreshResult }: {
   );
 }
 
+/** Avoid duplicate auto-sync under React Strict Mode remount (same URL). */
+let gmwrAutoSync2026LastKey = "";
+
+function trpcLikeErrorMessage(err: Error | { message: string } | null | undefined): string {
+  if (!err) return "";
+  const nested = (err as { data?: { json?: { message?: string } } }).data?.json?.message;
+  return typeof nested === "string" && nested.trim() ? nested : err.message;
+}
+
 export function SyncData() {
+  const [searchParams] = useSearchParams();
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
   const [forceRefresh, setForceRefresh] = useState(false);
   const [runResults, setRunResults] = useState<Record<number, RefreshResult>>({});
@@ -201,6 +212,18 @@ export function SyncData() {
       void utils.espn.cachedSeasons.invalidate();
     },
   });
+
+  const { mutate: runRefresh } = refreshMutation;
+
+  const autoSync2026 = searchParams.get("autoSync") === "2026";
+
+  useEffect(() => {
+    if (!autoSync2026) return;
+    const key = `${globalThis.location?.pathname ?? ""}${globalThis.location?.search ?? ""}`;
+    if (gmwrAutoSync2026LastKey === key) return;
+    gmwrAutoSync2026LastKey = key;
+    runRefresh({ season: 2026, forceRefresh: true });
+  }, [autoSync2026, runRefresh]);
 
   const allSeasons: number[] = allSeasonsQuery.data ?? [];
   const cachedSeasons: number[] = cachedQuery.data ?? [];
@@ -227,7 +250,14 @@ export function SyncData() {
     refreshMutation.mutate({ seasons: selectedSeasons, forceRefresh });
   };
 
+  const handleAutoSync2026Retry = () => {
+    refreshMutation.reset();
+    runRefresh({ season: 2026, forceRefresh: true });
+  };
+
   const isLoading = refreshMutation.isPending;
+  const autoSync2026RefreshDone =
+    autoSync2026 && refreshMutation.isSuccess && cachedSeasons.includes(2026);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -238,6 +268,36 @@ export function SyncData() {
           Pull fresh data from ESPN for any season. Closed seasons are skipped unless force-refresh is enabled.
         </p>
       </div>
+
+      {autoSync2026 && refreshMutation.isPending && (
+        <div className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-foreground">
+          Syncing 2026 ESPN data...
+        </div>
+      )}
+
+      {autoSync2026 && refreshMutation.isError && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="min-w-0 flex-1 space-y-3">
+              <p className="whitespace-pre-wrap break-words">
+                {trpcLikeErrorMessage(refreshMutation.error)}
+              </p>
+              <Button variant="outline" size="sm" onClick={handleAutoSync2026Retry} disabled={isLoading}>
+                Retry
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {autoSync2026RefreshDone && (
+        <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3">
+          <Button asChild variant="default" className="gap-2">
+            <Link to="/dashboard">Go to Dashboard</Link>
+          </Button>
+        </div>
+      )}
 
       {/* Quick sync card */}
       <Card>
@@ -351,11 +411,13 @@ export function SyncData() {
         )}
       </Card>
 
-      {/* Refresh error banner */}
-      {refreshMutation.isError && (
+      {/* Refresh error banner (manual sync — auto-sync errors shown above) */}
+      {refreshMutation.isError && !autoSync2026 && (
         <div className="flex items-start gap-3 rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          {refreshMutation.error.message}
+          <span className="whitespace-pre-wrap break-words">
+            {trpcLikeErrorMessage(refreshMutation.error)}
+          </span>
         </div>
       )}
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
+import { buildEspnFantasyFootballConnectUrl } from "@/lib/espnConnectUrl";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -310,6 +311,20 @@ export function ConnectESPN() {
     if (timeoutHandleRef.current) clearTimeout(timeoutHandleRef.current);
   }, []);
 
+  function openEspnConnectTab() {
+    const leagueIdForUrl = activeQ.data?.leagueId?.trim() || undefined;
+    const espnUrlOpened = buildEspnFantasyFootballConnectUrl(leagueIdForUrl);
+    console.info("[ConnectESPN] ESPN connect open", {
+      espnUrlOpened,
+      leagueIdDetected: leagueIdForUrl ?? null,
+      swidPresent: false,
+      espnS2Present: false,
+      saveCredentialsHttpStatus: null,
+      refreshStarted: null,
+    });
+    window.open(espnUrlOpened, "_blank", "noopener,noreferrer");
+  }
+
   function handleConnect() {
     // Snapshot current league IDs as baseline
     const current = (leaguesQ.data as LeagueRow[] | undefined) ?? [];
@@ -319,8 +334,8 @@ export function ConnectESPN() {
     setTimedOut(false);
     setNewLeague(null);
 
-    // Open ESPN in new tab
-    window.open("https://fantasy.espn.com/football/team?leagueId=1589198", "_blank", "noopener,noreferrer");
+    // Open ESPN in new tab (league overview when we know an active league id)
+    openEspnConnectTab();
 
     // Start 2-minute timeout
     timeoutHandleRef.current = setTimeout(() => {
@@ -449,7 +464,7 @@ export function ConnectESPN() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.open("https://fantasy.espn.com/football/team?leagueId=1589198", "_blank", "noopener,noreferrer")}
+                  onClick={openEspnConnectTab}
                   className="gap-1.5 text-xs"
                 >
                   <ExternalLink className="h-3.5 w-3.5" /> Re-open ESPN

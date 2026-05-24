@@ -1,9 +1,10 @@
 /**
- * Runs on https://gmwarroom.online/* — performs saveCredentials with Clerk cookies (credentials:include).
+ * Runs on https://gmwarroom.online/* — performs saveCredentials with Clerk cookies (credentials:include),
+ * then redirects to the sync page so SyncData.tsx runs espn.refresh.
  */
 
 const TRPC_SAVE_URL = "https://gmwarroom.online/api/trpc/espn.saveCredentials";
-const DASHBOARD_URL = "https://gmwarroom.online/dashboard";
+const SYNC_AUTOSYNC_URL = "https://gmwarroom.online/sync?autoSync=2026";
 
 function showBanner(html, variant) {
   const id = "gmwr-extension-banner";
@@ -54,6 +55,14 @@ function buildTrpcInputBody(input) {
   return JSON.stringify({ json });
 }
 
+function hasTrpcError(json) {
+  return Boolean(json && (json.error || (Array.isArray(json) && json[0]?.error)));
+}
+
+function logPipeline(payload) {
+  console.info("[GMWR] ESPN extension pipeline", payload);
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== "GMWR_SAVE_ESPN_CREDS") return false;
 
@@ -61,14 +70,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const { swid, espnS2, leagueId } = message.payload || {};
     const hasSwid = Boolean(swid);
     const hasS2 = Boolean(espnS2);
-    console.info("[GMWR] extension save request", {
-      swidPresent: hasSwid,
-      espnS2Present: hasS2,
-      leagueId: leagueId || "(none)",
-    });
+    const leagueIdDetected = leagueId ? String(leagueId).trim() : null;
 
     if (!hasSwid || !hasS2) {
       showBanner("GM War Room: missing ESPN credentials in extension message.", "error");
+      logPipeline({
+        espnUrlOpened: null,
+        leagueIdDetected,
+        swidPresent: hasSwid,
+        espnS2Present: hasS2,
+        saveCredentialsHttpStatus: null,
+      });
       sendResponse({ ok: false });
       return;
     }
@@ -83,43 +95,61 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     });
 
     const status = res.status;
-    let text = "";
     let json = null;
     const ct = res.headers.get("content-type") || "";
     try {
       if (ct.includes("application/json")) {
         json = await res.json();
       } else {
-        text = await res.text();
+        await res.text();
       }
     } catch {
-      text = "(could not read response body)";
+      /* ignore */
     }
 
-    console.info("[GMWR] save credentials response", { status, leagueId: leagueId || "(none)" });
-
     if (!res.ok) {
-      const detail = json ? trpcErrorText(json) : text;
+      const detail = json ? trpcErrorText(json) : "";
       showBanner(
         `GM War Room: save failed — HTTP ${status}${detail ? ` — ${escapeHtml(detail)}` : ""}`,
         "error",
       );
+      logPipeline({
+        espnUrlOpened: null,
+        leagueIdDetected,
+        swidPresent: hasSwid,
+        espnS2Present: hasS2,
+        saveCredentialsHttpStatus: status,
+      });
       sendResponse({ ok: false, status });
       return;
     }
 
-    if (json && (json.error || (Array.isArray(json) && json[0]?.error))) {
+    if (hasTrpcError(json)) {
       const detail = trpcErrorText(json);
       showBanner(`GM War Room: save failed — HTTP ${status}${detail ? ` — ${escapeHtml(detail)}` : ""}`, "error");
+      logPipeline({
+        espnUrlOpened: null,
+        leagueIdDetected,
+        swidPresent: hasSwid,
+        espnS2Present: hasS2,
+        saveCredentialsHttpStatus: status,
+      });
       sendResponse({ ok: false, status });
       return;
     }
 
-    showBanner("<strong>Saved to GM War Room</strong> — redirecting…", "ok");
+    showBanner("<strong>Saved to GM War Room</strong> — opening sync page…", "ok");
+    logPipeline({
+      espnUrlOpened: null,
+      leagueIdDetected,
+      swidPresent: hasSwid,
+      espnS2Present: hasS2,
+      saveCredentialsHttpStatus: status,
+    });
     sendResponse({ ok: true, status });
     setTimeout(() => {
-      window.location.assign(DASHBOARD_URL);
-    }, 1200);
+      window.location.assign(SYNC_AUTOSYNC_URL);
+    }, 400);
   })().catch((err) => {
     const msg = err instanceof Error ? err.message : String(err);
     showBanner(`GM War Room: ${escapeHtml(msg)}`, "error");
