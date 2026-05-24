@@ -134,6 +134,18 @@ export async function getRefreshManifests() {
   return db.select().from(refreshManifest).orderBy(desc(refreshManifest.season));
 }
 
+/** Coerce manifest status so MySQL enum never receives undefined / garbage (avoids bad bindings on ODKU). */
+function normalizeManifestStatus(
+  s: unknown
+): "success" | "partial" | "failed" {
+  if (s === "success" || s === "partial" || s === "failed") return s;
+  return "failed";
+}
+
+/**
+ * Upsert `refresh_manifest` by unique `season` (table has no leagueId — one row per season).
+ * Full refresh passes all counts; failure-only updates must not overwrite counts with null on duplicate.
+ */
 export async function upsertRefreshManifest(season: number, data: {
   teamCount?: number; rosterCount?: number; matchupCount?: number;
   draftPickCount?: number; transactionCount?: number;
@@ -141,14 +153,64 @@ export async function upsertRefreshManifest(season: number, data: {
 }) {
   const db = await getDb();
   if (!db) return;
-  const updateSet = {
-    lastRefreshedAt: new Date(), teamCount: data.teamCount ?? null,
-    rosterCount: data.rosterCount ?? null, matchupCount: data.matchupCount ?? null,
-    draftPickCount: data.draftPickCount ?? null, transactionCount: data.transactionCount ?? null,
-    status: data.status, errorMessage: data.errorMessage ?? null, viewsRefreshed: data.viewsRefreshed ?? null,
+
+  const status = normalizeManifestStatus(data.status);
+  const errorMessage = data.errorMessage ?? null;
+  const viewsRefreshed = data.viewsRefreshed ?? null;
+  const now = new Date();
+
+  const hasFullCounts =
+    typeof data.teamCount === "number" &&
+    typeof data.rosterCount === "number" &&
+    typeof data.matchupCount === "number" &&
+    typeof data.draftPickCount === "number" &&
+    typeof data.transactionCount === "number";
+
+  if (hasFullCounts) {
+    const row = {
+      season,
+      lastRefreshedAt: now,
+      teamCount: data.teamCount!,
+      rosterCount: data.rosterCount!,
+      matchupCount: data.matchupCount!,
+      draftPickCount: data.draftPickCount!,
+      transactionCount: data.transactionCount!,
+      status,
+      errorMessage,
+      viewsRefreshed,
+    };
+    await db.insert(refreshManifest).values(row).onDuplicateKeyUpdate({ set: row });
+    return;
+  }
+
+  // Partial row (e.g. status: "failed" + errorMessage only): insert minimal row for first insert;
+  // on duplicate, update only status fields so existing counts are not nulled.
+  const insertRow = {
+    season,
+    lastRefreshedAt: now,
+    teamCount: null as number | null,
+    rosterCount: null as number | null,
+    matchupCount: null as number | null,
+    draftPickCount: null as number | null,
+    transactionCount: null as number | null,
+    status,
+    errorMessage,
+    viewsRefreshed,
   };
-  await db.insert(refreshManifest).values({ season, ...updateSet })
-    .onDuplicateKeyUpdate({ set: updateSet });
+  const partialUpdate: {
+    lastRefreshedAt: Date;
+    status: "success" | "partial" | "failed";
+    errorMessage: string | null;
+    viewsRefreshed?: string[] | null;
+  } = {
+    lastRefreshedAt: now,
+    status,
+    errorMessage,
+  };
+  if (viewsRefreshed !== null) {
+    partialUpdate.viewsRefreshed = viewsRefreshed;
+  }
+  await db.insert(refreshManifest).values(insertRow).onDuplicateKeyUpdate({ set: partialUpdate });
 }
 
 export async function getChatHistory(userId: number, season?: number) {
