@@ -6,7 +6,6 @@ import {
   mysqlEnum,
   mysqlTable,
   text,
-  longtext,
   timestamp,
   varchar,
   json,
@@ -35,27 +34,6 @@ export const users = mysqlTable("users", {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
-
-// Cache raw ESPN API JSON payloads per season + view
-export const espnSeasonCache = mysqlTable(
-  "espn_season_cache",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    leagueId: varchar("leagueId", { length: 32 }).notNull().default("default"),
-    season: int("season").notNull(),
-    viewName: varchar("viewName", { length: 64 }).notNull(),
-    /** Raw ESPN JSON as text — LONGTEXT avoids MySQL JSON size limits on large combined views. */
-    payload: longtext("payload").notNull(),
-    fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  (t) => [
-    // unique constraint scoped per league — enables multi-league isolation
-    uniqueIndex("uq_league_season_view").on(t.leagueId, t.season, t.viewName),
-  ]
-);
-
-export type EspnSeasonCache = typeof espnSeasonCache.$inferSelect;
 
 // Track when each season was last refreshed
 export const refreshManifest = mysqlTable("refresh_manifest", {
@@ -191,7 +169,8 @@ export const scheduledJobs = mysqlTable("scheduled_jobs", {
 export type ScheduledJob = typeof scheduledJobs.$inferSelect;
 export type InsertScheduledJob = typeof scheduledJobs.$inferInsert;
 
-// ─── Fantasy Data Cache (FantasyPros ECR/ADP + PFR stats) ─────────────────────
+// ─── Fantasy Data Cache (FantasyPros ECR/ADP + PFR, Vegas odds, ESPN sync rows) ─
+// ESPN payloads use keys: `espn:${leagueId}:${season}:${viewName}` (see server/db.ts).
 export const fantasyDataCache = mysqlTable(
   "fantasy_data_cache",
   {

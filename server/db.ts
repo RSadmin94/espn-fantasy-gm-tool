@@ -1,8 +1,8 @@
-import { eq, desc, and, gt, or } from "drizzle-orm";
+import { eq, desc, and, gt, or, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import type { EspnSeasonCache } from "../drizzle/schema";
+import type { FantasyDataCache, InsertFantasyDataCache } from "../drizzle/schema";
 import {
-  InsertUser, users, espnSeasonCache, refreshManifest, chatHistory,
+  InsertUser, users, fantasyDataCache, refreshManifest, chatHistory,
   pickTrades, InsertPickTrade, espnViewHealth, InsertEspnViewHealth,
   weeklyPlayerStats, InsertWeeklyPlayerStats,
   scheduledJobs, ScheduledJob,
@@ -58,72 +58,119 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-/** Row shape returned from cache reads (`payload` is parsed JSON). */
-export type CachedEspnSeasonRow = Omit<EspnSeasonCache, "payload"> & { payload: Record<string, unknown> };
+/** Cache key for ESPN view payloads in `fantasy_data_cache`. */
+export function buildEspnFantasyDataCacheKey(leagueId: string, season: number, viewName: string): string {
+  return `espn:${leagueId}:${season}:${viewName}`;
+}
 
-function parseSeasonCacheRow(row: EspnSeasonCache): CachedEspnSeasonRow {
-  const raw = row.payload as unknown;
+export function parseEspnFantasyDataCacheKey(key: string): { leagueId: string; season: number; viewName: string } | null {
+  if (!key.startsWith("espn:")) return null;
+  const rest = key.slice(5);
+  const firstColon = rest.indexOf(":");
+  if (firstColon < 0) return null;
+  const leagueId = rest.slice(0, firstColon);
+  const afterLid = rest.slice(firstColon + 1);
+  const secondColon = afterLid.indexOf(":");
+  if (secondColon < 0) return null;
+  const seasonStr = afterLid.slice(0, secondColon);
+  const viewName = afterLid.slice(secondColon + 1);
+  const season = Number(seasonStr);
+  if (!Number.isFinite(season)) return null;
+  return { leagueId, season, viewName };
+}
+
+function escapeMysqlLikePattern(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+/** Row shape returned from ESPN cache reads (`payload` is decoded JSON). */
+export type CachedEspnSeasonRow = {
+  id: number;
+  cacheKey: string;
+  leagueId: string;
+  season: number;
+  viewName: string;
+  payload: unknown;
+  fetchedAt: Date;
+  updatedAt: Date;
+};
+
+function decodeFantasyDataJsonPayload(raw: unknown): unknown {
   if (typeof raw === "string") {
     try {
-      const parsed = JSON.parse(raw) as unknown;
-      return {
-        ...row,
-        payload: typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-          ? (parsed as Record<string, unknown>)
-          : {},
-      };
+      return JSON.parse(raw) as unknown;
     } catch {
-      return { ...row, payload: {} };
+      return {};
     }
   }
-  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
-    return { ...row, payload: raw as Record<string, unknown> };
-  }
-  return { ...row, payload: {} };
+  return raw ?? {};
 }
 
-function serializeSeasonCachePayload(payload: unknown): string {
-  return typeof payload === "string" ? payload : JSON.stringify(payload ?? {});
+function fantasyDataRowToCachedEspnSeason(row: FantasyDataCache): CachedEspnSeasonRow {
+  const meta = parseEspnFantasyDataCacheKey(row.cacheKey);
+  return {
+    id: row.id,
+    cacheKey: row.cacheKey,
+    leagueId: meta?.leagueId ?? "default",
+    season: meta?.season ?? 0,
+    viewName: meta?.viewName ?? "",
+    payload: decodeFantasyDataJsonPayload(row.payload),
+    fetchedAt: row.fetchedAt,
+    updatedAt: row.updatedAt,
+  };
 }
 
-export async function getCachedView(season: number, viewName: string, leagueId?: string): Promise<CachedEspnSeasonRow | null> {
+export async function getCachedView(
+  season: number,
+  viewName: string,
+  leagueId?: string
+): Promise<CachedEspnSeasonRow | null> {
   const db = await getDb();
   if (!db) return null;
   const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
-  // ORDER BY fetchedAt DESC ensures we always get the most recent row.
-  // Without this, duplicate rows (from missing unique constraint) could
-  // return stale data from an earlier refresh instead of the latest one.
-  const result = await db.select().from(espnSeasonCache)
-    .where(and(
-      eq(espnSeasonCache.leagueId, lid),
-      eq(espnSeasonCache.season, season),
-      eq(espnSeasonCache.viewName, viewName)
-    ))
-    .orderBy(desc(espnSeasonCache.fetchedAt))
+  const primaryKey = buildEspnFantasyDataCacheKey(lid, season, viewName);
+  const primary = await db
+    .select()
+    .from(fantasyDataCache)
+    .where(eq(fantasyDataCache.cacheKey, primaryKey))
+    .orderBy(desc(fantasyDataCache.updatedAt))
     .limit(1);
-  // Fallback: if no row found with leagueId, try the legacy "default" row (backward compat)
-  if (!result[0] && lid !== "default") {
-    const legacy = await db.select().from(espnSeasonCache)
-      .where(and(
-        eq(espnSeasonCache.leagueId, "default"),
-        eq(espnSeasonCache.season, season),
-        eq(espnSeasonCache.viewName, viewName)
-      ))
-      .orderBy(desc(espnSeasonCache.fetchedAt))
+  if (primary[0]) return fantasyDataRowToCachedEspnSeason(primary[0]);
+  if (lid !== "default") {
+    const legacyKey = buildEspnFantasyDataCacheKey("default", season, viewName);
+    const legacy = await db
+      .select()
+      .from(fantasyDataCache)
+      .where(eq(fantasyDataCache.cacheKey, legacyKey))
+      .orderBy(desc(fantasyDataCache.updatedAt))
       .limit(1);
-    return legacy[0] ? parseSeasonCacheRow(legacy[0]) : null;
+    if (legacy[0]) return fantasyDataRowToCachedEspnSeason(legacy[0]);
   }
-  return result[0] ? parseSeasonCacheRow(result[0]) : null;
+  return null;
 }
 
 export async function upsertCachedView(season: number, viewName: string, payload: unknown, leagueId?: string) {
   const db = await getDb();
   if (!db) return;
   const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
-  const payloadStr = serializeSeasonCachePayload(payload);
-  await db.insert(espnSeasonCache)
-    .values({ leagueId: lid, season, viewName, payload: payloadStr })
-    .onDuplicateKeyUpdate({ set: { payload: payloadStr, updatedAt: new Date() } });
+  const cacheKey = buildEspnFantasyDataCacheKey(lid, season, viewName);
+  const payloadForDb =
+    typeof payload === "object" && payload !== null ? payload : ({} as Record<string, unknown>);
+  const now = new Date();
+  await db
+    .insert(fantasyDataCache)
+    .values({
+      cacheKey,
+      payload: payloadForDb as InsertFantasyDataCache["payload"],
+      fetchedAt: now,
+      updatedAt: now,
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        payload: payloadForDb as InsertFantasyDataCache["payload"],
+        updatedAt: now,
+      },
+    });
 }
 
 export async function getAllCachedSeasons(
@@ -133,15 +180,28 @@ export async function getAllCachedSeasons(
   const db = await getDb();
   if (!db) return [];
   const lid = leagueId ?? (await resolveActiveLeagueId(userId));
-  // Include both the exact leagueId and "default" (legacy rows) for backward compat
-  const result = await db.selectDistinct({ season: espnSeasonCache.season })
-    .from(espnSeasonCache)
-    .where(and(
-      gt(espnSeasonCache.season, 2000),
-      or(eq(espnSeasonCache.leagueId, lid), eq(espnSeasonCache.leagueId, "default"))
-    ))
-    .orderBy(desc(espnSeasonCache.season));
-  return result.map((r) => r.season);
+  const esc = escapeMysqlLikePattern(lid);
+  const rows = await db
+    .select({ cacheKey: fantasyDataCache.cacheKey })
+    .from(fantasyDataCache)
+    .where(
+      and(
+        like(fantasyDataCache.cacheKey, "espn:%"),
+        or(
+          like(fantasyDataCache.cacheKey, `espn:${esc}:%`),
+          like(fantasyDataCache.cacheKey, "espn:default:%")
+        )
+      )
+    );
+  const seasons = new Set<number>();
+  for (const { cacheKey } of rows) {
+    const parsed = parseEspnFantasyDataCacheKey(cacheKey);
+    if (!parsed || parsed.season <= 2000) continue;
+    if (parsed.leagueId === lid || parsed.leagueId === "default") {
+      seasons.add(parsed.season);
+    }
+  }
+  return Array.from(seasons).sort((a, b) => b - a);
 }
 
 /**

@@ -5,7 +5,7 @@
  * Replaces the static opponentData.ts hardcoded file.
  *
  * Data sources:
- *   - espnSeasonCache (teams, schedule, transactions, draftPicks) per season
+ *   - fantasy_data_cache ESPN rows (teams, schedule, transactions, draftPicks) per season
  *   - calcManagerBehavior() from analytics.ts for GM archetypes
  *
  * The returned shape is compatible with the OpponentData interface from

@@ -3,7 +3,7 @@
  * Phase 1 — Injury Intelligence Engine
  *
  * Fetches live NFL injury + practice participation data from ESPN's public
- * injuries endpoint (no API key required) and caches in espn_season_cache
+ * injuries endpoint (no API key required) and caches in fantasy_data_cache (`espn:*` keys)
  * under season=0 / viewName="injury_cache".
  *
  * Exports:

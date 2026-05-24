@@ -1,11 +1,18 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
-import { espnSeasonCache } from "./drizzle/schema.js";
+import { fantasyDataCache } from "./drizzle/schema.js";
 import { eq } from "drizzle-orm";
 
 const conn = await mysql.createConnection(process.env.DATABASE_URL!);
 const db = drizzle(conn);
-const rows = await db.select().from(espnSeasonCache).where(eq(espnSeasonCache.season, 2025));
+const lid = process.env.ESPN_LEAGUE_ID ?? "default";
+const cacheKey = `espn:${lid}:2025:combined`;
+const rows = await db.select().from(fantasyDataCache).where(eq(fantasyDataCache.cacheKey, cacheKey));
+if (!rows.length) {
+  console.error("No row for", cacheKey);
+  await conn.end();
+  process.exit(1);
+}
 const payload = rows[0].payload as Record<string, unknown>;
 const draft = (payload.draftDetail as Record<string, unknown>)?.picks as unknown[] || [];
 const seen = new Set<number>();

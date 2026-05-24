@@ -1,6 +1,6 @@
-import { getDb } from "./server/db";
-import { espnSeasonCache } from "./drizzle/schema";
-import { eq } from "drizzle-orm";
+import { getDb, parseEspnFantasyDataCacheKey } from "./server/db";
+import { fantasyDataCache } from "./drizzle/schema";
+import { like } from "drizzle-orm";
 
 const ROD_TEAM_ID = 11;
 const SEASONS = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
@@ -8,11 +8,13 @@ const SEASONS = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
 async function main() {
   const db = await getDb();
 
-  // Load all combined payloads
-  const rows = await db.select().from(espnSeasonCache).where(eq(espnSeasonCache.viewName, "combined"));
+  // Load all combined payloads (`espn:*:*:combined` keys)
+  const rows = await db.select().from(fantasyDataCache).where(like(fantasyDataCache.cacheKey, "espn:%:%:combined"));
   const payloads: Record<number, any> = {};
   for (const row of rows) {
-    payloads[row.season] = row.payload;
+    const meta = parseEspnFantasyDataCacheKey(row.cacheKey);
+    if (!meta || meta.viewName !== "combined") continue;
+    payloads[meta.season] = row.payload;
   }
 
   // Build member map and team-to-member map across all seasons

@@ -1,15 +1,18 @@
-import { getDb } from "./server/db";
-import { espnSeasonCache } from "./drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { getDb, buildEspnFantasyDataCacheKey, parseEspnFantasyDataCacheKey } from "./server/db";
+import { fantasyDataCache } from "./drizzle/schema";
+import { eq, like } from "drizzle-orm";
 
 async function main() {
   const db = await getDb();
 
+  const lid = process.env.ESPN_LEAGUE_ID ?? "default";
+  const cacheKey = buildEspnFantasyDataCacheKey(lid, 2025, "combined");
+
   // Check 2025 season for scoring settings and player stats
   const rows = await db
     .select()
-    .from(espnSeasonCache)
-    .where(and(eq(espnSeasonCache.season, 2025), eq(espnSeasonCache.viewName, "combined")))
+    .from(fantasyDataCache)
+    .where(eq(fantasyDataCache.cacheKey, cacheKey))
     .limit(1);
 
   if (!rows.length) {
@@ -69,12 +72,12 @@ async function main() {
     }
   }
 
-  // Check if there are separate player stats views
+  // Check if there are separate player stats views (any `espn:*:2025:*` keys)
   const allRows = await db
-    .select({ viewName: espnSeasonCache.viewName })
-    .from(espnSeasonCache)
-    .where(eq(espnSeasonCache.season, 2025));
-  console.log("\nAll views for 2025:", allRows.map(r => r.viewName));
+    .select({ cacheKey: fantasyDataCache.cacheKey })
+    .from(fantasyDataCache)
+    .where(like(fantasyDataCache.cacheKey, `espn:%:2025:%`));
+  console.log("\nAll ESPN cache keys for 2025:", allRows.map(r => parseEspnFantasyDataCacheKey(r.cacheKey)?.viewName ?? r.cacheKey));
 
   process.exit(0);
 }
