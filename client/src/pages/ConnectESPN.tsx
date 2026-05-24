@@ -320,7 +320,7 @@ export function ConnectESPN() {
     setNewLeague(null);
 
     // Open ESPN in new tab
-    window.open("https://fantasy.espn.com/football/", "_blank", "noopener,noreferrer");
+    window.open("https://fantasy.espn.com/football/team?leagueId=1589198", "_blank", "noopener,noreferrer");
 
     // Start 2-minute timeout
     timeoutHandleRef.current = setTimeout(() => {
@@ -449,7 +449,7 @@ export function ConnectESPN() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.open("https://fantasy.espn.com/football/", "_blank", "noopener,noreferrer")}
+                  onClick={() => window.open("https://fantasy.espn.com/football/team?leagueId=1589198", "_blank", "noopener,noreferrer")}
                   className="gap-1.5 text-xs"
                 >
                   <ExternalLink className="h-3.5 w-3.5" /> Re-open ESPN
