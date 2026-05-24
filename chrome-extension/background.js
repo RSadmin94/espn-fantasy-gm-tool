@@ -8,6 +8,16 @@
 const WAR_ROOM_ORIGIN = "https://gmwarroom.online";
 const TRPC_SAVE_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.saveCredentials`;
 const SYNC_AUTOSYNC_URL = `${WAR_ROOM_ORIGIN}/sync?autoSync=2026`;
+/**
+ * ESPN Fantasy web draft recap (same query shape the server uses as Referer for historical mDraftDetail).
+ * Example: https://fantasy.espn.com/football/league/draftrecap?seasonId=2024&leagueId=457622
+ */
+function buildEspnDraftRecapUrl(seasonId, leagueId) {
+  const lid = String(leagueId ?? "").trim();
+  const y = Number(seasonId);
+  if (!lid || !Number.isFinite(y) || y < 1999) return "";
+  return `https://fantasy.espn.com/football/league/draftrecap?seasonId=${y}&leagueId=${encodeURIComponent(lid)}`;
+}
 /** User profile / teams for 2026 — more reliable than the leagues list endpoint for some accounts. */
 const ESPN_PROFILE_DISCOVER_URL =
   "https://fantasy.espn.com/apis/v3/games/ffl/seasons/2026?view=proTeam";
@@ -163,13 +173,15 @@ function extractLeaguesFromProTeamPayload(data) {
   return dedupeLeaguesById(out);
 }
 
-/** leagueId from fantasy.espn.com league/team URLs. */
+/** leagueId from fantasy.espn.com league/team/draftrecap URLs. */
 function extractLeagueIdFromEspnFantasyUrl(urlStr) {
   if (!urlStr || typeof urlStr !== "string") return null;
   try {
     const u = new URL(urlStr);
     const qp = u.searchParams.get("leagueId") || u.searchParams.get("league_id");
     if (qp && /^\d+$/.test(String(qp).trim())) return String(qp).trim();
+    const pathMatch = u.pathname.match(/\/leagues\/(\d+)/i);
+    if (pathMatch?.[1]) return pathMatch[1];
   } catch {
     /* fall through */
   }
@@ -180,13 +192,33 @@ function extractLeagueIdFromEspnFantasyUrl(urlStr) {
   return m?.[1] ?? null;
 }
 
+/** seasonId query param from draft recap (and similar) ESPN URLs. */
+function extractSeasonIdFromEspnFantasyUrl(urlStr) {
+  if (!urlStr || typeof urlStr !== "string") return null;
+  try {
+    const u = new URL(urlStr);
+    const s = u.searchParams.get("seasonId") || u.searchParams.get("season_id");
+    if (s && /^\d{4}$/.test(String(s).trim())) return Number(s.trim());
+  } catch {
+    /* ignore */
+  }
+  const m = urlStr.match(/[?&]seasonId=(\d{4})/i) || urlStr.match(/[?&]season_id=(\d{4})/i);
+  return m?.[1] ? Number(m[1]) : null;
+}
+
 async function getLeagueIdFromActiveEspnTab() {
   try {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const url = tabs[0]?.url;
     if (!url || typeof url !== "string") return null;
     if (!url.includes("espn.com")) return null;
-    return extractLeagueIdFromEspnFantasyUrl(url);
+    const leagueId = extractLeagueIdFromEspnFantasyUrl(url);
+    if (leagueId && (url.includes("draftrecap") || url.includes("/draft"))) {
+      const seasonId = extractSeasonIdFromEspnFantasyUrl(url);
+      const recap = buildEspnDraftRecapUrl(seasonId ?? new Date().getFullYear() - 1, leagueId);
+      if (recap) console.info("[GMWR] ESPN draft context tab", { leagueId, seasonId, recap });
+    }
+    return leagueId;
   } catch {
     return null;
   }

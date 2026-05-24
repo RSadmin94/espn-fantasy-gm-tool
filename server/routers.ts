@@ -1290,14 +1290,22 @@ export const appRouter = router({
       }),
 
     /** Normalized `draft_picks` + `teams` for the active league (DB — requires season sync). */
-    draftHistory: protectedProcedure
+    draftHistory: publicProcedure
       .input(z.object({ season: z.number() }))
       .query(async ({ ctx, input }) => {
-        const { leagueId } = await resolveActiveLeagueId(
-          { user: { id: ctx.user.id } },
+        const userId = ctx.user?.id ?? null;
+        const resolved = await resolveActiveLeagueId(
+          { user: ctx.user ? { id: ctx.user.id } : undefined },
           null,
           input.season
         );
+        const { leagueId, source } = resolved;
+        console.info("[draftHistory]", {
+          userId,
+          leagueId,
+          source,
+          season: input.season,
+        });
         const db = await getDb();
         if (!db) return [];
 

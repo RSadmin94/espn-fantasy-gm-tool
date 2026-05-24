@@ -134,6 +134,25 @@ function getBaseUrlFor(season: number, creds?: EspnCreds): string {
 }
 function getBaseUrl(season: number): string { return getBaseUrlFor(season); }
 
+/**
+ * Referer aligned with the ESPN web client. For past seasons, mDraftDetail is associated with
+ * the draft recap page (not the generic league shell).
+ */
+export function buildEspnFantasyRefererForApi(
+  season: number,
+  views: readonly string[],
+  creds?: EspnCreds
+): string {
+  const lid = String(creds?.leagueId ?? LEAGUE_ID).trim() || LEAGUE_ID;
+  const wantsDraft = views.some((v) => v === "mDraftDetail");
+  const calendarYear = new Date().getFullYear();
+  const isHistoricalSeason = season < calendarYear;
+  if (wantsDraft && isHistoricalSeason) {
+    return `https://fantasy.espn.com/football/league/draftrecap?seasonId=${season}&leagueId=${encodeURIComponent(lid)}`;
+  }
+  return "https://fantasy.espn.com/football/league";
+}
+
 // ─── Pipeline result types ────────────────────────────────────────────────────
 
 export type ViewFetchStatus = "ok" | "error" | "auth_error" | "empty";
@@ -169,7 +188,7 @@ async function fetchAllViewsAtOnce(
   const headers: Record<string, string> = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     Accept: "application/json,text/plain,*/*",
-    Referer: "https://fantasy.espn.com/football/league",
+    Referer: buildEspnFantasyRefererForApi(season, views, creds),
   };
   const cookieStr = buildCookieStringFor(creds);
   if (cookieStr) headers["Cookie"] = cookieStr;
@@ -197,7 +216,7 @@ async function fetchSingleView(
   const headers: Record<string, string> = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     Accept: "application/json,text/plain,*/*",
-    Referer: "https://fantasy.espn.com/football/league",
+    Referer: buildEspnFantasyRefererForApi(season, [viewName], creds),
   };
   const cookieStr = buildCookieStringFor(creds);
   if (cookieStr) headers["Cookie"] = cookieStr;
