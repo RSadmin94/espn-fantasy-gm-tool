@@ -142,9 +142,23 @@ function normalizeManifestStatus(
   return "failed";
 }
 
+const MAX_REFRESH_MANIFEST_ERROR_LEN = 16_000;
+
+function truncateRefreshManifestError(msg: string | null): string | null {
+  if (msg == null) return null;
+  if (msg.length <= MAX_REFRESH_MANIFEST_ERROR_LEN) return msg;
+  return `${msg.slice(0, MAX_REFRESH_MANIFEST_ERROR_LEN)}…(truncated)`;
+}
+
+function isMysqlDuplicateKeyError(err: unknown): boolean {
+  const e = err as { errno?: number; code?: string };
+  return e.errno === 1062 || e.code === "ER_DUP_ENTRY";
+}
+
 /**
  * Upsert `refresh_manifest` by unique `season` (table has no leagueId — one row per season).
- * Full refresh passes all counts; failure-only updates must not overwrite counts with null on duplicate.
+ * Uses UPDATE-or-INSERT instead of MySQL ODKU to avoid driver/JSON edge cases with nested errors.
+ * `viewsRefreshed` is intentionally omitted until MySQL JSON array serialization is fixed.
  */
 export async function upsertRefreshManifest(season: number, data: {
   teamCount?: number; rosterCount?: number; matchupCount?: number;
@@ -155,8 +169,7 @@ export async function upsertRefreshManifest(season: number, data: {
   if (!db) return;
 
   const status = normalizeManifestStatus(data.status);
-  const errorMessage = data.errorMessage ?? null;
-  const viewsRefreshed = data.viewsRefreshed ?? null;
+  const errorMessage = truncateRefreshManifestError(data.errorMessage ?? null);
   const now = new Date();
 
   const hasFullCounts =
@@ -166,51 +179,95 @@ export async function upsertRefreshManifest(season: number, data: {
     typeof data.draftPickCount === "number" &&
     typeof data.transactionCount === "number";
 
-  if (hasFullCounts) {
-    const row = {
-      season,
-      lastRefreshedAt: now,
-      teamCount: data.teamCount!,
-      rosterCount: data.rosterCount!,
-      matchupCount: data.matchupCount!,
-      draftPickCount: data.draftPickCount!,
-      transactionCount: data.transactionCount!,
-      status,
-      errorMessage,
-      viewsRefreshed,
-    };
-    await db.insert(refreshManifest).values(row).onDuplicateKeyUpdate({ set: row });
+  const existing = await db
+    .select({ id: refreshManifest.id })
+    .from(refreshManifest)
+    .where(eq(refreshManifest.season, season))
+    .limit(1);
+
+  if (existing.length > 0) {
+    if (hasFullCounts) {
+      await db
+        .update(refreshManifest)
+        .set({
+          lastRefreshedAt: now,
+          teamCount: data.teamCount!,
+          rosterCount: data.rosterCount!,
+          matchupCount: data.matchupCount!,
+          draftPickCount: data.draftPickCount!,
+          transactionCount: data.transactionCount!,
+          status,
+          errorMessage,
+        })
+        .where(eq(refreshManifest.season, season));
+    } else {
+      await db
+        .update(refreshManifest)
+        .set({
+          lastRefreshedAt: now,
+          status,
+          errorMessage,
+        })
+        .where(eq(refreshManifest.season, season));
+    }
     return;
   }
 
-  // Partial row (e.g. status: "failed" + errorMessage only): insert with 0 counts (NOT NULL safe);
-  // on duplicate, update only status fields so existing counts are not overwritten.
-  const insertRow = {
-    season,
-    lastRefreshedAt: now,
-    teamCount: 0,
-    rosterCount: 0,
-    matchupCount: 0,
-    draftPickCount: 0,
-    transactionCount: 0,
-    status,
-    errorMessage,
-    viewsRefreshed,
-  };
-  const partialUpdate: {
-    lastRefreshedAt: Date;
-    status: "success" | "partial" | "failed";
-    errorMessage: string | null;
-    viewsRefreshed?: string[] | null;
-  } = {
-    lastRefreshedAt: now,
-    status,
-    errorMessage,
-  };
-  if (viewsRefreshed !== null) {
-    partialUpdate.viewsRefreshed = viewsRefreshed;
+  if (hasFullCounts) {
+    try {
+      await db.insert(refreshManifest).values({
+        season,
+        lastRefreshedAt: now,
+        teamCount: data.teamCount!,
+        rosterCount: data.rosterCount!,
+        matchupCount: data.matchupCount!,
+        draftPickCount: data.draftPickCount!,
+        transactionCount: data.transactionCount!,
+        status,
+        errorMessage,
+      });
+    } catch (err) {
+      if (!isMysqlDuplicateKeyError(err)) throw err;
+      await db
+        .update(refreshManifest)
+        .set({
+          lastRefreshedAt: now,
+          teamCount: data.teamCount!,
+          rosterCount: data.rosterCount!,
+          matchupCount: data.matchupCount!,
+          draftPickCount: data.draftPickCount!,
+          transactionCount: data.transactionCount!,
+          status,
+          errorMessage,
+        })
+        .where(eq(refreshManifest.season, season));
+    }
+    return;
   }
-  await db.insert(refreshManifest).values(insertRow).onDuplicateKeyUpdate({ set: partialUpdate });
+
+  try {
+    await db.insert(refreshManifest).values({
+      season,
+      lastRefreshedAt: now,
+      teamCount: 0,
+      rosterCount: 0,
+      matchupCount: 0,
+      draftPickCount: 0,
+      transactionCount: 0,
+      status,
+      errorMessage,
+    });
+  } catch (err) {
+    if (!isMysqlDuplicateKeyError(err)) throw err;
+    await db
+      .update(refreshManifest)
+      .set({
+        lastRefreshedAt: now,
+        status,
+        errorMessage,
+      })
+      .where(eq(refreshManifest.season, season));
+  }
 }
 
 export async function getChatHistory(userId: number, season?: number) {
@@ -284,6 +341,10 @@ export async function getDefaultEspnLeagueId(): Promise<string> {
   return process.env.ESPN_LEAGUE_ID ?? "default";
 }
 
+/**
+ * Upsert ESPN view health by (season, viewName).
+ * Uses UPDATE-or-INSERT instead of MySQL ODKU — avoids duplicate-parameter / driver issues seen with nested refresh errors.
+ */
 export async function upsertViewHealth(
   season: number,
   viewName: string,
@@ -291,16 +352,35 @@ export async function upsertViewHealth(
 ) {
   const db = await getDb();
   if (!db) return;
-  const updateSet = {
+  const now = new Date();
+  const patch = {
     status: data.status,
     errorMessage: data.errorMessage ?? null,
     recordCount: data.recordCount ?? null,
-    fetchedAt: new Date(),
-    updatedAt: new Date(),
+    fetchedAt: now,
+    updatedAt: now,
   };
-  await db.insert(espnViewHealth)
-    .values({ season, viewName, ...updateSet })
-    .onDuplicateKeyUpdate({ set: updateSet });
+
+  const existing = await db
+    .select({ id: espnViewHealth.id })
+    .from(espnViewHealth)
+    .where(and(eq(espnViewHealth.season, season), eq(espnViewHealth.viewName, viewName)))
+    .limit(1);
+
+  if (existing.length > 0) {
+    await db.update(espnViewHealth).set(patch).where(eq(espnViewHealth.id, existing[0].id));
+    return;
+  }
+
+  try {
+    await db.insert(espnViewHealth).values({ season, viewName, ...patch });
+  } catch (err) {
+    if (!isMysqlDuplicateKeyError(err)) throw err;
+    await db
+      .update(espnViewHealth)
+      .set(patch)
+      .where(and(eq(espnViewHealth.season, season), eq(espnViewHealth.viewName, viewName)));
+  }
 }
 
 export async function getViewHealthForSeason(season: number) {
