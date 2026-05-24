@@ -15,6 +15,9 @@ import { registerStripeWebhook } from "../stripeWebhook";
 import { registerHealthRoute } from "./healthRoute";
 
 async function startServer() {
+  const { runMigrations } = await import("../runMigrations");
+  await runMigrations();
+
   const app = express();
   app.set("trust proxy", 1);
   const server = createServer(app);

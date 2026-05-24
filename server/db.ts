@@ -316,7 +316,7 @@ export async function getDefaultEspnLeagueId(): Promise<string> {
 
 /**
  * Upsert ESPN view health by (season, viewName).
- * Uses UPDATE-or-INSERT instead of MySQL ODKU — avoids duplicate-parameter / driver issues seen with nested refresh errors.
+ * Insert-first + duplicate-key retry — no separate SELECT (avoids failures when the table was missing or read path is restricted).
  */
 export async function upsertViewHealth(
   season: number,
@@ -325,6 +325,14 @@ export async function upsertViewHealth(
 ) {
   const db = await getDb();
   if (!db) return;
+
+  const yr = Math.floor(Number(season));
+  if (!Number.isFinite(yr) || yr < 1900 || yr > 2200) {
+    console.warn("[upsertViewHealth] invalid season:", season);
+    return;
+  }
+  const vn = String(viewName).slice(0, 64);
+
   const now = new Date();
   const patch = {
     status: data.status,
@@ -334,26 +342,17 @@ export async function upsertViewHealth(
     updatedAt: now,
   };
 
-  const existing = await db
-    .select({ id: espnViewHealth.id })
-    .from(espnViewHealth)
-    .where(and(eq(espnViewHealth.season, season), eq(espnViewHealth.viewName, viewName)))
-    .limit(1);
-
-  if (existing.length > 0) {
-    await db.update(espnViewHealth).set(patch).where(eq(espnViewHealth.id, existing[0].id));
-    return;
-  }
-
   try {
-    await db.insert(espnViewHealth).values({ season, viewName, ...patch });
+    await db.insert(espnViewHealth).values({ season: yr, viewName: vn, ...patch });
+    return;
   } catch (err) {
     if (!isMysqlDuplicateKeyError(err)) throw err;
-    await db
-      .update(espnViewHealth)
-      .set(patch)
-      .where(and(eq(espnViewHealth.season, season), eq(espnViewHealth.viewName, viewName)));
   }
+
+  await db
+    .update(espnViewHealth)
+    .set(patch)
+    .where(and(eq(espnViewHealth.season, yr), eq(espnViewHealth.viewName, vn)));
 }
 
 export async function getViewHealthForSeason(season: number) {
