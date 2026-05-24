@@ -1,5 +1,6 @@
 import { eq, desc, and, gt, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import type { EspnSeasonCache } from "../drizzle/schema";
 import {
   InsertUser, users, espnSeasonCache, refreshManifest, chatHistory,
   pickTrades, InsertPickTrade, espnViewHealth, InsertEspnViewHealth,
@@ -57,7 +58,35 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function getCachedView(season: number, viewName: string, leagueId?: string) {
+/** Row shape returned from cache reads (`payload` is parsed JSON). */
+export type CachedEspnSeasonRow = Omit<EspnSeasonCache, "payload"> & { payload: Record<string, unknown> };
+
+function parseSeasonCacheRow(row: EspnSeasonCache): CachedEspnSeasonRow {
+  const raw = row.payload as unknown;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return {
+        ...row,
+        payload: typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : {},
+      };
+    } catch {
+      return { ...row, payload: {} };
+    }
+  }
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    return { ...row, payload: raw as Record<string, unknown> };
+  }
+  return { ...row, payload: {} };
+}
+
+function serializeSeasonCachePayload(payload: unknown): string {
+  return typeof payload === "string" ? payload : JSON.stringify(payload ?? {});
+}
+
+export async function getCachedView(season: number, viewName: string, leagueId?: string): Promise<CachedEspnSeasonRow | null> {
   const db = await getDb();
   if (!db) return null;
   const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
@@ -82,18 +111,19 @@ export async function getCachedView(season: number, viewName: string, leagueId?:
       ))
       .orderBy(desc(espnSeasonCache.fetchedAt))
       .limit(1);
-    return legacy[0] ?? null;
+    return legacy[0] ? parseSeasonCacheRow(legacy[0]) : null;
   }
-  return result[0] ?? null;
+  return result[0] ? parseSeasonCacheRow(result[0]) : null;
 }
 
 export async function upsertCachedView(season: number, viewName: string, payload: unknown, leagueId?: string) {
   const db = await getDb();
   if (!db) return;
   const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
+  const payloadStr = serializeSeasonCachePayload(payload);
   await db.insert(espnSeasonCache)
-    .values({ leagueId: lid, season, viewName, payload: payload as Record<string, unknown> })
-    .onDuplicateKeyUpdate({ set: { payload: payload as Record<string, unknown>, updatedAt: new Date() } });
+    .values({ leagueId: lid, season, viewName, payload: payloadStr })
+    .onDuplicateKeyUpdate({ set: { payload: payloadStr, updatedAt: new Date() } });
 }
 
 export async function getAllCachedSeasons(

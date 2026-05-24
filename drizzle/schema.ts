@@ -6,6 +6,7 @@ import {
   mysqlEnum,
   mysqlTable,
   text,
+  longtext,
   timestamp,
   varchar,
   json,
@@ -43,7 +44,8 @@ export const espnSeasonCache = mysqlTable(
     leagueId: varchar("leagueId", { length: 32 }).notNull().default("default"),
     season: int("season").notNull(),
     viewName: varchar("viewName", { length: 64 }).notNull(),
-    payload: json("payload").notNull(),
+    /** Raw ESPN JSON as text — LONGTEXT avoids MySQL JSON size limits on large combined views. */
+    payload: longtext("payload").notNull(),
     fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
