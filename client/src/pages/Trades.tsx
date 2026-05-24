@@ -13,7 +13,7 @@ import {
 import {
   AlertCircle,
   ArrowLeftRight,
-  CheckCircle2,
+  CalendarDays,
   Loader2,
   Minus,
   Plus,
@@ -39,7 +39,6 @@ interface RosterEntry {
   position?: string;
   lineupSlot?: string;
   appliedAverage?: number | null;
-  appliedTotal?: number | null;
   injuryStatus?: string;
 }
 
@@ -49,6 +48,14 @@ interface TradePlayer {
   position: string;
   avgPoints: number;
   teamId: number;
+}
+
+/** Matches tradeAnalyze picksA / picksB schema exactly */
+interface TradePick {
+  round: number;
+  pick: number;
+  /** UI-only unique key for list rendering */
+  key: string;
 }
 
 interface PlayerValue {
@@ -63,6 +70,8 @@ interface TradeResult {
   sideBValues: PlayerValue[];
   totalA: number;
   totalB: number;
+  pickValueA: number;
+  pickValueB: number;
   ratio: number;
   fairnessGrade: string;
   aiVerdict: string;
@@ -72,13 +81,21 @@ interface TradeResult {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+const ORDINALS = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th"];
+function pickLabel(round: number, pick: number) {
+  return `${ORDINALS[round] ?? `R${round}`} Rd, Pick ${pick}`;
+}
+function pickShort(round: number, pick: number) {
+  return `R${round}P${pick}`;
+}
+
 const GRADE_CONFIG: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
-  "FAIR":          { label: "Fair Trade",       className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400", icon: <Scale className="h-4 w-4" /> },
-  "SLIGHT EDGE A": { label: "Slight Edge: You", className: "border-blue-500/30 bg-blue-500/10 text-blue-400",         icon: <TrendingUp className="h-4 w-4" /> },
-  "SLIGHT EDGE B": { label: "Slight Edge: Them",className: "border-yellow-500/30 bg-yellow-500/10 text-yellow-400",  icon: <TrendingDown className="h-4 w-4" /> },
-  "A WINS":        { label: "You Win",           className: "border-primary/30 bg-primary/10 text-primary",            icon: <TrendingUp className="h-4 w-4" /> },
-  "B WINS":        { label: "They Win",          className: "border-red-500/30 bg-red-500/10 text-red-400",            icon: <TrendingDown className="h-4 w-4" /> },
-  "LOPSIDED":      { label: "Lopsided",          className: "border-red-500/30 bg-red-500/10 text-red-400",            icon: <AlertCircle className="h-4 w-4" /> },
+  "FAIR":          { label: "Fair Trade",        className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400", icon: <Scale className="h-4 w-4" /> },
+  "SLIGHT EDGE A": { label: "Slight Edge: You",  className: "border-blue-500/30 bg-blue-500/10 text-blue-400",         icon: <TrendingUp className="h-4 w-4" /> },
+  "SLIGHT EDGE B": { label: "Slight Edge: Them", className: "border-yellow-500/30 bg-yellow-500/10 text-yellow-400",   icon: <TrendingDown className="h-4 w-4" /> },
+  "A WINS":        { label: "You Win",            className: "border-primary/30 bg-primary/10 text-primary",            icon: <TrendingUp className="h-4 w-4" /> },
+  "B WINS":        { label: "They Win",           className: "border-red-500/30 bg-red-500/10 text-red-400",            icon: <TrendingDown className="h-4 w-4" /> },
+  "LOPSIDED":      { label: "Lopsided",           className: "border-red-500/30 bg-red-500/10 text-red-400",            icon: <AlertCircle className="h-4 w-4" /> },
 };
 
 function PosBadge({ pos }: { pos: string | undefined }) {
@@ -100,7 +117,103 @@ function PosBadge({ pos }: { pos: string | undefined }) {
   );
 }
 
-// ── Player picker panel ───────────────────────────────────────────────────────
+// ── Pick adder ────────────────────────────────────────────────────────────────
+
+function PickAdder({
+  picks,
+  onAdd,
+  onRemove,
+}: {
+  picks: TradePick[];
+  onAdd: (p: TradePick) => void;
+  onRemove: (key: string) => void;
+}) {
+  const [round, setRound] = useState("1");
+  const [pick, setPick] = useState("7");
+
+  const handleAdd = () => {
+    const r = Number(round);
+    const p = Math.max(1, Math.min(14, Number(pick) || 7));
+    onAdd({ round: r, pick: p, key: `${r}-${p}-${Date.now()}` });
+  };
+
+  return (
+    <div className="space-y-2 border-t border-border/60 pt-3 mt-2">
+      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <CalendarDays className="h-3.5 w-3.5" />
+        Draft Picks
+      </p>
+
+      {/* Selected picks */}
+      {picks.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {picks.map(pk => (
+            <span
+              key={pk.key}
+              className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-xs text-primary"
+            >
+              {pickShort(pk.round, pk.pick)}
+              <button
+                onClick={() => onRemove(pk.key)}
+                className="ml-0.5 hover:text-destructive transition-colors"
+                aria-label="Remove pick"
+              >
+                <Minus className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Add row */}
+      <div className="flex items-center gap-1.5">
+        {/* Round */}
+        <Select value={round} onValueChange={setRound}>
+          <SelectTrigger className="h-7 w-20 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[1, 2, 3, 4, 5, 6, 7].map(r => (
+              <SelectItem key={r} value={String(r)} className="text-xs">
+                {ORDINALS[r]} Rd
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Pick number */}
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-muted-foreground">Pick</span>
+          <input
+            type="number"
+            min={1}
+            max={14}
+            value={pick}
+            onChange={e => setPick(e.target.value)}
+            className="h-7 w-12 rounded border border-border bg-muted/30 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1 text-xs px-2"
+          onClick={handleAdd}
+        >
+          <Plus className="h-3 w-3" /> Add
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground/60">
+        {picks.length === 0
+          ? `e.g. ${ORDINALS[1]} Rd Pick 7 = mid-1st`
+          : picks.map(pk => pickLabel(pk.round, pk.pick)).join(" · ")}
+      </p>
+    </div>
+  );
+}
+
+// ── Player + pick panel ───────────────────────────────────────────────────────
 
 function RosterPicker({
   label,
@@ -109,8 +222,11 @@ function RosterPicker({
   cachedSeasons,
   teams,
   selectedPlayers,
+  picks,
   onTeamChange,
   onTogglePlayer,
+  onAddPick,
+  onRemovePick,
 }: {
   label: string;
   teamId: number | null;
@@ -118,8 +234,11 @@ function RosterPicker({
   cachedSeasons: number[];
   teams: TeamRow[];
   selectedPlayers: TradePlayer[];
+  picks: TradePick[];
   onTeamChange: (id: number) => void;
   onTogglePlayer: (p: TradePlayer) => void;
+  onAddPick: (p: TradePick) => void;
+  onRemovePick: (key: string) => void;
 }) {
   const rosterQ = trpc.espn.rosters.useQuery(
     { season, teamId: teamId ?? undefined },
@@ -129,13 +248,9 @@ function RosterPicker({
   const players = (rosterQ.data as RosterEntry[] | undefined) ?? [];
   const selectedIds = new Set(selectedPlayers.map(p => p.playerId));
 
-  // Filter to starters + bench (exclude IR, D/ST optionally)
   const selectable = players.filter(
     p => p.playerName && p.lineupSlot !== "IR" && p.position !== "D/ST" && p.playerId
   );
-
-  const isSelected = (p: RosterEntry) =>
-    p.playerId != null && selectedIds.has(p.playerId);
 
   const toggle = (p: RosterEntry) => {
     if (!p.playerId || !p.playerName) return;
@@ -147,6 +262,8 @@ function RosterPicker({
       teamId: p.teamId,
     });
   };
+
+  const totalItems = selectedPlayers.length + picks.length;
 
   return (
     <Card className="flex-1">
@@ -172,11 +289,11 @@ function RosterPicker({
       </CardHeader>
 
       <CardContent className="space-y-2 p-3 pt-0">
-        {/* Selected players */}
-        {selectedPlayers.length > 0 && (
+        {/* Summary of selected items */}
+        {totalItems > 0 && (
           <div className="mb-3 space-y-1">
-            <p className="text-xs font-medium text-foreground mb-1">
-              Selected ({selectedPlayers.length})
+            <p className="text-xs font-medium text-foreground mb-1.5">
+              Selected ({totalItems})
             </p>
             {selectedPlayers.map(p => (
               <div
@@ -195,27 +312,48 @@ function RosterPicker({
                 </button>
               </div>
             ))}
+            {picks.map(pk => (
+              <div
+                key={pk.key}
+                className="flex items-center justify-between rounded border border-primary/20 bg-primary/5 px-2.5 py-1.5"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="inline-flex rounded border border-primary/25 bg-primary/10 px-1.5 py-0 text-xs font-semibold text-primary shrink-0">
+                    PICK
+                  </span>
+                  <span className="text-sm font-medium text-foreground truncate">
+                    {pickLabel(pk.round, pk.pick)}
+                  </span>
+                </div>
+                <button
+                  onClick={() => onRemovePick(pk.key)}
+                  className="ml-2 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                >
+                  <Minus className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
         {/* Roster list */}
         {teamId == null && (
-          <p className="text-xs text-muted-foreground text-center py-6">Select a team above.</p>
+          <p className="text-xs text-muted-foreground text-center py-4">Select a team above.</p>
         )}
 
         {rosterQ.isLoading && (
-          <div className="flex items-center justify-center py-6 gap-2 text-muted-foreground text-xs">
+          <div className="flex items-center justify-center py-4 gap-2 text-muted-foreground text-xs">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading roster…
           </div>
         )}
 
         {!rosterQ.isLoading && teamId != null && selectable.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-6">No players found.</p>
+          <p className="text-xs text-muted-foreground text-center py-4">No players found.</p>
         )}
 
-        <div className="max-h-64 overflow-y-auto space-y-0.5 pr-1">
+        <div className="max-h-52 overflow-y-auto space-y-0.5 pr-1">
           {selectable.map(p => {
-            const sel = isSelected(p);
+            const sel = p.playerId != null && selectedIds.has(p.playerId);
             return (
               <button
                 key={p.playerId}
@@ -243,6 +381,13 @@ function RosterPicker({
             );
           })}
         </div>
+
+        {/* Pick adder — always visible, not gated on team selection */}
+        <PickAdder
+          picks={picks}
+          onAdd={onAddPick}
+          onRemove={onRemovePick}
+        />
       </CardContent>
     </Card>
   );
@@ -250,10 +395,18 @@ function RosterPicker({
 
 // ── Results display ───────────────────────────────────────────────────────────
 
-function TradeResults({ result, teamAName, teamBName }: {
+function TradeResults({
+  result,
+  teamAName,
+  teamBName,
+  picksA,
+  picksB,
+}: {
   result: TradeResult;
   teamAName: string;
   teamBName: string;
+  picksA: TradePick[];
+  picksB: TradePick[];
 }) {
   const grade = GRADE_CONFIG[result.fairnessGrade] ?? {
     label: result.fairnessGrade,
@@ -280,28 +433,42 @@ function TradeResults({ result, teamAName, teamBName }: {
       </div>
 
       {/* Value comparison bars */}
-      <div className="space-y-3">
-        {[
-          { label: teamAName, value: result.totalA, bar: barA, players: result.sideAValues },
-          { label: teamBName, value: result.totalB, bar: barB, players: result.sideBValues },
-        ].map(({ label, value, bar, players }) => (
+      <div className="space-y-4">
+        {(
+          [
+            { label: teamAName, value: result.totalA, bar: barA, players: result.sideAValues, pickVal: result.pickValueA, picks: picksA },
+            { label: teamBName, value: result.totalB, bar: barB, players: result.sideBValues, pickVal: result.pickValueB, picks: picksB },
+          ] as const
+        ).map(({ label, value, bar, players, pickVal, picks }) => (
           <div key={label}>
             <div className="flex items-center justify-between mb-1.5 text-sm">
               <span className="font-medium text-foreground truncate">{label}</span>
               <span className="font-mono text-foreground ml-2 shrink-0">{Math.round(value)}</span>
             </div>
             <div className="h-2 rounded-full bg-muted/40 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-primary transition-all"
-                style={{ width: `${bar}%` }}
-              />
+              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${bar}%` }} />
             </div>
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
               {players.map(pv => (
                 <span key={pv.playerId} className="text-xs text-muted-foreground">
-                  {pv.name}: <span className="text-foreground font-medium">{Math.round(pv.compositeValue)}</span>
+                  {pv.name}:{" "}
+                  <span className="text-foreground font-medium">{Math.round(pv.compositeValue)}</span>
                 </span>
               ))}
+              {picks.map((pk, i) => (
+                <span key={i} className="text-xs text-muted-foreground">
+                  <span className="text-primary font-medium">{pickShort(pk.round, pk.pick)}</span>
+                  {pickVal > 0 && picks.length === 1 && (
+                    <span className="text-foreground font-medium"> +{Math.round(pickVal)}</span>
+                  )}
+                </span>
+              ))}
+              {picks.length > 1 && pickVal > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  Picks total:{" "}
+                  <span className="text-foreground font-medium">{Math.round(pickVal)}</span>
+                </span>
+              )}
             </div>
           </div>
         ))}
@@ -312,8 +479,7 @@ function TradeResults({ result, teamAName, teamBName }: {
         <Card className="border-primary/20 bg-primary/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-primary">
-              <Sparkles className="h-4 w-4" />
-              AI Analysis
+              <Sparkles className="h-4 w-4" /> AI Analysis
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -324,7 +490,7 @@ function TradeResults({ result, teamAName, teamBName }: {
         </Card>
       )}
 
-      {/* Positional needs */}
+      {/* Positional depth */}
       <div className="grid grid-cols-2 gap-3">
         {[
           { label: `${teamAName} depth`, needs: result.teamANeeds },
@@ -365,6 +531,8 @@ export function Trades() {
   const [teamBId, setTeamBId] = useState<number | null>(null);
   const [sideA, setSideA] = useState<TradePlayer[]>([]);
   const [sideB, setSideB] = useState<TradePlayer[]>([]);
+  const [picksA, setPicksA] = useState<TradePick[]>([]);
+  const [picksB, setPicksB] = useState<TradePick[]>([]);
   const [result, setResult] = useState<TradeResult | null>(null);
 
   const teamsQ = trpc.espn.teams.useQuery(
@@ -374,33 +542,19 @@ export function Trades() {
   const teams = (teamsQ.data as TeamRow[] | undefined) ?? [];
 
   const analyzeMutation = trpc.tradeAnalyze.useMutation({
-    onSuccess: (data) => setResult(data as TradeResult),
+    onSuccess: data => setResult(data as TradeResult),
   });
 
+  // A valid trade needs both teams, and each side must have at least 1 player OR 1 pick
+  const sideAHasItems = sideA.length > 0 || picksA.length > 0;
+  const sideBHasItems = sideB.length > 0 || picksB.length > 0;
   const canAnalyze =
     teamAId != null && teamBId != null &&
-    sideA.length > 0 && sideB.length > 0 &&
-    teamAId !== teamBId;
+    teamAId !== teamBId &&
+    sideAHasItems && sideBHasItems;
 
   const teamAName = teams.find(t => t.teamId === teamAId)?.teamName ?? "Your Team";
   const teamBName = teams.find(t => t.teamId === teamBId)?.teamName ?? "Their Team";
-
-  const handleToggleA = (p: TradePlayer) => {
-    setSideA(prev =>
-      prev.some(x => x.playerId === p.playerId)
-        ? prev.filter(x => x.playerId !== p.playerId)
-        : [...prev, p]
-    );
-    setResult(null);
-  };
-  const handleToggleB = (p: TradePlayer) => {
-    setSideB(prev =>
-      prev.some(x => x.playerId === p.playerId)
-        ? prev.filter(x => x.playerId !== p.playerId)
-        : [...prev, p]
-    );
-    setResult(null);
-  };
 
   const handleAnalyze = () => {
     if (!canAnalyze || teamAId == null || teamBId == null) return;
@@ -411,14 +565,26 @@ export function Trades() {
       sideB,
       teamAId,
       teamBId,
+      picksA: picksA.map(({ round, pick }) => ({ round, pick })),
+      picksB: picksB.map(({ round, pick }) => ({ round, pick })),
     });
   };
 
   const handleReset = () => {
-    setSideA([]);
-    setSideB([]);
+    setSideA([]); setSideB([]);
+    setPicksA([]); setPicksB([]);
     setResult(null);
   };
+
+  const hasAnySelection = sideA.length > 0 || sideB.length > 0 || picksA.length > 0 || picksB.length > 0;
+
+  const validationHint = useMemo(() => {
+    if (!teamAId || !teamBId) return "Select both teams first";
+    if (teamAId === teamBId) return "Teams must be different";
+    if (!sideAHasItems) return "Add at least one player or pick to give";
+    if (!sideBHasItems) return "Add at least one player or pick to receive";
+    return null;
+  }, [teamAId, teamBId, sideAHasItems, sideBHasItems]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -426,7 +592,7 @@ export function Trades() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Trades</h1>
         <p className="mt-1 text-muted-foreground">
-          Analyze trade fairness using real season data and AI evaluation.
+          Analyze trade fairness using real season data, draft pick values, and AI evaluation.
         </p>
       </div>
 
@@ -436,10 +602,9 @@ export function Trades() {
           value={String(season)}
           onValueChange={v => {
             setSeason(Number(v));
-            setTeamAId(null);
-            setTeamBId(null);
-            setSideA([]);
-            setSideB([]);
+            setTeamAId(null); setTeamBId(null);
+            setSideA([]); setSideB([]);
+            setPicksA([]); setPicksB([]);
             setResult(null);
           }}
         >
@@ -464,7 +629,7 @@ export function Trades() {
         )}
       </div>
 
-      {/* Two-panel player picker */}
+      {/* Two-panel picker */}
       <div className="flex flex-col gap-4 md:flex-row">
         <RosterPicker
           label="You Give"
@@ -473,11 +638,13 @@ export function Trades() {
           cachedSeasons={cachedSeasons}
           teams={teams}
           selectedPlayers={sideA}
-          onTeamChange={id => { setTeamAId(id); setSideA([]); setResult(null); }}
-          onTogglePlayer={handleToggleA}
+          picks={picksA}
+          onTeamChange={id => { setTeamAId(id); setSideA([]); setPicksA([]); setResult(null); }}
+          onTogglePlayer={p => { setSideA(prev => prev.some(x => x.playerId === p.playerId) ? prev.filter(x => x.playerId !== p.playerId) : [...prev, p]); setResult(null); }}
+          onAddPick={pk => { setPicksA(prev => [...prev, pk]); setResult(null); }}
+          onRemovePick={key => { setPicksA(prev => prev.filter(p => p.key !== key)); setResult(null); }}
         />
 
-        {/* Center arrow */}
         <div className="flex items-center justify-center">
           <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card">
             <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
@@ -491,13 +658,16 @@ export function Trades() {
           cachedSeasons={cachedSeasons}
           teams={teams}
           selectedPlayers={sideB}
-          onTeamChange={id => { setTeamBId(id); setSideB([]); setResult(null); }}
-          onTogglePlayer={handleToggleB}
+          picks={picksB}
+          onTeamChange={id => { setTeamBId(id); setSideB([]); setPicksB([]); setResult(null); }}
+          onTogglePlayer={p => { setSideB(prev => prev.some(x => x.playerId === p.playerId) ? prev.filter(x => x.playerId !== p.playerId) : [...prev, p]); setResult(null); }}
+          onAddPick={pk => { setPicksB(prev => [...prev, pk]); setResult(null); }}
+          onRemovePick={key => { setPicksB(prev => prev.filter(p => p.key !== key)); setResult(null); }}
         />
       </div>
 
       {/* Analyze button */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Button
           onClick={handleAnalyze}
           disabled={!canAnalyze || analyzeMutation.isPending}
@@ -509,21 +679,13 @@ export function Trades() {
             : <Sparkles className="h-4 w-4" />}
           {analyzeMutation.isPending ? "Analyzing…" : "Analyze Trade"}
         </Button>
-        {(sideA.length > 0 || sideB.length > 0) && (
+        {hasAnySelection && (
           <Button variant="ghost" size="sm" onClick={handleReset} className="text-muted-foreground">
             <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Reset
           </Button>
         )}
-        {!canAnalyze && (sideA.length > 0 || sideB.length > 0) && (
-          <span className="text-xs text-muted-foreground">
-            {teamAId == null || teamBId == null
-              ? "Select both teams first"
-              : teamAId === teamBId
-                ? "Teams must be different"
-                : sideA.length === 0
-                  ? "Select players to give"
-                  : "Select players to receive"}
-          </span>
+        {!canAnalyze && hasAnySelection && validationHint && (
+          <span className="text-xs text-muted-foreground">{validationHint}</span>
         )}
       </div>
 
@@ -552,6 +714,8 @@ export function Trades() {
               result={result}
               teamAName={teamAName}
               teamBName={teamBName}
+              picksA={picksA}
+              picksB={picksB}
             />
           </CardContent>
         </Card>
