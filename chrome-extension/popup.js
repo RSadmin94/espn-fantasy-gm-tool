@@ -1,5 +1,5 @@
 /**
- * Popup: detect ESPN session cookies on active tab context, trigger background connect flow.
+ * Popup: ESPN cookie presence UI; triggers background-only save (no gmwarroom content script).
  */
 
 const ESPN_HOST = "fantasy.espn.com";
@@ -34,7 +34,7 @@ function render(root, state) {
     html += `<button type="button" disabled>Connect to War Room</button>`;
   } else if (credsOk) {
     html += `<div class="ok">ESPN Connected</div>`;
-    html += `<p>Save your ESPN session to GM War Room (uses your War Room login in the browser).</p>`;
+    html += `<p>Save ESPN to GM War Room. Stay signed in at <strong>gmwarroom.online</strong> in this browser so the extension can use your War Room session.</p>`;
     html += `<button type="button" id="go" ${busy ? "disabled" : ""}>Connect to War Room</button>`;
   } else {
     html += `<p>ESPN cookies not detected. Sign in at ESPN Fantasy in this browser, then retry.</p>`;
