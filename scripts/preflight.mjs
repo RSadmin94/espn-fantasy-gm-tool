@@ -139,9 +139,11 @@ for (const { key, note } of OPTIONAL_VARS) {
 section("5. Migration files");
 
 const MIGRATIONS = [
+  "drizzle/migrations/0000_ensure_espn_view_health_table.sql",
   "drizzle/migrations/0001_drop_leagueId_from_espn_view_health.sql",
   "drizzle/migrations/0002_espn_view_health_unique_season_view.sql",
   "drizzle/migrations/0003_fantasy_data_cache_tables.sql",
+  "drizzle/migrations/0006_gmwarroom_clean_schema.sql",
 ];
 
 for (const migration of MIGRATIONS) {

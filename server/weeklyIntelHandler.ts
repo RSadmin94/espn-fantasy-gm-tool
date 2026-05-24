@@ -29,11 +29,12 @@ import {
   validateDataQuality,
 } from "./espnService";
 import {
-  upsertCachedView,
   upsertViewHealth,
   upsertRefreshManifest,
   getRefreshManifests,
+  getDefaultEspnLeagueId,
 } from "./db";
+import { syncEspnCombinedFullPipeline } from "./espnPersistence";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { notifyOwner } from "./_core/notification";
 import { memCache } from "./memCache";
@@ -58,15 +59,29 @@ export async function weeklyIntelHandler(req: Request, res: Response) {
 
     // ── 2. Persist per-view health records ────────────────────────────────
     for (const vr of pipelineResult.viewResults) {
-      await upsertViewHealth(CURRENT_SEASON, vr.viewName, {
-        status: vr.status === "auth_error" ? "error" : vr.status,
-        errorMessage: vr.error,
-        recordCount: vr.recordCount,
-      });
+      try {
+        await upsertViewHealth(CURRENT_SEASON, vr.viewName, {
+          status: vr.status === "auth_error" ? "error" : vr.status,
+          errorMessage: vr.error,
+          recordCount: vr.recordCount,
+        });
+      } catch (vhErr) {
+        console.warn("[weeklyIntel] upsertViewHealth failed:", vr.viewName, vhErr);
+      }
     }
 
     // ── 3. Persist combined cache + league identity ────────────────────────
-    await upsertCachedView(CURRENT_SEASON, "combined", data);
+    const leagueId = await getDefaultEspnLeagueId();
+    const quality = validateDataQuality(CURRENT_SEASON, data);
+    try {
+      await syncEspnCombinedFullPipeline(leagueId, CURRENT_SEASON, data as Record<string, unknown>, {
+        pipelineAllOk: pipelineResult.allViewsOk,
+        qualityUsable: quality.isUsable,
+      });
+    } catch (persistErr) {
+      console.warn("[weeklyIntel] syncEspnCombinedFullPipeline failed:", persistErr);
+      throw persistErr;
+    }
     try { await upsertLeagueIdentity(CURRENT_SEASON, data); } catch (_e) { /* non-fatal */ }
 
     // ── 4. Normalize and compute quality ──────────────────────────────────
@@ -75,26 +90,29 @@ export async function weeklyIntelHandler(req: Request, res: Response) {
     const matchups = normalizeMatchups(data);
     const picks = normalizeDraftPicks(data);
     const txs = normalizeTransactions(data);
-    const quality = validateDataQuality(CURRENT_SEASON, data);
 
     const overallStatus = pipelineResult.allViewsOk && quality.isUsable
       ? "success"
       : pipelineResult.hasPartialData || !quality.isUsable
-      ? "partial"
-      : "success";
+        ? "partial"
+        : "success";
 
-    await upsertRefreshManifest(CURRENT_SEASON, {
-      teamCount: teams.length,
-      rosterCount: rosters.length,
-      matchupCount: matchups.length,
-      draftPickCount: picks.length,
-      transactionCount: txs.length,
-      status: overallStatus,
-      viewsRefreshed: pipelineResult.viewResults
-        .filter(v => v.status === "ok")
-        .map(v => v.viewName),
-      errorMessage: quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
-    });
+    try {
+      await upsertRefreshManifest(CURRENT_SEASON, {
+        teamCount: teams.length,
+        rosterCount: rosters.length,
+        matchupCount: matchups.length,
+        draftPickCount: picks.length,
+        transactionCount: txs.length,
+        status: overallStatus,
+        viewsRefreshed: pipelineResult.viewResults
+          .filter(v => v.status === "ok")
+          .map(v => v.viewName),
+        errorMessage: quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
+      });
+    } catch (mfErr) {
+      console.warn("[weeklyIntel] upsertRefreshManifest failed:", mfErr);
+    }
 
     // ── 5. Bust in-memory caches ───────────────────────────────────────────
     memCache.invalidateAll();

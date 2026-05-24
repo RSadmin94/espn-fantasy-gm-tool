@@ -6,9 +6,11 @@ import {
   mysqlEnum,
   mysqlTable,
   text,
+  longtext,
   timestamp,
   varchar,
   json,
+  decimal,
   index,
   uniqueIndex,
 } from "drizzle-orm/mysql-core";
@@ -34,6 +36,22 @@ export const users = mysqlTable("users", {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+// Legacy ESPN season cache (LONGTEXT payloads; retained for compatibility reads)
+export const espnSeasonCache = mysqlTable(
+  "espn_season_cache",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull().default("default"),
+    season: int("season").notNull(),
+    viewName: varchar("viewName", { length: 64 }).notNull(),
+    payload: longtext("payload").notNull(),
+    fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_league_season_view").on(t.leagueId, t.season, t.viewName)]
+);
+export type EspnSeasonCache = typeof espnSeasonCache.$inferSelect;
 
 // Track when each season was last refreshed
 export const refreshManifest = mysqlTable("refresh_manifest", {
@@ -176,7 +194,8 @@ export const fantasyDataCache = mysqlTable(
   {
     id: int("id").primaryKey().autoincrement(),
     cacheKey: varchar("cacheKey", { length: 64 }).notNull(),
-    payload: json("payload").notNull(),
+    /** JSON text (LONGTEXT in DB after migration 0006) — non-ESPN rows use JSON text too. */
+    payload: longtext("payload").notNull(),
     fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -184,6 +203,229 @@ export const fantasyDataCache = mysqlTable(
 );
 export type FantasyDataCache = typeof fantasyDataCache.$inferSelect;
 export type InsertFantasyDataCache = typeof fantasyDataCache.$inferInsert;
+
+// ─── Canonical raw ESPN cache (LONGTEXT) ─────────────────────────────────────
+export const espnRawCache = mysqlTable(
+  "espn_raw_cache",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    viewName: varchar("viewName", { length: 64 }).notNull(),
+    payload: longtext("payload").notNull(),
+    payloadBytes: int("payloadBytes").notNull().default(0),
+    fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_raw_cache").on(t.leagueId, t.season, t.viewName),
+    index("idx_raw_cache_league_season").on(t.leagueId, t.season),
+  ]
+);
+export type EspnRawCache = typeof espnRawCache.$inferSelect;
+
+export const gmLeagueSettings = mysqlTable(
+  "league_settings",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    name: varchar("name", { length: 255 }).notNull().default(""),
+    teamCount: int("teamCount").notNull().default(0),
+    scoringType: varchar("scoringType", { length: 64 }).notNull().default(""),
+    playoffTeams: int("playoffTeams").notNull().default(0),
+    regularSeasonWeeks: int("regularSeasonWeeks").notNull().default(0),
+    tradeDeadline: bigint("tradeDeadline", { mode: "number" }),
+    rosterSlots: longtext("rosterSlots"),
+    scoringSettings: longtext("scoringSettings"),
+    rawSettings: longtext("rawSettings"),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_league_settings").on(t.leagueId, t.season)]
+);
+
+export const gmTeams = mysqlTable(
+  "teams",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    teamId: int("teamId").notNull(),
+    name: varchar("name", { length: 255 }).notNull().default(""),
+    abbreviation: varchar("abbreviation", { length: 16 }).notNull().default(""),
+    ownerName: varchar("ownerName", { length: 255 }).notNull().default(""),
+    ownerId: varchar("ownerId", { length: 128 }).notNull().default(""),
+    logoUrl: varchar("logoUrl", { length: 1024 }).notNull().default(""),
+    wins: int("wins").notNull().default(0),
+    losses: int("losses").notNull().default(0),
+    ties: int("ties").notNull().default(0),
+    pointsFor: decimal("pointsFor", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    pointsAgainst: decimal("pointsAgainst", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    playoffSeed: int("playoffSeed"),
+    finalStanding: int("finalStanding"),
+    rawTeam: longtext("rawTeam").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_teams").on(t.leagueId, t.season, t.teamId)]
+);
+
+export const gmMatchups = mysqlTable(
+  "matchups",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    week: int("week").notNull().default(0),
+    matchupPeriodId: int("matchupPeriodId").notNull(),
+    homeTeamId: int("homeTeamId").notNull(),
+    awayTeamId: int("awayTeamId").notNull(),
+    homeScore: decimal("homeScore", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    awayScore: decimal("awayScore", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    homeProjected: decimal("homeProjected", { precision: 10, scale: 2, mode: "number" }),
+    awayProjected: decimal("awayProjected", { precision: 10, scale: 2, mode: "number" }),
+    winnerTeamId: int("winnerTeamId"),
+    isPlayoff: int("isPlayoff").notNull().default(0),
+    isCompleted: int("isCompleted").notNull().default(0),
+    rawMatchup: longtext("rawMatchup").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_matchups").on(t.leagueId, t.season, t.matchupPeriodId, t.homeTeamId, t.awayTeamId),
+  ]
+);
+
+export const gmDraftPicks = mysqlTable(
+  "draft_picks",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    overallPick: int("overallPick").notNull(),
+    roundId: int("roundId").notNull().default(0),
+    roundPick: int("roundPick").notNull().default(0),
+    teamId: int("teamId").notNull(),
+    owningTeamId: int("owningTeamId"),
+    playerId: int("playerId"),
+    playerName: varchar("playerName", { length: 255 }),
+    position: varchar("position", { length: 16 }),
+    isKeeper: int("isKeeper").notNull().default(0),
+    bidAmount: decimal("bidAmount", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    rawPick: longtext("rawPick").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_draft_picks").on(t.leagueId, t.season, t.overallPick)]
+);
+
+export const gmTransactions = mysqlTable(
+  "transactions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    transactionId: varchar("transactionId", { length: 64 }).notNull(),
+    type: varchar("type", { length: 64 }).notNull().default(""),
+    status: varchar("status", { length: 64 }).notNull().default(""),
+    playerId: int("playerId"),
+    playerKey: int("playerKey").notNull().default(0),
+    playerName: varchar("playerName", { length: 255 }),
+    fromTeamId: int("fromTeamId"),
+    toTeamId: int("toTeamId"),
+    bidAmount: decimal("bidAmount", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    proposedDate: bigint("proposedDate", { mode: "number" }),
+    processedDate: bigint("processedDate", { mode: "number" }),
+    rawTransaction: longtext("rawTransaction").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_transactions").on(t.leagueId, t.season, t.transactionId, t.playerKey)]
+);
+
+export const gmRosterEntries = mysqlTable(
+  "roster_entries",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    week: int("week").notNull().default(0),
+    teamId: int("teamId").notNull(),
+    playerId: int("playerId").notNull(),
+    playerName: varchar("playerName", { length: 255 }).notNull().default(""),
+    position: varchar("position", { length: 16 }).notNull().default(""),
+    nflTeam: varchar("nflTeam", { length: 16 }).notNull().default(""),
+    slotId: int("slotId"),
+    acquisitionType: varchar("acquisitionType", { length: 64 }).notNull().default(""),
+    projectedPoints: decimal("projectedPoints", { precision: 10, scale: 2, mode: "number" }),
+    actualPoints: decimal("actualPoints", { precision: 10, scale: 2, mode: "number" }),
+    injuryStatus: varchar("injuryStatus", { length: 64 }).notNull().default(""),
+    rawRosterEntry: longtext("rawRosterEntry").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_roster_entries").on(t.leagueId, t.season, t.week, t.teamId, t.playerId)]
+);
+
+export const gmPlayers = mysqlTable(
+  "players",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    playerId: int("playerId").notNull(),
+    season: int("season").notNull(),
+    name: varchar("name", { length: 255 }).notNull().default(""),
+    position: varchar("position", { length: 16 }).notNull().default(""),
+    nflTeam: varchar("nflTeam", { length: 16 }).notNull().default(""),
+    jerseyNumber: int("jerseyNumber"),
+    injuryStatus: varchar("injuryStatus", { length: 64 }).notNull().default(""),
+    percentOwned: decimal("percentOwned", { precision: 10, scale: 2, mode: "number" }),
+    percentStarted: decimal("percentStarted", { precision: 10, scale: 2, mode: "number" }),
+    averagePoints: decimal("averagePoints", { precision: 10, scale: 4, mode: "number" }),
+    totalPoints: decimal("totalPoints", { precision: 10, scale: 4, mode: "number" }),
+    projectedTotalPoints: decimal("projectedTotalPoints", { precision: 10, scale: 4, mode: "number" }),
+    rawPlayer: longtext("rawPlayer").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_players").on(t.playerId, t.season)]
+);
+
+export const gmStandingsSnapshots = mysqlTable(
+  "standings_snapshots",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    week: int("week").notNull().default(0),
+    teamId: int("teamId").notNull(),
+    rank: int("rank").notNull().default(0),
+    wins: int("wins").notNull().default(0),
+    losses: int("losses").notNull().default(0),
+    ties: int("ties").notNull().default(0),
+    pointsFor: decimal("pointsFor", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    pointsAgainst: decimal("pointsAgainst", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    rawStanding: longtext("rawStanding").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_standings_snapshots").on(t.leagueId, t.season, t.week, t.teamId)]
+);
+
+export const syncRuns = mysqlTable(
+  "sync_runs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    status: mysqlEnum("status", ["running", "success", "partial", "failed"]).notNull().default("running"),
+    startedAt: timestamp("startedAt").defaultNow().notNull(),
+    finishedAt: timestamp("finishedAt"),
+    errorMessage: longtext("errorMessage"),
+    rawViewsSaved: int("rawViewsSaved").notNull().default(0),
+    teamsSaved: int("teamsSaved").notNull().default(0),
+    matchupsSaved: int("matchupsSaved").notNull().default(0),
+    draftPicksSaved: int("draftPicksSaved").notNull().default(0),
+    transactionsSaved: int("transactionsSaved").notNull().default(0),
+    rosterEntriesSaved: int("rosterEntriesSaved").notNull().default(0),
+    playersSaved: int("playersSaved").notNull().default(0),
+    standingsSaved: int("standingsSaved").notNull().default(0),
+  },
+  (t) => [index("idx_sync_runs_league_season").on(t.leagueId, t.season)]
+);
+export type SyncRun = typeof syncRuns.$inferSelect;
 
 // ─── Mock Draft Results ───────────────────────────────────────────────────────
 export const mockDraftResults = mysqlTable(

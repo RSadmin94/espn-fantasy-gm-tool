@@ -1,9 +1,9 @@
-import { eq, desc, and, gt, or, like } from "drizzle-orm";
+import { eq, desc, and, gt, or, like, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import type { FantasyDataCache, InsertFantasyDataCache } from "../drizzle/schema";
+import type { EspnRawCache, EspnSeasonCache, FantasyDataCache } from "../drizzle/schema";
 import {
   InsertUser, users, fantasyDataCache, refreshManifest, chatHistory,
-  pickTrades, InsertPickTrade, espnViewHealth, InsertEspnViewHealth,
+  pickTrades, InsertPickTrade, espnViewHealth,
   weeklyPlayerStats, InsertWeeklyPlayerStats,
   scheduledJobs, ScheduledJob,
   userMemory, UserMemory,
@@ -11,7 +11,10 @@ import {
   llmUsage,
   scrapedTrades, InsertScrapedTrade,
   leagueEvents, InsertLeagueEvent,
+  espnRawCache,
+  espnSeasonCache,
 } from "../drizzle/schema";
+import { upsertRawEspnCache, writeLegacyEspnCaches } from "./espnPersistence";
 import type { EspnCreds } from "./espnService";
 import { decryptCredentialsFromDb } from "./_core/crypto";
 import { ENV } from "./_core/env";
@@ -120,6 +123,32 @@ function fantasyDataRowToCachedEspnSeason(row: FantasyDataCache): CachedEspnSeas
   };
 }
 
+function rawEspnCacheRowToCached(row: EspnRawCache): CachedEspnSeasonRow {
+  return {
+    id: row.id,
+    cacheKey: buildEspnFantasyDataCacheKey(row.leagueId, row.season, row.viewName),
+    leagueId: row.leagueId,
+    season: row.season,
+    viewName: row.viewName,
+    payload: decodeFantasyDataJsonPayload(row.payload),
+    fetchedAt: row.fetchedAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function espnSeasonCacheRowToCached(row: EspnSeasonCache): CachedEspnSeasonRow {
+  return {
+    id: row.id,
+    cacheKey: buildEspnFantasyDataCacheKey(row.leagueId, row.season, row.viewName),
+    leagueId: row.leagueId,
+    season: row.season,
+    viewName: row.viewName,
+    payload: decodeFantasyDataJsonPayload(row.payload),
+    fetchedAt: row.fetchedAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 export async function getCachedView(
   season: number,
   viewName: string,
@@ -127,8 +156,29 @@ export async function getCachedView(
 ): Promise<CachedEspnSeasonRow | null> {
   const db = await getDb();
   if (!db) return null;
-  const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
-  const primaryKey = buildEspnFantasyDataCacheKey(lid, season, viewName);
+  const lid = String(leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default").slice(0, 32);
+  const yr = Math.floor(Number(season));
+  const vn = String(viewName).slice(0, 64);
+
+  const rawPrimary = await db
+    .select()
+    .from(espnRawCache)
+    .where(and(eq(espnRawCache.leagueId, lid), eq(espnRawCache.season, yr), eq(espnRawCache.viewName, vn)))
+    .orderBy(desc(espnRawCache.updatedAt))
+    .limit(1);
+  if (rawPrimary[0]) return rawEspnCacheRowToCached(rawPrimary[0]);
+
+  if (lid !== "default") {
+    const rawDefault = await db
+      .select()
+      .from(espnRawCache)
+      .where(and(eq(espnRawCache.leagueId, "default"), eq(espnRawCache.season, yr), eq(espnRawCache.viewName, vn)))
+      .orderBy(desc(espnRawCache.updatedAt))
+      .limit(1);
+    if (rawDefault[0]) return rawEspnCacheRowToCached(rawDefault[0]);
+  }
+
+  const primaryKey = buildEspnFantasyDataCacheKey(lid, yr, vn);
   const primary = await db
     .select()
     .from(fantasyDataCache)
@@ -136,8 +186,9 @@ export async function getCachedView(
     .orderBy(desc(fantasyDataCache.updatedAt))
     .limit(1);
   if (primary[0]) return fantasyDataRowToCachedEspnSeason(primary[0]);
+
   if (lid !== "default") {
-    const legacyKey = buildEspnFantasyDataCacheKey("default", season, viewName);
+    const legacyKey = buildEspnFantasyDataCacheKey("default", yr, vn);
     const legacy = await db
       .select()
       .from(fantasyDataCache)
@@ -146,31 +197,50 @@ export async function getCachedView(
       .limit(1);
     if (legacy[0]) return fantasyDataRowToCachedEspnSeason(legacy[0]);
   }
+
+  const escPrimary = await db
+    .select()
+    .from(espnSeasonCache)
+    .where(and(eq(espnSeasonCache.leagueId, lid), eq(espnSeasonCache.season, yr), eq(espnSeasonCache.viewName, vn)))
+    .orderBy(desc(espnSeasonCache.updatedAt))
+    .limit(1);
+  if (escPrimary[0]) return espnSeasonCacheRowToCached(escPrimary[0]);
+
+  if (lid !== "default") {
+    const escDefault = await db
+      .select()
+      .from(espnSeasonCache)
+      .where(
+        and(eq(espnSeasonCache.leagueId, "default"), eq(espnSeasonCache.season, yr), eq(espnSeasonCache.viewName, vn))
+      )
+      .orderBy(desc(espnSeasonCache.updatedAt))
+      .limit(1);
+    if (escDefault[0]) return espnSeasonCacheRowToCached(escDefault[0]);
+  }
+
   return null;
 }
 
 export async function upsertCachedView(season: number, viewName: string, payload: unknown, leagueId?: string) {
-  const db = await getDb();
-  if (!db) return;
-  const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
-  const cacheKey = buildEspnFantasyDataCacheKey(lid, season, viewName);
-  const payloadForDb =
-    typeof payload === "object" && payload !== null ? payload : ({} as Record<string, unknown>);
-  const now = new Date();
-  await db
-    .insert(fantasyDataCache)
-    .values({
-      cacheKey,
-      payload: payloadForDb as InsertFantasyDataCache["payload"],
-      fetchedAt: now,
-      updatedAt: now,
-    })
-    .onDuplicateKeyUpdate({
-      set: {
-        payload: payloadForDb as InsertFantasyDataCache["payload"],
-        updatedAt: now,
-      },
-    });
+  if (String(viewName) === "combined") {
+    console.warn(
+      '[db] upsertCachedView(..., "combined", ...) is deprecated; use syncEspnCombinedFullPipeline from ./espnPersistence'
+    );
+    return;
+  }
+  const lid = String(leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default").slice(0, 32);
+  const yr = Math.floor(Number(season));
+  const vn = String(viewName).slice(0, 64);
+  try {
+    await upsertRawEspnCache(lid, yr, vn, payload);
+  } catch (e) {
+    console.warn("[db] upsertCachedView upsertRawEspnCache failed:", { season: yr, viewName: vn, leagueId: lid, err: e });
+  }
+  try {
+    await writeLegacyEspnCaches(lid, yr, vn, payload);
+  } catch (e) {
+    console.warn("[db] upsertCachedView writeLegacyEspnCaches failed:", { season: yr, viewName: vn, leagueId: lid, err: e });
+  }
 }
 
 export async function getAllCachedSeasons(
@@ -179,7 +249,7 @@ export async function getAllCachedSeasons(
 ): Promise<number[]> {
   const db = await getDb();
   if (!db) return [];
-  const lid = leagueId ?? (await resolveActiveLeagueId(userId));
+  const lid = String(leagueId ?? (await resolveActiveLeagueId(userId))).slice(0, 32);
   const esc = escapeMysqlLikePattern(lid);
   const rows = await db
     .select({ cacheKey: fantasyDataCache.cacheKey })
@@ -201,6 +271,31 @@ export async function getAllCachedSeasons(
       seasons.add(parsed.season);
     }
   }
+
+  const rawLeagueWhere =
+    lid !== "default"
+      ? or(eq(espnRawCache.leagueId, lid), eq(espnRawCache.leagueId, "default"))
+      : eq(espnRawCache.leagueId, lid);
+  const rawSeasonRows = await db
+    .selectDistinct({ season: espnRawCache.season })
+    .from(espnRawCache)
+    .where(rawLeagueWhere);
+  for (const r of rawSeasonRows) {
+    if (r.season > 2000) seasons.add(r.season);
+  }
+
+  const seasonCacheLeagueWhere =
+    lid !== "default"
+      ? or(eq(espnSeasonCache.leagueId, lid), eq(espnSeasonCache.leagueId, "default"))
+      : eq(espnSeasonCache.leagueId, lid);
+  const escSeasonRows = await db
+    .selectDistinct({ season: espnSeasonCache.season })
+    .from(espnSeasonCache)
+    .where(seasonCacheLeagueWhere);
+  for (const r of escSeasonRows) {
+    if (r.season > 2000) seasons.add(r.season);
+  }
+
   return Array.from(seasons).sort((a, b) => b - a);
 }
 
@@ -240,15 +335,9 @@ function truncateRefreshManifestError(msg: string | null): string | null {
   return `${msg.slice(0, MAX_REFRESH_MANIFEST_ERROR_LEN)}…(truncated)`;
 }
 
-function isMysqlDuplicateKeyError(err: unknown): boolean {
-  const e = err as { errno?: number; code?: string };
-  return e.errno === 1062 || e.code === "ER_DUP_ENTRY";
-}
-
 /**
- * Upsert `refresh_manifest` by unique `season`.
- * Insert-first + duplicate-key retry: no separate SELECT (avoids failures on some hosts) and no MySQL ODKU.
- * `viewsRefreshed` is intentionally omitted until MySQL JSON array serialization is fixed.
+ * Upsert `refresh_manifest` by unique `season` using raw SQL + `ON DUPLICATE KEY UPDATE`.
+ * Ensures Railway MySQL always runs a real upsert (Drizzle-logged SQL may still show `INSERT` only).
  */
 export async function upsertRefreshManifest(season: number, data: {
   teamCount?: number; rosterCount?: number; matchupCount?: number;
@@ -275,62 +364,64 @@ export async function upsertRefreshManifest(season: number, data: {
     typeof data.draftPickCount === "number" &&
     typeof data.transactionCount === "number";
 
-  const insertRow = hasFullCounts
-    ? {
-        season: yr,
-        lastRefreshedAt: now,
-        teamCount: data.teamCount!,
-        rosterCount: data.rosterCount!,
-        matchupCount: data.matchupCount!,
-        draftPickCount: data.draftPickCount!,
-        transactionCount: data.transactionCount!,
-        status,
-        errorMessage,
-      }
-    : {
-        season: yr,
-        lastRefreshedAt: now,
-        teamCount: 0,
-        rosterCount: 0,
-        matchupCount: 0,
-        draftPickCount: 0,
-        transactionCount: 0,
-        status,
-        errorMessage,
-      };
-
-  try {
-    await db.insert(refreshManifest).values(insertRow);
-    return;
-  } catch (err) {
-    if (!isMysqlDuplicateKeyError(err)) throw err;
-  }
+  const viewsRefreshed =
+    data.viewsRefreshed !== undefined && data.viewsRefreshed !== null
+      ? data.viewsRefreshed
+      : null;
 
   if (hasFullCounts) {
-    await db
-      .update(refreshManifest)
-      .set({
-        lastRefreshedAt: now,
-        teamCount: data.teamCount!,
-        rosterCount: data.rosterCount!,
-        matchupCount: data.matchupCount!,
-        draftPickCount: data.draftPickCount!,
-        transactionCount: data.transactionCount!,
-        status,
-        errorMessage,
-      })
-      .where(eq(refreshManifest.season, yr));
+    await db.execute(sql`
+      INSERT INTO \`refresh_manifest\` (
+        \`season\`, \`lastRefreshedAt\`, \`viewsRefreshed\`, \`teamCount\`, \`rosterCount\`,
+        \`matchupCount\`, \`draftPickCount\`, \`transactionCount\`, \`status\`, \`errorMessage\`
+      ) VALUES (
+        ${yr}, ${now}, ${viewsRefreshed}, ${data.teamCount!}, ${data.rosterCount!},
+        ${data.matchupCount!}, ${data.draftPickCount!}, ${data.transactionCount!}, ${status}, ${errorMessage}
+      )
+      ON DUPLICATE KEY UPDATE
+        \`lastRefreshedAt\` = VALUES(\`lastRefreshedAt\`),
+        \`viewsRefreshed\` = VALUES(\`viewsRefreshed\`),
+        \`teamCount\` = VALUES(\`teamCount\`),
+        \`rosterCount\` = VALUES(\`rosterCount\`),
+        \`matchupCount\` = VALUES(\`matchupCount\`),
+        \`draftPickCount\` = VALUES(\`draftPickCount\`),
+        \`transactionCount\` = VALUES(\`transactionCount\`),
+        \`status\` = VALUES(\`status\`),
+        \`errorMessage\` = VALUES(\`errorMessage\`)
+    `);
     return;
   }
 
-  await db
-    .update(refreshManifest)
-    .set({
-      lastRefreshedAt: now,
-      status,
-      errorMessage,
-    })
-    .where(eq(refreshManifest.season, yr));
+  if (data.viewsRefreshed !== undefined) {
+    const vr = data.viewsRefreshed ?? null;
+    await db.execute(sql`
+      INSERT INTO \`refresh_manifest\` (
+        \`season\`, \`lastRefreshedAt\`, \`viewsRefreshed\`, \`teamCount\`, \`rosterCount\`,
+        \`matchupCount\`, \`draftPickCount\`, \`transactionCount\`, \`status\`, \`errorMessage\`
+      ) VALUES (
+        ${yr}, ${now}, ${vr}, 0, 0, 0, 0, 0, ${status}, ${errorMessage}
+      )
+      ON DUPLICATE KEY UPDATE
+        \`lastRefreshedAt\` = VALUES(\`lastRefreshedAt\`),
+        \`viewsRefreshed\` = VALUES(\`viewsRefreshed\`),
+        \`status\` = VALUES(\`status\`),
+        \`errorMessage\` = VALUES(\`errorMessage\`)
+    `);
+    return;
+  }
+
+  await db.execute(sql`
+    INSERT INTO \`refresh_manifest\` (
+      \`season\`, \`lastRefreshedAt\`, \`viewsRefreshed\`, \`teamCount\`, \`rosterCount\`,
+      \`matchupCount\`, \`draftPickCount\`, \`transactionCount\`, \`status\`, \`errorMessage\`
+    ) VALUES (
+      ${yr}, ${now}, ${viewsRefreshed}, 0, 0, 0, 0, 0, ${status}, ${errorMessage}
+    )
+    ON DUPLICATE KEY UPDATE
+      \`lastRefreshedAt\` = VALUES(\`lastRefreshedAt\`),
+      \`status\` = VALUES(\`status\`),
+      \`errorMessage\` = VALUES(\`errorMessage\`)
+  `);
 }
 
 export async function getChatHistory(userId: number, season?: number) {
@@ -405,8 +496,7 @@ export async function getDefaultEspnLeagueId(): Promise<string> {
 }
 
 /**
- * Upsert ESPN view health by (season, viewName).
- * Insert-first + duplicate-key retry — no separate SELECT (avoids failures when the table was missing or read path is restricted).
+ * Upsert ESPN view health by (season, viewName) using raw SQL + `ON DUPLICATE KEY UPDATE`.
  */
 export async function upsertViewHealth(
   season: number,
@@ -424,25 +514,23 @@ export async function upsertViewHealth(
   const vn = String(viewName).slice(0, 64);
 
   const now = new Date();
-  const patch = {
-    status: data.status,
-    errorMessage: data.errorMessage ?? null,
-    recordCount: data.recordCount ?? null,
-    fetchedAt: now,
-    updatedAt: now,
-  };
+  const st = data.status;
+  const err = data.errorMessage ?? null;
+  const rc = data.recordCount ?? null;
 
-  try {
-    await db.insert(espnViewHealth).values({ season: yr, viewName: vn, ...patch });
-    return;
-  } catch (err) {
-    if (!isMysqlDuplicateKeyError(err)) throw err;
-  }
-
-  await db
-    .update(espnViewHealth)
-    .set(patch)
-    .where(and(eq(espnViewHealth.season, yr), eq(espnViewHealth.viewName, vn)));
+  await db.execute(sql`
+    INSERT INTO \`espn_view_health\` (
+      \`season\`, \`viewName\`, \`status\`, \`errorMessage\`, \`recordCount\`, \`fetchedAt\`, \`updatedAt\`
+    ) VALUES (
+      ${yr}, ${vn}, ${st}, ${err}, ${rc}, ${now}, ${now}
+    )
+    ON DUPLICATE KEY UPDATE
+      \`status\` = VALUES(\`status\`),
+      \`errorMessage\` = VALUES(\`errorMessage\`),
+      \`recordCount\` = VALUES(\`recordCount\`),
+      \`fetchedAt\` = VALUES(\`fetchedAt\`),
+      \`updatedAt\` = VALUES(\`updatedAt\`)
+  `);
 }
 
 export async function getViewHealthForSeason(season: number) {

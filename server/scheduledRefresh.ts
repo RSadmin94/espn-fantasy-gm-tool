@@ -3,9 +3,10 @@ import { sdk } from "./_core/sdk";
 import { fetchEspnViewsHardened, fetchTradeProposals, mergeTradeProposalsIntoTransactions } from "./espnService";
 import {
   upsertViewHealth,
-  upsertCachedView,
   upsertRefreshManifest,
+  getDefaultEspnLeagueId,
 } from "./db";
+import { syncEspnCombinedFullPipeline } from "./espnPersistence";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import {
   normalizeTeams,
@@ -43,16 +44,21 @@ export async function espnRefreshHandler(req: Request, res: Response) {
 
     for (const season of AUTO_REFRESH_SEASONS) {
       try {
+        const cronLeagueId = await getDefaultEspnLeagueId();
         const pipelineResult = await fetchEspnViewsHardened(season);
         const data = pipelineResult.merged;
 
         // Persist per-view health records
         for (const vr of pipelineResult.viewResults) {
-          await upsertViewHealth(season, vr.viewName, {
-            status: vr.status === "auth_error" ? "error" : vr.status,
-            errorMessage: vr.error,
-            recordCount: vr.recordCount,
-          });
+          try {
+            await upsertViewHealth(season, vr.viewName, {
+              status: vr.status === "auth_error" ? "error" : vr.status,
+              errorMessage: vr.error,
+              recordCount: vr.recordCount,
+            });
+          } catch (vhErr) {
+            console.warn("[ScheduledRefresh] upsertViewHealth failed:", season, vr.viewName, vhErr);
+          }
         }
 
         // Enrich transactions: fetch all TRADE_PROPOSAL records via x-fantasy-filter.
@@ -64,7 +70,16 @@ export async function espnRefreshHandler(req: Request, res: Response) {
           enrichedData = mergeTradeProposalsIntoTransactions(data, proposals);
         } catch (_e) { /* non-fatal — fall back to unmerged data */ }
 
-        await upsertCachedView(season, "combined", enrichedData);
+        const quality = validateDataQuality(season, data);
+        try {
+          await syncEspnCombinedFullPipeline(cronLeagueId, season, enrichedData as Record<string, unknown>, {
+            pipelineAllOk: pipelineResult.allViewsOk,
+            qualityUsable: quality.isUsable,
+          });
+        } catch (persistErr) {
+          console.warn("[ScheduledRefresh] syncEspnCombinedFullPipeline failed:", season, persistErr);
+          throw persistErr;
+        }
         // Persist static identity data (team names, draft order, settings) to league_identity table
         try { await upsertLeagueIdentity(season, enrichedData); } catch (_e) { /* non-fatal */ }
 
@@ -74,27 +89,30 @@ export async function espnRefreshHandler(req: Request, res: Response) {
         const picks = normalizeDraftPicks(enrichedData);
         const txs = normalizeTransactions(enrichedData);
 
-        const quality = validateDataQuality(season, data);
         const overallStatus =
           pipelineResult.allViewsOk && quality.isUsable
             ? "success"
             : pipelineResult.hasPartialData || !quality.isUsable
-            ? "partial"
-            : "success";
+              ? "partial"
+              : "success";
 
-        await upsertRefreshManifest(season, {
-          teamCount: teams.length,
-          rosterCount: rosters.length,
-          matchupCount: matchups.length,
-          draftPickCount: picks.length,
-          transactionCount: txs.length,
-          status: overallStatus,
-          viewsRefreshed: pipelineResult.viewResults
-            .filter((v) => v.status === "ok")
-            .map((v) => v.viewName),
-          errorMessage:
-            quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
-        });
+        try {
+          await upsertRefreshManifest(season, {
+            teamCount: teams.length,
+            rosterCount: rosters.length,
+            matchupCount: matchups.length,
+            draftPickCount: picks.length,
+            transactionCount: txs.length,
+            status: overallStatus,
+            viewsRefreshed: pipelineResult.viewResults
+              .filter((v) => v.status === "ok")
+              .map((v) => v.viewName),
+            errorMessage:
+              quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
+          });
+        } catch (mfErr) {
+          console.warn("[ScheduledRefresh] upsertRefreshManifest failed:", season, mfErr);
+        }
 
         const viewHealth: Record<string, string> = {};
         for (const vr of pipelineResult.viewResults) {
@@ -108,10 +126,14 @@ export async function espnRefreshHandler(req: Request, res: Response) {
         };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        await upsertRefreshManifest(season, {
-          status: "failed",
-          errorMessage: msg,
-        });
+        try {
+          await upsertRefreshManifest(season, {
+            status: "failed",
+            errorMessage: msg,
+          });
+        } catch (mfErr) {
+          console.warn("[ScheduledRefresh] upsertRefreshManifest (failed) failed:", season, mfErr);
+        }
         results[season] = { status: "failed", error: msg };
         console.error(`[ScheduledRefresh] Season ${season} failed:`, msg);
       }

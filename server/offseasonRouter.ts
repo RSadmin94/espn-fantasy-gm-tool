@@ -14,7 +14,8 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { buildKeeperRecommendations } from "./keeperRecommendationEngine";
 import { buildLeagueDraftBoard } from "./draftStrategyEngine";
-import { getCachedView, getAllCachedSeasons, getCompletedSeasonForOffseason, upsertCachedView, upsertRefreshManifest, upsertViewHealth } from "./db";
+import { getCachedView, getAllCachedSeasons, getCompletedSeasonForOffseason, getDefaultEspnLeagueId, upsertRefreshManifest, upsertViewHealth } from "./db";
+import { syncEspnCombinedFullPipeline } from "./espnPersistence";
 import { normalizeDraftPicks, fetchEspnViewsHardened, normalizeTeams, normalizeRosters, normalizeMatchups, normalizeTransactions, validateDataQuality } from "./espnService";
 import { getOrFetchLeagueIdentity, upsertLeagueIdentity } from "./leagueIdentityService";
 import { memCache } from "./memCache";
@@ -395,14 +396,28 @@ Be specific, use the actual player names and round numbers. Write in a direct GM
 
         // Persist per-view health
         for (const vr of pipelineResult.viewResults) {
-          await upsertViewHealth(season, vr.viewName, {
-            status: vr.status === "auth_error" ? "error" : vr.status,
-            errorMessage: vr.error,
-            recordCount: vr.recordCount,
-          });
+          try {
+            await upsertViewHealth(season, vr.viewName, {
+              status: vr.status === "auth_error" ? "error" : vr.status,
+              errorMessage: vr.error,
+              recordCount: vr.recordCount,
+            });
+          } catch (vhErr) {
+            console.warn("[offseason.refresh] upsertViewHealth failed:", season, vr.viewName, vhErr);
+          }
         }
 
-        await upsertCachedView(season, "combined", data);
+        const leagueId = await getDefaultEspnLeagueId();
+        const quality = validateDataQuality(season, data);
+        try {
+          await syncEspnCombinedFullPipeline(leagueId, season, data as Record<string, unknown>, {
+            pipelineAllOk: pipelineResult.allViewsOk,
+            qualityUsable: quality.isUsable,
+          });
+        } catch (persistErr) {
+          console.warn("[offseason.refresh] syncEspnCombinedFullPipeline failed:", season, persistErr);
+          throw persistErr;
+        }
 
         // Update league identity (team names, draft order, settings)
         try { await upsertLeagueIdentity(season, data); } catch (_e) { /* non-fatal */ }
@@ -412,23 +427,30 @@ Be specific, use the actual player names and round numbers. Write in a direct GM
         const matchups = normalizeMatchups(data);
         const picks = normalizeDraftPicks(data);
         const txs = normalizeTransactions(data);
-        const quality = validateDataQuality(season, data);
         const overallStatus = pipelineResult.allViewsOk && quality.isUsable ? "success"
           : pipelineResult.hasPartialData || !quality.isUsable ? "partial"
           : "success";
 
-        await upsertRefreshManifest(season, {
-          teamCount: teams.length, rosterCount: rosters.length,
-          matchupCount: matchups.length, draftPickCount: picks.length,
-          transactionCount: txs.length, status: overallStatus,
-          viewsRefreshed: pipelineResult.viewResults.filter(v => v.status === "ok").map(v => v.viewName),
-          errorMessage: quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
-        });
+        try {
+          await upsertRefreshManifest(season, {
+            teamCount: teams.length, rosterCount: rosters.length,
+            matchupCount: matchups.length, draftPickCount: picks.length,
+            transactionCount: txs.length, status: overallStatus,
+            viewsRefreshed: pipelineResult.viewResults.filter(v => v.status === "ok").map(v => v.viewName),
+            errorMessage: quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
+          });
+        } catch (mfErr) {
+          console.warn("[offseason.refresh] upsertRefreshManifest failed:", season, mfErr);
+        }
 
         results[season] = { status: overallStatus };
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        await upsertRefreshManifest(season, { status: "failed", errorMessage: msg });
+        try {
+          await upsertRefreshManifest(season, { status: "failed", errorMessage: msg });
+        } catch (mfErr) {
+          console.warn("[offseason.refresh] upsertRefreshManifest (failed) failed:", season, mfErr);
+        }
         results[season] = { status: "failed", error: msg };
       }
     }

@@ -41,7 +41,6 @@ import {
   getLeagueEvents,
   getLeagueEventsSummary,
   getCachedView,
-  upsertCachedView,
   getAllCachedSeasons,
   getRefreshManifests,
   upsertRefreshManifest,
@@ -83,6 +82,7 @@ import {
   hasCookies,
   resolveEspnCreds,
 } from "./espnService";
+import { syncEspnCombinedFullPipeline } from "./espnPersistence";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -1091,11 +1091,15 @@ export const appRouter = router({
 
             // Persist per-view health records
             for (const vr of pipelineResult.viewResults) {
-              await upsertViewHealth(season, vr.viewName, {
-                status: vr.status === "auth_error" ? "error" : vr.status,
-                errorMessage: vr.error,
-                recordCount: vr.recordCount,
-              });
+              try {
+                await upsertViewHealth(season, vr.viewName, {
+                  status: vr.status === "auth_error" ? "error" : vr.status,
+                  errorMessage: vr.error,
+                  recordCount: vr.recordCount,
+                });
+              } catch (vhErr) {
+                console.warn("[ESPN Refresh] upsertViewHealth failed:", season, vr.viewName, vhErr);
+              }
             }
 
             // Enrich transactions:
@@ -1115,7 +1119,16 @@ export const appRouter = router({
               }
             } catch (_e) { /* non-fatal — fall back without activity trades */ }
 
-            await upsertCachedView(season, "combined", enrichedData, activeLeagueId);
+            const quality = validateDataQuality(season, data);
+            try {
+              await syncEspnCombinedFullPipeline(activeLeagueId, season, enrichedData as Record<string, unknown>, {
+                pipelineAllOk: pipelineResult.allViewsOk,
+                qualityUsable: quality.isUsable,
+              });
+            } catch (persistErr) {
+              console.warn("[ESPN Refresh] syncEspnCombinedFullPipeline failed:", season, persistErr);
+              throw persistErr;
+            }
             // Persist static identity data (team names, draft order, settings) to league_identity table.
             // All consumers (offseasonRouter, draftBoard, etc.) read from here instead of re-fetching ESPN.
             try { await upsertLeagueIdentity(season, enrichedData); } catch (_e) { /* non-fatal — don't block the refresh */ }
@@ -1125,20 +1138,22 @@ export const appRouter = router({
             const picks = normalizeDraftPicks(enrichedData);
             const txs = normalizeTransactions(enrichedData);
 
-            // Data quality validation
-            const quality = validateDataQuality(season, data);
-
+            // Data quality validation (meta already passed into pipeline; counts use enriched payload)
             const overallStatus = pipelineResult.allViewsOk && quality.isUsable ? "success"
               : pipelineResult.hasPartialData || !quality.isUsable ? "partial"
               : "success";
 
-            await upsertRefreshManifest(season, {
-              teamCount: teams.length, rosterCount: rosters.length,
-              matchupCount: matchups.length, draftPickCount: picks.length,
-              transactionCount: txs.length, status: overallStatus,
-              viewsRefreshed: pipelineResult.viewResults.filter(v => v.status === "ok").map(v => v.viewName),
-              errorMessage: quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
-            });
+            try {
+              await upsertRefreshManifest(season, {
+                teamCount: teams.length, rosterCount: rosters.length,
+                matchupCount: matchups.length, draftPickCount: picks.length,
+                transactionCount: txs.length, status: overallStatus,
+                viewsRefreshed: pipelineResult.viewResults.filter(v => v.status === "ok").map(v => v.viewName),
+                errorMessage: quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
+              });
+            } catch (mfErr) {
+              console.warn("[ESPN Refresh] upsertRefreshManifest failed:", season, mfErr);
+            }
 
             const viewHealth: Record<string, string> = {};
             for (const vr of pipelineResult.viewResults) viewHealth[vr.viewName] = vr.status;
@@ -1150,7 +1165,11 @@ export const appRouter = router({
             };
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            await upsertRefreshManifest(season, { status: "failed", errorMessage: msg });
+            try {
+              await upsertRefreshManifest(season, { status: "failed", errorMessage: msg });
+            } catch (mfErr) {
+              console.warn("[ESPN Refresh] upsertRefreshManifest (failed) failed:", season, mfErr);
+            }
             results[season] = { status: "failed", error: msg };
           }
         }
