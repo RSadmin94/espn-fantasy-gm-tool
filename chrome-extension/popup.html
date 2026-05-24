@@ -9,7 +9,7 @@
         font: 13px/1.4 system-ui, sans-serif;
         margin: 0;
         padding: 12px;
-        width: 280px;
+        width: 320px;
         color: #e8e8e8;
         background: #121212;
       }
@@ -32,6 +32,10 @@
         background: #16a34a;
         color: #fff;
       }
+      button.secondary {
+        background: #3f3f46;
+        margin-bottom: 8px;
+      }
       button:disabled {
         opacity: 0.45;
         cursor: not-allowed;
@@ -45,6 +49,43 @@
         color: #f87171;
         font-size: 12px;
         margin-top: 8px;
+      }
+      .meta {
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 8px;
+      }
+      .league-list {
+        max-height: 220px;
+        overflow: auto;
+        margin: 0 0 10px;
+        padding: 8px;
+        background: #1e1e1e;
+        border-radius: 8px;
+        border: 1px solid #333;
+      }
+      .league-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 6px 0;
+        border-bottom: 1px solid #2a2a2a;
+      }
+      .league-row:last-child {
+        border-bottom: none;
+      }
+      .league-row label {
+        cursor: pointer;
+        flex: 1;
+        line-height: 1.35;
+        color: #ddd;
+      }
+      .league-row input {
+        margin-top: 2px;
+      }
+      .lid {
+        color: #888;
+        font-size: 11px;
       }
     </style>
   </head>

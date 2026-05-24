@@ -1,53 +1,42 @@
 /**
  * GM War Room extension — background service worker.
- * Reads ESPN cookies + gmwarroom session cookies, POSTs espn.saveCredentials from the extension.
- * Session cookies are injected via declarativeNetRequest (fetch cannot set a Cookie header from a SW).
+ * Reads ESPN cookies + gmwarroom session cookies, discovers 2026 leagues via ESPN API,
+ * POSTs espn.saveCredentials per selected league. War Room cookies are injected via DNR
+ * (fetch cannot set a Cookie header from a SW); ESPN discovery uses the same for SWID/espn_s2.
  */
 
 const WAR_ROOM_ORIGIN = "https://gmwarroom.online";
 const TRPC_SAVE_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.saveCredentials`;
 const SYNC_AUTOSYNC_URL = `${WAR_ROOM_ORIGIN}/sync?autoSync=2026`;
-const ESPN_COOKIE_URL = "https://fantasy.espn.com/";
+const ESPN_DISCOVER_URL =
+  "https://fantasy.espn.com/apis/v3/games/ffl/seasons/2026/segments/0/leagues?view=mLeagueSettings";
 
-const MSG_OPEN_CONNECT = "GMWR_OPEN_CONNECT_AND_SAVE";
-/** Session rule: inject Cookie only for the saveCredentials request, then removed. */
+const MSG_DISCOVER_LEAGUES = "GMWR_DISCOVER_LEAGUES_2026";
+const MSG_SYNC_SELECTED_LEAGUES = "GMWR_SYNC_SELECTED_LEAGUES";
+
+/** Session rules: inject Cookie only for matching requests, then removed. */
 const DNR_SAVE_COOKIE_RULE_ID = 8844201;
+const DNR_ESPN_DISCOVER_RULE_ID = 8844202;
 
-function extractLeagueIdFromUrl(url) {
-  if (!url || typeof url !== "string") return "";
-  try {
-    const u = new URL(url);
-    const q = u.searchParams.get("leagueId") || u.searchParams.get("league_id");
-    if (q) return q.trim();
-    const m = u.pathname.match(/\/leagues?\/(\d+)/i);
-    if (m) return m[1];
-  } catch {
-    /* ignore */
-  }
-  return "";
-}
-
-async function detectLeagueId() {
-  try {
-    const espnTabs = await chrome.tabs.query({ url: "https://fantasy.espn.com/*" });
-    for (const t of espnTabs) {
-      const id = extractLeagueIdFromUrl(t.url ?? "");
-      if (id) return id;
-    }
-  } catch {
-    /* ignore */
-  }
-  const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-  return extractLeagueIdFromUrl(active?.url ?? "");
-}
+const ESPN_COOKIE_BASE_URLS = ["https://fantasy.espn.com/", "https://www.espn.com/"];
 
 async function getEspnCookieValues() {
-  const base = { url: ESPN_COOKIE_URL };
-  const [swidRow, s2Row] = await Promise.all([
-    chrome.cookies.get({ ...base, name: "SWID" }),
-    chrome.cookies.get({ ...base, name: "espn_s2" }),
-  ]);
-  return { swid: swidRow?.value ?? "", espnS2: s2Row?.value ?? "" };
+  let swid = "";
+  let espnS2 = "";
+  for (const url of ESPN_COOKIE_BASE_URLS) {
+    const [swidRow, s2Row] = await Promise.all([
+      chrome.cookies.get({ url, name: "SWID" }),
+      chrome.cookies.get({ url, name: "espn_s2" }),
+    ]);
+    if (!swid && swidRow?.value) swid = swidRow.value;
+    if (!espnS2 && s2Row?.value) espnS2 = s2Row.value;
+    if (swid && espnS2) break;
+  }
+  return { swid, espnS2 };
+}
+
+function buildEspnCookieHeader(swid, espnS2) {
+  return `SWID=${swid}; espn_s2=${espnS2}`;
 }
 
 /** Cookies scoped to GM War Room (host cookies only for this URL). */
@@ -82,16 +71,135 @@ function safeErrorSummary(status, json) {
   return "Request failed";
 }
 
-function logPipeline({ hasSwid, hasS2, leagueId, warRoomSession, status, ok, errorSummary }) {
-  console.info("[GMWR] ESPN extension pipeline", {
-    leagueIdDetected: leagueId ? String(leagueId).trim() : null,
-    swidPresent: hasSwid,
-    espnS2Present: hasS2,
-    warRoomSessionCookiesPresent: warRoomSession,
-    saveCredentialsHttpStatus: status ?? null,
-    saveOk: ok,
-    error: errorSummary ?? null,
+function dedupeLeaguesById(leagues) {
+  const map = new Map();
+  for (const L of leagues) {
+    if (L?.id && !map.has(L.id)) map.set(L.id, L);
+  }
+  return [...map.values()];
+}
+
+/**
+ * Parse ESPN discover payload: prefers top-level array of league objects with id + settings.name;
+ * also handles { leagues: [...] }, single league object, or record-of-league objects.
+ */
+function extractLeaguesFromDiscoverJson(data) {
+  const out = [];
+
+  function pushLeague(obj) {
+    if (!obj || typeof obj !== "object") return;
+    const rawId = obj.id ?? obj.leagueId;
+    if (rawId === undefined || rawId === null || rawId === "") return;
+    const id = String(rawId).trim();
+    if (!id) return;
+    const settings = obj.settings && typeof obj.settings === "object" ? obj.settings : null;
+    let name = "";
+    if (settings) {
+      if (settings.name) name = String(settings.name);
+      else if (settings.leagueName) name = String(settings.leagueName);
+    }
+    if (!name && obj.name) name = String(obj.name);
+    if (!name) name = `League ${id}`;
+    out.push({ id, name });
+  }
+
+  if (Array.isArray(data)) {
+    for (const item of data) pushLeague(item);
+    return dedupeLeaguesById(out);
+  }
+
+  if (data && typeof data === "object") {
+    if (Array.isArray(data.leagues)) {
+      for (const item of data.leagues) pushLeague(item);
+    }
+    if (Array.isArray(data.leagueSummaries)) {
+      for (const item of data.leagueSummaries) pushLeague(item);
+    }
+    pushLeague(data);
+    const vals = Object.values(data);
+    const looksLikeLeagueMap =
+      vals.length > 0 &&
+      vals.every((v) => v && typeof v === "object" && (v.id != null || v.leagueId != null));
+    if (looksLikeLeagueMap && !Array.isArray(data)) {
+      for (const v of vals) pushLeague(v);
+    }
+  }
+
+  return dedupeLeaguesById(out);
+}
+
+async function applyEspnDiscoverCookieRule(cookieHeader) {
+  await chrome.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [DNR_ESPN_DISCOVER_RULE_ID],
+    addRules: [
+      {
+        id: DNR_ESPN_DISCOVER_RULE_ID,
+        priority: 1,
+        action: {
+          type: "modifyHeaders",
+          requestHeaders: [{ header: "Cookie", operation: "set", value: cookieHeader }],
+        },
+        condition: {
+          urlFilter: "https://fantasy.espn.com/apis/v3/games/ffl/seasons/2026/segments/0/leagues*",
+          resourceTypes: ["xmlhttprequest", "other"],
+        },
+      },
+    ],
   });
+}
+
+async function removeEspnDiscoverCookieRule() {
+  try {
+    await chrome.declarativeNetRequest.updateSessionRules({
+      removeRuleIds: [DNR_ESPN_DISCOVER_RULE_ID],
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+async function discoverLeaguesWithEspnCookie(espnCookieHeader) {
+  await applyEspnDiscoverCookieRule(espnCookieHeader);
+  try {
+    const res = await fetch(ESPN_DISCOVER_URL, {
+      method: "GET",
+      credentials: "omit",
+      headers: {
+        Accept: "application/json",
+        Referer: "https://fantasy.espn.com/",
+      },
+    });
+    const status = res.status;
+    let parsed = null;
+    const ct = res.headers.get("content-type") || "";
+    try {
+      if (ct.includes("application/json")) {
+        parsed = await res.json();
+      } else {
+        await res.text();
+      }
+    } catch {
+      /* ignore */
+    }
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        leagues: [],
+        error: safeErrorSummary(status, parsed),
+        httpStatus: status,
+      };
+    }
+
+    const leagues = extractLeaguesFromDiscoverJson(parsed);
+    console.info("[GMWR] ESPN league discovery", {
+      httpStatus: status,
+      leagueCount: leagues.length,
+    });
+    return { ok: true, leagues, httpStatus: status };
+  } finally {
+    await removeEspnDiscoverCookieRule();
+  }
 }
 
 async function applySaveCredentialsCookieRule(cookieHeader) {
@@ -139,9 +247,7 @@ async function openOrFocusSyncTab() {
  * POST saveCredentials. Cookie header is applied via DNR (SW fetch forbids Cookie).
  */
 async function postSaveCredentials({ swid, espnS2, leagueId, warRoomCookieHeader }) {
-  const json = { swid, espnS2 };
-  const lid = leagueId ? String(leagueId).trim() : "";
-  if (lid) json.leagueId = lid;
+  const json = { swid, espnS2, leagueId: String(leagueId).trim() };
   const body = JSON.stringify({ json });
 
   await applySaveCredentialsCookieRule(warRoomCookieHeader);
@@ -172,6 +278,7 @@ async function postSaveCredentials({ swid, espnS2, leagueId, warRoomCookieHeader
     if (hasTrpcError(parsed)) {
       return { ok: false, status, error: safeErrorSummary(status, parsed) };
     }
+    console.info("[GMWR] saveCredentials OK", { leagueId: json.leagueId, httpStatus: status });
     return { ok: true, status };
   } finally {
     await removeSaveCredentialsCookieRule();
@@ -179,92 +286,96 @@ async function postSaveCredentials({ swid, espnS2, leagueId, warRoomCookieHeader
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type !== MSG_OPEN_CONNECT) return false;
+  const t = message?.type;
 
-  (async () => {
-    const leagueId = await detectLeagueId();
-    const { swid, espnS2 } = await getEspnCookieValues();
-    const hasSwid = Boolean(swid);
-    const hasS2 = Boolean(espnS2);
-
-    const warRoomCookieHeader = await getWarRoomCookieHeaderString();
-    const warRoomSession = Boolean(warRoomCookieHeader);
-
-    if (!hasSwid || !hasS2) {
-      logPipeline({
-        hasSwid,
-        hasS2,
-        leagueId,
-        warRoomSession,
-        status: null,
-        ok: false,
-        errorSummary: "Missing ESPN cookies",
-      });
-      sendResponse({
-        ok: false,
-        error: "ESPN cookies not found. Open fantasy.espn.com and sign in, then try again.",
-      });
-      return;
-    }
-
-    if (!warRoomSession) {
-      logPipeline({
-        hasSwid,
-        hasS2,
-        leagueId,
-        warRoomSession,
-        status: null,
-        ok: false,
-        errorSummary: "No GM War Room session cookies",
-      });
-      sendResponse({
-        ok: false,
-        error: "GM War Room session not found. Sign in at gmwarroom.online in this browser, then try again.",
-      });
-      return;
-    }
-
-    const result = await postSaveCredentials({
-      swid,
-      espnS2,
-      leagueId,
-      warRoomCookieHeader,
+  if (t === MSG_DISCOVER_LEAGUES) {
+    (async () => {
+      const { swid, espnS2 } = await getEspnCookieValues();
+      const hasSwid = Boolean(swid);
+      const hasS2 = Boolean(espnS2);
+      if (!hasSwid || !hasS2) {
+        console.info("[GMWR] ESPN league discovery skipped", { reason: "missing_espn_cookies" });
+        sendResponse({
+          ok: false,
+          leagues: [],
+          error:
+            "ESPN cookies not found. Open fantasy.espn.com (or espn.com), sign in, then try again.",
+        });
+        return;
+      }
+      const espnCookieHeader = buildEspnCookieHeader(swid, espnS2);
+      const result = await discoverLeaguesWithEspnCookie(espnCookieHeader);
+      sendResponse(result);
+    })().catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.info("[GMWR] ESPN league discovery failed", { error: msg });
+      sendResponse({ ok: false, leagues: [], error: msg });
     });
+    return true;
+  }
 
-    logPipeline({
-      hasSwid,
-      hasS2,
-      leagueId,
-      warRoomSession,
-      status: result.status,
-      ok: result.ok,
-      errorSummary: result.ok ? null : result.error,
+  if (t === MSG_SYNC_SELECTED_LEAGUES) {
+    (async () => {
+      const rawIds = message?.leagueIds;
+      const leagueIds = Array.isArray(rawIds)
+        ? rawIds.map((x) => String(x).trim()).filter(Boolean)
+        : [];
+      if (leagueIds.length === 0) {
+        sendResponse({ ok: false, error: "No leagues selected." });
+        return;
+      }
+
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        sendResponse({
+          ok: false,
+          error: "ESPN cookies not found. Sign in at ESPN, then try again.",
+        });
+        return;
+      }
+
+      const warRoomCookieHeader = await getWarRoomCookieHeaderString();
+      if (!warRoomCookieHeader) {
+        sendResponse({
+          ok: false,
+          error:
+            "GM War Room session not found. Sign in at gmwarroom.online in this browser, then try again.",
+        });
+        return;
+      }
+
+      for (const leagueId of leagueIds) {
+        const result = await postSaveCredentials({
+          swid,
+          espnS2,
+          leagueId,
+          warRoomCookieHeader,
+        });
+        if (!result.ok) {
+          console.info("[GMWR] saveCredentials failed", {
+            leagueId,
+            httpStatus: result.status ?? null,
+            error: result.error ?? null,
+          });
+          sendResponse({
+            ok: false,
+            error: result.error || "Save failed.",
+            failedLeagueId: leagueId,
+            httpStatus: result.status,
+          });
+          return;
+        }
+      }
+
+      await openOrFocusSyncTab();
+      sendResponse({ ok: true });
+    })().catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.info("[GMWR] sync selected leagues failed", { error: msg });
+      sendResponse({ ok: false, error: msg });
     });
+    return true;
+  }
 
-    if (!result.ok) {
-      sendResponse({
-        ok: false,
-        error: result.error || "Save failed.",
-        status: result.status,
-      });
-      return;
-    }
-
-    await openOrFocusSyncTab();
-    sendResponse({ ok: true });
-  })().catch((err) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.info("[GMWR] ESPN extension pipeline", {
-      leagueIdDetected: null,
-      swidPresent: null,
-      espnS2Present: null,
-      warRoomSessionCookiesPresent: null,
-      saveCredentialsHttpStatus: null,
-      saveOk: false,
-      error: msg,
-    });
-    sendResponse({ ok: false, error: msg });
-  });
-
-  return true;
+  return false;
 });

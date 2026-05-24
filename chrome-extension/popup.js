@@ -1,56 +1,25 @@
 /**
- * Popup: ESPN cookie presence UI; triggers background-only save (no gmwarroom content script).
+ * Popup: ESPN cookies, 2026 league discovery (background), multi-select sync to War Room.
  */
 
-const ESPN_HOST = "fantasy.espn.com";
-const MSG_OPEN_CONNECT = "GMWR_OPEN_CONNECT_AND_SAVE";
+const MSG_DISCOVER_LEAGUES = "GMWR_DISCOVER_LEAGUES_2026";
+const MSG_SYNC_SELECTED_LEAGUES = "GMWR_SYNC_SELECTED_LEAGUES";
 
-function isEspnFantasyUrl(url) {
-  if (!url) return false;
-  try {
-    const u = new URL(url);
-    return u.hostname === ESPN_HOST;
-  } catch {
-    return false;
-  }
-}
+const ESPN_COOKIE_BASE_URLS = ["https://fantasy.espn.com/", "https://www.espn.com/"];
 
 async function getCookiePresence() {
-  const url = `https://${ESPN_HOST}/`;
-  const [swid, s2] = await Promise.all([
-    chrome.cookies.get({ url, name: "SWID" }),
-    chrome.cookies.get({ url, name: "espn_s2" }),
-  ]);
-  return { hasSwid: Boolean(swid?.value), hasS2: Boolean(s2?.value) };
-}
-
-function render(root, state) {
-  const { onEspn, hasSwid, hasS2, busy, error } = state;
-  const credsOk = hasSwid && hasS2;
-  let html = "";
-
-  if (!onEspn) {
-    html += `<p>Open <strong>${ESPN_HOST}</strong> in this window, sign in to ESPN, then open this popup again.</p>`;
-    html += `<button type="button" disabled>Connect to War Room</button>`;
-  } else if (credsOk) {
-    html += `<div class="ok">ESPN Connected</div>`;
-    html += `<p>Save ESPN to GM War Room. Stay signed in at <strong>gmwarroom.online</strong> in this browser so the extension can use your War Room session.</p>`;
-    html += `<button type="button" id="go" ${busy ? "disabled" : ""}>Connect to War Room</button>`;
-  } else {
-    html += `<p>ESPN cookies not detected. Sign in at ESPN Fantasy in this browser, then retry.</p>`;
-    html += `<p style="font-size:11px;">SWID: ${hasSwid ? "yes" : "no"} · espn_s2: ${hasS2 ? "yes" : "no"}</p>`;
-    html += `<button type="button" disabled>Connect to War Room</button>`;
+  let hasSwid = false;
+  let hasS2 = false;
+  for (const url of ESPN_COOKIE_BASE_URLS) {
+    const [swid, s2] = await Promise.all([
+      chrome.cookies.get({ url, name: "SWID" }),
+      chrome.cookies.get({ url, name: "espn_s2" }),
+    ]);
+    if (swid?.value) hasSwid = true;
+    if (s2?.value) hasS2 = true;
+    if (hasSwid && hasS2) break;
   }
-
-  if (error) {
-    html += `<div class="err">${escapeHtml(error)}</div>`;
-  }
-
-  root.innerHTML = html;
-  const btn = root.querySelector("#go");
-  if (btn && !busy) {
-    btn.addEventListener("click", onConnectClick);
-  }
+  return { hasSwid, hasS2 };
 }
 
 function escapeHtml(s) {
@@ -62,46 +31,178 @@ function escapeHtml(s) {
 }
 
 let state = {
-  onEspn: false,
   hasSwid: false,
   hasS2: false,
-  busy: false,
-  error: "",
+  leagues: /** @type {{ id: string, name: string }[]} */ ([]),
+  selectedIds: /** @type {Set<string>} */ (new Set()),
+  discoverBusy: false,
+  syncBusy: false,
+  discoverError: "",
+  syncError: "",
 };
 
-async function refresh() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const onEspn = isEspnFantasyUrl(tab?.url);
-  const { hasSwid, hasS2 } = await getCookiePresence();
-  state = { ...state, onEspn, hasSwid, hasS2 };
-  render(document.getElementById("root"), state);
+function selectedArray() {
+  return [...state.selectedIds];
 }
 
-async function onConnectClick() {
-  state = { ...state, busy: true, error: "" };
-  render(document.getElementById("root"), state);
+function render(root) {
+  const {
+    hasSwid,
+    hasS2,
+    leagues,
+    selectedIds,
+    discoverBusy,
+    syncBusy,
+    discoverError,
+    syncError,
+  } = state;
+  const credsOk = hasSwid && hasS2;
+  const busy = discoverBusy || syncBusy;
+  let html = "";
+
+  html += `<p class="meta">ESPN session: SWID ${hasSwid ? "ok" : "missing"} · espn_s2 ${hasS2 ? "ok" : "missing"}</p>`;
+
+  if (!credsOk) {
+    html += `<p>Open <strong>fantasy.espn.com</strong> or <strong>espn.com</strong>, sign in, then reopen this popup.</p>`;
+    html += `<button type="button" class="secondary" disabled>Refresh leagues</button>`;
+    html += `<button type="button" disabled>Sync Selected Leagues</button>`;
+  } else {
+    html += `<p>2026 leagues from ESPN. Stay signed in at <strong>gmwarroom.online</strong> so sync can use your War Room session.</p>`;
+    html += `<button type="button" class="secondary" id="refresh" ${busy ? "disabled" : ""}>Refresh leagues</button>`;
+
+    if (discoverBusy) {
+      html += `<p>Loading leagues…</p>`;
+    } else if (leagues.length === 0) {
+      html += `<p>No 2026 leagues found (or none parsed). Tap Refresh after visiting ESPN Fantasy.</p>`;
+    } else {
+      html += `<div class="league-list" id="list">`;
+      for (const L of leagues) {
+        const checked = selectedIds.has(L.id) ? " checked" : "";
+        html += `<div class="league-row">`;
+        html += `<input type="checkbox" id="cb-${escapeHtml(L.id)}" data-lid="${escapeHtml(L.id)}"${checked} />`;
+        html += `<label for="cb-${escapeHtml(L.id)}">${escapeHtml(L.name)}<span class="lid"> · ID ${escapeHtml(L.id)}</span></label>`;
+        html += `</div>`;
+      }
+      html += `</div>`;
+    }
+
+    const canSync = leagues.length > 0 && selectedIds.size > 0 && !busy;
+    html += `<button type="button" id="sync" ${canSync ? "" : "disabled"}>Sync Selected Leagues</button>`;
+  }
+
+  if (discoverError) {
+    html += `<div class="err">${escapeHtml(discoverError)}</div>`;
+  }
+  if (syncError) {
+    html += `<div class="err">${escapeHtml(syncError)}</div>`;
+  }
+
+  root.innerHTML = html;
+
+  root.querySelector("#refresh")?.addEventListener("click", onRefreshClick);
+  root.querySelector("#sync")?.addEventListener("click", onSyncClick);
+}
+
+function onRootChange(ev) {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement) || t.type !== "checkbox") return;
+  const id = t.getAttribute("data-lid");
+  if (!id) return;
+  const next = new Set(state.selectedIds);
+  if (t.checked) next.add(id);
+  else next.delete(id);
+  state = { ...state, selectedIds: next };
+  render(document.getElementById("root"));
+}
+
+async function runDiscover() {
+  const root = document.getElementById("root");
+  state = {
+    ...state,
+    discoverBusy: true,
+    discoverError: "",
+    syncError: "",
+  };
+  render(root);
   try {
-    const reply = await chrome.runtime.sendMessage({ type: MSG_OPEN_CONNECT });
-    if (!reply?.ok) {
+    const reply = await chrome.runtime.sendMessage({ type: MSG_DISCOVER_LEAGUES });
+    if (!reply?.ok || !Array.isArray(reply.leagues)) {
       state = {
         ...state,
-        busy: false,
-        error: reply?.error || "Connection failed.",
+        discoverBusy: false,
+        leagues: [],
+        selectedIds: new Set(),
+        discoverError: reply?.error || "Could not load leagues.",
       };
     } else {
-      state = { ...state, busy: false, error: "" };
-      window.close();
+      const leagues = reply.leagues.map((L) => ({
+        id: String(L.id),
+        name: String(L.name || `League ${L.id}`),
+      }));
+      state = {
+        ...state,
+        discoverBusy: false,
+        leagues,
+        selectedIds: new Set(),
+        discoverError: "",
+      };
     }
   } catch (e) {
     state = {
       ...state,
-      busy: false,
-      error: e instanceof Error ? e.message : String(e),
+      discoverBusy: false,
+      leagues: [],
+      selectedIds: new Set(),
+      discoverError: e instanceof Error ? e.message : String(e),
     };
   }
-  render(document.getElementById("root"), state);
+  render(root);
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  void refresh();
+async function onRefreshClick() {
+  await runDiscover();
+}
+
+async function onSyncClick() {
+  const root = document.getElementById("root");
+  const ids = selectedArray();
+  state = { ...state, syncBusy: true, syncError: "" };
+  render(root);
+  try {
+    const reply = await chrome.runtime.sendMessage({
+      type: MSG_SYNC_SELECTED_LEAGUES,
+      leagueIds: ids,
+    });
+    if (!reply?.ok) {
+      const extra =
+        reply?.failedLeagueId != null ? ` (league ID ${reply.failedLeagueId})` : "";
+      state = {
+        ...state,
+        syncBusy: false,
+        syncError: (reply?.error || "Sync failed.") + extra,
+      };
+      render(root);
+      return;
+    }
+    state = { ...state, syncBusy: false, syncError: "" };
+    window.close();
+  } catch (e) {
+    state = {
+      ...state,
+      syncBusy: false,
+      syncError: e instanceof Error ? e.message : String(e),
+    };
+    render(root);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  const root = document.getElementById("root");
+  root.addEventListener("change", onRootChange);
+  const { hasSwid, hasS2 } = await getCookiePresence();
+  state = { ...state, hasSwid, hasS2 };
+  render(root);
+  if (hasSwid && hasS2) {
+    await runDiscover();
+  }
 });
