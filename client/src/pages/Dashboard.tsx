@@ -84,6 +84,19 @@ function HealthIcon({ health }: { health: string }) {
 function ActiveLeagueCard() {
   const activeQ = trpc.league.getActive.useQuery();
   const leaguesQ = trpc.league.getMyLeagues.useQuery();
+  const cachedQ = trpc.espn.cachedSeasons.useQuery();
+  const cachedSeasons: number[] = cachedQ.data ?? [];
+  const latestSeasonForTeams =
+    cachedSeasons.length > 0 ? Math.max(...cachedSeasons) : 2025;
+  const probeTeams =
+    activeQ.isFetched &&
+    !activeQ.data &&
+    !cachedQ.isLoading &&
+    cachedSeasons.length === 0;
+  const teamsQ = trpc.espn.teams.useQuery(
+    { season: latestSeasonForTeams },
+    { enabled: probeTeams }
+  );
 
   if (activeQ.isLoading) {
     return (
@@ -96,6 +109,58 @@ function ActiveLeagueCard() {
   }
 
   if (!activeQ.data) {
+    if (cachedQ.isLoading) {
+      return (
+        <Card>
+          <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading sync status…
+          </CardContent>
+        </Card>
+      );
+    }
+
+    const teamsBusy = probeTeams && (teamsQ.isLoading || teamsQ.isFetching);
+    const teamsHasResults = probeTeams && (teamsQ.data?.length ?? 0) > 0;
+    const hideNoLeagueBanner =
+      cachedSeasons.length > 0 || teamsBusy || teamsHasResults;
+
+    if (hideNoLeagueBanner) {
+      if (teamsBusy) {
+        return (
+          <Card>
+            <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading league data…
+            </CardContent>
+          </Card>
+        );
+      }
+      return (
+        <Card className="border-emerald-500/20 bg-emerald-500/5">
+          <CardContent className="flex flex-col gap-3 py-6">
+            <div className="flex items-center gap-2 text-sm text-emerald-200/90">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              Synced fantasy data is available.
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Choose your active league from the sidebar switcher, or manage ESPN connections below.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm" variant="outline" className="gap-1.5">
+                <Link to="/connect">
+                  <Plug className="h-3.5 w-3.5" /> ESPN connections
+                </Link>
+              </Button>
+              <Button asChild size="sm" variant="ghost" className="gap-1.5 text-muted-foreground">
+                <Link to="/sync">
+                  <RefreshCw className="h-3 w-3" /> Sync
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
     return (
       <Card className="border-dashed border-primary/20 bg-primary/5">
         <CardContent className="flex flex-col gap-3 py-6">

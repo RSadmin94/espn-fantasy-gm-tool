@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { useUser, useClerk } from "@clerk/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
@@ -23,10 +24,19 @@ import {
   ScrollText,
   BarChart2,
   UserCircle,
+  ChevronsUpDown,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Collapsible,
   CollapsibleContent,
@@ -90,6 +100,121 @@ const NAV_GROUPS: NavGroup[] = [
     items: [{ kind: "link", label: "Settings", href: "/settings", icon: Settings }],
   },
 ];
+
+function formatLeagueSeason(season: number | null | undefined): string {
+  if (season != null && season > 0) return String(season);
+  return "—";
+}
+
+function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
+  const queryClient = useQueryClient();
+  const leaguesQ = trpc.league.getMyLeagues.useQuery(undefined, { staleTime: 30_000 });
+  const activeQ = trpc.league.getActive.useQuery(undefined, { staleTime: 30_000 });
+
+  const setActive = trpc.league.setActive.useMutation({
+    onSuccess: async () => {
+      await queryClient.invalidateQueries();
+      onAfterSwitch?.();
+    },
+  });
+
+  const leagues = leaguesQ.data ?? [];
+  const busy = setActive.isPending;
+
+  if (leaguesQ.isLoading || activeQ.isLoading) {
+    return (
+      <div className="flex items-center gap-2 border-b border-border px-3 py-3 text-muted-foreground">
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+        <span className="text-xs">Loading leagues…</span>
+      </div>
+    );
+  }
+
+  if (leagues.length === 0) {
+    return (
+      <div className="border-b border-border px-3 py-3">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          League
+        </p>
+        <Button asChild variant="outline" size="sm" className="h-auto w-full justify-center gap-2 py-2">
+          <Link to="/connect" onClick={onAfterSwitch}>
+            <Plug className="h-4 w-4 shrink-0" />
+            Connect ESPN
+          </Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const activeId = activeQ.data?.id ?? leagues.find((l) => l.isActive)?.id;
+  const current = leagues.find((l) => l.id === activeId) ?? leagues[0]!;
+  const label = current.leagueName?.trim() || `League ${current.leagueId}`;
+  const year = formatLeagueSeason(current.season);
+
+  if (leagues.length === 1) {
+    return (
+      <div className="border-b border-border px-3 py-3">
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Active league
+        </p>
+        <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2">
+          <p className="truncate text-sm font-medium text-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground">{year}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-b border-border px-3 py-3">
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Active league
+      </p>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            className="h-auto min-h-10 w-full justify-between gap-2 px-3 py-2 text-left font-normal"
+            aria-label="Switch active league"
+          >
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="truncate text-sm font-medium text-foreground">{label}</span>
+              <span className="text-xs text-muted-foreground">{year}</span>
+            </span>
+            {busy ? (
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin opacity-70" />
+            ) : (
+              <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56" align="start">
+          {leagues.map((l) => {
+            const isCurrent = l.id === activeId;
+            const itemLabel = l.leagueName?.trim() || `League ${l.leagueId}`;
+            return (
+              <DropdownMenuItem
+                key={l.id}
+                disabled={isCurrent || busy}
+                className={cn("flex cursor-pointer flex-col items-start gap-0.5 py-2", isCurrent && "bg-accent/50")}
+                onSelect={(e) => {
+                  e.preventDefault();
+                  if (isCurrent || busy) return;
+                  setActive.mutate({ leagueConnectionId: l.id });
+                }}
+              >
+                <span className="font-medium leading-tight">{itemLabel}</span>
+                <span className="text-xs text-muted-foreground">{formatLeagueSeason(l.season)}</span>
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
 
 function useViewportMobile() {
   const [isMobile, setIsMobile] = useState(() =>
@@ -240,6 +365,8 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           </button>
         )}
       </div>
+
+      <LeagueSwitcher onAfterSwitch={onClose} />
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-3">
