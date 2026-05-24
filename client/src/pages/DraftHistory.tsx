@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { AlertCircle, Loader2 } from "lucide-react";
 
 interface DraftPickRow {
@@ -21,9 +22,12 @@ interface DraftPickRow {
   playerId: number | null;
   playerName: string | null;
   position: string | null;
+  nflTeam: string;
   isKeeper: boolean;
   bidAmount: number;
 }
+
+type ViewMode = "round" | "owner";
 
 function PosBadge({ pos }: { pos: string | null | undefined }) {
   const p = (pos || "?").toUpperCase();
@@ -64,6 +68,7 @@ export function DraftHistory() {
 
   const [season, setSeason] = useState<number>(defaultSeason);
   const [teamFilter, setTeamFilter] = useState<string>("ALL");
+  const [viewMode, setViewMode] = useState<ViewMode>("round");
 
   /** Always query by selected season — `draft_picks` may exist even if `cachedSeasons` omits the year. */
   const draftQ = trpc.espn.draftHistory.useQuery({ season }, { staleTime: 0 });
@@ -105,6 +110,22 @@ export function DraftHistory() {
     return n;
   }, [byRound]);
 
+  /** Teams ordered by first overall pick in this season (stable draft order). */
+  const byOwnerGroups = useMemo(() => {
+    const m = new Map<number, DraftPickRow[]>();
+    for (const p of filteredPicks) {
+      const arr = m.get(p.teamId) ?? [];
+      arr.push(p);
+      m.set(p.teamId, arr);
+    }
+    const groups = [...m.values()].map((arr) => {
+      arr.sort((a, b) => a.overallPick - b.overallPick);
+      return arr;
+    });
+    groups.sort((a, b) => (a[0]?.overallPick ?? 0) - (b[0]?.overallPick ?? 0));
+    return groups;
+  }, [filteredPicks]);
+
   const summary = useMemo(() => {
     const keeperCount = filteredPicks.filter((p) => p.isKeeper).length;
     const byRoundPos: Record<number, Record<string, number>> = {};
@@ -129,12 +150,12 @@ export function DraftHistory() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Draft History</h1>
         <p className="mt-1 text-muted-foreground">
-          Round-by-round board from synced league data.
+          Draft board from synced league data — switch between round grid and picks grouped by team.
         </p>
       </div>
 
       <Card>
-        <CardContent className="flex flex-wrap gap-3 py-4">
+        <CardContent className="flex flex-wrap items-center gap-3 py-4">
           <div className="w-28">
             <Select
               value={String(season)}
@@ -176,6 +197,24 @@ export function DraftHistory() {
               </SelectContent>
             </Select>
           </div>
+
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(v) => {
+              if (v === "round" || v === "owner") setViewMode(v);
+            }}
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+          >
+            <ToggleGroupItem value="round" className="text-xs">
+              By Round
+            </ToggleGroupItem>
+            <ToggleGroupItem value="owner" className="text-xs">
+              By Owner
+            </ToggleGroupItem>
+          </ToggleGroup>
         </CardContent>
       </Card>
 
@@ -250,84 +289,138 @@ export function DraftHistory() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Draft board</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="sticky left-0 z-10 bg-muted/30 px-2 py-2 text-left font-medium text-muted-foreground">
-                        Round
-                      </th>
-                      {Array.from({ length: maxSlots }, (_, i) => (
-                        <th
-                          key={i}
-                          className="min-w-[7.5rem] border-l border-border/60 px-1 py-2 text-center font-medium text-muted-foreground"
-                        >
-                          Slot {i + 1}
+          {viewMode === "round" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Draft board</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="sticky left-0 z-10 bg-muted/30 px-2 py-2 text-left font-medium text-muted-foreground">
+                          Round
                         </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {byRound.map(([round, slots]) => (
-                      <tr key={round} className="border-b border-border/50">
-                        <td className="sticky left-0 z-10 bg-card px-2 py-1 font-semibold text-foreground">
-                          {round}
-                        </td>
-                        {Array.from({ length: maxSlots }, (_, col) => {
-                          const pick = slots[col];
-                          if (!pick) {
+                        {Array.from({ length: maxSlots }, (_, i) => (
+                          <th
+                            key={i}
+                            className="min-w-[7.5rem] border-l border-border/60 px-1 py-2 text-center font-medium text-muted-foreground"
+                          >
+                            Slot {i + 1}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {byRound.map(([round, slots]) => (
+                        <tr key={round} className="border-b border-border/50">
+                          <td className="sticky left-0 z-10 bg-card px-2 py-1 font-semibold text-foreground">
+                            {round}
+                          </td>
+                          {Array.from({ length: maxSlots }, (_, col) => {
+                            const pick = slots[col];
+                            if (!pick) {
+                              return (
+                                <td
+                                  key={col}
+                                  className="border-l border-border/40 bg-muted/5 align-top p-1"
+                                />
+                              );
+                            }
                             return (
                               <td
-                                key={col}
-                                className="border-l border-border/40 bg-muted/5 align-top p-1"
-                              />
-                            );
-                          }
-                          return (
-                            <td
-                              key={`${pick.overallPick}-${col}`}
-                              className={cn(
-                                "border-l border-border/40 align-top p-1.5",
-                                pick.isKeeper && "bg-amber-500/10 ring-1 ring-inset ring-amber-500/25"
-                              )}
-                            >
-                              <div className="flex flex-col gap-0.5 rounded-md bg-background/80 p-1.5">
-                                <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground">
-                                  <span className="font-mono">#{pick.overallPick}</span>
-                                  <span>
-                                    R{pick.round}.{pick.roundPick}
-                                  </span>
-                                </div>
-                                <div className="line-clamp-2 font-medium leading-tight text-foreground">
-                                  {pick.playerName ?? "—"}
-                                </div>
-                                <div className="flex flex-wrap items-center gap-1">
-                                  <PosBadge pos={pick.position} />
-                                  {pick.isKeeper && (
-                                    <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-semibold uppercase text-amber-300">
-                                      K
+                                key={`${pick.overallPick}-${col}`}
+                                className={cn(
+                                  "border-l border-border/40 align-top p-1.5",
+                                  pick.isKeeper && "bg-amber-500/10 ring-1 ring-inset ring-amber-500/25"
+                                )}
+                              >
+                                <div className="flex flex-col gap-0.5 rounded-md bg-background/80 p-1.5">
+                                  <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground">
+                                    <span className="font-mono">#{pick.overallPick}</span>
+                                    <span>
+                                      R{pick.round}.{pick.roundPick}
                                     </span>
-                                  )}
+                                  </div>
+                                  <div className="line-clamp-2 font-medium leading-tight text-foreground">
+                                    {pick.playerName ?? "—"}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <PosBadge pos={pick.position} />
+                                    {pick.isKeeper && (
+                                      <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-semibold uppercase text-amber-300">
+                                        K
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground">
+                                    {(pick.nflTeam || "").trim() || "—"}
+                                  </div>
+                                  <div className="line-clamp-2 text-[10px] leading-tight text-muted-foreground">
+                                    {pick.teamName}
+                                  </div>
                                 </div>
-                                <div className="line-clamp-2 text-[10px] leading-tight text-muted-foreground">
-                                  {pick.teamName}
-                                </div>
-                              </div>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {viewMode === "owner" && (
+            <div className="space-y-4">
+              {byOwnerGroups.map((group) => {
+                const head = group[0];
+                if (!head) return null;
+                return (
+                  <Card key={head.teamId}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">{head.teamName}</CardTitle>
+                      {(head.ownerName || "").trim() !== "" && (
+                        <p className="text-xs text-muted-foreground">{head.ownerName}</p>
+                      )}
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {group.map((pick) => (
+                        <div
+                          key={pick.overallPick}
+                          className={cn(
+                            "flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-muted/10 px-2 py-1.5 text-xs",
+                            pick.isKeeper && "border-amber-500/30 bg-amber-500/5"
+                          )}
+                        >
+                          <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
+                            #{pick.overallPick}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            R{pick.round}.{pick.roundPick}
+                          </span>
+                          <span className="min-w-0 flex-1 font-medium text-foreground">
+                            {pick.playerName ?? "—"}
+                          </span>
+                          <PosBadge pos={pick.position} />
+                          <span className="text-[10px] text-muted-foreground">
+                            {(pick.nflTeam || "").trim() || "—"}
+                          </span>
+                          {pick.isKeeper && (
+                            <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-semibold uppercase text-amber-300">
+                              K
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
 

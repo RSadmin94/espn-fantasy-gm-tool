@@ -20,6 +20,7 @@ import { Trades } from "./pages/Trades";
 import { Advisor } from "./pages/Advisor";
 import { Settings } from "./pages/Settings";
 import { DraftHistory } from "./pages/DraftHistory";
+import { Matchups } from "./pages/Matchups";
 import { trpc } from "@/lib/trpc";
 import "./index.css";
 
@@ -109,6 +110,7 @@ const router = createBrowserRouter([
           { path: "/transactions", element: <Transactions /> },
           { path: "/draft-history", element: <DraftHistory /> },
           { path: "/standings", element: <Standings /> },
+          { path: "/matchups", element: <Matchups /> },
           { path: "/roster", element: <Roster /> },
           { path: "/trades", element: <Trades /> },
           { path: "/advisor", element: <Advisor /> },
@@ -141,7 +143,6 @@ const router = createBrowserRouter([
           { path: "/keepers", element: <Navigate to="/dashboard" replace /> },
           { path: "/keeper-calculator", element: <Navigate to="/dashboard" replace /> },
           { path: "/keeper-roi", element: <Navigate to="/dashboard" replace /> },
-          { path: "/matchups", element: <Navigate to="/dashboard" replace /> },
           { path: "/startsit", element: <Navigate to="/dashboard" replace /> },
           { path: "/player-profiles", element: <Navigate to="/dashboard" replace /> },
           { path: "/owner-stats", element: <Navigate to="/dashboard" replace /> },

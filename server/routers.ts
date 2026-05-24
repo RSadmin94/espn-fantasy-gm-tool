@@ -54,8 +54,8 @@ import {
   persistLlmUsage,
   getLlmUsageSummary,
 } from "./db";
-import { leagueConnections as lcTable, gmDraftPicks, gmTeams } from "../drizzle/schema";
-import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle, asc as ascDrizzle } from "drizzle-orm";
+import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmMatchups } from "../drizzle/schema";
+import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle, asc as ascDrizzle, sql } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
 import { parse as parseCookie } from "cookie";
@@ -97,6 +97,17 @@ import {
   type ManagerBehaviorStats,
 } from "./analytics";
 import type { RequestHandler } from "express";
+
+function nflTeamFromDraftRawPick(raw: string | null | undefined): string {
+  if (raw == null || raw === "") return "";
+  try {
+    const o = JSON.parse(raw) as Record<string, unknown>;
+    const t = o.proTeam ?? o.nflTeam;
+    return typeof t === "string" ? t.trim() : "";
+  } catch {
+    return "";
+  }
+}
 
 /** Exact origins allowed for credentialed browser requests (e.g. extension / cross-site tRPC). */
 const WAR_ROOM_CORS_ORIGINS = new Set([
@@ -1322,6 +1333,7 @@ export const appRouter = router({
             position: gmDraftPicks.position,
             isKeeper: gmDraftPicks.isKeeper,
             bidAmount: gmDraftPicks.bidAmount,
+            rawPick: gmDraftPicks.rawPick,
           })
           .from(gmDraftPicks)
           .innerJoin(
@@ -1350,6 +1362,7 @@ export const appRouter = router({
           playerId: r.playerId,
           playerName: r.playerName ?? null,
           position: r.position ?? null,
+          nflTeam: nflTeamFromDraftRawPick(r.rawPick != null ? String(r.rawPick) : ""),
           isKeeper: Boolean(r.isKeeper),
           bidAmount: r.bidAmount != null ? Number(r.bidAmount) : 0,
         }));
@@ -1363,6 +1376,179 @@ export const appRouter = router({
         const matchups = normalizeMatchups(data);
         if (input.matchupPeriodId !== undefined) return matchups.filter((m: unknown) => (m as Record<string, unknown>).matchupPeriodId === input.matchupPeriodId);
         return matchups;
+      }),
+
+    /**
+     * Scoreboard from persisted `matchups` + `teams` (normalized DB), keyed by scoring week.
+     * Use for the Matchups page; `espn.matchups` remains cache/API-shaped for other callers.
+     */
+    matchupsScoreboard: publicProcedure
+      .input(z.object({ season: z.number(), week: z.number().int().min(1) }))
+      .query(async ({ ctx, input }) => {
+        const resolved = await resolveActiveLeagueId(
+          { user: ctx.user ? { id: ctx.user.id } : undefined },
+          null,
+          input.season
+        );
+        const { leagueId, source } = resolved;
+        console.info("[matchupsScoreboard]", {
+          userId: ctx.user?.id ?? null,
+          leagueId,
+          source,
+          season: input.season,
+          week: input.week,
+        });
+        const db = await getDb();
+        if (!db) return { maxWeek: 0, matchups: [] as const };
+
+        const [agg] = await db
+          .select({
+            maxWeek: sql<number>`COALESCE(MAX(${gmMatchups.week}), 0)`.mapWith(Number),
+          })
+          .from(gmMatchups)
+          .where(
+            andDrizzle(
+              eqDrizzle(gmMatchups.leagueId, leagueId),
+              eqDrizzle(gmMatchups.season, input.season)
+            )
+          );
+
+        const maxWeek = Number(agg?.maxWeek ?? 0) || 0;
+
+        const teamRows = await db
+          .select({
+            teamId: gmTeams.teamId,
+            name: gmTeams.name,
+            ownerName: gmTeams.ownerName,
+            wins: gmTeams.wins,
+            losses: gmTeams.losses,
+            ties: gmTeams.ties,
+            logoUrl: gmTeams.logoUrl,
+            playoffSeed: gmTeams.playoffSeed,
+            finalStanding: gmTeams.finalStanding,
+          })
+          .from(gmTeams)
+          .where(
+            andDrizzle(
+              eqDrizzle(gmTeams.leagueId, leagueId),
+              eqDrizzle(gmTeams.season, input.season)
+            )
+          );
+
+        type TeamLite = {
+          teamId: number;
+          teamName: string;
+          ownerName: string;
+          wins: number;
+          losses: number;
+          ties: number;
+          logoUrl: string;
+          rank: number | null;
+        };
+
+        const teamMap = new Map<number, TeamLite>();
+        for (const t of teamRows) {
+          const tid = Number(t.teamId);
+          const rank =
+            t.playoffSeed != null && Number.isFinite(Number(t.playoffSeed))
+              ? Number(t.playoffSeed)
+              : t.finalStanding != null && Number.isFinite(Number(t.finalStanding))
+                ? Number(t.finalStanding)
+                : null;
+          teamMap.set(tid, {
+            teamId: tid,
+            teamName: (t.name && String(t.name).trim()) || `Team ${tid}`,
+            ownerName: (t.ownerName && String(t.ownerName).trim()) || "",
+            wins: Number(t.wins ?? 0) || 0,
+            losses: Number(t.losses ?? 0) || 0,
+            ties: Number(t.ties ?? 0) || 0,
+            logoUrl: (t.logoUrl && String(t.logoUrl).trim()) || "",
+            rank,
+          });
+        }
+
+        const mrows = await db
+          .select({
+            id: gmMatchups.id,
+            week: gmMatchups.week,
+            matchupPeriodId: gmMatchups.matchupPeriodId,
+            homeTeamId: gmMatchups.homeTeamId,
+            awayTeamId: gmMatchups.awayTeamId,
+            homeScore: gmMatchups.homeScore,
+            awayScore: gmMatchups.awayScore,
+            homeProjected: gmMatchups.homeProjected,
+            awayProjected: gmMatchups.awayProjected,
+            winnerTeamId: gmMatchups.winnerTeamId,
+            isCompleted: gmMatchups.isCompleted,
+            isPlayoff: gmMatchups.isPlayoff,
+          })
+          .from(gmMatchups)
+          .where(
+            andDrizzle(
+              eqDrizzle(gmMatchups.leagueId, leagueId),
+              eqDrizzle(gmMatchups.season, input.season),
+              eqDrizzle(gmMatchups.week, input.week)
+            )
+          )
+          .orderBy(ascDrizzle(gmMatchups.matchupPeriodId), ascDrizzle(gmMatchups.id));
+
+        const matchups = mrows.map((m) => {
+          const home = teamMap.get(Number(m.homeTeamId));
+          const away = teamMap.get(Number(m.awayTeamId));
+          const hid = Number(m.homeTeamId);
+          const aid = Number(m.awayTeamId);
+          const hs = Number(m.homeScore ?? 0);
+          const as = Number(m.awayScore ?? 0);
+          const wid = m.winnerTeamId != null ? Number(m.winnerTeamId) : null;
+          const completed = Boolean(m.isCompleted);
+          let winnerSide: "home" | "away" | "tie" | "undecided" = "undecided";
+          if (completed) {
+            if (wid === hid) winnerSide = "home";
+            else if (wid === aid) winnerSide = "away";
+            else if (hs > as) winnerSide = "home";
+            else if (as > hs) winnerSide = "away";
+            else winnerSide = "tie";
+          } else if (wid === hid) winnerSide = "home";
+          else if (wid === aid) winnerSide = "away";
+
+          return {
+            id: m.id,
+            week: m.week,
+            matchupPeriodId: m.matchupPeriodId,
+            homeTeamId: hid,
+            awayTeamId: aid,
+            homeScore: hs,
+            awayScore: as,
+            homeProjected: m.homeProjected != null ? Number(m.homeProjected) : null,
+            awayProjected: m.awayProjected != null ? Number(m.awayProjected) : null,
+            winnerTeamId: wid,
+            isCompleted: Boolean(m.isCompleted),
+            isPlayoff: Boolean(m.isPlayoff),
+            winnerSide,
+            home: home ?? {
+              teamId: hid,
+              teamName: `Team ${hid}`,
+              ownerName: "",
+              wins: 0,
+              losses: 0,
+              ties: 0,
+              logoUrl: "",
+              rank: null,
+            },
+            away: away ?? {
+              teamId: aid,
+              teamName: `Team ${aid}`,
+              ownerName: "",
+              wins: 0,
+              losses: 0,
+              ties: 0,
+              logoUrl: "",
+              rank: null,
+            },
+          };
+        });
+
+        return { maxWeek, matchups };
       }),
 
     transactions: publicProcedure

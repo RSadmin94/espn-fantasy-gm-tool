@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertCircle,
-  Loader2,
-  Medal,
-  RefreshCw,
-  Trophy,
-} from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,111 +31,200 @@ interface TeamRow {
   primaryColor?: string;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function RankDecal({ rank }: { rank: number }) {
-  if (rank === 1) return <Trophy className="h-4 w-4 text-yellow-400" />;
-  if (rank === 2) return <Medal className="h-4 w-4 text-slate-400" />;
-  if (rank === 3) return <Medal className="h-4 w-4 text-amber-600" />;
-  return <span className="w-4 text-center text-xs font-semibold text-muted-foreground">{rank}</span>;
+interface TxRow {
+  teamId?: number | null;
+  transactionId?: string | null;
 }
 
-function fmt(n: number | undefined, decimals = 1) {
-  if (n == null) return "—";
-  return Number(n).toFixed(decimals);
+type StandingsMode = "regular" | "final";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const CURRENT_YEAR = new Date().getFullYear();
+const SEASONS_DESC = Array.from({ length: CURRENT_YEAR - 2009 + 1 }, (_, i) => CURRENT_YEAR - i);
+
+function num(n: number | undefined | null): number {
+  const v = Number(n);
+  return Number.isFinite(v) ? v : 0;
+}
+
+function fmt1(n: number | undefined | null) {
+  return num(n).toFixed(1);
+}
+
+function gamesPlayed(t: TeamRow): number {
+  const g = num(t.wins) + num(t.losses) + num(t.ties);
+  return g > 0 ? g : 1;
+}
+
+function winPct(t: TeamRow): number {
+  const w = num(t.wins);
+  const l = num(t.losses);
+  const ti = num(t.ties);
+  const g = w + l + ti;
+  return g > 0 ? (w + 0.5 * ti) / g : 0;
+}
+
+/** Regular season: win pct desc, then PF desc (ESPN-style tiebreak). */
+function compareRegular(a: TeamRow, b: TeamRow): number {
+  const dPct = winPct(b) - winPct(a);
+  if (Math.abs(dPct) > 1e-9) return dPct;
+  return num(b.pointsFor) - num(a.pointsFor);
+}
+
+/** Final: league final rank, then regular tiebreak. */
+function compareFinal(a: TeamRow, b: TeamRow): number {
+  const ra = a.rankFinal != null && Number.isFinite(Number(a.rankFinal)) ? Number(a.rankFinal) : 999;
+  const rb = b.rankFinal != null && Number.isFinite(Number(b.rankFinal)) ? Number(b.rankFinal) : 999;
+  if (ra !== rb) return ra - rb;
+  return compareRegular(a, b);
+}
+
+function formatRec(t: TeamRow): string {
+  return `${num(t.wins)}-${num(t.losses)}-${num(t.ties)}`;
+}
+
+function formatDiff(pf: number, pa: number): { text: string; positive: boolean; zero: boolean } {
+  const d = pf - pa;
+  const zero = Math.abs(d) < 0.05;
+  const positive = d > 0;
+  const sign = zero ? "" : d > 0 ? "+" : "";
+  return { text: `${sign}${d.toFixed(1)}`, positive, zero };
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function Standings() {
-  const allSeasonsQ = trpc.espn.allSeasons.useQuery();
   const cachedQ = trpc.espn.cachedSeasons.useQuery();
 
-  const allSeasons: number[] = allSeasonsQ.data ?? [];
   const cachedSeasons: number[] = cachedQ.data ?? [];
 
-  const defaultSeason = cachedSeasons.length > 0
-    ? Math.max(...cachedSeasons)
-    : allSeasons.length > 0 ? allSeasons[allSeasons.length - 1] : 2025;
+  const defaultSeason =
+    cachedSeasons.length > 0 ? Math.max(...cachedSeasons) : Math.min(CURRENT_YEAR, 2025);
 
-  const [season, setSeason] = useState(defaultSeason);
+  const [season, setSeason] = useState<number>(defaultSeason);
+  const [mode, setMode] = useState<StandingsMode>("regular");
 
-  const standingsQ = trpc.espn.standings.useQuery(
-    { season },
-    { enabled: cachedSeasons.includes(season) }
+  const standingsQ = trpc.espn.standings.useQuery({ season }, { staleTime: 60_000 });
+  const txsQ = trpc.espn.transactions.useQuery(
+    { season, typeFilter: "ALL" },
+    { staleTime: 60_000 }
   );
 
-  const teams = (standingsQ.data as TeamRow[] | undefined) ?? [];
+  const rawTeams = (standingsQ.data as TeamRow[] | undefined) ?? [];
   const isNotCached = !cachedSeasons.includes(season);
 
+  const moveCountByTeam = useMemo(() => {
+    const txs = (txsQ.data as TxRow[] | undefined) ?? [];
+    const perTeam = new Map<number, Set<string>>();
+    for (const row of txs) {
+      const tid = row.teamId != null ? Number(row.teamId) : NaN;
+      const txid = row.transactionId != null ? String(row.transactionId) : "";
+      if (!Number.isFinite(tid) || tid <= 0 || !txid) continue;
+      if (!perTeam.has(tid)) perTeam.set(tid, new Set());
+      perTeam.get(tid)!.add(txid);
+    }
+    const counts = new Map<number, number>();
+    for (const [tid, set] of perTeam) counts.set(tid, set.size);
+    return counts;
+  }, [txsQ.data]);
+
+  const teams = useMemo(() => {
+    const copy = [...rawTeams];
+    copy.sort(mode === "final" ? compareFinal : compareRegular);
+    return copy;
+  }, [rawTeams, mode]);
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+    <div className="mx-auto max-w-6xl space-y-6 px-1">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Standings</h1>
-          <p className="mt-1 text-muted-foreground">Final league standings by season.</p>
+          <p className="mt-1 text-muted-foreground">
+            League standings in ESPN layout — switch between regular season order and final ranks.
+          </p>
         </div>
         <Button
           variant="outline"
           size="sm"
           className="gap-2"
-          disabled={standingsQ.isFetching || isNotCached}
-          onClick={() => void standingsQ.refetch()}
+          disabled={standingsQ.isFetching || txsQ.isFetching}
+          onClick={() => {
+            void standingsQ.refetch();
+            void txsQ.refetch();
+          }}
         >
-          {standingsQ.isFetching
-            ? <Loader2 className="h-4 w-4 animate-spin" />
-            : <RefreshCw className="h-4 w-4" />}
+          {standingsQ.isFetching || txsQ.isFetching ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
           Refresh
         </Button>
       </div>
 
-      {/* Season selector */}
-      <div className="flex items-center gap-3">
-        <Select
-          value={String(season)}
-          onValueChange={v => setSeason(Number(v))}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="w-[7.5rem]">
+          <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SEASONS_DESC.map((s) => (
+                <SelectItem key={s} value={String(s)}>
+                  <span className="flex items-center gap-1.5">
+                    {s}
+                    {cachedSeasons.includes(s) && (
+                      <span className="text-xs text-emerald-400">✓</span>
+                    )}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <ToggleGroup
+          type="single"
+          value={mode}
+          onValueChange={(v) => {
+            if (v === "regular" || v === "final") setMode(v);
+          }}
+          variant="outline"
+          size="sm"
+          className="shrink-0"
         >
-          <SelectTrigger className="w-32 h-9 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {[...allSeasons].reverse().map(s => (
-              <SelectItem key={s} value={String(s)}>
-                <span className="flex items-center gap-1.5">
-                  {s}
-                  {cachedSeasons.includes(s) && (
-                    <span className="text-emerald-400 text-xs">✓</span>
-                  )}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <ToggleGroupItem value="regular" className="text-xs">
+            Regular Season
+          </ToggleGroupItem>
+          <ToggleGroupItem value="final" className="text-xs">
+            Final Standings
+          </ToggleGroupItem>
+        </ToggleGroup>
+
         {teams.length > 0 && (
-          <span className="text-sm text-muted-foreground">
-            {teams.length} teams
-          </span>
+          <span className="text-sm text-muted-foreground">{teams.length} teams</span>
         )}
       </div>
 
-      {/* Not-cached notice */}
       {isNotCached && (
         <div className="flex items-center gap-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-300">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          Season {season} hasn't been synced yet.{" "}
-          <a href="/sync" className="underline underline-offset-2">Sync it now</a>.
+          Season {season} is not in the local cache yet.{" "}
+          <a href="/sync" className="underline underline-offset-2">
+            Sync data
+          </a>{" "}
+          to load standings and moves.
         </div>
       )}
 
-      {/* Loading */}
       {standingsQ.isLoading && (
-        <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" /> Loading standings…
+        <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          Loading standings…
         </div>
       )}
 
-      {/* Error */}
       {standingsQ.isError && (
         <div className="flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
           <AlertCircle className="h-4 w-4 shrink-0" />
@@ -148,106 +232,134 @@ export function Standings() {
         </div>
       )}
 
-      {/* Empty */}
-      {!standingsQ.isLoading && !standingsQ.isError && !isNotCached && teams.length === 0 && (
+      {!standingsQ.isLoading && !standingsQ.isError && teams.length === 0 && (
         <div className="rounded-lg border border-dashed border-border px-4 py-16 text-center text-sm text-muted-foreground">
           No standings data for {season}.
         </div>
       )}
 
-      {/* Standings table */}
       {teams.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              {season} Final Standings
+              {season} {mode === "final" ? "Final" : "Regular season"} standings
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {/* Desktop table */}
-            <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[860px] border-collapse text-sm">
                 <thead>
-                  <tr className="border-b border-border">
-                    <th className="w-10 px-4 py-2.5 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">#</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Team</th>
-                    <th className="px-4 py-2.5 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">W</th>
-                    <th className="px-4 py-2.5 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">L</th>
-                    <th className="px-4 py-2.5 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">T</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">PF</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">PA</th>
-                    <th className="px-4 py-2.5 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground hidden md:table-cell">Seed</th>
+                  <tr className="border-b border-border bg-muted/40">
+                    <th className="sticky left-0 z-10 bg-muted/40 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      RK
+                    </th>
+                    <th className="min-w-[200px] px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Team
+                    </th>
+                    <th className="px-2 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      REC
+                    </th>
+                    <th className="px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      PF
+                    </th>
+                    <th className="px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      PA
+                    </th>
+                    <th className="px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      PF/G
+                    </th>
+                    <th className="px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      PA/G
+                    </th>
+                    <th className="px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      DIFF
+                    </th>
+                    <th className="px-2 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      MOVES
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {teams.map((team, idx) => {
-                    const rank = team.rankFinal ?? (idx + 1);
-                    const isChamp = rank === 1;
+                    const rk = idx + 1;
+                    const pf = num(team.pointsFor);
+                    const pa = num(team.pointsAgainst);
+                    const gp = gamesPlayed(team);
+                    const pfg = pf / gp;
+                    const pag = pa / gp;
+                    const diff = formatDiff(pf, pa);
+                    const moves = moveCountByTeam.get(team.teamId) ?? 0;
+                    const logo = (team.logoUrl || "").trim();
+
                     return (
                       <tr
                         key={team.teamId}
-                        className={cn(
-                          "border-b border-border/50 last:border-0 transition-colors hover:bg-accent/20",
-                          isChamp && "bg-yellow-500/5"
-                        )}
+                        className="border-b border-border/50 transition-colors hover:bg-accent/15"
                       >
-                        <td className="px-4 py-3">
-                          <div className="flex justify-center">
-                            <RankDecal rank={rank} />
-                          </div>
+                        <td className="sticky left-0 z-10 bg-card px-2 py-2.5 text-sm font-semibold tabular-nums text-foreground">
+                          {rk}
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-foreground leading-tight">
-                            {team.teamName || `Team ${team.teamId}`}
-                          </div>
-                          {team.owners && (
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                              {team.owners}
+                        <td className="px-2 py-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted/40">
+                              {logo ? (
+                                <img
+                                  src={logo}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <span className="flex h-full w-full items-center justify-center text-[10px] font-bold text-muted-foreground">
+                                  {(team.abbrev || team.teamName || "?").slice(0, 3).toUpperCase()}
+                                </span>
+                              )}
                             </div>
-                          )}
+                            <div className="min-w-0 leading-tight">
+                              <div className="truncate font-medium text-foreground">
+                                {team.teamName?.trim() || `Team ${team.teamId}`}
+                              </div>
+                              {(team.owners || "").trim() !== "" && (
+                                <div className="truncate text-xs text-muted-foreground">
+                                  {team.owners}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-center font-semibold text-foreground">{team.wins ?? "—"}</td>
-                        <td className="px-4 py-3 text-center text-muted-foreground">{team.losses ?? "—"}</td>
-                        <td className="px-4 py-3 text-center text-muted-foreground">{team.ties ?? "—"}</td>
-                        <td className="px-4 py-3 text-right font-mono text-foreground">{fmt(team.pointsFor)}</td>
-                        <td className="px-4 py-3 text-right font-mono text-muted-foreground">{fmt(team.pointsAgainst)}</td>
-                        <td className="hidden px-4 py-3 text-center text-xs text-muted-foreground md:table-cell">
-                          {team.playoffSeed ?? "—"}
+                        <td className="px-2 py-2.5 text-center font-mono text-xs tabular-nums text-foreground">
+                          {formatRec(team)}
+                        </td>
+                        <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums text-foreground">
+                          {fmt1(team.pointsFor)}
+                        </td>
+                        <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                          {fmt1(team.pointsAgainst)}
+                        </td>
+                        <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums text-foreground">
+                          {pfg.toFixed(1)}
+                        </td>
+                        <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                          {pag.toFixed(1)}
+                        </td>
+                        <td
+                          className={cn(
+                            "px-2 py-2.5 text-right font-mono text-xs font-semibold tabular-nums",
+                            diff.zero && "text-muted-foreground",
+                            !diff.zero && diff.positive && "text-emerald-400",
+                            !diff.zero && !diff.positive && "text-red-400"
+                          )}
+                        >
+                          {diff.text}
+                        </td>
+                        <td className="px-2 py-2.5 text-center font-mono text-xs tabular-nums text-muted-foreground">
+                          {txsQ.isLoading ? "…" : moves}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-            </div>
-
-            {/* Mobile cards */}
-            <div className="sm:hidden divide-y divide-border">
-              {teams.map((team, idx) => {
-                const rank = team.rankFinal ?? (idx + 1);
-                return (
-                  <div key={team.teamId} className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <RankDecal rank={rank} />
-                      <div>
-                        <div className="font-medium text-foreground text-sm">
-                          {team.teamName || `Team ${team.teamId}`}
-                        </div>
-                        <div className="text-xs text-muted-foreground">{team.owners}</div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-foreground text-sm">
-                        {team.wins ?? "—"}–{team.losses ?? "—"}
-                        {(team.ties ?? 0) > 0 ? `–${team.ties}` : ""}
-                      </div>
-                      <div className="text-xs text-muted-foreground font-mono">
-                        {fmt(team.pointsFor)} pts
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           </CardContent>
         </Card>
