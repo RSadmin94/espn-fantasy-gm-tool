@@ -48,6 +48,8 @@ interface NormalizedStanding {
   displayRank: number;
 }
 
+type StandingWithoutDisplayRank = Omit<NormalizedStanding, "displayRank">;
+
 // ── Standings helpers (aligned with Standings page tie-break logic) ───────────
 
 function num(n: number | undefined | null): number {
@@ -71,13 +73,13 @@ function winPct(t: Pick<NormalizedStanding, "wins" | "losses" | "ties">): number
   return g > 0 ? (w + 0.5 * ti) / g : 0;
 }
 
-function compareRegular(a: NormalizedStanding, b: NormalizedStanding): number {
+function compareRegular(a: StandingWithoutDisplayRank, b: StandingWithoutDisplayRank): number {
   const dPct = winPct(b) - winPct(a);
   if (Math.abs(dPct) > 1e-9) return dPct;
   return num(b.pointsFor) - num(a.pointsFor);
 }
 
-function compareFinal(a: NormalizedStanding, b: NormalizedStanding): number {
+function compareFinal(a: StandingWithoutDisplayRank, b: StandingWithoutDisplayRank): number {
   const ra = a.rankFinal != null && Number.isFinite(a.rankFinal) ? a.rankFinal : 999;
   const rb = b.rankFinal != null && Number.isFinite(b.rankFinal) ? b.rankFinal : 999;
   if (ra !== rb) return ra - rb;

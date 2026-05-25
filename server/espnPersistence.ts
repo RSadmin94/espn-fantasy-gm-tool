@@ -19,7 +19,7 @@ export type AppDb = MySql2Database<typeof schema>;
 
 async function getDbConn(): Promise<AppDb | null> {
   const { getDb } = await import("./db.js");
-  return (await getDb()) as AppDb | null;
+  return await getDb();
 }
 
 export function safeStringify(value: unknown): string {

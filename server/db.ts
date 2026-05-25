@@ -1,5 +1,7 @@
 import { eq, desc, and, gt, or, like, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import type { MySql2Database } from "drizzle-orm/mysql2";
+import * as schema from "../drizzle/schema";
 import type { EspnRawCache, EspnSeasonCache, FantasyDataCache, RefreshManifest } from "../drizzle/schema";
 import {
   InsertUser, users, fantasyDataCache, chatHistory,
@@ -20,12 +22,19 @@ import type { EspnCreds } from "./espnService";
 import { decryptCredentialsFromDb } from "./_core/crypto";
 import { ENV } from "./_core/env";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+/** Drizzle client typed with the app schema (matches `espnPersistence` `AppDb`). */
+export type AppDb = MySql2Database<typeof schema>;
 
-export async function getDb() {
+let _db: AppDb | null = null;
+
+export async function getDb(): Promise<AppDb | null> {
   if (!_db && process.env.DATABASE_URL) {
-    try { _db = drizzle(process.env.DATABASE_URL); }
-    catch (error) { console.warn("[Database] Failed to connect:", error); _db = null; }
+    try {
+      _db = drizzle(process.env.DATABASE_URL, { schema, mode: "default" });
+    } catch (error) {
+      console.warn("[Database] Failed to connect:", error);
+      _db = null;
+    }
   }
   return _db;
 }
