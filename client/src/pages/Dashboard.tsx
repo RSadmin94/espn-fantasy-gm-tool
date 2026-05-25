@@ -1,18 +1,17 @@
+import { useMemo } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertCircle,
-  AlertTriangle,
   ArrowLeftRight,
   Bot,
-  CheckCircle2,
   ChevronRight,
-  Clock,
+  LayoutDashboard,
   Loader2,
   Plug,
   RefreshCw,
@@ -20,28 +19,9 @@ import {
   Users,
   Repeat2,
   Settings,
-  LayoutDashboard,
-  XCircle,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-interface LeagueRow {
-  id: number;
-  leagueId: string;
-  leagueName: string;
-  season: number;
-  syncStatus: string | null;
-  lastSyncedAt: Date | string | null;
-}
-
-interface ManifestRow {
-  season: number;
-  status?: string | null;
-  transactionCount?: number | null;
-  teamCount?: number | null;
-  lastRefreshedAt?: Date | string | null;
-}
 
 interface PulseTeam {
   teamId: number;
@@ -53,251 +33,428 @@ interface PulseTeam {
   desperationScore: number;
 }
 
-// ── Small helpers ─────────────────────────────────────────────────────────────
-
-function SyncBadge({ status }: { status: string | null | undefined }) {
-  if (!status) return null;
-  const map: Record<string, string> = {
-    success: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-    pending: "bg-yellow-500/15 text-yellow-400 border-yellow-500/20",
-    syncing: "bg-blue-500/15 text-blue-400 border-blue-500/20",
-    failed: "bg-red-500/15 text-red-400 border-red-500/20",
-    partial: "bg-orange-500/15 text-orange-400 border-orange-500/20",
-  };
-  return (
-    <span className={cn(
-      "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium",
-      map[status] ?? "bg-muted text-muted-foreground border-border"
-    )}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  );
+/** Defensive normalized row for standings payloads that may vary by shape/version. */
+interface NormalizedStanding {
+  teamId: number;
+  teamName: string;
+  ownerName: string;
+  wins: number;
+  losses: number;
+  ties: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  /** ESPN final rank when present */
+  rankFinal: number | null;
+  displayRank: number;
 }
 
-function HealthIcon({ health }: { health: string }) {
-  if (health === "healthy") return <CheckCircle2 className="h-5 w-5 text-emerald-400" />;
-  if (health === "warning" || health === "degraded") return <AlertTriangle className="h-5 w-5 text-yellow-400" />;
-  return <XCircle className="h-5 w-5 text-red-400" />;
+// ── Standings helpers (aligned with Standings page tie-break logic) ───────────
+
+function num(n: number | undefined | null): number {
+  const v = Number(n);
+  return Number.isFinite(v) ? v : 0;
 }
 
-// ── Active League Card ────────────────────────────────────────────────────────
-
-function ActiveLeagueCard({ resolvedSeason }: { resolvedSeason: number }) {
-  const activeQ = trpc.league.getActive.useQuery();
-  const leaguesQ = trpc.league.getMyLeagues.useQuery();
-  const cachedQ = trpc.espn.cachedSeasons.useQuery();
-  const cachedSeasons: number[] = cachedQ.data ?? [];
-  const latestSeasonForTeams = resolvedSeason;
-  const probeTeams =
-    activeQ.isFetched &&
-    !activeQ.data &&
-    !cachedQ.isLoading &&
-    cachedSeasons.length === 0;
-  const teamsQ = trpc.espn.teams.useQuery(
-    { season: latestSeasonForTeams },
-    { enabled: probeTeams }
-  );
-
-  if (activeQ.isLoading) {
-    return (
-      <Card>
-        <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading league…
-        </CardContent>
-      </Card>
-    );
+function pickNum(...vals: unknown[]): number {
+  for (const v of vals) {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
   }
+  return 0;
+}
 
-  if (!activeQ.data) {
-    if (cachedQ.isLoading) {
-      return (
-        <Card>
-          <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading sync status…
-          </CardContent>
-        </Card>
-      );
+function winPct(t: Pick<NormalizedStanding, "wins" | "losses" | "ties">): number {
+  const w = num(t.wins);
+  const l = num(t.losses);
+  const ti = num(t.ties);
+  const g = w + l + ti;
+  return g > 0 ? (w + 0.5 * ti) / g : 0;
+}
+
+function compareRegular(a: NormalizedStanding, b: NormalizedStanding): number {
+  const dPct = winPct(b) - winPct(a);
+  if (Math.abs(dPct) > 1e-9) return dPct;
+  return num(b.pointsFor) - num(a.pointsFor);
+}
+
+function compareFinal(a: NormalizedStanding, b: NormalizedStanding): number {
+  const ra = a.rankFinal != null && Number.isFinite(a.rankFinal) ? a.rankFinal : 999;
+  const rb = b.rankFinal != null && Number.isFinite(b.rankFinal) ? b.rankFinal : 999;
+  if (ra !== rb) return ra - rb;
+  return compareRegular(a, b);
+}
+
+function normalizeStandingRow(raw: unknown): Omit<NormalizedStanding, "displayRank"> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const teamId = pickNum(r.teamId, r.id);
+  if (!Number.isFinite(teamId) || teamId <= 0) return null;
+  const teamName = String(r.teamName ?? r.name ?? `Team ${teamId}`).trim() || `Team ${teamId}`;
+  const ownerName = String(r.owners ?? r.ownerName ?? r.owner ?? "").trim();
+  const wins = pickNum(r.wins);
+  const losses = pickNum(r.losses);
+  const ties = pickNum(r.ties);
+  const pointsFor = pickNum(r.pointsFor, r.PF);
+  const pointsAgainst = pickNum(r.pointsAgainst, r.PA);
+  let rankFinal: number | null = null;
+  for (const key of ["rankFinal", "rank", "standing"]) {
+    const v = r[key];
+    if (v != null && Number.isFinite(Number(v)) && Number(v) > 0) {
+      rankFinal = Number(v);
+      break;
     }
+  }
+  if (rankFinal == null) {
+    const ps = r.playoffSeed;
+    if (ps != null && Number.isFinite(Number(ps)) && Number(ps) > 0) {
+      rankFinal = Number(ps);
+    }
+  }
+  return {
+    teamId,
+    teamName,
+    ownerName,
+    wins,
+    losses,
+    ties,
+    pointsFor,
+    pointsAgainst,
+    rankFinal,
+  };
+}
 
-    const teamsBusy = probeTeams && (teamsQ.isLoading || teamsQ.isFetching);
-    const teamsHasResults = probeTeams && (teamsQ.data?.length ?? 0) > 0;
-    const hideNoLeagueBanner =
-      cachedSeasons.length > 0 || teamsBusy || teamsHasResults;
+function rankStandings(rows: Omit<NormalizedStanding, "displayRank">[]): NormalizedStanding[] {
+  const sorted = [...rows].sort(compareFinal);
+  return sorted.map((t, i) => ({ ...t, displayRank: i + 1 }));
+}
 
-    if (hideNoLeagueBanner) {
-      if (teamsBusy) {
-        return (
-          <Card>
-            <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading league data…
+function threatTone(rank: number): { label: string; className: string } {
+  if (rank <= 3) return { label: "High threat", className: "border-red-500/35 bg-red-500/10 text-red-300" };
+  if (rank <= 6) return { label: "Elevated", className: "border-yellow-500/35 bg-yellow-500/10 text-yellow-200" };
+  return { label: "Normal", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200/90" };
+}
+
+function formatRecord(t: NormalizedStanding): string {
+  return `${num(t.wins)}-${num(t.losses)}-${num(t.ties)}`;
+}
+
+// ── Executive Summary ─────────────────────────────────────────────────────────
+
+function MetricCard({
+  title,
+  value,
+  sub,
+  valueClassName,
+}: {
+  title: string;
+  value: string;
+  sub?: string;
+  valueClassName?: string;
+}) {
+  return (
+    <Card className="border-border/80">
+      <CardHeader className="pb-1 pt-4">
+        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pb-4 pt-0">
+        <div className={cn("text-2xl font-bold tabular-nums tracking-tight text-foreground", valueClassName)}>
+          {value}
+        </div>
+        {sub ? <p className="mt-1 text-xs text-muted-foreground">{sub}</p> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ExecutiveSummarySkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-64 max-w-full" />
+        <Skeleton className="h-4 w-48 max-w-full" />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Card key={i} className="border-border/60">
+            <CardHeader className="pb-2">
+              <Skeleton className="h-3 w-24" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-8 w-20" />
+              <Skeleton className="mt-2 h-3 w-28" />
             </CardContent>
           </Card>
-        );
-      }
-      return (
-        <Card className="border-emerald-500/20 bg-emerald-500/5">
-          <CardContent className="flex flex-col gap-3 py-6">
-            <div className="flex items-center gap-2 text-sm text-emerald-200/90">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              Synced fantasy data is available.
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Choose your active league from the sidebar switcher, or manage ESPN connections below.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild size="sm" variant="outline" className="gap-1.5">
-                <Link to="/connect">
-                  <Plug className="h-3.5 w-3.5" /> ESPN connections
-                </Link>
-              </Button>
-              <Button asChild size="sm" variant="ghost" className="gap-1.5 text-muted-foreground">
-                <Link to="/sync">
-                  <RefreshCw className="h-3 w-3" /> Sync
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    return (
-      <Card className="border-dashed border-primary/20 bg-primary/5">
-        <CardContent className="flex flex-col gap-3 py-6">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <AlertCircle className="h-4 w-4 text-yellow-400" />
-            No active league connected.
-          </div>
-          <Button asChild size="sm" className="self-start gap-1.5">
-            <Link to="/connect">
-              <Plug className="h-3.5 w-3.5" /> Connect ESPN League
-            </Link>
-          </Button>
+        ))}
+      </div>
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-5 w-40" />
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full" />
+          ))}
         </CardContent>
       </Card>
-    );
-  }
-
-  const league = activeQ.data;
-  const allLeagues = leaguesQ.data ?? [];
-
-  return (
-    <Card className="border-primary/20 bg-primary/5">
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between">
-          <div>
-            <CardTitle className="text-lg">{league.leagueName || `League ${league.leagueId}`}</CardTitle>
-            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-              <span>ESPN · League {league.leagueId}</span>
-              <span>·</span>
-              <SyncBadge status={league.syncStatus} />
-            </div>
-          </div>
-          <Trophy className="h-5 w-5 text-primary" />
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {league.lastSyncedAt && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
-            Last synced:{" "}
-            {new Date(league.lastSyncedAt).toLocaleString(undefined, {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })}
-          </div>
-        )}
-        {allLeagues.length > 1 && (
-          <p className="text-xs text-muted-foreground">
-            {allLeagues.length - 1} other connected league{allLeagues.length - 1 !== 1 ? "s" : ""}
-          </p>
-        )}
-        <div className="flex gap-2 pt-1">
-          <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs">
-            <Link to="/sync"><RefreshCw className="h-3 w-3" /> Sync Now</Link>
-          </Button>
-          <Button asChild size="sm" variant="ghost" className="gap-1.5 text-xs text-muted-foreground">
-            <Link to="/connect"><Settings className="h-3 w-3" /> Manage</Link>
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 
-// ── Pipeline Health Card ──────────────────────────────────────────────────────
+function ExecutiveSummary() {
+  const leagueCtx = useLeagueContext();
+  const effectiveSeason =
+    leagueCtx.season > 0 ? leagueCtx.season : 2026;
 
-function PipelineHealthCard() {
-  const healthQ = trpc.pipeline.health.useQuery({});
-  const manifestsQ = trpc.espn.manifests.useQuery();
-  const cachedQ = trpc.espn.cachedSeasons.useQuery();
+  const standingsQ = trpc.espn.standings.useQuery(
+    { season: effectiveSeason },
+    { enabled: !leagueCtx.isLoading, staleTime: 60_000 }
+  );
 
-  if (healthQ.isLoading) {
+  const ranked = useMemo(() => {
+    const raw = standingsQ.data;
+    if (!Array.isArray(raw) || raw.length === 0) return [];
+    const base = raw
+      .map(normalizeStandingRow)
+      .filter((r): r is NonNullable<typeof r> => r != null);
+    return rankStandings(base);
+  }, [standingsQ.data]);
+
+  const myRow = useMemo(() => {
+    if (leagueCtx.myTeamId == null) return null;
+    return ranked.find((t) => t.teamId === leagueCtx.myTeamId) ?? null;
+  }, [ranked, leagueCtx.myTeamId]);
+
+  const leagueAvgPf = useMemo(() => {
+    if (ranked.length === 0) return 0;
+    const sum = ranked.reduce((a, t) => a + num(t.pointsFor), 0);
+    return sum / ranked.length;
+  }, [ranked]);
+
+  const diff = useMemo(() => {
+    if (!myRow) return null;
+    return num(myRow.pointsFor) - num(myRow.pointsAgainst);
+  }, [myRow]);
+
+  const showSkeleton = leagueCtx.isLoading || standingsQ.isLoading || standingsQ.isFetching;
+
+  if (showSkeleton) {
     return (
-      <Card>
-        <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Checking data health…
-        </CardContent>
-      </Card>
+      <section className="space-y-4" aria-busy="true" aria-label="Executive summary loading">
+        <ExecutiveSummarySkeleton />
+      </section>
     );
   }
 
-  const health = healthQ.data;
-  const manifests = (manifestsQ.data as ManifestRow[] | undefined) ?? [];
-  const cachedSeasons = cachedQ.data ?? [];
+  if (standingsQ.isError) {
+    return (
+      <section className="space-y-4" aria-label="Executive summary error">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Executive Summary</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Season <span className="font-medium text-foreground">{effectiveSeason}</span>
+          </p>
+        </div>
+        <Card className="border-destructive/40">
+          <CardContent className="flex flex-col items-center gap-3 py-8 text-center text-sm">
+            <AlertCircle className="h-8 w-8 text-destructive/80" />
+            <p className="text-foreground">Could not load standings.</p>
+            <p className="max-w-md text-xs text-muted-foreground">
+              Check your connection and try again. If the problem persists, confirm ESPN sync completed for this season.
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={() => void standingsQ.refetch()}
+            >
+              <RefreshCw className="h-4 w-4" /> Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </section>
+    );
+  }
 
-  // Pick the latest manifest to show recent sync detail
-  const latest = [...manifests].sort((a, b) => b.season - a.season)[0];
+  const emptyStandings = !standingsQ.isLoading && ranked.length === 0;
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Data Health
-          </CardTitle>
-          {health && <HealthIcon health={health.overallHealth} />}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded border border-border bg-muted/30 px-3 py-2 text-center">
-            <div className="text-xs text-muted-foreground">Seasons</div>
-            <div className="mt-0.5 text-xl font-bold text-foreground">{cachedSeasons.length}</div>
+    <section className="space-y-6" aria-label="Executive summary">
+      <div>
+        <h2 className="text-xl font-semibold text-foreground">Executive Summary</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {leagueCtx.leagueId ? (
+            <>
+              League <span className="font-mono text-foreground/90">{leagueCtx.leagueId}</span>
+              <span className="mx-1.5">·</span>
+            </>
+          ) : null}
+          Season <span className="font-medium text-foreground">{effectiveSeason}</span>
+        </p>
+      </div>
+
+      {emptyStandings ? (
+        <Card className="border-dashed border-border">
+          <CardContent className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
+            <AlertCircle className="h-8 w-8 text-muted-foreground/60" />
+            <p>No standings data for {effectiveSeason}.</p>
+            <p className="max-w-md text-xs">
+              Sync your league from ESPN, then open the Standings page to confirm data is cached for this season.
+            </p>
+            <Button asChild size="sm" variant="outline" className="gap-2">
+              <Link to="/sync">
+                <RefreshCw className="h-4 w-4" /> Sync data
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <MetricCard
+              title="Your rank"
+              value={myRow ? String(myRow.displayRank) : "—"}
+              sub={myRow ? `of ${ranked.length}` : leagueCtx.myTeamId == null ? "Team not linked to profile" : undefined}
+            />
+            <MetricCard
+              title="Points for"
+              value={myRow ? num(myRow.pointsFor).toFixed(1) : "—"}
+            />
+            <MetricCard
+              title="Points against"
+              value={myRow ? num(myRow.pointsAgainst).toFixed(1) : "—"}
+            />
+            <MetricCard
+              title="Point differential"
+              value={
+                diff == null
+                  ? "—"
+                  : (() => {
+                      const z = Math.abs(diff) < 0.05;
+                      const sign = z ? "" : diff > 0 ? "+" : "";
+                      return `${sign}${diff.toFixed(1)}`;
+                    })()
+              }
+              valueClassName={
+                diff == null
+                  ? undefined
+                  : Math.abs(diff) < 0.05
+                    ? "text-muted-foreground"
+                    : diff > 0
+                      ? "text-emerald-400"
+                      : "text-red-400"
+              }
+            />
+            <MetricCard
+              title="League avg PF"
+              value={leagueAvgPf.toFixed(1)}
+              sub={`Across ${ranked.length} teams`}
+            />
+            <MetricCard
+              title="Record"
+              value={myRow ? formatRecord(myRow) : "—"}
+              sub={myRow ? "W-L-T" : undefined}
+            />
           </div>
-          <div className="rounded border border-border bg-muted/30 px-3 py-2 text-center">
-            <div className="text-xs text-muted-foreground">Stale</div>
-            <div className={cn("mt-0.5 text-xl font-bold", (health?.staleSeasons ?? 0) > 0 ? "text-yellow-400" : "text-foreground")}>
-              {health?.staleSeasons ?? 0}
-            </div>
-          </div>
-          <div className="rounded border border-border bg-muted/30 px-3 py-2 text-center">
-            <div className="text-xs text-muted-foreground">Failed</div>
-            <div className={cn("mt-0.5 text-xl font-bold", (health?.failedSeasons ?? 0) > 0 ? "text-red-400" : "text-foreground")}>
-              {health?.failedSeasons ?? 0}
-            </div>
-          </div>
-        </div>
-        {latest && (
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Latest: <span className="font-medium text-foreground">{latest.season}</span></span>
-            <SyncBadge status={latest.status} />
-          </div>
-        )}
-        {health?.overallHealth === "healthy" ? null : health && (
-          <div className="flex items-center gap-2 rounded border border-yellow-500/20 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-300">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            {health.overallHealth === "critical"
-              ? "One or more seasons failed to sync."
-              : health.staleSeasons > 0
-                ? `${health.staleSeasons} season${health.staleSeasons !== 1 ? "s" : ""} may be stale.`
-                : "Partial data on some seasons."}
-            {" "}
-            <Link to="/sync" className="underline underline-offset-2">Sync now</Link>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold text-foreground">Threat assessment</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Full board sorted by standing. Top 3: high threat. Ranks 4–6: elevated. Rest: normal.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-0 p-0 sm:px-0">
+              {/* Mobile: stacked rows */}
+              <div className="divide-y divide-border sm:hidden">
+                {ranked.map((t) => {
+                  const isMine = leagueCtx.myTeamId != null && t.teamId === leagueCtx.myTeamId;
+                  const tone = threatTone(t.displayRank);
+                  return (
+                    <div
+                      key={t.teamId}
+                      className={cn(
+                        "flex flex-col gap-2 px-4 py-3",
+                        isMine && "bg-blue-500/10 ring-1 ring-inset ring-blue-500/30"
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-lg font-bold text-foreground tabular-nums">#{t.displayRank}</span>
+                        <span
+                          className={cn(
+                            "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                            tone.className
+                          )}
+                        >
+                          {tone.label}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="font-medium text-foreground">{t.teamName}</div>
+                        <div className="text-xs text-muted-foreground">{t.ownerName || "—"}</div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                        <span className="text-muted-foreground">Record</span>
+                        <span className="font-mono font-medium text-foreground">{formatRecord(t)}</span>
+                        <span className="text-muted-foreground">PF</span>
+                        <span className="font-mono font-medium text-foreground">{num(t.pointsFor).toFixed(1)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* sm+: table-style grid */}
+              <div className="hidden sm:block overflow-x-auto">
+                <div
+                  className="min-w-[640px] grid grid-cols-[2.5rem_1.2fr_1fr_5.5rem_4rem_7rem] gap-x-2 border-b border-border px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                  role="row"
+                >
+                  <div>#</div>
+                  <div>Team</div>
+                  <div>Owner</div>
+                  <div className="text-right">Rec</div>
+                  <div className="text-right">PF</div>
+                  <div className="text-center">Threat</div>
+                </div>
+                {ranked.map((t) => {
+                  const isMine = leagueCtx.myTeamId != null && t.teamId === leagueCtx.myTeamId;
+                  const tone = threatTone(t.displayRank);
+                  return (
+                    <div
+                      key={t.teamId}
+                      role="row"
+                      className={cn(
+                        "min-w-[640px] grid grid-cols-[2.5rem_1.2fr_1fr_5.5rem_4rem_7rem] gap-x-2 items-center border-b border-border/70 px-4 py-2.5 text-sm",
+                        isMine && "bg-blue-500/10 ring-1 ring-inset ring-blue-500/25"
+                      )}
+                    >
+                      <div className="font-bold tabular-nums text-foreground">{t.displayRank}</div>
+                      <div className="min-w-0 font-medium text-foreground truncate">{t.teamName}</div>
+                      <div className="min-w-0 text-muted-foreground truncate text-xs">{t.ownerName || "—"}</div>
+                      <div className="text-right font-mono text-xs text-foreground">{formatRecord(t)}</div>
+                      <div className="text-right font-mono text-xs text-foreground">{num(t.pointsFor).toFixed(1)}</div>
+                      <div className="flex justify-center">
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                            tone.className
+                          )}
+                        >
+                          {tone.label}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -450,27 +607,21 @@ function QuickActionsGrid() {
 
 export function Dashboard() {
   const leagueCtx = useLeagueContext();
+  const pulseSeason = leagueCtx.season > 0 ? leagueCtx.season : 2026;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
         <p className="mt-1 text-muted-foreground">
-          Your GM War Room overview.
+          Your GM War Room command center.
         </p>
       </div>
 
-      {/* Top row: league + health */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <ActiveLeagueCard resolvedSeason={leagueCtx.season} />
-        <PipelineHealthCard />
-      </div>
+      <ExecutiveSummary />
 
-      {/* League pulse */}
-      <LeaguePulseCard season={leagueCtx.season} />
+      <LeaguePulseCard season={pulseSeason} />
 
-      {/* Quick actions */}
       <div>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Quick Actions
