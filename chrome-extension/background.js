@@ -482,72 +482,144 @@ function buildMatchupWeekUrl(leagueId, season, week) {
   return `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${y}/segments/0/leagues/${encodeURIComponent(lid)}?${params.toString()}`;
 }
 
-/** Message type handled by `content.js` on fantasy.espn.com (credentials: include fetch). */
+/** User-visible hint when no `https://fantasy.espn.com/football/*` tab exists (content script + same-origin fetch). */
+const MSG_NO_ESPN_FOOTBALL_TAB = "Open your ESPN fantasy league page first, then retry.";
+
+/** Message type handled by `content.js` on fantasy.espn.com/football (credentials: include fetch). */
 const MSG_FETCH_ESPN_IN_PAGE = "GMWR_FETCH_ESPN";
 
-/** Tab where the ESPN fetch proxy content script runs. */
-async function findFantasyEspnTabId() {
+const ESPN_FOOTBALL_TAB_MATCH = "https://fantasy.espn.com/football/*";
+
+function isEspnFootballFantasyTabUrl(u) {
+  if (typeof u !== "string") return false;
+  return (
+    u.startsWith("https://fantasy.espn.com/football/") ||
+    u === "https://fantasy.espn.com/football" ||
+    u.startsWith("https://fantasy.espn.com/football?")
+  );
+}
+
+/** Tab under `/football` so the FFL API is same-origin and `content.js` is injected. */
+async function findEspnFootballFantasyTab() {
   try {
     const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const activeUrl = active?.url;
-    if (active?.id != null && typeof activeUrl === "string" && activeUrl.startsWith("https://fantasy.espn.com/")) {
-      return active.id;
+    const u = active?.url;
+    if (active?.id != null && isEspnFootballFantasyTabUrl(u)) {
+      return { tabId: active.id, tabUrl: u };
     }
   } catch {
     /* ignore */
   }
   try {
-    const tabs = await chrome.tabs.query({ url: "https://fantasy.espn.com/*" });
+    const tabs = await chrome.tabs.query({ url: ESPN_FOOTBALL_TAB_MATCH });
     const t = tabs.find((x) => x.id != null);
-    if (t?.id != null) return t.id;
-  } catch {
-    /* ignore */
-  }
-  try {
-    const tabs = await chrome.tabs.query({ url: "*://fantasy.espn.com/*" });
-    const t = tabs.find((x) => x.id != null);
-    if (t?.id != null) return t.id;
+    if (t?.id != null && typeof t.url === "string") return { tabId: t.id, tabUrl: t.url };
   } catch {
     /* ignore */
   }
   return null;
 }
 
-async function fetchEspnJsonViaContentScriptOnce(url, label, attempt) {
-  const tabId = await findFantasyEspnTabId();
-  if (tabId == null) {
-    console.warn("[GMWR] ESPN fetch no fantasy.espn.com tab", { url, label, attempt });
-    return { ok: false, status: 0, error: "no_espn_tab", data: null };
-  }
-  try {
-    const result = await chrome.tabs.sendMessage(tabId, { type: MSG_FETCH_ESPN_IN_PAGE, url });
-    if (!result || typeof result !== "object") {
-      return { ok: false, status: 0, error: "empty_tab_response", data: null };
-    }
-    if (result.ok === true) {
-      return {
-        ok: true,
-        status: typeof result.status === "number" ? result.status : 200,
-        error: null,
-        data: result.data,
-      };
-    }
+/** Map content-script payload `{ ok, status, json, errorType }` into SW fetch result shape. */
+function normalizeGmwrEspnContentResponse(raw) {
+  if (!raw || typeof raw !== "object") {
     return {
       ok: false,
-      status: typeof result.status === "number" ? result.status : 0,
-      error: result.error || "tab_fetch_failed",
+      status: 0,
+      error: "empty_tab_response",
+      errorType: "empty_tab_response",
       data: null,
     };
+  }
+  const status = typeof raw.status === "number" ? raw.status : 0;
+  const et = raw.errorType != null ? String(raw.errorType) : "";
+  if (raw.ok === true) {
+    return {
+      ok: true,
+      status: status || 200,
+      error: null,
+      errorType: null,
+      data: raw.json,
+    };
+  }
+  const typeToLegacy = {
+    espn_login_expired: "ESPN login expired",
+    unavailable: "not_found",
+    rate_limited: "rate_limited",
+    cors_or_network_blocked: "cors_or_network_blocked",
+    network_error: "network_error",
+    espn_html_not_json: "espn_html_not_json",
+    invalid_url: "invalid_url",
+    invalid_json: "invalid_json",
+    http_error: "http_error",
+  };
+  const error = typeToLegacy[et] || et || "tab_fetch_failed";
+  return { ok: false, status, error, errorType: et || "unknown", data: null };
+}
+
+async function fetchEspnJsonViaContentScriptOnce(url, label, attempt) {
+  const tab = await findEspnFootballFantasyTab();
+  if (!tab) {
+    console.warn("[GMWR] ESPN fetch no football fantasy tab", {
+      url,
+      label,
+      attempt,
+      hint: MSG_NO_ESPN_FOOTBALL_TAB,
+    });
+    return {
+      ok: false,
+      status: 0,
+      error: MSG_NO_ESPN_FOOTBALL_TAB,
+      errorType: "no_espn_football_tab",
+      data: null,
+    };
+  }
+  const { tabId, tabUrl } = tab;
+  let fetchOrigin = "";
+  try {
+    fetchOrigin = new URL(tabUrl).origin;
+  } catch {
+    fetchOrigin = "";
+  }
+  try {
+    const raw = await chrome.tabs.sendMessage(tabId, { type: MSG_FETCH_ESPN_IN_PAGE, url });
+    const norm = normalizeGmwrEspnContentResponse(raw);
+    const payloadKeys =
+      norm.ok && norm.data && typeof norm.data === "object" && !Array.isArray(norm.data)
+        ? Object.keys(norm.data).slice(0, 50)
+        : [];
+    console.info("[GMWR] ESPN content-script fetch", {
+      tabId,
+      tabUrl,
+      fetchOrigin,
+      url,
+      status: norm.status,
+      label,
+      attempt,
+      ok: norm.ok,
+      errorType: norm.errorType ?? raw?.errorType ?? null,
+      payloadKeys,
+    });
+    return norm;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.warn("[GMWR] ESPN tabs.sendMessage failed", { url, label, attempt, error: msg });
     const dead =
       /Receiving end does not exist|Could not establish connection/i.test(msg) ||
       msg.includes("The message port closed");
+    console.warn("[GMWR] ESPN tabs.sendMessage failed", {
+      tabId,
+      tabUrl,
+      fetchOrigin,
+      url,
+      label,
+      attempt,
+      error: msg,
+    });
     return {
       ok: false,
       status: 0,
       error: dead ? "no_espn_content_script" : msg,
+      errorType: dead ? "no_espn_content_script" : "network_error",
       data: null,
     };
   }
@@ -571,8 +643,21 @@ async function fetchEspnJsonWithBackoffUnlocked(url, { label }) {
     console.info("[GMWR] historical ESPN", { url, label, status, attempt, via: "content_script" });
 
     if (!r.ok) {
-      if (r.error === "no_espn_tab" || r.error === "no_espn_content_script") {
-        return { ok: false, status: 0, error: r.error, data: null };
+      if (
+        r.errorType === "no_espn_football_tab" ||
+        r.error === MSG_NO_ESPN_FOOTBALL_TAB ||
+        r.error === "no_espn_tab" ||
+        r.error === "no_espn_content_script"
+      ) {
+        return { ok: false, status: 0, error: r.error || MSG_NO_ESPN_FOOTBALL_TAB, data: null };
+      }
+      if (r.error === "cors_or_network_blocked" || r.errorType === "cors_or_network_blocked") {
+        console.warn("[GMWR] ESPN fetch blocked (CORS/network)", { url, label, attempt });
+        return { ok: false, status: 0, error: "cors_or_network_blocked", data: null };
+      }
+      if (r.error === "network_error" || r.errorType === "network_error") {
+        console.warn("[GMWR] ESPN fetch network error", { url, label, attempt });
+        return { ok: false, status: 0, error: "network_error", data: null };
       }
       if (r.error === "ESPN login expired" || status === 401 || status === 403) {
         console.warn("[GMWR] ESPN fetch failed", {
@@ -632,7 +717,13 @@ async function fetchWeeklyMatchupsIfNeeded(leagueId, season, combined) {
     if (!r.ok) {
       if (r.status === 404) continue;
       if (r.error === "ESPN login expired") return { error: r.error, matchupPayloads };
-      if (r.error === "no_espn_tab" || r.error === "no_espn_content_script") {
+      if (
+        r.error === "no_espn_tab" ||
+        r.error === "no_espn_content_script" ||
+        r.error === MSG_NO_ESPN_FOOTBALL_TAB ||
+        r.error === "cors_or_network_blocked" ||
+        r.error === "network_error"
+      ) {
         return { error: r.error, matchupPayloads };
       }
       continue;
@@ -798,7 +889,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             ? "not_found"
             : r.error === "ESPN login expired"
               ? "ESPN login expired"
-              : r.error === "no_espn_tab" || r.error === "no_espn_content_script"
+              : r.error === "no_espn_tab" ||
+                  r.error === "no_espn_content_script" ||
+                  r.error === MSG_NO_ESPN_FOOTBALL_TAB ||
+                  r.error === "cors_or_network_blocked" ||
+                  r.error === "network_error"
                 ? r.error
                 : r.error || "fetch_failed";
         sendResponse({
@@ -930,13 +1025,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (t === MSG_HIST_TEST) {
     (async () => {
-      const espnTabId = await findFantasyEspnTabId();
-      if (espnTabId == null) {
+      const espnTab = await findEspnFootballFantasyTab();
+      if (espnTab == null) {
         sendResponse({
           ok: false,
-          error:
-            "Open https://fantasy.espn.com in a browser tab and sign in. Reload that tab after updating the extension.",
-          details: "no_espn_tab",
+          error: MSG_NO_ESPN_FOOTBALL_TAB,
+          details: "no_espn_football_tab",
         });
         return;
       }
@@ -961,14 +1055,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (t === MSG_HIST_FULL) {
     (async () => {
-      const espnTabId = await findFantasyEspnTabId();
-      if (espnTabId == null) {
+      const espnTab = await findEspnFootballFantasyTab();
+      if (espnTab == null) {
         sendResponse({
           ok: false,
-          error:
-            "Open https://fantasy.espn.com in a browser tab and sign in. Reload that tab after updating the extension.",
+          error: MSG_NO_ESPN_FOOTBALL_TAB,
           results: [],
-          details: "no_espn_tab",
+          details: "no_espn_football_tab",
         });
         return;
       }
