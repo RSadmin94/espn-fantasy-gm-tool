@@ -985,6 +985,57 @@ function payloadPlayersLen(p: Record<string, unknown>): number {
   return Array.isArray(pl) ? pl.length : 0;
 }
 
+/** Merge weekly `mMatchup` payloads into a single combined-shaped object for {@link normalizeMatchups}. */
+export function mergeScheduleIntoCombinedPayload(
+  combined: Record<string, unknown>,
+  matchupPayloads: { week: number; payload: Record<string, unknown> }[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...combined };
+  const base = (out.schedule as Record<string, unknown>[]) ?? [];
+  const merged: Record<string, unknown>[] = [...base];
+  const keyOf = (item: Record<string, unknown>) => {
+    const home = (item.home as Record<string, unknown> | undefined)?.teamId;
+    const away = (item.away as Record<string, unknown> | undefined)?.teamId;
+    const sp = item.scoringPeriodId;
+    return `${String(sp)}|${String(home)}|${String(away)}`;
+  };
+  const seen = new Set(merged.map((x) => keyOf(x)));
+  for (const { payload } of matchupPayloads) {
+    const sch = (payload.schedule as Record<string, unknown>[]) ?? [];
+    for (const item of sch) {
+      const k = keyOf(item);
+      if (!seen.has(k)) {
+        seen.add(k);
+        merged.push(item);
+      }
+    }
+  }
+  out.schedule = merged;
+  return out;
+}
+
+export async function countNormalizedGmRowsForSeason(
+  leagueId: string,
+  season: number,
+): Promise<{
+  draftPicks: number;
+  teams: number;
+  matchups: number;
+  transactions: number;
+}> {
+  const db = await getDbConn();
+  if (!db) throw new Error("Database unavailable");
+  const lid = String(leagueId).slice(0, 32);
+  const yr = Math.floor(Number(season));
+  const [draftPicks, teams, matchups, transactions] = await Promise.all([
+    gmCountLeagueSeason(db, schema.gmDraftPicks, lid, yr),
+    gmCountLeagueSeason(db, schema.gmTeams, lid, yr),
+    gmCountLeagueSeason(db, schema.gmMatchups, lid, yr),
+    gmCountLeagueSeason(db, schema.gmTransactions, lid, yr),
+  ]);
+  return { draftPicks, teams, matchups, transactions };
+}
+
 async function gmCountLeagueSeason(
   db: AppDb,
   table:

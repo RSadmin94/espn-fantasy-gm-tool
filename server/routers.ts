@@ -34,6 +34,8 @@ import {
   getAllViewHealth,
   getScheduledJobs,
   upsertScheduledJob,
+  getUserEspnLeagueIds,
+  getActiveEspnCredentials,
   getDb,
   upsertScrapedTrades,
   getScrapedTrades,
@@ -92,7 +94,19 @@ import {
   hasCookies,
   resolveEspnCreds,
 } from "./espnService";
-import { backfillNormalizedTablesFromPayload, syncEspnCombinedFullPipeline, normalizeEspnPayload, createSyncRun, finishSyncRun, runEspnRawCacheNormalizedBackfill } from "./espnPersistence";
+import {
+  backfillNormalizedTablesFromPayload,
+  syncEspnCombinedFullPipeline,
+  normalizeEspnPayload,
+  createSyncRun,
+  finishSyncRun,
+  runEspnRawCacheNormalizedBackfill,
+  runEspnCombinedPersist,
+  mergeScheduleIntoCombinedPayload,
+  countNormalizedGmRowsForSeason,
+  upsertRawEspnCache,
+  writeLegacyEspnCaches,
+} from "./espnPersistence";
 import { runHistoricalEnrichment } from "./espnHistoricalEnrichment";
 import {
   calcVORP,
@@ -3044,6 +3058,169 @@ export const appRouter = router({
           userId: ctx.user?.id ?? null,
           error,
         };
+      }),
+
+    /**
+     * Chrome extension: persist one season from ESPN JSON already fetched with the user's browser session.
+     * Raw rows → `espn_raw_cache`; normalization only via existing `runEspnCombinedPersist` / `normalizeEspnPayload` path.
+     */
+    ingestHistoricalSeasonPayload: protectedProcedure
+      .input(
+        z.object({
+          leagueId: z.string().min(1).max(32),
+          season: z.number().int().min(1990).max(2100),
+          source: z.literal("chrome_extension_espn_api"),
+          combinedPayload: z.record(z.unknown()),
+          matchupPayloads: z
+            .array(
+              z.object({
+                week: z.number().int().min(1).max(30),
+                payload: z.record(z.unknown()),
+              }),
+            )
+            .default([]),
+          force: z.boolean().optional(),
+          matchupsExplicitlyUnavailable: z.boolean().optional(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const uid = ctx.user.id;
+        const allowed = new Set(await getUserEspnLeagueIds(uid));
+        const creds = await getActiveEspnCredentials(uid);
+        if (creds?.leagueId) allowed.add(String(creds.leagueId).trim().slice(0, 32));
+        const lid = String(input.leagueId).trim().slice(0, 32);
+        if (!allowed.has(lid)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "League is not linked to your ESPN connections.",
+          });
+        }
+        const season = Math.floor(Number(input.season));
+        const force = input.force === true;
+        const pre = await countNormalizedGmRowsForSeason(lid, season);
+        const populatedCore =
+          pre.draftPicks > 0 &&
+          pre.teams > 0 &&
+          (pre.matchups > 0 || input.matchupsExplicitlyUnavailable === true);
+        if (populatedCore && !force) {
+          return {
+            success: false,
+            skipped: true as const,
+            reason: "already_populated" as const,
+            leagueId: lid,
+            season,
+            counts: pre,
+            verification: { draftOk: true, teamsOk: true, matchupsOk: true, txnOk: true },
+          };
+        }
+        const combined = { ...input.combinedPayload } as Record<string, unknown>;
+        if (combined.seasonId == null) combined.seasonId = season;
+        for (const mp of input.matchupPayloads) {
+          await upsertRawEspnCache(lid, season, `mMatchup:${mp.week}`, mp.payload);
+          await writeLegacyEspnCaches(lid, season, `mMatchup:${mp.week}`, mp.payload);
+        }
+        const merged = mergeScheduleIntoCombinedPayload(
+          combined,
+          input.matchupPayloads.map((x) => ({
+            week: x.week,
+            payload: x.payload as Record<string, unknown>,
+          })),
+        );
+        console.warn(
+          "[historicalIngest]",
+          JSON.stringify({ leagueId: lid, season, phase: "persist_combined", source: input.source }),
+        );
+        const persist = await runEspnCombinedPersist(lid, season, merged);
+        const post = await countNormalizedGmRowsForSeason(lid, season);
+        const draftOk = post.draftPicks > 0;
+        const teamsOk = post.teams > 0;
+        const matchupsOk = post.matchups > 0 || input.matchupsExplicitlyUnavailable === true;
+        const txnOk = post.transactions >= 0;
+        const verificationOk = draftOk && teamsOk && matchupsOk && txnOk;
+        const increased =
+          post.draftPicks > pre.draftPicks ||
+          post.teams > pre.teams ||
+          post.matchups > pre.matchups ||
+          post.transactions > pre.transactions;
+        const wasEmpty = pre.draftPicks + pre.teams + pre.matchups + pre.transactions === 0;
+        const success = verificationOk && (increased || wasEmpty);
+        if (success) {
+          try {
+            memCache.invalidateAll();
+          } catch {
+            /* ignore */
+          }
+        }
+        console.warn(
+          "[historicalIngest]",
+          JSON.stringify({
+            leagueId: lid,
+            season,
+            phase: "done",
+            normalization: persist.norm,
+            verificationOk,
+            success,
+            post,
+          }),
+        );
+        return {
+          success,
+          skipped: false as const,
+          leagueId: lid,
+          season,
+          payloadBytes: persist.payloadBytes,
+          normalization: persist.norm,
+          normalizationError: persist.normalizationError,
+          counts: post,
+          verification: { draftOk, teamsOk, matchupsOk, txnOk },
+        };
+      }),
+
+    /** Per-season normalized row counts for diagnostics (extension POSTs this like other mutations). */
+    historicalImportStatus: protectedProcedure
+      .input(
+        z.object({
+          leagueId: z.string().optional(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          input.leagueId ?? null,
+          undefined,
+        );
+        const db = await getDb();
+        if (!db) return { leagueId, seasons: [] as Array<Record<string, unknown>> };
+        const seasonsRows = await db
+          .selectDistinct({ season: gmDraftPicks.season })
+          .from(gmDraftPicks)
+          .where(eqDrizzle(gmDraftPicks.leagueId, leagueId))
+          .orderBy(ascDrizzle(gmDraftPicks.season));
+        const seasons = seasonsRows.map((r) => r.season);
+        const out: Array<{
+          season: number;
+          draftPicks: number;
+          teams: number;
+          matchups: number;
+          transactions: number;
+          errors: string[];
+        }> = [];
+        for (const s of seasons) {
+          const c = await countNormalizedGmRowsForSeason(leagueId, s);
+          const errors: string[] = [];
+          if (c.draftPicks === 0) errors.push("no_draft_picks");
+          if (c.teams === 0) errors.push("no_teams");
+          if (c.matchups === 0) errors.push("no_matchups");
+          out.push({
+            season: s,
+            draftPicks: c.draftPicks,
+            teams: c.teams,
+            matchups: c.matchups,
+            transactions: c.transactions,
+            errors,
+          });
+        }
+        return { leagueId, seasons: out };
       }),
   }),
 

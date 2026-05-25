@@ -4,6 +4,17 @@
 
 const MSG_DISCOVER_LEAGUES = "GMWR_DISCOVER_LEAGUES_2026";
 const MSG_SYNC_SELECTED_LEAGUES = "GMWR_SYNC_SELECTED_LEAGUES";
+const MSG_HIST_DISCOVER = "GMWR_HIST_DISCOVER";
+const MSG_HIST_TEST = "GMWR_HIST_TEST";
+const MSG_HIST_FULL = "GMWR_HIST_FULL";
+const MSG_HIST_STATUS = "GMWR_HIST_STATUS";
+
+let discoveredSeasons = /** @type {number[]} */ ([]);
+
+function setHistOut(text) {
+  const el = document.getElementById("histOut");
+  if (el) el.textContent = text;
+}
 
 const ESPN_COOKIE_BASE_URLS = ["https://fantasy.espn.com/", "https://www.espn.com/"];
 
@@ -234,4 +245,71 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (hasSwid && hasS2) {
     await runDiscover();
   }
+
+  document.getElementById("histDiscover")?.addEventListener("click", async () => {
+    const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
+    setHistOut("Discovering seasons from ESPN history…");
+    try {
+      const r = await chrome.runtime.sendMessage({ type: MSG_HIST_DISCOVER, leagueId: lid });
+      if (!r?.ok) {
+        setHistOut(r?.error || "Discover failed.");
+        return;
+      }
+      discoveredSeasons = Array.isArray(r.seasons) ? r.seasons : [];
+      setHistOut(`Found ${discoveredSeasons.length} seasons:\n${discoveredSeasons.join(", ")}`);
+    } catch (e) {
+      setHistOut(e instanceof Error ? e.message : String(e));
+    }
+  });
+
+  document.getElementById("histStatus")?.addEventListener("click", async () => {
+    const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
+    setHistOut("Loading DB status…");
+    try {
+      const r = await chrome.runtime.sendMessage({ type: MSG_HIST_STATUS, leagueId: lid });
+      if (!r?.ok) {
+        setHistOut(r?.error || "Status failed.");
+        return;
+      }
+      const rows = r.data?.seasons || [];
+      const lines = rows.map(
+        (row) =>
+          `${row.season}\tdraft:${row.draftPicks}\tteams:${row.teams}\tmatchups:${row.matchups}\ttx:${row.transactions}\t${(row.errors || []).join(",")}`,
+      );
+      setHistOut(["leagueId\t" + r.data?.leagueId, "season\tdraft\tteams\tmatchups\ttx\terrors", ...lines].join("\n"));
+    } catch (e) {
+      setHistOut(e instanceof Error ? e.message : String(e));
+    }
+  });
+
+  document.getElementById("histTest")?.addEventListener("click", async () => {
+    const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
+    setHistOut("TEST IMPORT 2010…");
+    try {
+      const r = await chrome.runtime.sendMessage({ type: MSG_HIST_TEST, leagueId: lid, force: false });
+      setHistOut(JSON.stringify(r, null, 2));
+    } catch (e) {
+      setHistOut(e instanceof Error ? e.message : String(e));
+    }
+  });
+
+  document.getElementById("histFull")?.addEventListener("click", async () => {
+    const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
+    if (!discoveredSeasons.length) {
+      setHistOut("Run Discover seasons first.");
+      return;
+    }
+    setHistOut(`FULL IMPORT ${discoveredSeasons.length} seasons…`);
+    try {
+      const r = await chrome.runtime.sendMessage({
+        type: MSG_HIST_FULL,
+        leagueId: lid,
+        seasons: discoveredSeasons,
+        force: false,
+      });
+      setHistOut(JSON.stringify(r, null, 2));
+    } catch (e) {
+      setHistOut(e instanceof Error ? e.message : String(e));
+    }
+  });
 });

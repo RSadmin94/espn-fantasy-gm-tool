@@ -347,6 +347,303 @@ async function removeSaveCredentialsCookieRule() {
   }
 }
 
+// ─── Historical league import (browser ESPN session → War Room tRPC) ───
+const TRPC_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestHistoricalSeasonPayload`;
+const TRPC_HIST_STATUS_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.historicalImportStatus`;
+const DNR_TRPC_HIST_RULE_ID = 8844210;
+const DNR_ESPN_HIST_API_RULE_ID = 8844211;
+
+const MSG_HIST_DISCOVER = "GMWR_HIST_DISCOVER";
+const MSG_HIST_TEST = "GMWR_HIST_TEST";
+const MSG_HIST_FULL = "GMWR_HIST_FULL";
+const MSG_HIST_STATUS = "GMWR_HIST_STATUS";
+
+function trpcResultJson(parsed) {
+  if (!parsed || typeof parsed !== "object") return null;
+  if (parsed.result?.data?.json !== undefined) return parsed.result.data.json;
+  if (Array.isArray(parsed) && parsed[0]?.result?.data?.json !== undefined) {
+    return parsed[0].result.data.json;
+  }
+  return null;
+}
+
+async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
+  await chrome.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1],
+    addRules: [
+      {
+        id: DNR_TRPC_HIST_RULE_ID,
+        priority: 1,
+        action: {
+          type: "modifyHeaders",
+          requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
+        },
+        condition: {
+          urlFilter: "https://gmwarroom.online/api/trpc/espn.ingestHistoricalSeasonPayload*",
+          resourceTypes: ["xmlhttprequest", "other"],
+        },
+      },
+      {
+        id: DNR_TRPC_HIST_RULE_ID + 1,
+        priority: 1,
+        action: {
+          type: "modifyHeaders",
+          requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
+        },
+        condition: {
+          urlFilter: "https://gmwarroom.online/api/trpc/espn.historicalImportStatus*",
+          resourceTypes: ["xmlhttprequest", "other"],
+        },
+      },
+    ],
+  });
+}
+
+async function removeWarRoomTrpcHistRule() {
+  try {
+    await chrome.declarativeNetRequest.updateSessionRules({
+      removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1],
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+async function applyEspnHistApiCookieRule(espnCookieHeader) {
+  await chrome.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [DNR_ESPN_HIST_API_RULE_ID],
+    addRules: [
+      {
+        id: DNR_ESPN_HIST_API_RULE_ID,
+        priority: 1,
+        action: {
+          type: "modifyHeaders",
+          requestHeaders: [{ header: "Cookie", operation: "set", value: espnCookieHeader }],
+        },
+        condition: {
+          urlFilter: "https://fantasy.espn.com/apis/v3/games/ffl/*",
+          resourceTypes: ["xmlhttprequest", "other"],
+        },
+      },
+    ],
+  });
+}
+
+async function removeEspnHistApiCookieRule() {
+  try {
+    await chrome.declarativeNetRequest.updateSessionRules({
+      removeRuleIds: [DNR_ESPN_HIST_API_RULE_ID],
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+async function applyEspnHistHtmlCookieRule(espnCookieHeader) {
+  await chrome.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [8844212],
+    addRules: [
+      {
+        id: 8844212,
+        priority: 1,
+        action: {
+          type: "modifyHeaders",
+          requestHeaders: [{ header: "Cookie", operation: "set", value: espnCookieHeader }],
+        },
+        condition: {
+          urlFilter: "https://fantasy.espn.com/football/league/history*",
+          resourceTypes: ["xmlhttprequest", "main_frame", "sub_frame", "other"],
+        },
+      },
+    ],
+  });
+}
+
+async function removeEspnHistHtmlCookieRule() {
+  try {
+    await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [8844212] });
+  } catch {
+    /* ignore */
+  }
+}
+
+function parseSeasonsFromHistoryHtml(html, leagueId) {
+  const seasons = new Set();
+  const reYear = /\b(20[0-2]\d)\b/g;
+  let m;
+  while ((m = reYear.exec(html)) !== null) {
+    const y = Number(m[1]);
+    if (y >= 2010 && y <= 2100) seasons.add(y);
+  }
+  for (const mm of html.matchAll(/seasonId[=:](\d{4})/gi)) seasons.add(Number(mm[1]));
+  for (const mm of html.matchAll(/"season"\s*:\s*(\d{4})/g)) seasons.add(Number(mm[1]));
+  seasons.delete(2009);
+  return [...seasons].sort((a, b) => a - b);
+}
+
+function scheduleLen(data) {
+  const s = data?.schedule;
+  return Array.isArray(s) ? s.length : 0;
+}
+
+async function sleep(ms) {
+  await new Promise((r) => setTimeout(r, ms));
+}
+
+async function fetchEspnJsonWithBackoff(url, { espnCookieHeader, label }) {
+  let attempt = 0;
+  let delay = 500;
+  while (attempt < 6) {
+    await applyEspnHistApiCookieRule(espnCookieHeader);
+    let res;
+    try {
+      res = await fetch(url, {
+        method: "GET",
+        credentials: "omit",
+        headers: {
+          Accept: "application/json",
+          Referer: "https://fantasy.espn.com/",
+        },
+      });
+    } finally {
+      await removeEspnHistApiCookieRule();
+    }
+    const status = res.status;
+    console.info("[GMWR] historical ESPN", { label, status, attempt });
+    if (status === 401 || status === 403) {
+      return { ok: false, status, error: "ESPN login expired", data: null };
+    }
+    if (status === 404) {
+      return { ok: false, status, error: "not_found", data: null };
+    }
+    if (status === 429) {
+      attempt += 1;
+      await sleep(delay);
+      delay = Math.min(delay * 2, 8000);
+      continue;
+    }
+    if (!res.ok) {
+      return { ok: false, status, error: `HTTP ${status}`, data: null };
+    }
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+    return { ok: true, status, error: null, data };
+  }
+  return { ok: false, status: 429, error: "rate_limited", data: null };
+}
+
+function buildCombinedLeagueUrl(leagueId, season) {
+  const lid = encodeURIComponent(String(leagueId).trim());
+  const y = Number(season);
+  const views = ["mTeam", "mStandings", "mSettings", "mDraftDetail", "mTransactions2"];
+  const qs = views.map((v) => `view=${v}`).join("&");
+  return `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${y}/segments/0/leagues/${lid}?${qs}`;
+}
+
+function buildMatchupWeekUrl(leagueId, season, week) {
+  const lid = encodeURIComponent(String(leagueId).trim());
+  const y = Number(season);
+  return `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${y}/segments/0/leagues/${lid}?view=mMatchup&view=mMatchupScore&scoringPeriodId=${week}`;
+}
+
+async function fetchWeeklyMatchupsIfNeeded(leagueId, season, combined, espnCookieHeader) {
+  const matchupPayloads = [];
+  if (scheduleLen(combined) > 0) return matchupPayloads;
+  for (let week = 1; week <= 17; week++) {
+    await sleep(500);
+    const url = buildMatchupWeekUrl(leagueId, season, week);
+    const r = await fetchEspnJsonWithBackoff(url, { espnCookieHeader, label: `mMatchup_${season}_${week}` });
+    if (!r.ok) {
+      if (r.status === 404) continue;
+      if (r.error === "ESPN login expired") return { error: r.error, matchupPayloads };
+      continue;
+    }
+    if (r.data && scheduleLen(r.data) > 0) {
+      matchupPayloads.push({ week, payload: r.data });
+    }
+  }
+  return { error: null, matchupPayloads };
+}
+
+async function postTrpcHistJson(url, warRoomCookieHeader, jsonInput) {
+  const body = JSON.stringify({ json: jsonInput });
+  await applyWarRoomTrpcHistRule(warRoomCookieHeader);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      credentials: "include",
+    });
+    const status = res.status;
+    let parsed = null;
+    const ct = res.headers.get("content-type") || "";
+    try {
+      if (ct.includes("application/json")) parsed = await res.json();
+      else await res.text();
+    } catch {
+      /* ignore */
+    }
+    if (!res.ok) {
+      return { ok: false, status, error: safeErrorSummary(status, parsed), parsed };
+    }
+    if (hasTrpcError(parsed)) {
+      return { ok: false, status, error: safeErrorSummary(status, parsed), parsed };
+    }
+    return { ok: true, status, parsed };
+  } finally {
+    await removeWarRoomTrpcHistRule();
+  }
+}
+
+async function runHistoricalImportOneSeason({
+  leagueId,
+  season,
+  espnCookieHeader,
+  warRoomCookieHeader,
+  force,
+}) {
+  const combinedUrl = buildCombinedLeagueUrl(leagueId, season);
+  const combinedRes = await fetchEspnJsonWithBackoff(combinedUrl, {
+    espnCookieHeader,
+    label: `combined_${season}`,
+  });
+  if (!combinedRes.ok && combinedRes.error === "ESPN login expired") {
+    return { ok: false, error: "ESPN login expired", season };
+  }
+  if (!combinedRes.ok || !combinedRes.data) {
+    return { ok: false, error: combinedRes.error || "combined_fetch_failed", season };
+  }
+  const combined = combinedRes.data;
+  const weekly = await fetchWeeklyMatchupsIfNeeded(leagueId, season, combined, espnCookieHeader);
+  const weeklyErr = Array.isArray(weekly) ? null : weekly.error;
+  if (weeklyErr) {
+    return { ok: false, error: weeklyErr, season };
+  }
+  const matchupPayloads = Array.isArray(weekly) ? weekly : weekly.matchupPayloads || [];
+  const matchupsExplicitlyUnavailable =
+    scheduleLen(combined) === 0 && matchupPayloads.length === 0;
+  const ingestBody = {
+    leagueId: String(leagueId).trim(),
+    season,
+    source: "chrome_extension_espn_api",
+    combinedPayload: combined,
+    matchupPayloads,
+    force: Boolean(force),
+    matchupsExplicitlyUnavailable,
+  };
+  const post = await postTrpcHistJson(TRPC_INGEST_URL, warRoomCookieHeader, ingestBody);
+  if (!post.ok) {
+    return { ok: false, error: post.error || "ingest_failed", season, httpStatus: post.status };
+  }
+  const resultJson = trpcResultJson(post.parsed);
+  return { ok: true, season, result: resultJson };
+}
+
 async function openOrFocusSyncTab() {
   const tabs = await chrome.tabs.query({ url: "https://gmwarroom.online/*" });
   const existing = tabs.find((t) => t.id != null) ?? null;
@@ -488,6 +785,140 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const msg = err instanceof Error ? err.message : String(err);
       console.info("[GMWR] sync selected leagues failed", { error: msg });
       sendResponse({ ok: false, error: msg });
+    });
+    return true;
+  }
+
+  if (t === MSG_HIST_DISCOVER) {
+    (async () => {
+      const leagueId = String(message?.leagueId || "457622").trim();
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        sendResponse({ ok: false, seasons: [], error: "ESPN login expired", details: "missing_cookies" });
+        return;
+      }
+      const espnCookieHeader = buildEspnCookieHeader(swid, espnS2);
+      const histUrl = `https://fantasy.espn.com/football/league/history?leagueId=${encodeURIComponent(leagueId)}`;
+      await applyEspnHistHtmlCookieRule(espnCookieHeader);
+      let status = 0;
+      let html = "";
+      try {
+        const res = await fetch(histUrl, {
+          method: "GET",
+          credentials: "omit",
+          headers: { Accept: "text/html,application/xhtml+xml", Referer: "https://fantasy.espn.com/" },
+        });
+        status = res.status;
+        html = await res.text();
+      } finally {
+        await removeEspnHistHtmlCookieRule();
+      }
+      if (status === 401 || status === 403) {
+        sendResponse({ ok: false, seasons: [], error: "ESPN login expired" });
+        return;
+      }
+      const seasons = parseSeasonsFromHistoryHtml(html, leagueId).filter((y) => y !== 2009);
+      const skipped = [];
+      console.info("[GMWR] historical discover", { leagueId, httpStatus: status, seasonCount: seasons.length });
+      sendResponse({ ok: true, seasons, skipped, httpStatus: status });
+    })().catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      sendResponse({ ok: false, seasons: [], error: msg });
+    });
+    return true;
+  }
+
+  if (t === MSG_HIST_TEST) {
+    (async () => {
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        sendResponse({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
+        return;
+      }
+      const warRoomCookieHeader = await getWarRoomCookieHeaderString();
+      if (!warRoomCookieHeader) {
+        sendResponse({ ok: false, error: "GM War Room session not found. Sign in at gmwarroom.online." });
+        return;
+      }
+      const leagueId = String(message?.leagueId || "457622").trim();
+      const espnCookieHeader = buildEspnCookieHeader(swid, espnS2);
+      const r = await runHistoricalImportOneSeason({
+        leagueId,
+        season: 2010,
+        espnCookieHeader,
+        warRoomCookieHeader,
+        force: Boolean(message?.force),
+      });
+      sendResponse(r);
+    })().catch((err) => {
+      sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    });
+    return true;
+  }
+
+  if (t === MSG_HIST_FULL) {
+    (async () => {
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        sendResponse({ ok: false, error: "ESPN login expired", results: [] });
+        return;
+      }
+      const warRoomCookieHeader = await getWarRoomCookieHeaderString();
+      if (!warRoomCookieHeader) {
+        sendResponse({ ok: false, error: "GM War Room session not found.", results: [] });
+        return;
+      }
+      const leagueId = String(message?.leagueId || "457622").trim();
+      const espnCookieHeader = buildEspnCookieHeader(swid, espnS2);
+      const uniq = [...new Set(seasons)]
+        .map((x) => Math.floor(Number(x)))
+        .filter((y) => Number.isFinite(y) && y >= 1990 && y !== 2009)
+        .sort((a, b) => a - b);
+      const ordered = uniq.includes(2010) ? [2010, ...uniq.filter((s) => s !== 2010)] : uniq;
+      const results = [];
+      let consecFail = 0;
+      for (const season of ordered) {
+        await sleep(500);
+        const r = await runHistoricalImportOneSeason({
+          leagueId,
+          season,
+          espnCookieHeader,
+          warRoomCookieHeader,
+          force: Boolean(message?.force),
+        });
+        results.push(r);
+        const skipped = Boolean(r.result?.skipped);
+        const okSeason = r.ok && (skipped || r.result?.success === true);
+        if (!okSeason) consecFail += 1;
+        else consecFail = 0;
+        if (consecFail >= 2) {
+          sendResponse({ ok: true, results, aborted: true, reason: "two_consecutive_failures" });
+          return;
+        }
+      }
+      sendResponse({ ok: true, results, aborted: false });
+    })().catch((err) => {
+      sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err), results: [] });
+    });
+    return true;
+  }
+
+  if (t === MSG_HIST_STATUS) {
+    (async () => {
+      const warRoomCookieHeader = await getWarRoomCookieHeaderString();
+      if (!warRoomCookieHeader) {
+        sendResponse({ ok: false, error: "GM War Room session not found." });
+        return;
+      }
+      const leagueId = message?.leagueId ? String(message.leagueId).trim() : undefined;
+      const post = await postTrpcHistJson(TRPC_HIST_STATUS_URL, warRoomCookieHeader, { leagueId });
+      if (!post.ok) {
+        sendResponse({ ok: false, error: post.error || "status_failed" });
+        return;
+      }
+      sendResponse({ ok: true, data: trpcResultJson(post.parsed) });
+    })().catch((err) => {
+      sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
     return true;
   }

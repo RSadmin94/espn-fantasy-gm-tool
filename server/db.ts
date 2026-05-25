@@ -938,7 +938,7 @@ function logActiveLeagueResolve(opts: {
   console.warn("[resolveActiveLeagueId]", JSON.stringify(opts));
 }
 
-async function getUserEspnLeagueIds(userId: number): Promise<string[]> {
+export async function getUserEspnLeagueIds(userId: number): Promise<string[]> {
   try {
     const db = await getDb();
     if (!db) return [];
