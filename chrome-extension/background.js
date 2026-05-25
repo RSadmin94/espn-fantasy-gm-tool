@@ -2,7 +2,8 @@
  * GM War Room extension — background service worker.
  * Reads ESPN cookies + gmwarroom session cookies, discovers 2026 leagues via ESPN profile API,
  * POSTs espn.saveCredentials per selected league. War Room cookies are injected via DNR
- * (fetch cannot set a Cookie header from a SW); ESPN discovery uses the same for SWID/espn_s2.
+ * (fetch cannot set a Cookie header from a SW). ESPN historical JSON is fetched via a
+ * fantasy.espn.com content script proxy (credentials: "include"); SW fetch cannot send ESPN cookies.
  */
 
 const WAR_ROOM_ORIGIN = "https://gmwarroom.online";
@@ -48,29 +49,6 @@ async function getEspnCookieValues() {
 
 function buildEspnCookieHeader(swid, espnS2) {
   return `SWID=${swid}; espn_s2=${espnS2}`;
-}
-
-/**
- * Build `Cookie` for fantasy.espn.com API fetches from the extension SW (DNR not used).
- * Reads SWID + espn_s2 from fantasy.espn.com, then www.espn.com as fallback.
- */
-async function readEspnAuthCookieHeaderForApi() {
-  const fantasyUrl = "https://fantasy.espn.com/";
-  const wwwUrl = "https://www.espn.com/";
-  const swidCookie = await chrome.cookies.get({ url: fantasyUrl, name: "SWID" });
-  const s2Cookie = await chrome.cookies.get({ url: fantasyUrl, name: "espn_s2" });
-  let swid = swidCookie?.value || "";
-  let espnS2 = s2Cookie?.value || "";
-  if (!swid) {
-    const row = await chrome.cookies.get({ url: wwwUrl, name: "SWID" });
-    if (row?.value) swid = row.value;
-  }
-  if (!espnS2) {
-    const row = await chrome.cookies.get({ url: wwwUrl, name: "espn_s2" });
-    if (row?.value) espnS2 = row.value;
-  }
-  if (!swid || !espnS2) return "";
-  return buildEspnCookieHeader(swid, espnS2);
 }
 
 /** Cookies scoped to GM War Room (host cookies only for this URL). */
@@ -504,6 +482,77 @@ function buildMatchupWeekUrl(leagueId, season, week) {
   return `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${y}/segments/0/leagues/${encodeURIComponent(lid)}?${params.toString()}`;
 }
 
+/** Message type handled by `content.js` on fantasy.espn.com (credentials: include fetch). */
+const MSG_FETCH_ESPN_IN_PAGE = "GMWR_FETCH_ESPN";
+
+/** Tab where the ESPN fetch proxy content script runs. */
+async function findFantasyEspnTabId() {
+  try {
+    const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const activeUrl = active?.url;
+    if (active?.id != null && typeof activeUrl === "string" && activeUrl.startsWith("https://fantasy.espn.com/")) {
+      return active.id;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const tabs = await chrome.tabs.query({ url: "https://fantasy.espn.com/*" });
+    const t = tabs.find((x) => x.id != null);
+    if (t?.id != null) return t.id;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const tabs = await chrome.tabs.query({ url: "*://fantasy.espn.com/*" });
+    const t = tabs.find((x) => x.id != null);
+    if (t?.id != null) return t.id;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+async function fetchEspnJsonViaContentScriptOnce(url, label, attempt) {
+  const tabId = await findFantasyEspnTabId();
+  if (tabId == null) {
+    console.warn("[GMWR] ESPN fetch no fantasy.espn.com tab", { url, label, attempt });
+    return { ok: false, status: 0, error: "no_espn_tab", data: null };
+  }
+  try {
+    const result = await chrome.tabs.sendMessage(tabId, { type: MSG_FETCH_ESPN_IN_PAGE, url });
+    if (!result || typeof result !== "object") {
+      return { ok: false, status: 0, error: "empty_tab_response", data: null };
+    }
+    if (result.ok === true) {
+      return {
+        ok: true,
+        status: typeof result.status === "number" ? result.status : 200,
+        error: null,
+        data: result.data,
+      };
+    }
+    return {
+      ok: false,
+      status: typeof result.status === "number" ? result.status : 0,
+      error: result.error || "tab_fetch_failed",
+      data: null,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn("[GMWR] ESPN tabs.sendMessage failed", { url, label, attempt, error: msg });
+    const dead =
+      /Receiving end does not exist|Could not establish connection/i.test(msg) ||
+      msg.includes("The message port closed");
+    return {
+      ok: false,
+      status: 0,
+      error: dead ? "no_espn_content_script" : msg,
+      data: null,
+    };
+  }
+}
+
 /** Serialize ESPN fantasy API fetches (backoff / gentler on rate limits). */
 let __gmwrEspnHistFetchQueue = Promise.resolve();
 
@@ -517,71 +566,56 @@ async function fetchEspnJsonWithBackoffUnlocked(url, { label }) {
   let attempt = 0;
   let delay = 500;
   while (attempt < 6) {
-    const cookieHeader = await readEspnAuthCookieHeaderForApi();
-    if (!cookieHeader) {
-      console.warn("[GMWR] ESPN fetch missing SWID/espn_s2", { url, label, attempt });
-      return { ok: false, status: 401, error: "ESPN login expired", data: null };
-    }
-    let res;
-    try {
-      res = await fetch(url, {
-        method: "GET",
-        credentials: "omit",
-        headers: {
-          Cookie: cookieHeader,
-          Accept: "application/json",
-          Referer: "https://fantasy.espn.com/",
-        },
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn("[GMWR] ESPN fetch network error", { url, label, attempt, error: msg });
-      return { ok: false, status: 0, error: msg, data: null };
-    }
-    const status = res.status;
-    const contentType = (res.headers.get("content-type") || "").toLowerCase();
-    console.info("[GMWR] historical ESPN", { url, label, status, attempt, contentType });
-    if (status === 401 || status === 403) {
-      console.warn("[GMWR] ESPN fetch failed", { url, httpStatus: status, label, attempt, error: "ESPN login expired" });
-      return { ok: false, status, error: "ESPN login expired", data: null };
-    }
-    if (status === 404) {
-      console.warn("[GMWR] ESPN fetch failed", { url, httpStatus: status, label, attempt, error: "not_found" });
-      return { ok: false, status, error: "not_found", data: null };
-    }
-    if (status === 429) {
-      attempt += 1;
-      console.warn("[GMWR] ESPN fetch rate limited, retrying", { url, httpStatus: status, label, attempt, delayMs: delay });
-      await sleep(delay);
-      delay = Math.min(delay * 2, 8000);
-      continue;
-    }
-    if (!res.ok) {
-      console.warn("[GMWR] ESPN fetch failed", { url, httpStatus: status, label, attempt, error: `HTTP ${status}` });
-      return { ok: false, status, error: `HTTP ${status}`, data: null };
-    }
-    if (contentType.includes("text/html")) {
-      console.warn("[GMWR] ESPN returned HTML, not JSON (session cookies likely not applied)", {
+    const r = await fetchEspnJsonViaContentScriptOnce(url, label, attempt);
+    const status = r.status ?? 0;
+    console.info("[GMWR] historical ESPN", { url, label, status, attempt, via: "content_script" });
+
+    if (!r.ok) {
+      if (r.error === "no_espn_tab" || r.error === "no_espn_content_script") {
+        return { ok: false, status: 0, error: r.error, data: null };
+      }
+      if (r.error === "ESPN login expired" || status === 401 || status === 403) {
+        console.warn("[GMWR] ESPN fetch failed", {
+          url,
+          httpStatus: status,
+          label,
+          attempt,
+          error: "ESPN login expired",
+        });
+        return { ok: false, status: status || 401, error: "ESPN login expired", data: null };
+      }
+      if (r.error === "not_found" || status === 404) {
+        console.warn("[GMWR] ESPN fetch failed", { url, httpStatus: status, label, attempt, error: "not_found" });
+        return { ok: false, status: status || 404, error: "not_found", data: null };
+      }
+      if (status === 429 || r.error === "rate_limited") {
+        attempt += 1;
+        console.warn("[GMWR] ESPN fetch rate limited, retrying", {
+          url,
+          httpStatus: status,
+          label,
+          attempt,
+          delayMs: delay,
+        });
+        await sleep(delay);
+        delay = Math.min(delay * 2, 8000);
+        continue;
+      }
+      console.warn("[GMWR] ESPN fetch failed", {
         url,
         httpStatus: status,
         label,
         attempt,
-        contentType,
+        error: r.error || "request_failed",
       });
-      return { ok: false, status, error: "espn_html_not_json", data: null };
+      return { ok: false, status, error: r.error || `HTTP ${status}`, data: null };
     }
-    let data = null;
-    try {
-      data = await res.json();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn("[GMWR] ESPN fetch JSON parse failed", { url, httpStatus: status, label, attempt, error: msg });
-      data = null;
-    }
-    if (data == null) {
+
+    if (r.data == null) {
       console.warn("[GMWR] ESPN fetch empty or non-JSON body", { url, httpStatus: status, label, attempt });
+      return { ok: false, status, error: "empty_json", data: null };
     }
-    return { ok: true, status, error: null, data };
+    return { ok: true, status, error: null, data: r.data };
   }
   console.warn("[GMWR] ESPN fetch failed after retries", { url, httpStatus: 429, label, error: "rate_limited" });
   return { ok: false, status: 429, error: "rate_limited", data: null };
@@ -598,6 +632,9 @@ async function fetchWeeklyMatchupsIfNeeded(leagueId, season, combined) {
     if (!r.ok) {
       if (r.status === 404) continue;
       if (r.error === "ESPN login expired") return { error: r.error, matchupPayloads };
+      if (r.error === "no_espn_tab" || r.error === "no_espn_content_script") {
+        return { error: r.error, matchupPayloads };
+      }
       continue;
     }
     if (r.data && scheduleLen(r.data) > 0) {
@@ -754,17 +791,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse({ ok: false, status: 0, error: "invalid_espn_url", result: null, bodyText: "" });
         return;
       }
-      const { swid, espnS2 } = await getEspnCookieValues();
-      if (!swid || !espnS2) {
-        sendResponse({
-          ok: false,
-          status: 401,
-          error: "ESPN login expired",
-          result: null,
-          bodyText: "",
-        });
-        return;
-      }
       const r = await fetchEspnJsonWithBackoff(url, { label: "page_bridge" });
       if (!r.ok || r.data == null) {
         const err =
@@ -772,7 +798,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             ? "not_found"
             : r.error === "ESPN login expired"
               ? "ESPN login expired"
-              : r.error || "fetch_failed";
+              : r.error === "no_espn_tab" || r.error === "no_espn_content_script"
+                ? r.error
+                : r.error || "fetch_failed";
         sendResponse({
           ok: false,
           status: r.status ?? 0,
@@ -883,11 +911,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (t === MSG_HIST_DISCOVER) {
     (async () => {
       const leagueId = String(message?.leagueId || "457622").trim();
-      const { swid, espnS2 } = await getEspnCookieValues();
-      if (!swid || !espnS2) {
-        sendResponse({ ok: false, seasons: [], error: "ESPN login expired", details: "missing_cookies" });
-        return;
-      }
       const currentYear = new Date().getFullYear();
       const seasons = buildEspnSeasonDiscoveryList();
       const skipped = [];
@@ -907,9 +930,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (t === MSG_HIST_TEST) {
     (async () => {
-      const { swid, espnS2 } = await getEspnCookieValues();
-      if (!swid || !espnS2) {
-        sendResponse({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
+      const espnTabId = await findFantasyEspnTabId();
+      if (espnTabId == null) {
+        sendResponse({
+          ok: false,
+          error:
+            "Open https://fantasy.espn.com in a browser tab and sign in. Reload that tab after updating the extension.",
+          details: "no_espn_tab",
+        });
         return;
       }
       const warRoomCookieHeader = await getWarRoomCookieHeaderString();
@@ -933,9 +961,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (t === MSG_HIST_FULL) {
     (async () => {
-      const { swid, espnS2 } = await getEspnCookieValues();
-      if (!swid || !espnS2) {
-        sendResponse({ ok: false, error: "ESPN login expired", results: [] });
+      const espnTabId = await findFantasyEspnTabId();
+      if (espnTabId == null) {
+        sendResponse({
+          ok: false,
+          error:
+            "Open https://fantasy.espn.com in a browser tab and sign in. Reload that tab after updating the extension.",
+          results: [],
+          details: "no_espn_tab",
+        });
         return;
       }
       const warRoomCookieHeader = await getWarRoomCookieHeaderString();
