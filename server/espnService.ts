@@ -114,7 +114,7 @@ async function markCredsExpired(userId: number): Promise<void> {
   } catch { /* non-fatal */ }
 }
 
-function buildCookieStringFor(creds?: EspnCreds): string {
+export function buildCookieStringFor(creds?: EspnCreds): string {
   const swid = creds?.swid ?? SWID;
   const s2   = creds?.espnS2 ?? ESPN_S2;
   const parts: string[] = [];
