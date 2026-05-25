@@ -12,9 +12,23 @@ import {
   normalizeTeams,
   normalizeTransactions,
 } from "./espnService";
-import { memCache } from "./memCache";
+import {
+  buildManualCombinedPayloadForSeason,
+  getAllManualMatchupsShapedForSeason,
+  getManualDraftPickRowsForSeason,
+  listManualSeasonsFromParsed,
+  loadParsedManualWorkbook,
+  manualMemberIdForOwnerName,
+  teamIdRegistryForSeason,
+} from "./manualHistoricalWorkbook";
 
-export type HistoricalDataSource = "normalized" | "raw_cache" | "legacy_cache" | "empty";
+export type HistoricalDataSource =
+  | "verified_manual"
+  | "manual_h2h_matrix"
+  | "normalized"
+  | "raw_cache"
+  | "legacy_cache"
+  | "empty";
 
 export type HistoricalReadResult<T = unknown> = {
   rows: T[];
@@ -79,7 +93,9 @@ export async function listSeasonsForLeagueHistorical(leagueId?: string, userId?:
   const lid = await resolveLeagueKey(new Date().getFullYear(), leagueId ?? null, userId);
   const fromCache = await getAllCachedSeasons(lid, userId);
   const fromDb = await distinctNormalizedSeasons(lid);
-  const merged = new Set<number>([...fromCache, ...fromDb]);
+  const wb = await loadParsedManualWorkbook();
+  const fromManual = wb ? listManualSeasonsFromParsed(wb) : [];
+  const merged = new Set<number>([...fromManual, ...fromCache, ...fromDb]);
   return Array.from(merged).sort((a, b) => a - b);
 }
 
@@ -153,6 +169,53 @@ export async function getSeasonTeams(
 ): Promise<HistoricalReadResult<Record<string, unknown>>> {
   const yr = Math.floor(Number(season));
   const lid = await resolveLeagueKey(yr, leagueId ?? null, userId);
+  if (yr !== 2009) {
+    const wb = await loadParsedManualWorkbook();
+    if (wb) {
+      const st = wb.standings.filter((s) => s.season === yr);
+      if (st.length > 0) {
+        const reg = teamIdRegistryForSeason(yr, st);
+        const shaped: Record<string, unknown>[] = st.map((r) => {
+          const teamId = reg.get(r.teamName)!;
+          const wins = r.wins;
+          const losses = r.losses;
+          const ties = r.ties;
+          const pa = r.pa;
+          const pf = r.pf;
+          const ownerDisplay = String(r.ownerName || "").trim();
+          const memberIds = ownerDisplay ? [manualMemberIdForOwnerName(ownerDisplay)] : [];
+          const ownersStr = ownerDisplay || "";
+          return {
+            season: yr,
+            teamId,
+            id: teamId,
+            name: r.teamName,
+            abbrev: r.teamName.slice(0, 4).toUpperCase(),
+            location: "",
+            nickname: r.teamName,
+            owners: ownersStr,
+            ownerDisplay,
+            primaryOwner: memberIds[0] ?? "",
+            memberIds,
+            wins,
+            losses,
+            ties,
+            pointsFor: pf,
+            pointsAgainst: pa,
+            percentage: undefined,
+            rankFinal: r.rank ?? undefined,
+            rankCalculatedFinal: r.rank ?? undefined,
+            playoffSeed: r.rank && r.rank <= 8 ? r.rank : undefined,
+            record: { overall: { wins, losses, ties, pointsAgainst: pa, pointsFor: pf } },
+            points: pf,
+            transactionCounter: {},
+          };
+        });
+        return { rows: shaped, source: "verified_manual", season: yr, leagueId: lid, count: shaped.length };
+      }
+    }
+  }
+
   const db = await getDb();
   if (db) {
     const rows = await db
@@ -195,6 +258,16 @@ export async function getSeasonMatchups(
 ): Promise<HistoricalReadResult<Record<string, unknown>>> {
   const yr = Math.floor(Number(season));
   const lid = await resolveLeagueKey(yr, leagueId ?? null, userId);
+  if (yr !== 2009) {
+    const wb = await loadParsedManualWorkbook();
+    if (wb) {
+      const manualRows = getAllManualMatchupsShapedForSeason(yr, wb);
+      if (manualRows.length > 0) {
+        return { rows: manualRows, source: "verified_manual", season: yr, leagueId: lid, count: manualRows.length };
+      }
+    }
+  }
+
   const db = await getDb();
   if (db) {
     const rows = await db
@@ -227,26 +300,7 @@ export async function getSeasonMatchups(
     }
   }
 
-  const hit = await getCachedViewWithTier(yr, "combined", lid, { userId });
-  if (hit?.row?.payload && typeof hit.row.payload === "object" && !Array.isArray(hit.row.payload)) {
-    const payload = hit.row.payload as Record<string, unknown>;
-    try {
-      const norm = normalizeMatchups(payload) as unknown as Record<string, unknown>[];
-      if (norm.length > 0) {
-        return {
-          rows: norm,
-          source: tierToHistoricalSource(hit.tier),
-          season: yr,
-          leagueId: lid,
-          count: norm.length,
-        };
-      }
-    } catch (e) {
-      console.warn("[historicalDataService] getSeasonMatchups normalizeMatchups failed:", yr, e);
-    }
-  }
-
-  return emptyResult(yr, lid, "no_matchups_in_normalized_or_combined_cache");
+  return emptyResult(yr, lid, "no_matchups_in_manual_workbook_or_normalized_db");
 }
 
 export async function getSeasonDraftPicks(
@@ -256,6 +310,16 @@ export async function getSeasonDraftPicks(
 ): Promise<HistoricalReadResult<Record<string, unknown>>> {
   const yr = Math.floor(Number(season));
   const lid = await resolveLeagueKey(yr, leagueId ?? null, userId);
+  if (yr !== 2009) {
+    const wb = await loadParsedManualWorkbook();
+    if (wb) {
+      const manualRows = getManualDraftPickRowsForSeason(yr, wb);
+      if (manualRows.length > 0) {
+        return { rows: manualRows, source: "verified_manual", season: yr, leagueId: lid, count: manualRows.length };
+      }
+    }
+  }
+
   const db = await getDb();
   if (db) {
     const rows = await db
@@ -506,6 +570,60 @@ export function getHistoricalCoverageReport(
   return memCache(key, 5 * 60_000, () => buildHistoricalCoverageInner(leagueId, userId));
 }
 
+export type HistoricalReadAuditLine = {
+  page: string;
+  sourceUsed: HistoricalDataSource;
+  rowsReturned: number;
+  seasonCoverage: number[];
+};
+
+export async function buildHistoricalReadAudit(leagueId: string | undefined, userId: number | undefined): Promise<{
+  leagueId: string;
+  workbookPath: string | null;
+  workbookLoaded: boolean;
+  pages: HistoricalReadAuditLine[];
+}> {
+  const { resolveVerifiedManualXlsPath } = await import("./manualHistoricalWorkbook");
+  const lid = await resolveLeagueKey(new Date().getFullYear(), leagueId ?? null, userId);
+  const seasons = COVERAGE_SEASONS.filter((s) => s !== 2009);
+  const workbookPath = resolveVerifiedManualXlsPath();
+  let workbookLoaded = false;
+  try {
+    workbookLoaded = Boolean(await loadParsedManualWorkbook());
+  } catch {
+    workbookLoaded = false;
+  }
+
+  const pickAgg = async (
+    label: string,
+    probe: (s: number) => Promise<HistoricalReadResult>,
+  ): Promise<HistoricalReadAuditLine> => {
+    const cov: number[] = [];
+    let maxRows = 0;
+    let sourceUsed: HistoricalDataSource = "empty";
+    for (const s of seasons) {
+      const r = await probe(s);
+      if (r.count === 0) continue;
+      cov.push(s);
+      maxRows = Math.max(maxRows, r.count);
+      if (r.source === "verified_manual") sourceUsed = "verified_manual";
+      else if (sourceUsed !== "verified_manual") sourceUsed = r.source;
+    }
+    return { page: label, sourceUsed, rowsReturned: maxRows, seasonCoverage: cov.sort((a, b) => a - b) };
+  };
+
+  const draft = await pickAgg("draft_history", (s) => getSeasonDraftPicks(s, lid, userId));
+  const h2h = await pickAgg("h2h_matchups", (s) => getSeasonMatchups(s, lid, userId));
+  const owner = await pickAgg("owner_career", (s) => getSeasonTeams(s, lid, userId));
+
+  return {
+    leagueId: lid,
+    workbookPath,
+    workbookLoaded,
+    pages: [draft, h2h, owner],
+  };
+}
+
 /**
  * When combined cache has no teams but normalized teams exist, build a minimal ESPN-shaped payload
  * for owner-career style consumers (schedule + members + settings only from real stored fields).
@@ -515,6 +633,8 @@ export async function buildCombinedPayloadFromNormalized(
   leagueId: string,
   userId?: number
 ): Promise<Record<string, unknown> | null> {
+  const manual = await buildManualCombinedPayloadForSeason(season);
+  if (manual) return manual;
   const teamsRes = await getSeasonTeams(season, leagueId, userId);
   if (teamsRes.count === 0) return null;
   const matchRes = await getSeasonMatchups(season, leagueId, userId);

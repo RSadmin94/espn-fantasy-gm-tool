@@ -73,7 +73,8 @@ export function DraftHistory() {
   /** Always query by selected season — `draft_picks` may exist even if `cachedSeasons` omits the year. */
   const draftQ = trpc.espn.draftHistory.useQuery({ season }, { staleTime: 0 });
 
-  const picks = (draftQ.data as DraftPickRow[] | undefined) ?? [];
+  const picks = (draftQ.data?.picks as DraftPickRow[] | undefined) ?? [];
+  const draftSource = draftQ.data?.dataSource as string | undefined;
 
   const filteredPicks = useMemo(() => {
     if (teamFilter === "ALL") return picks;
@@ -152,6 +153,11 @@ export function DraftHistory() {
         <p className="mt-1 text-muted-foreground">
           Draft board from synced league data — switch between round grid and picks grouped by team.
         </p>
+        {draftSource === "verified_manual" ? (
+          <p className="mt-2 rounded-md border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200">
+            Source: verified_manual
+          </p>
+        ) : null}
       </div>
 
       <Card>

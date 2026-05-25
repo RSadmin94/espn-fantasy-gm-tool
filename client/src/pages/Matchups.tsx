@@ -132,6 +132,7 @@ export function Matchups() {
 
   const maxWeek = boardQ.data?.maxWeek ?? 0;
   const rows = (boardQ.data?.matchups as ScoreboardRow[] | undefined) ?? [];
+  const boardSource = boardQ.data?.dataSource as string | undefined;
 
   useEffect(() => {
     setWeek(1);
@@ -155,6 +156,11 @@ export function Matchups() {
         <p className="mt-1 text-muted-foreground">
           Head-to-head scores by week (from synced league data).
         </p>
+        {boardSource === "verified_manual" ? (
+          <p className="mt-2 rounded-md border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200">
+            Source: verified_manual
+          </p>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

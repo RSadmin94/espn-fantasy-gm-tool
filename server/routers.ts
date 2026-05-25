@@ -59,10 +59,22 @@ import {
 } from "./db";
 import {
   buildCombinedPayloadFromNormalized,
+  buildHistoricalReadAudit,
   distinctNormalizedSeasons,
   getHistoricalCoverageReport,
   getSeasonDraftPicks,
+  getSeasonTeams,
 } from "./historicalDataService";
+import {
+  buildManualCombinedPayloadForSeason,
+  getManualMatchupsForSeasonWeek,
+  getManualWorkbookSignature,
+  listManualSeasonsFromParsed,
+  loadParsedManualWorkbook,
+  manualMemberIdForOwnerName,
+  maxWeekFromManualMatchups,
+  mergeManualH2HMatrixIntoOwners,
+} from "./manualHistoricalWorkbook";
 import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmMatchups, syncRuns } from "../drizzle/schema";
 import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle, asc as ascDrizzle, sql } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
@@ -1588,6 +1600,55 @@ export const appRouter = router({
     standings: publicProcedure
       .input(z.object({ season: z.number() }))
       .query(async ({ ctx, input }) => {
+        const resolved = await resolveActiveLeagueId(
+          { user: ctx.user ? { id: ctx.user.id } : undefined },
+          null,
+          input.season
+        );
+        const teamsRes = await getSeasonTeams(input.season, resolved.leagueId, ctx.user?.id ?? undefined);
+        if (teamsRes.count > 0) {
+          const mapped = teamsRes.rows.map((t) => {
+            const teamId = Number(t.teamId ?? t.id);
+            const wins = Number(t.wins ?? 0) || 0;
+            const losses = Number(t.losses ?? 0) || 0;
+            const ties = Number(t.ties ?? 0) || 0;
+            const pointsFor = Number(t.pointsFor ?? t.points ?? 0) || 0;
+            const pointsAgainst = Number(t.pointsAgainst ?? 0) || 0;
+            const rankFinal = Number(t.rankCalculatedFinal ?? t.rankFinal ?? 99) || 99;
+            const memberIds = (t.memberIds as string[]) || [];
+            const ownersStr = String(t.owners ?? "").trim();
+            const ownerNames =
+              memberIds.length > 0
+                ? memberIds
+                : ownersStr.split(";").map((s) => s.trim()).filter(Boolean);
+            return {
+              season: input.season,
+              teamId,
+              abbrev: t.abbrev ?? "",
+              teamName: String(t.name ?? t.nickname ?? `Team ${teamId}`),
+              location: String(t.location ?? ""),
+              nickname: String(t.nickname ?? ""),
+              owners: ownerNames,
+              memberIds: ownerNames,
+              wins,
+              losses,
+              ties,
+              pointsFor,
+              pointsAgainst,
+              percentage: t.percentage,
+              rankFinal,
+              playoffSeed: t.playoffSeed,
+              draftDayProjectedRank: t.draftDayProjectedRank,
+              currentProjectedRank: t.currentProjectedRank,
+              logoUrl: t.logoUrl,
+              primaryColor: t.primaryColor,
+              record: t.record ?? {
+                overall: { wins, losses, ties, pointsFor, pointsAgainst },
+              },
+            };
+          });
+          return mapped.sort((a, b) => (a.rankFinal || 99) - (b.rankFinal || 99));
+        }
         const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const teams = normalizeTeams(data);
@@ -1631,7 +1692,7 @@ export const appRouter = router({
         return picks;
       }),
 
-    /** Normalized `draft_picks` + `teams` for the active league (DB — requires season sync). */
+    /** Draft board: verified manual workbook → normalized `draft_picks` + teams → mDraftDetail / combined cache → empty. */
     draftHistory: publicProcedure
       .input(z.object({ season: z.number() }))
       .query(async ({ ctx, input }) => {
@@ -1648,76 +1709,12 @@ export const appRouter = router({
           source,
           season: input.season,
         });
-        const db = await getDb();
-        if (!db) return [];
-
-        // Read order: `draft_picks` + teams (DB) → getSeasonDraftPicks (mDraftDetail raw cache → combined cache → empty).
-
-        const rows = await db
-          .select({
-            overallPick: gmDraftPicks.overallPick,
-            round: gmDraftPicks.roundId,
-            roundPick: gmDraftPicks.roundPick,
-            teamId: gmDraftPicks.teamId,
-            teamName: gmTeams.name,
-            ownerName: gmTeams.ownerName,
-            playerId: gmDraftPicks.playerId,
-            playerName: gmDraftPicks.playerName,
-            position: gmDraftPicks.position,
-            isKeeper: gmDraftPicks.isKeeper,
-            bidAmount: gmDraftPicks.bidAmount,
-            rawPick: gmDraftPicks.rawPick,
-          })
-          .from(gmDraftPicks)
-          .innerJoin(
-            gmTeams,
-            andDrizzle(
-              eqDrizzle(gmDraftPicks.leagueId, gmTeams.leagueId),
-              eqDrizzle(gmDraftPicks.season, gmTeams.season),
-              eqDrizzle(gmDraftPicks.teamId, gmTeams.teamId)
-            )
-          )
-          .where(
-            andDrizzle(
-              eqDrizzle(gmDraftPicks.leagueId, leagueId),
-              eqDrizzle(gmDraftPicks.season, input.season)
-            )
-          )
-          .orderBy(ascDrizzle(gmDraftPicks.overallPick));
-
-        const mapRow = (r: {
-          overallPick: number;
-          round: number;
-          roundPick: number;
-          teamId: number;
-          teamName: string | null;
-          ownerName: string | null;
-          playerId: number | null;
-          playerName: string | null;
-          position: string | null;
-          isKeeper: boolean | number | null;
-          bidAmount: unknown;
-          rawPick: unknown;
-        }) => ({
-          overallPick: r.overallPick,
-          round: r.round,
-          roundPick: r.roundPick,
-          teamId: r.teamId,
-          teamName: (r.teamName && String(r.teamName).trim() !== "") ? String(r.teamName) : `Team ${r.teamId}`,
-          ownerName: (r.ownerName && String(r.ownerName).trim() !== "") ? String(r.ownerName) : "",
-          playerId: r.playerId,
-          playerName: r.playerName ?? null,
-          position: r.position ?? null,
-          nflTeam: nflTeamFromDraftRawPick(r.rawPick != null ? String(r.rawPick) : ""),
-          isKeeper: Boolean(r.isKeeper),
-          bidAmount: r.bidAmount != null ? Number(r.bidAmount) : 0,
-        });
-
-        if (rows.length > 0) return rows.map(mapRow);
 
         const fb = await getSeasonDraftPicks(input.season, leagueId, ctx.user?.id ?? undefined);
-        if (fb.count === 0) return [];
-        return (fb.rows as Record<string, unknown>[]).map((p) => {
+        const dataSource = fb.source;
+        if (fb.count === 0) return { picks: [] as const, dataSource };
+
+        const picks = (fb.rows as Record<string, unknown>[]).map((p) => {
           const raw = p.rawPick != null ? String(p.rawPick) : "";
           const nfl = nflTeamFromDraftRawPick(raw) || String(p.proTeam ?? "").trim();
           return {
@@ -1726,7 +1723,14 @@ export const appRouter = router({
             roundPick: Number(p.roundPickNumber ?? 0),
             teamId: Number(p.teamId ?? 0),
             teamName: String(p.teamName || `Team ${p.teamId}`),
-            ownerName: "",
+            ownerName: (() => {
+              try {
+                const j = JSON.parse(raw) as { ownerName?: string };
+                return j?.ownerName ? String(j.ownerName) : "";
+              } catch {
+                return "";
+              }
+            })(),
             playerId: p.playerId != null ? Number(p.playerId) : null,
             playerName: (p.playerName as string | null) ?? null,
             position: (p.position as string | null) ?? null,
@@ -1735,12 +1739,19 @@ export const appRouter = router({
             bidAmount: p.bidAmount != null ? Number(p.bidAmount) : 0,
           };
         });
+        return { picks, dataSource };
       }),
 
     /** Per-season counts + data source (normalized vs cache tiers) for ops / debugging. Cached 5 minutes. */
     historicalCoverage: protectedProcedure.query(async ({ ctx }) => {
       const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
       return getHistoricalCoverageReport(leagueId, ctx.user.id);
+    }),
+
+    /** Debug: which source backs historical pages (manual workbook vs DB vs cache). */
+    historicalReadAudit: protectedProcedure.query(async ({ ctx }) => {
+      const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+      return buildHistoricalReadAudit(leagueId, ctx.user.id);
     }),
 
     matchups: publicProcedure
@@ -1754,8 +1765,7 @@ export const appRouter = router({
       }),
 
     /**
-     * Scoreboard from persisted `matchups` + `teams` (normalized DB), keyed by scoring week.
-     * Use for the Matchups page; `espn.matchups` remains cache/API-shaped for other callers.
+     * Scoreboard: verified manual workbook (per week) → normalized `matchups` + `teams` (DB).
      */
     matchupsScoreboard: publicProcedure
       .input(z.object({ season: z.number(), week: z.number().int().min(1) }))
@@ -1773,8 +1783,133 @@ export const appRouter = router({
           season: input.season,
           week: input.week,
         });
+
+        type TeamLite = {
+          teamId: number;
+          teamName: string;
+          ownerName: string;
+          wins: number;
+          losses: number;
+          ties: number;
+          logoUrl: string;
+          rank: number | null;
+        };
+
+        function teamMapFromRows(rows: Record<string, unknown>[]): Map<number, TeamLite> {
+          const teamMap = new Map<number, TeamLite>();
+          for (const t of rows) {
+            const tid = Number(t.teamId ?? t.id);
+            if (!Number.isFinite(tid) || tid <= 0) continue;
+            const rank =
+              t.playoffSeed != null && Number.isFinite(Number(t.playoffSeed))
+                ? Number(t.playoffSeed)
+                : t.rankFinal != null && Number.isFinite(Number(t.rankFinal))
+                  ? Number(t.rankFinal)
+                  : t.finalStanding != null && Number.isFinite(Number(t.finalStanding))
+                    ? Number(t.finalStanding)
+                    : null;
+            const ownersStr = String(t.owners ?? "").trim();
+            const ownerDisplay = String(t.ownerDisplay ?? "").trim();
+            const ownerName =
+              ownerDisplay ||
+              ownersStr.split(";").map((s) => s.trim()).filter(Boolean)[0] ||
+              "";
+            teamMap.set(tid, {
+              teamId: tid,
+              teamName: String(t.name ?? t.nickname ?? `Team ${tid}`),
+              ownerName,
+              wins: Number(t.wins ?? 0) || 0,
+              losses: Number(t.losses ?? 0) || 0,
+              ties: Number(t.ties ?? 0) || 0,
+              logoUrl: (t.logoUrl && String(t.logoUrl).trim()) || "",
+              rank,
+            });
+          }
+          return teamMap;
+        }
+
+        function mapScoreboardRows(
+          mrows: { synthetic?: boolean }[],
+          teamMap: Map<number, TeamLite>,
+        ) {
+          return mrows.map((m) => {
+            const row = m as Record<string, unknown>;
+            const home = teamMap.get(Number(row.homeTeamId));
+            const away = teamMap.get(Number(row.awayTeamId));
+            const hid = Number(row.homeTeamId);
+            const aid = Number(row.awayTeamId);
+            const hs = Number(row.homeScore ?? row.homeTotalPoints ?? 0);
+            const as = Number(row.awayScore ?? row.awayTotalPoints ?? 0);
+            const wid = row.winnerTeamId != null ? Number(row.winnerTeamId) : null;
+            const completed = row.isCompleted !== undefined ? Boolean(row.isCompleted) : hs + as > 0;
+            let winnerSide: "home" | "away" | "tie" | "undecided" = "undecided";
+            if (completed) {
+              if (wid === hid) winnerSide = "home";
+              else if (wid === aid) winnerSide = "away";
+              else if (hs > as) winnerSide = "home";
+              else if (as > hs) winnerSide = "away";
+              else if (hs === as && hs > 0) winnerSide = "tie";
+            } else if (wid === hid) winnerSide = "home";
+            else if (wid === aid) winnerSide = "away";
+
+            return {
+              id: row.id != null ? Number(row.id) : -(Number(row.week ?? 1) * 1000 + Number(row.matchupPeriodId ?? 0)),
+              week: Number(row.week ?? row.scoringPeriodId ?? input.week),
+              matchupPeriodId: Number(row.matchupPeriodId ?? 0),
+              homeTeamId: hid,
+              awayTeamId: aid,
+              homeScore: hs,
+              awayScore: as,
+              homeProjected: row.homeProjected != null ? Number(row.homeProjected) : null,
+              awayProjected: row.awayProjected != null ? Number(row.awayProjected) : null,
+              winnerTeamId: wid,
+              isCompleted: completed,
+              isPlayoff: Boolean(row.isPlayoff),
+              winnerSide,
+              home: home ?? {
+                teamId: hid,
+                teamName: `Team ${hid}`,
+                ownerName: "",
+                wins: 0,
+                losses: 0,
+                ties: 0,
+                logoUrl: "",
+                rank: null,
+              },
+              away: away ?? {
+                teamId: aid,
+                teamName: `Team ${aid}`,
+                ownerName: "",
+                wins: 0,
+                losses: 0,
+                ties: 0,
+                logoUrl: "",
+                rank: null,
+              },
+            };
+          });
+        }
+
+        let dataSource: "verified_manual" | "normalized" | "empty" = "empty";
+        let maxWeek = 0;
+
+        if (input.season !== 2009) {
+          const wb = await loadParsedManualWorkbook();
+          if (wb) {
+            maxWeek = Math.max(maxWeek, maxWeekFromManualMatchups(input.season, wb));
+            const manualRaw = getManualMatchupsForSeasonWeek(input.season, input.week, wb);
+            if (manualRaw.length > 0) {
+              const ts = await getSeasonTeams(input.season, leagueId, ctx.user?.id ?? undefined);
+              const teamMap = teamMapFromRows(ts.rows as Record<string, unknown>[]);
+              const matchups = mapScoreboardRows(manualRaw as { synthetic?: boolean }[], teamMap);
+              dataSource = "verified_manual";
+              return { maxWeek: Math.max(maxWeek, input.week), matchups, dataSource };
+            }
+          }
+        }
+
         const db = await getDb();
-        if (!db) return { maxWeek: 0, matchups: [] as const };
+        if (!db) return { maxWeek, matchups: [] as const, dataSource };
 
         const [agg] = await db
           .select({
@@ -1788,7 +1923,7 @@ export const appRouter = router({
             )
           );
 
-        const maxWeek = Number(agg?.maxWeek ?? 0) || 0;
+        maxWeek = Math.max(maxWeek, Number(agg?.maxWeek ?? 0) || 0);
 
         const teamRows = await db
           .select({
@@ -1809,17 +1944,6 @@ export const appRouter = router({
               eqDrizzle(gmTeams.season, input.season)
             )
           );
-
-        type TeamLite = {
-          teamId: number;
-          teamName: string;
-          ownerName: string;
-          wins: number;
-          losses: number;
-          ties: number;
-          logoUrl: string;
-          rank: number | null;
-        };
 
         const teamMap = new Map<number, TeamLite>();
         for (const t of teamRows) {
@@ -1867,63 +1991,9 @@ export const appRouter = router({
           )
           .orderBy(ascDrizzle(gmMatchups.matchupPeriodId), ascDrizzle(gmMatchups.id));
 
-        const matchups = mrows.map((m) => {
-          const home = teamMap.get(Number(m.homeTeamId));
-          const away = teamMap.get(Number(m.awayTeamId));
-          const hid = Number(m.homeTeamId);
-          const aid = Number(m.awayTeamId);
-          const hs = Number(m.homeScore ?? 0);
-          const as = Number(m.awayScore ?? 0);
-          const wid = m.winnerTeamId != null ? Number(m.winnerTeamId) : null;
-          const completed = Boolean(m.isCompleted);
-          let winnerSide: "home" | "away" | "tie" | "undecided" = "undecided";
-          if (completed) {
-            if (wid === hid) winnerSide = "home";
-            else if (wid === aid) winnerSide = "away";
-            else if (hs > as) winnerSide = "home";
-            else if (as > hs) winnerSide = "away";
-            else winnerSide = "tie";
-          } else if (wid === hid) winnerSide = "home";
-          else if (wid === aid) winnerSide = "away";
-
-          return {
-            id: m.id,
-            week: m.week,
-            matchupPeriodId: m.matchupPeriodId,
-            homeTeamId: hid,
-            awayTeamId: aid,
-            homeScore: hs,
-            awayScore: as,
-            homeProjected: m.homeProjected != null ? Number(m.homeProjected) : null,
-            awayProjected: m.awayProjected != null ? Number(m.awayProjected) : null,
-            winnerTeamId: wid,
-            isCompleted: Boolean(m.isCompleted),
-            isPlayoff: Boolean(m.isPlayoff),
-            winnerSide,
-            home: home ?? {
-              teamId: hid,
-              teamName: `Team ${hid}`,
-              ownerName: "",
-              wins: 0,
-              losses: 0,
-              ties: 0,
-              logoUrl: "",
-              rank: null,
-            },
-            away: away ?? {
-              teamId: aid,
-              teamName: `Team ${aid}`,
-              ownerName: "",
-              wins: 0,
-              losses: 0,
-              ties: 0,
-              logoUrl: "",
-              rank: null,
-            },
-          };
-        });
-
-        return { maxWeek, matchups };
+        const matchups = mapScoreboardRows(mrows as { synthetic?: boolean }[], teamMap);
+        if (matchups.length > 0) dataSource = "normalized";
+        return { maxWeek, matchups, dataSource };
       }),
 
     transactions: publicProcedure
@@ -3202,7 +3272,7 @@ export const appRouter = router({
   }),
 
   ownerCareerStats: publicProcedure.query(() => {
-    return memCache("ownerCareerStats", 10 * 60_000, async () => {
+    return memCache(`ownerCareerStats:vManual:${getManualWorkbookSignature()}`, 10 * 60_000, async () => {
     // Resolve active league credentials for multi-league isolation
     let ownerStatsCreds: import('./espnService').EspnCreds | undefined;
     try {
@@ -3231,7 +3301,13 @@ export const appRouter = router({
 
     const cachedSeasonsList = await getAllCachedSeasons(ownerStatsLeagueId);
     const normSeasons = await distinctNormalizedSeasons(ownerStatsLeagueId);
-    const cachedSeasons = Array.from(new Set([...cachedSeasonsList, ...normSeasons])).sort((a, b) => a - b);
+    const wbOnce = await loadParsedManualWorkbook();
+    const manualSeasons = wbOnce ? listManualSeasonsFromParsed(wbOnce) : [];
+    const cachedSeasons = Array.from(
+      new Set([...manualSeasons, ...cachedSeasonsList, ...normSeasons].map((s) => Number(s))),
+    )
+      .filter((s) => s !== 2009)
+      .sort((a, b) => a - b);
 
     // ── Per-owner aggregated stats ──────────────────────────────────────────
     // memberId → owner profile
@@ -3299,21 +3375,18 @@ export const appRouter = router({
       return ownerMap.get(memberId)!;
     }
 
-    // Fetch championship data from ESPN leagueHistory API — the ONLY reliable source
-    // for pre-2018 seasons where the combined cache has empty teams arrays.
-    let leagueHistoryChampMap = new Map<number, { season: number; championMemberId: string; runnerUpMemberId: string | null; championTeamName: string }>();
-    try {
-      const { fetchLeagueHistoryChampions } = await import('./espnService');
-      leagueHistoryChampMap = await fetchLeagueHistoryChampions(cachedSeasons, ownerStatsCreds);
-    } catch {
-      // If the API call fails (e.g. no credentials), fall back to cache-based detection
-    }
-
     for (const season of cachedSeasons) {
-      const row = await getCachedView(season, 'combined', ownerStatsLeagueId);
-      let data: any = row?.payload as any;
-      const teamsLen = Array.isArray(data?.teams) ? data.teams.length : 0;
-      if (!data || teamsLen === 0) {
+      let data: any = null;
+      const manualPayload = await buildManualCombinedPayloadForSeason(season);
+      if (manualPayload && Array.isArray(manualPayload.teams) && manualPayload.teams.length > 0) {
+        data = manualPayload;
+      }
+      if (!data) {
+        const row = await getCachedView(season, "combined", ownerStatsLeagueId);
+        data = row?.payload as any;
+      }
+      const teamsLenEarly = Array.isArray(data?.teams) ? data.teams.length : 0;
+      if (!data || teamsLenEarly === 0) {
         try {
           const synth = await buildCombinedPayloadFromNormalized(season, ownerStatsLeagueId, undefined);
           if (synth && Array.isArray(synth.teams) && synth.teams.length > 0) {
@@ -3328,27 +3401,57 @@ export const appRouter = router({
       const teams: any[] = data.teams || [];
       const hasTeamData = teams.length > 0;
 
-      // For seasons with no team data (pre-2018 cache gap), still credit championships
-      // using the leagueHistory API data, but skip W/L/record processing.
       if (!hasTeamData) {
-        const histEntry = leagueHistoryChampMap.get(season);
-        if (histEntry) {
-          const champOwner = getOrCreateOwner(histEntry.championMemberId, []);
+        const ch = wbOnce?.champions.find((c) => c.season === season);
+        if (ch) {
+          const champId = manualMemberIdForOwnerName(ch.championName);
+          const champOwner = getOrCreateOwner(champId, [
+            {
+              id: champId,
+              displayName: ch.championName,
+              firstName: ch.championName.split(/\s+/)[0] ?? ch.championName,
+              lastName: ch.championName.split(/\s+/).slice(1).join(" ") ?? "",
+            },
+          ]);
           champOwner.championships++;
           champOwner.seasonRecords.push({
-            season, teamName: histEntry.championTeamName,
-            wins: 0, losses: 0, ties: 0, pf: 0, pa: 0,
-            rank: 1, playoffSeed: 0, madePlayoffs: true,
-            isChampion: true, isRunnerUp: false,
+            season,
+            teamName: ch.championName,
+            wins: 0,
+            losses: 0,
+            ties: 0,
+            pf: 0,
+            pa: 0,
+            rank: 1,
+            playoffSeed: 0,
+            madePlayoffs: true,
+            isChampion: true,
+            isRunnerUp: false,
           });
-          if (histEntry.runnerUpMemberId) {
-            const ruOwner = getOrCreateOwner(histEntry.runnerUpMemberId, []);
+          if (ch.runnerUpName) {
+            const ruId = manualMemberIdForOwnerName(ch.runnerUpName);
+            const ruOwner = getOrCreateOwner(ruId, [
+              {
+                id: ruId,
+                displayName: ch.runnerUpName,
+                firstName: ch.runnerUpName.split(/\s+/)[0] ?? ch.runnerUpName,
+                lastName: ch.runnerUpName.split(/\s+/).slice(1).join(" ") ?? "",
+              },
+            ]);
             ruOwner.runnerUps++;
             ruOwner.seasonRecords.push({
-              season, teamName: '',
-              wins: 0, losses: 0, ties: 0, pf: 0, pa: 0,
-              rank: 2, playoffSeed: 0, madePlayoffs: true,
-              isChampion: false, isRunnerUp: true,
+              season,
+              teamName: ch.runnerUpName,
+              wins: 0,
+              losses: 0,
+              ties: 0,
+              pf: 0,
+              pa: 0,
+              rank: 2,
+              playoffSeed: 0,
+              madePlayoffs: true,
+              isChampion: false,
+              isRunnerUp: true,
             });
           }
         }
@@ -3503,6 +3606,8 @@ export const appRouter = router({
         }
       }
     }
+
+    if (wbOnce) mergeManualH2HMatrixIntoOwners(ownerMap, wbOnce);
 
     // ── Serialize to plain objects ──────────────────────────────────────────
     const owners = Array.from(ownerMap.values()).map((o) => {
