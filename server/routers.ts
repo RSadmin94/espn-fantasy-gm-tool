@@ -91,6 +91,7 @@ import {
   resolveEspnCreds,
 } from "./espnService";
 import { backfillNormalizedTablesFromPayload, syncEspnCombinedFullPipeline, normalizeEspnPayload, createSyncRun, finishSyncRun, runEspnRawCacheNormalizedBackfill } from "./espnPersistence";
+import { runHistoricalEnrichment } from "./espnHistoricalEnrichment";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -1363,6 +1364,58 @@ export const appRouter = router({
         }
 
         const results = await runEspnRawCacheNormalizedBackfill(leagueId, seasonList, {
+          force: input.force === true,
+        });
+        memCache.invalidateAll();
+        return { leagueId, results };
+      }),
+
+    /**
+     * Targeted live ESPN fetches for missing draft / matchups / transactions (does not touch `combined`).
+     */
+    enrichHistoricalSeason: protectedProcedure
+      .input(
+        z.object({
+          startSeason: z.number().int().min(1990).max(2100).optional(),
+          endSeason: z.number().int().min(1990).max(2100).optional(),
+          seasons: z.array(z.number().int().min(1990).max(2100)).max(50).optional(),
+          force: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const creds = await resolveEspnCreds(undefined, ctx.user.id);
+        if (!hasCookies(creds)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "ESPN credentials (SWID / espn_s2) required for historical enrichment.",
+          });
+        }
+
+        let seasonList: number[];
+        if (input.seasons != null && input.seasons.length > 0) {
+          seasonList = [...new Set(input.seasons.map((s) => Math.floor(Number(s))))].sort((a, b) => a - b);
+        } else {
+          const lo = Math.floor(input.startSeason ?? 2010);
+          const hi = Math.floor(input.endSeason ?? 2025);
+          const a = Math.min(lo, hi);
+          const b = Math.max(lo, hi);
+          seasonList = [];
+          for (let y = a; y <= b; y++) seasonList.push(y);
+        }
+
+        let { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          seasonList[0] ?? 2025
+        );
+        if (!leagueId || leagueId === "default") {
+          leagueId = String(process.env.ESPN_LEAGUE_ID || process.env.LEAGUE_ID || "457622")
+            .trim()
+            .slice(0, 32);
+        }
+
+        const mergedCreds = { ...creds, leagueId };
+        const results = await runHistoricalEnrichment(leagueId, seasonList, mergedCreds, {
           force: input.force === true,
         });
         memCache.invalidateAll();

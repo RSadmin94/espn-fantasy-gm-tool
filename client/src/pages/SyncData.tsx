@@ -111,6 +111,9 @@ const ESPN_HISTORICAL_COMPLETED_MAX = 2025;
 /** Seasons for `espn.backfillFromRawCache` (combined JSON in `espn_raw_cache`). */
 const RAW_CACHE_BACKFILL_MIN = 2009;
 const RAW_CACHE_BACKFILL_MAX = 2026;
+/** Live ESPN enrichment (draft recap + weekly matchups + transactions). */
+const HISTORICAL_ENRICHMENT_MIN = 2010;
+const HISTORICAL_ENRICHMENT_MAX = 2025;
 const HISTORICAL_COMPLETED_SEASONS = Array.from(
   { length: ESPN_HISTORICAL_COMPLETED_MAX - ESPN_HISTORICAL_COMPLETED_MIN + 1 },
   (_, i) => ESPN_HISTORICAL_COMPLETED_MIN + i,
@@ -296,6 +299,7 @@ export function SyncData() {
   const [historicalRunning, setHistoricalRunning] = useState(false);
   const [forceHistoricalBackfill, setForceHistoricalBackfill] = useState(false);
   const [forceRawCacheBackfill, setForceRawCacheBackfill] = useState(false);
+  const [forceHistoricalEnrichment, setForceHistoricalEnrichment] = useState(false);
   const [showSeasonPicker, setShowSeasonPicker] = useState(false);
 
   const allSeasonsQuery = trpc.espn.allSeasons.useQuery();
@@ -319,6 +323,13 @@ export function SyncData() {
   });
 
   const backfillFromRawCacheMutation = trpc.espn.backfillFromRawCache.useMutation({
+    onSuccess: () => {
+      void utils.espn.manifests.invalidate();
+      void utils.espn.cachedSeasons.invalidate();
+    },
+  });
+
+  const enrichHistoricalSeasonMutation = trpc.espn.enrichHistoricalSeason.useMutation({
     onSuccess: () => {
       void utils.espn.manifests.invalidate();
       void utils.espn.cachedSeasons.invalidate();
@@ -381,6 +392,7 @@ export function SyncData() {
   const isLoading = refreshMutation.isPending;
   const isBackfillLoading = backfillNormalizedMutation.isPending;
   const isRawCacheBackfillLoading = backfillFromRawCacheMutation.isPending;
+  const isHistoricalEnrichmentLoading = enrichHistoricalSeasonMutation.isPending;
   const isReprocessLoading = reprocessCachedMutation.isPending || historicalRunning;
 
   const seasonsForNormalizedBackfill = useMemo(() => {
@@ -501,7 +513,7 @@ export function SyncData() {
           </div>
           <Button
             onClick={handleRefreshLatest}
-            disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isReprocessLoading || !latestSeason}
+            disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isHistoricalEnrichmentLoading || isReprocessLoading || !latestSeason}
             className="gap-2"
           >
             {isLoading && !selectedSeasons.length ? (
@@ -544,7 +556,7 @@ export function SyncData() {
           <Button
             variant="secondary"
             className="gap-2"
-            disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isReprocessLoading || seasonsForNormalizedBackfill.length === 0}
+            disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isHistoricalEnrichmentLoading || isReprocessLoading || seasonsForNormalizedBackfill.length === 0}
             onClick={() =>
               backfillNormalizedMutation.mutate({
                 seasons: [...seasonsForNormalizedBackfill].sort((a, b) => a - b),
@@ -598,7 +610,7 @@ export function SyncData() {
           <Button
             variant="secondary"
             className="gap-2"
-            disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isReprocessLoading}
+            disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isHistoricalEnrichmentLoading || isReprocessLoading}
             onClick={() =>
               backfillFromRawCacheMutation.mutate({
                 startSeason: RAW_CACHE_BACKFILL_MIN,
@@ -670,6 +682,106 @@ export function SyncData() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Historical Enrichment</CardTitle>
+          <CardDescription>
+            Fetches missing data from ESPN only when tables are empty: Draft Recap (<code className="text-xs">mDraftDetail</code>),
+            weeks 1–16 (<code className="text-xs">mMatchup</code> + <code className="text-xs">mMatchupScore</code>), and{" "}
+            <code className="text-xs">mTransactions2</code>. Seasons {HISTORICAL_ENRICHMENT_MIN}–{HISTORICAL_ENRICHMENT_MAX}.
+            Does not refresh <code className="text-xs">combined</code> cache or touch teams/standings. Requires ESPN
+            cookies (same as live sync). Example: <span className="text-muted-foreground">2010 draft: 196 · 2010 matchups: 98 · 2010 transactions: 87</span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="force-historical-enrichment"
+              checked={forceHistoricalEnrichment}
+              onCheckedChange={(v) => setForceHistoricalEnrichment(!!v)}
+            />
+            <Label htmlFor="force-historical-enrichment" className="cursor-pointer text-sm">
+              Force refresh (re-fetch from ESPN even when draft/matchups/transactions already have rows)
+            </Label>
+          </div>
+          <Button
+            variant="secondary"
+            className="gap-2"
+            disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isHistoricalEnrichmentLoading || isReprocessLoading}
+            onClick={() =>
+              enrichHistoricalSeasonMutation.mutate({
+                startSeason: HISTORICAL_ENRICHMENT_MIN,
+                endSeason: HISTORICAL_ENRICHMENT_MAX,
+                force: forceHistoricalEnrichment,
+              })
+            }
+          >
+            {isHistoricalEnrichmentLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Layers className="h-4 w-4" />
+            )}
+            {isHistoricalEnrichmentLoading ? "Enriching…" : "Run Historical Enrichment"}
+          </Button>
+          {enrichHistoricalSeasonMutation.isSuccess && enrichHistoricalSeasonMutation.data && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                League{" "}
+                <span className="font-mono text-foreground">{enrichHistoricalSeasonMutation.data.leagueId}</span>
+              </p>
+              <div className="max-h-72 overflow-auto rounded-lg border border-border">
+                <table className="w-full text-left text-xs">
+                  <thead className="sticky top-0 bg-muted/80 backdrop-blur">
+                    <tr className="border-b border-border">
+                      <th className="p-2 font-medium">Season</th>
+                      <th className="p-2 font-medium">Draft</th>
+                      <th className="p-2 font-medium">Matchups</th>
+                      <th className="p-2 font-medium">Transactions</th>
+                      <th className="p-2 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {enrichHistoricalSeasonMutation.data.results.map((r) => (
+                      <tr key={r.season} className="border-b border-border/60 odd:bg-muted/20">
+                        <td className="p-2 font-mono">{r.season}</td>
+                        <td className="p-2">
+                          {r.draft.skipped ? "—" : `${r.draft.saved}`}
+                        </td>
+                        <td className="p-2">
+                          {r.matchups.skipped ? "—" : `${r.matchups.saved}`}
+                        </td>
+                        <td className="p-2">
+                          {r.transactions.skipped ? "—" : `${r.transactions.saved}`}
+                        </td>
+                        <td className="p-2">
+                          <SeasonStatusBadge status={r.status} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {enrichHistoricalSeasonMutation.data.results.some((r) => r.errors.length > 0) && (
+                <pre className="max-h-40 overflow-auto rounded-lg border border-border bg-muted/30 p-2 text-[11px] text-muted-foreground">
+                  {enrichHistoricalSeasonMutation.data.results
+                    .filter((r) => r.errors.length > 0)
+                    .map((r) => `${r.season}: ${r.errors.join("; ")}`)
+                    .join("\n")}
+                </pre>
+              )}
+            </div>
+          )}
+          {enrichHistoricalSeasonMutation.isError && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="whitespace-pre-wrap break-words">
+                {trpcLikeErrorMessage(enrichHistoricalSeasonMutation.error)}
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {sortedReprocessSeasons.length > 0 && (
         <Card>
           <CardHeader>
@@ -689,7 +801,7 @@ export function SyncData() {
             <Button
               variant="secondary"
               className="gap-2"
-              disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isReprocessLoading}
+              disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isHistoricalEnrichmentLoading || isReprocessLoading}
               onClick={() => void handleBackfillHistoricalSeasons()}
             >
               {historicalRunning ? (
@@ -791,7 +903,7 @@ export function SyncData() {
               <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   onClick={handleRefreshSelected}
-                  disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isReprocessLoading}
+                  disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isHistoricalEnrichmentLoading || isReprocessLoading}
                   size="sm"
                   className="gap-2"
                 >
