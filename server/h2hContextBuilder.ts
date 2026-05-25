@@ -15,6 +15,11 @@
  */
 
 import { getCachedView } from "./db";
+import {
+  getSeasonMatchups,
+  getSeasonTeams,
+  listSeasonsForLeagueHistorical,
+} from "./historicalDataService";
 import { memCache } from "./memCache";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -93,7 +98,7 @@ async function _computeRichH2H(
   memberBName: string,
   userId?: number
 ): Promise<RichH2HStats> {
-  const sortedSeasons = await listSeasonsForLeagueHistorical(undefined, userId);
+  const sortedSeasons: number[] = await listSeasonsForLeagueHistorical(undefined, userId);
 
   const matchups: H2HMatchup[] = [];
 
@@ -313,8 +318,9 @@ const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
 
 export async function resolveRodMemberId(userId?: number): Promise<string | null> {
   return memCache(`rodMemberId:${userId ?? "anon"}`, 60 * 60_000, async () => {
-    const seasons = await listSeasonsForLeagueHistorical(undefined, userId);
-    for (const season of seasons.sort((a, b) => b - a)) {
+    const seasons: number[] = await listSeasonsForLeagueHistorical(undefined, userId);
+    seasons.sort((a: number, b: number) => b - a);
+    for (const season of seasons) {
       const row = await getCachedView(season, "combined", undefined, { userId });
       if (!row) continue;
       const data = row.payload as Record<string, unknown>;

@@ -1553,6 +1553,8 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return [];
 
+        // Read order: `draft_picks` + teams (DB) → getSeasonDraftPicks (mDraftDetail raw cache → combined cache → empty).
+
         const rows = await db
           .select({
             overallPick: gmDraftPicks.overallPick,
@@ -1632,7 +1634,7 @@ export const appRouter = router({
             position: (p.position as string | null) ?? null,
             nflTeam: nfl,
             isKeeper: Boolean(p.keeper || p.reservedForKeeper),
-            bidAmount: 0,
+            bidAmount: p.bidAmount != null ? Number(p.bidAmount) : 0,
           };
         });
       }),

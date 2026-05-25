@@ -393,6 +393,9 @@ export async function upsertDraftPicks(
   for (const p of picks) {
     const overall = Number(p.overallPickNumber ?? 0);
     if (!Number.isFinite(overall) || overall <= 0) continue;
+    const bidRaw = (p as Record<string, unknown>).bidAmount;
+    const bidAmount =
+      bidRaw != null && Number.isFinite(Number(bidRaw)) ? Number(bidRaw) : 0;
     await db
       .insert(schema.gmDraftPicks)
       .values({
@@ -407,7 +410,7 @@ export async function upsertDraftPicks(
         playerName: p.playerName != null ? String(p.playerName) : null,
         position: p.position != null ? String(p.position) : null,
         isKeeper: (p.keeper || p.reservedForKeeper) ? 1 : 0,
-        bidAmount: 0,
+        bidAmount,
         rawPick: safeStringify(p),
         updatedAt: now,
       })
@@ -420,6 +423,7 @@ export async function upsertDraftPicks(
           playerName: p.playerName != null ? String(p.playerName) : null,
           position: p.position != null ? String(p.position) : null,
           isKeeper: (p.keeper || p.reservedForKeeper) ? 1 : 0,
+          bidAmount,
           rawPick: safeStringify(p),
           updatedAt: now,
         },
@@ -427,6 +431,25 @@ export async function upsertDraftPicks(
     n++;
   }
   return n;
+}
+
+/**
+ * Store raw `mDraftDetail` league JSON and upsert `draft_picks` from ESPN Draft Recap only.
+ * Does not fabricate picks — uses {@link normalizeDraftPicks} / {@link upsertDraftPicks}.
+ */
+export async function persistDraftRecapSnapshot(
+  leagueId: string,
+  season: number,
+  apiBody: Record<string, unknown>
+): Promise<{ payloadBytes: number; picksSaved: number }> {
+  const lid = String(leagueId).slice(0, 32);
+  const yr = Math.floor(Number(season));
+  const { payloadBytes } = await upsertRawEspnCache(lid, yr, "mDraftDetail", apiBody);
+  await writeLegacyEspnCaches(lid, yr, "mDraftDetail", apiBody);
+  const db = await getDbConn();
+  if (!db) throw new Error("Database unavailable");
+  const picksSaved = await upsertDraftPicks(db, lid, yr, apiBody);
+  return { payloadBytes, picksSaved };
 }
 
 export async function upsertTransactions(

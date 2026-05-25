@@ -134,6 +134,49 @@ function getBaseUrlFor(season: number, creds?: EspnCreds): string {
 }
 function getBaseUrl(season: number): string { return getBaseUrlFor(season); }
 
+/** Public fantasy host (matches Draft Recap in the browser). */
+const FANTASY_ESPN_API_BASE = "https://fantasy.espn.com/apis/v3/games/ffl";
+
+/**
+ * Referer for `view=mDraftDetail` calls — must match the Draft Recap page (leagueId + seasonId).
+ */
+export function buildEspnDraftRecapReferer(season: number, leagueId: string): string {
+  const lid = String(leagueId).trim() || LEAGUE_ID;
+  return `https://fantasy.espn.com/football/league/draftrecap?leagueId=${encodeURIComponent(lid)}&seasonId=${season}`;
+}
+
+/**
+ * Fetch a single season’s draft board from ESPN Draft Recap (`mDraftDetail` only).
+ * Uses `fantasy.espn.com` + Draft Recap referer (same as the web client).
+ */
+export async function fetchDraftRecapSeason(
+  season: number,
+  creds: EspnCreds
+): Promise<{ status: number; data: Record<string, unknown> | null }> {
+  const lid = String(creds.leagueId ?? LEAGUE_ID).trim() || LEAGUE_ID;
+  const yr = Math.floor(Number(season));
+  const url = `${FANTASY_ESPN_API_BASE}/seasons/${yr}/segments/0/leagues/${encodeURIComponent(lid)}?view=mDraftDetail`;
+  const headers: Record<string, string> = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+    Accept: "application/json,text/plain,*/*",
+    Referer: buildEspnDraftRecapReferer(yr, lid),
+  };
+  const cookieStr = buildCookieStringFor(creds);
+  if (cookieStr) headers["Cookie"] = cookieStr;
+
+  try {
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(45_000) });
+    if (!res.ok) {
+      return { status: res.status, data: null };
+    }
+    const data = (await res.json()) as Record<string, unknown>;
+    return { status: res.status, data };
+  } catch (err) {
+    console.warn("[fetchDraftRecapSeason] failed:", yr, err instanceof Error ? err.message : String(err));
+    return { status: 0, data: null };
+  }
+}
+
 /**
  * Referer aligned with the ESPN web client. For past seasons, mDraftDetail is associated with
  * the draft recap page (not the generic league shell).
@@ -148,7 +191,7 @@ export function buildEspnFantasyRefererForApi(
   const calendarYear = new Date().getFullYear();
   const isHistoricalSeason = season < calendarYear;
   if (wantsDraft && isHistoricalSeason) {
-    return `https://fantasy.espn.com/football/league/draftrecap?seasonId=${season}&leagueId=${encodeURIComponent(lid)}`;
+    return buildEspnDraftRecapReferer(season, lid);
   }
   return "https://fantasy.espn.com/football/league";
 }
@@ -659,8 +702,41 @@ export async function resolveUnknownPlayerIds(
   return result;
 }
 
+/** Player fields present on the pick or nested `playerPoolEntry` only — no invented names. */
+function playerInfoFromDraftPickShape(pick: Record<string, unknown>): {
+  playerId: number;
+  name: string;
+  position: string;
+  positionId: number;
+  proTeam: string;
+} {
+  const pool = (pick.playerPoolEntry as Record<string, unknown>) || {};
+  const player = (pool.player as Record<string, unknown>) || {};
+  const rawPid = pick.playerId ?? player.id;
+  const playerId =
+    rawPid != null && Number.isFinite(Number(rawPid)) && Number(rawPid) > 0 ? Number(rawPid) : 0;
+  const name = (player.fullName as string) || "";
+  const posIdRaw = player.defaultPositionId;
+  const positionId =
+    posIdRaw != null && Number.isFinite(Number(posIdRaw)) ? Number(posIdRaw) : 0;
+  const position =
+    positionId > 0 && POSITION_MAP[positionId] ? POSITION_MAP[positionId] : positionId === 0 ? "" : "?";
+  const proTeamId = player.proTeamId;
+  const proTeam =
+    proTeamId != null && Number.isFinite(Number(proTeamId))
+      ? PRO_TEAM_MAP[Number(proTeamId)] || "?"
+      : "?";
+  return { playerId, name, position: position || "?", positionId, proTeam };
+}
+
 export function normalizeDraftPicks(data: Record<string, unknown>) {
-  const season = data.seasonId as number;
+  const seasonRaw = data.seasonId;
+  const season =
+    typeof seasonRaw === "number" && Number.isFinite(seasonRaw)
+      ? seasonRaw
+      : typeof seasonRaw === "string" && /^\d+$/.test(seasonRaw)
+        ? Number(seasonRaw)
+        : 0;
   const draft = (data.draftDetail as Record<string, unknown>) || {};
   const picks = (draft.picks as Record<string, unknown>[]) || [];
   const playerMap = buildPlayerIdMap(data);
@@ -673,8 +749,22 @@ export function normalizeDraftPicks(data: Record<string, unknown>) {
   }
 
   return picks.map((pick) => {
-    const playerId = pick.playerId as number;
-    const pinfo = playerMap.get(playerId) || { name: "", position: "?", positionId: 0, proTeam: "?" };
+    const inline = playerInfoFromDraftPickShape(pick);
+    let resolvedPlayerId = inline.playerId;
+    if (resolvedPlayerId <= 0 && pick.playerId != null) {
+      const n = Number(pick.playerId);
+      if (Number.isFinite(n) && n > 0) resolvedPlayerId = n;
+    }
+    const fromMap = resolvedPlayerId > 0 ? playerMap.get(resolvedPlayerId) : undefined;
+    const pinfo = fromMap || {
+      name: inline.name,
+      position: inline.position,
+      positionId: inline.positionId,
+      proTeam: inline.proTeam,
+    };
+    const bidRaw = pick.bidAmount;
+    const bidAmount =
+      bidRaw != null && Number.isFinite(Number(bidRaw)) ? Number(bidRaw) : 0;
     return {
       season,
       roundId: pick.roundId,
@@ -682,7 +772,7 @@ export function normalizeDraftPicks(data: Record<string, unknown>) {
       overallPickNumber: pick.overallPickNumber,
       teamId: pick.teamId,
       teamName: teamNameMap[pick.teamId as number] || `Team ${pick.teamId}`,
-      playerId,
+      playerId: resolvedPlayerId,
       playerName: pinfo.name,
       positionId: pinfo.positionId,
       position: pinfo.position,
@@ -690,6 +780,7 @@ export function normalizeDraftPicks(data: Record<string, unknown>) {
       keeper: pick.keeper,
       reservedForKeeper: pick.reservedForKeeper,
       autoDrafted: (pick.autoDraftTypeId as number) > 0,
+      bidAmount,
     };
   });
 }

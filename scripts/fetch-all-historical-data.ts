@@ -1,10 +1,12 @@
 /**
- * One-shot historical ESPN import for league 457622 (seasons 2009–2023).
+ * One-shot historical ESPN import for league 457622 (seasons 2009–2025).
  *
  * 1) Loads newest active ESPN row from `league_connections` (Railway MySQL via DATABASE_URL).
  * 2) Fetches ESPN JSON using stored SWID + espn_s2 (Cookie header as documented).
  * 3) Merges views, normalizes + persists via `syncEspnCombinedFullPipeline` (sync_runs + caches + GM tables).
- * 4) Writes `scripts/historical-data-report.json` with factual `espnReturned` (HTTP + array lengths).
+ * 4) For seasons 2010–2025, fetches Draft Recap (`mDraftDetail`) via `fetchDraftRecapSeason`, stores raw
+ *    `espn_raw_cache` view `mDraftDetail`, and upserts `draft_picks` (no synthetic picks).
+ * 5) Writes `scripts/historical-data-report.json` with factual `espnReturned` (HTTP + array lengths) + draft recap recovery.
  *
  * Usage: pnpm fetch:history
  */
@@ -19,16 +21,19 @@ import { decryptCredentialsFromDb } from "../server/_core/crypto";
 import type { EspnCreds } from "../server/espnService";
 import {
   buildEspnFantasyRefererForApi,
+  fetchDraftRecapSeason,
   fetchTradeProposals,
   mergeTradeProposalsIntoTransactions,
 } from "../server/espnService";
-import { syncEspnCombinedFullPipeline } from "../server/espnPersistence";
+import { persistDraftRecapSnapshot, syncEspnCombinedFullPipeline } from "../server/espnPersistence";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPORT_PATH = join(__dirname, "historical-data-report.json");
 
 const LEAGUE_ID = "457622";
-const SEASONS = Array.from({ length: 2023 - 2009 + 1 }, (_, i) => 2009 + i);
+const SEASONS = Array.from({ length: 2025 - 2009 + 1 }, (_, i) => 2009 + i);
+/** Draft Recap recovery: explicit `mDraftDetail` fetch + raw cache + `draft_picks` upsert. */
+const DRAFT_RECOVERY_SEASONS = Array.from({ length: 2025 - 2010 + 1 }, (_, i) => 2010 + i);
 
 const FANTASY_API = "https://fantasy.espn.com/apis/v3/games/ffl";
 
@@ -138,6 +143,13 @@ type SeasonReport = {
   errors: string[];
 };
 
+type DraftRecapPersistReport = {
+  httpStatus: number;
+  picksSaved: number;
+  payloadBytes?: number;
+  error?: string;
+};
+
 type ReportFile = {
   startedAt: string;
   finishedAt: string;
@@ -149,6 +161,8 @@ type ReportFile = {
     preferred457622: boolean;
   };
   seasons: Record<string, SeasonReport>;
+  /** Per-season Draft Recap (`mDraftDetail`) fetch + DB persist (2010–2025). */
+  draftRecapRecovery?: Record<string, DraftRecapPersistReport>;
 };
 
 async function loadCredentialsFromDb(): Promise<{
@@ -411,6 +425,31 @@ async function main() {
 
     report.seasons[key] = seasonReport;
   }
+
+  const draftRecapRecovery: Record<string, DraftRecapPersistReport> = {};
+  for (const season of DRAFT_RECOVERY_SEASONS) {
+    const key = String(season);
+    try {
+      const recap = await fetchDraftRecapSeason(season, creds);
+      if (recap.status === 200 && recap.data) {
+        const pr = await persistDraftRecapSnapshot(LEAGUE_ID, season, recap.data);
+        draftRecapRecovery[key] = {
+          httpStatus: recap.status,
+          picksSaved: pr.picksSaved,
+          payloadBytes: pr.payloadBytes,
+        };
+        console.log(`[draft-recap] season ${season}: HTTP ${recap.status}, picksSaved=${pr.picksSaved}`);
+      } else {
+        draftRecapRecovery[key] = { httpStatus: recap.status, picksSaved: 0 };
+        console.warn(`[draft-recap] season ${season}: HTTP ${recap.status}, no payload`);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      draftRecapRecovery[key] = { httpStatus: 0, picksSaved: 0, error: msg };
+      console.warn(`[draft-recap] season ${season} failed:`, msg);
+    }
+  }
+  report.draftRecapRecovery = draftRecapRecovery;
 
   report.finishedAt = new Date().toISOString();
   writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2), "utf8");

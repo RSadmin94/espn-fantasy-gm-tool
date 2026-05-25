@@ -268,6 +268,7 @@ export async function getSeasonDraftPicks(
         playerName: gmDraftPicks.playerName,
         position: gmDraftPicks.position,
         isKeeper: gmDraftPicks.isKeeper,
+        bidAmount: gmDraftPicks.bidAmount,
         rawPick: gmDraftPicks.rawPick,
         teamName: gmTeams.name,
       })
@@ -296,9 +297,49 @@ export async function getSeasonDraftPicks(
         keeper: Boolean(r.isKeeper),
         reservedForKeeper: false,
         proTeam: "",
+        bidAmount: r.bidAmount != null ? Number(r.bidAmount) : 0,
         rawPick: r.rawPick,
       }));
       return { rows: shaped, source: "normalized", season: yr, leagueId: lid, count: shaped.length };
+    }
+  }
+
+  const mdHit = await getCachedViewWithTier(yr, "mDraftDetail", lid, { userId });
+  if (mdHit?.row?.payload && typeof mdHit.row.payload === "object" && !Array.isArray(mdHit.row.payload)) {
+    const base = mdHit.row.payload as Record<string, unknown>;
+    const payload: Record<string, unknown> = {
+      ...base,
+      seasonId: base.seasonId != null ? base.seasonId : yr,
+    };
+    try {
+      const norm = normalizeDraftPicks(payload) as unknown as Record<string, unknown>[];
+      if (norm.length > 0) {
+        const shaped = norm.map((r) => ({
+          season: yr,
+          overallPickNumber: r.overallPickNumber,
+          roundId: r.roundId,
+          roundPickNumber: r.roundPickNumber,
+          teamId: r.teamId,
+          teamName: r.teamName,
+          playerId: r.playerId,
+          playerName: r.playerName,
+          position: r.position,
+          keeper: Boolean(r.keeper),
+          reservedForKeeper: Boolean(r.reservedForKeeper),
+          proTeam: r.proTeam ?? "",
+          bidAmount: r.bidAmount != null ? Number(r.bidAmount) : 0,
+          rawPick: JSON.stringify(r),
+        }));
+        return {
+          rows: shaped,
+          source: tierToHistoricalSource(mdHit.tier),
+          season: yr,
+          leagueId: lid,
+          count: shaped.length,
+        };
+      }
+    } catch (e) {
+      console.warn("[historicalDataService] getSeasonDraftPicks mDraftDetail normalize failed:", yr, e);
     }
   }
 
@@ -389,6 +430,12 @@ export type HistoricalCoverageSeason = {
   rawCacheExists: boolean;
   /** Latest sync_runs row for league+season (success with any persisted rows). */
   normalizedSyncComplete: boolean;
+  /** Stored ESPN Draft Recap (`mDraftDetail`) has a non-empty `draftDetail.picks` array. */
+  draftRecapAvailable: boolean;
+  /** Pick count from stored Draft Recap when available; otherwise same as `draftPicks.count`. */
+  draftPickCount: number;
+  /** Source used by {@link getSeasonDraftPicks} for effective rows (normalized → mDraftDetail cache → combined). */
+  draftSource: HistoricalDataSource;
 };
 
 export type HistoricalCoverageReport = {
@@ -402,13 +449,14 @@ async function buildHistoricalCoverageInner(leagueId: string | undefined, userId
   const db = await getDb();
   const seasons: HistoricalCoverageSeason[] = [];
   for (const season of COVERAGE_SEASONS) {
-    const [t, m, d, x] = await Promise.all([
+    const [t, m, d, x, rawHit, mdHit] = await Promise.all([
       getSeasonTeams(season, lid, userId),
       getSeasonMatchups(season, lid, userId),
       getSeasonDraftPicks(season, lid, userId),
       getSeasonTransactions(season, lid, userId),
+      getCachedViewWithTier(season, "combined", lid, { userId }),
+      getCachedViewWithTier(season, "mDraftDetail", lid, { userId }),
     ]);
-    const rawHit = await getCachedViewWithTier(season, "combined", lid, { userId });
     let normalizedSyncComplete = false;
     if (db) {
       const run = await db
@@ -424,6 +472,16 @@ async function buildHistoricalCoverageInner(leagueId: string | undefined, userId
           ((r.teamsSaved ?? 0) > 0 || (r.matchupsSaved ?? 0) > 0 || (r.draftPicksSaved ?? 0) > 0 || (r.transactionsSaved ?? 0) > 0)
       );
     }
+    let draftRecapAvailable = false;
+    let recapPickCount = 0;
+    if (mdHit?.row?.payload && typeof mdHit.row.payload === "object" && !Array.isArray(mdHit.row.payload)) {
+      const dd =
+        ((mdHit.row.payload as Record<string, unknown>).draftDetail as Record<string, unknown>) || {};
+      const picks = (dd.picks as unknown[]) || [];
+      recapPickCount = Array.isArray(picks) ? picks.length : 0;
+      draftRecapAvailable = recapPickCount > 0;
+    }
+    const draftPickCount = draftRecapAvailable ? recapPickCount : d.count;
     seasons.push({
       season,
       teams: { count: t.count, source: t.source },
@@ -432,6 +490,9 @@ async function buildHistoricalCoverageInner(leagueId: string | undefined, userId
       transactions: { count: x.count, source: x.source },
       rawCacheExists: Boolean(rawHit),
       normalizedSyncComplete,
+      draftRecapAvailable,
+      draftPickCount,
+      draftSource: d.source,
     });
   }
   return { leagueId: lid, seasons, generatedAt: new Date().toISOString() };
@@ -441,7 +502,7 @@ export function getHistoricalCoverageReport(
   leagueId: string | undefined,
   userId: number | undefined
 ): Promise<HistoricalCoverageReport> {
-  const key = `historicalCoverage:v1:${leagueId ?? "default"}:${userId ?? "anon"}`;
+  const key = `historicalCoverage:v2:${leagueId ?? "default"}:${userId ?? "anon"}`;
   return memCache(key, 5 * 60_000, () => buildHistoricalCoverageInner(leagueId, userId));
 }
 
