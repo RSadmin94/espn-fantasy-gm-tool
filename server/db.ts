@@ -342,6 +342,44 @@ export async function getCompletedSeasonForOffseason(): Promise<number | null> {
 
 type SyncRunRow = typeof syncRuns.$inferSelect;
 
+/** Manifest row derived from `sync_runs` (includes fields not on legacy `refresh_manifest` table type). */
+export type SeasonCacheManifest = RefreshManifest & {
+  standingsCount: number;
+  rawSyncStatus: SyncRunRow["status"];
+};
+
+/** NFL fantasy season currently in play (open for ESPN refresh). */
+export const ESPN_SYNC_CURRENT_SEASON = 2026;
+export const ESPN_HISTORICAL_COMPLETED_MIN = 2009;
+export const ESPN_HISTORICAL_COMPLETED_MAX = 2025;
+
+export function isHistoricalCompletedSeason(season: number): boolean {
+  return season >= ESPN_HISTORICAL_COMPLETED_MIN && season <= ESPN_HISTORICAL_COMPLETED_MAX;
+}
+
+/**
+ * Latest sync for a completed season is considered fully normalized when the pipeline finished in success,
+ * saved teams, and persisted at least one of matchups / draft picks / transactions / standings.
+ */
+export function isHistoricallyFullyNormalizedFromManifest(m: {
+  status?: string | null;
+  teamCount?: number | null;
+  matchupCount?: number | null;
+  draftPickCount?: number | null;
+  transactionCount?: number | null;
+  standingsCount?: number | null;
+}): boolean {
+  if (m.status !== "success") return false;
+  const teams = Number(m.teamCount) || 0;
+  if (teams <= 0) return false;
+  const keys =
+    (Number(m.matchupCount) || 0) +
+    (Number(m.draftPickCount) || 0) +
+    (Number(m.transactionCount) || 0) +
+    (Number(m.standingsCount) || 0);
+  return keys > 0;
+}
+
 /** Newest run wins: finishedAt (or startedAt if still running), then higher id. */
 function pickNewestSyncRun(pool: SyncRunRow[]): SyncRunRow | null {
   if (pool.length === 0) return null;
@@ -357,7 +395,7 @@ function pickNewestSyncRun(pool: SyncRunRow[]): SyncRunRow | null {
  * One manifest per season: latest `sync_runs` row for that season (by finishedAt/startedAt, then id).
  * Does not read `league_connections` so cache status still renders if that table is missing or errors.
  */
-export async function getRefreshManifests(): Promise<RefreshManifest[]> {
+export async function getRefreshManifests(): Promise<SeasonCacheManifest[]> {
   try {
     const db = await getDb();
     if (!db) return [];
@@ -393,7 +431,7 @@ function truncateRefreshManifestError(msg: string | null): string | null {
   return `${msg.slice(0, MAX_REFRESH_MANIFEST_ERROR_LEN)}…(truncated)`;
 }
 
-function mapSyncRunToRefreshManifest(r: typeof syncRuns.$inferSelect): RefreshManifest {
+function mapSyncRunToRefreshManifest(r: typeof syncRuns.$inferSelect): SeasonCacheManifest {
   const lastAt = r.finishedAt ?? r.startedAt;
   const manifestStatus: "success" | "partial" | "failed" =
     r.status === "success"
@@ -413,6 +451,8 @@ function mapSyncRunToRefreshManifest(r: typeof syncRuns.$inferSelect): RefreshMa
     matchupCount: r.matchupsSaved,
     draftPickCount: r.draftPicksSaved,
     transactionCount: r.transactionsSaved,
+    standingsCount: r.standingsSaved,
+    rawSyncStatus: r.status,
     status: manifestStatus,
     errorMessage: truncateRefreshManifestError(r.errorMessage ?? null),
   };

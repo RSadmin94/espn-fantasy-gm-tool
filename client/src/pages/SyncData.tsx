@@ -30,6 +30,7 @@ import {
 type RefreshResult = {
   status: string;
   error?: string;
+  message?: string;
   viewHealth?: Record<string, string>;
   qualityWarnings?: string[];
   skipped?: boolean;
@@ -38,9 +39,11 @@ type RefreshResult = {
 function SeasonStatusIcon({ status }: { status: string | undefined }) {
   switch (status) {
     case "success": return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
+    case "complete": return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
     case "partial": return <AlertTriangle className="h-4 w-4 text-yellow-400" />;
     case "failed":  return <XCircle className="h-4 w-4 text-red-400" />;
     case "skipped": return <SkipForward className="h-4 w-4 text-muted-foreground" />;
+    case "running": return <Loader2 className="h-4 w-4 animate-spin text-blue-400" />;
     default:        return <Clock className="h-4 w-4 text-muted-foreground" />;
   }
 }
@@ -49,10 +52,12 @@ function SeasonStatusBadge({ status }: { status: string | null | undefined }) {
   if (!status) return <span className="text-xs text-muted-foreground">—</span>;
   const map: Record<string, string> = {
     success: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+    complete: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
     partial: "bg-yellow-500/15 text-yellow-400 border-yellow-500/20",
     failed:  "bg-red-500/15 text-red-400 border-red-500/20",
     skipped: "bg-muted/50 text-muted-foreground border-border",
     pending: "bg-blue-500/15 text-blue-400 border-blue-500/20",
+    running: "bg-blue-500/15 text-blue-400 border-blue-500/20",
   };
   return (
     <span className={cn(
@@ -60,6 +65,28 @@ function SeasonStatusBadge({ status }: { status: string | null | undefined }) {
       map[status] ?? "bg-muted/50 text-muted-foreground border-border"
     )}>
       {status.charAt(0).toUpperCase() + status.slice(1)}
+    </span>
+  );
+}
+
+/** Cache / normalization health (manifest-driven), not the same as last ESPN refresh status. */
+function CacheHealthBadge({ label }: { label: string }) {
+  const map: Record<string, string> = {
+    Complete: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+    "Needs backfill": "bg-amber-500/15 text-amber-200 border-amber-500/25",
+    Partial: "bg-yellow-500/15 text-yellow-400 border-yellow-500/20",
+    Failed: "bg-red-500/15 text-red-400 border-red-500/20",
+    "No cache": "bg-muted/50 text-muted-foreground border-border",
+    Running: "bg-blue-500/15 text-blue-400 border-blue-500/20",
+  };
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium",
+        map[label] ?? "bg-muted/50 text-muted-foreground border-border"
+      )}
+    >
+      {label}
     </span>
   );
 }
@@ -72,7 +99,37 @@ interface ManifestRow {
   matchupCount?: number | null;
   draftPickCount?: number | null;
   transactionCount?: number | null;
+  standingsCount?: number | null;
+  rawSyncStatus?: string | null;
   updatedAt?: Date | string | null;
+}
+
+const ESPN_HISTORICAL_COMPLETED_MIN = 2009;
+const ESPN_HISTORICAL_COMPLETED_MAX = 2025;
+const HISTORICAL_COMPLETED_SEASONS = Array.from(
+  { length: ESPN_HISTORICAL_COMPLETED_MAX - ESPN_HISTORICAL_COMPLETED_MIN + 1 },
+  (_, i) => ESPN_HISTORICAL_COMPLETED_MIN + i,
+);
+
+function isHistoricallyFullyNormalizedFromManifestClient(m: ManifestRow): boolean {
+  if (m.status !== "success") return false;
+  const teams = Number(m.teamCount) || 0;
+  if (teams <= 0) return false;
+  const keys =
+    (Number(m.matchupCount) || 0) +
+    (Number(m.draftPickCount) || 0) +
+    (Number(m.transactionCount) || 0) +
+    (Number(m.standingsCount) || 0);
+  return keys > 0;
+}
+
+function seasonCacheHealthLabel(m: ManifestRow): string {
+  if (m.rawSyncStatus === "running") return "Running";
+  if (isHistoricallyFullyNormalizedFromManifestClient(m)) return "Complete";
+  if (m.status === "failed") return "Failed";
+  if (m.status === "partial") return "Partial";
+  if (m.status === "success") return "Needs backfill";
+  return "No cache";
 }
 
 function ManifestCard({ manifest, refreshResult }: {
@@ -81,7 +138,15 @@ function ManifestCard({ manifest, refreshResult }: {
 }) {
   const [expanded, setExpanded] = useState(false);
   const activeResult = refreshResult ?? null;
-  const displayStatus = activeResult?.status ?? manifest.status ?? undefined;
+  const iconStatus =
+    activeResult?.status === "complete"
+      ? "complete"
+      : activeResult?.status ?? (manifest.rawSyncStatus === "running" ? "running" : manifest.status ?? undefined);
+  const badgeStatus =
+    activeResult?.status === "complete"
+      ? "complete"
+      : activeResult?.status ?? manifest.status ?? undefined;
+  const cacheHealthLabel = seasonCacheHealthLabel(manifest);
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -93,10 +158,14 @@ function ManifestCard({ manifest, refreshResult }: {
         onKeyDown={e => e.key === "Enter" && setExpanded(v => !v)}
         aria-expanded={expanded}
       >
-        <div className="flex items-center gap-3">
-          <SeasonStatusIcon status={displayStatus} />
+        <div className="flex flex-wrap items-center gap-2 gap-y-1">
+          <SeasonStatusIcon status={iconStatus} />
           <span className="font-semibold text-foreground">{manifest.season}</span>
-          <SeasonStatusBadge status={displayStatus} />
+          {activeResult ? (
+            <SeasonStatusBadge status={badgeStatus} />
+          ) : (
+            <CacheHealthBadge label={cacheHealthLabel} />
+          )}
         </div>
         <div className="flex items-center gap-3">
           <span className="hidden text-xs text-muted-foreground sm:block">
@@ -112,13 +181,14 @@ function ManifestCard({ manifest, refreshResult }: {
       {expanded && (
         <div className="border-t border-border px-4 py-3 space-y-3">
           {/* Stats grid */}
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
             {[
               { label: "Teams", value: manifest.teamCount },
               { label: "Rosters", value: manifest.rosterCount },
               { label: "Matchups", value: manifest.matchupCount },
               { label: "Draft picks", value: manifest.draftPickCount },
               { label: "Transactions", value: manifest.transactionCount },
+              { label: "Standings", value: manifest.standingsCount },
             ].map(({ label, value }) => (
               <div key={label} className="rounded border border-border bg-muted/30 px-2.5 py-2 text-center">
                 <div className="text-xs text-muted-foreground">{label}</div>
@@ -132,6 +202,9 @@ function ManifestCard({ manifest, refreshResult }: {
           {/* Refresh result details */}
           {activeResult && (
             <div className="space-y-2">
+              {activeResult.message && (
+                <p className="text-sm text-muted-foreground">{activeResult.message}</p>
+              )}
               {activeResult.error && (
                 <div className="flex items-start gap-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -189,15 +262,14 @@ function ManifestCard({ manifest, refreshResult }: {
 /** Avoid duplicate auto-sync under React Strict Mode remount (same URL). */
 let gmwrAutoSync2026LastKey = "";
 
-const BACKFILL_HISTORICAL_SEASONS = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
-
 type HistoricalReprocessRow = {
   season: number;
-  status: "success" | "partial" | "failed" | "skipped";
+  status: "success" | "partial" | "failed" | "skipped" | "complete";
   teamCount: number;
   matchupCount: number;
   transactionCount: number;
   error?: string;
+  message?: string;
 };
 
 type HistoricalProgressEntry =
@@ -217,6 +289,7 @@ export function SyncData() {
   const [runResults, setRunResults] = useState<Record<number, RefreshResult>>({});
   const [historicalProgress, setHistoricalProgress] = useState<Record<number, HistoricalProgressEntry>>({});
   const [historicalRunning, setHistoricalRunning] = useState(false);
+  const [forceHistoricalBackfill, setForceHistoricalBackfill] = useState(false);
   const [showSeasonPicker, setShowSeasonPicker] = useState(false);
 
   const allSeasonsQuery = trpc.espn.allSeasons.useQuery();
@@ -296,15 +369,25 @@ export function SyncData() {
   const isBackfillLoading = backfillNormalizedMutation.isPending;
   const isReprocessLoading = reprocessCachedMutation.isPending || historicalRunning;
 
+  const seasonsForNormalizedBackfill = useMemo(() => {
+    return HISTORICAL_COMPLETED_SEASONS.filter(s => {
+      if (!cachedSeasons.includes(s)) return false;
+      if (forceHistoricalBackfill) return true;
+      const m = manifests.find(x => x.season === s);
+      return !m || !isHistoricallyFullyNormalizedFromManifestClient(m);
+    });
+  }, [manifests, cachedSeasons, forceHistoricalBackfill]);
+
   const seasonsToReprocessCached = useMemo(() => {
-    return BACKFILL_HISTORICAL_SEASONS.filter(s => {
+    return HISTORICAL_COMPLETED_SEASONS.filter(s => {
       const m = manifests.find(x => x.season === s);
       if (!m) return false;
       const teams = m.teamCount ?? 0;
-      const matchups = m.matchupCount ?? 0;
-      return teams > 0 && matchups === 0;
+      if (teams <= 0) return false;
+      if (forceHistoricalBackfill) return true;
+      return !isHistoricallyFullyNormalizedFromManifestClient(m);
     });
-  }, [manifests]);
+  }, [manifests, forceHistoricalBackfill]);
 
   const sortedReprocessSeasons = useMemo(
     () => [...seasonsToReprocessCached].sort((a, b) => a - b),
@@ -319,7 +402,7 @@ export function SyncData() {
       for (const s of sortedReprocessSeasons) {
         setHistoricalProgress(prev => ({ ...prev, [s]: { phase: "running" } }));
         try {
-          const res = await reprocessCachedMutation.mutateAsync({ seasons: [s] });
+          const res = await reprocessCachedMutation.mutateAsync({ seasons: [s], force: forceHistoricalBackfill });
           const row = res.results.find(r => r.season === s) ?? res.results[0];
           setHistoricalProgress(prev => ({
             ...prev,
@@ -347,7 +430,9 @@ export function SyncData() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Sync Data</h1>
         <p className="mt-1 text-muted-foreground">
-          Pull fresh data from ESPN for any season. Closed seasons are skipped unless force-refresh is enabled.
+          Pull fresh data from ESPN. Seasons {ESPN_HISTORICAL_COMPLETED_MIN}–{ESPN_HISTORICAL_COMPLETED_MAX} stay static
+          once fully normalized unless you force a refresh. Current season {ESPN_HISTORICAL_COMPLETED_MAX + 1} always
+          updates normally.
         </p>
       </div>
 
@@ -397,7 +482,7 @@ export function SyncData() {
               onCheckedChange={(v) => setForceRefresh(!!v)}
             />
             <Label htmlFor="force" className="cursor-pointer text-sm">
-              Force refresh closed seasons (re-fetches even if already cached)
+              Force refresh completed seasons ({ESPN_HISTORICAL_COMPLETED_MIN}–{ESPN_HISTORICAL_COMPLETED_MAX}) — re-fetches ESPN even when already fully normalized
             </Label>
           </div>
           <Button
@@ -421,15 +506,37 @@ export function SyncData() {
           <CardTitle className="text-base">Backfill Normalized Data</CardTitle>
           <CardDescription>
             Re-run matchups, transactions, roster entries, and standings from the existing combined cache for
-            seasons {BACKFILL_HISTORICAL_SEASONS[0]}–{BACKFILL_HISTORICAL_SEASONS[BACKFILL_HISTORICAL_SEASONS.length - 1]} without re-fetching ESPN.
+            completed seasons {ESPN_HISTORICAL_COMPLETED_MIN}–{ESPN_HISTORICAL_COMPLETED_MAX} that still need
+            normalization — without re-fetching ESPN. Fully normalized seasons are skipped unless you enable force
+            below.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="force-hist-backfill"
+              checked={forceHistoricalBackfill}
+              onCheckedChange={(v) => setForceHistoricalBackfill(!!v)}
+            />
+            <Label htmlFor="force-hist-backfill" className="cursor-pointer text-sm">
+              Force reprocess completed seasons (runs even when already fully normalized)
+            </Label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {seasonsForNormalizedBackfill.length > 0
+              ? `Target seasons: ${seasonsForNormalizedBackfill.sort((a, b) => a - b).join(", ")}`
+              : `No cached completed seasons in ${ESPN_HISTORICAL_COMPLETED_MIN}–${ESPN_HISTORICAL_COMPLETED_MAX} need normalization${forceHistoricalBackfill ? "" : " (enable force to include all cached years in range)"}.`}
+          </p>
           <Button
             variant="secondary"
             className="gap-2"
-            disabled={isLoading || isBackfillLoading || isReprocessLoading}
-            onClick={() => backfillNormalizedMutation.mutate({ seasons: BACKFILL_HISTORICAL_SEASONS })}
+            disabled={isLoading || isBackfillLoading || isReprocessLoading || seasonsForNormalizedBackfill.length === 0}
+            onClick={() =>
+              backfillNormalizedMutation.mutate({
+                seasons: [...seasonsForNormalizedBackfill].sort((a, b) => a - b),
+                force: forceHistoricalBackfill,
+              })
+            }
           >
             {isBackfillLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -460,15 +567,15 @@ export function SyncData() {
             <CardTitle className="text-base">Backfill Historical Seasons</CardTitle>
             <CardDescription>
               Runs the full normalization pipeline (teams, matchups, transactions, rosters, draft picks,
-              standings) from stored combined cache for {BACKFILL_HISTORICAL_SEASONS[0]}–
-              {BACKFILL_HISTORICAL_SEASONS[BACKFILL_HISTORICAL_SEASONS.length - 1]} seasons that have teams but zero
-              matchups — without calling ESPN. This unlocks Owner Career Stats, Keeper Calculator, and intelligence
-              features for those years.
+              standings) from stored combined cache for completed seasons {ESPN_HISTORICAL_COMPLETED_MIN}–
+              {ESPN_HISTORICAL_COMPLETED_MAX} that still need normalization — without calling ESPN. Enable force above
+              to include seasons that are already fully normalized.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Seasons to backfill: {sortedReprocessSeasons.join(", ")}
+              Uses the same &quot;Force reprocess&quot; toggle as Backfill Normalized. Seasons:{" "}
+              {sortedReprocessSeasons.join(", ")}
             </p>
             <Button
               variant="secondary"
@@ -502,6 +609,11 @@ export function SyncData() {
                         <span className="text-xs text-muted-foreground">
                           teams {p.row.teamCount} · matchups {p.row.matchupCount} · txns {p.row.transactionCount}
                         </span>
+                        {p.row.message ? (
+                          <span className="w-full text-xs text-muted-foreground whitespace-pre-wrap break-words">
+                            {p.row.message}
+                          </span>
+                        ) : null}
                         {p.row.error ? (
                           <span className="w-full text-xs text-yellow-300 whitespace-pre-wrap break-words">
                             {p.row.error}
@@ -524,7 +636,9 @@ export function SyncData() {
             <div>
               <CardTitle className="text-base">Multi-Season Sync</CardTitle>
               <CardDescription>
-                Select specific seasons to refresh.
+                Select specific seasons to refresh from ESPN. Completed seasons ({ESPN_HISTORICAL_COMPLETED_MIN}–
+                {ESPN_HISTORICAL_COMPLETED_MAX}) that are already fully normalized return &quot;Complete — not
+                reprocessed&quot; unless you enable force refresh above.
               </CardDescription>
             </div>
             <Button
@@ -652,12 +766,27 @@ export function SyncData() {
           .map(s => (
             <div
               key={s}
-              className="flex items-center gap-3 rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground"
+              className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground"
             >
-              <Clock className="h-4 w-4" />
+              {runResults[s] ? (
+                <SeasonStatusIcon
+                  status={
+                    runResults[s].status === "complete"
+                      ? "complete"
+                      : runResults[s].status === "running"
+                        ? "running"
+                        : runResults[s].status
+                  }
+                />
+              ) : (
+                <Clock className="h-4 w-4" />
+              )}
               <span className="font-medium text-foreground">{s}</span>
-              <span>— never synced</span>
+              <span>— No cache</span>
               {runResults[s] && <SeasonStatusBadge status={runResults[s].status} />}
+              {runResults[s]?.message && (
+                <span className="w-full text-xs text-muted-foreground">{runResults[s].message}</span>
+              )}
             </div>
           ))}
       </div>

@@ -44,6 +44,8 @@ import {
   getAllCachedSeasons,
   getRefreshManifests,
   hasActiveEspnLeagueConnection,
+  isHistoricalCompletedSeason,
+  isHistoricallyFullyNormalizedFromManifest,
   getChatHistory,
   addChatMessage,
   clearChatHistory,
@@ -1063,10 +1065,18 @@ export const appRouter = router({
         forceRefresh: z.boolean().optional(), // override closed-season skip
       }))
       .mutation(async ({ ctx, input }) => {
-        const CURRENT_SEASON = 2026;
-        const CLOSED_SEASONS = ALL_SEASONS.filter(s => s < CURRENT_SEASON); // 2009–2025 are closed
         const seasonsToRefresh = input.seasons ?? (input.season ? [input.season] : [ALL_SEASONS[ALL_SEASONS.length - 1]]);
-        const results: Record<number, { status: string; error?: string; viewHealth?: Record<string, string>; qualityWarnings?: string[]; skipped?: boolean }> = {};
+        const results: Record<
+          number,
+          {
+            status: string;
+            error?: string;
+            message?: string;
+            viewHealth?: Record<string, string>;
+            qualityWarnings?: string[];
+            skipped?: boolean;
+          }
+        > = {};
 
         const activeCreds = await resolveEspnCreds(undefined, ctx.user?.id);
         const activeLeagueId = activeCreds?.leagueId ?? LEAGUE_ID;
@@ -1084,13 +1094,17 @@ export const appRouter = router({
           seasonsToRefresh,
         }));
 
+        const manifestSnapshot = await getRefreshManifests();
+
         for (const season of seasonsToRefresh) {
-          // Skip closed seasons that are already successfully cached (unless forceRefresh)
-          if (!input.forceRefresh && CLOSED_SEASONS.includes(season)) {
-            const existing = await getRefreshManifests();
-            const manifest = (existing as { season: number; status: string }[]).find(m => m.season === season);
-            if (manifest?.status === "success") {
-              results[season] = { status: "skipped", skipped: true };
+          // Completed historical seasons (2009–2025): skip ESPN re-fetch when already fully normalized, unless forceRefresh.
+          if (!input.forceRefresh && isHistoricalCompletedSeason(season)) {
+            const manifest = manifestSnapshot.find(m => m.season === season);
+            if (manifest && isHistoricallyFullyNormalizedFromManifest(manifest)) {
+              results[season] = {
+                status: "complete",
+                message: "Complete — not reprocessed",
+              };
               continue;
             }
           }
@@ -1237,12 +1251,14 @@ export const appRouter = router({
       .input(
         z.object({
           seasons: z.array(z.number().int().min(2000).max(2100)).min(1).max(32),
+          force: z.boolean().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
         type Row = {
-          status: "success" | "partial" | "failed" | "skipped";
+          status: "success" | "partial" | "failed" | "skipped" | "complete";
           error?: string;
+          message?: string;
           matchupsSaved?: number;
           transactionsSaved?: number;
           rosterEntriesSaved?: number;
@@ -1251,7 +1267,19 @@ export const appRouter = router({
           syncRunId?: number | null;
         };
         const out: Record<number, Row> = {};
+        const force = input.force === true;
+        const manifestSnapshotBf = await getRefreshManifests();
         for (const season of input.seasons) {
+          if (isHistoricalCompletedSeason(season) && !force) {
+            const m = manifestSnapshotBf.find(x => x.season === season);
+            if (m && isHistoricallyFullyNormalizedFromManifest(m)) {
+              out[season] = {
+                status: "complete",
+                message: "Complete — not reprocessed",
+              };
+              continue;
+            }
+          }
           const { leagueId } = await resolveActiveLeagueId(
             { user: { id: ctx.user.id } },
             null,
@@ -1298,6 +1326,7 @@ export const appRouter = router({
       .input(
         z.object({
           seasons: z.array(z.number().int().min(2000).max(2100)).min(1).max(32),
+          force: z.boolean().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -1305,15 +1334,32 @@ export const appRouter = router({
         const db = await getDb();
         type Row = {
           season: number;
-          status: "success" | "partial" | "failed" | "skipped";
+          status: "success" | "partial" | "failed" | "skipped" | "complete";
           teamCount: number;
           matchupCount: number;
           transactionCount: number;
           error?: string;
+          message?: string;
         };
         const results: Row[] = [];
+        const force = input.force === true;
+        const manifestSnapshotRp = await getRefreshManifests();
 
         for (const season of input.seasons) {
+          if (isHistoricalCompletedSeason(season) && !force) {
+            const m = manifestSnapshotRp.find(x => x.season === season);
+            if (m && isHistoricallyFullyNormalizedFromManifest(m)) {
+              results.push({
+                season,
+                status: "complete",
+                teamCount: m.teamCount ?? 0,
+                matchupCount: m.matchupCount ?? 0,
+                transactionCount: m.transactionCount ?? 0,
+                message: "Complete — not reprocessed",
+              });
+              continue;
+            }
+          }
           const cached = await getCachedView(season, "combined", undefined, { userId });
           const rawPayload = cached?.payload;
           if (!cached || rawPayload == null || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
