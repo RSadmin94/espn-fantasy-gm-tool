@@ -43,6 +43,7 @@ function SeasonStatusIcon({ status }: { status: string | undefined }) {
     case "partial": return <AlertTriangle className="h-4 w-4 text-yellow-400" />;
     case "failed":  return <XCircle className="h-4 w-4 text-red-400" />;
     case "skipped": return <SkipForward className="h-4 w-4 text-muted-foreground" />;
+    case "no_cache": return <Database className="h-4 w-4 text-muted-foreground" />;
     case "running": return <Loader2 className="h-4 w-4 animate-spin text-blue-400" />;
     default:        return <Clock className="h-4 w-4 text-muted-foreground" />;
   }
@@ -56,6 +57,7 @@ function SeasonStatusBadge({ status }: { status: string | null | undefined }) {
     partial: "bg-yellow-500/15 text-yellow-400 border-yellow-500/20",
     failed:  "bg-red-500/15 text-red-400 border-red-500/20",
     skipped: "bg-muted/50 text-muted-foreground border-border",
+    no_cache: "bg-muted/50 text-muted-foreground border-border",
     pending: "bg-blue-500/15 text-blue-400 border-blue-500/20",
     running: "bg-blue-500/15 text-blue-400 border-blue-500/20",
   };
@@ -106,6 +108,9 @@ interface ManifestRow {
 
 const ESPN_HISTORICAL_COMPLETED_MIN = 2009;
 const ESPN_HISTORICAL_COMPLETED_MAX = 2025;
+/** Seasons for `espn.backfillFromRawCache` (combined JSON in `espn_raw_cache`). */
+const RAW_CACHE_BACKFILL_MIN = 2009;
+const RAW_CACHE_BACKFILL_MAX = 2026;
 const HISTORICAL_COMPLETED_SEASONS = Array.from(
   { length: ESPN_HISTORICAL_COMPLETED_MAX - ESPN_HISTORICAL_COMPLETED_MIN + 1 },
   (_, i) => ESPN_HISTORICAL_COMPLETED_MIN + i,
@@ -290,6 +295,7 @@ export function SyncData() {
   const [historicalProgress, setHistoricalProgress] = useState<Record<number, HistoricalProgressEntry>>({});
   const [historicalRunning, setHistoricalRunning] = useState(false);
   const [forceHistoricalBackfill, setForceHistoricalBackfill] = useState(false);
+  const [forceRawCacheBackfill, setForceRawCacheBackfill] = useState(false);
   const [showSeasonPicker, setShowSeasonPicker] = useState(false);
 
   const allSeasonsQuery = trpc.espn.allSeasons.useQuery();
@@ -306,6 +312,13 @@ export function SyncData() {
   });
 
   const backfillNormalizedMutation = trpc.espn.backfillNormalized.useMutation({
+    onSuccess: () => {
+      void utils.espn.manifests.invalidate();
+      void utils.espn.cachedSeasons.invalidate();
+    },
+  });
+
+  const backfillFromRawCacheMutation = trpc.espn.backfillFromRawCache.useMutation({
     onSuccess: () => {
       void utils.espn.manifests.invalidate();
       void utils.espn.cachedSeasons.invalidate();
@@ -367,6 +380,7 @@ export function SyncData() {
 
   const isLoading = refreshMutation.isPending;
   const isBackfillLoading = backfillNormalizedMutation.isPending;
+  const isRawCacheBackfillLoading = backfillFromRawCacheMutation.isPending;
   const isReprocessLoading = reprocessCachedMutation.isPending || historicalRunning;
 
   const seasonsForNormalizedBackfill = useMemo(() => {
@@ -487,7 +501,7 @@ export function SyncData() {
           </div>
           <Button
             onClick={handleRefreshLatest}
-            disabled={isLoading || isBackfillLoading || isReprocessLoading || !latestSeason}
+            disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isReprocessLoading || !latestSeason}
             className="gap-2"
           >
             {isLoading && !selectedSeasons.length ? (
@@ -530,7 +544,7 @@ export function SyncData() {
           <Button
             variant="secondary"
             className="gap-2"
-            disabled={isLoading || isBackfillLoading || isReprocessLoading || seasonsForNormalizedBackfill.length === 0}
+            disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isReprocessLoading || seasonsForNormalizedBackfill.length === 0}
             onClick={() =>
               backfillNormalizedMutation.mutate({
                 seasons: [...seasonsForNormalizedBackfill].sort((a, b) => a - b),
@@ -561,6 +575,101 @@ export function SyncData() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Backfill From Raw Cache</CardTitle>
+          <CardDescription>
+            Rebuilds normalized tables from <code className="text-xs">espn_raw_cache</code> combined payloads only
+            ({RAW_CACHE_BACKFILL_MIN}–{RAW_CACHE_BACKFILL_MAX}). Does not call ESPN or use cookies. Skips categories
+            that already have DB rows unless you force. Empty cache slices are never written over populated tables.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="force-raw-cache-backfill"
+              checked={forceRawCacheBackfill}
+              onCheckedChange={(v) => setForceRawCacheBackfill(!!v)}
+            />
+            <Label htmlFor="force-raw-cache-backfill" className="cursor-pointer text-sm">
+              Force overwrite all categories (re-upsert from cache even when DB already has rows)
+            </Label>
+          </div>
+          <Button
+            variant="secondary"
+            className="gap-2"
+            disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isReprocessLoading}
+            onClick={() =>
+              backfillFromRawCacheMutation.mutate({
+                startSeason: RAW_CACHE_BACKFILL_MIN,
+                endSeason: RAW_CACHE_BACKFILL_MAX,
+                force: forceRawCacheBackfill,
+              })
+            }
+          >
+            {isRawCacheBackfillLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Database className="h-4 w-4" />
+            )}
+            {isRawCacheBackfillLoading ? "Backfilling from raw cache…" : "Backfill From Raw Cache"}
+          </Button>
+          {backfillFromRawCacheMutation.isSuccess && backfillFromRawCacheMutation.data && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                League <span className="font-mono text-foreground">{backfillFromRawCacheMutation.data.leagueId}</span>
+              </p>
+              <div className="max-h-72 overflow-auto rounded-lg border border-border">
+                <table className="w-full text-left text-xs">
+                  <thead className="sticky top-0 bg-muted/80 backdrop-blur">
+                    <tr className="border-b border-border">
+                      <th className="p-2 font-medium">Season</th>
+                      <th className="p-2 font-medium">Status</th>
+                      <th className="p-2 font-medium">Tm</th>
+                      <th className="p-2 font-medium">Mup</th>
+                      <th className="p-2 font-medium">Dr</th>
+                      <th className="p-2 font-medium">Txn</th>
+                      <th className="p-2 font-medium">Rst</th>
+                      <th className="p-2 font-medium">Pl</th>
+                      <th className="p-2 font-medium">Std</th>
+                      <th className="p-2 font-medium">Errors</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {backfillFromRawCacheMutation.data.results.map((r) => (
+                      <tr key={r.season} className="border-b border-border/60 odd:bg-muted/20">
+                        <td className="p-2 font-mono">{r.season}</td>
+                        <td className="p-2">
+                          <SeasonStatusBadge status={r.status} />
+                        </td>
+                        <td className="p-2">{r.teams}</td>
+                        <td className="p-2">{r.matchups}</td>
+                        <td className="p-2">{r.draftPicks}</td>
+                        <td className="p-2">{r.transactions}</td>
+                        <td className="p-2">{r.rosters}</td>
+                        <td className="p-2">{r.players}</td>
+                        <td className="p-2">{r.standings}</td>
+                        <td className="p-2 whitespace-pre-wrap break-words text-muted-foreground">
+                          {r.errors?.length ? r.errors.join("; ") : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {backfillFromRawCacheMutation.isError && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="whitespace-pre-wrap break-words">
+                {trpcLikeErrorMessage(backfillFromRawCacheMutation.error)}
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {sortedReprocessSeasons.length > 0 && (
         <Card>
           <CardHeader>
@@ -580,7 +689,7 @@ export function SyncData() {
             <Button
               variant="secondary"
               className="gap-2"
-              disabled={isLoading || isBackfillLoading || isReprocessLoading}
+              disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isReprocessLoading}
               onClick={() => void handleBackfillHistoricalSeasons()}
             >
               {historicalRunning ? (
@@ -682,7 +791,7 @@ export function SyncData() {
               <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   onClick={handleRefreshSelected}
-                  disabled={isLoading || isBackfillLoading || isReprocessLoading}
+                  disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isReprocessLoading}
                   size="sm"
                   className="gap-2"
                 >

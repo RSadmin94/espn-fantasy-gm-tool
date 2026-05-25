@@ -258,6 +258,40 @@ export async function getCachedView(
   return hit?.row ?? null;
 }
 
+/**
+ * Load `espn_raw_cache` **only** (not `fantasy_data_cache` / `espn_season_cache`).
+ * Used to backfill normalized tables from stored combined JSON without re-fetching ESPN.
+ *
+ * Resolution order: primary `leagueId`, then `457622`, then `default` (newest `updatedAt` wins).
+ */
+export async function getEspnRawCacheCombinedPayload(
+  leagueId: string,
+  season: number
+): Promise<Record<string, unknown> | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const yr = Math.floor(Number(season));
+  const lid = String(leagueId).trim().slice(0, 32);
+  const candidates = [lid, "457622", "default"].filter((v, i, arr) => arr.indexOf(v) === i);
+  for (const key of candidates) {
+    const rows = await db
+      .select()
+      .from(espnRawCache)
+      .where(
+        and(eq(espnRawCache.leagueId, key), eq(espnRawCache.season, yr), eq(espnRawCache.viewName, "combined"))
+      )
+      .orderBy(desc(espnRawCache.updatedAt))
+      .limit(1);
+    const raw = rows[0]?.payload;
+    const decoded = decodeFantasyDataJsonPayload(raw);
+    if (decoded && typeof decoded === "object" && !Array.isArray(decoded)) {
+      const obj = decoded as Record<string, unknown>;
+      if (Object.keys(obj).length > 0) return obj;
+    }
+  }
+  return null;
+}
+
 export async function upsertCachedView(season: number, viewName: string, payload: unknown, leagueId?: string) {
   if (String(viewName) === "combined") {
     console.warn(

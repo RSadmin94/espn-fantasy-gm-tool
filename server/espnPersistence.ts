@@ -2,7 +2,7 @@
  * ESPN raw cache + normalized tables + sync_runs (MySQL / Drizzle).
  * Uses dynamic import("./db.js") for getDb to avoid circular deps with db.ts.
  */
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, count } from "drizzle-orm";
 import type { MySql2Database } from "drizzle-orm/mysql2";
 import * as schema from "../drizzle/schema";
 import {
@@ -936,4 +936,240 @@ export async function backfillNormalizedTablesFromPayload(
   );
 
   return { matchupsSaved, transactionsSaved, rosterEntriesSaved, standingsSaved, errors, syncRunId };
+}
+
+export type EspnRawCacheBackfillSeasonResult = {
+  season: number;
+  status: "success" | "partial" | "no_cache" | "failed";
+  teams: number;
+  matchups: number;
+  draftPicks: number;
+  transactions: number;
+  rosters: number;
+  players: number;
+  standings: number;
+  errors: string[];
+};
+
+function payloadTeamLen(p: Record<string, unknown>): number {
+  const t = p.teams;
+  return Array.isArray(t) ? t.length : 0;
+}
+
+function payloadScheduleLen(p: Record<string, unknown>): number {
+  const s = p.schedule;
+  return Array.isArray(s) ? s.length : 0;
+}
+
+function payloadDraftPickLen(p: Record<string, unknown>): number {
+  const dd = p.draftDetail as Record<string, unknown> | undefined;
+  const picks = dd?.picks;
+  return Array.isArray(picks) ? picks.length : 0;
+}
+
+function payloadTxnLen(p: Record<string, unknown>): number {
+  const t = p.transactions;
+  return Array.isArray(t) ? t.length : 0;
+}
+
+function payloadHasRosterEntries(p: Record<string, unknown>): boolean {
+  for (const tm of (p.teams as Record<string, unknown>[]) || []) {
+    const ent = (tm.roster as Record<string, unknown> | undefined)?.entries;
+    if (Array.isArray(ent) && ent.length > 0) return true;
+  }
+  return false;
+}
+
+function payloadPlayersLen(p: Record<string, unknown>): number {
+  const pl = p.players;
+  return Array.isArray(pl) ? pl.length : 0;
+}
+
+async function gmCountLeagueSeason(
+  db: AppDb,
+  table:
+    | typeof schema.gmTeams
+    | typeof schema.gmMatchups
+    | typeof schema.gmDraftPicks
+    | typeof schema.gmTransactions
+    | typeof schema.gmRosterEntries
+    | typeof schema.gmStandingsSnapshots,
+  leagueId: string,
+  season: number
+): Promise<number> {
+  const lid = String(leagueId).slice(0, 32);
+  const yr = Math.floor(Number(season));
+  const t = table as typeof schema.gmTeams;
+  const [r] = await db
+    .select({ c: count() })
+    .from(t)
+    .where(and(eq(t.leagueId, lid), eq(t.season, yr)));
+  return Number(r?.c ?? 0);
+}
+
+/** `players` table is keyed by season + playerId only (no leagueId). */
+async function gmPlayersSeasonCount(db: AppDb, season: number): Promise<number> {
+  const yr = Math.floor(Number(season));
+  const [r] = await db.select({ c: count() }).from(schema.gmPlayers).where(eq(schema.gmPlayers.season, yr));
+  return Number(r?.c ?? 0);
+}
+
+/**
+ * Backfill normalized GM tables from **existing** `espn_raw_cache` `combined` payloads only (no ESPN fetch).
+ * When `force` is false, skips upserts for categories that already have rows, and skips when the cache
+ * slice is empty so we never replace populated tables with empty writes.
+ */
+export async function runEspnRawCacheNormalizedBackfill(
+  leagueId: string,
+  seasons: number[],
+  opts?: { force?: boolean }
+): Promise<EspnRawCacheBackfillSeasonResult[]> {
+  const { getEspnRawCacheCombinedPayload } = await import("./db.js");
+  const db = await getDbConn();
+  if (!db) throw new Error("Database unavailable");
+  const lid = String(leagueId).slice(0, 32);
+  const force = opts?.force === true;
+  const out: EspnRawCacheBackfillSeasonResult[] = [];
+
+  for (const season of seasons) {
+    const yr = Math.floor(Number(season));
+    const errors: string[] = [];
+    const zero = (): EspnRawCacheBackfillSeasonResult => ({
+      season: yr,
+      status: "failed",
+      teams: 0,
+      matchups: 0,
+      draftPicks: 0,
+      transactions: 0,
+      rosters: 0,
+      players: 0,
+      standings: 0,
+      errors,
+    });
+
+    try {
+      const rawPayload = await getEspnRawCacheCombinedPayload(lid, yr);
+      if (!rawPayload) {
+        out.push({
+          season: yr,
+          status: "no_cache",
+          teams: 0,
+          matchups: 0,
+          draftPicks: 0,
+          transactions: 0,
+          rosters: 0,
+          players: 0,
+          standings: 0,
+          errors: [],
+        });
+        continue;
+      }
+
+      const payload: Record<string, unknown> = {
+        ...rawPayload,
+        seasonId: rawPayload.seasonId != null ? rawPayload.seasonId : yr,
+      };
+
+      const syncRunId = await createSyncRun(lid, yr);
+
+      const teamsExisting = await gmCountLeagueSeason(db, schema.gmTeams, lid, yr);
+      const matchupsExisting = await gmCountLeagueSeason(db, schema.gmMatchups, lid, yr);
+      const draftExisting = await gmCountLeagueSeason(db, schema.gmDraftPicks, lid, yr);
+      const txExisting = await gmCountLeagueSeason(db, schema.gmTransactions, lid, yr);
+      const rosterExisting = await gmCountLeagueSeason(db, schema.gmRosterEntries, lid, yr);
+      const playersExisting = await gmPlayersSeasonCount(db, yr);
+      const standingsExisting = await gmCountLeagueSeason(db, schema.gmStandingsSnapshots, lid, yr);
+
+      const hasTeamsPayload = payloadTeamLen(payload) > 0;
+      const hasSchedulePayload = payloadScheduleLen(payload) > 0;
+      const hasDraftPayload = payloadDraftPickLen(payload) > 0;
+      const hasTxnPayload = payloadTxnLen(payload) > 0;
+      const hasRosterPayload = payloadHasRosterEntries(payload);
+      const hasPlayersPayload = payloadPlayersLen(payload) > 0;
+      const hasStandingsPayload = hasTeamsPayload;
+
+      const run = async (label: string, fn: () => Promise<number | void>): Promise<number> => {
+        try {
+          const v = await fn();
+          return typeof v === "number" ? v : 0;
+        } catch (e) {
+          errors.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
+          return 0;
+        }
+      };
+
+      let teamsSaved = 0;
+      if ((force || teamsExisting === 0) && hasTeamsPayload) {
+        await run("upsertLeagueSettings", () => upsertLeagueSettings(db, lid, yr, payload));
+        teamsSaved = await run("upsertTeams", () => upsertTeams(db, lid, yr, payload));
+      }
+
+      let matchupsSaved = 0;
+      if ((force || matchupsExisting === 0) && hasSchedulePayload) {
+        matchupsSaved = await run("upsertMatchups", () => upsertMatchups(db, lid, yr, payload));
+      }
+
+      let draftPicksSaved = 0;
+      if ((force || draftExisting === 0) && hasDraftPayload) {
+        draftPicksSaved = await run("upsertDraftPicks", () => upsertDraftPicks(db, lid, yr, payload));
+      }
+
+      let transactionsSaved = 0;
+      if ((force || txExisting === 0) && hasTxnPayload) {
+        transactionsSaved = await run("upsertTransactions", () => upsertTransactions(db, lid, yr, payload));
+      }
+
+      let rosterEntriesSaved = 0;
+      if ((force || rosterExisting === 0) && hasRosterPayload) {
+        rosterEntriesSaved = await run("upsertRosterEntries", () => upsertRosterEntries(db, lid, yr, payload));
+      }
+
+      let playersSaved = 0;
+      if ((force || playersExisting === 0) && hasPlayersPayload) {
+        playersSaved = await run("upsertPlayers", () => upsertPlayers(db, lid, yr, payload));
+      }
+
+      let standingsSaved = 0;
+      if ((force || standingsExisting === 0) && hasStandingsPayload) {
+        standingsSaved = await run("upsertStandingsSnapshots", () => upsertStandingsSnapshots(db, lid, yr, payload));
+      }
+
+      const status: EspnRawCacheBackfillSeasonResult["status"] = errors.length > 0 ? "partial" : "success";
+      await finishSyncRun(
+        syncRunId,
+        status,
+        {
+          rawViewsSaved: 0,
+          teamsSaved,
+          matchupsSaved,
+          draftPicksSaved,
+          transactionsSaved,
+          rosterEntriesSaved,
+          playersSaved,
+          standingsSaved,
+        },
+        errors.length ? errors.join("; ") : null
+      );
+
+      out.push({
+        season: yr,
+        status,
+        teams: teamsSaved,
+        matchups: matchupsSaved,
+        draftPicks: draftPicksSaved,
+        transactions: transactionsSaved,
+        rosters: rosterEntriesSaved,
+        players: playersSaved,
+        standings: standingsSaved,
+        errors,
+      });
+    } catch (e) {
+      const z = zero();
+      z.status = "failed";
+      z.errors.push(e instanceof Error ? e.message : String(e));
+      out.push(z);
+    }
+  }
+
+  return out;
 }

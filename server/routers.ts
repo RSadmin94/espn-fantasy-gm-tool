@@ -90,7 +90,7 @@ import {
   hasCookies,
   resolveEspnCreds,
 } from "./espnService";
-import { backfillNormalizedTablesFromPayload, syncEspnCombinedFullPipeline, normalizeEspnPayload, createSyncRun, finishSyncRun } from "./espnPersistence";
+import { backfillNormalizedTablesFromPayload, syncEspnCombinedFullPipeline, normalizeEspnPayload, createSyncRun, finishSyncRun, runEspnRawCacheNormalizedBackfill } from "./espnPersistence";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -1322,6 +1322,51 @@ export const appRouter = router({
         }
         memCache.invalidateAll();
         return out;
+      }),
+
+    /**
+     * Backfill normalized GM tables from **espn_raw_cache** `combined` JSON only (no ESPN API, no cookies).
+     * Per category: skips when DB already has rows (unless `force`) and skips when the cache slice is empty
+     * so populated tables are not replaced by empty writes.
+     */
+    backfillFromRawCache: protectedProcedure
+      .input(
+        z.object({
+          startSeason: z.number().int().min(1990).max(2100).optional(),
+          endSeason: z.number().int().min(1990).max(2100).optional(),
+          seasons: z.array(z.number().int().min(1990).max(2100)).max(50).optional(),
+          force: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        let seasonList: number[];
+        if (input.seasons != null && input.seasons.length > 0) {
+          seasonList = [...new Set(input.seasons.map((s) => Math.floor(Number(s))))].sort((a, b) => a - b);
+        } else {
+          const lo = Math.floor(input.startSeason ?? 2009);
+          const hi = Math.floor(input.endSeason ?? 2026);
+          const a = Math.min(lo, hi);
+          const b = Math.max(lo, hi);
+          seasonList = [];
+          for (let y = a; y <= b; y++) seasonList.push(y);
+        }
+
+        let { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          seasonList[0] ?? 2026
+        );
+        if (!leagueId || leagueId === "default") {
+          leagueId = String(process.env.ESPN_LEAGUE_ID || process.env.LEAGUE_ID || "457622")
+            .trim()
+            .slice(0, 32);
+        }
+
+        const results = await runEspnRawCacheNormalizedBackfill(leagueId, seasonList, {
+          force: input.force === true,
+        });
+        memCache.invalidateAll();
+        return { leagueId, results };
       }),
 
     /**
