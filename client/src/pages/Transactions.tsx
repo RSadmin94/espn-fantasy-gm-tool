@@ -314,6 +314,23 @@ function dominantTradeType(rows: TxnRow[]): string {
   return rows[0]?.type || "TRADE";
 }
 
+/** Status line under a trade card — prefer completed-trade rows so grouped proposals match ESPN. */
+function displayedTradeStatus(rows: TxnRow[]): string | null {
+  const completed = rows.find(
+    r => r.type === "TRADE_UPHOLD" || r.type === "TRADE_ACCEPT"
+  );
+  if (completed?.status != null && String(completed.status).trim() !== "") {
+    return String(completed.status);
+  }
+  const any = rows.find(r => r.status != null && String(r.status).trim() !== "");
+  return any?.status != null ? String(any.status) : null;
+}
+
+function isExecutedTradeStatus(status: string | null): boolean {
+  if (status == null) return false;
+  return status.trim().toLowerCase() === "executed";
+}
+
 function rowMatchesSearch(r: TxnRow, q: string): boolean {
   if (r.playerName?.toLowerCase().includes(q)) return true;
   if (r.rawTransaction?.toLowerCase().includes(q)) return true;
@@ -422,6 +439,7 @@ export function Transactions() {
   const [season, setSeason] = useState<number>(defaultSeason);
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [teamFilter, setTeamFilter] = useState("ALL");
+  const [tradeOutcomeFilter, setTradeOutcomeFilter] = useState<"ALL" | "EXECUTED">("ALL");
   const [search, setSearch] = useState("");
 
   const enabled = cachedSeasons.includes(season);
@@ -496,8 +514,16 @@ export function Transactions() {
         b.kind === "trade" ? Math.max(0, ...b.rows.map(eventMs)) : eventMs(b.row);
       return mb - ma;
     });
+
+    if (tradeOutcomeFilter === "EXECUTED") {
+      return filtered.filter(
+        e =>
+          e.kind === "trade" && isExecutedTradeStatus(displayedTradeStatus(e.rows))
+      );
+    }
+
     return filtered;
-  }, [rawTxns, search]);
+  }, [rawTxns, search, tradeOutcomeFilter]);
 
   const isNotCached = !cachedSeasons.includes(season);
 
@@ -531,6 +557,7 @@ export function Transactions() {
                 setSeason(Number(v));
                 setTypeFilter("ALL");
                 setTeamFilter("ALL");
+                setTradeOutcomeFilter("ALL");
                 setSearch("");
               }}
             >
@@ -577,6 +604,21 @@ export function Transactions() {
                     {t.teamName || t.owners || `Team ${t.teamId}`}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="w-44">
+            <Select
+              value={tradeOutcomeFilter}
+              onValueChange={v => setTradeOutcomeFilter(v as "ALL" | "EXECUTED")}
+            >
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All transactions</SelectItem>
+                <SelectItem value="EXECUTED">Trades Executed</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -650,6 +692,7 @@ export function Transactions() {
                     tid,
                     name: teamMap.get(tid) || `Team ${tid}`,
                   }));
+                  const tradeStatusLine = displayedTradeStatus(entry.rows);
                   return (
                     <div
                       key={`trade-${entry.key}-${idx}`}
@@ -664,8 +707,8 @@ export function Transactions() {
                       </div>
                       <div className="min-w-0 space-y-1 text-sm text-foreground">
                         <p className="leading-snug">{detail}</p>
-                        {entry.rows[0]?.status ? (
-                          <p className="text-xs text-muted-foreground">Status: {String(entry.rows[0].status)}</p>
+                        {tradeStatusLine ? (
+                          <p className="text-xs text-muted-foreground">Status: {tradeStatusLine}</p>
                         ) : null}
                       </div>
                       <div className="flex flex-col items-start gap-1 sm:items-end">
