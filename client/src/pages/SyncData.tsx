@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
+import { useAuth } from "@clerk/react-router";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { useLeagueContext } from "@/hooks/useLeagueContext";
+import { fetchEspnSeasonBundleBrowserOrExtension } from "@/lib/espnApi";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -107,6 +111,7 @@ interface ManifestRow {
 }
 
 const ESPN_HISTORICAL_COMPLETED_MIN = 2009;
+const BROWSER_SYNC_TEST_SEASON = 2010;
 const ESPN_HISTORICAL_COMPLETED_MAX = 2025;
 /** Seasons for `espn.backfillFromRawCache` (combined JSON in `espn_raw_cache`). */
 const RAW_CACHE_BACKFILL_MIN = 2009;
@@ -118,6 +123,12 @@ const HISTORICAL_COMPLETED_SEASONS = Array.from(
   { length: ESPN_HISTORICAL_COMPLETED_MAX - ESPN_HISTORICAL_COMPLETED_MIN + 1 },
   (_, i) => ESPN_HISTORICAL_COMPLETED_MIN + i,
 );
+
+/** After 2010 passes the gate, optional bulk browser sync for these seasons. */
+const BROWSER_SYNC_REMAINING_SEASONS = Array.from({ length: 2025 - 2011 + 1 }, (_, i) => 2011 + i);
+
+/** Avoid duplicate auto-sync under React Strict Mode remount (same URL). */
+let gmwrAutoSync2026LastKey = "";
 
 function isHistoricallyFullyNormalizedFromManifestClient(m: ManifestRow): boolean {
   if (m.status !== "success") return false;
@@ -267,9 +278,6 @@ function ManifestCard({ manifest, refreshResult }: {
   );
 }
 
-/** Avoid duplicate auto-sync under React Strict Mode remount (same URL). */
-let gmwrAutoSync2026LastKey = "";
-
 type HistoricalReprocessRow = {
   season: number;
   status: "success" | "partial" | "failed" | "skipped" | "complete";
@@ -292,6 +300,7 @@ function trpcLikeErrorMessage(err: Error | { message: string } | null | undefine
 
 export function SyncData() {
   const [searchParams] = useSearchParams();
+  const { leagueId, isConnected } = useLeagueContext();
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
   const [forceRefresh, setForceRefresh] = useState(false);
   const [runResults, setRunResults] = useState<Record<number, RefreshResult>>({});
@@ -301,12 +310,40 @@ export function SyncData() {
   const [forceRawCacheBackfill, setForceRawCacheBackfill] = useState(false);
   const [forceHistoricalEnrichment, setForceHistoricalEnrichment] = useState(false);
   const [showSeasonPicker, setShowSeasonPicker] = useState(false);
+  const [browserSessionNote, setBrowserSessionNote] = useState<string | null>(null);
+  const [browserSessionErr, setBrowserSessionErr] = useState<string | null>(null);
+  const [browserSessionBusy, setBrowserSessionBusy] = useState(false);
+  const [browserSessionBulkBusy, setBrowserSessionBulkBusy] = useState(false);
+  const [lastBrowserImportCounts, setLastBrowserImportCounts] = useState<{
+    draftPicks: number;
+    teams: number;
+    matchups: number;
+    transactions: number;
+  } | null>(null);
 
   const allSeasonsQuery = trpc.espn.allSeasons.useQuery();
   const cachedQuery = trpc.espn.cachedSeasons.useQuery();
   const manifestsQuery = trpc.espn.manifests.useQuery();
 
   const utils = trpc.useUtils();
+
+  const browserSyncStatusQuery = trpc.espn.browserSyncStatus.useQuery(
+    {
+      leagueId: leagueId || undefined,
+      startSeason: ESPN_HISTORICAL_COMPLETED_MIN,
+      endSeason: ESPN_HISTORICAL_COMPLETED_MAX,
+    },
+    { enabled: Boolean(leagueId && isConnected), staleTime: 15_000 },
+  );
+
+  const importFromBrowserMutation = trpc.espn.importFromBrowser.useMutation({
+    onSuccess: () => {
+      void utils.espn.browserSyncStatus.invalidate();
+      void utils.espn.manifests.invalidate();
+      void utils.espn.cachedSeasons.invalidate();
+    },
+  });
+
   const refreshMutation = trpc.espn.refresh.useMutation({
     onSuccess: (data) => {
       setRunResults(data as Record<number, RefreshResult>);
@@ -387,6 +424,119 @@ export function SyncData() {
   const handleAutoSync2026Retry = () => {
     refreshMutation.reset();
     runRefresh({ season: 2026, forceRefresh: true });
+  };
+
+  const browser2010 = browserSyncStatusQuery.data?.seasons?.find(
+    (s) => s.season === BROWSER_SYNC_TEST_SEASON,
+  );
+  const browserSync2010Ready = Boolean(
+    browser2010 && (browser2010.draftPicks > 0 || browser2010.matchups > 0),
+  );
+
+  const handleBrowserSync2010 = async () => {
+    if (!leagueId) return;
+    setBrowserSessionErr(null);
+    setBrowserSessionNote(null);
+    setLastBrowserImportCounts(null);
+    setBrowserSessionBusy(true);
+    try {
+      const gathered = await fetchEspnSeasonBundleBrowserOrExtension({
+        leagueId,
+        season: BROWSER_SYNC_TEST_SEASON,
+        onBrowserBlocked: () => {
+          toast.message("Browser fetch blocked. Trying Chrome extension…");
+          setBrowserSessionNote("Browser fetch blocked. Trying Chrome extension…");
+        },
+      });
+      if (!gathered.ok) {
+        const msg = gathered.message;
+        setBrowserSessionErr(msg);
+        toast.error(msg);
+        return;
+      }
+      const res = await importFromBrowserMutation.mutateAsync({
+        leagueId,
+        season: BROWSER_SYNC_TEST_SEASON,
+        combinedPayload: gathered.combinedPayload,
+        matchupPayloads: gathered.matchupPayloads,
+        matchupsExplicitlyUnavailable: gathered.matchupsExplicitlyUnavailable,
+      });
+      setLastBrowserImportCounts(res.counts);
+      void browserSyncStatusQuery.refetch();
+      if (res.success) {
+        setBrowserSessionNote("Import completed.");
+        toast.success(
+          `Season ${BROWSER_SYNC_TEST_SEASON} — teams ${res.counts.teams}, matchups ${res.counts.matchups}, draft picks ${res.counts.draftPicks}, transactions ${res.counts.transactions}.`,
+        );
+      } else {
+        const errMsg =
+          res.skipped && res.reason === "already_populated"
+            ? `${BROWSER_SYNC_TEST_SEASON} is already populated in the database (skipped).`
+            : `Import did not verify${res.reason ? `: ${res.reason}` : ""}.`;
+        setBrowserSessionErr(errMsg);
+        toast.error(errMsg);
+      }
+    } catch (e) {
+      const msg = trpcLikeErrorMessage(e as Error);
+      setBrowserSessionErr(msg);
+      toast.error(msg);
+    } finally {
+      setBrowserSessionBusy(false);
+    }
+  };
+
+  const seasonsForBrowserBulk = useMemo(() => [...BROWSER_SYNC_REMAINING_SEASONS], []);
+
+  const handleBrowserSyncOtherSeasons = async () => {
+    if (!leagueId || !browserSync2010Ready) return;
+    setBrowserSessionBulkBusy(true);
+    setBrowserSessionErr(null);
+    setBrowserSessionNote(null);
+    setLastBrowserImportCounts(null);
+    try {
+      for (const season of seasonsForBrowserBulk) {
+        setBrowserSessionNote(`Fetching ESPN JSON for ${season}…`);
+        const gathered = await fetchEspnSeasonBundleBrowserOrExtension({
+          leagueId,
+          season,
+          onBrowserBlocked: () => {
+            toast.message("Browser fetch blocked. Trying Chrome extension…");
+            setBrowserSessionNote("Browser fetch blocked. Trying Chrome extension…");
+          },
+        });
+        if (!gathered.ok) {
+          const msg = `${season}: ${gathered.message}`;
+          setBrowserSessionErr(msg);
+          toast.error(msg);
+          return;
+        }
+        const res = await importFromBrowserMutation.mutateAsync({
+          leagueId,
+          season,
+          combinedPayload: gathered.combinedPayload,
+          matchupPayloads: gathered.matchupPayloads,
+          matchupsExplicitlyUnavailable: gathered.matchupsExplicitlyUnavailable,
+        });
+        setLastBrowserImportCounts(res.counts);
+        if (!res.success && !(res.skipped && res.reason === "already_populated")) {
+          const msg = `${season}: import did not verify${res.reason ? ` (${res.reason})` : ""}.`;
+          setBrowserSessionErr(msg);
+          toast.error(msg);
+          return;
+        }
+      }
+      setBrowserSessionNote(
+        `Finished syncing ${seasonsForBrowserBulk.length} seasons (${BROWSER_SYNC_REMAINING_SEASONS[0]}–${BROWSER_SYNC_REMAINING_SEASONS[BROWSER_SYNC_REMAINING_SEASONS.length - 1]}).`,
+      );
+      toast.success("Bulk browser session seasons finished.");
+      void browserSyncStatusQuery.refetch();
+    } catch (e) {
+      const msg = trpcLikeErrorMessage(e as Error);
+      setBrowserSessionErr(msg);
+      toast.error(msg);
+    } finally {
+      setBrowserSessionBulkBusy(false);
+    }
   };
 
   const isLoading = refreshMutation.isPending;
@@ -513,7 +663,7 @@ export function SyncData() {
           </div>
           <Button
             onClick={handleRefreshLatest}
-            disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isHistoricalEnrichmentLoading || isReprocessLoading || !latestSeason}
+            disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isHistoricalEnrichmentLoading || isReprocessLoading || importFromBrowserMutation.isPending || browserSessionBulkBusy || browserSessionBusy || !latestSeason}
             className="gap-2"
           >
             {isLoading && !selectedSeasons.length ? (
@@ -523,6 +673,116 @@ export function SyncData() {
             )}
             {isLoading && !selectedSeasons.length ? "Syncing…" : `Sync ${latestSeason ?? "…"}`}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Sync From ESPN Browser Session</CardTitle>
+          <CardDescription>
+            Fetches historical JSON using your ESPN login in this browser (or the GM War Room extension if ESPN
+            blocks the page). Test mode: sync <strong>{BROWSER_SYNC_TEST_SEASON}</strong> first. After the database
+            shows draft picks or matchups for {BROWSER_SYNC_TEST_SEASON}, you can sync seasons{" "}
+            {BROWSER_SYNC_REMAINING_SEASONS[0]}–{BROWSER_SYNC_REMAINING_SEASONS[BROWSER_SYNC_REMAINING_SEASONS.length - 1]}.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!leagueId && (
+            <p className="text-sm text-muted-foreground">Connect an active league to enable browser session sync.</p>
+          )}
+          {browserSyncStatusQuery.isLoading && leagueId ? (
+            <p className="text-xs text-muted-foreground flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading per-season DB counts…
+            </p>
+          ) : null}
+          {browser2010 && (
+            <p className="text-xs text-muted-foreground">
+              {BROWSER_SYNC_TEST_SEASON} DB: draft picks {browser2010.draftPicks} · matchups {browser2010.matchups}{" "}
+              · teams {browser2010.teams} · transactions {browser2010.transactions}
+              {browserSync2010Ready ? " — gate satisfied." : ` — sync ${BROWSER_SYNC_TEST_SEASON} to unlock bulk.`}
+            </p>
+          )}
+          {browserSessionNote && (
+            <p className="text-sm text-foreground/90 whitespace-pre-wrap">{browserSessionNote}</p>
+          )}
+          {browserSessionErr && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="whitespace-pre-wrap break-words">{browserSessionErr}</span>
+            </div>
+          )}
+          {lastBrowserImportCounts && (
+            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs text-foreground">
+              <div className="font-medium text-muted-foreground mb-1">Server-reported row counts (last import)</div>
+              <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+                <span>Teams: {lastBrowserImportCounts.teams}</span>
+                <span>Matchups: {lastBrowserImportCounts.matchups}</span>
+                <span>Draft picks: {lastBrowserImportCounts.draftPicks}</span>
+                <span>Transactions: {lastBrowserImportCounts.transactions}</span>
+              </div>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="default"
+              className="gap-2"
+              disabled={
+                !leagueId ||
+                browserSessionBusy ||
+                browserSessionBulkBusy ||
+                importFromBrowserMutation.isPending ||
+                isLoading ||
+                isBackfillLoading ||
+                isRawCacheBackfillLoading ||
+                isHistoricalEnrichmentLoading ||
+                isReprocessLoading
+              }
+              onClick={() => void handleBrowserSync2010()}
+            >
+              {browserSessionBusy || importFromBrowserMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {browserSessionBusy || importFromBrowserMutation.isPending
+                ? "Syncing…"
+                : `Sync From ESPN Browser Session (${BROWSER_SYNC_TEST_SEASON})`}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="gap-2"
+              disabled={
+                !leagueId ||
+                !browserSync2010Ready ||
+                browserSessionBusy ||
+                browserSessionBulkBusy ||
+                importFromBrowserMutation.isPending ||
+                isLoading ||
+                isBackfillLoading ||
+                isRawCacheBackfillLoading ||
+                isHistoricalEnrichmentLoading ||
+                isReprocessLoading
+              }
+              onClick={() => void handleBrowserSyncOtherSeasons()}
+            >
+              {browserSessionBulkBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Layers className="h-4 w-4" />
+              )}
+              {browserSessionBulkBusy
+                ? "Syncing other seasons…"
+                : `Sync all other seasons (${BROWSER_SYNC_REMAINING_SEASONS[0]}–${BROWSER_SYNC_REMAINING_SEASONS[BROWSER_SYNC_REMAINING_SEASONS.length - 1]})`}
+            </Button>
+          </div>
+          {!browserSync2010Ready && leagueId && (
+            <p className="text-xs text-muted-foreground">
+              Bulk sync stays disabled until {BROWSER_SYNC_TEST_SEASON} has draft picks or matchups in the database.
+            </p>
+          )}
         </CardContent>
       </Card>
 

@@ -357,6 +357,8 @@ const MSG_HIST_DISCOVER = "GMWR_HIST_DISCOVER";
 const MSG_HIST_TEST = "GMWR_HIST_TEST";
 const MSG_HIST_FULL = "GMWR_HIST_FULL";
 const MSG_HIST_STATUS = "GMWR_HIST_STATUS";
+/** Page (gmwarroom) → background: credentialed GET to fantasy.espn.com for browser-session sync. */
+const MSG_PAGE_ESPN_FETCH = "GMWR_PAGE_ESPN_FETCH";
 
 function trpcResultJson(parsed) {
   if (!parsed || typeof parsed !== "object") return null;
@@ -539,7 +541,7 @@ async function fetchEspnJsonWithBackoff(url, { espnCookieHeader, label }) {
 function buildCombinedLeagueUrl(leagueId, season) {
   const lid = encodeURIComponent(String(leagueId).trim());
   const y = Number(season);
-  const views = ["mTeam", "mStandings", "mSettings", "mDraftDetail", "mTransactions2"];
+  const views = ["mStandings", "mTeam", "mSettings", "mDraftDetail", "mTransactions2"];
   const qs = views.map((v) => `view=${v}`).join("&");
   return `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${y}/segments/0/leagues/${lid}?${qs}`;
 }
@@ -699,6 +701,51 @@ async function postSaveCredentials({ swid, espnS2, leagueId, warRoomCookieHeader
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const t = message?.type;
+
+  if (t === MSG_PAGE_ESPN_FETCH) {
+    (async () => {
+      const url = String(message?.url || "").trim();
+      if (!url.startsWith("https://fantasy.espn.com/")) {
+        sendResponse({ ok: false, status: 0, error: "invalid_espn_url", result: null, bodyText: "" });
+        return;
+      }
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        sendResponse({
+          ok: false,
+          status: 401,
+          error: "ESPN login expired",
+          result: null,
+          bodyText: "",
+        });
+        return;
+      }
+      const espnCookieHeader = buildEspnCookieHeader(swid, espnS2);
+      const r = await fetchEspnJsonWithBackoff(url, { espnCookieHeader, label: "page_bridge" });
+      if (!r.ok || r.data == null) {
+        const err =
+          r.error === "not_found"
+            ? "not_found"
+            : r.error === "ESPN login expired"
+              ? "ESPN login expired"
+              : r.error || "fetch_failed";
+        sendResponse({
+          ok: false,
+          status: r.status ?? 0,
+          error: err,
+          result: null,
+          bodyText: "",
+        });
+        return;
+      }
+      const bodyText = JSON.stringify(r.data);
+      sendResponse({ ok: true, status: r.status ?? 200, error: "", result: r.data, bodyText });
+    })().catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      sendResponse({ ok: false, status: 0, error: msg, result: null, bodyText: "" });
+    });
+    return true;
+  }
 
   if (t === MSG_DISCOVER_LEAGUES) {
     (async () => {
@@ -870,7 +917,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       const leagueId = String(message?.leagueId || "457622").trim();
       const espnCookieHeader = buildEspnCookieHeader(swid, espnS2);
-      const uniq = [...new Set(seasons)]
+      const rawSeasons = Array.isArray(message?.seasons) ? message.seasons : [];
+      const uniq = [...new Set(rawSeasons)]
         .map((x) => Math.floor(Number(x)))
         .filter((y) => Number.isFinite(y) && y >= 1990 && y !== 2009)
         .sort((a, b) => a - b);

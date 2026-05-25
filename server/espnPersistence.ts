@@ -14,6 +14,7 @@ import {
   normalizeSettings,
   buildPlayerIdMap,
 } from "./espnService";
+import { TRPCError } from "@trpc/server";
 
 export type AppDb = MySql2Database<typeof schema>;
 
@@ -1014,6 +1015,181 @@ export function mergeScheduleIntoCombinedPayload(
   return out;
 }
 
+/** Allowed provenance tags for {@link importEspnBrowserSeasonBundle}. */
+export type EspnBrowserImportSource = "chrome_extension_espn_api" | "browser_session";
+
+export type ImportEspnBrowserSeasonBundleResult = {
+  success: boolean;
+  skipped: boolean;
+  reason?: string;
+  leagueId: string;
+  season: number;
+  counts: {
+    draftPicks: number;
+    teams: number;
+    matchups: number;
+    transactions: number;
+  };
+  verification: {
+    draftOk: boolean;
+    teamsOk: boolean;
+    matchupsOk: boolean;
+    txnOk: boolean;
+  };
+  payloadBytes?: number;
+  normalization?: NormalizationCounts;
+  normalizationError?: string | null;
+};
+
+/**
+ * Structural sanity check before running normalization (teams + at least one core slice).
+ */
+export function analyzeEspnBrowserImportPayload(
+  merged: Record<string, unknown>,
+  matchupsExplicitlyUnavailable: boolean,
+): { ok: true } | { ok: false; reason: string } {
+  const teams = payloadTeamLen(merged);
+  if (teams <= 0) return { ok: false, reason: "no_teams_in_payload" };
+  const hasSchedule = payloadScheduleLen(merged) > 0;
+  const hasDraft = payloadDraftPickLen(merged) > 0;
+  const hasTxn = payloadTxnLen(merged) > 0;
+  const hasRosters = payloadHasRosterEntries(merged);
+  if (hasSchedule || hasDraft || hasTxn || hasRosters) return { ok: true };
+  if (matchupsExplicitlyUnavailable && teams > 0) return { ok: true };
+  return { ok: false, reason: "payload_empty_after_merge" };
+}
+
+/**
+ * Shared path: raw matchup rows → merge → validate → `espn_raw_cache` combined + normalization only.
+ * Used by Chrome extension historical ingest and in-browser session sync.
+ */
+export async function importEspnBrowserSeasonBundle(input: {
+  userId: number;
+  leagueId: string;
+  season: number;
+  source: EspnBrowserImportSource;
+  combinedPayload: Record<string, unknown>;
+  matchupPayloads: Array<{ week: number; payload: Record<string, unknown> }>;
+  force?: boolean;
+  matchupsExplicitlyUnavailable?: boolean;
+}): Promise<ImportEspnBrowserSeasonBundleResult> {
+  const { getUserEspnLeagueIds, getActiveEspnCredentials } = await import("./db.js");
+  const uid = input.userId;
+  const allowed = new Set(await getUserEspnLeagueIds(uid));
+  const creds = await getActiveEspnCredentials(uid);
+  if (creds?.leagueId) allowed.add(String(creds.leagueId).trim().slice(0, 32));
+  const lid = String(input.leagueId).trim().slice(0, 32);
+  if (!allowed.has(lid)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "League is not linked to your ESPN connections.",
+    });
+  }
+  const season = Math.floor(Number(input.season));
+  const force = input.force === true;
+  const matchupsExplicitlyUnavailable = input.matchupsExplicitlyUnavailable === true;
+  const pre = await countNormalizedGmRowsForSeason(lid, season);
+  const populatedCore =
+    pre.draftPicks > 0 &&
+    pre.teams > 0 &&
+    (pre.matchups > 0 || matchupsExplicitlyUnavailable);
+  if (populatedCore && !force) {
+    return {
+      success: false,
+      skipped: true,
+      reason: "already_populated",
+      leagueId: lid,
+      season,
+      counts: pre,
+      verification: { draftOk: true, teamsOk: true, matchupsOk: true, txnOk: true },
+    };
+  }
+  const combined = { ...input.combinedPayload } as Record<string, unknown>;
+  if (combined.seasonId == null) combined.seasonId = season;
+  const merged = mergeScheduleIntoCombinedPayload(
+    combined,
+    input.matchupPayloads.map((x) => ({
+      week: x.week,
+      payload: x.payload as Record<string, unknown>,
+    })),
+  );
+  const structural = analyzeEspnBrowserImportPayload(merged, matchupsExplicitlyUnavailable);
+  if (!structural.ok) {
+    console.warn(
+      "[importEspnBrowserSeasonBundle]",
+      JSON.stringify({ leagueId: lid, season, phase: "reject_payload", reason: structural.reason, source: input.source }),
+    );
+    return {
+      success: false,
+      skipped: false,
+      reason: structural.reason,
+      leagueId: lid,
+      season,
+      counts: pre,
+      verification: {
+        draftOk: false,
+        teamsOk: false,
+        matchupsOk: false,
+        txnOk: false,
+      },
+    };
+  }
+  for (const mp of input.matchupPayloads) {
+    await upsertRawEspnCache(lid, season, `mMatchup:${mp.week}`, mp.payload);
+    await writeLegacyEspnCaches(lid, season, `mMatchup:${mp.week}`, mp.payload);
+  }
+  console.warn(
+    "[importEspnBrowserSeasonBundle]",
+    JSON.stringify({ leagueId: lid, season, phase: "persist_combined", source: input.source }),
+  );
+  const persist = await runEspnCombinedPersist(lid, season, merged);
+  const post = await countNormalizedGmRowsForSeason(lid, season);
+  const draftOk = post.draftPicks > 0;
+  const teamsOk = post.teams > 0;
+  const matchupsOk = post.matchups > 0 || matchupsExplicitlyUnavailable;
+  const txnOk = post.transactions >= 0;
+  const verificationOk = draftOk && teamsOk && matchupsOk && txnOk;
+  const increased =
+    post.draftPicks > pre.draftPicks ||
+    post.teams > pre.teams ||
+    post.matchups > pre.matchups ||
+    post.transactions > pre.transactions;
+  const wasEmpty = pre.draftPicks + pre.teams + pre.matchups + pre.transactions === 0;
+  const success = verificationOk && (increased || wasEmpty);
+  if (success) {
+    try {
+      const { memCache } = await import("./memCache.js");
+      memCache.invalidateAll();
+    } catch {
+      /* ignore */
+    }
+  }
+  console.warn(
+    "[importEspnBrowserSeasonBundle]",
+    JSON.stringify({
+      leagueId: lid,
+      season,
+      phase: "done",
+      normalization: persist.norm,
+      verificationOk,
+      success,
+      post,
+      source: input.source,
+    }),
+  );
+  return {
+    success,
+    skipped: false,
+    leagueId: lid,
+    season,
+    payloadBytes: persist.payloadBytes,
+    normalization: persist.norm,
+    normalizationError: persist.normalizationError,
+    counts: post,
+    verification: { draftOk, teamsOk, matchupsOk, txnOk },
+  };
+}
+
 export async function countNormalizedGmRowsForSeason(
   leagueId: string,
   season: number,
@@ -1034,6 +1210,37 @@ export async function countNormalizedGmRowsForSeason(
     gmCountLeagueSeason(db, schema.gmTransactions, lid, yr),
   ]);
   return { draftPicks, teams, matchups, transactions };
+}
+
+export type BrowserSyncSeasonRow = {
+  season: number;
+  draftPicks: number;
+  teams: number;
+  matchups: number;
+  transactions: number;
+};
+
+/** Per-season normalized GM row counts (fixed range) for browser-sync UI. */
+export async function getBrowserSyncStatusForLeague(
+  leagueId: string,
+  startSeason: number,
+  endSeason: number,
+): Promise<BrowserSyncSeasonRow[]> {
+  const lid = String(leagueId).trim().slice(0, 32);
+  const lo = Math.floor(Math.min(startSeason, endSeason));
+  const hi = Math.floor(Math.max(startSeason, endSeason));
+  const out: BrowserSyncSeasonRow[] = [];
+  for (let s = lo; s <= hi; s++) {
+    const c = await countNormalizedGmRowsForSeason(lid, s);
+    out.push({
+      season: s,
+      draftPicks: c.draftPicks,
+      teams: c.teams,
+      matchups: c.matchups,
+      transactions: c.transactions,
+    });
+  }
+  return out;
 }
 
 async function gmCountLeagueSeason(

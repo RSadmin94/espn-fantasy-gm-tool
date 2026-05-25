@@ -22,6 +22,7 @@ import { Settings } from "./pages/Settings";
 import { DraftHistory } from "./pages/DraftHistory";
 import { Matchups } from "./pages/Matchups";
 import { trpc } from "@/lib/trpc";
+import { Toaster } from "@/components/ui/sonner";
 import "./index.css";
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
@@ -168,6 +169,7 @@ const router = createBrowserRouter([
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>
     <QueryClientProvider client={queryClient}>
+      <Toaster richColors closeButton />
       <RouterProvider router={router} />
     </QueryClientProvider>
   </trpc.Provider>

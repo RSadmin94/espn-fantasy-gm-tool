@@ -1,0 +1,58 @@
+/**
+ * Injected on GM War Room web app at document_start: marks extension presence and bridges
+ * `postMessage` ESPN fetch requests to the MV3 background worker.
+ */
+(function gmWarRoomEspnBridge() {
+  try {
+    document.documentElement.dataset.gmwrExtension = "1";
+  } catch {
+    /* ignore */
+  }
+
+  window.addEventListener(
+    "message",
+    (ev) => {
+      if (ev.source !== window) return;
+      const d = ev.data;
+      if (!d || d.type !== "GMWR_ESPN_FETCH") return;
+      const id = d.id;
+      const url = d.payload && typeof d.payload.url === "string" ? d.payload.url.trim() : "";
+      if (!id || !url) return;
+      if (!url.includes("fantasy.espn.com")) return;
+
+      chrome.runtime.sendMessage({ type: "GMWR_PAGE_ESPN_FETCH", id, url }, (response) => {
+        if (chrome.runtime.lastError) {
+          window.postMessage(
+            {
+              type: "GMWR_ESPN_FETCH_REPLY",
+              id,
+              status: 0,
+              error: chrome.runtime.lastError.message,
+              bodyText: "",
+            },
+            "*",
+          );
+          return;
+        }
+        const r = response || {};
+        const bodyText =
+          typeof r.bodyText === "string" && r.bodyText.length > 0
+            ? r.bodyText
+            : r.result != null
+              ? JSON.stringify(r.result)
+              : "";
+        window.postMessage(
+          {
+            type: "GMWR_ESPN_FETCH_REPLY",
+            id,
+            status: r.status ?? 0,
+            error: r.error != null ? String(r.error) : "",
+            bodyText,
+          },
+          "*",
+        );
+      });
+    },
+    false,
+  );
+})();
