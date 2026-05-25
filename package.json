@@ -9,7 +9,10 @@
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
     "emit:draft-2010": "node scripts/draft-data/emit-2010-json.mjs",
+    "emit:draft-all-slim": "node scripts/draft-data/emit-all-slim-drafts.mjs",
     "seed:draft-history": "tsx scripts/seed-draft-history.ts",
+    "seed:all-drafts": "tsx scripts/seed-all-drafts.ts",
+    "fetch:history": "tsx scripts/fetch-all-historical-data.ts",
     "format": "prettier --write .",
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"

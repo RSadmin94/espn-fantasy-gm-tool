@@ -5,10 +5,10 @@
  *   pnpm exec tsx scripts/seed-draft-history.ts <season> [--file=path/to.json] [--league-id=457622]
  *
  * JSON shape (see scripts/draft-data/README.md):
- *   { "leagueId"?: string, "teams"?: TeamRow[], "picks": PickRow[] }
+ *   { "season"?: number, "leagueId"?: string, "teams"?: TeamRow[], "picks": PickRow[] | SlimPickRow[] }
  *
- * Each pick: season, overallPick, round, roundPick, teamName, playerName, position, nflTeam,
- * optional teamId, isKeeper, playerId.
+ * Each pick: overallPick, round, roundPick, teamName, playerName, position, nflTeam,
+ * optional season (defaults to file `season` or CLI season), teamId, isKeeper, playerId.
  */
 import "dotenv/config";
 import { readFileSync, existsSync } from "node:fs";
@@ -39,13 +39,27 @@ type PickRow = {
   playerId?: number | null;
 };
 
+/** Slim pick rows omit per-pick `season` (inherited from file-level `season`). */
+type SlimPickRow = Omit<PickRow, "season"> & { season?: number };
+
 type DraftFile = {
+  season?: number;
   leagueId?: string;
   teams?: TeamRow[];
-  picks: PickRow[];
+  picks: (PickRow | SlimPickRow)[];
 };
 
-function rawPickFromSeedPick(p: PickRow): Record<string, unknown> {
+function rawPickFromSeedPick(p: {
+  overallPick: number;
+  round: number;
+  roundPick: number;
+  teamId?: number;
+  playerName: string;
+  position: string;
+  nflTeam: string;
+  isKeeper?: boolean;
+  playerId?: number | null;
+}): Record<string, unknown> {
   return {
     overallPickNumber: p.overallPick,
     roundId: p.round,
@@ -121,7 +135,7 @@ async function ensureTeams(
   }
 }
 
-function resolveTeamIds(picks: PickRow[]): { nameToId: Map<string, number>; rows: TeamRow[] } {
+function resolveTeamIds(picks: (PickRow | SlimPickRow)[]): { nameToId: Map<string, number>; rows: TeamRow[] } {
   const nameToId = new Map<string, number>();
   let maxId = 0;
   for (const p of picks) {
@@ -158,6 +172,11 @@ async function main() {
 
   const doc = JSON.parse(readFileSync(filePath, "utf8")) as DraftFile;
   const lid = String(doc.leagueId ?? leagueId).trim().slice(0, 32);
+  const fileSeason = Math.floor(Number(doc.season ?? season));
+  if (!Number.isFinite(fileSeason) || fileSeason < 1900 || fileSeason > 2200) {
+    console.error("JSON must include a valid `season` (top-level or via CLI).");
+    process.exit(1);
+  }
   const picks = doc.picks;
   if (!Array.isArray(picks) || picks.length === 0) {
     console.error("JSON must contain a non-empty picks array.");
@@ -175,12 +194,12 @@ async function main() {
   const { nameToId, rows: derivedTeams } = resolveTeamIds(picks);
   const teamsFromFile = doc.teams?.length ? doc.teams : derivedTeams;
 
-  await ensureTeams(db, lid, season, teamsFromFile);
+  await ensureTeams(db, lid, fileSeason, teamsFromFile);
 
   const now = new Date();
   let n = 0;
   for (const p of picks) {
-    const yr = Math.floor(Number(p.season ?? season));
+    const yr = Math.floor(Number(p.season ?? fileSeason));
     const overall = Math.floor(Number(p.overallPick));
     const teamName = String(p.teamName ?? "").trim();
     const tid = p.teamId != null && Number.isFinite(Number(p.teamId))
@@ -225,7 +244,7 @@ async function main() {
     n++;
   }
 
-  console.log(`Upserted ${n} draft picks for league ${lid} season ${season}.`);
+  console.log(`Upserted ${n} draft picks for league ${lid} season ${fileSeason}.`);
   process.exit(0);
 }
 
