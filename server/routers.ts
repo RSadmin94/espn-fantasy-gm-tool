@@ -43,6 +43,7 @@ import {
   getCachedView,
   getAllCachedSeasons,
   getRefreshManifests,
+  hasActiveEspnLeagueConnection,
   getChatHistory,
   addChatMessage,
   clearChatHistory,
@@ -1406,7 +1407,13 @@ export const appRouter = router({
         return { results };
       }),
 
-    manifests: publicProcedure.query(async () => getRefreshManifests()),
+    manifests: publicProcedure.query(async () => {
+      const [manifests, hasConn] = await Promise.all([
+        getRefreshManifests(),
+        hasActiveEspnLeagueConnection(),
+      ]);
+      return { manifests, leagueConnectionMissing: !hasConn };
+    }),
     cachedSeasons: publicProcedure.query(async ({ ctx }) =>
       getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)
     ),

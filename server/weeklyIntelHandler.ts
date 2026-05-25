@@ -71,7 +71,7 @@ export async function weeklyIntelHandler(req: Request, res: Response) {
     }
 
     // ── 3. Persist combined cache + league identity ────────────────────────
-    const leagueId = await getDefaultEspnLeagueId();
+    const leagueId = (await getDefaultEspnLeagueId()) ?? "default";
     const quality = validateDataQuality(CURRENT_SEASON, data);
     try {
       await syncEspnCombinedFullPipeline(leagueId, CURRENT_SEASON, data as Record<string, unknown>, {

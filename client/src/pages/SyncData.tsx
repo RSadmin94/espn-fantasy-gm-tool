@@ -255,7 +255,16 @@ export function SyncData() {
 
   const allSeasons: number[] = allSeasonsQuery.data ?? [];
   const cachedSeasons: number[] = cachedQuery.data ?? [];
-  const manifests: ManifestRow[] = (manifestsQuery.data as ManifestRow[] | undefined) ?? [];
+  const { manifests, leagueConnectionMissing } = useMemo(() => {
+    const raw = manifestsQuery.data;
+    if (!raw) return { manifests: [] as ManifestRow[], leagueConnectionMissing: false };
+    if (Array.isArray(raw)) return { manifests: raw as ManifestRow[], leagueConnectionMissing: false };
+    const o = raw as { manifests?: ManifestRow[]; leagueConnectionMissing?: boolean };
+    return {
+      manifests: Array.isArray(o.manifests) ? o.manifests : [],
+      leagueConnectionMissing: Boolean(o.leagueConnectionMissing),
+    };
+  }, [manifestsQuery.data]);
 
   // Latest season is default for single-season refresh
   const latestSeason = allSeasons.length > 0 ? allSeasons[allSeasons.length - 1] : null;
@@ -604,6 +613,12 @@ export function SyncData() {
             {cachedSeasons.length} of {allSeasons.length} seasons cached
           </span>
         </div>
+
+        {manifestsQuery.isSuccess && leagueConnectionMissing && (
+          <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            League not connected — showing cached seasons
+          </div>
+        )}
 
         {manifestsQuery.isLoading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">

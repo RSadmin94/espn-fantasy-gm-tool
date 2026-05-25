@@ -410,7 +410,7 @@ Be specific, use the actual player names and round numbers. Write in a direct GM
           }
         }
 
-        const leagueId = await getDefaultEspnLeagueId();
+        const leagueId = (await getDefaultEspnLeagueId()) ?? "default";
         const quality = validateDataQuality(season, data);
         try {
           await syncEspnCombinedFullPipeline(leagueId, season, data as Record<string, unknown>, {

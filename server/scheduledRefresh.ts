@@ -44,7 +44,7 @@ export async function espnRefreshHandler(req: Request, res: Response) {
 
     for (const season of AUTO_REFRESH_SEASONS) {
       try {
-        const cronLeagueId = await getDefaultEspnLeagueId();
+        const cronLeagueId = (await getDefaultEspnLeagueId()) ?? "default";
         const pipelineResult = await fetchEspnViewsHardened(season);
         const data = pipelineResult.merged;
 
