@@ -81,7 +81,7 @@ import {
   hasCookies,
   resolveEspnCreds,
 } from "./espnService";
-import { backfillNormalizedTablesFromPayload, syncEspnCombinedFullPipeline } from "./espnPersistence";
+import { backfillNormalizedTablesFromPayload, syncEspnCombinedFullPipeline, normalizeEspnPayload, createSyncRun, finishSyncRun } from "./espnPersistence";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -1290,35 +1290,27 @@ export const appRouter = router({
       }),
 
     /**
-     * Re-run full combined persistence (raw cache + all normalized upserts + sync_runs)
-     * from existing combined JSON — no ESPN API calls.
+     * Re-run full normalization from stored combined JSON (no ESPN fetch, no raw re-write).
+     * Upserts teams, matchups, transactions, roster entries, draft picks, players, standings; updates sync_runs.
      */
-    reprocessCachedSeasons: publicProcedure
+    reprocessCachedSeasons: protectedProcedure
       .input(
         z.object({
           seasons: z.array(z.number().int().min(2000).max(2100)).min(1).max(32),
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const userId = ctx.user?.id;
+        const userId = ctx.user.id;
         const db = await getDb();
-        type Counts = {
-          rawViewsSaved: number;
-          teamsSaved: number;
-          matchupsSaved: number;
-          draftPicksSaved: number;
-          transactionsSaved: number;
-          rosterEntriesSaved: number;
-          playersSaved: number;
-          standingsSaved: number;
-        };
-        type Item = {
+        type Row = {
           season: number;
           status: "success" | "partial" | "failed" | "skipped";
-          counts?: Counts;
+          teamCount: number;
+          matchupCount: number;
+          transactionCount: number;
           error?: string;
         };
-        const results: Item[] = [];
+        const results: Row[] = [];
 
         for (const season of input.seasons) {
           const cached = await getCachedView(season, "combined", undefined, { userId });
@@ -1327,73 +1319,86 @@ export const appRouter = router({
             results.push({
               season,
               status: "skipped",
+              teamCount: 0,
+              matchupCount: 0,
+              transactionCount: 0,
               error:
                 "No combined cache for this league/season (fantasy_data_cache / espn_raw_cache / espn_season_cache).",
             });
             continue;
           }
-          const leagueId = String(cached.leagueId).trim().slice(0, 32) || "default";
+          const leagueId = String(cached.leagueId ?? "").trim().slice(0, 32) || "default";
           const payload = rawPayload as Record<string, unknown>;
-          try {
-            await syncEspnCombinedFullPipeline(leagueId, season, payload, {
-              pipelineAllOk: true,
-              qualityUsable: true,
-            });
-            if (!db) {
-              results.push({
-                season,
-                status: "failed",
-                error: "Database unavailable when reading sync run counts.",
-              });
-              continue;
-            }
-            const rows = await db
-              .select({
-                status: syncRuns.status,
-                rawViewsSaved: syncRuns.rawViewsSaved,
-                teamsSaved: syncRuns.teamsSaved,
-                matchupsSaved: syncRuns.matchupsSaved,
-                draftPicksSaved: syncRuns.draftPicksSaved,
-                transactionsSaved: syncRuns.transactionsSaved,
-                rosterEntriesSaved: syncRuns.rosterEntriesSaved,
-                playersSaved: syncRuns.playersSaved,
-                standingsSaved: syncRuns.standingsSaved,
-              })
-              .from(syncRuns)
-              .where(andDrizzle(eqDrizzle(syncRuns.leagueId, leagueId), eqDrizzle(syncRuns.season, season)))
-              .orderBy(descDrizzle(syncRuns.id))
-              .limit(1);
-            const r = rows[0];
-            if (!r) {
-              results.push({
-                season,
-                status: "partial",
-                error: "Pipeline finished but no sync_runs row was found for this league and season.",
-              });
-              continue;
-            }
-            const counts: Counts = {
-              rawViewsSaved: r.rawViewsSaved ?? 0,
-              teamsSaved: r.teamsSaved ?? 0,
-              matchupsSaved: r.matchupsSaved ?? 0,
-              draftPicksSaved: r.draftPicksSaved ?? 0,
-              transactionsSaved: r.transactionsSaved ?? 0,
-              rosterEntriesSaved: r.rosterEntriesSaved ?? 0,
-              playersSaved: r.playersSaved ?? 0,
-              standingsSaved: r.standingsSaved ?? 0,
-            };
-            const st =
-              r.status === "failed"
-                ? "failed"
-                : r.status === "partial" || r.status === "running"
-                  ? "partial"
-                  : "success";
-            results.push({ season, status: st, counts });
-          } catch (e) {
+          if (!db) {
             results.push({
               season,
               status: "failed",
-              error: e instanceof Error ? e.message : String(e),
+              teamCount: 0,
+              matchupCount: 0,
+              transactionCount: 0,
+              error: "Database unavailable",
+            });
+            continue;
+          }
+
+          const syncRunId = await createSyncRun(leagueId, season);
+          try {
+            const norm = await normalizeEspnPayload(db, leagueId, season, payload);
+            const allZero =
+              norm.teamsSaved === 0 &&
+              norm.matchupsSaved === 0 &&
+              norm.transactionsSaved === 0 &&
+              norm.rosterEntriesSaved === 0 &&
+              norm.draftPicksSaved === 0 &&
+              norm.standingsSaved === 0;
+            const st = allZero ? "partial" : "success";
+            await finishSyncRun(
+              syncRunId,
+              st,
+              {
+                rawViewsSaved: 0,
+                teamsSaved: norm.teamsSaved,
+                matchupsSaved: norm.matchupsSaved,
+                draftPicksSaved: norm.draftPicksSaved,
+                transactionsSaved: norm.transactionsSaved,
+                rosterEntriesSaved: norm.rosterEntriesSaved,
+                playersSaved: norm.playersSaved,
+                standingsSaved: norm.standingsSaved,
+              },
+              allZero ? "Normalization produced zero rows (check cache payload)." : null
+            );
+            results.push({
+              season,
+              status: st,
+              teamCount: norm.teamsSaved,
+              matchupCount: norm.matchupsSaved,
+              transactionCount: norm.transactionsSaved,
+              ...(allZero ? { error: "Normalization produced zero rows (check cache payload)." } : {}),
+            });
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            await finishSyncRun(
+              syncRunId,
+              "failed",
+              {
+                rawViewsSaved: 0,
+                teamsSaved: 0,
+                matchupsSaved: 0,
+                draftPicksSaved: 0,
+                transactionsSaved: 0,
+                rosterEntriesSaved: 0,
+                playersSaved: 0,
+                standingsSaved: 0,
+              },
+              msg
+            );
+            results.push({
+              season,
+              status: "failed",
+              teamCount: 0,
+              matchupCount: 0,
+              transactionCount: 0,
+              error: msg,
             });
           }
         }

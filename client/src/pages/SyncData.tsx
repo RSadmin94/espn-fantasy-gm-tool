@@ -189,8 +189,20 @@ function ManifestCard({ manifest, refreshResult }: {
 /** Avoid duplicate auto-sync under React Strict Mode remount (same URL). */
 let gmwrAutoSync2026LastKey = "";
 
-const BACKFILL_NORMALIZED_SEASONS = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
-const REPROCESS_MANIFEST_RANGE = BACKFILL_NORMALIZED_SEASONS;
+const BACKFILL_HISTORICAL_SEASONS = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+
+type HistoricalReprocessRow = {
+  season: number;
+  status: "success" | "partial" | "failed" | "skipped";
+  teamCount: number;
+  matchupCount: number;
+  transactionCount: number;
+  error?: string;
+};
+
+type HistoricalProgressEntry =
+  | { phase: "running" }
+  | { phase: "done"; row?: HistoricalReprocessRow; error?: string };
 
 function trpcLikeErrorMessage(err: Error | { message: string } | null | undefined): string {
   if (!err) return "";
@@ -203,6 +215,8 @@ export function SyncData() {
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
   const [forceRefresh, setForceRefresh] = useState(false);
   const [runResults, setRunResults] = useState<Record<number, RefreshResult>>({});
+  const [historicalProgress, setHistoricalProgress] = useState<Record<number, HistoricalProgressEntry>>({});
+  const [historicalRunning, setHistoricalRunning] = useState(false);
   const [showSeasonPicker, setShowSeasonPicker] = useState(false);
 
   const allSeasonsQuery = trpc.espn.allSeasons.useQuery();
@@ -225,12 +239,7 @@ export function SyncData() {
     },
   });
 
-  const reprocessCachedMutation = trpc.espn.reprocessCachedSeasons.useMutation({
-    onSuccess: () => {
-      void utils.espn.manifests.invalidate();
-      void utils.espn.cachedSeasons.invalidate();
-    },
-  });
+  const reprocessCachedMutation = trpc.espn.reprocessCachedSeasons.useMutation();
 
   const { mutate: runRefresh } = refreshMutation;
 
@@ -276,17 +285,50 @@ export function SyncData() {
 
   const isLoading = refreshMutation.isPending;
   const isBackfillLoading = backfillNormalizedMutation.isPending;
-  const isReprocessLoading = reprocessCachedMutation.isPending;
+  const isReprocessLoading = reprocessCachedMutation.isPending || historicalRunning;
 
   const seasonsToReprocessCached = useMemo(() => {
-    return REPROCESS_MANIFEST_RANGE.filter((s) => {
-      const m = manifests.find((x) => x.season === s);
+    return BACKFILL_HISTORICAL_SEASONS.filter(s => {
+      const m = manifests.find(x => x.season === s);
       if (!m) return false;
       const teams = m.teamCount ?? 0;
       const matchups = m.matchupCount ?? 0;
       return teams > 0 && matchups === 0;
     });
   }, [manifests]);
+
+  const sortedReprocessSeasons = useMemo(
+    () => [...seasonsToReprocessCached].sort((a, b) => a - b),
+    [seasonsToReprocessCached],
+  );
+
+  const handleBackfillHistoricalSeasons = async () => {
+    if (sortedReprocessSeasons.length === 0) return;
+    setHistoricalProgress({});
+    setHistoricalRunning(true);
+    try {
+      for (const s of sortedReprocessSeasons) {
+        setHistoricalProgress(prev => ({ ...prev, [s]: { phase: "running" } }));
+        try {
+          const res = await reprocessCachedMutation.mutateAsync({ seasons: [s] });
+          const row = res.results.find(r => r.season === s) ?? res.results[0];
+          setHistoricalProgress(prev => ({
+            ...prev,
+            [s]: { phase: "done", row: row as HistoricalReprocessRow },
+          }));
+        } catch (e) {
+          setHistoricalProgress(prev => ({
+            ...prev,
+            [s]: { phase: "done", error: trpcLikeErrorMessage(e as Error) },
+          }));
+        }
+      }
+      void utils.espn.manifests.invalidate();
+      void utils.espn.cachedSeasons.invalidate();
+    } finally {
+      setHistoricalRunning(false);
+    }
+  };
   const autoSync2026RefreshDone =
     autoSync2026 && refreshMutation.isSuccess && cachedSeasons.includes(2026);
 
@@ -370,7 +412,7 @@ export function SyncData() {
           <CardTitle className="text-base">Backfill Normalized Data</CardTitle>
           <CardDescription>
             Re-run matchups, transactions, roster entries, and standings from the existing combined cache for
-            seasons {BACKFILL_NORMALIZED_SEASONS[0]}–{BACKFILL_NORMALIZED_SEASONS[BACKFILL_NORMALIZED_SEASONS.length - 1]} without re-fetching ESPN.
+            seasons {BACKFILL_HISTORICAL_SEASONS[0]}–{BACKFILL_HISTORICAL_SEASONS[BACKFILL_HISTORICAL_SEASONS.length - 1]} without re-fetching ESPN.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -378,7 +420,7 @@ export function SyncData() {
             variant="secondary"
             className="gap-2"
             disabled={isLoading || isBackfillLoading || isReprocessLoading}
-            onClick={() => backfillNormalizedMutation.mutate({ seasons: BACKFILL_NORMALIZED_SEASONS })}
+            onClick={() => backfillNormalizedMutation.mutate({ seasons: BACKFILL_HISTORICAL_SEASONS })}
           >
             {isBackfillLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -403,58 +445,68 @@ export function SyncData() {
         </CardContent>
       </Card>
 
-      {/* Full re-persist from combined cache (no ESPN fetch) */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Reprocess Cached Data</CardTitle>
-          <CardDescription>
-            Runs the full normalization pipeline (teams, matchups, transactions, rosters, draft picks, standings)
-            from the stored combined JSON for seasons in {REPROCESS_MANIFEST_RANGE[0]}–
-            {REPROCESS_MANIFEST_RANGE[REPROCESS_MANIFEST_RANGE.length - 1]} that show teams in the manifest but
-            zero matchups — without calling the ESPN API.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            {seasonsToReprocessCached.length > 0
-              ? `Will reprocess: ${seasonsToReprocessCached.sort((a, b) => a - b).join(", ")}`
-              : `No seasons in ${REPROCESS_MANIFEST_RANGE[0]}–${REPROCESS_MANIFEST_RANGE[REPROCESS_MANIFEST_RANGE.length - 1]} currently match (teams > 0 and matchups = 0).`}
-          </p>
-          <Button
-            variant="secondary"
-            className="gap-2"
-            disabled={
-              isLoading ||
-              isBackfillLoading ||
-              isReprocessLoading ||
-              seasonsToReprocessCached.length === 0
-            }
-            onClick={() =>
-              reprocessCachedMutation.mutate({ seasons: [...seasonsToReprocessCached].sort((a, b) => a - b) })
-            }
-          >
-            {isReprocessLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Layers className="h-4 w-4" />
-            )}
-            {isReprocessLoading ? "Reprocessing…" : "Reprocess Cached Data"}
-          </Button>
-          {reprocessCachedMutation.isSuccess && reprocessCachedMutation.data && (
-            <pre className="max-h-64 overflow-auto rounded-lg border border-border bg-muted/30 p-3 text-xs text-foreground">
-              {JSON.stringify(reprocessCachedMutation.data, null, 2)}
-            </pre>
-          )}
-          {reprocessCachedMutation.isError && (
-            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span className="whitespace-pre-wrap break-words">
-                {trpcLikeErrorMessage(reprocessCachedMutation.error)}
-              </span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {sortedReprocessSeasons.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Backfill Historical Seasons</CardTitle>
+            <CardDescription>
+              Runs the full normalization pipeline (teams, matchups, transactions, rosters, draft picks,
+              standings) from stored combined cache for {BACKFILL_HISTORICAL_SEASONS[0]}–
+              {BACKFILL_HISTORICAL_SEASONS[BACKFILL_HISTORICAL_SEASONS.length - 1]} seasons that have teams but zero
+              matchups — without calling ESPN. This unlocks Owner Career Stats, Keeper Calculator, and intelligence
+              features for those years.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Seasons to backfill: {sortedReprocessSeasons.join(", ")}
+            </p>
+            <Button
+              variant="secondary"
+              className="gap-2"
+              disabled={isLoading || isBackfillLoading || isReprocessLoading}
+              onClick={() => void handleBackfillHistoricalSeasons()}
+            >
+              {historicalRunning ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Layers className="h-4 w-4" />
+              )}
+              {historicalRunning ? "Backfilling…" : "Backfill Historical Seasons"}
+            </Button>
+            <ul className="space-y-2 rounded-lg border border-border bg-muted/20 p-3 text-sm">
+              {sortedReprocessSeasons.map(s => {
+                const p = historicalProgress[s];
+                return (
+                  <li key={s} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="min-w-[3rem] font-medium text-foreground">{s}</span>
+                    {!p && <span className="text-xs text-muted-foreground">—</span>}
+                    {p?.phase === "running" && (
+                      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                    )}
+                    {p?.phase === "done" && p.error && (
+                      <span className="text-xs text-red-300 whitespace-pre-wrap break-words">{p.error}</span>
+                    )}
+                    {p?.phase === "done" && p.row && (
+                      <>
+                        <SeasonStatusBadge status={p.row.status} />
+                        <span className="text-xs text-muted-foreground">
+                          teams {p.row.teamCount} · matchups {p.row.matchupCount} · txns {p.row.transactionCount}
+                        </span>
+                        {p.row.error ? (
+                          <span className="w-full text-xs text-yellow-300 whitespace-pre-wrap break-words">
+                            {p.row.error}
+                          </span>
+                        ) : null}
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Multi-season selector */}
       <Card>
