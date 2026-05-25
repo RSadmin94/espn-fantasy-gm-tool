@@ -330,14 +330,48 @@ export async function getCompletedSeasonForOffseason(): Promise<number | null> {
   return completed.length > 0 ? completed[0] : null; // already sorted desc
 }
 
+type SyncRunRow = typeof syncRuns.$inferSelect;
+
+/** Newest run wins: finishedAt (or startedAt if still running), then higher id. */
+function pickNewestSyncRun(pool: SyncRunRow[]): SyncRunRow | null {
+  if (pool.length === 0) return null;
+  return pool.reduce((best, r) => {
+    const tBest = (best.finishedAt ?? best.startedAt).getTime();
+    const tR = (r.finishedAt ?? r.startedAt).getTime();
+    if (tR !== tBest) return tR > tBest ? r : best;
+    return r.id > best.id ? r : best;
+  });
+}
+
+/**
+ * One manifest per season: latest `sync_runs` row for that season (by finishedAt/startedAt, then id).
+ * When multiple leagueIds exist, prefers the active ESPN league from connections/env if that league has
+ * any run for the season; otherwise falls back to the newest run across all leagues. Does not delete history.
+ */
 export async function getRefreshManifests(): Promise<RefreshManifest[]> {
   const db = await getDb();
   if (!db) return [];
-  const runs = await db
-    .select()
-    .from(syncRuns)
-    .orderBy(desc(syncRuns.season));
-  return runs.map(mapSyncRunToRefreshManifest);
+
+  const activeLeagueId = await getDefaultEspnLeagueId();
+  const runs = await db.select().from(syncRuns);
+
+  const bySeason = new Map<number, SyncRunRow[]>();
+  for (const r of runs) {
+    const list = bySeason.get(r.season) ?? [];
+    list.push(r);
+    bySeason.set(r.season, list);
+  }
+
+  const deduped: SyncRunRow[] = [];
+  for (const [, seasonRuns] of bySeason) {
+    const forActive = seasonRuns.filter(r => r.leagueId === activeLeagueId);
+    const pool = forActive.length > 0 ? forActive : seasonRuns;
+    const chosen = pickNewestSyncRun(pool);
+    if (chosen) deduped.push(chosen);
+  }
+
+  deduped.sort((a, b) => b.season - a.season);
+  return deduped.map(mapSyncRunToRefreshManifest);
 }
 
 const MAX_REFRESH_MANIFEST_ERROR_LEN = 16_000;
