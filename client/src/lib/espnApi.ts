@@ -6,11 +6,11 @@
 const FANTASY_FFL = "https://fantasy.espn.com/apis/v3/games/ffl";
 
 export const ESPN_COMBINED_VIEWS = [
-  "mStandings",
   "mTeam",
-  "mSettings",
+  "mStandings",
   "mDraftDetail",
   "mTransactions2",
+  "mSettings",
 ] as const;
 
 export type EspnJsonOk = { ok: true; status: number; data: unknown };

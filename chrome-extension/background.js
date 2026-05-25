@@ -465,7 +465,63 @@ async function sleep(ms) {
   await new Promise((r) => setTimeout(r, ms));
 }
 
-async function fetchEspnJsonWithBackoff(url, { espnCookieHeader, label }) {
+/** League id for API path: digits only (avoids pasted URLs / query junk corrupting the path). */
+function normalizeEspnLeagueIdForPath(leagueId) {
+  const raw = String(leagueId ?? "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) {
+    const fromUrl = extractLeagueIdFromEspnFantasyUrl(raw);
+    if (fromUrl) return fromUrl;
+  }
+  if (/^\d+$/.test(raw)) return raw;
+  const m = raw.match(/\b(\d{4,12})\b/);
+  return m ? m[1] : "";
+}
+
+/** Integer season year for API path only. */
+function sanitizeEspnHistoricalSeasonYear(season) {
+  const y = Math.floor(Number(season));
+  if (!Number.isFinite(y) || y < 1999 || y > 2100) return NaN;
+  return y;
+}
+
+/**
+ * Combined league payload URL — path is strictly `/seasons/{int}/segments/0/leagues/{leagueId}`;
+ * views are query only via URLSearchParams.append("view", …).
+ */
+function buildCombinedLeagueUrl(leagueId, season) {
+  const lid = normalizeEspnLeagueIdForPath(leagueId);
+  const y = sanitizeEspnHistoricalSeasonYear(season);
+  if (!lid || Number.isNaN(y)) return "";
+  const params = new URLSearchParams();
+  for (const view of ["mTeam", "mStandings", "mDraftDetail", "mTransactions2", "mSettings"]) {
+    params.append("view", view);
+  }
+  return `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${y}/segments/0/leagues/${encodeURIComponent(lid)}?${params.toString()}`;
+}
+
+function buildMatchupWeekUrl(leagueId, season, week) {
+  const lid = normalizeEspnLeagueIdForPath(leagueId);
+  const y = sanitizeEspnHistoricalSeasonYear(season);
+  const w = Math.floor(Number(week));
+  if (!lid || Number.isNaN(y) || !Number.isFinite(w) || w < 1 || w > 25) return "";
+  const params = new URLSearchParams();
+  params.append("view", "mMatchup");
+  params.append("view", "mMatchupScore");
+  params.append("scoringPeriodId", String(w));
+  return `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${y}/segments/0/leagues/${encodeURIComponent(lid)}?${params.toString()}`;
+}
+
+/** One DNR rule id is shared; serialize fetches so a `finally` remove never drops another in-flight request's cookies. */
+let __gmwrEspnHistFetchQueue = Promise.resolve();
+
+async function fetchEspnJsonWithBackoff(url, opts) {
+  const next = __gmwrEspnHistFetchQueue.then(() => fetchEspnJsonWithBackoffUnlocked(url, opts));
+  __gmwrEspnHistFetchQueue = next.catch(() => undefined);
+  return next;
+}
+
+async function fetchEspnJsonWithBackoffUnlocked(url, { espnCookieHeader, label }) {
   let attempt = 0;
   let delay = 500;
   while (attempt < 6) {
@@ -488,7 +544,8 @@ async function fetchEspnJsonWithBackoff(url, { espnCookieHeader, label }) {
       await removeEspnHistApiCookieRule();
     }
     const status = res.status;
-    console.info("[GMWR] historical ESPN", { url, label, status, attempt });
+    const contentType = (res.headers.get("content-type") || "").toLowerCase();
+    console.info("[GMWR] historical ESPN", { url, label, status, attempt, contentType });
     if (status === 401 || status === 403) {
       console.warn("[GMWR] ESPN fetch failed", { url, httpStatus: status, label, attempt, error: "ESPN login expired" });
       return { ok: false, status, error: "ESPN login expired", data: null };
@@ -508,6 +565,16 @@ async function fetchEspnJsonWithBackoff(url, { espnCookieHeader, label }) {
       console.warn("[GMWR] ESPN fetch failed", { url, httpStatus: status, label, attempt, error: `HTTP ${status}` });
       return { ok: false, status, error: `HTTP ${status}`, data: null };
     }
+    if (contentType.includes("text/html")) {
+      console.warn("[GMWR] ESPN returned HTML, not JSON (session cookies likely not applied)", {
+        url,
+        httpStatus: status,
+        label,
+        attempt,
+        contentType,
+      });
+      return { ok: false, status, error: "espn_html_not_json", data: null };
+    }
     let data = null;
     try {
       data = await res.json();
@@ -525,26 +592,13 @@ async function fetchEspnJsonWithBackoff(url, { espnCookieHeader, label }) {
   return { ok: false, status: 429, error: "rate_limited", data: null };
 }
 
-function buildCombinedLeagueUrl(leagueId, season) {
-  const lid = encodeURIComponent(String(leagueId).trim());
-  const y = Number(season);
-  const views = ["mStandings", "mTeam", "mSettings", "mDraftDetail", "mTransactions2"];
-  const qs = views.map((v) => `view=${v}`).join("&");
-  return `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${y}/segments/0/leagues/${lid}?${qs}`;
-}
-
-function buildMatchupWeekUrl(leagueId, season, week) {
-  const lid = encodeURIComponent(String(leagueId).trim());
-  const y = Number(season);
-  return `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${y}/segments/0/leagues/${lid}?view=mMatchup&view=mMatchupScore&scoringPeriodId=${week}`;
-}
-
 async function fetchWeeklyMatchupsIfNeeded(leagueId, season, combined, espnCookieHeader) {
   const matchupPayloads = [];
   if (scheduleLen(combined) > 0) return matchupPayloads;
   for (let week = 1; week <= 17; week++) {
     await sleep(500);
     const url = buildMatchupWeekUrl(leagueId, season, week);
+    if (!url) continue;
     const r = await fetchEspnJsonWithBackoff(url, { espnCookieHeader, label: `mMatchup_${season}_${week}` });
     if (!r.ok) {
       if (r.status === 404) continue;
@@ -597,6 +651,10 @@ async function runHistoricalImportOneSeason({
   force,
 }) {
   const combinedUrl = buildCombinedLeagueUrl(leagueId, season);
+  if (!combinedUrl) {
+    console.warn("[GMWR] historical combined URL invalid", { leagueId, season });
+    return { ok: false, error: "invalid_league_or_season", season };
+  }
   const combinedRes = await fetchEspnJsonWithBackoff(combinedUrl, {
     espnCookieHeader,
     label: `combined_${season}`,
