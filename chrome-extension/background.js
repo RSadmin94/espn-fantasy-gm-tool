@@ -441,46 +441,19 @@ async function removeEspnHistApiCookieRule() {
   }
 }
 
-async function applyEspnHistHtmlCookieRule(espnCookieHeader) {
-  await chrome.declarativeNetRequest.updateSessionRules({
-    removeRuleIds: [8844212],
-    addRules: [
-      {
-        id: 8844212,
-        priority: 1,
-        action: {
-          type: "modifyHeaders",
-          requestHeaders: [{ header: "Cookie", operation: "set", value: espnCookieHeader }],
-        },
-        condition: {
-          urlFilter: "https://fantasy.espn.com/football/league/history*",
-          resourceTypes: ["xmlhttprequest", "main_frame", "sub_frame", "other"],
-        },
-      },
-    ],
-  });
-}
-
-async function removeEspnHistHtmlCookieRule() {
-  try {
-    await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [8844212] });
-  } catch {
-    /* ignore */
+/**
+ * ESPN seasons we may attempt to import: fixed window [2009, current calendar year].
+ * No HTML/API discovery — avoids phantom future years (e.g. 2027+) and duplicate years from page scraping.
+ */
+function buildEspnSeasonDiscoveryList() {
+  const currentYear = new Date().getFullYear();
+  const minYear = 2009;
+  if (currentYear < minYear) return [];
+  const seasons = [];
+  for (let y = minYear; y <= currentYear; y++) {
+    seasons.push(y);
   }
-}
-
-function parseSeasonsFromHistoryHtml(html, leagueId) {
-  const seasons = new Set();
-  const reYear = /\b(20[0-2]\d)\b/g;
-  let m;
-  while ((m = reYear.exec(html)) !== null) {
-    const y = Number(m[1]);
-    if (y >= 2010 && y <= 2100) seasons.add(y);
-  }
-  for (const mm of html.matchAll(/seasonId[=:](\d{4})/gi)) seasons.add(Number(mm[1]));
-  for (const mm of html.matchAll(/"season"\s*:\s*(\d{4})/g)) seasons.add(Number(mm[1]));
-  seasons.delete(2009);
-  return [...seasons].sort((a, b) => a - b);
+  return seasons;
 }
 
 function scheduleLen(data) {
@@ -507,34 +480,48 @@ async function fetchEspnJsonWithBackoff(url, { espnCookieHeader, label }) {
           Referer: "https://fantasy.espn.com/",
         },
       });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[GMWR] ESPN fetch network error", { url, label, attempt, error: msg });
+      return { ok: false, status: 0, error: msg, data: null };
     } finally {
       await removeEspnHistApiCookieRule();
     }
     const status = res.status;
-    console.info("[GMWR] historical ESPN", { label, status, attempt });
+    console.info("[GMWR] historical ESPN", { url, label, status, attempt });
     if (status === 401 || status === 403) {
+      console.warn("[GMWR] ESPN fetch failed", { url, httpStatus: status, label, attempt, error: "ESPN login expired" });
       return { ok: false, status, error: "ESPN login expired", data: null };
     }
     if (status === 404) {
+      console.warn("[GMWR] ESPN fetch failed", { url, httpStatus: status, label, attempt, error: "not_found" });
       return { ok: false, status, error: "not_found", data: null };
     }
     if (status === 429) {
       attempt += 1;
+      console.warn("[GMWR] ESPN fetch rate limited, retrying", { url, httpStatus: status, label, attempt, delayMs: delay });
       await sleep(delay);
       delay = Math.min(delay * 2, 8000);
       continue;
     }
     if (!res.ok) {
+      console.warn("[GMWR] ESPN fetch failed", { url, httpStatus: status, label, attempt, error: `HTTP ${status}` });
       return { ok: false, status, error: `HTTP ${status}`, data: null };
     }
     let data = null;
     try {
       data = await res.json();
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[GMWR] ESPN fetch JSON parse failed", { url, httpStatus: status, label, attempt, error: msg });
       data = null;
+    }
+    if (data == null) {
+      console.warn("[GMWR] ESPN fetch empty or non-JSON body", { url, httpStatus: status, label, attempt });
     }
     return { ok: true, status, error: null, data };
   }
+  console.warn("[GMWR] ESPN fetch failed after retries", { url, httpStatus: 429, label, error: "rate_limited" });
   return { ok: false, status: 429, error: "rate_limited", data: null };
 }
 
@@ -618,6 +605,13 @@ async function runHistoricalImportOneSeason({
     return { ok: false, error: "ESPN login expired", season };
   }
   if (!combinedRes.ok || !combinedRes.data) {
+    console.warn("[GMWR] historical combined fetch failed", {
+      leagueId,
+      season,
+      url: combinedUrl,
+      httpStatus: combinedRes.status ?? null,
+      error: combinedRes.error || "combined_fetch_failed",
+    });
     return { ok: false, error: combinedRes.error || "combined_fetch_failed", season };
   }
   const combined = combinedRes.data;
@@ -844,30 +838,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse({ ok: false, seasons: [], error: "ESPN login expired", details: "missing_cookies" });
         return;
       }
-      const espnCookieHeader = buildEspnCookieHeader(swid, espnS2);
-      const histUrl = `https://fantasy.espn.com/football/league/history?leagueId=${encodeURIComponent(leagueId)}`;
-      await applyEspnHistHtmlCookieRule(espnCookieHeader);
-      let status = 0;
-      let html = "";
-      try {
-        const res = await fetch(histUrl, {
-          method: "GET",
-          credentials: "omit",
-          headers: { Accept: "text/html,application/xhtml+xml", Referer: "https://fantasy.espn.com/" },
-        });
-        status = res.status;
-        html = await res.text();
-      } finally {
-        await removeEspnHistHtmlCookieRule();
-      }
-      if (status === 401 || status === 403) {
-        sendResponse({ ok: false, seasons: [], error: "ESPN login expired" });
-        return;
-      }
-      const seasons = parseSeasonsFromHistoryHtml(html, leagueId).filter((y) => y !== 2009);
+      const currentYear = new Date().getFullYear();
+      const seasons = buildEspnSeasonDiscoveryList();
       const skipped = [];
-      console.info("[GMWR] historical discover", { leagueId, httpStatus: status, seasonCount: seasons.length });
-      sendResponse({ ok: true, seasons, skipped, httpStatus: status });
+      console.info("[GMWR] historical discover (fixed range)", {
+        leagueId,
+        minYear: 2009,
+        currentYear,
+        seasonCount: seasons.length,
+      });
+      sendResponse({ ok: true, seasons, skipped, httpStatus: 200 });
     })().catch((err) => {
       const msg = err instanceof Error ? err.message : String(err);
       sendResponse({ ok: false, seasons: [], error: msg });
@@ -918,9 +898,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const leagueId = String(message?.leagueId || "457622").trim();
       const espnCookieHeader = buildEspnCookieHeader(swid, espnS2);
       const rawSeasons = Array.isArray(message?.seasons) ? message.seasons : [];
+      const currentYear = new Date().getFullYear();
       const uniq = [...new Set(rawSeasons)]
         .map((x) => Math.floor(Number(x)))
-        .filter((y) => Number.isFinite(y) && y >= 1990 && y !== 2009)
+        .filter((y) => Number.isFinite(y) && y >= 2009 && y <= currentYear)
         .sort((a, b) => a - b);
       const ordered = uniq.includes(2010) ? [2010, ...uniq.filter((s) => s !== 2010)] : uniq;
       const results = [];
