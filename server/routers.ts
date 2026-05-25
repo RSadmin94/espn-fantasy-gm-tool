@@ -65,16 +65,6 @@ import {
   getSeasonDraftPicks,
   getSeasonTeams,
 } from "./historicalDataService";
-import {
-  buildManualCombinedPayloadForSeason,
-  getManualMatchupsForSeasonWeek,
-  getManualWorkbookSignature,
-  listManualSeasonsFromParsed,
-  loadParsedManualWorkbook,
-  manualMemberIdForOwnerName,
-  maxWeekFromManualMatchups,
-  mergeManualH2HMatrixIntoOwners,
-} from "./manualHistoricalWorkbook";
 import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmMatchups, syncRuns } from "../drizzle/schema";
 import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle, asc as ascDrizzle, sql } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
@@ -1692,7 +1682,7 @@ export const appRouter = router({
         return picks;
       }),
 
-    /** Draft board: verified manual workbook → normalized `draft_picks` + teams → mDraftDetail / combined cache → empty. */
+    /** Draft board: normalized `draft_picks` (+ joins) → mDraftDetail / combined cache → empty. */
     draftHistory: publicProcedure
       .input(z.object({ season: z.number() }))
       .query(async ({ ctx, input }) => {
@@ -1748,7 +1738,7 @@ export const appRouter = router({
       return getHistoricalCoverageReport(leagueId, ctx.user.id);
     }),
 
-    /** Debug: which source backs historical pages (manual workbook vs DB vs cache). */
+    /** Debug: which source backs historical pages (DB vs cache). */
     historicalReadAudit: protectedProcedure.query(async ({ ctx }) => {
       const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
       return buildHistoricalReadAudit(leagueId, ctx.user.id);
@@ -1765,7 +1755,7 @@ export const appRouter = router({
       }),
 
     /**
-     * Scoreboard: verified manual workbook (per week) → normalized `matchups` + `teams` (DB).
+     * Scoreboard: normalized `matchups` + `teams` (DB) for the requested week.
      */
     matchupsScoreboard: publicProcedure
       .input(z.object({ season: z.number(), week: z.number().int().min(1) }))
@@ -1821,7 +1811,7 @@ export const appRouter = router({
               wins: Number(t.wins ?? 0) || 0,
               losses: Number(t.losses ?? 0) || 0,
               ties: Number(t.ties ?? 0) || 0,
-              logoUrl: (t.logoUrl && String(t.logoUrl).trim()) || "",
+              logoUrl: typeof t.logoUrl === "string" ? t.logoUrl.trim() : "",
               rank,
             });
           }
@@ -1893,21 +1883,6 @@ export const appRouter = router({
         let dataSource: "verified_manual" | "normalized" | "empty" = "empty";
         let maxWeek = 0;
 
-        if (input.season !== 2009) {
-          const wb = await loadParsedManualWorkbook();
-          if (wb) {
-            maxWeek = Math.max(maxWeek, maxWeekFromManualMatchups(input.season, wb));
-            const manualRaw = getManualMatchupsForSeasonWeek(input.season, input.week, wb);
-            if (manualRaw.length > 0) {
-              const ts = await getSeasonTeams(input.season, leagueId, ctx.user?.id ?? undefined);
-              const teamMap = teamMapFromRows(ts.rows as Record<string, unknown>[]);
-              const matchups = mapScoreboardRows(manualRaw as { synthetic?: boolean }[], teamMap);
-              dataSource = "verified_manual";
-              return { maxWeek: Math.max(maxWeek, input.week), matchups, dataSource };
-            }
-          }
-        }
-
         const db = await getDb();
         if (!db) return { maxWeek, matchups: [] as const, dataSource };
 
@@ -1961,7 +1936,7 @@ export const appRouter = router({
             wins: Number(t.wins ?? 0) || 0,
             losses: Number(t.losses ?? 0) || 0,
             ties: Number(t.ties ?? 0) || 0,
-            logoUrl: (t.logoUrl && String(t.logoUrl).trim()) || "",
+            logoUrl: typeof t.logoUrl === "string" ? t.logoUrl.trim() : "",
             rank,
           });
         }
@@ -3271,9 +3246,7 @@ export const appRouter = router({
     };
   }),
 
-  ownerCareerStats: publicProcedure.query(() => {
-    return memCache(`ownerCareerStats:vManual:${getManualWorkbookSignature()}`, 10 * 60_000, async () => {
-    // Resolve active league credentials for multi-league isolation
+  ownerCareerStats: publicProcedure.query(async () => {
     let ownerStatsCreds: import('./espnService').EspnCreds | undefined;
     try {
       const db = await getDb();
@@ -3299,12 +3272,11 @@ export const appRouter = router({
     } catch (_e) { /* non-fatal — fall back to env-var league */ }
     const ownerStatsLeagueId = ownerStatsCreds?.leagueId ?? LEAGUE_ID;
 
+    return memCache(`ownerCareerStats:vNorm:${ownerStatsLeagueId}`, 10 * 60_000, async () => {
     const cachedSeasonsList = await getAllCachedSeasons(ownerStatsLeagueId);
     const normSeasons = await distinctNormalizedSeasons(ownerStatsLeagueId);
-    const wbOnce = await loadParsedManualWorkbook();
-    const manualSeasons = wbOnce ? listManualSeasonsFromParsed(wbOnce) : [];
     const cachedSeasons = Array.from(
-      new Set([...manualSeasons, ...cachedSeasonsList, ...normSeasons].map((s) => Number(s))),
+      new Set([...cachedSeasonsList, ...normSeasons].map((s) => Number(s))),
     )
       .filter((s) => s !== 2009)
       .sort((a, b) => a - b);
@@ -3377,14 +3349,8 @@ export const appRouter = router({
 
     for (const season of cachedSeasons) {
       let data: any = null;
-      const manualPayload = await buildManualCombinedPayloadForSeason(season);
-      if (manualPayload && Array.isArray(manualPayload.teams) && manualPayload.teams.length > 0) {
-        data = manualPayload;
-      }
-      if (!data) {
-        const row = await getCachedView(season, "combined", ownerStatsLeagueId);
-        data = row?.payload as any;
-      }
+      const row = await getCachedView(season, "combined", ownerStatsLeagueId);
+      data = row?.payload as any;
       const teamsLenEarly = Array.isArray(data?.teams) ? data.teams.length : 0;
       if (!data || teamsLenEarly === 0) {
         try {
@@ -3402,59 +3368,6 @@ export const appRouter = router({
       const hasTeamData = teams.length > 0;
 
       if (!hasTeamData) {
-        const ch = wbOnce?.champions.find((c) => c.season === season);
-        if (ch) {
-          const champId = manualMemberIdForOwnerName(ch.championName);
-          const champOwner = getOrCreateOwner(champId, [
-            {
-              id: champId,
-              displayName: ch.championName,
-              firstName: ch.championName.split(/\s+/)[0] ?? ch.championName,
-              lastName: ch.championName.split(/\s+/).slice(1).join(" ") ?? "",
-            },
-          ]);
-          champOwner.championships++;
-          champOwner.seasonRecords.push({
-            season,
-            teamName: ch.championName,
-            wins: 0,
-            losses: 0,
-            ties: 0,
-            pf: 0,
-            pa: 0,
-            rank: 1,
-            playoffSeed: 0,
-            madePlayoffs: true,
-            isChampion: true,
-            isRunnerUp: false,
-          });
-          if (ch.runnerUpName) {
-            const ruId = manualMemberIdForOwnerName(ch.runnerUpName);
-            const ruOwner = getOrCreateOwner(ruId, [
-              {
-                id: ruId,
-                displayName: ch.runnerUpName,
-                firstName: ch.runnerUpName.split(/\s+/)[0] ?? ch.runnerUpName,
-                lastName: ch.runnerUpName.split(/\s+/).slice(1).join(" ") ?? "",
-              },
-            ]);
-            ruOwner.runnerUps++;
-            ruOwner.seasonRecords.push({
-              season,
-              teamName: ch.runnerUpName,
-              wins: 0,
-              losses: 0,
-              ties: 0,
-              pf: 0,
-              pa: 0,
-              rank: 2,
-              playoffSeed: 0,
-              madePlayoffs: true,
-              isChampion: false,
-              isRunnerUp: true,
-            });
-          }
-        }
         continue;
       }
 
@@ -3606,8 +3519,6 @@ export const appRouter = router({
         }
       }
     }
-
-    if (wbOnce) mergeManualH2HMatrixIntoOwners(ownerMap, wbOnce);
 
     // ── Serialize to plain objects ──────────────────────────────────────────
     const owners = Array.from(ownerMap.values()).map((o) => {
