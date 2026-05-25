@@ -57,6 +57,12 @@ import {
   persistLlmUsage,
   getLlmUsageSummary,
 } from "./db";
+import {
+  buildCombinedPayloadFromNormalized,
+  distinctNormalizedSeasons,
+  getHistoricalCoverageReport,
+  getSeasonDraftPicks,
+} from "./historicalDataService";
 import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmMatchups, syncRuns } from "../drizzle/schema";
 import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle, asc as ascDrizzle, sql } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
@@ -1579,7 +1585,20 @@ export const appRouter = router({
           )
           .orderBy(ascDrizzle(gmDraftPicks.overallPick));
 
-        return rows.map((r) => ({
+        const mapRow = (r: {
+          overallPick: number;
+          round: number;
+          roundPick: number;
+          teamId: number;
+          teamName: string | null;
+          ownerName: string | null;
+          playerId: number | null;
+          playerName: string | null;
+          position: string | null;
+          isKeeper: boolean | number | null;
+          bidAmount: unknown;
+          rawPick: unknown;
+        }) => ({
           overallPick: r.overallPick,
           round: r.round,
           roundPick: r.roundPick,
@@ -1592,8 +1611,37 @@ export const appRouter = router({
           nflTeam: nflTeamFromDraftRawPick(r.rawPick != null ? String(r.rawPick) : ""),
           isKeeper: Boolean(r.isKeeper),
           bidAmount: r.bidAmount != null ? Number(r.bidAmount) : 0,
-        }));
+        });
+
+        if (rows.length > 0) return rows.map(mapRow);
+
+        const fb = await getSeasonDraftPicks(input.season, leagueId, ctx.user?.id ?? undefined);
+        if (fb.count === 0) return [];
+        return (fb.rows as Record<string, unknown>[]).map((p) => {
+          const raw = p.rawPick != null ? String(p.rawPick) : "";
+          const nfl = nflTeamFromDraftRawPick(raw) || String(p.proTeam ?? "").trim();
+          return {
+            overallPick: Number(p.overallPickNumber ?? 0),
+            round: Number(p.roundId ?? 0),
+            roundPick: Number(p.roundPickNumber ?? 0),
+            teamId: Number(p.teamId ?? 0),
+            teamName: String(p.teamName || `Team ${p.teamId}`),
+            ownerName: "",
+            playerId: p.playerId != null ? Number(p.playerId) : null,
+            playerName: (p.playerName as string | null) ?? null,
+            position: (p.position as string | null) ?? null,
+            nflTeam: nfl,
+            isKeeper: Boolean(p.keeper || p.reservedForKeeper),
+            bidAmount: 0,
+          };
+        });
       }),
+
+    /** Per-season counts + data source (normalized vs cache tiers) for ops / debugging. Cached 5 minutes. */
+    historicalCoverage: protectedProcedure.query(async ({ ctx }) => {
+      const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+      return getHistoricalCoverageReport(leagueId, ctx.user.id);
+    }),
 
     matchups: publicProcedure
       .input(z.object({ season: z.number(), matchupPeriodId: z.number().optional() }))
@@ -3081,7 +3129,9 @@ export const appRouter = router({
     } catch (_e) { /* non-fatal — fall back to env-var league */ }
     const ownerStatsLeagueId = ownerStatsCreds?.leagueId ?? LEAGUE_ID;
 
-    const cachedSeasons = await getAllCachedSeasons(ownerStatsLeagueId);
+    const cachedSeasonsList = await getAllCachedSeasons(ownerStatsLeagueId);
+    const normSeasons = await distinctNormalizedSeasons(ownerStatsLeagueId);
+    const cachedSeasons = Array.from(new Set([...cachedSeasonsList, ...normSeasons])).sort((a, b) => a - b);
 
     // ── Per-owner aggregated stats ──────────────────────────────────────────
     // memberId → owner profile
@@ -3161,8 +3211,19 @@ export const appRouter = router({
 
     for (const season of cachedSeasons) {
       const row = await getCachedView(season, 'combined', ownerStatsLeagueId);
-      if (!row) continue;
-      const data = row.payload as any;
+      let data: any = row?.payload as any;
+      const teamsLen = Array.isArray(data?.teams) ? data.teams.length : 0;
+      if (!data || teamsLen === 0) {
+        try {
+          const synth = await buildCombinedPayloadFromNormalized(season, ownerStatsLeagueId, undefined);
+          if (synth && Array.isArray(synth.teams) && synth.teams.length > 0) {
+            data = synth;
+          }
+        } catch (e) {
+          console.warn("[ownerCareerStats] normalized fallback skipped:", season, e);
+        }
+      }
+      if (!data) continue;
       const members: any[] = data.members || [];
       const teams: any[] = data.teams || [];
       const hasTeamData = teams.length > 0;

@@ -160,12 +160,17 @@ function espnSeasonCacheRowToCached(row: EspnSeasonCache): CachedEspnSeasonRow {
   };
 }
 
-export async function getCachedView(
+export type CachedViewStorageTier = "espn_raw_cache" | "fantasy_data_cache" | "espn_season_cache";
+
+/**
+ * Same resolution order as {@link getCachedView}, but records which persistence layer served the row.
+ */
+export async function getCachedViewWithTier(
   season: number,
   viewName: string,
   leagueId?: string,
   opts?: { userId?: number }
-): Promise<CachedEspnSeasonRow | null> {
+): Promise<{ row: CachedEspnSeasonRow; tier: CachedViewStorageTier } | null> {
   const db = await getDb();
   if (!db) return null;
   const yr = Math.floor(Number(season));
@@ -188,7 +193,7 @@ export async function getCachedView(
     .where(and(eq(espnRawCache.leagueId, lid), eq(espnRawCache.season, yr), eq(espnRawCache.viewName, vn)))
     .orderBy(desc(espnRawCache.updatedAt))
     .limit(1);
-  if (rawPrimary[0]) return rawEspnCacheRowToCached(rawPrimary[0]);
+  if (rawPrimary[0]) return { row: rawEspnCacheRowToCached(rawPrimary[0]), tier: "espn_raw_cache" };
 
   if (lid !== "default") {
     const rawDefault = await db
@@ -197,7 +202,7 @@ export async function getCachedView(
       .where(and(eq(espnRawCache.leagueId, "default"), eq(espnRawCache.season, yr), eq(espnRawCache.viewName, vn)))
       .orderBy(desc(espnRawCache.updatedAt))
       .limit(1);
-    if (rawDefault[0]) return rawEspnCacheRowToCached(rawDefault[0]);
+    if (rawDefault[0]) return { row: rawEspnCacheRowToCached(rawDefault[0]), tier: "espn_raw_cache" };
   }
 
   const primaryKey = buildEspnFantasyDataCacheKey(lid, yr, vn);
@@ -207,7 +212,7 @@ export async function getCachedView(
     .where(eq(fantasyDataCache.cacheKey, primaryKey))
     .orderBy(desc(fantasyDataCache.updatedAt))
     .limit(1);
-  if (primary[0]) return fantasyDataRowToCachedEspnSeason(primary[0]);
+  if (primary[0]) return { row: fantasyDataRowToCachedEspnSeason(primary[0]), tier: "fantasy_data_cache" };
 
   if (lid !== "default") {
     const legacyKey = buildEspnFantasyDataCacheKey("default", yr, vn);
@@ -217,7 +222,7 @@ export async function getCachedView(
       .where(eq(fantasyDataCache.cacheKey, legacyKey))
       .orderBy(desc(fantasyDataCache.updatedAt))
       .limit(1);
-    if (legacy[0]) return fantasyDataRowToCachedEspnSeason(legacy[0]);
+    if (legacy[0]) return { row: fantasyDataRowToCachedEspnSeason(legacy[0]), tier: "fantasy_data_cache" };
   }
 
   const escPrimary = await db
@@ -226,7 +231,7 @@ export async function getCachedView(
     .where(and(eq(espnSeasonCache.leagueId, lid), eq(espnSeasonCache.season, yr), eq(espnSeasonCache.viewName, vn)))
     .orderBy(desc(espnSeasonCache.updatedAt))
     .limit(1);
-  if (escPrimary[0]) return espnSeasonCacheRowToCached(escPrimary[0]);
+  if (escPrimary[0]) return { row: espnSeasonCacheRowToCached(escPrimary[0]), tier: "espn_season_cache" };
 
   if (lid !== "default") {
     const escDefault = await db
@@ -237,10 +242,20 @@ export async function getCachedView(
       )
       .orderBy(desc(espnSeasonCache.updatedAt))
       .limit(1);
-    if (escDefault[0]) return espnSeasonCacheRowToCached(escDefault[0]);
+    if (escDefault[0]) return { row: espnSeasonCacheRowToCached(escDefault[0]), tier: "espn_season_cache" };
   }
 
   return null;
+}
+
+export async function getCachedView(
+  season: number,
+  viewName: string,
+  leagueId?: string,
+  opts?: { userId?: number }
+): Promise<CachedEspnSeasonRow | null> {
+  const hit = await getCachedViewWithTier(season, viewName, leagueId, opts);
+  return hit?.row ?? null;
 }
 
 export async function upsertCachedView(season: number, viewName: string, payload: unknown, leagueId?: string) {
