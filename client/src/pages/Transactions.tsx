@@ -134,15 +134,67 @@ function isDraftish(r: TxnRow): boolean {
   return it.includes("DRAFT") || r.overallPickNumber != null || (r.playerId == null && (r.round != null || r.pickInRound != null));
 }
 
-function formatPickBits(r: Pick<TxnRow, "round" | "pickInRound" | "overallPickNumber">): string {
-  const rnd = r.round != null ? Number(r.round) : NaN;
-  const pir = r.pickInRound != null ? Number(r.pickInRound) : NaN;
-  const ov = r.overallPickNumber != null ? Number(r.overallPickNumber) : NaN;
-  const parts: string[] = [];
-  if (Number.isFinite(rnd)) parts.push(`Round ${rnd}`);
-  if (Number.isFinite(pir)) parts.push(`Pick ${pir}`);
-  if (Number.isFinite(ov)) parts.push(`#${ov} overall`);
-  return parts.length ? `Draft pick (${parts.join(", ")})` : "Draft pick";
+type DraftPickBitsInput = {
+  round?: number | null;
+  pickInRound?: number | null;
+  overallPickNumber?: number | null;
+};
+
+interface DraftPickVisual {
+  line1: string;
+  rNotation: string | null;
+  overallText: string | null;
+}
+
+function ordinal(n: number): string {
+  const v = Math.floor(Math.abs(n)) * Math.sign(n || 1);
+  const j = v % 10;
+  const k = v % 100;
+  if (j === 1 && k !== 11) return `${v}st`;
+  if (j === 2 && k !== 12) return `${v}nd`;
+  if (j === 3 && k !== 13) return `${v}rd`;
+  return `${v}th`;
+}
+
+function padPickInRound(p: number): string {
+  return String(Math.max(0, Math.floor(Math.abs(p)))).padStart(2, "0");
+}
+
+function formatDraftPickVisual(season: number, bits: DraftPickBitsInput): DraftPickVisual {
+  const rnd = bits.round != null ? Number(bits.round) : NaN;
+  const pir = bits.pickInRound != null ? Number(bits.pickInRound) : NaN;
+  const ov = bits.overallPickNumber != null ? Number(bits.overallPickNumber) : NaN;
+  const hasR = Number.isFinite(rnd) && rnd > 0;
+  const hasPir = Number.isFinite(pir) && pir > 0;
+  const hasOv = Number.isFinite(ov) && ov > 0;
+  const overallText = hasOv ? `Overall #${Math.floor(ov)}` : null;
+
+  if (hasR && hasPir) {
+    return {
+      line1: `${season} ${ordinal(Math.floor(rnd))} Round Pick`,
+      rNotation: `R${Math.floor(rnd)}.${padPickInRound(pir)}`,
+      overallText,
+    };
+  }
+  if (hasR && !hasPir) {
+    return {
+      line1: hasOv ? `${season} ${ordinal(Math.floor(rnd))} Round Pick` : `Round ${Math.floor(rnd)}`,
+      rNotation: null,
+      overallText,
+    };
+  }
+  if (hasOv) {
+    return { line1: `Overall #${Math.floor(ov)}`, rNotation: null, overallText: null };
+  }
+  return { line1: "Draft pick", rNotation: null, overallText: null };
+}
+
+function formatDraftPickNarrative(season: number, bits: DraftPickBitsInput): string {
+  const v = formatDraftPickVisual(season, bits);
+  const parts: string[] = [v.line1];
+  if (v.rNotation) parts.push(v.rNotation);
+  if (v.overallText) parts.push(v.overallText);
+  return parts.join(" · ");
 }
 
 interface PlayerBits {
@@ -150,8 +202,14 @@ interface PlayerBits {
   proTeam: string;
 }
 
-function assetLabel(r: TxnRow, meta: Map<number, PlayerBits>): string {
-  if (isDraftish(r)) return formatPickBits(r);
+function assetLabel(r: TxnRow, meta: Map<number, PlayerBits>, season: number): string {
+  if (isDraftish(r)) {
+    return formatDraftPickNarrative(season, {
+      round: r.round,
+      pickInRound: r.pickInRound,
+      overallPickNumber: r.overallPickNumber,
+    });
+  }
   const pid = r.playerId != null && r.playerId > 0 ? r.playerId : null;
   const m = pid != null ? meta.get(pid) : undefined;
   const pos = (r.position || m?.position || "?").trim();
@@ -236,12 +294,12 @@ function collectTradeAssets(rows: TxnRow[]): TradeAsset[] {
   return assetsFromRaw(rows);
 }
 
-function assetToLabel(a: TradeAsset, meta: Map<number, PlayerBits>): string {
+function assetToLabel(a: TradeAsset, meta: Map<number, PlayerBits>, season: number): string {
   const draftLike =
     String(a.itemType || "").toUpperCase().includes("DRAFT") ||
     (a.playerId == null && (a.overallPickNumber != null || a.round != null));
   if (draftLike) {
-    return formatPickBits({
+    return formatDraftPickNarrative(season, {
       round: a.round,
       pickInRound: a.pickInRound,
       overallPickNumber: a.overallPickNumber,
@@ -263,7 +321,12 @@ function listPhrase(items: string[]): string {
   return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]!}`;
 }
 
-function describeTrade(rows: TxnRow[], teamMap: Map<number, string>, meta: Map<number, PlayerBits>): string {
+function describeTrade(
+  rows: TxnRow[],
+  teamMap: Map<number, string>,
+  meta: Map<number, PlayerBits>,
+  season: number
+): string {
   const assets = collectTradeAssets(rows);
   if (assets.length === 0) {
     const st = rows.map(r => r.status).find(Boolean);
@@ -281,10 +344,10 @@ function describeTrade(rows: TxnRow[], teamMap: Map<number, string>, meta: Map<n
     const [ta, tb] = teams.slice(0, 2);
     const aGives = assets
       .filter(a => a.fromTeamId === ta && a.toTeamId === tb)
-      .map(a => assetToLabel(a, meta));
+      .map(a => assetToLabel(a, meta, season));
     const bGives = assets
       .filter(a => a.fromTeamId === tb && a.toTeamId === ta)
-      .map(a => assetToLabel(a, meta));
+      .map(a => assetToLabel(a, meta, season));
     const nameA = teamMap.get(ta) || `Team ${ta}`;
     const nameB = teamMap.get(tb) || `Team ${tb}`;
     if (aGives.length || bGives.length) {
@@ -303,7 +366,7 @@ function describeTrade(rows: TxnRow[], teamMap: Map<number, string>, meta: Map<n
     .map(a => {
       const from = a.fromTeamId != null ? teamMap.get(a.fromTeamId) || `Team ${a.fromTeamId}` : "?";
       const to = a.toTeamId != null ? teamMap.get(a.toTeamId) || `Team ${a.toTeamId}` : "?";
-      return `${from} → ${assetToLabel(a, meta)} → ${to}`;
+      return `${from} → ${assetToLabel(a, meta, season)} → ${to}`;
     })
     .join(" · ");
 }
@@ -408,10 +471,11 @@ function addDropLine(
   r: TxnRow,
   kind: "ADD" | "DROP" | "WAIVER",
   teamMap: Map<number, string>,
-  meta: Map<number, PlayerBits>
+  meta: Map<number, PlayerBits>,
+  season: number
 ): string {
   const ft = fantasyTeamForRow(r, teamMap);
-  const label = assetLabel(r, meta);
+  const label = assetLabel(r, meta, season);
   if (kind === "ADD") return `Added ${label} — ${ft}`;
   if (kind === "DROP") return `Dropped ${label} — ${ft}`;
   const bid = r.bidAmount != null ? Number(r.bidAmount) : 0;
@@ -440,7 +504,9 @@ interface TradeReceivePlayer {
 
 interface TradeReceivePick {
   key: string;
-  label: string;
+  line1: string;
+  rNotation: string | null;
+  overallText: string | null;
 }
 
 interface TradeSideView {
@@ -456,34 +522,11 @@ interface TradeSidesModel {
   sideB: TradeSideView;
 }
 
-function ordinal(n: number): string {
-  const v = Math.floor(Math.abs(n)) * Math.sign(n || 1);
-  const j = v % 10;
-  const k = v % 100;
-  if (j === 1 && k !== 11) return `${v}st`;
-  if (j === 2 && k !== 12) return `${v}nd`;
-  if (j === 3 && k !== 13) return `${v}rd`;
-  return `${v}th`;
-}
-
 function isDraftAsset(a: TradeAsset): boolean {
   return (
     String(a.itemType || "").toUpperCase().includes("DRAFT") ||
     (a.playerId == null && (a.overallPickNumber != null || a.round != null))
   );
-}
-
-function formatDraftPickLine(season: number, a: TradeAsset): string {
-  const rnd = a.round != null ? Number(a.round) : NaN;
-  const pir = a.pickInRound != null ? Number(a.pickInRound) : NaN;
-  const ov = a.overallPickNumber != null ? Number(a.overallPickNumber) : NaN;
-  if (Number.isFinite(rnd) && Number.isFinite(pir)) {
-    return `${season} ${ordinal(rnd)} Round Pick (Round ${rnd} Pick ${pir})`;
-  }
-  if (Number.isFinite(ov)) {
-    return `${season} Draft Pick (#${ov} overall)`;
-  }
-  return `${season} Draft pick`;
 }
 
 function buildTradeSidesModel(
@@ -522,10 +565,16 @@ function buildTradeSidesModel(
     picks: [],
   };
 
-  const pushPick = (tid: number, label: string, idx: number) => {
-    const key = `p-${tid}-${idx}-${label}`;
-    if (tid === ta) sideA.picks.push({ key, label });
-    else if (tid === tb) sideB.picks.push({ key, label });
+  const pushPick = (tid: number, a: TradeAsset, idx: number) => {
+    const vis = formatDraftPickVisual(season, {
+      round: a.round,
+      pickInRound: a.pickInRound,
+      overallPickNumber: a.overallPickNumber,
+    });
+    const key = `p-${tid}-${idx}-${vis.line1}-${vis.rNotation ?? ""}-${vis.overallText ?? ""}`;
+    const pk: TradeReceivePick = { key, ...vis };
+    if (tid === ta) sideA.picks.push(pk);
+    else if (tid === tb) sideB.picks.push(pk);
   };
 
   const pushPlayer = (tid: number, p: TradeReceivePlayer) => {
@@ -539,7 +588,7 @@ function buildTradeSidesModel(
     if (to == null) continue;
 
     if (isDraftAsset(a)) {
-      pushPick(to, formatDraftPickLine(season, a), pickIdx++);
+      pushPick(to, a, pickIdx++);
       continue;
     }
     if (a.playerId != null && a.playerId > 0) {
@@ -630,10 +679,26 @@ function ReceivesPanel({
           <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             Draft Picks ({picks.length})
           </div>
-          <ul className="space-y-1.5">
+          <ul className="space-y-2">
             {picks.map(pk => (
-              <li key={pk.key} className="text-sm leading-tight text-foreground">
-                • {pk.label}
+              <li key={pk.key} className="text-sm leading-snug text-foreground">
+                <span className="text-muted-foreground">• </span>
+                <span className="text-[13px] font-medium text-foreground/95">{pk.line1}</span>
+                {pk.rNotation || pk.overallText ? (
+                  <div className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 pl-3.5">
+                    {pk.rNotation ? (
+                      <span className="font-semibold tabular-nums tracking-tight text-sky-200">
+                        {pk.rNotation}
+                      </span>
+                    ) : null}
+                    {pk.rNotation && pk.overallText ? (
+                      <span className="text-[11px] text-muted-foreground">·</span>
+                    ) : null}
+                    {pk.overallText ? (
+                      <span className="text-[11px] text-muted-foreground">{pk.overallText}</span>
+                    ) : null}
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -732,7 +797,7 @@ function TradeComparisonCard({
   const { date, time } = formatWhen(ms);
   const dtype = dominantTradeType(rows);
   const tradeStatusLine = displayedTradeStatus(rows);
-  const narrative = describeTrade(rows, teamMap, playerMeta);
+  const narrative = describeTrade(rows, teamMap, playerMeta, season);
   const sides = buildTradeSidesModel(rows, season, teamMap, teamLogoById, playerMeta);
   const teamsCol = involvedTeamIds(rows);
   const rosterTeams = teamsCol.map(tid => ({
@@ -1155,15 +1220,17 @@ export function Transactions() {
                 const { date, time } = formatWhen(ms);
                 const t = r.type || "";
                 let detail = "";
-                if (t === "ADD") detail = addDropLine(r, "ADD", teamMap, playerMeta);
-                else if (t === "DROP") detail = addDropLine(r, "DROP", teamMap, playerMeta);
-                else if (t === "WAIVER") detail = addDropLine(r, "WAIVER", teamMap, playerMeta);
+                if (t === "ADD") detail = addDropLine(r, "ADD", teamMap, playerMeta, season);
+                else if (t === "DROP") detail = addDropLine(r, "DROP", teamMap, playerMeta, season);
+                else if (t === "WAIVER") detail = addDropLine(r, "WAIVER", teamMap, playerMeta, season);
                 else {
                   const raw = tryParseRaw(r.rawTransaction ?? undefined);
                   const memo = raw && typeof raw.memo === "string" ? raw.memo : null;
                   detail =
                     memo ||
-                    [assetLabel(r, playerMeta), r.status ? `(${String(r.status)})` : ""].filter(Boolean).join(" ");
+                    [assetLabel(r, playerMeta, season), r.status ? `(${String(r.status)})` : ""]
+                      .filter(Boolean)
+                      .join(" ");
                 }
 
                 const teamsCol = involvedTeamIds([r]);
