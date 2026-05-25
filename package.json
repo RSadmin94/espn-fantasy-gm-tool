@@ -14,7 +14,7 @@
     "seed:all-drafts": "tsx scripts/seed-all-drafts.ts",
     "import:atlantas": "tsx scripts/import-atlantas-finest-history.ts",
     "generate:draft-sql": "tsx scripts/generate-draft-history-sql.ts",
-    "sql:draft-import": "node scripts/sql/build_import_sql.mjs",
+    "import:draft-drizzle": "tsx scripts/import-draft-history-drizzle.ts",
     "fetch:history": "tsx scripts/fetch-all-historical-data.ts",
     "fetch:matchups": "tsx scripts/fetch-historical-matchups.ts",
     "format": "prettier --write .",
