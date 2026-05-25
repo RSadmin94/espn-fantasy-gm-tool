@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { trpc } from "@/lib/trpc";
+import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -81,13 +82,12 @@ function HealthIcon({ health }: { health: string }) {
 
 // ── Active League Card ────────────────────────────────────────────────────────
 
-function ActiveLeagueCard() {
+function ActiveLeagueCard({ resolvedSeason }: { resolvedSeason: number }) {
   const activeQ = trpc.league.getActive.useQuery();
   const leaguesQ = trpc.league.getMyLeagues.useQuery();
   const cachedQ = trpc.espn.cachedSeasons.useQuery();
   const cachedSeasons: number[] = cachedQ.data ?? [];
-  const latestSeasonForTeams =
-    cachedSeasons.length > 0 ? Math.max(...cachedSeasons) : 2025;
+  const latestSeasonForTeams = resolvedSeason;
   const probeTeams =
     activeQ.isFetched &&
     !activeQ.data &&
@@ -449,11 +449,7 @@ function QuickActionsGrid() {
 // ── Dashboard (root export) ───────────────────────────────────────────────────
 
 export function Dashboard() {
-  const cachedQ = trpc.espn.cachedSeasons.useQuery();
-  const cachedSeasons: number[] = cachedQ.data ?? [];
-  const latestSeason = cachedSeasons.length > 0
-    ? Math.max(...cachedSeasons)
-    : 2025;
+  const leagueCtx = useLeagueContext();
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -467,12 +463,12 @@ export function Dashboard() {
 
       {/* Top row: league + health */}
       <div className="grid gap-4 md:grid-cols-2">
-        <ActiveLeagueCard />
+        <ActiveLeagueCard resolvedSeason={leagueCtx.season} />
         <PipelineHealthCard />
       </div>
 
       {/* League pulse */}
-      <LeaguePulseCard season={latestSeason} />
+      <LeaguePulseCard season={leagueCtx.season} />
 
       {/* Quick actions */}
       <div>
