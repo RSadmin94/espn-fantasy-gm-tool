@@ -1202,6 +1202,102 @@ export async function ingestParsedDraftPicks(input: IngestParsedDraftPicksInput)
   };
 }
 
+export type IngestParsedStandingsInput = {
+  userId: number;
+  leagueId: string;
+  season: number;
+  rows: Array<{
+    rank: number;
+    teamName: string;
+    ownerName: string;
+    wins: number;
+    losses: number;
+    ties: number;
+    pointsFor: number;
+    pointsAgainst: number;
+  }>;
+};
+
+export type IngestParsedStandingsResult = {
+  season: number;
+  received: number;
+  insertedOrUpdated: number;
+  dbCountAfter: number;
+  success: boolean;
+};
+
+/**
+ * Upsert HTML-scraped standings rows into `teams` + `standings_snapshots` (week=0 = final standings).
+ * Uses rank as synthetic teamId — stable per (leagueId, season) without requiring a teams lookup.
+ */
+export async function ingestParsedStandings(input: IngestParsedStandingsInput): Promise<IngestParsedStandingsResult> {
+  const { getUserEspnLeagueIds, getActiveEspnCredentials } = await import("./db.js");
+  const uid = input.userId;
+  const allowed = new Set(await getUserEspnLeagueIds(uid));
+  const creds = await getActiveEspnCredentials(uid);
+  if (creds?.leagueId) allowed.add(String(creds.leagueId).trim().slice(0, 32));
+  const lid = String(input.leagueId).trim().slice(0, 32);
+  const allowLegacyTestLeague = lid === "457622";
+  if (!allowed.has(lid) && !allowLegacyTestLeague) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "League is not linked to your ESPN connections." });
+  }
+  const yr = Math.floor(Number(input.season));
+  const received = input.rows.length;
+  const db = await getDbConn();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+  const now = new Date();
+  let insertedOrUpdated = 0;
+
+  for (const row of input.rows) {
+    const rank = Math.floor(Number(row.rank));
+    if (!Number.isFinite(rank) || rank <= 0) continue;
+    const teamId = rank;
+    const pf = Number(row.pointsFor) || 0;
+    const pa = Number(row.pointsAgainst) || 0;
+    const wins = Math.floor(Number(row.wins)) || 0;
+    const losses = Math.floor(Number(row.losses)) || 0;
+    const ties = Math.floor(Number(row.ties)) || 0;
+    const teamName = String(row.teamName ?? "").slice(0, 255);
+    const ownerName = String(row.ownerName || teamName).slice(0, 255);
+    const rawTeam = safeStringify({ source: "standings_html", teamName, ownerName, rank });
+
+    await db
+      .insert(schema.gmTeams)
+      .values({
+        leagueId: lid, season: yr, teamId,
+        name: teamName, abbreviation: "", ownerName, ownerId: "", logoUrl: "",
+        wins, losses, ties, pointsFor: pf, pointsAgainst: pa,
+        playoffSeed: rank, finalStanding: rank,
+        rawTeam, updatedAt: now,
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          name: teamName, ownerName, wins, losses, ties,
+          pointsFor: pf, pointsAgainst: pa,
+          finalStanding: rank, playoffSeed: rank,
+          rawTeam, updatedAt: now,
+        },
+      });
+
+    await db
+      .insert(schema.gmStandingsSnapshots)
+      .values({
+        leagueId: lid, season: yr, week: 0, teamId,
+        rank, wins, losses, ties, pointsFor: pf, pointsAgainst: pa,
+        rawStanding: rawTeam, updatedAt: now,
+      })
+      .onDuplicateKeyUpdate({
+        set: { rank, wins, losses, ties, pointsFor: pf, pointsAgainst: pa, rawStanding: rawTeam, updatedAt: now },
+      });
+
+    insertedOrUpdated++;
+  }
+
+  const dbCountAfter = await gmCountLeagueSeason(db, schema.gmTeams, lid, yr);
+  return { season: yr, received, insertedOrUpdated, dbCountAfter, success: dbCountAfter > 0 };
+}
+
 /** Allowed provenance tags for {@link importEspnBrowserSeasonBundle}. */
 export type EspnBrowserImportSource = "chrome_extension_espn_api" | "browser_session";
 

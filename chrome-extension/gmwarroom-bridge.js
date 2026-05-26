@@ -89,6 +89,30 @@
     (ev) => {
       if (ev.source !== window) return;
       const d = ev.data;
+      if (!d || d.type !== "GMWR_HIST_STANDINGS") return;
+      const id = d.id;
+      const leagueId = String(d.leagueId || "457622").trim();
+      const season = d.season ? Number(d.season) : 2010;
+      chrome.runtime.sendMessage({ type: "GMWR_HIST_STANDINGS", leagueId, season }, (response) => {
+        if (chrome.runtime.lastError) {
+          window.postMessage(
+            { type: "GMWR_HIST_STANDINGS_REPLY", id, ok: false, error: chrome.runtime.lastError.message },
+            "*",
+          );
+          return;
+        }
+        const r = response || {};
+        window.postMessage({ ...r, type: "GMWR_HIST_STANDINGS_REPLY", id, ok: Boolean(r.ok) }, "*");
+      });
+    },
+    false,
+  );
+
+  window.addEventListener(
+    "message",
+    (ev) => {
+      if (ev.source !== window) return;
+      const d = ev.data;
       if (!d || d.type !== "GMWR_HIST_FULL") return;
       const id = d.id;
       const leagueId = String(d.leagueId || "457622").trim();

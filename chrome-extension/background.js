@@ -358,6 +358,7 @@ const MSG_HIST_DISCOVER = "GMWR_HIST_DISCOVER";
 const MSG_HIST_TEST = "GMWR_HIST_TEST";
 const MSG_HIST_FULL = "GMWR_HIST_FULL";
 const MSG_HIST_STATUS = "GMWR_HIST_STATUS";
+const MSG_HIST_STANDINGS = "GMWR_HIST_STANDINGS";
 /** Page (gmwarroom) → background: credentialed GET to fantasy.espn.com for browser-session sync. */
 const MSG_PAGE_ESPN_FETCH = "GMWR_PAGE_ESPN_FETCH";
 
@@ -566,6 +567,134 @@ async function scrapeDraftRecapPage(leagueId, season) {
       chrome.tabs.remove(tabId).catch(() => { /* tab may already be closed */ });
     }
   }
+}
+
+/**
+ * Open a hidden tab for the ESPN league standings page, wait for render, scrape table rows, close tab.
+ * Returns { ok, tableRows: [{tblIdx, rowIdx, cells}], bodyLength, url, title } or { ok: false, error }.
+ */
+async function scrapeStandingsPage(leagueId, season) {
+  const lid = String(leagueId ?? "").trim();
+  const y = Math.floor(Number(season));
+  const targetUrl = `https://fantasy.espn.com/football/league/standings?leagueId=${encodeURIComponent(lid)}&seasonId=${y}`;
+  let tabId = null;
+  try {
+    const tab = await chrome.tabs.create({ url: targetUrl, active: false });
+    tabId = tab.id;
+    console.info("[GMWR] scrapeStandings: opened tab", { tabId, season: y });
+    await waitForTabComplete(tabId, 30000);
+    await sleep(6000);
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: () => {
+        const bodyText = document.body.innerText || "";
+        const tableRows = [];
+        document.querySelectorAll("table").forEach((tbl, tblIdx) => {
+          tbl.querySelectorAll("tr").forEach((row, rowIdx) => {
+            const cells = Array.from(row.querySelectorAll("td, th")).map((c) => (c.innerText || "").trim());
+            if (cells.length > 1 && cells.some((c) => c.length > 0)) {
+              tableRows.push({ tblIdx, rowIdx, cells });
+            }
+          });
+        });
+        return { ok: true, url: location.href, title: document.title, bodyLength: bodyText.length, tableRows };
+      },
+    });
+    return results?.[0]?.result || { ok: false, error: "scrape_failed" };
+  } catch (err) {
+    return { ok: false, error: "scrape_failed", message: err instanceof Error ? err.message : String(err) };
+  } finally {
+    if (tabId != null) chrome.tabs.remove(tabId).catch(() => {});
+  }
+}
+
+/**
+ * Parse `scrapeStandingsPage` result into standings row objects.
+ * Detects column positions from header row; falls back to ESPN's typical 8-column order.
+ */
+function parseStandingsRows(scrapeResult) {
+  const parseErrors = [];
+  const rows = [];
+  if (!scrapeResult?.ok || !Array.isArray(scrapeResult.tableRows)) {
+    return { rows, parseErrors: ["scrape_not_ok"] };
+  }
+  const tableRows = scrapeResult.tableRows;
+  if (tableRows.length === 0) return { rows, parseErrors: ["no_table_rows"] };
+
+  // Find header row: must have distinct "W" and "L" cells
+  let headerIdx = -1;
+  let wCol = -1, lCol = -1, tCol = -1, pfCol = -1, paCol = -1, teamCol = 1;
+  for (let i = 0; i < tableRows.length; i++) {
+    const norm = tableRows[i].cells.map((c) => c.toUpperCase().trim());
+    const wi = norm.findIndex((c) => c === "W" || c === "WINS");
+    const li = norm.findIndex((c) => c === "L" || c === "LOSSES");
+    if (wi >= 0 && li >= 0 && wi !== li) {
+      headerIdx = i;
+      wCol = wi; lCol = li;
+      tCol = norm.findIndex((c) => c === "T" || c === "TIES");
+      pfCol = norm.findIndex((c) => c === "PF" || c === "POINTS FOR" || c === "PTS");
+      paCol = norm.findIndex((c) => c === "PA" || c === "POINTS AGAINST");
+      const rankIdx = norm.findIndex((c) => c === "#" || c === "RANK");
+      // Team column: first non-rank cell before W
+      teamCol = norm.findIndex((c, idx) => idx !== rankIdx && idx < wi && c.length > 0 && !/^\d+$/.test(c));
+      if (teamCol < 0) teamCol = rankIdx >= 0 ? rankIdx + 1 : 1;
+      break;
+    }
+  }
+
+  // Positional fallback: ESPN typical = [rank(0), team(1), PF(2), PA(3), STRK(4), W(5), L(6), T(7)]
+  if (headerIdx < 0) {
+    parseErrors.push("no_header_detected_using_positional_fallback");
+    const sample = tableRows.find((r) => r.cells.length >= 6);
+    if (sample) {
+      if (sample.cells.length >= 8) {
+        teamCol = 1; pfCol = 2; paCol = 3; wCol = 5; lCol = 6; tCol = 7;
+      } else {
+        teamCol = 1; wCol = 2; lCol = 3; tCol = 4; pfCol = 5; paCol = 6;
+      }
+    }
+  }
+
+  const startIdx = headerIdx >= 0 ? headerIdx + 1 : 0;
+  let rank = 0;
+  for (let i = startIdx; i < tableRows.length; i++) {
+    const cells = tableRows[i].cells;
+    if (cells.length < 3) continue;
+    const nonEmpty = cells.filter((c) => c.trim().length > 0);
+    if (nonEmpty.length < 3) continue; // division header / spacer row
+
+    rank++;
+    const rawTeamCell = teamCol < cells.length ? cells[teamCol] : cells[1] || "";
+    const lines = rawTeamCell.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+    const teamName = lines[0] || `Team ${rank}`;
+    const ownerName = lines[1] || teamName;
+
+    if (/^(team\s*name|team)$/i.test(teamName)) continue;
+
+    const getNum = (col) => (col >= 0 && col < cells.length ? parseFloat(cells[col].replace(/,/g, "")) : NaN);
+    const wins = getNum(wCol);
+    const losses = getNum(lCol);
+    if (isNaN(wins) || isNaN(losses)) {
+      parseErrors.push(`row_${i}: W/L parse failed cells=${JSON.stringify(cells)}`);
+      continue;
+    }
+    const ties = isNaN(getNum(tCol)) ? 0 : getNum(tCol);
+    const pf = isNaN(getNum(pfCol)) ? 0 : getNum(pfCol);
+    const pa = isNaN(getNum(paCol)) ? 0 : getNum(paCol);
+
+    rows.push({
+      rank,
+      teamName,
+      ownerName,
+      wins: Math.floor(wins),
+      losses: Math.floor(losses),
+      ties: Math.floor(ties),
+      pointsFor: pf,
+      pointsAgainst: pa,
+    });
+  }
+  return { rows, parseErrors };
 }
 
 function gmwrNormalizeKey(s) {
@@ -1426,6 +1555,64 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       sendResponse({ ok: allOk, results, aborted: false, leagueId });
     })().catch((err) => {
       sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err), results: [] });
+    });
+    return true;
+  }
+
+  if (t === MSG_HIST_STANDINGS) {
+    let responded = false;
+    function onceRespondStandings(response) {
+      if (responded) return;
+      responded = true;
+      clearTimeout(standingsTimer);
+      sendResponse(response);
+    }
+    const standingsTimer = setTimeout(
+      () => onceRespondStandings({ ok: false, error: "extension_internal_timeout" }),
+      110000,
+    );
+    (async () => {
+      const leagueId = String(message?.leagueId || "457622").trim();
+      const season = Number(message?.season) || 2010;
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        onceRespondStandings({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
+        return;
+      }
+      const scrapeResult = await scrapeStandingsPage(leagueId, season);
+      console.info("[GMWR] standings scrape", { leagueId, season }, scrapeResult);
+      if (!scrapeResult?.ok) {
+        onceRespondStandings({
+          ok: false,
+          error: scrapeResult?.error || "scrape_failed",
+          message: scrapeResult?.message,
+          mode: "standings_scrape_failed",
+        });
+        return;
+      }
+      const { rows, parseErrors } = parseStandingsRows(scrapeResult);
+      console.info("[GMWR] standings parse", { season, rowCount: rows.length, parseErrors });
+      if (rows.length === 0) {
+        onceRespondStandings({
+          ok: false,
+          error: "standings_parse_empty",
+          mode: "standings_parse_empty",
+          parseErrors,
+          bodyLength: scrapeResult.bodyLength,
+        });
+        return;
+      }
+      onceRespondStandings({
+        ok: true,
+        mode: "standings_scraped_parsed",
+        leagueId,
+        season,
+        rowCount: rows.length,
+        rows,
+        parseErrors,
+      });
+    })().catch((err) => {
+      onceRespondStandings({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
     return true;
   }

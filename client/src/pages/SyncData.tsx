@@ -316,6 +316,9 @@ export function SyncData() {
   const [browserSessionErr, setBrowserSessionErr] = useState<string | null>(null);
   const [browserSessionBusy, setBrowserSessionBusy] = useState(false);
   const [browserSessionBulkBusy, setBrowserSessionBulkBusy] = useState(false);
+  const [standingsBusy, setStandingsBusy] = useState(false);
+  const [standingsNote, setStandingsNote] = useState<string | null>(null);
+  const [standingsErr, setStandingsErr] = useState<string | null>(null);
   const [browserSync2010Raw, setBrowserSync2010Raw] = useState<Record<string, unknown> | null>(null);
   const [browserSync2010IngestRaw, setBrowserSync2010IngestRaw] = useState<Record<string, unknown> | null>(null);
   const [gate2010Persisted, setGate2010Persisted] = useState(() => {
@@ -395,6 +398,11 @@ export function SyncData() {
     onSuccess: () => {
       void utils.espn.browserSyncStatus.invalidate();
       void utils.espn.manifests.invalidate();
+    },
+  });
+  const ingestParsedStandingsMutation = trpc.espn.ingestParsedStandings.useMutation({
+    onSuccess: () => {
+      void utils.espn.standingsHistory.invalidate();
     },
   });
 
@@ -642,6 +650,74 @@ export function SyncData() {
       toast.error(msg);
     } finally {
       setBrowserSessionBulkBusy(false);
+    }
+  };
+
+  const handleBrowserSyncStandings = async (seasons: number[]) => {
+    setStandingsErr(null);
+    setStandingsNote(null);
+    setStandingsBusy(true);
+    try {
+      const token = await getToken();
+      console.log("[STANDINGS TOKEN]", !!token);
+      const results: string[] = [];
+      for (const season of seasons) {
+        console.log(`[STANDINGS INGEST ${season}]`);
+        setStandingsNote(`Scraping standings ${season}…`);
+        const extResult = await new Promise<Record<string, unknown>>((resolve) => {
+          const id = `hist-standings-${season}-${Date.now()}`;
+          const timeout = window.setTimeout(() => {
+            window.removeEventListener("message", onMsg);
+            resolve({ ok: false, error: `Extension timed out for standings ${season}` });
+          }, 120_000);
+          function onMsg(ev: MessageEvent) {
+            if (ev.source !== window) return;
+            const d = ev.data as Record<string, unknown> | null;
+            if (!d || d.type !== "GMWR_HIST_STANDINGS_REPLY" || d.id !== id) return;
+            window.clearTimeout(timeout);
+            window.removeEventListener("message", onMsg);
+            resolve(d);
+          }
+          window.addEventListener("message", onMsg);
+          window.postMessage({ type: "GMWR_HIST_STANDINGS", id, leagueId: "457622", season }, "*");
+        });
+        if (!extResult.ok) {
+          results.push(`${season}: scrape failed — ${String(extResult.error ?? "unknown")}`);
+          continue;
+        }
+        const rows = Array.isArray(extResult.rows) ? extResult.rows : [];
+        if (rows.length === 0) {
+          results.push(`${season}: no standings rows`);
+          continue;
+        }
+        setStandingsNote(`Ingesting standings ${season} (${rows.length} teams)…`);
+        setTrpcToken(token);
+        try {
+          const ingestResult = await ingestParsedStandingsMutation.mutateAsync({
+            leagueId: "457622",
+            season,
+            rows: rows as {
+              rank: number; teamName: string; ownerName: string;
+              wins: number; losses: number; ties: number;
+              pointsFor: number; pointsAgainst: number;
+            }[],
+          }) as Record<string, unknown>;
+          const dbCount = typeof ingestResult.dbCountAfter === "number" ? ingestResult.dbCountAfter : 0;
+          results.push(`${season}: teams=${dbCount}`);
+          if (dbCount > 0) toast.success(`Standings ${season} synced.`);
+        } catch (ingestErr) {
+          results.push(`${season}: ingest failed — ${trpcLikeErrorMessage(ingestErr as Error)}`);
+        } finally {
+          setTrpcToken(null);
+        }
+      }
+      setStandingsNote(results.join(" | "));
+    } catch (e) {
+      const msg = trpcLikeErrorMessage(e as Error);
+      setStandingsErr(msg);
+      toast.error(msg);
+    } finally {
+      setStandingsBusy(false);
     }
   };
 
@@ -895,6 +971,54 @@ export function SyncData() {
               {browserSessionBulkBusy
                 ? "Syncing other seasons…"
                 : `Sync all other seasons (${BROWSER_SYNC_REMAINING_SEASONS[0]}–${BROWSER_SYNC_REMAINING_SEASONS[BROWSER_SYNC_REMAINING_SEASONS.length - 1]})`}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Historical standings import (2010–2017) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Import Historical Standings (2010–2017)</CardTitle>
+          <CardDescription>
+            Scrapes the ESPN standings page for each season and imports final standings into League History.
+            Requires you to be logged in to ESPN in this browser. Extension opens each tab automatically.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {standingsNote && (
+            <p className="text-xs text-muted-foreground">{standingsNote}</p>
+          )}
+          {standingsErr && (
+            <div className="flex items-start gap-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              {standingsErr}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017].map((season) => (
+              <Button
+                key={season}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={standingsBusy}
+                onClick={() => void handleBrowserSyncStandings([season])}
+              >
+                {standingsBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Database className="h-3 w-3" />}
+                {season}
+              </Button>
+            ))}
+            <Button
+              type="button"
+              variant="default"
+              className={`gap-2 ${standingsBusy ? "" : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700"}`}
+              disabled={standingsBusy}
+              onClick={() => void handleBrowserSyncStandings([2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017])}
+            >
+              {standingsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Layers className="h-4 w-4" />}
+              {standingsBusy ? "Importing standings…" : "Import all 2010–2017"}
             </Button>
           </div>
         </CardContent>

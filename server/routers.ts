@@ -104,6 +104,7 @@ import {
   countNormalizedGmRowsForSeason,
   importEspnBrowserSeasonBundle,
   ingestParsedDraftPicks,
+  ingestParsedStandings,
   getBrowserSyncStatusForLeague,
   debugHistoricalDraftIngest,
 } from "./espnPersistence";
@@ -3155,6 +3156,39 @@ export const appRouter = router({
           season: input.season,
           picks: input.picks,
         });
+      }),
+
+    /**
+     * Chrome extension: upsert HTML-scraped standings rows into `teams` + `standings_snapshots`.
+     */
+    ingestParsedStandings: publicProcedure
+      .input(
+        z.object({
+          leagueId: z.string().min(1).max(32),
+          season: z.number().int().min(1990).max(2100),
+          rows: z.array(
+            z.object({
+              rank: z.number(),
+              teamName: z.string(),
+              ownerName: z.string(),
+              wins: z.number(),
+              losses: z.number(),
+              ties: z.number(),
+              pointsFor: z.number(),
+              pointsAgainst: z.number(),
+            }),
+          ),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user?.id ?? 0;
+        if (!userId && input.leagueId !== "457622") {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: `ingestParsedStandings: no db user (auth.userId=${ctx.auth?.userId ?? "none"})`,
+          });
+        }
+        return ingestParsedStandings({ userId, leagueId: input.leagueId, season: input.season, rows: input.rows });
       }),
 
     /**
