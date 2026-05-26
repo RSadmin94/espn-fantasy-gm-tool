@@ -375,6 +375,8 @@ export function SyncData() {
 
   const reprocessCachedMutation = trpc.espn.reprocessCachedSeasons.useMutation();
 
+  const debugDraftIngestMutation = trpc.espn.debugHistoricalDraftIngest.useMutation();
+
   const { mutate: runRefresh } = refreshMutation;
 
   const autoSync2026 = searchParams.get("autoSync") === "2026";
@@ -544,6 +546,7 @@ export function SyncData() {
   const isRawCacheBackfillLoading = backfillFromRawCacheMutation.isPending;
   const isHistoricalEnrichmentLoading = enrichHistoricalSeasonMutation.isPending;
   const isReprocessLoading = reprocessCachedMutation.isPending || historicalRunning;
+  const isDraftIngestDebugLoading = debugDraftIngestMutation.isPending;
 
   const seasonsForNormalizedBackfill = useMemo(() => {
     return HISTORICAL_COMPLETED_SEASONS.filter(s => {
@@ -844,6 +847,50 @@ export function SyncData() {
               </span>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-amber-500/30">
+        <CardHeader>
+          <CardTitle className="text-base">Temporary: 2010 draft ingest debug</CardTitle>
+          <CardDescription>
+            Calls <code className="text-xs">espn.debugHistoricalDraftIngest</code> for league{" "}
+            <span className="font-mono">457622</span> / season <span className="font-mono">2010</span>. Requires
+            sign-in and league access. Remove this card when done.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2"
+            disabled={!isConnected || isDraftIngestDebugLoading}
+            onClick={() =>
+              debugDraftIngestMutation.mutate({
+                leagueId: "457622",
+                season: 2010,
+              })
+            }
+          >
+            {isDraftIngestDebugLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Layers className="h-4 w-4" />
+            )}
+            Debug 2010 Draft Import
+          </Button>
+          {(debugDraftIngestMutation.isSuccess && debugDraftIngestMutation.data != null) ||
+          debugDraftIngestMutation.isError ? (
+            <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/30 p-3 text-xs text-foreground">
+              {debugDraftIngestMutation.isSuccess && debugDraftIngestMutation.data != null
+                ? JSON.stringify(debugDraftIngestMutation.data, null, 2)
+                : JSON.stringify(
+                    { error: trpcLikeErrorMessage(debugDraftIngestMutation.error) },
+                    null,
+                    2,
+                  )}
+            </pre>
+          ) : null}
         </CardContent>
       </Card>
 
