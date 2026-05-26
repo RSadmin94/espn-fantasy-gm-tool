@@ -307,9 +307,9 @@ async function fetchSingleView(
 
 function estimateRecordCount(viewName: string, data: Record<string, unknown>): number {
   switch (viewName) {
-    case "mTeam": return ((data.teams as unknown[]) || []).length;
+    case "mTeam": return teamsArrayFromEspnPayload(data).length;
     case "mRoster": {
-      const teams = (data.teams as Record<string, unknown>[]) || [];
+      const teams = teamsArrayFromEspnPayload(data);
       return teams.reduce((sum, t) => {
         const entries = ((t.roster as Record<string, unknown>)?.entries as unknown[]) || [];
         return sum + entries.length;
@@ -319,12 +319,11 @@ function estimateRecordCount(viewName: string, data: Record<string, unknown>): n
     case "mMatchupScore":
     case "mSchedule": return ((data.schedule as unknown[]) || []).length;
     case "mDraftDetail": {
-      const draft = (data.draftDetail as Record<string, unknown>) || {};
-      return ((draft.picks as unknown[]) || []).length;
+      return extractDraftPickRowsFromPayload(data).picks.length;
     }
     case "mTransactions2": return ((data.transactions as unknown[]) || []).length;
     case "mSettings": return data.settings ? 1 : 0;
-    case "mStandings": return ((data.teams as unknown[]) || []).length;
+    case "mStandings": return teamsArrayFromEspnPayload(data).length;
     case "mStatus": return data.status ? 1 : 0;
     default: return 1;
   }
@@ -347,7 +346,7 @@ export function validateDataQuality(
   const warnings: string[] = [];
 
   // Teams check
-  const teams = (data.teams as Record<string, unknown>[]) || [];
+  const teams = teamsArrayFromEspnPayload(data);
   if (teams.length === 0) issues.push("No teams found — roster data missing");
   else if (teams.length < 10) warnings.push(`Only ${teams.length} teams found (expected 14)`);
 
@@ -366,8 +365,7 @@ export function validateDataQuality(
 
   // Draft check (only for completed seasons)
   if (season <= 2025) {
-    const draft = (data.draftDetail as Record<string, unknown>) || {};
-    const picks = (draft.picks as unknown[]) || [];
+    const picks = extractDraftPickRowsFromPayload(data).picks;
     if (picks.length === 0) warnings.push("No draft picks found — draft history may be missing");
     else if (picks.length < 100) warnings.push(`Only ${picks.length} draft picks (expected 180+)`);
   }
@@ -547,7 +545,7 @@ export function normalizeTeams(data: Record<string, unknown>) {
     members[m.id as string] = m;
   }
 
-  return ((data.teams as Record<string, unknown>[]) || []).map((team) => {
+  return teamsArrayFromEspnPayload(data).map((team) => {
     const owners = (team.owners as string[]) || [];
     const ownerNames = owners.map((oid) => {
       const m = members[oid] || {};
@@ -584,7 +582,7 @@ export function normalizeRosters(data: Record<string, unknown>) {
   const season = data.seasonId as number;
   const rosters: unknown[] = [];
 
-  for (const team of (data.teams as Record<string, unknown>[]) || []) {
+  for (const team of teamsArrayFromEspnPayload(data)) {
     const teamId = team.id;
     const teamName = `${team.location || ""} ${team.nickname || ""}`.trim() || (team.name as string) || "";
     const entries = ((team.roster as Record<string, unknown>)?.entries as Record<string, unknown>[]) || [];
@@ -641,10 +639,59 @@ export function normalizeRosters(data: Record<string, unknown>) {
   return rosters;
 }
 
+/** ESPN combined payloads often use `teams` as a dict keyed by team id — normalize to an array. */
+export function teamsArrayFromEspnPayload(data: Record<string, unknown>): Record<string, unknown>[] {
+  const t = data.teams;
+  if (!t) return [];
+  if (Array.isArray(t)) return t as Record<string, unknown>[];
+  if (typeof t === "object")
+    return Object.values(t as Record<string, Record<string, unknown>>) as Record<string, unknown>[];
+  return [];
+}
+
+export type ExtractDraftPicksResult = {
+  hasDraftDetail: boolean;
+  pathUsed: "picks" | "draftedPlayers" | "draftResults" | null;
+  picks: Record<string, unknown>[];
+  emptyReason: string | null;
+};
+
+/**
+ * Resolve `draftDetail.picks` vs alternate ESPN / extension shapes.
+ * If `draftDetail` exists but no usable pick array, returns `emptyReason` (never silent).
+ */
+export function extractDraftPickRowsFromPayload(data: Record<string, unknown>): ExtractDraftPicksResult {
+  const dd = data.draftDetail as Record<string, unknown> | undefined;
+  if (!dd || typeof dd !== "object" || Array.isArray(dd)) {
+    return { hasDraftDetail: false, pathUsed: null, picks: [], emptyReason: null };
+  }
+  const hasDraftDetail = true;
+  const tryKeys = ["picks", "draftedPlayers", "draftResults"] as const;
+  for (const key of tryKeys) {
+    const arr = dd[key];
+    if (Array.isArray(arr) && arr.length > 0 && arr.every((x) => x && typeof x === "object")) {
+      return {
+        hasDraftDetail,
+        pathUsed: key,
+        picks: arr as Record<string, unknown>[],
+        emptyReason: null,
+      };
+    }
+  }
+  const keys = Object.keys(dd);
+  return {
+    hasDraftDetail,
+    pathUsed: null,
+    picks: [],
+    emptyReason:
+      keys.length > 0 ? `draftDetail_present_no_nonempty_pick_array:keys=${keys.join(",")}` : "draftDetail_empty_object",
+  };
+}
+
 export function buildPlayerIdMap(data: Record<string, unknown>): Map<number, { name: string; position: string; positionId: number; proTeam: string }> {
   const map = new Map<number, { name: string; position: string; positionId: number; proTeam: string }>();
   // Build from roster entries (most reliable source)
-  for (const team of (data.teams as Record<string, unknown>[]) || []) {
+  for (const team of teamsArrayFromEspnPayload(data)) {
     for (const entry of ((team.roster as Record<string, unknown>)?.entries as Record<string, unknown>[]) || []) {
       const poolEntry = (entry.playerPoolEntry as Record<string, unknown>) || {};
       const player = (poolEntry.player as Record<string, unknown>) || {};
@@ -715,17 +762,25 @@ function playerInfoFromDraftPickShape(pick: Record<string, unknown>): {
   const rawPid = pick.playerId ?? player.id;
   const playerId =
     rawPid != null && Number.isFinite(Number(rawPid)) && Number(rawPid) > 0 ? Number(rawPid) : 0;
-  const name = (player.fullName as string) || "";
-  const posIdRaw = player.defaultPositionId;
+  const name =
+    (player.fullName as string) ||
+    (pick.playerName as string) ||
+    (pick.fullName as string) ||
+    "";
+  const posIdRaw = player.defaultPositionId ?? pick.defaultPositionId;
   const positionId =
     posIdRaw != null && Number.isFinite(Number(posIdRaw)) ? Number(posIdRaw) : 0;
   const position =
     positionId > 0 && POSITION_MAP[positionId] ? POSITION_MAP[positionId] : positionId === 0 ? "" : "?";
   const proTeamId = player.proTeamId;
-  const proTeam =
-    proTeamId != null && Number.isFinite(Number(proTeamId))
-      ? PRO_TEAM_MAP[Number(proTeamId)] || "?"
-      : "?";
+  let proTeam = "";
+  if (proTeamId != null && Number.isFinite(Number(proTeamId))) {
+    proTeam = PRO_TEAM_MAP[Number(proTeamId)] || "?";
+  } else if (typeof player.proTeam === "string" && player.proTeam.trim()) {
+    proTeam = player.proTeam.trim();
+  } else {
+    proTeam = "?";
+  }
   return { playerId, name, position: position || "?", positionId, proTeam };
 }
 
@@ -737,15 +792,28 @@ export function normalizeDraftPicks(data: Record<string, unknown>) {
       : typeof seasonRaw === "string" && /^\d+$/.test(seasonRaw)
         ? Number(seasonRaw)
         : 0;
-  const draft = (data.draftDetail as Record<string, unknown>) || {};
-  const picks = (draft.picks as Record<string, unknown>[]) || [];
+  const extracted = extractDraftPickRowsFromPayload(data);
+  const picks = extracted.picks;
+  if (extracted.hasDraftDetail && picks.length === 0 && extracted.emptyReason) {
+    console.warn(
+      "[historicalIngest:draft:extract]",
+      JSON.stringify({
+        season,
+        leagueId: data.id,
+        emptyReason: extracted.emptyReason,
+        draftDetailKeys: Object.keys((data.draftDetail as Record<string, unknown>) || {}),
+      }),
+    );
+  }
   const playerMap = buildPlayerIdMap(data);
 
-  // Build teamId -> teamName map
+  // Build teamId -> teamName map (teams may be array or dict on combined payloads)
   const teamNameMap: Record<number, string> = {};
-  for (const t of (data.teams as Record<string, unknown>[]) || []) {
-    const tid = t.id as number;
-    teamNameMap[tid] = `${t.location || ""} ${t.nickname || ""}`.trim() || (t.name as string) || `Team ${tid}`;
+  for (const t of teamsArrayFromEspnPayload(data)) {
+    const tid = Number(t.id);
+    if (!Number.isFinite(tid)) continue;
+    teamNameMap[tid] =
+      `${t.location || ""} ${t.nickname || ""}`.trim() || (t.name as string) || `Team ${tid}`;
   }
 
   return picks.map((pick) => {
@@ -765,14 +833,16 @@ export function normalizeDraftPicks(data: Record<string, unknown>) {
     const bidRaw = pick.bidAmount;
     const bidAmount =
       bidRaw != null && Number.isFinite(Number(bidRaw)) ? Number(bidRaw) : 0;
+    const tidRaw = pick.teamId;
+    const teamIdNum = tidRaw != null && Number.isFinite(Number(tidRaw)) ? Number(tidRaw) : 0;
     return {
       season,
       roundId: pick.roundId,
       roundPickNumber: pick.roundPickNumber,
       overallPickNumber: pick.overallPickNumber,
-      teamId: pick.teamId,
-      teamName: teamNameMap[pick.teamId as number] || `Team ${pick.teamId}`,
-      playerId: resolvedPlayerId,
+      teamId: teamIdNum,
+      teamName: teamNameMap[teamIdNum] || `Team ${teamIdNum}`,
+      playerId: resolvedPlayerId > 0 ? resolvedPlayerId : null,
       playerName: pinfo.name,
       positionId: pinfo.positionId,
       position: pinfo.position,
@@ -797,7 +867,7 @@ export function normalizeDraftOrder(data: Record<string, unknown>) {
   for (const m of (data.members as Record<string, unknown>[]) || []) {
     members[m.id as string] = m;
   }
-  for (const t of (data.teams as Record<string, unknown>[]) || []) {
+  for (const t of teamsArrayFromEspnPayload(data)) {
     const tid = t.id as number;
     const owners = (t.owners as string[]) || [];
     const ownerNames = owners.map((oid) => {

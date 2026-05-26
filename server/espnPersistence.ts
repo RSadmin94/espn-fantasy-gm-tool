@@ -13,6 +13,8 @@ import {
   normalizeTransactions,
   normalizeSettings,
   buildPlayerIdMap,
+  extractDraftPickRowsFromPayload,
+  teamsArrayFromEspnPayload,
 } from "./espnService";
 import { TRPCError } from "@trpc/server";
 
@@ -383,11 +385,14 @@ export async function upsertDraftPicks(
 ): Promise<number> {
   const lid = String(leagueId).slice(0, 32);
   const yr = Math.floor(Number(season));
+  const extracted = extractDraftPickRowsFromPayload(payload);
   let picks: ReturnType<typeof normalizeDraftPicks> = [];
+  const errors: string[] = [];
   try {
     picks = normalizeDraftPicks(payload);
-  } catch {
-    return 0;
+  } catch (e) {
+    errors.push(e instanceof Error ? e.message : String(e));
+    picks = [];
   }
   const now = new Date();
   let n = 0;
@@ -397,6 +402,10 @@ export async function upsertDraftPicks(
     const bidRaw = (p as Record<string, unknown>).bidAmount;
     const bidAmount =
       bidRaw != null && Number.isFinite(Number(bidRaw)) ? Number(bidRaw) : 0;
+    const playerIdVal =
+      p.playerId != null && Number.isFinite(Number(p.playerId)) && Number(p.playerId) > 0
+        ? Number(p.playerId)
+        : null;
     await db
       .insert(schema.gmDraftPicks)
       .values({
@@ -407,7 +416,7 @@ export async function upsertDraftPicks(
         roundPick: Number(p.roundPickNumber ?? 0) || 0,
         teamId: Number(p.teamId ?? 0) || 0,
         owningTeamId: null,
-        playerId: p.playerId != null ? Number(p.playerId) : null,
+        playerId: playerIdVal,
         playerName: p.playerName != null ? String(p.playerName) : null,
         position: p.position != null ? String(p.position) : null,
         isKeeper: (p.keeper || p.reservedForKeeper) ? 1 : 0,
@@ -420,7 +429,7 @@ export async function upsertDraftPicks(
           roundId: Number(p.roundId ?? 0) || 0,
           roundPick: Number(p.roundPickNumber ?? 0) || 0,
           teamId: Number(p.teamId ?? 0) || 0,
-          playerId: p.playerId != null ? Number(p.playerId) : null,
+          playerId: playerIdVal,
           playerName: p.playerName != null ? String(p.playerName) : null,
           position: p.position != null ? String(p.position) : null,
           isKeeper: (p.keeper || p.reservedForKeeper) ? 1 : 0,
@@ -431,6 +440,24 @@ export async function upsertDraftPicks(
       });
     n++;
   }
+  const firstIn = extracted.picks[0];
+  const firstNorm = picks[0];
+  console.warn(
+    "[historicalIngest:draft]",
+    JSON.stringify({
+      season: yr,
+      leagueId: lid,
+      hasDraftDetail: extracted.hasDraftDetail,
+      draftDetailPathUsed: extracted.pathUsed,
+      emptyReason: extracted.emptyReason,
+      draftPickInputCount: extracted.picks.length,
+      normalizedDraftPickCount: picks.length,
+      firstInputPick: firstIn != null ? safeStringify(firstIn).slice(0, 800) : null,
+      firstNormalizedPick: firstNorm != null ? safeStringify(firstNorm).slice(0, 800) : null,
+      draftPicksSaved: n,
+      errors,
+    }),
+  );
   return n;
 }
 
@@ -953,8 +980,7 @@ export type EspnRawCacheBackfillSeasonResult = {
 };
 
 function payloadTeamLen(p: Record<string, unknown>): number {
-  const t = p.teams;
-  return Array.isArray(t) ? t.length : 0;
+  return teamsArrayFromEspnPayload(p).length;
 }
 
 function payloadScheduleLen(p: Record<string, unknown>): number {
@@ -963,9 +989,7 @@ function payloadScheduleLen(p: Record<string, unknown>): number {
 }
 
 function payloadDraftPickLen(p: Record<string, unknown>): number {
-  const dd = p.draftDetail as Record<string, unknown> | undefined;
-  const picks = dd?.picks;
-  return Array.isArray(picks) ? picks.length : 0;
+  return extractDraftPickRowsFromPayload(p).picks.length;
 }
 
 function payloadTxnLen(p: Record<string, unknown>): number {
@@ -974,7 +998,7 @@ function payloadTxnLen(p: Record<string, unknown>): number {
 }
 
 function payloadHasRosterEntries(p: Record<string, unknown>): boolean {
-  for (const tm of (p.teams as Record<string, unknown>[]) || []) {
+  for (const tm of teamsArrayFromEspnPayload(p)) {
     const ent = (tm.roster as Record<string, unknown> | undefined)?.entries;
     if (Array.isArray(ent) && ent.length > 0) return true;
   }
@@ -1144,6 +1168,51 @@ export async function importEspnBrowserSeasonBundle(input: {
   );
   const persist = await runEspnCombinedPersist(lid, season, merged);
   const post = await countNormalizedGmRowsForSeason(lid, season);
+  const draftExtract = extractDraftPickRowsFromPayload(merged);
+  const draftPickInputCount = draftExtract.picks.length;
+  let normalizedDraftRows: ReturnType<typeof normalizeDraftPicks> = [];
+  try {
+    normalizedDraftRows = normalizeDraftPicks(merged);
+  } catch {
+    normalizedDraftRows = [];
+  }
+  if (input.source === "chrome_extension_espn_api" && draftPickInputCount > 0 && post.draftPicks === 0) {
+    const firstIn = draftExtract.picks[0];
+    const firstNorm = normalizedDraftRows[0];
+    console.warn(
+      "[historicalIngest:draft]",
+      JSON.stringify({
+        season,
+        leagueId: lid,
+        hasDraftDetail: draftExtract.hasDraftDetail,
+        draftPickInputCount,
+        normalizedDraftPickCount: normalizedDraftRows.length,
+        firstInputPick: firstIn != null ? safeStringify(firstIn).slice(0, 800) : null,
+        firstNormalizedPick: firstNorm != null ? safeStringify(firstNorm).slice(0, 800) : null,
+        draftPicksSaved: post.draftPicks,
+        draftDetailPathUsed: draftExtract.pathUsed,
+        emptyReason: draftExtract.emptyReason,
+        errors: ["draft_normalization_zero_output"],
+      }),
+    );
+    return {
+      success: false,
+      skipped: false,
+      reason: "draft_normalization_zero_output",
+      leagueId: lid,
+      season,
+      payloadBytes: persist.payloadBytes,
+      normalization: persist.norm,
+      normalizationError: persist.normalizationError ?? "draft_normalization_zero_output",
+      counts: post,
+      verification: {
+        draftOk: false,
+        teamsOk: post.teams > 0,
+        matchupsOk: post.matchups > 0 || matchupsExplicitlyUnavailable,
+        txnOk: post.transactions >= 0,
+      },
+    };
+  }
   const draftOk = post.draftPicks > 0;
   const teamsOk = post.teams > 0;
   const matchupsOk = post.matchups > 0 || matchupsExplicitlyUnavailable;
