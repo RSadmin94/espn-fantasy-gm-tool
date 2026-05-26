@@ -22,6 +22,7 @@ import { Settings } from "./pages/Settings";
 import { DraftHistory } from "./pages/DraftHistory";
 import { Matchups } from "./pages/Matchups";
 import { LeagueHistory } from "./pages/LeagueHistory";
+import { LeagueTimeline } from "./pages/LeagueTimeline";
 import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
@@ -120,6 +121,7 @@ const router = createBrowserRouter([
           { path: "/standings", element: <Standings /> },
           { path: "/matchups", element: <Matchups /> },
           { path: "/history", element: <LeagueHistory /> },
+          { path: "/league-timeline", element: <LeagueTimeline /> },
           { path: "/roster", element: <Roster /> },
           { path: "/trades", element: <Trades /> },
           { path: "/advisor", element: <Advisor /> },
