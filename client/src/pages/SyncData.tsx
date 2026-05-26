@@ -318,6 +318,9 @@ export function SyncData() {
   const [browserSessionBulkBusy, setBrowserSessionBulkBusy] = useState(false);
   const [browserSync2010Raw, setBrowserSync2010Raw] = useState<Record<string, unknown> | null>(null);
   const [browserSync2010IngestRaw, setBrowserSync2010IngestRaw] = useState<Record<string, unknown> | null>(null);
+  const [gate2010Persisted, setGate2010Persisted] = useState(() => {
+    try { return localStorage.getItem("gmwr_2010_synced") === "1"; } catch { return false; }
+  });
   const [lastBrowserImportCounts, setLastBrowserImportCounts] = useState<{
     draftPicks: number;
     teams: number;
@@ -339,6 +342,14 @@ export function SyncData() {
     },
     { enabled: Boolean(leagueId && isConnected), staleTime: 15_000 },
   );
+
+  // Always query draft_picks count for the hardcoded test league on mount — independent of ESPN connection.
+  const draftPicks2010GateQuery = trpc.espn.browserSyncStatus.useQuery(
+    { leagueId: "457622", startSeason: 2010, endSeason: 2010 },
+    { staleTime: 60_000 },
+  );
+  const dbDraftPicks2010 =
+    draftPicks2010GateQuery.data?.seasons?.find((s) => s.season === 2010)?.draftPicks ?? 0;
 
   const importFromBrowserMutation = trpc.espn.importFromBrowser.useMutation({
     onSuccess: () => {
@@ -441,9 +452,15 @@ export function SyncData() {
   const browser2010 = browserSyncStatusQuery.data?.seasons?.find(
     (s) => s.season === BROWSER_SYNC_TEST_SEASON,
   );
-  const browserSync2010Ready = Boolean(
-    browser2010 && (browser2010.draftPicks > 0 || browser2010.matchups > 0),
-  );
+  const lastIngestDbCount =
+    typeof browserSync2010IngestRaw?.dbCountAfter === "number"
+      ? (browserSync2010IngestRaw.dbCountAfter as number)
+      : 0;
+  const browserSync2010Ready =
+    gate2010Persisted ||
+    lastIngestDbCount > 0 ||
+    dbDraftPicks2010 > 0 ||
+    Boolean(browser2010 && (browser2010.draftPicks > 0 || browser2010.matchups > 0));
 
   const handleBrowserSync2010 = async () => {
     setBrowserSessionErr(null);
@@ -517,11 +534,14 @@ export function SyncData() {
       const ingestSuccess = ingestResult.success === true;
       const dbCount = typeof ingestResult.dbCountAfter === "number" ? ingestResult.dbCountAfter : 0;
       if (ingestSuccess && dbCount > 0) {
+        try { localStorage.setItem("gmwr_2010_synced", "1"); } catch {}
+        setGate2010Persisted(true);
         setBrowserSessionNote(
           `Import completed. received=${String(ingestResult.received ?? "?")} inserted/updated=${String(ingestResult.insertedOrUpdated ?? "?")} dbCountAfter=${dbCount}`,
         );
         toast.success("Season 2010 sync complete.");
         void browserSyncStatusQuery.refetch();
+        void draftPicks2010GateQuery.refetch();
       } else {
         const msg = ingestSuccess
           ? `db_count_zero after ingest`
