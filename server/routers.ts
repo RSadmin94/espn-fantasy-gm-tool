@@ -243,6 +243,23 @@ function findChampionshipMatchup(schedule: any[]): any | null {
   return finalRound[finalRound.length - 1];
 }
 
+// Maps normalized lowercase aliases → canonical display name.
+// Add entries here whenever the same person appears under different names.
+const OWNER_ALIASES: Record<string, string> = {
+  "rod sellers": "Rod Sellers",
+  "roderick sellers": "Rod Sellers",
+  "demetri clark": "Demetri Clark",
+  "christian edmondson": "Christian Graham",
+  "lozell styles": "LOZELL STYLES",
+};
+
+function canonicalizeOwner(raw: string): string {
+  if (!raw) return raw;
+  const stripped = raw.trim().replace(/^\(+|\)+$/g, "").trim();
+  const key = stripped.toLowerCase().replace(/\s+/g, " ");
+  return OWNER_ALIASES[key] ?? stripped;
+}
+
 export const appRouter = router({
   system: systemRouter,
   billing: billingRouter,
@@ -3335,7 +3352,7 @@ export const appRouter = router({
         undefined,
       );
       const db = await getDb();
-      if (!db) return { seasons: [] as number[], history: [] as { season: number; teams: { teamId: number; name: string; abbreviation: string; ownerName: string; wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number; finalStanding: number | null; playoffSeed: number | null }[] }[] };
+      if (!db) return { seasons: [] as number[], history: [] as { season: number; teams: { teamId: number; name: string; abbreviation: string; ownerName: string; wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number; finalStanding: number | null; playoffSeed: number | null }[] }[], rawOwnerCount: 0, canonicalOwnerCount: 0, mergedAliases: [] as string[] };
       const rows = await db
         .select({
           season: gmTeams.season,
@@ -3354,10 +3371,18 @@ export const appRouter = router({
         .from(gmTeams)
         .where(eqDrizzle(gmTeams.leagueId, leagueId))
         .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.finalStanding));
+      const rawOwnerSet = new Set<string>();
+      const canonicalOwnerSet = new Set<string>();
+      const mergedAliasSet = new Set<string>();
       const bySeasonMap = new Map<number, typeof rows>();
       for (const row of rows) {
         if (!bySeasonMap.has(row.season)) bySeasonMap.set(row.season, []);
         bySeasonMap.get(row.season)!.push(row);
+        const rawDisplay = (row.ownerName || row.name || `Team ${row.teamId}`).trim();
+        rawOwnerSet.add(rawDisplay);
+        const canonical = canonicalizeOwner(rawDisplay);
+        canonicalOwnerSet.add(canonical);
+        if (canonical !== rawDisplay) mergedAliasSet.add(`${rawDisplay} → ${canonical}`);
       }
       const seasons = [...bySeasonMap.keys()].sort((a, b) => a - b);
       const history = seasons.map((s) => ({
@@ -3366,7 +3391,7 @@ export const appRouter = router({
           teamId: t.teamId,
           name: t.name,
           abbreviation: t.abbreviation,
-          ownerName: t.ownerName,
+          ownerName: canonicalizeOwner((t.ownerName || t.name || `Team ${t.teamId}`).trim()),
           wins: t.wins,
           losses: t.losses,
           ties: t.ties,
@@ -3376,7 +3401,7 @@ export const appRouter = router({
           playoffSeed: t.playoffSeed,
         })),
       }));
-      return { seasons, history };
+      return { seasons, history, rawOwnerCount: rawOwnerSet.size, canonicalOwnerCount: canonicalOwnerSet.size, mergedAliases: [...mergedAliasSet] };
     }),
 
     allTimeH2H: publicProcedure.query(async ({ ctx }) => {
@@ -3386,7 +3411,7 @@ export const appRouter = router({
         undefined,
       );
       const db = await getDb();
-      if (!db) return { owners: [] as string[], matrix: [] as { owner: string; vs: Record<string, { wins: number; losses: number; ties: number }> }[] };
+      if (!db) return { owners: [] as string[], matrix: [] as { owner: string; vs: Record<string, { wins: number; losses: number; ties: number }> }[], rawOwnerCount: 0, canonicalOwnerCount: 0, mergedAliases: [] as string[] };
       const allTeams = await db
         .select({
           season: gmTeams.season,
@@ -3397,9 +3422,16 @@ export const appRouter = router({
         .from(gmTeams)
         .where(eqDrizzle(gmTeams.leagueId, leagueId));
       const ownerMap = new Map<string, string>();
+      const rawOwnerSet2 = new Set<string>();
+      const canonicalOwnerSet2 = new Set<string>();
+      const mergedAliasSet2 = new Set<string>();
       for (const t of allTeams) {
-        const display = (t.ownerName || t.name || `Team ${t.teamId}`).trim();
-        ownerMap.set(`${t.season}:${t.teamId}`, display);
+        const rawDisplay = (t.ownerName || t.name || `Team ${t.teamId}`).trim();
+        rawOwnerSet2.add(rawDisplay);
+        const canonical = canonicalizeOwner(rawDisplay);
+        canonicalOwnerSet2.add(canonical);
+        if (canonical !== rawDisplay) mergedAliasSet2.add(`${rawDisplay} → ${canonical}`);
+        ownerMap.set(`${t.season}:${t.teamId}`, canonical);
       }
       const matchups = await db
         .select({
@@ -3444,7 +3476,7 @@ export const appRouter = router({
             .map((rival) => [rival, h2h.get(`${owner}|${rival}`) ?? { wins: 0, losses: 0, ties: 0 }]),
         ),
       }));
-      return { owners, matrix };
+      return { owners, matrix, rawOwnerCount: rawOwnerSet2.size, canonicalOwnerCount: canonicalOwnerSet2.size, mergedAliases: [...mergedAliasSet2] };
     }),
   }),
 
