@@ -499,7 +499,8 @@ async function waitForTabComplete(tabId, timeoutMs) {
 }
 
 /**
- * Scrape ESPN Draft Recap from an already-open tab. Never opens a background tab.
+ * Scrape ESPN Draft Recap by opening a hidden background tab, waiting for load,
+ * injecting the scraper, then closing the tab.
  * @param {string} leagueId
  * @param {number} season
  */
@@ -508,39 +509,15 @@ async function scrapeDraftRecapPage(leagueId, season) {
   const y = Math.floor(Number(season));
   const targetUrl = `https://fantasy.espn.com/football/league/draftrecap?leagueId=${encodeURIComponent(lid)}&seasonId=${y}`;
 
-  // Find an already-open tab matching the draft recap URL for this league+season.
   let tabId = null;
   try {
-    const existingTabs = await chrome.tabs.query({
-      url: "https://fantasy.espn.com/football/league/draftrecap*",
-    });
-    const match = existingTabs.find((t) => {
-      const u = t.url || "";
-      return u.includes(`leagueId=${lid}`) && u.includes(`seasonId=${y}`);
-    });
-    if (match && match.id != null) {
-      tabId = match.id;
-      console.info("[GMWR] scrapeDraftRecap: using existing tab", { tabId, url: match.url });
-    }
-  } catch {
-    /* tabs.query failure is non-fatal; fall through to error below */
-  }
+    const tab = await chrome.tabs.create({ url: targetUrl, active: false });
+    tabId = tab.id;
+    console.info("[GMWR] scrapeDraftRecap: opened background tab", { tabId, season: y });
 
-  if (tabId == null) {
-    return {
-      ok: false,
-      error: "tab_not_open",
-      message: `Open this tab first, then retry:\n${targetUrl}`,
-    };
-  }
+    await waitForTabComplete(tabId, 30000);
+    await sleep(6000);
 
-  try {
-    // Tab is already loaded — wait for React to finish rendering.
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      world: "MAIN",
-      func: () => new Promise((resolve) => { setTimeout(resolve, 6000); }),
-    });
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       world: "MAIN",
@@ -584,8 +561,11 @@ async function scrapeDraftRecapPage(leagueId, season) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: "scrape_failed", message: msg };
+  } finally {
+    if (tabId != null) {
+      chrome.tabs.remove(tabId).catch(() => { /* tab may already be closed */ });
+    }
   }
-  // Never close the tab — we didn't open it.
 }
 
 function gmwrNormalizeKey(s) {
@@ -1272,7 +1252,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
     const internalTimer = setTimeout(
       () => onceRespond({ ok: false, error: "extension_internal_timeout" }),
-      60000,
+      110000,
     );
 
     (async () => {
