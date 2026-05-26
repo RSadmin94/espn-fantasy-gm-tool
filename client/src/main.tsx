@@ -23,6 +23,7 @@ import { DraftHistory } from "./pages/DraftHistory";
 import { Matchups } from "./pages/Matchups";
 import { LeagueHistory } from "./pages/LeagueHistory";
 import { trpc } from "@/lib/trpc";
+import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
 import "./index.css";
 
@@ -39,6 +40,10 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
+      headers: () => {
+        const t = getTrpcToken();
+        return t ? { Authorization: `Bearer ${t}` } : {};
+      },
       fetch(input, init) {
         return globalThis.fetch(input, {
           ...(init ?? {}),

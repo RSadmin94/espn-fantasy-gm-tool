@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import { useAuth } from "@clerk/react-router";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { setTrpcToken } from "@/lib/trpcAuth";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { fetchEspnSeasonBundleBrowserOrExtension } from "@/lib/espnApi";
 import { cn } from "@/lib/utils";
@@ -485,27 +486,39 @@ export function SyncData() {
         return;
       }
 
-      const ingestResult = await ingestParsedDraftPicksMutation.mutateAsync({
-        leagueId: "457622",
-        season: 2010,
-        picks: picks as {
-          overallPick: number;
-          roundId: number;
-          roundPick: number;
-          teamId?: number;
-          teamName: string;
-          playerName: string;
-          position: string;
-          nflTeam?: string;
-        }[],
-      });
-      const ingestRaw = ingestResult as Record<string, unknown>;
-      setBrowserSync2010IngestRaw(ingestRaw);
-      const ingestSuccess = ingestRaw.success === true;
-      const dbCount = typeof ingestRaw.dbCountAfter === "number" ? ingestRaw.dbCountAfter : 0;
+      const token = await getToken();
+      console.log("[gmwr] tokenPresent", Boolean(token));
+      setTrpcToken(token);
+      let ingestResult: Record<string, unknown>;
+      try {
+        console.log("[gmwr] ingestStart", { leagueId: "457622", season: 2010, pickCount: picks.length });
+        ingestResult = await ingestParsedDraftPicksMutation.mutateAsync({
+          leagueId: "457622",
+          season: 2010,
+          picks: picks as {
+            overallPick: number;
+            roundId: number;
+            roundPick: number;
+            teamId?: number;
+            teamName: string;
+            playerName: string;
+            position: string;
+            nflTeam?: string;
+          }[],
+        }) as Record<string, unknown>;
+        console.log("[gmwr] ingestSuccess", ingestResult);
+      } catch (ingestErr) {
+        console.error("[gmwr] ingestError", ingestErr);
+        throw ingestErr;
+      } finally {
+        setTrpcToken(null);
+      }
+      setBrowserSync2010IngestRaw(ingestResult);
+      const ingestSuccess = ingestResult.success === true;
+      const dbCount = typeof ingestResult.dbCountAfter === "number" ? ingestResult.dbCountAfter : 0;
       if (ingestSuccess && dbCount > 0) {
         setBrowserSessionNote(
-          `Import completed. received=${String(ingestRaw.received ?? "?")} inserted/updated=${String(ingestRaw.insertedOrUpdated ?? "?")} dbCountAfter=${dbCount}`,
+          `Import completed. received=${String(ingestResult.received ?? "?")} inserted/updated=${String(ingestResult.insertedOrUpdated ?? "?")} dbCountAfter=${dbCount}`,
         );
         toast.success("Season 2010 sync complete.");
         void browserSyncStatusQuery.refetch();
