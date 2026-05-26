@@ -1,254 +1,451 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
-function standingClass(place: number | null | undefined): string {
-  if (!place) return "text-muted-foreground/40";
-  if (place === 1) return "bg-yellow-500/20 text-yellow-300 font-bold";
-  if (place === 2) return "bg-slate-400/15 text-slate-300 font-semibold";
-  if (place === 3) return "bg-amber-700/15 text-amber-500 font-semibold";
-  if (place <= 6) return "text-foreground";
-  return "text-muted-foreground";
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+function ordinal(n: number): string {
+  if (n === 11 || n === 12 || n === 13) return `${n}th`;
+  const s = ["th", "st", "nd", "rd"];
+  return `${n}${s[n % 10] ?? "th"}`;
 }
 
+function winPct(w: number, l: number, t: number): string {
+  const g = w + l + t;
+  return g === 0 ? "—" : ((w / g) * 100).toFixed(1) + "%";
+}
+
+function chipStyle(place: number | null | undefined): string {
+  if (!place) return "bg-muted/30 text-muted-foreground/40 border-transparent";
+  if (place === 1) return "bg-yellow-500/20 text-yellow-300 border-yellow-500/40 font-bold";
+  if (place === 2) return "bg-slate-400/15 text-slate-300 border-slate-400/30";
+  if (place === 3) return "bg-amber-700/15 text-amber-500 border-amber-600/30";
+  if (place <= 6)  return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+  return "bg-muted/20 text-muted-foreground/50 border-transparent";
+}
+
+// ── component ─────────────────────────────────────────────────────────────────
+
+type Tab = "dynasty" | "seasons" | "rivalries";
+type SortKey = "titles" | "wins" | "winpct";
+
 export function LeagueHistory() {
-  const [tab, setTab] = useState<"standings" | "h2h">("standings");
+  const [tab, setTab]                       = useState<Tab>("dynasty");
+  const [sortBy, setSortBy]                 = useState<SortKey>("titles");
+  const [expandedOwner, setExpandedOwner]   = useState<string | null>(null);
+  const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
+  const [rivalOwner, setRivalOwner]         = useState<string>("");
 
   const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(undefined, { staleTime: 60_000 });
   const h2hQ = trpc.espn.leagueHistoryH2H.useQuery(undefined, {
     staleTime: 60_000,
-    enabled: tab === "h2h",
+    enabled: tab === "rivalries",
   });
 
-  const seasons = standingsQ.data?.seasons ?? [];
-  const owners = standingsQ.data?.owners ?? [];
+  const allSeasons = standingsQ.data?.seasons ?? [];
+  const rawOwners  = standingsQ.data?.owners  ?? [];
 
-  // Per-owner Map<season, entry> for O(1) cell lookup during render
-  const ownerSeasonMaps = new Map(
-    owners.map((o) => [
-      o.ownerKey,
-      new Map(o.seasons.map(({ season, entry }) => [season, entry])),
-    ]),
-  );
+  // ── Dynasty Board sort (client-side display sort only) ────────────────────
+  const owners = [...rawOwners].sort((a, b) => {
+    const wA = a.seasons.reduce((s, r) => s + r.entry.wins,   0);
+    const lA = a.seasons.reduce((s, r) => s + r.entry.losses, 0);
+    const tA = a.seasons.reduce((s, r) => s + r.entry.ties,   0);
+    const wB = b.seasons.reduce((s, r) => s + r.entry.wins,   0);
+    const lB = b.seasons.reduce((s, r) => s + r.entry.losses, 0);
+    const tB = b.seasons.reduce((s, r) => s + r.entry.ties,   0);
+    if (sortBy === "titles") {
+      if (b.championships !== a.championships) return b.championships - a.championships;
+      return wB - wA;
+    }
+    if (sortBy === "wins")   return wB - wA;
+    const pA = (wA + lA + tA) === 0 ? 0 : wA / (wA + lA + tA);
+    const pB = (wB + lB + tB) === 0 ? 0 : wB / (wB + lB + tB);
+    return pB - pA;
+  });
 
+  // ── Season Explorer ───────────────────────────────────────────────────────
+  const activeSeason = selectedSeason ?? allSeasons[allSeasons.length - 1] ?? null;
+  const seasonRows = activeSeason
+    ? rawOwners
+        .flatMap((o) => {
+          const s = o.seasons.find((r) => r.season === activeSeason);
+          return s ? [{ owner: o.displayName, ...s.entry }] : [];
+        })
+        .sort((a, b) => (a.finalStanding ?? 99) - (b.finalStanding ?? 99))
+    : [];
+  const topScorer = seasonRows.length
+    ? [...seasonRows].sort((a, b) => b.pointsFor - a.pointsFor)[0]!
+    : null;
+
+  // ── Rivalries ─────────────────────────────────────────────────────────────
   const h2hOwners = h2hQ.data?.owners ?? [];
   const h2hMatrix = h2hQ.data?.matrix ?? [];
-
-  const loading = tab === "standings" ? standingsQ.isLoading : h2hQ.isLoading;
+  const activeRival = rivalOwner || h2hOwners[0] || "";
+  const rivalRow    = h2hMatrix.find((r) => r.owner === activeRival);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-1">
-      <div className="rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400 font-mono">
-        League History v2 · endpoint: leagueHistoryStandings_v2 · owners: {owners.length}
-      </div>
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">League History</h1>
-        <p className="mt-1 text-muted-foreground">
-          All-time standings and head-to-head records across every season.
-        </p>
+    <div className="mx-auto max-w-7xl space-y-5 px-1 pb-12">
+
+      {/* ── Page header ── */}
+      <div className="space-y-0.5">
+        <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400">
+          League Timeline V1
+        </div>
+        <h1 className="text-3xl font-bold text-foreground">League Timeline</h1>
+        <p className="text-sm text-muted-foreground">History · Dynasties · Rivalries</p>
       </div>
 
+      {/* ── Tab bar ── */}
       <ToggleGroup
         type="single"
         value={tab}
-        onValueChange={(v) => {
-          if (v === "standings" || v === "h2h") setTab(v);
-        }}
+        onValueChange={(v) => { if (v) setTab(v as Tab); }}
         variant="outline"
         size="sm"
       >
-        <ToggleGroupItem value="standings">Season Standings</ToggleGroupItem>
-        <ToggleGroupItem value="h2h">All-Time H2H</ToggleGroupItem>
+        <ToggleGroupItem value="dynasty">Dynasty Board</ToggleGroupItem>
+        <ToggleGroupItem value="seasons">Season Explorer</ToggleGroupItem>
+        <ToggleGroupItem value="rivalries">Rivalries</ToggleGroupItem>
       </ToggleGroup>
 
-      {loading && (
+      {standingsQ.isLoading && (
         <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          Loading…
+          <Loader2 className="h-5 w-5 animate-spin" /> Loading…
         </div>
       )}
 
-      {/* ── Season standings history ── */}
-      {tab === "standings" && !standingsQ.isLoading && (
-        seasons.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border px-4 py-16 text-center text-sm text-muted-foreground">
-            No historical standings yet. Sync seasons via the extension on the Sync Data page.
-          </div>
-        ) : (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Final standings by season — {seasons[0]}–{seasons[seasons.length - 1]}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/40">
-                      <th className="sticky left-0 z-10 bg-muted/40 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground min-w-[150px]">
-                        Owner
-                      </th>
-                      {seasons.map((s) => (
-                        <th
-                          key={s}
-                          className="px-1.5 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground min-w-[46px]"
-                        >
-                          {s}
-                        </th>
-                      ))}
-                      <th className="px-2 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-yellow-400 min-w-[36px]">
-                        🏆
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {owners.map((owner) => {
-                      const smap = ownerSeasonMaps.get(owner.ownerKey);
-                      return (
-                        <tr
-                          key={owner.ownerKey}
-                          className="border-b border-border/50 hover:bg-accent/10 transition-colors"
-                        >
-                          <td className="sticky left-0 z-10 bg-card px-3 py-2 font-medium text-foreground truncate max-w-[150px]">
-                            {owner.displayName}
-                          </td>
-                          {seasons.map((s) => {
-                            const d = smap?.get(s);
-                            if (!d) {
-                              return (
-                                <td key={s} className="px-1.5 py-2 text-center text-[10px] text-muted-foreground/25">
-                                  —
-                                </td>
-                              );
-                            }
-                            return (
-                              <td
-                                key={s}
-                                className={cn("px-1.5 py-2 text-center text-xs tabular-nums rounded-sm", standingClass(d.finalStanding))}
-                              >
-                                <div>{d.finalStanding ?? "—"}</div>
-                                <div className="text-[10px] text-muted-foreground leading-none mt-0.5">
-                                  {d.wins}-{d.losses}
-                                </div>
-                              </td>
-                            );
-                          })}
-                          <td className="px-2 py-2 text-center font-bold text-yellow-400 text-sm">
-                            {owner.championships > 0
-                              ? owner.championships
-                              : <span className="text-muted-foreground/30">—</span>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        )
-      )}
+      {/* ═══════════════════════════════════════════════════════════════════
+          TAB 1 — Dynasty Board
+      ════════════════════════════════════════════════════════════════════ */}
+      {tab === "dynasty" && !standingsQ.isLoading && (
+        <div className="space-y-4">
 
-      {/* ── All-time H2H matrix ── */}
-      {tab === "h2h" && !h2hQ.isLoading && (
-        h2hOwners.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border px-4 py-16 text-center text-sm text-muted-foreground">
-            No H2H data yet. Sync seasons via the extension on the Sync Data page.
+          {/* Sort bar */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-muted-foreground">Sort by:</span>
+            {(["titles", "wins", "winpct"] as SortKey[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSortBy(s)}
+                className={cn(
+                  "rounded px-2.5 py-1 text-xs border transition-colors",
+                  sortBy === s
+                    ? "border-primary/60 text-primary bg-primary/10"
+                    : "border-border text-muted-foreground hover:text-foreground hover:border-border/80",
+                )}
+              >
+                {s === "titles" ? "Titles" : s === "wins" ? "Wins" : "Win %"}
+              </button>
+            ))}
           </div>
-        ) : (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                All-time head-to-head records (row beats column: W-L)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/40">
-                      <th className="sticky left-0 z-10 bg-muted/40 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground min-w-[130px]">
-                        ↓ vs →
-                      </th>
-                      {h2hOwners.map((o) => (
-                        <th
-                          key={o}
-                          className="px-1.5 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground min-w-[64px]"
-                        >
-                          <div className="truncate max-w-[64px]" title={o}>
-                            {o.split(" ")[0]}
-                          </div>
-                        </th>
-                      ))}
-                      <th className="px-2 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground min-w-[52px]">
-                        Total
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {h2hMatrix.map(({ owner, vs }) => {
-                      let tw = 0, tl = 0, tt = 0;
-                      for (const r of Object.values(vs)) {
-                        tw += r.wins; tl += r.losses; tt += r.ties;
-                      }
-                      return (
-                        <tr
-                          key={owner}
-                          className="border-b border-border/50 hover:bg-accent/10 transition-colors"
-                        >
-                          <td className="sticky left-0 z-10 bg-card px-3 py-2 font-medium text-foreground truncate max-w-[130px]" title={owner}>
-                            {owner}
-                          </td>
-                          {h2hOwners.map((rival) => {
-                            if (rival === owner) {
-                              return (
-                                <td key={rival} className="px-1.5 py-2 text-center text-muted-foreground/20 bg-muted/10">
-                                  —
-                                </td>
-                              );
-                            }
-                            const rec = vs[rival] ?? { wins: 0, losses: 0, ties: 0 };
-                            const winning = rec.wins > rec.losses;
-                            const losing = rec.losses > rec.wins;
-                            return (
-                              <td
-                                key={rival}
-                                className={cn(
-                                  "px-1.5 py-2 text-center font-mono text-xs tabular-nums",
-                                  winning && "text-emerald-400",
-                                  losing && "text-red-400",
-                                  !winning && !losing && "text-muted-foreground",
-                                )}
-                              >
-                                {rec.wins}-{rec.losses}
-                                {rec.ties > 0 && `-${rec.ties}`}
-                              </td>
-                            );
-                          })}
-                          <td
+
+          {owners.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border px-4 py-14 text-center text-sm text-muted-foreground">
+              No standings data yet. Sync seasons on the Sync Data page.
+            </div>
+          )}
+
+          {/* Owner cards grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {owners.map((owner) => {
+              const totalW = owner.seasons.reduce((s, r) => s + r.entry.wins,   0);
+              const totalL = owner.seasons.reduce((s, r) => s + r.entry.losses, 0);
+              const totalT = owner.seasons.reduce((s, r) => s + r.entry.ties,   0);
+              const best   = owner.seasons.reduce((b, r) => Math.min(b, r.entry.finalStanding ?? 99), 99);
+              const isOpen = expandedOwner === owner.ownerKey;
+
+              return (
+                <Card key={owner.ownerKey} className={cn("transition-all", isOpen && "ring-1 ring-primary/25")}>
+                  <CardContent className="p-4 space-y-3">
+
+                    {/* Name + title badge */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-semibold text-foreground leading-tight">{owner.displayName}</div>
+                      {owner.championships > 0 && (
+                        <div className="shrink-0 rounded-full bg-yellow-500/15 px-2 py-0.5 text-yellow-300 text-xs font-bold">
+                          🏆&nbsp;{owner.championships}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Stats grid */}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      <span className="text-muted-foreground">📈 Seasons</span>
+                      <span className="text-right tabular-nums">{owner.seasons.length}</span>
+
+                      <span className="text-muted-foreground">🔥 Best Finish</span>
+                      <span className={cn(
+                        "text-right tabular-nums font-medium",
+                        best === 1 && "text-yellow-300",
+                        best === 2 && "text-slate-300",
+                        best === 3 && "text-amber-500",
+                      )}>
+                        {best < 99 ? ordinal(best) : "—"}
+                      </span>
+
+                      <span className="text-muted-foreground">📊 Record</span>
+                      <span className="text-right tabular-nums">
+                        {totalW}–{totalL}{totalT > 0 ? `–${totalT}` : ""}
+                      </span>
+
+                      <span className="text-muted-foreground">💯 Win %</span>
+                      <span className="text-right tabular-nums">{winPct(totalW, totalL, totalT)}</span>
+                    </div>
+
+                    {/* Expand toggle */}
+                    <button
+                      onClick={() => setExpandedOwner(isOpen ? null : owner.ownerKey)}
+                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {isOpen
+                        ? <><ChevronUp className="h-3 w-3" /> Hide seasons</>
+                        : <><ChevronDown className="h-3 w-3" /> Show seasons</>}
+                    </button>
+
+                    {/* Season chips */}
+                    {isOpen && (
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {owner.seasons.map(({ season, entry }) => (
+                          <button
+                            key={season}
+                            title={`${season}: ${entry.wins}–${entry.losses}, Place ${entry.finalStanding ?? "?"}`}
+                            onClick={() => { setSelectedSeason(season); setTab("seasons"); }}
                             className={cn(
-                              "px-2 py-2 text-center font-mono text-xs font-semibold tabular-nums",
-                              tw > tl && "text-emerald-400",
-                              tl > tw && "text-red-400",
-                              tw === tl && "text-muted-foreground",
+                              "rounded border px-2 py-0.5 text-[11px] tabular-nums transition-opacity hover:opacity-80",
+                              chipStyle(entry.finalStanding),
                             )}
                           >
-                            {tw}-{tl}
-                            {tt > 0 && `-${tt}`}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            {season}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          TAB 2 — Season Explorer
+      ════════════════════════════════════════════════════════════════════ */}
+      {tab === "seasons" && !standingsQ.isLoading && (
+        <div className="space-y-4">
+
+          {/* Horizontal season strip */}
+          <div className="overflow-x-auto pb-1">
+            <div className="flex gap-1.5 min-w-max">
+              {allSeasons.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSelectedSeason(s)}
+                  className={cn(
+                    "rounded px-3 py-1.5 text-sm font-medium border transition-colors whitespace-nowrap",
+                    activeSeason === s
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40",
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {activeSeason && seasonRows.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">
+              No standings data for {activeSeason}.
+            </div>
+          )}
+
+          {activeSeason && seasonRows.length > 0 && (
+            <Card>
+              <CardContent className="p-5 space-y-5">
+
+                {/* Season heading */}
+                <div className="text-xl font-bold text-foreground">{activeSeason} Season</div>
+
+                {/* Champion + runner-up */}
+                <div className="flex gap-3">
+                  {seasonRows[0] && (
+                    <div className="flex-1 rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-3 text-center">
+                      <div className="text-[10px] uppercase tracking-widest font-semibold text-yellow-400 mb-1">Champion</div>
+                      <div className="font-bold text-yellow-300">{seasonRows[0].owner}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {seasonRows[0].wins}–{seasonRows[0].losses} · {seasonRows[0].pointsFor.toFixed(1)} pts
+                      </div>
+                    </div>
+                  )}
+                  {seasonRows[1] && (
+                    <div className="flex-1 rounded-lg bg-slate-400/10 border border-slate-400/15 p-3 text-center">
+                      <div className="text-[10px] uppercase tracking-widest font-semibold text-slate-400 mb-1">Runner-Up</div>
+                      <div className="font-semibold text-slate-300">{seasonRows[1].owner}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {seasonRows[1].wins}–{seasonRows[1].losses} · {seasonRows[1].pointsFor.toFixed(1)} pts
+                      </div>
+                    </div>
+                  )}
+                  {topScorer && topScorer.owner !== seasonRows[0]?.owner && (
+                    <div className="flex-1 rounded-lg bg-blue-500/10 border border-blue-500/15 p-3 text-center">
+                      <div className="text-[10px] uppercase tracking-widest font-semibold text-blue-400 mb-1">Top Scorer</div>
+                      <div className="font-semibold text-blue-300">{topScorer.owner}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {topScorer.pointsFor.toFixed(1)} pts
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Full standings list */}
+                <div>
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">
+                    Final Standings
+                  </div>
+                  <div className="space-y-1">
+                    {seasonRows.map((row, idx) => (
+                      <div
+                        key={row.owner}
+                        className={cn(
+                          "flex items-center justify-between rounded-md px-3 py-2 text-sm",
+                          idx === 0 && "bg-yellow-500/8",
+                          idx === 1 && "bg-slate-400/6",
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className={cn(
+                            "w-5 text-center text-xs font-semibold tabular-nums",
+                            idx === 0 && "text-yellow-400",
+                            idx === 1 && "text-slate-400",
+                            idx === 2 && "text-amber-500",
+                            idx >= 3 && "text-muted-foreground",
+                          )}>
+                            {row.finalStanding ?? idx + 1}
+                          </span>
+                          <span className="text-foreground">{row.owner}</span>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground tabular-nums">
+                          <span>{row.wins}–{row.losses}</span>
+                          <span>{row.pointsFor.toFixed(1)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          TAB 3 — Rivalries
+      ════════════════════════════════════════════════════════════════════ */}
+      {tab === "rivalries" && (
+        <div className="space-y-4">
+
+          {h2hQ.isLoading && (
+            <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" /> Loading rivalries…
+            </div>
+          )}
+
+          {!h2hQ.isLoading && h2hOwners.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border px-4 py-14 text-center text-sm text-muted-foreground">
+              No H2H data yet. Sync matchup data on the Sync Data page.
+            </div>
+          )}
+
+          {!h2hQ.isLoading && h2hOwners.length > 0 && (
+            <>
+              {/* Owner pill selector */}
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">Select owner to view their rivalries:</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {h2hOwners.map((o) => (
+                    <button
+                      key={o}
+                      onClick={() => setRivalOwner(o)}
+                      className={cn(
+                        "rounded-full px-3 py-1 text-xs border transition-colors",
+                        activeRival === o
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40",
+                      )}
+                    >
+                      {o}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        )
+
+              {/* Rivalry cards */}
+              {rivalRow && (
+                <div className="space-y-3">
+                  <div className="text-sm font-semibold text-foreground">
+                    {activeRival} — all-time head-to-head
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {Object.entries(rivalRow.vs)
+                      .sort(([, a], [, b]) => (b.wins + b.losses + b.ties) - (a.wins + a.losses + a.ties))
+                      .map(([rival, rec]) => {
+                        const total   = rec.wins + rec.losses + rec.ties;
+                        const winning = rec.wins > rec.losses;
+                        const losing  = rec.losses > rec.wins;
+                        const winFrac = total > 0 ? (rec.wins / total) * 100 : 0;
+
+                        return (
+                          <Card key={rival}>
+                            <CardContent className="p-4 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">vs</div>
+                                  <div className="font-semibold text-foreground">{rival}</div>
+                                </div>
+                                <div className={cn(
+                                  "text-2xl font-bold tabular-nums",
+                                  winning && "text-emerald-400",
+                                  losing  && "text-red-400",
+                                  !winning && !losing && "text-muted-foreground",
+                                )}>
+                                  {rec.wins}–{rec.losses}
+                                  {rec.ties > 0 && <span className="text-base">–{rec.ties}</span>}
+                                </div>
+                              </div>
+
+                              {/* Win rate bar */}
+                              {total > 0 && (
+                                <div className="space-y-1">
+                                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                                    <div
+                                      className={cn(
+                                        "h-full rounded-full transition-all",
+                                        winning ? "bg-emerald-400" : losing ? "bg-red-400" : "bg-muted-foreground",
+                                      )}
+                                      style={{ width: `${winFrac}%` }}
+                                    />
+                                  </div>
+                                  <div className="flex justify-between text-[11px] text-muted-foreground">
+                                    <span>{winFrac.toFixed(0)}% win rate</span>
+                                    <span>{total} game{total !== 1 ? "s" : ""}</span>
+                                  </div>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
     </div>
   );
