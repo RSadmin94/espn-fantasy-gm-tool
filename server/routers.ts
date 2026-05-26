@@ -3348,7 +3348,7 @@ export const appRouter = router({
     standingsHistory: publicProcedure.query(async ({ ctx }) => {
       type SeasonResult = { season: number; finalStanding: number | null; wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number };
       type AggOwner = { ownerKey: string; displayName: string; seasonResults: SeasonResult[] };
-      const empty = { seasons: [] as number[], owners: [] as AggOwner[], rawOwnerCount: 0, canonicalOwnerCount: 0, mergedAliases: [] as string[] };
+      const empty = { seasons: [] as number[], owners: [] as AggOwner[], canonicalOwnerCount: 0, mergedAliases: [] as string[] };
       const { leagueId } = await resolveActiveLeagueId(
         { user: ctx.user ? { id: ctx.user.id } : undefined },
         null,
@@ -3373,26 +3373,30 @@ export const appRouter = router({
         .where(eqDrizzle(gmTeams.leagueId, leagueId))
         .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.finalStanding));
 
-      const rawOwnerSet = new Set<string>();
       const mergedAliasSet = new Set<string>();
       const allSeasonSet = new Set<number>();
-      // ownerKey → { displayName, seasonResults Map }
+      // ownerKey (canonical) → { displayName, bySeasonMap }
       const ownerAccumulator = new Map<string, { displayName: string; bySeasonMap: Map<number, SeasonResult> }>();
 
       for (const row of rows) {
         allSeasonSet.add(row.season);
-        const rawDisplay = (row.ownerName || row.name || `Team ${row.teamId}`).trim();
-        rawOwnerSet.add(rawDisplay);
-        const ownerKey = canonicalizeOwner(rawDisplay);
-        if (ownerKey !== rawDisplay) mergedAliasSet.add(`${rawDisplay} → ${ownerKey}`);
+        const rawOwner = (row.ownerName || row.name || `Team ${row.teamId}`).trim();
 
-        if (!ownerAccumulator.has(ownerKey)) {
-          ownerAccumulator.set(ownerKey, { displayName: ownerKey, bySeasonMap: new Map() });
+        // Canonicalize BEFORE any accumulator lookup — never use rawOwner as a map key
+        const ownerKey = canonicalizeOwner(rawOwner);
+        console.log("[standingsHistory]", { rawOwner, ownerKey, season: row.season });
+
+        if (ownerKey !== rawOwner) mergedAliasSet.add(`${rawOwner} → ${ownerKey}`);
+
+        let agg = ownerAccumulator.get(ownerKey);
+        if (!agg) {
+          agg = { displayName: ownerKey, bySeasonMap: new Map() };
+          ownerAccumulator.set(ownerKey, agg);
         }
-        const acc = ownerAccumulator.get(ownerKey)!;
+
         // Keep first (best-standing) entry per season per owner
-        if (!acc.bySeasonMap.has(row.season)) {
-          acc.bySeasonMap.set(row.season, {
+        if (!agg.bySeasonMap.has(row.season)) {
+          agg.bySeasonMap.set(row.season, {
             season: row.season,
             finalStanding: row.finalStanding,
             wins: row.wins,
@@ -3420,7 +3424,7 @@ export const appRouter = router({
           return wB - wA;
         });
 
-      return { seasons, owners, rawOwnerCount: rawOwnerSet.size, canonicalOwnerCount: ownerAccumulator.size, mergedAliases: [...mergedAliasSet] };
+      return { seasons, owners, canonicalOwnerCount: ownerAccumulator.size, mergedAliases: [...mergedAliasSet] };
     }),
 
     allTimeH2H: publicProcedure.query(async ({ ctx }) => {
