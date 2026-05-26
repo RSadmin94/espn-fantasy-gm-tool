@@ -561,12 +561,10 @@ export function SyncData() {
   const seasonsForBrowserBulk = useMemo(() => [...BROWSER_SYNC_REMAINING_SEASONS], []);
 
   const handleBrowserSyncOtherSeasons = async () => {
-    if (!browserSync2010Ready) return;
+    console.log("[BULK CLICKED]");
+    setBrowserSessionNote("Bulk sync started...");
     setBrowserSessionBulkBusy(true);
     setBrowserSessionErr(null);
-    setBrowserSessionNote(
-      `Syncing ${BROWSER_SYNC_REMAINING_SEASONS.length} seasons (${BROWSER_SYNC_REMAINING_SEASONS[0]}–${BROWSER_SYNC_REMAINING_SEASONS[BROWSER_SYNC_REMAINING_SEASONS.length - 1]}) via extension…`,
-    );
     try {
       const clerkToken = await getToken() ?? "";
       const result = await new Promise<{
@@ -857,8 +855,8 @@ export function SyncData() {
             </Button>
             <Button
               type="button"
-              variant="secondary"
-              className="gap-2"
+              variant="default"
+              className={`gap-2 ${browserSessionBulkBusy ? "" : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700"}`}
               disabled={browserSessionBulkBusy}
               onClick={() => void handleBrowserSyncOtherSeasons()}
             >
