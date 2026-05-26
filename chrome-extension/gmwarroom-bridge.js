@@ -55,4 +55,30 @@
     },
     false,
   );
+
+  window.addEventListener(
+    "message",
+    (ev) => {
+      if (ev.source !== window) return;
+      const d = ev.data;
+      if (!d || d.type !== "GMWR_HIST_TEST") return;
+      const id = d.id;
+      const leagueId = String(d.leagueId || "457622").trim();
+      chrome.runtime.sendMessage({ type: "GMWR_HIST_TEST", leagueId }, (response) => {
+        if (chrome.runtime.lastError) {
+          window.postMessage(
+            { type: "GMWR_HIST_TEST_REPLY", id, ok: false, error: chrome.runtime.lastError.message },
+            "*",
+          );
+          return;
+        }
+        const r = response || {};
+        window.postMessage(
+          { type: "GMWR_HIST_TEST_REPLY", id, ok: Boolean(r.ok), error: r.error ? String(r.error) : "" },
+          "*",
+        );
+      });
+    },
+    false,
+  );
 })();

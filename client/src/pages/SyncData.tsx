@@ -436,47 +436,35 @@ export function SyncData() {
   );
 
   const handleBrowserSync2010 = async () => {
-    if (!leagueId) return;
     setBrowserSessionErr(null);
     setBrowserSessionNote(null);
-    setLastBrowserImportCounts(null);
     setBrowserSessionBusy(true);
     try {
-      const gathered = await fetchEspnSeasonBundleBrowserOrExtension({
-        leagueId,
-        season: BROWSER_SYNC_TEST_SEASON,
-        onBrowserBlocked: () => {
-          toast.message("Browser fetch blocked. Trying Chrome extension…");
-          setBrowserSessionNote("Browser fetch blocked. Trying Chrome extension…");
-        },
+      const result = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+        const id = `hist-test-${Date.now()}`;
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener("message", onMsg);
+          resolve({ ok: false, error: "Extension request timed out" });
+        }, 120_000);
+        function onMsg(ev: MessageEvent) {
+          if (ev.source !== window) return;
+          const d = ev.data as Record<string, unknown> | null;
+          if (!d || d.type !== "GMWR_HIST_TEST_REPLY" || d.id !== id) return;
+          window.clearTimeout(timeout);
+          window.removeEventListener("message", onMsg);
+          resolve({ ok: Boolean(d.ok), error: d.error ? String(d.error) : undefined });
+        }
+        window.addEventListener("message", onMsg);
+        window.postMessage({ type: "GMWR_HIST_TEST", id, leagueId: "457622" }, "*");
       });
-      if (!gathered.ok) {
-        const msg = gathered.message;
+      if (result.ok) {
+        setBrowserSessionNote("Import completed.");
+        toast.success("Season 2010 sync complete.");
+        void browserSyncStatusQuery.refetch();
+      } else {
+        const msg = result.error || "Extension sync failed.";
         setBrowserSessionErr(msg);
         toast.error(msg);
-        return;
-      }
-      const res = await importFromBrowserMutation.mutateAsync({
-        leagueId,
-        season: BROWSER_SYNC_TEST_SEASON,
-        combinedPayload: gathered.combinedPayload,
-        matchupPayloads: gathered.matchupPayloads,
-        matchupsExplicitlyUnavailable: gathered.matchupsExplicitlyUnavailable,
-      });
-      setLastBrowserImportCounts(res.counts);
-      void browserSyncStatusQuery.refetch();
-      if (res.success) {
-        setBrowserSessionNote("Import completed.");
-        toast.success(
-          `Season ${BROWSER_SYNC_TEST_SEASON} — teams ${res.counts.teams}, matchups ${res.counts.matchups}, draft picks ${res.counts.draftPicks}, transactions ${res.counts.transactions}.`,
-        );
-      } else {
-        const errMsg =
-          res.skipped && res.reason === "already_populated"
-            ? `${BROWSER_SYNC_TEST_SEASON} is already populated in the database (skipped).`
-            : `Import did not verify${res.reason ? `: ${res.reason}` : ""}.`;
-        setBrowserSessionErr(errMsg);
-        toast.error(errMsg);
       }
     } catch (e) {
       const msg = trpcLikeErrorMessage(e as Error);
