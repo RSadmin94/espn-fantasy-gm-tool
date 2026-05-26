@@ -65,7 +65,8 @@
       const id = d.id;
       const leagueId = String(d.leagueId || "457622").trim();
       const clerkToken = typeof d.clerkToken === "string" ? d.clerkToken : "";
-      chrome.runtime.sendMessage({ type: "GMWR_HIST_TEST", leagueId, clerkToken }, (response) => {
+      const season = d.season ? Number(d.season) : undefined;
+      chrome.runtime.sendMessage({ type: "GMWR_HIST_TEST", leagueId, clerkToken, season }, (response) => {
         if (chrome.runtime.lastError) {
           window.postMessage(
             { type: "GMWR_HIST_TEST_REPLY", id, ok: false, error: chrome.runtime.lastError.message },

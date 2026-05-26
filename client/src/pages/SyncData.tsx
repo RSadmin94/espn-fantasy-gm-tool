@@ -561,54 +561,81 @@ export function SyncData() {
   const seasonsForBrowserBulk = useMemo(() => [...BROWSER_SYNC_REMAINING_SEASONS], []);
 
   const handleBrowserSyncOtherSeasons = async () => {
-    console.log("[BULK CLICKED]");
+    console.log("[BULK START]");
     setBrowserSessionNote("Bulk sync started...");
     setBrowserSessionBulkBusy(true);
     setBrowserSessionErr(null);
     try {
-      const clerkToken = await getToken() ?? "";
-      const result = await new Promise<{
-        ok: boolean;
-        error?: string;
-        results?: unknown[];
-        aborted?: boolean;
-      }>((resolve) => {
-        const id = `hist-full-${Date.now()}`;
-        const timeout = window.setTimeout(() => {
-          window.removeEventListener("message", onMsg);
-          resolve({ ok: false, error: "Extension request timed out" });
-        }, 600_000);
-        function onMsg(ev: MessageEvent) {
-          if (ev.source !== window) return;
-          const d = ev.data as Record<string, unknown> | null;
-          if (!d || d.type !== "GMWR_HIST_FULL_REPLY" || d.id !== id) return;
-          window.clearTimeout(timeout);
-          window.removeEventListener("message", onMsg);
-          resolve({
-            ok: Boolean(d.ok),
-            error: d.error ? String(d.error) : undefined,
-            results: Array.isArray(d.results) ? d.results : [],
-            aborted: Boolean(d.aborted),
-          });
+      const token = await getToken();
+      console.log("[BULK TOKEN]", !!token);
+
+      const seasonResults: string[] = [];
+      for (const season of BROWSER_SYNC_REMAINING_SEASONS) {
+        console.log(`[BULK INGEST ${season}]`);
+        setBrowserSessionNote(`Scraping season ${season}…`);
+
+        const extResult = await new Promise<Record<string, unknown>>((resolve) => {
+          const id = `hist-bulk-${season}-${Date.now()}`;
+          const timeout = window.setTimeout(() => {
+            window.removeEventListener("message", onMsg);
+            resolve({ ok: false, error: `Extension timed out for season ${season}` });
+          }, 120_000);
+          function onMsg(ev: MessageEvent) {
+            if (ev.source !== window) return;
+            const d = ev.data as Record<string, unknown> | null;
+            if (!d || d.type !== "GMWR_HIST_TEST_REPLY" || d.id !== id) return;
+            window.clearTimeout(timeout);
+            window.removeEventListener("message", onMsg);
+            resolve(d);
+          }
+          window.addEventListener("message", onMsg);
+          window.postMessage(
+            { type: "GMWR_HIST_TEST", id, leagueId: "457622", season, clerkToken: token ?? "" },
+            "*",
+          );
+        });
+
+        if (!extResult.ok) {
+          const errMsg = extResult.error ? String(extResult.error) : "scrape_failed";
+          seasonResults.push(`${season}: scrape failed — ${errMsg}`);
+          continue;
         }
-        window.addEventListener("message", onMsg);
-        window.postMessage(
-          { type: "GMWR_HIST_FULL", id, leagueId: "457622", seasons: BROWSER_SYNC_REMAINING_SEASONS, clerkToken },
-          "*",
-        );
-      });
-      if (result.ok) {
-        const note = result.aborted
-          ? `Stopped early after two consecutive failures. Completed ${(result.results ?? []).length} season(s).`
-          : `Finished syncing ${BROWSER_SYNC_REMAINING_SEASONS.length} seasons (${BROWSER_SYNC_REMAINING_SEASONS[0]}–${BROWSER_SYNC_REMAINING_SEASONS[BROWSER_SYNC_REMAINING_SEASONS.length - 1]}).`;
-        setBrowserSessionNote(note);
-        toast.success("Bulk extension sync finished.");
-        void browserSyncStatusQuery.refetch();
-      } else {
-        const msg = result.error || "Extension bulk sync failed.";
-        setBrowserSessionErr(msg);
-        toast.error(msg);
+
+        const picks = Array.isArray(extResult.picks) ? extResult.picks : [];
+        if (picks.length === 0) {
+          seasonResults.push(`${season}: no picks returned`);
+          continue;
+        }
+
+        setBrowserSessionNote(`Ingesting season ${season} (${picks.length} picks)…`);
+        setTrpcToken(token);
+        try {
+          const ingestResult = await ingestParsedDraftPicksMutation.mutateAsync({
+            leagueId: "457622",
+            season,
+            picks: picks as {
+              overallPick: number;
+              roundId: number;
+              roundPick: number;
+              teamId?: number;
+              teamName: string;
+              playerName: string;
+              position: string;
+              nflTeam?: string;
+            }[],
+          }) as Record<string, unknown>;
+          const dbCount = typeof ingestResult.dbCountAfter === "number" ? ingestResult.dbCountAfter : 0;
+          seasonResults.push(`${season}: dbCountAfter=${dbCount}`);
+          if (dbCount > 0) toast.success(`Season ${season} synced.`);
+        } catch (ingestErr) {
+          seasonResults.push(`${season}: ingest failed — ${trpcLikeErrorMessage(ingestErr as Error)}`);
+        } finally {
+          setTrpcToken(null);
+        }
       }
+
+      setBrowserSessionNote(seasonResults.join(" | "));
+      void browserSyncStatusQuery.refetch();
     } catch (e) {
       const msg = trpcLikeErrorMessage(e as Error);
       setBrowserSessionErr(msg);

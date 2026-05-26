@@ -1277,7 +1277,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     (async () => {
       const TEST_LEAGUE = "457622";
-      const TEST_SEASON = 2010;
+      const TEST_SEASON = Number(message?.season) || 2010;
       const { swid, espnS2 } = await getEspnCookieValues();
       if (!swid || !espnS2) {
         onceRespond({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
@@ -1285,7 +1285,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
 
       const full = await scrapeDraftRecapPage(TEST_LEAGUE, TEST_SEASON);
-      console.info("[GMWR] draft recap scrape full result (TEST 2010)", full);
+      console.info("[GMWR] draft recap scrape full result", { season: TEST_SEASON }, full);
       const candidates = Array.isArray(full?.candidates) ? full.candidates : [];
       const first20CandidateTexts = candidates.slice(0, 20).map((c) => (c && c.text ? String(c.text) : ""));
       const summary = {
@@ -1310,20 +1310,37 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         TEST_LEAGUE,
         TEST_SEASON,
       );
-      const v = validateDraftRecap2010ParsedPicks(parsedPicks);
-      if (!v.ok) {
-        console.warn("[GMWR] draft recap parse validation failed", v.reason, {
-          parsedCount: parsedPicks.length,
-        });
+
+      // 2010-specific minimum-count validation only applies to the baseline season
+      if (TEST_SEASON === 2010) {
+        const v = validateDraftRecap2010ParsedPicks(parsedPicks);
+        if (!v.ok) {
+          console.warn("[GMWR] draft recap parse validation failed", v.reason, {
+            parsedCount: parsedPicks.length,
+          });
+          onceRespond({
+            ok: false,
+            error: v.reason || "draft_recap_parse_failed",
+            mode: "draft_recap_parse_failed",
+            scrape: full,
+            summary,
+            parseErrors,
+            parsedCount: parsedPicks.length,
+            validationReason: v.reason,
+          });
+          return;
+        }
+      }
+
+      if (parsedPicks.length === 0) {
         onceRespond({
           ok: false,
-          error: v.reason || "draft_recap_parse_failed",
-          mode: "draft_recap_parse_failed",
+          error: "draft_recap_parse_empty",
+          mode: "draft_recap_parse_empty",
           scrape: full,
           summary,
           parseErrors,
-          parsedCount: parsedPicks.length,
-          validationReason: v.reason,
+          parsedCount: 0,
         });
         return;
       }
@@ -1332,6 +1349,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const first5 = parsedPicks.slice(0, 5);
       const last5 = parsedPicks.slice(-5);
       console.info("[GMWR] draft recap HTML parse", {
+        season: TEST_SEASON,
         parsedCount: parsedPicks.length,
         pickPayloadCount: picksPayload.length,
         first5,
@@ -1340,7 +1358,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       onceRespond({
         ok: true,
-        mode: "draft_recap_scrape_parsed_2010",
+        mode: "draft_recap_scrape_parsed",
         leagueId: TEST_LEAGUE,
         season: TEST_SEASON,
         parsedCount: parsedPicks.length,
