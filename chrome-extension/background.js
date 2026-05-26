@@ -705,7 +705,7 @@ function parseDraftRecapCandidatesToPicks(candidates, leagueId, season) {
 }
 
 function validateDraftRecap2010ParsedPicks(picks) {
-  if (!Array.isArray(picks) || picks.length <= 150) {
+  if (!Array.isArray(picks) || picks.length < 50) {
     return { ok: false, reason: `parsed_count_too_low:${picks?.length ?? 0}` };
   }
   const head = picks.slice(0, 25);

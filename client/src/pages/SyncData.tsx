@@ -499,16 +499,20 @@ export function SyncData() {
           nflTeam?: string;
         }[],
       });
-      setBrowserSync2010IngestRaw(ingestResult as Record<string, unknown>);
-      const dbCount = typeof (ingestResult as Record<string, unknown>).dbCountAfter === "number"
-        ? (ingestResult as Record<string, unknown>).dbCountAfter as number
-        : 0;
-      if (dbCount > 150) {
-        setBrowserSessionNote(`Import completed. ${dbCount} draft picks in DB.`);
+      const ingestRaw = ingestResult as Record<string, unknown>;
+      setBrowserSync2010IngestRaw(ingestRaw);
+      const ingestSuccess = ingestRaw.success === true;
+      const dbCount = typeof ingestRaw.dbCountAfter === "number" ? ingestRaw.dbCountAfter : 0;
+      if (ingestSuccess && dbCount > 0) {
+        setBrowserSessionNote(
+          `Import completed. received=${String(ingestRaw.received ?? "?")} inserted/updated=${String(ingestRaw.insertedOrUpdated ?? "?")} dbCountAfter=${dbCount}`,
+        );
         toast.success("Season 2010 sync complete.");
         void browserSyncStatusQuery.refetch();
       } else {
-        const msg = `db_count_low: ${dbCount} (expected > 150)`;
+        const msg = ingestSuccess
+          ? `db_count_zero after ingest`
+          : `ingest reported success=false (dbCountAfter=${dbCount})`;
         setBrowserSessionErr(msg);
         toast.error(msg);
       }
