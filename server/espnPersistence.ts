@@ -1259,6 +1259,235 @@ export async function importEspnBrowserSeasonBundle(input: {
   };
 }
 
+function truncateJsonForDebug(value: unknown, max = 1200): string | null {
+  if (value === undefined || value === null) return null;
+  try {
+    const s = safeStringify(value);
+    return s.length > max ? `${s.slice(0, max)}…` : s;
+  } catch {
+    return String(value).slice(0, max);
+  }
+}
+
+/**
+ * Diagnostics for historical draft ingest: read `espn_raw_cache` `combined`, run extract / normalize / upsertDraftPicks, report DB counts.
+ * Does not add new import paths — reuses existing helpers only.
+ */
+export async function debugHistoricalDraftIngest(input: {
+  userId: number;
+  leagueId: string;
+  season: number;
+}): Promise<Record<string, unknown>> {
+  const { getUserEspnLeagueIds, getActiveEspnCredentials } = await import("./db.js");
+  const uid = input.userId;
+  const allowed = new Set(await getUserEspnLeagueIds(uid));
+  const creds = await getActiveEspnCredentials(uid);
+  if (creds?.leagueId) allowed.add(String(creds.leagueId).trim().slice(0, 32));
+  const lid = String(input.leagueId).trim().slice(0, 32);
+  if (!allowed.has(lid)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "League is not linked to your ESPN connections.",
+    });
+  }
+  const season = Math.floor(Number(input.season));
+  const log = (phase: string, extra?: Record<string, unknown>) => {
+    console.warn("[debugHistoricalDraftIngest]", JSON.stringify({ phase, leagueId: lid, season, ...extra }));
+  };
+  log("start");
+
+  const db = await getDbConn();
+  if (!db) {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+  }
+
+  const rows = await db
+    .select()
+    .from(schema.espnRawCache)
+    .where(
+      and(
+        eq(schema.espnRawCache.leagueId, lid),
+        eq(schema.espnRawCache.season, season),
+        eq(schema.espnRawCache.viewName, "combined"),
+      ),
+    )
+    .orderBy(desc(schema.espnRawCache.updatedAt))
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) {
+    log("no_raw_cache_combined");
+    const dbDraftPickCountBefore = await gmCountLeagueSeason(db, schema.gmDraftPicks, lid, season);
+    return {
+      leagueId: lid,
+      season,
+      rawCacheFound: false,
+      rawCacheRowId: null,
+      cacheLeagueId: null,
+      viewName: null,
+      updatedAt: null,
+      fetchedAt: null,
+      parseError: null,
+      payloadTopLevelKeys: [],
+      hasDraftDetail: false,
+      draftDetailKeys: [],
+      draftPickInputCount: 0,
+      firstInputPick: null,
+      extractedCount: 0,
+      extractedPathUsed: null,
+      extractedEmptyReason: "no_espn_raw_cache_combined_row",
+      firstExtracted: null,
+      normalizedCount: 0,
+      firstNormalized: null,
+      normalizeErrors: [],
+      upsertDraftPicksReturned: 0,
+      dbDraftPickCountBefore,
+      dbDraftPickCountAfter: dbDraftPickCountBefore,
+      stageHints: {
+        raw_cache_combined_missing: true,
+        payload_parse_failed: false,
+        payload_has_no_top_level_keys: true,
+        draft_detail_missing: true,
+        raw_draft_detail_picks_empty: true,
+        extraction_zero: true,
+        normalization_zero: true,
+        upsert_returned_zero: true,
+        db_draft_picks_still_zero_after: dbDraftPickCountBefore === 0,
+      },
+      normalizePayloadPatch: null,
+      note: "No combined row in espn_raw_cache for this leagueId + season.",
+    };
+  }
+
+  let payload: Record<string, unknown>;
+  let parseError: string | null = null;
+  try {
+    const raw = row.payload;
+    if (typeof raw === "string") {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        parseError = "payload_json_not_object";
+        payload = {};
+      } else {
+        payload = parsed as Record<string, unknown>;
+      }
+    } else if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      payload = raw as Record<string, unknown>;
+    } else {
+      parseError = "payload_unexpected_type";
+      payload = {};
+    }
+  } catch (e) {
+    parseError = e instanceof Error ? e.message : String(e);
+    payload = {};
+  }
+
+  const dbDraftPickCountBefore = await gmCountLeagueSeason(db, schema.gmDraftPicks, lid, season);
+
+  const payloadTopLevelKeys =
+    payload && typeof payload === "object" && !Array.isArray(payload) ? Object.keys(payload) : [];
+  const dd = payload.draftDetail as Record<string, unknown> | undefined;
+  const hasDraftDetail = Boolean(dd && typeof dd === "object" && !Array.isArray(dd));
+  const draftDetailKeys = hasDraftDetail ? Object.keys(dd as Record<string, unknown>) : [];
+  const rawPicksOnly = dd && Array.isArray((dd as Record<string, unknown>).picks)
+    ? ((dd as Record<string, unknown>).picks as unknown[])
+    : null;
+  const draftPickInputCount = Array.isArray(rawPicksOnly) ? rawPicksOnly.length : 0;
+  const firstInputPick =
+    Array.isArray(rawPicksOnly) && rawPicksOnly[0] != null ? truncateJsonForDebug(rawPicksOnly[0]) : null;
+
+  const extracted = extractDraftPickRowsFromPayload(payload);
+  const extractedCount = extracted.picks.length;
+  const firstExtracted =
+    extracted.picks[0] != null ? truncateJsonForDebug(extracted.picks[0]) : null;
+
+  const normalizeErrors: string[] = [];
+  let normalizedRows: ReturnType<typeof normalizeDraftPicks> = [];
+  const payloadForNorm = { ...payload };
+  if (payloadForNorm.seasonId == null) payloadForNorm.seasonId = season;
+  if (payloadForNorm.id == null) {
+    const n = Number(lid);
+    if (Number.isFinite(n)) payloadForNorm.id = n;
+  }
+  try {
+    normalizedRows = normalizeDraftPicks(payloadForNorm);
+  } catch (e) {
+    normalizeErrors.push(e instanceof Error ? e.message : String(e));
+  }
+  const normalizedCount = normalizedRows.length;
+  const firstNormalized =
+    normalizedRows[0] != null ? truncateJsonForDebug(normalizedRows[0]) : null;
+
+  log("pre_upsert", {
+    extractedCount,
+    normalizedCount,
+    draftPickInputCount,
+    dbDraftPickCountBefore,
+    extractedPathUsed: extracted.pathUsed,
+    extractedEmptyReason: extracted.emptyReason,
+  });
+
+  let upsertDraftPicksReturned = 0;
+  if (parseError == null && Object.keys(payload).length > 0) {
+    try {
+      upsertDraftPicksReturned = await upsertDraftPicks(db, lid, season, payloadForNorm);
+    } catch (e) {
+      normalizeErrors.push(`upsertDraftPicks:${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  const dbDraftPickCountAfter = await gmCountLeagueSeason(db, schema.gmDraftPicks, lid, season);
+
+  log("done", {
+    upsertDraftPicksReturned,
+    dbDraftPickCountBefore,
+    dbDraftPickCountAfter,
+    normalizedCount,
+    extractedCount,
+  });
+
+  const stageHints = {
+    raw_cache_combined_missing: false,
+    payload_parse_failed: parseError != null,
+    payload_has_no_top_level_keys: payloadTopLevelKeys.length === 0,
+    draft_detail_missing: !hasDraftDetail,
+    raw_draft_detail_picks_empty: draftPickInputCount === 0,
+    extraction_zero: extractedCount === 0,
+    normalization_zero: normalizedCount === 0,
+    upsert_returned_zero: upsertDraftPicksReturned === 0,
+    db_draft_picks_still_zero_after: dbDraftPickCountAfter === 0,
+  };
+
+  return {
+    leagueId: lid,
+    season,
+    rawCacheFound: true,
+    rawCacheRowId: row.id,
+    cacheLeagueId: row.leagueId,
+    viewName: row.viewName,
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
+    fetchedAt: row.fetchedAt instanceof Date ? row.fetchedAt.toISOString() : String(row.fetchedAt),
+    parseError,
+    payloadTopLevelKeys,
+    hasDraftDetail,
+    draftDetailKeys,
+    draftPickInputCount,
+    firstInputPick,
+    extractedCount,
+    extractedPathUsed: extracted.pathUsed,
+    extractedEmptyReason: extracted.emptyReason,
+    firstExtracted,
+    normalizedCount,
+    firstNormalized,
+    normalizeErrors,
+    upsertDraftPicksReturned,
+    dbDraftPickCountBefore,
+    dbDraftPickCountAfter,
+    stageHints,
+    normalizePayloadPatch: { seasonId: payloadForNorm.seasonId, id: payloadForNorm.id },
+  };
+}
+
 export async function countNormalizedGmRowsForSeason(
   leagueId: string,
   season: number,

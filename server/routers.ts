@@ -104,6 +104,7 @@ import {
   countNormalizedGmRowsForSeason,
   importEspnBrowserSeasonBundle,
   getBrowserSyncStatusForLeague,
+  debugHistoricalDraftIngest,
 } from "./espnPersistence";
 import { runHistoricalEnrichment } from "./espnHistoricalEnrichment";
 import {
@@ -3056,6 +3057,25 @@ export const appRouter = router({
           userId: ctx.user?.id ?? null,
           error,
         };
+      }),
+
+    /**
+     * One-click diagnostics: why `espn_raw_cache` `combined` JSON for a season does not produce `draft_picks`.
+     * Loads latest `combined` row, runs extract → normalize → upsertDraftPicks, reports DB counts. Dev console / tRPC only.
+     */
+    debugHistoricalDraftIngest: protectedProcedure
+      .input(
+        z.object({
+          leagueId: z.string().min(1).max(32),
+          season: z.number().int().min(1990).max(2100),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        return debugHistoricalDraftIngest({
+          userId: ctx.user.id,
+          leagueId: input.leagueId,
+          season: input.season,
+        });
       }),
 
     /**
