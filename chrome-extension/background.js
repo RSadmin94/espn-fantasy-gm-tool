@@ -499,31 +499,47 @@ async function waitForTabComplete(tabId, timeoutMs) {
 }
 
 /**
- * Open ESPN Draft Recap in a background tab, wait for render, collect DOM text candidates (probe only).
- * Does not call ESPN JSON APIs. Does not persist.
+ * Scrape ESPN Draft Recap from an already-open tab. Never opens a background tab.
  * @param {string} leagueId
  * @param {number} season
  */
 async function scrapeDraftRecapPage(leagueId, season) {
   const lid = String(leagueId ?? "").trim();
   const y = Math.floor(Number(season));
-  const url = `https://fantasy.espn.com/football/league/draftrecap?leagueId=${encodeURIComponent(lid)}&seasonId=${y}`;
-  /** @type {number | null} */
+  const targetUrl = `https://fantasy.espn.com/football/league/draftrecap?leagueId=${encodeURIComponent(lid)}&seasonId=${y}`;
+
+  // Find an already-open tab matching the draft recap URL for this league+season.
   let tabId = null;
   try {
-    const tab = await chrome.tabs.create({ url, active: false });
-    tabId = tab.id ?? null;
-    if (tabId == null) {
-      return { ok: false, error: "scrape_failed", detail: "no_tab_id" };
+    const existingTabs = await chrome.tabs.query({
+      url: "https://fantasy.espn.com/football/league/draftrecap*",
+    });
+    const match = existingTabs.find((t) => {
+      const u = t.url || "";
+      return u.includes(`leagueId=${lid}`) && u.includes(`seasonId=${y}`);
+    });
+    if (match && match.id != null) {
+      tabId = match.id;
+      console.info("[GMWR] scrapeDraftRecap: using existing tab", { tabId, url: match.url });
     }
-    await waitForTabComplete(tabId, 20000);
+  } catch {
+    /* tabs.query failure is non-fatal; fall through to error below */
+  }
+
+  if (tabId == null) {
+    return {
+      ok: false,
+      error: "tab_not_open",
+      message: `Open this tab first, then retry:\n${targetUrl}`,
+    };
+  }
+
+  try {
+    // Tab is already loaded — wait for React to finish rendering.
     await chrome.scripting.executeScript({
       target: { tabId },
       world: "MAIN",
-      func: () =>
-        new Promise((resolve) => {
-          setTimeout(resolve, 4000);
-        }),
+      func: () => new Promise((resolve) => { setTimeout(resolve, 6000); }),
     });
     const results = await chrome.scripting.executeScript({
       target: { tabId },
@@ -568,15 +584,8 @@ async function scrapeDraftRecapPage(leagueId, season) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: "scrape_failed", message: msg };
-  } finally {
-    if (tabId != null) {
-      try {
-        await chrome.tabs.remove(tabId);
-      } catch {
-        /* ignore */
-      }
-    }
   }
+  // Never close the tab — we didn't open it.
 }
 
 function gmwrNormalizeKey(s) {
