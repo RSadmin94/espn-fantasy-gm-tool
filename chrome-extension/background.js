@@ -1269,19 +1269,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     (async () => {
       const TEST_LEAGUE = "457622";
       const TEST_SEASON = 2010;
-      const clerkToken = typeof message?.clerkToken === "string" ? message.clerkToken : "";
-
       const { swid, espnS2 } = await getEspnCookieValues();
       if (!swid || !espnS2) {
         onceRespond({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
-        return;
-      }
-      const warRoomCookieHeader = await getWarRoomCookieHeaderString();
-      if (!warRoomCookieHeader) {
-        onceRespond({
-          ok: false,
-          error: "GM War Room session not found. Sign in at gmwarroom.online.",
-        });
         return;
       }
 
@@ -1339,29 +1329,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         last5,
       });
 
-      const ingest = await postIngestParsedDraftPicks(TEST_LEAGUE, TEST_SEASON, picksPayload, warRoomCookieHeader, clerkToken);
-      const r = ingest.result;
-      const draftRowsInDb = Number(r?.dbCountAfter ?? 0);
-      const ingestSuccess = ingest.ok && draftRowsInDb > 150;
-
       onceRespond({
-        ok: ingestSuccess,
-        error: ingestSuccess
-          ? undefined
-          : !ingest.ok
-            ? ingest.error || "ingest_api_failed"
-            : `db_count_low:${draftRowsInDb}`,
-        mode: "draft_recap_scrape_ingest_2010",
-        scrape: full,
-        summary,
+        ok: true,
+        mode: "draft_recap_scrape_parsed_2010",
+        leagueId: TEST_LEAGUE,
+        season: TEST_SEASON,
         parsedCount: parsedPicks.length,
-        received: r?.received,
-        insertedOrUpdated: r?.insertedOrUpdated,
-        dbCountAfter: r?.dbCountAfter,
-        apiSuccess: r?.success,
+        picks: picksPayload,
+        summary,
         first5ParsedRows: first5,
         last5ParsedRows: last5,
-        ingest: ingest.ok ? { ok: true, result: r, status: ingest.status } : ingest,
       });
     })().catch((err) => {
       onceRespond({ ok: false, error: err instanceof Error ? err.message : String(err) });

@@ -316,6 +316,7 @@ export function SyncData() {
   const [browserSessionBusy, setBrowserSessionBusy] = useState(false);
   const [browserSessionBulkBusy, setBrowserSessionBulkBusy] = useState(false);
   const [browserSync2010Raw, setBrowserSync2010Raw] = useState<Record<string, unknown> | null>(null);
+  const [browserSync2010IngestRaw, setBrowserSync2010IngestRaw] = useState<Record<string, unknown> | null>(null);
   const [lastBrowserImportCounts, setLastBrowserImportCounts] = useState<{
     draftPicks: number;
     teams: number;
@@ -378,6 +379,12 @@ export function SyncData() {
   const reprocessCachedMutation = trpc.espn.reprocessCachedSeasons.useMutation();
 
   const debugDraftIngestMutation = trpc.espn.debugHistoricalDraftIngest.useMutation();
+  const ingestParsedDraftPicksMutation = trpc.espn.ingestParsedDraftPicks.useMutation({
+    onSuccess: () => {
+      void utils.espn.browserSyncStatus.invalidate();
+      void utils.espn.manifests.invalidate();
+    },
+  });
 
   const { mutate: runRefresh } = refreshMutation;
 
@@ -440,10 +447,12 @@ export function SyncData() {
   const handleBrowserSync2010 = async () => {
     setBrowserSessionErr(null);
     setBrowserSessionNote(null);
+    setBrowserSync2010Raw(null);
+    setBrowserSync2010IngestRaw(null);
     setBrowserSessionBusy(true);
     try {
       const clerkToken = await getToken() ?? "";
-      const result = await new Promise<Record<string, unknown>>((resolve) => {
+      const extResult = await new Promise<Record<string, unknown>>((resolve) => {
         const id = `hist-test-${Date.now()}`;
         const timeout = window.setTimeout(() => {
           window.removeEventListener("message", onMsg);
@@ -460,13 +469,46 @@ export function SyncData() {
         window.addEventListener("message", onMsg);
         window.postMessage({ type: "GMWR_HIST_TEST", id, leagueId: "457622", clerkToken }, "*");
       });
-      setBrowserSync2010Raw(result);
-      if (result.ok) {
-        setBrowserSessionNote("Import completed.");
+      setBrowserSync2010Raw(extResult);
+
+      if (!extResult.ok) {
+        const msg = extResult.error ? String(extResult.error) : "Extension sync failed.";
+        setBrowserSessionErr(msg);
+        toast.error(msg);
+        return;
+      }
+
+      const picks = Array.isArray(extResult.picks) ? extResult.picks : [];
+      if (picks.length === 0) {
+        setBrowserSessionErr("Extension returned no picks.");
+        toast.error("Extension returned no picks.");
+        return;
+      }
+
+      const ingestResult = await ingestParsedDraftPicksMutation.mutateAsync({
+        leagueId: "457622",
+        season: 2010,
+        picks: picks as {
+          overallPick: number;
+          roundId: number;
+          roundPick: number;
+          teamId?: number;
+          teamName: string;
+          playerName: string;
+          position: string;
+          nflTeam?: string;
+        }[],
+      });
+      setBrowserSync2010IngestRaw(ingestResult as Record<string, unknown>);
+      const dbCount = typeof (ingestResult as Record<string, unknown>).dbCountAfter === "number"
+        ? (ingestResult as Record<string, unknown>).dbCountAfter as number
+        : 0;
+      if (dbCount > 150) {
+        setBrowserSessionNote(`Import completed. ${dbCount} draft picks in DB.`);
         toast.success("Season 2010 sync complete.");
         void browserSyncStatusQuery.refetch();
       } else {
-        const msg = result.error ? String(result.error) : "Extension sync failed.";
+        const msg = `db_count_low: ${dbCount} (expected > 150)`;
         setBrowserSessionErr(msg);
         toast.error(msg);
       }
@@ -716,9 +758,26 @@ export function SyncData() {
             </div>
           )}
           {browserSync2010Raw && (
-            <pre className="max-h-[40rem] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/30 p-3 text-xs text-foreground">
-              {JSON.stringify(browserSync2010Raw, null, 2)}
-            </pre>
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Extension response</p>
+              <pre className="max-h-[24rem] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/30 p-3 text-xs text-foreground">
+                {JSON.stringify(browserSync2010Raw, null, 2)}
+              </pre>
+            </div>
+          )}
+          {ingestParsedDraftPicksMutation.isPending && (
+            <p className="text-xs text-muted-foreground flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Ingesting picks…
+            </p>
+          )}
+          {browserSync2010IngestRaw && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Ingest response</p>
+              <pre className="max-h-[24rem] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/30 p-3 text-xs text-foreground">
+                {JSON.stringify(browserSync2010IngestRaw, null, 2)}
+              </pre>
+            </div>
           )}
           {lastBrowserImportCounts && (
             <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs text-foreground">
@@ -741,6 +800,7 @@ export function SyncData() {
                 browserSessionBusy ||
                 browserSessionBulkBusy ||
                 importFromBrowserMutation.isPending ||
+                ingestParsedDraftPicksMutation.isPending ||
                 isLoading ||
                 isBackfillLoading ||
                 isRawCacheBackfillLoading ||
@@ -749,12 +809,12 @@ export function SyncData() {
               }
               onClick={() => void handleBrowserSync2010()}
             >
-              {browserSessionBusy || importFromBrowserMutation.isPending ? (
+              {browserSessionBusy || importFromBrowserMutation.isPending || ingestParsedDraftPicksMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4" />
               )}
-              {browserSessionBusy || importFromBrowserMutation.isPending
+              {browserSessionBusy || importFromBrowserMutation.isPending || ingestParsedDraftPicksMutation.isPending
                 ? "Syncing…"
                 : `Sync From ESPN Browser Session (${BROWSER_SYNC_TEST_SEASON})`}
             </Button>
