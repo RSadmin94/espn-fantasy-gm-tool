@@ -17,27 +17,27 @@ function standingClass(place: number | null | undefined): string {
 export function LeagueHistory() {
   const [tab, setTab] = useState<"standings" | "h2h">("standings");
 
-  const histQ = trpc.espn.standingsHistory.useQuery(undefined, { staleTime: 60_000 });
-  const h2hQ = trpc.espn.allTimeH2H.useQuery(undefined, {
+  const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(undefined, { staleTime: 60_000 });
+  const h2hQ = trpc.espn.leagueHistoryH2H.useQuery(undefined, {
     staleTime: 60_000,
     enabled: tab === "h2h",
   });
 
-  const seasons = histQ.data?.seasons ?? [];
-  const owners = histQ.data?.owners ?? [];
+  const seasons = standingsQ.data?.seasons ?? [];
+  const owners = standingsQ.data?.owners ?? [];
 
-  // Build per-owner season lookup for O(1) access in render
+  // Per-owner Map<season, entry> for O(1) cell lookup during render
   const ownerSeasonMaps = new Map(
     owners.map((o) => [
       o.ownerKey,
-      new Map(o.seasonResults.map((r) => [r.season, r])),
+      new Map(o.seasons.map(({ season, entry }) => [season, entry])),
     ]),
   );
 
   const h2hOwners = h2hQ.data?.owners ?? [];
   const h2hMatrix = h2hQ.data?.matrix ?? [];
 
-  const loading = tab === "standings" ? histQ.isLoading : h2hQ.isLoading;
+  const loading = tab === "standings" ? standingsQ.isLoading : h2hQ.isLoading;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-1">
@@ -69,7 +69,7 @@ export function LeagueHistory() {
       )}
 
       {/* ── Season standings history ── */}
-      {tab === "standings" && !histQ.isLoading && (
+      {tab === "standings" && !standingsQ.isLoading && (
         seasons.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border px-4 py-16 text-center text-sm text-muted-foreground">
             No historical standings yet. Sync seasons via the extension on the Sync Data page.
@@ -104,8 +104,7 @@ export function LeagueHistory() {
                   </thead>
                   <tbody>
                     {owners.map((owner) => {
-                      const smap = ownerSeasonMaps.get(owner.ownerKey)!;
-                      const titles = owner.seasonResults.filter((r) => r.finalStanding === 1).length;
+                      const smap = ownerSeasonMaps.get(owner.ownerKey);
                       return (
                         <tr
                           key={owner.ownerKey}
@@ -136,7 +135,9 @@ export function LeagueHistory() {
                             );
                           })}
                           <td className="px-2 py-2 text-center font-bold text-yellow-400 text-sm">
-                            {titles > 0 ? titles : <span className="text-muted-foreground/30">—</span>}
+                            {owner.championships > 0
+                              ? owner.championships
+                              : <span className="text-muted-foreground/30">—</span>}
                           </td>
                         </tr>
                       );
@@ -189,9 +190,7 @@ export function LeagueHistory() {
                     {h2hMatrix.map(({ owner, vs }) => {
                       let tw = 0, tl = 0, tt = 0;
                       for (const r of Object.values(vs)) {
-                        tw += r.wins;
-                        tl += r.losses;
-                        tt += r.ties;
+                        tw += r.wins; tl += r.losses; tt += r.ties;
                       }
                       return (
                         <tr

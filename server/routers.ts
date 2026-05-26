@@ -3556,6 +3556,163 @@ export const appRouter = router({
       });
       return { owners, matrix };
     }),
+
+    // ── Clean League History endpoints ─────────────────────────────────────
+
+    leagueHistoryStandings: publicProcedure.query(async ({ ctx }) => {
+      type SeasonEntry = { finalStanding: number | null; wins: number; losses: number; ties: number; pointsFor: number };
+      type OwnerRow = { ownerKey: string; displayName: string; championships: number; seasons: { season: number; entry: SeasonEntry }[] };
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return { seasons: [] as number[], owners: [] as OwnerRow[] };
+
+      const rows = await db
+        .select({
+          season: gmTeams.season,
+          teamId: gmTeams.teamId,
+          name: gmTeams.name,
+          ownerName: gmTeams.ownerName,
+          wins: gmTeams.wins,
+          losses: gmTeams.losses,
+          ties: gmTeams.ties,
+          pointsFor: gmTeams.pointsFor,
+          finalStanding: gmTeams.finalStanding,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId))
+        .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.finalStanding));
+
+      const allSeasons = new Set<number>();
+      // ownerKey → { displayName, seasonMap }
+      const acc = new Map<string, { displayName: string; seasonMap: Map<number, SeasonEntry> }>();
+
+      for (const row of rows) {
+        allSeasons.add(row.season);
+        const rawName = (row.ownerName || row.name || `Team ${row.teamId}`).trim();
+        const ownerKey = normalizeOwnerStr(rawName);
+        const display = cleanOwnerDisplay(rawName) || rawName;
+
+        let entry = acc.get(ownerKey);
+        if (!entry) {
+          entry = { displayName: display, seasonMap: new Map() };
+          acc.set(ownerKey, entry);
+        } else {
+          entry.displayName = display; // most recent season wins for display name
+        }
+
+        if (!entry.seasonMap.has(row.season)) {
+          entry.seasonMap.set(row.season, {
+            finalStanding: row.finalStanding,
+            wins: row.wins,
+            losses: row.losses,
+            ties: row.ties,
+            pointsFor: Number(row.pointsFor),
+          });
+        }
+      }
+
+      const seasons = [...allSeasons].sort((a, b) => a - b);
+      const owners: OwnerRow[] = [...acc.entries()]
+        .map(([ownerKey, { displayName, seasonMap }]) => {
+          const seasons2 = [...seasonMap.entries()]
+            .sort(([a], [b]) => a - b)
+            .map(([season, entry]) => ({ season, entry }));
+          const championships = seasons2.filter((s) => s.entry.finalStanding === 1).length;
+          return { ownerKey, displayName, championships, seasons: seasons2 };
+        })
+        .sort((a, b) => {
+          if (b.championships !== a.championships) return b.championships - a.championships;
+          const wA = a.seasons.reduce((s, r) => s + r.entry.wins, 0);
+          const wB = b.seasons.reduce((s, r) => s + r.entry.wins, 0);
+          return wB - wA;
+        });
+
+      return { seasons, owners };
+    }),
+
+    leagueHistoryH2H: publicProcedure.query(async ({ ctx }) => {
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return { owners: [] as string[], matrix: [] as { owner: string; vs: Record<string, { wins: number; losses: number; ties: number }> }[] };
+
+      const allTeams = await db
+        .select({
+          season: gmTeams.season,
+          teamId: gmTeams.teamId,
+          name: gmTeams.name,
+          ownerName: gmTeams.ownerName,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId))
+        .orderBy(ascDrizzle(gmTeams.season));
+
+      // season:teamId → ownerKey  +  ownerKey → displayName
+      const teamToOwnerKey = new Map<string, string>();
+      const ownerDisplay = new Map<string, string>();
+      for (const t of allTeams) {
+        const rawName = (t.ownerName || t.name || `Team ${t.teamId}`).trim();
+        const ownerKey = normalizeOwnerStr(rawName);
+        const display = cleanOwnerDisplay(rawName) || rawName;
+        teamToOwnerKey.set(`${t.season}:${t.teamId}`, ownerKey);
+        ownerDisplay.set(ownerKey, display); // most recent season wins
+      }
+
+      const matchups = await db
+        .select({
+          season: gmMatchups.season,
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          winnerTeamId: gmMatchups.winnerTeamId,
+        })
+        .from(gmMatchups)
+        .where(andDrizzle(
+          eqDrizzle(gmMatchups.leagueId, leagueId),
+          eqDrizzle(gmMatchups.isCompleted, 1),
+        ));
+
+      const h2h = new Map<string, { wins: number; losses: number; ties: number }>();
+      const bump = (k: string, f: "wins" | "losses" | "ties") => {
+        if (!h2h.has(k)) h2h.set(k, { wins: 0, losses: 0, ties: 0 });
+        h2h.get(k)![f]++;
+      };
+      for (const m of matchups) {
+        const hk = teamToOwnerKey.get(`${m.season}:${m.homeTeamId}`);
+        const ak = teamToOwnerKey.get(`${m.season}:${m.awayTeamId}`);
+        if (!hk || !ak || hk === ak) continue;
+        if (m.winnerTeamId === m.homeTeamId) {
+          bump(`${hk}|${ak}`, "wins"); bump(`${ak}|${hk}`, "losses");
+        } else if (m.winnerTeamId === m.awayTeamId) {
+          bump(`${ak}|${hk}`, "wins"); bump(`${hk}|${ak}`, "losses");
+        } else {
+          bump(`${hk}|${ak}`, "ties"); bump(`${ak}|${hk}`, "ties");
+        }
+      }
+
+      const ownerKeys = [...ownerDisplay.keys()].sort((a, b) =>
+        (ownerDisplay.get(a) ?? a).localeCompare(ownerDisplay.get(b) ?? b),
+      );
+      const owners = ownerKeys.map((k) => ownerDisplay.get(k) ?? k);
+      const matrix = ownerKeys.map((ownerKey) => ({
+        owner: ownerDisplay.get(ownerKey) ?? ownerKey,
+        vs: Object.fromEntries(
+          ownerKeys
+            .filter((r) => r !== ownerKey)
+            .map((rivalKey) => [
+              ownerDisplay.get(rivalKey) ?? rivalKey,
+              h2h.get(`${ownerKey}|${rivalKey}`) ?? { wins: 0, losses: 0, ties: 0 },
+            ]),
+        ),
+      }));
+      return { owners, matrix };
+    }),
   }),
 
   playerProfiles: publicProcedure.query(async ({ ctx }) => {
