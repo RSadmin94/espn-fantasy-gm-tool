@@ -1254,6 +1254,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (t === MSG_HIST_TEST) {
+    let responded = false;
+    function onceRespond(response) {
+      if (responded) return;
+      responded = true;
+      clearTimeout(internalTimer);
+      sendResponse(response);
+    }
+    const internalTimer = setTimeout(
+      () => onceRespond({ ok: false, error: "extension_internal_timeout" }),
+      60000,
+    );
+
     (async () => {
       const TEST_LEAGUE = "457622";
       const TEST_SEASON = 2010;
@@ -1261,12 +1273,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       const { swid, espnS2 } = await getEspnCookieValues();
       if (!swid || !espnS2) {
-        sendResponse({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
+        onceRespond({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
         return;
       }
       const warRoomCookieHeader = await getWarRoomCookieHeaderString();
       if (!warRoomCookieHeader) {
-        sendResponse({
+        onceRespond({
           ok: false,
           error: "GM War Room session not found. Sign in at gmwarroom.online.",
         });
@@ -1284,7 +1296,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       };
       const probeOk = Boolean(full && full.ok !== false && full.error == null);
       if (!probeOk) {
-        sendResponse({
+        onceRespond({
           ok: false,
           error: full?.message || full?.error || "scrape_probe_failed",
           mode: "draft_recap_scrape_probe",
@@ -1304,7 +1316,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         console.warn("[GMWR] draft recap parse validation failed", v.reason, {
           parsedCount: parsedPicks.length,
         });
-        sendResponse({
+        onceRespond({
           ok: false,
           error: v.reason || "draft_recap_parse_failed",
           mode: "draft_recap_parse_failed",
@@ -1332,7 +1344,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const draftRowsInDb = Number(r?.dbCountAfter ?? 0);
       const ingestSuccess = ingest.ok && draftRowsInDb > 150;
 
-      sendResponse({
+      onceRespond({
         ok: ingestSuccess,
         error: ingestSuccess
           ? undefined
@@ -1352,7 +1364,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         ingest: ingest.ok ? { ok: true, result: r, status: ingest.status } : ingest,
       });
     })().catch((err) => {
-      sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
+      onceRespond({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
     return true;
   }
