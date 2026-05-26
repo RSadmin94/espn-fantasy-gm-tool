@@ -3118,7 +3118,7 @@ export const appRouter = router({
     /**
      * Chrome extension: upsert HTML-scraped draft recap picks into `draft_picks` (no combined JSON persist).
      */
-    ingestParsedDraftPicks: protectedProcedure
+    ingestParsedDraftPicks: publicProcedure
       .input(
         z.object({
           leagueId: z.string().min(1).max(32),
@@ -3138,8 +3138,16 @@ export const appRouter = router({
         }),
       )
       .mutation(async ({ ctx, input }) => {
+        console.log("[AUTH USER]", ctx.auth?.userId, "dbUser:", ctx.user?.id ?? null);
+        const userId = ctx.user?.id;
+        if (!userId) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: `ingestParsedDraftPicks: no db user (auth.userId=${ctx.auth?.userId ?? "none"})`,
+          });
+        }
         return ingestParsedDraftPicks({
-          userId: ctx.user.id,
+          userId,
           leagueId: input.leagueId,
           season: input.season,
           picks: input.picks,

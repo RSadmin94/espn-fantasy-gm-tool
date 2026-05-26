@@ -42,6 +42,7 @@ const trpcClient = trpc.createClient({
       transformer: superjson,
       headers: () => {
         const t = getTrpcToken();
+        console.log("[TRPC HEADER]", !!t);
         return t ? { Authorization: `Bearer ${t}` } : {};
       },
       fetch(input, init) {

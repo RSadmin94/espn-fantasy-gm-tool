@@ -487,7 +487,7 @@ export function SyncData() {
       }
 
       const token = await getToken();
-      console.log("[gmwr] tokenPresent", Boolean(token));
+      console.log("[TOKEN]", !!token);
       setTrpcToken(token);
       let ingestResult: Record<string, unknown>;
       try {
