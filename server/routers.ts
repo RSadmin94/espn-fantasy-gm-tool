@@ -243,21 +243,34 @@ function findChampionshipMatchup(schedule: any[]): any | null {
   return finalRound[finalRound.length - 1];
 }
 
-// Maps normalized lowercase aliases → canonical display name.
-// Add entries here whenever the same person appears under different names.
-const OWNER_ALIASES: Record<string, string> = {
-  "rod sellers": "Rod Sellers",
-  "roderick sellers": "Rod Sellers",
-  "demetri clark": "Demetri Clark",
-  "christian edmondson": "Christian Graham",
-  "lozell styles": "LOZELL STYLES",
-};
+// Normalize a raw owner name to a stable lowercase key: strip surrounding parens, collapse spaces.
+// "(Rod Sellers)" and "Rod Sellers" both produce "rod sellers".
+function normalizeOwnerStr(raw: string): string {
+  if (!raw) return "";
+  return raw.trim().replace(/^\(+|\)+$/g, "").trim().toLowerCase().replace(/\s+/g, " ");
+}
 
-function canonicalizeOwner(raw: string): string {
-  if (!raw) return raw;
-  const stripped = raw.trim().replace(/^\(+|\)+$/g, "").trim();
-  const key = stripped.toLowerCase().replace(/\s+/g, " ");
-  return OWNER_ALIASES[key] ?? stripped;
+// Return the display-ready version: strip parens, preserve original casing.
+function cleanOwnerDisplay(raw: string): string {
+  if (!raw) return "";
+  return raw.trim().replace(/^\(+|\)+$/g, "").trim();
+}
+
+// Compute a stable owner key for one team row.
+// Priority: (A) ESPN ownerId when present, (B) ownerId bridged via normalized-name cross-ref, (C) normalized name.
+// The nameToOwnerId map is built from rows that have BOTH ownerId and ownerName so that
+// historical rows (ownerId="") can be bridged to the same key as their recent counterpart.
+function resolveOwnerKey(
+  ownerId: string,
+  ownerName: string,
+  fallback: string,
+  nameToOwnerId: ReadonlyMap<string, string>,
+): string {
+  const id = (ownerId || "").trim();
+  if (id) return `id:${id}`;
+  const norm = normalizeOwnerStr(ownerName || fallback);
+  const bridged = nameToOwnerId.get(norm);
+  return bridged ? `id:${bridged}` : `name:${norm || "unknown"}`;
 }
 
 export const appRouter = router({
@@ -3348,7 +3361,8 @@ export const appRouter = router({
     standingsHistory: publicProcedure.query(async ({ ctx }) => {
       type SeasonResult = { season: number; finalStanding: number | null; wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number };
       type AggOwner = { ownerKey: string; displayName: string; seasonResults: SeasonResult[] };
-      const empty = { seasons: [] as number[], owners: [] as AggOwner[], canonicalOwnerCount: 0, mergedAliases: [] as string[] };
+      type Diagnostic = { ownerKey: string; displayName: string; seasonCount: number };
+      const empty = { seasons: [] as number[], owners: [] as AggOwner[], diagnostics: [] as Diagnostic[] };
       const { leagueId } = await resolveActiveLeagueId(
         { user: ctx.user ? { id: ctx.user.id } : undefined },
         null,
@@ -3361,6 +3375,7 @@ export const appRouter = router({
           season: gmTeams.season,
           teamId: gmTeams.teamId,
           name: gmTeams.name,
+          ownerId: gmTeams.ownerId,
           ownerName: gmTeams.ownerName,
           wins: gmTeams.wins,
           losses: gmTeams.losses,
@@ -3373,25 +3388,35 @@ export const appRouter = router({
         .where(eqDrizzle(gmTeams.leagueId, leagueId))
         .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.finalStanding));
 
-      const mergedAliasSet = new Set<string>();
       const allSeasonSet = new Set<number>();
-      // ownerKey (canonical) → { displayName, bySeasonMap }
+
+      // Pass 1: build normalizedName → ownerId cross-reference from rows that have both.
+      // This lets historical rows (ownerId="") be bridged to the same key as their recent counterpart.
+      const nameToOwnerId = new Map<string, string>();
+      for (const row of rows) {
+        const id = (row.ownerId || "").trim();
+        if (!id) continue;
+        const norm = normalizeOwnerStr(row.ownerName || row.name || "");
+        if (norm && !nameToOwnerId.has(norm)) nameToOwnerId.set(norm, id);
+      }
+
+      // Pass 2: accumulate by ownerKey
       const ownerAccumulator = new Map<string, { displayName: string; bySeasonMap: Map<number, SeasonResult> }>();
 
       for (const row of rows) {
         allSeasonSet.add(row.season);
         const rawOwner = (row.ownerName || row.name || `Team ${row.teamId}`).trim();
-
-        // Canonicalize BEFORE any accumulator lookup — never use rawOwner as a map key
-        const ownerKey = canonicalizeOwner(rawOwner);
+        const ownerKey = resolveOwnerKey(row.ownerId, row.ownerName, row.name || `Team ${row.teamId}`, nameToOwnerId);
+        const display = cleanOwnerDisplay(rawOwner) || rawOwner;
         console.log("[standingsHistory]", { rawOwner, ownerKey, season: row.season });
-
-        if (ownerKey !== rawOwner) mergedAliasSet.add(`${rawOwner} → ${ownerKey}`);
 
         let agg = ownerAccumulator.get(ownerKey);
         if (!agg) {
-          agg = { displayName: ownerKey, bySeasonMap: new Map() };
+          agg = { displayName: display, bySeasonMap: new Map() };
           ownerAccumulator.set(ownerKey, agg);
+        } else if (display && !display.startsWith("(")) {
+          // Prefer the most recent clean (non-paren) display name
+          agg.displayName = display;
         }
 
         // Keep first (best-standing) entry per season per owner
@@ -3424,7 +3449,10 @@ export const appRouter = router({
           return wB - wA;
         });
 
-      return { seasons, owners, canonicalOwnerCount: ownerAccumulator.size, mergedAliases: [...mergedAliasSet] };
+      const diagnostics: Diagnostic[] = [...ownerAccumulator.entries()].map(([ownerKey, { displayName, bySeasonMap }]) => ({
+        ownerKey, displayName, seasonCount: bySeasonMap.size,
+      }));
+      return { seasons, owners, diagnostics };
     }),
 
     allTimeH2H: publicProcedure.query(async ({ ctx }) => {
@@ -3434,28 +3462,40 @@ export const appRouter = router({
         undefined,
       );
       const db = await getDb();
-      if (!db) return { owners: [] as string[], matrix: [] as { owner: string; vs: Record<string, { wins: number; losses: number; ties: number }> }[], rawOwnerCount: 0, canonicalOwnerCount: 0, mergedAliases: [] as string[] };
+      if (!db) return { owners: [] as string[], matrix: [] as { owner: string; vs: Record<string, { wins: number; losses: number; ties: number }> }[] };
       const allTeams = await db
         .select({
           season: gmTeams.season,
           teamId: gmTeams.teamId,
+          ownerId: gmTeams.ownerId,
           ownerName: gmTeams.ownerName,
           name: gmTeams.name,
         })
         .from(gmTeams)
-        .where(eqDrizzle(gmTeams.leagueId, leagueId));
-      const ownerMap = new Map<string, string>();
-      const rawOwnerSet2 = new Set<string>();
-      const canonicalOwnerSet2 = new Set<string>();
-      const mergedAliasSet2 = new Set<string>();
+        .where(eqDrizzle(gmTeams.leagueId, leagueId))
+        .orderBy(ascDrizzle(gmTeams.season));
+
+      // Pass 1: build normalizedName → ownerId cross-reference
+      const nameToOwnerId2 = new Map<string, string>();
       for (const t of allTeams) {
-        const rawDisplay = (t.ownerName || t.name || `Team ${t.teamId}`).trim();
-        rawOwnerSet2.add(rawDisplay);
-        const canonical = canonicalizeOwner(rawDisplay);
-        canonicalOwnerSet2.add(canonical);
-        if (canonical !== rawDisplay) mergedAliasSet2.add(`${rawDisplay} → ${canonical}`);
-        ownerMap.set(`${t.season}:${t.teamId}`, canonical);
+        const id = (t.ownerId || "").trim();
+        if (!id) continue;
+        const norm = normalizeOwnerStr(t.ownerName || t.name || "");
+        if (norm && !nameToOwnerId2.has(norm)) nameToOwnerId2.set(norm, id);
       }
+
+      // Pass 2: ownerKey → display name (last/most-recent clean name wins)
+      const ownerMap = new Map<string, string>();         // season:teamId → ownerKey
+      const ownerDisplayMap = new Map<string, string>();  // ownerKey → displayName
+      for (const t of allTeams) {
+        const rawName = (t.ownerName || t.name || `Team ${t.teamId}`).trim();
+        const ownerKey = resolveOwnerKey(t.ownerId, t.ownerName, t.name || `Team ${t.teamId}`, nameToOwnerId2);
+        ownerMap.set(`${t.season}:${t.teamId}`, ownerKey);
+        const display = cleanOwnerDisplay(rawName);
+        if (display && !display.startsWith("(")) ownerDisplayMap.set(ownerKey, display);
+        else if (!ownerDisplayMap.has(ownerKey)) ownerDisplayMap.set(ownerKey, display || rawName);
+      }
+
       const matchups = await db
         .select({
           season: gmMatchups.season,
@@ -3468,38 +3508,53 @@ export const appRouter = router({
           eqDrizzle(gmMatchups.leagueId, leagueId),
           eqDrizzle(gmMatchups.isCompleted, 1),
         ));
+
+      // H2H accumulation keyed by ownerKey (not display name) to handle merged owners correctly
       const h2h = new Map<string, { wins: number; losses: number; ties: number }>();
       const getOrCreate = (key: string) => {
         if (!h2h.has(key)) h2h.set(key, { wins: 0, losses: 0, ties: 0 });
         return h2h.get(key)!;
       };
       for (const m of matchups) {
-        const home = ownerMap.get(`${m.season}:${m.homeTeamId}`);
-        const away = ownerMap.get(`${m.season}:${m.awayTeamId}`);
-        if (!home || !away || home === away) continue;
+        const homeKey = ownerMap.get(`${m.season}:${m.homeTeamId}`);
+        const awayKey = ownerMap.get(`${m.season}:${m.awayTeamId}`);
+        if (!homeKey || !awayKey || homeKey === awayKey) continue;
         if (m.winnerTeamId === m.homeTeamId) {
-          getOrCreate(`${home}|${away}`).wins++;
-          getOrCreate(`${away}|${home}`).losses++;
+          getOrCreate(`${homeKey}|${awayKey}`).wins++;
+          getOrCreate(`${awayKey}|${homeKey}`).losses++;
         } else if (m.winnerTeamId === m.awayTeamId) {
-          getOrCreate(`${away}|${home}`).wins++;
-          getOrCreate(`${home}|${away}`).losses++;
+          getOrCreate(`${awayKey}|${homeKey}`).wins++;
+          getOrCreate(`${homeKey}|${awayKey}`).losses++;
         } else {
-          getOrCreate(`${home}|${away}`).ties++;
-          getOrCreate(`${away}|${home}`).ties++;
+          getOrCreate(`${homeKey}|${awayKey}`).ties++;
+          getOrCreate(`${awayKey}|${homeKey}`).ties++;
         }
       }
-      const ownerSet = new Set<string>();
-      for (const v of ownerMap.values()) ownerSet.add(v);
-      const owners = [...ownerSet].sort();
-      const matrix = owners.map((owner) => ({
-        owner,
-        vs: Object.fromEntries(
-          owners
-            .filter((r) => r !== owner)
-            .map((rival) => [rival, h2h.get(`${owner}|${rival}`) ?? { wins: 0, losses: 0, ties: 0 }]),
-        ),
-      }));
-      return { owners, matrix, rawOwnerCount: rawOwnerSet2.size, canonicalOwnerCount: canonicalOwnerSet2.size, mergedAliases: [...mergedAliasSet2] };
+
+      // Convert ownerKeys → display names for the response (client uses display strings as identifiers)
+      const ownerKeySet = new Set<string>();
+      for (const v of ownerMap.values()) ownerKeySet.add(v);
+      const ownerKeys = [...ownerKeySet].sort((a, b) => {
+        const da = ownerDisplayMap.get(a) ?? a;
+        const db2 = ownerDisplayMap.get(b) ?? b;
+        return da.localeCompare(db2);
+      });
+      const owners = ownerKeys.map((k) => ownerDisplayMap.get(k) ?? k);
+      const matrix = ownerKeys.map((ownerKey) => {
+        const owner = ownerDisplayMap.get(ownerKey) ?? ownerKey;
+        return {
+          owner,
+          vs: Object.fromEntries(
+            ownerKeys
+              .filter((r) => r !== ownerKey)
+              .map((rivalKey) => {
+                const rivalDisplay = ownerDisplayMap.get(rivalKey) ?? rivalKey;
+                return [rivalDisplay, h2h.get(`${ownerKey}|${rivalKey}`) ?? { wins: 0, losses: 0, ties: 0 }];
+              }),
+          ),
+        };
+      });
+      return { owners, matrix };
     }),
   }),
 
