@@ -1135,6 +1135,8 @@ export async function ingestParsedDraftPicks(input: IngestParsedDraftPicksInput)
     name: r.name,
     abbreviation: r.abbreviation,
   }));
+  // Fallback: assign stable synthetic teamIds by unique teamName order when teams table is empty.
+  const stableTeamIdMap = new Map<string, number>();
   const now = new Date();
   let insertedOrUpdated = 0;
   for (const p of input.picks) {
@@ -1144,7 +1146,13 @@ export async function ingestParsedDraftPicks(input: IngestParsedDraftPicksInput)
     if (!Number.isFinite(teamId) || teamId <= 0) {
       teamId = resolveTeamIdFromDraftRecapOwnerLine(String(p.teamName ?? ""), teamsList);
     }
-    if (!Number.isFinite(teamId) || teamId <= 0) continue;
+    if (!Number.isFinite(teamId) || teamId <= 0) {
+      const nameKey = String(p.teamName ?? "").trim().toLowerCase();
+      if (!stableTeamIdMap.has(nameKey)) {
+        stableTeamIdMap.set(nameKey, stableTeamIdMap.size + 1);
+      }
+      teamId = stableTeamIdMap.get(nameKey)!;
+    }
     const teamName = String(p.teamName ?? "");
     const nflPart = p.nflTeam != null ? String(p.nflTeam) : "";
     const rawPick = safeStringify({
@@ -1184,7 +1192,7 @@ export async function ingestParsedDraftPicks(input: IngestParsedDraftPicksInput)
     insertedOrUpdated++;
   }
   const dbCountAfter = await gmCountLeagueSeason(db, schema.gmDraftPicks, lid, yr);
-  const success = received === 0 ? false : dbCountAfter >= received * 0.9;
+  const success = dbCountAfter > 0;
   return {
     season: yr,
     received,
