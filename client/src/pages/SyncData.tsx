@@ -478,48 +478,55 @@ export function SyncData() {
   const seasonsForBrowserBulk = useMemo(() => [...BROWSER_SYNC_REMAINING_SEASONS], []);
 
   const handleBrowserSyncOtherSeasons = async () => {
-    if (!leagueId || !browserSync2010Ready) return;
+    if (!browserSync2010Ready) return;
     setBrowserSessionBulkBusy(true);
     setBrowserSessionErr(null);
-    setBrowserSessionNote(null);
-    setLastBrowserImportCounts(null);
+    setBrowserSessionNote(
+      `Syncing ${BROWSER_SYNC_REMAINING_SEASONS.length} seasons (${BROWSER_SYNC_REMAINING_SEASONS[0]}–${BROWSER_SYNC_REMAINING_SEASONS[BROWSER_SYNC_REMAINING_SEASONS.length - 1]}) via extension…`,
+    );
     try {
-      for (const season of seasonsForBrowserBulk) {
-        setBrowserSessionNote(`Fetching ESPN JSON for ${season}…`);
-        const gathered = await fetchEspnSeasonBundleBrowserOrExtension({
-          leagueId,
-          season,
-          onBrowserBlocked: () => {
-            toast.message("Browser fetch blocked. Trying Chrome extension…");
-            setBrowserSessionNote("Browser fetch blocked. Trying Chrome extension…");
-          },
-        });
-        if (!gathered.ok) {
-          const msg = `${season}: ${gathered.message}`;
-          setBrowserSessionErr(msg);
-          toast.error(msg);
-          return;
+      const result = await new Promise<{
+        ok: boolean;
+        error?: string;
+        results?: unknown[];
+        aborted?: boolean;
+      }>((resolve) => {
+        const id = `hist-full-${Date.now()}`;
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener("message", onMsg);
+          resolve({ ok: false, error: "Extension request timed out" });
+        }, 600_000);
+        function onMsg(ev: MessageEvent) {
+          if (ev.source !== window) return;
+          const d = ev.data as Record<string, unknown> | null;
+          if (!d || d.type !== "GMWR_HIST_FULL_REPLY" || d.id !== id) return;
+          window.clearTimeout(timeout);
+          window.removeEventListener("message", onMsg);
+          resolve({
+            ok: Boolean(d.ok),
+            error: d.error ? String(d.error) : undefined,
+            results: Array.isArray(d.results) ? d.results : [],
+            aborted: Boolean(d.aborted),
+          });
         }
-        const res = await importFromBrowserMutation.mutateAsync({
-          leagueId,
-          season,
-          combinedPayload: gathered.combinedPayload,
-          matchupPayloads: gathered.matchupPayloads,
-          matchupsExplicitlyUnavailable: gathered.matchupsExplicitlyUnavailable,
-        });
-        setLastBrowserImportCounts(res.counts);
-        if (!res.success && !(res.skipped && res.reason === "already_populated")) {
-          const msg = `${season}: import did not verify${res.reason ? ` (${res.reason})` : ""}.`;
-          setBrowserSessionErr(msg);
-          toast.error(msg);
-          return;
-        }
+        window.addEventListener("message", onMsg);
+        window.postMessage(
+          { type: "GMWR_HIST_FULL", id, leagueId: "457622", seasons: BROWSER_SYNC_REMAINING_SEASONS },
+          "*",
+        );
+      });
+      if (result.ok) {
+        const note = result.aborted
+          ? `Stopped early after two consecutive failures. Completed ${(result.results ?? []).length} season(s).`
+          : `Finished syncing ${BROWSER_SYNC_REMAINING_SEASONS.length} seasons (${BROWSER_SYNC_REMAINING_SEASONS[0]}–${BROWSER_SYNC_REMAINING_SEASONS[BROWSER_SYNC_REMAINING_SEASONS.length - 1]}).`;
+        setBrowserSessionNote(note);
+        toast.success("Bulk extension sync finished.");
+        void browserSyncStatusQuery.refetch();
+      } else {
+        const msg = result.error || "Extension bulk sync failed.";
+        setBrowserSessionErr(msg);
+        toast.error(msg);
       }
-      setBrowserSessionNote(
-        `Finished syncing ${seasonsForBrowserBulk.length} seasons (${BROWSER_SYNC_REMAINING_SEASONS[0]}–${BROWSER_SYNC_REMAINING_SEASONS[BROWSER_SYNC_REMAINING_SEASONS.length - 1]}).`,
-      );
-      toast.success("Bulk browser session seasons finished.");
-      void browserSyncStatusQuery.refetch();
     } catch (e) {
       const msg = trpcLikeErrorMessage(e as Error);
       setBrowserSessionErr(msg);

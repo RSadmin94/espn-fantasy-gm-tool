@@ -26,6 +26,7 @@ import {
   UserCircle,
   ChevronsUpDown,
   Loader2,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -63,6 +64,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: "My League",
     items: [
       { kind: "link", label: "Standings", href: "/standings", icon: Trophy },
+      { kind: "link", label: "League History", href: "/history", icon: History },
       { kind: "link", label: "Matchups", href: "/matchups", icon: LayoutGrid },
       { kind: "link", label: "Rosters", href: "/roster", icon: Users },
       { kind: "link", label: "Transactions", href: "/transactions", icon: ArrowLeftRight },

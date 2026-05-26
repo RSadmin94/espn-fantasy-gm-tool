@@ -81,4 +81,31 @@
     },
     false,
   );
+
+  window.addEventListener(
+    "message",
+    (ev) => {
+      if (ev.source !== window) return;
+      const d = ev.data;
+      if (!d || d.type !== "GMWR_HIST_FULL") return;
+      const id = d.id;
+      const leagueId = String(d.leagueId || "457622").trim();
+      const seasons = Array.isArray(d.seasons) ? d.seasons : [];
+      chrome.runtime.sendMessage({ type: "GMWR_HIST_FULL", leagueId, seasons }, (response) => {
+        if (chrome.runtime.lastError) {
+          window.postMessage(
+            { type: "GMWR_HIST_FULL_REPLY", id, ok: false, error: chrome.runtime.lastError.message, results: [], aborted: false },
+            "*",
+          );
+          return;
+        }
+        const r = response || {};
+        window.postMessage(
+          { type: "GMWR_HIST_FULL_REPLY", id, ok: Boolean(r.ok), error: r.error ? String(r.error) : "", results: r.results || [], aborted: Boolean(r.aborted) },
+          "*",
+        );
+      });
+    },
+    false,
+  );
 })();
