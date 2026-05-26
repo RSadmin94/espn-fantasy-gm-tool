@@ -3346,19 +3346,21 @@ export const appRouter = router({
       }),
 
     standingsHistory: publicProcedure.query(async ({ ctx }) => {
+      type SeasonResult = { season: number; finalStanding: number | null; wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number };
+      type AggOwner = { ownerKey: string; displayName: string; seasonResults: SeasonResult[] };
+      const empty = { seasons: [] as number[], owners: [] as AggOwner[], rawOwnerCount: 0, canonicalOwnerCount: 0, mergedAliases: [] as string[] };
       const { leagueId } = await resolveActiveLeagueId(
         { user: ctx.user ? { id: ctx.user.id } : undefined },
         null,
         undefined,
       );
       const db = await getDb();
-      if (!db) return { seasons: [] as number[], history: [] as { season: number; teams: { teamId: number; name: string; abbreviation: string; ownerName: string; wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number; finalStanding: number | null; playoffSeed: number | null }[] }[], rawOwnerCount: 0, canonicalOwnerCount: 0, mergedAliases: [] as string[] };
+      if (!db) return empty;
       const rows = await db
         .select({
           season: gmTeams.season,
           teamId: gmTeams.teamId,
           name: gmTeams.name,
-          abbreviation: gmTeams.abbreviation,
           ownerName: gmTeams.ownerName,
           wins: gmTeams.wins,
           losses: gmTeams.losses,
@@ -3366,42 +3368,59 @@ export const appRouter = router({
           pointsFor: gmTeams.pointsFor,
           pointsAgainst: gmTeams.pointsAgainst,
           finalStanding: gmTeams.finalStanding,
-          playoffSeed: gmTeams.playoffSeed,
         })
         .from(gmTeams)
         .where(eqDrizzle(gmTeams.leagueId, leagueId))
         .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.finalStanding));
+
       const rawOwnerSet = new Set<string>();
-      const canonicalOwnerSet = new Set<string>();
       const mergedAliasSet = new Set<string>();
-      const bySeasonMap = new Map<number, typeof rows>();
+      const allSeasonSet = new Set<number>();
+      // ownerKey → { displayName, seasonResults Map }
+      const ownerAccumulator = new Map<string, { displayName: string; bySeasonMap: Map<number, SeasonResult> }>();
+
       for (const row of rows) {
-        if (!bySeasonMap.has(row.season)) bySeasonMap.set(row.season, []);
-        bySeasonMap.get(row.season)!.push(row);
+        allSeasonSet.add(row.season);
         const rawDisplay = (row.ownerName || row.name || `Team ${row.teamId}`).trim();
         rawOwnerSet.add(rawDisplay);
-        const canonical = canonicalizeOwner(rawDisplay);
-        canonicalOwnerSet.add(canonical);
-        if (canonical !== rawDisplay) mergedAliasSet.add(`${rawDisplay} → ${canonical}`);
+        const ownerKey = canonicalizeOwner(rawDisplay);
+        if (ownerKey !== rawDisplay) mergedAliasSet.add(`${rawDisplay} → ${ownerKey}`);
+
+        if (!ownerAccumulator.has(ownerKey)) {
+          ownerAccumulator.set(ownerKey, { displayName: ownerKey, bySeasonMap: new Map() });
+        }
+        const acc = ownerAccumulator.get(ownerKey)!;
+        // Keep first (best-standing) entry per season per owner
+        if (!acc.bySeasonMap.has(row.season)) {
+          acc.bySeasonMap.set(row.season, {
+            season: row.season,
+            finalStanding: row.finalStanding,
+            wins: row.wins,
+            losses: row.losses,
+            ties: row.ties,
+            pointsFor: Number(row.pointsFor),
+            pointsAgainst: Number(row.pointsAgainst),
+          });
+        }
       }
-      const seasons = [...bySeasonMap.keys()].sort((a, b) => a - b);
-      const history = seasons.map((s) => ({
-        season: s,
-        teams: (bySeasonMap.get(s) ?? []).map((t) => ({
-          teamId: t.teamId,
-          name: t.name,
-          abbreviation: t.abbreviation,
-          ownerName: canonicalizeOwner((t.ownerName || t.name || `Team ${t.teamId}`).trim()),
-          wins: t.wins,
-          losses: t.losses,
-          ties: t.ties,
-          pointsFor: Number(t.pointsFor),
-          pointsAgainst: Number(t.pointsAgainst),
-          finalStanding: t.finalStanding,
-          playoffSeed: t.playoffSeed,
-        })),
-      }));
-      return { seasons, history, rawOwnerCount: rawOwnerSet.size, canonicalOwnerCount: canonicalOwnerSet.size, mergedAliases: [...mergedAliasSet] };
+
+      const seasons = [...allSeasonSet].sort((a, b) => a - b);
+      const owners: AggOwner[] = [...ownerAccumulator.entries()]
+        .map(([ownerKey, { displayName, bySeasonMap }]) => ({
+          ownerKey,
+          displayName,
+          seasonResults: [...bySeasonMap.values()].sort((a, b) => a.season - b.season),
+        }))
+        .sort((a, b) => {
+          const tA = a.seasonResults.filter((r) => r.finalStanding === 1).length;
+          const tB = b.seasonResults.filter((r) => r.finalStanding === 1).length;
+          if (tB !== tA) return tB - tA;
+          const wA = a.seasonResults.reduce((s, r) => s + r.wins, 0);
+          const wB = b.seasonResults.reduce((s, r) => s + r.wins, 0);
+          return wB - wA;
+        });
+
+      return { seasons, owners, rawOwnerCount: rawOwnerSet.size, canonicalOwnerCount: ownerAccumulator.size, mergedAliases: [...mergedAliasSet] };
     }),
 
     allTimeH2H: publicProcedure.query(async ({ ctx }) => {

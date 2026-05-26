@@ -24,36 +24,15 @@ export function LeagueHistory() {
   });
 
   const seasons = histQ.data?.seasons ?? [];
-  const history = histQ.data?.history ?? [];
+  const owners = histQ.data?.owners ?? [];
 
-  // owner → season → { finalStanding, wins, losses }
-  const ownerSeasonMap = new Map<
-    string,
-    Map<number, { finalStanding: number | null; wins: number; losses: number }>
-  >();
-  for (const { season, teams } of history) {
-    for (const t of teams) {
-      const owner = (t.ownerName || t.name || `Team ${t.teamId}`).trim();
-      if (!ownerSeasonMap.has(owner)) ownerSeasonMap.set(owner, new Map());
-      ownerSeasonMap.get(owner)!.set(season, {
-        finalStanding: t.finalStanding,
-        wins: t.wins,
-        losses: t.losses,
-      });
-    }
-  }
-
-  // sort owners: most titles first, then total wins
-  const owners = [...ownerSeasonMap.keys()].sort((a, b) => {
-    const vA = ownerSeasonMap.get(a)!;
-    const vB = ownerSeasonMap.get(b)!;
-    const tA = [...vA.values()].filter((v) => v.finalStanding === 1).length;
-    const tB = [...vB.values()].filter((v) => v.finalStanding === 1).length;
-    if (tB !== tA) return tB - tA;
-    const wA = [...vA.values()].reduce((s, v) => s + v.wins, 0);
-    const wB = [...vB.values()].reduce((s, v) => s + v.wins, 0);
-    return wB - wA;
-  });
+  // Build per-owner season lookup for O(1) access in render
+  const ownerSeasonMaps = new Map(
+    owners.map((o) => [
+      o.ownerKey,
+      new Map(o.seasonResults.map((r) => [r.season, r])),
+    ]),
+  );
 
   const h2hOwners = h2hQ.data?.owners ?? [];
   const h2hMatrix = h2hQ.data?.matrix ?? [];
@@ -125,18 +104,18 @@ export function LeagueHistory() {
                   </thead>
                   <tbody>
                     {owners.map((owner) => {
-                      const smap = ownerSeasonMap.get(owner)!;
-                      const titles = [...smap.values()].filter((v) => v.finalStanding === 1).length;
+                      const smap = ownerSeasonMaps.get(owner.ownerKey)!;
+                      const titles = owner.seasonResults.filter((r) => r.finalStanding === 1).length;
                       return (
                         <tr
-                          key={owner}
+                          key={owner.ownerKey}
                           className="border-b border-border/50 hover:bg-accent/10 transition-colors"
                         >
                           <td className="sticky left-0 z-10 bg-card px-3 py-2 font-medium text-foreground truncate max-w-[150px]">
-                            {owner}
+                            {owner.displayName}
                           </td>
                           {seasons.map((s) => {
-                            const d = smap.get(s);
+                            const d = smap?.get(s);
                             if (!d) {
                               return (
                                 <td key={s} className="px-1.5 py-2 text-center text-[10px] text-muted-foreground/25">
