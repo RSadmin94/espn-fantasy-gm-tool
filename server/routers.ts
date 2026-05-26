@@ -103,6 +103,7 @@ import {
   runEspnRawCacheNormalizedBackfill,
   countNormalizedGmRowsForSeason,
   importEspnBrowserSeasonBundle,
+  ingestParsedDraftPicks,
   getBrowserSyncStatusForLeague,
   debugHistoricalDraftIngest,
 } from "./espnPersistence";
@@ -3111,6 +3112,37 @@ export const appRouter = router({
           matchupPayloads: input.matchupPayloads,
           force: input.force,
           matchupsExplicitlyUnavailable: input.matchupsExplicitlyUnavailable,
+        });
+      }),
+
+    /**
+     * Chrome extension: upsert HTML-scraped draft recap picks into `draft_picks` (no combined JSON persist).
+     */
+    ingestParsedDraftPicks: protectedProcedure
+      .input(
+        z.object({
+          leagueId: z.string().min(1).max(32),
+          season: z.number().int().min(1990).max(2100),
+          picks: z.array(
+            z.object({
+              overallPick: z.number(),
+              roundId: z.number(),
+              roundPick: z.number(),
+              teamId: z.number().optional().default(0),
+              teamName: z.string(),
+              playerName: z.string(),
+              position: z.string(),
+              nflTeam: z.string().optional(),
+            }),
+          ),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        return ingestParsedDraftPicks({
+          userId: ctx.user.id,
+          leagueId: input.leagueId,
+          season: input.season,
+          picks: input.picks,
         });
       }),
 

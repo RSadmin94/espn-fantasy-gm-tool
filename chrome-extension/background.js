@@ -349,8 +349,8 @@ async function removeSaveCredentialsCookieRule() {
   }
 }
 
-// ─── Historical league import (browser ESPN session → War Room tRPC) ───
-const TRPC_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestHistoricalSeasonPayload`;
+// ─── Historical league import (War Room tRPC; draft recap uses ingestParsedDraftPicks only) ───
+const TRPC_PARSED_DRAFT_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestParsedDraftPicks`;
 const TRPC_HIST_STATUS_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.historicalImportStatus`;
 const DNR_TRPC_HIST_RULE_ID = 8844210;
 
@@ -372,7 +372,7 @@ function trpcResultJson(parsed) {
 
 async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
   await chrome.declarativeNetRequest.updateSessionRules({
-    removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1],
+    removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1, DNR_TRPC_HIST_RULE_ID + 2],
     addRules: [
       {
         id: DNR_TRPC_HIST_RULE_ID,
@@ -382,7 +382,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://gmwarroom.online/api/trpc/espn.ingestHistoricalSeasonPayload*",
+          urlFilter: "https://gmwarroom.online/api/trpc/espn.ingestParsedDraftPicks*",
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -405,7 +405,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
 async function removeWarRoomTrpcHistRule() {
   try {
     await chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1],
+      removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1, DNR_TRPC_HIST_RULE_ID + 2],
     });
   } catch {
     /* ignore */
@@ -475,11 +475,6 @@ function buildEspnSeasonDiscoveryList() {
     seasons.push(y);
   }
   return seasons;
-}
-
-function scheduleLen(data) {
-  const s = data?.schedule;
-  return Array.isArray(s) ? s.length : 0;
 }
 
 async function sleep(ms) {
@@ -565,7 +560,7 @@ async function scrapeDraftRecapPage(leagueId, season) {
           title: document.title,
           bodyLength: bodyText.length,
           bodyPreview: bodyText.slice(0, 2000),
-          candidates: candidates.slice(0, 500),
+          candidates: candidates.slice(0, 1200),
         };
       },
     });
@@ -584,51 +579,144 @@ async function scrapeDraftRecapPage(leagueId, season) {
   }
 }
 
-/** League id for API path: digits only (avoids pasted URLs / query junk corrupting the path). */
-function normalizeEspnLeagueIdForPath(leagueId) {
-  const raw = String(leagueId ?? "").trim();
-  if (!raw) return "";
-  if (/^https?:\/\//i.test(raw)) {
-    const fromUrl = extractLeagueIdFromEspnFantasyUrl(raw);
-    if (fromUrl) return fromUrl;
-  }
-  if (/^\d+$/.test(raw)) return raw;
-  const m = raw.match(/\b(\d{4,12})\b/);
-  return m ? m[1] : "";
+function gmwrNormalizeKey(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-/** Integer season year for API path only. */
-function sanitizeEspnHistoricalSeasonYear(season) {
-  const y = Math.floor(Number(season));
-  if (!Number.isFinite(y) || y < 1999 || y > 2100) return NaN;
-  return y;
+function orderedLinesFromDraftCandidates(candidates) {
+  const lines = [];
+  let prev = null;
+  for (const c of candidates || []) {
+    const chunks = String(c.text || "").split(/\r?\n/);
+    for (const raw of chunks) {
+      const t = raw.trim();
+      if (t.length < 2 || t.length > 220) continue;
+      if (t === prev) continue;
+      lines.push(t);
+      prev = t;
+    }
+  }
+  return lines;
+}
+
+function isJunkDraftRecapLine(line) {
+  const lower = line.toLowerCase();
+  if (lower.startsWith("http")) return true;
+  if (lower.includes("download the app")) return true;
+  if (lower.includes("terms of use") || lower.includes("privacy policy")) return true;
+  if (/^pick\s*#?\s*\d+$/i.test(line)) return true;
+  return false;
+}
+
+function parseRoundHeaderFromLine(line) {
+  const m1 = line.match(/^round\s*[:\s-]*(\d{1,2})\b/i);
+  if (m1) return Number(m1[1]);
+  const m2 = line.match(/^(\d{1,2})(?:st|nd|rd|th)\s+round\b/i);
+  if (m2) return Number(m2[1]);
+  if (line.length < 56) {
+    const m3 = line.match(/\bround\s+(\d{1,2})\b/i);
+    if (m3) return Number(m3[1]);
+  }
+  return null;
 }
 
 /**
- * Combined league payload URL — path is strictly `/seasons/{int}/segments/0/leagues/{leagueId}`;
- * views are query only via URLSearchParams.append("view", …).
+ * Pick line: "<player> <nflTeamAbbr>, <POS>" (comma before position).
+ * @returns {{ playerName: string, nflTeam: string, position: string } | null}
  */
-function buildCombinedLeagueUrl(leagueId, season) {
-  const lid = normalizeEspnLeagueIdForPath(leagueId);
-  const y = sanitizeEspnHistoricalSeasonYear(season);
-  if (!lid || Number.isNaN(y)) return "";
-  const params = new URLSearchParams();
-  for (const view of ["mTeam", "mStandings", "mTransactions2", "mSettings"]) {
-    params.append("view", view);
-  }
-  return `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${y}/segments/0/leagues/${encodeURIComponent(lid)}?${params.toString()}`;
+function tryParseDraftPickPlayerLine(line) {
+  const m = line.match(/^(.+),\s*(QB|RB|WR|TE|K|D\/ST|DST|DEF)\s*$/i);
+  if (!m) return null;
+  const left = m[1].trim();
+  const posRaw = String(m[2]).toUpperCase();
+  const position = posRaw === "DST" || posRaw === "DEF" ? "D/ST" : posRaw;
+  const lastSpace = left.lastIndexOf(" ");
+  if (lastSpace <= 0) return null;
+  const nflTeam = left.slice(lastSpace + 1).trim();
+  const playerName = left.slice(0, lastSpace).trim();
+  if (!playerName || !nflTeam) return null;
+  if (playerName.length > 80 || nflTeam.length > 40) return null;
+  return { playerName, nflTeam, position };
 }
 
-function buildMatchupWeekUrl(leagueId, season, week) {
-  const lid = normalizeEspnLeagueIdForPath(leagueId);
-  const y = sanitizeEspnHistoricalSeasonYear(season);
-  const w = Math.floor(Number(week));
-  if (!lid || Number.isNaN(y) || !Number.isFinite(w) || w < 1 || w > 25) return "";
-  const params = new URLSearchParams();
-  params.append("view", "mMatchup");
-  params.append("view", "mMatchupScore");
-  params.append("scoringPeriodId", String(w));
-  return `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${y}/segments/0/leagues/${encodeURIComponent(lid)}?${params.toString()}`;
+/**
+ * @param {unknown[]} candidates scrape.candidates
+ * @param {string} leagueId
+ * @param {number} season
+ * @returns {{ picks: object[], parseErrors: string[] }}
+ */
+function parseDraftRecapCandidatesToPicks(candidates, leagueId, season) {
+  const parseErrors = [];
+  const lines = orderedLinesFromDraftCandidates(candidates);
+  let currentRound = 1;
+  let roundPick = 0;
+  let overall = 0;
+  /** @type {string | null} */
+  let prevLine = null;
+  const picks = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || isJunkDraftRecapLine(line)) continue;
+
+    const rh = parseRoundHeaderFromLine(line);
+    if (rh != null && Number.isFinite(rh) && rh >= 1 && rh <= 30) {
+      currentRound = rh;
+      roundPick = 0;
+      prevLine = null;
+      continue;
+    }
+
+    const parsedPick = tryParseDraftPickPlayerLine(line);
+    if (parsedPick) {
+      roundPick += 1;
+      overall += 1;
+      const ownerLine = prevLine && !parseRoundHeaderFromLine(prevLine) ? prevLine : "";
+      const teamName = ownerLine.trim();
+      picks.push({
+        leagueId: String(leagueId).trim(),
+        season,
+        overallPick: overall,
+        roundId: currentRound,
+        roundPick,
+        teamName,
+        playerName: parsedPick.playerName,
+        nflTeam: parsedPick.nflTeam,
+        position: parsedPick.position,
+        rawPick: {
+          source: "draft_recap_html",
+          teamName,
+          nflTeam: parsedPick.nflTeam,
+          ownerName: "",
+        },
+      });
+      prevLine = line;
+      continue;
+    }
+
+    prevLine = line;
+  }
+
+  if (picks.length === 0) parseErrors.push("no_pick_rows_detected");
+  return { picks, parseErrors };
+}
+
+function validateDraftRecap2010ParsedPicks(picks) {
+  if (!Array.isArray(picks) || picks.length <= 150) {
+    return { ok: false, reason: `parsed_count_too_low:${picks?.length ?? 0}` };
+  }
+  const head = picks.slice(0, 25);
+  if (!head.some((p) => String(p.playerName || "").includes("Dez Bryant"))) {
+    return { ok: false, reason: "dez_bryant_not_in_first_25_rows" };
+  }
+  const last = picks[picks.length - 1];
+  if (!last || !String(last.playerName || "").trim()) {
+    return { ok: false, reason: "last_pick_missing" };
+  }
+  return { ok: true };
 }
 
 /**
@@ -906,33 +994,6 @@ async function fetchEspnJsonWithBackoffUnlocked(url, { label }) {
   return { ok: false, status: 429, error: "rate_limited", data: null };
 }
 
-async function fetchWeeklyMatchupsIfNeeded(leagueId, season, combined) {
-  const matchupPayloads = [];
-  if (scheduleLen(combined) > 0) return matchupPayloads;
-  for (let week = 1; week <= 17; week++) {
-    await sleep(500);
-    const url = buildMatchupWeekUrl(leagueId, season, week);
-    if (!url) continue;
-    const r = await fetchEspnJsonWithBackoff(url, { label: `mMatchup_${season}_${week}` });
-    if (!r.ok) {
-      if (r.status === 404 || r.error === "unavailable" || r.error === "not_found") continue;
-      if (r.error === "ESPN login expired") return { error: r.error, matchupPayloads };
-      if (
-        r.error === "extension_fetch_blocked" ||
-        r.error === "espn_html_not_json" ||
-        r.error === "invalid_json"
-      ) {
-        return { error: r.error, matchupPayloads };
-      }
-      continue;
-    }
-    if (r.data && scheduleLen(r.data) > 0) {
-      matchupPayloads.push({ week, payload: r.data });
-    }
-  }
-  return { error: null, matchupPayloads };
-}
-
 async function postTrpcHistJson(url, warRoomCookieHeader, jsonInput) {
   const body = JSON.stringify({ json: jsonInput });
   await applyWarRoomTrpcHistRule(warRoomCookieHeader);
@@ -964,57 +1025,27 @@ async function postTrpcHistJson(url, warRoomCookieHeader, jsonInput) {
   }
 }
 
-async function runHistoricalImportOneSeason({
-  leagueId,
-  season,
-  warRoomCookieHeader,
-  force,
-}) {
-  const combinedUrl = buildCombinedLeagueUrl(leagueId, season);
-  if (!combinedUrl) {
-    console.warn("[GMWR] historical combined URL invalid", { leagueId, season });
-    return { ok: false, error: "invalid_league_or_season", season };
-  }
-  const combinedRes = await fetchEspnJsonWithBackoff(combinedUrl, {
-    label: `combined_${season}`,
-  });
-  if (!combinedRes.ok && combinedRes.error === "ESPN login expired") {
-    return { ok: false, error: "ESPN login expired", season };
-  }
-  if (!combinedRes.ok || !combinedRes.data) {
-    console.warn("[GMWR] historical combined fetch failed", {
-      leagueId,
-      season,
-      url: combinedUrl,
-      httpStatus: combinedRes.status ?? null,
-      error: combinedRes.error || "combined_fetch_failed",
-    });
-    return { ok: false, error: combinedRes.error || "combined_fetch_failed", season };
-  }
-  const combined = combinedRes.data;
-  const weekly = await fetchWeeklyMatchupsIfNeeded(leagueId, season, combined);
-  const weeklyErr = Array.isArray(weekly) ? null : weekly.error;
-  if (weeklyErr) {
-    return { ok: false, error: weeklyErr, season };
-  }
-  const matchupPayloads = Array.isArray(weekly) ? weekly : weekly.matchupPayloads || [];
-  const matchupsExplicitlyUnavailable =
-    scheduleLen(combined) === 0 && matchupPayloads.length === 0;
-  const ingestBody = {
+function picksPayloadForIngestParsedDraft(parsedPicks) {
+  return parsedPicks.map((row) => ({
+    overallPick: row.overallPick,
+    roundId: row.roundId,
+    roundPick: row.roundPick,
+    teamId: 0,
+    teamName: row.teamName,
+    playerName: row.playerName,
+    position: row.position,
+    nflTeam: row.nflTeam,
+  }));
+}
+
+async function postIngestParsedDraftPicks(leagueId, season, picks, warRoomCookieHeader) {
+  const post = await postTrpcHistJson(TRPC_PARSED_DRAFT_INGEST_URL, warRoomCookieHeader, {
     leagueId: String(leagueId).trim(),
     season,
-    source: "chrome_extension_espn_api",
-    combinedPayload: combined,
-    matchupPayloads,
-    force: Boolean(force),
-    matchupsExplicitlyUnavailable,
-  };
-  const post = await postTrpcHistJson(TRPC_INGEST_URL, warRoomCookieHeader, ingestBody);
-  if (!post.ok) {
-    return { ok: false, error: post.error || "ingest_failed", season, httpStatus: post.status };
-  }
-  const resultJson = trpcResultJson(post.parsed);
-  return { ok: true, season, result: resultJson };
+    picks,
+  });
+  const result = post.ok ? trpcResultJson(post.parsed) : null;
+  return { ok: post.ok, status: post.status, error: post.error, result, parsed: post.parsed };
 }
 
 async function openOrFocusSyncTab() {
@@ -1223,8 +1254,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (t === MSG_HIST_TEST) {
     (async () => {
-      /** Hard-coded 2010 draft recap DOM probe (no JSON API, no ingest). */
-      const full = await scrapeDraftRecapPage("457622", 2010);
+      const TEST_LEAGUE = "457622";
+      const TEST_SEASON = 2010;
+
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        sendResponse({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
+        return;
+      }
+      const warRoomCookieHeader = await getWarRoomCookieHeaderString();
+      if (!warRoomCookieHeader) {
+        sendResponse({
+          ok: false,
+          error: "GM War Room session not found. Sign in at gmwarroom.online.",
+        });
+        return;
+      }
+
+      const full = await scrapeDraftRecapPage(TEST_LEAGUE, TEST_SEASON);
       console.info("[GMWR] draft recap scrape full result (TEST 2010)", full);
       const candidates = Array.isArray(full?.candidates) ? full.candidates : [];
       const first20CandidateTexts = candidates.slice(0, 20).map((c) => (c && c.text ? String(c.text) : ""));
@@ -1234,11 +1281,66 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         first20CandidateTexts,
       };
       const probeOk = Boolean(full && full.ok !== false && full.error == null);
+      if (!probeOk) {
+        sendResponse({
+          ok: false,
+          mode: "draft_recap_scrape_probe",
+          scrape: full,
+          summary,
+        });
+        return;
+      }
+
+      const { picks: parsedPicks, parseErrors } = parseDraftRecapCandidatesToPicks(
+        candidates,
+        TEST_LEAGUE,
+        TEST_SEASON,
+      );
+      const v = validateDraftRecap2010ParsedPicks(parsedPicks);
+      if (!v.ok) {
+        console.warn("[GMWR] draft recap parse validation failed", v.reason, {
+          parsedCount: parsedPicks.length,
+        });
+        sendResponse({
+          ok: false,
+          mode: "draft_recap_parse_failed",
+          scrape: full,
+          summary,
+          parseErrors,
+          parsedCount: parsedPicks.length,
+          validationReason: v.reason,
+        });
+        return;
+      }
+
+      const picksPayload = picksPayloadForIngestParsedDraft(parsedPicks);
+      const first5 = parsedPicks.slice(0, 5);
+      const last5 = parsedPicks.slice(-5);
+      console.info("[GMWR] draft recap HTML parse", {
+        parsedCount: parsedPicks.length,
+        pickPayloadCount: picksPayload.length,
+        first5,
+        last5,
+      });
+
+      const ingest = await postIngestParsedDraftPicks(TEST_LEAGUE, TEST_SEASON, picksPayload, warRoomCookieHeader);
+      const r = ingest.result;
+      const draftRowsInDb = Number(r?.dbCountAfter ?? 0);
+      const ingestSuccess = ingest.ok && draftRowsInDb > 150;
+
       sendResponse({
-        ok: probeOk,
-        mode: "draft_recap_scrape_probe",
+        ok: ingestSuccess,
+        mode: "draft_recap_scrape_ingest_2010",
         scrape: full,
         summary,
+        parsedCount: parsedPicks.length,
+        received: r?.received,
+        insertedOrUpdated: r?.insertedOrUpdated,
+        dbCountAfter: r?.dbCountAfter,
+        apiSuccess: r?.success,
+        first5ParsedRows: first5,
+        last5ParsedRows: last5,
+        ingest: ingest.ok ? { ok: true, result: r, status: ingest.status } : ingest,
       });
     })().catch((err) => {
       sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
@@ -1259,57 +1361,63 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return;
       }
       const leagueId = String(message?.leagueId || "457622").trim();
-      const rawSeasons = Array.isArray(message?.seasons) ? message.seasons : [];
-      const currentYear = new Date().getFullYear();
-      const uniq = [...new Set(rawSeasons)]
-        .map((x) => Math.floor(Number(x)))
-        .filter((y) => Number.isFinite(y) && y >= 2009 && y <= currentYear)
-        .sort((a, b) => a - b);
-      const ordered = uniq.includes(2010) ? [2010, ...uniq.filter((s) => s !== 2010)] : uniq;
       const results = [];
-      const needs2010Gate = ordered.length > 1 || ordered.some((s) => s !== 2010);
-      if (needs2010Gate) {
+      for (let season = 2010; season <= 2025; season++) {
         await sleep(500);
-        const gate2010 = await runHistoricalImportOneSeason({
-          leagueId,
-          season: 2010,
-          warRoomCookieHeader,
-          force: Boolean(message?.force),
-        });
-        results.push(gate2010);
-        const gateOk =
-          gate2010.ok && (Boolean(gate2010.result?.skipped) || gate2010.result?.success === true);
-        if (!gateOk) {
-          sendResponse({
-            ok: false,
-            results,
-            aborted: true,
-            reason: "import_2010_first_until_json_and_db_counts_succeed",
-          });
-          return;
-        }
-      }
-      let consecFail = 0;
-      for (const season of ordered) {
-        if (needs2010Gate && season === 2010) continue;
-        await sleep(500);
-        const r = await runHistoricalImportOneSeason({
-          leagueId,
+        const full = await scrapeDraftRecapPage(leagueId, season);
+        const candidates = Array.isArray(full?.candidates) ? full.candidates : [];
+        const summary = {
           season,
-          warRoomCookieHeader,
-          force: Boolean(message?.force),
-        });
-        results.push(r);
-        const skipped = Boolean(r.result?.skipped);
-        const okSeason = r.ok && (skipped || r.result?.success === true);
-        if (!okSeason) consecFail += 1;
-        else consecFail = 0;
-        if (consecFail >= 2) {
-          sendResponse({ ok: true, results, aborted: true, reason: "two_consecutive_failures" });
-          return;
+          bodyLength: typeof full?.bodyLength === "number" ? full.bodyLength : 0,
+          candidatesCount: candidates.length,
+        };
+        const probeOk = Boolean(full && full.ok !== false && full.error == null);
+        if (!probeOk) {
+          results.push({
+            season,
+            ok: false,
+            mode: "draft_recap_scrape_probe",
+            summary,
+            scrape: full,
+            parsedCount: 0,
+            ingest: null,
+          });
+          continue;
         }
+        const { picks: parsedPicks, parseErrors } = parseDraftRecapCandidatesToPicks(candidates, leagueId, season);
+        if (parsedPicks.length === 0) {
+          results.push({
+            season,
+            ok: false,
+            mode: "draft_recap_parse_empty",
+            summary,
+            parseErrors,
+            parsedCount: 0,
+            ingest: null,
+          });
+          continue;
+        }
+        const picksPayload = picksPayloadForIngestParsedDraft(parsedPicks);
+        const ingest = await postIngestParsedDraftPicks(leagueId, season, picksPayload, warRoomCookieHeader);
+        const r = ingest.result;
+        const row = {
+          season,
+          ok: Boolean(ingest.ok && r && r.success),
+          mode: "draft_recap_scrape_ingest",
+          summary,
+          parsedCount: parsedPicks.length,
+          received: r?.received,
+          insertedOrUpdated: r?.insertedOrUpdated,
+          dbCountAfter: r?.dbCountAfter,
+          apiSuccess: r?.success,
+          parseErrors,
+          ingest: ingest.ok ? { ok: true, result: r, status: ingest.status } : ingest,
+        };
+        results.push(row);
+        console.info("[GMWR] draft recap full import season", row);
       }
-      sendResponse({ ok: true, results, aborted: false });
+      const allOk = results.length > 0 && results.every((x) => x.ok);
+      sendResponse({ ok: allOk, results, aborted: false, leagueId });
     })().catch((err) => {
       sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err), results: [] });
     });

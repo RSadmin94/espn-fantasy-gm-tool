@@ -283,7 +283,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   document.getElementById("histTest")?.addEventListener("click", async () => {
-    setHistOut("Draft recap scrape (2010 DOM probe, league 457622)…");
+    setHistOut("2010 draft recap: scrape → parse → ingest…");
     try {
       const r = await chrome.runtime.sendMessage({ type: MSG_HIST_TEST });
       const lines = [];

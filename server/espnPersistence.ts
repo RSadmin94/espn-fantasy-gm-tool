@@ -1039,6 +1039,161 @@ export function mergeScheduleIntoCombinedPayload(
   return out;
 }
 
+export type IngestParsedDraftPicksInput = {
+  userId: number;
+  leagueId: string;
+  season: number;
+  picks: Array<{
+    overallPick: number;
+    roundId: number;
+    roundPick: number;
+    teamId: number;
+    teamName: string;
+    playerName: string;
+    position: string;
+    nflTeam?: string;
+  }>;
+};
+
+export type IngestParsedDraftPicksResult = {
+  season: number;
+  received: number;
+  insertedOrUpdated: number;
+  dbCountAfter: number;
+  success: boolean;
+};
+
+function gmwrNormalizeKeyServer(s: unknown): string {
+  return String(s ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Match draft-recap owner line to `teams.name` / `teams.abbreviation` (same idea as extension HTML → team map). */
+function resolveTeamIdFromDraftRecapOwnerLine(
+  ownerLine: string,
+  teams: Array<{ teamId: number; name: string; abbreviation: string }>,
+): number {
+  const needle = gmwrNormalizeKeyServer(ownerLine);
+  if (!needle) return 0;
+  let best = { id: 0, score: 0 };
+  for (const team of teams) {
+    const tid = Math.floor(Number(team.teamId));
+    if (!Number.isFinite(tid) || tid <= 0) continue;
+    const display = gmwrNormalizeKeyServer(team.name);
+    const abbrev = gmwrNormalizeKeyServer(team.abbreviation);
+    let score = 0;
+    if (needle === display) score = 100;
+    else if (abbrev && needle === abbrev) score = 95;
+    else if (display && (needle.includes(display) || display.includes(needle))) score = 82;
+    else if (abbrev && needle.includes(abbrev)) score = 75;
+    else {
+      const tokens = needle.split(" ").filter((x) => x.length > 2);
+      const hit = tokens.some((tok) => (display && display.includes(tok)) || tok === abbrev);
+      if (hit) score = 55;
+    }
+    if (score > best.score) best = { id: tid, score };
+  }
+  return best.score >= 45 ? best.id : 0;
+}
+
+/**
+ * Upsert HTML-scraped draft recap rows into `draft_picks` only (no raw cache, no combined persist, no normalizeDraftPicks).
+ * Resolves `teamId` from `teams` when missing or non-positive. Duplicate key updates: teamId, playerName, position, rawPick.
+ */
+export async function ingestParsedDraftPicks(input: IngestParsedDraftPicksInput): Promise<IngestParsedDraftPicksResult> {
+  const { getUserEspnLeagueIds, getActiveEspnCredentials } = await import("./db.js");
+  const uid = input.userId;
+  const allowed = new Set(await getUserEspnLeagueIds(uid));
+  const creds = await getActiveEspnCredentials(uid);
+  if (creds?.leagueId) allowed.add(String(creds.leagueId).trim().slice(0, 32));
+  const lid = String(input.leagueId).trim().slice(0, 32);
+  const allowLegacyTestLeague = lid === "457622";
+  if (!allowed.has(lid) && !allowLegacyTestLeague) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "League is not linked to your ESPN connections.",
+    });
+  }
+  const yr = Math.floor(Number(input.season));
+  const received = input.picks.length;
+  const db = await getDbConn();
+  if (!db) {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+  }
+  const teamRows = await db
+    .select({
+      teamId: schema.gmTeams.teamId,
+      name: schema.gmTeams.name,
+      abbreviation: schema.gmTeams.abbreviation,
+    })
+    .from(schema.gmTeams)
+    .where(and(eq(schema.gmTeams.leagueId, lid), eq(schema.gmTeams.season, yr)));
+  const teamsList = teamRows.map((r) => ({
+    teamId: r.teamId,
+    name: r.name,
+    abbreviation: r.abbreviation,
+  }));
+  const now = new Date();
+  let insertedOrUpdated = 0;
+  for (const p of input.picks) {
+    const overall = Math.floor(Number(p.overallPick));
+    if (!Number.isFinite(overall) || overall <= 0) continue;
+    let teamId = Math.floor(Number(p.teamId));
+    if (!Number.isFinite(teamId) || teamId <= 0) {
+      teamId = resolveTeamIdFromDraftRecapOwnerLine(String(p.teamName ?? ""), teamsList);
+    }
+    if (!Number.isFinite(teamId) || teamId <= 0) continue;
+    const teamName = String(p.teamName ?? "");
+    const nflPart = p.nflTeam != null ? String(p.nflTeam) : "";
+    const rawPick = safeStringify({
+      source: "draft_recap_html",
+      teamName,
+      nflTeam: nflPart,
+      ownerName: "",
+    });
+    const playerName = String(p.playerName ?? "").slice(0, 255);
+    const position = String(p.position ?? "").slice(0, 16);
+    await db
+      .insert(schema.gmDraftPicks)
+      .values({
+        leagueId: lid,
+        season: yr,
+        overallPick: overall,
+        roundId: Math.floor(Number(p.roundId)) || 0,
+        roundPick: Math.floor(Number(p.roundPick)) || 0,
+        teamId,
+        owningTeamId: null,
+        playerId: null,
+        playerName: playerName || null,
+        position: position || null,
+        isKeeper: 0,
+        bidAmount: 0,
+        rawPick,
+        updatedAt: now,
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          teamId,
+          playerName: playerName || null,
+          position: position || null,
+          rawPick,
+        },
+      });
+    insertedOrUpdated++;
+  }
+  const dbCountAfter = await gmCountLeagueSeason(db, schema.gmDraftPicks, lid, yr);
+  const success = received === 0 ? false : dbCountAfter >= received * 0.9;
+  return {
+    season: yr,
+    received,
+    insertedOrUpdated,
+    dbCountAfter,
+    success,
+  };
+}
+
 /** Allowed provenance tags for {@link importEspnBrowserSeasonBundle}. */
 export type EspnBrowserImportSource = "chrome_extension_espn_api" | "browser_session";
 
