@@ -283,11 +283,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   document.getElementById("histTest")?.addEventListener("click", async () => {
-    const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
-    setHistOut("TEST IMPORT 2010…");
+    setHistOut("Draft recap scrape (2010 DOM probe, league 457622)…");
     try {
-      const r = await chrome.runtime.sendMessage({ type: MSG_HIST_TEST, leagueId: lid, force: false });
-      setHistOut(JSON.stringify(r, null, 2));
+      const r = await chrome.runtime.sendMessage({ type: MSG_HIST_TEST });
+      const lines = [];
+      if (r?.summary) {
+        lines.push(`bodyLength: ${r.summary.bodyLength}`);
+        lines.push(`candidates: ${r.summary.candidatesCount}`);
+        lines.push("first 20 candidate texts:");
+        for (const t of r.summary.first20CandidateTexts || []) {
+          lines.push(typeof t === "string" ? t : JSON.stringify(t));
+        }
+      }
+      lines.push("");
+      lines.push(JSON.stringify(r, null, 2));
+      setHistOut(lines.join("\n"));
     } catch (e) {
       setHistOut(e instanceof Error ? e.message : String(e));
     }

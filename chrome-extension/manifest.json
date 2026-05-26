@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "GM War Room — ESPN",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Connect ESPN Fantasy credentials to GM War Room using your logged-in session.",
-  "permissions": ["cookies", "tabs", "declarativeNetRequest", "declarativeNetRequestWithHostAccess"],
+  "permissions": ["cookies", "tabs", "scripting", "declarativeNetRequest", "declarativeNetRequestWithHostAccess"],
   "host_permissions": [
     "https://fantasy.espn.com/*",
     "https://lm-api-reads.fantasy.espn.com/*",

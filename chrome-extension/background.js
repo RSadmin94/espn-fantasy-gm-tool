@@ -4,6 +4,7 @@
  * POSTs espn.saveCredentials per selected league. War Room cookies are injected via DNR
  * (fetch cannot set a Cookie header from a SW). ESPN historical JSON is fetched from the
  * service worker with `credentials: "include"` plus session-rule DNR (Cookie + Kona headers).
+ * Historical draft recap: scrape the rendered draftrecap page in a background tab (no ESPN draft JSON API).
  */
 
 const WAR_ROOM_ORIGIN = "https://gmwarroom.online";
@@ -485,6 +486,104 @@ async function sleep(ms) {
   await new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * Wait until the tab finishes its primary navigation (`status === "complete"`).
+ * @param {number} tabId
+ * @param {number} timeoutMs
+ */
+async function waitForTabComplete(tabId, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.status === "complete") return;
+    if (Date.now() >= deadline) {
+      throw new Error("tab_load_timeout");
+    }
+    await sleep(150);
+  }
+}
+
+/**
+ * Open ESPN Draft Recap in a background tab, wait for render, collect DOM text candidates (probe only).
+ * Does not call ESPN JSON APIs. Does not persist.
+ * @param {string} leagueId
+ * @param {number} season
+ */
+async function scrapeDraftRecapPage(leagueId, season) {
+  const lid = String(leagueId ?? "").trim();
+  const y = Math.floor(Number(season));
+  const url = `https://fantasy.espn.com/football/league/draftrecap?leagueId=${encodeURIComponent(lid)}&seasonId=${y}`;
+  /** @type {number | null} */
+  let tabId = null;
+  try {
+    const tab = await chrome.tabs.create({ url, active: false });
+    tabId = tab.id ?? null;
+    if (tabId == null) {
+      return { ok: false, error: "scrape_failed", detail: "no_tab_id" };
+    }
+    await waitForTabComplete(tabId, 20000);
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: () =>
+        new Promise((resolve) => {
+          setTimeout(resolve, 4000);
+        }),
+    });
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: () => {
+        const bodyText = document.body.innerText || "";
+        const candidates = [];
+        const selectors = [
+          "table tr",
+          "[role='row']",
+          ".Table__TR",
+          ".Table__TD",
+          ".pick-list li",
+          ".draft-recap-pick",
+          "[class*='draft']",
+          "[class*='pick']",
+        ];
+        for (const selector of selectors) {
+          document.querySelectorAll(selector).forEach((el, i) => {
+            const text = (el.innerText || "").trim();
+            if (text) {
+              candidates.push({
+                selector,
+                index: i,
+                text,
+                html: el.innerHTML.slice(0, 1000),
+              });
+            }
+          });
+        }
+        return {
+          ok: true,
+          url: location.href,
+          title: document.title,
+          bodyLength: bodyText.length,
+          bodyPreview: bodyText.slice(0, 2000),
+          candidates: candidates.slice(0, 500),
+        };
+      },
+    });
+    return results?.[0]?.result || { ok: false, error: "scrape_failed" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: "scrape_failed", message: msg };
+  } finally {
+    if (tabId != null) {
+      try {
+        await chrome.tabs.remove(tabId);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
 /** League id for API path: digits only (avoids pasted URLs / query junk corrupting the path). */
 function normalizeEspnLeagueIdForPath(leagueId) {
   const raw = String(leagueId ?? "").trim();
@@ -514,7 +613,7 @@ function buildCombinedLeagueUrl(leagueId, season) {
   const y = sanitizeEspnHistoricalSeasonYear(season);
   if (!lid || Number.isNaN(y)) return "";
   const params = new URLSearchParams();
-  for (const view of ["mTeam", "mStandings", "mDraftDetail", "mTransactions2", "mSettings"]) {
+  for (const view of ["mTeam", "mStandings", "mTransactions2", "mSettings"]) {
     params.append("view", view);
   }
   return `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${y}/segments/0/leagues/${encodeURIComponent(lid)}?${params.toString()}`;
@@ -1124,24 +1223,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (t === MSG_HIST_TEST) {
     (async () => {
-      const { swid, espnS2 } = await getEspnCookieValues();
-      if (!swid || !espnS2) {
-        sendResponse({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
-        return;
-      }
-      const warRoomCookieHeader = await getWarRoomCookieHeaderString();
-      if (!warRoomCookieHeader) {
-        sendResponse({ ok: false, error: "GM War Room session not found. Sign in at gmwarroom.online." });
-        return;
-      }
-      const leagueId = String(message?.leagueId || "457622").trim();
-      const r = await runHistoricalImportOneSeason({
-        leagueId,
-        season: 2010,
-        warRoomCookieHeader,
-        force: Boolean(message?.force),
+      /** Hard-coded 2010 draft recap DOM probe (no JSON API, no ingest). */
+      const full = await scrapeDraftRecapPage("457622", 2010);
+      console.info("[GMWR] draft recap scrape full result (TEST 2010)", full);
+      const candidates = Array.isArray(full?.candidates) ? full.candidates : [];
+      const first20CandidateTexts = candidates.slice(0, 20).map((c) => (c && c.text ? String(c.text) : ""));
+      const summary = {
+        bodyLength: typeof full?.bodyLength === "number" ? full.bodyLength : 0,
+        candidatesCount: candidates.length,
+        first20CandidateTexts,
+      };
+      const probeOk = Boolean(full && full.ok !== false && full.error == null);
+      sendResponse({
+        ok: probeOk,
+        mode: "draft_recap_scrape_probe",
+        scrape: full,
+        summary,
       });
-      sendResponse(r);
     })().catch((err) => {
       sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
