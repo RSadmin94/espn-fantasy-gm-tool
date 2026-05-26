@@ -1284,6 +1284,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (!probeOk) {
         sendResponse({
           ok: false,
+          error: full?.message || full?.error || "scrape_probe_failed",
           mode: "draft_recap_scrape_probe",
           scrape: full,
           summary,
@@ -1303,6 +1304,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         });
         sendResponse({
           ok: false,
+          error: v.reason || "draft_recap_parse_failed",
           mode: "draft_recap_parse_failed",
           scrape: full,
           summary,
@@ -1330,6 +1332,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       sendResponse({
         ok: ingestSuccess,
+        error: ingestSuccess
+          ? undefined
+          : !ingest.ok
+            ? ingest.error || "ingest_api_failed"
+            : `db_count_low:${draftRowsInDb}`,
         mode: "draft_recap_scrape_ingest_2010",
         scrape: full,
         summary,
