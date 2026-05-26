@@ -859,18 +859,7 @@ export function SyncData() {
               type="button"
               variant="secondary"
               className="gap-2"
-              disabled={
-                !leagueId ||
-                !browserSync2010Ready ||
-                browserSessionBusy ||
-                browserSessionBulkBusy ||
-                importFromBrowserMutation.isPending ||
-                isLoading ||
-                isBackfillLoading ||
-                isRawCacheBackfillLoading ||
-                isHistoricalEnrichmentLoading ||
-                isReprocessLoading
-              }
+              disabled={browserSessionBulkBusy}
               onClick={() => void handleBrowserSyncOtherSeasons()}
             >
               {browserSessionBulkBusy ? (
@@ -883,11 +872,6 @@ export function SyncData() {
                 : `Sync all other seasons (${BROWSER_SYNC_REMAINING_SEASONS[0]}–${BROWSER_SYNC_REMAINING_SEASONS[BROWSER_SYNC_REMAINING_SEASONS.length - 1]})`}
             </Button>
           </div>
-          {!browserSync2010Ready && leagueId && (
-            <p className="text-xs text-muted-foreground">
-              Bulk sync stays disabled until {BROWSER_SYNC_TEST_SEASON} has draft picks or matchups in the database.
-            </p>
-          )}
         </CardContent>
       </Card>
 
