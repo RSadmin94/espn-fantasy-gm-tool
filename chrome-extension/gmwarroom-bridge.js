@@ -64,7 +64,8 @@
       if (!d || d.type !== "GMWR_HIST_TEST") return;
       const id = d.id;
       const leagueId = String(d.leagueId || "457622").trim();
-      chrome.runtime.sendMessage({ type: "GMWR_HIST_TEST", leagueId }, (response) => {
+      const clerkToken = typeof d.clerkToken === "string" ? d.clerkToken : "";
+      chrome.runtime.sendMessage({ type: "GMWR_HIST_TEST", leagueId, clerkToken }, (response) => {
         if (chrome.runtime.lastError) {
           window.postMessage(
             { type: "GMWR_HIST_TEST_REPLY", id, ok: false, error: chrome.runtime.lastError.message },
@@ -91,7 +92,8 @@
       const id = d.id;
       const leagueId = String(d.leagueId || "457622").trim();
       const seasons = Array.isArray(d.seasons) ? d.seasons : [];
-      chrome.runtime.sendMessage({ type: "GMWR_HIST_FULL", leagueId, seasons }, (response) => {
+      const clerkToken = typeof d.clerkToken === "string" ? d.clerkToken : "";
+      chrome.runtime.sendMessage({ type: "GMWR_HIST_FULL", leagueId, seasons, clerkToken }, (response) => {
         if (chrome.runtime.lastError) {
           window.postMessage(
             { type: "GMWR_HIST_FULL_REPLY", id, ok: false, error: chrome.runtime.lastError.message, results: [], aborted: false },

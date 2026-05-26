@@ -994,13 +994,14 @@ async function fetchEspnJsonWithBackoffUnlocked(url, { label }) {
   return { ok: false, status: 429, error: "rate_limited", data: null };
 }
 
-async function postTrpcHistJson(url, warRoomCookieHeader, jsonInput) {
+async function postTrpcHistJson(url, warRoomCookieHeader, jsonInput, authToken) {
   const body = JSON.stringify({ json: jsonInput });
   await applyWarRoomTrpcHistRule(warRoomCookieHeader);
+  const extraHeaders = authToken ? { "Authorization": `Bearer ${authToken}` } : {};
   try {
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...extraHeaders },
       body,
       credentials: "include",
     });
@@ -1038,12 +1039,12 @@ function picksPayloadForIngestParsedDraft(parsedPicks) {
   }));
 }
 
-async function postIngestParsedDraftPicks(leagueId, season, picks, warRoomCookieHeader) {
+async function postIngestParsedDraftPicks(leagueId, season, picks, warRoomCookieHeader, authToken) {
   const post = await postTrpcHistJson(TRPC_PARSED_DRAFT_INGEST_URL, warRoomCookieHeader, {
     leagueId: String(leagueId).trim(),
     season,
     picks,
-  });
+  }, authToken);
   const result = post.ok ? trpcResultJson(post.parsed) : null;
   return { ok: post.ok, status: post.status, error: post.error, result, parsed: post.parsed };
 }
@@ -1256,6 +1257,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     (async () => {
       const TEST_LEAGUE = "457622";
       const TEST_SEASON = 2010;
+      const clerkToken = typeof message?.clerkToken === "string" ? message.clerkToken : "";
 
       const { swid, espnS2 } = await getEspnCookieValues();
       if (!swid || !espnS2) {
@@ -1325,7 +1327,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         last5,
       });
 
-      const ingest = await postIngestParsedDraftPicks(TEST_LEAGUE, TEST_SEASON, picksPayload, warRoomCookieHeader);
+      const ingest = await postIngestParsedDraftPicks(TEST_LEAGUE, TEST_SEASON, picksPayload, warRoomCookieHeader, clerkToken);
       const r = ingest.result;
       const draftRowsInDb = Number(r?.dbCountAfter ?? 0);
       const ingestSuccess = ingest.ok && draftRowsInDb > 150;
@@ -1368,6 +1370,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return;
       }
       const leagueId = String(message?.leagueId || "457622").trim();
+      const clerkToken = typeof message?.clerkToken === "string" ? message.clerkToken : "";
       const results = [];
       for (let season = 2010; season <= 2025; season++) {
         await sleep(500);
@@ -1405,7 +1408,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           continue;
         }
         const picksPayload = picksPayloadForIngestParsedDraft(parsedPicks);
-        const ingest = await postIngestParsedDraftPicks(leagueId, season, picksPayload, warRoomCookieHeader);
+        const ingest = await postIngestParsedDraftPicks(leagueId, season, picksPayload, warRoomCookieHeader, clerkToken);
         const r = ingest.result;
         const row = {
           season,

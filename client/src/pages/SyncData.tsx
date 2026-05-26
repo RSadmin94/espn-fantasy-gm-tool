@@ -300,6 +300,7 @@ function trpcLikeErrorMessage(err: Error | { message: string } | null | undefine
 
 export function SyncData() {
   const [searchParams] = useSearchParams();
+  const { getToken } = useAuth();
   const { leagueId, isConnected } = useLeagueContext();
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
   const [forceRefresh, setForceRefresh] = useState(false);
@@ -440,6 +441,7 @@ export function SyncData() {
     setBrowserSessionNote(null);
     setBrowserSessionBusy(true);
     try {
+      const clerkToken = await getToken() ?? "";
       const result = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
         const id = `hist-test-${Date.now()}`;
         const timeout = window.setTimeout(() => {
@@ -455,7 +457,7 @@ export function SyncData() {
           resolve({ ok: Boolean(d.ok), error: d.error ? String(d.error) : undefined });
         }
         window.addEventListener("message", onMsg);
-        window.postMessage({ type: "GMWR_HIST_TEST", id, leagueId: "457622" }, "*");
+        window.postMessage({ type: "GMWR_HIST_TEST", id, leagueId: "457622", clerkToken }, "*");
       });
       if (result.ok) {
         setBrowserSessionNote("Import completed.");
@@ -485,6 +487,7 @@ export function SyncData() {
       `Syncing ${BROWSER_SYNC_REMAINING_SEASONS.length} seasons (${BROWSER_SYNC_REMAINING_SEASONS[0]}–${BROWSER_SYNC_REMAINING_SEASONS[BROWSER_SYNC_REMAINING_SEASONS.length - 1]}) via extension…`,
     );
     try {
+      const clerkToken = await getToken() ?? "";
       const result = await new Promise<{
         ok: boolean;
         error?: string;
@@ -511,7 +514,7 @@ export function SyncData() {
         }
         window.addEventListener("message", onMsg);
         window.postMessage(
-          { type: "GMWR_HIST_FULL", id, leagueId: "457622", seasons: BROWSER_SYNC_REMAINING_SEASONS },
+          { type: "GMWR_HIST_FULL", id, leagueId: "457622", seasons: BROWSER_SYNC_REMAINING_SEASONS, clerkToken },
           "*",
         );
       });
