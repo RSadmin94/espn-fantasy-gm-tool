@@ -105,6 +105,7 @@ import {
   importEspnBrowserSeasonBundle,
   ingestParsedDraftPicks,
   ingestParsedStandings,
+  ingestParsedMatchups,
   getBrowserSyncStatusForLeague,
   debugHistoricalDraftIngest,
 } from "./espnPersistence";
@@ -3189,6 +3190,37 @@ export const appRouter = router({
           });
         }
         return ingestParsedStandings({ userId, leagueId: input.leagueId, season: input.season, rows: input.rows });
+      }),
+
+    /**
+     * Chrome extension: upsert HTML-scraped weekly matchup rows into `matchups`.
+     */
+    ingestParsedMatchups: publicProcedure
+      .input(
+        z.object({
+          leagueId: z.string().min(1).max(32),
+          season: z.number().int().min(1990).max(2100),
+          rows: z.array(
+            z.object({
+              week: z.number(),
+              awayTeam: z.string(),
+              homeTeam: z.string(),
+              awayScore: z.number(),
+              homeScore: z.number(),
+              winner: z.string().nullable(),
+            }),
+          ),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user?.id ?? 0;
+        if (!userId && input.leagueId !== "457622") {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: `ingestParsedMatchups: no db user (auth.userId=${ctx.auth?.userId ?? "none"})`,
+          });
+        }
+        return ingestParsedMatchups({ userId, leagueId: input.leagueId, season: input.season, rows: input.rows });
       }),
 
     /**

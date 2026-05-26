@@ -319,6 +319,9 @@ export function SyncData() {
   const [standingsBusy, setStandingsBusy] = useState(false);
   const [standingsNote, setStandingsNote] = useState<string | null>(null);
   const [standingsErr, setStandingsErr] = useState<string | null>(null);
+  const [matchupsBusy, setMatchupsBusy] = useState(false);
+  const [matchupsNote, setMatchupsNote] = useState<string | null>(null);
+  const [matchupsErr, setMatchupsErr] = useState<string | null>(null);
   const [browserSync2010Raw, setBrowserSync2010Raw] = useState<Record<string, unknown> | null>(null);
   const [browserSync2010IngestRaw, setBrowserSync2010IngestRaw] = useState<Record<string, unknown> | null>(null);
   const [gate2010Persisted, setGate2010Persisted] = useState(() => {
@@ -403,6 +406,13 @@ export function SyncData() {
   const ingestParsedStandingsMutation = trpc.espn.ingestParsedStandings.useMutation({
     onSuccess: () => {
       void utils.espn.standingsHistory.invalidate();
+    },
+  });
+  const ingestParsedMatchupsMutation = trpc.espn.ingestParsedMatchups.useMutation({
+    onSuccess: () => {
+      void utils.espn.allTimeH2H.invalidate();
+      void utils.espn.standingsHistory.invalidate();
+      void utils.espn.manifests.invalidate();
     },
   });
 
@@ -721,6 +731,73 @@ export function SyncData() {
     }
   };
 
+  const handleBrowserSyncMatchups = async (seasons: number[]) => {
+    setMatchupsErr(null);
+    setMatchupsNote(null);
+    setMatchupsBusy(true);
+    try {
+      const token = await getToken();
+      const results: string[] = [];
+      for (const season of seasons) {
+        console.log(`[MATCHUPS INGEST ${season}]`);
+        setMatchupsNote(`Scraping schedule ${season}…`);
+        const extResult = await new Promise<Record<string, unknown>>((resolve) => {
+          const id = `hist-matchups-${season}-${Date.now()}`;
+          const timeout = window.setTimeout(() => {
+            window.removeEventListener("message", onMsg);
+            resolve({ ok: false, error: `Extension timed out for matchups ${season}` });
+          }, 120_000);
+          function onMsg(ev: MessageEvent) {
+            if (ev.source !== window) return;
+            const d = ev.data as Record<string, unknown> | null;
+            if (!d || d.type !== "GMWR_HIST_MATCHUPS_REPLY" || d.id !== id) return;
+            window.clearTimeout(timeout);
+            window.removeEventListener("message", onMsg);
+            resolve(d);
+          }
+          window.addEventListener("message", onMsg);
+          window.postMessage({ type: "GMWR_HIST_MATCHUPS", id, leagueId: "457622", season }, "*");
+        });
+        if (!extResult.ok) {
+          results.push(`${season}: scrape failed — ${String(extResult.error ?? "unknown")}`);
+          continue;
+        }
+        const rows = Array.isArray(extResult.rows) ? extResult.rows : [];
+        if (rows.length === 0) {
+          results.push(`${season}: no matchup rows`);
+          continue;
+        }
+        setMatchupsNote(`Ingesting matchups ${season} (${rows.length} rows)…`);
+        setTrpcToken(token);
+        try {
+          const ingestResult = await ingestParsedMatchupsMutation.mutateAsync({
+            leagueId: "457622",
+            season,
+            rows: rows as {
+              week: number; awayTeam: string; homeTeam: string;
+              awayScore: number; homeScore: number; winner: string | null;
+            }[],
+          }) as Record<string, unknown>;
+          const dbCount = typeof ingestResult.dbCountAfter === "number" ? ingestResult.dbCountAfter : 0;
+          const inserted = typeof ingestResult.insertedOrUpdated === "number" ? ingestResult.insertedOrUpdated : 0;
+          results.push(`${season}: received=${rows.length} inserted=${inserted} dbCountAfter=${dbCount}`);
+          if (dbCount > 0) toast.success(`Matchups ${season} synced.`);
+        } catch (ingestErr) {
+          results.push(`${season}: ingest failed — ${trpcLikeErrorMessage(ingestErr as Error)}`);
+        } finally {
+          setTrpcToken(null);
+        }
+      }
+      setMatchupsNote(results.join(" | "));
+    } catch (e) {
+      const msg = trpcLikeErrorMessage(e as Error);
+      setMatchupsErr(msg);
+      toast.error(msg);
+    } finally {
+      setMatchupsBusy(false);
+    }
+  };
+
   const isLoading = refreshMutation.isPending;
   const isBackfillLoading = backfillNormalizedMutation.isPending;
   const isRawCacheBackfillLoading = backfillFromRawCacheMutation.isPending;
@@ -1019,6 +1096,54 @@ export function SyncData() {
             >
               {standingsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Layers className="h-4 w-4" />}
               {standingsBusy ? "Importing standings…" : "Import all 2010–2017"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Historical matchups import (2010–2025) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Import Historical Matchups (2010–2025)</CardTitle>
+          <CardDescription>
+            Scrapes the ESPN schedule page per season and imports weekly matchups into League History H2H.
+            Run standings import first so team names resolve correctly.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {matchupsNote && (
+            <p className="text-xs text-muted-foreground whitespace-pre-wrap">{matchupsNote}</p>
+          )}
+          {matchupsErr && (
+            <div className="flex items-start gap-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              {matchupsErr}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: 2025 - 2010 + 1 }, (_, i) => 2010 + i).map((season) => (
+              <Button
+                key={season}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={matchupsBusy}
+                onClick={() => void handleBrowserSyncMatchups([season])}
+              >
+                {matchupsBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Database className="h-3 w-3" />}
+                {season}
+              </Button>
+            ))}
+            <Button
+              type="button"
+              variant="default"
+              className={`gap-2 ${matchupsBusy ? "" : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700"}`}
+              disabled={matchupsBusy}
+              onClick={() => void handleBrowserSyncMatchups(Array.from({ length: 2025 - 2010 + 1 }, (_, i) => 2010 + i))}
+            >
+              {matchupsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Layers className="h-4 w-4" />}
+              {matchupsBusy ? "Importing matchups…" : "Import all 2010–2025"}
             </Button>
           </div>
         </CardContent>

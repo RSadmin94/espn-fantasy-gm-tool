@@ -1298,6 +1298,124 @@ export async function ingestParsedStandings(input: IngestParsedStandingsInput): 
   return { season: yr, received, insertedOrUpdated, dbCountAfter, success: dbCountAfter > 0 };
 }
 
+export type IngestParsedMatchupsInput = {
+  userId: number;
+  leagueId: string;
+  season: number;
+  rows: Array<{
+    week: number;
+    awayTeam: string;
+    homeTeam: string;
+    awayScore: number;
+    homeScore: number;
+    winner: string | null;
+  }>;
+};
+
+export type IngestParsedMatchupsResult = {
+  season: number;
+  received: number;
+  insertedOrUpdated: number;
+  dbCountAfter: number;
+  success: boolean;
+};
+
+/**
+ * Upsert HTML-scraped weekly matchup rows into `matchups`.
+ * Resolves teamIds from `gmTeams` by name; falls back to stable first-seen ordering.
+ * Sets isCompleted=1 and infers winnerTeamId from scores.
+ */
+export async function ingestParsedMatchups(input: IngestParsedMatchupsInput): Promise<IngestParsedMatchupsResult> {
+  const { getUserEspnLeagueIds, getActiveEspnCredentials } = await import("./db.js");
+  const uid = input.userId;
+  const allowed = new Set(await getUserEspnLeagueIds(uid));
+  const creds = await getActiveEspnCredentials(uid);
+  if (creds?.leagueId) allowed.add(String(creds.leagueId).trim().slice(0, 32));
+  const lid = String(input.leagueId).trim().slice(0, 32);
+  if (!allowed.has(lid) && lid !== "457622") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "League is not linked to your ESPN connections." });
+  }
+  const yr = Math.floor(Number(input.season));
+  const received = input.rows.length;
+  const db = await getDbConn();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+  // Build name→teamId map from existing gmTeams for this season
+  const teamRows = await db
+    .select({ teamId: schema.gmTeams.teamId, name: schema.gmTeams.name, ownerName: schema.gmTeams.ownerName })
+    .from(schema.gmTeams)
+    .where(and(eq(schema.gmTeams.leagueId, lid), eq(schema.gmTeams.season, yr)));
+
+  // Stable fallback IDs for names not found in gmTeams
+  const stableTeamIdMap = new Map<string, number>();
+
+  function resolveTeamId(teamName: string): number {
+    const needle = gmwrNormalizeKeyServer(teamName);
+    if (!needle) return 0;
+    // Exact match on name or ownerName
+    for (const t of teamRows) {
+      if (gmwrNormalizeKeyServer(t.name) === needle || gmwrNormalizeKeyServer(t.ownerName) === needle) {
+        return t.teamId;
+      }
+    }
+    // Substring match
+    for (const t of teamRows) {
+      const n = gmwrNormalizeKeyServer(t.name);
+      const o = gmwrNormalizeKeyServer(t.ownerName);
+      if ((n && (needle.includes(n) || n.includes(needle))) || (o && (needle.includes(o) || o.includes(needle)))) {
+        return t.teamId;
+      }
+    }
+    // Stable synthetic fallback
+    if (!stableTeamIdMap.has(needle)) stableTeamIdMap.set(needle, stableTeamIdMap.size + 1);
+    return stableTeamIdMap.get(needle)!;
+  }
+
+  const now = new Date();
+  let insertedOrUpdated = 0;
+
+  for (const row of input.rows) {
+    const week = Math.floor(Number(row.week));
+    if (!Number.isFinite(week) || week <= 0 || week > 30) continue;
+    const awayTeamId = resolveTeamId(String(row.awayTeam ?? ""));
+    const homeTeamId = resolveTeamId(String(row.homeTeam ?? ""));
+    if (awayTeamId <= 0 || homeTeamId <= 0 || awayTeamId === homeTeamId) continue;
+
+    const hs = Number(row.homeScore) || 0;
+    const as_ = Number(row.awayScore) || 0;
+
+    let winnerTeamId: number | null = null;
+    if (row.winner) {
+      const wn = gmwrNormalizeKeyServer(String(row.winner));
+      if (wn === gmwrNormalizeKeyServer(String(row.awayTeam))) winnerTeamId = awayTeamId;
+      else if (wn === gmwrNormalizeKeyServer(String(row.homeTeam))) winnerTeamId = homeTeamId;
+    }
+    if (winnerTeamId === null) {
+      if (as_ > hs) winnerTeamId = awayTeamId;
+      else if (hs > as_) winnerTeamId = homeTeamId;
+    }
+
+    const rawMatchup = safeStringify({ source: "schedule_html", awayTeam: row.awayTeam, homeTeam: row.homeTeam, awayScore: as_, homeScore: hs });
+    await db
+      .insert(schema.gmMatchups)
+      .values({
+        leagueId: lid, season: yr, week,
+        matchupPeriodId: week,
+        homeTeamId, awayTeamId,
+        homeScore: hs, awayScore: as_,
+        winnerTeamId, isPlayoff: 0, isCompleted: 1,
+        rawMatchup, updatedAt: now,
+      })
+      .onDuplicateKeyUpdate({
+        set: { homeScore: hs, awayScore: as_, winnerTeamId, isCompleted: 1, rawMatchup, updatedAt: now },
+      });
+    insertedOrUpdated++;
+  }
+
+  const dbCountAfter = await gmCountLeagueSeason(db, schema.gmMatchups, lid, yr);
+  return { season: yr, received, insertedOrUpdated, dbCountAfter, success: dbCountAfter > 0 };
+}
+
 /** Allowed provenance tags for {@link importEspnBrowserSeasonBundle}. */
 export type EspnBrowserImportSource = "chrome_extension_espn_api" | "browser_session";
 

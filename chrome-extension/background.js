@@ -359,6 +359,7 @@ const MSG_HIST_TEST = "GMWR_HIST_TEST";
 const MSG_HIST_FULL = "GMWR_HIST_FULL";
 const MSG_HIST_STATUS = "GMWR_HIST_STATUS";
 const MSG_HIST_STANDINGS = "GMWR_HIST_STANDINGS";
+const MSG_HIST_MATCHUPS = "GMWR_HIST_MATCHUPS";
 /** Page (gmwarroom) → background: credentialed GET to fantasy.espn.com for browser-session sync. */
 const MSG_PAGE_ESPN_FETCH = "GMWR_PAGE_ESPN_FETCH";
 
@@ -694,6 +695,148 @@ function parseStandingsRows(scrapeResult) {
       pointsAgainst: pa,
     });
   }
+  return { rows, parseErrors };
+}
+
+/**
+ * Open a hidden tab for the ESPN season schedule page, wait for render, collect lines + table rows, close tab.
+ */
+async function scrapeSchedulePage(leagueId, season) {
+  const lid = String(leagueId ?? "").trim();
+  const y = Math.floor(Number(season));
+  const targetUrl = `https://fantasy.espn.com/football/league/schedule?leagueId=${encodeURIComponent(lid)}&seasonId=${y}`;
+  let tabId = null;
+  try {
+    const tab = await chrome.tabs.create({ url: targetUrl, active: false });
+    tabId = tab.id;
+    console.info("[GMWR] scrapeSchedule: opened tab", { tabId, season: y });
+    await waitForTabComplete(tabId, 30000);
+    await sleep(6000);
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: () => {
+        const bodyText = document.body.innerText || "";
+        const tableRows = [];
+        document.querySelectorAll("table").forEach((tbl, tblIdx) => {
+          tbl.querySelectorAll("tr").forEach((row, rowIdx) => {
+            const cells = Array.from(row.querySelectorAll("td, th")).map((c) => (c.innerText || "").trim());
+            if (cells.length > 1 && cells.some((c) => c.length > 0)) {
+              tableRows.push({ tblIdx, rowIdx, cells });
+            }
+          });
+        });
+        const lines = bodyText.split(/\n/).map((s) => s.trim()).filter((s) => s.length > 0);
+        return {
+          ok: true,
+          url: location.href,
+          title: document.title,
+          bodyLength: bodyText.length,
+          bodyPreview: bodyText.slice(0, 8000),
+          tableRows,
+          lines: lines.slice(0, 3000),
+        };
+      },
+    });
+    return results?.[0]?.result || { ok: false, error: "scrape_failed" };
+  } catch (err) {
+    return { ok: false, error: "scrape_failed", message: err instanceof Error ? err.message : String(err) };
+  } finally {
+    if (tabId != null) chrome.tabs.remove(tabId).catch(() => {});
+  }
+}
+
+/** True if a text string looks like a fantasy football score (0–400, up to 2 decimal places). */
+function isScoreLine(s) {
+  const t = String(s).trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(t)) return false;
+  const n = parseFloat(t);
+  return n >= 0 && n <= 400;
+}
+
+/** Return week number from a text line, or 0 if not detected. */
+function getWeekNumber(s) {
+  const m = String(s).match(/\bweek\s*(\d+)\b/i) || String(s).match(/\bwk\.?\s*(\d+)\b/i);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+/**
+ * Parse schedule page scrape result into weekly matchup rows.
+ * Tries 4-line pattern (name/score/name/score), inline "Name Score" pairs, then table fallback.
+ */
+function parseMatchupRows(scrapeResult) {
+  const rows = [];
+  const parseErrors = [];
+  if (!scrapeResult?.ok) return { rows, parseErrors: ["scrape_not_ok"] };
+  const lines = Array.isArray(scrapeResult.lines) ? scrapeResult.lines : [];
+  if (lines.length === 0) return { rows, parseErrors: ["no_lines"] };
+
+  let currentWeek = 0;
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const w = getWeekNumber(line);
+    if (w > 0) { currentWeek = w; i++; continue; }
+    if (currentWeek <= 0) { i++; continue; }
+
+    // Pattern 1: 4-line block — name / score / name / score
+    if (
+      i + 3 < lines.length &&
+      !isScoreLine(line) && line.length > 1 &&
+      isScoreLine(lines[i + 1]) &&
+      !isScoreLine(lines[i + 2]) && lines[i + 2].length > 1 &&
+      isScoreLine(lines[i + 3])
+    ) {
+      const name1 = line.trim();
+      const s1 = parseFloat(lines[i + 1]);
+      const name2 = lines[i + 2].trim();
+      const s2 = parseFloat(lines[i + 3]);
+      if (name1 !== name2) {
+        rows.push({ week: currentWeek, awayTeam: name1, homeTeam: name2, awayScore: s1, homeScore: s2,
+          winner: s1 > s2 ? name1 : s2 > s1 ? name2 : null });
+        i += 4; continue;
+      }
+    }
+
+    // Pattern 2: inline "Name Score" on two consecutive lines
+    const m1 = line.match(/^(.+?)\s+(\d+(?:\.\d{1,2})?)$/);
+    if (m1 && i + 1 < lines.length) {
+      const m2 = lines[i + 1].match(/^(.+?)\s+(\d+(?:\.\d{1,2})?)$/);
+      if (m2) {
+        const name1 = m1[1].trim(); const s1 = parseFloat(m1[2]);
+        const name2 = m2[1].trim(); const s2 = parseFloat(m2[2]);
+        if (s1 >= 0 && s1 <= 400 && s2 >= 0 && s2 <= 400 && name1 !== name2 && name1.length > 1 && name2.length > 1) {
+          rows.push({ week: currentWeek, awayTeam: name1, homeTeam: name2, awayScore: s1, homeScore: s2,
+            winner: s1 > s2 ? name1 : s2 > s1 ? name2 : null });
+          i += 2; continue;
+        }
+      }
+    }
+    i++;
+  }
+
+  // Table fallback when line parsing finds nothing
+  if (rows.length === 0 && Array.isArray(scrapeResult.tableRows)) {
+    let wk = 0;
+    for (const { cells } of scrapeResult.tableRows) {
+      const w2 = getWeekNumber(cells[0] || "") || getWeekNumber(cells.join(" "));
+      if (w2 > 0) { wk = w2; continue; }
+      if (wk <= 0) continue;
+      const scoreIdxs = cells.reduce((acc, c, ci) => (isScoreLine(c) ? [...acc, ci] : acc), []);
+      if (scoreIdxs.length >= 2) {
+        const si1 = scoreIdxs[0]; const si2 = scoreIdxs[1];
+        const name1 = cells.slice(0, si1).join(" ").trim();
+        const name2 = cells.slice(si1 + 1, si2).join(" ").trim();
+        const s1 = parseFloat(cells[si1]); const s2 = parseFloat(cells[si2]);
+        if (name1 && name2 && name1 !== name2) {
+          rows.push({ week: wk, awayTeam: name1, homeTeam: name2, awayScore: s1, homeScore: s2,
+            winner: s1 > s2 ? name1 : s2 > s1 ? name2 : null });
+        }
+      }
+    }
+    if (rows.length > 0) parseErrors.push("used_table_fallback");
+  }
+
   return { rows, parseErrors };
 }
 
@@ -1613,6 +1756,45 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       });
     })().catch((err) => {
       onceRespondStandings({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    });
+    return true;
+  }
+
+  if (t === MSG_HIST_MATCHUPS) {
+    let mResponded = false;
+    function onceRespondMatchups(response) {
+      if (mResponded) return;
+      mResponded = true;
+      clearTimeout(matchupsTimer);
+      sendResponse(response);
+    }
+    const matchupsTimer = setTimeout(
+      () => onceRespondMatchups({ ok: false, error: "extension_internal_timeout" }),
+      110000,
+    );
+    (async () => {
+      const leagueId = String(message?.leagueId || "457622").trim();
+      const season = Number(message?.season) || 2010;
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        onceRespondMatchups({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
+        return;
+      }
+      const scrapeResult = await scrapeSchedulePage(leagueId, season);
+      console.info("[GMWR] schedule scrape", { leagueId, season }, { bodyLength: scrapeResult?.bodyLength, ok: scrapeResult?.ok });
+      if (!scrapeResult?.ok) {
+        onceRespondMatchups({ ok: false, error: scrapeResult?.error || "scrape_failed", message: scrapeResult?.message, mode: "schedule_scrape_failed" });
+        return;
+      }
+      const { rows, parseErrors } = parseMatchupRows(scrapeResult);
+      console.info("[GMWR] matchup parse", { season, rowCount: rows.length, parseErrors });
+      if (rows.length === 0) {
+        onceRespondMatchups({ ok: false, error: "matchup_parse_empty", mode: "matchup_parse_empty", parseErrors, bodyLength: scrapeResult.bodyLength });
+        return;
+      }
+      onceRespondMatchups({ ok: true, mode: "schedule_scraped_parsed", leagueId, season, rowCount: rows.length, rows, parseErrors });
+    })().catch((err) => {
+      onceRespondMatchups({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
     return true;
   }
