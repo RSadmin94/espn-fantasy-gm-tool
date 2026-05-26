@@ -75,7 +75,7 @@
         }
         const r = response || {};
         window.postMessage(
-          { type: "GMWR_HIST_TEST_REPLY", id, ok: Boolean(r.ok), error: r.error ? String(r.error) : "" },
+          { ...r, type: "GMWR_HIST_TEST_REPLY", id, ok: Boolean(r.ok) },
           "*",
         );
       });

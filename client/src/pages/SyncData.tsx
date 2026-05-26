@@ -315,6 +315,7 @@ export function SyncData() {
   const [browserSessionErr, setBrowserSessionErr] = useState<string | null>(null);
   const [browserSessionBusy, setBrowserSessionBusy] = useState(false);
   const [browserSessionBulkBusy, setBrowserSessionBulkBusy] = useState(false);
+  const [browserSync2010Raw, setBrowserSync2010Raw] = useState<Record<string, unknown> | null>(null);
   const [lastBrowserImportCounts, setLastBrowserImportCounts] = useState<{
     draftPicks: number;
     teams: number;
@@ -442,7 +443,7 @@ export function SyncData() {
     setBrowserSessionBusy(true);
     try {
       const clerkToken = await getToken() ?? "";
-      const result = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      const result = await new Promise<Record<string, unknown>>((resolve) => {
         const id = `hist-test-${Date.now()}`;
         const timeout = window.setTimeout(() => {
           window.removeEventListener("message", onMsg);
@@ -454,17 +455,18 @@ export function SyncData() {
           if (!d || d.type !== "GMWR_HIST_TEST_REPLY" || d.id !== id) return;
           window.clearTimeout(timeout);
           window.removeEventListener("message", onMsg);
-          resolve({ ok: Boolean(d.ok), error: d.error ? String(d.error) : undefined });
+          resolve(d);
         }
         window.addEventListener("message", onMsg);
         window.postMessage({ type: "GMWR_HIST_TEST", id, leagueId: "457622", clerkToken }, "*");
       });
+      setBrowserSync2010Raw(result);
       if (result.ok) {
         setBrowserSessionNote("Import completed.");
         toast.success("Season 2010 sync complete.");
         void browserSyncStatusQuery.refetch();
       } else {
-        const msg = result.error || "Extension sync failed.";
+        const msg = result.error ? String(result.error) : "Extension sync failed.";
         setBrowserSessionErr(msg);
         toast.error(msg);
       }
@@ -712,6 +714,11 @@ export function SyncData() {
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span className="whitespace-pre-wrap break-words">{browserSessionErr}</span>
             </div>
+          )}
+          {browserSync2010Raw && (
+            <pre className="max-h-[40rem] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/30 p-3 text-xs text-foreground">
+              {JSON.stringify(browserSync2010Raw, null, 2)}
+            </pre>
           )}
           {lastBrowserImportCounts && (
             <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs text-foreground">
