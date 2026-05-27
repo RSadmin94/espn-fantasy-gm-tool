@@ -27,6 +27,12 @@ function chipStyle(place: number | null | undefined): string {
   return "bg-muted/20 text-muted-foreground/50 border-transparent";
 }
 
+// Mirrors server normalizeOwnerStr — used to match medal names to ownerKeys.
+function normalizeOwnerForMatch(raw: string): string {
+  if (!raw) return "";
+  return raw.trim().replace(/^\(+|\)+$/g, "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 // ── component ─────────────────────────────────────────────────────────────────
 
 type Tab = "dynasty" | "seasons" | "rivalries";
@@ -40,6 +46,7 @@ export function LeagueTimeline() {
   const [rivalOwner, setRivalOwner]         = useState<string>("");
 
   const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(undefined, { staleTime: 60_000 });
+  const medalsQ    = trpc.espn.leagueMedals.useQuery(undefined, { staleTime: 60_000 });
   const h2hQ = trpc.espn.leagueHistoryH2H.useQuery(undefined, {
     staleTime: 60_000,
     enabled: tab === "rivalries",
@@ -48,6 +55,20 @@ export function LeagueTimeline() {
 
   const allSeasons = standingsQ.data?.seasons ?? [];
   const rawOwners  = standingsQ.data?.owners  ?? [];
+  const medals     = medalsQ.data ?? [];
+
+  // ── Medal title counts: normalizedName → count ────────────────────────────
+  // Medal championOwner names are matched against owner displayName and ownerKey.
+  const medalTitleCounts = new Map<string, number>();
+  for (const m of medals) {
+    if (!m.championOwner) continue;
+    const k = normalizeOwnerForMatch(m.championOwner);
+    medalTitleCounts.set(k, (medalTitleCounts.get(k) ?? 0) + 1);
+  }
+  const getMedalTitles = (owner: { ownerKey: string; displayName: string }) =>
+    medalTitleCounts.get(owner.ownerKey) ??
+    medalTitleCounts.get(normalizeOwnerForMatch(owner.displayName)) ??
+    0;
 
   // ── Dynasty Board sort (client-side display sort only) ────────────────────
   const owners = [...rawOwners].sort((a, b) => {
@@ -57,8 +78,10 @@ export function LeagueTimeline() {
     const wB = b.seasons.reduce((s, r) => s + r.entry.wins,   0);
     const lB = b.seasons.reduce((s, r) => s + r.entry.losses, 0);
     const tB = b.seasons.reduce((s, r) => s + r.entry.ties,   0);
+    const titlesA = getMedalTitles(a);
+    const titlesB = getMedalTitles(b);
     if (sortBy === "titles") {
-      if (b.championships !== a.championships) return b.championships - a.championships;
+      if (titlesB !== titlesA) return titlesB - titlesA;
       return wB - wA;
     }
     if (sortBy === "wins")   return wB - wA;
@@ -102,30 +125,30 @@ export function LeagueTimeline() {
       {/* ── Diagnostics bar ── */}
       {(() => {
         const d = diagQ.data;
-        if (!d) return null;
-        const missingChampCount = d.champion.filter((c) => c.missingChampion).length;
-        const dupChampCount = d.champion.filter((c) => c.duplicateChampionCandidates).length;
-        const dupStandingSeasons = d.standings.filter((s) => s.duplicateFinalStandingRanks.length > 0 || s.duplicateOwnerRows > 0).length;
-        const missingRankSeasons = d.standings.filter((s) => s.missingFinalStandingRanks.length > 0).length;
-        const dupMatchupSeasons = d.matchups.filter((m) => m.duplicateMatchups > 0).length;
-        const mismatchSeasons = d.matchups.filter((m) => m.winnerScoreMismatches > 0).length;
-        const missingScoreSeasons = d.matchups.filter((m) => m.missingScores > 0).length;
-        const anyIssue = missingChampCount + dupChampCount + dupStandingSeasons + missingRankSeasons + dupMatchupSeasons + mismatchSeasons + missingScoreSeasons > 0;
+        const medalSeasons = medals.length;
+        const allSeasonCount = allSeasons.length;
+        const missingMedals = allSeasonCount > 0 ? allSeasonCount - medalSeasons : 0;
+        const dupStandingSeasons = (d?.standings ?? []).filter((s) => s.duplicateFinalStandingRanks.length > 0 || s.duplicateOwnerRows > 0).length;
+        const missingRankSeasons = (d?.standings ?? []).filter((s) => s.missingFinalStandingRanks.length > 0).length;
+        const dupMatchupSeasons = (d?.matchups ?? []).filter((m) => m.duplicateMatchups > 0).length;
+        const mismatchSeasons = (d?.matchups ?? []).filter((m) => m.winnerScoreMismatches > 0).length;
+        const missingScoreSeasons = (d?.matchups ?? []).filter((m) => m.missingScores > 0).length;
+        const anyIssue = missingMedals + dupStandingSeasons + missingRankSeasons + dupMatchupSeasons + mismatchSeasons + missingScoreSeasons > 0;
         return (
           <div className={cn(
             "rounded-md border px-4 py-2 font-mono text-xs text-muted-foreground",
             anyIssue ? "border-amber-500/30 bg-amber-500/5" : "border-border/60 bg-muted/10",
           )}>
             <span className="text-foreground/60 font-semibold">diag</span>
-            {" · "}seasons: <span className="text-foreground">{d.champion.length}</span>
-            {" · "}champions: <span className={cn(missingChampCount > 0 ? "text-red-400 font-bold" : dupChampCount > 0 ? "text-amber-400" : "text-emerald-400")}>
-              {missingChampCount > 0 ? `${missingChampCount} missing` : dupChampCount > 0 ? `${dupChampCount} multi-rank1` : "ok"}
+            {" · "}seasons: <span className="text-foreground">{allSeasonCount}</span>
+            {" · "}medals: <span className={cn(missingMedals > 0 ? "text-red-400 font-bold" : "text-emerald-400")}>
+              {medalSeasons}/{allSeasonCount}{missingMedals > 0 ? ` (${missingMedals} missing)` : " ok"}
             </span>
-            {" · "}standings: <span className={cn(dupStandingSeasons + missingRankSeasons > 0 ? "text-amber-400" : "text-emerald-400")}>
-              {dupStandingSeasons > 0 ? `${dupStandingSeasons} dup-ranks` : missingRankSeasons > 0 ? `${missingRankSeasons} missing-ranks` : "ok"}
+            {" · "}standings: <span className={cn(dupStandingSeasons + missingRankSeasons > 0 ? "text-amber-400" : d ? "text-emerald-400" : "text-muted-foreground")}>
+              {dupStandingSeasons > 0 ? `${dupStandingSeasons} dup-ranks` : missingRankSeasons > 0 ? `${missingRankSeasons} missing-ranks` : d ? "ok" : "…"}
             </span>
-            {" · "}matchups: <span className={cn(dupMatchupSeasons + mismatchSeasons > 0 ? "text-red-400 font-bold" : missingScoreSeasons > 0 ? "text-amber-400" : "text-emerald-400")}>
-              {dupMatchupSeasons > 0 ? `${dupMatchupSeasons} dups` : mismatchSeasons > 0 ? `${mismatchSeasons} mismatches` : missingScoreSeasons > 0 ? `${missingScoreSeasons} missing-scores` : "ok"}
+            {" · "}matchups: <span className={cn(dupMatchupSeasons + mismatchSeasons > 0 ? "text-red-400 font-bold" : missingScoreSeasons > 0 ? "text-amber-400" : d ? "text-emerald-400" : "text-muted-foreground")}>
+              {dupMatchupSeasons > 0 ? `${dupMatchupSeasons} dups` : mismatchSeasons > 0 ? `${mismatchSeasons} mismatches` : missingScoreSeasons > 0 ? `${missingScoreSeasons} missing-scores` : d ? "ok" : "…"}
             </span>
           </div>
         );
@@ -189,6 +212,7 @@ export function LeagueTimeline() {
               const totalT = owner.seasons.reduce((s, r) => s + r.entry.ties,   0);
               const best   = owner.seasons.reduce((b, r) => Math.min(b, r.entry.finalStanding ?? 99), 99);
               const isOpen = expandedOwner === owner.ownerKey;
+              const titles = getMedalTitles(owner);
 
               return (
                 <Card key={owner.ownerKey} className={cn("transition-all", isOpen && "ring-1 ring-primary/25")}>
@@ -197,9 +221,9 @@ export function LeagueTimeline() {
                     {/* Name + title badge */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="font-semibold text-foreground leading-tight">{owner.displayName}</div>
-                      {owner.championships > 0 && (
+                      {titles > 0 && (
                         <div className="shrink-0 rounded-full bg-yellow-500/15 px-2 py-0.5 text-yellow-300 text-xs font-bold">
-                          🏆&nbsp;{owner.championships}
+                          🏆&nbsp;{titles}
                         </div>
                       )}
                     </div>

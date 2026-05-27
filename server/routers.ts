@@ -67,7 +67,7 @@ import {
   getSeasonDraftPicks,
   getSeasonTeams,
 } from "./historicalDataService";
-import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmMatchups, syncRuns } from "../drizzle/schema";
+import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmMatchups, syncRuns, leagueMedals } from "../drizzle/schema";
 import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle, asc as ascDrizzle, sql } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
@@ -3735,30 +3735,8 @@ export const appRouter = router({
         }
       }
 
-      // ── Identify the single true champion per season ──────────────────────
-      // Among rank-1 rows, pick highest wins then highest pointsFor.
-      const bySeasonTeams = new Map<number, typeof rows>();
-      for (const r of rows) {
-        const arr = bySeasonTeams.get(r.season) ?? [];
-        arr.push(r);
-        bySeasonTeams.set(r.season, arr);
-      }
-      const trueChampOwnerKey = new Map<number, string>(); // season → ownerKey
-      for (const [season, sRows] of bySeasonTeams) {
-        const rank1 = sRows.filter((r) => r.finalStanding === 1);
-        if (rank1.length === 0) continue;
-        const sorted = [...rank1].sort((a, b) => {
-          const aw = computedRecord.get(`${season}:${a.teamId}`)?.wins ?? a.wins;
-          const bw = computedRecord.get(`${season}:${b.teamId}`)?.wins ?? b.wins;
-          if (bw !== aw) return bw - aw;
-          return Number(b.pointsFor) - Number(a.pointsFor);
-        });
-        const champ = sorted[0]!;
-        const rawName = (champ.ownerName || champ.name || `Team ${champ.teamId}`).trim();
-        trueChampOwnerKey.set(season, normalizeOwnerStr(rawName));
-      }
-
       // ── Build owner map, using matchup records for wins/losses ────────────
+      // championships is always 0 here — title counts come from leagueMedals.
       const allSeasons = new Set<number>();
       const acc = new Map<string, { displayName: string; seasonMap: Map<number, SeasonEntry> }>();
 
@@ -3794,12 +3772,9 @@ export const appRouter = router({
           const seasons2 = [...seasonMap.entries()]
             .sort(([a], [b]) => a - b)
             .map(([season, entry]) => ({ season, entry }));
-          // Championship credited only to the true champion of each season
-          const championships = seasons2.filter((s) => trueChampOwnerKey.get(s.season) === ownerKey).length;
-          return { ownerKey, displayName, championships, seasons: seasons2 };
+          return { ownerKey, displayName, championships: 0, seasons: seasons2 };
         })
         .sort((a, b) => {
-          if (b.championships !== a.championships) return b.championships - a.championships;
           const wA = a.seasons.reduce((s, r) => s + r.entry.wins, 0);
           const wB = b.seasons.reduce((s, r) => s + r.entry.wins, 0);
           return wB - wA;
@@ -4028,8 +4003,89 @@ export const appRouter = router({
         return { season, totalMatchupRows, uniqueMatchups, duplicateMatchups, missingScores, winnerScoreMismatches };
       });
 
-      return { champion, standings, matchups };
+      // ── Medal diagnostics ─────────────────────────────────────────────────
+      const medalRows = await db
+        .select({
+          season: leagueMedals.season,
+          championOwner: leagueMedals.championOwner,
+          runnerUpOwner: leagueMedals.runnerUpOwner,
+          thirdPlaceOwner: leagueMedals.thirdPlaceOwner,
+          source: leagueMedals.source,
+        })
+        .from(leagueMedals)
+        .where(eqDrizzle(leagueMedals.leagueId, leagueId))
+        .orderBy(ascDrizzle(leagueMedals.season));
+
+      const medals = medalRows.map((m) => ({
+        season: m.season,
+        championOwner: m.championOwner,
+        runnerUpOwner: m.runnerUpOwner,
+        thirdPlaceOwner: m.thirdPlaceOwner,
+        source: m.source,
+      }));
+
+      return { champion, standings, matchups, medals };
     }),
+
+    /** All medal records for the active league — source of truth for title counts. */
+    leagueMedals: publicProcedure.query(async ({ ctx }) => {
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return [];
+      return db
+        .select({
+          season: leagueMedals.season,
+          championOwner: leagueMedals.championOwner,
+          runnerUpOwner: leagueMedals.runnerUpOwner,
+          thirdPlaceOwner: leagueMedals.thirdPlaceOwner,
+          source: leagueMedals.source,
+        })
+        .from(leagueMedals)
+        .where(eqDrizzle(leagueMedals.leagueId, leagueId))
+        .orderBy(ascDrizzle(leagueMedals.season));
+    }),
+
+    /** Upsert gold/silver/bronze medal data for one season from the ESPN League History page. */
+    upsertSeasonMedals: publicProcedure
+      .input(z.object({
+        season:          z.number().int().min(2009).max(2030),
+        championOwner:   z.string().max(255),
+        runnerUpOwner:   z.string().max(255).default(""),
+        thirdPlaceOwner: z.string().max(255).default(""),
+        source:          z.string().max(64).default("espn_history_medal"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: ctx.user ? { id: ctx.user.id } : undefined },
+          null,
+          undefined,
+        );
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+        await db
+          .insert(leagueMedals)
+          .values({
+            leagueId,
+            season: input.season,
+            championOwner: input.championOwner.trim(),
+            runnerUpOwner: input.runnerUpOwner.trim(),
+            thirdPlaceOwner: input.thirdPlaceOwner.trim(),
+            source: input.source,
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              championOwner: input.championOwner.trim(),
+              runnerUpOwner: input.runnerUpOwner.trim(),
+              thirdPlaceOwner: input.thirdPlaceOwner.trim(),
+              source: input.source,
+            },
+          });
+        return { leagueId, season: input.season, ok: true };
+      }),
   }),
 
   playerProfiles: publicProcedure.query(async ({ ctx }) => {

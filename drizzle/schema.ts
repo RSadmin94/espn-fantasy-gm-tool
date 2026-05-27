@@ -1232,3 +1232,22 @@ export const leagueEvents = mysqlTable(
 );
 export type LeagueEvent = typeof leagueEvents.$inferSelect;
 export type InsertLeagueEvent = typeof leagueEvents.$inferInsert;
+
+// ─── ESPN League History Medals ───────────────────────────────────────────────
+// Source of truth for champion / runner-up / third-place per season.
+// Populated from the ESPN League History page — not derived from standings.
+export const leagueMedals = mysqlTable(
+  "league_medals",
+  {
+    id:              int("id").autoincrement().primaryKey(),
+    leagueId:        varchar("leagueId", { length: 32 }).notNull(),
+    season:          int("season").notNull(),
+    championOwner:   varchar("championOwner", { length: 255 }).notNull().default(""),
+    runnerUpOwner:   varchar("runnerUpOwner", { length: 255 }).notNull().default(""),
+    thirdPlaceOwner: varchar("thirdPlaceOwner", { length: 255 }).notNull().default(""),
+    source:          varchar("source", { length: 64 }).notNull().default("espn_history_medal"),
+    updatedAt:       timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_league_medals").on(t.leagueId, t.season)]
+);
+export type LeagueMedal = typeof leagueMedals.$inferSelect;

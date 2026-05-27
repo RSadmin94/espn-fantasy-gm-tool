@@ -347,6 +347,30 @@ export function SyncData() {
   };
   const [draftImportResults, setDraftImportResults] = useState<Record<number, DraftImportResult>>({});
 
+  // ── League Medals state ──────────────────────────────────────────────────
+  type MedalEntry = { champion: string; runnerUp: string; third: string };
+  const ALL_MEDAL_SEASONS = Array.from({ length: 16 }, (_, i) => 2010 + i);
+  const [medalEntries, setMedalEntries] = useState<Record<number, MedalEntry>>(() =>
+    Object.fromEntries(ALL_MEDAL_SEASONS.map((y) => [y, { champion: "", runnerUp: "", third: "" }]))
+  );
+  const [medalBusy, setMedalBusy]   = useState<number | null>(null);
+  const [medalSaved, setMedalSaved] = useState<Set<number>>(new Set());
+  const [medalErr, setMedalErr]     = useState<Record<number, string>>({});
+  const medalsQ = trpc.espn.leagueMedals.useQuery(undefined, { staleTime: 0 });
+
+  // Pre-fill form from DB when query resolves
+  const [medalPrefilled, setMedalPrefilled] = useState(false);
+  if (medalsQ.data && !medalPrefilled) {
+    setMedalPrefilled(true);
+    const updates: Record<number, MedalEntry> = {};
+    for (const m of medalsQ.data) {
+      updates[m.season] = { champion: m.championOwner, runnerUp: m.runnerUpOwner, third: m.thirdPlaceOwner };
+    }
+    if (Object.keys(updates).length > 0) {
+      setMedalEntries((prev) => ({ ...prev, ...updates }));
+    }
+  }
+
   const allSeasonsQuery = trpc.espn.allSeasons.useQuery();
   const cachedQuery = trpc.espn.cachedSeasons.useQuery();
   const manifestsQuery = trpc.espn.manifests.useQuery();
@@ -430,6 +454,7 @@ export function SyncData() {
   });
 
   const clearLeagueDraftPicksMutation = trpc.espn.clearLeagueDraftPicks.useMutation();
+  const upsertSeasonMedalsMutation    = trpc.espn.upsertSeasonMedals.useMutation();
 
   const { mutate: runRefresh } = refreshMutation;
 
@@ -1790,6 +1815,82 @@ export function SyncData() {
             </div>
           ))}
       </div>
+
+      {/* ── League History Medals (admin) ──────────────────────────────── */}
+      {(() => {
+        const handleSaveMedal = async (season: number) => {
+          const entry = medalEntries[season];
+          if (!entry?.champion.trim()) return;
+          setMedalBusy(season);
+          setMedalErr((p) => { const n = { ...p }; delete n[season]; return n; });
+          try {
+            await upsertSeasonMedalsMutation.mutateAsync({
+              season,
+              championOwner:   entry.champion.trim(),
+              runnerUpOwner:   entry.runnerUp.trim(),
+              thirdPlaceOwner: entry.third.trim(),
+              source: "espn_history_medal",
+            });
+            setMedalSaved((p) => new Set([...p, season]));
+            void medalsQ.refetch();
+          } catch (e) {
+            setMedalErr((p) => ({ ...p, [season]: e instanceof Error ? e.message : String(e) }));
+          } finally {
+            setMedalBusy(null);
+          }
+        };
+        return (
+          <Card className="border-blue-500/30 bg-blue-500/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base text-blue-300">League History Medals</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                Enter champion / runner-up / third-place from the ESPN League History page. Source of truth for dynasty titles.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="grid grid-cols-[4rem_1fr_1fr_1fr_5rem] gap-x-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1 pb-1">
+                <span>Season</span><span>🥇 Champion</span><span>🥈 Runner-Up</span><span>🥉 Third</span><span />
+              </div>
+              {ALL_MEDAL_SEASONS.map((yr) => {
+                const entry = medalEntries[yr] ?? { champion: "", runnerUp: "", third: "" };
+                const isBusy = medalBusy === yr;
+                const isSaved = medalSaved.has(yr);
+                const err = medalErr[yr];
+                return (
+                  <div key={yr} className="grid grid-cols-[4rem_1fr_1fr_1fr_5rem] gap-x-2 items-center">
+                    <span className="font-mono text-xs text-muted-foreground">{yr}</span>
+                    {(["champion","runnerUp","third"] as const).map((field) => (
+                      <input
+                        key={field}
+                        type="text"
+                        value={entry[field]}
+                        placeholder={field === "champion" ? "Champion" : field === "runnerUp" ? "Runner-Up" : "3rd Place"}
+                        className="h-7 rounded border border-border/60 bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        onChange={(e) => {
+                          setMedalEntries((p) => ({ ...p, [yr]: { ...entry, [field]: e.target.value } }));
+                          setMedalSaved((p) => { const n = new Set(p); n.delete(yr); return n; });
+                        }}
+                      />
+                    ))}
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        disabled={isBusy || !entry.champion.trim()}
+                        onClick={() => void handleSaveMedal(yr)}
+                      >
+                        {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : isSaved ? <CheckCircle2 className="h-3 w-3 text-emerald-400" /> : "Save"}
+                      </Button>
+                      {err && <span className="text-[10px] text-red-400 truncate max-w-[6rem]" title={err}>!</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* ── Reset Draft History (admin/debug) ─────────────────────────── */}
       <Card className="border-amber-500/30 bg-amber-500/5">
