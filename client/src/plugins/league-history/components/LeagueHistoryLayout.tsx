@@ -36,6 +36,13 @@ export function LeagueHistoryPlugin() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-1 pb-12">
+      <div
+        className="rounded-md border-4 border-yellow-300 bg-lime-400 px-4 py-3 text-center text-lg font-black tracking-wide text-black shadow-[0_0_24px_6px_rgba(250,204,21,0.95)] ring-4 ring-lime-300"
+        role="status"
+        aria-live="polite"
+      >
+        LEAGUE HISTORY PLUGIN ACTIVE — ffbb348
+      </div>
       <div className="space-y-0.5">
         <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400">League History</div>
         <h1 className="text-3xl font-bold text-foreground">League Timeline</h1>
