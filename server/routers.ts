@@ -2039,26 +2039,13 @@ export const appRouter = router({
           });
         }
 
-        let dataSource: "verified_manual" | "normalized" | "empty" = "empty";
+        let dataSource: "verified_manual" | "normalized" | "cache" | "none" = "none";
         let maxWeek = 0;
 
         const db = await getDb();
         if (!db) return { maxWeek, matchups: [] as const, dataSource };
 
-        const [agg] = await db
-          .select({
-            maxWeek: sql<number>`COALESCE(MAX(${gmMatchups.week}), 0)`.mapWith(Number),
-          })
-          .from(gmMatchups)
-          .where(
-            andDrizzle(
-              eqDrizzle(gmMatchups.leagueId, leagueId),
-              eqDrizzle(gmMatchups.season, input.season)
-            )
-          );
-
-        maxWeek = Math.max(maxWeek, Number(agg?.maxWeek ?? 0) || 0);
-
+        // ── Load team map from gmTeams (used for both DB and cache paths) ─────
         const teamRows = await db
           .select({
             teamId: gmTeams.teamId,
@@ -2100,6 +2087,21 @@ export const appRouter = router({
           });
         }
 
+        // ── Phase 1: gmMatchups DB ─────────────────────────────────────────────
+        const [agg] = await db
+          .select({
+            maxWeek: sql<number>`COALESCE(MAX(${gmMatchups.week}), 0)`.mapWith(Number),
+          })
+          .from(gmMatchups)
+          .where(
+            andDrizzle(
+              eqDrizzle(gmMatchups.leagueId, leagueId),
+              eqDrizzle(gmMatchups.season, input.season)
+            )
+          );
+
+        maxWeek = Math.max(maxWeek, Number(agg?.maxWeek ?? 0) || 0);
+
         const mrows = await db
           .select({
             id: gmMatchups.id,
@@ -2125,8 +2127,71 @@ export const appRouter = router({
           )
           .orderBy(ascDrizzle(gmMatchups.matchupPeriodId), ascDrizzle(gmMatchups.id));
 
-        const matchups = mapScoreboardRows(mrows as { synthetic?: boolean }[], teamMap);
-        if (matchups.length > 0) dataSource = "normalized";
+        if (mrows.length > 0) {
+          const matchups = mapScoreboardRows(mrows as { synthetic?: boolean }[], teamMap);
+          dataSource = "normalized";
+          return { maxWeek, matchups, dataSource };
+        }
+
+        // ── Phase 2: Combined ESPN cache fallback ──────────────────────────────
+        const cacheHit = await getCachedViewWithTier(input.season, "combined", leagueId);
+        if (!cacheHit) return { maxWeek, matchups: [] as const, dataSource };
+
+        const payload = cacheHit.row.payload as Record<string, unknown>;
+        let cacheNorm: ReturnType<typeof normalizeMatchups> = [];
+        try {
+          cacheNorm = normalizeMatchups(payload);
+        } catch {
+          return { maxWeek, matchups: [] as const, dataSource };
+        }
+
+        // Compute maxWeek from full cache schedule so week selector populates
+        const cacheMaxWeek = cacheNorm.reduce((mx, m) => {
+          const w = Number(m.scoringPeriodId ?? m.matchupPeriodId ?? 0);
+          return w > mx ? w : mx;
+        }, 0);
+        maxWeek = Math.max(maxWeek, cacheMaxWeek);
+
+        // Filter to requested week: match scoringPeriodId first, then matchupPeriodId
+        let weekMatchups = cacheNorm.filter((m) => Number(m.scoringPeriodId) === input.week);
+        if (weekMatchups.length === 0) {
+          weekMatchups = cacheNorm.filter((m) => Number(m.matchupPeriodId) === input.week);
+        }
+
+        if (weekMatchups.length === 0) return { maxWeek, matchups: [] as const, dataSource };
+
+        // Dedup by homeTeamId|awayTeamId within the week
+        const seen = new Set<string>();
+        const dedupedWeek: typeof weekMatchups = [];
+        for (const m of weekMatchups) {
+          const key = `${m.homeTeamId}|${m.awayTeamId}`;
+          if (!seen.has(key)) { seen.add(key); dedupedWeek.push(m); }
+        }
+
+        // Convert normalizeMatchups output to the shape mapScoreboardRows expects
+        const cacheRows = dedupedWeek.map((m, idx) => {
+          const hid = Number(m.homeTeamId);
+          const aid = Number(m.awayTeamId);
+          const winnerStr = String(m.winner ?? "UNDECIDED");
+          const winnerTeamId = winnerStr === "HOME" ? hid : winnerStr === "AWAY" ? aid : null;
+          return {
+            id: -(idx + 1),
+            week: Number(m.scoringPeriodId ?? m.matchupPeriodId ?? input.week),
+            matchupPeriodId: Number(m.matchupPeriodId ?? 0),
+            homeTeamId: hid,
+            awayTeamId: aid,
+            homeScore: Number(m.homeTotalPoints ?? 0),
+            awayScore: Number(m.awayTotalPoints ?? 0),
+            homeProjected: m.homeProjectedPoints != null ? Number(m.homeProjectedPoints) : null,
+            awayProjected: m.awayProjectedPoints != null ? Number(m.awayProjectedPoints) : null,
+            winnerTeamId,
+            isCompleted: winnerTeamId != null ? 1 : 0,
+            isPlayoff: String(m.playoffTierType ?? "").length > 0 ? 1 : 0,
+          };
+        });
+
+        const matchups = mapScoreboardRows(cacheRows as { synthetic?: boolean }[], teamMap);
+        dataSource = "cache";
         return { maxWeek, matchups, dataSource };
       }),
 

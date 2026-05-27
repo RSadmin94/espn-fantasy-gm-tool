@@ -156,11 +156,16 @@ export function Matchups() {
         <p className="mt-1 text-muted-foreground">
           Head-to-head scores by week (from synced league data).
         </p>
-        {boardSource === "verified_manual" ? (
+        {boardSource === "verified_manual" && (
           <p className="mt-2 rounded-md border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200">
             Source: verified_manual
           </p>
-        ) : null}
+        )}
+        {boardSource === "cache" && (
+          <p className="mt-2 rounded-md border border-blue-500/35 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-300">
+            Source: ESPN combined cache (not yet backfilled to DB)
+          </p>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -235,10 +240,10 @@ export function Matchups() {
 
       {!boardQ.isLoading && !boardQ.isError && maxWeek === 0 && (
         <div className="rounded-lg border border-dashed border-border px-4 py-16 text-center text-sm text-muted-foreground">
-          <p>No matchup rows in the database for {season}.</p>
+          <p>No matchup data found for {season} — not in gmMatchups or combined cache.</p>
           <p className="mt-2">
-            Run a full season sync so <code className="rounded bg-muted px-1">matchups</code> is
-            populated (home/away scores, teams, weeks).
+            Use <a href="/sync" className="underline underline-offset-2">Sync Data</a> → "Fetch Historical Matchups" to import from ESPN,
+            or run a full season sync to populate the database.
           </p>
         </div>
       )}
