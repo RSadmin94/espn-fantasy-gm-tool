@@ -1,8 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
-import type { OwnerWithMedalTitles } from "../utils/mergeMedalsIntoOwners";
-import type { LeagueHistoryTab, SortKey } from "../hooks/useLeagueHistoryModel";
+import type { LeagueHistoryTab, SortKey, OwnerWithTitles } from "../hooks/useLeagueHistoryModel";
 
 function ordinal(n: number): string {
   if (n === 11 || n === 12 || n === 13) return `${n}th`;
@@ -25,7 +24,7 @@ function chipStyle(place: number | null | undefined): string {
 }
 
 type Props = {
-  owners: OwnerWithMedalTitles[];
+  owners: OwnerWithTitles[];
   sortBy: SortKey;
   setSortBy: (s: SortKey) => void;
   expandedOwner: string | null;
@@ -82,9 +81,9 @@ export function DynastyBoardTab({
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {owners.map((owner) => {
-          const totalW = owner.seasons.reduce((s, r) => s + r.entry.wins, 0);
-          const totalL = owner.seasons.reduce((s, r) => s + r.entry.losses, 0);
-          const totalT = owner.seasons.reduce((s, r) => s + r.entry.ties, 0);
+          const totalW = owner.allTimeWins;
+          const totalL = owner.allTimeLosses;
+          const totalT = owner.allTimeTies;
           const best = owner.seasons.reduce((b, r) => Math.min(b, r.entry.finalStanding ?? 99), 99);
           const isOpen = expandedOwner === owner.ownerKey;
 
@@ -123,7 +122,9 @@ export function DynastyBoardTab({
                   </span>
 
                   <span className="text-muted-foreground">💯 Win %</span>
-                  <span className="text-right tabular-nums">{winPct(totalW, totalL, totalT)}</span>
+                  <span className="text-right tabular-nums">
+                    {totalW + totalL + totalT > 0 ? owner.allTimeWinPct.toFixed(1) + "%" : "—"}
+                  </span>
                 </div>
 
                 <button

@@ -4224,6 +4224,174 @@ export const appRouter = router({
       };
     }),
 
+    /** All-time owner W-L-T from deduped completed weekly matchups (not standings snapshots). */
+    ownerAllTimeRecords: publicProcedure.query(async ({ ctx }) => {
+      type OwnerRecord = {
+        ownerKey: string;
+        displayName: string;
+        wins: number;
+        losses: number;
+        ties: number;
+        gamesPlayed: number;
+        winPct: number;
+      };
+      type Diagnostics = {
+        rawMatchupRows: number;
+        uniqueMatchups: number;
+        duplicateMatchups: number;
+        skippedIncomplete: number;
+        skippedMissingTeams: number;
+        skippedSynthetic: number;
+        skippedUnresolvedOwner: number;
+        skippedSameOwner: number;
+      };
+      const emptyDiag: Diagnostics = {
+        rawMatchupRows: 0,
+        uniqueMatchups: 0,
+        duplicateMatchups: 0,
+        skippedIncomplete: 0,
+        skippedMissingTeams: 0,
+        skippedSynthetic: 0,
+        skippedUnresolvedOwner: 0,
+        skippedSameOwner: 0,
+      };
+
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return { owners: [] as OwnerRecord[], diagnostics: emptyDiag };
+
+      const allTeams = await db
+        .select({
+          season: gmTeams.season,
+          teamId: gmTeams.teamId,
+          name: gmTeams.name,
+          ownerName: gmTeams.ownerName,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId));
+
+      const teamToOwnerKey = new Map<string, string>();
+      const ownerDisplay = new Map<string, string>();
+      for (const t of allTeams) {
+        const rawName = (t.ownerName || t.name || `Team ${t.teamId}`).trim();
+        const ownerKey = normalizeOwnerStr(rawName);
+        const display = cleanOwnerDisplay(rawName) || rawName;
+        teamToOwnerKey.set(`${t.season}:${t.teamId}`, ownerKey);
+        if (display) ownerDisplay.set(ownerKey, display);
+      }
+
+      const matchups = await db
+        .select({
+          season: gmMatchups.season,
+          matchupPeriodId: gmMatchups.matchupPeriodId,
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          winnerTeamId: gmMatchups.winnerTeamId,
+          isCompleted: gmMatchups.isCompleted,
+        })
+        .from(gmMatchups)
+        .where(eqDrizzle(gmMatchups.leagueId, leagueId));
+
+      const records = new Map<string, { wins: number; losses: number; ties: number }>();
+      const bump = (ownerKey: string, field: "wins" | "losses" | "ties") => {
+        if (!records.has(ownerKey)) records.set(ownerKey, { wins: 0, losses: 0, ties: 0 });
+        records.get(ownerKey)![field]++;
+      };
+
+      const seenKeys = new Set<string>();
+      let duplicateMatchups = 0;
+      let skippedIncomplete = 0;
+      let skippedMissingTeams = 0;
+      let skippedSynthetic = 0;
+      let skippedUnresolvedOwner = 0;
+      let skippedSameOwner = 0;
+      let uniqueMatchups = 0;
+
+      for (const m of matchups) {
+        if (m.isCompleted !== 1) {
+          skippedIncomplete++;
+          continue;
+        }
+
+        const homeId = Number(m.homeTeamId);
+        const awayId = Number(m.awayTeamId);
+        if (!homeId || !awayId) {
+          skippedMissingTeams++;
+          continue;
+        }
+        if (homeId <= 0 || awayId <= 0 || homeId === awayId) {
+          skippedSynthetic++;
+          continue;
+        }
+
+        const mk = `${m.season}|${m.matchupPeriodId}|${homeId}|${awayId}`;
+        if (seenKeys.has(mk)) {
+          duplicateMatchups++;
+          continue;
+        }
+        seenKeys.add(mk);
+        uniqueMatchups++;
+
+        const homeOwnerKey = teamToOwnerKey.get(`${m.season}:${homeId}`);
+        const awayOwnerKey = teamToOwnerKey.get(`${m.season}:${awayId}`);
+        if (!homeOwnerKey || !awayOwnerKey) {
+          skippedUnresolvedOwner++;
+          continue;
+        }
+        if (homeOwnerKey === awayOwnerKey) {
+          skippedSameOwner++;
+          continue;
+        }
+
+        const winnerId = m.winnerTeamId != null ? Number(m.winnerTeamId) : null;
+        if (winnerId === homeId) {
+          bump(homeOwnerKey, "wins");
+          bump(awayOwnerKey, "losses");
+        } else if (winnerId === awayId) {
+          bump(awayOwnerKey, "wins");
+          bump(homeOwnerKey, "losses");
+        } else {
+          bump(homeOwnerKey, "ties");
+          bump(awayOwnerKey, "ties");
+        }
+      }
+
+      const owners: OwnerRecord[] = [...records.entries()]
+        .map(([ownerKey, { wins, losses, ties }]) => {
+          const gamesPlayed = wins + losses + ties;
+          const winPct =
+            gamesPlayed > 0 ? Math.round(((wins + 0.5 * ties) / gamesPlayed) * 1000) / 10 : 0;
+          return {
+            ownerKey,
+            displayName: ownerDisplay.get(ownerKey) ?? ownerKey,
+            wins,
+            losses,
+            ties,
+            gamesPlayed,
+            winPct,
+          };
+        })
+        .sort((a, b) => b.winPct - a.winPct || b.wins - a.wins || a.displayName.localeCompare(b.displayName));
+
+      return {
+        owners,
+        diagnostics: {
+          rawMatchupRows: matchups.length,
+          uniqueMatchups,
+          duplicateMatchups,
+          skippedIncomplete,
+          skippedMissingTeams,
+          skippedSynthetic,
+          skippedUnresolvedOwner,
+          skippedSameOwner,
+        },
+      };
+    }),
+
     /** Upsert gold/silver/bronze medal data for one season from the ESPN League History page. */
     upsertSeasonMedals: publicProcedure
       .input(z.object({
