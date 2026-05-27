@@ -832,97 +832,101 @@ async function scrapeLeagueHistoryPage(leagueId) {
 
 /**
  * Parse `scrapeLeagueHistoryPage` result into medal rows.
- * Tries: (1) table rows with a year cell, (2) body-text sequential parsing, (3) DOM card data.
- * Returns [{ season, championOwner, runnerUpOwner, thirdPlaceOwner }] sorted by season asc.
+ *
+ * Per-season text-window approach:
+ *   1. Split bodyLines into windows bounded by year lines (2009–currentYear).
+ *   2. Within each window, find position-marker lines ("Champion", "Second Place", "Third Place").
+ *   3. Take the first valid team-name line immediately after each marker.
+ *   Never picks the "next N non-junk" globally — each position is anchored by its marker.
+ *
+ * Returns { medals: [{ season, championOwner, runnerUpOwner, thirdPlaceOwner }], debug: [...] }.
  */
 function parseLeagueHistoryMedals(scrapeResult) {
-  if (!scrapeResult?.ok) return [];
+  if (!scrapeResult?.ok) return { medals: [], debug: [] };
 
   const currentYear = new Date().getFullYear();
-  const seen = new Set();
   const medals = [];
-
-  function addMedal(season, champion, runnerUp, thirdPlace) {
-    season = Number(season);
-    if (!season || season < 2009 || season > currentYear) return;
-    if (seen.has(season)) return;
-    champion = String(champion || "").trim();
-    if (!champion) return;
-    seen.add(season);
-    medals.push({
-      season,
-      championOwner: champion,
-      runnerUpOwner: String(runnerUp || "").trim(),
-      thirdPlaceOwner: String(thirdPlace || "").trim(),
-    });
-  }
+  const debug = [];
 
   const yearLineRe = /^(20[0-9]{2})$/;
-  const rankLineRe = /^(1st|2nd|3rd|1st\s*place|2nd\s*place|3rd\s*place|champion|runner.?up|third|third\s*place|silver|gold|bronze)$/i;
-  const junkRe = /^(espn|fantasy|football|league|history|season|playoffs?|bracket|regular\s*season|schedule|standings|draft|trade|roster|settings|members?|message\s*board|waiver|free\s*agent|powered\s*by|terms|privacy|©|home|sign\s*in|log\s*in|menu|navigation|skip|loading|more|less)$/i;
+
+  // Position markers: these lines identify which role the NEXT team name plays.
+  const championMarkerRe = /^(champion|1st\s*place|first\s*place|gold)$/i;
+  const runnerUpMarkerRe = /^(second\s*place|2nd\s*place|runner.?up|silver)$/i;
+  const thirdMarkerRe    = /^(third\s*place|3rd\s*place|bronze)$/i;
+
+  // Lines that are definitely not team names (ESPN UI text, nav links, position labels).
+  const notTeamRe = /^(espn|fantasy\s*football|fantasy|league\s*office|league\s*history|show\s*full.*|view\s*score.*|view\s*sco.*|draft\s*recap|regular\s*season|schedule|standings|draft|trade|roster|settings|members?|message\s*board|waiver|free\s*agent|powered\s*by|terms.*|privacy.*|©|home|sign\s*in|log\s*in|menu|navigation|skip|loading|playoff|playoffs|bracket|champion|second\s*place|third\s*place|first\s*place|1st\s*place|2nd\s*place|3rd\s*place|runner.?up|silver|gold|bronze|more|less)$/i;
 
   function isValidTeamName(line) {
     const s = String(line || "").trim();
     if (s.length < 2 || s.length > 80) return false;
     if (yearLineRe.test(s)) return false;
-    if (rankLineRe.test(s)) return false;
-    if (junkRe.test(s)) return false;
+    if (notTeamRe.test(s)) return false;
     if (/^https?:/i.test(s)) return false;
     if (/^\d+$/.test(s)) return false;
     return true;
   }
 
-  // ── Strategy 1: table rows with a year cell ──
-  if (Array.isArray(scrapeResult.tableRows) && scrapeResult.tableRows.length > 0) {
-    for (const { cells } of scrapeResult.tableRows) {
-      if (cells.length < 2) continue;
-      const yearIdx = cells.findIndex((c) => yearLineRe.test(String(c || "").trim()));
-      if (yearIdx < 0) continue;
-      const year = parseInt(cells[yearIdx], 10);
-      const teamCells = cells.slice(yearIdx + 1).filter((c) => isValidTeamName(c));
-      if (teamCells.length >= 1) addMedal(year, teamCells[0], teamCells[1], teamCells[2]);
+  // Scan up to 5 lines ahead of fromIdx for the next valid team name.
+  function findNextValidName(lines, fromIdx) {
+    for (let m = fromIdx; m < lines.length && m < fromIdx + 5; m++) {
+      if (isValidTeamName(lines[m])) return lines[m];
     }
-    if (medals.length >= 3) { medals.sort((a, b) => a.season - b.season); return medals; }
-    seen.clear(); medals.length = 0;
+    return "";
   }
 
-  // ── Strategy 2: body lines sequential (year header → following team names) ──
   const bodyLines = Array.isArray(scrapeResult.bodyLines) ? scrapeResult.bodyLines : [];
-  if (bodyLines.length > 0) {
-    let i = 0;
-    while (i < bodyLines.length) {
-      const line = bodyLines[i].trim();
-      if (!yearLineRe.test(line)) { i++; continue; }
-      const year = parseInt(line, 10);
-      if (year < 2009 || year > currentYear) { i++; continue; }
+  if (bodyLines.length === 0) return { medals, debug };
 
-      const teams = [];
-      let j = i + 1;
-      while (j < bodyLines.length && j < i + 40 && teams.length < 3) {
-        const next = bodyLines[j].trim();
-        if (yearLineRe.test(next)) break;
-        if (!rankLineRe.test(next) && isValidTeamName(next)) teams.push(next);
-        j++;
-      }
-
-      if (teams.length >= 1) addMedal(year, teams[0], teams[1], teams[2]);
-      i = j;
-    }
-    if (medals.length >= 3) { medals.sort((a, b) => a.season - b.season); return medals; }
-    seen.clear(); medals.length = 0;
+  // Collect all year-line positions.
+  const yearIndices = [];
+  for (let i = 0; i < bodyLines.length; i++) {
+    const l = bodyLines[i].trim();
+    if (!yearLineRe.test(l)) continue;
+    const year = parseInt(l, 10);
+    if (year >= 2009 && year <= currentYear) yearIndices.push({ year, idx: i });
   }
 
-  // ── Strategy 3: DOM cards ──
-  if (Array.isArray(scrapeResult.cards) && scrapeResult.cards.length > 0) {
-    for (const card of scrapeResult.cards) {
-      if (!card.year || !Array.isArray(card.lines)) continue;
-      const teams = card.lines.filter((l) => isValidTeamName(l));
-      if (teams.length >= 1) addMedal(card.year, teams[0], teams[1], teams[2]);
+  for (let k = 0; k < yearIndices.length; k++) {
+    const { year, idx: startIdx } = yearIndices[k];
+    const endIdx = k + 1 < yearIndices.length ? yearIndices[k + 1].idx : bodyLines.length;
+
+    const sectionLines = bodyLines
+      .slice(startIdx + 1, endIdx)
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    let champion = "";
+    let runnerUp = "";
+    let thirdPlace = "";
+
+    for (let j = 0; j < sectionLines.length; j++) {
+      const line = sectionLines[j];
+      if (championMarkerRe.test(line) && !champion) {
+        champion = findNextValidName(sectionLines, j + 1);
+      } else if (runnerUpMarkerRe.test(line) && !runnerUp) {
+        runnerUp = findNextValidName(sectionLines, j + 1);
+      } else if (thirdMarkerRe.test(line) && !thirdPlace) {
+        thirdPlace = findNextValidName(sectionLines, j + 1);
+      }
+    }
+
+    debug.push({
+      season: year,
+      rawSectionLines: sectionLines,
+      parsedChampion: champion,
+      parsedRunnerUp: runnerUp,
+      parsedThird: thirdPlace,
+    });
+
+    if (champion) {
+      medals.push({ season: year, championOwner: champion, runnerUpOwner: runnerUp, thirdPlaceOwner: thirdPlace });
     }
   }
 
   medals.sort((a, b) => a.season - b.season);
-  return medals;
+  return { medals, debug };
 }
 
 /** True if a text string looks like a fantasy football score (0–400, up to 2 decimal places). */
@@ -2032,7 +2036,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         });
         return;
       }
-      const medals = parseLeagueHistoryMedals(scrapeResult);
+      const { medals, debug } = parseLeagueHistoryMedals(scrapeResult);
       console.info("[GMWR] leagueHistory medals parsed", { count: medals.length, first: medals[0], last: medals[medals.length - 1] });
       onceRespondLhm({
         ok: true,
@@ -2040,6 +2044,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         leagueId,
         medalCount: medals.length,
         medals,
+        debug,
         bodyLength: scrapeResult.bodyLength,
         cardCount: Array.isArray(scrapeResult.cards) ? scrapeResult.cards.length : 0,
       });
