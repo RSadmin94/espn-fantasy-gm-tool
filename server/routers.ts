@@ -3784,13 +3784,28 @@ export const appRouter = router({
     }),
 
     leagueHistoryH2H: publicProcedure.query(async ({ ctx }) => {
+      type H2HDiagnostics = {
+        rawMatchupRows: number; uniqueMatchups: number; duplicateMatchups: number;
+        unresolvedTeamMappings: number; ownerResolutionFailures: number; ownerPairCount: number;
+        missingScores: number;
+      };
+      type H2HReturn = {
+        owners: string[];
+        matrix: { owner: string; vs: Record<string, { wins: number; losses: number; ties: number }> }[];
+        diagnostics: H2HDiagnostics;
+      };
+      const emptyDiag: H2HDiagnostics = {
+        rawMatchupRows: 0, uniqueMatchups: 0, duplicateMatchups: 0,
+        unresolvedTeamMappings: 0, ownerResolutionFailures: 0, ownerPairCount: 0, missingScores: 0,
+      };
+
       const { leagueId } = await resolveActiveLeagueId(
         { user: ctx.user ? { id: ctx.user.id } : undefined },
         null,
         undefined,
       );
       const db = await getDb();
-      if (!db) return { owners: [] as string[], matrix: [] as { owner: string; vs: Record<string, { wins: number; losses: number; ties: number }> }[] };
+      if (!db) return { owners: [] as string[], matrix: [] as H2HReturn["matrix"], diagnostics: emptyDiag };
 
       const allTeams = await db
         .select({
@@ -3821,12 +3836,21 @@ export const appRouter = router({
           homeTeamId: gmMatchups.homeTeamId,
           awayTeamId: gmMatchups.awayTeamId,
           winnerTeamId: gmMatchups.winnerTeamId,
+          homeScore: gmMatchups.homeScore,
+          awayScore: gmMatchups.awayScore,
         })
         .from(gmMatchups)
         .where(andDrizzle(
           eqDrizzle(gmMatchups.leagueId, leagueId),
           eqDrizzle(gmMatchups.isCompleted, 1),
         ));
+
+      const rawMatchupRows = matchups.length;
+      let uniqueMatchups = 0;
+      let duplicateMatchups = 0;
+      let unresolvedTeamMappings = 0;
+      let ownerResolutionFailures = 0;
+      let missingScores = 0;
 
       const h2h = new Map<string, { wins: number; losses: number; ties: number }>();
       const bump = (k: string, f: "wins" | "losses" | "ties") => {
@@ -3836,11 +3860,19 @@ export const appRouter = router({
       const seenH2HKeys = new Set<string>();
       for (const m of matchups) {
         const mk = `${m.season}|${m.matchupPeriodId}|${m.homeTeamId}|${m.awayTeamId}`;
-        if (seenH2HKeys.has(mk)) continue;
+        if (seenH2HKeys.has(mk)) { duplicateMatchups++; continue; }
         seenH2HKeys.add(mk);
+        uniqueMatchups++;
+
+        if (!m.homeScore && !m.awayScore) missingScores++;
+
         const hk = teamToOwnerKey.get(`${m.season}:${m.homeTeamId}`);
         const ak = teamToOwnerKey.get(`${m.season}:${m.awayTeamId}`);
-        if (!hk || !ak || hk === ak) continue;
+        if (!hk) unresolvedTeamMappings++;
+        if (!ak) unresolvedTeamMappings++;
+        if (!hk || !ak) { ownerResolutionFailures++; continue; }
+        if (hk === ak) continue;
+
         if (m.winnerTeamId === m.homeTeamId) {
           bump(`${hk}|${ak}`, "wins"); bump(`${ak}|${hk}`, "losses");
         } else if (m.winnerTeamId === m.awayTeamId) {
@@ -3849,6 +3881,12 @@ export const appRouter = router({
           bump(`${hk}|${ak}`, "ties"); bump(`${ak}|${hk}`, "ties");
         }
       }
+
+      const ownerPairCount = Math.floor(h2h.size / 2);
+      const diagnostics: H2HDiagnostics = {
+        rawMatchupRows, uniqueMatchups, duplicateMatchups,
+        unresolvedTeamMappings, ownerResolutionFailures, ownerPairCount, missingScores,
+      };
 
       const ownerKeys = [...ownerDisplay.keys()].sort((a, b) =>
         (ownerDisplay.get(a) ?? a).localeCompare(ownerDisplay.get(b) ?? b),
@@ -3865,7 +3903,7 @@ export const appRouter = router({
             ]),
         ),
       }));
-      return { owners, matrix };
+      return { owners, matrix, diagnostics };
     }),
 
     /** Per-season diagnostic analysis: champions, standings integrity, matchup integrity. */

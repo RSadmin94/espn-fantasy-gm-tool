@@ -81,6 +81,19 @@ export function LeagueTimeline() {
      medalTitleSeasons.get(normalizeOwnerForMatch(owner.displayName)) ??
      []).slice().sort((a, b) => b - a);
 
+  // ── Medal match diagnostics: champion names that don't resolve to any owner ──
+  const ownerKeySet        = new Set<string>(rawOwners.map((o) => o.ownerKey));
+  const ownerDisplayNormSet = new Set<string>(rawOwners.map((o) => normalizeOwnerForMatch(o.displayName)));
+  const unmatchedChampionNames: string[] = [];
+  for (const m of medals) {
+    if (!m.championOwner) continue;
+    const k = normalizeOwnerForMatch(m.championOwner);
+    if (!ownerKeySet.has(k) && !ownerDisplayNormSet.has(k)) {
+      unmatchedChampionNames.push(m.championOwner);
+    }
+  }
+  const ownerNormalizationMisses = unmatchedChampionNames.length;
+
   // ── Dynasty Board sort (client-side display sort only) ────────────────────
   const owners = [...rawOwners].sort((a, b) => {
     const wA = a.seasons.reduce((s, r) => s + r.entry.wins,   0);
@@ -144,7 +157,12 @@ export function LeagueTimeline() {
         const dupMatchupSeasons = (d?.matchups ?? []).filter((m) => m.duplicateMatchups > 0).length;
         const mismatchSeasons = (d?.matchups ?? []).filter((m) => m.winnerScoreMismatches > 0).length;
         const missingScoreSeasons = (d?.matchups ?? []).filter((m) => m.missingScores > 0).length;
-        const anyIssue = missingMedals + dupStandingSeasons + missingRankSeasons + dupMatchupSeasons + mismatchSeasons + missingScoreSeasons > 0;
+        const h2dDiag = h2hQ.data?.diagnostics;
+        const anyIssue =
+          missingMedals + ownerNormalizationMisses +
+          dupStandingSeasons + missingRankSeasons +
+          dupMatchupSeasons + mismatchSeasons + missingScoreSeasons +
+          (h2dDiag?.unresolvedTeamMappings ?? 0) + (h2dDiag?.ownerResolutionFailures ?? 0) > 0;
         return (
           <div className={cn(
             "rounded-md border px-4 py-2 font-mono text-xs text-muted-foreground",
@@ -155,12 +173,32 @@ export function LeagueTimeline() {
             {" · "}medals: <span className={cn(missingMedals > 0 ? "text-red-400 font-bold" : "text-emerald-400")}>
               {medalSeasons}/{allSeasonCount}{missingMedals > 0 ? ` (${missingMedals} missing)` : " ok"}
             </span>
+            {" · "}medal-match: <span className={cn(ownerNormalizationMisses > 0 ? "text-amber-400 font-bold" : medalSeasons > 0 ? "text-emerald-400" : "text-muted-foreground")}
+              title={ownerNormalizationMisses > 0 ? unmatchedChampionNames.join(", ") : undefined}>
+              {ownerNormalizationMisses > 0 ? `${ownerNormalizationMisses} unmatched` : medalSeasons > 0 ? "ok" : "…"}
+            </span>
             {" · "}standings: <span className={cn(dupStandingSeasons + missingRankSeasons > 0 ? "text-amber-400" : d ? "text-emerald-400" : "text-muted-foreground")}>
               {dupStandingSeasons > 0 ? `${dupStandingSeasons} dup-ranks` : missingRankSeasons > 0 ? `${missingRankSeasons} missing-ranks` : d ? "ok" : "…"}
             </span>
             {" · "}matchups: <span className={cn(dupMatchupSeasons + mismatchSeasons > 0 ? "text-red-400 font-bold" : missingScoreSeasons > 0 ? "text-amber-400" : d ? "text-emerald-400" : "text-muted-foreground")}>
               {dupMatchupSeasons > 0 ? `${dupMatchupSeasons} dups` : mismatchSeasons > 0 ? `${mismatchSeasons} mismatches` : missingScoreSeasons > 0 ? `${missingScoreSeasons} missing-scores` : d ? "ok" : "…"}
             </span>
+            {h2dDiag && (
+              <>
+                {" · "}h2h-rows: <span className="text-foreground">{h2dDiag.rawMatchupRows}</span>
+                {" · "}h2h-unique: <span className="text-foreground">{h2dDiag.uniqueMatchups}</span>
+                {h2dDiag.duplicateMatchups > 0 && (
+                  <>{" · "}h2h-dups: <span className="text-amber-400 font-bold">{h2dDiag.duplicateMatchups}</span></>
+                )}
+                {h2dDiag.unresolvedTeamMappings > 0 && (
+                  <>{" · "}h2h-unresolved: <span className="text-red-400 font-bold">{h2dDiag.unresolvedTeamMappings}</span></>
+                )}
+                {h2dDiag.ownerResolutionFailures > 0 && (
+                  <>{" · "}h2h-fail: <span className="text-red-400 font-bold">{h2dDiag.ownerResolutionFailures}</span></>
+                )}
+                {" · "}h2h-pairs: <span className={cn(h2dDiag.ownerPairCount > 0 ? "text-emerald-400" : "text-muted-foreground")}>{h2dDiag.ownerPairCount}</span>
+              </>
+            )}
           </div>
         );
       })()}
