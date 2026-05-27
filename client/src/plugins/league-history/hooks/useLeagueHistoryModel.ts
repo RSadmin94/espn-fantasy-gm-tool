@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   mergeMedalsIntoOwners,
@@ -11,13 +11,25 @@ import {
 export type LeagueHistoryTab = "dynasty" | "seasons" | "rivalries";
 export type SortKey = "titles" | "wins" | "winpct";
 
-export function useLeagueHistoryModel(options: { h2hEnabled: boolean }) {
+type MatrixRow = {
+  owner: string;
+  vs: Record<string, { wins: number; losses: number; ties: number; gamesPlayed?: number }>;
+};
+
+function h2hGamesFromMatrix(matrix: MatrixRow[], displayName: string): number {
+  const row = matrix.find((r) => r.owner === displayName);
+  if (!row) return 0;
+  let g = 0;
+  for (const rec of Object.values(row.vs)) {
+    g += rec.gamesPlayed ?? rec.wins + rec.losses + rec.ties;
+  }
+  return g;
+}
+
+export function useLeagueHistoryModel() {
   const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(undefined, { staleTime: 60_000 });
   const medalsQ = trpc.espn.leagueMedals.useQuery(undefined, { staleTime: 60_000 });
-  const h2hQ = trpc.espn.leagueHistoryH2H.useQuery(undefined, {
-    staleTime: 60_000,
-    enabled: options.h2hEnabled,
-  });
+  const h2hQ = trpc.espn.leagueHistoryH2H.useQuery(undefined, { staleTime: 60_000 });
 
   const allSeasons = standingsQ.data?.seasons ?? [];
   const rawOwners = (standingsQ.data?.owners ?? []) as StandingsOwnerRow[];
@@ -27,6 +39,20 @@ export function useLeagueHistoryModel(options: { h2hEnabled: boolean }) {
     () => mergeMedalsIntoOwners(rawOwners, medals),
     [standingsQ.data?.owners, medalsQ.data],
   );
+
+  const standingsLoading = standingsQ.isLoading || medalsQ.isLoading;
+  const matrix = (h2hQ.data?.matrix ?? []) as MatrixRow[];
+
+  useEffect(() => {
+    if (standingsLoading || h2hQ.isLoading) return;
+    const rows = mergedOwners.map((o) => ({
+      owner: o.displayName,
+      titleSeasons: o.titleSeasons.join(", "),
+      titleCount: o.titleCount,
+      h2hGames: h2hGamesFromMatrix(matrix, o.displayName),
+    }));
+    console.info("[league-history-aggregation]", rows);
+  }, [standingsLoading, h2hQ.isLoading, mergedOwners, matrix]);
 
   function sortOwners(sortBy: SortKey): OwnerWithMedalTitles[] {
     return [...mergedOwners].sort((a, b) => {
@@ -58,7 +84,8 @@ export function useLeagueHistoryModel(options: { h2hEnabled: boolean }) {
   }
 
   function medalSpotlights(activeSeason: number | null) {
-    if (activeSeason == null) return { champion: null as string | null, runnerUp: null as string | null, third: null as string | null };
+    if (activeSeason == null)
+      return { champion: null as string | null, runnerUp: null as string | null, third: null as string | null };
     return getMedalSpotlightsForSeason(medals, activeSeason);
   }
 
