@@ -4,6 +4,7 @@ import { useLeagueHistoryModel, type LeagueHistoryTab, type SortKey } from "../h
 import { DynastyBoardTab } from "./DynastyBoardTab";
 import { SeasonExplorerTab } from "./SeasonExplorerTab";
 import { RivalriesTab } from "./RivalriesTab";
+import { OwnerProfilesTab } from "./OwnerProfilesTab";
 
 export function LeagueHistoryPlugin() {
   const [tab, setTab] = useState<LeagueHistoryTab>("dynasty");
@@ -62,6 +63,7 @@ export function LeagueHistoryPlugin() {
         <ToggleGroupItem value="dynasty">Dynasty Board</ToggleGroupItem>
         <ToggleGroupItem value="seasons">Season Explorer</ToggleGroupItem>
         <ToggleGroupItem value="rivalries">Rivalries</ToggleGroupItem>
+        <ToggleGroupItem value="profiles">Owner Profiles</ToggleGroupItem>
       </ToggleGroup>
 
       {tab === "dynasty" && (
@@ -101,6 +103,8 @@ export function LeagueHistoryPlugin() {
           isLoading={model.h2hQ.isLoading}
         />
       )}
+
+      {tab === "profiles" && <OwnerProfilesTab />}
     </div>
   );
 }

@@ -4983,6 +4983,152 @@ export const appRouter = router({
           });
         return { leagueId, season: input.season, ok: true };
       }),
+
+    /** Owner Draft Profiles — all-time draft breakdown per owner from gmDraftPicks. */
+    ownerDraftProfiles: publicProcedure.query(async ({ ctx }) => {
+      const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+      const POSITIONS = ["QB", "RB", "WR", "TE", "K", "D/ST"] as const;
+      function normalizePos(raw: string | null | undefined): string {
+        if (!raw) return "Other";
+        const s = raw.trim().toUpperCase();
+        if (s === "DST" || s === "D/ST" || s === "DEF") return "D/ST";
+        if (POSITIONS.includes(s as typeof POSITIONS[number])) return s;
+        return "Other";
+      }
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return { profiles: [], diagnostics: { seasonsWithPicks: [] as number[], seasonsMissingPicks: HIST_SEASONS, totalRows: 0, unresolvedPicks: 0, coverageWarning: true } };
+
+      const allPicks = await db
+        .select({
+          season: gmDraftPicks.season,
+          overallPick: gmDraftPicks.overallPick,
+          roundId: gmDraftPicks.roundId,
+          roundPick: gmDraftPicks.roundPick,
+          teamId: gmDraftPicks.teamId,
+          playerId: gmDraftPicks.playerId,
+          playerName: gmDraftPicks.playerName,
+          position: gmDraftPicks.position,
+          isKeeper: gmDraftPicks.isKeeper,
+        })
+        .from(gmDraftPicks)
+        .where(eqDrizzle(gmDraftPicks.leagueId, leagueId))
+        .orderBy(ascDrizzle(gmDraftPicks.season), ascDrizzle(gmDraftPicks.overallPick));
+
+      const allTeams = await db
+        .select({
+          season: gmTeams.season,
+          teamId: gmTeams.teamId,
+          ownerName: gmTeams.ownerName,
+          name: gmTeams.name,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId));
+
+      const teamToOwner = new Map<string, { ownerKey: string; displayName: string }>();
+      const ownerDisplay = new Map<string, string>();
+      for (const t of allTeams) {
+        const rawName = (t.ownerName || t.name || `Team ${t.teamId}`).trim();
+        const ownerKey = normalizeOwnerStr(rawName);
+        const display = cleanOwnerDisplay(rawName) || rawName;
+        teamToOwner.set(`${t.season}:${t.teamId}`, { ownerKey, displayName: display });
+        ownerDisplay.set(ownerKey, display);
+      }
+
+      const seenPickSlots = new Set<string>();
+      const dedupedPicks: typeof allPicks = [];
+      for (const p of allPicks) {
+        const key = `${p.season}:${p.overallPick}`;
+        if (!seenPickSlots.has(key)) { seenPickSlots.add(key); dedupedPicks.push(p); }
+      }
+
+      const seasonsWithPicks = [...new Set(dedupedPicks.map((p) => p.season))].sort((a, b) => a - b);
+      const seasonsMissingPicks = HIST_SEASONS.filter((s) => !seasonsWithPicks.includes(s));
+      let unresolvedPicks = 0;
+
+      type OwnerPickEntry = {
+        season: number; overallPick: number; roundId: number; roundPick: number;
+        playerName: string | null; position: string; isKeeper: boolean;
+      };
+      const ownerPicks = new Map<string, OwnerPickEntry[]>();
+      for (const p of dedupedPicks) {
+        const ownerInfo = teamToOwner.get(`${p.season}:${p.teamId}`);
+        if (!ownerInfo) { unresolvedPicks++; continue; }
+        const { ownerKey } = ownerInfo;
+        if (!ownerPicks.has(ownerKey)) ownerPicks.set(ownerKey, []);
+        ownerPicks.get(ownerKey)!.push({
+          season: p.season, overallPick: p.overallPick,
+          roundId: p.roundId ?? 0, roundPick: p.roundPick ?? 0,
+          playerName: p.playerName, position: normalizePos(p.position), isKeeper: Boolean(p.isKeeper),
+        });
+      }
+
+      const profiles = [...ownerPicks.entries()].map(([ownerKey, picks]) => {
+        const seasons = [...new Set(picks.map((p) => p.season))].sort((a, b) => a - b);
+        const totalPicks = picks.length;
+        const picksPerSeason = seasons.length > 0 ? Math.round((totalPicks / seasons.length) * 10) / 10 : 0;
+
+        const positionCounts: Record<string, number> = {};
+        for (const p of picks) positionCounts[p.position] = (positionCounts[p.position] ?? 0) + 1;
+
+        const positionPercentages: Record<string, number> = {};
+        for (const [pos, cnt] of Object.entries(positionCounts))
+          positionPercentages[pos] = totalPicks > 0 ? Math.round((cnt / totalPicks) * 1000) / 10 : 0;
+
+        const firstRoundPicks = picks.filter((p) => p.roundId === 1 && !p.isKeeper);
+        const firstRoundBySeason: Record<number, { playerName: string | null; position: string; roundPick: number }[]> = {};
+        for (const p of firstRoundPicks) {
+          if (!firstRoundBySeason[p.season]) firstRoundBySeason[p.season] = [];
+          firstRoundBySeason[p.season].push({ playerName: p.playerName, position: p.position, roundPick: p.roundPick });
+        }
+        for (const s of Object.keys(firstRoundBySeason))
+          firstRoundBySeason[Number(s)].sort((a, b) => a.roundPick - b.roundPick);
+
+        const firstRoundPosCounts: Record<string, number> = {};
+        for (const p of firstRoundPicks)
+          firstRoundPosCounts[p.position] = (firstRoundPosCounts[p.position] ?? 0) + 1;
+        const mostCommonFirstRoundPos = Object.entries(firstRoundPosCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+        const keeperPicks = picks.filter((p) => p.isKeeper);
+        const keeperCount = keeperPicks.length;
+        const keeperRate = totalPicks > 0 ? Math.round((keeperCount / totalPicks) * 1000) / 10 : 0;
+        const keeperSeasons = [...new Set(keeperPicks.map((p) => p.season))].sort((a, b) => a - b);
+
+        const nonKeeperPicks = picks.filter((p) => !p.isKeeper);
+        const nonKeeperTotal = nonKeeperPicks.length;
+        const rbPct = nonKeeperTotal > 0 ? (positionCounts["RB"] ?? 0) / nonKeeperTotal : 0;
+        const wrPct = nonKeeperTotal > 0 ? (positionCounts["WR"] ?? 0) / nonKeeperTotal : 0;
+        const qbFirstRoundPct = firstRoundPicks.length > 0
+          ? (firstRoundPosCounts["QB"] ?? 0) / firstRoundPicks.length : 0;
+
+        let draftStyleLabel: string;
+        if (totalPicks < 5) draftStyleLabel = "Unknown / Insufficient Data";
+        else if (keeperRate >= 35) draftStyleLabel = "Keeper Dependent";
+        else if (qbFirstRoundPct >= 0.5) draftStyleLabel = "QB Early";
+        else if (rbPct >= 0.35) draftStyleLabel = "RB Heavy";
+        else if (wrPct >= 0.35) draftStyleLabel = "WR Heavy";
+        else draftStyleLabel = "Balanced";
+
+        return {
+          ownerKey, ownerName: ownerDisplay.get(ownerKey) ?? ownerKey,
+          seasons, totalPicks, picksPerSeason,
+          positionCounts, positionPercentages,
+          firstRoundPickCount: firstRoundPicks.length,
+          mostCommonFirstRoundPos, firstRoundBySeason,
+          keeperCount, keeperRate, keeperSeasons, draftStyleLabel,
+        };
+      });
+
+      profiles.sort((a, b) => b.totalPicks - a.totalPicks || a.ownerName.localeCompare(b.ownerName));
+      return {
+        profiles,
+        diagnostics: { seasonsWithPicks, seasonsMissingPicks, totalRows: dedupedPicks.length, unresolvedPicks, coverageWarning: seasonsMissingPicks.length > 0 },
+      };
+    }),
   }),
 
   playerProfiles: publicProcedure.query(async ({ ctx }) => {

@@ -2,7 +2,7 @@ import { useMemo, useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { buildSeasonTabRows, type StandingsOwnerRow } from "../utils/seasonTabChampions";
 
-export type LeagueHistoryTab = "dynasty" | "seasons" | "rivalries";
+export type LeagueHistoryTab = "dynasty" | "seasons" | "rivalries" | "profiles";
 export type SortKey = "titles" | "wins" | "winpct";
 
 type MedalRow = {
