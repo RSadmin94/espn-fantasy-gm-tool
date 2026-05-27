@@ -1788,7 +1788,7 @@ export const appRouter = router({
         return { picks, dataSource, rawCount: fb.rawCount ?? allPicks.length, dedupedCount: picks.length };
       }),
 
-    /** Audit: per-season duplicate counts in draft_picks. */
+    /** Audit: per-season duplicate analysis in draft_picks. */
     draftDiagnostics: publicProcedure
       .input(z.object({ season: z.number() }))
       .query(async ({ ctx, input }) => {
@@ -1798,22 +1798,72 @@ export const appRouter = router({
           input.season,
         );
         const db = await getDb();
-        if (!db) return { totalRows: 0, uniqueOverallPicks: 0, duplicateSlots: 0 };
+        const empty = {
+          totalRows: 0, uniqueOverallPicks: 0,
+          duplicateOverallPickSlots: [] as number[],
+          duplicatePlayerRoundOwner: [] as { round: number; playerName: string; teamId: number }[],
+          adjacentDuplicatePlayers: [] as { overallPick: number; playerName: string }[],
+        };
+        if (!db) return empty;
 
-        const [row] = await db
+        // Fetch all rows for the season ordered by overallPick ASC
+        const rows = await db
           .select({
-            totalRows: sql<number>`COUNT(*)`,
-            uniqueOverallPicks: sql<number>`COUNT(DISTINCT ${gmDraftPicks.overallPick})`,
+            overallPick: gmDraftPicks.overallPick,
+            roundId: gmDraftPicks.roundId,
+            teamId: gmDraftPicks.teamId,
+            playerName: gmDraftPicks.playerName,
           })
           .from(gmDraftPicks)
           .where(andDrizzle(
             eqDrizzle(gmDraftPicks.leagueId, leagueId),
             eqDrizzle(gmDraftPicks.season, input.season),
-          ));
+          ))
+          .orderBy(ascDrizzle(gmDraftPicks.overallPick));
 
-        const totalRows = Number(row?.totalRows ?? 0);
-        const uniqueOverallPicks = Number(row?.uniqueOverallPicks ?? 0);
-        return { totalRows, uniqueOverallPicks, duplicateSlots: totalRows - uniqueOverallPicks };
+        const totalRows = rows.length;
+
+        // 1. duplicateOverallPickSlots — same overallPick more than once
+        const slotCounts = new Map<number, number>();
+        for (const r of rows) slotCounts.set(r.overallPick, (slotCounts.get(r.overallPick) ?? 0) + 1);
+        const uniqueOverallPicks = slotCounts.size;
+        const duplicateOverallPickSlots = [...slotCounts.entries()]
+          .filter(([, cnt]) => cnt > 1)
+          .map(([pick]) => pick)
+          .sort((a, b) => a - b);
+
+        // 2. duplicatePlayerRoundOwner — same (round, playerName, teamId) more than once
+        const proKey = (r: { roundId: number; playerName: string | null; teamId: number }) =>
+          `${r.roundId}|${(r.playerName ?? "").trim().toLowerCase()}|${r.teamId}`;
+        const proCounts = new Map<string, number>();
+        for (const r of rows) {
+          if (!r.playerName) continue;
+          proCounts.set(proKey(r), (proCounts.get(proKey(r)) ?? 0) + 1);
+        }
+        const duplicatePlayerRoundOwner = [...proCounts.entries()]
+          .filter(([, cnt]) => cnt > 1)
+          .map(([key]) => {
+            const parts = key.split("|");
+            return { round: Number(parts[0]), playerName: parts[1] ?? "", teamId: Number(parts[2]) };
+          });
+
+        // 3. adjacentDuplicatePlayers — same playerName in consecutive overallPick slots (after slot dedup)
+        const slotMap = new Map<number, typeof rows[number]>();
+        for (const r of rows) { if (!slotMap.has(r.overallPick)) slotMap.set(r.overallPick, r); }
+        const sorted = [...slotMap.values()].sort((a, b) => a.overallPick - b.overallPick);
+        const adjacentDuplicatePlayers: { overallPick: number; playerName: string }[] = [];
+        for (let i = 1; i < sorted.length; i++) {
+          const prev = sorted[i - 1]!;
+          const curr = sorted[i]!;
+          if (
+            prev.playerName && curr.playerName &&
+            prev.playerName.trim().toLowerCase() === curr.playerName.trim().toLowerCase()
+          ) {
+            adjacentDuplicatePlayers.push({ overallPick: curr.overallPick, playerName: curr.playerName });
+          }
+        }
+
+        return { totalRows, uniqueOverallPicks, duplicateOverallPickSlots, duplicatePlayerRoundOwner, adjacentDuplicatePlayers };
       }),
 
     /** Delete all (or one season's) draft_picks for a league. Returns how many rows were cleared. */

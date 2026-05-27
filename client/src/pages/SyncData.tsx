@@ -341,7 +341,9 @@ export function SyncData() {
   const [draftImportBusy, setDraftImportBusy] = useState<number | null>(null);
   type DraftImportResult = {
     season: number; received: number; insertedOrUpdated: number;
-    dbCountAfter: number; uniqueOverallPicks: number; duplicateSlots: number; error?: string;
+    dbCountAfter: number; uniqueOverallPicks: number;
+    duplicateSlots: number; duplicatePlayerRoundOwner: number; adjacentDuplicatePlayers: number;
+    error?: string;
   };
   const [draftImportResults, setDraftImportResults] = useState<Record<number, DraftImportResult>>({});
 
@@ -920,13 +922,13 @@ export function SyncData() {
 
       if (!extResult.ok) {
         const msg = extResult.error ? String(extResult.error) : "Extension scrape failed";
-        setDraftImportResults((prev) => ({ ...prev, [season]: { season, received: 0, insertedOrUpdated: 0, dbCountAfter: 0, uniqueOverallPicks: 0, duplicateSlots: 0, error: msg } }));
+        setDraftImportResults((prev) => ({ ...prev, [season]: { season, received: 0, insertedOrUpdated: 0, dbCountAfter: 0, uniqueOverallPicks: 0, duplicateSlots: 0, duplicatePlayerRoundOwner: 0, adjacentDuplicatePlayers: 0, error: msg } }));
         return;
       }
 
       const picks = Array.isArray(extResult.picks) ? extResult.picks : [];
       if (picks.length === 0) {
-        setDraftImportResults((prev) => ({ ...prev, [season]: { season, received: 0, insertedOrUpdated: 0, dbCountAfter: 0, uniqueOverallPicks: 0, duplicateSlots: 0, error: "Extension returned 0 picks" } }));
+        setDraftImportResults((prev) => ({ ...prev, [season]: { season, received: 0, insertedOrUpdated: 0, dbCountAfter: 0, uniqueOverallPicks: 0, duplicateSlots: 0, duplicatePlayerRoundOwner: 0, adjacentDuplicatePlayers: 0, error: "Extension returned 0 picks" } }));
         return;
       }
 
@@ -957,12 +959,14 @@ export function SyncData() {
           insertedOrUpdated: Number(ingestResult.insertedOrUpdated ?? 0),
           dbCountAfter: Number(ingestResult.dbCountAfter ?? 0),
           uniqueOverallPicks: diag.uniqueOverallPicks,
-          duplicateSlots: diag.duplicateSlots,
+          duplicateSlots: diag.duplicateOverallPickSlots.length,
+          duplicatePlayerRoundOwner: diag.duplicatePlayerRoundOwner.length,
+          adjacentDuplicatePlayers: diag.adjacentDuplicatePlayers.length,
         },
       }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setDraftImportResults((prev) => ({ ...prev, [season]: { season, received: 0, insertedOrUpdated: 0, dbCountAfter: 0, uniqueOverallPicks: 0, duplicateSlots: 0, error: msg } }));
+      setDraftImportResults((prev) => ({ ...prev, [season]: { season, received: 0, insertedOrUpdated: 0, dbCountAfter: 0, uniqueOverallPicks: 0, duplicateSlots: 0, duplicatePlayerRoundOwner: 0, adjacentDuplicatePlayers: 0, error: msg } }));
     } finally {
       setDraftImportBusy(null);
     }
@@ -1824,7 +1828,10 @@ export function SyncData() {
             {Array.from({ length: 16 }, (_, i) => 2010 + i).map((yr) => {
               const res    = draftImportResults[yr];
               const isBusy = draftImportBusy === yr;
-              const isClean = res && !res.error && res.duplicateSlots === 0 && res.dbCountAfter > 0;
+              const isClean = res && !res.error && res.dbCountAfter > 0
+                && res.duplicateSlots === 0
+                && res.duplicatePlayerRoundOwner === 0
+                && res.adjacentDuplicatePlayers === 0;
               return (
                 <div key={yr} className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <Button
@@ -1857,7 +1864,13 @@ export function SyncData() {
                             unique <span className={res.uniqueOverallPicks === res.dbCountAfter ? "text-emerald-400" : "text-amber-400"}>{res.uniqueOverallPicks}</span>
                           </span>
                           <span className="text-muted-foreground">
-                            dupes <span className={res.duplicateSlots === 0 ? "text-emerald-400" : "text-red-400 font-bold"}>{res.duplicateSlots}</span>
+                            dupSlots <span className={res.duplicateSlots === 0 ? "text-emerald-400" : "text-red-400 font-bold"}>{res.duplicateSlots}</span>
+                          </span>
+                          <span className="text-muted-foreground">
+                            dupPlayer <span className={res.duplicatePlayerRoundOwner === 0 ? "text-emerald-400" : "text-red-400 font-bold"}>{res.duplicatePlayerRoundOwner}</span>
+                          </span>
+                          <span className="text-muted-foreground">
+                            adjDup <span className={res.adjacentDuplicatePlayers === 0 ? "text-emerald-400" : "text-red-400 font-bold"}>{res.adjacentDuplicatePlayers}</span>
                           </span>
                           {isClean && <span className="text-emerald-400">✓</span>}
                         </>

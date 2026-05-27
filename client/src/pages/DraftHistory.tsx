@@ -74,10 +74,24 @@ export function DraftHistory() {
   const draftQ = trpc.espn.draftHistory.useQuery({ season }, { staleTime: 0 });
   const diagQ  = trpc.espn.draftDiagnostics.useQuery({ season }, { staleTime: 0 });
 
-  const picks = (draftQ.data?.picks as DraftPickRow[] | undefined) ?? [];
+  const rawPicks = (draftQ.data?.picks as DraftPickRow[] | undefined) ?? [];
   const draftSource   = draftQ.data?.dataSource as string | undefined;
   const rawCount      = draftQ.data?.rawCount   ?? null;
   const dedupedCount  = draftQ.data?.dedupedCount ?? null;
+
+  // Secondary client-side dedup: same player+round+team in different overallPick slots.
+  // picks arrive sorted by overallPick ASC; keep first occurrence (lowest overallPick).
+  const picks = useMemo<DraftPickRow[]>(() => {
+    const seen = new Set<string>();
+    const out: DraftPickRow[] = [];
+    for (const p of rawPicks) {
+      const norm = (p.playerName ?? "").trim().toLowerCase();
+      if (!norm) { out.push(p); continue; }
+      const key = `${norm}|${p.round}|${p.teamId}`;
+      if (!seen.has(key)) { seen.add(key); out.push(p); }
+    }
+    return out;
+  }, [rawPicks]);
 
   const filteredPicks = useMemo(() => {
     if (teamFilter === "ALL") return picks;
@@ -231,15 +245,18 @@ export function DraftHistory() {
       <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2 font-mono text-xs text-muted-foreground">
         <span className="text-foreground/60 font-semibold">draft debug</span>
         {" · "}season: <span className="text-foreground">{season}</span>
-        {" · "}rawRows: <span className="text-foreground">{diagQ.data?.totalRows ?? "…"}</span>
-        {" · "}dedupedRows: <span className={cn(
-          dedupedCount !== null && diagQ.data?.totalRows !== undefined && dedupedCount < diagQ.data.totalRows
-            ? "text-amber-400" : "text-foreground"
-        )}>{dedupedCount ?? picks.length}</span>
-        {" · "}duplicateCount: <span className={cn(
-          (diagQ.data?.duplicateSlots ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
-        )}>{diagQ.data?.duplicateSlots ?? "…"}</span>
-        {" · "}uniqueOverallPicks: <span className="text-foreground">{diagQ.data?.uniqueOverallPicks ?? "…"}</span>
+        {" · "}dbRows: <span className="text-foreground">{diagQ.data?.totalRows ?? "…"}</span>
+        {" · "}uniqueSlots: <span className="text-foreground">{diagQ.data?.uniqueOverallPicks ?? "…"}</span>
+        {" · "}dupSlots: <span className={cn(
+          (diagQ.data?.duplicateOverallPickSlots?.length ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
+        )}>{diagQ.data?.duplicateOverallPickSlots?.length ?? "…"}</span>
+        {" · "}dupPlayer+Round: <span className={cn(
+          (diagQ.data?.duplicatePlayerRoundOwner?.length ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
+        )}>{diagQ.data?.duplicatePlayerRoundOwner?.length ?? "…"}</span>
+        {" · "}adjDup: <span className={cn(
+          (diagQ.data?.adjacentDuplicatePlayers?.length ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
+        )}>{diagQ.data?.adjacentDuplicatePlayers?.length ?? "…"}</span>
+        {" · "}rendered: <span className="text-foreground">{picks.length}</span>
       </div>
 
       {draftQ.isLoading && (
