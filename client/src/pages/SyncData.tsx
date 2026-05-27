@@ -353,23 +353,42 @@ export function SyncData() {
   const [medalEntries, setMedalEntries] = useState<Record<number, MedalEntry>>(() =>
     Object.fromEntries(ALL_MEDAL_SEASONS.map((y) => [y, { champion: "", runnerUp: "", third: "" }]))
   );
-  const [medalBusy, setMedalBusy]   = useState<number | null>(null);
-  const [medalSaved, setMedalSaved] = useState<Set<number>>(new Set());
-  const [medalErr, setMedalErr]     = useState<Record<number, string>>({});
-  const medalsQ = trpc.espn.leagueMedals.useQuery(undefined, { staleTime: 0 });
+  const [medalBusy, setMedalBusy]     = useState<number | null>(null);
+  const [medalSaved, setMedalSaved]   = useState<Set<number>>(new Set());
+  const [medalErr, setMedalErr]       = useState<Record<number, string>>({});
+  const [forceReplace, setForceReplace] = useState(false);
+  const [saveAllBusy, setSaveAllBusy] = useState(false);
+  const medalsQ    = trpc.espn.leagueMedals.useQuery(undefined, { staleTime: 0 });
+  const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(undefined, { staleTime: 60_000 });
 
-  // Pre-fill form from DB when query resolves
+  // Pre-fill form from DB on first load — use useEffect to avoid render-phase state mutation
   const [medalPrefilled, setMedalPrefilled] = useState(false);
-  if (medalsQ.data && !medalPrefilled) {
+  useEffect(() => {
+    if (medalPrefilled || !medalsQ.data) return;
     setMedalPrefilled(true);
     const updates: Record<number, MedalEntry> = {};
     for (const m of medalsQ.data) {
       updates[m.season] = { champion: m.championOwner, runnerUp: m.runnerUpOwner, third: m.thirdPlaceOwner };
     }
-    if (Object.keys(updates).length > 0) {
-      setMedalEntries((prev) => ({ ...prev, ...updates }));
+    if (Object.keys(updates).length > 0) setMedalEntries((prev) => ({ ...prev, ...updates }));
+  }, [medalsQ.data, medalPrefilled]);
+
+  // Derive per-season top-3 from imported standings (auto-fill source)
+  const perSeasonTopThree = useMemo(() => {
+    const map = new Map<number, { p1?: string; p2?: string; p3?: string }>();
+    for (const owner of standingsQ.data?.owners ?? []) {
+      for (const { season, entry } of owner.seasons) {
+        const s = entry.finalStanding;
+        if (!s || s < 1 || s > 3) continue;
+        const row = map.get(season) ?? {};
+        if (s === 1 && !row.p1) row.p1 = owner.displayName;
+        if (s === 2 && !row.p2) row.p2 = owner.displayName;
+        if (s === 3 && !row.p3) row.p3 = owner.displayName;
+        map.set(season, row);
+      }
     }
-  }
+    return map;
+  }, [standingsQ.data]);
 
   const allSeasonsQuery = trpc.espn.allSeasons.useQuery();
   const cachedQuery = trpc.espn.cachedSeasons.useQuery();
@@ -899,6 +918,79 @@ export function SyncData() {
   };
   const autoSync2026RefreshDone =
     autoSync2026 && refreshMutation.isSuccess && cachedSeasons.includes(2026);
+
+  // ── League Medals handlers ────────────────────────────────────────────────
+  const handleSaveMedal = async (season: number) => {
+    const entry = medalEntries[season];
+    if (!entry?.champion.trim()) return;
+    setMedalBusy(season);
+    setMedalErr((p) => { const n = { ...p }; delete n[season]; return n; });
+    try {
+      await upsertSeasonMedalsMutation.mutateAsync({
+        season,
+        championOwner:   entry.champion.trim(),
+        runnerUpOwner:   entry.runnerUp.trim(),
+        thirdPlaceOwner: entry.third.trim(),
+        source: "espn_history_medal",
+      });
+      setMedalSaved((p) => new Set([...p, season]));
+      void medalsQ.refetch();
+    } catch (e) {
+      setMedalErr((p) => ({ ...p, [season]: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setMedalBusy(null);
+    }
+  };
+
+  const handleAutoFill = () => {
+    const dbBySeason = new Map<number, { champion: string; runnerUp: string; third: string }>();
+    for (const m of medalsQ.data ?? []) {
+      dbBySeason.set(m.season, { champion: m.championOwner, runnerUp: m.runnerUpOwner, third: m.thirdPlaceOwner });
+    }
+    setMedalEntries((prev) => {
+      const next = { ...prev };
+      for (const yr of ALL_MEDAL_SEASONS) {
+        const detected = perSeasonTopThree.get(yr);
+        if (!detected?.p1) continue; // no standings data for this season
+        const hasDbValue = dbBySeason.has(yr) && (dbBySeason.get(yr)?.champion ?? "").trim() !== "";
+        if (hasDbValue && !forceReplace) continue; // respect saved value
+        next[yr] = {
+          champion: detected.p1 ?? "",
+          runnerUp: detected.p2 ?? "",
+          third:    detected.p3 ?? "",
+        };
+      }
+      return next;
+    });
+    // Clear saved indicators for any season we just overwrote
+    setMedalSaved(new Set());
+  };
+
+  const handleSaveAll = async () => {
+    setSaveAllBusy(true);
+    const errs: Record<number, string> = {};
+    const saved = new Set<number>();
+    for (const yr of ALL_MEDAL_SEASONS) {
+      const entry = medalEntries[yr];
+      if (!entry?.champion.trim()) continue;
+      try {
+        await upsertSeasonMedalsMutation.mutateAsync({
+          season:          yr,
+          championOwner:   entry.champion.trim(),
+          runnerUpOwner:   entry.runnerUp.trim(),
+          thirdPlaceOwner: entry.third.trim(),
+          source: "espn_history_medal",
+        });
+        saved.add(yr);
+      } catch (e) {
+        errs[yr] = e instanceof Error ? e.message : String(e);
+      }
+    }
+    setMedalSaved((p) => new Set([...p, ...saved]));
+    setMedalErr(errs);
+    void medalsQ.refetch();
+    setSaveAllBusy(false);
+  };
 
   // ── Draft Reset handlers ─────────────────────────────────────────────────
   const handleClearAllDraftPicks = async () => {
@@ -1818,48 +1910,74 @@ export function SyncData() {
 
       {/* ── League History Medals (admin) ──────────────────────────────── */}
       {(() => {
-        const handleSaveMedal = async (season: number) => {
-          const entry = medalEntries[season];
-          if (!entry?.champion.trim()) return;
-          setMedalBusy(season);
-          setMedalErr((p) => { const n = { ...p }; delete n[season]; return n; });
-          try {
-            await upsertSeasonMedalsMutation.mutateAsync({
-              season,
-              championOwner:   entry.champion.trim(),
-              runnerUpOwner:   entry.runnerUp.trim(),
-              thirdPlaceOwner: entry.third.trim(),
-              source: "espn_history_medal",
-            });
-            setMedalSaved((p) => new Set([...p, season]));
-            void medalsQ.refetch();
-          } catch (e) {
-            setMedalErr((p) => ({ ...p, [season]: e instanceof Error ? e.message : String(e) }));
-          } finally {
-            setMedalBusy(null);
-          }
+        const dbBySeason = new Map<number, { champion: string; runnerUp: string; third: string }>();
+        for (const m of medalsQ.data ?? []) {
+          dbBySeason.set(m.season, { champion: m.championOwner, runnerUp: m.runnerUpOwner, third: m.thirdPlaceOwner });
+        }
+        const getMedalStatus = (yr: number): "saved" | "edited" | "missing" => {
+          const entry = medalEntries[yr];
+          if (!entry?.champion.trim()) return "missing";
+          const db = dbBySeason.get(yr);
+          if (!db?.champion) return "edited";
+          if (
+            entry.champion.trim() === db.champion &&
+            entry.runnerUp.trim() === (db.runnerUp ?? "") &&
+            entry.third.trim()    === (db.third ?? "")
+          ) return "saved";
+          return "edited";
         };
+        const seasonsFilled = ALL_MEDAL_SEASONS.filter((yr) => medalEntries[yr]?.champion.trim()).length;
+        const seasonsWithStandings = ALL_MEDAL_SEASONS.filter((yr) => perSeasonTopThree.has(yr)).length;
         return (
           <Card className="border-blue-500/30 bg-blue-500/5">
             <CardHeader className="pb-3">
               <CardTitle className="text-base text-blue-300">League History Medals</CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
-                Enter champion / runner-up / third-place from the ESPN League History page. Source of truth for dynasty titles.
+                Source of truth for dynasty titles — from ESPN League History page. {seasonsFilled}/{ALL_MEDAL_SEASONS.length} seasons filled.
               </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="grid grid-cols-[4rem_1fr_1fr_1fr_5rem] gap-x-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1 pb-1">
-                <span>Season</span><span>🥇 Champion</span><span>🥈 Runner-Up</span><span>🥉 Third</span><span />
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  disabled={standingsQ.isLoading || seasonsWithStandings === 0}
+                  onClick={handleAutoFill}
+                >
+                  {standingsQ.isLoading
+                    ? <><Loader2 className="mr-1.5 h-3 w-3 animate-spin" />Loading…</>
+                    : `Auto Fill From Imported History (${seasonsWithStandings} seasons)`}
+                </Button>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <Checkbox
+                    checked={forceReplace}
+                    onCheckedChange={(v) => setForceReplace(Boolean(v))}
+                    className="h-3.5 w-3.5"
+                  />
+                  <span className="text-xs text-muted-foreground">Force Replace saved values</span>
+                </label>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-1.5">
+              {/* Header row */}
+              <div className="grid grid-cols-[4rem_1fr_1fr_1fr_3rem_5rem] gap-x-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1 pb-1 border-b border-border/40">
+                <span>Season</span>
+                <span>🥇 Champion</span>
+                <span>🥈 Runner-Up</span>
+                <span>🥉 Third</span>
+                <span className="text-center">Status</span>
+                <span />
+              </div>
+
+              {/* Season rows */}
               {ALL_MEDAL_SEASONS.map((yr) => {
-                const entry = medalEntries[yr] ?? { champion: "", runnerUp: "", third: "" };
-                const isBusy = medalBusy === yr;
-                const isSaved = medalSaved.has(yr);
-                const err = medalErr[yr];
+                const entry   = medalEntries[yr] ?? { champion: "", runnerUp: "", third: "" };
+                const isBusy  = medalBusy === yr;
+                const err     = medalErr[yr];
+                const status  = getMedalStatus(yr);
                 return (
-                  <div key={yr} className="grid grid-cols-[4rem_1fr_1fr_1fr_5rem] gap-x-2 items-center">
+                  <div key={yr} className="grid grid-cols-[4rem_1fr_1fr_1fr_3rem_5rem] gap-x-2 items-center py-0.5">
                     <span className="font-mono text-xs text-muted-foreground">{yr}</span>
-                    {(["champion","runnerUp","third"] as const).map((field) => (
+                    {(["champion", "runnerUp", "third"] as const).map((field) => (
                       <input
                         key={field}
                         type="text"
@@ -1872,21 +1990,44 @@ export function SyncData() {
                         }}
                       />
                     ))}
+                    {/* Status */}
+                    <div className="flex justify-center text-sm" title={status}>
+                      {status === "saved"   && <span className="text-emerald-400">✓</span>}
+                      {status === "edited"  && <span className="text-amber-400">✎</span>}
+                      {status === "missing" && <span className="text-red-400/60">⚠</span>}
+                    </div>
+                    {/* Per-row Save */}
                     <div className="flex items-center gap-1">
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 px-2 text-xs"
-                        disabled={isBusy || !entry.champion.trim()}
+                        className="h-7 w-full px-2 text-xs"
+                        disabled={isBusy || saveAllBusy || !entry.champion.trim()}
                         onClick={() => void handleSaveMedal(yr)}
                       >
-                        {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : isSaved ? <CheckCircle2 className="h-3 w-3 text-emerald-400" /> : "Save"}
+                        {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
                       </Button>
-                      {err && <span className="text-[10px] text-red-400 truncate max-w-[6rem]" title={err}>!</span>}
+                      {err && <span className="text-[10px] text-red-400" title={err}>!</span>}
                     </div>
                   </div>
                 );
               })}
+
+              {/* Save All */}
+              <div className="flex items-center gap-3 pt-3 border-t border-border/40">
+                <Button
+                  size="sm"
+                  className="text-xs"
+                  disabled={saveAllBusy || medalBusy !== null || seasonsFilled === 0}
+                  onClick={() => void handleSaveAll()}
+                >
+                  {saveAllBusy && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                  Save All ({seasonsFilled} seasons)
+                </Button>
+                {Object.keys(medalErr).length > 0 && (
+                  <span className="text-xs text-red-400">{Object.keys(medalErr).length} error(s)</span>
+                )}
+              </div>
             </CardContent>
           </Card>
         );
