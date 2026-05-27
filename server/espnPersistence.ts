@@ -337,9 +337,17 @@ export async function upsertMatchups(
     const as = Number(m.awayTotalPoints ?? 0) || 0;
     const hp = m.homeProjectedPoints != null ? Number(m.homeProjectedPoints) : null;
     const ap = m.awayProjectedPoints != null ? Number(m.awayProjectedPoints) : null;
-    const winner = m.winner != null && m.winner !== "UNDECIDED" ? Number(m.winner) : null;
+    // ESPN returns winner as "HOME", "AWAY", or "UNDECIDED" (string), or a numeric team ID.
+    // Convert "HOME"/"AWAY" strings to the actual winning team ID so isCompleted is set correctly.
+    let winner: number | null = null;
+    if (m.winner != null && m.winner !== "UNDECIDED" && m.winner !== "") {
+      const ws = String(m.winner);
+      if (ws === "HOME") winner = hid;
+      else if (ws === "AWAY") winner = aid;
+      else { const n = Number(m.winner); if (Number.isFinite(n) && n > 0) winner = n; }
+    }
     const isPlayoff = String(m.playoffTierType || "").length > 0 ? 1 : 0;
-    const isCompleted = winner != null && Number.isFinite(winner) ? 1 : 0;
+    const isCompleted = winner != null ? 1 : 0;
     await db
       .insert(schema.gmMatchups)
       .values({

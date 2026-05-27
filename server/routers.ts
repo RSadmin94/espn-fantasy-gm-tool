@@ -3786,19 +3786,43 @@ export const appRouter = router({
     }),
 
     leagueHistoryH2H: publicProcedure.query(async ({ ctx }) => {
+      const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+
+      type FlatMatchup = {
+        season: number;
+        matchupPeriodId: number;
+        homeTeamId: number;
+        awayTeamId: number;
+        winnerTeamId: number | null;
+        isCompleted: number;
+      };
       type H2HDiagnostics = {
-        rawMatchupRows: number; uniqueMatchups: number; duplicateMatchups: number;
-        unresolvedTeamMappings: number; ownerResolutionFailures: number; ownerPairCount: number;
+        rawMatchupRows: number;
+        uniqueMatchups: number;
+        duplicateMatchups: number;
+        unresolvedTeamMappings: number;
+        ownerResolutionFailures: number;
+        ownerPairCount: number;
         missingScores: number;
+        skippedUnresolvedOwners: number;
+        skippedSameOwner: number;
+        totalDedupedMatchups: number;
+        dbSeasons: number[];
+        cacheSeasons: number[];
+        emptySeasons: number[];
+        coverageWarning: boolean;
       };
       type H2HReturn = {
         owners: string[];
-        matrix: { owner: string; vs: Record<string, { wins: number; losses: number; ties: number }> }[];
+        matrix: { owner: string; vs: Record<string, { wins: number; losses: number; ties: number; gamesPlayed?: number }> }[];
         diagnostics: H2HDiagnostics;
       };
       const emptyDiag: H2HDiagnostics = {
         rawMatchupRows: 0, uniqueMatchups: 0, duplicateMatchups: 0,
-        unresolvedTeamMappings: 0, ownerResolutionFailures: 0, ownerPairCount: 0, missingScores: 0,
+        unresolvedTeamMappings: 0, ownerResolutionFailures: 0, ownerPairCount: 0,
+        missingScores: 0, skippedUnresolvedOwners: 0, skippedSameOwner: 0,
+        totalDedupedMatchups: 0, dbSeasons: [], cacheSeasons: [], emptySeasons: [],
+        coverageWarning: false,
       };
 
       const { leagueId } = await resolveActiveLeagueId(
@@ -3828,66 +3852,132 @@ export const appRouter = router({
         const ownerKey = normalizeOwnerStr(rawName);
         const display = cleanOwnerDisplay(rawName) || rawName;
         teamToOwnerKey.set(`${t.season}:${t.teamId}`, ownerKey);
-        ownerDisplay.set(ownerKey, display); // most recent season wins
+        ownerDisplay.set(ownerKey, display);
       }
 
-      const matchups = await db
+      // ── Phase 1: Load from normalized gmMatchups ──────────────────────────
+      const dbRows = await db
         .select({
           season: gmMatchups.season,
           matchupPeriodId: gmMatchups.matchupPeriodId,
           homeTeamId: gmMatchups.homeTeamId,
           awayTeamId: gmMatchups.awayTeamId,
           winnerTeamId: gmMatchups.winnerTeamId,
-          homeScore: gmMatchups.homeScore,
-          awayScore: gmMatchups.awayScore,
+          isCompleted: gmMatchups.isCompleted,
         })
         .from(gmMatchups)
-        .where(andDrizzle(
-          eqDrizzle(gmMatchups.leagueId, leagueId),
-          eqDrizzle(gmMatchups.isCompleted, 1),
-        ));
+        .where(eqDrizzle(gmMatchups.leagueId, leagueId));
 
-      const rawMatchupRows = matchups.length;
+      const coveredByDb = new Set<number>(dbRows.map((r) => r.season));
+      const allMatchups: FlatMatchup[] = dbRows.map((r) => ({
+        season: r.season,
+        matchupPeriodId: r.matchupPeriodId,
+        homeTeamId: r.homeTeamId,
+        awayTeamId: r.awayTeamId,
+        winnerTeamId: r.winnerTeamId,
+        isCompleted: r.isCompleted,
+      }));
+
+      // ── Phase 2: Fallback to combined ESPN cache for uncovered seasons ─────
+      const dbSeasons: number[] = [];
+      const cacheSeasons: number[] = [];
+      const emptySeasons: number[] = [];
+
+      for (const s of HIST_SEASONS) {
+        if (coveredByDb.has(s)) {
+          dbSeasons.push(s);
+          continue;
+        }
+        const hit = await getCachedViewWithTier(s, "combined", leagueId);
+        const payload = hit?.row?.payload;
+        if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+          let added = 0;
+          try {
+            const norm = normalizeMatchups(payload as Record<string, unknown>);
+            for (const m of norm) {
+              const hid = Number(m.homeTeamId);
+              const aid = Number(m.awayTeamId);
+              if (!hid || !aid || !Number.isFinite(hid) || !Number.isFinite(aid)) continue;
+              const winnerStr = String(m.winner ?? "UNDECIDED");
+              const winnerTeamId = winnerStr === "HOME" ? hid : winnerStr === "AWAY" ? aid : null;
+              const isCompleted = winnerTeamId != null ? 1 : 0;
+              allMatchups.push({ season: s, matchupPeriodId: Number(m.matchupPeriodId) || 0, homeTeamId: hid, awayTeamId: aid, winnerTeamId, isCompleted });
+              added++;
+            }
+          } catch { /* skip malformed payload */ }
+          if (added > 0) {
+            cacheSeasons.push(s);
+          } else {
+            emptySeasons.push(s);
+          }
+        } else {
+          emptySeasons.push(s);
+        }
+      }
+
+      // ── Phase 3: Build H2H matrix across all sources ──────────────────────
+      const h2h = new Map<string, { wins: number; losses: number; ties: number; gamesPlayed: number }>();
+      const bumpH2H = (k: string, f: "wins" | "losses" | "ties") => {
+        if (!h2h.has(k)) h2h.set(k, { wins: 0, losses: 0, ties: 0, gamesPlayed: 0 });
+        h2h.get(k)![f]++;
+        h2h.get(k)!.gamesPlayed++;
+      };
+
+      const seenH2HKeys = new Set<string>();
       let uniqueMatchups = 0;
       let duplicateMatchups = 0;
       let unresolvedTeamMappings = 0;
       let ownerResolutionFailures = 0;
       let missingScores = 0;
+      let skippedUnresolvedOwners = 0;
+      let skippedSameOwner = 0;
 
-      const h2h = new Map<string, { wins: number; losses: number; ties: number }>();
-      const bump = (k: string, f: "wins" | "losses" | "ties") => {
-        if (!h2h.has(k)) h2h.set(k, { wins: 0, losses: 0, ties: 0 });
-        h2h.get(k)![f]++;
-      };
-      const seenH2HKeys = new Set<string>();
-      for (const m of matchups) {
-        const mk = `${m.season}|${m.matchupPeriodId}|${m.homeTeamId}|${m.awayTeamId}`;
+      for (const m of allMatchups) {
+        if (m.isCompleted !== 1) continue;
+
+        const homeId = Number(m.homeTeamId);
+        const awayId = Number(m.awayTeamId);
+        if (!homeId || !awayId || homeId <= 0 || awayId <= 0 || homeId === awayId) continue;
+
+        const mk = `${m.season}|${m.matchupPeriodId}|${homeId}|${awayId}`;
         if (seenH2HKeys.has(mk)) { duplicateMatchups++; continue; }
         seenH2HKeys.add(mk);
         uniqueMatchups++;
 
-        if (!m.homeScore && !m.awayScore) missingScores++;
-
-        const hk = teamToOwnerKey.get(`${m.season}:${m.homeTeamId}`);
-        const ak = teamToOwnerKey.get(`${m.season}:${m.awayTeamId}`);
+        const hk = teamToOwnerKey.get(`${m.season}:${homeId}`);
+        const ak = teamToOwnerKey.get(`${m.season}:${awayId}`);
         if (!hk) unresolvedTeamMappings++;
         if (!ak) unresolvedTeamMappings++;
-        if (!hk || !ak) { ownerResolutionFailures++; continue; }
-        if (hk === ak) continue;
+        if (!hk || !ak) { ownerResolutionFailures++; skippedUnresolvedOwners++; continue; }
+        if (hk === ak) { skippedSameOwner++; continue; }
 
-        if (m.winnerTeamId === m.homeTeamId) {
-          bump(`${hk}|${ak}`, "wins"); bump(`${ak}|${hk}`, "losses");
-        } else if (m.winnerTeamId === m.awayTeamId) {
-          bump(`${ak}|${hk}`, "wins"); bump(`${hk}|${ak}`, "losses");
+        const winnerId = m.winnerTeamId != null ? Number(m.winnerTeamId) : null;
+        if (winnerId === homeId) {
+          bumpH2H(`${hk}|${ak}`, "wins"); bumpH2H(`${ak}|${hk}`, "losses");
+        } else if (winnerId === awayId) {
+          bumpH2H(`${ak}|${hk}`, "wins"); bumpH2H(`${hk}|${ak}`, "losses");
         } else {
-          bump(`${hk}|${ak}`, "ties"); bump(`${ak}|${hk}`, "ties");
+          bumpH2H(`${hk}|${ak}`, "ties"); bumpH2H(`${ak}|${hk}`, "ties");
+          missingScores++;
         }
       }
 
       const ownerPairCount = Math.floor(h2h.size / 2);
       const diagnostics: H2HDiagnostics = {
-        rawMatchupRows, uniqueMatchups, duplicateMatchups,
-        unresolvedTeamMappings, ownerResolutionFailures, ownerPairCount, missingScores,
+        rawMatchupRows: allMatchups.length,
+        uniqueMatchups,
+        duplicateMatchups,
+        unresolvedTeamMappings,
+        ownerResolutionFailures,
+        ownerPairCount,
+        missingScores,
+        skippedUnresolvedOwners,
+        skippedSameOwner,
+        totalDedupedMatchups: uniqueMatchups,
+        dbSeasons,
+        cacheSeasons,
+        emptySeasons,
+        coverageWarning: emptySeasons.length > 0,
       };
 
       const ownerKeys = [...ownerDisplay.keys()].sort((a, b) =>
@@ -3901,7 +3991,7 @@ export const appRouter = router({
             .filter((r) => r !== ownerKey)
             .map((rivalKey) => [
               ownerDisplay.get(rivalKey) ?? rivalKey,
-              h2h.get(`${ownerKey}|${rivalKey}`) ?? { wins: 0, losses: 0, ties: 0 },
+              h2h.get(`${ownerKey}|${rivalKey}`) ?? { wins: 0, losses: 0, ties: 0, gamesPlayed: 0 },
             ]),
         ),
       }));
@@ -4533,6 +4623,262 @@ export const appRouter = router({
 
       const totalWritten = results.reduce((n, r) => n + r.rowsWritten, 0);
       return { leagueId, results, totalWritten };
+    }),
+
+    /**
+     * Per-season source audit for H2H data.
+     * Reports for each of 2009–2025: gmMatchups row counts, combined cache schedule counts,
+     * winner field format found in cache, Rod Sellers' team presence, and Rod's per-opponent record.
+     * Use this to prove where 0-0 H2H records come from before fixing anything.
+     */
+    h2hSourceDiagnostics: publicProcedure.query(async ({ ctx }) => {
+      const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+      const ROD_PATTERNS = ["rod sellers", "rod", "sellers"]; // normalized lowercase search
+
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return { leagueId, seasons: [] as unknown[] };
+
+      // Load all gmMatchups rows once
+      const allDbMatchups = await db
+        .select({
+          season: gmMatchups.season,
+          matchupPeriodId: gmMatchups.matchupPeriodId,
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          winnerTeamId: gmMatchups.winnerTeamId,
+          isCompleted: gmMatchups.isCompleted,
+        })
+        .from(gmMatchups)
+        .where(eqDrizzle(gmMatchups.leagueId, leagueId));
+
+      // Load all gmTeams rows once
+      const allDbTeams = await db
+        .select({
+          season: gmTeams.season,
+          teamId: gmTeams.teamId,
+          name: gmTeams.name,
+          ownerName: gmTeams.ownerName,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId));
+
+      // Index by season
+      const matchupsBySeason = new Map<number, typeof allDbMatchups>();
+      for (const m of allDbMatchups) {
+        if (!matchupsBySeason.has(m.season)) matchupsBySeason.set(m.season, []);
+        matchupsBySeason.get(m.season)!.push(m);
+      }
+      const teamsBySeason = new Map<number, typeof allDbTeams>();
+      for (const t of allDbTeams) {
+        if (!teamsBySeason.has(t.season)) teamsBySeason.set(t.season, []);
+        teamsBySeason.get(t.season)!.push(t);
+      }
+
+      function findRodTeamId(teams: typeof allDbTeams): number | null {
+        for (const t of teams) {
+          const raw = (t.ownerName || t.name || "").toLowerCase();
+          if (ROD_PATTERNS.some((p) => raw.includes(p))) return t.teamId;
+        }
+        return null;
+      }
+
+      const seasons = await Promise.all(HIST_SEASONS.map(async (season) => {
+        // ── gmMatchups stats ──────────────────────────────────────────────────
+        const dbRows = matchupsBySeason.get(season) ?? [];
+        const dbCompleted = dbRows.filter((r) => r.isCompleted === 1);
+        const dbDeduped = new Set<string>();
+        for (const r of dbCompleted) dbDeduped.add(`${r.matchupPeriodId}|${r.homeTeamId}|${r.awayTeamId}`);
+        const dbNullWinner = dbRows.filter((r) => r.winnerTeamId == null).length;
+
+        // ── gmTeams stats ─────────────────────────────────────────────────────
+        const seasonTeams = teamsBySeason.get(season) ?? [];
+        const rodTeamId = findRodTeamId(seasonTeams);
+        const rodDbMatchups = rodTeamId != null
+          ? dbRows.filter((r) => r.homeTeamId === rodTeamId || r.awayTeamId === rodTeamId)
+          : [];
+        const rodDbCompleted = rodDbMatchups.filter((r) => r.isCompleted === 1).length;
+
+        // ── Combined cache stats ──────────────────────────────────────────────
+        const hit = await getCachedViewWithTier(season, "combined", leagueId);
+        let cacheExists = false;
+        let cacheScheduleItems = 0;
+        let cacheCompletedItems = 0;
+        let cacheWinnerValues: Record<string, number> = {};
+        let cacheRodMatchups = 0;
+        let cacheTier = "";
+
+        if (hit) {
+          cacheExists = true;
+          cacheTier = hit.tier;
+          const payload = hit.row.payload as Record<string, unknown>;
+          const schedule = (payload?.schedule as Record<string, unknown>[]) ?? [];
+          cacheScheduleItems = schedule.length;
+          for (const item of schedule) {
+            const w = String(item.winner ?? "UNDECIDED");
+            cacheWinnerValues[w] = (cacheWinnerValues[w] ?? 0) + 1;
+            if (w !== "UNDECIDED") cacheCompletedItems++;
+            if (rodTeamId != null) {
+              const hid = Number((item.home as Record<string, unknown>)?.teamId);
+              const aid = Number((item.away as Record<string, unknown>)?.teamId);
+              if (hid === rodTeamId || aid === rodTeamId) cacheRodMatchups++;
+            }
+          }
+        }
+
+        // ── Rod opponent record from DB completed matchups ───────────────────
+        const rodOpponents: Record<string, { wins: number; losses: number; ties: number }> = {};
+        if (rodTeamId != null) {
+          for (const r of dbCompleted) {
+            const rIsHome: boolean = r.homeTeamId === rodTeamId;
+            const rIsAway: boolean = r.awayTeamId === rodTeamId;
+            if (!rIsHome && !rIsAway) continue;
+            const oppId: number = rIsHome ? r.awayTeamId : r.homeTeamId;
+            const oppEntry = seasonTeams.find((t) => t.teamId === oppId);
+            const oppName: string = oppEntry ? (oppEntry.ownerName || oppEntry.name || String(oppId)) : String(oppId);
+            if (!rodOpponents[oppName]) rodOpponents[oppName] = { wins: 0, losses: 0, ties: 0 };
+            const rodWon: boolean = r.winnerTeamId === rodTeamId;
+            const oppWon: boolean = r.winnerTeamId === oppId;
+            if (rodWon) rodOpponents[oppName].wins++;
+            else if (oppWon) rodOpponents[oppName].losses++;
+            else rodOpponents[oppName].ties++;
+          }
+        }
+
+        // Source determination
+        const source = dbRows.length > 0 ? "gmMatchups" : cacheExists ? "cache_only" : "none";
+
+        return {
+          season,
+          source,
+          // gmMatchups
+          dbTotalRows: dbRows.length,
+          dbCompletedRows: dbCompleted.length,
+          dbDedupedCompleted: dbDeduped.size,
+          dbNullWinnerRows: dbNullWinner,
+          // gmTeams
+          gmTeamsRows: seasonTeams.length,
+          rodTeamId,
+          rodDbMatchups: rodDbMatchups.length,
+          rodDbCompleted,
+          // cache
+          cacheExists,
+          cacheTier,
+          cacheScheduleItems,
+          cacheCompletedItems,
+          cacheWinnerValues,
+          cacheRodMatchups,
+          // Rod opponents (from DB completed)
+          rodOpponentRecord: rodOpponents,
+        };
+      }));
+
+      // Summary
+      const noData = seasons.filter((s) => s.source === "none");
+      const cacheOnly = seasons.filter((s) => s.source === "cache_only");
+      const dbCovered = seasons.filter((s) => s.source === "gmMatchups");
+      const nullWinnerSeasons = seasons.filter((s) => s.dbNullWinnerRows > 0);
+
+      return {
+        leagueId,
+        summary: {
+          totalSeasons: seasons.length,
+          dbCoveredCount: dbCovered.length,
+          cacheOnlyCount: cacheOnly.length,
+          noDataCount: noData.length,
+          nullWinnerSeasonsCount: nullWinnerSeasons.length,
+          noDataSeasons: noData.map((s) => s.season),
+          cacheOnlySeasons: cacheOnly.map((s) => s.season),
+          dbCoveredSeasons: dbCovered.map((s) => s.season),
+          nullWinnerSeasons: nullWinnerSeasons.map((s) => ({ season: s.season, nullCount: s.dbNullWinnerRows })),
+        },
+        seasons,
+      };
+    }),
+
+    /**
+     * Fetch historical matchup scoreboard from ESPN API for seasons not covered by gmMatchups,
+     * then persist via upsertMatchups. Requires valid ESPN credentials (SWID + espn_s2).
+     * Does NOT touch championships, Ring of Honor, or draft data.
+     */
+    fetchAndPersistHistoricalMatchups: publicProcedure.mutation(async ({ ctx }) => {
+      const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const { resolveEspnCreds, fetchEspnViewsHardened } = await import("./espnService");
+      const creds = await resolveEspnCreds(undefined, ctx.user?.id);
+
+      // Find which seasons already have completed matchup rows
+      const existing = await db
+        .selectDistinct({ season: gmMatchups.season })
+        .from(gmMatchups)
+        .where(andDrizzle(
+          eqDrizzle(gmMatchups.leagueId, leagueId),
+          eqDrizzle(gmMatchups.isCompleted, 1),
+        ));
+      const coveredSeasons = new Set(existing.map((r) => r.season));
+
+      const results: {
+        season: number;
+        status: "skipped" | "fetched" | "no_auth" | "fetch_error" | "empty_schedule";
+        scheduleItems: number;
+        completedItems: number;
+        rowsWritten: number;
+        error?: string;
+      }[] = [];
+
+      for (const s of HIST_SEASONS) {
+        if (coveredSeasons.has(s)) {
+          results.push({ season: s, status: "skipped", scheduleItems: 0, completedItems: 0, rowsWritten: 0 });
+          continue;
+        }
+
+        if (!creds.swid || !creds.espnS2) {
+          results.push({ season: s, status: "no_auth", scheduleItems: 0, completedItems: 0, rowsWritten: 0 });
+          continue;
+        }
+
+        try {
+          const fetchResult = await fetchEspnViewsHardened(s, ["mMatchupScore"], {
+            ...creds,
+            leagueId,
+          });
+          const schedule = (fetchResult.merged?.schedule as Record<string, unknown>[]) ?? [];
+
+          if (schedule.length === 0) {
+            results.push({ season: s, status: "empty_schedule", scheduleItems: 0, completedItems: 0, rowsWritten: 0 });
+            continue;
+          }
+
+          const completedCount = schedule.filter((item) => {
+            const w = String(item.winner ?? "UNDECIDED");
+            return w !== "UNDECIDED" && w !== "";
+          }).length;
+
+          // Inject seasonId into payload so normalizeMatchups can read it
+          const payload: Record<string, unknown> = { ...fetchResult.merged, seasonId: s, schedule };
+          const written = await upsertMatchups(db, leagueId, s, payload);
+          results.push({ season: s, status: "fetched", scheduleItems: schedule.length, completedItems: completedCount, rowsWritten: written });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          results.push({ season: s, status: "fetch_error", scheduleItems: 0, completedItems: 0, rowsWritten: 0, error: msg });
+        }
+      }
+
+      const totalFetched = results.filter((r) => r.status === "fetched").length;
+      const totalWritten = results.reduce((n, r) => n + r.rowsWritten, 0);
+      return { leagueId, results, totalFetched, totalWritten };
     }),
 
     /** Upsert gold/silver/bronze medal data for one season from the ESPN League History page. */
