@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useLeagueHistoryModel, type LeagueHistoryTab, type SortKey } from "../hooks/useLeagueHistoryModel";
-import { normalizeOwner } from "../utils/mergeMedalsIntoOwners";
 import { DynastyBoardTab } from "./DynastyBoardTab";
 import { SeasonExplorerTab } from "./SeasonExplorerTab";
 import { RivalriesTab } from "./RivalriesTab";
@@ -24,15 +23,17 @@ export function LeagueHistoryPlugin() {
   const topScorer =
     seasonRows.length > 0 ? [...seasonRows].sort((a, b) => b.pointsFor - a.pointsFor)[0]! : null;
 
+  const topScorerOwner = topScorer
+    ? model.mergedOwners.find((o) => o.displayName === topScorer.owner)
+    : undefined;
   const showTopScorer =
     Boolean(topScorer) &&
-    (!spotlights.champion ||
-      normalizeOwner(topScorer!.owner) !== normalizeOwner(spotlights.champion));
+    !(activeSeason != null && topScorerOwner?.titleSeasons.includes(activeSeason));
 
   const h2hOwners = model.h2hQ.data?.owners ?? [];
   const h2hMatrix = model.h2hQ.data?.matrix ?? [];
 
-  const standingsLoading = model.standingsQ.isLoading || model.medalsQ.isLoading;
+  const standingsLoading = model.standingsLoading;
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-1 pb-12">

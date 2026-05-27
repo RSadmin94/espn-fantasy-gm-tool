@@ -1,10 +1,13 @@
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   mergeMedalsIntoOwners,
+  aggregateChampionTitlesFromMedals,
+  buildLeagueHistoryTeamSeasonRows,
   type MedalRow,
   type OwnerWithMedalTitles,
   type StandingsOwnerRow,
+  type StandingsTeamInput,
   getMedalSpotlightsForSeason,
 } from "../utils/mergeMedalsIntoOwners";
 
@@ -27,6 +30,7 @@ function h2hGamesFromMatrix(matrix: MatrixRow[], displayName: string): number {
 }
 
 export function useLeagueHistoryModel() {
+  const utils = trpc.useUtils();
   const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(undefined, { staleTime: 60_000 });
   const medalsQ = trpc.espn.leagueMedals.useQuery(undefined, { staleTime: 60_000 });
   const h2hQ = trpc.espn.leagueHistoryH2H.useQuery(undefined, { staleTime: 60_000 });
@@ -35,16 +39,73 @@ export function useLeagueHistoryModel() {
   const rawOwners = (standingsQ.data?.owners ?? []) as StandingsOwnerRow[];
   const medals = (medalsQ.data ?? []) as MedalRow[];
 
-  const mergedOwners = useMemo(
-    () => mergeMedalsIntoOwners(rawOwners, medals),
-    [standingsQ.data?.owners, medalsQ.data],
+  const [standingsBySeason, setStandingsBySeason] = useState<Map<number, StandingsTeamInput[]>>(new Map());
+  const [teamRowsLoading, setTeamRowsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!allSeasons.length) {
+      setStandingsBySeason(new Map());
+      return;
+    }
+    let cancelled = false;
+    setTeamRowsLoading(true);
+    void (async () => {
+      const next = new Map<number, StandingsTeamInput[]>();
+      await Promise.all(
+        allSeasons.map(async (season) => {
+          try {
+            const teams = await utils.espn.standings.fetch({ season });
+            if (cancelled) return;
+            next.set(
+              season,
+              teams.map((t) => ({
+                teamName: t.teamName,
+                owners: Array.isArray(t.owners) ? t.owners.map(String) : [],
+              })),
+            );
+          } catch {
+            if (!cancelled) next.set(season, []);
+          }
+        }),
+      );
+      if (!cancelled) {
+        setStandingsBySeason(next);
+        setTeamRowsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [allSeasons.join(","), utils]);
+
+  const teamSeasonRows = useMemo(
+    () => buildLeagueHistoryTeamSeasonRows(standingsBySeason),
+    [standingsBySeason],
   );
 
-  const standingsLoading = standingsQ.isLoading || medalsQ.isLoading;
+  const titleAggregation = useMemo(
+    () => aggregateChampionTitlesFromMedals(medals, teamSeasonRows),
+    [medals, teamSeasonRows],
+  );
+
+  const mergedOwners = useMemo(
+    () => mergeMedalsIntoOwners(rawOwners, medals, teamSeasonRows),
+    [rawOwners, medals, teamSeasonRows],
+  );
+
+  const standingsLoading = standingsQ.isLoading || medalsQ.isLoading || teamRowsLoading;
   const matrix = (h2hQ.data?.matrix ?? []) as MatrixRow[];
 
   useEffect(() => {
     if (standingsLoading || h2hQ.isLoading) return;
+
+    for (const row of titleAggregation.diagnostics) {
+      console.info("[league-history-title-match]", row);
+    }
+    if (titleAggregation.unmatchedMedalTeams.length > 0) {
+      console.info("[league-history-title-match] unmatchedMedalTeams", titleAggregation.unmatchedMedalTeams);
+    }
+
     const rows = mergedOwners.map((o) => ({
       owner: o.displayName,
       titleSeasons: o.titleSeasons.join(", "),
@@ -52,7 +113,7 @@ export function useLeagueHistoryModel() {
       h2hGames: h2hGamesFromMatrix(matrix, o.displayName),
     }));
     console.info("[league-history-aggregation]", rows);
-  }, [standingsLoading, h2hQ.isLoading, mergedOwners, matrix]);
+  }, [standingsLoading, h2hQ.isLoading, mergedOwners, matrix, titleAggregation]);
 
   function sortOwners(sortBy: SortKey): OwnerWithMedalTitles[] {
     return [...mergedOwners].sort((a, b) => {
@@ -93,6 +154,7 @@ export function useLeagueHistoryModel() {
     standingsQ,
     medalsQ,
     h2hQ,
+    standingsLoading,
     allSeasons,
     rawOwners,
     mergedOwners,
