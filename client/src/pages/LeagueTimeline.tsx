@@ -57,18 +57,29 @@ export function LeagueTimeline() {
   const rawOwners  = standingsQ.data?.owners  ?? [];
   const medals     = medalsQ.data ?? [];
 
-  // ── Medal title counts: normalizedName → count ────────────────────────────
-  // Medal championOwner names are matched against owner displayName and ownerKey.
-  const medalTitleCounts = new Map<string, number>();
+  // ── Medal title counts + seasons: normalizedChampionOwner → count / season[] ──
+  // Source of truth: league_medals.championOwner only. finalStanding is never used for titles.
+  const medalTitleCounts  = new Map<string, number>();
+  const medalTitleSeasons = new Map<string, number[]>();
   for (const m of medals) {
     if (!m.championOwner) continue;
     const k = normalizeOwnerForMatch(m.championOwner);
     medalTitleCounts.set(k, (medalTitleCounts.get(k) ?? 0) + 1);
+    const existing = medalTitleSeasons.get(k) ?? [];
+    existing.push(m.season);
+    medalTitleSeasons.set(k, existing);
   }
-  const getMedalTitles = (owner: { ownerKey: string; displayName: string }) =>
+
+  // Try ownerKey (server-normalized) first, then normalized displayName as fallback.
+  const getMedalTitles = (owner: { ownerKey: string; displayName: string }): number =>
     medalTitleCounts.get(owner.ownerKey) ??
     medalTitleCounts.get(normalizeOwnerForMatch(owner.displayName)) ??
     0;
+
+  const getMedalTitleSeasons = (owner: { ownerKey: string; displayName: string }): number[] =>
+    (medalTitleSeasons.get(owner.ownerKey) ??
+     medalTitleSeasons.get(normalizeOwnerForMatch(owner.displayName)) ??
+     []).slice().sort((a, b) => b - a);
 
   // ── Dynasty Board sort (client-side display sort only) ────────────────────
   const owners = [...rawOwners].sort((a, b) => {
@@ -262,22 +273,33 @@ export function LeagueTimeline() {
                         : <><ChevronDown className="h-3 w-3" /> Show seasons</>}
                     </button>
 
-                    {/* Season chips */}
+                    {/* Expanded detail */}
                     {isOpen && (
-                      <div className="flex flex-wrap gap-1.5 pt-0.5">
-                        {owner.seasons.map(({ season, entry }) => (
-                          <button
-                            key={season}
-                            title={`${season}: ${entry.wins}–${entry.losses}, Place ${entry.finalStanding ?? "?"}`}
-                            onClick={() => { setSelectedSeason(season); setTab("seasons"); }}
-                            className={cn(
-                              "rounded border px-2 py-0.5 text-[11px] tabular-nums transition-opacity hover:opacity-80",
-                              chipStyle(entry.finalStanding),
-                            )}
-                          >
-                            {season}
-                          </button>
-                        ))}
+                      <div className="space-y-2">
+                        {/* Title seasons debug row */}
+                        <div className="text-[11px] text-muted-foreground font-mono">
+                          <span className="text-yellow-400 font-semibold">🏆 titles:</span>{" "}
+                          {getMedalTitleSeasons(owner).length > 0
+                            ? getMedalTitleSeasons(owner).join(", ")
+                            : <span className="text-muted-foreground/50">none</span>}
+                        </div>
+
+                        {/* Season chips */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {owner.seasons.map(({ season, entry }) => (
+                            <button
+                              key={season}
+                              title={`${season}: ${entry.wins}–${entry.losses}, Place ${entry.finalStanding ?? "?"}`}
+                              onClick={() => { setSelectedSeason(season); setTab("seasons"); }}
+                              className={cn(
+                                "rounded border px-2 py-0.5 text-[11px] tabular-nums transition-opacity hover:opacity-80",
+                                chipStyle(entry.finalStanding),
+                              )}
+                            >
+                              {season}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </CardContent>
