@@ -9,11 +9,6 @@ function ordinal(n: number): string {
   return `${n}${s[n % 10] ?? "th"}`;
 }
 
-function winPct(w: number, l: number, t: number): string {
-  const g = w + l + t;
-  return g === 0 ? "—" : ((w / g) * 100).toFixed(1) + "%";
-}
-
 function chipStyle(place: number | null | undefined): string {
   if (!place) return "bg-muted/30 text-muted-foreground/40 border-transparent";
   if (place === 1) return "bg-yellow-500/20 text-yellow-300 border-yellow-500/40 font-bold";
@@ -81,6 +76,7 @@ export function DynastyBoardTab({
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {owners.map((owner) => {
+          const hasRecord = owner.allTimeGamesPlayed > 0;
           const totalW = owner.allTimeWins;
           const totalL = owner.allTimeLosses;
           const totalT = owner.allTimeTies;
@@ -117,13 +113,14 @@ export function DynastyBoardTab({
 
                   <span className="text-muted-foreground">📊 Record</span>
                   <span className="text-right tabular-nums">
-                    {totalW}–{totalL}
-                    {totalT > 0 ? `–${totalT}` : ""}
+                    {hasRecord
+                      ? `${totalW}–${totalL}${totalT > 0 ? `–${totalT}` : ""}`
+                      : "—"}
                   </span>
 
                   <span className="text-muted-foreground">💯 Win %</span>
                   <span className="text-right tabular-nums">
-                    {totalW + totalL + totalT > 0 ? owner.allTimeWinPct.toFixed(1) + "%" : "—"}
+                    {hasRecord ? `${owner.allTimeWinPct.toFixed(1)}%` : "—"}
                   </span>
                 </div>
 

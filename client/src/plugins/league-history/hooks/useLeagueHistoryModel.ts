@@ -23,6 +23,7 @@ export type OwnerWithTitles = StandingsOwnerRow & {
   allTimeWins: number;
   allTimeLosses: number;
   allTimeTies: number;
+  allTimeGamesPlayed: number;
   allTimeWinPct: number;
 };
 
@@ -268,23 +269,31 @@ export function useLeagueHistoryModel() {
     [medals, teamsBySeason, rawOwners],
   );
 
-  const recordByOwnerKey = useMemo(() => {
-    const map = new Map<string, { wins: number; losses: number; ties: number; winPct: number }>();
+  const recordLookup = useMemo(() => {
+    const byKey = new Map<
+      string,
+      { wins: number; losses: number; ties: number; gamesPlayed: number; winPct: number }
+    >();
     for (const row of recordsQ.data?.owners ?? []) {
-      map.set(row.ownerKey, {
+      const entry = {
         wins: row.wins,
         losses: row.losses,
         ties: row.ties,
+        gamesPlayed: row.gamesPlayed,
         winPct: row.winPct,
-      });
+      };
+      byKey.set(row.ownerKey, entry);
+      byKey.set(ownerKeyFromLabel(row.displayName), entry);
     }
-    return map;
+    return byKey;
   }, [recordsQ.data?.owners]);
 
   const mergedOwners = useMemo((): OwnerWithTitles[] => {
     return rawOwners.map((o) => {
       const titleSeasons = [...(titleSeasonsByOwnerKey.get(o.ownerKey) ?? [])].sort((a, b) => b - a);
-      const rec = recordByOwnerKey.get(o.ownerKey);
+      const rec =
+        recordLookup.get(o.ownerKey) ?? recordLookup.get(ownerKeyFromLabel(o.displayName));
+      const gamesPlayed = rec?.gamesPlayed ?? 0;
       return {
         ...o,
         titleCount: titleSeasons.length,
@@ -292,10 +301,11 @@ export function useLeagueHistoryModel() {
         allTimeWins: rec?.wins ?? 0,
         allTimeLosses: rec?.losses ?? 0,
         allTimeTies: rec?.ties ?? 0,
-        allTimeWinPct: rec?.winPct ?? 0,
+        allTimeGamesPlayed: gamesPlayed,
+        allTimeWinPct: gamesPlayed > 0 ? rec!.winPct : 0,
       };
     });
-  }, [rawOwners, titleSeasonsByOwnerKey, recordByOwnerKey]);
+  }, [rawOwners, titleSeasonsByOwnerKey, recordLookup]);
 
   const standingsLoading =
     standingsQ.isLoading || medalsQ.isLoading || teamsLoading || recordsQ.isLoading;
