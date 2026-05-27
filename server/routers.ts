@@ -3697,8 +3697,69 @@ export const appRouter = router({
         .where(eqDrizzle(gmTeams.leagueId, leagueId))
         .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.finalStanding));
 
+      // ── Compute wins/losses/ties from deduped matchups ────────────────────
+      const matchupRows = await db
+        .select({
+          season: gmMatchups.season,
+          matchupPeriodId: gmMatchups.matchupPeriodId,
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          winnerTeamId: gmMatchups.winnerTeamId,
+          isCompleted: gmMatchups.isCompleted,
+        })
+        .from(gmMatchups)
+        .where(andDrizzle(
+          eqDrizzle(gmMatchups.leagueId, leagueId),
+          eqDrizzle(gmMatchups.isCompleted, 1),
+        ));
+
+      // Deduplicate matchups then accumulate per (season, teamId)
+      const seenMatchupKeys = new Set<string>();
+      const computedRecord = new Map<string, { wins: number; losses: number; ties: number }>();
+      const ensureRecord = (k: string) => {
+        if (!computedRecord.has(k)) computedRecord.set(k, { wins: 0, losses: 0, ties: 0 });
+        return computedRecord.get(k)!;
+      };
+      for (const m of matchupRows) {
+        const mk = `${m.season}|${m.matchupPeriodId}|${m.homeTeamId}|${m.awayTeamId}`;
+        if (seenMatchupKeys.has(mk)) continue;
+        seenMatchupKeys.add(mk);
+        const hk = `${m.season}:${m.homeTeamId}`;
+        const ak = `${m.season}:${m.awayTeamId}`;
+        if (m.winnerTeamId === m.homeTeamId) {
+          ensureRecord(hk).wins++; ensureRecord(ak).losses++;
+        } else if (m.winnerTeamId === m.awayTeamId) {
+          ensureRecord(ak).wins++; ensureRecord(hk).losses++;
+        } else {
+          ensureRecord(hk).ties++; ensureRecord(ak).ties++;
+        }
+      }
+
+      // ── Identify the single true champion per season ──────────────────────
+      // Among rank-1 rows, pick highest wins then highest pointsFor.
+      const bySeasonTeams = new Map<number, typeof rows>();
+      for (const r of rows) {
+        const arr = bySeasonTeams.get(r.season) ?? [];
+        arr.push(r);
+        bySeasonTeams.set(r.season, arr);
+      }
+      const trueChampOwnerKey = new Map<number, string>(); // season → ownerKey
+      for (const [season, sRows] of bySeasonTeams) {
+        const rank1 = sRows.filter((r) => r.finalStanding === 1);
+        if (rank1.length === 0) continue;
+        const sorted = [...rank1].sort((a, b) => {
+          const aw = computedRecord.get(`${season}:${a.teamId}`)?.wins ?? a.wins;
+          const bw = computedRecord.get(`${season}:${b.teamId}`)?.wins ?? b.wins;
+          if (bw !== aw) return bw - aw;
+          return Number(b.pointsFor) - Number(a.pointsFor);
+        });
+        const champ = sorted[0]!;
+        const rawName = (champ.ownerName || champ.name || `Team ${champ.teamId}`).trim();
+        trueChampOwnerKey.set(season, normalizeOwnerStr(rawName));
+      }
+
+      // ── Build owner map, using matchup records for wins/losses ────────────
       const allSeasons = new Set<number>();
-      // ownerKey → { displayName, seasonMap }
       const acc = new Map<string, { displayName: string; seasonMap: Map<number, SeasonEntry> }>();
 
       for (const row of rows) {
@@ -3712,15 +3773,16 @@ export const appRouter = router({
           entry = { displayName: display, seasonMap: new Map() };
           acc.set(ownerKey, entry);
         } else {
-          entry.displayName = display; // most recent season wins for display name
+          entry.displayName = display;
         }
 
         if (!entry.seasonMap.has(row.season)) {
+          const rec = computedRecord.get(`${row.season}:${row.teamId}`);
           entry.seasonMap.set(row.season, {
             finalStanding: row.finalStanding,
-            wins: row.wins,
-            losses: row.losses,
-            ties: row.ties,
+            wins:   rec?.wins   ?? row.wins,
+            losses: rec?.losses ?? row.losses,
+            ties:   rec?.ties   ?? row.ties,
             pointsFor: Number(row.pointsFor),
           });
         }
@@ -3732,7 +3794,8 @@ export const appRouter = router({
           const seasons2 = [...seasonMap.entries()]
             .sort(([a], [b]) => a - b)
             .map(([season, entry]) => ({ season, entry }));
-          const championships = seasons2.filter((s) => s.entry.finalStanding === 1).length;
+          // Championship credited only to the true champion of each season
+          const championships = seasons2.filter((s) => trueChampOwnerKey.get(s.season) === ownerKey).length;
           return { ownerKey, displayName, championships, seasons: seasons2 };
         })
         .sort((a, b) => {
@@ -3779,6 +3842,7 @@ export const appRouter = router({
       const matchups = await db
         .select({
           season: gmMatchups.season,
+          matchupPeriodId: gmMatchups.matchupPeriodId,
           homeTeamId: gmMatchups.homeTeamId,
           awayTeamId: gmMatchups.awayTeamId,
           winnerTeamId: gmMatchups.winnerTeamId,
@@ -3794,7 +3858,11 @@ export const appRouter = router({
         if (!h2h.has(k)) h2h.set(k, { wins: 0, losses: 0, ties: 0 });
         h2h.get(k)![f]++;
       };
+      const seenH2HKeys = new Set<string>();
       for (const m of matchups) {
+        const mk = `${m.season}|${m.matchupPeriodId}|${m.homeTeamId}|${m.awayTeamId}`;
+        if (seenH2HKeys.has(mk)) continue;
+        seenH2HKeys.add(mk);
         const hk = teamToOwnerKey.get(`${m.season}:${m.homeTeamId}`);
         const ak = teamToOwnerKey.get(`${m.season}:${m.awayTeamId}`);
         if (!hk || !ak || hk === ak) continue;
@@ -3823,6 +3891,144 @@ export const appRouter = router({
         ),
       }));
       return { owners, matrix };
+    }),
+
+    /** Per-season diagnostic analysis: champions, standings integrity, matchup integrity. */
+    leagueDiagnostics: publicProcedure.query(async ({ ctx }) => {
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return { champion: [], standings: [], matchups: [] };
+
+      // ── Fetch all team rows ───────────────────────────────────────────────
+      const teamRows = await db
+        .select({
+          season: gmTeams.season,
+          teamId: gmTeams.teamId,
+          name: gmTeams.name,
+          ownerName: gmTeams.ownerName,
+          wins: gmTeams.wins,
+          losses: gmTeams.losses,
+          ties: gmTeams.ties,
+          pointsFor: gmTeams.pointsFor,
+          finalStanding: gmTeams.finalStanding,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId))
+        .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.finalStanding));
+
+      // ── Fetch all matchup rows ────────────────────────────────────────────
+      const matchupRows = await db
+        .select({
+          season: gmMatchups.season,
+          matchupPeriodId: gmMatchups.matchupPeriodId,
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          homeScore: gmMatchups.homeScore,
+          awayScore: gmMatchups.awayScore,
+          winnerTeamId: gmMatchups.winnerTeamId,
+          isCompleted: gmMatchups.isCompleted,
+        })
+        .from(gmMatchups)
+        .where(eqDrizzle(gmMatchups.leagueId, leagueId))
+        .orderBy(ascDrizzle(gmMatchups.season), ascDrizzle(gmMatchups.matchupPeriodId));
+
+      // ── Group by season ───────────────────────────────────────────────────
+      const bySeasonTeams = new Map<number, typeof teamRows>();
+      for (const r of teamRows) {
+        const arr = bySeasonTeams.get(r.season) ?? [];
+        arr.push(r);
+        bySeasonTeams.set(r.season, arr);
+      }
+      const bySeasonMatchups = new Map<number, typeof matchupRows>();
+      for (const m of matchupRows) {
+        const arr = bySeasonMatchups.get(m.season) ?? [];
+        arr.push(m);
+        bySeasonMatchups.set(m.season, arr);
+      }
+
+      const allSeasonSet = new Set<number>([...bySeasonTeams.keys(), ...bySeasonMatchups.keys()]);
+      const allSeasonsList = [...allSeasonSet].sort((a, b) => a - b);
+
+      // ── Champion diagnostics ──────────────────────────────────────────────
+      const champion = allSeasonsList.map((season) => {
+        const rows = bySeasonTeams.get(season) ?? [];
+        const rank1 = rows.filter((r) => r.finalStanding === 1);
+        const sorted = [...rank1].sort((a, b) => {
+          if (b.wins !== a.wins) return b.wins - a.wins;
+          return Number(b.pointsFor) - Number(a.pointsFor);
+        });
+        const selected = sorted[0] ?? null;
+        const rawName = selected ? (selected.ownerName || selected.name || `Team ${selected.teamId}`).trim() : null;
+        return {
+          season,
+          totalRows: rows.length,
+          rank1Rows: rank1.length,
+          selectedChampion: rawName,
+          duplicateChampionCandidates: rank1.length > 1,
+          missingChampion: rank1.length === 0,
+          titleOwnerKey: rawName ? normalizeOwnerStr(rawName) : null,
+        };
+      });
+
+      // ── Standings diagnostics ─────────────────────────────────────────────
+      const standings = allSeasonsList.map((season) => {
+        const rows = bySeasonTeams.get(season) ?? [];
+        const teamCount = rows.length;
+
+        const ownerKeyCounts = new Map<string, number>();
+        for (const r of rows) {
+          const k = normalizeOwnerStr((r.ownerName || r.name || `Team ${r.teamId}`).trim());
+          ownerKeyCounts.set(k, (ownerKeyCounts.get(k) ?? 0) + 1);
+        }
+        const uniqueOwnerCount = ownerKeyCounts.size;
+        const duplicateOwnerRows = [...ownerKeyCounts.values()].filter((c) => c > 1).reduce((s, c) => s + (c - 1), 0);
+
+        const standingCounts = new Map<number, number>();
+        for (const r of rows) {
+          if (r.finalStanding != null) standingCounts.set(r.finalStanding, (standingCounts.get(r.finalStanding) ?? 0) + 1);
+        }
+        const duplicateFinalStandingRanks = [...standingCounts.entries()].filter(([, c]) => c > 1).map(([rank]) => rank).sort((a, b) => a - b);
+        const expectedRanks = Array.from({ length: teamCount }, (_, i) => i + 1);
+        const missingFinalStandingRanks = expectedRanks.filter((r) => !standingCounts.has(r));
+        const impossibleRecords = rows.filter((r) => r.wins < 0 || r.losses < 0 || r.ties < 0).length;
+
+        return { season, teamCount, uniqueOwnerCount, duplicateOwnerRows, duplicateFinalStandingRanks, missingFinalStandingRanks, impossibleRecords };
+      });
+
+      // ── Matchup diagnostics ───────────────────────────────────────────────
+      const matchups = allSeasonsList.map((season) => {
+        const rows = bySeasonMatchups.get(season) ?? [];
+        const totalMatchupRows = rows.length;
+
+        const seenKeys = new Set<string>();
+        const dupeKeys = new Set<string>();
+        for (const r of rows) {
+          const k = `${r.matchupPeriodId}|${r.homeTeamId}|${r.awayTeamId}`;
+          if (seenKeys.has(k)) dupeKeys.add(k);
+          else seenKeys.add(k);
+        }
+        const uniqueMatchups = seenKeys.size;
+        const duplicateMatchups = dupeKeys.size;
+
+        const completed = rows.filter((r) => r.isCompleted === 1);
+        const missingScores = completed.filter((r) => Number(r.homeScore) === 0 && Number(r.awayScore) === 0).length;
+        const winnerScoreMismatches = completed.filter((r) => {
+          if (!r.winnerTeamId) return false;
+          const hs = Number(r.homeScore);
+          const as_ = Number(r.awayScore);
+          if (hs === as_) return false;
+          const expected = hs > as_ ? r.homeTeamId : r.awayTeamId;
+          return r.winnerTeamId !== expected;
+        }).length;
+
+        return { season, totalMatchupRows, uniqueMatchups, duplicateMatchups, missingScores, winnerScoreMismatches };
+      });
+
+      return { champion, standings, matchups };
     }),
   }),
 

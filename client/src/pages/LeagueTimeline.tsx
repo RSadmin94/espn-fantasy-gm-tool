@@ -44,6 +44,7 @@ export function LeagueTimeline() {
     staleTime: 60_000,
     enabled: tab === "rivalries",
   });
+  const diagQ = trpc.espn.leagueDiagnostics.useQuery(undefined, { staleTime: 60_000 });
 
   const allSeasons = standingsQ.data?.seasons ?? [];
   const rawOwners  = standingsQ.data?.owners  ?? [];
@@ -97,6 +98,38 @@ export function LeagueTimeline() {
         <h1 className="text-3xl font-bold text-foreground">League Timeline</h1>
         <p className="text-sm text-muted-foreground">History · Dynasties · Rivalries</p>
       </div>
+
+      {/* ── Diagnostics bar ── */}
+      {(() => {
+        const d = diagQ.data;
+        if (!d) return null;
+        const missingChampCount = d.champion.filter((c) => c.missingChampion).length;
+        const dupChampCount = d.champion.filter((c) => c.duplicateChampionCandidates).length;
+        const dupStandingSeasons = d.standings.filter((s) => s.duplicateFinalStandingRanks.length > 0 || s.duplicateOwnerRows > 0).length;
+        const missingRankSeasons = d.standings.filter((s) => s.missingFinalStandingRanks.length > 0).length;
+        const dupMatchupSeasons = d.matchups.filter((m) => m.duplicateMatchups > 0).length;
+        const mismatchSeasons = d.matchups.filter((m) => m.winnerScoreMismatches > 0).length;
+        const missingScoreSeasons = d.matchups.filter((m) => m.missingScores > 0).length;
+        const anyIssue = missingChampCount + dupChampCount + dupStandingSeasons + missingRankSeasons + dupMatchupSeasons + mismatchSeasons + missingScoreSeasons > 0;
+        return (
+          <div className={cn(
+            "rounded-md border px-4 py-2 font-mono text-xs text-muted-foreground",
+            anyIssue ? "border-amber-500/30 bg-amber-500/5" : "border-border/60 bg-muted/10",
+          )}>
+            <span className="text-foreground/60 font-semibold">diag</span>
+            {" · "}seasons: <span className="text-foreground">{d.champion.length}</span>
+            {" · "}champions: <span className={cn(missingChampCount > 0 ? "text-red-400 font-bold" : dupChampCount > 0 ? "text-amber-400" : "text-emerald-400")}>
+              {missingChampCount > 0 ? `${missingChampCount} missing` : dupChampCount > 0 ? `${dupChampCount} multi-rank1` : "ok"}
+            </span>
+            {" · "}standings: <span className={cn(dupStandingSeasons + missingRankSeasons > 0 ? "text-amber-400" : "text-emerald-400")}>
+              {dupStandingSeasons > 0 ? `${dupStandingSeasons} dup-ranks` : missingRankSeasons > 0 ? `${missingRankSeasons} missing-ranks` : "ok"}
+            </span>
+            {" · "}matchups: <span className={cn(dupMatchupSeasons + mismatchSeasons > 0 ? "text-red-400 font-bold" : missingScoreSeasons > 0 ? "text-amber-400" : "text-emerald-400")}>
+              {dupMatchupSeasons > 0 ? `${dupMatchupSeasons} dups` : mismatchSeasons > 0 ? `${mismatchSeasons} mismatches` : missingScoreSeasons > 0 ? `${missingScoreSeasons} missing-scores` : "ok"}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* ── Tab bar ── */}
       <ToggleGroup
