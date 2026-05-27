@@ -1816,6 +1816,29 @@ export const appRouter = router({
         return { totalRows, uniqueOverallPicks, duplicateSlots: totalRows - uniqueOverallPicks };
       }),
 
+    /** Delete all (or one season's) draft_picks for a league. Returns how many rows were cleared. */
+    clearLeagueDraftPicks: publicProcedure
+      .input(z.object({
+        leagueId: z.string().min(1).max(32),
+        season: z.number().int().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+        const lid = String(input.leagueId).trim().slice(0, 32);
+        const yr = input.season ?? null;
+        const whereClause = yr != null
+          ? andDrizzle(eqDrizzle(gmDraftPicks.leagueId, lid), eqDrizzle(gmDraftPicks.season, yr))
+          : eqDrizzle(gmDraftPicks.leagueId, lid);
+        const [before] = await db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(gmDraftPicks)
+          .where(whereClause);
+        const clearedCount = Number(before?.count ?? 0);
+        await db.delete(gmDraftPicks).where(whereClause);
+        return { leagueId: lid, season: yr, clearedCount };
+      }),
+
     /** Per-season counts + data source (normalized vs cache tiers) for ops / debugging. Cached 5 minutes. */
     historicalCoverage: protectedProcedure.query(async ({ ctx }) => {
       const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
