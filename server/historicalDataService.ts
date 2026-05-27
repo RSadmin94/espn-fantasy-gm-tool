@@ -27,6 +27,8 @@ export type HistoricalReadResult<T = unknown> = {
   season: number;
   leagueId: string;
   count: number;
+  /** Total DB rows before in-memory dedup (normalized path only). */
+  rawCount?: number;
   /** Why `empty` or extra context (never fabricated numbers). */
   debugReason?: string;
 };
@@ -249,6 +251,7 @@ export async function getSeasonDraftPicks(
   if (db) {
     const rows = await db
       .select({
+        id: gmDraftPicks.id,
         overallPick: gmDraftPicks.overallPick,
         roundId: gmDraftPicks.roundId,
         roundPick: gmDraftPicks.roundPick,
@@ -271,9 +274,21 @@ export async function getSeasonDraftPicks(
         ),
       )
       .where(and(eq(gmDraftPicks.leagueId, lid), eq(gmDraftPicks.season, yr)))
-      .orderBy(gmDraftPicks.overallPick);
-    if (rows.length > 0) {
-      const shaped = rows.map((r) => ({
+      // desc(id) so that for duplicate overallPick rows, the latest insert wins after dedup
+      .orderBy(gmDraftPicks.overallPick, desc(gmDraftPicks.id));
+
+    // Deduplicate by overallPick — keeps first occurrence (latest id) when duplicates exist
+    const seenPicks = new Set<number>();
+    const dedupedRows: typeof rows = [];
+    for (const row of rows) {
+      if (!seenPicks.has(row.overallPick)) {
+        seenPicks.add(row.overallPick);
+        dedupedRows.push(row);
+      }
+    }
+
+    if (dedupedRows.length > 0) {
+      const shaped = dedupedRows.map((r) => ({
         season: yr,
         overallPickNumber: r.overallPick,
         roundId: r.roundId,
@@ -289,7 +304,7 @@ export async function getSeasonDraftPicks(
         bidAmount: r.bidAmount != null ? Number(r.bidAmount) : 0,
         rawPick: r.rawPick,
       }));
-      return { rows: shaped, source: "normalized", season: yr, leagueId: lid, count: shaped.length };
+      return { rows: shaped, source: "normalized", season: yr, leagueId: lid, count: shaped.length, rawCount: rows.length };
     }
   }
 

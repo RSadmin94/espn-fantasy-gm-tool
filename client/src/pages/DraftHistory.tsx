@@ -72,9 +72,12 @@ export function DraftHistory() {
 
   /** Always query by selected season — `draft_picks` may exist even if `cachedSeasons` omits the year. */
   const draftQ = trpc.espn.draftHistory.useQuery({ season }, { staleTime: 0 });
+  const diagQ  = trpc.espn.draftDiagnostics.useQuery({ season }, { staleTime: 0 });
 
   const picks = (draftQ.data?.picks as DraftPickRow[] | undefined) ?? [];
-  const draftSource = draftQ.data?.dataSource as string | undefined;
+  const draftSource   = draftQ.data?.dataSource as string | undefined;
+  const rawCount      = draftQ.data?.rawCount   ?? null;
+  const dedupedCount  = draftQ.data?.dedupedCount ?? null;
 
   const filteredPicks = useMemo(() => {
     if (teamFilter === "ALL") return picks;
@@ -223,6 +226,21 @@ export function DraftHistory() {
           </ToggleGroup>
         </CardContent>
       </Card>
+
+      {/* ── Debug panel ── */}
+      <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2 font-mono text-xs text-muted-foreground">
+        <span className="text-foreground/60 font-semibold">draft debug</span>
+        {" · "}season: <span className="text-foreground">{season}</span>
+        {" · "}rawRows: <span className="text-foreground">{diagQ.data?.totalRows ?? "…"}</span>
+        {" · "}dedupedRows: <span className={cn(
+          dedupedCount !== null && diagQ.data?.totalRows !== undefined && dedupedCount < diagQ.data.totalRows
+            ? "text-amber-400" : "text-foreground"
+        )}>{dedupedCount ?? picks.length}</span>
+        {" · "}duplicateCount: <span className={cn(
+          (diagQ.data?.duplicateSlots ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
+        )}>{diagQ.data?.duplicateSlots ?? "…"}</span>
+        {" · "}uniqueOverallPicks: <span className="text-foreground">{diagQ.data?.uniqueOverallPicks ?? "…"}</span>
+      </div>
 
       {draftQ.isLoading && (
         <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">

@@ -1748,9 +1748,9 @@ export const appRouter = router({
 
         const fb = await getSeasonDraftPicks(input.season, leagueId, ctx.user?.id ?? undefined);
         const dataSource = fb.source;
-        if (fb.count === 0) return { picks: [] as const, dataSource };
+        if (fb.count === 0) return { picks: [] as const, dataSource, rawCount: 0, dedupedCount: 0 };
 
-        const picks = (fb.rows as Record<string, unknown>[]).map((p) => {
+        const allPicks = (fb.rows as Record<string, unknown>[]).map((p) => {
           const raw = p.rawPick != null ? String(p.rawPick) : "";
           const nfl = nflTeamFromDraftRawPick(raw) || String(p.proTeam ?? "").trim();
           return {
@@ -1775,7 +1775,45 @@ export const appRouter = router({
             bidAmount: p.bidAmount != null ? Number(p.bidAmount) : 0,
           };
         });
-        return { picks, dataSource };
+
+        // Sort by overallPick ASC then deduplicate — one pick per slot, covers all data sources
+        allPicks.sort((a, b) => a.overallPick - b.overallPick);
+        const seenSlots = new Set<number>();
+        const picks = allPicks.filter((p) => {
+          if (seenSlots.has(p.overallPick)) return false;
+          seenSlots.add(p.overallPick);
+          return true;
+        });
+
+        return { picks, dataSource, rawCount: fb.rawCount ?? allPicks.length, dedupedCount: picks.length };
+      }),
+
+    /** Audit: per-season duplicate counts in draft_picks. */
+    draftDiagnostics: publicProcedure
+      .input(z.object({ season: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: ctx.user ? { id: ctx.user.id } : undefined },
+          null,
+          input.season,
+        );
+        const db = await getDb();
+        if (!db) return { totalRows: 0, uniqueOverallPicks: 0, duplicateSlots: 0 };
+
+        const [row] = await db
+          .select({
+            totalRows: sql<number>`COUNT(*)`,
+            uniqueOverallPicks: sql<number>`COUNT(DISTINCT ${gmDraftPicks.overallPick})`,
+          })
+          .from(gmDraftPicks)
+          .where(andDrizzle(
+            eqDrizzle(gmDraftPicks.leagueId, leagueId),
+            eqDrizzle(gmDraftPicks.season, input.season),
+          ));
+
+        const totalRows = Number(row?.totalRows ?? 0);
+        const uniqueOverallPicks = Number(row?.uniqueOverallPicks ?? 0);
+        return { totalRows, uniqueOverallPicks, duplicateSlots: totalRows - uniqueOverallPicks };
       }),
 
     /** Per-season counts + data source (normalized vs cache tiers) for ops / debugging. Cached 5 minutes. */
