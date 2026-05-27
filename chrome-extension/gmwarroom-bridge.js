@@ -156,4 +156,36 @@
     },
     false,
   );
+
+  window.addEventListener(
+    "message",
+    (ev) => {
+      if (ev.source !== window) return;
+      const d = ev.data;
+      if (!d || d.type !== "GMWR_LEAGUE_HISTORY_MEDALS") return;
+      const id = d.id;
+      const leagueId = String(d.leagueId || "457622").trim();
+      chrome.runtime.sendMessage({ type: "GMWR_LEAGUE_HISTORY_MEDALS", leagueId }, (response) => {
+        if (chrome.runtime.lastError) {
+          window.postMessage(
+            { type: "GMWR_LEAGUE_HISTORY_MEDALS_REPLY", id, ok: false, error: chrome.runtime.lastError.message, medals: [] },
+            "*",
+          );
+          return;
+        }
+        const r = response || {};
+        window.postMessage(
+          {
+            ...r,
+            type: "GMWR_LEAGUE_HISTORY_MEDALS_REPLY",
+            id,
+            ok: Boolean(r.ok),
+            medals: Array.isArray(r.medals) ? r.medals : [],
+          },
+          "*",
+        );
+      });
+    },
+    false,
+  );
 })();

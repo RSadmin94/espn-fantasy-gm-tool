@@ -358,6 +358,9 @@ export function SyncData() {
   const [medalErr, setMedalErr]       = useState<Record<number, string>>({});
   const [forceReplace, setForceReplace] = useState(false);
   const [saveAllBusy, setSaveAllBusy] = useState(false);
+  const [scrapeLeagueMedalsBusy, setScrapeLeagueMedalsBusy] = useState(false);
+  const [scrapeLeagueMedalsNote, setScrapeLeagueMedalsNote] = useState<string | null>(null);
+  const [scrapeLeagueMedalsErr, setScrapeLeagueMedalsErr] = useState<string | null>(null);
   const medalsQ    = trpc.espn.leagueMedals.useQuery(undefined, { staleTime: 0 });
   const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(undefined, { staleTime: 60_000 });
 
@@ -990,6 +993,70 @@ export function SyncData() {
     setMedalErr(errs);
     void medalsQ.refetch();
     setSaveAllBusy(false);
+  };
+
+  const handleScrapeLeagueHistoryMedals = async () => {
+    setScrapeLeagueMedalsErr(null);
+    setScrapeLeagueMedalsNote("Opening ESPN League History page…");
+    setScrapeLeagueMedalsBusy(true);
+    try {
+      const extResult = await new Promise<Record<string, unknown>>((resolve) => {
+        const id = `league-history-medals-${Date.now()}`;
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener("message", onMsg);
+          resolve({ ok: false, error: "Extension timed out" });
+        }, 120_000);
+        function onMsg(ev: MessageEvent) {
+          if (ev.source !== window) return;
+          const d = ev.data as Record<string, unknown> | null;
+          if (!d || d.type !== "GMWR_LEAGUE_HISTORY_MEDALS_REPLY" || d.id !== id) return;
+          window.clearTimeout(timeout);
+          window.removeEventListener("message", onMsg);
+          resolve(d);
+        }
+        window.addEventListener("message", onMsg);
+        window.postMessage({ type: "GMWR_LEAGUE_HISTORY_MEDALS", id, leagueId: "457622" }, "*");
+      });
+
+      if (!extResult.ok) {
+        setScrapeLeagueMedalsErr(extResult.error ? String(extResult.error) : "Scrape failed");
+        return;
+      }
+
+      const medals = Array.isArray(extResult.medals) ? extResult.medals : [];
+      if (medals.length === 0) {
+        setScrapeLeagueMedalsErr("No medal data found. Check that the ESPN League History page loaded and you are signed in.");
+        return;
+      }
+
+      setScrapeLeagueMedalsNote(`Scraped ${medals.length} seasons. Saving to DB…`);
+      let saved = 0;
+      const errs: string[] = [];
+      for (const row of medals as { season: number; championOwner: string; runnerUpOwner: string; thirdPlaceOwner: string }[]) {
+        try {
+          await upsertSeasonMedalsMutation.mutateAsync({
+            season: row.season,
+            championOwner: row.championOwner ?? "",
+            runnerUpOwner: row.runnerUpOwner ?? "",
+            thirdPlaceOwner: row.thirdPlaceOwner ?? "",
+            source: "espn_history_medal",
+          });
+          saved++;
+        } catch (e) {
+          errs.push(`${row.season}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+
+      setScrapeLeagueMedalsNote(
+        `Saved ${saved}/${medals.length} seasons${errs.length ? `. Errors: ${errs.join("; ")}` : "."}`,
+      );
+      setMedalPrefilled(false);
+      void medalsQ.refetch();
+    } catch (e) {
+      setScrapeLeagueMedalsErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setScrapeLeagueMedalsBusy(false);
+    }
   };
 
   // ── Draft Reset handlers ─────────────────────────────────────────────────
@@ -1947,6 +2014,18 @@ export function SyncData() {
                     ? <><Loader2 className="mr-1.5 h-3 w-3 animate-spin" />Loading…</>
                     : `Auto Fill From Imported History (${seasonsWithStandings} seasons)`}
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs gap-1.5"
+                  disabled={scrapeLeagueMedalsBusy}
+                  onClick={() => void handleScrapeLeagueHistoryMedals()}
+                >
+                  {scrapeLeagueMedalsBusy
+                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                    : <Database className="h-3 w-3" />}
+                  {scrapeLeagueMedalsBusy ? "Scraping…" : "Scrape ESPN League History Medals"}
+                </Button>
                 <label className="flex items-center gap-1.5 cursor-pointer select-none">
                   <Checkbox
                     checked={forceReplace}
@@ -1956,6 +2035,15 @@ export function SyncData() {
                   <span className="text-xs text-muted-foreground">Force Replace saved values</span>
                 </label>
               </div>
+              {scrapeLeagueMedalsNote && (
+                <p className="text-xs text-muted-foreground pt-1">{scrapeLeagueMedalsNote}</p>
+              )}
+              {scrapeLeagueMedalsErr && (
+                <div className="flex items-start gap-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300 mt-2">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  {scrapeLeagueMedalsErr}
+                </div>
+              )}
             </CardHeader>
             <CardContent className="space-y-1.5">
               {/* Header row */}

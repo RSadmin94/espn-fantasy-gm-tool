@@ -360,6 +360,7 @@ const MSG_HIST_FULL = "GMWR_HIST_FULL";
 const MSG_HIST_STATUS = "GMWR_HIST_STATUS";
 const MSG_HIST_STANDINGS = "GMWR_HIST_STANDINGS";
 const MSG_HIST_MATCHUPS = "GMWR_HIST_MATCHUPS";
+const MSG_LEAGUE_HISTORY_MEDALS = "GMWR_LEAGUE_HISTORY_MEDALS";
 /** Page (gmwarroom) → background: credentialed GET to fantasy.espn.com for browser-session sync. */
 const MSG_PAGE_ESPN_FETCH = "GMWR_PAGE_ESPN_FETCH";
 
@@ -744,6 +745,184 @@ async function scrapeSchedulePage(leagueId, season) {
   } finally {
     if (tabId != null) chrome.tabs.remove(tabId).catch(() => {});
   }
+}
+
+/**
+ * Open a hidden tab for the ESPN league history page, wait for SPA render, scrape season medal data, close tab.
+ * Scrapes once for all seasons (the page shows full history). Returns { ok, bodyLines, tableRows, cards, ... }.
+ */
+async function scrapeLeagueHistoryPage(leagueId) {
+  const lid = String(leagueId ?? "").trim();
+  const targetUrl = `https://fantasy.espn.com/football/league/history?leagueId=${encodeURIComponent(lid)}`;
+  let tabId = null;
+  try {
+    const tab = await chrome.tabs.create({ url: targetUrl, active: false });
+    tabId = tab.id;
+    console.info("[GMWR] scrapeLeagueHistory: opened tab", { tabId, leagueId: lid });
+    await waitForTabComplete(tabId, 30000);
+    await sleep(6000);
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: () => {
+        const bodyText = document.body.innerText || "";
+        const bodyLines = bodyText.split("\n").map((s) => s.trim()).filter((s) => s.length > 0);
+
+        const tableRows = [];
+        document.querySelectorAll("table").forEach((tbl, tblIdx) => {
+          tbl.querySelectorAll("tr").forEach((row, rowIdx) => {
+            const cells = Array.from(row.querySelectorAll("td, th")).map((c) => (c.innerText || "").trim());
+            if (cells.length > 0 && cells.some((c) => c.length > 0)) {
+              tableRows.push({ tblIdx, rowIdx, cells });
+            }
+          });
+        });
+
+        // DOM card extraction: look for history/season/placement/medal containers that contain a year
+        const cards = [];
+        const currentYear = new Date().getFullYear();
+        const yearRe = /\b(20[0-9]{2})\b/;
+        const seenEls = new Set();
+
+        const selectors = [
+          "[class*='history']", "[class*='History']",
+          "[class*='season']",  "[class*='Season']",
+          "[class*='champion']","[class*='Champion']",
+          "[class*='placement']","[class*='Placement']",
+          "[class*='trophy']",  "[class*='Trophy']",
+          "[class*='medal']",   "[class*='Medal']",
+        ];
+
+        for (const sel of selectors) {
+          try {
+            document.querySelectorAll(sel).forEach((el) => {
+              if (seenEls.has(el)) return;
+              const txt = el.innerText || "";
+              if (!yearRe.test(txt) || txt.length > 50000) return;
+              seenEls.add(el);
+              const yearMatch = txt.match(/\b(20[0-9]{2})\b/);
+              if (!yearMatch) return;
+              const year = parseInt(yearMatch[1], 10);
+              if (year < 2009 || year > currentYear) return;
+              const lines = txt.split("\n").map((s) => s.trim()).filter(Boolean);
+              cards.push({ year, lines: lines.slice(0, 30), textPreview: txt.slice(0, 300) });
+            });
+          } catch { /* invalid selector — ignore */ }
+        }
+
+        return {
+          ok: true,
+          url: location.href,
+          title: document.title,
+          bodyLength: bodyText.length,
+          bodyPreview: bodyText.slice(0, 8000),
+          bodyLines: bodyLines.slice(0, 5000),
+          tableRows: tableRows.slice(0, 500),
+          cards: cards.slice(0, 100),
+        };
+      },
+    });
+    return results?.[0]?.result || { ok: false, error: "scrape_failed" };
+  } catch (err) {
+    return { ok: false, error: "scrape_failed", message: err instanceof Error ? err.message : String(err) };
+  } finally {
+    if (tabId != null) chrome.tabs.remove(tabId).catch(() => {});
+  }
+}
+
+/**
+ * Parse `scrapeLeagueHistoryPage` result into medal rows.
+ * Tries: (1) table rows with a year cell, (2) body-text sequential parsing, (3) DOM card data.
+ * Returns [{ season, championOwner, runnerUpOwner, thirdPlaceOwner }] sorted by season asc.
+ */
+function parseLeagueHistoryMedals(scrapeResult) {
+  if (!scrapeResult?.ok) return [];
+
+  const currentYear = new Date().getFullYear();
+  const seen = new Set();
+  const medals = [];
+
+  function addMedal(season, champion, runnerUp, thirdPlace) {
+    season = Number(season);
+    if (!season || season < 2009 || season > currentYear) return;
+    if (seen.has(season)) return;
+    champion = String(champion || "").trim();
+    if (!champion) return;
+    seen.add(season);
+    medals.push({
+      season,
+      championOwner: champion,
+      runnerUpOwner: String(runnerUp || "").trim(),
+      thirdPlaceOwner: String(thirdPlace || "").trim(),
+    });
+  }
+
+  const yearLineRe = /^(20[0-9]{2})$/;
+  const rankLineRe = /^(1st|2nd|3rd|1st\s*place|2nd\s*place|3rd\s*place|champion|runner.?up|third|third\s*place|silver|gold|bronze)$/i;
+  const junkRe = /^(espn|fantasy|football|league|history|season|playoffs?|bracket|regular\s*season|schedule|standings|draft|trade|roster|settings|members?|message\s*board|waiver|free\s*agent|powered\s*by|terms|privacy|©|home|sign\s*in|log\s*in|menu|navigation|skip|loading|more|less)$/i;
+
+  function isValidTeamName(line) {
+    const s = String(line || "").trim();
+    if (s.length < 2 || s.length > 80) return false;
+    if (yearLineRe.test(s)) return false;
+    if (rankLineRe.test(s)) return false;
+    if (junkRe.test(s)) return false;
+    if (/^https?:/i.test(s)) return false;
+    if (/^\d+$/.test(s)) return false;
+    return true;
+  }
+
+  // ── Strategy 1: table rows with a year cell ──
+  if (Array.isArray(scrapeResult.tableRows) && scrapeResult.tableRows.length > 0) {
+    for (const { cells } of scrapeResult.tableRows) {
+      if (cells.length < 2) continue;
+      const yearIdx = cells.findIndex((c) => yearLineRe.test(String(c || "").trim()));
+      if (yearIdx < 0) continue;
+      const year = parseInt(cells[yearIdx], 10);
+      const teamCells = cells.slice(yearIdx + 1).filter((c) => isValidTeamName(c));
+      if (teamCells.length >= 1) addMedal(year, teamCells[0], teamCells[1], teamCells[2]);
+    }
+    if (medals.length >= 3) { medals.sort((a, b) => a.season - b.season); return medals; }
+    seen.clear(); medals.length = 0;
+  }
+
+  // ── Strategy 2: body lines sequential (year header → following team names) ──
+  const bodyLines = Array.isArray(scrapeResult.bodyLines) ? scrapeResult.bodyLines : [];
+  if (bodyLines.length > 0) {
+    let i = 0;
+    while (i < bodyLines.length) {
+      const line = bodyLines[i].trim();
+      if (!yearLineRe.test(line)) { i++; continue; }
+      const year = parseInt(line, 10);
+      if (year < 2009 || year > currentYear) { i++; continue; }
+
+      const teams = [];
+      let j = i + 1;
+      while (j < bodyLines.length && j < i + 40 && teams.length < 3) {
+        const next = bodyLines[j].trim();
+        if (yearLineRe.test(next)) break;
+        if (!rankLineRe.test(next) && isValidTeamName(next)) teams.push(next);
+        j++;
+      }
+
+      if (teams.length >= 1) addMedal(year, teams[0], teams[1], teams[2]);
+      i = j;
+    }
+    if (medals.length >= 3) { medals.sort((a, b) => a.season - b.season); return medals; }
+    seen.clear(); medals.length = 0;
+  }
+
+  // ── Strategy 3: DOM cards ──
+  if (Array.isArray(scrapeResult.cards) && scrapeResult.cards.length > 0) {
+    for (const card of scrapeResult.cards) {
+      if (!card.year || !Array.isArray(card.lines)) continue;
+      const teams = card.lines.filter((l) => isValidTeamName(l));
+      if (teams.length >= 1) addMedal(card.year, teams[0], teams[1], teams[2]);
+    }
+  }
+
+  medals.sort((a, b) => a.season - b.season);
+  return medals;
 }
 
 /** True if a text string looks like a fantasy football score (0–400, up to 2 decimal places). */
@@ -1815,6 +1994,57 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       sendResponse({ ok: true, data: trpcResultJson(post.parsed) });
     })().catch((err) => {
       sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    });
+    return true;
+  }
+
+  if (t === MSG_LEAGUE_HISTORY_MEDALS) {
+    let lhmResponded = false;
+    function onceRespondLhm(response) {
+      if (lhmResponded) return;
+      lhmResponded = true;
+      clearTimeout(lhmTimer);
+      sendResponse(response);
+    }
+    const lhmTimer = setTimeout(
+      () => onceRespondLhm({ ok: false, error: "extension_internal_timeout" }),
+      110000,
+    );
+    (async () => {
+      const leagueId = String(message?.leagueId || "457622").trim();
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        onceRespondLhm({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
+        return;
+      }
+      const scrapeResult = await scrapeLeagueHistoryPage(leagueId);
+      console.info("[GMWR] leagueHistory scrape", { leagueId }, {
+        bodyLength: scrapeResult?.bodyLength,
+        ok: scrapeResult?.ok,
+        cardCount: Array.isArray(scrapeResult?.cards) ? scrapeResult.cards.length : 0,
+      });
+      if (!scrapeResult?.ok) {
+        onceRespondLhm({
+          ok: false,
+          error: scrapeResult?.error || "scrape_failed",
+          message: scrapeResult?.message,
+          mode: "league_history_scrape_failed",
+        });
+        return;
+      }
+      const medals = parseLeagueHistoryMedals(scrapeResult);
+      console.info("[GMWR] leagueHistory medals parsed", { count: medals.length, first: medals[0], last: medals[medals.length - 1] });
+      onceRespondLhm({
+        ok: true,
+        mode: "league_history_scraped_parsed",
+        leagueId,
+        medalCount: medals.length,
+        medals,
+        bodyLength: scrapeResult.bodyLength,
+        cardCount: Array.isArray(scrapeResult.cards) ? scrapeResult.cards.length : 0,
+      });
+    })().catch((err) => {
+      onceRespondLhm({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
     return true;
   }
