@@ -66,6 +66,8 @@ const NAV_GROUPS: NavGroup[] = [
       { kind: "link", label: "Standings", href: "/standings", icon: Trophy },
       { kind: "link", label: "League History", href: "/history", icon: History },
       { kind: "link", label: "League Timeline", href: "/league-timeline", icon: History },
+      { kind: "link", label: "Championships", href: "/championships", icon: Trophy },
+      { kind: "link", label: "Ring of Honor", href: "/ring-of-honor", icon: Trophy },
       { kind: "link", label: "Matchups", href: "/matchups", icon: LayoutGrid },
       { kind: "link", label: "Rosters", href: "/roster", icon: Users },
       { kind: "link", label: "Transactions", href: "/transactions", icon: ArrowLeftRight },

@@ -4087,6 +4087,143 @@ export const appRouter = router({
         .orderBy(ascDrizzle(leagueMedals.season));
     }),
 
+    /**
+     * Ring of Honor: resolve league_medals champion/runner-up/third team names → owner names
+     * via gmTeams lookup (same season). Championships are credited to the OWNER of the team,
+     * not to the team name itself.
+     */
+    ringOfHonor: publicProcedure.query(async ({ ctx }) => {
+      type ResolvedMedal = {
+        season: number;
+        championTeam: string | null;
+        runnerUpTeam: string | null;
+        thirdTeam: string | null;
+        resolvedChampionOwner: string | null;
+        resolvedRunnerUpOwner: string | null;
+        resolvedThirdOwner: string | null;
+      };
+      type LeaderboardEntry = {
+        ownerName: string;
+        ownerKey: string;
+        titles: number;
+        seasons: number[];
+      };
+      type Diagnostics = {
+        totalMedals: number;
+        unmatchedChampionTeams: { season: number; teamName: string }[];
+        unmatchedRunnerUpTeams: { season: number; teamName: string }[];
+        unmatchedThirdTeams: { season: number; teamName: string }[];
+      };
+      const empty = {
+        medals: [] as ResolvedMedal[],
+        leaderboard: [] as LeaderboardEntry[],
+        diagnostics: {
+          totalMedals: 0,
+          unmatchedChampionTeams: [] as { season: number; teamName: string }[],
+          unmatchedRunnerUpTeams: [] as { season: number; teamName: string }[],
+          unmatchedThirdTeams: [] as { season: number; teamName: string }[],
+        } as Diagnostics,
+      };
+
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return empty;
+
+      const [medalRows, teamRows] = await Promise.all([
+        db.select({
+          season: leagueMedals.season,
+          championOwner: leagueMedals.championOwner,
+          runnerUpOwner: leagueMedals.runnerUpOwner,
+          thirdPlaceOwner: leagueMedals.thirdPlaceOwner,
+        })
+        .from(leagueMedals)
+        .where(eqDrizzle(leagueMedals.leagueId, leagueId))
+        .orderBy(ascDrizzle(leagueMedals.season)),
+
+        db.select({
+          season: gmTeams.season,
+          name: gmTeams.name,
+          ownerName: gmTeams.ownerName,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId)),
+      ]);
+
+      // Build lookup: season → [{ normName, rawOwner }]
+      const teamsBySeason = new Map<number, { normName: string; rawOwner: string }[]>();
+      for (const t of teamRows) {
+        const normName = normalizeOwnerStr(t.name || "");
+        if (!normName) continue;
+        const rawOwner = cleanOwnerDisplay(t.ownerName || t.name || "") || t.name || "";
+        const arr = teamsBySeason.get(t.season) ?? [];
+        arr.push({ normName, rawOwner });
+        teamsBySeason.set(t.season, arr);
+      }
+
+      function resolveTeamToOwner(season: number, teamName: string | null): string | null {
+        if (!teamName?.trim()) return null;
+        const norm = normalizeOwnerStr(teamName);
+        const match = (teamsBySeason.get(season) ?? []).find((t) => t.normName === norm);
+        return match?.rawOwner ?? null;
+      }
+
+      const unmatchedChampionTeams: { season: number; teamName: string }[] = [];
+      const unmatchedRunnerUpTeams: { season: number; teamName: string }[] = [];
+      const unmatchedThirdTeams:    { season: number; teamName: string }[] = [];
+
+      const resolvedMedals: ResolvedMedal[] = medalRows.map((m) => {
+        const resolvedChampionOwner = resolveTeamToOwner(m.season, m.championOwner);
+        const resolvedRunnerUpOwner = resolveTeamToOwner(m.season, m.runnerUpOwner);
+        const resolvedThirdOwner    = resolveTeamToOwner(m.season, m.thirdPlaceOwner);
+
+        if (m.championOwner?.trim() && !resolvedChampionOwner)
+          unmatchedChampionTeams.push({ season: m.season, teamName: m.championOwner });
+        if (m.runnerUpOwner?.trim() && !resolvedRunnerUpOwner)
+          unmatchedRunnerUpTeams.push({ season: m.season, teamName: m.runnerUpOwner });
+        if (m.thirdPlaceOwner?.trim() && !resolvedThirdOwner)
+          unmatchedThirdTeams.push({ season: m.season, teamName: m.thirdPlaceOwner });
+
+        return {
+          season: m.season,
+          championTeam: m.championOwner || null,
+          runnerUpTeam: m.runnerUpOwner || null,
+          thirdTeam:    m.thirdPlaceOwner || null,
+          resolvedChampionOwner,
+          resolvedRunnerUpOwner,
+          resolvedThirdOwner,
+        };
+      });
+
+      // Leaderboard: credit resolved owner (person) with each championship
+      const ownerMap = new Map<string, { ownerName: string; ownerKey: string; titles: number; seasons: number[] }>();
+      for (const m of resolvedMedals) {
+        if (!m.resolvedChampionOwner) continue;
+        const key = normalizeOwnerStr(m.resolvedChampionOwner);
+        const entry = ownerMap.get(key) ?? { ownerName: m.resolvedChampionOwner, ownerKey: key, titles: 0, seasons: [] };
+        entry.titles++;
+        entry.seasons.push(m.season);
+        ownerMap.set(key, entry);
+      }
+      const leaderboard: LeaderboardEntry[] = [...ownerMap.values()]
+        .map((e) => ({ ...e, seasons: e.seasons.slice().sort((a, b) => b - a) }))
+        .sort((a, b) => b.titles - a.titles || a.ownerName.localeCompare(b.ownerName));
+
+      return {
+        medals: resolvedMedals,
+        leaderboard,
+        diagnostics: {
+          totalMedals: resolvedMedals.length,
+          unmatchedChampionTeams,
+          unmatchedRunnerUpTeams,
+          unmatchedThirdTeams,
+        },
+      };
+    }),
+
     /** Upsert gold/silver/bronze medal data for one season from the ESPN League History page. */
     upsertSeasonMedals: publicProcedure
       .input(z.object({

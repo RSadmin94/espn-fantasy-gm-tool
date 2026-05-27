@@ -23,6 +23,8 @@ import { DraftHistory } from "./pages/DraftHistory";
 import { Matchups } from "./pages/Matchups";
 import { LeagueHistory } from "./pages/LeagueHistory";
 import { LeagueTimeline } from "./pages/LeagueTimeline";
+import { Championships } from "./pages/Championships";
+import { RingOfHonor } from "./pages/RingOfHonor";
 import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
@@ -122,6 +124,8 @@ const router = createBrowserRouter([
           { path: "/matchups", element: <Matchups /> },
           { path: "/history", element: <LeagueHistory /> },
           { path: "/league-timeline", element: <LeagueTimeline /> },
+          { path: "/championships", element: <Championships /> },
+          { path: "/ring-of-honor", element: <RingOfHonor /> },
           { path: "/roster", element: <Roster /> },
           { path: "/trades", element: <Trades /> },
           { path: "/advisor", element: <Advisor /> },
