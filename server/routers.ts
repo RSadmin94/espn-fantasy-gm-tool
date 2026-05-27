@@ -43,6 +43,7 @@ import {
   getLeagueEvents,
   getLeagueEventsSummary,
   getCachedView,
+  getCachedViewWithTier,
   getAllCachedSeasons,
   getRefreshManifests,
   hasActiveEspnLeagueConnection,
@@ -67,6 +68,7 @@ import {
   getSeasonDraftPicks,
   getSeasonTeams,
 } from "./historicalDataService";
+import { upsertMatchups } from "./espnPersistence";
 import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmMatchups, syncRuns, leagueMedals } from "../drizzle/schema";
 import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle, asc as ascDrizzle, sql } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
@@ -4226,6 +4228,23 @@ export const appRouter = router({
 
     /** All-time owner W-L-T from deduped completed weekly matchups (not standings snapshots). */
     ownerAllTimeRecords: publicProcedure.query(async ({ ctx }) => {
+      // Seasons we expect coverage for. Cache fallback is attempted for any season
+      // not present in the normalized gmMatchups table.
+      const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+
+      type FlatMatchup = {
+        season: number;
+        matchupPeriodId: number;
+        homeTeamId: number;
+        awayTeamId: number;
+        winnerTeamId: number | null;
+        isCompleted: number;
+      };
+      type SeasonCoverageEntry = {
+        season: number;
+        source: "db" | "cache" | "empty";
+        rawRows: number;
+      };
       type OwnerRecord = {
         ownerKey: string;
         displayName: string;
@@ -4244,16 +4263,18 @@ export const appRouter = router({
         skippedSynthetic: number;
         skippedUnresolvedOwner: number;
         skippedSameOwner: number;
+        dbSeasons: number[];
+        cacheSeasons: number[];
+        emptySeasons: number[];
+        coverageWarning: boolean;
+        seasonCoverage: SeasonCoverageEntry[];
       };
       const emptyDiag: Diagnostics = {
-        rawMatchupRows: 0,
-        uniqueMatchups: 0,
-        duplicateMatchups: 0,
-        skippedIncomplete: 0,
-        skippedMissingTeams: 0,
-        skippedSynthetic: 0,
-        skippedUnresolvedOwner: 0,
-        skippedSameOwner: 0,
+        rawMatchupRows: 0, uniqueMatchups: 0, duplicateMatchups: 0,
+        skippedIncomplete: 0, skippedMissingTeams: 0, skippedSynthetic: 0,
+        skippedUnresolvedOwner: 0, skippedSameOwner: 0,
+        dbSeasons: [], cacheSeasons: [], emptySeasons: [],
+        coverageWarning: false, seasonCoverage: [],
       };
 
       const { leagueId } = await resolveActiveLeagueId(
@@ -4284,7 +4305,8 @@ export const appRouter = router({
         if (display) ownerDisplay.set(ownerKey, display);
       }
 
-      const matchups = await db
+      // ── Phase 1: Load from normalized gmMatchups ──────────────────────────
+      const dbRows = await db
         .select({
           season: gmMatchups.season,
           matchupPeriodId: gmMatchups.matchupPeriodId,
@@ -4296,6 +4318,61 @@ export const appRouter = router({
         .from(gmMatchups)
         .where(eqDrizzle(gmMatchups.leagueId, leagueId));
 
+      const coveredByDb = new Set<number>(dbRows.map((r) => r.season));
+      const allMatchups: FlatMatchup[] = dbRows.map((r) => ({
+        season: r.season,
+        matchupPeriodId: r.matchupPeriodId,
+        homeTeamId: r.homeTeamId,
+        awayTeamId: r.awayTeamId,
+        winnerTeamId: r.winnerTeamId,
+        isCompleted: r.isCompleted,
+      }));
+
+      // ── Phase 2: Fallback to combined ESPN cache for uncovered seasons ─────
+      const seasonCoverage: SeasonCoverageEntry[] = [];
+      const dbSeasons: number[] = [];
+      const cacheSeasons: number[] = [];
+      const emptySeasons: number[] = [];
+
+      for (const s of HIST_SEASONS) {
+        if (coveredByDb.has(s)) {
+          const count = dbRows.filter((r) => r.season === s).length;
+          seasonCoverage.push({ season: s, source: "db", rawRows: count });
+          dbSeasons.push(s);
+          continue;
+        }
+        // Season not in gmMatchups — try combined ESPN cache
+        const hit = await getCachedViewWithTier(s, "combined", leagueId);
+        const payload = hit?.row?.payload;
+        if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+          let added = 0;
+          try {
+            const norm = normalizeMatchups(payload as Record<string, unknown>);
+            for (const m of norm) {
+              const hid = Number(m.homeTeamId);
+              const aid = Number(m.awayTeamId);
+              if (!hid || !aid || !Number.isFinite(hid) || !Number.isFinite(aid)) continue;
+              const winnerStr = String(m.winner ?? "UNDECIDED");
+              const winnerTeamId = winnerStr === "HOME" ? hid : winnerStr === "AWAY" ? aid : null;
+              const isCompleted = winnerTeamId != null ? 1 : 0;
+              allMatchups.push({ season: s, matchupPeriodId: Number(m.matchupPeriodId) || 0, homeTeamId: hid, awayTeamId: aid, winnerTeamId, isCompleted });
+              added++;
+            }
+          } catch { /* skip malformed payload */ }
+          if (added > 0) {
+            seasonCoverage.push({ season: s, source: "cache", rawRows: added });
+            cacheSeasons.push(s);
+          } else {
+            seasonCoverage.push({ season: s, source: "empty", rawRows: 0 });
+            emptySeasons.push(s);
+          }
+        } else {
+          seasonCoverage.push({ season: s, source: "empty", rawRows: 0 });
+          emptySeasons.push(s);
+        }
+      }
+
+      // ── Phase 3: Aggregate owner W-L-T across all sources ─────────────────
       const records = new Map<string, { wins: number; losses: number; ties: number }>();
       const bump = (ownerKey: string, field: "wins" | "losses" | "ties") => {
         if (!records.has(ownerKey)) records.set(ownerKey, { wins: 0, losses: 0, ties: 0 });
@@ -4311,76 +4388,46 @@ export const appRouter = router({
       let skippedSameOwner = 0;
       let uniqueMatchups = 0;
 
-      for (const m of matchups) {
-        if (m.isCompleted !== 1) {
-          skippedIncomplete++;
-          continue;
-        }
+      for (const m of allMatchups) {
+        if (m.isCompleted !== 1) { skippedIncomplete++; continue; }
 
         const homeId = Number(m.homeTeamId);
         const awayId = Number(m.awayTeamId);
-        if (!homeId || !awayId) {
-          skippedMissingTeams++;
-          continue;
-        }
-        if (homeId <= 0 || awayId <= 0 || homeId === awayId) {
-          skippedSynthetic++;
-          continue;
-        }
+        if (!homeId || !awayId) { skippedMissingTeams++; continue; }
+        if (homeId <= 0 || awayId <= 0 || homeId === awayId) { skippedSynthetic++; continue; }
 
         const mk = `${m.season}|${m.matchupPeriodId}|${homeId}|${awayId}`;
-        if (seenKeys.has(mk)) {
-          duplicateMatchups++;
-          continue;
-        }
+        if (seenKeys.has(mk)) { duplicateMatchups++; continue; }
         seenKeys.add(mk);
         uniqueMatchups++;
 
         const homeOwnerKey = teamToOwnerKey.get(`${m.season}:${homeId}`);
         const awayOwnerKey = teamToOwnerKey.get(`${m.season}:${awayId}`);
-        if (!homeOwnerKey || !awayOwnerKey) {
-          skippedUnresolvedOwner++;
-          continue;
-        }
-        if (homeOwnerKey === awayOwnerKey) {
-          skippedSameOwner++;
-          continue;
-        }
+        if (!homeOwnerKey || !awayOwnerKey) { skippedUnresolvedOwner++; continue; }
+        if (homeOwnerKey === awayOwnerKey) { skippedSameOwner++; continue; }
 
         const winnerId = m.winnerTeamId != null ? Number(m.winnerTeamId) : null;
         if (winnerId === homeId) {
-          bump(homeOwnerKey, "wins");
-          bump(awayOwnerKey, "losses");
+          bump(homeOwnerKey, "wins"); bump(awayOwnerKey, "losses");
         } else if (winnerId === awayId) {
-          bump(awayOwnerKey, "wins");
-          bump(homeOwnerKey, "losses");
+          bump(awayOwnerKey, "wins"); bump(homeOwnerKey, "losses");
         } else {
-          bump(homeOwnerKey, "ties");
-          bump(awayOwnerKey, "ties");
+          bump(homeOwnerKey, "ties"); bump(awayOwnerKey, "ties");
         }
       }
 
       const owners: OwnerRecord[] = [...records.entries()]
         .map(([ownerKey, { wins, losses, ties }]) => {
           const gamesPlayed = wins + losses + ties;
-          const winPct =
-            gamesPlayed > 0 ? Math.round(((wins + 0.5 * ties) / gamesPlayed) * 1000) / 10 : 0;
-          return {
-            ownerKey,
-            displayName: ownerDisplay.get(ownerKey) ?? ownerKey,
-            wins,
-            losses,
-            ties,
-            gamesPlayed,
-            winPct,
-          };
+          const winPct = gamesPlayed > 0 ? Math.round(((wins + 0.5 * ties) / gamesPlayed) * 1000) / 10 : 0;
+          return { ownerKey, displayName: ownerDisplay.get(ownerKey) ?? ownerKey, wins, losses, ties, gamesPlayed, winPct };
         })
         .sort((a, b) => b.winPct - a.winPct || b.wins - a.wins || a.displayName.localeCompare(b.displayName));
 
       return {
         owners,
         diagnostics: {
-          rawMatchupRows: matchups.length,
+          rawMatchupRows: allMatchups.length,
           uniqueMatchups,
           duplicateMatchups,
           skippedIncomplete,
@@ -4388,8 +4435,104 @@ export const appRouter = router({
           skippedSynthetic,
           skippedUnresolvedOwner,
           skippedSameOwner,
+          dbSeasons,
+          cacheSeasons,
+          emptySeasons,
+          coverageWarning: emptySeasons.length > 0,
+          seasonCoverage,
         },
       };
+    }),
+
+    /** Per-season matchup coverage diagnostics: how many matchup rows exist per source per season. */
+    ownerMatchupCoverage: publicProcedure.query(async ({ ctx }) => {
+      const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return { leagueId, seasons: [] as { season: number; gmMatchupsRows: number; completedRows: number; dedupedRows: number; gmTeamsRows: number; cacheAvailable: boolean; usable: boolean }[] };
+
+      // Count gmMatchups rows per season
+      const [dbMatchupRows, dbTeamRows] = await Promise.all([
+        db.select({ season: gmMatchups.season, matchupPeriodId: gmMatchups.matchupPeriodId, homeTeamId: gmMatchups.homeTeamId, awayTeamId: gmMatchups.awayTeamId, isCompleted: gmMatchups.isCompleted })
+          .from(gmMatchups).where(eqDrizzle(gmMatchups.leagueId, leagueId)),
+        db.select({ season: gmTeams.season }).from(gmTeams).where(eqDrizzle(gmTeams.leagueId, leagueId)),
+      ]);
+
+      const matchupsBySeason = new Map<number, typeof dbMatchupRows>();
+      for (const r of dbMatchupRows) {
+        const arr = matchupsBySeason.get(r.season) ?? [];
+        arr.push(r);
+        matchupsBySeason.set(r.season, arr);
+      }
+      const teamCountBySeason = new Map<number, number>();
+      for (const r of dbTeamRows) teamCountBySeason.set(r.season, (teamCountBySeason.get(r.season) ?? 0) + 1);
+
+      const seasons = await Promise.all(HIST_SEASONS.map(async (s) => {
+        const rows = matchupsBySeason.get(s) ?? [];
+        const completedRows = rows.filter((r) => r.isCompleted === 1).length;
+        const seenKeys = new Set<string>();
+        let dedupedRows = 0;
+        for (const r of rows) {
+          if (r.isCompleted !== 1) continue;
+          const k = `${s}|${r.matchupPeriodId}|${r.homeTeamId}|${r.awayTeamId}`;
+          if (!seenKeys.has(k)) { seenKeys.add(k); dedupedRows++; }
+        }
+        const gmTeamsRows = teamCountBySeason.get(s) ?? 0;
+        const hit = await getCachedViewWithTier(s, "combined", leagueId);
+        const cacheAvailable = Boolean(hit?.row?.payload);
+        const usable = (rows.length > 0 || cacheAvailable) && gmTeamsRows > 0;
+        return { season: s, gmMatchupsRows: rows.length, completedRows, dedupedRows, gmTeamsRows, cacheAvailable, usable };
+      }));
+
+      return { leagueId, seasons };
+    }),
+
+    /** Backfill gmMatchups from ESPN combined cache for seasons with no normalized rows. */
+    backfillMatchupsFromCache: publicProcedure.mutation(async ({ ctx }) => {
+      const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      // Find which seasons already have rows in gmMatchups
+      const existing = await db
+        .selectDistinct({ season: gmMatchups.season })
+        .from(gmMatchups)
+        .where(eqDrizzle(gmMatchups.leagueId, leagueId));
+      const coveredSeasons = new Set(existing.map((r) => r.season));
+
+      const results: { season: number; status: "skipped" | "backfilled" | "no_cache" | "error"; rowsWritten: number }[] = [];
+
+      for (const s of HIST_SEASONS) {
+        if (coveredSeasons.has(s)) {
+          results.push({ season: s, status: "skipped", rowsWritten: 0 });
+          continue;
+        }
+        const hit = await getCachedViewWithTier(s, "combined", leagueId);
+        const payload = hit?.row?.payload;
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+          results.push({ season: s, status: "no_cache", rowsWritten: 0 });
+          continue;
+        }
+        try {
+          const written = await upsertMatchups(db, leagueId, s, payload as Record<string, unknown>);
+          results.push({ season: s, status: "backfilled", rowsWritten: written });
+        } catch (e) {
+          console.error("[backfillMatchupsFromCache] season", s, e);
+          results.push({ season: s, status: "error", rowsWritten: 0 });
+        }
+      }
+
+      const totalWritten = results.reduce((n, r) => n + r.rowsWritten, 0);
+      return { leagueId, results, totalWritten };
     }),
 
     /** Upsert gold/silver/bronze medal data for one season from the ESPN League History page. */
