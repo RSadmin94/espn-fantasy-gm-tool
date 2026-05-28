@@ -334,19 +334,6 @@ export function SyncData() {
     transactions: number;
   } | null>(null);
 
-  // ── Draft Reset state ────────────────────────────────────────────────────
-  const [draftResetBusy, setDraftResetBusy]   = useState(false);
-  const [draftResetNote, setDraftResetNote]   = useState<string | null>(null);
-  const [draftResetErr,  setDraftResetErr]    = useState<string | null>(null);
-  const [draftImportBusy, setDraftImportBusy] = useState<number | null>(null);
-  type DraftImportResult = {
-    season: number; received: number; insertedOrUpdated: number;
-    dbCountAfter: number; uniqueOverallPicks: number;
-    duplicateSlots: number; duplicatePlayerRoundOwner: number; adjacentDuplicatePlayers: number;
-    error?: string;
-  };
-  const [draftImportResults, setDraftImportResults] = useState<Record<number, DraftImportResult>>({});
-
   // ── League Medals state ──────────────────────────────────────────────────
   type MedalEntry = { champion: string; runnerUp: string; third: string };
   const ALL_MEDAL_SEASONS = Array.from({ length: 16 }, (_, i) => 2010 + i);
@@ -475,7 +462,6 @@ export function SyncData() {
     },
   });
 
-  const clearLeagueDraftPicksMutation = trpc.espn.clearLeagueDraftPicks.useMutation();
   const upsertSeasonMedalsMutation    = trpc.espn.upsertSeasonMedals.useMutation();
 
   const { mutate: runRefresh } = refreshMutation;
@@ -1056,103 +1042,6 @@ export function SyncData() {
       setScrapeLeagueMedalsErr(e instanceof Error ? e.message : String(e));
     } finally {
       setScrapeLeagueMedalsBusy(false);
-    }
-  };
-
-  // ── Draft Reset handlers ─────────────────────────────────────────────────
-  const handleClearAllDraftPicks = async () => {
-    if (!window.confirm("Delete ALL draft_picks for league 457622? This cannot be undone.")) return;
-    setDraftResetBusy(true);
-    setDraftResetNote(null);
-    setDraftResetErr(null);
-    try {
-      const result = await clearLeagueDraftPicksMutation.mutateAsync({ leagueId: "457622" });
-      setDraftResetNote(`Cleared ${result.clearedCount} rows — draft_picks count = 0`);
-      setDraftImportResults({});
-    } catch (e) {
-      setDraftResetErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setDraftResetBusy(false);
-    }
-  };
-
-  const handleImportDraftYear = async (season: number) => {
-    setDraftImportBusy(season);
-    setDraftImportResults((prev) => {
-      const next = { ...prev };
-      delete next[season];
-      return next;
-    });
-    try {
-      const token = await getToken() ?? "";
-      // 1. Scrape via extension
-      const extResult = await new Promise<Record<string, unknown>>((resolve) => {
-        const id = `draft-reset-${season}-${Date.now()}`;
-        const timeout = window.setTimeout(() => {
-          window.removeEventListener("message", onDraftResetMsg);
-          resolve({ ok: false, error: "Extension timed out" });
-        }, 120_000);
-        function onDraftResetMsg(ev: MessageEvent) {
-          if (ev.source !== window) return;
-          const d = ev.data as Record<string, unknown> | null;
-          if (!d || d.type !== "GMWR_HIST_TEST_REPLY" || d.id !== id) return;
-          window.clearTimeout(timeout);
-          window.removeEventListener("message", onDraftResetMsg);
-          resolve(d);
-        }
-        window.addEventListener("message", onDraftResetMsg);
-        window.postMessage({ type: "GMWR_HIST_TEST", id, leagueId: "457622", season, clerkToken: token }, "*");
-      });
-
-      if (!extResult.ok) {
-        const msg = extResult.error ? String(extResult.error) : "Extension scrape failed";
-        setDraftImportResults((prev) => ({ ...prev, [season]: { season, received: 0, insertedOrUpdated: 0, dbCountAfter: 0, uniqueOverallPicks: 0, duplicateSlots: 0, duplicatePlayerRoundOwner: 0, adjacentDuplicatePlayers: 0, error: msg } }));
-        return;
-      }
-
-      const picks = Array.isArray(extResult.picks) ? extResult.picks : [];
-      if (picks.length === 0) {
-        setDraftImportResults((prev) => ({ ...prev, [season]: { season, received: 0, insertedOrUpdated: 0, dbCountAfter: 0, uniqueOverallPicks: 0, duplicateSlots: 0, duplicatePlayerRoundOwner: 0, adjacentDuplicatePlayers: 0, error: "Extension returned 0 picks" } }));
-        return;
-      }
-
-      // 2. Clear this season's rows first
-      await clearLeagueDraftPicksMutation.mutateAsync({ leagueId: "457622", season });
-
-      // 3. Ingest
-      setTrpcToken(token);
-      let ingestResult: Record<string, unknown> = {};
-      try {
-        ingestResult = await ingestParsedDraftPicksMutation.mutateAsync({
-          leagueId: "457622",
-          season,
-          picks: picks as { overallPick: number; roundId: number; roundPick: number; teamId?: number; teamName: string; playerName: string; position: string; nflTeam?: string }[],
-        }) as Record<string, unknown>;
-      } finally {
-        setTrpcToken(null);
-      }
-
-      // 4. Diagnostics
-      const diag = await utils.espn.draftDiagnostics.fetch({ season });
-
-      setDraftImportResults((prev) => ({
-        ...prev,
-        [season]: {
-          season,
-          received: picks.length,
-          insertedOrUpdated: Number(ingestResult.insertedOrUpdated ?? 0),
-          dbCountAfter: Number(ingestResult.dbCountAfter ?? 0),
-          uniqueOverallPicks: diag.uniqueOverallPicks,
-          duplicateSlots: diag.duplicateOverallPickSlots.length,
-          duplicatePlayerRoundOwner: diag.duplicatePlayerRoundOwner.length,
-          adjacentDuplicatePlayers: diag.adjacentDuplicatePlayers.length,
-        },
-      }));
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setDraftImportResults((prev) => ({ ...prev, [season]: { season, received: 0, insertedOrUpdated: 0, dbCountAfter: 0, uniqueOverallPicks: 0, duplicateSlots: 0, duplicatePlayerRoundOwner: 0, adjacentDuplicatePlayers: 0, error: msg } }));
-    } finally {
-      setDraftImportBusy(null);
     }
   };
 
@@ -2120,100 +2009,6 @@ export function SyncData() {
           </Card>
         );
       })()}
-
-      {/* ── Reset Draft History (admin/debug) ─────────────────────────── */}
-      <Card className="border-amber-500/30 bg-amber-500/5">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base text-amber-300">Reset Draft History</CardTitle>
-          <CardDescription className="text-xs text-muted-foreground">
-            Debug — clear corrupted draft_picks and reimport one season at a time. Verify each season before continuing.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-
-          {/* Clear all */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="destructive"
-                size="sm"
-                className="text-xs"
-                disabled={draftResetBusy || draftImportBusy !== null}
-                onClick={() => void handleClearAllDraftPicks()}
-              >
-                {draftResetBusy && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
-                Clear all draft_picks for league 457622
-              </Button>
-            </div>
-            {draftResetNote && (
-              <p className="text-xs text-emerald-400">{draftResetNote}</p>
-            )}
-            {draftResetErr && (
-              <p className="text-xs text-red-400">{draftResetErr}</p>
-            )}
-          </div>
-
-          {/* Per-year import */}
-          <div className="space-y-1.5 border-t border-border/40 pt-3">
-            {Array.from({ length: 16 }, (_, i) => 2010 + i).map((yr) => {
-              const res    = draftImportResults[yr];
-              const isBusy = draftImportBusy === yr;
-              const isClean = res && !res.error && res.dbCountAfter > 0
-                && res.duplicateSlots === 0
-                && res.duplicatePlayerRoundOwner === 0
-                && res.adjacentDuplicatePlayers === 0;
-              return (
-                <div key={yr} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-36 shrink-0 text-xs"
-                    disabled={isBusy || draftResetBusy || draftImportBusy !== null}
-                    onClick={() => void handleImportDraftYear(yr)}
-                  >
-                    {isBusy && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
-                    Import {yr}
-                  </Button>
-
-                  {res && (
-                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs">
-                      {res.error ? (
-                        <span className="text-red-400">{res.error}</span>
-                      ) : (
-                        <>
-                          <span className="text-muted-foreground">
-                            received <span className="text-foreground">{res.received}</span>
-                          </span>
-                          <span className="text-muted-foreground">
-                            inserted <span className="text-foreground">{res.insertedOrUpdated}</span>
-                          </span>
-                          <span className="text-muted-foreground">
-                            dbCount <span className="text-foreground">{res.dbCountAfter}</span>
-                          </span>
-                          <span className="text-muted-foreground">
-                            unique <span className={res.uniqueOverallPicks === res.dbCountAfter ? "text-emerald-400" : "text-amber-400"}>{res.uniqueOverallPicks}</span>
-                          </span>
-                          <span className="text-muted-foreground">
-                            dupSlots <span className={res.duplicateSlots === 0 ? "text-emerald-400" : "text-red-400 font-bold"}>{res.duplicateSlots}</span>
-                          </span>
-                          <span className="text-muted-foreground">
-                            dupPlayer <span className={res.duplicatePlayerRoundOwner === 0 ? "text-emerald-400" : "text-red-400 font-bold"}>{res.duplicatePlayerRoundOwner}</span>
-                          </span>
-                          <span className="text-muted-foreground">
-                            adjDup <span className={res.adjacentDuplicatePlayers === 0 ? "text-emerald-400" : "text-red-400 font-bold"}>{res.adjacentDuplicatePlayers}</span>
-                          </span>
-                          {isClean && <span className="text-emerald-400">✓</span>}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-        </CardContent>
-      </Card>
 
     </div>
   );

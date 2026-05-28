@@ -106,6 +106,7 @@ import {
   countNormalizedGmRowsForSeason,
   importEspnBrowserSeasonBundle,
   ingestParsedDraftPicks,
+  importSeasonDraftFromEspnApi,
   ingestParsedStandings,
   ingestParsedMatchups,
   getBrowserSyncStatusForLeague,
@@ -1852,72 +1853,51 @@ export const appRouter = router({
       }),
 
     /**
-     * Import draft picks for one season from ESPN mDraftDetail API.
-     * Deletes existing rows for the season then inserts fresh normalized rows.
+     * FULL IMPORT / repair: mDraftDetail → normalizeDraftPicks → DELETE season → INSERT (no scrape upsert).
      */
     importDraftFromEspnApi: protectedProcedure
-      .input(z.object({ season: z.number().int().min(2009).max(2030) }))
+      .input(
+        z.object({
+          season: z.number().int().min(2009).max(2030),
+          leagueId: z.string().min(1).max(32).optional(),
+          /** Chrome extension: live ESPN session from browser cookies */
+          swid: z.string().min(1).optional(),
+          espnS2: z.string().min(1).optional(),
+        }),
+      )
       .mutation(async ({ ctx, input }) => {
         const yr = input.season;
-        const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, yr);
-        const db = await getDb();
-        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-
-        const { getActiveEspnCredentials } = await import("./db");
-        const userCreds = await getActiveEspnCredentials(ctx.user.id);
-
-        let raw: Record<string, unknown>;
-        try {
-          raw = await fetchEspnViews(yr, ["mDraftDetail", "mTeam", "mSettings"], userCreds) as Record<string, unknown>;
-        } catch (err) {
-          throw new TRPCError({ code: "BAD_GATEWAY", message: `ESPN fetch failed: ${String(err)}` });
-        }
-
-        const normalized = normalizeDraftPicks(raw);
-        const validPicks = normalized.filter(
-          (p) => p.playerName && String(p.playerName).trim() && Number(p.overallPickNumber) > 0,
+        const resolved = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          input.leagueId ?? null,
+          yr,
         );
-
-        // Delete existing rows for this league+season
-        await db.delete(gmDraftPicks).where(
-          andDrizzle(eqDrizzle(gmDraftPicks.leagueId, leagueId), eqDrizzle(gmDraftPicks.season, yr)),
-        );
-
-        const now = new Date();
-        let inserted = 0;
-        for (const p of validPicks) {
-          const overall = Number(p.overallPickNumber);
-          const rawPickJson = JSON.stringify({
-            source: "espn_mDraftDetail",
-            teamName: String(p.teamName ?? ""),
-            nflTeam: String(p.proTeam ?? ""),
-          });
-          await db.insert(gmDraftPicks).values({
-            leagueId,
-            season: yr,
-            overallPick: overall,
-            roundId: Number(p.roundId) || 0,
-            roundPick: Number(p.roundPickNumber) || 0,
-            teamId: Number(p.teamId) || 0,
-            owningTeamId: null,
-            playerId: p.playerId != null ? Number(p.playerId) : null,
-            playerName: String(p.playerName ?? "").slice(0, 255) || null,
-            position: String(p.position ?? "").slice(0, 16) || null,
-            isKeeper: p.keeper ? 1 : 0,
-            bidAmount: Number(p.bidAmount) || 0,
-            rawPick: rawPickJson,
-            updatedAt: now,
-          });
-          inserted++;
-        }
-
-        return {
+        const hasSwid = Boolean(input.swid?.trim());
+        const hasEspnS2 = Boolean(input.espnS2?.trim());
+        const extensionCreds =
+          hasSwid && hasEspnS2
+            ? {
+                leagueId: resolved.leagueId,
+                swid: input.swid!.trim(),
+                espnS2: input.espnS2!.trim(),
+              }
+            : undefined;
+        console.info("[importDraftFromEspnApi]", {
           season: yr,
-          leagueId,
-          rowsDeleted: "all existing",
-          rowsInserted: inserted,
-          rawRows: normalized.length,
-          skipped: normalized.length - validPicks.length,
+          leagueId: resolved.leagueId,
+          hasSwid,
+          hasEspnS2,
+          authSource: extensionCreds ? "extension_payload" : "stored_or_env",
+        });
+        const result = await importSeasonDraftFromEspnApi(
+          resolved.leagueId,
+          yr,
+          extensionCreds,
+          ctx.user.id,
+        );
+        return {
+          ...result,
+          success: result.status === "imported",
         };
       }),
 

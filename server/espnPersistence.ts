@@ -1114,6 +1114,9 @@ function resolveTeamIdFromDraftRecapOwnerLine(
 /**
  * Upsert HTML-scraped draft recap rows into `draft_picks` only (no raw cache, no combined persist, no normalizeDraftPicks).
  * Resolves `teamId` from `teams` when missing or non-positive. Duplicate key updates: teamId, playerName, position, rawPick.
+ *
+ * QUARANTINE: Ingest path only. Draft History display must read via `getDraftRecapCanonicalBoard` (draft_recap_html filter).
+ * See docs/DRAFT_HISTORY_CANONICAL.md
  */
 export async function ingestParsedDraftPicks(input: IngestParsedDraftPicksInput): Promise<IngestParsedDraftPicksResult> {
   const { getUserEspnLeagueIds, getActiveEspnCredentials } = await import("./db.js");
@@ -1218,14 +1221,21 @@ export async function ingestParsedDraftPicks(input: IngestParsedDraftPicksInput)
   };
 }
 
+export const ESPN_MDRAFT_DETAIL_SOURCE = "espn_mDraftDetail" as const;
+
 export type ImportSeasonDraftFromEspnApiResult = {
   season: number;
   leagueId: string;
+  deletedRows: number;
+  insertedRows: number;
+  /** @deprecated use deletedRows */
   deleted: number;
+  /** @deprecated use insertedRows */
   inserted: number;
   uniquePicks: number;
   skippedDuplicates: number;
   teamCount: number;
+  sourceUsed: typeof ESPN_MDRAFT_DETAIL_SOURCE;
   round1Preview: Array<{
     overallPick: number;
     roundPick: number;
@@ -1233,8 +1243,7 @@ export type ImportSeasonDraftFromEspnApiResult = {
     teamName: string;
     playerName: string | null;
   }>;
-  status: "imported" | "missing_espn_data" | "blocked_scrape_canonical";
-  scrapeRowCount?: number;
+  status: "imported" | "missing_espn_data";
   error?: string;
 };
 
@@ -1252,11 +1261,14 @@ export async function importSeasonDraftFromEspnApi(
   const empty = (error: string): ImportSeasonDraftFromEspnApiResult => ({
     season: yr,
     leagueId: lid,
+    deletedRows: 0,
+    insertedRows: 0,
     deleted: 0,
     inserted: 0,
     uniquePicks: 0,
     skippedDuplicates: 0,
     teamCount: 0,
+    sourceUsed: ESPN_MDRAFT_DETAIL_SOURCE,
     round1Preview: [],
     status: "missing_espn_data",
     error,
@@ -1267,32 +1279,17 @@ export async function importSeasonDraftFromEspnApi(
     throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
   }
 
-  if (yr === 2025) {
-    const scrapeRows = await db
-      .select({ rawPick: schema.gmDraftPicks.rawPick })
-      .from(schema.gmDraftPicks)
-      .where(and(eq(schema.gmDraftPicks.leagueId, lid), eq(schema.gmDraftPicks.season, yr)));
-    const scrapeRowCount = scrapeRows.filter((r) => isDraftRecapHtmlRawPick(r.rawPick)).length;
-    if (scrapeRowCount > 0) {
-      return {
-        season: yr,
-        leagueId: lid,
-        deleted: 0,
-        inserted: 0,
-        uniquePicks: 0,
-        skippedDuplicates: 0,
-        teamCount: 0,
-        round1Preview: [],
-        status: "blocked_scrape_canonical",
-        scrapeRowCount,
-        error:
-          `2025 has ${scrapeRowCount} draft_recap_html rows — visual recap is canonical. Use "Use Draft Recap Order" instead of API import.`,
-      };
-    }
-  }
-
   const resolvedCreds = await resolveEspnCreds(creds, userId);
   const credsWithLeague: EspnCreds = { ...resolvedCreds, leagueId: lid };
+  const authSource =
+    creds?.swid && creds?.espnS2 ? "extension_payload" : "stored_or_env";
+  console.info("[importSeasonDraftFromEspnApi] auth", {
+    season: yr,
+    leagueId: lid,
+    hasSwid: Boolean(credsWithLeague.swid),
+    hasEspnS2: Boolean(credsWithLeague.espnS2),
+    authSource,
+  });
 
   if (!hasCookies(credsWithLeague)) {
     return empty("ESPN cookies missing — set ESPN_SWID and ESPN_S2 or link league in app");
@@ -1352,26 +1349,28 @@ export async function importSeasonDraftFromEspnApi(
     .select({ count: count() })
     .from(schema.gmDraftPicks)
     .where(and(eq(schema.gmDraftPicks.leagueId, lid), eq(schema.gmDraftPicks.season, yr)));
-  const deleted = Number(beforeCount?.count ?? 0);
+  const deletedRows = Number(beforeCount?.count ?? 0);
   await db
     .delete(schema.gmDraftPicks)
     .where(and(eq(schema.gmDraftPicks.leagueId, lid), eq(schema.gmDraftPicks.season, yr)));
 
   picks.sort((a, b) => a.overallPickNumber - b.overallPickNumber);
   const seenSlots = new Set<number>();
-  let inserted = 0;
+  let insertedRows = 0;
   const now = new Date();
 
   for (const p of picks) {
     const overall = Number(p.overallPickNumber ?? 0);
     if (!Number.isFinite(overall) || overall <= 0 || seenSlots.has(overall)) continue;
+    const playerName = (p.playerName ?? "").trim();
+    if (!playerName) continue;
     seenSlots.add(overall);
     const playerIdVal =
       p.playerId != null && Number.isFinite(Number(p.playerId)) && Number(p.playerId) > 0
         ? Number(p.playerId)
         : null;
     const rawPick = safeStringify({
-      source: "espn_mDraftDetail_api",
+      source: ESPN_MDRAFT_DETAIL_SOURCE,
       season: yr,
       overallPickNumber: overall,
       roundId: Number(p.roundId ?? 0) || 0,
@@ -1384,40 +1383,34 @@ export async function importSeasonDraftFromEspnApi(
       keeper: Boolean(p.keeper || p.reservedForKeeper),
       bidAmount: p.bidAmount != null ? Number(p.bidAmount) : 0,
     });
-    await db
-      .insert(schema.gmDraftPicks)
-      .values({
-        leagueId: lid,
-        season: yr,
-        overallPick: overall,
-        roundId: Number(p.roundId ?? 0) || 0,
-        roundPick: Number(p.roundPickNumber ?? 0) || 0,
-        teamId: Number(p.teamId ?? 0) || 0,
-        owningTeamId: null,
-        playerId: playerIdVal,
-        playerName: p.playerName != null ? String(p.playerName) : null,
-        position: p.position != null ? String(p.position) : null,
-        isKeeper: p.keeper || p.reservedForKeeper ? 1 : 0,
-        bidAmount: p.bidAmount != null ? Number(p.bidAmount) : 0,
-        rawPick,
-        updatedAt: now,
-      })
-      .onDuplicateKeyUpdate({
-        set: {
-          roundId: Number(p.roundId ?? 0) || 0,
-          roundPick: Number(p.roundPickNumber ?? 0) || 0,
-          teamId: Number(p.teamId ?? 0) || 0,
-          playerId: playerIdVal,
-          playerName: p.playerName != null ? String(p.playerName) : null,
-          position: p.position != null ? String(p.position) : null,
-          isKeeper: p.keeper || p.reservedForKeeper ? 1 : 0,
-          bidAmount: p.bidAmount != null ? Number(p.bidAmount) : 0,
-          rawPick,
-          updatedAt: now,
-        },
-      });
-    inserted++;
+    await db.insert(schema.gmDraftPicks).values({
+      leagueId: lid,
+      season: yr,
+      overallPick: overall,
+      roundId: Number(p.roundId ?? 0) || 0,
+      roundPick: Number(p.roundPickNumber ?? 0) || 0,
+      teamId: Number(p.teamId ?? 0) || 0,
+      owningTeamId: null,
+      playerId: playerIdVal,
+      playerName,
+      position: p.position != null ? String(p.position) : null,
+      isKeeper: p.keeper || p.reservedForKeeper ? 1 : 0,
+      bidAmount: p.bidAmount != null ? Number(p.bidAmount) : 0,
+      rawPick,
+      updatedAt: now,
+    });
+    insertedRows++;
   }
+
+  console.info("[importSeasonDraftFromEspnApi]", {
+    season: yr,
+    leagueId: lid,
+    sourceUsed: ESPN_MDRAFT_DETAIL_SOURCE,
+    deletedRows,
+    insertedRows,
+    teamCount,
+    skippedDuplicates: picks.length - seenSlots.size,
+  });
 
   const round1Preview = picks
     .filter((p) => Number(p.roundId) === 1)
@@ -1434,11 +1427,14 @@ export async function importSeasonDraftFromEspnApi(
   return {
     season: yr,
     leagueId: lid,
-    deleted,
-    inserted,
+    deletedRows,
+    insertedRows,
+    deleted: deletedRows,
+    inserted: insertedRows,
     uniquePicks: seenSlots.size,
     skippedDuplicates: picks.length - seenSlots.size,
     teamCount,
+    sourceUsed: ESPN_MDRAFT_DETAIL_SOURCE,
     round1Preview,
     status: "imported",
   };
