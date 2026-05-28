@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, ShieldCheck, Wrench, XCircle } from "lucide-react";
 
 interface DraftPickRow {
   overallPick: number;
@@ -69,10 +69,14 @@ export function DraftHistory() {
   const [season, setSeason] = useState<number>(defaultSeason);
   const [teamFilter, setTeamFilter] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<ViewMode>("round");
+  const [showVerify, setShowVerify] = useState(false);
+  const [verifyEnabled, setVerifyEnabled] = useState(false);
 
   /** Always query by selected season — `draft_picks` may exist even if `cachedSeasons` omits the year. */
   const draftQ = trpc.espn.draftHistory.useQuery({ season }, { staleTime: 0 });
   const diagQ  = trpc.espn.draftDiagnostics.useQuery({ season }, { staleTime: 0 });
+  const verifyQ = trpc.espn.verifyDraftHistory.useQuery({ season }, { enabled: verifyEnabled, staleTime: 0 });
+  const repairMut = trpc.espn.repairDraftHistory.useMutation();
 
   const rawPicks = (draftQ.data?.picks as DraftPickRow[] | undefined) ?? [];
   const draftSource   = draftQ.data?.dataSource as string | undefined;
@@ -257,6 +261,197 @@ export function DraftHistory() {
           (diagQ.data?.adjacentDuplicatePlayers?.length ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
         )}>{diagQ.data?.adjacentDuplicatePlayers?.length ?? "…"}</span>
         {" · "}rendered: <span className="text-foreground">{picks.length}</span>
+      </div>
+
+      {/* ── ESPN Verification panel ── */}
+      <div className="rounded-lg border border-border/60 bg-card/50">
+        <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+          <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-foreground">Verify Against ESPN</span>
+          <span className="text-xs text-muted-foreground">Compare DB rows for {season} with live ESPN draft recap data</span>
+          <div className="ml-auto flex items-center gap-2">
+            {verifyEnabled && verifyQ.isLoading && (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+            <button
+              onClick={() => {
+                if (!showVerify) {
+                  setVerifyEnabled(true);
+                  setShowVerify(true);
+                } else {
+                  setShowVerify(false);
+                  setVerifyEnabled(false);
+                }
+              }}
+              className="rounded border border-border/70 bg-muted/30 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors"
+            >
+              {showVerify ? "Hide" : "Verify Against ESPN"}
+            </button>
+          </div>
+        </div>
+
+        {showVerify && (
+          <div className="border-t border-border/40 px-4 pb-4 pt-3 space-y-4">
+            {verifyQ.isError && (
+              <div className="flex items-center gap-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                <XCircle className="h-4 w-4 shrink-0" />
+                {verifyQ.error.message}
+              </div>
+            )}
+
+            {verifyQ.data && (() => {
+              const v = verifyQ.data;
+              const statusColors = {
+                verified: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
+                mismatch: "text-red-400 border-red-500/30 bg-red-500/10",
+                missing_espn_data: "text-amber-400 border-amber-500/30 bg-amber-500/10",
+                missing_db_data: "text-orange-400 border-orange-500/30 bg-orange-500/10",
+              };
+              const statusColor = statusColors[v.status] ?? statusColors.mismatch;
+              const canRepair = v.status === "mismatch" || v.status === "missing_db_data";
+
+              return (
+                <div className="space-y-3">
+                  {/* Summary row */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className={cn("rounded border px-2 py-0.5 text-xs font-semibold", statusColor)}>
+                      {v.status === "verified" && <CheckCircle2 className="mr-1 inline h-3 w-3" />}
+                      {v.status === "mismatch" && <XCircle className="mr-1 inline h-3 w-3" />}
+                      {v.status.replace("_", " ")}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      DB: <span className="text-foreground font-mono">{v.dbCount}</span>
+                      {" · "}ESPN: <span className="text-foreground font-mono">{v.scrapedCount}</span>
+                      {" · "}Matched: <span className="text-emerald-400 font-mono">{v.matchedCount}</span>
+                      {v.missingPicks.length > 0 && <>{" · "}Missing: <span className="text-amber-400 font-mono">{v.missingPicks.length}</span></>}
+                      {v.mismatchedPlayers.length > 0 && <>{" · "}Wrong player: <span className="text-red-400 font-mono">{v.mismatchedPlayers.length}</span></>}
+                      {v.mismatchedOwners.length > 0 && <>{" · "}Wrong owner: <span className="text-orange-400 font-mono">{v.mismatchedOwners.length}</span></>}
+                      {v.extraRows.length > 0 && <>{" · "}Extra DB: <span className="text-muted-foreground font-mono">{v.extraRows.length}</span></>}
+                      {v.duplicatePicks.length > 0 && <>{" · "}Dup slots: <span className="text-red-400 font-mono">{v.duplicatePicks.length}</span></>}
+                    </span>
+                    {canRepair && (
+                      <button
+                        onClick={async () => {
+                          await repairMut.mutateAsync({ season });
+                          void verifyQ.refetch();
+                          void draftQ.refetch();
+                          void diagQ.refetch();
+                        }}
+                        disabled={repairMut.isPending}
+                        className="ml-auto flex items-center gap-1.5 rounded border border-blue-500/40 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-300 hover:bg-blue-500/20 disabled:opacity-50 transition-colors"
+                      >
+                        {repairMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
+                        Repair From ESPN
+                      </button>
+                    )}
+                  </div>
+
+                  {repairMut.data && (
+                    <div className="rounded border border-emerald-500/25 bg-emerald-500/8 px-3 py-2 text-xs text-emerald-300">
+                      Repair complete — deleted {repairMut.data.deleted}, inserted {repairMut.data.inserted} ({repairMut.data.uniquePicks} unique slots, {repairMut.data.skippedDuplicates} skipped)
+                    </div>
+                  )}
+                  {repairMut.error && (
+                    <div className="rounded border border-red-500/25 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                      Repair failed: {repairMut.error.message}
+                    </div>
+                  )}
+
+                  {/* Missing picks (in ESPN, not in DB) */}
+                  {v.missingPicks.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-semibold text-amber-400">Missing from DB ({v.missingPicks.length})</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs font-mono">
+                          <thead><tr className="border-b border-border/30 text-left text-muted-foreground">
+                            <th className="py-0.5 pr-3">Pick</th><th className="py-0.5 pr-3">R.Slot</th><th className="py-0.5 pr-3">Pos</th><th className="py-0.5">Player</th>
+                          </tr></thead>
+                          <tbody>
+                            {v.missingPicks.map((p) => (
+                              <tr key={p.overallPick} className="border-b border-border/15 text-amber-300/80">
+                                <td className="py-0.5 pr-3">#{p.overallPick}</td>
+                                <td className="py-0.5 pr-3">R{p.round}.{p.roundPick}</td>
+                                <td className="py-0.5 pr-3">{p.position ?? "?"}</td>
+                                <td className="py-0.5">{p.playerName ?? "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mismatched players (same slot, different player) */}
+                  {v.mismatchedPlayers.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-semibold text-red-400">Wrong player ({v.mismatchedPlayers.length})</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs font-mono">
+                          <thead><tr className="border-b border-border/30 text-left text-muted-foreground">
+                            <th className="py-0.5 pr-3">Pick</th><th className="py-0.5 pr-3">DB</th><th className="py-0.5">ESPN</th>
+                          </tr></thead>
+                          <tbody>
+                            {v.mismatchedPlayers.map((m) => (
+                              <tr key={m.overallPick} className="border-b border-border/15">
+                                <td className="py-0.5 pr-3 text-muted-foreground">#{m.overallPick}</td>
+                                <td className="py-0.5 pr-3 text-red-400">{m.dbPlayerName ?? "—"}</td>
+                                <td className="py-0.5 text-emerald-400">{m.espnPlayerName ?? "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mismatched owners */}
+                  {v.mismatchedOwners.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-semibold text-orange-400">Wrong owner ({v.mismatchedOwners.length})</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs font-mono">
+                          <thead><tr className="border-b border-border/30 text-left text-muted-foreground">
+                            <th className="py-0.5 pr-3">Pick</th><th className="py-0.5 pr-3">DB teamId</th><th className="py-0.5 pr-3">ESPN teamId</th><th className="py-0.5">Player</th>
+                          </tr></thead>
+                          <tbody>
+                            {v.mismatchedOwners.map((m) => (
+                              <tr key={m.overallPick} className="border-b border-border/15">
+                                <td className="py-0.5 pr-3 text-muted-foreground">#{m.overallPick}</td>
+                                <td className="py-0.5 pr-3 text-orange-400">{m.dbTeamId}</td>
+                                <td className="py-0.5 pr-3 text-emerald-400">{m.espnTeamId}</td>
+                                <td className="py-0.5 text-foreground/80">{m.playerName ?? "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Extra DB rows */}
+                  {v.extraRows.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-semibold text-muted-foreground">Extra in DB only ({v.extraRows.length})</div>
+                      <div className="flex flex-wrap gap-1">
+                        {v.extraRows.map((r) => (
+                          <span key={r.overallPick} className="rounded border border-border/30 bg-muted/20 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                            #{r.overallPick} {r.playerName ?? "—"}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {v.status === "verified" && v.missingPicks.length === 0 && v.mismatchedPlayers.length === 0 && (
+                    <div className="flex items-center gap-2 text-xs text-emerald-400">
+                      <CheckCircle2 className="h-4 w-4" /> All {v.matchedCount} picks match ESPN data exactly.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        )}
       </div>
 
       {draftQ.isLoading && (
