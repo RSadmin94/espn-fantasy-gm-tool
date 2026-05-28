@@ -79,11 +79,17 @@ export function DraftHistory() {
   const repairMut = trpc.espn.repairDraftHistory.useMutation();
 
   const rawPicks = (draftQ.data?.picks as DraftPickRow[] | undefined) ?? [];
-  const draftSource   = draftQ.data?.dataSource as string | undefined;
-  const rawCount      = draftQ.data?.rawCount   ?? null;
-  const dedupedCount  = draftQ.data?.dedupedCount ?? null;
+  const draftSource              = draftQ.data?.dataSource as string | undefined;
+  const rawCount                 = draftQ.data?.rawCount   ?? null;
+  const dedupedCount             = draftQ.data?.dedupedCount ?? null;
+  const serverTeamCount          = (draftQ.data as { teamCount?: number } | undefined)?.teamCount ?? 0;
+  const serverValidCount         = (draftQ.data as { validCount?: number } | undefined)?.validCount ?? null;
+  const serverInvalidCount       = (draftQ.data as { invalidCount?: number } | undefined)?.invalidCount ?? null;
+  const unresolvedTeamMapCount   = (draftQ.data as { unresolvedTeamMappingCount?: number } | undefined)?.unresolvedTeamMappingCount ?? 0;
+  const unresolvedTeamMappings   = (draftQ.data as { unresolvedTeamMappings?: Array<{ teamId: number; overallPick: number; round: number; roundPick: number }> } | undefined)?.unresolvedTeamMappings ?? [];
 
   // Secondary client-side dedup: same player+round+team in different overallPick slots.
+  // Server already filters invalid picks (round=0, roundPick=0, roundPick>teamCount).
   // picks arrive sorted by overallPick ASC; keep first occurrence (lowest overallPick).
   const picks = useMemo<DraftPickRow[]>(() => {
     const seen = new Set<string>();
@@ -115,10 +121,11 @@ export function DraftHistory() {
   const byRound = useMemo(() => {
     const m = new Map<number, DraftPickRow[]>();
     for (const p of filteredPicks) {
-      const r = p.round > 0 ? p.round : 1;
-      const arr = m.get(r) ?? [];
+      // Server guarantees round >= 1 for all returned picks — no fallback needed
+      if (p.round <= 0) continue;
+      const arr = m.get(p.round) ?? [];
       arr.push(p);
-      m.set(r, arr);
+      m.set(p.round, arr);
     }
     for (const [, arr] of m) {
       arr.sort((a, b) => a.roundPick - b.roundPick || a.overallPick - b.overallPick);
@@ -126,11 +133,13 @@ export function DraftHistory() {
     return [...m.entries()].sort((a, b) => a[0] - b[0]);
   }, [filteredPicks]);
 
-  const maxSlots = useMemo(() => {
-    let n = 0;
-    for (const [, arr] of byRound) n = Math.max(n, arr.length);
-    return n;
-  }, [byRound]);
+  // boardCols: canonical team count from server (most reliable); fallback to max roundPick observed
+  const boardCols = useMemo(() => {
+    if (serverTeamCount > 0) return serverTeamCount;
+    let maxRp = 0;
+    for (const p of filteredPicks) maxRp = Math.max(maxRp, p.roundPick);
+    return maxRp || 14;
+  }, [serverTeamCount, filteredPicks]);
 
   /** Teams ordered by first overall pick in this season (stable draft order). */
   const byOwnerGroups = useMemo(() => {
@@ -152,10 +161,10 @@ export function DraftHistory() {
     const keeperCount = filteredPicks.filter((p) => p.isKeeper).length;
     const byRoundPos: Record<number, Record<string, number>> = {};
     for (const p of filteredPicks) {
-      const rd = p.round > 0 ? p.round : 1;
+      if (p.round <= 0) continue; // skip invalid rounds (server should have filtered, safety guard)
       const pos = (p.position || "?").toUpperCase();
-      if (!byRoundPos[rd]) byRoundPos[rd] = {};
-      byRoundPos[rd][pos] = (byRoundPos[rd][pos] ?? 0) + 1;
+      if (!byRoundPos[p.round]) byRoundPos[p.round] = {};
+      byRoundPos[p.round][pos] = (byRoundPos[p.round][pos] ?? 0) + 1;
     }
     return {
       total: filteredPicks.length,
@@ -245,22 +254,38 @@ export function DraftHistory() {
         </CardContent>
       </Card>
 
-      {/* ── Debug panel ── */}
-      <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2 font-mono text-xs text-muted-foreground">
-        <span className="text-foreground/60 font-semibold">draft debug</span>
-        {" · "}season: <span className="text-foreground">{season}</span>
-        {" · "}dbRows: <span className="text-foreground">{diagQ.data?.totalRows ?? "…"}</span>
-        {" · "}uniqueSlots: <span className="text-foreground">{diagQ.data?.uniqueOverallPicks ?? "…"}</span>
-        {" · "}dupSlots: <span className={cn(
-          (diagQ.data?.duplicateOverallPickSlots?.length ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
-        )}>{diagQ.data?.duplicateOverallPickSlots?.length ?? "…"}</span>
-        {" · "}dupPlayer+Round: <span className={cn(
-          (diagQ.data?.duplicatePlayerRoundOwner?.length ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
-        )}>{diagQ.data?.duplicatePlayerRoundOwner?.length ?? "…"}</span>
-        {" · "}adjDup: <span className={cn(
-          (diagQ.data?.adjacentDuplicatePlayers?.length ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
-        )}>{diagQ.data?.adjacentDuplicatePlayers?.length ?? "…"}</span>
-        {" · "}rendered: <span className="text-foreground">{picks.length}</span>
+      {/* ── Diagnostics panel ── */}
+      <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2 font-mono text-xs text-muted-foreground space-y-0.5">
+        <div>
+          <span className="text-foreground/60 font-semibold">draft-diag</span>
+          {" · "}season: <span className="text-foreground">{season}</span>
+          {" · "}teamCount: <span className={cn(serverTeamCount > 0 ? "text-emerald-400" : "text-amber-400")}>{serverTeamCount > 0 ? serverTeamCount : "unknown"}</span>
+          {" · "}boardCols: <span className="text-foreground">{boardCols}</span>
+          {" · "}dbRows: <span className="text-foreground">{diagQ.data?.totalRows ?? "…"}</span>
+          {" · "}rawPicks: <span className="text-foreground">{rawCount ?? "…"}</span>
+          {" · "}deduped: <span className="text-foreground">{dedupedCount ?? "…"}</span>
+          {" · "}valid: <span className="text-emerald-400">{serverValidCount ?? "…"}</span>
+          {" · "}invalid-hidden: <span className={cn(
+            (serverInvalidCount ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
+          )}>{serverInvalidCount ?? "…"}</span>
+          {" · "}rendered: <span className="text-foreground">{picks.length}</span>
+        </div>
+        <div>
+          {" · "}dupSlots: <span className={cn(
+            (diagQ.data?.duplicateOverallPickSlots?.length ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
+          )}>{diagQ.data?.duplicateOverallPickSlots?.length ?? "…"}</span>
+          {" · "}dupPlayer+Round: <span className={cn(
+            (diagQ.data?.duplicatePlayerRoundOwner?.length ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
+          )}>{diagQ.data?.duplicatePlayerRoundOwner?.length ?? "…"}</span>
+          {" · "}unresolvedTeams: <span className={cn(
+            unresolvedTeamMapCount > 0 ? "text-amber-400 font-bold" : "text-foreground"
+          )}>{unresolvedTeamMapCount}</span>
+        </div>
+        {unresolvedTeamMappings.length > 0 && (
+          <div className="text-amber-400">
+            unresolved: {unresolvedTeamMappings.map((m) => `teamId=${m.teamId}@pick#${m.overallPick}(R${m.round}.${m.roundPick})`).join(", ")}
+          </div>
+        )}
       </div>
 
       {/* ── ESPN Verification panel ── */}
@@ -528,7 +553,14 @@ export function DraftHistory() {
           {viewMode === "round" && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Draft board</CardTitle>
+                <CardTitle className="text-base">
+                  Draft board
+                  {serverTeamCount > 0 && (
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      {serverTeamCount} teams · {boardCols} slots per round
+                    </span>
+                  )}
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
@@ -538,7 +570,7 @@ export function DraftHistory() {
                         <th className="sticky left-0 z-10 bg-muted/30 px-2 py-2 text-left font-medium text-muted-foreground">
                           Round
                         </th>
-                        {Array.from({ length: maxSlots }, (_, i) => (
+                        {Array.from({ length: boardCols }, (_, i) => (
                           <th
                             key={i}
                             className="min-w-[7.5rem] border-l border-border/60 px-1 py-2 text-center font-medium text-muted-foreground"
@@ -549,59 +581,63 @@ export function DraftHistory() {
                       </tr>
                     </thead>
                     <tbody>
-                      {byRound.map(([round, slots]) => (
-                        <tr key={round} className="border-b border-border/50">
-                          <td className="sticky left-0 z-10 bg-card px-2 py-1 font-semibold text-foreground">
-                            {round}
-                          </td>
-                          {Array.from({ length: maxSlots }, (_, col) => {
-                            const pick = slots[col];
-                            if (!pick) {
+                      {byRound.map(([round, slots]) => {
+                        // Build roundPick → pick lookup so board is slot-correct (not array-index)
+                        const byRoundPick = new Map(slots.map((p) => [p.roundPick, p]));
+                        return (
+                          <tr key={round} className="border-b border-border/50">
+                            <td className="sticky left-0 z-10 bg-card px-2 py-1 font-semibold text-foreground">
+                              {round}
+                            </td>
+                            {Array.from({ length: boardCols }, (_, col) => {
+                              const pick = byRoundPick.get(col + 1);
+                              if (!pick) {
+                                return (
+                                  <td
+                                    key={col}
+                                    className="border-l border-border/40 bg-muted/5 align-top p-1"
+                                  />
+                                );
+                              }
                               return (
                                 <td
-                                  key={col}
-                                  className="border-l border-border/40 bg-muted/5 align-top p-1"
-                                />
-                              );
-                            }
-                            return (
-                              <td
-                                key={`${pick.overallPick}-${col}`}
-                                className={cn(
-                                  "border-l border-border/40 align-top p-1.5",
-                                  pick.isKeeper && "bg-amber-500/10 ring-1 ring-inset ring-amber-500/25"
-                                )}
-                              >
-                                <div className="flex flex-col gap-0.5 rounded-md bg-background/80 p-1.5">
-                                  <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground">
-                                    <span className="font-mono">#{pick.overallPick}</span>
-                                    <span>
-                                      R{pick.round}.{pick.roundPick}
-                                    </span>
-                                  </div>
-                                  <div className="line-clamp-2 font-medium leading-tight text-foreground">
-                                    {pick.playerName ?? "—"}
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-1">
-                                    <PosBadge pos={pick.position} />
-                                    {pick.isKeeper && (
-                                      <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-semibold uppercase text-amber-300">
-                                        K
+                                  key={`${pick.overallPick}-${col}`}
+                                  className={cn(
+                                    "border-l border-border/40 align-top p-1.5",
+                                    pick.isKeeper && "bg-amber-500/10 ring-1 ring-inset ring-amber-500/25"
+                                  )}
+                                >
+                                  <div className="flex flex-col gap-0.5 rounded-md bg-background/80 p-1.5">
+                                    <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground">
+                                      <span className="font-mono">#{pick.overallPick}</span>
+                                      <span>
+                                        R{pick.round}.{pick.roundPick}
                                       </span>
-                                    )}
+                                    </div>
+                                    <div className="line-clamp-2 font-medium leading-tight text-foreground">
+                                      {pick.playerName ?? "—"}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      <PosBadge pos={pick.position} />
+                                      {pick.isKeeper && (
+                                        <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-semibold uppercase text-amber-300">
+                                          K
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground">
+                                      {(pick.nflTeam || "").trim() || "—"}
+                                    </div>
+                                    <div className="line-clamp-2 text-[10px] leading-tight text-muted-foreground">
+                                      {pick.teamName}
+                                    </div>
                                   </div>
-                                  <div className="text-[10px] text-muted-foreground">
-                                    {(pick.nflTeam || "").trim() || "—"}
-                                  </div>
-                                  <div className="line-clamp-2 text-[10px] leading-tight text-muted-foreground">
-                                    {pick.teamName}
-                                  </div>
-                                </div>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

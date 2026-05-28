@@ -69,7 +69,7 @@ import {
   getSeasonTeams,
 } from "./historicalDataService";
 import { upsertMatchups } from "./espnPersistence";
-import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmMatchups, syncRuns, leagueMedals } from "../drizzle/schema";
+import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmLeagueSettings, gmMatchups, syncRuns, leagueMedals } from "../drizzle/schema";
 import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle, asc as ascDrizzle, sql } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
@@ -139,6 +139,60 @@ function nflTeamFromDraftRawPick(raw: string | null | undefined): string {
     return "";
   }
 }
+
+/**
+ * Resolve canonical team count for a season.
+ * Priority: gmTeams DISTINCT count → gmLeagueSettings.teamCount → combined cache settings.size.
+ */
+async function resolveSeasonTeamCount(leagueId: string, season: number, userId?: number): Promise<number> {
+  const db = await getDb();
+  if (db) {
+    const [teamRow] = await db
+      .select({ count: sql<number>`COUNT(DISTINCT ${gmTeams.teamId})` })
+      .from(gmTeams)
+      .where(andDrizzle(eqDrizzle(gmTeams.leagueId, leagueId), eqDrizzle(gmTeams.season, season)));
+    const fromTeams = Number(teamRow?.count ?? 0);
+    if (fromTeams > 0) return fromTeams;
+
+    const [settingsRow] = await db
+      .select({ teamCount: gmLeagueSettings.teamCount })
+      .from(gmLeagueSettings)
+      .where(andDrizzle(eqDrizzle(gmLeagueSettings.leagueId, leagueId), eqDrizzle(gmLeagueSettings.season, season)));
+    const fromSettings = Number(settingsRow?.teamCount ?? 0);
+    if (fromSettings > 0) return fromSettings;
+  }
+
+  const hit = await getCachedViewWithTier(season, "combined", leagueId, { userId });
+  if (hit?.row?.payload && typeof hit.row.payload === "object" && !Array.isArray(hit.row.payload)) {
+    const settingsMapped = normalizeSettings(hit.row.payload as Record<string, unknown>);
+    const fromCache = Number(settingsMapped.size ?? 0);
+    if (fromCache > 0) return fromCache;
+  }
+
+  return 0;
+}
+
+/**
+ * Build teamId → {name, ownerName} lookup for a season.
+ * Uses getSeasonTeams (DB → combined cache fallback).
+ */
+async function buildSeasonTeamMap(leagueId: string, season: number, userId?: number): Promise<Map<number, { name: string; ownerName: string }>> {
+  const teamsRes = await getSeasonTeams(season, leagueId, userId);
+  const map = new Map<number, { name: string; ownerName: string }>();
+  for (const t of teamsRes.rows as Record<string, unknown>[]) {
+    const tid = Number(t.teamId ?? t.id ?? 0);
+    if (tid <= 0) continue;
+    // DB path (teamRowFromGmTeam) uses "name"; cache path (normalizeTeams) uses "teamName"
+    const name = String(t.teamName ?? t.name ?? "").trim();
+    // DB path uses "owners"/"ownerDisplay"; cache path uses "owners"
+    const ownerName = String(t.ownerDisplay ?? t.owners ?? t.ownerName ?? "").trim();
+    if (name || ownerName) map.set(tid, { name, ownerName });
+  }
+  return map;
+}
+
+/** Regex to detect synthetic fallback team name "Team N" or "Team NN". */
+const FALLBACK_TEAM_NAME_RE = /^Team\s+\d+$/i;
 
 /** Exact origins allowed for credentialed browser requests (e.g. extension / cross-site tRPC). */
 const WAR_ROOM_CORS_ORIGINS = new Set([
@@ -1735,60 +1789,125 @@ export const appRouter = router({
     draftHistory: publicProcedure
       .input(z.object({ season: z.number() }))
       .query(async ({ ctx, input }) => {
+        const yr = input.season;
         const userId = ctx.user?.id ?? null;
         const resolved = await resolveActiveLeagueId(
           { user: ctx.user ? { id: ctx.user.id } : undefined },
           null,
-          input.season
+          yr
         );
         const { leagueId, source } = resolved;
-        console.info("[draftHistory]", {
-          userId,
-          leagueId,
-          source,
-          season: input.season,
-        });
+        console.info("[draftHistory]", { userId, leagueId, source, season: yr });
 
-        const fb = await getSeasonDraftPicks(input.season, leagueId, ctx.user?.id ?? undefined);
+        // Load picks (three-tier: DB → mDraftDetail → combined cache)
+        const fb = await getSeasonDraftPicks(yr, leagueId, ctx.user?.id ?? undefined);
         const dataSource = fb.source;
-        if (fb.count === 0) return { picks: [] as const, dataSource, rawCount: 0, dedupedCount: 0 };
+        const emptyDiag = { picks: [] as const, dataSource, rawCount: 0, dedupedCount: 0, validCount: 0, invalidCount: 0, teamCount: 0, unresolvedTeamMappingCount: 0, unresolvedTeamMappings: [] as Array<{ teamId: number; overallPick: number; round: number; roundPick: number }> };
+        if (fb.count === 0) return emptyDiag;
 
+        // Resolve team count (priority: gmTeams count → gmLeagueSettings → combined cache)
+        const teamCount = await resolveSeasonTeamCount(leagueId, yr, ctx.user?.id ?? undefined);
+
+        // Build teamId → name/owner map for re-resolving fallback "Team N" names
+        const teamMap = await buildSeasonTeamMap(leagueId, yr, ctx.user?.id ?? undefined);
+
+        // Map raw picks and resolve team names
         const allPicks = (fb.rows as Record<string, unknown>[]).map((p) => {
           const raw = p.rawPick != null ? String(p.rawPick) : "";
           const nfl = nflTeamFromDraftRawPick(raw) || String(p.proTeam ?? "").trim();
+          const tid = Number(p.teamId ?? 0);
+
+          let resolvedTeamName = String(p.teamName ?? "").trim();
+          let resolvedOwnerName = "";
+          let teamResolved = false;
+
+          const mapEntry = teamMap.get(tid);
+          if (mapEntry) {
+            // Use map name if the stored name is missing or a synthetic fallback
+            if (!resolvedTeamName || FALLBACK_TEAM_NAME_RE.test(resolvedTeamName)) {
+              resolvedTeamName = mapEntry.name || resolvedTeamName || `Team ${tid}`;
+            }
+            resolvedOwnerName = mapEntry.ownerName;
+            teamResolved = true;
+          } else if (!resolvedTeamName || FALLBACK_TEAM_NAME_RE.test(resolvedTeamName)) {
+            // Try ownerName from rawPick JSON as last resort
+            try {
+              const j = JSON.parse(raw) as { ownerName?: string; teamName?: string };
+              if (j?.ownerName) resolvedOwnerName = String(j.ownerName);
+              if (j?.teamName && (!resolvedTeamName || FALLBACK_TEAM_NAME_RE.test(resolvedTeamName))) {
+                resolvedTeamName = String(j.teamName);
+              }
+            } catch { /* ignore */ }
+            teamResolved = Boolean(resolvedTeamName && !FALLBACK_TEAM_NAME_RE.test(resolvedTeamName));
+          } else {
+            // Name already resolved from source; try to get ownerName from map or rawPick
+            try {
+              const j = JSON.parse(raw) as { ownerName?: string };
+              resolvedOwnerName = j?.ownerName ? String(j.ownerName) : "";
+            } catch { /* ignore */ }
+            teamResolved = true;
+          }
+
           return {
             overallPick: Number(p.overallPickNumber ?? 0),
             round: Number(p.roundId ?? 0),
             roundPick: Number(p.roundPickNumber ?? 0),
-            teamId: Number(p.teamId ?? 0),
-            teamName: String(p.teamName || `Team ${p.teamId}`),
-            ownerName: (() => {
-              try {
-                const j = JSON.parse(raw) as { ownerName?: string };
-                return j?.ownerName ? String(j.ownerName) : "";
-              } catch {
-                return "";
-              }
-            })(),
+            teamId: tid,
+            teamName: resolvedTeamName || `Team ${tid}`,
+            ownerName: resolvedOwnerName,
             playerId: p.playerId != null ? Number(p.playerId) : null,
             playerName: (p.playerName as string | null) ?? null,
             position: (p.position as string | null) ?? null,
             nflTeam: nfl,
             isKeeper: Boolean(p.keeper || p.reservedForKeeper),
             bidAmount: p.bidAmount != null ? Number(p.bidAmount) : 0,
+            _teamResolved: teamResolved,
           };
         });
 
-        // Sort by overallPick ASC then deduplicate — one pick per slot, covers all data sources
+        // Layer 1: sort by overallPick ASC, dedup by slot
         allPicks.sort((a, b) => a.overallPick - b.overallPick);
         const seenSlots = new Set<number>();
-        const picks = allPicks.filter((p) => {
+        const dedupedPicks = allPicks.filter((p) => {
           if (seenSlots.has(p.overallPick)) return false;
           seenSlots.add(p.overallPick);
           return true;
         });
 
-        return { picks, dataSource, rawCount: fb.rawCount ?? allPicks.length, dedupedCount: picks.length };
+        // Classify valid vs invalid picks
+        // Valid: overallPick >= 1, round >= 1, roundPick in [1, teamCount] (if teamCount known)
+        const invalidPicks: typeof dedupedPicks = [];
+        const validPicks = dedupedPicks.filter((p) => {
+          if (p.overallPick <= 0 || p.round <= 0 || p.roundPick <= 0) {
+            invalidPicks.push(p);
+            return false;
+          }
+          if (teamCount > 0 && p.roundPick > teamCount) {
+            invalidPicks.push(p);
+            return false;
+          }
+          return true;
+        });
+
+        // Collect unresolved team mappings (from valid picks only — board picks)
+        const unresolvedTeamMappings = validPicks
+          .filter((p) => !p._teamResolved)
+          .map((p) => ({ teamId: p.teamId, overallPick: p.overallPick, round: p.round, roundPick: p.roundPick }));
+
+        // Strip internal field before returning
+        const picks = validPicks.map(({ _teamResolved: _, ...rest }) => rest);
+
+        return {
+          picks,
+          dataSource,
+          rawCount: fb.rawCount ?? allPicks.length,
+          dedupedCount: dedupedPicks.length,
+          validCount: validPicks.length,
+          invalidCount: invalidPicks.length,
+          teamCount,
+          unresolvedTeamMappingCount: unresolvedTeamMappings.length,
+          unresolvedTeamMappings: unresolvedTeamMappings.slice(0, 10),
+        };
       }),
 
     /** Audit: per-season duplicate analysis in draft_picks. */
@@ -5207,8 +5326,8 @@ export const appRouter = router({
         return "Other";
       }
 
-      // Same processing as draftHistory endpoint: slot dedup + secondary playerName|round|teamId dedup
-      function cleanPicksFromFb(fb: Awaited<ReturnType<typeof getSeasonDraftPicks>>, season: number) {
+      // Same processing as draftHistory endpoint: slot dedup + validity filter + secondary playerName|round|teamId dedup
+      function cleanPicksFromFb(fb: Awaited<ReturnType<typeof getSeasonDraftPicks>>, season: number, teamCount: number) {
         if (fb.count === 0) return [];
         const mapped = (fb.rows as Record<string, unknown>[]).map((p) => ({
           season,
@@ -5228,9 +5347,16 @@ export const appRouter = router({
           seenSlots.add(p.overallPick);
           return true;
         });
+        // Layer 1b: validity filter — identical to draftHistory board filter
+        // round >= 1, roundPick >= 1, roundPick <= teamCount (when known)
+        const validPicks = slotDeduped.filter((p) => {
+          if (p.overallPick <= 0 || p.round <= 0 || p.roundPick <= 0) return false;
+          if (teamCount > 0 && p.roundPick > teamCount) return false;
+          return true;
+        });
         // Layer 2: secondary dedup by playerName|round|teamId (identical to DraftHistory.tsx client logic)
         const seenPlayer = new Set<string>();
-        return slotDeduped.filter((p) => {
+        return validPicks.filter((p) => {
           const norm = (p.playerName ?? "").trim().toLowerCase();
           if (!norm) return true; // unnamed picks always kept
           const key = `${norm}|${p.round}|${p.teamId}`;
@@ -5275,12 +5401,15 @@ export const appRouter = router({
         ownerDisplay.set(ownerKey, display);
       }
 
-      // Fetch and clean picks for all seasons in parallel (same source as draftHistory)
+      // Fetch and clean picks for all seasons in parallel (same source and validity rules as draftHistory)
       const seasonResults = await Promise.all(
         HIST_SEASONS.map(async (season) => {
-          const fb = await getSeasonDraftPicks(season, leagueId, ctx.user?.id ?? undefined);
-          const picks = cleanPicksFromFb(fb, season);
-          return { season, picks, source: fb.source };
+          const [fb, teamCount] = await Promise.all([
+            getSeasonDraftPicks(season, leagueId, ctx.user?.id ?? undefined),
+            resolveSeasonTeamCount(leagueId, season, ctx.user?.id ?? undefined),
+          ]);
+          const picks = cleanPicksFromFb(fb, season, teamCount);
+          return { season, picks, source: fb.source, teamCount };
         })
       );
 
