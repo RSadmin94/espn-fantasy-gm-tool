@@ -160,17 +160,35 @@ export async function fetchDraftRecapSeason(
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     Accept: "application/json,text/plain,*/*",
     Referer: buildEspnDraftRecapReferer(yr, lid),
+    "X-Fantasy-Source": "kona",
+    "X-Fantasy-Platform": "kona",
   };
   const cookieStr = buildCookieStringFor(creds);
   if (cookieStr) headers["Cookie"] = cookieStr;
 
   try {
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(45_000) });
+    const text = await res.text();
     if (!res.ok) {
+      console.warn("[fetchDraftRecapSeason] HTTP", yr, res.status, text.slice(0, 120));
       return { status: res.status, data: null };
     }
-    const data = (await res.json()) as Record<string, unknown>;
-    return { status: res.status, data };
+    if (!text.trim()) {
+      console.warn("[fetchDraftRecapSeason] empty body:", yr);
+      return { status: res.status, data: null };
+    }
+    try {
+      const data = JSON.parse(text) as Record<string, unknown>;
+      return { status: res.status, data };
+    } catch (parseErr) {
+      console.warn(
+        "[fetchDraftRecapSeason] invalid JSON:",
+        yr,
+        parseErr instanceof Error ? parseErr.message : String(parseErr),
+        text.slice(0, 120),
+      );
+      return { status: res.status, data: null };
+    }
   } catch (err) {
     console.warn("[fetchDraftRecapSeason] failed:", yr, err instanceof Error ? err.message : String(err));
     return { status: 0, data: null };
@@ -232,6 +250,8 @@ async function fetchAllViewsAtOnce(
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     Accept: "application/json,text/plain,*/*",
     Referer: buildEspnFantasyRefererForApi(season, views, creds),
+    "X-Fantasy-Source": "kona",
+    "X-Fantasy-Platform": "kona",
   };
   const cookieStr = buildCookieStringFor(creds);
   if (cookieStr) headers["Cookie"] = cookieStr;
@@ -260,6 +280,8 @@ async function fetchSingleView(
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     Accept: "application/json,text/plain,*/*",
     Referer: buildEspnFantasyRefererForApi(season, [viewName], creds),
+    "X-Fantasy-Source": "kona",
+    "X-Fantasy-Platform": "kona",
   };
   const cookieStr = buildCookieStringFor(creds);
   if (cookieStr) headers["Cookie"] = cookieStr;
@@ -784,6 +806,12 @@ function playerInfoFromDraftPickShape(pick: Record<string, unknown>): {
   return { playerId, name, position: position || "?", positionId, proTeam };
 }
 
+/** Chronological position within the round (1..N) — matches ESPN draft recap left-to-right order. */
+export function chronologicalPickInRound(overall: number, round: number, nTeams: number): number {
+  if (overall <= 0 || round <= 0 || nTeams <= 0) return 0;
+  return overall - (round - 1) * nTeams;
+}
+
 export function normalizeDraftPicks(data: Record<string, unknown>) {
   const seasonRaw = data.seasonId;
   const season =
@@ -816,6 +844,13 @@ export function normalizeDraftPicks(data: Record<string, unknown>) {
       `${t.location || ""} ${t.nickname || ""}`.trim() || (t.name as string) || `Team ${tid}`;
   }
 
+  const settings = (data.settings as Record<string, unknown>) || {};
+  const sizeRaw = (settings.size as number) ?? (settings.teamCount as number);
+  const teamCount =
+    typeof sizeRaw === "number" && sizeRaw > 0
+      ? sizeRaw
+      : teamsArrayFromEspnPayload(data).length || 14;
+
   return picks.map((pick) => {
     const inline = playerInfoFromDraftPickShape(pick);
     let resolvedPlayerId = inline.playerId;
@@ -835,11 +870,40 @@ export function normalizeDraftPicks(data: Record<string, unknown>) {
       bidRaw != null && Number.isFinite(Number(bidRaw)) ? Number(bidRaw) : 0;
     const tidRaw = pick.teamId;
     const teamIdNum = tidRaw != null && Number.isFinite(Number(tidRaw)) ? Number(tidRaw) : 0;
+
+    let roundId = Number(pick.roundId ?? pick.round ?? 0);
+    let overallPickNumber = Number(
+      pick.overallPickNumber ?? pick.overallPick ?? pick.overallPickId ?? 0,
+    );
+    let roundPickNumber = Number(
+      pick.roundPickNumber ?? pick.pickInRound ?? pick.pickInRoundNumber ?? 0,
+    );
+    if (roundId <= 0 && overallPickNumber > 0 && teamCount > 0) {
+      roundId = Math.floor((overallPickNumber - 1) / teamCount) + 1;
+    }
+
+    if (roundPickNumber <= 0 && overallPickNumber > 0 && roundId > 0 && teamCount > 0) {
+      const chron = chronologicalPickInRound(overallPickNumber, roundId, teamCount);
+      if (chron >= 1 && chron <= teamCount) roundPickNumber = chron;
+    }
+    if (overallPickNumber <= 0 && roundId > 0 && roundPickNumber > 0 && teamCount > 0) {
+      const base = (roundId - 1) * teamCount;
+      const chron = chronologicalPickInRound(base + roundPickNumber, roundId, teamCount);
+      if (chron >= 1 && chron <= teamCount) {
+        overallPickNumber = (roundId - 1) * teamCount + roundPickNumber;
+      }
+    }
+    // Board / recap display uses chronological pick order in the round, not snake slot index.
+    if (overallPickNumber > 0 && roundId > 0 && teamCount > 0) {
+      const chron = chronologicalPickInRound(overallPickNumber, roundId, teamCount);
+      if (chron >= 1 && chron <= teamCount) roundPickNumber = chron;
+    }
+
     return {
       season,
-      roundId: pick.roundId,
-      roundPickNumber: pick.roundPickNumber,
-      overallPickNumber: pick.overallPickNumber,
+      roundId,
+      roundPickNumber,
+      overallPickNumber,
       teamId: teamIdNum,
       teamName: teamNameMap[teamIdNum] || `Team ${teamIdNum}`,
       playerId: resolvedPlayerId > 0 ? resolvedPlayerId : null,
