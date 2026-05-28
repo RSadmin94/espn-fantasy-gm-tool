@@ -19,9 +19,9 @@ import { Roster } from "./pages/Roster";
 import { Trades } from "./pages/Trades";
 import { Advisor } from "./pages/Advisor";
 import { Settings } from "./pages/Settings";
-import { DraftHistory } from "./pages/DraftHistory";
 import { Matchups } from "./pages/Matchups";
 import { LeagueHistory } from "./pages/LeagueHistory";
+import { DraftHistory } from "./pages/DraftHistory";
 import { Championships } from "./pages/Championships";
 import { RingOfHonor } from "./pages/RingOfHonor";
 import { trpc } from "@/lib/trpc";
@@ -118,10 +118,10 @@ const router = createBrowserRouter([
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/sync", element: <SyncData /> },
           { path: "/transactions", element: <Transactions /> },
-          { path: "/draft-history", element: <DraftHistory /> },
           { path: "/standings", element: <Standings /> },
           { path: "/matchups", element: <Matchups /> },
           { path: "/history", element: <LeagueHistory /> },
+          { path: "/draft-history", element: <DraftHistory /> },
           { path: "/championships", element: <Championships /> },
           { path: "/ring-of-honor", element: <RingOfHonor /> },
           { path: "/roster", element: <Roster /> },

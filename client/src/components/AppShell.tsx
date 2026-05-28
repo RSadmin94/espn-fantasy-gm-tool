@@ -11,7 +11,6 @@ import {
   Trophy,
   Users,
   Repeat2,
-  ListOrdered,
   LayoutGrid,
   Bot,
   Settings,
@@ -76,7 +75,7 @@ const NAV_GROUPS: NavGroup[] = [
     id: "draft-keepers",
     title: "Draft & Keepers",
     items: [
-      { kind: "link", label: "Draft History", href: "/draft-history", icon: ListOrdered },
+      { kind: "link", label: "Draft History", href: "/draft-history", icon: ScrollText },
       { kind: "placeholder", label: "Keeper Calculator", icon: Calculator },
       { kind: "placeholder", label: "Draft Strategy", icon: ScrollText },
     ],
