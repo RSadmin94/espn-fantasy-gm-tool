@@ -294,7 +294,7 @@ export async function getSeasonDraftPicks(
         roundId: r.roundId,
         roundPickNumber: r.roundPick,
         teamId: r.teamId,
-        teamName: r.teamName || `Team ${r.teamId}`,
+        teamName: (r.teamName && String(r.teamName).trim()) || "",
         playerId: r.playerId,
         playerName: r.playerName,
         position: r.position,

@@ -82,26 +82,18 @@ export function DraftHistory() {
   const draftSource              = draftQ.data?.dataSource as string | undefined;
   const rawCount                 = draftQ.data?.rawCount   ?? null;
   const dedupedCount             = draftQ.data?.dedupedCount ?? null;
+  const dedupedSlotCount         = (draftQ.data as { dedupedSlotCount?: number } | undefined)?.dedupedSlotCount ?? null;
+  const duplicateOverallRemoved  = (draftQ.data as { duplicateOverallRemoved?: number } | undefined)?.duplicateOverallRemoved ?? 0;
+  const duplicateSlotRemoved     = (draftQ.data as { duplicateSlotRemoved?: number } | undefined)?.duplicateSlotRemoved ?? 0;
   const serverTeamCount          = (draftQ.data as { teamCount?: number } | undefined)?.teamCount ?? 0;
   const serverValidCount         = (draftQ.data as { validCount?: number } | undefined)?.validCount ?? null;
   const serverInvalidCount       = (draftQ.data as { invalidCount?: number } | undefined)?.invalidCount ?? null;
+  const missingPlayerNameCount   = (draftQ.data as { missingPlayerNameCount?: number } | undefined)?.missingPlayerNameCount ?? 0;
   const unresolvedTeamMapCount   = (draftQ.data as { unresolvedTeamMappingCount?: number } | undefined)?.unresolvedTeamMappingCount ?? 0;
-  const unresolvedTeamMappings   = (draftQ.data as { unresolvedTeamMappings?: Array<{ teamId: number; overallPick: number; round: number; roundPick: number }> } | undefined)?.unresolvedTeamMappings ?? [];
+  const unresolvedTeamMappings   = (draftQ.data as { unresolvedTeamMappings?: Array<{ season?: number; teamId: number; overallPick: number; round: number; roundPick: number }> } | undefined)?.unresolvedTeamMappings ?? [];
 
-  // Secondary client-side dedup: same player+round+team in different overallPick slots.
-  // Server already filters invalid picks (round=0, roundPick=0, roundPick>teamCount).
-  // picks arrive sorted by overallPick ASC; keep first occurrence (lowest overallPick).
-  const picks = useMemo<DraftPickRow[]>(() => {
-    const seen = new Set<string>();
-    const out: DraftPickRow[] = [];
-    for (const p of rawPicks) {
-      const norm = (p.playerName ?? "").trim().toLowerCase();
-      if (!norm) { out.push(p); continue; }
-      const key = `${norm}|${p.round}|${p.teamId}`;
-      if (!seen.has(key)) { seen.add(key); out.push(p); }
-    }
-    return out;
-  }, [rawPicks]);
+  // Server returns the canonical cleaned pick set (dedup + validity + team resolution).
+  const picks = rawPicks;
 
   const filteredPicks = useMemo(() => {
     if (teamFilter === "ALL") return picks;
@@ -133,13 +125,8 @@ export function DraftHistory() {
     return [...m.entries()].sort((a, b) => a[0] - b[0]);
   }, [filteredPicks]);
 
-  // boardCols: canonical team count from server (most reliable); fallback to max roundPick observed
-  const boardCols = useMemo(() => {
-    if (serverTeamCount > 0) return serverTeamCount;
-    let maxRp = 0;
-    for (const p of filteredPicks) maxRp = Math.max(maxRp, p.roundPick);
-    return maxRp || 14;
-  }, [serverTeamCount, filteredPicks]);
+  // boardCols: canonical team count from server only — never derive from max observed roundPick
+  const boardCols = serverTeamCount > 0 ? serverTeamCount : 14;
 
   /** Teams ordered by first overall pick in this season (stable draft order). */
   const byOwnerGroups = useMemo(() => {
@@ -263,27 +250,33 @@ export function DraftHistory() {
           {" · "}boardCols: <span className="text-foreground">{boardCols}</span>
           {" · "}dbRows: <span className="text-foreground">{diagQ.data?.totalRows ?? "…"}</span>
           {" · "}rawPicks: <span className="text-foreground">{rawCount ?? "…"}</span>
-          {" · "}deduped: <span className="text-foreground">{dedupedCount ?? "…"}</span>
-          {" · "}valid: <span className="text-emerald-400">{serverValidCount ?? "…"}</span>
-          {" · "}invalid-hidden: <span className={cn(
+          {" · "}afterOverallDedup: <span className="text-foreground">{dedupedCount ?? "…"}</span>
+          {" · "}afterSlotDedup: <span className="text-foreground">{dedupedSlotCount ?? "…"}</span>
+          {" · "}cleanShown: <span className="text-emerald-400">{serverValidCount ?? picks.length}</span>
+          {" · "}invalidHidden: <span className={cn(
             (serverInvalidCount ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
           )}>{serverInvalidCount ?? "…"}</span>
-          {" · "}rendered: <span className="text-foreground">{picks.length}</span>
+          {" · "}dupOverallRemoved: <span className="text-foreground">{duplicateOverallRemoved}</span>
+          {" · "}dupSlotRemoved: <span className="text-foreground">{duplicateSlotRemoved}</span>
+          {missingPlayerNameCount > 0 && (
+            <>
+              {" · "}missingPlayerName: <span className="text-amber-400">{missingPlayerNameCount}</span>
+            </>
+          )}
         </div>
         <div>
-          {" · "}dupSlots: <span className={cn(
+          {" · "}dbDupOverallSlots: <span className={cn(
             (diagQ.data?.duplicateOverallPickSlots?.length ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
           )}>{diagQ.data?.duplicateOverallPickSlots?.length ?? "…"}</span>
-          {" · "}dupPlayer+Round: <span className={cn(
-            (diagQ.data?.duplicatePlayerRoundOwner?.length ?? 0) > 0 ? "text-red-400 font-bold" : "text-foreground"
-          )}>{diagQ.data?.duplicatePlayerRoundOwner?.length ?? "…"}</span>
-          {" · "}unresolvedTeams: <span className={cn(
+          {" · "}unresolvedTeamMappings: <span className={cn(
             unresolvedTeamMapCount > 0 ? "text-amber-400 font-bold" : "text-foreground"
           )}>{unresolvedTeamMapCount}</span>
         </div>
         {unresolvedTeamMappings.length > 0 && (
           <div className="text-amber-400">
-            unresolved: {unresolvedTeamMappings.map((m) => `teamId=${m.teamId}@pick#${m.overallPick}(R${m.round}.${m.roundPick})`).join(", ")}
+            {unresolvedTeamMappings.slice(0, 10).map((m) =>
+              `Unresolved team owner mapping: season ${m.season ?? season} teamId ${m.teamId} (pick #${m.overallPick}, R${m.round}.${m.roundPick})`
+            ).join(" · ")}
           </div>
         )}
       </div>
