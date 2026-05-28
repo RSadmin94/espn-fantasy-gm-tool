@@ -277,15 +277,33 @@ export async function getSeasonDraftPicks(
       // desc(id) so that for duplicate overallPick rows, the latest insert wins after dedup
       .orderBy(gmDraftPicks.overallPick, desc(gmDraftPicks.id));
 
-    // Deduplicate by overallPick — keeps first occurrence (latest id) when duplicates exist
-    const seenPicks = new Set<number>();
-    const dedupedRows: typeof rows = [];
+    const isScrapeRow = (raw: string | null | undefined): boolean => {
+      if (!raw) return false;
+      try {
+        const j = JSON.parse(raw) as { source?: string };
+        return j.source === "draft_recap_html";
+      } catch {
+        return false;
+      }
+    };
+
+    // Deduplicate by overallPick — prefer HTML scrape rows over ESPN API/normalized rows
+    const byOverall = new Map<number, (typeof rows)[number]>();
     for (const row of rows) {
-      if (!seenPicks.has(row.overallPick)) {
-        seenPicks.add(row.overallPick);
-        dedupedRows.push(row);
+      const existing = byOverall.get(row.overallPick);
+      if (!existing) {
+        byOverall.set(row.overallPick, row);
+        continue;
+      }
+      const rowScrape = isScrapeRow(row.rawPick);
+      const existingScrape = isScrapeRow(existing.rawPick);
+      if (rowScrape && !existingScrape) {
+        byOverall.set(row.overallPick, row);
+      } else if (rowScrape === existingScrape && row.id > existing.id) {
+        byOverall.set(row.overallPick, row);
       }
     }
+    const dedupedRows = [...byOverall.values()].sort((a, b) => a.overallPick - b.overallPick);
 
     if (dedupedRows.length > 0) {
       const shaped = dedupedRows.map((r) => ({

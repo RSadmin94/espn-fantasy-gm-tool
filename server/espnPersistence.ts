@@ -1191,10 +1191,13 @@ export async function ingestParsedDraftPicks(input: IngestParsedDraftPicksInput)
       })
       .onDuplicateKeyUpdate({
         set: {
+          roundId: Math.floor(Number(p.roundId)) || 0,
+          roundPick: Math.floor(Number(p.roundPick)) || 0,
           teamId,
           playerName: playerName || null,
           position: position || null,
           rawPick,
+          updatedAt: now,
         },
       });
     insertedOrUpdated++;
@@ -1207,6 +1210,124 @@ export async function ingestParsedDraftPicks(input: IngestParsedDraftPicksInput)
     insertedOrUpdated,
     dbCountAfter,
     success,
+  };
+}
+
+export function isDraftRecapHtmlRawPick(raw: string | null | undefined): boolean {
+  if (!raw) return false;
+  try {
+    const j = JSON.parse(raw) as { source?: string };
+    return j.source === "draft_recap_html";
+  } catch {
+    return false;
+  }
+}
+
+export type ReconcileDraftFromScrapeResult = {
+  season: number;
+  totalRows: number;
+  scrapeRows: number;
+  updatedFromScrape: number;
+  realignedRoundPick: number;
+  deletedDuplicateNonScrape: number;
+};
+
+/**
+ * Align `draft_picks` round/slot/team fields with HTML scrape rows (draft_recap_html).
+ * When scrape rows exist for a season, they define roundId, roundPick, teamId, and rawPick.
+ * Remaining rows get roundPick reassigned from overallPick order within each round.
+ */
+export async function reconcileSeasonDraftPicksFromScrape(
+  leagueId: string,
+  season: number,
+): Promise<ReconcileDraftFromScrapeResult> {
+  const lid = String(leagueId).trim().slice(0, 32);
+  const yr = Math.floor(Number(season));
+  const db = await getDbConn();
+  if (!db) {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+  }
+
+  const rows = await db
+    .select()
+    .from(schema.gmDraftPicks)
+    .where(and(eq(schema.gmDraftPicks.leagueId, lid), eq(schema.gmDraftPicks.season, yr)))
+    .orderBy(schema.gmDraftPicks.overallPick, desc(schema.gmDraftPicks.id));
+
+  const scrapeByOverall = new Map<number, (typeof rows)[number]>();
+  for (const row of rows) {
+    if (!isDraftRecapHtmlRawPick(row.rawPick)) continue;
+    const existing = scrapeByOverall.get(row.overallPick);
+    if (!existing || row.id > existing.id) scrapeByOverall.set(row.overallPick, row);
+  }
+
+  const now = new Date();
+  let updatedFromScrape = 0;
+  let deletedDuplicateNonScrape = 0;
+
+  for (const scrapeRow of scrapeByOverall.values()) {
+    const dupes = rows.filter((r) => r.overallPick === scrapeRow.overallPick);
+    for (const dup of dupes) {
+      if (dup.id === scrapeRow.id) {
+        await db
+          .update(schema.gmDraftPicks)
+          .set({
+            roundId: scrapeRow.roundId,
+            roundPick: scrapeRow.roundPick,
+            teamId: scrapeRow.teamId,
+            playerName: scrapeRow.playerName,
+            position: scrapeRow.position,
+            rawPick: scrapeRow.rawPick,
+            updatedAt: now,
+          })
+          .where(eq(schema.gmDraftPicks.id, dup.id));
+        updatedFromScrape++;
+      } else if (!isDraftRecapHtmlRawPick(dup.rawPick)) {
+        await db.delete(schema.gmDraftPicks).where(eq(schema.gmDraftPicks.id, dup.id));
+        deletedDuplicateNonScrape++;
+      }
+    }
+  }
+
+  const afterRows = await db
+    .select()
+    .from(schema.gmDraftPicks)
+    .where(and(eq(schema.gmDraftPicks.leagueId, lid), eq(schema.gmDraftPicks.season, yr)))
+    .orderBy(schema.gmDraftPicks.overallPick);
+
+  const byRound = new Map<number, typeof afterRows>();
+  for (const row of afterRows) {
+    const round = Number(row.roundId) || 0;
+    if (round <= 0) continue;
+    const arr = byRound.get(round) ?? [];
+    arr.push(row);
+    byRound.set(round, arr);
+  }
+
+  let realignedRoundPick = 0;
+  for (const [, roundRows] of byRound) {
+    const ordered = [...roundRows].sort((a, b) => a.overallPick - b.overallPick);
+    for (let i = 0; i < ordered.length; i++) {
+      const row = ordered[i];
+      const desiredSlot =
+        isDraftRecapHtmlRawPick(row.rawPick) && row.roundPick > 0 ? row.roundPick : i + 1;
+      if (row.roundPick !== desiredSlot) {
+        await db
+          .update(schema.gmDraftPicks)
+          .set({ roundPick: desiredSlot, updatedAt: now })
+          .where(eq(schema.gmDraftPicks.id, row.id));
+        realignedRoundPick++;
+      }
+    }
+  }
+
+  return {
+    season: yr,
+    totalRows: afterRows.length,
+    scrapeRows: scrapeByOverall.size,
+    updatedFromScrape,
+    realignedRoundPick,
+    deletedDuplicateNonScrape,
   };
 }
 

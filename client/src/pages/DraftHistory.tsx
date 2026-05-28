@@ -77,6 +77,8 @@ export function DraftHistory() {
   const diagQ  = trpc.espn.draftDiagnostics.useQuery({ season }, { staleTime: 0 });
   const verifyQ = trpc.espn.verifyDraftHistory.useQuery({ season }, { enabled: verifyEnabled, staleTime: 0 });
   const repairMut = trpc.espn.repairDraftHistory.useMutation();
+  const reconcileMut = trpc.espn.reconcileDraftOrderFromScrapes.useMutation();
+  const utils = trpc.useUtils();
 
   const rawPicks = (draftQ.data?.picks as DraftPickRow[] | undefined) ?? [];
   const draftSource              = draftQ.data?.dataSource as string | undefined;
@@ -291,6 +293,40 @@ export function DraftHistory() {
             </span>
           </div>
         )}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <button
+            type="button"
+            onClick={async () => {
+              await reconcileMut.mutateAsync({ season });
+              await draftQ.refetch();
+              await diagQ.refetch();
+              void utils.espn.draftHistory.invalidate({ season });
+            }}
+            disabled={reconcileMut.isPending}
+            className="rounded border border-violet-500/40 bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-200 hover:bg-violet-500/20 disabled:opacity-50"
+          >
+            {reconcileMut.isPending ? "Aligning…" : `Align ${season} to scrape order`}
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!window.confirm("Reconcile draft slot order from HTML scrapes for ALL seasons (2009–2025)?")) return;
+              await reconcileMut.mutateAsync({});
+              await draftQ.refetch();
+              await diagQ.refetch();
+            }}
+            disabled={reconcileMut.isPending}
+            className="rounded border border-violet-500/30 bg-muted/20 px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted/40 disabled:opacity-50"
+          >
+            All seasons
+          </button>
+          {reconcileMut.data?.seasons?.find((s) => s.season === season) && (
+            <span className="text-[10px] text-muted-foreground">
+              scrape rows: {reconcileMut.data.seasons.find((s) => s.season === season)?.scrapeRows ?? 0},{" "}
+              realigned: {reconcileMut.data.seasons.find((s) => s.season === season)?.realignedRoundPick ?? 0}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ── ESPN Verification panel ── */}

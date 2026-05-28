@@ -107,6 +107,7 @@ import {
   countNormalizedGmRowsForSeason,
   importEspnBrowserSeasonBundle,
   ingestParsedDraftPicks,
+  reconcileSeasonDraftPicksFromScrape,
   ingestParsedStandings,
   ingestParsedMatchups,
   getBrowserSyncStatusForLeague,
@@ -183,6 +184,26 @@ async function resolveSeasonTeamCount(leagueId: string, season: number, userId?:
 
 /** Regex to detect synthetic fallback team name "Team N" or "Team NN". */
 const FALLBACK_TEAM_NAME_RE = /^Team\s+\d+$/i;
+
+/** Board column order within each round: scrape roundPick when present, else overallPick sequence. */
+function assignRoundPickWithinRounds<
+  T extends { round: number; overallPick: number; roundPick: number; _teamNameSource?: string },
+>(picks: T[]): void {
+  const byRound = new Map<number, T[]>();
+  for (const p of picks) {
+    const arr = byRound.get(p.round) ?? [];
+    arr.push(p);
+    byRound.set(p.round, arr);
+  }
+  for (const [, arr] of byRound) {
+    const ordered = [...arr].sort((a, b) => a.overallPick - b.overallPick);
+    for (let i = 0; i < ordered.length; i++) {
+      const p = ordered[i];
+      const fromScrape = p._teamNameSource === "rawPick.teamName";
+      p.roundPick = fromScrape && p.roundPick > 0 ? p.roundPick : i + 1;
+    }
+  }
+}
 
 function mergeTeamRowIntoMap(
   map: Map<number, { name: string; ownerName: string }>,
@@ -374,6 +395,8 @@ async function cleanSeasonDraftPicks(
     dedupedOverall.push(p);
   }
   const duplicateOverallRemoved = allPicks.length - dedupedOverall.length;
+
+  assignRoundPickWithinRounds(dedupedOverall);
 
   const seenSlot = new Set<string>();
   const dedupedSlot: typeof allPicks = [];
@@ -2370,6 +2393,29 @@ export const appRouter = router({
         }
 
         return { season: yr, leagueId, deleted, inserted, uniquePicks: seenSlots.size, skippedDuplicates: picks.length - seenSlots.size, status: "repaired" as const };
+      }),
+
+    /**
+     * Reconcile DB draft_picks with HTML scrape rows (draft_recap_html) for slot order and team columns.
+     * Run after extension FULL IMPORT or per-season scrape ingest. All seasons when `season` omitted.
+     */
+    reconcileDraftOrderFromScrapes: protectedProcedure
+      .input(
+        z.object({
+          season: z.number().int().min(2009).max(2030).optional(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, input.season);
+        const seasons =
+          input.season != null
+            ? [input.season]
+            : [2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+        const results = [];
+        for (const yr of seasons) {
+          results.push(await reconcileSeasonDraftPicksFromScrape(leagueId, yr));
+        }
+        return { leagueId, seasons: results };
       }),
 
     /** Delete all (or one season's) draft_picks for a league. Returns how many rows were cleared. */
