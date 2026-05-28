@@ -278,7 +278,7 @@ export async function getSeasonDraftPicks(
       // desc(id) so that for duplicate overallPick rows, the latest insert wins after dedup
       .orderBy(gmDraftPicks.overallPick, desc(gmDraftPicks.id));
 
-    // Deduplicate by overallPick — 2025: draft_recap_html > API; other seasons: API > scrape
+    // Deduplicate by overallPick — draft_recap_html > espn_mDraftDetail_api > other
     const byOverall = new Map<number, (typeof rows)[number]>();
     for (const row of rows) {
       const existing = byOverall.get(row.overallPick);

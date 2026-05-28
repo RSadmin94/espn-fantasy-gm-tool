@@ -25,20 +25,14 @@ export function isEspnApiDraftRawPick(raw: string | null | undefined): boolean {
   }
 }
 
-/** Higher rank wins duplicate overallPick rows. */
+/** Higher rank wins duplicate overallPick rows. Recap scrape always beats API. */
 export function draftPickSourceRank(season: number, raw: string | null | undefined): number {
+  void season;
   if (!raw) return 0;
   try {
     const j = JSON.parse(raw) as { source?: string; overallPickNumber?: number };
-    const yr = Math.floor(season);
-    if (yr === SEASON_DRAFT_RECAP_HTML_CANONICAL) {
-      if (j.source === "draft_recap_html") return 4;
-      if (j.source === "espn_mDraftDetail_api") return 3;
-      if (j.overallPickNumber != null) return 1;
-      return 0;
-    }
+    if (j.source === "draft_recap_html") return 4;
     if (j.source === "espn_mDraftDetail_api") return 3;
-    if (j.source === "draft_recap_html") return 2;
     if (j.overallPickNumber != null) return 1;
     return 0;
   } catch {
@@ -58,9 +52,9 @@ export function canonicalSourceLabelForSeason(season: number, scrapeRowCount: nu
 
 export function sourcePriorityDescription(season: number): string {
   if (season === SEASON_DRAFT_RECAP_HTML_CANONICAL) {
-    return "2025: draft_recap_html > espn_mDraftDetail_api > other";
+    return "2025: draft_recap_html > espn_mDraftDetail_api > other (API diagnostic only when scrape exists)";
   }
-  return "other seasons: espn_mDraftDetail_api > draft_recap_html > other";
+  return "draft_recap_html > espn_mDraftDetail_api > other";
 }
 
 /** Rows in draft_picks with rawPick.source = draft_recap_html for this season. */

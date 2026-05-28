@@ -6,8 +6,7 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { buildDraftOrderDebugReport } from "../server/draftOrderDebugger";
-import { getSeasonDraftPicks } from "../server/historicalDataService";
-import { cleanSeasonDraftPicks } from "../server/routers";
+import { buildCanonicalDraftBoard, flattenCanonicalBoard } from "../server/canonicalDraftBoard";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, "..", ".env") });
@@ -15,15 +14,14 @@ dotenv.config({ path: join(__dirname, "..", ".env") });
 const leagueId = process.argv[2] || process.env.ESPN_LEAGUE_ID || "457622";
 const season = 2025;
 
-const fb = await getSeasonDraftPicks(season, leagueId);
-const cleaned =
-  fb.count > 0 ? await cleanSeasonDraftPicks(leagueId, season, undefined, fb) : { picks: [] };
+const board = await buildCanonicalDraftBoard(season, leagueId);
+const flat = flattenCanonicalBoard(board);
 
 const report = await buildDraftOrderDebugReport({
   leagueId,
   season,
   round: 1,
-  uiPicks: cleaned.picks.map((p) => ({
+  uiPicks: flat.map((p) => ({
     overallPick: p.overallPick,
     round: p.round,
     roundPick: p.roundPick,
