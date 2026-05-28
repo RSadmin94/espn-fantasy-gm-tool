@@ -64,7 +64,11 @@ export function DraftHistory() {
   const draftQ = trpc.espn.draftHistory.useQuery({ season }, { staleTime: 0 });
   const importMut = trpc.espn.importDraftFromEspnApi.useMutation({
     onSuccess: (data) => {
-      setImportResult(data);
+      setImportResult({
+        rowsInserted: data.insertedRows ?? data.inserted ?? 0,
+        rawRows: data.deletedRows ?? data.deleted ?? 0,
+        skipped: data.skippedDuplicates ?? 0,
+      });
       setImportError(null);
       void draftQ.refetch();
     },
@@ -149,7 +153,8 @@ export function DraftHistory() {
 
           {importResult && (
             <span className="text-xs text-emerald-400">
-              Imported {importResult.rowsInserted} picks ({importResult.skipped} skipped, {importResult.rawRows} raw)
+              Imported {importResult.rowsInserted} picks (deleted {importResult.rawRows} prior rows
+              {importResult.skipped > 0 ? `, ${importResult.skipped} skipped` : ""})
             </span>
           )}
           {importError && (

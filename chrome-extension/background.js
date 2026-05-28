@@ -349,8 +349,9 @@ async function removeSaveCredentialsCookieRule() {
   }
 }
 
-// ─── Historical league import (War Room tRPC; draft recap uses ingestParsedDraftPicks only) ───
+// ─── Historical league import (War Room tRPC) ───
 const TRPC_PARSED_DRAFT_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestParsedDraftPicks`;
+const TRPC_IMPORT_DRAFT_API_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.importDraftFromEspnApi`;
 const TRPC_HIST_STATUS_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.historicalImportStatus`;
 const DNR_TRPC_HIST_RULE_ID = 8844210;
 
@@ -391,6 +392,18 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
       },
       {
         id: DNR_TRPC_HIST_RULE_ID + 1,
+        priority: 1,
+        action: {
+          type: "modifyHeaders",
+          requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
+        },
+        condition: {
+          urlFilter: "https://gmwarroom.online/api/trpc/espn.importDraftFromEspnApi*",
+          resourceTypes: ["xmlhttprequest", "other"],
+        },
+      },
+      {
+        id: DNR_TRPC_HIST_RULE_ID + 2,
         priority: 1,
         action: {
           type: "modifyHeaders",
@@ -1493,6 +1506,18 @@ async function postIngestParsedDraftPicks(leagueId, season, picks, warRoomCookie
   return { ok: post.ok, status: post.status, error: post.error, result, parsed: post.parsed };
 }
 
+/** FULL IMPORT: mDraftDetail API → delete season rows → insert normalized picks (no HTML scrape). */
+async function postImportDraftFromEspnApi(leagueId, season, warRoomCookieHeader, authToken) {
+  const post = await postTrpcHistJson(
+    TRPC_IMPORT_DRAFT_API_URL,
+    warRoomCookieHeader,
+    { leagueId: String(leagueId).trim(), season },
+    authToken,
+  );
+  const result = post.ok ? trpcResultJson(post.parsed) : null;
+  return { ok: post.ok, status: post.status, error: post.error, result, parsed: post.parsed };
+}
+
 async function openOrFocusSyncTab() {
   const tabs = await chrome.tabs.query({ url: "https://gmwarroom.online/*" });
   const existing = tabs.find((t) => t.id != null) ?? null;
@@ -1825,57 +1850,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const results = [];
       for (let season = 2010; season <= 2025; season++) {
         await sleep(500);
-        const full = await scrapeDraftRecapPage(leagueId, season);
-        const candidates = Array.isArray(full?.candidates) ? full.candidates : [];
-        const summary = {
-          season,
-          bodyLength: typeof full?.bodyLength === "number" ? full.bodyLength : 0,
-          candidatesCount: candidates.length,
-        };
-        const probeOk = Boolean(full && full.ok !== false && full.error == null);
-        if (!probeOk) {
-          results.push({
-            season,
-            ok: false,
-            mode: "draft_recap_scrape_probe",
-            summary,
-            scrape: full,
-            parsedCount: 0,
-            ingest: null,
-          });
-          continue;
-        }
-        const { picks: parsedPicks, parseErrors } = parseDraftRecapCandidatesToPicks(candidates, leagueId, season);
-        if (parsedPicks.length === 0) {
-          results.push({
-            season,
-            ok: false,
-            mode: "draft_recap_parse_empty",
-            summary,
-            parseErrors,
-            parsedCount: 0,
-            ingest: null,
-          });
-          continue;
-        }
-        const picksPayload = picksPayloadForIngestParsedDraft(parsedPicks);
-        const ingest = await postIngestParsedDraftPicks(leagueId, season, picksPayload, warRoomCookieHeader, clerkToken);
-        const r = ingest.result;
+        const imp = await postImportDraftFromEspnApi(leagueId, season, warRoomCookieHeader, clerkToken);
+        const r = imp.result;
         const row = {
           season,
-          ok: Boolean(ingest.ok && r && r.success),
-          mode: "draft_recap_scrape_ingest",
-          summary,
-          parsedCount: parsedPicks.length,
-          received: r?.received,
-          insertedOrUpdated: r?.insertedOrUpdated,
-          dbCountAfter: r?.dbCountAfter,
-          apiSuccess: r?.success,
-          parseErrors,
-          ingest: ingest.ok ? { ok: true, result: r, status: ingest.status } : ingest,
+          ok: Boolean(imp.ok && r && (r.success === true || r.status === "imported")),
+          mode: "espn_mDraftDetail_import",
+          sourceUsed: r?.sourceUsed ?? "espn_mDraftDetail",
+          deletedRows: r?.deletedRows ?? r?.deleted ?? 0,
+          insertedRows: r?.insertedRows ?? r?.inserted ?? 0,
+          teamCount: r?.teamCount ?? 0,
+          uniquePicks: r?.uniquePicks ?? 0,
+          skippedDuplicates: r?.skippedDuplicates ?? 0,
+          error: r?.error ?? imp.error ?? null,
+          ingest: imp.ok ? { ok: true, result: r, status: imp.status } : imp,
         };
         results.push(row);
-        console.info("[GMWR] draft recap full import season", row);
+        console.info("[GMWR] mDraftDetail full import season", row);
       }
       const allOk = results.length > 0 && results.every((x) => x.ok);
       sendResponse({ ok: allOk, results, aborted: false, leagueId });

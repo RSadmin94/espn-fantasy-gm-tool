@@ -1,8 +1,14 @@
-# Historical draft recap import (extension)
+# Chrome extension — historical import
 
-1. Sign in at **fantasy.espn.com** (or **espn.com**) so **SWID** and **espn_s2** exist for this browser profile. Sign in at **gmwarroom.online** for tRPC. Draft recap uses a **background tab** on the ESPN draft recap URL (HTML only); no ESPN JSON `combined` fetch for this path.
-2. **Discover seasons** — fixed list **2009 through the current calendar year** (used elsewhere; full recap import here uses **2010–2025**).
-3. **TEST IMPORT (2010)** — opens **Draft Recap** for league **457622**, collects **`candidates[]`**, parses pick rows (`<player> <NFL>, <POS>` with the prior line as fantasy team name), validates **>150** parsed rows plus sanity checks, then POST **`espn.ingestParsedDraftPicks`** (Drizzle upsert into `draft_picks` only; **no** `espn_raw_cache`, **no** `ingestHistoricalSeasonPayload`, **no** `normalizeDraftPicks`). Service worker logs **`[GMWR] draft recap HTML parse`**. Success: **`dbCountAfter` > 150** for 2010 after ingest.
-4. **FULL IMPORT** — loops **2010–2025**: scrape draft recap → parse → **`espn.ingestParsedDraftPicks`** per season. Response includes **per-season** `parsedCount`, `received`, `insertedOrUpdated`, `dbCountAfter`, and `apiSuccess`. Overall `ok` is true only when **every** season row succeeds (`ingest.ok` and API `success`).
+1. **DISCOVER** — fixed ESPN season list (2009–current).
+2. **STATUS** — `espn.historicalImportStatus` for league coverage.
+3. **TEST IMPORT (2010)** — optional HTML draft recap scrape + `espn.ingestParsedDraftPicks` (legacy test path only).
+4. **FULL IMPORT (2010–2025)** — per season:
+   - `espn.importDraftFromEspnApi`
+   - Server: ESPN **mDraftDetail** → `normalizeDraftPicks()` → **DELETE** all `draft_picks` for league+season → **INSERT** clean rows
+   - `rawPick.source = "espn_mDraftDetail"`
+   - Logs: `deletedRows`, `insertedRows`, `season`, `sourceUsed`
+   - Expect ~14 picks × rounds per season (not hundreds of scrape rows)
+5. **STANDINGS / MATCHUPS** — separate scrape ingest paths (unchanged).
 
-Backend: **`espn.ingestParsedDraftPicks`** resolves fantasy **`teamId`** from existing **`teams`** rows for that league/season when the client sends `teamId: 0`. League **457622** is allowed when not in the user’s linked list (test league). Duplicate keys update **`teamId`**, **`playerName`**, **`position`**, **`rawPick`** only.
+**Do not** use `draft_recap_scrape_ingest` for FULL IMPORT — that path appended duplicate HTML rows.
