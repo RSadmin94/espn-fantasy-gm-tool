@@ -262,6 +262,7 @@ type CleanSeasonDraftPicksResult = {
   teamCount: number;
   unresolvedTeamMappingCount: number;
   unresolvedTeamMappings: Array<{ season: number; teamId: number; overallPick: number; round: number; roundPick: number }>;
+  firstRoundDiagnostic: Array<{ overallPick: number; playerName: string | null; displayedTeamName: string; sourceOfTeamName: string }>;
 };
 
 /**
@@ -287,6 +288,7 @@ async function cleanSeasonDraftPicks(
     teamCount: 0,
     unresolvedTeamMappingCount: 0,
     unresolvedTeamMappings: [],
+    firstRoundDiagnostic: [],
   };
   if (fb.count === 0) return empty;
 
@@ -299,38 +301,46 @@ async function cleanSeasonDraftPicks(
     const nfl = nflTeamFromDraftRawPick(raw) || String(p.proTeam ?? "").trim();
     const tid = Number(p.teamId ?? 0);
 
-    let resolvedTeamName = String(p.teamName ?? "").trim();
+    // Parse rawPick JSON first — for scraped ESPN Draft Recap rows it holds the canonical TEAM column
+    let rawPickParsed: { source?: string; teamName?: string; ownerName?: string } = {};
+    try { rawPickParsed = JSON.parse(raw) as typeof rawPickParsed; } catch { /* ignore */ }
+    const isScrapedDraftRecap = rawPickParsed.source === "draft_recap_html";
+
+    let resolvedTeamName = "";
     let resolvedOwnerName = "";
     let teamResolved = false;
+    let teamNameSource = "unresolved";
 
-    const mapEntry = teamMap.get(tid);
-    if (mapEntry) {
-      if (!resolvedTeamName || FALLBACK_TEAM_NAME_RE.test(resolvedTeamName)) {
-        resolvedTeamName = mapEntry.name || resolvedTeamName;
-      }
-      resolvedOwnerName = mapEntry.ownerName;
-      teamResolved = Boolean(
-        resolvedTeamName && !FALLBACK_TEAM_NAME_RE.test(resolvedTeamName),
-      );
-    } else if (!resolvedTeamName || FALLBACK_TEAM_NAME_RE.test(resolvedTeamName)) {
-      try {
-        const j = JSON.parse(raw) as { ownerName?: string; teamName?: string };
-        if (j?.ownerName) resolvedOwnerName = String(j.ownerName);
-        if (j?.teamName && (!resolvedTeamName || FALLBACK_TEAM_NAME_RE.test(resolvedTeamName))) {
-          resolvedTeamName = String(j.teamName);
-        }
-      } catch {
-        /* ignore */
-      }
-      teamResolved = Boolean(resolvedTeamName && !FALLBACK_TEAM_NAME_RE.test(resolvedTeamName));
-    } else {
-      try {
-        const j = JSON.parse(raw) as { ownerName?: string };
-        resolvedOwnerName = j?.ownerName ? String(j.ownerName) : "";
-      } catch {
-        /* ignore */
-      }
+    // Priority 1: scraped ESPN Draft Recap TEAM column (canonical, do not override with gmTeams)
+    if (isScrapedDraftRecap && rawPickParsed.teamName?.trim()) {
+      resolvedTeamName = rawPickParsed.teamName.trim();
       teamResolved = true;
+      teamNameSource = "rawPick.teamName";
+    }
+
+    // Priority 2: rawPick.ownerName (other scraped source)
+    if (!resolvedTeamName && rawPickParsed.ownerName?.trim()) {
+      resolvedTeamName = rawPickParsed.ownerName.trim();
+      teamResolved = true;
+      teamNameSource = "rawPick.ownerName";
+    }
+
+    // Priority 3 & 4: gmTeams mapping — only when no scraped team name is available
+    if (!resolvedTeamName) {
+      const mapEntry = teamMap.get(tid);
+      if (mapEntry) {
+        resolvedTeamName = (mapEntry.name || "").trim();
+        resolvedOwnerName = mapEntry.ownerName;
+        teamResolved = Boolean(resolvedTeamName && !FALLBACK_TEAM_NAME_RE.test(resolvedTeamName));
+        if (teamResolved) teamNameSource = "gmTeams";
+      } else {
+        const dbTeamName = String(p.teamName ?? "").trim();
+        if (dbTeamName && !FALLBACK_TEAM_NAME_RE.test(dbTeamName)) {
+          resolvedTeamName = dbTeamName;
+          teamResolved = true;
+          teamNameSource = "db.teamName";
+        }
+      }
     }
 
     const displayTeamName = teamResolved
@@ -351,6 +361,7 @@ async function cleanSeasonDraftPicks(
       isKeeper: Boolean(p.keeper || p.reservedForKeeper),
       bidAmount: p.bidAmount != null ? Number(p.bidAmount) : 0,
       _teamResolved: teamResolved,
+      _teamNameSource: teamNameSource,
     };
   });
 
@@ -404,7 +415,17 @@ async function cleanSeasonDraftPicks(
       roundPick: p.roundPick,
     }));
 
-  const picks = validPicks.map(({ _teamResolved: _, ...rest }) => rest);
+  const firstRoundDiagnostic = validPicks
+    .filter((p) => p.round === 1)
+    .sort((a, b) => a.overallPick - b.overallPick)
+    .map((p) => ({
+      overallPick: p.overallPick,
+      playerName: p.playerName,
+      displayedTeamName: p.teamName,
+      sourceOfTeamName: p._teamNameSource,
+    }));
+
+  const picks = validPicks.map(({ _teamResolved: _, _teamNameSource: __, ...rest }) => rest);
 
   return {
     picks,
@@ -419,6 +440,7 @@ async function cleanSeasonDraftPicks(
     teamCount,
     unresolvedTeamMappingCount: unresolvedTeamMappings.length,
     unresolvedTeamMappings: unresolvedTeamMappings.slice(0, 10),
+    firstRoundDiagnostic,
   };
 }
 
@@ -2044,6 +2066,7 @@ export const appRouter = router({
           teamCount: 0,
           unresolvedTeamMappingCount: 0,
           unresolvedTeamMappings: [] as Array<{ season: number; teamId: number; overallPick: number; round: number; roundPick: number }>,
+          firstRoundDiagnostic: [] as Array<{ overallPick: number; playerName: string | null; displayedTeamName: string; sourceOfTeamName: string }>,
         };
         if (fb.count === 0) return emptyDiag;
 
@@ -2063,6 +2086,7 @@ export const appRouter = router({
           teamCount: cleaned.teamCount,
           unresolvedTeamMappingCount: cleaned.unresolvedTeamMappingCount,
           unresolvedTeamMappings: cleaned.unresolvedTeamMappings,
+          firstRoundDiagnostic: cleaned.firstRoundDiagnostic,
         };
       }),
 
@@ -5502,6 +5526,8 @@ export const appRouter = router({
       };
 
       const teamToOwner = new Map<string, { ownerKey: string; displayName: string }>();
+      // Reverse map: season:normalizedTeamName → owner (for scraped-name lookups)
+      const teamNameToOwner = new Map<string, { ownerKey: string; displayName: string }>();
       const ownerDisplay = new Map<string, string>();
       const teamMapBySeason = await Promise.all(
         HIST_SEASONS.map(async (s) => ({
@@ -5517,6 +5543,9 @@ export const appRouter = router({
           const display = cleanOwnerDisplay(rawName) || rawName;
           teamToOwner.set(`${s}:${tid}`, { ownerKey, displayName: display });
           ownerDisplay.set(ownerKey, display);
+          // Also index by normalized team name so scraped teamName can resolve owner
+          const teamNameKey = normalizeOwnerStr(entry.name || rawName);
+          if (teamNameKey) teamNameToOwner.set(`${s}:${teamNameKey}`, { ownerKey, displayName: display });
         }
       }
 
@@ -5531,6 +5560,7 @@ export const appRouter = router({
             round: p.round,
             roundPick: p.roundPick,
             teamId: p.teamId,
+            teamName: p.teamName,
             playerName: p.playerName,
             position: normalizePos(p.position),
             isKeeper: p.isKeeper,
@@ -5541,7 +5571,7 @@ export const appRouter = router({
 
       type CleanPick = {
         season: number; overallPick: number; round: number; roundPick: number;
-        teamId: number; playerName: string | null; position: string; isKeeper: boolean;
+        teamId: number; teamName: string; playerName: string | null; position: string; isKeeper: boolean;
       };
 
       // Owner pick accumulator
@@ -5555,7 +5585,11 @@ export const appRouter = router({
         let unresolvedPickCount = 0;
 
         for (const p of cleanPicks) {
-          const ownerInfo = teamToOwner.get(`${p.season}:${p.teamId}`);
+          // Try teamId-based lookup first, then scraped team name–based lookup
+          let ownerInfo = teamToOwner.get(`${p.season}:${p.teamId}`);
+          if (!ownerInfo && p.teamName) {
+            ownerInfo = teamNameToOwner.get(`${p.season}:${normalizeOwnerStr(p.teamName)}`);
+          }
           if (!ownerInfo) { unresolvedPickCount++; totalUnresolved++; continue; }
           const { ownerKey } = ownerInfo;
           if (!ownerPicks.has(ownerKey)) ownerPicks.set(ownerKey, []);

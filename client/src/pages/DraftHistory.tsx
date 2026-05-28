@@ -91,6 +91,7 @@ export function DraftHistory() {
   const missingPlayerNameCount   = (draftQ.data as { missingPlayerNameCount?: number } | undefined)?.missingPlayerNameCount ?? 0;
   const unresolvedTeamMapCount   = (draftQ.data as { unresolvedTeamMappingCount?: number } | undefined)?.unresolvedTeamMappingCount ?? 0;
   const unresolvedTeamMappings   = (draftQ.data as { unresolvedTeamMappings?: Array<{ season?: number; teamId: number; overallPick: number; round: number; roundPick: number }> } | undefined)?.unresolvedTeamMappings ?? [];
+  const firstRoundDiagnostic     = (draftQ.data as { firstRoundDiagnostic?: Array<{ overallPick: number; playerName: string | null; displayedTeamName: string; sourceOfTeamName: string }> } | undefined)?.firstRoundDiagnostic ?? [];
 
   // Server returns the canonical cleaned pick set (dedup + validity + team resolution).
   const picks = rawPicks;
@@ -277,6 +278,17 @@ export function DraftHistory() {
             {unresolvedTeamMappings.slice(0, 10).map((m) =>
               `Unresolved team owner mapping: season ${m.season ?? season} teamId ${m.teamId} (pick #${m.overallPick}, R${m.round}.${m.roundPick})`
             ).join(" · ")}
+          </div>
+        )}
+        {firstRoundDiagnostic.length > 0 && (
+          <div className="mt-1">
+            <span className="font-semibold text-foreground/60">round-1-team-source</span>
+            {" · "}
+            <span className="text-muted-foreground">
+              {firstRoundDiagnostic.map((d) =>
+                `#${d.overallPick} ${d.playerName ?? "?"} → ${d.displayedTeamName} [${d.sourceOfTeamName}]`
+              ).join(" · ")}
+            </span>
           </div>
         )}
       </div>
