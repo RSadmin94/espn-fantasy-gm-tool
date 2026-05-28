@@ -40,6 +40,17 @@ export type CanonicalDraftRound = {
   picks: CanonicalDraftPick[];
 };
 
+export type Round1OverrideDiagRow = {
+  expectedPick: number;
+  expectedPlayer: string;
+  expectedTeam: string;
+  actualPlayerBefore: string | null;
+  actualTeamBefore: string | null;
+  actualPlayerAfter: string | null;
+  actualTeamAfter: string | null;
+  status: "matched" | "player_not_found";
+};
+
 export type CanonicalDraftDiagnostics = {
   rawRows: number;
   cleanRows: number;
@@ -57,6 +68,7 @@ export type CanonicalDraftDiagnostics = {
   scrapeRowCount: number;
   apiRowCount: number;
   dataSource: string;
+  round1OverrideDiag: Round1OverrideDiagRow[];
 };
 
 export type CanonicalDraftBoard = {
@@ -139,6 +151,14 @@ function resolveFantasyTeam(
   };
 }
 
+/** Ground-truth first-pass override for 2025 Round 1 picks 1-4. Source: ESPN Draft Recap screenshot. */
+const RECAP_2025_R1_OVERRIDE: Array<{ pickInRound: number; playerName: string; fantasyTeamName: string }> = [
+  { pickInRound: 1, playerName: "ja'marr chase",       fantasyTeamName: "Dominus Thus" },
+  { pickInRound: 2, playerName: "saquon barkley",       fantasyTeamName: "Winkstradamus" },
+  { pickInRound: 3, playerName: "amon-ra st. brown",    fantasyTeamName: "TigerCommander" },
+  { pickInRound: 4, playerName: "christian mccaffrey",  fantasyTeamName: "Str8FrmHell, RodZilla" },
+];
+
 function inferRowSource(raw: string, fbSource: string): string {
   const j = parseDraftRawPick(raw);
   if (j.source) return j.source;
@@ -168,6 +188,7 @@ export async function buildCanonicalDraftBoard(
     scrapeRowCount,
     apiRowCount: 0,
     dataSource: fb.source,
+    round1OverrideDiag: [],
   };
 
   const empty: CanonicalDraftBoard = {
@@ -302,6 +323,48 @@ export async function buildCanonicalDraftBoard(
 
   diagnostics.apiRowCount = apiRowCount;
   diagnostics.cleanRows = valid.length;
+
+  // 2025 Round 1 ground-truth override: force pickInRound + fantasyTeamName for first 4 picks
+  if (yr === 2025) {
+    for (const expected of RECAP_2025_R1_OVERRIDE) {
+      const normExpected = expected.playerName.trim().toLowerCase();
+      const hit = valid.find(
+        (p) => p.round === 1 && p.playerName.trim().toLowerCase() === normExpected,
+      );
+      if (!hit) {
+        diagnostics.round1OverrideDiag.push({
+          expectedPick: expected.pickInRound,
+          expectedPlayer: expected.playerName,
+          expectedTeam: expected.fantasyTeamName,
+          actualPlayerBefore: null,
+          actualTeamBefore: null,
+          actualPlayerAfter: null,
+          actualTeamAfter: null,
+          status: "player_not_found",
+        });
+        diagnostics.warnings.push(
+          `2025 R1 override: expected player "${expected.playerName}" not found in round 1`,
+        );
+        continue;
+      }
+      const playerBefore = hit.playerName;
+      const teamBefore = hit.fantasyTeamName;
+      hit.pickInRound = expected.pickInRound;
+      hit.fantasyTeamName = expected.fantasyTeamName;
+      hit.confidence = "high";
+      hit.source = "recap_override_2025";
+      diagnostics.round1OverrideDiag.push({
+        expectedPick: expected.pickInRound,
+        expectedPlayer: expected.playerName,
+        expectedTeam: expected.fantasyTeamName,
+        actualPlayerBefore: playerBefore,
+        actualTeamBefore: teamBefore,
+        actualPlayerAfter: hit.playerName,
+        actualTeamAfter: hit.fantasyTeamName,
+        status: "matched",
+      });
+    }
+  }
 
   const roundMap = new Map<number, CanonicalDraftPick[]>();
   for (const p of valid) {
