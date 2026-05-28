@@ -117,6 +117,13 @@ import {
 import { runHistoricalEnrichment } from "./espnHistoricalEnrichment";
 import { buildDraftOrderDebugReport } from "./draftOrderDebugger";
 import {
+  countDraftRecapHtmlRows,
+  canonicalSourceLabelForSeason,
+  sourcePriorityDescription,
+  SEASON_DRAFT_RECAP_HTML_CANONICAL,
+  isDraftRecapHtmlRawPick,
+} from "./draftPickSourcePriority";
+import {
   calcVORP,
   calcPositionalScarcity,
   calcRosterGaps,
@@ -314,22 +321,32 @@ export async function cleanSeasonDraftPicks(
     let teamResolved = false;
     let teamNameSource = "unresolved";
 
-    // Priority 1: team name stored on the pick row (ESPN API import / rawPick JSON)
+    // 2025: HTML draft recap team column is canonical when present
+    if (
+      season === SEASON_DRAFT_RECAP_HTML_CANONICAL &&
+      isScrapedDraftRecap &&
+      rawPickParsed.teamName?.trim()
+    ) {
+      resolvedTeamName = rawPickParsed.teamName.trim();
+      teamResolved = true;
+      teamNameSource = "draft_recap_html.teamName";
+    }
+
+    // Team name on pick row (API import or other rawPick JSON)
     const storedTeamName = String(
       (rawPickParsed as { teamName?: string }).teamName ?? p.teamName ?? "",
     ).trim();
-    if (storedTeamName && !FALLBACK_TEAM_NAME_RE.test(storedTeamName)) {
+    if (!resolvedTeamName && storedTeamName && !FALLBACK_TEAM_NAME_RE.test(storedTeamName)) {
       resolvedTeamName = storedTeamName;
       teamResolved = true;
       teamNameSource =
         rawPickParsed.source === "espn_mDraftDetail_api" ? "espn_api.teamName" : "rawPick.teamName";
     }
 
-    // Priority 2: scraped ESPN Draft Recap TEAM column
     if (!resolvedTeamName && isScrapedDraftRecap && rawPickParsed.teamName?.trim()) {
       resolvedTeamName = rawPickParsed.teamName.trim();
       teamResolved = true;
-      teamNameSource = "rawPick.teamName";
+      teamNameSource = "draft_recap_html.teamName";
     }
 
     // Priority 2: rawPick.ownerName (other scraped source)
@@ -389,9 +406,9 @@ export async function cleanSeasonDraftPicks(
   }
   const duplicateOverallRemoved = allPicks.length - dedupedOverall.length;
 
-  // Do not dedupe by round|roundPick — traded picks / bad legacy data can share slot keys;
-  // overallPick is the only canonical key. Recompute recap column from overall within round.
+  // Recompute recap column from overall within round — skip 2025 HTML scrape rows (keep scraped round/roundPick).
   for (const p of dedupedOverall) {
+    if (p._teamNameSource === "draft_recap_html.teamName") continue;
     if (teamCount > 0 && p.overallPick > 0 && p.round > 0) {
       const chron = p.overallPick - (p.round - 1) * teamCount;
       if (chron >= 1 && chron <= teamCount) p.roundPick = chron;
@@ -2081,14 +2098,21 @@ export const appRouter = router({
           unresolvedTeamMappingCount: 0,
           unresolvedTeamMappings: [] as Array<{ season: number; teamId: number; overallPick: number; round: number; roundPick: number }>,
           firstRoundDiagnostic: [] as Array<{ overallPick: number; playerName: string | null; displayedTeamName: string; sourceOfTeamName: string }>,
+          scrapeRowCount: 0,
+          canonicalSource: canonicalSourceLabelForSeason(yr, 0),
+          sourcePriority: sourcePriorityDescription(yr),
         };
         if (fb.count === 0) return emptyDiag;
 
         const cleaned = await cleanSeasonDraftPicks(leagueId, yr, ctx.user?.id ?? undefined, fb);
+        const scrapeRowCount = await countDraftRecapHtmlRows(leagueId, yr);
 
         return {
           picks: cleaned.picks,
           dataSource,
+          scrapeRowCount,
+          canonicalSource: canonicalSourceLabelForSeason(yr, scrapeRowCount),
+          sourcePriority: sourcePriorityDescription(yr),
           rawCount: cleaned.rawCount,
           dedupedCount: cleaned.dedupedOverallCount,
           dedupedSlotCount: cleaned.dedupedSlotCount,
@@ -2329,6 +2353,19 @@ export const appRouter = router({
         const yr = input.season;
         const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, yr);
         const result = await importSeasonDraftFromEspnApi(leagueId, yr, undefined, ctx.user.id);
+        if (result.status === "blocked_scrape_canonical") {
+          return {
+            season: yr,
+            leagueId,
+            deleted: 0,
+            inserted: 0,
+            uniquePicks: 0,
+            skippedDuplicates: 0,
+            status: "blocked_scrape_canonical" as const,
+            scrapeRowCount: result.scrapeRowCount,
+            error: result.error,
+          };
+        }
         if (result.status !== "imported") {
           return {
             season: yr,

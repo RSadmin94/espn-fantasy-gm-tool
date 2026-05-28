@@ -12,6 +12,11 @@ import {
   hasCookies,
   type EspnCreds,
 } from "./espnService";
+import {
+  draftPickSourceRank,
+  countDraftRecapHtmlRows,
+  SEASON_DRAFT_RECAP_HTML_CANONICAL,
+} from "./draftPickSourcePriority";
 
 export type DraftOrderDebugRow = {
   pickNumber: number;
@@ -55,6 +60,20 @@ export type DraftOrderDebugSummary = {
     playerMismatches: number[];
     teamMismatches: number[];
   };
+  dbVsEspnRecap: {
+    playerOrderMatch: boolean;
+    teamOrderMatch: boolean;
+    playerMismatches: number[];
+    teamMismatches: number[];
+  };
+  uiVsEspnRecap: {
+    playerOrderMatch: boolean;
+    teamOrderMatch: boolean;
+    playerMismatches: number[];
+    teamMismatches: number[];
+  };
+  scrapeRowCount: number;
+  canonicalSource: string;
   uiVsDb: {
     playerOrderMatch: boolean;
     teamOrderMatch: boolean;
@@ -164,18 +183,6 @@ function round1ByOverall(
   }));
 }
 
-function draftPickSourceRank(raw: string | null | undefined): number {
-  if (!raw) return 0;
-  try {
-    const j = JSON.parse(raw) as { source?: string };
-    if (j.source === "espn_mDraftDetail_api") return 3;
-    if (j.source === "draft_recap_html") return 2;
-    return 1;
-  } catch {
-    return 0;
-  }
-}
-
 export async function buildDraftOrderDebugReport(input: {
   leagueId: string;
   season: number;
@@ -259,9 +266,9 @@ export async function buildDraftOrderDebugReport(input: {
         byOverall.set(row.overallPick, row);
         continue;
       }
-      if (draftPickSourceRank(row.rawPick) > draftPickSourceRank(existing.rawPick)) {
+      if (draftPickSourceRank(yr, row.rawPick) > draftPickSourceRank(yr, existing.rawPick)) {
         byOverall.set(row.overallPick, row);
-      } else if (draftPickSourceRank(row.rawPick) === draftPickSourceRank(existing.rawPick) && row.id > existing.id) {
+      } else if (draftPickSourceRank(yr, row.rawPick) === draftPickSourceRank(yr, existing.rawPick) && row.id > existing.id) {
         byOverall.set(row.overallPick, row);
       }
     }
@@ -309,8 +316,15 @@ export async function buildDraftOrderDebugReport(input: {
   );
 
   const rows: DraftOrderDebugRow[] = [];
+  const scrapeRowCount = await countDraftRecapHtmlRows(leagueId, yr);
+  const useRecapCanonical = yr === SEASON_DRAFT_RECAP_HTML_CANONICAL && scrapeRowCount > 0;
+
   const apiVsEspnPlayer: number[] = [];
   const apiVsEspnTeam: number[] = [];
+  const dbVsEspnPlayer: number[] = [];
+  const dbVsEspnTeam: number[] = [];
+  const uiVsEspnPlayer: number[] = [];
+  const uiVsEspnTeam: number[] = [];
   const dbVsApiPlayer: number[] = [];
   const dbVsApiTeam: number[] = [];
   const dbVsApiOverall: number[] = [];
@@ -332,6 +346,22 @@ export async function buildDraftOrderDebugReport(input: {
     if (espn && api && espn.teamName && api.teamName && !namesMatch(espn.teamName, api.teamName)) {
       flags.push("espn≠api_team");
       apiVsEspnTeam.push(n);
+    }
+    if (espn && db && !namesMatch(espn.playerName, db.playerName)) {
+      flags.push("espn≠db_player");
+      dbVsEspnPlayer.push(n);
+    }
+    if (espn && db && espn.teamName && db.teamName && !namesMatch(espn.teamName, db.teamName)) {
+      flags.push("espn≠db_team");
+      dbVsEspnTeam.push(n);
+    }
+    if (espn && ui && !namesMatch(espn.playerName, ui.playerName)) {
+      flags.push("espn≠ui_player");
+      uiVsEspnPlayer.push(n);
+    }
+    if (espn && ui && espn.teamName && ui.teamName && !namesMatch(espn.teamName, ui.teamName)) {
+      flags.push("espn≠ui_team");
+      uiVsEspnTeam.push(n);
     }
     if (api && db && !namesMatch(api.playerName, db.playerName)) {
       flags.push("api≠db_player");
@@ -399,6 +429,18 @@ export async function buildDraftOrderDebugReport(input: {
     playerMismatches: dbVsApiPlayer,
     teamMismatches: dbVsApiTeam,
   };
+  const dbVsEspnRecap = {
+    playerOrderMatch: dbVsEspnPlayer.length === 0 && dbLayer.length >= espnRecap.length,
+    teamOrderMatch: dbVsEspnTeam.length === 0,
+    playerMismatches: dbVsEspnPlayer,
+    teamMismatches: dbVsEspnTeam,
+  };
+  const uiVsEspnRecap = {
+    playerOrderMatch: uiVsEspnPlayer.length === 0 && uiLayer.length >= espnRecap.length,
+    teamOrderMatch: uiVsEspnTeam.length === 0,
+    playerMismatches: uiVsEspnPlayer,
+    teamMismatches: uiVsEspnTeam,
+  };
   const uiVsDb = {
     playerOrderMatch: uiVsDbPlayer.length === 0 && uiLayer.length === dbLayer.length,
     teamOrderMatch: uiVsDbTeam.length === 0,
@@ -410,7 +452,26 @@ export async function buildDraftOrderDebugReport(input: {
   let wrongLayer = "unknown";
   let nextCorrection = "Re-run debugger after fixing credentials or pasting ESPN recap.";
 
-  if (apiFetchStatus !== "ok") {
+  if (useRecapCanonical) {
+    if (!dbVsEspnRecap.playerOrderMatch) {
+      wrongLayer = "DB vs ESPN recap";
+      nextCorrection =
+        "Re-ingest 2025 from extension draft recap scrape or run Use Draft Recap Order — DB must match visual recap rows.";
+    } else if (!uiVsEspnRecap.playerOrderMatch) {
+      wrongLayer = "UI vs ESPN recap";
+      nextCorrection = "DB matches recap; fix Draft History display only.";
+    } else if (!dbVsEspnRecap.teamOrderMatch && dbVsEspnRecap.playerOrderMatch) {
+      wrongLayer = "DB team labels vs ESPN recap";
+      nextCorrection = "Player order matches recap; fix team names on draft_recap_html rows.";
+    } else if (!apiVsEspnRecap.playerOrderMatch) {
+      wrongLayer = "none (API≠recap documented)";
+      nextCorrection =
+        "DB/UI match ESPN recap. mDraftDetail API differs — do not import API over scrape for 2025.";
+    } else {
+      wrongLayer = "none";
+      nextCorrection = "2025 draft_recap_html is canonical; DB/UI align with ESPN recap.";
+    }
+  } else if (apiFetchStatus !== "ok") {
     wrongLayer = "API (fetch failed)";
     nextCorrection = "Fix ESPN cookies / league id, then re-run. Cannot compare until API returns mDraftDetail.";
   } else if (!apiVsEspnRecap.playerOrderMatch) {
@@ -448,6 +509,10 @@ export async function buildDraftOrderDebugReport(input: {
     uiPickCount: uiLayer.length,
     apiVsEspnRecap,
     dbVsApi,
+    dbVsEspnRecap,
+    uiVsEspnRecap,
+    scrapeRowCount,
+    canonicalSource: useRecapCanonical ? "draft_recap_html" : "espn_mDraftDetail_api_or_legacy",
     uiVsDb,
     wrongLayer,
     nextCorrection,

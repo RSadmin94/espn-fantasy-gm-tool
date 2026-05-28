@@ -1233,7 +1233,8 @@ export type ImportSeasonDraftFromEspnApiResult = {
     teamName: string;
     playerName: string | null;
   }>;
-  status: "imported" | "missing_espn_data";
+  status: "imported" | "missing_espn_data" | "blocked_scrape_canonical";
+  scrapeRowCount?: number;
   error?: string;
 };
 
@@ -1260,6 +1261,35 @@ export async function importSeasonDraftFromEspnApi(
     status: "missing_espn_data",
     error,
   });
+
+  const db = await getDbConn();
+  if (!db) {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+  }
+
+  if (yr === 2025) {
+    const scrapeRows = await db
+      .select({ rawPick: schema.gmDraftPicks.rawPick })
+      .from(schema.gmDraftPicks)
+      .where(and(eq(schema.gmDraftPicks.leagueId, lid), eq(schema.gmDraftPicks.season, yr)));
+    const scrapeRowCount = scrapeRows.filter((r) => isDraftRecapHtmlRawPick(r.rawPick)).length;
+    if (scrapeRowCount > 0) {
+      return {
+        season: yr,
+        leagueId: lid,
+        deleted: 0,
+        inserted: 0,
+        uniquePicks: 0,
+        skippedDuplicates: 0,
+        teamCount: 0,
+        round1Preview: [],
+        status: "blocked_scrape_canonical",
+        scrapeRowCount,
+        error:
+          `2025 has ${scrapeRowCount} draft_recap_html rows — visual recap is canonical. Use "Use Draft Recap Order" instead of API import.`,
+      };
+    }
+  }
 
   const resolvedCreds = await resolveEspnCreds(creds, userId);
   const credsWithLeague: EspnCreds = { ...resolvedCreds, leagueId: lid };
@@ -1317,11 +1347,6 @@ export async function importSeasonDraftFromEspnApi(
 
   const settings = normalizeSettings(payload);
   const teamCount = Number(settings.size ?? 0) || teamsArrayFromEspnPayload(payload).length || 0;
-
-  const db = await getDbConn();
-  if (!db) {
-    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-  }
 
   const [beforeCount] = await db
     .select({ count: count() })

@@ -115,6 +115,10 @@ export function DraftHistory() {
   const unresolvedTeamMapCount   = (draftQ.data as { unresolvedTeamMappingCount?: number } | undefined)?.unresolvedTeamMappingCount ?? 0;
   const unresolvedTeamMappings   = (draftQ.data as { unresolvedTeamMappings?: Array<{ season?: number; teamId: number; overallPick: number; round: number; roundPick: number }> } | undefined)?.unresolvedTeamMappings ?? [];
   const firstRoundDiagnostic     = (draftQ.data as { firstRoundDiagnostic?: Array<{ overallPick: number; playerName: string | null; displayedTeamName: string; sourceOfTeamName: string }> } | undefined)?.firstRoundDiagnostic ?? [];
+  const scrapeRowCount           = (draftQ.data as { scrapeRowCount?: number } | undefined)?.scrapeRowCount ?? 0;
+  const canonicalSource          = (draftQ.data as { canonicalSource?: string } | undefined)?.canonicalSource ?? "";
+  const sourcePriority           = (draftQ.data as { sourcePriority?: string } | undefined)?.sourcePriority ?? "";
+  const has2025ScrapeCanonical   = season === 2025 && scrapeRowCount > 0;
 
   // Server returns the canonical cleaned pick set (dedup + validity + team resolution).
   const picks = rawPicks;
@@ -323,12 +327,12 @@ export function DraftHistory() {
               <div className="grid gap-1 text-[10px] sm:grid-cols-2">
                 <div>API fetch: {orderDebugQ.data.summary.apiFetchStatus}</div>
                 <div>ESPN source: {orderDebugQ.data.summary.espnRecapSource}</div>
-                <div>API vs ESPN players: {orderDebugQ.data.summary.apiVsEspnRecap.playerOrderMatch ? "match" : "MISMATCH"}</div>
-                <div>API vs ESPN teams: {orderDebugQ.data.summary.apiVsEspnRecap.teamOrderMatch ? "match" : "MISMATCH"}</div>
+                <div>canonical: {orderDebugQ.data.summary.canonicalSource} ({orderDebugQ.data.summary.scrapeRowCount} scrape rows)</div>
+                <div>API vs ESPN players: {orderDebugQ.data.summary.apiVsEspnRecap.playerOrderMatch ? "match" : "MISMATCH (expected)"}</div>
+                <div>DB vs ESPN recap: {(orderDebugQ.data.summary as { dbVsEspnRecap?: { playerOrderMatch: boolean } }).dbVsEspnRecap?.playerOrderMatch ? "match" : "MISMATCH"}</div>
+                <div>UI vs ESPN recap: {(orderDebugQ.data.summary as { uiVsEspnRecap?: { playerOrderMatch: boolean } }).uiVsEspnRecap?.playerOrderMatch ? "match" : "MISMATCH"}</div>
                 <div>DB vs API players: {orderDebugQ.data.summary.dbVsApi.playerOrderMatch ? "match" : "MISMATCH"}</div>
-                <div>DB vs API teams: {orderDebugQ.data.summary.dbVsApi.teamOrderMatch ? "match" : "MISMATCH"}</div>
                 <div>UI vs DB players: {orderDebugQ.data.summary.uiVsDb.playerOrderMatch ? "match" : "MISMATCH"}</div>
-                <div>UI vs DB teams: {orderDebugQ.data.summary.uiVsDb.teamOrderMatch ? "match" : "MISMATCH"}</div>
               </div>
             </div>
           )}
@@ -398,6 +402,17 @@ export function DraftHistory() {
           <span className="text-foreground/60 font-semibold">draft-diag</span>
           {" · "}season: <span className="text-foreground">{season}</span>
           {" · "}teamCount: <span className={cn(serverTeamCount > 0 ? "text-emerald-400" : "text-amber-400")}>{serverTeamCount > 0 ? serverTeamCount : "unknown"}</span>
+          {" · "}canonical: <span className={cn(has2025ScrapeCanonical ? "text-emerald-400" : "text-foreground")}>{canonicalSource || "—"}</span>
+          {scrapeRowCount > 0 && (
+            <>
+              {" · "}scrapeRows: <span className="text-emerald-400">{scrapeRowCount}</span>
+            </>
+          )}
+          {sourcePriority && (
+            <>
+              {" · "}priority: <span className="text-muted-foreground">{sourcePriority}</span>
+            </>
+          )}
           {" · "}boardCols: <span className="text-foreground">{boardCols}</span>
           {" · "}dbRows: <span className="text-foreground">{diagQ.data?.totalRows ?? "…"}</span>
           {" · "}rawPicks: <span className="text-foreground">{rawCount ?? "…"}</span>
@@ -442,39 +457,78 @@ export function DraftHistory() {
           </div>
         )}
         <div className="flex flex-wrap items-center gap-2 pt-1">
+          {has2025ScrapeCanonical && (
+            <span className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-200">
+              2025 canonical: draft_recap_html ({scrapeRowCount} rows) — not mDraftDetail API
+            </span>
+          )}
+          {season === 2025 && (
+            <button
+              type="button"
+              title={
+                has2025ScrapeCanonical
+                  ? "Blocked while draft_recap_html rows exist — API order does not match ESPN recap"
+                  : "Replace 2025 picks from mDraftDetail API (only when no scrape rows)"
+              }
+              onClick={async () => {
+                if (has2025ScrapeCanonical) {
+                  window.alert(
+                    `2025 already has ${scrapeRowCount} draft_recap_html rows. Visual recap is canonical — API import is disabled. Use "Use Draft Recap Order" or re-scrape from Sync Data.`,
+                  );
+                  return;
+                }
+                if (!window.confirm("Replace ALL 2025 draft picks from ESPN mDraftDetail API?")) return;
+                const res = await importEspnMut.mutateAsync({ season: 2025 });
+                if ((res as { status?: string }).status === "blocked_scrape_canonical") {
+                  window.alert((res as { error?: string }).error ?? "API import blocked — scrape rows exist.");
+                  return;
+                }
+                await draftQ.refetch();
+                await diagQ.refetch();
+                setOrderDebugRunId((n) => n + 1);
+              }}
+              disabled={importEspnMut.isPending || has2025ScrapeCanonical}
+              className={cn(
+                "rounded border px-2.5 py-1 text-xs font-medium disabled:opacity-50",
+                has2025ScrapeCanonical
+                  ? "border-border/50 bg-muted/20 text-muted-foreground cursor-not-allowed"
+                  : "border-blue-500/50 bg-blue-500/15 text-blue-200 hover:bg-blue-500/25",
+              )}
+            >
+              {importEspnMut.isPending ? "Fetching ESPN…" : "Import 2025 from ESPN API (non-canonical)"}
+            </button>
+          )}
           {season === 2025 && (
             <button
               type="button"
               onClick={async () => {
-                if (!window.confirm("Replace ALL 2025 draft picks from ESPN mDraftDetail API? This overwrites scrape rows for 2025.")) return;
-                await importEspnMut.mutateAsync({ season: 2025 });
+                await reconcileMut.mutateAsync({ season: 2025 });
                 await draftQ.refetch();
                 await diagQ.refetch();
+                void utils.espn.draftHistory.invalidate({ season: 2025 });
+                setOrderDebugRunId((n) => n + 1);
               }}
-              disabled={importEspnMut.isPending}
-              className="rounded border border-blue-500/50 bg-blue-500/15 px-2.5 py-1 text-xs font-medium text-blue-200 hover:bg-blue-500/25 disabled:opacity-50"
+              disabled={reconcileMut.isPending}
+              className="rounded border border-emerald-500/50 bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50"
             >
-              {importEspnMut.isPending ? "Fetching ESPN…" : "Import 2025 from ESPN API"}
+              {reconcileMut.isPending ? "Applying…" : "Use Draft Recap Order (2025)"}
             </button>
           )}
-          {importEspnMut.data?.round1Preview && importEspnMut.data.season === season && (
-            <span className="text-[10px] text-muted-foreground max-w-full truncate">
-              R1 API: {importEspnMut.data.round1Preview.map((p) => `${p.roundPick}:${p.teamName?.split(" ").slice(-1)[0] ?? p.teamId}`).join(", ")}
-            </span>
+          {season !== 2025 && (
+            <button
+              type="button"
+              onClick={async () => {
+                await reconcileMut.mutateAsync({ season });
+                await draftQ.refetch();
+                await diagQ.refetch();
+                void utils.espn.draftHistory.invalidate({ season });
+              }}
+              disabled={reconcileMut.isPending}
+              className="rounded border border-violet-500/40 bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-200 hover:bg-violet-500/20 disabled:opacity-50"
+            >
+              {reconcileMut.isPending ? "Aligning…" : `Align ${season} to scrape order`}
+            </button>
           )}
-          <button
-            type="button"
-            onClick={async () => {
-              await reconcileMut.mutateAsync({ season });
-              await draftQ.refetch();
-              await diagQ.refetch();
-              void utils.espn.draftHistory.invalidate({ season });
-            }}
-            disabled={reconcileMut.isPending}
-            className="rounded border border-violet-500/40 bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-200 hover:bg-violet-500/20 disabled:opacity-50"
-          >
-            {reconcileMut.isPending ? "Aligning…" : `Align ${season} to scrape order`}
-          </button>
           <button
             type="button"
             onClick={async () => {

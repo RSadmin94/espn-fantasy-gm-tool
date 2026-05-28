@@ -13,6 +13,7 @@ import {
   normalizeTeams,
   normalizeTransactions,
 } from "./espnService";
+import { draftPickSourceRank } from "./draftPickSourcePriority";
 export type HistoricalDataSource =
   | "verified_manual"
   | "manual_h2h_matrix"
@@ -277,20 +278,7 @@ export async function getSeasonDraftPicks(
       // desc(id) so that for duplicate overallPick rows, the latest insert wins after dedup
       .orderBy(gmDraftPicks.overallPick, desc(gmDraftPicks.id));
 
-    const draftPickSourceRank = (raw: string | null | undefined): number => {
-      if (!raw) return 0;
-      try {
-        const j = JSON.parse(raw) as { source?: string; overallPickNumber?: number };
-        if (j.source === "espn_mDraftDetail_api") return 3;
-        if (j.source === "draft_recap_html") return 2;
-        if (j.overallPickNumber != null) return 1;
-        return 0;
-      } catch {
-        return 0;
-      }
-    };
-
-    // Deduplicate by overallPick — prefer ESPN mDraftDetail API rows over HTML scrape
+    // Deduplicate by overallPick — 2025: draft_recap_html > API; other seasons: API > scrape
     const byOverall = new Map<number, (typeof rows)[number]>();
     for (const row of rows) {
       const existing = byOverall.get(row.overallPick);
@@ -298,8 +286,8 @@ export async function getSeasonDraftPicks(
         byOverall.set(row.overallPick, row);
         continue;
       }
-      const rowRank = draftPickSourceRank(row.rawPick);
-      const existingRank = draftPickSourceRank(existing.rawPick);
+      const rowRank = draftPickSourceRank(yr, row.rawPick);
+      const existingRank = draftPickSourceRank(yr, existing.rawPick);
       if (rowRank > existingRank) {
         byOverall.set(row.overallPick, row);
       } else if (rowRank === existingRank && row.id > existing.id) {
