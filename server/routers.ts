@@ -4984,10 +4984,16 @@ export const appRouter = router({
         return { leagueId, season: input.season, ok: true };
       }),
 
-    /** Owner Draft Profiles — all-time draft breakdown per owner from gmDraftPicks. */
+    /**
+     * Owner Draft Profiles — uses the IDENTICAL draft data source as trpc.espn.draftHistory.
+     * Per-season picks come from getSeasonDraftPicks (gmDraftPicks → mDraftDetail → combined cache).
+     * Both server-side dedup (by overallPick slot) and client-side dedup (by playerName|round|teamId)
+     * from DraftHistory.tsx are applied here so totals match the Draft History tab exactly.
+     */
     ownerDraftProfiles: publicProcedure.query(async ({ ctx }) => {
       const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
       const POSITIONS = ["QB", "RB", "WR", "TE", "K", "D/ST"] as const;
+
       function normalizePos(raw: string | null | undefined): string {
         if (!raw) return "Other";
         const s = raw.trim().toUpperCase();
@@ -4995,37 +5001,62 @@ export const appRouter = router({
         if (POSITIONS.includes(s as typeof POSITIONS[number])) return s;
         return "Other";
       }
+
+      // Same processing as draftHistory endpoint: slot dedup + secondary playerName|round|teamId dedup
+      function cleanPicksFromFb(fb: Awaited<ReturnType<typeof getSeasonDraftPicks>>, season: number) {
+        if (fb.count === 0) return [];
+        const mapped = (fb.rows as Record<string, unknown>[]).map((p) => ({
+          season,
+          overallPick: Number(p.overallPickNumber ?? 0),
+          round: Number(p.roundId ?? 0),
+          roundPick: Number(p.roundPickNumber ?? 0),
+          teamId: Number(p.teamId ?? 0),
+          playerName: (p.playerName as string | null) ?? null,
+          position: normalizePos((p.position as string | null) ?? null),
+          isKeeper: Boolean(p.keeper || p.reservedForKeeper),
+        }));
+        // Layer 1: sort + dedup by overallPick slot (identical to draftHistory server logic)
+        mapped.sort((a, b) => a.overallPick - b.overallPick);
+        const seenSlots = new Set<number>();
+        const slotDeduped = mapped.filter((p) => {
+          if (seenSlots.has(p.overallPick)) return false;
+          seenSlots.add(p.overallPick);
+          return true;
+        });
+        // Layer 2: secondary dedup by playerName|round|teamId (identical to DraftHistory.tsx client logic)
+        const seenPlayer = new Set<string>();
+        return slotDeduped.filter((p) => {
+          const norm = (p.playerName ?? "").trim().toLowerCase();
+          if (!norm) return true; // unnamed picks always kept
+          const key = `${norm}|${p.round}|${p.teamId}`;
+          if (seenPlayer.has(key)) return false;
+          seenPlayer.add(key);
+          return true;
+        });
+      }
+
       const { leagueId } = await resolveActiveLeagueId(
         { user: ctx.user ? { id: ctx.user.id } : undefined },
         null,
         undefined,
       );
       const db = await getDb();
-      if (!db) return { profiles: [], diagnostics: { seasonsWithPicks: [] as number[], seasonsMissingPicks: HIST_SEASONS, totalRows: 0, unresolvedPicks: 0, coverageWarning: true } };
+      if (!db) return {
+        profiles: [],
+        diagnostics: {
+          seasonsAnalyzed: [] as number[],
+          seasonsMissingPicks: HIST_SEASONS,
+          perSeason: [] as { season: number; draftHistoryPickCount: number; ownerProfilePickCount: number; unresolvedPickCount: number; overCount: boolean; source: string }[],
+          totalDraftHistoryPicks: 0,
+          totalProfilePicks: 0,
+          totalUnresolved: 0,
+          coverageWarning: true,
+        },
+      };
 
-      const allPicks = await db
-        .select({
-          season: gmDraftPicks.season,
-          overallPick: gmDraftPicks.overallPick,
-          roundId: gmDraftPicks.roundId,
-          roundPick: gmDraftPicks.roundPick,
-          teamId: gmDraftPicks.teamId,
-          playerId: gmDraftPicks.playerId,
-          playerName: gmDraftPicks.playerName,
-          position: gmDraftPicks.position,
-          isKeeper: gmDraftPicks.isKeeper,
-        })
-        .from(gmDraftPicks)
-        .where(eqDrizzle(gmDraftPicks.leagueId, leagueId))
-        .orderBy(ascDrizzle(gmDraftPicks.season), ascDrizzle(gmDraftPicks.overallPick));
-
+      // Load gmTeams once for all seasons (owner resolution)
       const allTeams = await db
-        .select({
-          season: gmTeams.season,
-          teamId: gmTeams.teamId,
-          ownerName: gmTeams.ownerName,
-          name: gmTeams.name,
-        })
+        .select({ season: gmTeams.season, teamId: gmTeams.teamId, ownerName: gmTeams.ownerName, name: gmTeams.name })
         .from(gmTeams)
         .where(eqDrizzle(gmTeams.leagueId, leagueId));
 
@@ -5039,34 +5070,57 @@ export const appRouter = router({
         ownerDisplay.set(ownerKey, display);
       }
 
-      const seenPickSlots = new Set<string>();
-      const dedupedPicks: typeof allPicks = [];
-      for (const p of allPicks) {
-        const key = `${p.season}:${p.overallPick}`;
-        if (!seenPickSlots.has(key)) { seenPickSlots.add(key); dedupedPicks.push(p); }
-      }
+      // Fetch and clean picks for all seasons in parallel (same source as draftHistory)
+      const seasonResults = await Promise.all(
+        HIST_SEASONS.map(async (season) => {
+          const fb = await getSeasonDraftPicks(season, leagueId, ctx.user?.id ?? undefined);
+          const picks = cleanPicksFromFb(fb, season);
+          return { season, picks, source: fb.source };
+        })
+      );
 
-      const seasonsWithPicks = [...new Set(dedupedPicks.map((p) => p.season))].sort((a, b) => a - b);
-      const seasonsMissingPicks = HIST_SEASONS.filter((s) => !seasonsWithPicks.includes(s));
-      let unresolvedPicks = 0;
-
-      type OwnerPickEntry = {
-        season: number; overallPick: number; roundId: number; roundPick: number;
-        playerName: string | null; position: string; isKeeper: boolean;
+      type CleanPick = {
+        season: number; overallPick: number; round: number; roundPick: number;
+        teamId: number; playerName: string | null; position: string; isKeeper: boolean;
       };
-      const ownerPicks = new Map<string, OwnerPickEntry[]>();
-      for (const p of dedupedPicks) {
-        const ownerInfo = teamToOwner.get(`${p.season}:${p.teamId}`);
-        if (!ownerInfo) { unresolvedPicks++; continue; }
-        const { ownerKey } = ownerInfo;
-        if (!ownerPicks.has(ownerKey)) ownerPicks.set(ownerKey, []);
-        ownerPicks.get(ownerKey)!.push({
-          season: p.season, overallPick: p.overallPick,
-          roundId: p.roundId ?? 0, roundPick: p.roundPick ?? 0,
-          playerName: p.playerName, position: normalizePos(p.position), isKeeper: Boolean(p.isKeeper),
-        });
+
+      // Owner pick accumulator
+      const ownerPicks = new Map<string, CleanPick[]>();
+      const perSeason: { season: number; draftHistoryPickCount: number; ownerProfilePickCount: number; unresolvedPickCount: number; overCount: boolean; source: string }[] = [];
+      let totalUnresolved = 0;
+
+      for (const { season, picks: cleanPicks, source } of seasonResults) {
+        const draftHistoryPickCount = cleanPicks.length;
+        let ownerProfilePickCount = 0;
+        let unresolvedPickCount = 0;
+
+        for (const p of cleanPicks) {
+          const ownerInfo = teamToOwner.get(`${p.season}:${p.teamId}`);
+          if (!ownerInfo) { unresolvedPickCount++; totalUnresolved++; continue; }
+          const { ownerKey } = ownerInfo;
+          if (!ownerPicks.has(ownerKey)) ownerPicks.set(ownerKey, []);
+          ownerPicks.get(ownerKey)!.push(p);
+          ownerProfilePickCount++;
+        }
+
+        if (draftHistoryPickCount > 0) {
+          perSeason.push({
+            season,
+            draftHistoryPickCount,
+            ownerProfilePickCount,
+            unresolvedPickCount,
+            overCount: ownerProfilePickCount > draftHistoryPickCount,
+            source: String(source ?? "none"),
+          });
+        }
       }
 
+      const seasonsAnalyzed = perSeason.map((s) => s.season);
+      const seasonsMissingPicks = HIST_SEASONS.filter((s) => !seasonsAnalyzed.includes(s));
+      const totalDraftHistoryPicks = perSeason.reduce((n, s) => n + s.draftHistoryPickCount, 0);
+      const totalProfilePicks = perSeason.reduce((n, s) => n + s.ownerProfilePickCount, 0);
+
+      // Build profiles
       const profiles = [...ownerPicks.entries()].map(([ownerKey, picks]) => {
         const seasons = [...new Set(picks.map((p) => p.season))].sort((a, b) => a - b);
         const totalPicks = picks.length;
@@ -5079,7 +5133,7 @@ export const appRouter = router({
         for (const [pos, cnt] of Object.entries(positionCounts))
           positionPercentages[pos] = totalPicks > 0 ? Math.round((cnt / totalPicks) * 1000) / 10 : 0;
 
-        const firstRoundPicks = picks.filter((p) => p.roundId === 1 && !p.isKeeper);
+        const firstRoundPicks = picks.filter((p) => p.round === 1 && !p.isKeeper);
         const firstRoundBySeason: Record<number, { playerName: string | null; position: string; roundPick: number }[]> = {};
         for (const p of firstRoundPicks) {
           if (!firstRoundBySeason[p.season]) firstRoundBySeason[p.season] = [];
@@ -5102,8 +5156,7 @@ export const appRouter = router({
         const nonKeeperTotal = nonKeeperPicks.length;
         const rbPct = nonKeeperTotal > 0 ? (positionCounts["RB"] ?? 0) / nonKeeperTotal : 0;
         const wrPct = nonKeeperTotal > 0 ? (positionCounts["WR"] ?? 0) / nonKeeperTotal : 0;
-        const qbFirstRoundPct = firstRoundPicks.length > 0
-          ? (firstRoundPosCounts["QB"] ?? 0) / firstRoundPicks.length : 0;
+        const qbFirstRoundPct = firstRoundPicks.length > 0 ? (firstRoundPosCounts["QB"] ?? 0) / firstRoundPicks.length : 0;
 
         let draftStyleLabel: string;
         if (totalPicks < 5) draftStyleLabel = "Unknown / Insufficient Data";
@@ -5124,9 +5177,18 @@ export const appRouter = router({
       });
 
       profiles.sort((a, b) => b.totalPicks - a.totalPicks || a.ownerName.localeCompare(b.ownerName));
+
       return {
         profiles,
-        diagnostics: { seasonsWithPicks, seasonsMissingPicks, totalRows: dedupedPicks.length, unresolvedPicks, coverageWarning: seasonsMissingPicks.length > 0 },
+        diagnostics: {
+          seasonsAnalyzed,
+          seasonsMissingPicks,
+          perSeason,
+          totalDraftHistoryPicks,
+          totalProfilePicks,
+          totalUnresolved,
+          coverageWarning: seasonsMissingPicks.length > 0 || perSeason.some((s) => s.overCount),
+        },
       };
     }),
   }),

@@ -243,16 +243,21 @@ export function OwnerProfilesTab() {
         )}>
           <div>
             <span className="font-semibold text-foreground/60">draft-coverage</span>
-            {" · "}rows: <span className="text-foreground">{diag.totalRows}</span>
+            {" · "}picks: <span className="text-foreground">{diag.totalProfilePicks}</span>
             {" · "}owners: <span className="text-foreground">{profiles.length}</span>
-            {" · "}seasons-with-data: <span className="text-emerald-400">{diag.seasonsWithPicks.join(", ") || "none"}</span>
-            {diag.unresolvedPicks > 0 && (
-              <>{" · "}unresolved: <span className="text-amber-400">{diag.unresolvedPicks}</span></>
+            {" · "}seasons-with-data: <span className="text-emerald-400">{diag.seasonsAnalyzed.join(", ") || "none"}</span>
+            {diag.totalUnresolved > 0 && (
+              <>{" · "}unresolved: <span className="text-amber-400">{diag.totalUnresolved}</span></>
             )}
           </div>
           {diag.coverageWarning && (
             <div className="text-amber-300">
               ⚠ Missing draft data for: {diag.seasonsMissingPicks.join(", ")}
+            </div>
+          )}
+          {diag.perSeason.some((s) => s.overCount) && (
+            <div className="text-red-400">
+              ⚠ Over-count detected: {diag.perSeason.filter((s) => s.overCount).map((s) => `${s.season}(profile:${s.ownerProfilePickCount}>hist:${s.draftHistoryPickCount})`).join(", ")}
             </div>
           )}
         </div>
