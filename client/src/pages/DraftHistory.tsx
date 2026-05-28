@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,6 +71,26 @@ export function DraftHistory() {
   const [viewMode, setViewMode] = useState<ViewMode>("round");
   const [showVerify, setShowVerify] = useState(false);
   const [verifyEnabled, setVerifyEnabled] = useState(false);
+  const [showOrderDebug, setShowOrderDebug] = useState(true);
+  const [espnRecapPaste, setEspnRecapPaste] = useState("");
+  const [orderDebugRunId, setOrderDebugRunId] = useState(0);
+  const orderDebugQ = trpc.espn.draftOrderDebug.useQuery(
+    {
+      season,
+      round: 1,
+      espnRecapPaste: espnRecapPaste.trim() || undefined,
+    },
+    {
+      enabled: showOrderDebug && orderDebugRunId > 0,
+      staleTime: 0,
+    },
+  );
+
+  useEffect(() => {
+    if (season === 2025 && showOrderDebug && orderDebugRunId === 0) {
+      setOrderDebugRunId(1);
+    }
+  }, [season, showOrderDebug, orderDebugRunId]);
 
   /** Always query by selected season — `draft_picks` may exist even if `cachedSeasons` omits the year. */
   const draftQ = trpc.espn.draftHistory.useQuery({ season }, { staleTime: 0 });
@@ -242,6 +262,133 @@ export function DraftHistory() {
               By Owner
             </ToggleGroupItem>
           </ToggleGroup>
+        </CardContent>
+      </Card>
+
+      {/* ── Draft Order Debugger (2025 R1) ── */}
+      <Card className="border-amber-500/30 bg-amber-500/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Draft Order Debugger — Round 1</CardTitle>
+          <p className="text-xs text-muted-foreground font-normal">
+            Compares ESPN recap (paste) · API mDraftDetail · DB draft_picks · Draft History UI. No ordering changes — diagnostics only.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowOrderDebug((v) => !v);
+              }}
+              className="rounded border border-border/70 px-2.5 py-1 text-xs hover:bg-muted/40"
+            >
+              {showOrderDebug ? "Hide debugger" : "Show debugger"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderDebugRunId((n) => n + 1)}
+              disabled={orderDebugQ.isFetching}
+              className="rounded border border-amber-500/50 bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-100 hover:bg-amber-500/25 disabled:opacity-50"
+            >
+              {orderDebugQ.isFetching ? "Running…" : `Run compare (${season} R1)`}
+            </button>
+          </div>
+          {showOrderDebug && (
+            <>
+              <label className="block text-xs text-muted-foreground">
+                Paste ESPN Draft Recap Round 1 (one row per line:{" "}
+                <code className="text-foreground">1 Player Name → Team Name</code>)
+              </label>
+              <textarea
+                className="min-h-[120px] w-full rounded-md border border-border/70 bg-background/80 p-2 font-mono text-xs"
+                placeholder={`1 Ja'Marr Chase → Dominion Thor\n2 Saquon Barkley → The Playmakers\n...`}
+                value={espnRecapPaste}
+                onChange={(e) => setEspnRecapPaste(e.target.value)}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Leave empty to use built-in screenshot sample. Click Run compare after pasting.
+              </p>
+            </>
+          )}
+          {orderDebugQ.data?.summary && (
+            <div className="rounded border border-border/60 bg-muted/10 p-3 font-mono text-xs space-y-2">
+              <div className="text-foreground">
+                <span className="font-semibold text-amber-300">Wrong layer:</span>{" "}
+                {orderDebugQ.data.summary.wrongLayer}
+              </div>
+              <div className="text-muted-foreground">
+                <span className="font-semibold text-foreground">Next:</span>{" "}
+                {orderDebugQ.data.summary.nextCorrection}
+              </div>
+              <div className="grid gap-1 text-[10px] sm:grid-cols-2">
+                <div>API fetch: {orderDebugQ.data.summary.apiFetchStatus}</div>
+                <div>ESPN source: {orderDebugQ.data.summary.espnRecapSource}</div>
+                <div>API vs ESPN players: {orderDebugQ.data.summary.apiVsEspnRecap.playerOrderMatch ? "match" : "MISMATCH"}</div>
+                <div>API vs ESPN teams: {orderDebugQ.data.summary.apiVsEspnRecap.teamOrderMatch ? "match" : "MISMATCH"}</div>
+                <div>DB vs API players: {orderDebugQ.data.summary.dbVsApi.playerOrderMatch ? "match" : "MISMATCH"}</div>
+                <div>DB vs API teams: {orderDebugQ.data.summary.dbVsApi.teamOrderMatch ? "match" : "MISMATCH"}</div>
+                <div>UI vs DB players: {orderDebugQ.data.summary.uiVsDb.playerOrderMatch ? "match" : "MISMATCH"}</div>
+                <div>UI vs DB teams: {orderDebugQ.data.summary.uiVsDb.teamOrderMatch ? "match" : "MISMATCH"}</div>
+              </div>
+            </div>
+          )}
+          {orderDebugQ.data?.rows && orderDebugQ.data.rows.length > 0 && (
+            <div className="overflow-x-auto max-h-[420px] overflow-y-auto rounded border border-border/60">
+              <table className="w-full min-w-[1100px] border-collapse text-[10px]">
+                <thead className="sticky top-0 bg-muted/90">
+                  <tr className="text-left text-muted-foreground">
+                    <th className="p-1">#</th>
+                    <th className="p-1">ESPN player</th>
+                    <th className="p-1">ESPN team</th>
+                    <th className="p-1">API player</th>
+                    <th className="p-1">API team</th>
+                    <th className="p-1">API ovr</th>
+                    <th className="p-1">API r/rp</th>
+                    <th className="p-1">DB player</th>
+                    <th className="p-1">DB team</th>
+                    <th className="p-1">DB ovr</th>
+                    <th className="p-1">DB r/rp</th>
+                    <th className="p-1">UI player</th>
+                    <th className="p-1">UI team</th>
+                    <th className="p-1">UI col</th>
+                    <th className="p-1">status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orderDebugQ.data.rows.slice(0, 14).map((row) => (
+                    <tr
+                      key={row.pickNumber}
+                      className={cn(
+                        "border-t border-border/40",
+                        row.matchStatus !== "all_match" && "bg-red-500/10"
+                      )}
+                    >
+                      <td className="p-1 font-mono">{row.pickNumber}</td>
+                      <td className="p-1">{row.espnRecapPlayer ?? "—"}</td>
+                      <td className="p-1">{row.espnRecapTeam ?? "—"}</td>
+                      <td className="p-1">{row.apiPlayer ?? "—"}</td>
+                      <td className="p-1">{row.apiTeam ?? "—"}</td>
+                      <td className="p-1 font-mono">{row.apiOverallPick ?? "—"}</td>
+                      <td className="p-1 font-mono">{row.apiRoundId}.{row.apiRoundPick}</td>
+                      <td className="p-1">{row.dbPlayer ?? "—"}</td>
+                      <td className="p-1">{row.dbTeam ?? "—"}</td>
+                      <td className="p-1 font-mono">{row.dbOverallPick ?? "—"}</td>
+                      <td className="p-1 font-mono">{row.dbRoundId}.{row.dbRoundPick}</td>
+                      <td className="p-1">{row.uiPlayer ?? "—"}</td>
+                      <td className="p-1">{row.uiTeam ?? "—"}</td>
+                      <td className="p-1 font-mono">{row.uiColumn ?? "—"}</td>
+                      <td className={cn("p-1", row.matchStatus !== "all_match" && "text-red-300")}>
+                        {row.matchStatus}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {orderDebugQ.isError && (
+            <div className="text-xs text-red-300">{orderDebugQ.error.message}</div>
+          )}
         </CardContent>
       </Card>
 

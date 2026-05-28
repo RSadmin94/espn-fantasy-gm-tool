@@ -115,6 +115,7 @@ import {
   debugHistoricalDraftIngest,
 } from "./espnPersistence";
 import { runHistoricalEnrichment } from "./espnHistoricalEnrichment";
+import { buildDraftOrderDebugReport } from "./draftOrderDebugger";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -271,7 +272,7 @@ type CleanSeasonDraftPicksResult = {
  * Canonical draft pick cleaning for Draft History and Owner Draft Profiles.
  * Dedupes by overallPick and by round+roundPick; filters invalid slots; resolves team names.
  */
-async function cleanSeasonDraftPicks(
+export async function cleanSeasonDraftPicks(
   leagueId: string,
   season: number,
   userId: number | undefined,
@@ -2351,6 +2352,49 @@ export const appRouter = router({
           round1Preview: result.round1Preview,
           status: "repaired" as const,
         };
+      }),
+
+    /**
+     * Row-for-row draft order debugger: ESPN recap (paste) vs API vs DB vs Draft History UI.
+     * Does not change ordering — reports mismatches only.
+     */
+    draftOrderDebug: publicProcedure
+      .input(
+        z.object({
+          season: z.number().int().min(2009).max(2030),
+          round: z.number().int().min(1).max(30).default(1),
+          espnRecapPaste: z.string().max(32_000).optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        const yr = input.season;
+        const rd = input.round;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: ctx.user ? { id: ctx.user.id } : undefined },
+          null,
+          yr,
+        );
+
+        const fb = await getSeasonDraftPicks(yr, leagueId, ctx.user?.id ?? undefined);
+        const cleaned =
+          fb.count > 0
+            ? await cleanSeasonDraftPicks(leagueId, yr, ctx.user?.id ?? undefined, fb)
+            : { picks: [] as Array<{ overallPick: number; round: number; roundPick: number; teamName: string; playerName: string | null }> };
+
+        return buildDraftOrderDebugReport({
+          leagueId,
+          season: yr,
+          round: rd,
+          userId: ctx.user?.id,
+          espnRecapPaste: input.espnRecapPaste,
+          uiPicks: cleaned.picks.map((p) => ({
+            overallPick: p.overallPick,
+            round: p.round,
+            roundPick: p.roundPick,
+            teamName: p.teamName,
+            playerName: p.playerName,
+          })),
+        });
       }),
 
     /** Import draft picks for one season from ESPN mDraftDetail API (same as repair, explicit name). */
