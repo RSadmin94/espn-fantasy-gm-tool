@@ -77,6 +77,7 @@ export function DraftHistory() {
   const diagQ  = trpc.espn.draftDiagnostics.useQuery({ season }, { staleTime: 0 });
   const verifyQ = trpc.espn.verifyDraftHistory.useQuery({ season }, { enabled: verifyEnabled, staleTime: 0 });
   const repairMut = trpc.espn.repairDraftHistory.useMutation();
+  const importEspnMut = trpc.espn.importDraftFromEspnApi.useMutation();
   const reconcileMut = trpc.espn.reconcileDraftOrderFromScrapes.useMutation();
   const utils = trpc.useUtils();
 
@@ -294,6 +295,26 @@ export function DraftHistory() {
           </div>
         )}
         <div className="flex flex-wrap items-center gap-2 pt-1">
+          {season === 2025 && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!window.confirm("Replace ALL 2025 draft picks from ESPN mDraftDetail API? This overwrites scrape rows for 2025.")) return;
+                await importEspnMut.mutateAsync({ season: 2025 });
+                await draftQ.refetch();
+                await diagQ.refetch();
+              }}
+              disabled={importEspnMut.isPending}
+              className="rounded border border-blue-500/50 bg-blue-500/15 px-2.5 py-1 text-xs font-medium text-blue-200 hover:bg-blue-500/25 disabled:opacity-50"
+            >
+              {importEspnMut.isPending ? "Fetching ESPN…" : "Import 2025 from ESPN API"}
+            </button>
+          )}
+          {importEspnMut.data?.round1Preview && importEspnMut.data.season === season && (
+            <span className="text-[10px] text-muted-foreground max-w-full truncate">
+              R1 API: {importEspnMut.data.round1Preview.map((p) => `${p.roundPick}:${p.teamName?.split(" ").slice(-1)[0] ?? p.teamId}`).join(", ")}
+            </span>
+          )}
           <button
             type="button"
             onClick={async () => {
