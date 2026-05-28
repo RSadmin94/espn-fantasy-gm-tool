@@ -619,7 +619,7 @@ export function DraftHistory() {
                   Draft board
                   {serverTeamCount > 0 && (
                     <span className="ml-2 text-xs font-normal text-muted-foreground">
-                      {serverTeamCount} teams · {boardCols} slots per round
+                      {serverTeamCount} teams · {boardCols} picks per round (ESPN recap order)
                     </span>
                   )}
                 </CardTitle>
@@ -637,22 +637,24 @@ export function DraftHistory() {
                             key={i}
                             className="min-w-[7.5rem] border-l border-border/60 px-1 py-2 text-center font-medium text-muted-foreground"
                           >
-                            Slot {i + 1}
+                            Pick {i + 1}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {byRound.map(([round, slots]) => {
-                        // Build roundPick → pick lookup so board is slot-correct (not array-index)
-                        const byRoundPick = new Map(slots.map((p) => [p.roundPick, p]));
+                        // ESPN recap order: left-to-right = chronological picks in the round (by overallPick)
+                        const orderedInRound = [...slots].sort(
+                          (a, b) => a.overallPick - b.overallPick,
+                        );
                         return (
                           <tr key={round} className="border-b border-border/50">
                             <td className="sticky left-0 z-10 bg-card px-2 py-1 font-semibold text-foreground">
                               {round}
                             </td>
                             {Array.from({ length: boardCols }, (_, col) => {
-                              const pick = byRoundPick.get(col + 1);
+                              const pick = orderedInRound[col];
                               if (!pick) {
                                 return (
                                   <td

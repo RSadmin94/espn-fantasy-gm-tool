@@ -309,13 +309,23 @@ export async function getSeasonDraftPicks(
     const dedupedRows = [...byOverall.values()].sort((a, b) => a.overallPick - b.overallPick);
 
     if (dedupedRows.length > 0) {
-      const shaped = dedupedRows.map((r) => ({
+      const shaped = dedupedRows.map((r) => {
+        let teamName = (r.teamName && String(r.teamName).trim()) || "";
+        if (r.rawPick) {
+          try {
+            const j = JSON.parse(String(r.rawPick)) as { teamName?: string };
+            if (j.teamName?.trim()) teamName = j.teamName.trim();
+          } catch {
+            /* ignore */
+          }
+        }
+        return {
         season: yr,
         overallPickNumber: r.overallPick,
         roundId: r.roundId,
         roundPickNumber: r.roundPick,
         teamId: r.teamId,
-        teamName: (r.teamName && String(r.teamName).trim()) || "",
+        teamName,
         playerId: r.playerId,
         playerName: r.playerName,
         position: r.position,
@@ -324,7 +334,8 @@ export async function getSeasonDraftPicks(
         proTeam: "",
         bidAmount: r.bidAmount != null ? Number(r.bidAmount) : 0,
         rawPick: r.rawPick,
-      }));
+        };
+      });
       return { rows: shaped, source: "normalized", season: yr, leagueId: lid, count: shaped.length, rawCount: rows.length };
     }
   }

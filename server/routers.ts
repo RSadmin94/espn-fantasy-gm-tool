@@ -313,14 +313,15 @@ async function cleanSeasonDraftPicks(
     let teamResolved = false;
     let teamNameSource = "unresolved";
 
-    // Priority 1: ESPN mDraftDetail API (canonical team + slot from repair/import)
-    const apiTeamName = String(
+    // Priority 1: team name stored on the pick row (ESPN API import / rawPick JSON)
+    const storedTeamName = String(
       (rawPickParsed as { teamName?: string }).teamName ?? p.teamName ?? "",
     ).trim();
-    if (rawPickParsed.source === "espn_mDraftDetail_api" && apiTeamName) {
-      resolvedTeamName = apiTeamName;
-      teamResolved = !FALLBACK_TEAM_NAME_RE.test(resolvedTeamName);
-      teamNameSource = "espn_api.teamName";
+    if (storedTeamName && !FALLBACK_TEAM_NAME_RE.test(storedTeamName)) {
+      resolvedTeamName = storedTeamName;
+      teamResolved = true;
+      teamNameSource =
+        rawPickParsed.source === "espn_mDraftDetail_api" ? "espn_api.teamName" : "rawPick.teamName";
     }
 
     // Priority 2: scraped ESPN Draft Recap TEAM column
@@ -387,19 +388,19 @@ async function cleanSeasonDraftPicks(
   }
   const duplicateOverallRemoved = allPicks.length - dedupedOverall.length;
 
-  const seenSlot = new Set<string>();
-  const dedupedSlot: typeof allPicks = [];
+  // Do not dedupe by round|roundPick — traded picks / bad legacy data can share slot keys;
+  // overallPick is the only canonical key. Recompute recap column from overall within round.
   for (const p of dedupedOverall) {
-    const slotKey = `${p.round}|${p.roundPick}`;
-    if (seenSlot.has(slotKey)) continue;
-    seenSlot.add(slotKey);
-    dedupedSlot.push(p);
+    if (teamCount > 0 && p.overallPick > 0 && p.round > 0) {
+      const chron = p.overallPick - (p.round - 1) * teamCount;
+      if (chron >= 1 && chron <= teamCount) p.roundPick = chron;
+    }
   }
-  const duplicateSlotRemoved = dedupedOverall.length - dedupedSlot.length;
+  const duplicateSlotRemoved = 0;
 
   let missingPlayerNameCount = 0;
-  const invalidPicks: typeof dedupedSlot = [];
-  const validPicks = dedupedSlot.filter((p) => {
+  const invalidPicks: typeof dedupedOverall = [];
+  const validPicks = dedupedOverall.filter((p) => {
     if (p.overallPick <= 0 || p.round <= 0 || p.roundPick <= 0) {
       invalidPicks.push(p);
       return false;
@@ -443,7 +444,7 @@ async function cleanSeasonDraftPicks(
     picks,
     rawCount,
     dedupedOverallCount: dedupedOverall.length,
-    dedupedSlotCount: dedupedSlot.length,
+    dedupedSlotCount: dedupedOverall.length,
     duplicateOverallRemoved,
     duplicateSlotRemoved,
     validCount: validPicks.length,
