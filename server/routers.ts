@@ -2100,9 +2100,9 @@ export const appRouter = router({
       .input(z.object({ draftYear: z.number().int().min(2019).max(2030).optional() }))
       .query(async ({ ctx, input }) => {
         const currentYear = new Date().getFullYear();
-        const draftYear  = input.draftYear ?? currentYear;
-        const prevSeason = draftYear - 1;   // 2025 — last completed season
-        const prev2Season = draftYear - 2;  // 2024 — season before that
+        const draftYear   = input.draftYear ?? currentYear;
+        const prevSeason  = draftYear - 1;   // 2025 — the final roster season
+        const prev2Season = draftYear - 2;   // 2024 — for 2-year streak check
 
         const userId = ctx.user?.id ?? 0;
         const { leagueId } = await resolveActiveLeagueId(
@@ -2112,91 +2112,47 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return { pool: [], draftYear, leagueId: lid, error: "db_unavailable" };
 
-        // ── 1. Roster — dual path ─────────────────────────────────────────────
-        // 2018+: ESPN API cache (fast, no scrape needed)
-        // <2018:  season_rosters table (DOM-scraped)
-        type RosterPlayer = {
-          ownerName: string; teamName: string; playerName: string;
-          nflTeam: string; position: string; slot: string; acquisitionType: string;
-        };
-        let rosterPlayers: RosterPlayer[] = [];
+        // ── 1. Final 2025 roster from ESPN API cache ─────────────────────────
+        const seasonData = await getSeasonData(prevSeason, lid, userId || undefined);
+        if (!seasonData) {
+          return { pool: [], draftYear, leagueId: lid, error: "no_espn_cache",
+            hint: `Run Sync for ${prevSeason} from the dashboard first.` };
+        }
+        const roster2025 = (normalizeRosters(seasonData) as Record<string, unknown>[])
+          .filter(r => String(r.playerName ?? "").trim().length > 0);
 
-        const normAcqType = (raw: string): string => {
-          const a = String(raw ?? "").toUpperCase();
-          if (a === "DRAFT")    return "Draft";
-          if (a === "TRADE")    return "Trade";
-          if (a.includes("FREE") || a.includes("WAIVER")) return "Free Agency";
-          return String(raw ?? "");
-        };
-
-        if (prevSeason >= 2018) {
-          const seasonData = await getSeasonData(prevSeason, lid, userId || undefined);
-          if (!seasonData) {
-            return {
-              pool: [], draftYear, leagueId: lid,
-              error: "no_espn_cache",
-              hint: `Run Sync for ${prevSeason} from the dashboard first.`,
-            };
-          }
-          const normalized = normalizeRosters(seasonData) as Record<string, unknown>[];
-
-          // teamId → ownerName from gmTeams
-          const teamLookupRows = await db
-            .select({ teamId: gmTeams.teamId, name: gmTeams.name, ownerName: gmTeams.ownerName })
-            .from(gmTeams)
-            .where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), eqDrizzle(gmTeams.season, prevSeason)));
-          const ownerByTeamId = new Map<number, string>();
-          for (const t of teamLookupRows) ownerByTeamId.set(t.teamId, t.ownerName ?? "");
-
-          for (const r of normalized) {
-            const playerName = String(r.playerName ?? "").trim();
-            if (!playerName) continue;
-            const teamId = Number(r.teamId);
-            rosterPlayers.push({
-              ownerName:       ownerByTeamId.get(teamId) || String(r.teamName ?? ""),
-              teamName:        String(r.teamName ?? ""),
-              playerName,
-              nflTeam:         String(r.proTeam ?? ""),
-              position:        String(r.position ?? ""),
-              slot:            String(r.lineupSlot ?? ""),
-              acquisitionType: normAcqType(String(r.acquisitionType ?? "")),
-            });
-          }
-        } else {
-          // Pre-2018: DOM-scraped season_rosters
-          const dbRows = await db
-            .select()
-            .from(gmSeasonRosters)
-            .where(andDrizzle(eqDrizzle(gmSeasonRosters.leagueId, lid), eqDrizzle(gmSeasonRosters.season, prevSeason)));
-          rosterPlayers = dbRows.map(r => ({
-            ownerName:       r.ownerName || r.teamName,
-            teamName:        r.teamName,
-            playerName:      r.playerName,
-            nflTeam:         r.nflTeam,
-            position:        r.position,
-            slot:            r.slot,
-            acquisitionType: r.acquisitionType,
-          }));
+        if (roster2025.length === 0) {
+          return { pool: [], draftYear, leagueId: lid, error: "no_roster_data",
+            hint: `ESPN cache for ${prevSeason} has no roster entries.` };
         }
 
-        if (rosterPlayers.length === 0) {
-          const hint = prevSeason >= 2018
-            ? `Run Sync for ${prevSeason} from the dashboard first.`
-            : `Run Roster Import (2010–2017) from the extension popup first.`;
-          return { pool: [], draftYear, leagueId: lid, error: "no_roster_data", hint };
-        }
-
-        // ── 2. Keepers from prevSeason (2025 draft) ──────────────────────────
-        const kept2025Rows = await db
-          .select({ playerName: gmDraftPicks.playerName, roundId: gmDraftPicks.roundId, teamName: sql<string>`JSON_UNQUOTE(JSON_EXTRACT(${gmDraftPicks.rawPick}, '$.teamName'))` })
+        // ── 2. All 2025 draft_picks keyed by playerId ─────────────────────────
+        // Includes both normal picks (isKeeper=0) and keeper picks (isKeeper=1)
+        const picks2025Rows = await db
+          .select({
+            playerId:  gmDraftPicks.playerId,
+            playerName:gmDraftPicks.playerName,
+            roundId:   gmDraftPicks.roundId,
+            isKeeper:  gmDraftPicks.isKeeper,
+          })
           .from(gmDraftPicks)
           .where(andDrizzle(
             eqDrizzle(gmDraftPicks.leagueId, lid),
             eqDrizzle(gmDraftPicks.season, prevSeason),
-            eqDrizzle(gmDraftPicks.isKeeper, 1),
           ));
 
-        // ── 3. Keepers from prev2Season (2024 draft) — for streak detection ──
+        // playerId → { roundId, isKeeper }
+        const pickByPlayerId = new Map<number, { roundId: number; isKeeper: number }>();
+        // normalised name → { roundId, isKeeper }  (fallback for null playerId rows)
+        const pickByName     = new Map<string,  { roundId: number; isKeeper: number }>();
+        for (const p of picks2025Rows) {
+          const entry = { roundId: p.roundId, isKeeper: p.isKeeper ?? 0 };
+          if (p.playerId)                           pickByPlayerId.set(p.playerId, entry);
+          const nk = normKeeperName(p.playerName ?? "");
+          if (nk && !pickByName.has(nk))            pickByName.set(nk, entry);
+        }
+
+        // ── 3. 2024 keeper names for consecutive-streak check ─────────────────
         const kept2024Names = new Set(
           (await db
             .select({ playerName: gmDraftPicks.playerName })
@@ -2205,93 +2161,98 @@ export const appRouter = router({
               eqDrizzle(gmDraftPicks.leagueId, lid),
               eqDrizzle(gmDraftPicks.season, prev2Season),
               eqDrizzle(gmDraftPicks.isKeeper, 1),
-            ))
-          ).map(r => normKeeperName(r.playerName ?? ""))
+            )))
+          .map(r => normKeeperName(r.playerName ?? ""))
         );
 
-        // ── 4. Full draft history — for original round lookup ─────────────────
-        const allDraftRows = await db
-          .select({ playerName: gmDraftPicks.playerName, roundId: gmDraftPicks.roundId, season: gmDraftPicks.season })
-          .from(gmDraftPicks)
-          .where(andDrizzle(
-            eqDrizzle(gmDraftPicks.leagueId, lid),
-            eqDrizzle(gmDraftPicks.isKeeper, 0),
-          ))
-          .orderBy(descDrizzle(gmDraftPicks.season));
-
-        // Build: normalizedName → { roundId, season } (most recent non-keeper draft)
-        const draftHistoryMap = new Map<string, { roundId: number; season: number }>();
-        for (const row of allDraftRows) {
-          const key = normKeeperName(row.playerName ?? "");
-          if (!draftHistoryMap.has(key)) {
-            draftHistoryMap.set(key, { roundId: row.roundId, season: row.season });
-          }
+        // ── 4. teamId → ownerName / teamName ─────────────────────────────────
+        const teamRows = await db
+          .select({ teamId: gmTeams.teamId, name: gmTeams.name, ownerName: gmTeams.ownerName })
+          .from(gmTeams)
+          .where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), eqDrizzle(gmTeams.season, prevSeason)));
+        const ownerByTeamId = new Map<number, string>();
+        const nameByTeamId  = new Map<number, string>();
+        for (const t of teamRows) {
+          ownerByTeamId.set(t.teamId, t.ownerName ?? "");
+          nameByTeamId.set(t.teamId,  t.name      ?? "");
         }
 
-        // Build: normalizedName → { roundId } for 2025 keepers
-        const kept2025Map = new Map<string, { roundId: number; teamName: string }>();
-        for (const row of kept2025Rows) {
-          kept2025Map.set(normKeeperName(row.playerName ?? ""), { roundId: row.roundId, teamName: row.teamName ?? "" });
-        }
-
-        // ── 5. Build pool ─────────────────────────────────────────────────────
+        // ── 5. Build keeper pool — roster is the universe ─────────────────────
         const pool: KeeperPoolEntry[] = [];
 
-        for (const player of rosterPlayers) {
-          const key = normKeeperName(player.playerName);
-          const kept2025 = kept2025Map.get(key);
-          const wasKept2024 = kept2024Names.has(key);
+        for (const r of roster2025) {
+          const playerName = String(r.playerName ?? "").trim();
+          const pid  = r.playerId != null ? Number(r.playerId) : 0;
+          const nkey = normKeeperName(playerName);
+          const teamId = Number(r.teamId);
 
-          // Ineligible: kept both 2024 AND 2025 consecutively (2-year streak used up)
-          if (kept2025 && wasKept2024) continue;
+          // Look up this player in the 2025 draft — playerId first, name fallback
+          const draftEntry = (pid ? pickByPlayerId.get(pid) : undefined) ?? pickByName.get(nkey);
 
-          const keepYear:          0 | 1   = kept2025 ? 1 : 0;
-          const isLastKeeperYear:  boolean = keepYear === 1;
+          // Determine keeper eligibility
+          const wasKept2024    = kept2024Names.has(nkey);
+          const isKeptThisYear = draftEntry ? draftEntry.isKeeper === 1 : false;
 
-          // Keeper cost resolution
-          let keeperRoundCost:  number;
-          let costSource:       "espn_stored" | "draft_minus_1" | "fa_fixed";
+          // Ineligible: kept 2024 AND 2025 consecutively — back to draft pool
+          if (isKeptThisYear && wasKept2024) continue;
+
+          const keepYear:         0 | 1   = isKeptThisYear ? 1 : 0;
+          const isLastKeeperYear: boolean = keepYear === 1;
+
+          // Case 1: Player in 2025 draft AND isKeeper = 1
+          //   → keeperCost = roundId (ESPN stored the keeper round)
+          // Case 2: Player in 2025 draft AND isKeeper = 0
+          //   → keeperCost = roundId - 1 (next year costs one round earlier)
+          // Case 3: Player NOT in 2025 draft (FA / waiver pickup)
+          //   → keeperCost = 7
+          let keeperRoundCost: number;
+          let costSource: KeeperPoolEntry["costSource"];
           let originalDraftRound: number | null = null;
           let originalDraftSeason: number | null = null;
 
-          if (kept2025) {
-            // Already kept in 2025 — ESPN stored the round
-            keeperRoundCost  = kept2025.roundId;
-            costSource       = "espn_stored";
+          if (!draftEntry) {
+            // Case 3 — FA / waiver pickup
+            keeperRoundCost = 7;
+            costSource      = "fa_fixed";
+          } else if (isKeptThisYear) {
+            // Case 1 — kept in 2025 draft, ESPN stored the round
+            keeperRoundCost = draftEntry.roundId;
+            costSource      = "espn_stored";
           } else {
-            const history = draftHistoryMap.get(key);
-            if (history) {
-              keeperRoundCost     = Math.max(1, history.roundId - 1);
-              costSource          = "draft_minus_1";
-              originalDraftRound  = history.roundId;
-              originalDraftSeason = history.season;
-            } else {
-              // FA — never drafted
-              keeperRoundCost = 7;
-              costSource      = "fa_fixed";
-            }
+            // Case 2 — drafted in 2025, not a keeper pick
+            keeperRoundCost     = Math.max(1, draftEntry.roundId - 1);
+            costSource          = "draft_minus_1";
+            originalDraftRound  = draftEntry.roundId;
+            originalDraftSeason = prevSeason;
           }
 
+          const normAcq = (raw: string) => {
+            const a = String(raw ?? "").toUpperCase();
+            if (a === "DRAFT") return "Draft";
+            if (a === "TRADE") return "Trade";
+            if (a.includes("FREE") || a.includes("WAIVER")) return "Free Agency";
+            return raw || (draftEntry ? (isKeptThisYear ? "Keeper" : "Draft") : "Free Agency");
+          };
+
           pool.push({
-            ownerName:          player.ownerName || player.teamName,
-            teamName:           player.teamName,
-            playerName:         player.playerName,
-            nflTeam:            player.nflTeam,
-            position:           player.position,
-            slot:               player.slot,
-            acquisitionType:    player.acquisitionType,
+            ownerName:           ownerByTeamId.get(teamId) || nameByTeamId.get(teamId) || `Team ${teamId}`,
+            teamName:            nameByTeamId.get(teamId)  || `Team ${teamId}`,
+            playerName,
+            nflTeam:             String(r.proTeam ?? ""),
+            position:            String(r.position ?? ""),
+            slot:                String(r.lineupSlot ?? ""),
+            acquisitionType:     normAcq(String(r.acquisitionType ?? "")),
             keepYear,
             isLastKeeperYear,
             keeperRoundCost,
             costSource,
             originalDraftRound,
             originalDraftSeason,
-            lastKeptSeason:     kept2025 ? prevSeason : null,
-            lastKeptRound:      kept2025 ? kept2025.roundId : null,
+            lastKeptSeason:      isKeptThisYear ? prevSeason : null,
+            lastKeptRound:       isKeptThisYear ? draftEntry!.roundId : null,
           });
         }
 
-        // Sort: by ownerName, then keeperRoundCost
         pool.sort((a, b) => {
           const own = a.ownerName.localeCompare(b.ownerName);
           if (own !== 0) return own;
@@ -2300,10 +2261,6 @@ export const appRouter = router({
 
         return { pool, draftYear, leagueId: lid, prevSeason, prev2Season };
       }),
-
-    /**
-     * Keeper pool filtered to a single owner.
-     */
     keeperPoolByOwner: publicProcedure
       .input(z.object({
         draftYear: z.number().int().min(2019).max(2030).optional(),
