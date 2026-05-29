@@ -75,8 +75,8 @@ const NAV_GROUPS: NavGroup[] = [
     id: "draft-keepers",
     title: "Draft & Keepers",
     items: [
-      { kind: "link", label: "Draft History", href: "/draft-history", icon: ScrollText },
-      { kind: "placeholder", label: "Keeper Calculator", icon: Calculator },
+      { kind: "link", label: "Draft History",   href: "/draft-history",  icon: ScrollText },
+      { kind: "link", label: "Keeper Advisor",  href: "/keeper-advisor", icon: Calculator },
       { kind: "placeholder", label: "Draft Strategy", icon: ScrollText },
     ],
   },

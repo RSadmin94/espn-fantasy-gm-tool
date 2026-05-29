@@ -359,7 +359,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document.getElementById("rosterFull")?.addEventListener("click", async () => {
     const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
-    setRosterOut("Scraping rosters for 2010–2025…\nThis opens 16 background tabs (~11 min). Do not close the browser.");
+    setRosterOut("Scraping rosters for 2018–2025…\nThis opens 8 background tabs (~6 min). Do not close the browser.");
     try {
       const r = await chrome.runtime.sendMessage({
         type: MSG_ROSTER_FULL,

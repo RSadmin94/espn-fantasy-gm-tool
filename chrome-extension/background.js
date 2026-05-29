@@ -2832,7 +2832,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
 
       const warRoomCookieHeader = await getWarRoomCookieHeaderString();
-      const SEASONS = [2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+      const SEASONS = [2018,2019,2020,2021,2022,2023,2024,2025];
       const results = [];
 
       for (const season of SEASONS) {

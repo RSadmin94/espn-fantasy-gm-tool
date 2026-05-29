@@ -22,6 +22,7 @@ import { Settings } from "./pages/Settings";
 import { Matchups } from "./pages/Matchups";
 import { LeagueHistory } from "./pages/LeagueHistory";
 import { DraftHistory } from "./pages/DraftHistory";
+import { KeeperAdvisor } from "./pages/KeeperAdvisor";
 import { Championships } from "./pages/Championships";
 import { RingOfHonor } from "./pages/RingOfHonor";
 import { trpc } from "@/lib/trpc";
@@ -122,6 +123,7 @@ const router = createBrowserRouter([
           { path: "/matchups", element: <Matchups /> },
           { path: "/history", element: <LeagueHistory /> },
           { path: "/draft-history", element: <DraftHistory /> },
+          { path: "/keeper-advisor", element: <KeeperAdvisor /> },
           { path: "/championships", element: <Championships /> },
           { path: "/ring-of-honor", element: <RingOfHonor /> },
           { path: "/roster", element: <Roster /> },
