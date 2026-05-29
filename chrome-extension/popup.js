@@ -8,6 +8,9 @@ const MSG_HIST_DISCOVER = "GMWR_HIST_DISCOVER";
 const MSG_HIST_TEST = "GMWR_HIST_TEST";
 const MSG_HIST_FULL = "GMWR_HIST_FULL";
 const MSG_HIST_STATUS = "GMWR_HIST_STATUS";
+const MSG_ROSTER_MATRIX_TEST = "GMWR_ROSTER_MATRIX_TEST";
+const MSG_ROSTER_2017_POC = "GMWR_ROSTER_2017_POC";
+const MSG_ROSTER_FULL = "GMWR_ROSTER_FULL";
 
 let discoveredSeasons = /** @type {number[]} */ ([]);
 
@@ -282,6 +285,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  document.getElementById("histRoster2017Poc")?.addEventListener("click", async () => {
+    const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
+    setHistOut("Scraping 2017 League Rosters (hidden tab)…");
+    try {
+      const r = await chrome.runtime.sendMessage({ type: MSG_ROSTER_2017_POC, leagueId: lid });
+      setHistOut(JSON.stringify(r, null, 2));
+    } catch (e) {
+      setHistOut(e instanceof Error ? e.message : String(e));
+    }
+  });
+
+  document.getElementById("histRosterMatrix")?.addEventListener("click", async () => {
+    setHistOut("Roster endpoint matrix (debug): fetching ESPN with extension cookies…");
+    try {
+      const r = await chrome.runtime.sendMessage({ type: MSG_ROSTER_MATRIX_TEST });
+      if (!r?.ok) {
+        setHistOut(r?.error || "Roster matrix failed.");
+        return;
+      }
+      setHistOut(JSON.stringify({ ok: true, rows: r.rows }, null, 2));
+    } catch (e) {
+      setHistOut(e instanceof Error ? e.message : String(e));
+    }
+  });
+
   document.getElementById("histTest")?.addEventListener("click", async () => {
     setHistOut("2010 draft recap: scrape → parse → ingest…");
     try {
@@ -320,6 +348,26 @@ document.addEventListener("DOMContentLoaded", async () => {
       setHistOut(JSON.stringify(r, null, 2));
     } catch (e) {
       setHistOut(e instanceof Error ? e.message : String(e));
+    }
+  });
+
+  // ── Historical Roster Capture ──────────────────────────────────────────────
+  function setRosterOut(text) {
+    const el = document.getElementById("rosterOut");
+    if (el) el.textContent = text;
+  }
+
+  document.getElementById("rosterFull")?.addEventListener("click", async () => {
+    const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
+    setRosterOut("Scraping rosters for 2010–2025…\nThis opens 16 background tabs (~11 min). Do not close the browser.");
+    try {
+      const r = await chrome.runtime.sendMessage({
+        type: MSG_ROSTER_FULL,
+        leagueId: lid,
+      });
+      setRosterOut(JSON.stringify(r, null, 2));
+    } catch (e) {
+      setRosterOut(e instanceof Error ? e.message : String(e));
     }
   });
 });

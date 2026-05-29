@@ -363,6 +363,31 @@ export const gmRosterEntries = mysqlTable(
   (t) => [uniqueIndex("uq_roster_entries").on(t.leagueId, t.season, t.week, t.teamId, t.playerId)]
 );
 
+/**
+ * season_rosters: end-of-season roster snapshot scraped from the ESPN League Rosters page.
+ * One row per player per team per season.
+ * acquisitionType = "Draft" | "Trade" | "Free Agency" | "" (empty for older seasons).
+ * ownerName resolved from gmTeams at query time; blank initially.
+ */
+export const gmSeasonRosters = mysqlTable(
+  "season_rosters",
+  {
+    id:              int("id").autoincrement().primaryKey(),
+    leagueId:        varchar("leagueId",        { length: 32  }).notNull(),
+    season:          int("season").notNull(),
+    teamName:        varchar("teamName",         { length: 255 }).notNull().default(""),
+    ownerName:       varchar("ownerName",        { length: 255 }).notNull().default(""),
+    playerName:      varchar("playerName",       { length: 255 }).notNull(),
+    nflTeam:         varchar("nflTeam",          { length: 32  }).notNull().default(""),
+    position:        varchar("position",         { length: 16  }).notNull().default(""),
+    slot:            varchar("slot",             { length: 32  }).notNull().default(""),
+    acquisitionType: varchar("acquisitionType",  { length: 64  }).notNull().default(""),
+    injuryStatus:    varchar("injuryStatus",     { length: 16  }).notNull().default(""),
+    capturedAt:      timestamp("capturedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_season_rosters").on(t.leagueId, t.season, t.teamName, t.playerName)]
+);
+
 export const gmPlayers = mysqlTable(
   "players",
   {

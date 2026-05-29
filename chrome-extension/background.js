@@ -356,6 +356,7 @@ async function removeSaveCredentialsCookieRule() {
 // ─── Historical league import (War Room tRPC) ───
 const TRPC_PARSED_DRAFT_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestParsedDraftPicks`;
 const TRPC_LEGACY_DRAFT_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestLegacyDraftRecap`;
+const TRPC_SEASON_ROSTER_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestSeasonRosters`;
 const TRPC_IMPORT_DRAFT_API_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.importDraftFromEspnApi`;
 const TRPC_HIST_STATUS_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.historicalImportStatus`;
 const DNR_TRPC_HIST_RULE_ID = 8844210;
@@ -364,6 +365,12 @@ const MSG_HIST_DISCOVER = "GMWR_HIST_DISCOVER";
 const MSG_HIST_TEST = "GMWR_HIST_TEST";
 const MSG_HIST_FULL = "GMWR_HIST_FULL";
 const MSG_HIST_STATUS = "GMWR_HIST_STATUS";
+/** Temporary debug: probe historical roster URLs with browser ESPN cookies (no persist). */
+const MSG_ROSTER_MATRIX_TEST = "GMWR_ROSTER_MATRIX_TEST";
+/** POC: 2017 league rosters DOM scrape — JSON only, no persist. */
+const MSG_ROSTER_2017_POC = "GMWR_ROSTER_2017_POC";
+/** Full historical roster capture: scrape ESPN League Rosters page for every season and ingest. */
+const MSG_ROSTER_FULL = "GMWR_ROSTER_FULL";
 const MSG_HIST_STANDINGS = "GMWR_HIST_STANDINGS";
 const MSG_HIST_MATCHUPS = "GMWR_HIST_MATCHUPS";
 const MSG_LEAGUE_HISTORY_MEDALS = "GMWR_LEAGUE_HISTORY_MEDALS";
@@ -431,6 +438,18 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
+      {
+        id: DNR_TRPC_HIST_RULE_ID + 4,
+        priority: 1,
+        action: {
+          type: "modifyHeaders",
+          requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
+        },
+        condition: {
+          urlFilter: "https://gmwarroom.online/api/trpc/espn.ingestSeasonRosters*",
+          resourceTypes: ["xmlhttprequest", "other"],
+        },
+      },
     ],
   });
 }
@@ -438,7 +457,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
 async function removeWarRoomTrpcHistRule() {
   try {
     await chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1, DNR_TRPC_HIST_RULE_ID + 2, DNR_TRPC_HIST_RULE_ID + 3],
+      removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1, DNR_TRPC_HIST_RULE_ID + 2, DNR_TRPC_HIST_RULE_ID + 3, DNR_TRPC_HIST_RULE_ID + 4],
     });
   } catch {
     /* ignore */
@@ -654,6 +673,249 @@ async function scrapeDraftRecapPage(leagueId, season) {
       chrome.tabs.remove(tabId).catch(() => { /* tab may already be closed */ });
     }
   }
+}
+
+/**
+ * Scrape League Rosters (fantasy.espn.com) — same tab pattern as draft recap: background tab,
+ * waitForTabComplete, fixed settle delay, executeScript in MAIN, close tab.
+ * Returns compact JSON only (no persist). Tuned for multi-team roster layouts (Table__* / tables).
+ * @param {string} leagueId
+ * @param {number} season
+ */
+async function scrapeLeagueRostersPage(leagueId, season) {
+  const lid = String(leagueId ?? "").trim();
+  const y = Math.floor(Number(season));
+  const targetUrl = `https://fantasy.espn.com/football/league/rosters?leagueId=${encodeURIComponent(lid)}&seasonId=${y}`;
+
+  let tabId = null;
+  try {
+    const tab = await chrome.tabs.create({ url: targetUrl, active: false });
+    tabId = tab.id;
+    console.info("[GMWR] scrapeLeagueRosters: opened background tab", { tabId, season: y, leagueId: lid });
+
+    await waitForTabComplete(tabId, 30000);
+    console.info("[GMWR] scrapeLeagueRosters: tab loaded", { tabId, season: y });
+    await sleep(6000);
+    console.info("[GMWR] scrapeLeagueRosters: executing script", { tabId, season: y });
+
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      args: [lid, y],
+      func: (leagueIdArg, seasonArg) => {
+        const debugNotes = [];
+        const playerLineRe =
+          /^(.+?)\s+([A-Za-z]{2,5}(?:\/[A-Za-z]{1,5})?),\s*([A-Za-z\/]+)\s*$/;
+        const junkTitles = /^(starters|bench|slot|scoring|roster|opponent|proj|status|player|pos|team)$/i;
+
+        /**
+         * @param {string} raw
+         */
+        function parsePlayerCell(raw) {
+          const s = String(raw || "").replace(/\s+/g, " ").trim();
+          if (!s) return null;
+          const m = s.match(playerLineRe);
+          if (m) {
+            let playerName = m[1].trim();
+            const nflTeam = m[2].trim();
+            let position = m[3].toUpperCase().trim();
+            if (position === "DST" || position === "DEF") position = "D/ST";
+            if (/(D\/ST|DEF)$/i.test(playerName)) {
+              playerName = playerName.replace(/\s+(D\/ST|DEF)\s*$/i, "").trim();
+              return { playerName, nflTeam: nflTeam || "", position: "D/ST" };
+            }
+            return { playerName, nflTeam, position };
+          }
+          return { playerName: s, nflTeam: "", position: "" };
+        }
+
+        /**
+         * @param {HTMLTableRowElement} row
+         */
+        function rowPlayerAnchorHref(row) {
+          const a = row.querySelector('a[href*="players/"], a[href*="playerId"]');
+          return a ? String(a.getAttribute("href") || "") : "";
+        }
+
+        /**
+         * @param {HTMLTableRowElement} row
+         */
+        function extractRow(row) {
+          const cells = Array.from(row.querySelectorAll("td.Table__TD, td"));
+          if (cells.length < 2) return null;
+          const texts = cells.map((c) => (c.innerText || "").replace(/\s+/g, " ").trim());
+          let slot = "";
+          let playerCell = "";
+          if (cells.length >= 3) {
+            slot = texts[0] || "";
+            playerCell = texts[1] || "";
+          } else {
+            playerCell = texts[0] || "";
+          }
+          if (!playerCell || junkTitles.test(playerCell)) return null;
+          if (/^(no\.?|#|rank)$/i.test(slot) && cells.length >= 4) {
+            slot = texts[1] || "";
+            playerCell = texts[2] || "";
+          }
+          if (!playerCell || junkTitles.test(playerCell)) return null;
+          const parsed = parsePlayerCell(playerCell);
+          if (!parsed || !parsed.playerName) return null;
+          if (/^(add|drop|trade|waiver|faab)$/i.test(parsed.playerName)) return null;
+          return {
+            slot: slot || "",
+            playerName: parsed.playerName,
+            position: parsed.position || "",
+            nflTeam: parsed.nflTeam || "",
+            playerLinkHref: rowPlayerAnchorHref(row),
+          };
+        }
+
+        /** @type {Map<string, { teamName: string, players: ReturnType<typeof extractRow>[] }>} */
+        const teamMap = new Map();
+
+        function addTeamBlock(teamNameRaw, tableEl) {
+          let teamName = String(teamNameRaw || "").replace(/\s+/g, " ").trim();
+          if (!teamName || teamName.length > 80 || junkTitles.test(teamName)) return;
+          if (!teamMap.has(teamName)) {
+            teamMap.set(teamName, { teamName, players: [] });
+          }
+          const bucket = teamMap.get(teamName);
+          tableEl.querySelectorAll("tr.Table__TR--sm, tr.Table__TR, tr").forEach((row) => {
+            const ex = extractRow(row);
+            if (ex) bucket.players.push(ex);
+          });
+        }
+
+        // Primary: Table__Title immediately followed by (or near) a roster table (per-team blocks).
+        document.querySelectorAll(".Table__Title, [class*='Table__Title']").forEach((titleEl) => {
+          const titleText = (titleEl.textContent || "").trim();
+          if (!titleText || junkTitles.test(titleText)) return;
+          let walk = titleEl.parentElement;
+          for (let depth = 0; depth < 8 && walk; depth++) {
+            const tbl = walk.querySelector("table");
+            if (tbl) {
+              addTeamBlock(titleText, tbl);
+              return;
+            }
+            walk = walk.parentElement;
+          }
+        });
+
+        if (teamMap.size === 0) {
+          debugNotes.push("no_team_blocks_from_Table__Title");
+          // Fallback: one table per team — find tables whose nearest heading-like text looks like a team.
+          document.querySelectorAll("table").forEach((tbl, tblIdx) => {
+            let teamGuess = "";
+            let n = tbl;
+            for (let i = 0; i < 12 && n; i++) {
+              n = n.previousElementSibling;
+              if (!n) break;
+              const t = (n.textContent || "").trim();
+              if (t && t.length > 2 && t.length < 80 && !junkTitles.test(t)) {
+                const h = n.querySelector("h1, h2, h3, h4, .Table__Title");
+                teamGuess = (h ? h.textContent : t).trim().split("\n")[0].trim();
+                if (teamGuess) break;
+              }
+            }
+            if (!teamGuess) teamGuess = `table_${tblIdx}`;
+            const before = teamMap.get(teamGuess)?.players.length ?? 0;
+            addTeamBlock(teamGuess, tbl);
+            const after = teamMap.get(teamGuess)?.players.length ?? 0;
+            if (after > before) debugNotes.push(`fallback_table_${tblIdx}_team_${teamGuess.slice(0, 24)}`);
+          });
+        }
+
+        const teams = Array.from(teamMap.values()).map((t) => ({
+          teamName: t.teamName,
+          players: t.players,
+        }));
+
+        let playerCount = 0;
+        for (const t of teams) playerCount += t.players.length;
+
+        const finalTeams = teams.filter((t) => t.players.length > 0);
+        const ok = finalTeams.length > 0 && playerCount > 0;
+
+        return {
+          ok,
+          leagueId: leagueIdArg,
+          season: seasonArg,
+          url: location.href,
+          title: document.title,
+          teams: finalTeams,
+          meta: {
+            teamCount: finalTeams.length,
+            playerCount,
+            debugNotes,
+          },
+        };
+      },
+    });
+
+    const scrapeResult = results?.[0]?.result || { ok: false, error: "scrape_failed" };
+    console.info("[GMWR] scrapeLeagueRosters: script done", {
+      ok: scrapeResult.ok,
+      teamCount: scrapeResult.meta?.teamCount,
+      playerCount: scrapeResult.meta?.playerCount,
+    });
+    return scrapeResult;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn("[GMWR] scrapeLeagueRosters: caught error", msg);
+    return { ok: false, error: "scrape_failed", message: msg, leagueId: lid, season: y, teams: [] };
+  } finally {
+    if (tabId != null) {
+      chrome.tabs.remove(tabId).catch(() => {});
+    }
+  }
+}
+
+function playerIdFromEspnPlayerHref(href) {
+  const h = String(href || "");
+  const m = h.match(/(?:\/players\/(?:full\/)?|playerId=)(\d+)/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/**
+ * Public JSON for GMWR_ROSTER_2017_POC (no internal scrape fields).
+ * @param {Record<string, unknown>} snapshot
+ */
+function buildRoster2017PocResponsePayload(snapshot) {
+  const teams = Array.isArray(snapshot?.teams)
+    ? snapshot.teams.map((t) => ({
+        teamName: String(t.teamName || ""),
+        players: (Array.isArray(t.players) ? t.players : []).map((p) => {
+          /** @type {Record<string, unknown>} */
+          const row = {
+            slot: String(p.slot || ""),
+            playerName: String(p.playerName || ""),
+            position: String(p.position || ""),
+            nflTeam: String(p.nflTeam || ""),
+          };
+          const pid = playerIdFromEspnPlayerHref(p.playerLinkHref);
+          if (pid != null) row.playerId = pid;
+          return row;
+        }),
+      }))
+    : [];
+  let playerCount = 0;
+  for (const tm of teams) playerCount += tm.players.length;
+  const ok = Boolean(snapshot?.ok);
+  return {
+    poc: MSG_ROSTER_2017_POC,
+    ok,
+    leagueId: String(snapshot?.leagueId ?? ""),
+    season: Number(snapshot?.season) || 2017,
+    url: String(snapshot?.url ?? ""),
+    title: String(snapshot?.title ?? ""),
+    teams,
+    meta: {
+      teamCount: teams.length,
+      playerCount,
+      debugNotes: Array.isArray(snapshot?.meta?.debugNotes) ? snapshot.meta.debugNotes : [],
+    },
+    error: ok ? null : String(snapshot?.error || snapshot?.message || "scrape_failed"),
+  };
 }
 
 /**
@@ -1568,6 +1830,110 @@ async function fetchEspnJsonWithBackoffUnlocked(url, { label }) {
   return { ok: false, status: 429, error: "rate_limited", data: null };
 }
 
+const ROSTER_MATRIX_DEBUG_LEAGUE_ID = "457622";
+const ROSTER_MATRIX_DEBUG_SEASONS = [2010, 2013, 2015, 2017];
+
+function rosterMatrixTeamsFromPayload(payload) {
+  const t = payload?.teams;
+  return Array.isArray(t) ? t : [];
+}
+
+function rosterMatrixCountEntries(teams) {
+  let n = 0;
+  for (const team of teams) {
+    const entries = team?.roster?.entries;
+    if (Array.isArray(entries)) n += entries.length;
+  }
+  return n;
+}
+
+function rosterMatrixFirstTeamDisplayName(team) {
+  if (!team || typeof team !== "object") return "";
+  if (typeof team.name === "string" && team.name.trim()) return team.name.trim();
+  const loc = typeof team.location === "string" ? team.location.trim() : "";
+  const nick = typeof team.nickname === "string" ? team.nickname.trim() : "";
+  const joined = [loc, nick].filter(Boolean).join(" ").trim();
+  if (joined) return joined;
+  if (typeof team.abbrev === "string" && team.abbrev.trim()) return team.abbrev.trim();
+  return "";
+}
+
+function rosterMatrixFirstPlayerFromTeams(teams) {
+  for (const team of teams) {
+    const entries = team?.roster?.entries;
+    if (!Array.isArray(entries) || entries.length === 0) continue;
+    const e = entries[0];
+    const pool = e?.playerPoolEntry;
+    const player = pool?.player;
+    const pid =
+      e?.playerId ??
+      pool?.id ??
+      (player && typeof player.id === "number" ? player.id : player?.id != null ? Number(player.id) : null);
+    const pname =
+      (typeof player?.fullName === "string" && player.fullName.trim()) ||
+      (typeof player?.lastName === "string" && player.lastName.trim()) ||
+      "";
+    return {
+      firstRosterPlayerId: Number.isFinite(Number(pid)) ? Number(pid) : pid,
+      firstRosterPlayerName: typeof pname === "string" ? pname : String(pname || ""),
+    };
+  }
+  return { firstRosterPlayerId: null, firstRosterPlayerName: "" };
+}
+
+/**
+ * One matrix row for a single GET result (same fetch path as historical ESPN import).
+ * @param {number} season
+ * @param {"seasons_lm_api_reads"|"leagueHistory_fantasy_espn"} endpointType
+ * @param {{ ok: boolean, status?: number, error?: string | null, data: unknown }} r
+ */
+function buildRosterMatrixRow(season, endpointType, r) {
+  /** @type {{ season: number, endpointType: string, httpStatus: number, isArray: boolean, teamsCount: number, rosterEntriesCount: number, firstTeamId: number | string | null, firstTeamName: string, firstRosterPlayerId: number | string | null, firstRosterPlayerName: string, hasRosterEntries: boolean, error: string | null }} */
+  const row = {
+    season,
+    endpointType,
+    httpStatus: r.status ?? 0,
+    isArray: false,
+    teamsCount: 0,
+    rosterEntriesCount: 0,
+    firstTeamId: null,
+    firstTeamName: "",
+    firstRosterPlayerId: null,
+    firstRosterPlayerName: "",
+    hasRosterEntries: false,
+    error: null,
+  };
+  if (!r.ok) {
+    row.error = r.error || `HTTP_${row.httpStatus}`;
+    return row;
+  }
+  const raw = r.data;
+  row.isArray = Array.isArray(raw);
+  if (raw == null) {
+    row.error = r.error || "empty_json";
+    return row;
+  }
+  const payload =
+    Array.isArray(raw) && raw.length > 0 && raw[0] != null && typeof raw[0] === "object" ? raw[0] : raw;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    row.error = "unexpected_payload_shape";
+    return row;
+  }
+  const teams = rosterMatrixTeamsFromPayload(payload);
+  row.teamsCount = teams.length;
+  if (teams.length > 0) {
+    const ft = teams[0];
+    row.firstTeamId = ft?.id ?? ft?.teamId ?? null;
+    row.firstTeamName = rosterMatrixFirstTeamDisplayName(ft);
+    row.rosterEntriesCount = rosterMatrixCountEntries(teams);
+    const { firstRosterPlayerId, firstRosterPlayerName } = rosterMatrixFirstPlayerFromTeams(teams);
+    row.firstRosterPlayerId = firstRosterPlayerId;
+    row.firstRosterPlayerName = firstRosterPlayerName;
+    row.hasRosterEntries = row.rosterEntriesCount > 0;
+  }
+  return row;
+}
+
 async function postTrpcHistJson(url, warRoomCookieHeader, jsonInput, authToken) {
   const body = JSON.stringify({ json: jsonInput });
   await applyWarRoomTrpcHistRule(warRoomCookieHeader);
@@ -1648,6 +2014,119 @@ async function postIngestLegacyDraftRecap(season, picks, warRoomCookieHeader, au
 }
 
 /** FULL IMPORT: mDraftDetail API → delete season rows → insert normalized picks (no HTML scrape). */
+/**
+ * Scrape the ESPN League Rosters page for one season and return structured player rows.
+ * URL strategy:
+ *   - season 2025 → no seasonId param (base URL) because ?seasonId=2025 requires auth redirect
+ *   - season 2010–2024 → ?seasonId=YYYY
+ *
+ * @param {string} leagueId
+ * @param {number} season
+ */
+async function scrapeSeasonRosterPage(leagueId, season) {
+  const lid = String(leagueId ?? "").trim();
+  const y = Math.floor(Number(season));
+  const targetUrl = y === 2025
+    ? `https://fantasy.espn.com/football/league/rosters?leagueId=${encodeURIComponent(lid)}`
+    : `https://fantasy.espn.com/football/league/rosters?leagueId=${encodeURIComponent(lid)}&seasonId=${y}`;
+
+  let tabId = null;
+  try {
+    const tab = await chrome.tabs.create({ url: targetUrl, active: false });
+    tabId = tab.id;
+    console.info("[GMWR] scrapeSeasonRoster: opened tab", { tabId, season: y, url: targetUrl });
+
+    await waitForTabComplete(tabId, 30000);
+    await sleep(6000);
+
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      args: [lid, y],
+      func: (leagueIdArg, seasonArg) => {
+        const INJURY_BADGES = new Set(["Q", "D", "O", "P", "SSPD", "IR", "PUP", "NFI"]);
+        const SKIP_SLOTS   = new Set(["SLOT", "PLAYER", "ACQ"]);
+
+        function parsePlayerCell(td) {
+          const injuryEl = td.querySelector("[class*='injury'], [class*='status']");
+          const injuryStatus = injuryEl ? injuryEl.innerText.trim() : "";
+          const raw = td.innerText.trim();
+          if (!raw || raw === "Empty") return null;
+          const lines = raw.split("\n")
+            .map(l => l.trim())
+            .filter(l => l && l !== injuryStatus && !INJURY_BADGES.has(l));
+          if (lines.length === 0) return null;
+          return {
+            playerName:  lines[0],
+            nflTeam:     lines[1] || "",
+            position:    lines[2] || "",
+            injuryStatus,
+          };
+        }
+
+        const tables    = document.querySelectorAll("table");
+        const teamNames = document.querySelectorAll(".teamName");
+        const players   = [];
+
+        tables.forEach((tbl, i) => {
+          const teamName = teamNames[i] ? teamNames[i].innerText.trim() : ("Team_" + i);
+          tbl.querySelectorAll("tr").forEach(row => {
+            const cells = row.querySelectorAll("td");
+            if (cells.length < 2) return;
+            const slot = cells[0].innerText.trim();
+            if (!slot || SKIP_SLOTS.has(slot.toUpperCase())) return;
+            const parsed = parsePlayerCell(cells[1]);
+            if (!parsed || !parsed.playerName || parsed.playerName === "Empty") return;
+            const acq = cells.length >= 3 ? cells[2].innerText.trim() : "";
+            players.push({
+              teamName,
+              slot,
+              playerName:      parsed.playerName,
+              nflTeam:         parsed.nflTeam,
+              position:        parsed.position,
+              acquisitionType: acq,
+              injuryStatus:    parsed.injuryStatus,
+            });
+          });
+        });
+
+        const teamSet = new Set(players.map(p => p.teamName));
+        return {
+          ok: players.length > 0 && teamSet.size > 0,
+          leagueId: leagueIdArg,
+          season: seasonArg,
+          url: location.href,
+          title: document.title,
+          players,
+          teamCount: teamSet.size,
+          playerCount: players.length,
+        };
+      },
+    });
+
+    const r = results?.[0]?.result || { ok: false, error: "scrape_failed" };
+    console.info("[GMWR] scrapeSeasonRoster: done", { season: y, ok: r.ok, teams: r.teamCount, players: r.playerCount });
+    return r;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn("[GMWR] scrapeSeasonRoster: error", { season: y, msg });
+    return { ok: false, error: "scrape_failed", message: msg, season: y, players: [] };
+  } finally {
+    if (tabId != null) { try { await chrome.tabs.remove(tabId); } catch { /* ignore */ } }
+  }
+}
+
+/**
+ * POST espn.ingestSeasonRosters — writes season_rosters rows with source tracking.
+ */
+async function postIngestSeasonRosters(season, players, warRoomCookieHeader, authToken) {
+  const post = await postTrpcHistJson(
+    TRPC_SEASON_ROSTER_INGEST_URL, warRoomCookieHeader, { season, players }, authToken,
+  );
+  const result = post.ok ? trpcResultJson(post.parsed) : null;
+  return { ok: post.ok, status: post.status, error: post.error, result };
+}
+
 async function postImportDraftFromEspnApi(leagueId, season, espnCreds, warRoomCookieHeader, authToken) {
   const jsonInput = {
     leagueId: String(leagueId).trim(),
@@ -1870,6 +2349,92 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     })().catch((err) => {
       const msg = err instanceof Error ? err.message : String(err);
       sendResponse({ ok: false, seasons: [], error: msg });
+    });
+    return true;
+  }
+
+  if (t === MSG_ROSTER_MATRIX_TEST) {
+    (async () => {
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        sendResponse({ ok: false, error: "ESPN login expired", rows: [] });
+        return;
+      }
+      const rows = [];
+      const leagueId = ROSTER_MATRIX_DEBUG_LEAGUE_ID;
+      for (const season of ROSTER_MATRIX_DEBUG_SEASONS) {
+        const urlSeasons = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=mRoster`;
+        const rA = await fetchEspnJsonWithBackoff(urlSeasons, { label: `roster_matrix_seasons_${season}` });
+        rows.push(buildRosterMatrixRow(season, "seasons_lm_api_reads", rA));
+        await sleep(400);
+        const urlHistory = `https://fantasy.espn.com/apis/v3/games/ffl/leagueHistory/${leagueId}?seasonId=${season}&view=mRoster`;
+        const rB = await fetchEspnJsonWithBackoff(urlHistory, { label: `roster_matrix_leagueHistory_${season}` });
+        rows.push(buildRosterMatrixRow(season, "leagueHistory_fantasy_espn", rB));
+        await sleep(400);
+      }
+      console.info("[GMWR] roster matrix debug done", { rowCount: rows.length });
+      sendResponse({ ok: true, rows });
+    })().catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[GMWR] roster matrix debug failed", { error: msg });
+      sendResponse({ ok: false, error: msg, rows: [] });
+    });
+    return true;
+  }
+
+  if (t === MSG_ROSTER_2017_POC) {
+    let responded = false;
+    const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
+    function onceRosterPoc(response) {
+      if (responded) return;
+      responded = true;
+      clearInterval(keepAlive);
+      clearTimeout(rosterPocTimer);
+      sendResponse(response);
+    }
+    const rosterPocTimer = setTimeout(
+      () =>
+        onceRosterPoc(
+          buildRoster2017PocResponsePayload({
+            ok: false,
+            error: "extension_internal_timeout",
+            leagueId: "",
+            season: 2017,
+            teams: [],
+          }),
+        ),
+      110000,
+    );
+
+    (async () => {
+      const leagueId = String(message?.leagueId || "457622").trim();
+      const SEASON = 2017;
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        onceRosterPoc(
+          buildRoster2017PocResponsePayload({
+            ok: false,
+            error: "ESPN login expired",
+            leagueId,
+            season: SEASON,
+            teams: [],
+          }),
+        );
+        return;
+      }
+      const snapshot = await scrapeLeagueRostersPage(leagueId, SEASON);
+      onceRosterPoc(buildRoster2017PocResponsePayload(snapshot));
+    })().catch((err) => {
+      const lid = String(message?.leagueId || "457622").trim();
+      onceRosterPoc(
+        buildRoster2017PocResponsePayload({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+          leagueId: lid,
+          season: 2017,
+          teams: [],
+        }),
+      );
     });
     return true;
   }
@@ -2236,6 +2801,78 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       });
     })().catch((err) => {
       onceRespondLhm({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    });
+    return true;
+  }
+
+  // ─── Historical Roster Capture: scrape ESPN League Rosters page for 2010–2025 ───
+  if (t === MSG_ROSTER_FULL) {
+    let responded = false;
+    const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
+    function onceRespondRoster(response) {
+      if (responded) return;
+      responded = true;
+      clearInterval(keepAlive);
+      clearTimeout(rosterFullTimer);
+      sendResponse(response);
+    }
+    // 16 seasons × ~40s each = ~640s. Hard cap at 720s.
+    const rosterFullTimer = setTimeout(
+      () => onceRespondRoster({ ok: false, error: "extension_internal_timeout" }),
+      720000,
+    );
+
+    (async () => {
+      const leagueId = String(message?.leagueId || "457622").trim();
+      const clerkToken = typeof message?.clerkToken === "string" ? message.clerkToken : "";
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        onceRespondRoster({ ok: false, error: "ESPN login expired", details: "missing_espn_cookies" });
+        return;
+      }
+
+      const warRoomCookieHeader = await getWarRoomCookieHeaderString();
+      const SEASONS = [2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+      const results = [];
+
+      for (const season of SEASONS) {
+        await sleep(800);
+        console.info("[GMWR] roster full: scraping", { leagueId, season });
+
+        const scrape = await scrapeSeasonRosterPage(leagueId, season);
+        if (!scrape?.ok || !Array.isArray(scrape.players) || scrape.players.length === 0) {
+          const row = {
+            season,
+            ok: false,
+            mode: "scrape_failed",
+            error: scrape?.error || "no_players",
+            teamCount: 0,
+            playerCount: 0,
+          };
+          results.push(row);
+          console.warn("[GMWR] roster full: scrape failed", row);
+          continue;
+        }
+
+        const ingest = await postIngestSeasonRosters(season, scrape.players, warRoomCookieHeader, clerkToken);
+        const row = {
+          season,
+          ok: ingest.ok,
+          mode: "roster_scrape_ingest",
+          teamCount: scrape.teamCount,
+          playerCount: scrape.playerCount,
+          upserted: ingest.result?.upserted ?? 0,
+          error: ingest.error || null,
+          ingest: { ok: ingest.ok, status: ingest.status },
+        };
+        results.push(row);
+        console.info("[GMWR] roster full: season done", row);
+      }
+
+      const allOk = results.length > 0 && results.every(r => r.ok);
+      onceRespondRoster({ ok: allOk, results, leagueId });
+    })().catch((err) => {
+      onceRespondRoster({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
     return true;
   }

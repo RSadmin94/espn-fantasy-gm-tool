@@ -69,7 +69,7 @@ import {
   getSeasonTeams,
 } from "./historicalDataService";
 import { upsertMatchups } from "./espnPersistence";
-import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmLeagueSettings, gmMatchups, syncRuns, leagueMedals } from "../drizzle/schema";
+import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmSeasonRosters, gmLeagueSettings, gmMatchups, syncRuns, leagueMedals } from "../drizzle/schema";
 import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle, asc as ascDrizzle, sql } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
@@ -1899,6 +1899,156 @@ export const appRouter = router({
         }
         return { ok: true, season: yr, leagueId: lid, upserted };
       }),
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Season Roster Capture  (2010–2025, scraped from ESPN League Rosters page)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Write a full end-of-season roster snapshot for one season.
+     * Called by the Chrome extension after scraping the ESPN League Rosters page.
+     * publicProcedure + 457622 bypass so the extension can POST without Clerk JWT.
+     */
+    ingestSeasonRosters: publicProcedure
+      .input(
+        z.object({
+          season: z.number().int().min(2010).max(2030),
+          players: z
+            .array(
+              z.object({
+                teamName:        z.string().max(255),
+                playerName:      z.string().min(1).max(255),
+                nflTeam:         z.string().max(32).default(""),
+                position:        z.string().max(16).default(""),
+                slot:            z.string().max(32).default(""),
+                acquisitionType: z.string().max(64).default(""),
+                injuryStatus:    z.string().max(16).default(""),
+              }),
+            )
+            .min(1)
+            .max(2000),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const yr = input.season;
+        const userId = ctx.user?.id ?? 0;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: userId ? { id: userId } : undefined },
+          null,
+          yr,
+        );
+        const lid = leagueId || "457622";
+        if (!userId && lid !== "457622") {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "You must be signed in." });
+        }
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+        // Resolve ownerName from gmTeams for this season
+        const teamRows = await db
+          .select({ name: gmTeams.name, abbreviation: gmTeams.abbreviation, ownerName: gmTeams.ownerName })
+          .from(gmTeams)
+          .where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), eqDrizzle(gmTeams.season, yr)));
+
+        const norm = (s: unknown) => String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+        const ownerByTeam = new Map<string, string>();
+        for (const t of teamRows) {
+          if (t.ownerName) {
+            ownerByTeam.set(norm(t.name), t.ownerName);
+            if (t.abbreviation) ownerByTeam.set(norm(t.abbreviation), t.ownerName);
+          }
+        }
+
+        const now = new Date();
+        let upserted = 0;
+        for (const p of input.players) {
+          const ownerName = ownerByTeam.get(norm(p.teamName)) ?? "";
+          await db
+            .insert(gmSeasonRosters)
+            .values({
+              leagueId: lid,
+              season: yr,
+              teamName: p.teamName,
+              ownerName,
+              playerName: p.playerName,
+              nflTeam: p.nflTeam ?? "",
+              position: p.position ?? "",
+              slot: p.slot ?? "",
+              acquisitionType: p.acquisitionType ?? "",
+              injuryStatus: p.injuryStatus ?? "",
+              capturedAt: now,
+            })
+            .onDuplicateKeyUpdate({
+              set: {
+                ownerName,
+                nflTeam: p.nflTeam ?? "",
+                position: p.position ?? "",
+                slot: p.slot ?? "",
+                acquisitionType: p.acquisitionType ?? "",
+                injuryStatus: p.injuryStatus ?? "",
+                capturedAt: now,
+              },
+            });
+          upserted++;
+        }
+        return { ok: true, season: yr, leagueId: lid, upserted };
+      }),
+
+    /** Return roster snapshot for a season, optionally filtered to one team. */
+    seasonRosters: publicProcedure
+      .input(z.object({
+        season: z.number().int().min(2010).max(2030),
+        teamName: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const yr = input.season;
+        const userId = ctx.user?.id ?? 0;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: userId ? { id: userId } : undefined },
+          null,
+          yr,
+        );
+        const lid = leagueId || "457622";
+        const db = await getDb();
+        if (!db) return { players: [], season: yr, leagueId: lid };
+
+        const where = input.teamName
+          ? andDrizzle(
+              eqDrizzle(gmSeasonRosters.leagueId, lid),
+              eqDrizzle(gmSeasonRosters.season, yr),
+              eqDrizzle(gmSeasonRosters.teamName, input.teamName),
+            )
+          : andDrizzle(eqDrizzle(gmSeasonRosters.leagueId, lid), eqDrizzle(gmSeasonRosters.season, yr));
+
+        const rows = await db
+          .select()
+          .from(gmSeasonRosters)
+          .where(where)
+          .orderBy(ascDrizzle(gmSeasonRosters.teamName), ascDrizzle(gmSeasonRosters.slot));
+
+        return { players: rows, season: yr, leagueId: lid };
+      }),
+
+    /** Which seasons have at least one scraped roster row. Used by the extension popup DB status. */
+    seasonRosterCoverage: publicProcedure.query(async ({ ctx }) => {
+      const userId = ctx.user?.id ?? 0;
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: userId ? { id: userId } : undefined },
+        null,
+        undefined,
+      );
+      const lid = leagueId || "457622";
+      const db = await getDb();
+      if (!db) return { seasons: [] };
+
+      const rows = await db
+        .selectDistinct({ season: gmSeasonRosters.season })
+        .from(gmSeasonRosters)
+        .where(eqDrizzle(gmSeasonRosters.leagueId, lid))
+        .orderBy(ascDrizzle(gmSeasonRosters.season));
+
+      return { seasons: rows.map((r) => r.season) };
+    }),
 
     /**
      * Draft History — simple mDraftDetail pipeline.
