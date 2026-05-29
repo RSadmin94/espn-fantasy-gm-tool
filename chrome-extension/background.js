@@ -355,6 +355,7 @@ async function removeSaveCredentialsCookieRule() {
 
 // ─── Historical league import (War Room tRPC) ───
 const TRPC_PARSED_DRAFT_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestParsedDraftPicks`;
+const TRPC_LEGACY_DRAFT_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestLegacyDraftRecap`;
 const TRPC_IMPORT_DRAFT_API_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.importDraftFromEspnApi`;
 const TRPC_HIST_STATUS_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.historicalImportStatus`;
 const DNR_TRPC_HIST_RULE_ID = 8844210;
@@ -380,7 +381,7 @@ function trpcResultJson(parsed) {
 
 async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
   await chrome.declarativeNetRequest.updateSessionRules({
-    removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1, DNR_TRPC_HIST_RULE_ID + 2],
+    removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1, DNR_TRPC_HIST_RULE_ID + 2, DNR_TRPC_HIST_RULE_ID + 3],
     addRules: [
       {
         id: DNR_TRPC_HIST_RULE_ID,
@@ -418,6 +419,18 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
+      {
+        id: DNR_TRPC_HIST_RULE_ID + 3,
+        priority: 1,
+        action: {
+          type: "modifyHeaders",
+          requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
+        },
+        condition: {
+          urlFilter: "https://gmwarroom.online/api/trpc/espn.ingestLegacyDraftRecap*",
+          resourceTypes: ["xmlhttprequest", "other"],
+        },
+      },
     ],
   });
 }
@@ -425,7 +438,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
 async function removeWarRoomTrpcHistRule() {
   try {
     await chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1, DNR_TRPC_HIST_RULE_ID + 2],
+      removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1, DNR_TRPC_HIST_RULE_ID + 2, DNR_TRPC_HIST_RULE_ID + 3],
     });
   } catch {
     /* ignore */
@@ -1610,6 +1623,30 @@ async function postIngestParsedDraftPicks(leagueId, season, picks, warRoomCookie
   return { ok: post.ok, status: post.status, error: post.error, result, parsed: post.parsed };
 }
 
+/**
+ * POST espn.ingestLegacyDraftRecap — correct endpoint for 2010–2017 DOM-scraped picks.
+ * Writes source="legacy_draft_recap" so legacyDraftPicks query in DraftHistory can read them.
+ * NOTE: server resolves leagueId from the authenticated user — no leagueId in payload.
+ */
+async function postIngestLegacyDraftRecap(season, picks, warRoomCookieHeader, authToken) {
+  // Shape expected by ingestLegacyDraftRecap: no leagueId, no teamId field
+  const legacyPicks = picks.map((p) => ({
+    overallPick: p.overallPick,
+    roundId: p.roundId,
+    roundPick: p.roundPick,
+    playerName: p.playerName,
+    position: p.position,
+    nflTeam: p.nflTeam || "",
+    teamName: p.teamName,
+  }));
+  const post = await postTrpcHistJson(TRPC_LEGACY_DRAFT_INGEST_URL, warRoomCookieHeader, {
+    season,
+    picks: legacyPicks,
+  }, authToken);
+  const result = post.ok ? trpcResultJson(post.parsed) : null;
+  return { ok: post.ok, status: post.status, error: post.error, result, parsed: post.parsed };
+}
+
 /** FULL IMPORT: mDraftDetail API → delete season rows → insert normalized picks (no HTML scrape). */
 async function postImportDraftFromEspnApi(leagueId, season, espnCreds, warRoomCookieHeader, authToken) {
   const jsonInput = {
@@ -1956,6 +1993,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const results = [];
 
       // 2010–2017: ESPN API has no draft data for these seasons — scrape Draft Recap HTML directly.
+      // Uses ingestLegacyDraftRecap so rows land with source='legacy_draft_recap',
+      // which is the only value legacyDraftPicks (DraftHistory) will return.
       const LEGACY_SCRAPE_MIN = 2010;
       const LEGACY_SCRAPE_MAX = 2017;
       for (let season = LEGACY_SCRAPE_MIN; season <= LEGACY_SCRAPE_MAX; season++) {
@@ -1982,12 +2021,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           continue;
         }
         const picksPayload = picksPayloadForIngestParsedDraft(parsedPicks);
-        const ingest = await postIngestParsedDraftPicks(leagueId, season, picksPayload, warRoomCookieHeader, clerkToken);
+        // postIngestLegacyDraftRecap writes source='legacy_draft_recap' — visible to DraftHistory
+        const ingest = await postIngestLegacyDraftRecap(season, picksPayload, warRoomCookieHeader, clerkToken);
         const row = {
           season,
           ok: ingest.ok,
-          mode: "dom_scrape_ingest",
+          mode: "dom_scrape_legacy_ingest",
           pickCount: picksPayload.length,
+          upserted: ingest.result?.upserted ?? 0,
           parseErrors,
           error: ingest.error || null,
           ingest: { ok: ingest.ok, status: ingest.status },
