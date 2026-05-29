@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,25 +54,8 @@ export function DraftHistory() {
         ? allSeasons[allSeasons.length - 1]!
         : 2025;
 
-  const [season, setSeason] = useState(defaultSeason);
-
-  // defaultSeason computes to 2025 at mount (queries not yet loaded). Update once
-  // when cachedSeasons / allSeasons arrive so the page opens on the latest cached season.
-  const seasonInitialized = useRef(false);
-  useEffect(() => {
-    if (seasonInitialized.current) return;
-    const best =
-      cachedSeasons.length > 0
-        ? Math.max(...cachedSeasons)
-        : allSeasons.length > 0
-          ? allSeasons[allSeasons.length - 1]!
-          : 0;
-    if (best > 0) {
-      setSeason(best);
-      seasonInitialized.current = true;
-    }
-  }, [cachedSeasons, allSeasons]);
-
+  const [seasonOverride, setSeasonOverride] = useState<number | null>(null);
+  const season = seasonOverride ?? defaultSeason;
   const draftQ = trpc.espn.draftPicks.useQuery({ season });
 
   const picks = useMemo(
@@ -92,7 +75,7 @@ export function DraftHistory() {
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3 py-4">
           <div className="w-28">
-            <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
+            <Select value={String(season)} onValueChange={(v) => setSeasonOverride(Number(v))}>
               <SelectTrigger className="h-9 text-sm">
                 <SelectValue />
               </SelectTrigger>
