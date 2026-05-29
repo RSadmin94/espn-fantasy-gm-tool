@@ -1727,9 +1727,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (t === MSG_HIST_TEST) {
     let responded = false;
+    // MV3 keepalive: prevent service worker termination during long tab-scrape (tab load can take 30+ seconds)
+    const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
     function onceRespond(response) {
       if (responded) return;
       responded = true;
+      clearInterval(keepAlive);
       clearTimeout(internalTimer);
       sendResponse(response);
     }
