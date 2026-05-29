@@ -202,6 +202,7 @@ export function DraftHistory() {
     setScrapeEspnNote(null);
     setScrapeEspnBusy(true);
     try {
+      const clerkToken = (await getToken()) ?? "";
       const id = `legacy-draft-${season}-${Date.now()}`;
       const extResult = await new Promise<Record<string, unknown>>((resolve) => {
         const timeout = window.setTimeout(() => {
@@ -218,7 +219,7 @@ export function DraftHistory() {
         }
         window.addEventListener("message", onMsg);
         window.postMessage(
-          { type: "GMWR_HIST_TEST", id, leagueId: "457622", season },
+          { type: "GMWR_HIST_TEST", id, leagueId: "457622", season, clerkToken },
           "*",
         );
       });
@@ -234,8 +235,7 @@ export function DraftHistory() {
         return;
       }
 
-      const token = await getToken();
-      setTrpcToken(token);
+      setTrpcToken(clerkToken);
       try {
         const result = await ingestLegacyMutation.mutateAsync({
           season,
