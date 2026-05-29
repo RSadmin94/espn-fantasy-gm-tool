@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -9,44 +9,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronDown, ChevronRight, Loader2, RefreshCw } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
-const POS_COLORS: Record<string, string> = {
-  QB: "border-red-500/30 bg-red-500/10 text-red-300",
-  RB: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-  WR: "border-blue-500/30 bg-blue-500/10 text-blue-300",
-  TE: "border-orange-500/30 bg-orange-500/10 text-orange-300",
-  K: "border-purple-500/30 bg-purple-500/10 text-purple-300",
-  DST: "border-slate-500/30 bg-slate-500/10 text-slate-300",
-  "D/ST": "border-slate-500/30 bg-slate-500/10 text-slate-300",
+type DraftPickRow = {
+  overallPick: number;
+  roundId: number;
+  roundPick: number;
+  playerName: string | null;
+  position: string | null;
+  nflTeam: string;
+  teamName: string;
+  teamId: number;
+  isKeeper: boolean;
 };
 
 function PosBadge({ pos }: { pos: string | null | undefined }) {
   const p = (pos || "?").toUpperCase();
   return (
-    <span
-      className={cn(
-        "inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase",
-        POS_COLORS[p] ?? "border-border bg-muted/40 text-muted-foreground",
-      )}
-    >
+    <span className="inline-flex rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
       {p}
     </span>
   );
 }
 
-type DraftPick = {
-  overallPick: number;
-  roundId: number;
-  roundPick: number;
-  teamId: number;
-  teamName: string;
-  playerName: string;
-  position: string | null;
-  nflTeam: string;
-  isKeeper: boolean;
-  source: string;
-};
+function sortDraftPicks(rows: DraftPickRow[]): DraftPickRow[] {
+  return [...rows].sort((a, b) => {
+    const ao = a.overallPick > 0 ? a.overallPick : 0;
+    const bo = b.overallPick > 0 ? b.overallPick : 0;
+    if (ao > 0 && bo > 0 && ao !== bo) return ao - bo;
+    if (a.roundId !== b.roundId) return a.roundId - b.roundId;
+    return (a.roundPick > 0 ? a.roundPick : 0) - (b.roundPick > 0 ? b.roundPick : 0);
+  });
+}
 
 export function DraftHistory() {
   const allSeasonsQ = trpc.espn.allSeasons.useQuery();
@@ -54,75 +48,51 @@ export function DraftHistory() {
   const allSeasons: number[] = allSeasonsQ.data ?? [];
   const cachedSeasons: number[] = cachedQ.data ?? [];
   const defaultSeason =
-    allSeasons.length > 0 ? allSeasons[allSeasons.length - 1]! : 2025;
+    cachedSeasons.length > 0
+      ? Math.max(...cachedSeasons)
+      : allSeasons.length > 0
+        ? allSeasons[allSeasons.length - 1]!
+        : 2025;
 
   const [season, setSeason] = useState(defaultSeason);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [importResult, setImportResult] = useState<{ rowsInserted: number; rawRows: number; skipped: number } | null>(null);
 
-  const draftQ = trpc.espn.draftHistory.useQuery({ season }, { staleTime: 0 });
-  const importMut = trpc.espn.importDraftFromEspnApi.useMutation({
-    onSuccess: (data) => {
-      setImportResult({
-        rowsInserted: data.insertedRows ?? data.inserted ?? 0,
-        rawRows: data.deletedRows ?? data.deleted ?? 0,
-        skipped: data.skippedDuplicates ?? 0,
-      });
-      setImportError(null);
-      void draftQ.refetch();
-    },
-    onError: (err) => {
-      setImportError(err.message);
-    },
-  });
-
-  const picks = (draftQ.data?.picks ?? []) as DraftPick[];
-  const teamCount = draftQ.data?.teamCount ?? 0;
-  const diagnostics = draftQ.data?.diagnostics;
-
-  // Group picks by roundId, then sort within each round by roundPick (or overallPick)
-  const byRound = useMemo(() => {
-    const map = new Map<number, DraftPick[]>();
-    for (const p of picks) {
-      const r = p.roundId > 0 ? p.roundId : 1;
-      const arr = map.get(r) ?? [];
-      arr.push(p);
-      map.set(r, arr);
+  // defaultSeason computes to 2025 at mount (queries not yet loaded). Update once
+  // when cachedSeasons / allSeasons arrive so the page opens on the latest cached season.
+  const seasonInitialized = useRef(false);
+  useEffect(() => {
+    if (seasonInitialized.current) return;
+    const best =
+      cachedSeasons.length > 0
+        ? Math.max(...cachedSeasons)
+        : allSeasons.length > 0
+          ? allSeasons[allSeasons.length - 1]!
+          : 0;
+    if (best > 0) {
+      setSeason(best);
+      seasonInitialized.current = true;
     }
-    return [...map.entries()]
-      .sort(([a], [b]) => a - b)
-      .map(([round, roundPicks]) => ({
-        round,
-        picks: [...roundPicks].sort((a, b) =>
-          a.roundPick > 0 && b.roundPick > 0
-            ? a.roundPick - b.roundPick
-            : a.overallPick - b.overallPick,
-        ),
-      }));
-  }, [picks]);
+  }, [cachedSeasons, allSeasons]);
 
-  const handleImport = () => {
-    if (!confirm(`Import 2025 draft picks from ESPN mDraftDetail? This will DELETE all existing picks for season ${season} and replace with fresh ESPN data.`)) return;
-    setImportResult(null);
-    setImportError(null);
-    importMut.mutate({ season });
-  };
+  const draftQ = trpc.espn.draftPicks.useQuery({ season });
+
+  const picks = useMemo(
+    () => sortDraftPicks((draftQ.data ?? []) as DraftPickRow[]),
+    [draftQ.data],
+  );
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-1 pb-12">
+    <div className="mx-auto max-w-6xl space-y-6 px-1 pb-12">
       <div>
         <h1 className="text-3xl font-bold text-foreground">Draft History</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          ESPN mDraftDetail → normalized picks → stored rows. No source priority logic.
+          ESPN combined cache → normalized draft picks (no database table).
         </p>
       </div>
 
-      {/* Controls */}
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3 py-4">
           <div className="w-28">
-            <Select value={String(season)} onValueChange={(v) => { setSeason(Number(v)); setImportResult(null); setImportError(null); }}>
+            <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
               <SelectTrigger className="h-9 text-sm">
                 <SelectValue />
               </SelectTrigger>
@@ -138,56 +108,12 @@ export function DraftHistory() {
               </SelectContent>
             </Select>
           </div>
-
           {draftQ.isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-
-          <button
-            type="button"
-            disabled={importMut.isPending}
-            onClick={handleImport}
-            className="flex items-center gap-1.5 rounded border border-blue-500/40 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-300 hover:bg-blue-500/20 disabled:opacity-50"
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", importMut.isPending && "animate-spin")} />
-            {importMut.isPending ? "Importing…" : "Import from ESPN"}
-          </button>
-
-          {importResult && (
-            <span className="text-xs text-emerald-400">
-              Imported {importResult.rowsInserted} picks (deleted {importResult.rawRows} prior rows
-              {importResult.skipped > 0 ? `, ${importResult.skipped} skipped` : ""})
-            </span>
-          )}
-          {importError && (
-            <span className="text-xs text-red-400">{importError}</span>
+          {!draftQ.isLoading && (
+            <span className="text-xs text-muted-foreground">{picks.length} picks</span>
           )}
         </CardContent>
       </Card>
-
-      {/* Source banner */}
-      {diagnostics && (
-        <div
-          className={cn(
-            "rounded-lg border px-4 py-3 text-sm",
-            diagnostics.sourceUsed === "espn_mDraftDetail"
-              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
-              : "border-amber-500/40 bg-amber-500/10 text-amber-100",
-          )}
-        >
-          <div className="font-medium">
-            Source: <span className="text-foreground">{diagnostics.sourceUsed || "—"}</span>
-            {teamCount > 0 && (
-              <span className="ml-3 text-muted-foreground">
-                {teamCount} teams · {picks.length} picks
-              </span>
-            )}
-          </div>
-          {diagnostics.warnings.length > 0 && (
-            <ul className="mt-1.5 space-y-0.5 text-xs text-amber-300">
-              {diagnostics.warnings.map((w, i) => <li key={i}>⚠ {w}</li>)}
-            </ul>
-          )}
-        </div>
-      )}
 
       {draftQ.isError && (
         <div className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
@@ -195,79 +121,72 @@ export function DraftHistory() {
         </div>
       )}
 
-      {!draftQ.isLoading && picks.length === 0 && (
+      {!draftQ.isLoading && !draftQ.isError && picks.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          No draft picks for {season}. Use "Import from ESPN" to fetch mDraftDetail data.
+          No draft picks for {season}. Sync or cache this season&apos;s combined ESPN data first.
         </p>
       )}
 
-      {/* Rounds table */}
-      {byRound.map(({ round, picks: roundPicks }) => (
-        <Card key={round}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Round {round}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">Pick</th>
-                    <th className="pb-2 pr-4 font-medium">Overall</th>
-                    <th className="pb-2 pr-4 font-medium">Player</th>
-                    <th className="pb-2 pr-4 font-medium">Pos</th>
-                    <th className="pb-2 pr-4 font-medium">NFL Team</th>
-                    <th className="pb-2 pr-4 font-medium">Fantasy Team</th>
-                    <th className="pb-2 font-medium">K</th>
+      {picks.length > 0 && (
+        <Card>
+          <CardContent className="overflow-x-auto p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30 text-left text-xs text-muted-foreground">
+                  <th className="px-3 py-2 font-medium">Overall Pick</th>
+                  <th className="px-3 py-2 font-medium">Round</th>
+                  <th className="px-3 py-2 font-medium">Round Pick</th>
+                  <th className="px-3 py-2 font-medium">Player</th>
+                  <th className="px-3 py-2 font-medium">Position</th>
+                  <th className="px-3 py-2 font-medium">NFL Team</th>
+                  <th className="px-3 py-2 font-medium">Fantasy Team</th>
+                  <th className="px-3 py-2 font-medium">Team Id</th>
+                  <th className="px-3 py-2 font-medium">Keeper</th>
+                </tr>
+              </thead>
+              <tbody>
+                {picks.map((p) => (
+                  <tr
+                    key={`${p.overallPick}-${p.teamId}-${p.playerName ?? ""}`}
+                    className={cn(
+                      "border-b border-border/40",
+                      p.isKeeper && "bg-amber-500/5",
+                    )}
+                  >
+                    <td className="px-3 py-1.5 font-mono tabular-nums text-muted-foreground">
+                      {p.overallPick > 0 ? p.overallPick : "—"}
+                    </td>
+                    <td className="px-3 py-1.5 font-mono tabular-nums">{p.roundId || "—"}</td>
+                    <td className="px-3 py-1.5 font-mono tabular-nums">
+                      {p.roundPick > 0 ? p.roundPick : "—"}
+                    </td>
+                    <td className="px-3 py-1.5 font-medium text-foreground">
+                      {p.playerName ?? "—"}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <PosBadge pos={p.position} />
+                    </td>
+                    <td className="px-3 py-1.5 text-muted-foreground">
+                      {(p.nflTeam || "").trim() || "—"}
+                    </td>
+                    <td className="px-3 py-1.5 text-foreground/90">{p.teamName}</td>
+                    <td className="px-3 py-1.5 font-mono text-xs text-muted-foreground">
+                      {p.teamId}
+                    </td>
+                    <td className="px-3 py-1.5 text-center">
+                      {p.isKeeper ? (
+                        <span className="text-xs font-semibold text-amber-400">K</span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {roundPicks.map((p) => (
-                    <tr key={p.overallPick} className="border-t border-border/30">
-                      <td className="py-1.5 pr-4 font-mono text-muted-foreground">
-                        {p.roundPick > 0 ? p.roundPick : "—"}
-                      </td>
-                      <td className="py-1.5 pr-4 font-mono text-muted-foreground">{p.overallPick}</td>
-                      <td className="py-1.5 pr-4 font-medium text-foreground">{p.playerName}</td>
-                      <td className="py-1.5 pr-4">
-                        <PosBadge pos={p.position} />
-                      </td>
-                      <td className="py-1.5 pr-4 text-xs text-muted-foreground">{p.nflTeam || "—"}</td>
-                      <td className="py-1.5 pr-4 text-xs text-foreground/80">{p.teamName}</td>
-                      <td className="py-1.5 text-xs">
-                        {p.isKeeper && <span className="text-amber-400">K</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
-      ))}
-
-      {/* Diagnostics */}
-      <Card>
-        <button
-          type="button"
-          className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium"
-          onClick={() => setShowDiagnostics((v) => !v)}
-        >
-          {showDiagnostics ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
-          Diagnostics
-        </button>
-        {showDiagnostics && diagnostics && (
-          <CardContent className="border-t border-border/40 pt-0">
-            <pre className="max-h-80 overflow-auto rounded bg-muted/20 p-3 font-mono text-[11px] text-muted-foreground">
-              {JSON.stringify(diagnostics, null, 2)}
-            </pre>
-          </CardContent>
-        )}
-      </Card>
+      )}
     </div>
   );
 }
