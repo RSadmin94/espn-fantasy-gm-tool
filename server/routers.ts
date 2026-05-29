@@ -1740,6 +1740,135 @@ export const appRouter = router({
       }),
 
     /**
+     * Legacy Draft Recap: reads draft_picks rows with rawPick.source="legacy_draft_recap" for seasons 2010–2017.
+     * Fallback path for DraftHistory when the combined ESPN cache has no mDraftDetail picks.
+     */
+    legacyDraftPicks: publicProcedure
+      .input(z.object({ season: z.number().int().min(2010).max(2017) }))
+      .query(async ({ ctx, input }) => {
+        const yr = input.season;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: ctx.user ? { id: ctx.user.id } : undefined },
+          null,
+          yr,
+        );
+        const lid = leagueId || "457622";
+        const db = await getDb();
+        if (!db) return { picks: [] as Array<{ overallPick: number; roundId: number; roundPick: number; playerName: string | null; position: string | null; nflTeam: string; teamName: string; teamId: number; isKeeper: boolean }>, source: "legacy_draft_recap" as const };
+        const rows = await db
+          .select()
+          .from(gmDraftPicks)
+          .where(andDrizzle(eqDrizzle(gmDraftPicks.leagueId, lid), eqDrizzle(gmDraftPicks.season, yr)))
+          .orderBy(ascDrizzle(gmDraftPicks.overallPick));
+        const picks = rows
+          .map((r) => {
+            let raw: Record<string, unknown> = {};
+            try { raw = JSON.parse(r.rawPick) as Record<string, unknown>; } catch { /* ignore */ }
+            if (raw.source !== "legacy_draft_recap") return null;
+            return {
+              overallPick: r.overallPick,
+              roundId: r.roundId,
+              roundPick: r.roundPick,
+              playerName: r.playerName ?? null,
+              position: r.position ?? null,
+              nflTeam: String(raw.nflTeam ?? ""),
+              teamName: String(raw.teamName ?? ""),
+              teamId: r.teamId,
+              isKeeper: r.isKeeper === 1,
+            };
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== null);
+        return { picks, source: "legacy_draft_recap" as const };
+      }),
+
+    /**
+     * Ingest manually-pasted or HTML-scraped ESPN Draft Recap rows for legacy seasons (2010–2017).
+     * Stores in draft_picks with rawPick.source = "legacy_draft_recap" and captureMethod = "manual_paste_or_html".
+     * teamName from the Draft Recap column is the canonical owner/team truth — do not infer from gmTeams.
+     */
+    ingestLegacyDraftRecap: protectedProcedure
+      .input(
+        z.object({
+          season: z.number().int().min(2010).max(2017),
+          picks: z
+            .array(
+              z.object({
+                overallPick: z.number().int().min(1).max(500),
+                roundId: z.number().int().min(1).max(30),
+                roundPick: z.number().int().min(0).max(30),
+                playerName: z.string().max(255),
+                position: z.string().max(16),
+                nflTeam: z.string().max(32).default(""),
+                teamName: z.string().max(255),
+              }),
+            )
+            .min(1)
+            .max(500),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const yr = input.season;
+        const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, yr);
+        const lid = leagueId || "457622";
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+        // Validate uniqueness within the submitted batch
+        const seenOverall = new Set<number>();
+        const seenRoundPick = new Set<string>();
+        for (const p of input.picks) {
+          if (seenOverall.has(p.overallPick))
+            throw new TRPCError({ code: "BAD_REQUEST", message: `Duplicate overall pick ${p.overallPick} in submitted batch` });
+          seenOverall.add(p.overallPick);
+          const rk = `${p.roundId}:${p.roundPick}`;
+          if (p.roundPick > 0 && seenRoundPick.has(rk))
+            throw new TRPCError({ code: "BAD_REQUEST", message: `Duplicate round ${p.roundId} pick ${p.roundPick} in submitted batch` });
+          if (p.roundPick > 0) seenRoundPick.add(rk);
+        }
+
+        const now = new Date();
+        let upserted = 0;
+        for (const p of input.picks) {
+          const rawPick = JSON.stringify({
+            source: "legacy_draft_recap",
+            captureMethod: "manual_paste_or_html",
+            teamName: p.teamName,
+            nflTeam: p.nflTeam ?? "",
+          });
+          await db
+            .insert(gmDraftPicks)
+            .values({
+              leagueId: lid,
+              season: yr,
+              overallPick: p.overallPick,
+              roundId: p.roundId,
+              roundPick: p.roundPick,
+              teamId: 0,
+              owningTeamId: null,
+              playerId: null,
+              playerName: p.playerName || null,
+              position: p.position || null,
+              isKeeper: 0,
+              bidAmount: 0,
+              rawPick,
+              updatedAt: now,
+            })
+            .onDuplicateKeyUpdate({
+              set: {
+                roundId: p.roundId,
+                roundPick: p.roundPick,
+                playerName: p.playerName || null,
+                position: p.position || null,
+                rawPick,
+                updatedAt: now,
+              },
+            });
+          upserted++;
+        }
+        return { ok: true, season: yr, leagueId: lid, upserted };
+      }),
+
+    /**
      * Draft History — simple mDraftDetail pipeline.
      * Reads gmDraftPicks for the season ordered by overallPick.
      * No source priority, no canonical builder, no scrape rows.
