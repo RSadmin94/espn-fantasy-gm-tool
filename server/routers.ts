@@ -1786,7 +1786,7 @@ export const appRouter = router({
      * Stores in draft_picks with rawPick.source = "legacy_draft_recap" and captureMethod = "manual_paste_or_html".
      * teamName from the Draft Recap column is the canonical owner/team truth — do not infer from gmTeams.
      */
-    ingestLegacyDraftRecap: protectedProcedure
+    ingestLegacyDraftRecap: publicProcedure
       .input(
         z.object({
           season: z.number().int().min(2010).max(2017),
@@ -1808,8 +1808,18 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const yr = input.season;
-        const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, yr);
+        const userId = ctx.user?.id ?? 0;
+        // Allow the extension to ingest for the test/primary league without full auth,
+        // same safety model as ingestParsedDraftPicks.
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: userId ? { id: userId } : undefined },
+          null,
+          yr,
+        );
         const lid = leagueId || "457622";
+        if (!userId && lid !== "457622") {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "You must be signed in." });
+        }
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
