@@ -22,6 +22,7 @@ type DraftPickRow = {
   position: string | null;
   nflTeam: string;
   teamName: string;
+  ownerName?: string | null;
   teamId: number;
   isKeeper: boolean;
 };
@@ -508,7 +509,7 @@ export function DraftHistory() {
                   <th className="px-3 py-2 font-medium">Player</th>
                   <th className="px-3 py-2 font-medium">Position</th>
                   <th className="px-3 py-2 font-medium">NFL Team</th>
-                  <th className="px-3 py-2 font-medium">Fantasy Team</th>
+                  <th className="px-3 py-2 font-medium">Owner</th>
                   <th className="px-3 py-2 font-medium">Team Id</th>
                   <th className="px-3 py-2 font-medium">Keeper</th>
                 </tr>
@@ -538,7 +539,11 @@ export function DraftHistory() {
                     <td className="px-3 py-1.5 text-muted-foreground">
                       {(p.nflTeam || "").trim() || "—"}
                     </td>
-                    <td className="px-3 py-1.5 text-foreground/90">{p.teamName}</td>
+                    <td className="px-3 py-1.5 text-foreground/90">
+                      {p.ownerName
+                        ? <><span className="font-medium">{p.ownerName}</span><br /><span className="text-xs text-muted-foreground">{p.teamName}</span></>
+                        : p.teamName}
+                    </td>
                     <td className="px-3 py-1.5 font-mono text-xs text-muted-foreground">
                       {p.teamId || "—"}
                     </td>

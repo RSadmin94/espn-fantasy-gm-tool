@@ -1754,17 +1754,38 @@ export const appRouter = router({
         );
         const lid = leagueId || "457622";
         const db = await getDb();
-        if (!db) return { picks: [] as Array<{ overallPick: number; roundId: number; roundPick: number; playerName: string | null; position: string | null; nflTeam: string; teamName: string; teamId: number; isKeeper: boolean }>, source: "legacy_draft_recap" as const };
+        if (!db) return { picks: [] as Array<{ overallPick: number; roundId: number; roundPick: number; playerName: string | null; position: string | null; nflTeam: string; teamName: string; ownerName: string; teamId: number; isKeeper: boolean }>, source: "legacy_draft_recap" as const };
         const rows = await db
           .select()
           .from(gmDraftPicks)
           .where(andDrizzle(eqDrizzle(gmDraftPicks.leagueId, lid), eqDrizzle(gmDraftPicks.season, yr)))
           .orderBy(ascDrizzle(gmDraftPicks.overallPick));
+
+        // Build teamName → ownerName lookup from gmTeams for this season.
+        // Normalise both sides so minor case/spacing differences still match.
+        const teamRows = await db
+          .select({ name: gmTeams.name, abbreviation: gmTeams.abbreviation, ownerName: gmTeams.ownerName })
+          .from(gmTeams)
+          .where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), eqDrizzle(gmTeams.season, yr)));
+
+        const norm = (s: unknown) =>
+          String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+
+        const ownerByName = new Map<string, string>();
+        for (const t of teamRows) {
+          if (t.ownerName) {
+            ownerByName.set(norm(t.name), t.ownerName);
+            if (t.abbreviation) ownerByName.set(norm(t.abbreviation), t.ownerName);
+          }
+        }
+
         const picks = rows
           .map((r) => {
             let raw: Record<string, unknown> = {};
             try { raw = JSON.parse(r.rawPick) as Record<string, unknown>; } catch { /* ignore */ }
             if (raw.source !== "legacy_draft_recap") return null;
+            const fantasyTeamName = String(raw.teamName ?? "");
+            const ownerName = ownerByName.get(norm(fantasyTeamName)) ?? "";
             return {
               overallPick: r.overallPick,
               roundId: r.roundId,
@@ -1772,7 +1793,8 @@ export const appRouter = router({
               playerName: r.playerName ?? null,
               position: r.position ?? null,
               nflTeam: String(raw.nflTeam ?? ""),
-              teamName: String(raw.teamName ?? ""),
+              teamName: fantasyTeamName,
+              ownerName,
               teamId: r.teamId,
               isKeeper: r.isKeeper === 1,
             };
