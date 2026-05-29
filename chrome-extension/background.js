@@ -543,25 +543,92 @@ async function scrapeDraftRecapPage(leagueId, season) {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       world: "MAIN",
-      // Same approach as scrapeLeagueHistoryPage: extract body text as lines (no per-element HTML)
+      // DOM-structured scrape: reads .draftRecapTable.byRound sections directly.
+      // Each round section has a .Table__Title ("Round N") and Table__TR--sm rows with 3 TD cells:
+      //   [0] pick number in round, [1] "PlayerName NFL_ABBR, POS", [2] fantasy team name.
+      // Falls back to scanning all <tr> rows if the round sections are absent.
       func: () => {
-        const bodyText = document.body.innerText || "";
-        const bodyLines = bodyText.split("\n").map((s) => s.trim()).filter((s) => s.length > 0);
+        const picks = [];
+
+        // Primary: .draftRecapTable.byRound sections (2014-present layout)
+        const roundSections = document.querySelectorAll(".draftRecapTable.byRound");
+        roundSections.forEach((section) => {
+          const titleEl = section.querySelector(".Table__Title");
+          const titleText = titleEl ? titleEl.innerText.trim() : "";
+          const roundMatch = titleText.match(/^Round\s+(\d+)$/i);
+          const roundNum = roundMatch ? parseInt(roundMatch[1], 10) : null;
+          if (!roundNum) return;
+
+          section.querySelectorAll("tr.Table__TR--sm").forEach((row) => {
+            const cells = row.querySelectorAll("td.Table__TD");
+            if (cells.length < 3) return;
+            const pickNum = parseInt(cells[0].innerText.trim(), 10) || 0;
+            const playerCell = cells[1].innerText.trim();
+            const fantasyTeam = cells[2].innerText.trim();
+            if (!playerCell || !fantasyTeam) return;
+
+            // "Player Name ABBR, POS"  e.g. "Dez Bryant Dal, WR" or "Aaron Rodgers GB, QB"
+            const m = playerCell.match(/^(.+?)\s+([A-Za-z]{2,5}(?:\/[A-Za-z]{1,5})?),\s*([A-Za-z\/]+)\s*$/);
+            const playerName = m ? m[1].trim() : playerCell;
+            const nflTeam    = m ? m[2] : "";
+            const posRaw     = m ? m[3].toUpperCase() : "";
+            const position   = (posRaw === "DST" || posRaw === "DEF") ? "D/ST" : posRaw;
+            picks.push({ round: roundNum, pickInRound: pickNum, playerName, nflTeam, position, fantasyTeam });
+          });
+        });
+
+        // Fallback: scan all table rows (older ESPN page layout / "By Team" view fallback)
+        if (picks.length === 0) {
+          let currentRound = 1;
+          let lastPickNum = 0;
+          document.querySelectorAll("tr").forEach((row) => {
+            const cells = row.querySelectorAll("td");
+            if (cells.length < 3) return;
+            const c0 = cells[0].innerText.trim();
+            const c1 = cells[1].innerText.trim();
+            const c2 = cells[2].innerText.trim();
+            if (!c0 || !c1 || !c2) return;
+            if (/^(no\.?|#)$/i.test(c0) || c0.toLowerCase() === "player") return; // header
+
+            const pickNum = parseInt(c0, 10);
+            if (!Number.isFinite(pickNum) || pickNum < 1 || pickNum > 30) return;
+
+            // Detect round boundary: pick number resets to 1 after going higher
+            if (pickNum < lastPickNum && lastPickNum > 1) currentRound++;
+            lastPickNum = pickNum;
+
+            const m = c1.match(/^(.+?)\s+([A-Za-z]{2,5}(?:\/[A-Za-z]{1,5})?),\s*([A-Za-z\/]+)\s*$/);
+            const playerName = m ? m[1].trim() : c1;
+            const nflTeam    = m ? m[2] : "";
+            const posRaw     = m ? m[3].toUpperCase() : "";
+            const position   = (posRaw === "DST" || posRaw === "DEF") ? "D/ST" : posRaw;
+            picks.push({ round: currentRound, pickInRound: pickNum, playerName, nflTeam, position, fantasyTeam: c2 });
+          });
+        }
+
+        const draftType = (() => {
+          const el = document.querySelector("[class*='draftType'], .draft-type");
+          if (el) return el.innerText.trim();
+          const bodyText = document.body.innerText || "";
+          const m = bodyText.match(/Type:\s*(Offline|Online|Autopick)/i);
+          return m ? m[1] : "";
+        })();
+
         return {
-          ok: true,
+          ok: picks.length > 0,
           url: location.href,
           title: document.title,
-          bodyLength: bodyText.length,
-          bodyPreview: bodyText.slice(0, 2000),
-          bodyLines: bodyLines.slice(0, 5000),
+          picks,
+          pickCount: picks.length,
+          draftType,
         };
       },
     });
     const scrapeResult = results?.[0]?.result || { ok: false, error: "scrape_failed" };
     console.info("[GMWR] scrapeDraftRecap: script done", {
       ok: scrapeResult.ok,
-      bodyLength: scrapeResult.bodyLength,
-      bodyLinesCount: Array.isArray(scrapeResult.bodyLines) ? scrapeResult.bodyLines.length : 0,
+      pickCount: scrapeResult.pickCount,
+      draftType: scrapeResult.draftType,
       title: scrapeResult.title,
     });
     return scrapeResult;
@@ -1150,6 +1217,51 @@ function parseDraftRecapCandidatesToPicks(candidates, leagueId, season) {
   }
 
   if (picks.length === 0) parseErrors.push("no_pick_rows_detected");
+  return { picks, parseErrors };
+}
+
+/**
+ * Convert DOM-scraped draft picks (from scrapeDraftRecapPage) into the full pick payload format
+ * expected by parseDraftRecapCandidatesToPicks / picksPayloadForIngestParsedDraft.
+ * Adds leagueId, season, and computes overallPick sequentially across rounds.
+ *
+ * @param {{ ok: boolean, picks: Array, pickCount: number }} domResult  — from scrapeDraftRecapPage
+ * @param {string} leagueId
+ * @param {number} season
+ * @returns {{ picks: object[], parseErrors: string[] }}
+ */
+function parseDraftRecapDomResult(domResult, leagueId, season) {
+  const parseErrors = [];
+  if (!domResult?.ok || !Array.isArray(domResult.picks) || domResult.picks.length === 0) {
+    parseErrors.push(domResult?.ok === false ? (domResult?.error || "scrape_not_ok") : "no_dom_picks");
+    return { picks: [], parseErrors };
+  }
+
+  const picks = [];
+  let overall = 0;
+  for (const p of domResult.picks) {
+    overall++;
+    const posRaw = String(p.position || "").toUpperCase().trim();
+    picks.push({
+      leagueId: String(leagueId).trim(),
+      season,
+      overallPick: overall,
+      roundId: p.round,
+      roundPick: p.pickInRound,
+      teamName: p.fantasyTeam || "",
+      playerName: p.playerName || "",
+      nflTeam: p.nflTeam || "",
+      position: posRaw,
+      rawPick: {
+        source: "draft_recap_dom",
+        teamName: p.fantasyTeam || "",
+        nflTeam: p.nflTeam || "",
+        ownerName: "",
+      },
+    });
+  }
+
+  if (picks.length === 0) parseErrors.push("picks_empty_after_conversion");
   return { picks, parseErrors };
 }
 
@@ -1754,47 +1866,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       console.info("[GMWR:BG] cookies present, calling scrapeDraftRecapPage", { season: TEST_SEASON });
 
       const full = await scrapeDraftRecapPage(TEST_LEAGUE, TEST_SEASON);
-      console.info("[GMWR] draft recap scrape full result", { season: TEST_SEASON, ok: full?.ok, bodyLength: full?.bodyLength, bodyLinesCount: Array.isArray(full?.bodyLines) ? full.bodyLines.length : 0 });
-      const bodyLines = Array.isArray(full?.bodyLines) ? full.bodyLines : [];
-      const summary = {
-        bodyLength: typeof full?.bodyLength === "number" ? full.bodyLength : 0,
-        bodyLinesCount: bodyLines.length,
-        first20Lines: bodyLines.slice(0, 20),
-      };
+      console.info("[GMWR] draft recap scrape result", { season: TEST_SEASON, ok: full?.ok, pickCount: full?.pickCount });
+
       const probeOk = Boolean(full && full.ok !== false && full.error == null);
       if (!probeOk) {
         onceRespond({
           ok: false,
           error: full?.message || full?.error || "scrape_probe_failed",
           mode: "draft_recap_scrape_probe",
-          scrape: { ok: full?.ok, bodyLength: full?.bodyLength, title: full?.title },
-          summary,
+          scrape: { ok: full?.ok, pickCount: full?.pickCount, title: full?.title },
         });
         return;
       }
 
-      // Pass bodyLines as a single candidate so the existing parser (orderedLinesFromDraftCandidates) processes them
-      const lineCandidate = { text: bodyLines.join("\n"), selector: "body", index: 0, html: "" };
-      const { picks: parsedPicks, parseErrors } = parseDraftRecapCandidatesToPicks(
-        [lineCandidate],
-        TEST_LEAGUE,
-        TEST_SEASON,
-      );
-      console.info("[GMWR:BG] picks parsed", { count: parsedPicks.length, errors: parseErrors });
+      // Convert DOM-structured picks directly — no text-line parsing needed
+      const { picks: parsedPicks, parseErrors } = parseDraftRecapDomResult(full, TEST_LEAGUE, TEST_SEASON);
+      console.info("[GMWR:BG] picks parsed from DOM", { count: parsedPicks.length, errors: parseErrors });
 
-      // 2010-specific minimum-count validation only applies to the baseline season
       if (TEST_SEASON === 2010) {
         const v = validateDraftRecap2010ParsedPicks(parsedPicks);
         if (!v.ok) {
-          console.warn("[GMWR] draft recap parse validation failed", v.reason, {
-            parsedCount: parsedPicks.length,
-          });
+          console.warn("[GMWR] draft recap DOM parse validation failed", v.reason, { parsedCount: parsedPicks.length });
           onceRespond({
             ok: false,
             error: v.reason || "draft_recap_parse_failed",
             mode: "draft_recap_parse_failed",
-            scrape: full,
-            summary,
             parseErrors,
             parsedCount: parsedPicks.length,
             validationReason: v.reason,
@@ -1808,8 +1904,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           ok: false,
           error: "draft_recap_parse_empty",
           mode: "draft_recap_parse_empty",
-          scrape: full,
-          summary,
           parseErrors,
           parsedCount: 0,
         });
@@ -1820,22 +1914,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const first5 = parsedPicks.slice(0, 5);
       const last5 = parsedPicks.slice(-5);
       console.info("[GMWR:BG] sending success response", { season: TEST_SEASON, picks: picksPayload.length });
-      console.info("[GMWR] draft recap HTML parse", {
-        season: TEST_SEASON,
-        parsedCount: parsedPicks.length,
-        pickPayloadCount: picksPayload.length,
-        first5,
-        last5,
-      });
 
       onceRespond({
         ok: true,
-        mode: "draft_recap_scrape_parsed",
+        mode: "draft_recap_dom_parsed",
         leagueId: TEST_LEAGUE,
         season: TEST_SEASON,
         parsedCount: parsedPicks.length,
         picks: picksPayload,
-        summary,
         first5ParsedRows: first5,
         last5ParsedRows: last5,
       });
@@ -1868,7 +1954,52 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const clerkToken = typeof message?.clerkToken === "string" ? message.clerkToken : "";
       const espnCreds = { swid, espnS2 };
       const results = [];
-      for (let season = 2010; season <= 2025; season++) {
+
+      // 2010–2017: ESPN API has no draft data for these seasons — scrape Draft Recap HTML directly.
+      const LEGACY_SCRAPE_MIN = 2010;
+      const LEGACY_SCRAPE_MAX = 2017;
+      for (let season = LEGACY_SCRAPE_MIN; season <= LEGACY_SCRAPE_MAX; season++) {
+        await sleep(800);
+        console.info("[GMWR] legacy draft scrape", { leagueId, season });
+        const scrapeResult = await scrapeDraftRecapPage(leagueId, season);
+        if (!scrapeResult?.ok || !Array.isArray(scrapeResult.picks) || scrapeResult.picks.length === 0) {
+          const row = {
+            season,
+            ok: false,
+            mode: "dom_scrape_failed",
+            error: scrapeResult?.error || "no_picks_from_dom",
+            pickCount: 0,
+          };
+          results.push(row);
+          console.warn("[GMWR] legacy draft scrape failed", row);
+          continue;
+        }
+        const { picks: parsedPicks, parseErrors } = parseDraftRecapDomResult(scrapeResult, leagueId, season);
+        if (parsedPicks.length === 0) {
+          const row = { season, ok: false, mode: "dom_parse_empty", error: "no_picks_after_parse", parseErrors };
+          results.push(row);
+          console.warn("[GMWR] legacy draft parse empty", row);
+          continue;
+        }
+        const picksPayload = picksPayloadForIngestParsedDraft(parsedPicks);
+        const ingest = await postIngestParsedDraftPicks(leagueId, season, picksPayload, warRoomCookieHeader, clerkToken);
+        const row = {
+          season,
+          ok: ingest.ok,
+          mode: "dom_scrape_ingest",
+          pickCount: picksPayload.length,
+          parseErrors,
+          error: ingest.error || null,
+          ingest: { ok: ingest.ok, status: ingest.status },
+        };
+        results.push(row);
+        console.info("[GMWR] legacy draft ingest", row);
+      }
+
+      // 2018+: ESPN mDraftDetail API has draft data — use the existing API import path.
+      const API_MIN = LEGACY_SCRAPE_MAX + 1; // 2018
+      const currentYear = new Date().getFullYear();
+      for (let season = API_MIN; season <= currentYear; season++) {
         await sleep(500);
         const imp = await postImportDraftFromEspnApi(leagueId, season, espnCreds, warRoomCookieHeader, clerkToken);
         const r = imp.result;
@@ -1888,8 +2019,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           ingest: imp.ok ? { ok: true, result: r, status: imp.status } : imp,
         };
         results.push(row);
-        console.info("[GMWR] mDraftDetail full import season", row);
+        console.info("[GMWR] mDraftDetail import season", row);
       }
+
       const allOk = results.length > 0 && results.every((x) => x.ok);
       sendResponse({ ok: allOk, results, aborted: false, leagueId });
     })().catch((err) => {
