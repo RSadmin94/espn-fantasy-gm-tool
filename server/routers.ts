@@ -1695,33 +1695,47 @@ export const appRouter = router({
       }),
 
     /**
-     * Live/current-season draft picks from combined ESPN cache — NOT canonical for Draft History.
-     * Used by Draft War Room and current-season tools. See docs/DRAFT_HISTORY_CANONICAL.md
+     * Draft History (Manus): combined ESPN cache → normalizeDraftPicks → rows for UI.
+     * Does not read draft_picks table.
      */
     draftPicks: publicProcedure
       .input(z.object({ season: z.number(), teamId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
-        const rawPicks = normalizeDraftPicks(data) as unknown[];
-        // Resolve any player IDs that weren't in the roster map
+        const rawPicks = normalizeDraftPicks(data);
         const unknownIds = rawPicks
-          .filter((p: unknown) => !(p as Record<string, unknown>).playerName)
-          .map((p: unknown) => (p as Record<string, unknown>).playerId as number)
-          .filter(Boolean);
-        let picks: unknown[] = rawPicks;
+          .filter((p) => !p.playerName && p.playerId)
+          .map((p) => p.playerId as number);
+        let enriched = rawPicks;
         if (unknownIds.length > 0) {
           const resolved = await resolveUnknownPlayerIds(unknownIds);
-          picks = rawPicks.map((p: unknown) => {
-            const pick = p as Record<string, unknown>;
-            if (!pick.playerName && resolved.has(pick.playerId as number)) {
-              const info = resolved.get(pick.playerId as number)!;
-              return { ...pick, playerName: info.name, position: pick.position === "?" ? info.position : pick.position };
+          enriched = rawPicks.map((pick) => {
+            if (!pick.playerName && pick.playerId && resolved.has(pick.playerId)) {
+              const info = resolved.get(pick.playerId)!;
+              return {
+                ...pick,
+                playerName: info.name,
+                position: pick.position === "?" ? info.position : pick.position,
+              };
             }
             return pick;
           });
         }
-        if (input.teamId !== undefined) return picks.filter((p: unknown) => (p as Record<string, unknown>).teamId === input.teamId);
+        const picks = enriched.map((p) => ({
+          overallPick: p.overallPickNumber,
+          roundId: p.roundId,
+          roundPick: p.roundPickNumber,
+          playerName: p.playerName,
+          position: p.position,
+          nflTeam: p.proTeam ?? "",
+          teamName: p.teamName,
+          teamId: p.teamId,
+          isKeeper: Boolean(p.keeper || p.reservedForKeeper),
+        }));
+        if (input.teamId !== undefined) {
+          return picks.filter((p) => p.teamId === input.teamId);
+        }
         return picks;
       }),
 
