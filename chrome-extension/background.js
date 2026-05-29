@@ -31,7 +31,11 @@ const MSG_SYNC_SELECTED_LEAGUES = "GMWR_SYNC_SELECTED_LEAGUES";
 const DNR_SAVE_COOKIE_RULE_ID = 8844201;
 const DNR_ESPN_PROFILE_RULE_ID = 8844202;
 
-const ESPN_COOKIE_BASE_URLS = ["https://fantasy.espn.com/", "https://www.espn.com/"];
+const ESPN_COOKIE_BASE_URLS = [
+  "https://fantasy.espn.com/",
+  "https://www.espn.com/",
+  "https://lm-api-reads.fantasy.espn.com/",
+];
 
 async function getEspnCookieValues() {
   let swid = "";
@@ -45,7 +49,7 @@ async function getEspnCookieValues() {
     if (!espnS2 && s2Row?.value) espnS2 = s2Row.value;
     if (swid && espnS2) break;
   }
-  return { swid, espnS2 };
+  return { swid, espnS2, hasSwid: Boolean(swid), hasEspnS2: Boolean(espnS2) };
 }
 
 function buildEspnCookieHeader(swid, espnS2) {
@@ -532,7 +536,9 @@ async function scrapeDraftRecapPage(leagueId, season) {
     console.info("[GMWR] scrapeDraftRecap: opened background tab", { tabId, season: y });
 
     await waitForTabComplete(tabId, 30000);
+    console.info("[GMWR] scrapeDraftRecap: tab loaded", { tabId, season: y });
     await sleep(6000);
+    console.info("[GMWR] scrapeDraftRecap: executing script", { tabId, season: y });
 
     const results = await chrome.scripting.executeScript({
       target: { tabId },
@@ -573,9 +579,17 @@ async function scrapeDraftRecapPage(leagueId, season) {
         };
       },
     });
-    return results?.[0]?.result || { ok: false, error: "scrape_failed" };
+    const scrapeResult = results?.[0]?.result || { ok: false, error: "scrape_failed" };
+    console.info("[GMWR] scrapeDraftRecap: script done", {
+      ok: scrapeResult.ok,
+      bodyLength: scrapeResult.bodyLength,
+      candidatesCount: Array.isArray(scrapeResult.candidates) ? scrapeResult.candidates.length : 0,
+      title: scrapeResult.title,
+    });
+    return scrapeResult;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    console.warn("[GMWR] scrapeDraftRecap: caught error", msg);
     return { ok: false, error: "scrape_failed", message: msg };
   } finally {
     if (tabId != null) {
@@ -1507,11 +1521,22 @@ async function postIngestParsedDraftPicks(leagueId, season, picks, warRoomCookie
 }
 
 /** FULL IMPORT: mDraftDetail API → delete season rows → insert normalized picks (no HTML scrape). */
-async function postImportDraftFromEspnApi(leagueId, season, warRoomCookieHeader, authToken) {
+async function postImportDraftFromEspnApi(leagueId, season, espnCreds, warRoomCookieHeader, authToken) {
+  const jsonInput = {
+    leagueId: String(leagueId).trim(),
+    season,
+  };
+  if (espnCreds?.swid) jsonInput.swid = espnCreds.swid;
+  if (espnCreds?.espnS2) jsonInput.espnS2 = espnCreds.espnS2;
+  console.info("[GMWR] importDraftFromEspnApi creds", {
+    season,
+    hasSwid: Boolean(espnCreds?.swid),
+    hasEspnS2: Boolean(espnCreds?.espnS2),
+  });
   const post = await postTrpcHistJson(
     TRPC_IMPORT_DRAFT_API_URL,
     warRoomCookieHeader,
-    { leagueId: String(leagueId).trim(), season },
+    jsonInput,
     authToken,
   );
   const result = post.ok ? trpcResultJson(post.parsed) : null;
@@ -1738,11 +1763,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     (async () => {
       const TEST_LEAGUE = "457622";
       const TEST_SEASON = Number(message?.season) || 2010;
+      console.info("[GMWR:BG] MSG_HIST_TEST received", { season: TEST_SEASON });
       const { swid, espnS2 } = await getEspnCookieValues();
       if (!swid || !espnS2) {
+        console.warn("[GMWR:BG] cookies missing — ESPN login expired");
         onceRespond({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
         return;
       }
+      console.info("[GMWR:BG] cookies present, calling scrapeDraftRecapPage", { season: TEST_SEASON });
 
       const full = await scrapeDraftRecapPage(TEST_LEAGUE, TEST_SEASON);
       console.info("[GMWR] draft recap scrape full result", { season: TEST_SEASON }, full);
@@ -1770,6 +1798,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         TEST_LEAGUE,
         TEST_SEASON,
       );
+      console.info("[GMWR:BG] picks parsed", { count: parsedPicks.length, errors: parseErrors });
 
       // 2010-specific minimum-count validation only applies to the baseline season
       if (TEST_SEASON === 2010) {
@@ -1808,6 +1837,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const picksPayload = picksPayloadForIngestParsedDraft(parsedPicks);
       const first5 = parsedPicks.slice(0, 5);
       const last5 = parsedPicks.slice(-5);
+      console.info("[GMWR:BG] sending success response", { season: TEST_SEASON, picks: picksPayload.length });
       console.info("[GMWR] draft recap HTML parse", {
         season: TEST_SEASON,
         parsedCount: parsedPicks.length,
@@ -1835,9 +1865,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (t === MSG_HIST_FULL) {
     (async () => {
-      const { swid, espnS2 } = await getEspnCookieValues();
+      const { swid, espnS2, hasSwid, hasEspnS2 } = await getEspnCookieValues();
       if (!swid || !espnS2) {
-        sendResponse({ ok: false, error: "ESPN login expired", results: [], details: "missing_cookies" });
+        sendResponse({
+          ok: false,
+          error: "ESPN login expired",
+          results: [],
+          details: "missing_cookies",
+          hasSwid,
+          hasEspnS2,
+        });
         return;
       }
       const warRoomCookieHeader = await getWarRoomCookieHeaderString();
@@ -1847,15 +1884,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       const leagueId = String(message?.leagueId || "457622").trim();
       const clerkToken = typeof message?.clerkToken === "string" ? message.clerkToken : "";
+      const espnCreds = { swid, espnS2 };
       const results = [];
       for (let season = 2010; season <= 2025; season++) {
         await sleep(500);
-        const imp = await postImportDraftFromEspnApi(leagueId, season, warRoomCookieHeader, clerkToken);
+        const imp = await postImportDraftFromEspnApi(leagueId, season, espnCreds, warRoomCookieHeader, clerkToken);
         const r = imp.result;
         const row = {
           season,
           ok: Boolean(imp.ok && r && (r.success === true || r.status === "imported")),
           mode: "espn_mDraftDetail_import",
+          hasSwid,
+          hasEspnS2,
           sourceUsed: r?.sourceUsed ?? "espn_mDraftDetail",
           deletedRows: r?.deletedRows ?? r?.deleted ?? 0,
           insertedRows: r?.insertedRows ?? r?.inserted ?? 0,

@@ -199,22 +199,36 @@ export function DraftHistory() {
 
   const handleScrapeFromEspn = async () => {
     setScrapeEspnErr(null);
-    setScrapeEspnNote(null);
+    setScrapeEspnNote("Posting to extension…");
     setScrapeEspnBusy(true);
     try {
       const clerkToken = (await getToken()) ?? "";
       const id = `legacy-draft-${season}-${Date.now()}`;
+      console.log("[GMWR:DH] posting GMWR_HIST_TEST", { id, season, hasToken: clerkToken.length > 0 });
       const extResult = await new Promise<Record<string, unknown>>((resolve) => {
+        // Spy: log every GMWR_* message that arrives — helps identify which hop fails
+        function spyMsg(ev: MessageEvent) {
+          if (ev.source !== window) return;
+          const d = ev.data as Record<string, unknown> | null;
+          if (!d || typeof d.type !== "string" || !String(d.type).startsWith("GMWR_")) return;
+          console.log("[GMWR:DH] window msg received", String(d.type), { id: d.id, ok: d.ok, error: d.error, mode: d.mode });
+        }
+        window.addEventListener("message", spyMsg);
+
         const timeout = window.setTimeout(() => {
           window.removeEventListener("message", onMsg);
+          window.removeEventListener("message", spyMsg);
+          console.warn("[GMWR:DH] 120s timeout — no GMWR_HIST_TEST_REPLY for id", id);
           resolve({ ok: false, error: "Extension request timed out" });
         }, 120_000);
         function onMsg(ev: MessageEvent) {
           if (ev.source !== window) return;
           const d = ev.data as Record<string, unknown> | null;
           if (!d || d.type !== "GMWR_HIST_TEST_REPLY" || d.id !== id) return;
+          console.log("[GMWR:DH] GMWR_HIST_TEST_REPLY matched", { id, ok: d.ok, error: d.error, picks: Array.isArray(d.picks) ? d.picks.length : "n/a" });
           window.clearTimeout(timeout);
           window.removeEventListener("message", onMsg);
+          window.removeEventListener("message", spyMsg);
           resolve(d);
         }
         window.addEventListener("message", onMsg);
@@ -222,6 +236,7 @@ export function DraftHistory() {
           { type: "GMWR_HIST_TEST", id, leagueId: "457622", season, clerkToken },
           "*",
         );
+        console.log("[GMWR:DH] GMWR_HIST_TEST posted — awaiting GMWR_HIST_TEST_REPLY");
       });
 
       if (!extResult.ok) {
