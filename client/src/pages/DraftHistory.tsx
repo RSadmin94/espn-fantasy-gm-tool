@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import { useAuth } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
+import { setTrpcToken } from "@/lib/trpcAuth";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -10,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 
 type DraftPickRow = {
   overallPick: number;
@@ -124,6 +126,7 @@ function sortDraftPicks(rows: DraftPickRow[]): DraftPickRow[] {
 }
 
 export function DraftHistory() {
+  const { getToken } = useAuth();
   const allSeasonsQ = trpc.espn.allSeasons.useQuery();
   const cachedQ = trpc.espn.cachedSeasons.useQuery();
   const allSeasons: number[] = allSeasonsQ.data ?? [];
@@ -174,6 +177,9 @@ export function DraftHistory() {
   const [pasteText, setPasteText] = useState("");
   const [parsedPreview, setParsedPreview] = useState<ParsedPickInput[] | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [scrapeEspnBusy, setScrapeEspnBusy] = useState(false);
+  const [scrapeEspnNote, setScrapeEspnNote] = useState<string | null>(null);
+  const [scrapeEspnErr, setScrapeEspnErr] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
   const ingestLegacyMutation = trpc.espn.ingestLegacyDraftRecap.useMutation({
@@ -189,6 +195,61 @@ export function DraftHistory() {
     const { rows, error } = parseDraftRecapText(pasteText);
     setParseError(rows.length === 0 && !error ? "No valid rows found." : error);
     setParsedPreview(rows.length > 0 ? rows : null);
+  };
+
+  const handleScrapeFromEspn = async () => {
+    setScrapeEspnErr(null);
+    setScrapeEspnNote(null);
+    setScrapeEspnBusy(true);
+    try {
+      const id = `legacy-draft-${season}-${Date.now()}`;
+      const extResult = await new Promise<Record<string, unknown>>((resolve) => {
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener("message", onMsg);
+          resolve({ ok: false, error: "Extension request timed out" });
+        }, 120_000);
+        function onMsg(ev: MessageEvent) {
+          if (ev.source !== window) return;
+          const d = ev.data as Record<string, unknown> | null;
+          if (!d || d.type !== "GMWR_HIST_TEST_REPLY" || d.id !== id) return;
+          window.clearTimeout(timeout);
+          window.removeEventListener("message", onMsg);
+          resolve(d);
+        }
+        window.addEventListener("message", onMsg);
+        window.postMessage(
+          { type: "GMWR_HIST_TEST", id, leagueId: "457622", season },
+          "*",
+        );
+      });
+
+      if (!extResult.ok) {
+        setScrapeEspnErr(extResult.error ? String(extResult.error) : "Extension scrape failed.");
+        return;
+      }
+
+      const picks = Array.isArray(extResult.picks) ? extResult.picks : [];
+      if (picks.length === 0) {
+        setScrapeEspnErr("Extension returned no picks for this season.");
+        return;
+      }
+
+      const token = await getToken();
+      setTrpcToken(token);
+      try {
+        const result = await ingestLegacyMutation.mutateAsync({
+          season,
+          picks: picks as ParsedPickInput[],
+        });
+        setScrapeEspnNote(`Scraped ${result.upserted} picks from ESPN and imported.`);
+      } finally {
+        setTrpcToken(null);
+      }
+    } catch (e) {
+      setScrapeEspnErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setScrapeEspnBusy(false);
+    }
   };
 
   const showImportCard =
@@ -275,6 +336,40 @@ export function DraftHistory() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {/* Scrape from ESPN via extension */}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-2"
+                disabled={scrapeEspnBusy || ingestLegacyMutation.isPending}
+                onClick={() => void handleScrapeFromEspn()}
+              >
+                {scrapeEspnBusy ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3 w-3" />
+                )}
+                {scrapeEspnBusy ? "Scraping…" : "Scrape from ESPN"}
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Requires GM War Room extension + ESPN login.
+              </span>
+            </div>
+            {scrapeEspnNote && (
+              <p className="text-xs text-emerald-400">{scrapeEspnNote}</p>
+            )}
+            {scrapeEspnErr && (
+              <div className="flex items-start gap-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                {scrapeEspnErr}
+              </div>
+            )}
+
+            <div className="border-t border-border/40 pt-2">
+              <p className="mb-2 text-xs text-muted-foreground">Or paste manually:</p>
+            </div>
+
             <textarea
               className="w-full resize-y rounded border border-border bg-muted/30 p-2 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
               rows={8}
