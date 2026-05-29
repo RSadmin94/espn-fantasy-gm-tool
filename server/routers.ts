@@ -2112,14 +2112,78 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return { pool: [], draftYear, leagueId: lid, error: "db_unavailable" };
 
-        // ── 1. Full 2025 roster — the universe of keeper candidates ──────────
-        const rosterRows = await db
-          .select()
-          .from(gmSeasonRosters)
-          .where(andDrizzle(eqDrizzle(gmSeasonRosters.leagueId, lid), eqDrizzle(gmSeasonRosters.season, prevSeason)));
+        // ── 1. Roster — dual path ─────────────────────────────────────────────
+        // 2018+: ESPN API cache (fast, no scrape needed)
+        // <2018:  season_rosters table (DOM-scraped)
+        type RosterPlayer = {
+          ownerName: string; teamName: string; playerName: string;
+          nflTeam: string; position: string; slot: string; acquisitionType: string;
+        };
+        let rosterPlayers: RosterPlayer[] = [];
 
-        if (rosterRows.length === 0) {
-          return { pool: [], draftYear, leagueId: lid, error: "no_roster_data", hint: `Run Roster Import for ${prevSeason} first.` };
+        const normAcqType = (raw: string): string => {
+          const a = String(raw ?? "").toUpperCase();
+          if (a === "DRAFT")    return "Draft";
+          if (a === "TRADE")    return "Trade";
+          if (a.includes("FREE") || a.includes("WAIVER")) return "Free Agency";
+          return String(raw ?? "");
+        };
+
+        if (prevSeason >= 2018) {
+          const seasonData = await getSeasonData(prevSeason, lid, userId || undefined);
+          if (!seasonData) {
+            return {
+              pool: [], draftYear, leagueId: lid,
+              error: "no_espn_cache",
+              hint: `Run Sync for ${prevSeason} from the dashboard first.`,
+            };
+          }
+          const normalized = normalizeRosters(seasonData) as Record<string, unknown>[];
+
+          // teamId → ownerName from gmTeams
+          const teamLookupRows = await db
+            .select({ teamId: gmTeams.teamId, name: gmTeams.name, ownerName: gmTeams.ownerName })
+            .from(gmTeams)
+            .where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), eqDrizzle(gmTeams.season, prevSeason)));
+          const ownerByTeamId = new Map<number, string>();
+          for (const t of teamLookupRows) ownerByTeamId.set(t.teamId, t.ownerName ?? "");
+
+          for (const r of normalized) {
+            const playerName = String(r.playerName ?? "").trim();
+            if (!playerName) continue;
+            const teamId = Number(r.teamId);
+            rosterPlayers.push({
+              ownerName:       ownerByTeamId.get(teamId) || String(r.teamName ?? ""),
+              teamName:        String(r.teamName ?? ""),
+              playerName,
+              nflTeam:         String(r.proTeam ?? ""),
+              position:        String(r.position ?? ""),
+              slot:            String(r.lineupSlot ?? ""),
+              acquisitionType: normAcqType(String(r.acquisitionType ?? "")),
+            });
+          }
+        } else {
+          // Pre-2018: DOM-scraped season_rosters
+          const dbRows = await db
+            .select()
+            .from(gmSeasonRosters)
+            .where(andDrizzle(eqDrizzle(gmSeasonRosters.leagueId, lid), eqDrizzle(gmSeasonRosters.season, prevSeason)));
+          rosterPlayers = dbRows.map(r => ({
+            ownerName:       r.ownerName || r.teamName,
+            teamName:        r.teamName,
+            playerName:      r.playerName,
+            nflTeam:         r.nflTeam,
+            position:        r.position,
+            slot:            r.slot,
+            acquisitionType: r.acquisitionType,
+          }));
+        }
+
+        if (rosterPlayers.length === 0) {
+          const hint = prevSeason >= 2018
+            ? `Run Sync for ${prevSeason} from the dashboard first.`
+            : `Run Roster Import (2010–2017) from the extension popup first.`;
+          return { pool: [], draftYear, leagueId: lid, error: "no_roster_data", hint };
         }
 
         // ── 2. Keepers from prevSeason (2025 draft) ──────────────────────────
@@ -2173,7 +2237,7 @@ export const appRouter = router({
         // ── 5. Build pool ─────────────────────────────────────────────────────
         const pool: KeeperPoolEntry[] = [];
 
-        for (const player of rosterRows) {
+        for (const player of rosterPlayers) {
           const key = normKeeperName(player.playerName);
           const kept2025 = kept2025Map.get(key);
           const wasKept2024 = kept2024Names.has(key);
