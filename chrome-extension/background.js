@@ -543,39 +543,17 @@ async function scrapeDraftRecapPage(leagueId, season) {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       world: "MAIN",
+      // Same approach as scrapeLeagueHistoryPage: extract body text as lines (no per-element HTML)
       func: () => {
         const bodyText = document.body.innerText || "";
-        const candidates = [];
-        const selectors = [
-          "table tr",
-          "[role='row']",
-          ".Table__TR",
-          ".Table__TD",
-          ".pick-list li",
-          ".draft-recap-pick",
-          "[class*='draft']",
-          "[class*='pick']",
-        ];
-        for (const selector of selectors) {
-          document.querySelectorAll(selector).forEach((el, i) => {
-            const text = (el.innerText || "").trim();
-            if (text) {
-              candidates.push({
-                selector,
-                index: i,
-                text,
-                html: el.innerHTML.slice(0, 1000),
-              });
-            }
-          });
-        }
+        const bodyLines = bodyText.split("\n").map((s) => s.trim()).filter((s) => s.length > 0);
         return {
           ok: true,
           url: location.href,
           title: document.title,
           bodyLength: bodyText.length,
           bodyPreview: bodyText.slice(0, 2000),
-          candidates: candidates.slice(0, 1200),
+          bodyLines: bodyLines.slice(0, 5000),
         };
       },
     });
@@ -583,7 +561,7 @@ async function scrapeDraftRecapPage(leagueId, season) {
     console.info("[GMWR] scrapeDraftRecap: script done", {
       ok: scrapeResult.ok,
       bodyLength: scrapeResult.bodyLength,
-      candidatesCount: Array.isArray(scrapeResult.candidates) ? scrapeResult.candidates.length : 0,
+      bodyLinesCount: Array.isArray(scrapeResult.bodyLines) ? scrapeResult.bodyLines.length : 0,
       title: scrapeResult.title,
     });
     return scrapeResult;
@@ -1773,13 +1751,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       console.info("[GMWR:BG] cookies present, calling scrapeDraftRecapPage", { season: TEST_SEASON });
 
       const full = await scrapeDraftRecapPage(TEST_LEAGUE, TEST_SEASON);
-      console.info("[GMWR] draft recap scrape full result", { season: TEST_SEASON }, full);
-      const candidates = Array.isArray(full?.candidates) ? full.candidates : [];
-      const first20CandidateTexts = candidates.slice(0, 20).map((c) => (c && c.text ? String(c.text) : ""));
+      console.info("[GMWR] draft recap scrape full result", { season: TEST_SEASON, ok: full?.ok, bodyLength: full?.bodyLength, bodyLinesCount: Array.isArray(full?.bodyLines) ? full.bodyLines.length : 0 });
+      const bodyLines = Array.isArray(full?.bodyLines) ? full.bodyLines : [];
       const summary = {
         bodyLength: typeof full?.bodyLength === "number" ? full.bodyLength : 0,
-        candidatesCount: candidates.length,
-        first20CandidateTexts,
+        bodyLinesCount: bodyLines.length,
+        first20Lines: bodyLines.slice(0, 20),
       };
       const probeOk = Boolean(full && full.ok !== false && full.error == null);
       if (!probeOk) {
@@ -1787,14 +1764,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           ok: false,
           error: full?.message || full?.error || "scrape_probe_failed",
           mode: "draft_recap_scrape_probe",
-          scrape: full,
+          scrape: { ok: full?.ok, bodyLength: full?.bodyLength, title: full?.title },
           summary,
         });
         return;
       }
 
+      // Pass bodyLines as a single candidate so the existing parser (orderedLinesFromDraftCandidates) processes them
+      const lineCandidate = { text: bodyLines.join("\n"), selector: "body", index: 0, html: "" };
       const { picks: parsedPicks, parseErrors } = parseDraftRecapCandidatesToPicks(
-        candidates,
+        [lineCandidate],
         TEST_LEAGUE,
         TEST_SEASON,
       );
