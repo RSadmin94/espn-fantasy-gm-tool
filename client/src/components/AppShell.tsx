@@ -93,6 +93,7 @@ const NAV_GROUPS: NavGroup[] = [
     id: "data",
     title: "Data",
     items: [
+      { kind: "link", label: "League Settings", href: "/league-settings", icon: Settings },
       { kind: "link", label: "Sync Data", href: "/sync", icon: RefreshCw },
       { kind: "link", label: "Connect ESPN", href: "/connect", icon: Plug },
     ],

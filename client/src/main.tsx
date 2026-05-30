@@ -24,6 +24,7 @@ import { LeagueHistory } from "./pages/LeagueHistory";
 import { DraftHistory } from "./pages/DraftHistory";
 import { KeeperAdvisor } from "./pages/KeeperAdvisor";
 import { Championships } from "./pages/Championships";
+import { LeagueSettings } from "./pages/LeagueSettings";
 import { RingOfHonor } from "./pages/RingOfHonor";
 import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
@@ -118,6 +119,7 @@ const router = createBrowserRouter([
           { path: "/dashboard", element: <Dashboard /> },
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/sync", element: <SyncData /> },
+          { path: "/league-settings", element: <LeagueSettings /> },
           { path: "/transactions", element: <Transactions /> },
           { path: "/standings", element: <Standings /> },
           { path: "/matchups", element: <Matchups /> },
