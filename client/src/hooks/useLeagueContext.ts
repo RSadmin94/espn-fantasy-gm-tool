@@ -47,13 +47,19 @@ function buildOwnerMatchClues(
 }
 
 function resolveMyTeam(
-  teams: Array<{ teamId: number; teamName: string; owners: string }>,
+  teams: Array<{ teamId: number; teamName: string; owners: string | unknown }>,
   clues: string[]
 ): { teamId: number; teamName: string; ownerName: string } | null {
   const clean = clues.map((c) => c.trim().toLowerCase()).filter((c) => c.length >= 2);
   if (!clean.length) return null;
   for (const t of teams) {
-    const segments = t.owners.split(";").map((s) => s.trim()).filter(Boolean);
+    const raw =
+      typeof t.owners === "string"
+        ? t.owners
+        : Array.isArray(t.owners)
+          ? (t.owners as unknown[]).map(String).join(";")
+          : "";
+    const segments = raw.split(";").map((s) => s.trim()).filter(Boolean);
     for (const seg of segments) {
       const low = seg.toLowerCase();
       for (const clue of clean) {
@@ -114,7 +120,7 @@ export function useLeagueContext(): LeagueContext {
   const teams = (teamsQ.data ?? []) as Array<{
     teamId: number;
     teamName: string;
-    owners: string;
+    owners: string | unknown;
   }>;
 
   const draftOrder = draftQ.data as

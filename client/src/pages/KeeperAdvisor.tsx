@@ -104,6 +104,36 @@ function costSourceTooltip(src: KeeperEntry["costSource"]) {
   return "Not in stored draft history: fixed Round 7";
 }
 
+function tierConfidenceLine(round: number, isLast: boolean): string {
+  let tier = "C";
+  if (round <= 3) tier = "S";
+  else if (round <= 6) tier = "A";
+  else if (round <= 10) tier = "B";
+  const conf = isLast ? "High — last keeper year" : round <= 5 ? "High" : round <= 10 ? "Medium" : "Low";
+  return `Tier ${tier} · ${conf}`;
+}
+
+function rankKeeperCandidates(players: KeeperEntry[]): KeeperEntry[] {
+  return [...players].sort((a, b) => {
+    if (a.isLastKeeperYear !== b.isLastKeeperYear) return a.isLastKeeperYear ? -1 : 1;
+    if (a.keeperRoundCost !== b.keeperRoundCost) return a.keeperRoundCost - b.keeperRoundCost;
+    return a.playerName.localeCompare(b.playerName);
+  });
+}
+
+function recommendedKeeperReason(pick: KeeperEntry): string {
+  const costSrc =
+    pick.costSource === "espn_stored"
+      ? "ESPN-stored keeper round"
+      : pick.costSource === "draft_history_round"
+        ? "cost from last draft round"
+        : "FA keep (default Rd 7)";
+  if (pick.isLastKeeperYear) {
+    return `Last year of keeper eligibility — keep now or return to the pool. Rd ${pick.keeperRoundCost} (${costSrc}).`;
+  }
+  return `Lowest effective cost among your eligible players (Rd ${pick.keeperRoundCost}, ${costSrc}). Year ${pick.keepYear + 1} of 2 on the keeper clock.`;
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function KeeperAdvisor() {
@@ -169,10 +199,10 @@ export function KeeperAdvisor() {
     return (
       <div className="mx-auto max-w-2xl px-6 py-16 text-center">
         <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-amber-400" />
-        <p className="text-lg font-semibold text-foreground">Roster data not ready</p>
+        <p className="text-lg font-semibold text-foreground">No 2025 draft data</p>
         <p className="mt-1 text-sm text-muted-foreground">{hintMsg ?? errorMsg}</p>
         <p className="mt-4 text-xs text-muted-foreground">
-          Open the extension popup → Historical Roster Capture → ROSTER IMPORT (2018–2025)
+          Open the extension popup → Import Historical League Data → <strong>FULL IMPORT</strong>
         </p>
       </div>
     );
@@ -269,7 +299,12 @@ export function KeeperAdvisor() {
           No players match the current filters.
         </div>
       ) : (
-        Array.from(byOwner.entries()).map(([owner, players]) => (
+        Array.from(byOwner.entries()).map(([owner, players]) => {
+          const ranked = rankKeeperCandidates(players);
+          const top = ranked[0];
+          const alternatives = ranked.slice(1);
+
+          return (
           <div key={owner} className="overflow-hidden rounded-lg border border-border">
             {/* Owner header */}
             <div className="flex items-baseline justify-between border-b border-border bg-muted/30 px-4 py-2.5">
@@ -284,10 +319,26 @@ export function KeeperAdvisor() {
               </span>
             </div>
 
+            {top && (
+              <div className="border-b border-border bg-emerald-950/15 px-4 py-3 space-y-1.5">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-400">Recommended keeper</div>
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="text-lg font-semibold text-foreground">{top.playerName}</span>
+                  {posChip(top.position)}
+                  <span className="text-sm text-muted-foreground">{top.nflTeam || "—"}</span>
+                  {roundBadge(top.keeperRoundCost, top.isLastKeeperYear)}
+                </div>
+                <p className="text-sm text-muted-foreground leading-snug">{recommendedKeeperReason(top)}</p>
+                <p className="text-xs text-emerald-400/90">{tierConfidenceLine(top.keeperRoundCost, top.isLastKeeperYear)}</p>
+              </div>
+            )}
+
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[200px]">Player</TableHead>
+                  <TableHead className="w-[200px]">
+                    {alternatives.length > 0 ? "Other eligible keepers" : "Alternatives"}
+                  </TableHead>
                   <TableHead className="w-16">Pos</TableHead>
                   <TableHead className="w-16">NFL</TableHead>
                   <TableHead className="w-24">Cost</TableHead>
@@ -298,45 +349,53 @@ export function KeeperAdvisor() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {players.map((p, idx) => (
-                  <TableRow
-                    key={`${p.playerName}-${idx}`}
-                    className={cn(
-                      p.isLastKeeperYear && "bg-amber-950/20 hover:bg-amber-950/30",
-                    )}
-                  >
-                    <TableCell className="font-medium text-foreground">
-                      {p.playerName}
-                    </TableCell>
-                    <TableCell>{posChip(p.position)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{p.nflTeam || "—"}</TableCell>
-                    <TableCell>{roundBadge(p.keeperRoundCost, p.isLastKeeperYear)}</TableCell>
-                    <TableCell>
-                      <span className={cn(
-                        "text-xs font-medium",
-                        p.keepYear === 1 ? "text-amber-400" : "text-muted-foreground",
-                      )}>
-                        {p.keepYear === 1 ? "Year 2 of 2" : "Year 1 of 2"}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-xs text-muted-foreground">
-                        {p.acquisitionType || "—"}
-                      </span>
-                    </TableCell>
-                    <TableCell>{statusBadge(p)}</TableCell>
-                    <TableCell className="text-right">
-                      {/* Cost source tooltip */}
-                      <span title={costSourceTooltip(p.costSource)}>
-                        <Info className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-muted-foreground cursor-help" />
-                      </span>
+                {alternatives.length > 0 ? (
+                  alternatives.map((p, idx) => (
+                    <TableRow
+                      key={`${p.playerName}-${idx}`}
+                      className={cn(
+                        p.isLastKeeperYear && "bg-amber-950/20 hover:bg-amber-950/30",
+                      )}
+                    >
+                      <TableCell className="font-medium text-foreground">
+                        {p.playerName}
+                      </TableCell>
+                      <TableCell>{posChip(p.position)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{p.nflTeam || "—"}</TableCell>
+                      <TableCell>{roundBadge(p.keeperRoundCost, p.isLastKeeperYear)}</TableCell>
+                      <TableCell>
+                        <span className={cn(
+                          "text-xs font-medium",
+                          p.keepYear === 1 ? "text-amber-400" : "text-muted-foreground",
+                        )}>
+                          {p.keepYear === 1 ? "Year 2 of 2" : "Year 1 of 2"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs text-muted-foreground">
+                          {p.acquisitionType || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>{statusBadge(p)}</TableCell>
+                      <TableCell className="text-right">
+                        <span title={costSourceTooltip(p.costSource)}>
+                          <Info className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-muted-foreground cursor-help" />
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-6 text-center text-xs text-muted-foreground">
+                      No other eligible keepers for this team under the current filters.
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </div>
-        ))
+          );
+        })
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
-import type { StandingsSeasonEntry } from "../utils/mergeMedalsIntoOwners";
+import type { StandingsSeasonEntry } from "../utils/seasonTabChampions";
 
 type SeasonRow = { owner: string } & StandingsSeasonEntry;
 

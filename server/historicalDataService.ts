@@ -13,7 +13,6 @@ import {
   normalizeTeams,
   normalizeTransactions,
 } from "./espnService";
-import { draftPickSourceRank } from "./draftPickSourcePriority";
 export type HistoricalDataSource =
   | "verified_manual"
   | "manual_h2h_matrix"
@@ -240,6 +239,12 @@ export async function getSeasonMatchups(
   return emptyResult(yr, lid, "no_matchups_in_normalized_db");
 }
 
+/**
+ * @deprecated For Draft History **display** — use `getDraftRecapCanonicalBoard` / `espn.draftRecapCanonical` only.
+ * Legacy read: normalized `gm_draft_picks` (+ joins) → mDraftDetail cache → combined cache.
+ * Still used by historical coverage reports and analytics; not canonical for recap UI.
+ * See docs/DRAFT_HISTORY_CANONICAL.md
+ */
 export async function getSeasonDraftPicks(
   season: number,
   leagueId?: string,
@@ -278,21 +283,10 @@ export async function getSeasonDraftPicks(
       // desc(id) so that for duplicate overallPick rows, the latest insert wins after dedup
       .orderBy(gmDraftPicks.overallPick, desc(gmDraftPicks.id));
 
-    // Deduplicate by overallPick — draft_recap_html > espn_mDraftDetail_api > other
+    // Deduplicate by overallPick — highest id wins (rows ordered desc id)
     const byOverall = new Map<number, (typeof rows)[number]>();
     for (const row of rows) {
-      const existing = byOverall.get(row.overallPick);
-      if (!existing) {
-        byOverall.set(row.overallPick, row);
-        continue;
-      }
-      const rowRank = draftPickSourceRank(yr, row.rawPick);
-      const existingRank = draftPickSourceRank(yr, existing.rawPick);
-      if (rowRank > existingRank) {
-        byOverall.set(row.overallPick, row);
-      } else if (rowRank === existingRank && row.id > existing.id) {
-        byOverall.set(row.overallPick, row);
-      }
+      if (!byOverall.has(row.overallPick)) byOverall.set(row.overallPick, row);
     }
     const dedupedRows = [...byOverall.values()].sort((a, b) => a.overallPick - b.overallPick);
 

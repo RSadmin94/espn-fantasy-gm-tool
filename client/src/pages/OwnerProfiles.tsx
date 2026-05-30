@@ -2,7 +2,7 @@ import { useState, useMemo, Fragment, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   Loader2, AlertTriangle, ChevronDown, ChevronRight,
-  Trophy, Users, TrendingUp, Zap, FileText, Skull, Swords, ListOrdered, Award, GitCompare, AlertCircle,
+  Trophy, Users, TrendingUp, Zap, FileText, Skull, Swords, GitCompare, AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
@@ -153,24 +153,37 @@ function cmpRankLowerWins(a: number, b: number): "left" | "right" | "tie" {
   return "tie";
 }
 
+/** Stable id for ownerList rows: canonical `ownerKey` when present, else display name. */
+function listRowLookupKey(o: { ownerKey?: string; ownerName?: string } | null | undefined): string {
+  const k = typeof o?.ownerKey === "string" ? o.ownerKey.trim() : "";
+  if (k) return k;
+  return String(o?.ownerName ?? "").trim();
+}
+
 function ProfilePanel({
   profileLookupKey,
   headerDisplayName,
   powerRankings,
   ownerAwards,
+  availableOwnerKeysCount,
 }: {
-  /** Canonical `owners.ownerList.ownerKey` — passed as `owners.ownerProfile` input `ownerName`. */
+  /** Canonical `owners.ownerList` row id — sent as `ownerKey` on `owners.ownerProfile`. */
   profileLookupKey: string;
   headerDisplayName: string;
   powerRankings: any[];
   ownerAwards: any[];
+  /** Distinct ownerKey count from ownerList (active + graveyard). */
+  availableOwnerKeysCount: number;
 }) {
   const trpcAny = trpc as any;
   const [compareWith, setCompareWith] = useState("");
-  const q = trpcAny.owners.ownerProfile.useQuery(
-    { ownerName: profileLookupKey, ...(compareWith ? { compareWith } : {}) },
-    { enabled: !!profileLookupKey },
-  );
+  const profileArgs = useMemo(() => {
+    const base = compareWith ? { compareWith } : {};
+    const k = profileLookupKey.trim();
+    return { ownerKey: k, ...base };
+  }, [profileLookupKey, compareWith]);
+
+  const q = trpcAny.owners.ownerProfile.useQuery(profileArgs, { enabled: !!profileLookupKey.trim() });
   const p = q.data as any;
   const [intelExpanded, setIntelExpanded] = useState<string | null>(null);
 
@@ -179,16 +192,37 @@ function ProfilePanel({
     setCompareWith("");
   }, [profileLookupKey]);
 
-  if (q.isLoading) return (
+  if (q.isPending || q.isLoading) return (
     <div className="flex items-center justify-center py-20 text-muted-foreground">
       <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading profile…
     </div>
   );
-  if (!p) return (
-    <div className="flex items-center justify-center py-20 text-muted-foreground">
-      <AlertTriangle className="mr-2 h-5 w-5" /> Profile not found.
-    </div>
-  );
+  if (q.isError) {
+    return (
+      <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-6 text-sm text-destructive">
+        <AlertTriangle className="mb-2 inline h-5 w-5" /> Could not load profile: {String((q.error as Error)?.message ?? q.error)}
+        <div className="mt-3 font-mono text-xs text-foreground/80 space-y-1">
+          <div>ownerKey (query input): {profileLookupKey}</div>
+          <div>ownerList ownerKey count: {availableOwnerKeysCount}</div>
+        </div>
+      </div>
+    );
+  }
+  if (!p) {
+    return (
+      <div className="rounded-lg border border-amber-500/40 bg-amber-950/20 px-4 py-6 text-sm text-amber-100/90">
+        <AlertTriangle className="mb-2 inline h-5 w-5 text-amber-400" /> Profile not found.
+        <div className="mt-3 font-mono text-[11px] text-foreground/85 space-y-1">
+          <div>
+            <span className="text-muted-foreground">selectedOwnerKey:</span> {profileLookupKey}
+          </div>
+          <div>
+            <span className="text-muted-foreground">available ownerKeys (from list):</span> {availableOwnerKeysCount}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Destructure using the ACTUAL server field names
   const snap     = p.snapshot     ?? {};
@@ -232,12 +266,16 @@ function ProfilePanel({
     <div className="space-y-4">
       <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-[11px] font-mono text-muted-foreground space-y-0.5">
         <div>
-          <span className="text-muted-foreground/80">selected ownerKey (list):</span>{" "}
+          <span className="text-muted-foreground/80">selectedOwnerKey:</span>{" "}
           <span className="text-foreground">{profileLookupKey}</span>
         </div>
         <div>
-          <span className="text-muted-foreground/80">profile lookup key (query input):</span>{" "}
-          <span className="text-foreground">{profileLookupKey}</span>
+          <span className="text-muted-foreground/80">returned ownerKey:</span>{" "}
+          <span className="text-foreground">{str((p.dataSourceDiagnostics as any)?.ownerKey ?? "—")}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground/80">serviceVersion:</span>{" "}
+          <span className="text-foreground">{str((p.dataSourceDiagnostics as any)?.serviceVersion ?? "—")}</span>
         </div>
       </div>
       {/* Header */}
@@ -295,11 +333,11 @@ function ProfilePanel({
               <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-500/90 py-2 truncate" title={compareWith}>{compareWith}</div>
 
               {(() => {
-                const prL = powerRankings.find((r: any) => r.ownerKey === profileLookupKey);
+                const prL = powerRankings.find((r: any) => listRowLookupKey(r) === profileLookupKey);
                 const prR = powerRankings.find((r: any) => r.ownerName === compareWith);
                 const rankL = prL ? num(prL.rank) : 999;
                 const rankR = prR ? num(prR.rank) : 999;
-                const awardsL = ownerAwards.filter((a: any) => a.ownerKey === profileLookupKey).length;
+                const awardsL = ownerAwards.filter((a: any) => listRowLookupKey(a) === profileLookupKey).length;
                 const awardsR = ownerAwards.filter((a: any) => a.ownerName === compareWith).length;
                 const topL = topDraftedPosCount(draft as Record<string, unknown>);
                 const topR = topDraftedPosCount(draftP as Record<string, unknown>);
@@ -742,44 +780,6 @@ function ProfilePanel({
         <p className="text-sm text-foreground leading-relaxed">{str(p.scoutingSummary)}</p>
       </Section>
 
-      {/* Temporary: confirms live client is hitting the ownerProfile payload with matchup+medals pipeline */}
-      {p.dataSourceDiagnostics && (
-        <div className="rounded-md border border-amber-600/40 bg-amber-950/20 px-3 py-2 text-xs font-mono text-amber-100/90 space-y-1">
-          <div className="font-semibold text-amber-200/95">Canonical owner / record diagnostics</div>
-          <div>ownerKey: {str((p.dataSourceDiagnostics as any).ownerKey)}</div>
-          <div>displayName: {str((p.dataSourceDiagnostics as any).displayName)}</div>
-          <div>identityResolvedBy: {str((p.dataSourceDiagnostics as any).identityResolvedBy ?? "—")}</div>
-          <div>mergedOwnerAliases: {str((p.dataSourceDiagnostics as any).mergedOwnerAliases?.join(" · "))}</div>
-          <div>mergedTeamNames: {str((p.dataSourceDiagnostics as any).mergedTeamNames?.join(" · "))}</div>
-          <div>recordSource: {str((p.dataSourceDiagnostics as any).recordSource)}</div>
-          <div>totalResolvedMatchups: {str((p.dataSourceDiagnostics as any).totalResolvedMatchups)}</div>
-          <div>missingSeasons: {str((p.dataSourceDiagnostics as any).missingRecordSeasons?.join(", "))}</div>
-          <div>medalSource: {str((p.dataSourceDiagnostics as any).medalSource)}</div>
-          <div>serviceVersion: {str((p.dataSourceDiagnostics as any).serviceVersion)}</div>
-          {(p.ownerResolutionDiagnostics as any)?.identityMerge && (
-            <div className="mt-2 pt-2 border-t border-amber-700/40 space-y-1">
-              <div className="font-semibold text-amber-200/95">Identity merge (V1)</div>
-              <div>canonicalOwnerName: {str((p.ownerResolutionDiagnostics as any).identityMerge.canonicalOwnerName)}</div>
-              <div>resolvedBy: {str((p.ownerResolutionDiagnostics as any).identityMerge.resolvedBy)}</div>
-              <div>activeSeasons: {str((p.ownerResolutionDiagnostics as any).identityMerge.activeSeasons?.join(", "))}</div>
-              <div>linkedTeamIds: {str((p.ownerResolutionDiagnostics as any).identityMerge.linkedTeamIds?.map((x: any) => `${x.season}:${x.teamId}`).join(" · "))}</div>
-              <div>linkedTeamNames: {str((p.ownerResolutionDiagnostics as any).identityMerge.linkedTeamNames?.join(" · "))}</div>
-              <div>sourceTeamIds: {str((p.ownerResolutionDiagnostics as any).identityMerge.sourceTeamIds?.join(" · "))}</div>
-              <div>sourceTeamNames: {str((p.ownerResolutionDiagnostics as any).identityMerge.sourceTeamNames?.join(" · "))}</div>
-              <div>unresolvedRecordCount: {str((p.ownerResolutionDiagnostics as any).identityMerge.unresolvedRecordCount)}</div>
-              <div className="whitespace-pre-wrap text-[10px] leading-snug opacity-90">
-                mergeAudit:{"\n"}
-                {((p.ownerResolutionDiagnostics as any).identityMerge.mergeAudit ?? []).map((line: string, i: number) => (
-                  <span key={i}>
-                    {line}
-                    {"\n"}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -797,15 +797,31 @@ export function OwnerProfiles() {
   const powerRankings = useMemo(() => (listQ.data?.powerRankings ?? []) as any[], [listQ.data]);
   const ownerAwards = useMemo(() => (listQ.data?.ownerAwards ?? []) as any[], [listQ.data]);
 
+  const availableOwnerKeysCount = useMemo(() => {
+    const s = new Set<string>();
+    for (const o of active) {
+      const k = listRowLookupKey(o);
+      if (k) s.add(k);
+    }
+    for (const o of graveyard) {
+      const k = listRowLookupKey(o);
+      if (k) s.add(k);
+    }
+    return s.size;
+  }, [active, graveyard]);
+
   useEffect(() => {
-    if (selectedOwnerKey != null) return;
-    const first = active[0]?.ownerKey as string | undefined;
+    if (selectedOwnerKey != null && selectedOwnerKey !== "") return;
+    const first =
+      listRowLookupKey(active[0]) ||
+      listRowLookupKey(graveyard[0]) ||
+      "";
     if (first) setSelectedOwnerKey(first);
-  }, [active, selectedOwnerKey]);
+  }, [active, graveyard, selectedOwnerKey]);
 
   const headerDisplayName = useMemo(() => {
     if (!selectedOwnerKey) return "";
-    const row = [...active, ...graveyard].find((o: any) => o.ownerKey === selectedOwnerKey);
+    const row = [...active, ...graveyard].find((o: any) => listRowLookupKey(o) === selectedOwnerKey);
     return (row?.ownerName as string) || selectedOwnerKey;
   }, [active, graveyard, selectedOwnerKey]);
 
@@ -824,114 +840,18 @@ export function OwnerProfiles() {
         </p>
       </div>
 
-      <div className="mb-6 rounded-lg border border-border bg-card/40 overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-4 py-2.5">
-          <ListOrdered className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">Power Rankings</h2>
-          <span className="text-xs text-muted-foreground">(win % · titles · H2H · activity)</span>
-        </div>
-        {powerRankings.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-muted-foreground text-center">No owners to rank yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
-              <thead>
-                <tr className="text-left text-xs text-muted-foreground border-b border-border/50 bg-muted/10">
-                  <th className="py-2 pl-4 pr-2 w-10">#</th>
-                  <th className="py-2 pr-3">Owner</th>
-                  <th className="py-2 pr-3 hidden sm:table-cell">Team</th>
-                  <th className="py-2 pr-2 text-right">Record</th>
-                  <th className="py-2 pr-2 text-right">Win %</th>
-                  <th className="py-2 pr-2 text-right hidden md:table-cell" title="Championships">🏆</th>
-                  <th className="py-2 pr-2 text-right hidden md:table-cell" title="Runner-up / 3rd">Medals</th>
-                  <th className="py-2 pr-2 text-right">Score</th>
-                  <th className="py-2 pr-4">Why</th>
-                </tr>
-              </thead>
-              <tbody>
-                {powerRankings.map((row: any) => {
-                  const sel = selectedOwnerKey === row.ownerKey;
-                  const m = row.medals ?? {};
-                  return (
-                    <tr
-                      key={row.ownerKey}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedOwnerKey(row.ownerKey)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setSelectedOwnerKey(row.ownerKey);
-                        }
-                      }}
-                      className={cn(
-                        "cursor-pointer border-b border-border/30 transition-colors",
-                        sel ? "bg-primary/15 ring-1 ring-inset ring-primary/30" : "hover:bg-muted/25",
-                      )}
-                    >
-                      <td className="py-2 pl-4 pr-2 font-mono text-muted-foreground">{num(row.rank)}</td>
-                      <td className="py-2 pr-3 font-medium text-foreground">{str(row.ownerName)}</td>
-                      <td className="py-2 pr-3 text-muted-foreground truncate max-w-[140px] hidden sm:table-cell">
-                        {str(row.currentTeam)}
-                      </td>
-                      <td className="py-2 pr-2 text-right tabular-nums text-muted-foreground">{str(row.record)}</td>
-                      <td className="py-2 pr-2 text-right tabular-nums">{pct(num(row.winPct))}</td>
-                      <td className="py-2 pr-2 text-right tabular-nums hidden md:table-cell">{num(row.championships)}</td>
-                      <td className="py-2 pr-2 text-right text-xs text-muted-foreground hidden md:table-cell">
-                        RU {num(m.runnerUps)} · 3rd {num(m.thirdPlace)}
-                      </td>
-                      <td className="py-2 pr-2 text-right font-mono text-xs text-muted-foreground">{num(row.score)}</td>
-                      <td className="py-2 pr-4 text-xs text-muted-foreground leading-snug max-w-[220px]">
-                        {str(row.reason)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <div className="mb-6 rounded-lg border border-border bg-card/40 overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-4 py-2.5">
-          <Award className="h-4 w-4 text-amber-400/90" />
-          <h2 className="text-sm font-semibold text-foreground">Owner Awards</h2>
-          <span className="text-xs text-muted-foreground">deterministic · same data as profiles</span>
-        </div>
-        {ownerAwards.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-muted-foreground text-center">No awards yet — need more league history in the DB.</p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
-            {ownerAwards.map((a: any) => {
-              const sel = selectedOwnerKey === a.ownerKey;
-              return (
-                <button
-                  key={`${a.awardName}-${a.ownerKey}`}
-                  type="button"
-                  onClick={() => setSelectedOwnerKey(a.ownerKey)}
-                  className={cn(
-                    "rounded-lg border text-left p-3 transition-colors",
-                    sel
-                      ? "border-primary bg-primary/10 ring-1 ring-primary/25"
-                      : "border-border/60 bg-muted/10 hover:bg-muted/20 hover:border-border",
-                  )}
-                >
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-amber-500/90">{str(a.awardName)}</p>
-                  <p className="mt-1 text-sm font-semibold text-foreground">{str(a.ownerName)}</p>
-                  <p className="text-xs font-mono text-muted-foreground mt-0.5">Value: {String(a.value ?? "—")}</p>
-                  <p className="text-xs text-muted-foreground/90 mt-2 leading-relaxed">{str(a.reason)}</p>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
       <div className="flex gap-6">
         <div className="w-72 shrink-0 space-y-2">
-          {active.map((o: any) => (
-            <OwnerCard key={o.ownerKey} o={o} selected={selectedOwnerKey === o.ownerKey} onClick={() => setSelectedOwnerKey(o.ownerKey)} />
+          {active.map((o: any, i: number) => (
+            <OwnerCard
+              key={listRowLookupKey(o) || `active-${i}`}
+              o={o}
+              selected={listRowLookupKey(o) !== "" && selectedOwnerKey === listRowLookupKey(o)}
+              onClick={() => {
+                const id = listRowLookupKey(o);
+                if (id) setSelectedOwnerKey(id);
+              }}
+            />
           ))}
 
           {graveyard.length > 0 && (
@@ -947,11 +867,14 @@ export function OwnerProfiles() {
                   <p className="text-[10px] text-muted-foreground/60 mb-2 italic">
                     One-season owners. They came, they lost, they left.
                   </p>
-                  {graveyard.map((o: any) => (
-                    <button key={o.ownerKey} type="button" onClick={() => setSelectedOwnerKey(o.ownerKey)}
+                  {graveyard.map((o: any, gi: number) => (
+                    <button key={listRowLookupKey(o) || `grave-${gi}`} type="button" onClick={() => {
+                      const id = listRowLookupKey(o);
+                      if (id) setSelectedOwnerKey(id);
+                    }}
                       className={cn(
                         "w-full rounded border text-left px-3 py-2 text-xs transition-colors",
-                        selectedOwnerKey === o.ownerKey ? "border-primary/40 bg-primary/5" : "border-border/40 hover:bg-muted/20",
+                        listRowLookupKey(o) !== "" && selectedOwnerKey === listRowLookupKey(o) ? "border-primary/40 bg-primary/5" : "border-border/40 hover:bg-muted/20",
                       )}>
                       <span className="text-muted-foreground font-medium">{o.ownerName}</span>
                       <span className="ml-2 text-muted-foreground/50">{Array.isArray(o.seasons) ? o.seasons[0] : ""}</span>
@@ -970,6 +893,7 @@ export function OwnerProfiles() {
               headerDisplayName={headerDisplayName}
               powerRankings={powerRankings}
               ownerAwards={ownerAwards}
+              availableOwnerKeysCount={availableOwnerKeysCount}
             />
           ) : (
             <div className="flex items-center justify-center h-64 rounded-lg border border-border text-muted-foreground text-sm">
