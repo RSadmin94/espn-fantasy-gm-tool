@@ -2,6 +2,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import type { LeagueHistoryTab, SortKey, OwnerWithTitles } from "../hooks/useLeagueHistoryModel";
+import type { StandingsSeasonEntry } from "../utils/seasonTabChampions";
+
+function seasonChipTitle(season: number, entry: StandingsSeasonEntry): string {
+  if (entry.recordBasis === "pf_only") {
+    return `${season}: PF ${entry.pointsFor.toFixed(1)} · PA ${entry.pointsAgainst.toFixed(1)} · Place ${entry.finalStanding ?? "?"}`;
+  }
+  const w = entry.wins ?? 0;
+  const l = entry.losses ?? 0;
+  const t = entry.ties ?? 0;
+  return `${season}: ${w}–${l}${t ? `–${t}` : ""}, Place ${entry.finalStanding ?? "?"}`;
+}
 
 function ordinal(n: number): string {
   if (n === 11 || n === 12 || n === 13) return `${n}th`;
@@ -146,7 +157,7 @@ export function DynastyBoardTab({
                       <button
                         key={season}
                         type="button"
-                        title={`${season}: ${entry.wins}–${entry.losses}, Place ${entry.finalStanding ?? "?"}`}
+                        title={seasonChipTitle(season, entry)}
                         onClick={() => {
                           setSelectedSeason(season);
                           setTab("seasons");

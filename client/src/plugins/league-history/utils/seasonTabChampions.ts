@@ -5,10 +5,12 @@
 
 export type StandingsSeasonEntry = {
   finalStanding: number | null;
-  wins: number;
-  losses: number;
-  ties: number;
+  wins: number | null;
+  losses: number | null;
+  ties: number | null;
   pointsFor: number;
+  pointsAgainst: number;
+  recordBasis: "rs_matchups" | "pf_only";
 };
 
 export type StandingsOwnerRow = {

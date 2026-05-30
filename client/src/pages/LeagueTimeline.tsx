@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import type { StandingsSeasonEntry } from "@/plugins/league-history/utils/seasonTabChampions";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -16,6 +17,27 @@ function ordinal(n: number): string {
 function winPct(w: number, l: number, t: number): string {
   const g = w + l + t;
   return g === 0 ? "—" : ((w / g) * 100).toFixed(1) + "%";
+}
+
+/** Display RS record + PF, or PF/PA only when we do not trust W–L from the DB. */
+function formatStandingsSubtitle(entry: StandingsSeasonEntry): string {
+  if (entry.recordBasis === "pf_only") {
+    return `PF ${entry.pointsFor.toFixed(1)} · PA ${entry.pointsAgainst.toFixed(1)}`;
+  }
+  const w = entry.wins ?? 0;
+  const l = entry.losses ?? 0;
+  const t = entry.ties ?? 0;
+  return `${w}–${l}${t ? `–${t}` : ""} · PF ${entry.pointsFor.toFixed(1)}`;
+}
+
+function recordOrPfPrimary(entry: StandingsSeasonEntry): string {
+  if (entry.recordBasis === "pf_only") {
+    return `PF ${entry.pointsFor.toFixed(1)} · PA ${entry.pointsAgainst.toFixed(1)}`;
+  }
+  const w = entry.wins ?? 0;
+  const l = entry.losses ?? 0;
+  const t = entry.ties ?? 0;
+  return `${w}–${l}${t ? `–${t}` : ""}`;
 }
 
 function chipStyle(place: number | null | undefined): string {
@@ -96,12 +118,12 @@ export function LeagueTimeline() {
 
   // ── Dynasty Board sort (client-side display sort only) ────────────────────
   const owners = [...rawOwners].sort((a, b) => {
-    const wA = a.seasons.reduce((s, r) => s + r.entry.wins,   0);
-    const lA = a.seasons.reduce((s, r) => s + r.entry.losses, 0);
-    const tA = a.seasons.reduce((s, r) => s + r.entry.ties,   0);
-    const wB = b.seasons.reduce((s, r) => s + r.entry.wins,   0);
-    const lB = b.seasons.reduce((s, r) => s + r.entry.losses, 0);
-    const tB = b.seasons.reduce((s, r) => s + r.entry.ties,   0);
+    const wA = a.seasons.reduce((s, r) => s + (r.entry.recordBasis === "rs_matchups" ? (r.entry.wins ?? 0) : 0), 0);
+    const lA = a.seasons.reduce((s, r) => s + (r.entry.recordBasis === "rs_matchups" ? (r.entry.losses ?? 0) : 0), 0);
+    const tA = a.seasons.reduce((s, r) => s + (r.entry.recordBasis === "rs_matchups" ? (r.entry.ties ?? 0) : 0), 0);
+    const wB = b.seasons.reduce((s, r) => s + (r.entry.recordBasis === "rs_matchups" ? (r.entry.wins ?? 0) : 0), 0);
+    const lB = b.seasons.reduce((s, r) => s + (r.entry.recordBasis === "rs_matchups" ? (r.entry.losses ?? 0) : 0), 0);
+    const tB = b.seasons.reduce((s, r) => s + (r.entry.recordBasis === "rs_matchups" ? (r.entry.ties ?? 0) : 0), 0);
     const titlesA = getMedalTitles(a);
     const titlesB = getMedalTitles(b);
     if (sortBy === "titles") {
@@ -256,9 +278,19 @@ export function LeagueTimeline() {
           {/* Owner cards grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {owners.map((owner) => {
-              const totalW = owner.seasons.reduce((s, r) => s + r.entry.wins,   0);
-              const totalL = owner.seasons.reduce((s, r) => s + r.entry.losses, 0);
-              const totalT = owner.seasons.reduce((s, r) => s + r.entry.ties,   0);
+              const totalW = owner.seasons.reduce(
+                (s, r) => s + (r.entry.recordBasis === "rs_matchups" ? (r.entry.wins ?? 0) : 0),
+                0,
+              );
+              const totalL = owner.seasons.reduce(
+                (s, r) => s + (r.entry.recordBasis === "rs_matchups" ? (r.entry.losses ?? 0) : 0),
+                0,
+              );
+              const totalT = owner.seasons.reduce(
+                (s, r) => s + (r.entry.recordBasis === "rs_matchups" ? (r.entry.ties ?? 0) : 0),
+                0,
+              );
+              const hasRsRecord = totalW + totalL + totalT > 0;
               const best   = owner.seasons.reduce((b, r) => Math.min(b, r.entry.finalStanding ?? 99), 99);
               const isOpen = expandedOwner === owner.ownerKey;
               const titles = getMedalTitles(owner);
@@ -294,11 +326,18 @@ export function LeagueTimeline() {
 
                       <span className="text-muted-foreground">📊 Record</span>
                       <span className="text-right tabular-nums">
-                        {totalW}–{totalL}{totalT > 0 ? `–${totalT}` : ""}
+                        {hasRsRecord ? `${totalW}–${totalL}${totalT > 0 ? `–${totalT}` : ""}` : "—"}
                       </span>
 
                       <span className="text-muted-foreground">💯 Win %</span>
-                      <span className="text-right tabular-nums">{winPct(totalW, totalL, totalT)}</span>
+                      <span className="text-right tabular-nums">
+                        {hasRsRecord ? winPct(totalW, totalL, totalT) : "—"}
+                      </span>
+                      {!hasRsRecord && (
+                        <span className="col-span-2 text-[10px] text-muted-foreground/80">
+                          No RS matchup W–L in DB for these seasons; PF/PA shown per season in explorer.
+                        </span>
+                      )}
                     </div>
 
                     {/* Expand toggle */}
@@ -327,7 +366,7 @@ export function LeagueTimeline() {
                           {owner.seasons.map(({ season, entry }) => (
                             <button
                               key={season}
-                              title={`${season}: ${entry.wins}–${entry.losses}, Place ${entry.finalStanding ?? "?"}`}
+                              title={`${season}: ${formatStandingsSubtitle(entry)}, Place ${entry.finalStanding ?? "?"}`}
                               onClick={() => { setSelectedSeason(season); setTab("seasons"); }}
                               className={cn(
                                 "rounded border px-2 py-0.5 text-[11px] tabular-nums transition-opacity hover:opacity-80",
@@ -394,7 +433,7 @@ export function LeagueTimeline() {
                       <div className="text-[10px] uppercase tracking-widest font-semibold text-yellow-400 mb-1">Champion</div>
                       <div className="font-bold text-yellow-300">{seasonRows[0].owner}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        {seasonRows[0].wins}–{seasonRows[0].losses} · {seasonRows[0].pointsFor.toFixed(1)} pts
+                        {formatStandingsSubtitle(seasonRows[0])}
                       </div>
                     </div>
                   )}
@@ -403,7 +442,7 @@ export function LeagueTimeline() {
                       <div className="text-[10px] uppercase tracking-widest font-semibold text-slate-400 mb-1">Runner-Up</div>
                       <div className="font-semibold text-slate-300">{seasonRows[1].owner}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        {seasonRows[1].wins}–{seasonRows[1].losses} · {seasonRows[1].pointsFor.toFixed(1)} pts
+                        {formatStandingsSubtitle(seasonRows[1])}
                       </div>
                     </div>
                   )}
@@ -420,8 +459,15 @@ export function LeagueTimeline() {
 
                 {/* Full standings list */}
                 <div>
-                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">
-                    Final Standings
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+                    <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
+                      Final Standings
+                    </div>
+                    {seasonRows[0]?.recordBasis === "pf_only" ? (
+                      <span className="text-[10px] text-muted-foreground">PF / PA (no RS W–L in DB)</span>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground">RS W–L–T + PF</span>
+                    )}
                   </div>
                   <div className="space-y-1">
                     {seasonRows.map((row, idx) => (
@@ -446,8 +492,10 @@ export function LeagueTimeline() {
                           <span className="text-foreground">{row.owner}</span>
                         </div>
                         <div className="flex items-center gap-4 text-xs text-muted-foreground tabular-nums">
-                          <span>{row.wins}–{row.losses}</span>
-                          <span>{row.pointsFor.toFixed(1)}</span>
+                          <span>{recordOrPfPrimary(row)}</span>
+                          {row.recordBasis === "rs_matchups" ? (
+                            <span className="text-muted-foreground/80">PF {row.pointsFor.toFixed(1)}</span>
+                          ) : null}
                         </div>
                       </div>
                     ))}

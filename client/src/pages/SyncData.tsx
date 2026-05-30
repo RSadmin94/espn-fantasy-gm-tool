@@ -1087,12 +1087,13 @@ export function SyncData() {
         </div>
       )}
 
-      {/* Quick sync card */}
+      {/* ── 1. Current season sync (API) ───────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Quick Sync</CardTitle>
+          <CardTitle className="text-base">Current season sync</CardTitle>
           <CardDescription>
-            Sync the current season{latestSeason ? ` (${latestSeason})` : ""} in one click.
+            Refresh the active ESPN season ({latestSeason ?? "…"}) via the server. Use force only when you intentionally
+            want to re-pull completed years from ESPN.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1119,11 +1120,97 @@ export function SyncData() {
             {isLoading && !selectedSeasons.length ? "Syncing…" : `Sync ${latestSeason ?? "…"}`}
           </Button>
         </CardContent>
+
+        <div className="border-t border-border px-6 py-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Other seasons (same API refresh)</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Pick specific years — same backend path as the button above (not browser scrape / not backfill).
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSeasonPicker(v => !v)}
+            >
+              {showSeasonPicker ? "Hide" : "Select Seasons"}
+            </Button>
+          </div>
+          {showSeasonPicker && (
+            <div className="space-y-4 pt-1">
+              <div className="flex flex-wrap gap-2">
+                {allSeasons.map((s) => {
+                  const isCached = cachedSeasons.includes(s);
+                  const isSelected = selectedSeasons.includes(s);
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => toggleSeason(s)}
+                      className={cn(
+                        "rounded-lg border px-3 py-1.5 text-sm font-medium transition-all",
+                        isSelected
+                          ? "border-primary bg-primary/15 text-primary"
+                          : isCached
+                            ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-300 hover:border-emerald-500/50"
+                            : "border-border bg-muted/30 text-muted-foreground hover:border-border/80 hover:bg-muted/50"
+                      )}
+                    >
+                      {s}
+                      {isCached && !isSelected && (
+                        <span className="ml-1 text-xs opacity-70">✓</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedSeasons.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    type="button"
+                    onClick={handleRefreshSelected}
+                    disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isHistoricalEnrichmentLoading || isReprocessLoading}
+                    size="sm"
+                    className="gap-2"
+                  >
+                    {isLoading && selectedSeasons.length > 0 ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    Sync {selectedSeasons.length} season{selectedSeasons.length !== 1 ? "s" : ""}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedSeasons([])}
+                  >
+                    Clear
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {selectedSeasons.slice().sort((a, b) => a - b).join(", ")}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </Card>
+
+      {/* ── 2. Historical seasons sync (browser + cache pipelines) ─────────── */}
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold text-foreground">Historical seasons sync</h2>
+        <p className="text-sm text-muted-foreground">
+          Browser session import, re-normalize from stored cache, raw-cache rebuild, and ESPN enrichment — separate
+          from the live API refresh above.
+        </p>
+      </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Sync From ESPN Browser Session</CardTitle>
+          <CardTitle className="text-base">Browser session import (historical JSON)</CardTitle>
           <CardDescription>
             Fetches historical JSON using your ESPN login in this browser (or the GM War Room extension if ESPN
             blocks the page). Test mode: sync <strong>{BROWSER_SYNC_TEST_SEASON}</strong> first. After the database
@@ -1238,54 +1325,11 @@ export function SyncData() {
         </CardContent>
       </Card>
 
-      {/* Historical standings import (2010–2017) */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Import Historical Standings (2010–2017)</CardTitle>
-          <CardDescription>
-            Scrapes the ESPN standings page for each season and imports final standings into League History.
-            Requires you to be logged in to ESPN in this browser. Extension opens each tab automatically.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {standingsNote && (
-            <p className="text-xs text-muted-foreground">{standingsNote}</p>
-          )}
-          {standingsErr && (
-            <div className="flex items-start gap-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              {standingsErr}
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017].map((season) => (
-              <Button
-                key={season}
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={standingsBusy}
-                onClick={() => void handleBrowserSyncStandings([season])}
-              >
-                {standingsBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Database className="h-3 w-3" />}
-                {season}
-              </Button>
-            ))}
-            <Button
-              type="button"
-              variant="default"
-              className={`gap-2 ${standingsBusy ? "" : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700"}`}
-              disabled={standingsBusy}
-              onClick={() => void handleBrowserSyncStandings([2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017])}
-            >
-              {standingsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Layers className="h-4 w-4" />}
-              {standingsBusy ? "Importing standings…" : "Import all 2010–2017"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
+      {/* ── 3. Matchup backfill (extension scrape) ─────────────────────────── */}
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold text-foreground">Matchup backfill</h2>
+        <p className="text-xs text-muted-foreground">Schedule pages → H2H rows (run after standings import when possible).</p>
+      </div>
       {/* Historical matchups import (2010–2025) */}
       <Card>
         <CardHeader>
@@ -1329,6 +1373,59 @@ export function SyncData() {
             >
               {matchupsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Layers className="h-4 w-4" />}
               {matchupsBusy ? "Importing matchups…" : "Import all 2010–2025"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── 4. Standings import (extension scrape) ─────────────────────────── */}
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold text-foreground">Standings import</h2>
+        <p className="text-xs text-muted-foreground">Final standings pages → normalized standings / medals helpers.</p>
+      </div>
+      {/* Historical standings import (2010–2017) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Import Historical Standings (2010–2017)</CardTitle>
+          <CardDescription>
+            Scrapes the ESPN standings page for each season and imports final standings into League History.
+            Requires you to be logged in to ESPN in this browser. Extension opens each tab automatically.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {standingsNote && (
+            <p className="text-xs text-muted-foreground">{standingsNote}</p>
+          )}
+          {standingsErr && (
+            <div className="flex items-start gap-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              {standingsErr}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017].map((season) => (
+              <Button
+                key={season}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={standingsBusy}
+                onClick={() => void handleBrowserSyncStandings([season])}
+              >
+                {standingsBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Database className="h-3 w-3" />}
+                {season}
+              </Button>
+            ))}
+            <Button
+              type="button"
+              variant="default"
+              className={`gap-2 ${standingsBusy ? "" : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700"}`}
+              disabled={standingsBusy}
+              onClick={() => void handleBrowserSyncStandings([2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017])}
+            >
+              {standingsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Layers className="h-4 w-4" />}
+              {standingsBusy ? "Importing standings…" : "Import all 2010–2017"}
             </Button>
           </div>
         </CardContent>
@@ -1702,84 +1799,15 @@ export function SyncData() {
         </Card>
       )}
 
-      {/* Multi-season selector */}
-      <Card>
+      {/* ── 5. Player stats pipeline (not enabled) ──────────────────────────── */}
+      <Card className="border-dashed border-muted-foreground/30">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-base">Multi-Season Sync</CardTitle>
-              <CardDescription>
-                Select specific seasons to refresh from ESPN. Completed seasons ({ESPN_HISTORICAL_COMPLETED_MIN}–
-                {ESPN_HISTORICAL_COMPLETED_MAX}) that are already fully normalized return &quot;Complete — not
-                reprocessed&quot; unless you enable force refresh above.
-              </CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowSeasonPicker(v => !v)}
-            >
-              {showSeasonPicker ? "Hide" : "Select Seasons"}
-            </Button>
-          </div>
+          <CardTitle className="text-base">Player stats pipeline</CardTitle>
+          <CardDescription>
+            Future work: bulk NFL / fantasy player stat ingest for modeling. <strong>Locked</strong> in this app — no
+            action here yet (use other tools for raw player stats).
+          </CardDescription>
         </CardHeader>
-
-        {showSeasonPicker && (
-          <CardContent className="space-y-4 border-t border-border pt-4">
-            <div className="flex flex-wrap gap-2">
-              {allSeasons.map((s) => {
-                const isCached = cachedSeasons.includes(s);
-                const isSelected = selectedSeasons.includes(s);
-                return (
-                  <button
-                    key={s}
-                    onClick={() => toggleSeason(s)}
-                    className={cn(
-                      "rounded-lg border px-3 py-1.5 text-sm font-medium transition-all",
-                      isSelected
-                        ? "border-primary bg-primary/15 text-primary"
-                        : isCached
-                          ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-300 hover:border-emerald-500/50"
-                          : "border-border bg-muted/30 text-muted-foreground hover:border-border/80 hover:bg-muted/50"
-                    )}
-                  >
-                    {s}
-                    {isCached && !isSelected && (
-                      <span className="ml-1 text-xs opacity-70">✓</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            {selectedSeasons.length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button
-                  onClick={handleRefreshSelected}
-                  disabled={isLoading || isBackfillLoading || isRawCacheBackfillLoading || isHistoricalEnrichmentLoading || isReprocessLoading}
-                  size="sm"
-                  className="gap-2"
-                >
-                  {isLoading && selectedSeasons.length > 0 ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  Sync {selectedSeasons.length} season{selectedSeasons.length !== 1 ? "s" : ""}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedSeasons([])}
-                >
-                  Clear
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  {selectedSeasons.sort((a, b) => a - b).join(", ")}
-                </span>
-              </div>
-            )}
-          </CardContent>
-        )}
       </Card>
 
       {/* Refresh error banner (manual sync — auto-sync errors shown above) */}

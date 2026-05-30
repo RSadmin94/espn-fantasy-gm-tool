@@ -96,8 +96,15 @@ export function SeasonExplorerTab({
             </div>
 
             <div>
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Final Standings
+              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Final Standings
+                </div>
+                {seasonRows[0]?.recordBasis === "pf_only" ? (
+                  <span className="text-[10px] text-muted-foreground">PF / PA only (no RS matchup record in DB)</span>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground">Reg. season W–L–T (completed RS matchups)</span>
+                )}
               </div>
               <div className="space-y-1">
                 {seasonRows.map((row, idx) => (
@@ -124,10 +131,19 @@ export function SeasonExplorerTab({
                       <span className="text-foreground">{row.owner}</span>
                     </div>
                     <div className="flex items-center gap-4 text-xs tabular-nums text-muted-foreground">
-                      <span>
-                        {row.wins}–{row.losses}
-                      </span>
-                      <span>{row.pointsFor.toFixed(1)}</span>
+                      {row.recordBasis === "rs_matchups" ? (
+                        <span>
+                          {(row.wins ?? 0)}–{(row.losses ?? 0)}
+                          {(row.ties ?? 0) > 0 ? `–${row.ties}` : ""}
+                        </span>
+                      ) : (
+                        <span>
+                          PF {row.pointsFor.toFixed(1)} · PA {row.pointsAgainst.toFixed(1)}
+                        </span>
+                      )}
+                      {row.recordBasis === "rs_matchups" ? (
+                        <span className="text-muted-foreground/80">PF {row.pointsFor.toFixed(1)}</span>
+                      ) : null}
                     </div>
                   </div>
                 ))}

@@ -25,7 +25,7 @@ import { DraftHistory } from "./pages/DraftHistory";
 import { KeeperAdvisor } from "./pages/KeeperAdvisor";
 import { LeagueSettings } from "./pages/LeagueSettings";
 import { OwnerProfiles } from "./pages/OwnerProfiles";
-import { RingOfHonor } from "./pages/RingOfHonor";
+import { HallOfFame } from "./pages/HallOfFame";
 import { LeagueDataHealth } from "./pages/LeagueDataHealth";
 import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
 import { trpc } from "@/lib/trpc";
@@ -131,7 +131,8 @@ const router = createBrowserRouter([
           { path: "/history", element: <LeagueHistory /> },
           { path: "/draft-history", element: <DraftHistory /> },
           { path: "/keeper-advisor", element: <KeeperAdvisor /> },
-          { path: "/ring-of-honor", element: <RingOfHonor /> },
+          { path: "/hall-of-fame", element: <HallOfFame /> },
+          { path: "/ring-of-honor", element: <Navigate to="/hall-of-fame" replace /> },
           { path: "/roster", element: <Roster /> },
           { path: "/trades", element: <Trades /> },
           { path: "/advisor", element: <Advisor /> },
@@ -141,7 +142,7 @@ const router = createBrowserRouter([
           // Chrome extension posts here after ESPN connect
           { path: "/command-center", element: <Navigate to="/dashboard" replace /> },
           // Renamed routes
-          { path: "/championships", element: <Navigate to="/ring-of-honor" replace /> },
+          { path: "/championships", element: <Navigate to="/hall-of-fame" replace /> },
           { path: "/rosters", element: <Navigate to="/roster" replace /> },
           { path: "/refresh", element: <Navigate to="/sync" replace /> },
           { path: "/data-center", element: <Navigate to="/sync" replace /> },

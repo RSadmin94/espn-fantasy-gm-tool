@@ -19,7 +19,7 @@
  *              93=defensive TDs, 123=pts allowed 0, 124=pts allowed 1-6, etc.
  */
 
-import { getCachedView } from "./db";
+import { getCachedViewWithTier } from "./db";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,6 +28,11 @@ export interface ScoringItem {
   points: number;
   pointsOverrides?: Record<string, number>;
 }
+
+export type LeagueScoringDataSource =
+  | "espn_combined_cache"
+  | "espn_combined_cache_prior_season"
+  | "fallback_defaults";
 
 export interface LeagueScoringSettings {
   scoringType: string;                   // "PPR", "HALF_PPR", "STANDARD"
@@ -43,6 +48,14 @@ export interface LeagueScoringSettings {
   receivingYardsPerPoint: number;        // yards per 1 point (e.g. 10)
   interceptionPoints: number;            // typically -2 or -1
   fetchedAt: Date;
+  /** Where scoring rules were read from (never treat `fallback_defaults` as live league truth). */
+  scoringDataSource: LeagueScoringDataSource;
+  /** Season row the combined cache payload was read for (may differ from requested season when using prior-year fallback). */
+  scoringCacheSeason: number | null;
+  /** `updatedAt` on the cache row that supplied `settings.scoringSettings`, when applicable. */
+  scoringSyncedAt: Date | null;
+  /** Which physical cache tier served the row (`espn_raw_cache`, `fantasy_data_cache`, `espn_season_cache`). */
+  scoringStorageTier: string | null;
 }
 
 export interface RawStatLine {
@@ -127,15 +140,15 @@ export async function getLeagueScoringSettings(season?: number, userId?: number)
     // Sync stores the full ESPN payload under viewName="combined", never "mSettings".
     // Both mSettings data (data.settings.scoringSettings) and all other views
     // are merged into the single combined row — read from there.
-    let cached = await getCachedView(targetSeason, "combined", undefined, { userId });
-
-    // Fall back to previous season if current season not yet synced
-    if (!cached) {
-      cached = await getCachedView(targetSeason - 1, "combined", undefined, { userId });
+    let hit = await getCachedViewWithTier(targetSeason, "combined", undefined, { userId });
+    let usedPriorSeason = false;
+    if (!hit?.row?.payload) {
+      hit = await getCachedViewWithTier(targetSeason - 1, "combined", undefined, { userId });
+      usedPriorSeason = true;
     }
 
-    if (cached?.payload) {
-      const payload = cached.payload as Record<string, unknown>;
+    if (hit?.row?.payload) {
+      const payload = hit.row.payload as Record<string, unknown>;
       const settings = (payload.settings as Record<string, unknown>) || {};
       const scoringSettings = (settings.scoringSettings as Record<string, unknown>) || {};
       const rawItems = (scoringSettings.scoringItems as ScoringItem[]) || [];
@@ -155,6 +168,12 @@ export async function getLeagueScoringSettings(season?: number, userId?: number)
         receptionPts >= 1 ? "PPR" : receptionPts > 0 ? "HALF_PPR" : "STANDARD";
 
       const result = buildScoringSettings(derivedScoringType, scoringMap, rawItems);
+      const syncAt = hit.row.updatedAt;
+      result.fetchedAt = syncAt;
+      result.scoringDataSource = usedPriorSeason ? "espn_combined_cache_prior_season" : "espn_combined_cache";
+      result.scoringCacheSeason = hit.row.season;
+      result.scoringSyncedAt = syncAt;
+      result.scoringStorageTier = hit.tier;
       scoringSettingsCache.set(cacheKey, { settings: result, loadedAt: Date.now() });
       return result;
     }
@@ -162,8 +181,13 @@ export async function getLeagueScoringSettings(season?: number, userId?: number)
     console.warn("[LeagueScoring] Failed to load from cache:", err);
   }
 
-  // Fallback
+  // Fallback — generic half-PPR template; UI must label as defaults, not synced league rules.
   const fallback = buildScoringSettings("HALF_PPR", FALLBACK_SCORING_MAP, []);
+  fallback.scoringDataSource = "fallback_defaults";
+  fallback.scoringCacheSeason = null;
+  fallback.scoringSyncedAt = null;
+  fallback.scoringStorageTier = null;
+  fallback.fetchedAt = new Date();
   return fallback;
 }
 
@@ -209,6 +233,10 @@ function buildScoringSettings(
     receivingYardsPerPoint: recYardsPerPt,
     interceptionPoints,
     fetchedAt: new Date(),
+    scoringDataSource: "fallback_defaults",
+    scoringCacheSeason: null,
+    scoringSyncedAt: null,
+    scoringStorageTier: null,
   };
 }
 

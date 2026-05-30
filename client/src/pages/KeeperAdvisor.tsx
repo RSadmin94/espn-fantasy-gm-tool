@@ -36,6 +36,7 @@ type KeeperEntry = {
   originalDraftSeason: number | null;
   lastKeptSeason:      number | null;
   lastKeptRound:       number | null;
+  sourceLabel:         string;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -181,6 +182,8 @@ export function KeeperAdvisor() {
 
   const draftYear = new Date().getFullYear();
   const prevSeason = draftYear - 1;
+  const rosterSeason = (poolQ.data as { rosterSeason?: number } | undefined)?.rosterSeason ?? draftYear;
+  const rosterProv = (poolQ.data as { rosterProvenance?: { label: string } | null } | undefined)?.rosterProvenance;
   const errorMsg = (poolQ.data as { error?: string; hint?: string } | undefined)?.error;
   const hintMsg  = (poolQ.data as { hint?: string } | undefined)?.hint;
 
@@ -199,7 +202,7 @@ export function KeeperAdvisor() {
     return (
       <div className="mx-auto max-w-2xl px-6 py-16 text-center">
         <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-amber-400" />
-        <p className="text-lg font-semibold text-foreground">No 2025 draft data</p>
+        <p className="text-lg font-semibold text-foreground">Keeper pool unavailable</p>
         <p className="mt-1 text-sm text-muted-foreground">{hintMsg ?? errorMsg}</p>
         <p className="mt-4 text-xs text-muted-foreground">
           Open the extension popup → Import Historical League Data → <strong>FULL IMPORT</strong>
@@ -214,9 +217,17 @@ export function KeeperAdvisor() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Keeper Advisor</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {draftYear} Draft · Based on {prevSeason} end-of-season rosters ·{" "}
-          <span className="font-medium text-foreground">{pool.length}</span> eligible players
-          across <span className="font-medium text-foreground">{owners.length}</span> teams
+          {draftYear} draft · {rosterSeason} current rosters ·{" "}
+          <span className="font-medium text-foreground">{pool.length}</span> eligible players across{" "}
+          <span className="font-medium text-foreground">{owners.length}</span> teams
+        </p>
+        {rosterProv?.label && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground/90">Roster source:</span> {rosterProv.label}
+          </p>
+        )}
+        <p className="mt-0.5 text-[11px] text-muted-foreground/80">
+          Keeper costs use {prevSeason} draft / keeper flags (draft · keeper); missing rows use cache FA default (Rd 7).
         </p>
       </div>
 
@@ -344,6 +355,7 @@ export function KeeperAdvisor() {
                   <TableHead className="w-24">Cost</TableHead>
                   <TableHead className="w-28">Keep Yr</TableHead>
                   <TableHead className="w-28">Acquired</TableHead>
+                  <TableHead className="min-w-[140px] max-w-[220px]">Source</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-8 text-right"></TableHead>
                 </TableRow>
@@ -376,6 +388,11 @@ export function KeeperAdvisor() {
                           {p.acquisitionType || "—"}
                         </span>
                       </TableCell>
+                      <TableCell>
+                        <span className="text-xs text-muted-foreground line-clamp-2" title={p.sourceLabel}>
+                          {p.sourceLabel}
+                        </span>
+                      </TableCell>
                       <TableCell>{statusBadge(p)}</TableCell>
                       <TableCell className="text-right">
                         <span title={costSourceTooltip(p.costSource)}>
@@ -386,7 +403,7 @@ export function KeeperAdvisor() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-6 text-center text-xs text-muted-foreground">
+                    <TableCell colSpan={9} className="py-6 text-center text-xs text-muted-foreground">
                       No other eligible keepers for this team under the current filters.
                     </TableCell>
                   </TableRow>

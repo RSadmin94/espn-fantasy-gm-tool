@@ -39,6 +39,22 @@ export function LeagueSettings() {
   const s = scoringQ.data;
   const meta = settingsQ.data;
 
+  function scoringSourceDescription(): string {
+    if (!s) return "";
+    const src = (s as { scoringDataSource?: string }).scoringDataSource;
+    const tier = (s as { scoringStorageTier?: string | null }).scoringStorageTier;
+    const cacheSeas = (s as { scoringCacheSeason?: number | null }).scoringCacheSeason;
+    const parts: string[] = [];
+    if (src === "espn_combined_cache") parts.push("ESPN combined cache (same season)");
+    else if (src === "espn_combined_cache_prior_season") parts.push("ESPN combined cache (prior season fallback)");
+    else if (src === "fallback_defaults") parts.push("Built-in defaults — not your league sync");
+    if (tier) parts.push(`tier: ${tier}`);
+    if (cacheSeas != null) parts.push(`cache season ${cacheSeas}`);
+    return parts.join(" · ");
+  }
+
+  const scoringSyncedAt = (s as { scoringSyncedAt?: string | null } | undefined)?.scoringSyncedAt;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24 text-muted-foreground">
@@ -87,9 +103,24 @@ export function LeagueSettings() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground">League Settings</h1>
+        {(s as { scoringDataSource?: string }).scoringDataSource === "fallback_defaults" && (
+          <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+            Scoring rules are showing built-in defaults because no ESPN combined cache row with scoring settings was
+            found. Sync the current season on the Sync Data page — values below are not verified league rules until then.
+          </div>
+        )}
         <p className="mt-1 text-sm text-muted-foreground">
-          {String(meta?.leagueName ?? "Atlantas Finest FF")} · {season} Season ·{" "}
-          <span className="text-xs text-muted-foreground/60">loaded from ESPN cache</span>
+          {String(meta?.leagueName ?? "").trim() || "League"}{" "}
+          · {season} season · scoring: {scoringSourceDescription()}
+          {scoringSyncedAt ? (
+            <>
+              {" "}
+              · last scoring sync{" "}
+              <span className="tabular-nums">{new Date(scoringSyncedAt).toLocaleString()}</span>
+            </>
+          ) : s && (s as { scoringDataSource?: string }).scoringDataSource === "fallback_defaults" ? (
+            <span> · scoring sync time n/a (defaults)</span>
+          ) : null}
         </p>
       </div>
 
@@ -139,8 +170,12 @@ export function LeagueSettings() {
         </SectionCard>
       )}
 
-      {/* 5. Keeper League Rules (hardcoded) */}
-      <SectionCard title="Keeper Rules">
+      {/* 5. Keeper League Rules — app defaults unless ESPN exposes keeper fields */}
+      <SectionCard title="Keeper Rules (app defaults)">
+        <p className="mb-2 text-xs text-muted-foreground">
+          These rows describe how the Keeper Advisor models costs. ESPN keeper flags still come from draft history
+          when available; this block is not a live ESPN settings dump.
+        </p>
         <Row label="FA Pickup Cost"      value="Round 7" />
         <Row label="Max Keeper Duration" value="2 consecutive years" />
         <Row label="Keeper Cost Method"  value="Drafted round — 1 (min Round 1)" />
