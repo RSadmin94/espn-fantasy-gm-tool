@@ -1,7 +1,11 @@
+import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { RivalryDossierPanel } from "@/components/RivalryDossierPanel";
+import type { StandingsOwnerRow } from "../utils/seasonTabChampions";
 
 type VsRec = { wins: number; losses: number; ties: number; gamesPlayed?: number };
 type MatrixRow = { owner: string; vs: Record<string, VsRec> };
@@ -26,11 +30,18 @@ type Props = {
   isLoading: boolean;
   diagnostics?: H2hDiagnostics | null;
   dossierPickerOptions: Array<{ ownerKey: string; label: string }>;
+  activeSeason: number | null;
+  rivalryEligibleOwnerKeys: string[];
+  rawOwners: StandingsOwnerRow[];
 };
 
 function gamesPlayed(rec: VsRec): number {
   if (typeof rec.gamesPlayed === "number" && rec.gamesPlayed > 0) return rec.gamesPlayed;
   return rec.wins + rec.losses + rec.ties;
+}
+
+function ownerKeyForDisplayName(rawOwners: StandingsOwnerRow[], displayName: string): string | undefined {
+  return rawOwners.find((o) => o.displayName === displayName)?.ownerKey;
 }
 
 export function RivalriesTab({
@@ -41,16 +52,42 @@ export function RivalriesTab({
   isLoading,
   diagnostics,
   dossierPickerOptions,
+  activeSeason,
+  rivalryEligibleOwnerKeys,
+  rawOwners,
 }: Props) {
-  const activeRival = rivalOwner || h2hOwners[0] || "";
+  const [includeHistoricalOwners, setIncludeHistoricalOwners] = useState(false);
+
+  const rosterSet = useMemo(() => new Set(rivalryEligibleOwnerKeys), [rivalryEligibleOwnerKeys.join("|")]);
+
+  const filteredH2hOwners = useMemo(() => {
+    if (includeHistoricalOwners) return h2hOwners;
+    return h2hOwners.filter((name) => {
+      const k = ownerKeyForDisplayName(rawOwners, name);
+      return k && rosterSet.has(k);
+    });
+  }, [h2hOwners, includeHistoricalOwners, rawOwners, rosterSet]);
+
+  const activeRival = rivalOwner || filteredH2hOwners[0] || "";
   const rivalRow = h2hMatrix.find((r) => r.owner === activeRival);
 
   const rivalCards = rivalRow
     ? Object.entries(rivalRow.vs)
         .map(([rival, rec]) => ({ rival, rec, gp: gamesPlayed(rec) }))
         .filter((x) => x.gp > 0)
+        .filter((x) => {
+          if (includeHistoricalOwners) return true;
+          const k = ownerKeyForDisplayName(rawOwners, x.rival);
+          return k && rosterSet.has(k);
+        })
         .sort((a, b) => b.gp - a.gp)
     : [];
+
+  const focalKeyForDossier = useMemo(() => {
+    const byRival = ownerKeyForDisplayName(rawOwners, activeRival);
+    if (byRival) return byRival;
+    return dossierPickerOptions[0]?.ownerKey ?? "";
+  }, [activeRival, rawOwners, dossierPickerOptions]);
 
   if (isLoading) {
     return (
@@ -73,11 +110,31 @@ export function RivalriesTab({
 
   return (
     <div className="space-y-4">
-      {dossierPickerOptions.length > 0 && (
+      <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-card/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-xs text-muted-foreground">
+          <span className="font-semibold text-foreground">Default rivalry view</span> includes this season&apos;s
+          managers, anyone active in the last four seasons, and any past champion. Toggle to show all historical
+          owners in lists and the dossier.
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="rival-hist"
+            checked={includeHistoricalOwners}
+            onCheckedChange={(v) => setIncludeHistoricalOwners(Boolean(v))}
+          />
+          <Label htmlFor="rival-hist" className="cursor-pointer text-xs text-muted-foreground">
+            Include Historical Owners
+          </Label>
+        </div>
+      </div>
+
+      {dossierPickerOptions.length > 0 && activeSeason != null && (
         <div className="rounded-lg border border-border/60 bg-card/30 p-4">
           <RivalryDossierPanel
-            focalOwnerKey={dossierPickerOptions[0]!.ownerKey}
+            focalOwnerKey={focalKeyForDossier}
             pickerOptions={dossierPickerOptions}
+            rivalryEligibleOwnerKeys={includeHistoricalOwners ? undefined : rivalryEligibleOwnerKeys}
+            activeSeason={activeSeason ?? undefined}
           />
         </div>
       )}
@@ -111,7 +168,7 @@ export function RivalriesTab({
       <div className="space-y-2">
         <div className="text-xs text-muted-foreground">Select owner to view their rivalries:</div>
         <div className="flex flex-wrap gap-1.5">
-          {h2hOwners.map((o) => (
+          {filteredH2hOwners.map((o) => (
             <button
               key={o}
               type="button"

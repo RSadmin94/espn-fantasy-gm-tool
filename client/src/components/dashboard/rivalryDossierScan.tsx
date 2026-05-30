@@ -45,27 +45,61 @@ function closestFromMeetings(
   return `${bestAbs.toFixed(1)} pts`;
 }
 
-/**
- * Fan-out up to eight `owners.rivalryDossier` queries (active owners only) and pick
- * the hottest active-vs-active pairing by heartbreak losses, then games played.
- */
-export function useRivalryDossierScan(activeOwnerKeys: string[]): RivalryHeroResult {
-  const k = useMemo(() => padKeys(activeOwnerKeys), [activeOwnerKeys.join("|")]);
-  const activeSet = useMemo(() => new Set(activeOwnerKeys), [activeOwnerKeys.join("|")]);
+const dossierInput = (ownerKey: string, eligibleArg: string[] | undefined) => ({
+  ownerKey,
+  includeHistoricalOwners: false as const,
+  rivalryEligibleOwnerKeys: eligibleArg,
+});
 
-  const q0 = trpc.owners.rivalryDossier.useQuery({ ownerKey: k[0] }, { enabled: Boolean(k[0]), staleTime: 120_000 });
-  const q1 = trpc.owners.rivalryDossier.useQuery({ ownerKey: k[1] }, { enabled: Boolean(k[1]), staleTime: 120_000 });
-  const q2 = trpc.owners.rivalryDossier.useQuery({ ownerKey: k[2] }, { enabled: Boolean(k[2]), staleTime: 120_000 });
-  const q3 = trpc.owners.rivalryDossier.useQuery({ ownerKey: k[3] }, { enabled: Boolean(k[3]), staleTime: 120_000 });
-  const q4 = trpc.owners.rivalryDossier.useQuery({ ownerKey: k[4] }, { enabled: Boolean(k[4]), staleTime: 120_000 });
-  const q5 = trpc.owners.rivalryDossier.useQuery({ ownerKey: k[5] }, { enabled: Boolean(k[5]), staleTime: 120_000 });
-  const q6 = trpc.owners.rivalryDossier.useQuery({ ownerKey: k[6] }, { enabled: Boolean(k[6]), staleTime: 120_000 });
-  const q7 = trpc.owners.rivalryDossier.useQuery({ ownerKey: k[7] }, { enabled: Boolean(k[7]), staleTime: 120_000 });
+/**
+ * Fan-out up to eight `owners.rivalryDossier` queries (default rivalry-eligible owners only)
+ * and pick the hottest eligible-vs-eligible pairing by heartbreak losses, then games played.
+ */
+export function useRivalryDossierScan(rivalryEligibleOwnerKeys: string[]): RivalryHeroResult {
+  const k = useMemo(() => padKeys(rivalryEligibleOwnerKeys), [rivalryEligibleOwnerKeys.join("|")]);
+  const activeSet = useMemo(() => new Set(rivalryEligibleOwnerKeys), [rivalryEligibleOwnerKeys.join("|")]);
+  const eligibleArg = useMemo(
+    () => (rivalryEligibleOwnerKeys.length > 0 ? rivalryEligibleOwnerKeys : undefined),
+    [rivalryEligibleOwnerKeys.join("|")],
+  );
+
+  const q0 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[0]!, eligibleArg), {
+    enabled: Boolean(k[0]),
+    staleTime: 120_000,
+  });
+  const q1 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[1]!, eligibleArg), {
+    enabled: Boolean(k[1]),
+    staleTime: 120_000,
+  });
+  const q2 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[2]!, eligibleArg), {
+    enabled: Boolean(k[2]),
+    staleTime: 120_000,
+  });
+  const q3 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[3]!, eligibleArg), {
+    enabled: Boolean(k[3]),
+    staleTime: 120_000,
+  });
+  const q4 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[4]!, eligibleArg), {
+    enabled: Boolean(k[4]),
+    staleTime: 120_000,
+  });
+  const q5 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[5]!, eligibleArg), {
+    enabled: Boolean(k[5]),
+    staleTime: 120_000,
+  });
+  const q6 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[6]!, eligibleArg), {
+    enabled: Boolean(k[6]),
+    staleTime: 120_000,
+  });
+  const q7 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[7]!, eligibleArg), {
+    enabled: Boolean(k[7]),
+    staleTime: 120_000,
+  });
 
   const queries = [q0, q1, q2, q3, q4, q5, q6, q7];
 
   return useMemo(() => {
-    if (activeOwnerKeys.length === 0) return { status: "idle" } as const;
+    if (rivalryEligibleOwnerKeys.length === 0) return { status: "idle" } as const;
     if (queries.some((q) => q.isLoading || q.isFetching)) return { status: "loading" } as const;
 
     type Cand = {
@@ -136,9 +170,11 @@ export function useRivalryDossierScan(activeOwnerKeys: string[]): RivalryHeroRes
       closestMarginLabel: best.closestMarginLabel,
     };
   }, [
-    activeOwnerKeys.length,
+    rivalryEligibleOwnerKeys.length,
+    rivalryEligibleOwnerKeys.join("|"),
     activeSet,
     k,
+    eligibleArg,
     q0.data,
     q1.data,
     q2.data,

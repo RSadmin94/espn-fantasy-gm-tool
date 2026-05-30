@@ -24,6 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { CSSProperties, ReactNode } from "react";
 import { RivalryDossierPanel, type RivalryPickerOption } from "@/components/RivalryDossierPanel";
+import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
 import {
   Collapsible,
   CollapsibleContent,
@@ -250,6 +251,8 @@ function ProfilePanel({
   ownerAwards,
   availableOwnerKeysCount,
   dossierPickerOptions,
+  dossierActiveSeason,
+  rivalryEligibleOwnerKeysForDossier,
 }: {
   /** Canonical `owners.ownerList` row id — sent as `ownerKey` on `owners.ownerProfile`. */
   profileLookupKey: string;
@@ -259,6 +262,8 @@ function ProfilePanel({
   /** Distinct ownerKey count from ownerList (active + graveyard). */
   availableOwnerKeysCount: number;
   dossierPickerOptions: RivalryPickerOption[];
+  dossierActiveSeason: number;
+  rivalryEligibleOwnerKeysForDossier: string[];
 }) {
   const trpcAny = trpc as any;
   const [compareWith, setCompareWith] = useState("");
@@ -1013,7 +1018,7 @@ function ProfilePanel({
       <Section title="Matchup Intel" icon={<Swords className="h-4 w-4" />} defaultOpen={false}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-[11px] text-zinc-500">
-            Intel uses matchup pipeline with cache fallback; dossier uses gmMatchups RS completed only.
+            Intel uses matchup pipeline with cache fallback; dossier uses completed gmMatchups (RS + playoffs).
           </p>
           <button
             type="button"
@@ -1025,7 +1030,12 @@ function ProfilePanel({
         </div>
         {showRivalryDossier && (
           <div className="mb-4 rounded-xl border border-white/[0.08] bg-[#0b0e14]/80 p-4">
-            <RivalryDossierPanel focalOwnerKey={profileLookupKey} pickerOptions={dossierPickerOptions} />
+            <RivalryDossierPanel
+              focalOwnerKey={profileLookupKey}
+              pickerOptions={dossierPickerOptions}
+              rivalryEligibleOwnerKeys={rivalryEligibleOwnerKeysForDossier}
+              activeSeason={dossierActiveSeason}
+            />
           </div>
         )}
         {intel.length === 0 ? (
@@ -1185,6 +1195,24 @@ function ProfilePanel({
 export function OwnerProfiles() {
   const trpcAny = trpc as any;
   const listQ = trpcAny.owners.ownerList.useQuery();
+  const cachedSeasonsQ = trpc.espn.cachedSeasons.useQuery(undefined, { staleTime: 60_000 });
+
+  const dossierActiveSeason = useMemo(() => {
+    const c = cachedSeasonsQ.data ?? [];
+    return c.length > 0 ? Math.max(...c) : new Date().getFullYear();
+  }, [cachedSeasonsQ.data]);
+
+  const rivalryEligibleOwnerKeysForDossier = useMemo(() => {
+    const all = listQ.data?.allOwners ?? [];
+    return buildDefaultRivalryEligibleOwnerKeys(
+      all.map((o: { ownerKey: string; seasons?: number[]; championships?: number }) => ({
+        ownerKey: o.ownerKey,
+        seasons: Array.isArray(o.seasons) ? o.seasons : [],
+        championships: typeof o.championships === "number" ? o.championships : 0,
+      })),
+      dossierActiveSeason,
+    );
+  }, [listQ.data?.allOwners, dossierActiveSeason]);
   const [selectedOwnerKey, setSelectedOwnerKey] = useState<string | null>(null);
   const [showGraveyard, setShowGraveyard] = useState(false);
 
@@ -1303,6 +1331,8 @@ export function OwnerProfiles() {
               ownerAwards={ownerAwards}
               availableOwnerKeysCount={availableOwnerKeysCount}
               dossierPickerOptions={dossierPickerOptions}
+              dossierActiveSeason={dossierActiveSeason}
+              rivalryEligibleOwnerKeysForDossier={rivalryEligibleOwnerKeysForDossier}
             />
           ) : (
             <div className="flex h-64 items-center justify-center rounded-xl border border-white/[0.08] bg-[#0f131c]/50 text-sm text-zinc-500">

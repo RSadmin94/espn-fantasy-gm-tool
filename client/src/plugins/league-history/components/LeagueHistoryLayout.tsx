@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
 import { useLeagueHistoryModel, type LeagueHistoryTab, type SortKey } from "../hooks/useLeagueHistoryModel";
 import { DynastyBoardTab } from "./DynastyBoardTab";
 import { SeasonExplorerTab } from "./SeasonExplorerTab";
@@ -38,6 +39,24 @@ export function LeagueHistoryPlugin() {
   const dossierPickerOptions = useMemo(
     () => model.rawOwners.map((o) => ({ ownerKey: o.ownerKey, label: o.displayName })),
     [model.rawOwners],
+  );
+
+  const anchorSeasonForRivalry = useMemo(() => {
+    if (!allSeasons.length) return new Date().getFullYear();
+    return Math.max(...allSeasons);
+  }, [allSeasons]);
+
+  const rivalryEligibleOwnerKeys = useMemo(
+    () =>
+      buildDefaultRivalryEligibleOwnerKeys(
+        model.rawOwners.map((o) => ({
+          ownerKey: o.ownerKey,
+          seasons: o.seasons.map((s) => s.season),
+          championships: o.championships,
+        })),
+        anchorSeasonForRivalry,
+      ),
+    [model.rawOwners, anchorSeasonForRivalry],
   );
 
   const standingsLoading = model.standingsLoading;
@@ -102,6 +121,9 @@ export function LeagueHistoryPlugin() {
           isLoading={model.h2hQ.isLoading}
           diagnostics={h2hDiagnostics}
           dossierPickerOptions={dossierPickerOptions}
+          activeSeason={activeSeason}
+          rivalryEligibleOwnerKeys={rivalryEligibleOwnerKeys}
+          rawOwners={model.rawOwners}
         />
       )}
 

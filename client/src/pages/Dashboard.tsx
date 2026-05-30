@@ -13,12 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Flame, HeartPulse, Loader2, RefreshCw, Trophy } from "lucide-react";
+import { Flame, Loader2, RefreshCw, Trophy } from "lucide-react";
 import { DevBuildDiagnostics } from "@/components/DevBuildDiagnostics";
 import { DashboardLeagueHealthCard } from "@/components/dashboard/DashboardLeagueHealthCard";
 import { DashboardMatchupMarquee, type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
 import { DashboardTimelineStrip, type TimelineChamp } from "@/components/dashboard/DashboardTimelineStrip";
+import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
 import { useRivalryDossierScan } from "@/components/dashboard/rivalryDossierScan";
+import { DashboardRecentLeagueEvents } from "@/components/dashboard/DashboardRecentLeagueEvents";
 import { MiniTable, StatusBadge } from "@/components/dashboard/DashboardPrimitives";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -288,11 +290,28 @@ export function Dashboard() {
     return rows.some((s) => s.completedPlayoffDedupedRows > 0);
   }, [coverageQ.data?.seasons]);
 
-  const activeOwnerKeys = useMemo(
-    () => (ownerListQ.data?.active ?? []).map((o) => o.ownerKey),
-    [ownerListQ.data?.active],
-  );
-  const rivalryHero = useRivalryDossierScan(activeOwnerKeys);
+  const rivalryEligibleOwnerKeys = useMemo(() => {
+    const all = ownerListQ.data?.allOwners ?? [];
+    return buildDefaultRivalryEligibleOwnerKeys(
+      all.map((o) => ({
+        ownerKey: o.ownerKey,
+        seasons: Array.isArray(o.seasons) ? o.seasons : [],
+        championships: typeof o.championships === "number" ? o.championships : 0,
+      })),
+      season,
+    );
+  }, [ownerListQ.data?.allOwners, season]);
+
+  const rivalryHero = useRivalryDossierScan(rivalryEligibleOwnerKeys);
+
+  const eventSeasons = useMemo(() => {
+    const out: number[] = [];
+    if (cachedSeasons.includes(season)) out.push(season);
+    for (let y = season - 1; y >= season - 4 && y >= 2009; y--) {
+      if (cachedSeasons.includes(y)) out.push(y);
+    }
+    return [...new Set(out)];
+  }, [season, cachedSeasons]);
 
   const pulseTeams = (pulseQ.data?.teams ?? []) as Array<{
     teamId: number;
@@ -667,16 +686,10 @@ export function Dashboard() {
       <section className="grid gap-4 lg:grid-cols-3" aria-label="League insights">
         <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#0f131c]/95">
           <div className="border-b border-white/[0.06] px-4 py-3">
-            <h3 className="text-sm font-semibold text-zinc-50">Recent league events</h3>
-            <p className="text-xs text-zinc-500">Story feed</p>
+            <h3 className="text-sm font-semibold text-zinc-50">Recent League Events</h3>
+            <p className="text-xs text-zinc-500">Latest completed transactions (stored league data)</p>
           </div>
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 py-8 text-center">
-            <HeartPulse className="h-9 w-9 text-zinc-600" />
-            <p className="text-sm font-medium text-zinc-400">No event feed available yet.</p>
-            <p className="text-[11px] leading-relaxed text-zinc-600">
-              Future hooks: records broken, Hall of Fame movement, rivalry milestones — requires a league events engine.
-            </p>
-          </div>
+          <DashboardRecentLeagueEvents seasons={eventSeasons} enabled={eventSeasons.length > 0} />
         </div>
 
         <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#0f131c]/95">

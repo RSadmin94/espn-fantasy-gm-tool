@@ -147,6 +147,7 @@ import {
   type GmTeamRow,
 } from "./ownerProfileService";
 import { loadRivalryDossier } from "./rivalryDossierService";
+import { loadRecentLeagueTransactionEvents } from "./recentLeagueEventsService";
 import { buildHallOfFamePayload } from "./hallOfFameService";
 import {
   calcVORP,
@@ -3088,6 +3089,30 @@ export const appRouter = router({
           );
         }
         return txs;
+      }),
+
+    /** Recent completed-style transactions from persisted `gmTransactions` (newest first). */
+    recentLeagueTransactionEvents: publicProcedure
+      .input(
+        z.object({
+          seasons: z.array(z.number().int()).min(1).max(8),
+          limit: z.number().int().min(1).max(40).optional().default(12),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        const userId = ctx.user?.id ?? 0;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: userId ? { id: userId } : undefined }, null, undefined,
+        );
+        const lid = leagueId || "457622";
+        const db = await getDb();
+        if (!db) return [];
+        return loadRecentLeagueTransactionEvents({
+          db,
+          leagueId: lid,
+          seasons: input.seasons,
+          limit: input.limit ?? 12,
+        });
       }),
 
     // ── Trade Aging ─────────────────────────────────────────────────────────────
@@ -9849,6 +9874,7 @@ if (pickOrder.length > 0) {
           powerRankings: [] as OwnerPowerRankingRow[],
           ownerAwards: [] as OwnerAwardRow[],
           canonicalLeagueDebug: {} as Record<string, never>,
+          allOwners: [] as { ownerKey: string; ownerName: string; seasons: number[]; championships: number }[],
         };
       }
 
@@ -10476,6 +10502,12 @@ if (pickOrder.length > 0) {
         powerRankings,
         ownerAwards,
         canonicalLeagueDebug,
+        allOwners: all.map((o) => ({
+          ownerKey: o.ownerKey,
+          ownerName: o.ownerName,
+          seasons: o.seasons,
+          championships: o.championships,
+        })),
       };
     }),
 
@@ -10631,9 +10663,18 @@ if (pickOrder.length > 0) {
         };
       }),
 
-    /** Rivalry Dossier V1: focal owner vs all opponents from completed RS `gmMatchups` only (canonical ownerKey). */
+    /** Rivalry Dossier: focal owner vs opponents from completed `gmMatchups` (RS + playoffs), canonical ownerKey. */
     rivalryDossier: publicProcedure
-      .input(z.object({ ownerKey: z.string().min(1).max(255) }))
+      .input(
+        z.object({
+          ownerKey: z.string().min(1).max(255),
+          includeHistoricalOwners: z.boolean().optional().default(false),
+          /** When `includeHistoricalOwners` is false, opponents are limited to this set (default rivalry eligibility). */
+          rivalryEligibleOwnerKeys: z.array(z.string().min(1).max(255)).optional(),
+          /** When set, `pairDetail` is populated for this opponent only. */
+          opponentOwnerKeyForPair: z.string().min(1).max(255).optional(),
+        }),
+      )
       .query(async ({ ctx, input }) => {
         const userId = ctx.user?.id ?? 0;
         const { leagueId } = await resolveActiveLeagueId(
@@ -10642,7 +10683,19 @@ if (pickOrder.length > 0) {
         const lid = leagueId || "457622";
         const db = await getDb();
         if (!db) return null;
-        return loadRivalryDossier({ db, leagueId: lid, ownerKey: input.ownerKey.trim() });
+        const includeHistoricalOwners = input.includeHistoricalOwners === true;
+        const activeFilter =
+          includeHistoricalOwners || !input.rivalryEligibleOwnerKeys?.length
+            ? null
+            : new Set(input.rivalryEligibleOwnerKeys.map((k) => k.trim()).filter(Boolean));
+        return loadRivalryDossier({
+          db,
+          leagueId: lid,
+          ownerKey: input.ownerKey.trim(),
+          includeHistoricalOwners,
+          activeOwnerKeysInSeason: activeFilter,
+          opponentOwnerKeyForPair: input.opponentOwnerKeyForPair?.trim() || null,
+        });
       }),
 
   }),
