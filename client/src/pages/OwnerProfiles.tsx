@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
+import { RivalryDossierPanel, type RivalryPickerOption } from "@/components/RivalryDossierPanel";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -166,6 +167,7 @@ function ProfilePanel({
   powerRankings,
   ownerAwards,
   availableOwnerKeysCount,
+  dossierPickerOptions,
 }: {
   /** Canonical `owners.ownerList` row id — sent as `ownerKey` on `owners.ownerProfile`. */
   profileLookupKey: string;
@@ -174,6 +176,7 @@ function ProfilePanel({
   ownerAwards: any[];
   /** Distinct ownerKey count from ownerList (active + graveyard). */
   availableOwnerKeysCount: number;
+  dossierPickerOptions: RivalryPickerOption[];
 }) {
   const trpcAny = trpc as any;
   const [compareWith, setCompareWith] = useState("");
@@ -186,10 +189,12 @@ function ProfilePanel({
   const q = trpcAny.owners.ownerProfile.useQuery(profileArgs, { enabled: !!profileLookupKey.trim() });
   const p = q.data as any;
   const [intelExpanded, setIntelExpanded] = useState<string | null>(null);
+  const [showRivalryDossier, setShowRivalryDossier] = useState(false);
 
   useEffect(() => {
     setIntelExpanded(null);
     setCompareWith("");
+    setShowRivalryDossier(false);
   }, [profileLookupKey]);
 
   if (q.isPending || q.isLoading) return (
@@ -632,6 +637,23 @@ function ProfilePanel({
 
       {/* 5. Matchup Intel */}
       <Section title="Matchup Intel" icon={<Swords className="h-4 w-4" />} defaultOpen={false}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] text-muted-foreground">
+            Intel uses matchup pipeline with cache fallback; dossier uses gmMatchups RS completed only.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowRivalryDossier((v) => !v)}
+            className="text-xs font-medium text-sky-400 hover:text-sky-300 underline-offset-2 hover:underline"
+          >
+            {showRivalryDossier ? "Hide rivalry dossier" : "Rivalry dossier (gmMatchups)"}
+          </button>
+        </div>
+        {showRivalryDossier && (
+          <div className="mb-4 rounded-lg border border-border/70 bg-card/30 p-4">
+            <RivalryDossierPanel focalOwnerKey={profileLookupKey} pickerOptions={dossierPickerOptions} />
+          </div>
+        )}
         {intel.length === 0 ? (
           <div className="py-4 text-center text-sm text-muted-foreground">
             {num(intelDiag.unresolvedMatchups) > 0
@@ -825,6 +847,16 @@ export function OwnerProfiles() {
     return (row?.ownerName as string) || selectedOwnerKey;
   }, [active, graveyard, selectedOwnerKey]);
 
+  const dossierPickerOptions = useMemo((): RivalryPickerOption[] => {
+    const out: RivalryPickerOption[] = [];
+    for (const o of [...active, ...graveyard] as any[]) {
+      const ownerKey = listRowLookupKey(o);
+      if (!ownerKey) continue;
+      out.push({ ownerKey, label: String(o.ownerName ?? ownerKey) });
+    }
+    return out;
+  }, [active, graveyard]);
+
   if (listQ.isLoading) return (
     <div className="flex items-center justify-center py-24 text-muted-foreground">
       <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading owner profiles…
@@ -894,6 +926,7 @@ export function OwnerProfiles() {
               powerRankings={powerRankings}
               ownerAwards={ownerAwards}
               availableOwnerKeysCount={availableOwnerKeysCount}
+              dossierPickerOptions={dossierPickerOptions}
             />
           ) : (
             <div className="flex items-center justify-center h-64 rounded-lg border border-border text-muted-foreground text-sm">

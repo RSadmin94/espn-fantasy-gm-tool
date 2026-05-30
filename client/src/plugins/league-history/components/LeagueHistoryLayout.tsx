@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useLeagueHistoryModel, type LeagueHistoryTab, type SortKey } from "../hooks/useLeagueHistoryModel";
 import { DynastyBoardTab } from "./DynastyBoardTab";
@@ -34,6 +34,11 @@ export function LeagueHistoryPlugin() {
   const h2hOwners = model.h2hQ.data?.owners ?? [];
   const h2hMatrix = model.h2hQ.data?.matrix ?? [];
   const h2hDiagnostics = model.h2hQ.data?.diagnostics ?? null;
+
+  const dossierPickerOptions = useMemo(
+    () => model.rawOwners.map((o) => ({ ownerKey: o.ownerKey, label: o.displayName })),
+    [model.rawOwners],
+  );
 
   const standingsLoading = model.standingsLoading;
 
@@ -96,6 +101,7 @@ export function LeagueHistoryPlugin() {
           setRivalOwner={setRivalOwner}
           isLoading={model.h2hQ.isLoading}
           diagnostics={h2hDiagnostics}
+          dossierPickerOptions={dossierPickerOptions}
         />
       )}
 

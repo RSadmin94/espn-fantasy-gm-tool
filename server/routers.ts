@@ -137,6 +137,7 @@ import {
   aggregateMatchupWLByOwnerSeason,
   type GmTeamRow,
 } from "./ownerProfileService";
+import { loadRivalryDossier } from "./rivalryDossierService";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -10320,6 +10321,20 @@ if (pickOrder.length > 0) {
           comparison,
           headToHead,
         };
+      }),
+
+    /** Rivalry Dossier V1: focal owner vs all opponents from completed RS `gmMatchups` only (canonical ownerKey). */
+    rivalryDossier: publicProcedure
+      .input(z.object({ ownerKey: z.string().min(1).max(255) }))
+      .query(async ({ ctx, input }) => {
+        const userId = ctx.user?.id ?? 0;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: userId ? { id: userId } : undefined }, null, undefined,
+        );
+        const lid = leagueId || "457622";
+        const db = await getDb();
+        if (!db) return null;
+        return loadRivalryDossier({ db, leagueId: lid, ownerKey: input.ownerKey.trim() });
       }),
 
   }),

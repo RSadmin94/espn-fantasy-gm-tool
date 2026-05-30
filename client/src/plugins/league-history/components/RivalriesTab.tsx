@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
+import { RivalryDossierPanel } from "@/components/RivalryDossierPanel";
 
 type VsRec = { wins: number; losses: number; ties: number; gamesPlayed?: number };
 type MatrixRow = { owner: string; vs: Record<string, VsRec> };
@@ -24,6 +25,7 @@ type Props = {
   setRivalOwner: (o: string) => void;
   isLoading: boolean;
   diagnostics?: H2hDiagnostics | null;
+  dossierPickerOptions: Array<{ ownerKey: string; label: string }>;
 };
 
 function gamesPlayed(rec: VsRec): number {
@@ -31,7 +33,15 @@ function gamesPlayed(rec: VsRec): number {
   return rec.wins + rec.losses + rec.ties;
 }
 
-export function RivalriesTab({ h2hOwners, h2hMatrix, rivalOwner, setRivalOwner, isLoading, diagnostics }: Props) {
+export function RivalriesTab({
+  h2hOwners,
+  h2hMatrix,
+  rivalOwner,
+  setRivalOwner,
+  isLoading,
+  diagnostics,
+  dossierPickerOptions,
+}: Props) {
   const activeRival = rivalOwner || h2hOwners[0] || "";
   const rivalRow = h2hMatrix.find((r) => r.owner === activeRival);
 
@@ -63,6 +73,15 @@ export function RivalriesTab({ h2hOwners, h2hMatrix, rivalOwner, setRivalOwner, 
 
   return (
     <div className="space-y-4">
+      {dossierPickerOptions.length > 0 && (
+        <div className="rounded-lg border border-border/60 bg-card/30 p-4">
+          <RivalryDossierPanel
+            focalOwnerKey={dossierPickerOptions[0]!.ownerKey}
+            pickerOptions={dossierPickerOptions}
+          />
+        </div>
+      )}
+
       {diagnostics && (
         <details className="rounded-md border border-border/60 bg-muted/10 px-3 py-2 font-mono text-[11px] text-muted-foreground">
           <summary className="cursor-pointer select-none text-foreground/70">H2H resolution diagnostics</summary>
