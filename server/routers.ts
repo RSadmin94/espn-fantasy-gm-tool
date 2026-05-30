@@ -115,6 +115,11 @@ import {
 import { runHistoricalEnrichment } from "./espnHistoricalEnrichment";
 import { getDraftRecapCanonicalBoard } from "./draftRecapCanonical";
 import {
+  buildTeamsBySeason,
+  parseDraftPickTeamNameFromRawPick,
+  resolveDraftPickOwner,
+} from "./resolveDraftPickOwner";
+import {
   calcVORP,
   calcPositionalScarcity,
   calcRosterGaps,
@@ -296,6 +301,19 @@ type KeeperPoolEntry = {
   originalDraftSeason: number | null;
   lastKeptSeason:      number | null;
   lastKeptRound:       number | null;
+};
+
+type OwnerSummaryRow = {
+  ownerName:    string;
+  seasons:      number[];
+  currentTeam:  string;
+  totalWins:    number;
+  totalLosses:  number;
+  totalTies:    number;
+  winPct:       number;
+  championships:number;
+  runnerUps:    number;
+  thirdPlace:   number;
 };
 
 export const appRouter = router({
@@ -6141,6 +6159,7 @@ export const appRouter = router({
     }); // end memCache
   }),
 
+
   ownerPredictions: protectedProcedure
     .input(z.object({ memberId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -9099,6 +9118,178 @@ if (pickOrder.length > 0) {
         return buildStrategyModeContext({ wins: (team.wins as number) || 0, losses: (team.losses as number) || 0, ties: (team.ties as number) || 0 }, input.currentWeek, 14, input.manualOverride);
       }),
   }),
+
+  // Owner Profiles — separate sub-router to avoid espn router TypeScript depth limit
+  owners: router({
+
+    ownerList: publicProcedure.query(async ({ ctx }) => {
+      const userId = ctx.user?.id ?? 0;
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: userId ? { id: userId } : undefined }, null, undefined,
+      );
+      const lid = leagueId || "457622";
+      const db = await getDb();
+      if (!db) return { active: [] as OwnerSummaryRow[], graveyard: [] as OwnerSummaryRow[] };
+
+      const teamRows = await db
+        .select({ ownerName: gmTeams.ownerName, season: gmTeams.season, wins: gmTeams.wins, losses: gmTeams.losses, ties: gmTeams.ties, name: gmTeams.name })
+        .from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))
+        .orderBy(ascDrizzle(gmTeams.season));
+
+      const om = new Map<string, OwnerSummaryRow>();
+      for (const row of teamRows) {
+        const on = row.ownerName; if (!on) continue;
+        if (!om.has(on)) om.set(on, { ownerName:on, seasons:[], currentTeam:"", totalWins:0, totalLosses:0, totalTies:0, winPct:0, championships:0, runnerUps:0, thirdPlace:0 });
+        const o = om.get(on)!;
+        o.seasons.push(row.season); o.totalWins+=row.wins; o.totalLosses+=row.losses; o.totalTies+=row.ties;
+        o.currentTeam = row.name;
+      }
+      const medalRows = await db.select({ season:leagueMedals.season, c:leagueMedals.championOwner, r:leagueMedals.runnerUpOwner, t:leagueMedals.thirdPlaceOwner }).from(leagueMedals).where(eqDrizzle(leagueMedals.leagueId, lid));
+      for (const m of medalRows) {
+        if (om.has(m.c)) om.get(m.c)!.championships++;
+        if (om.has(m.r)) om.get(m.r)!.runnerUps++;
+        if (om.has(m.t)) om.get(m.t)!.thirdPlace++;
+      }
+      const all = Array.from(om.values()).map(o => {
+        const seasons = [...new Set(o.seasons)].sort((a,b)=>a-b);
+        const g = o.totalWins+o.totalLosses+o.totalTies;
+        return { ...o, seasons, winPct: g>0?Number(((o.totalWins/g)*100).toFixed(1)):0 };
+      });
+      return {
+        active:    all.filter(o=>o.seasons.length>=2).sort((a,b)=>b.totalWins-a.totalWins),
+        graveyard: all.filter(o=>o.seasons.length===1).sort((a,b)=>b.seasons[0]-a.seasons[0]),
+      };
+    }),
+
+    ownerProfile: publicProcedure
+      .input(z.object({ ownerName: z.string().min(1).max(255) }))
+      .query(async ({ ctx, input }) => {
+        const userId = ctx.user?.id ?? 0;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: userId ? { id: userId } : undefined }, null, undefined,
+        );
+        const lid = leagueId || "457622";
+        const db = await getDb();
+        if (!db) return null;
+        const ownerName = input.ownerName.trim();
+        const normN = (s:string) => String(s??"").toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
+
+        const teamRows = await db.select().from(gmTeams)
+          .where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), eqDrizzle(gmTeams.ownerName, ownerName)))
+          .orderBy(ascDrizzle(gmTeams.season));
+        if (teamRows.length === 0) return null;
+
+        // Build 3-level resolution maps
+        const allTeams = await db.select({ teamId:gmTeams.teamId, season:gmTeams.season, name:gmTeams.name, ownerName:gmTeams.ownerName }).from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid));
+        const l1 = new Map<string,string>(); const l2 = new Map<string,string>(); const l3v = new Map<string,Map<string,number>>();
+        for (const t of allTeams) {
+          if (!t.ownerName) continue;
+          if (t.teamId>0) l1.set(`${t.season}:${t.teamId}`, t.ownerName);
+          const nn=normN(t.name);
+          if (nn) {
+            l2.set(`${t.season}:${nn}`, t.ownerName);
+            if (!l3v.has(nn)) l3v.set(nn, new Map());
+            const v=l3v.get(nn)!; v.set(t.ownerName,(v.get(t.ownerName)??0)+1);
+          }
+        }
+        const l3 = new Map<string,string>();
+        for (const [nn,votes] of l3v) { const b=[...votes.entries()].sort((a,b)=>b[1]-a[1])[0]; if(b) l3.set(nn,b[0]); }
+
+        const resolveP = (teamId:number, rawPick:string|null, season:number): string => {
+          if (teamId>0) { const n=l1.get(`${season}:${teamId}`); if(n) return n; }
+          try {
+            const raw=JSON.parse(rawPick??"{}") as Record<string,unknown>;
+            const nn=normN(String(raw.teamName??""));
+            if (nn) { const n2=l2.get(`${season}:${nn}`); if(n2) return n2; const n3=l3.get(nn); if(n3) return n3; }
+          } catch { /* ignore */ }
+          return "Unknown";
+        };
+
+        const ownerTeamIds=[...new Set(teamRows.filter(t=>t.teamId>0).map(t=>t.teamId))];
+        const tIdSeason=new Map(teamRows.map(t=>[`${t.season}:${t.teamId}`, true]));
+        const apiPicks = ownerTeamIds.length>0
+          ? (await db.select({ playerName:gmDraftPicks.playerName, position:gmDraftPicks.position, roundId:gmDraftPicks.roundId, isKeeper:gmDraftPicks.isKeeper, season:gmDraftPicks.season, teamId:gmDraftPicks.teamId, rawPick:gmDraftPicks.rawPick })
+              .from(gmDraftPicks)
+              .where(andDrizzle(eqDrizzle(gmDraftPicks.leagueId, lid), inArrayDrizzle(gmDraftPicks.teamId, ownerTeamIds)))
+              .orderBy(ascDrizzle(gmDraftPicks.season), ascDrizzle(gmDraftPicks.roundId)))
+              .filter(p=>tIdSeason.has(`${p.season}:${p.teamId}`))
+          : [];
+
+        const legacyAll = await db.select({ playerName:gmDraftPicks.playerName, position:gmDraftPicks.position, roundId:gmDraftPicks.roundId, isKeeper:gmDraftPicks.isKeeper, season:gmDraftPicks.season, teamId:gmDraftPicks.teamId, rawPick:gmDraftPicks.rawPick })
+          .from(gmDraftPicks)
+          .where(andDrizzle(eqDrizzle(gmDraftPicks.leagueId, lid), sql`${gmDraftPicks.season} < 2018`))
+          .orderBy(ascDrizzle(gmDraftPicks.season));
+        const legacyPicks = legacyAll.filter(p=>resolveP(p.teamId, p.rawPick, p.season)===ownerName);
+        const unresolvedLegacy = legacyAll.filter(p=>resolveP(p.teamId, p.rawPick, p.season)==="Unknown").length;
+
+        const picks=[...apiPicks,...legacyPicks].sort((a,b)=>a.season!==b.season?a.season-b.season:a.roundId-b.roundId);
+
+        const medals=await db.select().from(leagueMedals).where(eqDrizzle(leagueMedals.leagueId, lid));
+        const champS=medals.filter(m=>m.championOwner===ownerName).map(m=>m.season);
+        const runnerS=medals.filter(m=>m.runnerUpOwner===ownerName).map(m=>m.season);
+        const thirdS=medals.filter(m=>m.thirdPlaceOwner===ownerName).map(m=>m.season);
+
+        const W=teamRows.reduce((s,r)=>s+r.wins,0), L=teamRows.reduce((s,r)=>s+r.losses,0), Ti=teamRows.reduce((s,r)=>s+r.ties,0);
+        const G=W+L+Ti; const winPct=G>0?Number(((W/G)*100).toFixed(1)):0;
+        const seasons=[...new Set(teamRows.map(t=>t.season))].sort((a,b)=>a-b);
+        const curTeam=teamRows[teamRows.length-1]?.name??ownerName;
+        const srecs=teamRows.map(t=>({ season:t.season, teamName:t.name, wins:t.wins, losses:t.losses, ties:t.ties, pointsFor:Number(t.pointsFor), pointsAgainst:Number(t.pointsAgainst), playoffSeed:t.playoffSeed ?? null, finalStanding:t.finalStanding ?? null, isChampion:champS.includes(t.season), isRunnerUp:runnerS.includes(t.season), isThirdPlace:thirdS.includes(t.season) }));
+        const bestS=[...srecs].sort((a,b)=>b.wins-a.wins)[0] ?? null;
+        const worstS=[...srecs].sort((a,b)=>a.wins-b.wins)[0] ?? null;
+
+        const totalPicks=picks.length;
+        const posD: Record<string,number>={}, earlyP: Record<string,number>={}, rsSum: Record<string,number>={}, rsCnt: Record<string,number>={};
+        for (const p of picks) {
+          const pos=String(p.position||"UNK"); posD[pos]=(posD[pos]??0)+1;
+          if (p.roundId<=3) earlyP[pos]=(earlyP[pos]??0)+1;
+          rsSum[pos]=(rsSum[pos]??0)+p.roundId; rsCnt[pos]=(rsCnt[pos]??0)+1;
+        }
+        const posShare: Record<string,number>={};
+        for (const [pos,cnt] of Object.entries(posD)) posShare[pos]=totalPicks>0?Number(((cnt/totalPicks)*100).toFixed(1)):0;
+        const avgR: Record<string,number>={};
+        for (const [pos,s] of Object.entries(rsSum)) avgR[pos]=Number((s/rsCnt[pos]).toFixed(1));
+        const topPos=Object.entries(posD).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([p])=>p);
+
+        const kp=picks.filter(p=>p.isKeeper===1);
+        const kTotal=kp.length, kRate=totalPicks>0?Number(((kTotal/totalPicks)*100).toFixed(1)):0;
+        const kPos: Record<string,number>={}; let kRSum=0;
+        for (const p of kp) { const pos=String(p.position||"UNK"); kPos[pos]=(kPos[pos]??0)+1; kRSum+=p.roundId; }
+        const avgKR: number|null=kTotal>0?Number((kRSum/kTotal).toFixed(1)):null;
+        const lastKept=kp.filter(p=>seasons.length>0 && p.season===Math.max(...seasons)).map(p=>({ playerName:String(p.playerName??""), position:String(p.position??""), round:p.roundId }));
+
+        const txn: Array<{season:number;acquisitions:number;drops:number;trades:number;moveToActive:number;moveToIR:number;total:number}>=[];
+        for (const t of teamRows) {
+          try {
+            const raw=JSON.parse(t.rawTeam||"{}") as Record<string,unknown>;
+            const tc=(raw.transactionCounter??{}) as Record<string,number>;
+            const a=Number(tc.acquisitions??0),d=Number(tc.drops??0),tr=Number(tc.trades??0),ma=Number(tc.moveToActive??0),mi=Number(tc.moveToIR??0);
+            txn.push({season:t.season,acquisitions:a,drops:d,trades:tr,moveToActive:ma,moveToIR:mi,total:a+d+tr+ma+mi});
+          } catch { txn.push({season:t.season,acquisitions:0,drops:0,trades:0,moveToActive:0,moveToIR:0,total:0}); }
+        }
+        const wd=txn.filter(s=>s.total>0);
+        const tAcq=txn.reduce((s,t)=>s+t.acquisitions,0), tDrop=txn.reduce((s,t)=>s+t.drops,0), tTrd=txn.reduce((s,t)=>s+t.trades,0), tIR=txn.reduce((s,t)=>s+t.moveToIR,0);
+        const avgT=wd.length>0?Number((wd.reduce((s,t)=>s+t.total,0)/wd.length).toFixed(1)):0;
+        const mostAct=txn.length>0?txn.reduce((b,c)=>c.total>b.total?c:b) ?? null:null;
+
+        const tp=topPos[0]??"unknown";
+        const chStr=champS.length>0?`${champS.length}-time champion (${champS.join(", ")})`:"no championships yet";
+        const kStr=kRate>20?`heavy keeper user (${kRate}% rate)`:kRate>10?"moderate keeper user":"rarely uses keepers";
+        const txStr=avgT>60?"high-activity manager":avgT>30?"moderate transaction volume":avgT>0?"low transaction volume":"transaction data unavailable";
+        const dStr=(earlyP["RB"]??0)>(earlyP["WR"]??0)?"RB-heavy early drafter":(earlyP["WR"]??0)>(earlyP["RB"]??0)?"WR-heavy early drafter":"balanced early-round approach";
+        const scouting=`${ownerName} active ${seasons.length} season${seasons.length!==1?"s":""} (${seasons[0]}\u2013${seasons[seasons.length-1]}), ${W}\u2013${L} record (${winPct}% win). ${chStr}. ${dStr}, ${tp} most drafted (${posShare[tp]??0}%). ${kStr}. ${txStr}.`;
+
+        return {
+          ownerName, scouting,
+          diagnostics: { unresolvedLegacy },
+          snapshot: { seasons, curTeam, W, L, Ti, winPct, champS, runnerS, thirdS, bestS, worstS, srecs },
+          draftDNA: { totalPicks, posShare, earlyP, avgR, topPos },
+          keeperDNA: { kTotal, kRate, kPos, avgKR, lastKept },
+          activityDNA: { tAcq, tDrop, tTrd, tIR, avgT, mostAct, txn },
+        };
+      }),
+
+  }),
+
 
   // ── DRAFT OPTIMIZER ──────────────────────────────────────────────────────────
   draftOptimizer: protectedProcedure
