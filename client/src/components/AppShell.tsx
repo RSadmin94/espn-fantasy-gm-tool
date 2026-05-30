@@ -8,6 +8,7 @@ import {
   Plug,
   RefreshCw,
   ArrowLeftRight,
+  Award,
   Trophy,
   Users,
   Repeat2,
@@ -66,7 +67,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { kind: "link", label: "Standings",      href: "/standings",      icon: Trophy },
       { kind: "link", label: "League History", href: "/history",        icon: History },
-      { kind: "link", label: "Ring of Honor",  href: "/ring-of-honor",  icon: Trophy },
+      { kind: "link", label: "Hall of Fame", href: "/hall-of-fame", icon: Award },
       { kind: "link", label: "Owner Profiles", href: "/owner-profiles", icon: Users },
       { kind: "link", label: "Matchups",       href: "/matchups",       icon: LayoutGrid },
       { kind: "link", label: "Rosters",        href: "/roster",         icon: Users },
@@ -288,7 +289,8 @@ function NavItemRow({
   const Icon = entry.icon;
   const isActive =
     pathname === entry.href ||
-    (entry.href === "/ring-of-honor" && pathname === "/championships");
+    (entry.href === "/hall-of-fame" &&
+      (pathname === "/ring-of-honor" || pathname === "/championships"));
   return (
     <li>
       <Link

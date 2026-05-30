@@ -138,6 +138,7 @@ import {
   type GmTeamRow,
 } from "./ownerProfileService";
 import { loadRivalryDossier } from "./rivalryDossierService";
+import { buildHallOfFamePayload } from "./hallOfFameService";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -5048,6 +5049,19 @@ export const appRouter = router({
           unmatchedThirdTeams,
         },
       };
+    }),
+
+    /** Hall of Fame — championships via league_medals; records from completed RS gmMatchups only (no gmTeams W/L). */
+    hallOfFame: publicProcedure.query(async ({ ctx }) => {
+      const userId = ctx.user?.id ?? 0;
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return null;
+      return buildHallOfFamePayload({ db, leagueId: leagueId || "457622", userId });
     }),
 
     /** All-time owner W-L-T from deduped completed weekly matchups (not standings snapshots). */
