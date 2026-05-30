@@ -31,7 +31,7 @@ type KeeperEntry = {
   keepYear:            0 | 1;
   isLastKeeperYear:    boolean;
   keeperRoundCost:     number;
-  costSource:          "espn_stored" | "draft_minus_1" | "fa_fixed";
+  costSource:          "espn_stored" | "draft_history_round" | "fa_fixed";
   originalDraftRound:  number | null;
   originalDraftSeason: number | null;
   lastKeptSeason:      number | null;
@@ -99,9 +99,9 @@ function statusBadge(entry: KeeperEntry) {
 }
 
 function costSourceTooltip(src: KeeperEntry["costSource"]) {
-  if (src === "espn_stored")  return "Cost stored by ESPN (player was kept last year)";
-  if (src === "draft_minus_1") return "Original draft round minus 1";
-  return "Free agent rule: fixed Round 7";
+  if (src === "espn_stored") return "Cost from stored draft history (ESPN keeper round)";
+  if (src === "draft_history_round") return "Cost from stored draft history (draft round)";
+  return "Not in stored draft history: fixed Round 7";
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
