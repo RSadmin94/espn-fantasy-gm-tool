@@ -1276,3 +1276,25 @@ export const leagueMedals = mysqlTable(
   (t) => [uniqueIndex("uq_league_medals").on(t.leagueId, t.season)]
 );
 export type LeagueMedal = typeof leagueMedals.$inferSelect;
+
+// ── Owner Aliases ────────────────────────────────────────────────────────────
+// Commissioner-approved mappings from legacy team names (pre-2018) to known
+// ownerNames. Populated by the Owner Identity Review page.
+export const ownerAliases = mysqlTable(
+  "owner_aliases",
+  {
+    id:                 int("id").autoincrement().primaryKey(),
+    leagueId:           varchar("leagueId", { length: 32 }).notNull(),
+    legacyTeamName:     varchar("legacyTeamName", { length: 255 }).notNull(),
+    legacySeason:       int("legacySeason"),
+    resolvedOwnerName:  varchar("resolvedOwnerName", { length: 255 }),
+    confidence:         int("confidence").notNull().default(0),
+    resolutionMethod:   varchar("resolutionMethod", { length: 64 }).notNull().default("unresolved"),
+    status:             varchar("status", { length: 32 }).notNull().default("pending"),
+    notes:              text("notes"),
+    createdAt:          timestamp("createdAt").defaultNow().notNull(),
+    updatedAt:          timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_owner_aliases").on(t.leagueId, t.legacyTeamName)]
+);
+export type OwnerAlias = typeof ownerAliases.$inferSelect;

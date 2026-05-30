@@ -69,7 +69,7 @@ import {
   getSeasonTeams,
 } from "./historicalDataService";
 import { upsertMatchups } from "./espnPersistence";
-import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmSeasonRosters, gmLeagueSettings, gmMatchups, syncRuns, leagueMedals } from "../drizzle/schema";
+import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmSeasonRosters, gmLeagueSettings, gmMatchups, syncRuns, leagueMedals, ownerAliases } from "../drizzle/schema";
 import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle, asc as ascDrizzle, inArray as inArrayDrizzle, sql } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
@@ -9245,6 +9245,285 @@ if (pickOrder.length > 0) {
   }),
 
   // Owner Profiles — separate sub-router to avoid espn router TypeScript depth limit
+
+  // ─── Data Health + Owner Identity ─────────────────────────────────────────
+  // Separate sub-router (avoids espn depth limit).
+  // leagueOverview: season/draft/matchup/medal coverage + readiness score.
+  // identityScan: legacy team-name resolution scan + fuzzy confidence.
+  // saveAlias: commissioner-approved mapping saved to owner_aliases table.
+  // ─────────────────────────────────────────────────────────────────────────
+  dataHealth: router({
+
+    leagueOverview: publicProcedure.query(async ({ ctx }) => {
+      const userId = ctx.user?.id ?? 0;
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: userId ? { id: userId } : undefined }, null, undefined,
+      );
+      const lid = leagueId || "457622";
+      const db = await getDb();
+      if (!db) return null;
+
+      const SEASONS = [2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+
+      // Aggregate each table per season in bulk
+      const teamCounts = await db
+        .select({ season: gmTeams.season, cnt: sql<number>`COUNT(*)`.mapWith(Number) })
+        .from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))
+        .groupBy(gmTeams.season);
+      const draftCounts = await db
+        .select({ season: gmDraftPicks.season, cnt: sql<number>`COUNT(*)`.mapWith(Number) })
+        .from(gmDraftPicks).where(eqDrizzle(gmDraftPicks.leagueId, lid))
+        .groupBy(gmDraftPicks.season);
+      const matchupCounts = await db
+        .select({ season: gmMatchups.season, cnt: sql<number>`COUNT(*)`.mapWith(Number) })
+        .from(gmMatchups).where(andDrizzle(eqDrizzle(gmMatchups.leagueId, lid), eqDrizzle(gmMatchups.isCompleted, 1), eqDrizzle(gmMatchups.isPlayoff, 0)))
+        .groupBy(gmMatchups.season);
+      const medalSeasons = (await db.select({ season: leagueMedals.season }).from(leagueMedals).where(eqDrizzle(leagueMedals.leagueId, lid))).map(r => r.season);
+
+      const tcMap  = new Map(teamCounts.map(r => [r.season, r.cnt]));
+      const dcMap  = new Map(draftCounts.map(r => [r.season, r.cnt]));
+      const mcMap  = new Map(matchupCounts.map(r => [r.season, r.cnt]));
+      const medSet = new Set(medalSeasons);
+
+      // Owner resolution quality: % of gmTeams rows with non-empty ownerName (2018+)
+      const teamRows2018 = await db
+        .select({ ownerName: gmTeams.ownerName })
+        .from(gmTeams).where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), sql`${gmTeams.season} >= 2018`));
+      const resolvedCount  = teamRows2018.filter(r => r.ownerName && r.ownerName.trim() !== "").length;
+      const ownerResolution = teamRows2018.length > 0 ? Math.round((resolvedCount / teamRows2018.length) * 100) : 0;
+
+      // Check for weekly player stats table existence
+      let weeklyStatsExist = false;
+      try {
+        const result = await db.execute(sql`SELECT COUNT(*) as cnt FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = "gm_weekly_player_stats"`) as unknown as Array<{cnt: number}>;
+        weeklyStatsExist = Number(result[0]?.cnt ?? 0) > 0;
+      } catch { weeklyStatsExist = false; }
+
+      const seasonRows = SEASONS.map(s => ({
+        season:     s,
+        teams:      tcMap.get(s) ?? 0,
+        draftPicks: dcMap.get(s) ?? 0,
+        matchups:   mcMap.get(s) ?? 0,
+        medals:     medSet.has(s),
+        weeklyStats: weeklyStatsExist,
+        apiSeason:  s >= 2018,
+      }));
+
+      // Readiness score
+      const apiSeasons = seasonRows.filter(s => s.apiSeason);
+      const fullCoverage = apiSeasons.filter(s => s.teams > 0 && s.draftPicks > 0 && s.matchups > 0).length;
+      const coveragePct  = apiSeasons.length > 0 ? fullCoverage / apiSeasons.length : 0;
+      const medalScore   = medSet.size > 0 ? 5 : 0;
+      const ownerScore   = Math.round(ownerResolution * 0.15);
+      const readinessScore = Math.min(100, Math.round(coveragePct * 80) + medalScore + ownerScore);
+
+      const featureGates = [
+        { name: "Rivalry Dossier",        status: mcMap.size > 0 ? "unlocked" : "blocked",   reason: mcMap.size > 0 ? "gmMatchups populated" : "Sync to populate matchup data" },
+        { name: "Heartbreak Index",        status: mcMap.size > 0 ? "unlocked" : "blocked",   reason: mcMap.size > 0 ? "gmMatchups scores available" : "Requires matchup scores" },
+        { name: "Owner Profiles",          status: tcMap.size > 0 ? "unlocked" : "blocked",   reason: tcMap.size > 0 ? "gmTeams populated" : "Sync to populate team data" },
+        { name: "Draft DNA",               status: dcMap.size > 0 ? "unlocked" : "blocked",   reason: dcMap.size > 0 ? "gmDraftPicks populated" : "Run Full Import" },
+        { name: "Keeper Advisor",          status: dcMap.size > 0 ? "unlocked" : "blocked",   reason: dcMap.size > 0 ? "gmDraftPicks with isKeeper flag" : "Run Full Import" },
+        { name: "Hall of Fame",            status: medSet.size > 0 && ownerResolution >= 80 ? "unlocked" : "warning", reason: medSet.size === 0 ? "Import league history medals" : ownerResolution < 80 ? "Resolve owner aliases first" : "All data present" },
+        { name: "No-Moves Simulator",      status: "blocked",  reason: "Requires gmWeeklyPlayerStats (P2 pipeline)" },
+        { name: "GM Score (full)",         status: "blocked",  reason: "Requires gmWeeklyPlayerStats (P2 pipeline)" },
+        { name: "KVS / Draft RODC",        status: "blocked",  reason: "Requires gmWeeklyPlayerStats (P2 pipeline)" },
+      ];
+
+      return { leagueId: lid, seasonRows, readinessScore, ownerResolution, featureGates, weeklyStatsExist };
+    }),
+
+    identityScan: publicProcedure.query(async ({ ctx }) => {
+      const userId = ctx.user?.id ?? 0;
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: userId ? { id: userId } : undefined }, null, undefined,
+      );
+      const lid = leagueId || "457622";
+      const db = await getDb();
+      if (!db) return { knownOwners: [], legacyItems: [], savedAliases: [], stats: { known: 0, autoResolved: 0, needsReview: 0, unresolved: 0 } };
+
+      // Inline Levenshtein for server-side fuzzy match
+      function lev(a: string, b: string): number {
+        const m = a.length, n = b.length;
+        const dp: number[][] = Array.from({ length: m + 1 }, (_, i) => Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0));
+        for (let i = 1; i <= m; i++) {
+          for (let j = 1; j <= n; j++) {
+            dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+          }
+        }
+        return dp[m][n];
+      }
+      const normStr = (s: string) => String(s ?? "").toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+      function fuzzyScore(a: string, b: string): number {
+        const na = normStr(a), nb = normStr(b);
+        const maxLen = Math.max(na.length, nb.length);
+        return maxLen === 0 ? 100 : Math.round((1 - lev(na, nb) / maxLen) * 100);
+      }
+
+      // Known owners (2018+)
+      const teamRows = await db.select({ ownerName: gmTeams.ownerName, name: gmTeams.name, season: gmTeams.season })
+        .from(gmTeams).where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), sql`${gmTeams.season} >= 2018`))
+        .orderBy(ascDrizzle(gmTeams.ownerName), ascDrizzle(gmTeams.season));
+      const ownerSeasons = new Map<string, number[]>();
+      const ownerTeams   = new Map<string, string[]>();
+      for (const r of teamRows) {
+        if (!r.ownerName) continue;
+        if (!ownerSeasons.has(r.ownerName)) ownerSeasons.set(r.ownerName, []);
+        ownerSeasons.get(r.ownerName)!.push(r.season);
+        if (!ownerTeams.has(r.ownerName)) ownerTeams.set(r.ownerName, []);
+        if (r.name && !ownerTeams.get(r.ownerName)!.includes(r.name)) ownerTeams.get(r.ownerName)!.push(r.name);
+      }
+      const knownOwners = Array.from(ownerSeasons.entries()).map(([ownerName, seasons]) => ({
+        ownerName, seasons: seasons.sort((a,b)=>a-b), teamNames: ownerTeams.get(ownerName) ?? [],
+      }));
+
+      // Legacy picks (pre-2018) — extract unique team names from rawPick JSON
+      const legacyPicks = await db.select({ season: gmDraftPicks.season, rawPick: gmDraftPicks.rawPick })
+        .from(gmDraftPicks)
+        .where(andDrizzle(eqDrizzle(gmDraftPicks.leagueId, lid), sql`${gmDraftPicks.season} < 2018`));
+
+      // Group by unique teamName
+      const legacyMap = new Map<string, { seasons: Set<number>; pickCount: number }>();
+      for (const p of legacyPicks) {
+        try {
+          const raw = JSON.parse(p.rawPick ?? "{}") as Record<string, unknown>;
+          const tn  = String(raw.teamName ?? "").trim();
+          if (!tn) continue;
+          if (!legacyMap.has(tn)) legacyMap.set(tn, { seasons: new Set(), pickCount: 0 });
+          legacyMap.get(tn)!.seasons.add(p.season);
+          legacyMap.get(tn)!.pickCount++;
+        } catch { /* skip bad JSON */ }
+      }
+
+      // Build L2 map: season+normName → ownerName (same as ownerProfile)
+      const l2 = new Map<string, string>();
+      for (const r of teamRows) {
+        if (!r.ownerName) continue;
+        const nn = normStr(r.name);
+        if (nn) l2.set(`${r.season}:${nn}`, r.ownerName);
+      }
+      // L3: normName → most common ownerName
+      const l3v = new Map<string, Map<string, number>>();
+      for (const r of teamRows) {
+        if (!r.ownerName) continue;
+        const nn = normStr(r.name);
+        if (!nn) continue;
+        if (!l3v.has(nn)) l3v.set(nn, new Map());
+        const v = l3v.get(nn)!; v.set(r.ownerName, (v.get(r.ownerName) ?? 0) + 1);
+      }
+      const l3 = new Map<string, string>();
+      for (const [nn, votes] of l3v) {
+        const best = [...votes.entries()].sort((a,b) => b[1]-a[1])[0];
+        if (best) l3.set(nn, best[0]);
+      }
+
+      // Saved aliases from DB
+      const savedRows = await db.select().from(ownerAliases).where(eqDrizzle(ownerAliases.leagueId, lid));
+      const savedMap  = new Map(savedRows.map(r => [r.legacyTeamName, r]));
+
+      // Score each legacy team name
+      const knownOwnerNames = Array.from(ownerSeasons.keys());
+      const legacyItems = Array.from(legacyMap.entries()).map(([tn, info]) => {
+        const nn          = normStr(tn);
+        const seasons     = [...info.seasons].sort((a,b)=>a-b);
+        const saved       = savedMap.get(tn);
+
+        // Try L2 / L3 first (high confidence structural matches)
+        let resolvedOwner:  string | null = null;
+        let confidence      = 0;
+        let method: string  = "unresolved";
+
+        for (const s of seasons) {
+          const l2match = l2.get(`${s}:${nn}`);
+          if (l2match) { resolvedOwner = l2match; confidence = 88; method = "season_name"; break; }
+        }
+        if (!resolvedOwner) {
+          const l3match = l3.get(nn);
+          if (l3match) { resolvedOwner = l3match; confidence = 74; method = "cross_season"; }
+        }
+        // Fuzzy fallback
+        if (!resolvedOwner) {
+          let best: { owner: string; score: number } | null = null;
+          for (const o of knownOwnerNames) {
+            const sc = fuzzyScore(tn, o);
+            if (!best || sc > best.score) best = { owner: o, score: sc };
+          }
+          if (best && best.score >= 60) {
+            resolvedOwner = best.owner; confidence = best.score; method = "fuzzy";
+          }
+        }
+
+        return {
+          legacyTeamName: tn,
+          seasons,
+          pickCount: info.pickCount,
+          resolvedOwner,
+          confidence,
+          method,
+          savedStatus: saved?.status ?? null,
+          savedOwner:  saved?.resolvedOwnerName ?? null,
+        };
+      }).sort((a,b) => b.confidence - a.confidence);
+
+      const autoResolved  = legacyItems.filter(i => i.confidence >= 88);
+      const needsReview   = legacyItems.filter(i => i.confidence >= 50 && i.confidence < 88);
+      const unresolved    = legacyItems.filter(i => i.confidence < 50);
+
+      return {
+        knownOwners,
+        legacyItems,
+        savedAliases: savedRows,
+        stats: {
+          known:        knownOwners.length,
+          autoResolved: autoResolved.length,
+          needsReview:  needsReview.length,
+          unresolved:   unresolved.length,
+        },
+      };
+    }),
+
+    saveAlias: publicProcedure
+      .input(z.object({
+        legacyTeamName:    z.string().min(1).max(255),
+        legacySeason:      z.number().int().nullable().optional(),
+        resolvedOwnerName: z.string().max(255).nullable(),
+        status:            z.enum(["approved", "rejected", "skipped"]),
+        confidence:        z.number().int().min(0).max(100).optional(),
+        resolutionMethod:  z.string().max(64).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user?.id ?? 0;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: userId ? { id: userId } : undefined }, null, undefined,
+        );
+        const lid = leagueId || "457622";
+        const db  = await getDb();
+        if (!db) return { ok: false };
+        try {
+          await db.insert(ownerAliases).values({
+            leagueId:          lid,
+            legacyTeamName:    input.legacyTeamName,
+            legacySeason:      input.legacySeason ?? null,
+            resolvedOwnerName: input.resolvedOwnerName ?? null,
+            confidence:        input.confidence ?? 0,
+            resolutionMethod:  input.resolutionMethod ?? "manual",
+            status:            input.status,
+          }).onDuplicateKeyUpdate({
+            set: {
+              resolvedOwnerName: input.resolvedOwnerName ?? null,
+              confidence:        input.confidence ?? 0,
+              resolutionMethod:  input.resolutionMethod ?? "manual",
+              status:            input.status,
+            }
+          });
+          return { ok: true };
+        } catch (err) {
+          console.error("[dataHealth.saveAlias]", err);
+          return { ok: false };
+        }
+      }),
+
+  }),
+
   owners: router({
 
     ownerList: publicProcedure.query(async ({ ctx }) => {

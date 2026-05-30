@@ -26,6 +26,8 @@ import {
   ChevronsUpDown,
   Loader2,
   History,
+  ShieldCheck,
+  UserSearch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -93,9 +95,11 @@ const NAV_GROUPS: NavGroup[] = [
     id: "data",
     title: "Data",
     items: [
-      { kind: "link", label: "League Settings", href: "/league-settings", icon: Settings },
-      { kind: "link", label: "Sync Data", href: "/sync", icon: RefreshCw },
-      { kind: "link", label: "Connect ESPN", href: "/connect", icon: Plug },
+      { kind: "link", label: "League Data Health",     href: "/league-data-health",    icon: ShieldCheck },
+      { kind: "link", label: "Owner Identity Review",  href: "/owner-identity-review", icon: UserSearch },
+      { kind: "link", label: "League Settings",        href: "/league-settings",       icon: Settings },
+      { kind: "link", label: "Sync Data",              href: "/sync",                  icon: RefreshCw },
+      { kind: "link", label: "Connect ESPN",           href: "/connect",               icon: Plug },
     ],
   },
   {

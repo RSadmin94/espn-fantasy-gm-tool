@@ -26,6 +26,8 @@ import { KeeperAdvisor } from "./pages/KeeperAdvisor";
 import { LeagueSettings } from "./pages/LeagueSettings";
 import { OwnerProfiles } from "./pages/OwnerProfiles";
 import { RingOfHonor } from "./pages/RingOfHonor";
+import { LeagueDataHealth } from "./pages/LeagueDataHealth";
+import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
 import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
@@ -119,8 +121,10 @@ const router = createBrowserRouter([
           { path: "/dashboard", element: <Dashboard /> },
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/sync", element: <SyncData /> },
-          { path: "/league-settings", element: <LeagueSettings /> },
-          { path: "/owner-profiles", element: <OwnerProfiles /> },
+          { path: "/league-settings",      element: <LeagueSettings /> },
+          { path: "/owner-profiles",         element: <OwnerProfiles /> },
+          { path: "/league-data-health",     element: <LeagueDataHealth /> },
+          { path: "/owner-identity-review",  element: <OwnerIdentityReview /> },
           { path: "/transactions", element: <Transactions /> },
           { path: "/standings", element: <Standings /> },
           { path: "/matchups", element: <Matchups /> },
