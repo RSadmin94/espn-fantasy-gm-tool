@@ -2117,44 +2117,30 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return { pool: [], draftYear, leagueId: lid, error: "db_unavailable" };
 
-        // ── 1. Roster pool — season_rosters table (scraped from ESPN Rosters page) ──
-        const rosterRows = await db
-          .select()
-          .from(gmSeasonRosters)
-          .where(andDrizzle(
-            eqDrizzle(gmSeasonRosters.leagueId, lid),
-            eqDrizzle(gmSeasonRosters.season, prevSeason),
-          ));
-
-        if (rosterRows.length === 0) {
-          return { pool: [], draftYear, leagueId: lid, error: "no_roster_data",
-            hint: `No roster data for ${prevSeason}. Run ROSTER IMPORT (2018–2025) from the extension popup.` };
-        }
-
-        // ── 2. Draft cost lookup — gmDraftPicks (same data as Draft History page) ──
-        const draftRows2025 = await db
+        // ── 1. All 2025 draft rows — every row is a keeper candidate ──────────
+        const rows2025 = await db
           .select({
             playerName: gmDraftPicks.playerName,
+            position:   gmDraftPicks.position,
             roundId:    gmDraftPicks.roundId,
+            teamId:     gmDraftPicks.teamId,
             isKeeper:   gmDraftPicks.isKeeper,
+            rawPick:    gmDraftPicks.rawPick,
           })
           .from(gmDraftPicks)
           .where(andDrizzle(
             eqDrizzle(gmDraftPicks.leagueId, lid),
             eqDrizzle(gmDraftPicks.season, prevSeason),
-          ));
+          ))
+          .orderBy(ascDrizzle(gmDraftPicks.roundId), ascDrizzle(gmDraftPicks.teamId));
 
-        // normalised name → { roundId, isKeeper }
-        const draftMap = new Map<string, { roundId: number; isKeeper: boolean }>();
-        for (const row of draftRows2025) {
-          const key = normKeeperName(row.playerName ?? "");
-          if (key && !draftMap.has(key)) {
-            draftMap.set(key, { roundId: row.roundId, isKeeper: row.isKeeper === 1 });
-          }
+        if (rows2025.length === 0) {
+          return { pool: [], draftYear, leagueId: lid, error: "no_draft_data",
+            hint: `No 2025 draft data in gmDraftPicks. Run Full Import from the extension popup.` };
         }
 
-        // ── 3. 2024 keepers — for 2-year streak check ────────────────────────
-        const kept2024Names = new Set(
+        // ── 2. 2024 keeper names — for 2-year consecutive streak check ────────
+        const kept2024 = new Set(
           (await db
             .select({ playerName: gmDraftPicks.playerName })
             .from(gmDraftPicks)
@@ -2166,60 +2152,71 @@ export const appRouter = router({
           .map(r => normKeeperName(r.playerName ?? ""))
         );
 
+        // ── 3. teamId → ownerName / teamName from gmTeams ─────────────────────
+        const teamRows = await db
+          .select({ teamId: gmTeams.teamId, name: gmTeams.name, ownerName: gmTeams.ownerName })
+          .from(gmTeams)
+          .where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), eqDrizzle(gmTeams.season, prevSeason)));
+        const ownerByTeamId = new Map<number, string>();
+        const nameByTeamId  = new Map<number, string>();
+        for (const t of teamRows) {
+          ownerByTeamId.set(t.teamId, t.ownerName ?? "");
+          nameByTeamId.set(t.teamId,  t.name      ?? "");
+        }
+
         // ── 4. Build pool ─────────────────────────────────────────────────────
         const pool: KeeperPoolEntry[] = [];
 
-        for (const player of rosterRows) {
-          const nkey = normKeeperName(player.playerName);
-          if (!nkey) continue;
+        for (const row of rows2025) {
+          const playerName = (row.playerName ?? "").trim();
+          if (!playerName) continue;
 
-          const draftEntry   = draftMap.get(nkey);
-          const isKeptInPrev = draftEntry?.isKeeper === true;
-          const wasKept2024  = kept2024Names.has(nkey);
+          const nkey           = normKeeperName(playerName);
+          const isKeptThisYear = row.isKeeper === 1;
+          const wasKept2024    = kept2024.has(nkey);
 
-          // Exclude: kept in both 2024 AND 2025 — 2-year max used up
-          if (isKeptInPrev && wasKept2024) continue;
+          // Rule 4: kept in both 2024 AND 2025 — 2-year max used up, exclude
+          if (isKeptThisYear && wasKept2024) continue;
 
-          const keepYear:         0 | 1   = isKeptInPrev ? 1 : 0;
+          const keepYear:         0 | 1   = isKeptThisYear ? 1 : 0;
           const isLastKeeperYear: boolean = keepYear === 1;
 
-          let keeperRoundCost: number;
-          let costSource: KeeperPoolEntry["costSource"];
-          let originalDraftRound:  number | null = null;
-          let originalDraftSeason: number | null = null;
+          // Rule 2: isKeeper = 1 → keeperCost = roundId (ESPN stored it)
+          // Rule 3: isKeeper = 0 → keeperCost = max(1, roundId - 1)
+          const keeperRoundCost = isKeptThisYear
+            ? row.roundId
+            : Math.max(1, row.roundId - 1);
+          const costSource: KeeperPoolEntry["costSource"] = isKeptThisYear
+            ? "espn_stored"
+            : "draft_history_round";
 
-          if (!draftEntry) {
-            // Not in 2025 draft — FA / waiver pickup
-            keeperRoundCost = 7;
-            costSource      = "fa_fixed";
-          } else if (isKeptInPrev) {
-            // Kept in 2025 — ESPN stored the keeper round
-            keeperRoundCost = draftEntry.roundId;
-            costSource      = "espn_stored";
-          } else {
-            // Drafted in 2025 — cost is one round earlier
-            keeperRoundCost     = Math.max(1, draftEntry.roundId - 1);
-            costSource          = "draft_history_round";
-            originalDraftRound  = draftEntry.roundId;
-            originalDraftSeason = prevSeason;
-          }
+          // teamName from rawPick JSON (most accurate) or gmTeams fallback
+          let rawTeamName = "";
+          try {
+            const raw = JSON.parse(row.rawPick ?? "{}") as { teamName?: string };
+            rawTeamName = raw.teamName ?? "";
+          } catch { /* ignore */ }
+
+          const teamId   = row.teamId;
+          const teamName = rawTeamName || nameByTeamId.get(teamId) || `Team ${teamId}`;
+          const ownerName = ownerByTeamId.get(teamId) || teamName;
 
           pool.push({
-            ownerName:           player.ownerName || player.teamName,
-            teamName:            player.teamName,
-            playerName:          player.playerName,
-            nflTeam:             player.nflTeam,
-            position:            player.position,
-            slot:                player.slot,
-            acquisitionType:     player.acquisitionType || (!draftEntry ? "Free Agency" : isKeptInPrev ? "Keeper" : "Draft"),
+            ownerName,
+            teamName,
+            playerName,
+            nflTeam:             "",
+            position:            row.position ?? "",
+            slot:                "",
+            acquisitionType:     isKeptThisYear ? "Keeper" : "Draft",
             keepYear,
             isLastKeeperYear,
             keeperRoundCost,
             costSource,
-            originalDraftRound,
-            originalDraftSeason,
-            lastKeptSeason:  isKeptInPrev ? prevSeason : null,
-            lastKeptRound:   isKeptInPrev ? draftEntry.roundId : null,
+            originalDraftRound:  isKeptThisYear ? null : row.roundId,
+            originalDraftSeason: isKeptThisYear ? null : prevSeason,
+            lastKeptSeason:      isKeptThisYear ? prevSeason : null,
+            lastKeptRound:       isKeptThisYear ? row.roundId : null,
           });
         }
 
