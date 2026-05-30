@@ -5,6 +5,7 @@ import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -12,29 +13,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertCircle,
-  Flame,
-  HeartPulse,
-  Loader2,
-  RefreshCw,
-  Trophy,
-} from "lucide-react";
+import { Flame, HeartPulse, Loader2, RefreshCw, Trophy } from "lucide-react";
 import { DevBuildDiagnostics } from "@/components/DevBuildDiagnostics";
-import {
-  DashboardCard,
-  DashboardSectionHeader,
-  MetricPill,
-  MiniTable,
-  StatusBadge,
-} from "@/components/dashboard/DashboardPrimitives";
+import { DashboardLeagueHealthCard } from "@/components/dashboard/DashboardLeagueHealthCard";
+import { DashboardMatchupMarquee, type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
+import { DashboardTimelineStrip, type TimelineChamp } from "@/components/dashboard/DashboardTimelineStrip";
+import { useRivalryDossierScan } from "@/components/dashboard/rivalryDossierScan";
+import { MiniTable, StatusBadge } from "@/components/dashboard/DashboardPrimitives";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface NormalizedStanding {
+type NormalizedStanding = {
   teamId: number;
   teamName: string;
   ownerName: string;
+  logoUrl?: string;
   wins: number;
   losses: number;
   ties: number;
@@ -43,7 +36,7 @@ interface NormalizedStanding {
   rankFinal: number | null;
   playoffSeed: number | null;
   displayRank: number;
-}
+};
 
 type StandingWithoutDisplayRank = Omit<NormalizedStanding, "displayRank">;
 
@@ -124,6 +117,7 @@ function normalizeStandingRow(raw: unknown): Omit<NormalizedStanding, "displayRa
   if (psRaw != null && Number.isFinite(Number(psRaw)) && Number(psRaw) > 0) {
     playoffSeed = Number(psRaw);
   }
+  const logoUrl = String(r.logoUrl ?? r.logo ?? "").trim();
   return {
     teamId,
     teamName,
@@ -135,6 +129,7 @@ function normalizeStandingRow(raw: unknown): Omit<NormalizedStanding, "displayRa
     pointsAgainst,
     rankFinal,
     playoffSeed,
+    logoUrl: logoUrl || undefined,
   };
 }
 
@@ -148,11 +143,6 @@ function formatRecord(t: Pick<NormalizedStanding, "wins" | "losses" | "ties">): 
   return ti > 0
     ? `${num(t.wins)}-${num(t.losses)}-${ti}`
     : `${num(t.wins)}-${num(t.losses)}`;
-}
-
-function formatWinPct(t: Pick<NormalizedStanding, "wins" | "losses" | "ties">): string {
-  const p = winPct(t);
-  return p > 0 ? `${(p * 100).toFixed(1)}%` : "—";
 }
 
 // ── Matchup scoreboard ─────────────────────────────────────────────────────────
@@ -177,6 +167,34 @@ function findScoreboardMatchup(
     if (ids.includes(a) && ids.includes(b)) return m;
   }
   return null;
+}
+
+function toMarqueeTeam(t: NormalizedStanding): MarqueeTeam {
+  return {
+    teamId: t.teamId,
+    teamName: t.teamName,
+    ownerName: t.ownerName,
+    displayRank: t.displayRank,
+    wins: t.wins,
+    losses: t.losses,
+    logoUrl: t.logoUrl,
+  };
+}
+
+function classifyPlayoff(
+  t: NormalizedStanding,
+  playoffSpots: number,
+): { label: string; tone: "success" | "warning" | "danger" | "default" } {
+  const spots = playoffSpots > 0 ? playoffSpots : 6;
+  if (t.playoffSeed != null) {
+    if (t.playoffSeed <= spots) return { label: "In", tone: "success" };
+    if (t.playoffSeed === spots + 1) return { label: "Bubble", tone: "warning" };
+    return { label: "Outside", tone: "danger" };
+  }
+  const r = t.displayRank;
+  if (r <= spots) return { label: "In", tone: "success" };
+  if (r === spots + 1) return { label: "Bubble", tone: "warning" };
+  return { label: "Outside", tone: "danger" };
 }
 
 // ── Dashboard ───────────────────────────────────────────────────────────────────
@@ -205,6 +223,7 @@ export function Dashboard() {
   const hofQ = trpc.espn.hallOfFame.useQuery(undefined, { staleTime: 60_000 });
   const ownerListQ = trpc.owners.ownerList.useQuery(undefined, { staleTime: 60_000 });
   const dataHealthQ = trpc.dataHealth.leagueOverview.useQuery(undefined, { staleTime: 60_000 });
+  const coverageQ = trpc.espn.ownerMatchupCoverage.useQuery(undefined, { staleTime: 60_000 });
 
   const pulseQ = trpc.weeklyAssessment.leaguePulse.useQuery(
     { season },
@@ -254,20 +273,26 @@ export function Dashboard() {
     subtitleParts.length > 0 ? subtitleParts.join(" · ") : "Connect ESPN and sync to populate history";
 
   const hofLeader = hofQ.data?.championships?.leaderboard?.[0];
-  const hbRivalry = unwrapMaybe(hofQ.data?.rivalryRecords?.mostHeartbreakGames);
-  const gamesRivalry = unwrapMaybe(hofQ.data?.rivalryRecords?.mostGamesPlayed);
-
-  const rivalryPair = hbRivalry ?? gamesRivalry;
-  const rivalryTitle = hbRivalry ? "Hottest rivalry (heartbreaks)" : "Most-played rivalry";
+  const leaderStats = hofLeader
+    ? hofQ.data?.ownerRecords?.find((r) => r.ownerKey === hofLeader.ownerKey)
+    : undefined;
 
   const sg = hofQ.data?.singleGameRecords;
+  const sr = hofQ.data?.seasonRecords;
   const highest = unwrapMaybe(sg?.highestTeamScore);
   const lowest = unwrapMaybe(sg?.lowestTeamScore);
-  const blowout = unwrapMaybe(sg?.biggestBlowout);
-  const closest = unwrapMaybe(sg?.closestGame);
+  const hiSeasonPf = unwrapMaybe(sr?.mostPointsInSeason);
 
-  const readiness = dataHealthQ.data?.readinessScore;
-  const ownerResPct = dataHealthQ.data?.ownerResolution;
+  const hasPlayoffGmMatchups = useMemo(() => {
+    const rows = coverageQ.data?.seasons ?? [];
+    return rows.some((s) => s.completedPlayoffDedupedRows > 0);
+  }, [coverageQ.data?.seasons]);
+
+  const activeOwnerKeys = useMemo(
+    () => (ownerListQ.data?.active ?? []).map((o) => o.ownerKey),
+    [ownerListQ.data?.active],
+  );
+  const rivalryHero = useRivalryDossierScan(activeOwnerKeys);
 
   const pulseTeams = (pulseQ.data?.teams ?? []) as Array<{
     teamId: number;
@@ -276,32 +301,55 @@ export function Dashboard() {
     wins: number;
     losses: number;
     currentOpponentTeamId: number | null;
+    playoffProbability: number;
+    standingRank: number;
   }>;
 
-  const myPulse =
-    leagueCtx.myTeamId != null
-      ? pulseTeams.find((t) => t.teamId === leagueCtx.myTeamId) ?? null
-      : null;
-  const oppId = myPulse?.currentOpponentTeamId ?? null;
-  const oppPulse = oppId != null ? pulseTeams.find((t) => t.teamId === oppId) ?? null : null;
-
   const scoreRows = scoreboardQ.data?.matchups as ScoreboardRow[] | undefined;
-  const matchupRow =
-    leagueCtx.myTeamId != null && oppId != null
-      ? findScoreboardMatchup(scoreRows, leagueCtx.myTeamId, oppId)
-      : null;
 
-  const homeIsMine = matchupRow && leagueCtx.myTeamId === matchupRow.homeTeamId;
-  const myProj = matchupRow
-    ? homeIsMine
-      ? matchupRow.homeProjected
-      : matchupRow.awayProjected
-    : null;
-  const oppProj = matchupRow
-    ? homeIsMine
-      ? matchupRow.awayProjected
-      : matchupRow.homeProjected
-    : null;
+  const marqueePick = useMemo(() => {
+    if (!ranked.length) return { a: null as NormalizedStanding | null, b: null as NormalizedStanding | null };
+    let a: NormalizedStanding | null = null;
+    let b: NormalizedStanding | null = null;
+    if (leagueCtx.myTeamId) {
+      a = ranked.find((t) => t.teamId === leagueCtx.myTeamId) ?? null;
+      const p = pulseTeams.find((x) => x.teamId === leagueCtx.myTeamId);
+      const oid = p?.currentOpponentTeamId ?? null;
+      b = oid != null ? ranked.find((t) => t.teamId === oid) ?? null : null;
+    }
+    if (!a || !b) {
+      const lead = ranked[0] ?? null;
+      if (!lead) return { a: null, b: null };
+      const p0 = pulseTeams.find((x) => x.teamId === lead.teamId);
+      const oid = p0?.currentOpponentTeamId ?? null;
+      a = lead;
+      b = oid != null ? ranked.find((t) => t.teamId === oid) ?? null : null;
+    }
+    return { a, b };
+  }, [ranked, pulseTeams, leagueCtx.myTeamId]);
+
+  const boardLite = useMemo((): ScoreboardLite | null => {
+    const { a, b } = marqueePick;
+    if (!a || !b || !scoreRows?.length) return null;
+    const r = findScoreboardMatchup(scoreRows, a.teamId, b.teamId);
+    if (!r) return null;
+    return {
+      homeTeamId: r.homeTeamId,
+      awayTeamId: r.awayTeamId,
+      homeProjected: r.homeProjected,
+      awayProjected: r.awayProjected,
+    };
+  }, [marqueePick, scoreRows]);
+
+  const outlookPct = useMemo(() => {
+    const { a } = marqueePick;
+    if (!a) return null;
+    const p = pulseTeams.find((x) => x.teamId === a.teamId);
+    if (p == null || typeof p.playoffProbability !== "number" || !Number.isFinite(p.playoffProbability)) {
+      return null;
+    }
+    return Math.round(p.playoffProbability);
+  }, [marqueePick, pulseTeams]);
 
   const powerTop = (ownerListQ.data?.powerRankings ?? []).slice(0, 5);
 
@@ -311,6 +359,19 @@ export function Dashboard() {
     return [...hist].sort((a, b) => a.season - b.season);
   }, [hofQ.data?.championships?.history]);
 
+  const timelineChamps: TimelineChamp[] = useMemo(
+    () =>
+      timelineRows.map((row) => ({
+        season: row.season,
+        label:
+          row.resolvedChampionDisplay?.trim() ||
+          row.championTeam?.trim() ||
+          "Not Yet Available",
+        isCurrentSeason: row.season === season,
+      })),
+    [timelineRows, season],
+  );
+
   const pageLoading =
     leagueCtx.isLoading ||
     activeLeagueQ.isLoading ||
@@ -319,30 +380,40 @@ export function Dashboard() {
 
   if (pageLoading) {
     return (
-      <div className="mx-auto max-w-7xl space-y-4" aria-busy="true">
+      <div className="mx-auto max-w-[1400px] space-y-4 bg-[#07090e] px-4 py-6" aria-busy="true">
         <Skeleton className="h-10 w-72 max-w-full" />
         <Skeleton className="h-4 w-96 max-w-full" />
         <div className="grid gap-3 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 rounded-xl" />
+            <Skeleton key={i} className="h-48 rounded-2xl" />
           ))}
         </div>
-        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-80 w-full rounded-2xl" />
       </div>
     );
   }
 
+  const teamA = marqueePick.a ? toMarqueeTeam(marqueePick.a) : null;
+  const teamB = marqueePick.b ? toMarqueeTeam(marqueePick.b) : null;
+  const weekLabel =
+    week >= 1 && !pulseQ.data?.isSeasonComplete
+      ? `Season ${season} · Week ${week}`
+      : pulseQ.data?.isSeasonComplete
+        ? `Season ${season} · Final`
+        : `Season ${season}`;
+
+  const playoffSpots = leagueCtx.playoffTeams > 0 ? leagueCtx.playoffTeams : 6;
+
   return (
-    <div className="mx-auto max-w-7xl space-y-8 pb-10">
-      {/* Top header */}
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="mx-auto max-w-[1400px] space-y-10 bg-[#07090e] px-4 pb-16 pt-6 sm:px-6">
+      <header className="flex flex-col gap-4 border-b border-white/[0.06] pb-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Command center</p>
-          <h1 className="truncate text-2xl font-bold tracking-tight text-zinc-50 md:text-3xl">{leagueName}</h1>
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-red-500/90">GM War Room</p>
+          <h1 className="truncate text-3xl font-bold tracking-tight text-zinc-50 md:text-4xl">{leagueName}</h1>
           <p className="text-sm text-zinc-400">{subtitle}</p>
         </div>
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-          <div className="w-full min-w-[140px] sm:w-44">
+          <div className="w-full min-w-[160px] sm:w-48">
             <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
               <SelectTrigger className="border-white/[0.08] bg-[#0f131c] text-zinc-100">
                 <SelectValue placeholder="Season" />
@@ -350,7 +421,7 @@ export function Dashboard() {
               <SelectContent>
                 {SEASONS_DESC.map((s) => (
                   <SelectItem key={s} value={String(s)} disabled={!cachedSeasons.includes(s)}>
-                    {s}
+                    Season {s}
                     {!cachedSeasons.includes(s) ? " (not cached)" : ""}
                   </SelectItem>
                 ))}
@@ -361,7 +432,7 @@ export function Dashboard() {
             asChild
             variant="outline"
             size="sm"
-            className="shrink-0 border-white/[0.1] bg-white/[0.02] text-zinc-200"
+            className="shrink-0 border-red-500/25 bg-red-500/[0.06] text-red-200 hover:bg-red-500/15"
           >
             <Link to="/sync" className="gap-2">
               <RefreshCw className="h-4 w-4" />
@@ -371,427 +442,320 @@ export function Dashboard() {
         </div>
       </header>
 
-      <DevBuildDiagnostics compact />
-
-      {/* Hero row */}
-      <section aria-label="League highlights">
-        <div className="grid gap-3 md:grid-cols-3">
-          <DashboardCard
-            title="Hall of Fame leader"
-            subtitle="All-time titles"
-            accent="gold"
-            to="/hall-of-fame"
-            toLabel="View Hall of Fame"
-          >
-            {hofQ.isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-zinc-500">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-              </div>
-            ) : hofLeader ? (
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-amber-500/30 bg-amber-500/10">
-                    <Trophy className="h-5 w-5 text-amber-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-lg font-semibold text-zinc-50">{hofLeader.displayName}</p>
-                    <p className="text-sm text-zinc-400">
-                      {hofLeader.titles} title{hofLeader.titles === 1 ? "" : "s"}
-                    </p>
-                  </div>
+      {/* Hero — three prestige cards */}
+      <section aria-label="League highlights" className="grid gap-4 md:grid-cols-3">
+        <div className="flex min-h-[240px] flex-col rounded-2xl border border-amber-500/25 bg-gradient-to-br from-[#141820] to-[#0c0f14] p-5 shadow-[0_0_40px_-12px_rgba(245,158,11,0.35)]">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-400/90">Hall of Fame leader</p>
+            <Trophy className="h-4 w-4 shrink-0 text-amber-400/80" aria-hidden />
+          </div>
+          {hofQ.isLoading ? (
+            <div className="mt-8 flex flex-1 items-center gap-2 text-sm text-zinc-500">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            </div>
+          ) : hofLeader ? (
+            <div className="mt-4 flex flex-1 flex-col">
+              <p className="text-2xl font-bold tracking-tight text-zinc-50">{hofLeader.displayName}</p>
+              <p className="mt-1 text-sm text-amber-200/90">
+                {hofLeader.titles} championship{hofLeader.titles === 1 ? "" : "s"}
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-zinc-400">
+                <div className="rounded-lg border border-white/[0.06] bg-black/20 px-2 py-2">
+                  <p className="text-[10px] font-semibold uppercase text-zinc-500">Win %</p>
+                  <p className="mt-0.5 font-semibold tabular-nums text-zinc-100">
+                    {leaderStats ? `${leaderStats.winPct.toFixed(1)}%` : "—"}
+                  </p>
                 </div>
-                <MetricPill label="Hall of Fame score" value="Unavailable" variant="neutral" />
-                {/* TODO: surface a dedicated HoF composite score from the API when available */}
-              </div>
-            ) : (
-              <p className="text-sm text-zinc-500">No championship data yet.</p>
-            )}
-          </DashboardCard>
-
-          <DashboardCard
-            title={rivalryTitle}
-            accent="red"
-            to="/matchups"
-            toLabel="View matchups"
-          >
-            {hofQ.isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-zinc-500">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-              </div>
-            ) : rivalryPair && "displayA" in rivalryPair ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-center gap-2 text-center">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-zinc-100">{rivalryPair.displayA}</p>
-                  </div>
-                  <Flame className="h-5 w-5 shrink-0 text-red-400/90" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-zinc-100">{rivalryPair.displayB}</p>
-                  </div>
+                <div className="rounded-lg border border-white/[0.06] bg-black/20 px-2 py-2">
+                  <p className="text-[10px] font-semibold uppercase text-zinc-500">Seasons active</p>
+                  <p className="mt-0.5 font-semibold tabular-nums text-zinc-100">
+                    {leaderStats?.seasonsActive ?? "—"}
+                  </p>
                 </div>
-                {"heartbreakGames" in rivalryPair ? (
-                  <MetricPill
-                    label="Heartbreak games (≤3 pts)"
-                    value={num(rivalryPair.heartbreakGames as number)}
-                    variant="red"
-                  />
-                ) : null}
-                {"games" in rivalryPair ? (
-                  <MetricPill
-                    label="Head-to-head games tracked"
-                    value={num(rivalryPair.games as number)}
-                    variant="neutral"
-                  />
-                ) : null}
-                <p className="text-[11px] leading-snug text-zinc-500">
-                  Win–loss between this pair is not returned on this payload; open Matchups for scheduled
-                  head-to-heads.
-                </p>
               </div>
-            ) : (
-              <p className="text-sm text-zinc-500">Unavailable — import matchup history to compute rivalries.</p>
-            )}
-          </DashboardCard>
-
-          <DashboardCard
-            title="League health"
-            subtitle="Data readiness"
-            accent="green"
-            to="/league-data-health"
-            toLabel="League data health"
-          >
-            {dataHealthQ.isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-zinc-500">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+              <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Hall of Fame score</p>
+                <p className="mt-1 text-sm font-medium text-zinc-300">Coming Soon</p>
               </div>
-            ) : dataHealthQ.data == null ? (
-              <p className="text-sm text-zinc-500">Unavailable</p>
-            ) : (
-              <div className="space-y-3">
-                {readiness != null ? (
-                  <div className="flex items-end gap-2">
-                    <span className="text-3xl font-bold tabular-nums text-emerald-300">{readiness}</span>
-                    <span className="pb-1 text-xs font-medium uppercase text-zinc-500">readiness</span>
-                  </div>
-                ) : (
-                  <p className="text-sm text-zinc-500">Unavailable</p>
-                )}
-                <ul className="space-y-1.5 text-xs text-zinc-400">
-                  <li className="flex justify-between gap-2 border-b border-white/[0.04] pb-1">
-                    <span>Owner name resolution (2018+)</span>
-                    <span className="tabular-nums text-zinc-200">
-                      {ownerResPct != null ? `${ownerResPct}%` : "Unavailable"}
-                    </span>
-                  </li>
-                  <li className="flex justify-between gap-2">
-                    <span>Weekly player stats table</span>
-                    <span className="text-zinc-200">
-                      {dataHealthQ.data.weeklyStatsExist ? "Present" : "Not present"}
-                    </span>
-                  </li>
-                </ul>
-              </div>
-            )}
-          </DashboardCard>
+            </div>
+          ) : (
+            <div className="mt-6 flex flex-1 flex-col justify-center text-sm text-zinc-500">
+              <p className="font-medium text-zinc-400">Not Yet Available</p>
+              <p className="mt-1 text-xs text-zinc-600">Import medals to crown a league leader.</p>
+            </div>
+          )}
+          <Link to="/hall-of-fame" className="mt-4 text-xs font-medium text-amber-400/90 hover:text-amber-300">
+            View Hall of Fame →
+          </Link>
         </div>
+
+        <div className="flex min-h-[240px] flex-col rounded-2xl border border-red-500/25 bg-gradient-to-br from-[#16121a] to-[#0c0f14] p-5 shadow-[0_0_36px_-12px_rgba(239,68,68,0.3)]">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-400/90">Hottest rivalry</p>
+            <Flame className="h-4 w-4 shrink-0 text-red-400/80" aria-hidden />
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-black/20 px-2 py-1.5">
+            <span className="text-[10px] font-medium text-zinc-500">Active owners only</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] text-zinc-600">Historical</span>
+              <Switch disabled checked={false} className="scale-90 opacity-50" aria-label="Include historical owners — coming soon" />
+            </div>
+          </div>
+          {rivalryHero.status === "loading" || ownerListQ.isLoading ? (
+            <div className="mt-8 flex flex-1 items-center gap-2 text-sm text-zinc-500">
+              <Loader2 className="h-4 w-4 animate-spin" /> Scanning dossiers…
+            </div>
+          ) : rivalryHero.status === "ready" ? (
+            <div className="mt-4 flex flex-1 flex-col">
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+                <p className="text-lg font-bold text-zinc-100">{rivalryHero.focalDisplay}</p>
+                <span className="rounded-full border border-red-500/35 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-red-300">
+                  vs
+                </span>
+                <p className="text-lg font-bold text-zinc-100">{rivalryHero.opponentDisplay}</p>
+              </div>
+              <p className="mt-3 text-center font-mono text-3xl font-black tabular-nums text-red-400/95">
+                {rivalryHero.wins}-{rivalryHero.losses}
+                {rivalryHero.ties > 0 ? `-${rivalryHero.ties}` : ""}
+              </p>
+              <p className="text-center text-[10px] text-zinc-500">Head-to-head (focal: {rivalryHero.focalDisplay})</p>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-2 py-2 text-center">
+                  <p className="text-[10px] font-semibold uppercase text-zinc-500">Heartbreak losses</p>
+                  <p className="mt-0.5 text-lg font-bold text-red-300/90">{rivalryHero.heartbreakLosses}</p>
+                </div>
+                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-2 py-2 text-center">
+                  <p className="text-[10px] font-semibold uppercase text-zinc-500">Closest game</p>
+                  <p className="mt-0.5 text-sm font-semibold text-zinc-200">
+                    {rivalryHero.closestMarginLabel ?? "—"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-6 flex flex-1 flex-col justify-center text-center text-sm text-zinc-500">
+              <p className="font-medium text-zinc-400">Not Yet Available</p>
+              <p className="mt-1 px-2 text-xs text-zinc-600">
+                {rivalryHero.status === "idle"
+                  ? "No active owner list yet."
+                  : "Need at least two active owners with regular-season head-to-head rows in gmMatchups."}
+              </p>
+            </div>
+          )}
+          <Link to="/matchups" className="mt-4 text-xs font-medium text-red-400/90 hover:text-red-300">
+            Rivalry center →
+          </Link>
+        </div>
+
+        <DashboardLeagueHealthCard isLoading={dataHealthQ.isLoading} data={dataHealthQ.data ?? null} />
       </section>
 
-      {/* Main grid */}
-      <section className="space-y-3" aria-label="League grid">
-        <DashboardSectionHeader title="League board" />
-        <div className="grid gap-3 lg:grid-cols-3">
-          <div className="space-y-3 lg:col-span-2">
-            <DashboardCard
-              title="Current standings"
-              subtitle={`Season ${season} · top 5`}
-              to="/standings"
-              toLabel="Full standings"
-            >
+      {/* Row 2 — standings | marquee matchup | records */}
+      <section className="grid gap-4 xl:grid-cols-12" aria-label="League board">
+        <div className="space-y-3 xl:col-span-3">
+          <div className="flex min-h-[280px] flex-col rounded-2xl border border-white/[0.08] bg-[#0f131c]/95 shadow-lg shadow-black/40">
+            <div className="border-b border-white/[0.06] px-4 py-3">
+              <h3 className="text-sm font-semibold text-zinc-50">Current standings</h3>
+              <p className="text-xs text-zinc-500">Top 6 · Season {season}</p>
+            </div>
+            <div className="flex-1 px-3 py-3">
               {standingsQ.isError ? (
-                <div className="flex flex-col items-start gap-2 text-sm text-red-300">
+                <div className="flex flex-col gap-2 text-sm text-red-300">
                   <span>Could not load standings.</span>
                   <Button type="button" size="sm" variant="outline" onClick={() => void standingsQ.refetch()}>
                     Retry
                   </Button>
                 </div>
               ) : ranked.length === 0 ? (
-                <p className="text-sm text-zinc-500">No standings for this season.</p>
+                <p className="text-sm text-zinc-500">Not Yet Available for this season.</p>
               ) : (
                 <MiniTable
                   dense
-                  columns={["#", "Team / owner", "W-L-T", "Win %", "PF"]}
-                  rows={ranked.slice(0, 5).map((t) => {
+                  columns={["Rank", "Owner", "Record", "PF"]}
+                  rows={ranked.slice(0, 6).map((t) => {
                     const mine = leagueCtx.myTeamId != null && t.teamId === leagueCtx.myTeamId;
                     return [
                       <span key="r" className="tabular-nums text-zinc-400">
                         {t.displayRank}
                       </span>,
-                      <div key="tm" className={cn("min-w-0", mine && "text-red-400")}>
-                        <div className="truncate font-medium">{t.teamName}</div>
-                        <div className="truncate text-[11px] text-zinc-500">{t.ownerName || "—"}</div>
+                      <div key="o" className={cn("min-w-0 font-medium", mine && "text-red-400")}>
+                        <div className="truncate">{t.ownerName || t.teamName}</div>
                       </div>,
                       formatRecord(t),
-                      formatWinPct(t),
-                      num(t.pointsFor).toFixed(1),
+                      <span key="pf" className="tabular-nums text-zinc-200">
+                        {num(t.pointsFor).toFixed(1)}
+                      </span>,
                     ];
                   })}
                 />
               )}
-            </DashboardCard>
-
-            <DashboardCard
-              title="This week's matchup"
-              subtitle={
-                week >= 1 && !pulseQ.data?.isSeasonComplete
-                  ? `Week ${week}`
-                  : pulseQ.data?.isSeasonComplete
-                    ? "Season complete"
-                    : "Current week"
-              }
-              to="/matchups"
-              toLabel="All matchups"
-            >
-              {pulseQ.isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-                </div>
-              ) : pulseQ.isError || !pulseQ.data ? (
-                <p className="text-sm text-zinc-500">
-                  No current matchup data — refresh ESPN cache from Sync Data.
-                </p>
-              ) : pulseQ.data.isSeasonComplete || week < 1 ? (
-                <p className="text-sm text-zinc-500">No current matchup data for a completed season window.</p>
-              ) : !myPulse || !oppPulse ? (
-                <p className="text-sm text-zinc-500">
-                  {leagueCtx.myTeamId == null
-                    ? "Link your team in your profile to highlight your matchup."
-                    : "No current matchup data for your team in the pulse snapshot."}
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-stretch justify-between gap-3 text-center">
-                    <div className="min-w-0 flex-1 rounded-lg border border-blue-500/15 bg-blue-500/[0.04] px-2 py-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-300/90">You</p>
-                      <p className="mt-1 truncate text-sm font-semibold text-zinc-100">{myPulse.teamName}</p>
-                      <p className="truncate text-[11px] text-zinc-500">{myPulse.ownerName || "—"}</p>
-                      <p className="mt-2 text-xs text-zinc-400">
-                        {myPulse.wins}–{myPulse.losses}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-center justify-center px-1">
-                      <span className="text-[10px] font-bold text-zinc-500">VS</span>
-                    </div>
-                    <div className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2 py-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Opponent</p>
-                      <p className="mt-1 truncate text-sm font-semibold text-zinc-100">{oppPulse.teamName}</p>
-                      <p className="truncate text-[11px] text-zinc-500">{oppPulse.ownerName || "—"}</p>
-                      <p className="mt-2 text-xs text-zinc-400">
-                        {oppPulse.wins}–{oppPulse.losses}
-                      </p>
-                    </div>
-                  </div>
-                  {myProj != null && oppProj != null ? (
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-semibold uppercase text-blue-300/90">Projected (ESPN)</p>
-                      <p className="font-mono text-sm text-zinc-200">
-                        {myProj.toFixed(1)} — {oppProj.toFixed(1)}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-zinc-500">Projections unavailable for this week in synced data.</p>
-                  )}
-                </div>
-              )}
-            </DashboardCard>
-
-            <DashboardCard
-              title="League records"
-              subtitle="Single-game book"
-              accent="gold"
-              to="/hall-of-fame"
-              toLabel="Hall of Fame records"
-            >
-              {hofQ.isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-                </div>
-              ) : (
-                <ul className="space-y-2 text-sm">
-                  <li className="flex flex-col gap-0.5 border-b border-white/[0.04] pb-2 sm:flex-row sm:justify-between">
-                    <span className="text-zinc-500">Highest team score</span>
-                    <span className="text-zinc-100">
-                      {highest ? `${highest.score.toFixed(1)} pts · ${highest.label}` : "Unavailable"}
-                    </span>
-                  </li>
-                  <li className="flex flex-col gap-0.5 border-b border-white/[0.04] pb-2 sm:flex-row sm:justify-between">
-                    <span className="text-zinc-500">Lowest team score</span>
-                    <span className="text-zinc-100">
-                      {lowest ? `${lowest.score.toFixed(1)} pts · ${lowest.label}` : "Unavailable"}
-                    </span>
-                  </li>
-                  <li className="flex flex-col gap-0.5 border-b border-white/[0.04] pb-2 sm:flex-row sm:justify-between">
-                    <span className="text-zinc-500">Biggest blowout</span>
-                    <span className="text-zinc-100">
-                      {blowout
-                        ? `${blowout.margin.toFixed(1)} pts margin · ${blowout.winnerLabel} vs ${blowout.loserLabel}`
-                        : "Unavailable"}
-                    </span>
-                  </li>
-                  <li className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-                    <span className="text-zinc-500">Closest game</span>
-                    <span className="text-zinc-100">
-                      {closest
-                        ? `${closest.margin.toFixed(2)} pt margin · ${closest.homeLabel} ${closest.homeScore}–${closest.awayScore} ${closest.awayLabel}`
-                        : "Unavailable"}
-                    </span>
-                  </li>
-                </ul>
-              )}
-            </DashboardCard>
+            </div>
+            <div className="border-t border-white/[0.06] px-4 py-2">
+              <Link to="/standings" className="text-xs font-medium text-blue-400 hover:text-blue-300">
+                View full standings →
+              </Link>
+            </div>
           </div>
+        </div>
 
-          <div className="space-y-3">
-            <DashboardCard title="Recent league events" subtitle="Automated feed">
-              {/* TODO: wire to a real league activity stream when the API exposes it */}
-              <div className="flex flex-col items-center gap-2 py-6 text-center">
-                <HeartPulse className="h-8 w-8 text-zinc-600" />
-                <p className="text-sm text-zinc-500">No tracked events yet.</p>
-                <p className="text-[11px] text-zinc-600">
-                  Championship, record, and rivalry notifications will appear here once a timeline feed exists.
-                </p>
-              </div>
-            </DashboardCard>
+        <div className="xl:col-span-6">
+          <DashboardMatchupMarquee
+            isLoading={pulseQ.isLoading || scoreboardQ.isLoading}
+            weekLabel={weekLabel}
+            teamA={teamA}
+            teamB={teamB}
+            board={boardLite}
+            winProbPct={outlookPct}
+            winProbCaption="Uses weeklyAssessment.leaguePulse team outlook when available."
+          />
+        </div>
 
-            <DashboardCard
-              title="Dynasty power rankings"
-              subtitle="Composite score (server)"
-              to="/owner-profiles"
-              toLabel="Owner profiles"
-            >
-              {ownerListQ.isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
+        <div className="space-y-3 xl:col-span-3">
+          <div className="flex min-h-[280px] flex-col rounded-2xl border border-amber-500/20 bg-[#0f131c]/95 shadow-[0_0_28px_-12px_rgba(245,158,11,0.22)]">
+            <div className="border-b border-white/[0.06] px-4 py-3">
+              <h3 className="text-sm font-semibold text-zinc-50">League records</h3>
+              <p className="text-xs text-zinc-500">All-time marks</p>
+            </div>
+            <div className="flex flex-1 flex-col gap-3 px-4 py-3 text-sm">
+              {hofQ.isLoading ? (
+                <div className="flex items-center gap-2 text-zinc-500">
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading…
                 </div>
-              ) : powerTop.length === 0 ? (
-                <p className="text-sm text-zinc-500">No power ranking data.</p>
               ) : (
-                <ol className="space-y-2">
-                  {powerTop.map((o) => (
+                <>
+                  <div className="flex flex-col gap-0.5 border-b border-white/[0.05] pb-2">
+                    <span className="text-[10px] font-semibold uppercase text-zinc-500">Highest single game</span>
+                    <span className="text-zinc-100">
+                      {highest ? `${highest.score.toFixed(1)} pts · ${highest.label}` : "Not Yet Calculated"}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-0.5 border-b border-white/[0.05] pb-2">
+                    <span className="text-[10px] font-semibold uppercase text-zinc-500">Lowest single game</span>
+                    <span className="text-zinc-100">
+                      {lowest ? `${lowest.score.toFixed(1)} pts · ${lowest.label}` : "Not Yet Calculated"}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-0.5 border-b border-white/[0.05] pb-2">
+                    <span className="text-[10px] font-semibold uppercase text-zinc-500">Most points (season)</span>
+                    <span className="text-zinc-100">
+                      {hiSeasonPf
+                        ? `${hiSeasonPf.pointsFor.toFixed(1)} PF · ${hiSeasonPf.displayName} (${hiSeasonPf.season})`
+                        : "Not Yet Calculated"}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[10px] font-semibold uppercase text-zinc-500">Closest championship</span>
+                    <span className="text-xs leading-snug text-zinc-400">
+                      {hasPlayoffGmMatchups
+                        ? "Playoff rows exist in gmMatchups; smallest championship margin is not included in the Hall of Fame payload for this view."
+                        : "Not included in Hall of Fame payload."}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="border-t border-white/[0.06] px-4 py-2">
+              <Link to="/hall-of-fame" className="text-xs font-medium text-amber-400/90 hover:text-amber-300">
+                Full records →
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Row 3 — events | power | playoff */}
+      <section className="grid gap-4 lg:grid-cols-3" aria-label="League insights">
+        <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#0f131c]/95">
+          <div className="border-b border-white/[0.06] px-4 py-3">
+            <h3 className="text-sm font-semibold text-zinc-50">Recent league events</h3>
+            <p className="text-xs text-zinc-500">Story feed</p>
+          </div>
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 py-8 text-center">
+            <HeartPulse className="h-9 w-9 text-zinc-600" />
+            <p className="text-sm font-medium text-zinc-400">No event feed available yet.</p>
+            <p className="text-[11px] leading-relaxed text-zinc-600">
+              Future hooks: records broken, Hall of Fame movement, rivalry milestones — requires a league events engine.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#0f131c]/95">
+          <div className="border-b border-white/[0.06] px-4 py-3">
+            <h3 className="text-sm font-semibold text-zinc-50">Dynasty power rankings</h3>
+            <p className="text-xs text-zinc-500">Top 5 · owners.ownerList</p>
+          </div>
+          <div className="flex-1 px-3 py-3">
+            {ownerListQ.isLoading ? (
+              <div className="flex items-center gap-2 text-sm text-zinc-500">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+              </div>
+            ) : powerTop.length === 0 ? (
+              <p className="text-sm text-zinc-500">Not Yet Available</p>
+            ) : (
+              <MiniTable
+                dense
+                columns={["Owner", "Power Score"]}
+                rows={powerTop.map((o) => [
+                  <div key="n" className="min-w-0">
+                    <div className="truncate font-medium text-zinc-100">{o.ownerName}</div>
+                    <div className="truncate text-[10px] text-zinc-600">{o.currentTeam}</div>
+                  </div>,
+                  <span key="s" className="tabular-nums font-semibold text-emerald-300/90">
+                    {o.score}
+                  </span>,
+                ])}
+              />
+            )}
+          </div>
+          <div className="border-t border-white/[0.06] px-4 py-2">
+            <Link to="/owner-profiles" className="text-xs font-medium text-blue-400 hover:text-blue-300">
+              Owner profiles →
+            </Link>
+          </div>
+        </div>
+
+        <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#0f131c]/95">
+          <div className="border-b border-white/[0.06] px-4 py-3">
+            <h3 className="text-sm font-semibold text-zinc-50">Playoff picture</h3>
+            <p className="text-xs text-zinc-500">Seed-based · top 6 · no fabricated odds</p>
+          </div>
+          <div className="flex-1 space-y-2 px-3 py-3">
+            {ranked.length === 0 ? (
+              <p className="text-sm text-zinc-500">Not Yet Available</p>
+            ) : (
+              <ul className="space-y-2">
+                {ranked.slice(0, 6).map((t) => {
+                  const { label, tone } = classifyPlayoff(t, playoffSpots);
+                  const mine = leagueCtx.myTeamId != null && t.teamId === leagueCtx.myTeamId;
+                  return (
                     <li
-                      key={o.ownerKey}
+                      key={t.teamId}
                       className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.05] bg-white/[0.02] px-2 py-2"
                     >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="w-5 text-center text-xs font-bold text-zinc-500">{o.rank}</span>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-zinc-100">{o.ownerName}</p>
-                          <p className="truncate text-[11px] text-zinc-500">{o.currentTeam}</p>
-                        </div>
+                      <div className={cn("min-w-0", mine && "text-red-400")}>
+                        <p className="truncate text-sm font-medium text-zinc-100">{t.ownerName || t.teamName}</p>
+                        <p className="text-[11px] text-zinc-500">
+                          #{t.displayRank} · {formatRecord(t)}
+                          {t.playoffSeed != null ? ` · Seed ${t.playoffSeed}` : ""}
+                        </p>
                       </div>
-                      <span className="shrink-0 text-sm font-semibold tabular-nums text-emerald-300/90">
-                        {o.score}
-                      </span>
+                      <StatusBadge tone={tone}>{label}</StatusBadge>
                     </li>
-                  ))}
-                </ol>
-              )}
-            </DashboardCard>
-
-            <DashboardCard title="Playoff picture" subtitle="By standings order only · top 6">
-              {ranked.length === 0 ? (
-                <p className="text-sm text-zinc-500">No standings data.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {ranked.slice(0, 6).map((t) => {
-                    const seed = t.playoffSeed;
-                    return (
-                      <li
-                        key={t.teamId}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.05] px-2 py-2"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-zinc-100">{t.teamName}</p>
-                          <p className="text-[11px] text-zinc-500">
-                            #{t.displayRank} · {formatRecord(t)}
-                          </p>
-                        </div>
-                        {seed != null ? (
-                          <StatusBadge tone="info">Seed {seed}</StatusBadge>
-                        ) : (
-                          <StatusBadge tone="default">No seed</StatusBadge>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-              <p className="mt-3 text-[10px] leading-snug text-zinc-600">
-                No win-probability or clinch math is shown unless ESPN exposes it on the standings payload (playoff
-                seed only).
-              </p>
-            </DashboardCard>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </div>
       </section>
 
-      {/* Timeline strip */}
-      <section aria-label="Championship timeline">
-        <DashboardSectionHeader
-          title="League timeline"
-          action={
-            <Link
-              to="/league-timeline"
-              className="text-xs font-medium text-blue-400 hover:text-blue-300"
-            >
-              Open timeline →
-            </Link>
-          }
-        />
-        <div className="overflow-x-auto rounded-xl border border-white/[0.06] bg-[#0f131c]/80 px-3 py-4">
-          {hofQ.isLoading ? (
-            <div className="flex justify-center py-6 text-sm text-zinc-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-            </div>
-          ) : timelineRows.length === 0 ? (
-            <div className="flex items-center gap-2 py-4 text-sm text-zinc-500">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              No medal history loaded — sync and open Hall of Fame to resolve champions.
-            </div>
-          ) : (
-            <div className="flex min-w-max gap-4">
-              {timelineRows.map((row) => {
-                const champ =
-                  row.resolvedChampionDisplay?.trim() ||
-                  row.championTeam?.trim() ||
-                  "Unavailable";
-                const isCurrent = row.season === season;
-                return (
-                  <div
-                    key={row.season}
-                    className={cn(
-                      "flex w-[88px] shrink-0 flex-col items-center gap-1.5 text-center",
-                      isCurrent && "rounded-lg border border-blue-500/30 bg-blue-500/5 py-2",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "text-[10px] font-bold uppercase tracking-wide",
-                        isCurrent ? "text-blue-300" : "text-zinc-500",
-                      )}
-                    >
-                      {row.season}
-                    </span>
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-amber-500/25 bg-amber-500/10 text-[10px] font-bold text-amber-200">
-                      {champ === "Unavailable" ? "?" : champ.slice(0, 2).toUpperCase()}
-                    </div>
-                    <p className="line-clamp-2 text-[10px] leading-tight text-zinc-400">{champ}</p>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </section>
+      <DashboardTimelineStrip
+        isLoading={hofQ.isLoading}
+        rows={timelineChamps}
+        currentSeason={season}
+      />
+
+      <DevBuildDiagnostics compact />
     </div>
   );
 }

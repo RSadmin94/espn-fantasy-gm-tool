@@ -12,7 +12,6 @@ import {
   Trophy,
   Users,
   Repeat2,
-  LayoutGrid,
   Bot,
   Settings,
   Menu,
@@ -21,14 +20,14 @@ import {
   ChevronRight,
   ChevronDown,
   Calculator,
-  ScrollText,
   ChevronsUpDown,
   Loader2,
-  History,
   ShieldCheck,
   UserSearch,
   Calendar,
-  Settings2,
+  Building2,
+  Swords,
+  Dna,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -55,7 +54,7 @@ type NavGroup = { id: string; title: string; items: NavEntry[] };
 const NAV_GROUPS: NavGroup[] = [
   {
     id: "command-center",
-    title: "Command Center",
+    title: "COMMAND CENTER",
     items: [
       { kind: "link", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { kind: "link", label: "AI Advisor", href: "/advisor", icon: Bot },
@@ -63,43 +62,42 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     id: "dynasty",
-    title: "Dynasty",
+    title: "DYNASTY",
     items: [
+      { kind: "placeholder", label: "Franchise Dashboard", icon: Building2 },
       { kind: "link", label: "Owner Profiles", href: "/owner-profiles", icon: Users },
       { kind: "link", label: "Hall of Fame", href: "/hall-of-fame", icon: Award },
       { kind: "link", label: "League Timeline", href: "/league-timeline", icon: Calendar },
-      { kind: "link", label: "League History", href: "/history", icon: History },
     ],
   },
   {
     id: "intelligence",
-    title: "Intelligence",
+    title: "INTELLIGENCE",
     items: [
-      { kind: "link", label: "Rivalries / Matchups", href: "/matchups", icon: LayoutGrid },
-      { kind: "link", label: "Draft History", href: "/draft-history", icon: ScrollText },
+      { kind: "link", label: "Rivalry Center", href: "/matchups", icon: Swords },
+      { kind: "placeholder", label: "Draft DNA", icon: Dna },
       { kind: "link", label: "Keeper Advisor", href: "/keeper-advisor", icon: Calculator },
       { kind: "link", label: "Trade Analyzer", href: "/trades", icon: Repeat2 },
     ],
   },
   {
     id: "league",
-    title: "League",
+    title: "LEAGUE",
     items: [
       { kind: "link", label: "Standings", href: "/standings", icon: Trophy },
+      { kind: "link", label: "Matchups", href: "/matchups", icon: Swords },
       { kind: "link", label: "Rosters", href: "/roster", icon: Users },
       { kind: "link", label: "Transactions", href: "/transactions", icon: ArrowLeftRight },
     ],
   },
   {
     id: "commissioner",
-    title: "Commissioner",
+    title: "COMMISSIONER",
     items: [
       { kind: "link", label: "League Settings", href: "/league-settings", icon: Settings },
       { kind: "link", label: "Sync Data", href: "/sync", icon: RefreshCw },
       { kind: "link", label: "Data Health", href: "/league-data-health", icon: ShieldCheck },
       { kind: "link", label: "Identity Review", href: "/owner-identity-review", icon: UserSearch },
-      { kind: "link", label: "Connect ESPN", href: "/connect", icon: Plug },
-      { kind: "link", label: "App Settings", href: "/settings", icon: Settings2 },
     ],
   },
 ];
@@ -241,7 +239,7 @@ function SidebarGroupTitle({ title, isFirst }: { title: string; isFirst?: boolea
   return (
     <div
       className={cn(
-        "px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500",
+        "px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-600",
         isFirst ? "pt-0" : "pt-4"
       )}
     >
@@ -264,14 +262,14 @@ function NavItemRow({
     return (
       <li>
         <div
-          className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground/60 opacity-70"
+          className="flex cursor-not-allowed items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-sm font-medium text-zinc-600 opacity-90"
           aria-disabled
         >
-          <Icon className="h-4 w-4 shrink-0 opacity-60" />
+          <Icon className="h-4 w-4 shrink-0 text-zinc-600" />
           <span className="min-w-0 flex-1 truncate">{entry.label}</span>
           <Badge
             variant="outline"
-            className="shrink-0 border-muted-foreground/25 px-1.5 py-0 text-[10px] font-normal text-muted-foreground"
+            className="shrink-0 border-red-500/25 bg-red-500/[0.04] px-1.5 py-0 text-[10px] font-medium text-red-300/90"
           >
             Coming Soon
           </Badge>
@@ -293,13 +291,13 @@ function NavItemRow({
         className={cn(
           "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
           isActive
-            ? "border border-red-500/40 bg-red-500/10 text-red-100 shadow-[0_0_20px_-12px_rgba(239,68,68,0.45)]"
-            : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100"
+            ? "border border-red-500/40 border-l-[3px] border-l-red-500 bg-gradient-to-r from-red-500/20 via-red-500/10 to-transparent text-red-50 shadow-[0_0_26px_-12px_rgba(239,68,68,0.5)]"
+            : "border border-transparent text-zinc-400 hover:border-white/[0.06] hover:bg-white/[0.04] hover:text-zinc-100"
         )}
       >
-        <Icon className="h-4 w-4 shrink-0" />
+        <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-red-400" : "text-zinc-500")} />
         <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-        {isActive && <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-red-400/70" />}
+        {isActive && <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-red-400/80" />}
       </Link>
     </li>
   );
