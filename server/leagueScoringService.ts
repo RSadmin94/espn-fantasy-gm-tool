@@ -92,17 +92,21 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 // ─── Fallback defaults (standard half-PPR) ────────────────────────────────────
 
+// Fallback for league 457622 (Atlantas Finest FF) actual settings.
+// Used only when ESPN combined cache is unavailable.
+// Full PPR, 6-pt passing TD, standard yardage, sacks enabled.
 const FALLBACK_SCORING_MAP: Record<number, number> = {
-  4:  0.04,    // 1 pt per 25 pass yards
-  5:  4,       // 4 pts per pass TD
-  6:  -2,      // -2 per INT
-  24: 0.1,     // 1 pt per 10 rush yards
-  25: 6,       // 6 pts per rush TD
-  42: 0.1,     // 1 pt per 10 rec yards
-  43: 6,       // 6 pts per rec TD
-  41: 0.5,     // 0.5 pts per reception (half-PPR)
-  72: -2,      // -2 per fumble lost
-  20: -2,      // -2 per fumble lost (alt ID)
+  4:   0.04,  // 1 pt per 25 pass yards
+  5:   6,     // 6 pts per pass TD  ← Full PPR league rule
+  6:  -2,     // -2 per INT
+  24:  0.1,   // 1 pt per 10 rush yards
+  25:  6,     // 6 pts per rush TD
+  42:  0.1,   // 1 pt per 10 rec yards
+  43:  6,     // 6 pts per rec TD
+  41:  1,     // 1 pt per reception  ← Full PPR
+  72: -2,     // -2 per fumble lost
+  20: -2,     // -2 per fumble lost (alt ID)
+  99: -1,     // -1 per sack
 };
 
 // ─── Scoring settings loader ──────────────────────────────────────────────────
@@ -333,8 +337,9 @@ export function getScoringBreakdown(settings: LeagueScoringSettings): {
     { category: "Receiving", statId: 43, label: "Receiving TD",      perUnit: "each" },
     { category: "Receiving", statId: 58, label: "Target",            perUnit: "each" },
     // Misc
-    { category: "Misc", statId: 72, label: "Fumble Lost",            perUnit: "each" },
-    { category: "Misc", statId: 20, label: "Fumble Lost (alt)",      perUnit: "each" },
+    { category: "Misc", statId: 72,  label: "Fumble Lost",          perUnit: "each" },
+    { category: "Misc", statId: 20,  label: "Fumble Lost (alt)",    perUnit: "each" },
+    { category: "Misc", statId: 99,  label: "Sack",                 perUnit: "each" },
   ];
 
   for (const cat of categories) {
