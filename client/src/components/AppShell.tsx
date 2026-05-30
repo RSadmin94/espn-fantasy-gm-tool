@@ -22,13 +22,13 @@ import {
   ChevronDown,
   Calculator,
   ScrollText,
-  BarChart2,
-  UserCircle,
   ChevronsUpDown,
   Loader2,
   History,
   ShieldCheck,
   UserSearch,
+  Calendar,
+  Settings2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -62,51 +62,45 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    id: "my-league",
-    title: "My League",
+    id: "dynasty",
+    title: "Dynasty",
     items: [
-      { kind: "link", label: "Standings",      href: "/standings",      icon: Trophy },
-      { kind: "link", label: "League History", href: "/history",        icon: History },
-      { kind: "link", label: "Hall of Fame", href: "/hall-of-fame", icon: Award },
       { kind: "link", label: "Owner Profiles", href: "/owner-profiles", icon: Users },
-      { kind: "link", label: "Matchups",       href: "/matchups",       icon: LayoutGrid },
-      { kind: "link", label: "Rosters",        href: "/roster",         icon: Users },
-      { kind: "link", label: "Transactions",   href: "/transactions",   icon: ArrowLeftRight },
-    ],
-  },
-  {
-    id: "draft-keepers",
-    title: "Draft & Keepers",
-    items: [
-      { kind: "link", label: "Draft History",   href: "/draft-history",  icon: ScrollText },
-      { kind: "link", label: "Keeper Advisor",  href: "/keeper-advisor", icon: Calculator },
-      { kind: "placeholder", label: "Draft Strategy", icon: ScrollText },
+      { kind: "link", label: "Hall of Fame", href: "/hall-of-fame", icon: Award },
+      { kind: "link", label: "League Timeline", href: "/league-timeline", icon: Calendar },
+      { kind: "link", label: "League History", href: "/history", icon: History },
     ],
   },
   {
     id: "intelligence",
     title: "Intelligence",
     items: [
-      { kind: "placeholder", label: "Owner Career Stats", icon: BarChart2 },
-      { kind: "placeholder", label: "Player Profiles", icon: UserCircle },
+      { kind: "link", label: "Rivalries / Matchups", href: "/matchups", icon: LayoutGrid },
+      { kind: "link", label: "Draft History", href: "/draft-history", icon: ScrollText },
+      { kind: "link", label: "Keeper Advisor", href: "/keeper-advisor", icon: Calculator },
       { kind: "link", label: "Trade Analyzer", href: "/trades", icon: Repeat2 },
     ],
   },
   {
-    id: "data",
-    title: "Data",
+    id: "league",
+    title: "League",
     items: [
-      { kind: "link", label: "League Data Health",     href: "/league-data-health",    icon: ShieldCheck },
-      { kind: "link", label: "Owner Identity Review",  href: "/owner-identity-review", icon: UserSearch },
-      { kind: "link", label: "League Settings",        href: "/league-settings",       icon: Settings },
-      { kind: "link", label: "Sync Data",              href: "/sync",                  icon: RefreshCw },
-      { kind: "link", label: "Connect ESPN",           href: "/connect",               icon: Plug },
+      { kind: "link", label: "Standings", href: "/standings", icon: Trophy },
+      { kind: "link", label: "Rosters", href: "/roster", icon: Users },
+      { kind: "link", label: "Transactions", href: "/transactions", icon: ArrowLeftRight },
     ],
   },
   {
-    id: "account",
-    title: "Account",
-    items: [{ kind: "link", label: "Settings", href: "/settings", icon: Settings }],
+    id: "commissioner",
+    title: "Commissioner",
+    items: [
+      { kind: "link", label: "League Settings", href: "/league-settings", icon: Settings },
+      { kind: "link", label: "Sync Data", href: "/sync", icon: RefreshCw },
+      { kind: "link", label: "Data Health", href: "/league-data-health", icon: ShieldCheck },
+      { kind: "link", label: "Identity Review", href: "/owner-identity-review", icon: UserSearch },
+      { kind: "link", label: "Connect ESPN", href: "/connect", icon: Plug },
+      { kind: "link", label: "App Settings", href: "/settings", icon: Settings2 },
+    ],
   },
 ];
 
@@ -132,7 +126,7 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
 
   if (leaguesQ.isLoading || activeQ.isLoading) {
     return (
-      <div className="flex items-center gap-2 border-b border-border px-3 py-3 text-muted-foreground">
+      <div className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-3 text-zinc-500">
         <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
         <span className="text-xs">Loading leagues…</span>
       </div>
@@ -141,8 +135,8 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
 
   if (leagues.length === 0) {
     return (
-      <div className="border-b border-border px-3 py-3">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="border-b border-white/[0.06] px-3 py-3">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
           League
         </p>
         <Button asChild variant="outline" size="sm" className="h-auto w-full justify-center gap-2 py-2">
@@ -162,21 +156,21 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
 
   if (leagues.length === 1) {
     return (
-      <div className="border-b border-border px-3 py-3">
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="border-b border-white/[0.06] px-3 py-3">
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
           Active league
         </p>
-        <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2">
-          <p className="truncate text-sm font-medium text-foreground">{label}</p>
-          <p className="text-xs text-muted-foreground">{year}</p>
+        <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
+          <p className="truncate text-sm font-medium text-zinc-100">{label}</p>
+          <p className="text-xs text-zinc-500">{year}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="border-b border-border px-3 py-3">
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="border-b border-white/[0.06] px-3 py-3">
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
         Active league
       </p>
       <DropdownMenu>
@@ -189,8 +183,8 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
             aria-label="Switch active league"
           >
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="truncate text-sm font-medium text-foreground">{label}</span>
-              <span className="text-xs text-muted-foreground">{year}</span>
+              <span className="truncate text-sm font-medium text-zinc-100">{label}</span>
+              <span className="text-xs text-zinc-500">{year}</span>
             </span>
             {busy ? (
               <Loader2 className="h-4 w-4 shrink-0 animate-spin opacity-70" />
@@ -215,7 +209,7 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
                 }}
               >
                 <span className="font-medium leading-tight">{itemLabel}</span>
-                <span className="text-xs text-muted-foreground">{formatLeagueSeason(l.season)}</span>
+                <span className="text-xs text-zinc-500">{formatLeagueSeason(l.season)}</span>
               </DropdownMenuItem>
             );
           })}
@@ -243,11 +237,11 @@ function useViewportMobile() {
   return isMobile;
 }
 
-function SectionHeader({ title, isFirst }: { title: string; isFirst?: boolean }) {
+function SidebarGroupTitle({ title, isFirst }: { title: string; isFirst?: boolean }) {
   return (
     <div
       className={cn(
-        "px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground",
+        "px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500",
         isFirst ? "pt-0" : "pt-4"
       )}
     >
@@ -299,13 +293,13 @@ function NavItemRow({
         className={cn(
           "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
           isActive
-            ? "border border-primary/20 bg-primary/15 text-primary"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            ? "border border-red-500/40 bg-red-500/10 text-red-100 shadow-[0_0_20px_-12px_rgba(239,68,68,0.45)]"
+            : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100"
         )}
       >
         <Icon className="h-4 w-4 shrink-0" />
         <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-        {isActive && <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-primary/60" />}
+        {isActive && <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-red-400/70" />}
       </Link>
     </li>
   );
@@ -334,6 +328,36 @@ function NavGroupList({
   );
 }
 
+function SidebarFooter() {
+  const { user, isLoaded } = useUser();
+  return (
+    <div className="space-y-2 border-t border-white/[0.06] p-3">
+      {isLoaded && user ? (
+        <div className="flex items-center gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
+          <img
+            src={user.imageUrl}
+            alt=""
+            className="h-9 w-9 shrink-0 rounded-full ring-1 ring-white/10"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-zinc-100">
+              {user.fullName || user.username || "GM"}
+            </p>
+            {user.primaryEmailAddress?.emailAddress ? (
+              <p className="truncate text-[10px] text-zinc-500">
+                {user.primaryEmailAddress.emailAddress}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      <div className="rounded-lg border border-red-500/10 bg-red-500/[0.03] px-3 py-2 text-[10px] leading-snug text-zinc-500">
+        <span className="font-semibold text-red-400/90">ESPN Fantasy</span> · GM War Room
+      </div>
+    </div>
+  );
+}
+
 function Sidebar({ onClose }: { onClose?: () => void }) {
   const location = useLocation();
   const pathname = location.pathname;
@@ -357,13 +381,13 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   }, [isMobile]);
 
   return (
-    <div className="flex h-full flex-col border-r border-border bg-card">
+    <div className="flex h-full flex-col border-r border-white/[0.06] bg-[#070a10]">
       {/* Logo */}
-      <div className="flex items-center justify-between border-b border-border px-6 py-5">
+      <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
         <div className="flex items-center gap-2">
-          <span className="text-xl font-bold tracking-tight">
-            <span className="text-primary">GM</span>
-            <span className="text-foreground"> War Room</span>
+          <span className="text-lg font-bold tracking-tight">
+            <span className="text-red-500">GM</span>
+            <span className="text-zinc-100"> War Room</span>
           </span>
         </div>
         {onClose && (
@@ -386,8 +410,8 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           {NAV_GROUPS.map((group, idx) => {
             if (!isMobile) {
               return (
-                <div key={group.id} className={cn(idx > 0 && "mt-1 border-t border-border/60 pt-2")}>
-                  <SectionHeader title={group.title} isFirst={idx === 0} />
+                <div key={group.id} className={cn(idx > 0 && "mt-1 border-t border-white/[0.06] pt-2")}>
+                  <SidebarGroupTitle title={group.title} isFirst={idx === 0} />
                   <NavGroupList group={group} pathname={pathname} onNavigate={onClose} />
                 </div>
               );
@@ -401,11 +425,11 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
                 onOpenChange={(next) =>
                   setOpenGroups((s) => ({ ...s, [group.id]: next }))
                 }
-                className={cn(idx > 0 && "mt-1 border-t border-border/60 pt-1")}
+                className={cn(idx > 0 && "mt-1 border-t border-white/[0.06] pt-1")}
               >
                 <CollapsibleTrigger
                   type="button"
-                  className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent/40 hover:text-accent-foreground"
+                  className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500 transition-colors hover:bg-white/[0.04] hover:text-zinc-200"
                 >
                   <span>{group.title}</span>
                   <ChevronDown
@@ -422,11 +446,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-border p-3">
-        <div className="rounded-lg border border-primary/10 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-          <span className="font-semibold text-primary">ESPN Fantasy</span> GM Tool
-        </div>
-      </div>
+      <SidebarFooter />
     </div>
   );
 }
@@ -436,7 +456,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { signOut } = useClerk();
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-card/80 px-4 backdrop-blur-sm md:px-6">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-white/[0.06] bg-[#070a10]/95 px-4 backdrop-blur-md md:px-6">
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -447,8 +467,8 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
           <Menu className="h-5 w-5" />
         </button>
         <span className="text-lg font-bold md:hidden">
-          <span className="text-primary">GM</span>
-          <span className="text-foreground"> War Room</span>
+          <span className="text-red-500">GM</span>
+          <span className="text-zinc-100"> War Room</span>
         </span>
       </div>
 
@@ -476,7 +496,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-[#0b0e14]">
       <aside className="hidden w-64 shrink-0 md:block">
         <Sidebar />
       </aside>
@@ -500,7 +520,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-[#0b0e14] p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

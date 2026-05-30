@@ -1,11 +1,27 @@
 /**
  * Build / environment readout (Dashboard). Renders unconditionally for now.
  */
-export function DevBuildDiagnostics() {
+export function DevBuildDiagnostics({ compact }: { compact?: boolean }) {
   const mode = import.meta.env.MODE;
   const envLabel = import.meta.env.PROD ? "production" : "development";
   const buildHash = __APP_GIT_HASH__;
   const buildTime = __APP_BUILD_TIME_ISO__;
+
+  if (compact) {
+    return (
+      <section
+        className="mt-2 rounded-lg border border-amber-500/35 bg-zinc-950/80 px-2.5 py-2 text-left text-zinc-100"
+        aria-label="Build information"
+      >
+        <h2 className="text-[10px] font-semibold uppercase tracking-wide text-amber-400/90">Build</h2>
+        <p className="mt-1 font-mono text-[10px] leading-snug text-zinc-300">
+          <span className="text-zinc-500">hash</span> {buildHash.slice(0, 8)}… ·{" "}
+          <span className="text-zinc-500">{envLabel}</span>
+        </p>
+        <p className="font-mono text-[10px] text-zinc-500">{buildTime}</p>
+      </section>
+    );
+  }
 
   return (
     <section

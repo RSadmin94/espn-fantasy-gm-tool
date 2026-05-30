@@ -21,6 +21,7 @@ import { Advisor } from "./pages/Advisor";
 import { Settings } from "./pages/Settings";
 import { Matchups } from "./pages/Matchups";
 import { LeagueHistory } from "./pages/LeagueHistory";
+import { LeagueTimeline } from "./pages/LeagueTimeline";
 import { DraftHistory } from "./pages/DraftHistory";
 import { KeeperAdvisor } from "./pages/KeeperAdvisor";
 import { LeagueSettings } from "./pages/LeagueSettings";
@@ -129,6 +130,7 @@ const router = createBrowserRouter([
           { path: "/standings", element: <Standings /> },
           { path: "/matchups", element: <Matchups /> },
           { path: "/history", element: <LeagueHistory /> },
+          { path: "/league-timeline", element: <LeagueTimeline /> },
           { path: "/draft-history", element: <DraftHistory /> },
           { path: "/keeper-advisor", element: <KeeperAdvisor /> },
           { path: "/hall-of-fame", element: <HallOfFame /> },
