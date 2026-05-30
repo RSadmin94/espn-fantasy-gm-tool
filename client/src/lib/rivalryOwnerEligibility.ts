@@ -8,13 +8,13 @@ export type RivalryOwnerEligibilityRow = {
   championships: number;
 };
 
-/** Seasons since last team row must be ≤4 to stay eligible without a title (anchor = current ESPN season). */
-const RECENT_SEASON_SPAN = 4;
+/** Seasons since last team row must be ≤3 (covers the last 4 seasons, anchor inclusive). */
+const RECENT_SEASON_SPAN = 3;
 
 /**
  * Eligible for default rivalry surfaces if any:
  * - has a team in `currentSeason`, or
- * - last `gmTeams` season year ≥ `currentSeason - 4`, or
+ * - last `gmTeams` season year ≥ `currentSeason - 3` (active in last 4 seasons), or
  * - at least one league championship on record.
  */
 export function buildDefaultRivalryEligibleOwnerKeys(

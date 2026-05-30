@@ -246,14 +246,41 @@ export function Dashboard() {
     { enabled: !leagueCtx.isLoading, staleTime: 60_000 },
   );
 
+  // pulseTeams must be declared before `ranked` so we can overlay real ownerNames.
+  // The standings API returns owners as ESPN member-ID GUIDs; pulse data has real names.
+  const pulseTeams = (pulseQ.data?.teams ?? []) as Array<{
+    teamId: number;
+    teamName: string;
+    ownerName: string;
+    wins: number;
+    losses: number;
+    currentOpponentTeamId: number | null;
+    playoffProbability: number;
+    standingRank: number;
+  }>;
+
+  // teamId → ownerName from pulse (has real display names, not GUIDs)
+  const pulseOwnerMap = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const t of pulseTeams) {
+      if (t.teamId > 0 && t.ownerName?.trim()) m.set(t.teamId, t.ownerName.trim());
+    }
+    return m;
+  }, [pulseTeams]);
+
   const ranked = useMemo(() => {
     const raw = standingsQ.data;
     if (!Array.isArray(raw) || raw.length === 0) return [];
     const base = raw
       .map(normalizeStandingRow)
       .filter((r): r is NonNullable<typeof r> => r != null);
-    return rankStandings(base);
-  }, [standingsQ.data]);
+    const sorted = rankStandings(base);
+    // Overlay real ownerName from pulse data — standings API may return ESPN member-ID GUIDs
+    return sorted.map((t) => ({
+      ...t,
+      ownerName: pulseOwnerMap.get(t.teamId) || t.ownerName || t.teamName,
+    }));
+  }, [standingsQ.data, pulseOwnerMap]);
 
   const leagueName =
     activeLeagueQ.data?.leagueName?.trim() ||
@@ -302,6 +329,15 @@ export function Dashboard() {
     );
   }, [ownerListQ.data?.allOwners, season]);
 
+  const rivalryEligibilityDiagnostics = useMemo(() => {
+    const all = ownerListQ.data?.allOwners ?? [];
+    return {
+      totalOwners:    all.length,
+      eligibleOwners: rivalryEligibleOwnerKeys.length,
+      filteredOwners: all.length - rivalryEligibleOwnerKeys.length,
+    };
+  }, [ownerListQ.data?.allOwners, rivalryEligibleOwnerKeys]);
+
   const rivalryHero = useRivalryDossierScan(rivalryEligibleOwnerKeys);
 
   const eventSeasons = useMemo(() => {
@@ -312,17 +348,6 @@ export function Dashboard() {
     }
     return [...new Set(out)];
   }, [season, cachedSeasons]);
-
-  const pulseTeams = (pulseQ.data?.teams ?? []) as Array<{
-    teamId: number;
-    teamName: string;
-    ownerName: string;
-    wins: number;
-    losses: number;
-    currentOpponentTeamId: number | null;
-    playoffProbability: number;
-    standingRank: number;
-  }>;
 
   const scoreRows = scoreboardQ.data?.matchups as ScoreboardRow[] | undefined;
 
@@ -564,6 +589,11 @@ export function Dashboard() {
           <Link to="/matchups" className="mt-4 text-xs font-medium text-red-400/90 hover:text-red-300">
             Rivalry center →
           </Link>
+          {rivalryEligibilityDiagnostics.totalOwners > 0 && (
+            <p className="mt-1 text-[9px] text-zinc-600">
+              Eligible: {rivalryEligibilityDiagnostics.eligibleOwners} · Filtered: {rivalryEligibilityDiagnostics.filteredOwners} (inactive/unrecognized)
+            </p>
+          )}
         </div>
 
         <DashboardLeagueHealthCard isLoading={dataHealthQ.isLoading} data={dataHealthQ.data ?? null} />

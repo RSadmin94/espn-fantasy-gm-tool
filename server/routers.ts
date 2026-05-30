@@ -9643,13 +9643,32 @@ if (pickOrder.length > 0) {
         apiSeason:  s >= 2018,
       }));
 
-      // Readiness score
-      const apiSeasons = seasonRows.filter(s => s.apiSeason);
-      const fullCoverage = apiSeasons.filter(s => s.teams > 0 && s.draftPicks > 0 && s.matchups > 0).length;
-      const coveragePct  = apiSeasons.length > 0 ? fullCoverage / apiSeasons.length : 0;
-      const medalScore   = medSet.size > 0 ? 5 : 0;
-      const ownerScore   = Math.round(ownerResolution * 0.15);
-      const readinessScore = Math.min(100, Math.round(coveragePct * 80) + medalScore + ownerScore);
+      // Readiness score — weighted across separate dimensions so partial data
+      // gets appropriate credit rather than being zeroed by missing matchup data.
+      //   40 pts: API seasons with teams + draft picks (core import coverage)
+      //   30 pts: API seasons with matchup data (rivalry/H2H features)
+      //   15 pts: owner resolution quality (2018+)
+      //    5 pts: medals imported
+      //   10 pts: any legacy data (2010–2017)
+      const apiSeasons     = seasonRows.filter(s => s.apiSeason);
+      const coreSeasons    = apiSeasons.filter(s => s.teams > 0 && s.draftPicks > 0).length;
+      const matchupSeasons = apiSeasons.filter(s => s.matchups > 0).length;
+      const legacySeasons  = seasonRows.filter(s => !s.apiSeason && s.draftPicks > 0).length;
+
+      const corePct    = apiSeasons.length > 0 ? coreSeasons    / apiSeasons.length : 0;
+      const matchupPct = apiSeasons.length > 0 ? matchupSeasons / apiSeasons.length : 0;
+      const legacyPct  = legacySeasons > 0 ? 1 : 0;
+
+      const medalScore  = medSet.size > 0 ? 5 : 0;
+      const ownerScore  = Math.round(Number.isFinite(ownerResolution) ? ownerResolution * 0.15 : 0);
+
+      const readinessScore = Math.min(100, Math.round(
+        corePct    * 40 +
+        matchupPct * 30 +
+        ownerScore      +
+        medalScore      +
+        legacyPct  * 10,
+      ));
 
       const featureGates = [
         { name: "Rivalry Dossier",        status: mcMap.size > 0 ? "unlocked" : "blocked",   reason: mcMap.size > 0 ? "gmMatchups populated" : "Sync to populate matchup data" },
@@ -9663,7 +9682,17 @@ if (pickOrder.length > 0) {
         { name: "KVS / Draft RODC",        status: "blocked",  reason: "Requires gmWeeklyPlayerStats (P2 pipeline)" },
       ];
 
-      return { leagueId: lid, seasonRows, readinessScore, ownerResolution, featureGates, weeklyStatsExist };
+      return {
+        leagueId: lid,
+        seasonRows,
+        readinessScore,
+        ownerResolution,
+        featureGates,
+        weeklyStatsExist,
+        // Breakdown values for health card bar rows
+        dataCompleteness: apiSeasons.length > 0 ? Math.round(corePct * 100) : null,
+        matchupCoverage:  apiSeasons.length > 0 ? Math.round(matchupPct * 100) : null,
+      };
     }),
 
     identityScan: publicProcedure.query(async ({ ctx }) => {

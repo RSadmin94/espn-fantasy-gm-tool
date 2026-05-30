@@ -6,6 +6,8 @@ export type LeagueOverviewPayload = {
   readinessScore: number;
   ownerResolution: number;
   weeklyStatsExist: boolean;
+  dataCompleteness?: number | null;
+  matchupCoverage?: number | null;
   seasonRows: Array<{
     season: number;
     teams: number;
@@ -70,13 +72,18 @@ export function DashboardLeagueHealthCard({
   }
 
   const apiSeasons = data.seasonRows.filter((s) => s.apiSeason);
+  // Prefer server-computed breakdown values (avoid double-calculating)
   const dataCompleteness =
-    apiSeasons.length > 0
-      ? (apiSeasons.filter((s) => s.teams > 0 && s.draftPicks > 0 && s.matchups > 0).length / apiSeasons.length) * 100
+    data.dataCompleteness != null
+      ? data.dataCompleteness
+      : apiSeasons.length > 0
+      ? Math.round((apiSeasons.filter((s) => s.teams > 0 && s.draftPicks > 0).length / apiSeasons.length) * 100)
       : null;
   const matchupCoverage =
-    apiSeasons.length > 0
-      ? (apiSeasons.filter((s) => s.matchups > 0).length / apiSeasons.length) * 100
+    data.matchupCoverage != null
+      ? data.matchupCoverage
+      : apiSeasons.length > 0
+      ? Math.round((apiSeasons.filter((s) => s.matchups > 0).length / apiSeasons.length) * 100)
       : null;
   const ownerResolution = Number.isFinite(data.ownerResolution) ? data.ownerResolution : null;
   const readiness = Number.isFinite(data.readinessScore) ? data.readinessScore : null;
@@ -126,6 +133,9 @@ export function DashboardLeagueHealthCard({
       >
         Data health detail →
       </Link>
+      <p className="mt-1 text-[9px] text-zinc-700">
+        Score: {readiness ?? "—"}/100 · Matchup coverage: {matchupCoverage != null ? `${matchupCoverage}%` : "—"} · Source: dataHealth.leagueOverview
+      </p>
     </div>
   );
 }
