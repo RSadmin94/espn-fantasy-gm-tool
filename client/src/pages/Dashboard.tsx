@@ -21,6 +21,8 @@ import {
   Settings,
 } from "lucide-react";
 
+import { DevBuildDiagnostics } from "@/components/DevBuildDiagnostics";
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface PulseTeam {
@@ -619,6 +621,8 @@ export function Dashboard() {
           Your GM War Room command center.
         </p>
       </div>
+
+      <DevBuildDiagnostics />
 
       <ExecutiveSummary />
 

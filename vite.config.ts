@@ -3,6 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
+import { execSync } from "node:child_process";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 
@@ -12,6 +13,21 @@ import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 // =============================================================================
 
 const PROJECT_ROOT = import.meta.dirname;
+
+function safeGitShort(): string {
+  try {
+    return execSync("git rev-parse --short HEAD", {
+      cwd: PROJECT_ROOT,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return process.env.VITE_APP_GIT_HASH?.trim() || "unknown";
+  }
+}
+
+const APP_GIT_HASH = (process.env.VITE_APP_GIT_HASH ?? safeGitShort()).trim() || "unknown";
+const APP_BUILD_TIME_ISO = process.env.VITE_APP_BUILD_TIME ?? new Date().toISOString();
 const LOG_DIR = path.join(PROJECT_ROOT, ".manus-logs");
 const MAX_LOG_SIZE_BYTES = 1 * 1024 * 1024; // 1MB per log file
 const TRIM_TARGET_BYTES = Math.floor(MAX_LOG_SIZE_BYTES * 0.6); // Trim to 60% to avoid constant re-trimming
@@ -154,6 +170,10 @@ const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(
 
 export default defineConfig({
   plugins,
+  define: {
+    __APP_GIT_HASH__: JSON.stringify(APP_GIT_HASH),
+    __APP_BUILD_TIME_ISO__: JSON.stringify(APP_BUILD_TIME_ISO),
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
