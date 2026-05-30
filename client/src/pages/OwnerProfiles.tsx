@@ -1,8 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, Fragment, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   Loader2, AlertTriangle, ChevronDown, ChevronRight,
-  Trophy, Users, TrendingUp, Zap, FileText, Skull, Swords,
+  Trophy, Users, TrendingUp, Zap, FileText, Skull, Swords, ListOrdered, Award, GitCompare, AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
@@ -100,12 +100,81 @@ function OwnerCard({ o, selected, onClick }: { o: any; selected: boolean; onClic
   );
 }
 
-// ─── Profile panel ────────────────────────────────────────────────────────────
+function medalScore(snap: Record<string, unknown>) {
+  return (
+    num(snap.championships) * 10000 +
+    num(snap.runnerUps) * 100 +
+    num(snap.thirdPlace)
+  );
+}
 
-function ProfilePanel({ ownerName }: { ownerName: string }) {
+function topDraftedPosCount(draft: Record<string, unknown>) {
+  const tops = Array.isArray(draft.mostDraftedPos) ? (draft.mostDraftedPos as string[]) : [];
+  const top = tops[0];
+  if (!top) return { label: "—", count: 0 };
+  const share = num((draft.posShare as Record<string, number> | undefined)?.[top]);
+  const tp = num(draft.totalPicks);
+  const count = Math.round((tp * share) / 100);
+  return { label: `${top} (${count})`, count };
+}
+
+function cmp3(a: number, b: number): "left" | "right" | "tie" {
+  if (a > b) return "left";
+  if (b > a) return "right";
+  return "tie";
+}
+
+function CompareCell({ tone, children }: { tone: "win" | "lose" | "tie"; children: ReactNode }) {
+  return (
+    <div
+      className={cn(
+        "rounded-md border px-3 py-2 text-sm tabular-nums",
+        tone === "win" && "border-emerald-600/50 bg-emerald-950/25 text-foreground",
+        tone === "lose" && "border-border/60 bg-muted/10 text-muted-foreground opacity-80",
+        tone === "tie" && "border-border/50 bg-muted/5 text-foreground",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function rowTones(w: "left" | "right" | "tie"): { left: "win" | "lose" | "tie"; right: "win" | "lose" | "tie" } {
+  if (w === "tie") return { left: "tie", right: "tie" };
+  if (w === "left") return { left: "win", right: "lose" };
+  return { left: "lose", right: "win" };
+}
+
+function cmpRankLowerWins(a: number, b: number): "left" | "right" | "tie" {
+  const ar = a >= 999 ? Infinity : a;
+  const br = b >= 999 ? Infinity : b;
+  if (ar < br) return "left";
+  if (br < ar) return "right";
+  return "tie";
+}
+
+function ProfilePanel({
+  ownerName,
+  powerRankings,
+  ownerAwards,
+}: {
+  ownerName: string;
+  powerRankings: any[];
+  ownerAwards: any[];
+}) {
   const trpcAny = trpc as any;
-  const q = trpcAny.owners.ownerProfile.useQuery({ ownerName });
+  const [compareWith, setCompareWith] = useState("");
+  const q = trpcAny.owners.ownerProfile.useQuery(
+    { ownerName, ...(compareWith ? { compareWith } : {}) },
+    { enabled: !!ownerName },
+  );
   const p = q.data as any;
+  const [intelExpanded, setIntelExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIntelExpanded(null);
+    setCompareWith("");
+  }, [ownerName]);
 
   if (q.isLoading) return (
     <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -125,6 +194,20 @@ function ProfilePanel({ ownerName }: { ownerName: string }) {
   const activity = p.activityDNA  ?? {};
   const intel    = Array.isArray(p.matchupIntel) ? p.matchupIntel as any[] : [];
   const intelDiag = p.matchupIntelDiagnostics ?? {};
+  const profDiag = (p.ownerResolutionDiagnostics ?? {}) as Record<string, unknown>;
+  const peer = p.comparison as Record<string, unknown> | null | undefined;
+  const snapP = (peer?.snapshot ?? {}) as Record<string, unknown>;
+  const draftP = (peer?.draftDNA ?? {}) as Record<string, unknown>;
+  const keeperP = (peer?.keeperDNA ?? {}) as Record<string, unknown>;
+  const activityP = (peer?.activityDNA ?? {}) as Record<string, unknown>;
+  const h2h = p.headToHead as {
+    games: number;
+    winsForOwner: number;
+    lossesForOwner: number;
+    ties: number;
+    recordVs: string;
+  } | null;
+  const candidates = (Array.isArray(p.comparisonCandidates) ? p.comparisonCandidates : []) as string[];
 
   const seasons        = Array.isArray(snap.seasons)        ? snap.seasons        : [];
   const champSeasons   = Array.isArray(snap.champSeasons)   ? snap.champSeasons   : [];
@@ -164,20 +247,144 @@ function ProfilePanel({ ownerName }: { ownerName: string }) {
         )}
       </div>
 
+      {/* Compare owners */}
+      <div className="rounded-lg border border-border bg-card/40 overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 border-b border-border/60 bg-muted/20 px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <GitCompare className="h-4 w-4 text-sky-400/90" />
+            <h2 className="text-sm font-semibold text-foreground">Compare Owners</h2>
+          </div>
+          <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
+            <label className="text-xs text-muted-foreground shrink-0" htmlFor="owner-compare-select">vs</label>
+            <select
+              id="owner-compare-select"
+              className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground min-w-[160px] max-w-full"
+              value={compareWith}
+              onChange={(e) => setCompareWith(e.target.value)}
+            >
+              <option value="">— Select owner —</option>
+              {candidates.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {compareWith && !peer && (q.isFetching || q.isLoading) ? (
+          <div className="flex justify-center items-center py-10 text-muted-foreground gap-2">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-sm">Loading comparison…</span>
+          </div>
+        ) : peer ? (
+          <div className="p-4 overflow-x-auto">
+            <div className="grid grid-cols-[minmax(7.5rem,1fr)_1fr_1fr] gap-x-2 gap-y-1 min-w-[300px]">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground py-2">Metric</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-500/90 py-2 truncate" title={ownerName}>{ownerName}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-500/90 py-2 truncate" title={compareWith}>{compareWith}</div>
+
+              {(() => {
+                const prL = powerRankings.find((r: any) => r.ownerName === ownerName);
+                const prR = powerRankings.find((r: any) => r.ownerName === compareWith);
+                const rankL = prL ? num(prL.rank) : 999;
+                const rankR = prR ? num(prR.rank) : 999;
+                const awardsL = ownerAwards.filter((a: any) => a.ownerName === ownerName).length;
+                const awardsR = ownerAwards.filter((a: any) => a.ownerName === compareWith).length;
+                const topL = topDraftedPosCount(draft as Record<string, unknown>);
+                const topR = topDraftedPosCount(draftP as Record<string, unknown>);
+
+                const rows: Array<{
+                  label: string;
+                  l: ReactNode;
+                  r: ReactNode;
+                  w: "left" | "right" | "tie";
+                }> = [
+                  {
+                    label: "Power rank #",
+                    l: rankL >= 999 ? "—" : `#${rankL}`,
+                    r: rankR >= 999 ? "—" : `#${rankR}`,
+                    w: cmpRankLowerWins(rankL, rankR),
+                  },
+                  { label: "Owner awards", l: awardsL, r: awardsR, w: cmp3(awardsL, awardsR) },
+                  {
+                    label: "Career record",
+                    l: `${num(snap.totalWins)}–${num(snap.totalLosses)}${num(snap.totalTies) ? `–${num(snap.totalTies)}` : ""}`,
+                    r: `${num(snapP.totalWins)}–${num(snapP.totalLosses)}${num(snapP.totalTies) ? `–${num(snapP.totalTies)}` : ""}`,
+                    w: cmp3(num(snap.winPct), num(snapP.winPct)),
+                  },
+                  { label: "Win %", l: pct(num(snap.winPct)), r: pct(num(snapP.winPct)), w: cmp3(num(snap.winPct), num(snapP.winPct)) },
+                  {
+                    label: "Medals (🏆 / 🥈+🥉)",
+                    l: `${num(snap.championships)} / ${num(snap.runnerUps) + num(snap.thirdPlace)}`,
+                    r: `${num(snapP.championships)} / ${num(snapP.runnerUps) + num(snapP.thirdPlace)}`,
+                    w: cmp3(medalScore(snap as Record<string, unknown>), medalScore(snapP as Record<string, unknown>)),
+                  },
+                  { label: "Total draft picks", l: num(draft.totalPicks), r: num(draftP.totalPicks), w: cmp3(num(draft.totalPicks), num(draftP.totalPicks)) },
+                  { label: "Most drafted (pos)", l: topL.label, r: topR.label, w: cmp3(topL.count, topR.count) },
+                  { label: "Keeper rate", l: pct(num(keeper.keeperRate)), r: pct(num(keeperP.keeperRate)), w: cmp3(num(keeper.keeperRate), num(keeperP.keeperRate)) },
+                  { label: "Acquisitions", l: num(activity.totalAcq), r: num(activityP.totalAcq), w: cmp3(num(activity.totalAcq), num(activityP.totalAcq)) },
+                  { label: "Trades", l: num(activity.totalTrades), r: num(activityP.totalTrades), w: cmp3(num(activity.totalTrades), num(activityP.totalTrades)) },
+                  { label: "Drops", l: num(activity.totalDrops), r: num(activityP.totalDrops), w: cmp3(num(activity.totalDrops), num(activityP.totalDrops)) },
+                ];
+
+                if (h2h && h2h.games > 0) {
+                  rows.push({
+                    label: "Head-to-head",
+                    l: `${h2h.winsForOwner}–${h2h.lossesForOwner}${h2h.ties ? `–${h2h.ties}` : ""} (you)`,
+                    r: `${h2h.lossesForOwner}–${h2h.winsForOwner}${h2h.ties ? `–${h2h.ties}` : ""} (them)`,
+                    w: cmp3(h2h.winsForOwner, h2h.lossesForOwner),
+                  });
+                }
+
+                return rows.map((row) => {
+                  const tones = rowTones(row.w);
+                  return (
+                    <Fragment key={row.label}>
+                      <div className="text-xs text-muted-foreground py-2 pr-1 border-b border-border/40 flex items-center leading-snug">{row.label}</div>
+                      <div className="border-b border-border/40 py-1">
+                        <CompareCell tone={tones.left}><span className="font-medium">{row.l}</span></CompareCell>
+                      </div>
+                      <div className="border-b border-border/40 py-1">
+                        <CompareCell tone={tones.right}><span className="font-medium">{row.r}</span></CompareCell>
+                      </div>
+                    </Fragment>
+                  );
+                });
+              })()}
+            </div>
+            {(!h2h || h2h.games === 0) && (
+              <p className="mt-3 text-xs text-muted-foreground">No regular-season head-to-head matchups on file for this pair.</p>
+            )}
+          </div>
+        ) : compareWith ? (
+          <p className="px-4 py-5 text-sm text-muted-foreground">Could not load comparison for that owner.</p>
+        ) : (
+          <p className="px-4 py-5 text-sm text-muted-foreground">Pick another owner to see side-by-side career stats (same data as your profile).</p>
+        )}
+      </div>
+
       {/* 1. Snapshot */}
       <Section title="Owner Snapshot" icon={<Users className="h-4 w-4" />}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
           <div>
             <StatRow label="Seasons Active"     value={seasons.length > 0 ? `${seasons[0]}–${seasons[seasons.length - 1]} (${seasons.length})` : "—"} />
-            <StatRow label="Career Record"      value={`${num(snap.totalWins)}–${num(snap.totalLosses)}${num(snap.totalTies) > 0 ? `–${num(snap.totalTies)}` : ""}`} />
+            <StatRow label="Career Record"      value={`${num(snap.totalWins)}–${num(snap.totalLosses)}${num(snap.totalTies) > 0 ? `–${num(snap.totalTies)}` : ""} (RS matchups)`} />
             <StatRow label="Win %"              value={pct(num(snap.winPct))} />
             <StatRow label="Championships"      value={champSeasons.length > 0 ? `${champSeasons.length} (${champSeasons.join(", ")})` : "—"} />
             <StatRow label="Finals Appearances" value={runnerUpSeasons.length > 0 ? `${runnerUpSeasons.length} (${runnerUpSeasons.join(", ")})` : "—"} />
             <StatRow label="3rd Place"          value={thirdSeasons.length > 0 ? `${thirdSeasons.length} (${thirdSeasons.join(", ")})` : "—"} />
           </div>
           <div>
-            {snap.bestSeason  && <StatRow label="Best Season"  value={`${snap.bestSeason.season}: ${snap.bestSeason.wins}–${snap.bestSeason.losses}`} />}
-            {snap.worstSeason && <StatRow label="Worst Season" value={`${snap.worstSeason.season}: ${snap.worstSeason.wins}–${snap.worstSeason.losses}`} />}
+            {snap.bestSeason?.season > 0 && (
+              <StatRow
+                label="Best Season"
+                value={`${snap.bestSeason.season}: ${snap.bestSeason.wins}–${snap.bestSeason.losses}${num(snap.bestSeason.ties) ? `–${num(snap.bestSeason.ties)}` : ""}`}
+              />
+            )}
+            {snap.worstSeason?.season > 0 && (
+              <StatRow
+                label="Worst Season"
+                value={`${snap.worstSeason.season}: ${snap.worstSeason.wins}–${snap.worstSeason.losses}${num(snap.worstSeason.ties) ? `–${num(snap.worstSeason.ties)}` : ""}`}
+              />
+            )}
           </div>
         </div>
         <div className="mt-4 overflow-x-auto">
@@ -186,7 +393,8 @@ function ProfilePanel({ ownerName }: { ownerName: string }) {
               <tr className="text-muted-foreground border-b border-border">
                 <th className="text-left py-1.5 pr-3">Season</th>
                 <th className="text-left pr-3">Team</th>
-                <th className="text-right pr-3">W–L</th>
+                <th className="text-right pr-3">W–L–T</th>
+                <th className="text-right pr-2" title="Completed regular-season matchups counted">RS</th>
                 <th className="text-right pr-3">Seed</th>
                 <th className="text-right">Medal</th>
               </tr>
@@ -196,7 +404,8 @@ function ProfilePanel({ ownerName }: { ownerName: string }) {
                 <tr key={sr.season} className="border-b border-border/30 hover:bg-muted/20">
                   <td className="py-1.5 pr-3 font-medium">{sr.season}</td>
                   <td className="pr-3 text-muted-foreground truncate max-w-[120px]">{sr.teamName}</td>
-                  <td className="text-right pr-3">{sr.wins}–{sr.losses}</td>
+                  <td className="text-right pr-3 tabular-nums">{sr.wins}–{sr.losses}{num(sr.ties) ? `–${num(sr.ties)}` : ""}</td>
+                  <td className="text-right pr-2 text-muted-foreground tabular-nums">{num(sr.matchupGames) || "—"}</td>
                   <td className="text-right pr-3 text-muted-foreground">{sr.playoffSeed ?? "—"}</td>
                   <td className="text-right">{sr.isChampion ? "🏆" : sr.isRunnerUp ? "🥈" : sr.isThirdPlace ? "🥉" : ""}</td>
                 </tr>
@@ -205,6 +414,55 @@ function ProfilePanel({ ownerName }: { ownerName: string }) {
           </table>
         </div>
       </Section>
+
+      {(() => {
+        const unSeas = Array.isArray(profDiag.unresolvedSeasonTeams) ? profDiag.unresolvedSeasonTeams as { season: number; reason: string }[] : [];
+        const missRec = Array.isArray(profDiag.missingRecordSeasons) ? profDiag.missingRecordSeasons as number[] : [];
+        const missMed = Array.isArray(profDiag.missingMedalJoinSeasons) ? profDiag.missingMedalJoinSeasons as { season: number; slot: string; raw: string }[] : [];
+        const unDraft = Array.isArray(profDiag.unresolvedTeamNames) ? profDiag.unresolvedTeamNames as string[] : [];
+        const hasDiag = unSeas.length + missRec.length + missMed.length + unDraft.length > 0;
+        if (!hasDiag) return null;
+        return (
+          <Section title="Profile data diagnostics" icon={<AlertCircle className="h-4 w-4 text-amber-500/90" />} defaultOpen={false}>
+            <div className="space-y-3 text-xs text-muted-foreground">
+              {unSeas.length > 0 && (
+                <div>
+                  <p className="font-semibold text-foreground mb-1">Unresolved season teams (expected 2010–2026 coverage)</p>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    {unSeas.map((u) => (
+                      <li key={u.season}><span className="text-foreground">{u.season}</span>: {str(u.reason)}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {missRec.length > 0 && (
+                <div>
+                  <p className="font-semibold text-foreground mb-1">Missing matchup record (gmTeams row but 0 RS games)</p>
+                  <p className="font-mono">{missRec.join(", ")}</p>
+                </div>
+              )}
+              {missMed.length > 0 && (
+                <div>
+                  <p className="font-semibold text-foreground mb-1">Medal rows that did not join to a team</p>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    {missMed.map((m, i) => (
+                      <li key={`${m.season}-${m.slot}-${i}`}>{m.season} · {str(m.slot)} · {str(m.raw)}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {unDraft.length > 0 && (
+                <div>
+                  <p className="font-semibold text-foreground mb-1">Draft pick owner resolution</p>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    {unDraft.map((n) => (<li key={n} className="font-mono">{str(n)}</li>))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </Section>
+        );
+      })()}
 
       {/* 2. Draft DNA */}
       <Section title="Draft DNA" icon={<TrendingUp className="h-4 w-4" />}>
@@ -334,6 +592,7 @@ function ProfilePanel({ ownerName }: { ownerName: string }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-muted-foreground border-b border-border text-xs">
+                  <th className="w-8 py-1.5 pr-1" aria-hidden />
                   <th className="text-left py-1.5 pr-3">Opponent</th>
                   <th className="text-right pr-3">Games</th>
                   <th className="text-right pr-3">W–L–T</th>
@@ -342,25 +601,104 @@ function ProfilePanel({ ownerName }: { ownerName: string }) {
                 </tr>
               </thead>
               <tbody>
-                {intel.map((row: any) => (
-                  <tr key={row.opponentOwner} className="border-b border-border/30 hover:bg-muted/20">
-                    <td className="py-1.5 pr-3 font-medium text-foreground">{row.opponentOwner}</td>
-                    <td className="text-right pr-3 text-muted-foreground">{num(row.games)}</td>
-                    <td className="text-right pr-3 text-muted-foreground">
-                      {num(row.wins)}–{num(row.losses)}{num(row.ties) > 0 ? `–${num(row.ties)}` : ""}
-                    </td>
-                    <td className="text-right pr-3">
-                      <span className={cn(
-                        "font-medium",
-                        num(row.winPct) >= 60 ? "text-emerald-400" :
-                        num(row.winPct) <= 40 ? "text-red-400" : "text-foreground",
-                      )}>
-                        {pct(num(row.winPct))}
-                      </span>
-                    </td>
-                    <td className="text-right"><MatchupTag tag={row.tag} /></td>
-                  </tr>
-                ))}
+                {intel.map((row: any) => {
+                  const open = intelExpanded === row.opponentOwner;
+                  const games = Array.isArray(row.recentGames) ? row.recentGames : [];
+                  return (
+                    <Fragment key={row.opponentOwner}>
+                      <tr className="border-b border-border/30 hover:bg-muted/20">
+                        <td className="py-1.5 pr-1 align-middle">
+                          <button
+                            type="button"
+                            aria-expanded={open}
+                            aria-label={open ? "Collapse game history" : "Expand game history"}
+                            className="rounded p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            onClick={() =>
+                              setIntelExpanded((cur) => (cur === row.opponentOwner ? null : row.opponentOwner))
+                            }
+                          >
+                            {open ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </button>
+                        </td>
+                        <td className="py-1.5 pr-3 font-medium text-foreground">{row.opponentOwner}</td>
+                        <td className="text-right pr-3 text-muted-foreground">{num(row.games)}</td>
+                        <td className="text-right pr-3 text-muted-foreground">
+                          {num(row.wins)}–{num(row.losses)}
+                          {num(row.ties) > 0 ? `–${num(row.ties)}` : ""}
+                        </td>
+                        <td className="text-right pr-3">
+                          <span
+                            className={cn(
+                              "font-medium",
+                              num(row.winPct) >= 60
+                                ? "text-emerald-400"
+                                : num(row.winPct) <= 40
+                                  ? "text-red-400"
+                                  : "text-foreground",
+                            )}
+                          >
+                            {pct(num(row.winPct))}
+                          </span>
+                        </td>
+                        <td className="text-right">
+                          <MatchupTag tag={row.tag} />
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr className="border-b border-border/30 bg-muted/15">
+                          <td colSpan={6} className="px-3 py-3">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                              Last 5 meetings
+                            </p>
+                            {games.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">No game rows on file for this opponent.</p>
+                            ) : (
+                              <div className="overflow-x-auto rounded border border-border/40">
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="text-muted-foreground border-b border-border/60 bg-muted/30">
+                                      <th className="text-left py-1.5 px-2">Season</th>
+                                      <th className="text-right py-1.5 px-2">Week</th>
+                                      <th className="text-right py-1.5 px-2">Score (you–opp)</th>
+                                      <th className="text-center py-1.5 px-2">Result</th>
+                                      <th className="text-right py-1.5 px-2">Margin</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {games.map((g: any, i: number) => {
+                                      const hasScores =
+                                        g.ownerScore !== undefined && g.opponentScore !== undefined;
+                                      const scoreStr = hasScores
+                                        ? `${num(g.ownerScore)}–${num(g.opponentScore)}`
+                                        : "—";
+                                      const marginStr =
+                                        g.margin !== undefined ? `${num(g.margin) > 0 ? "+" : ""}${num(g.margin).toFixed(2)}` : "—";
+                                      return (
+                                        <tr key={`${g.season}-${g.week}-${i}`} className="border-b border-border/30 last:border-0">
+                                          <td className="py-1.5 px-2 font-medium">{g.season}</td>
+                                          <td className="text-right py-1.5 px-2 text-muted-foreground">{g.week}</td>
+                                          <td className="text-right py-1.5 px-2 tabular-nums">{scoreStr}</td>
+                                          <td className="text-center py-1.5 px-2 font-semibold">{str(g.result)}</td>
+                                          <td className="text-right py-1.5 px-2 tabular-nums text-muted-foreground">
+                                            {marginStr}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
             {num(intelDiag.unresolvedMatchups) > 0 && (
@@ -368,9 +706,18 @@ function ProfilePanel({ ownerName }: { ownerName: string }) {
                 ℹ {num(intelDiag.unresolvedMatchups)} games excluded — opponent owner could not be resolved.
               </p>
             )}
+            {num(intelDiag.recentGamesOmittedScores) > 0 && (
+              <p className="mt-1 text-xs text-amber-200/80">
+                ℹ {num(intelDiag.recentGamesOmittedScores)} recent meeting
+                {num(intelDiag.recentGamesOmittedScores) !== 1 ? "s" : ""} omit box scores (0–0 in DB); result still shown
+                where available.
+              </p>
+            )}
             <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
               {Object.entries(TAG_STYLES).map(([tag, cls]) => (
-                <span key={tag} className={cn("rounded border px-1.5 py-0.5 font-semibold uppercase tracking-wide", cls)}>{tag}</span>
+                <span key={tag} className={cn("rounded border px-1.5 py-0.5 font-semibold uppercase tracking-wide", cls)}>
+                  {tag}
+                </span>
               ))}
             </div>
           </>
@@ -381,6 +728,45 @@ function ProfilePanel({ ownerName }: { ownerName: string }) {
       <Section title="Scouting Summary" icon={<FileText className="h-4 w-4" />} defaultOpen={false}>
         <p className="text-sm text-foreground leading-relaxed">{str(p.scoutingSummary)}</p>
       </Section>
+
+      {/* Temporary: confirms live client is hitting the ownerProfile payload with matchup+medals pipeline */}
+      {p.dataSourceDiagnostics && (
+        <div className="rounded-md border border-amber-600/40 bg-amber-950/20 px-3 py-2 text-xs font-mono text-amber-100/90 space-y-1">
+          <div className="font-semibold text-amber-200/95">Canonical owner / record diagnostics</div>
+          <div>ownerKey: {str((p.dataSourceDiagnostics as any).ownerKey)}</div>
+          <div>displayName: {str((p.dataSourceDiagnostics as any).displayName)}</div>
+          <div>identityResolvedBy: {str((p.dataSourceDiagnostics as any).identityResolvedBy ?? "—")}</div>
+          <div>mergedOwnerAliases: {str((p.dataSourceDiagnostics as any).mergedOwnerAliases?.join(" · "))}</div>
+          <div>mergedTeamNames: {str((p.dataSourceDiagnostics as any).mergedTeamNames?.join(" · "))}</div>
+          <div>recordSource: {str((p.dataSourceDiagnostics as any).recordSource)}</div>
+          <div>totalResolvedMatchups: {str((p.dataSourceDiagnostics as any).totalResolvedMatchups)}</div>
+          <div>missingSeasons: {str((p.dataSourceDiagnostics as any).missingRecordSeasons?.join(", "))}</div>
+          <div>medalSource: {str((p.dataSourceDiagnostics as any).medalSource)}</div>
+          <div>serviceVersion: {str((p.dataSourceDiagnostics as any).serviceVersion)}</div>
+          {(p.ownerResolutionDiagnostics as any)?.identityMerge && (
+            <div className="mt-2 pt-2 border-t border-amber-700/40 space-y-1">
+              <div className="font-semibold text-amber-200/95">Identity merge (V1)</div>
+              <div>canonicalOwnerName: {str((p.ownerResolutionDiagnostics as any).identityMerge.canonicalOwnerName)}</div>
+              <div>resolvedBy: {str((p.ownerResolutionDiagnostics as any).identityMerge.resolvedBy)}</div>
+              <div>activeSeasons: {str((p.ownerResolutionDiagnostics as any).identityMerge.activeSeasons?.join(", "))}</div>
+              <div>linkedTeamIds: {str((p.ownerResolutionDiagnostics as any).identityMerge.linkedTeamIds?.map((x: any) => `${x.season}:${x.teamId}`).join(" · "))}</div>
+              <div>linkedTeamNames: {str((p.ownerResolutionDiagnostics as any).identityMerge.linkedTeamNames?.join(" · "))}</div>
+              <div>sourceTeamIds: {str((p.ownerResolutionDiagnostics as any).identityMerge.sourceTeamIds?.join(" · "))}</div>
+              <div>sourceTeamNames: {str((p.ownerResolutionDiagnostics as any).identityMerge.sourceTeamNames?.join(" · "))}</div>
+              <div>unresolvedRecordCount: {str((p.ownerResolutionDiagnostics as any).identityMerge.unresolvedRecordCount)}</div>
+              <div className="whitespace-pre-wrap text-[10px] leading-snug opacity-90">
+                mergeAudit:{"\n"}
+                {((p.ownerResolutionDiagnostics as any).identityMerge.mergeAudit ?? []).map((line: string, i: number) => (
+                  <span key={i}>
+                    {line}
+                    {"\n"}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -395,6 +781,8 @@ export function OwnerProfiles() {
 
   const active    = useMemo(() => (listQ.data?.active    ?? []) as any[], [listQ.data]);
   const graveyard = useMemo(() => (listQ.data?.graveyard ?? []) as any[], [listQ.data]);
+  const powerRankings = useMemo(() => (listQ.data?.powerRankings ?? []) as any[], [listQ.data]);
+  const ownerAwards = useMemo(() => (listQ.data?.ownerAwards ?? []) as any[], [listQ.data]);
 
   useMemo(() => {
     if (!selected && active.length > 0) setSelected(active[0].ownerName);
@@ -413,6 +801,110 @@ export function OwnerProfiles() {
         <p className="mt-1 text-sm text-muted-foreground">
           {active.length} active owner{active.length !== 1 ? "s" : ""} · click to view full profile
         </p>
+      </div>
+
+      <div className="mb-6 rounded-lg border border-border bg-card/40 overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-4 py-2.5">
+          <ListOrdered className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Power Rankings</h2>
+          <span className="text-xs text-muted-foreground">(win % · titles · H2H · activity)</span>
+        </div>
+        {powerRankings.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-muted-foreground text-center">No owners to rank yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground border-b border-border/50 bg-muted/10">
+                  <th className="py-2 pl-4 pr-2 w-10">#</th>
+                  <th className="py-2 pr-3">Owner</th>
+                  <th className="py-2 pr-3 hidden sm:table-cell">Team</th>
+                  <th className="py-2 pr-2 text-right">Record</th>
+                  <th className="py-2 pr-2 text-right">Win %</th>
+                  <th className="py-2 pr-2 text-right hidden md:table-cell" title="Championships">🏆</th>
+                  <th className="py-2 pr-2 text-right hidden md:table-cell" title="Runner-up / 3rd">Medals</th>
+                  <th className="py-2 pr-2 text-right">Score</th>
+                  <th className="py-2 pr-4">Why</th>
+                </tr>
+              </thead>
+              <tbody>
+                {powerRankings.map((row: any) => {
+                  const sel = selected === row.ownerName;
+                  const m = row.medals ?? {};
+                  return (
+                    <tr
+                      key={row.ownerName}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelected(row.ownerName)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelected(row.ownerName);
+                        }
+                      }}
+                      className={cn(
+                        "cursor-pointer border-b border-border/30 transition-colors",
+                        sel ? "bg-primary/15 ring-1 ring-inset ring-primary/30" : "hover:bg-muted/25",
+                      )}
+                    >
+                      <td className="py-2 pl-4 pr-2 font-mono text-muted-foreground">{num(row.rank)}</td>
+                      <td className="py-2 pr-3 font-medium text-foreground">{str(row.ownerName)}</td>
+                      <td className="py-2 pr-3 text-muted-foreground truncate max-w-[140px] hidden sm:table-cell">
+                        {str(row.currentTeam)}
+                      </td>
+                      <td className="py-2 pr-2 text-right tabular-nums text-muted-foreground">{str(row.record)}</td>
+                      <td className="py-2 pr-2 text-right tabular-nums">{pct(num(row.winPct))}</td>
+                      <td className="py-2 pr-2 text-right tabular-nums hidden md:table-cell">{num(row.championships)}</td>
+                      <td className="py-2 pr-2 text-right text-xs text-muted-foreground hidden md:table-cell">
+                        RU {num(m.runnerUps)} · 3rd {num(m.thirdPlace)}
+                      </td>
+                      <td className="py-2 pr-2 text-right font-mono text-xs text-muted-foreground">{num(row.score)}</td>
+                      <td className="py-2 pr-4 text-xs text-muted-foreground leading-snug max-w-[220px]">
+                        {str(row.reason)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="mb-6 rounded-lg border border-border bg-card/40 overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-4 py-2.5">
+          <Award className="h-4 w-4 text-amber-400/90" />
+          <h2 className="text-sm font-semibold text-foreground">Owner Awards</h2>
+          <span className="text-xs text-muted-foreground">deterministic · same data as profiles</span>
+        </div>
+        {ownerAwards.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-muted-foreground text-center">No awards yet — need more league history in the DB.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
+            {ownerAwards.map((a: any) => {
+              const sel = selected === a.ownerName;
+              return (
+                <button
+                  key={a.awardName}
+                  type="button"
+                  onClick={() => setSelected(a.ownerName)}
+                  className={cn(
+                    "rounded-lg border text-left p-3 transition-colors",
+                    sel
+                      ? "border-primary bg-primary/10 ring-1 ring-primary/25"
+                      : "border-border/60 bg-muted/10 hover:bg-muted/20 hover:border-border",
+                  )}
+                >
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-amber-500/90">{str(a.awardName)}</p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">{str(a.ownerName)}</p>
+                  <p className="text-xs font-mono text-muted-foreground mt-0.5">Value: {String(a.value ?? "—")}</p>
+                  <p className="text-xs text-muted-foreground/90 mt-2 leading-relaxed">{str(a.reason)}</p>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-6">
@@ -452,7 +944,7 @@ export function OwnerProfiles() {
 
         <div className="flex-1 min-w-0">
           {selected ? (
-            <ProfilePanel ownerName={selected} />
+            <ProfilePanel ownerName={selected} powerRankings={powerRankings} ownerAwards={ownerAwards} />
           ) : (
             <div className="flex items-center justify-center h-64 rounded-lg border border-border text-muted-foreground text-sm">
               Select an owner to view their profile.

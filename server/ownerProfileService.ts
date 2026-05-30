@@ -32,11 +32,27 @@ export type FlatRegularSeasonMatchup = {
   awayScore: number;
 };
 
+/** Per-profile canonical owner / merge diagnostics (DB-only, no draft history). */
+export type OwnerIdentityMergeDiagnostics = {
+  canonicalOwnerName: string;
+  ownerDisplayName: string;
+  linkedTeamIds: Array<{ season: number; teamId: number }>;
+  linkedTeamNames: string[];
+  activeSeasons: number[];
+  resolvedBy: "teamId" | "seasonTeamName" | "crossSeasonTeamName" | "canonicalMerge" | "unknown";
+  sourceTeamIds: string[];
+  sourceTeamNames: string[];
+  unresolvedRecordCount: number;
+  mergeAudit: string[];
+};
+
 export type OwnerProfileResolutionDiagnostics = {
   unresolvedTeamNames: string[];
   unresolvedSeasonTeams: Array<{ season: number; reason: string }>;
   missingRecordSeasons: number[];
   missingMedalJoinSeasons: Array<{ season: number; slot: "champion" | "runnerUp" | "third"; raw: string }>;
+  /** V1 identity merge audit (Owner Profiles canonical person). */
+  identityMerge?: OwnerIdentityMergeDiagnostics;
 };
 
 export type OwnerProfileRecordBundle = {
@@ -195,6 +211,8 @@ export type OwnerProfilePayload = {
     mergedTeamNames: string[];
     totalResolvedMatchups: number;
     missingRecordSeasons: number[];
+    /** Mirrors identityMerge.resolvedBy for quick UI scan. */
+    identityResolvedBy?: OwnerIdentityMergeDiagnostics["resolvedBy"];
   };
 };
 
@@ -227,6 +245,116 @@ export function normalizeOwnerStr(raw: string): string {
   return raw.trim().replace(/^\(+|\)+$/g, "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/**
+ * Stable person key for cross-season identity: trim/lowercase via {@link normalizeOwnerStr},
+ * then strip punctuation and collapse spaces so "Jan", "Jan.", and "JAN" match.
+ */
+export function personMergeKey(raw: string): string {
+  const n = normalizeOwnerStr(raw);
+  if (!n) return "";
+  return n.replace(/[^a-z0-9\s]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+class OwnerKeyUnionFind {
+  private readonly parent = new Map<string, string>();
+  find(x: string): string {
+    if (!this.parent.has(x)) this.parent.set(x, x);
+    const p = this.parent.get(x)!;
+    if (p === x) return x;
+    const r = this.find(p);
+    this.parent.set(x, r);
+    return r;
+  }
+  union(a: string, b: string) {
+    const ra = this.find(a);
+    const rb = this.find(b);
+    if (ra === rb) return;
+    if (ra.localeCompare(rb) < 0) this.parent.set(rb, ra);
+    else this.parent.set(ra, rb);
+  }
+}
+
+function pickCanonicalOwnerKeyFromSet(members: Set<string>): string {
+  const arr = [...members];
+  const ids = arr.filter((k) => k.startsWith("id:")).sort((a, b) => a.localeCompare(b));
+  if (ids.length > 0) return ids[0]!;
+  return arr.sort((a, b) => a.localeCompare(b))[0] ?? "name:unknown";
+}
+
+/**
+ * Maps raw {@link resolveOwnerKey} values to one canonical profile key per human
+ * (same non-empty owner display person key, or same ownerId, unions).
+ */
+export function buildRawKeyToCanonicalProfileKey(allRows: GmTeamRow[]): Map<string, string> {
+  const nameToOwnerId = buildNameToOwnerId(allRows);
+  const rowKey = (t: GmTeamRow) =>
+    resolveOwnerKey(String(t.ownerId || "").trim(), t.ownerName || "", t.name || "", nameToOwnerId);
+
+  const uf = new OwnerKeyUnionFind();
+  const allKeys = new Set<string>();
+  for (const t of allRows) {
+    if (t.teamId <= 0) continue;
+    allKeys.add(rowKey(t));
+  }
+
+  const personKeyToKeys = new Map<string, Set<string>>();
+  for (const t of allRows) {
+    if (t.teamId <= 0) continue;
+    const k = rowKey(t);
+    const o = (t.ownerName || "").trim();
+    if (!o) continue;
+    const pk = personMergeKey(o);
+    if (!pk) continue;
+    if (!personKeyToKeys.has(pk)) personKeyToKeys.set(pk, new Set());
+    personKeyToKeys.get(pk)!.add(k);
+  }
+  for (const set of personKeyToKeys.values()) {
+    const arr = [...set];
+    for (let i = 1; i < arr.length; i++) uf.union(arr[0]!, arr[i]!);
+  }
+
+  const ownerIdToKeys = new Map<string, Set<string>>();
+  for (const t of allRows) {
+    if (t.teamId <= 0) continue;
+    const id = String(t.ownerId || "").trim();
+    if (!id) continue;
+    const k = rowKey(t);
+    if (!ownerIdToKeys.has(id)) ownerIdToKeys.set(id, new Set());
+    ownerIdToKeys.get(id)!.add(k);
+  }
+  for (const set of ownerIdToKeys.values()) {
+    const arr = [...set];
+    for (let i = 1; i < arr.length; i++) uf.union(arr[0]!, arr[i]!);
+  }
+
+  const rootToMembers = new Map<string, Set<string>>();
+  for (const k of allKeys) {
+    const r = uf.find(k);
+    if (!rootToMembers.has(r)) rootToMembers.set(r, new Set());
+    rootToMembers.get(r)!.add(k);
+  }
+
+  const remap = new Map<string, string>();
+  for (const members of rootToMembers.values()) {
+    const canon = pickCanonicalOwnerKeyFromSet(members);
+    for (const m of members) remap.set(m, canon);
+  }
+  return remap;
+}
+
+/** `season:teamId` → canonical profile owner key (for matchup / list aggregation). */
+export function buildTeamToCanonicalProfileKey(allRows: GmTeamRow[]): Map<string, string> {
+  const nameToOwnerId = buildNameToOwnerId(allRows);
+  const remap = buildRawKeyToCanonicalProfileKey(allRows);
+  const m = new Map<string, string>();
+  for (const t of allRows) {
+    if (t.teamId <= 0) continue;
+    const raw = resolveOwnerKey(String(t.ownerId || "").trim(), t.ownerName || "", t.name || "", nameToOwnerId);
+    m.set(`${t.season}:${t.teamId}`, remap.get(raw) ?? raw);
+  }
+  return m;
+}
+
 export function cleanOwnerDisplay(raw: string): string {
   if (!raw) return "";
   return raw.trim().replace(/^\(+|\)+$/g, "").trim();
@@ -237,8 +365,9 @@ export function buildNameToOwnerId(allRows: GmTeamRow[]): Map<string, string> {
   for (const t of allRows) {
     const id = (t.ownerId || "").trim();
     if (!id) continue;
-    const norm = normalizeOwnerStr((t.ownerName || t.name || "").trim());
-    if (norm) m.set(norm, id);
+    const disp = (t.ownerName || "").trim() || (t.name || "").trim();
+    const pk = personMergeKey(disp);
+    if (pk && !m.has(pk)) m.set(pk, id);
   }
   return m;
 }
@@ -251,38 +380,110 @@ export function resolveOwnerKey(
 ): string {
   const id = (ownerId || "").trim();
   if (id) return `id:${id}`;
-  const norm = normalizeOwnerStr(ownerName || fallback);
-  const bridged = nameToOwnerId.get(norm);
-  return bridged ? `id:${bridged}` : `name:${norm || "unknown"}`;
+  const pk = personMergeKey(ownerName || fallback);
+  const bridged = nameToOwnerId.get(pk);
+  return bridged ? `id:${bridged}` : `name:${pk || "unknown"}`;
 }
 
-/** All team rows for this human owner (cross-season ownerId / name bridge). */
-export function resolveOwnerTeamsForProfile(allRows: GmTeamRow[], ownerDisplayName: string): {
+/** All team rows for this human owner (cross-season ownerId / person key / name bridge). */
+export function resolveOwnerTeamsForProfile(
+  allRows: GmTeamRow[],
+  ownerDisplayName: string,
+  opts?: { season?: number; teamId?: number },
+): {
   profileOwnerKey: string;
   ownerTeamRows: GmTeamRow[];
+  identityMerge: OwnerIdentityMergeDiagnostics;
 } | null {
   const trimmed = ownerDisplayName.trim();
   if (!trimmed) return null;
   const normIn = normalizeOwnerStr(trimmed);
+  const pkWant = personMergeKey(trimmed);
   const nameToOwnerId = buildNameToOwnerId(allRows);
-  const candidates = allRows.filter((t) => {
-    const o = (t.ownerName || "").trim();
-    return o === trimmed || normalizeOwnerStr(o) === normIn;
-  });
-  if (candidates.length === 0) return null;
-  const profileKey = resolveOwnerKey(
-    candidates[0].ownerId || "",
-    candidates[0].ownerName || "",
-    candidates[0].name || "",
-    nameToOwnerId,
-  );
+  const remap = buildRawKeyToCanonicalProfileKey(allRows);
+  const rowKey = (t: GmTeamRow) =>
+    resolveOwnerKey(String(t.ownerId || "").trim(), t.ownerName || "", t.name || "", nameToOwnerId);
+
+  let seedCanonical: string | null = null;
+
+  if (opts?.season != null && opts?.teamId != null) {
+    const hit = allRows.find((t) => t.season === opts.season && t.teamId === opts.teamId);
+    if (!hit) return null;
+    const raw = rowKey(hit);
+    seedCanonical = remap.get(raw) ?? raw;
+  } else {
+    const seeds = allRows.filter((t) => {
+      if (t.teamId <= 0) return false;
+      const o = (t.ownerName || "").trim();
+      if (o) {
+        return o === trimmed || normalizeOwnerStr(o) === normIn || personMergeKey(o) === pkWant;
+      }
+      const tn = (t.name || "").trim();
+      return Boolean(tn && personMergeKey(tn) === pkWant);
+    });
+    if (seeds.length === 0) return null;
+    const raw0 = rowKey(seeds[0]!);
+    seedCanonical = remap.get(raw0) ?? raw0;
+  }
+
   const ownerTeamRows = allRows
-    .filter(
-      (t) =>
-        resolveOwnerKey(t.ownerId || "", t.ownerName || "", t.name || "", nameToOwnerId) === profileKey,
-    )
+    .filter((t) => {
+      if (t.teamId <= 0) return false;
+      const raw = rowKey(t);
+      return (remap.get(raw) ?? raw) === seedCanonical;
+    })
     .sort((a, b) => a.season - b.season || a.teamId - b.teamId);
-  return { profileOwnerKey: profileKey, ownerTeamRows };
+
+  if (ownerTeamRows.length === 0) return null;
+
+  const profileOwnerKey = seedCanonical;
+  const rawKeysInCluster = new Set(ownerTeamRows.map((t) => rowKey(t)));
+  const distinctOwnerIds = new Set(ownerTeamRows.map((t) => String(t.ownerId || "").trim()).filter(Boolean));
+
+  let resolvedBy: OwnerIdentityMergeDiagnostics["resolvedBy"] = "unknown";
+  if (opts?.season != null && opts?.teamId != null) {
+    resolvedBy = "teamId";
+  } else if (rawKeysInCluster.size > 1 || distinctOwnerIds.size > 1) {
+    resolvedBy = "canonicalMerge";
+  } else {
+    const seasonSet = new Set(ownerTeamRows.map((t) => t.season));
+    resolvedBy = seasonSet.size <= 1 ? "seasonTeamName" : "crossSeasonTeamName";
+  }
+
+  const linkedTeamIds = ownerTeamRows.map((t) => ({ season: t.season, teamId: t.teamId }));
+  const linkedTeamNames = [...new Set(ownerTeamRows.map((t) => (t.name || "").trim()).filter(Boolean))].sort();
+  const activeSeasons = [...new Set(ownerTeamRows.map((t) => t.season))].sort((a, b) => a - b);
+  const sourceTeamIds = [...new Set(ownerTeamRows.map((t) => `${t.season}:${t.teamId}`))].sort();
+  const sourceTeamNames = [...new Set(ownerTeamRows.map((t) => (t.name || "").trim()).filter(Boolean))].sort();
+  const ownerAliases = [...new Set(ownerTeamRows.map((t) => (t.ownerName || "").trim()).filter(Boolean))].sort();
+  const canonicalOwnerName =
+    cleanOwnerDisplay(ownerTeamRows[ownerTeamRows.length - 1]?.ownerName?.trim() || trimmed) || trimmed;
+
+  const mergeAudit: string[] = [];
+  if (rawKeysInCluster.size > 1) {
+    mergeAudit.push(`Merged ${rawKeysInCluster.size} raw owner keys into canonical ${profileOwnerKey}.`);
+  }
+  if (distinctOwnerIds.size > 1) {
+    mergeAudit.push(`Linked ${distinctOwnerIds.size} ESPN ownerId values under person key "${pkWant}".`);
+  }
+  for (const r of rawKeysInCluster) {
+    if (r !== profileOwnerKey) mergeAudit.push(`Remapped ${r} → ${profileOwnerKey}.`);
+  }
+
+  const identityMerge: OwnerIdentityMergeDiagnostics = {
+    canonicalOwnerName,
+    ownerDisplayName: canonicalOwnerName,
+    linkedTeamIds,
+    linkedTeamNames,
+    activeSeasons,
+    resolvedBy,
+    sourceTeamIds,
+    sourceTeamNames,
+    unresolvedRecordCount: 0,
+    mergeAudit: mergeAudit.slice(0, 24),
+  };
+
+  return { profileOwnerKey, ownerTeamRows, identityMerge };
 }
 
 function buildL1TeamOwnerDisplay(allRows: GmTeamRow[]): Map<string, string> {
@@ -510,9 +711,15 @@ export function computeOwnerProfileRecordBundle(args: {
   medalRows: (typeof leagueMedals.$inferSelect)[];
   flatRegularSeason: FlatRegularSeasonMatchup[];
 }): OwnerProfileRecordBundle {
-  const { profileOwnerKey, ownerTeamRows, allLeagueGmRows, medalRows, flatRegularSeason } = args;
+  const { profileOwnerKey: profileOwnerKeyIn, ownerTeamRows, allLeagueGmRows, medalRows, flatRegularSeason } = args;
   const nameToOwnerId = buildNameToOwnerId(allLeagueGmRows);
-  const teamToOwnerKey = buildTeamToOwnerKey(allLeagueGmRows);
+  const keyRemap = buildRawKeyToCanonicalProfileKey(allLeagueGmRows);
+  const profileOwnerKey = keyRemap.get(profileOwnerKeyIn) ?? profileOwnerKeyIn;
+  const rawTeamToOwner = buildTeamToOwnerKey(allLeagueGmRows);
+  const teamToOwnerKey = new Map<string, string>();
+  for (const [sk, rk] of rawTeamToOwner) {
+    teamToOwnerKey.set(sk, keyRemap.get(rk) ?? rk);
+  }
   const l1TeamOwnerDisplay = buildL1TeamOwnerDisplay(allLeagueGmRows);
   const wlByOwnerSeason = aggregateMatchupWLByOwnerSeason(flatRegularSeason, teamToOwnerKey);
 
@@ -521,22 +728,24 @@ export function computeOwnerProfileRecordBundle(args: {
   const runnerUpSeasons: number[] = [];
   const thirdSeasons: number[] = [];
 
+  const canonMedalKey = (k: string | null) => (k == null ? null : keyRemap.get(k) ?? k);
+
   for (const m of medalRows) {
-    const ck = resolveMedalTeamToOwnerKey(m.season, m.championOwner, allLeagueGmRows, nameToOwnerId);
+    const ck = canonMedalKey(resolveMedalTeamToOwnerKey(m.season, m.championOwner, allLeagueGmRows, nameToOwnerId));
     if (m.championOwner?.trim() && !ck) {
       missingMedalJoinSeasons.push({ season: m.season, slot: "champion", raw: m.championOwner });
     } else if (ck === profileOwnerKey) {
       champSeasons.push(m.season);
     }
 
-    const rk = resolveMedalTeamToOwnerKey(m.season, m.runnerUpOwner, allLeagueGmRows, nameToOwnerId);
+    const rk = canonMedalKey(resolveMedalTeamToOwnerKey(m.season, m.runnerUpOwner, allLeagueGmRows, nameToOwnerId));
     if (m.runnerUpOwner?.trim() && !rk) {
       missingMedalJoinSeasons.push({ season: m.season, slot: "runnerUp", raw: m.runnerUpOwner });
     } else if (rk === profileOwnerKey) {
       runnerUpSeasons.push(m.season);
     }
 
-    const tk = resolveMedalTeamToOwnerKey(m.season, m.thirdPlaceOwner, allLeagueGmRows, nameToOwnerId);
+    const tk = canonMedalKey(resolveMedalTeamToOwnerKey(m.season, m.thirdPlaceOwner, allLeagueGmRows, nameToOwnerId));
     if (m.thirdPlaceOwner?.trim() && !tk) {
       missingMedalJoinSeasons.push({ season: m.season, slot: "third", raw: m.thirdPlaceOwner });
     } else if (tk === profileOwnerKey) {
@@ -717,15 +926,28 @@ export async function buildOwnerProfilePayload(args: {
   medalRows: (typeof leagueMedals.$inferSelect)[];
   allMatchupRows: MatchupRowIn[] | null;
   recordBundle: OwnerProfileRecordBundle;
+  identityMerge?: OwnerIdentityMergeDiagnostics;
 }): Promise<OwnerProfilePayload> {
-  const { ownerName, profileOwnerKey, allLeagueGmRows, teamRows, teamsBySeason, draftRows, allMatchupRows, recordBundle } = args;
+  const {
+    ownerName,
+    profileOwnerKey,
+    allLeagueGmRows,
+    teamRows,
+    teamsBySeason,
+    draftRows,
+    allMatchupRows,
+    recordBundle,
+    identityMerge: identityMergeIn,
+  } = args;
   const snapR = recordBundle.snapshotFromRecords;
 
   const leagueCanonRows = allLeagueGmRows?.length ? allLeagueGmRows : teamRows;
   const nameToOwnerIdFull = buildNameToOwnerId(leagueCanonRows);
+  const keyRemapFull = buildRawKeyToCanonicalProfileKey(leagueCanonRows);
 
   const ownerTeamIds = teamRows.map((t) => t.teamId).filter((id): id is number => id > 0);
   const l1 = recordBundle.l1TeamOwnerDisplay;
+  const profilePersonKey = personMergeKey(cleanOwnerDisplay(ownerName) || ownerName);
 
   const mergedOwnerAliases = [
     ...new Set(teamRows.map((t) => (t.ownerName || "").trim()).filter(Boolean)),
@@ -759,7 +981,7 @@ export async function buildOwnerProfilePayload(args: {
     }
     const seasonList = teamsBySeason.get(row.season) ?? [];
     const rowById = seasonList.find((t) => t.teamId === row.teamId);
-    const pickOwnerKey = rowById
+    const pickOwnerKeyRaw = rowById
       ? resolveOwnerKey(
           String(rowById.ownerId ?? "").trim(),
           rowById.ownerName,
@@ -767,6 +989,7 @@ export async function buildOwnerProfilePayload(args: {
           nameToOwnerIdFull,
         )
       : resolveOwnerKey("", res.ownerName, teamNameFromPick ?? "", nameToOwnerIdFull);
+    const pickOwnerKey = keyRemapFull.get(pickOwnerKeyRaw) ?? pickOwnerKeyRaw;
     if (pickOwnerKey === profileOwnerKey) {
       ownedPicks.push({
         playerName: row.playerName,
@@ -779,9 +1002,20 @@ export async function buildOwnerProfilePayload(args: {
     }
   }
 
+  const unresolvedTeamNamesSorted = [...unresolvedDiag].sort((a, b) => a.localeCompare(b));
+  const unresolvedRecordCount =
+    unresolvedTeamNamesSorted.length +
+    recordBundle.diagnostics.missingRecordSeasons.length +
+    recordBundle.diagnostics.missingMedalJoinSeasons.length;
+
+  const identityMerge: OwnerIdentityMergeDiagnostics | undefined = identityMergeIn
+    ? { ...identityMergeIn, unresolvedRecordCount }
+    : undefined;
+
   const ownerResolutionDiagnostics: OwnerProfileResolutionDiagnostics = {
     ...recordBundle.diagnostics,
-    unresolvedTeamNames: [...unresolvedDiag].sort((a, b) => a.localeCompare(b)),
+    unresolvedTeamNames: unresolvedTeamNamesSorted,
+    identityMerge,
   };
 
   const seasons = snapR.seasons;
@@ -953,7 +1187,7 @@ export async function buildOwnerProfilePayload(args: {
       const myId = isHome ? m.homeTeamId : m.awayTeamId;
       const oppId = isHome ? m.awayTeamId : m.homeTeamId;
       const oppOwner = l1.get(`${m.season}:${oppId}`) ?? "";
-      if (!oppOwner || normalizeOwnerStr(oppOwner) === normOwner) {
+      if (!oppOwner || personMergeKey(oppOwner) === profilePersonKey) {
         unresolvedMatchupCount++;
         continue;
       }
@@ -1061,13 +1295,14 @@ export async function buildOwnerProfilePayload(args: {
     dataSourceDiagnostics: {
       recordSource: "gmMatchupsCompletedRegularSeason",
       medalSource: "league_medals_resolved_by_team_name",
-      serviceVersion: "owner-canon-v3",
+      serviceVersion: "owner-canon-v4",
       ownerKey: profileOwnerKey,
       displayName: cleanOwnerDisplay(ownerName) || ownerName,
       mergedOwnerAliases,
       mergedTeamNames,
       totalResolvedMatchups,
       missingRecordSeasons: [...recordBundle.diagnostics.missingRecordSeasons],
+      identityResolvedBy: identityMerge?.resolvedBy,
     },
   };
 }
