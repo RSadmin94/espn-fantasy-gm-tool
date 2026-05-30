@@ -82,7 +82,9 @@ export type HallOfFamePayload = {
       thirdTeam: string | null;
       resolvedChampionOwnerKey: string | null;
       resolvedChampionDisplay: string | null;
+      resolvedRunnerUpOwnerKey: string | null;
       resolvedRunnerUpDisplay: string | null;
+      resolvedThirdOwnerKey: string | null;
       resolvedThirdDisplay: string | null;
     }>;
     medalDiagnostics: {
@@ -311,7 +313,9 @@ export async function buildHallOfFamePayload(args: {
       thirdTeam: m.thirdPlaceOwner || null,
       resolvedChampionOwnerKey: ck,
       resolvedChampionDisplay: ck ? ownerLabel(ck) : null,
+      resolvedRunnerUpOwnerKey: rk,
       resolvedRunnerUpDisplay: rk ? ownerLabel(rk) : null,
+      resolvedThirdOwnerKey: tk,
       resolvedThirdDisplay: tk ? ownerLabel(tk) : null,
     });
   }

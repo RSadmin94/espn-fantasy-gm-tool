@@ -5555,12 +5555,35 @@ export const appRouter = router({
         undefined,
       );
       const db = await getDb();
-      if (!db) return { leagueId, seasons: [] as { season: number; gmMatchupsRows: number; completedRows: number; dedupedRows: number; gmTeamsRows: number; cacheAvailable: boolean; usable: boolean }[] };
+      if (!db) {
+        return {
+          leagueId,
+          seasons: [] as {
+            season: number;
+            gmMatchupsRows: number;
+            completedRows: number;
+            dedupedRows: number;
+            completedPlayoffDedupedRows: number;
+            gmTeamsRows: number;
+            cacheAvailable: boolean;
+            usable: boolean;
+          }[],
+        };
+      }
 
       // Count gmMatchups rows per season
       const [dbMatchupRows, dbTeamRows] = await Promise.all([
-        db.select({ season: gmMatchups.season, matchupPeriodId: gmMatchups.matchupPeriodId, homeTeamId: gmMatchups.homeTeamId, awayTeamId: gmMatchups.awayTeamId, isCompleted: gmMatchups.isCompleted })
-          .from(gmMatchups).where(eqDrizzle(gmMatchups.leagueId, leagueId)),
+        db
+          .select({
+            season: gmMatchups.season,
+            matchupPeriodId: gmMatchups.matchupPeriodId,
+            homeTeamId: gmMatchups.homeTeamId,
+            awayTeamId: gmMatchups.awayTeamId,
+            isCompleted: gmMatchups.isCompleted,
+            isPlayoff: gmMatchups.isPlayoff,
+          })
+          .from(gmMatchups)
+          .where(eqDrizzle(gmMatchups.leagueId, leagueId)),
         db.select({ season: gmTeams.season }).from(gmTeams).where(eqDrizzle(gmTeams.leagueId, leagueId)),
       ]);
 
@@ -5583,11 +5606,29 @@ export const appRouter = router({
           const k = `${s}|${r.matchupPeriodId}|${r.homeTeamId}|${r.awayTeamId}`;
           if (!seenKeys.has(k)) { seenKeys.add(k); dedupedRows++; }
         }
+        const seenPlayoff = new Set<string>();
+        let completedPlayoffDedupedRows = 0;
+        for (const r of rows) {
+          if (r.isCompleted !== 1 || r.isPlayoff !== 1) continue;
+          const k = `${s}|${r.matchupPeriodId}|${r.homeTeamId}|${r.awayTeamId}`;
+          if (seenPlayoff.has(k)) continue;
+          seenPlayoff.add(k);
+          completedPlayoffDedupedRows++;
+        }
         const gmTeamsRows = teamCountBySeason.get(s) ?? 0;
         const hit = await getCachedViewWithTier(s, "combined", leagueId);
         const cacheAvailable = Boolean(hit?.row?.payload);
         const usable = (rows.length > 0 || cacheAvailable) && gmTeamsRows > 0;
-        return { season: s, gmMatchupsRows: rows.length, completedRows, dedupedRows, gmTeamsRows, cacheAvailable, usable };
+        return {
+          season: s,
+          gmMatchupsRows: rows.length,
+          completedRows,
+          dedupedRows,
+          completedPlayoffDedupedRows,
+          gmTeamsRows,
+          cacheAvailable,
+          usable,
+        };
       }));
 
       return { leagueId, seasons };
