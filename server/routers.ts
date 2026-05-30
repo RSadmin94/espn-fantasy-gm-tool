@@ -120,6 +120,22 @@ import {
   resolveDraftPickOwner,
 } from "./resolveDraftPickOwner";
 import {
+  buildOwnerProfilePayload,
+  loadOwnerProfileSharedData,
+  loadFlatRegularSeasonMatchups,
+  computeOwnerProfileRecordBundle,
+  flatMatchupsToIntelRows,
+  resolveOwnerTeamsForProfile,
+  normalizeOwnerStr,
+  cleanOwnerDisplay,
+  resolveOwnerKey,
+  buildNameToOwnerId,
+  buildTeamToOwnerKey,
+  resolveMedalTeamToOwnerKey,
+  aggregateMatchupWLByOwnerSeason,
+  type GmTeamRow,
+} from "./ownerProfileService";
+import {
   calcVORP,
   calcPositionalScarcity,
   calcRosterGaps,
@@ -241,34 +257,21 @@ function findChampionshipMatchup(schedule: any[]): any | null {
   return finalRound[finalRound.length - 1];
 }
 
-// Normalize a raw owner name to a stable lowercase key: strip surrounding parens, collapse spaces.
-// "(Rod Sellers)" and "Rod Sellers" both produce "rod sellers".
-function normalizeOwnerStr(raw: string): string {
-  if (!raw) return "";
-  return raw.trim().replace(/^\(+|\)+$/g, "").trim().toLowerCase().replace(/\s+/g, " ");
-}
+// Owner canonicalization: normalizeOwnerStr, cleanOwnerDisplay, resolveOwnerKey, buildNameToOwnerId,
+// buildTeamToOwnerKey, resolveMedalTeamToOwnerKey — imported from `./ownerProfileService`.
 
-// Return the display-ready version: strip parens, preserve original casing.
-function cleanOwnerDisplay(raw: string): string {
-  if (!raw) return "";
-  return raw.trim().replace(/^\(+|\)+$/g, "").trim();
-}
-
-// Compute a stable owner key for one team row.
-// Priority: (A) ESPN ownerId when present, (B) ownerId bridged via normalized-name cross-ref, (C) normalized name.
-// The nameToOwnerId map is built from rows that have BOTH ownerId and ownerName so that
-// historical rows (ownerId="") can be bridged to the same key as their recent counterpart.
-function resolveOwnerKey(
-  ownerId: string,
-  ownerName: string,
-  fallback: string,
-  nameToOwnerId: ReadonlyMap<string, string>,
-): string {
-  const id = (ownerId || "").trim();
-  if (id) return `id:${id}`;
-  const norm = normalizeOwnerStr(ownerName || fallback);
-  const bridged = nameToOwnerId.get(norm);
-  return bridged ? `id:${bridged}` : `name:${norm || "unknown"}`;
+/** Normalize ESPN `memberIds` / owner id lists for standings (arrays, strings, or sparse objects). */
+function coerceOwnerIdList(raw: unknown): string[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof raw === "string") return raw.split(/[;,]/).map((s) => s.trim()).filter(Boolean);
+  if (typeof raw === "object") {
+    const vals = Object.values(raw as Record<string, unknown>).filter(
+      (v) => v != null && String(v).trim() !== "",
+    );
+    if (vals.length > 0) return vals.map((v) => String(v).trim()).filter(Boolean);
+  }
+  return [];
 }
 
 /**
@@ -304,17 +307,80 @@ type KeeperPoolEntry = {
 };
 
 type OwnerSummaryRow = {
-  ownerName:    string;
-  seasons:      number[];
-  currentTeam:  string;
-  totalWins:    number;
-  totalLosses:  number;
-  totalTies:    number;
-  winPct:       number;
-  championships:number;
-  runnerUps:    number;
-  thirdPlace:   number;
+  /** Stable canonical key (`id:…` or `name:…`). */
+  ownerKey: string;
+  /** Human-facing label. */
+  ownerName: string;
+  seasons: number[];
+  currentTeam: string;
+  totalWins: number;
+  totalLosses: number;
+  totalTies: number;
+  winPct: number;
+  championships: number;
+  runnerUps: number;
+  thirdPlace: number;
 };
+
+/** Deterministic power ranking row (Owner Profiles V1). */
+type OwnerPowerRankingRow = {
+  rank: number;
+  ownerName: string;
+  currentTeam: string;
+  score: number;
+  record: string;
+  winPct: number;
+  championships: number;
+  medals: { runnerUps: number; thirdPlace: number };
+  reason: string;
+};
+
+/** Deterministic league award (Owner Awards V1). */
+type OwnerAwardRow = {
+  awardName: string;
+  ownerName: string;
+  value: string | number;
+  reason: string;
+};
+
+function h2hWinPctForPower(w: number, l: number, t: number): number {
+  const g = w + l + t;
+  if (g <= 0) return 0;
+  return Number((((w + 0.5 * t) / g) * 100).toFixed(1));
+}
+
+/** Short deterministic copy from fixed phrase bank (no LLM). */
+function buildOwnerPowerReason(input: {
+  winPct: number;
+  championships: number;
+  runnerUps: number;
+  thirdPlace: number;
+  h2hWins: number;
+  h2hLosses: number;
+  h2hTies: number;
+  activityAvgPerSeason: number;
+}): string {
+  const parts: string[] = [];
+  if (input.championships >= 2) parts.push("repeat champion");
+  else if (input.championships === 1) parts.push("title ceiling");
+  if (input.runnerUps >= 2) parts.push("finals regular");
+  else if (input.runnerUps === 1 && input.championships === 0) parts.push("deep playoff run");
+  if (input.thirdPlace >= 2) parts.push("podium staple");
+  else if (input.thirdPlace >= 1 && input.championships === 0 && input.runnerUps === 0) {
+    parts.push("medaled season");
+  }
+  if (input.winPct >= 58) parts.push("elite win rate");
+  else if (input.winPct >= 52) parts.push("winning record");
+  else if (input.winPct < 45) parts.push("below-.500 ledger");
+  const hg = input.h2hWins + input.h2hLosses + input.h2hTies;
+  const h2hPct = h2hWinPctForPower(input.h2hWins, input.h2hLosses, input.h2hTies);
+  if (hg >= 10 && h2hPct >= 56) parts.push("H2H bully");
+  else if (hg >= 10 && h2hPct <= 42) parts.push("H2H underdog");
+  if (input.activityAvgPerSeason >= 55) parts.push("high motor");
+  else if (input.activityAvgPerSeason <= 12 && hg >= 6) parts.push("low-volume operator");
+  if (parts.length === 0) parts.push("balanced résumé");
+  return parts.slice(0, 3).join(" · ");
+}
 
 export const appRouter = router({
   system: systemRouter,
@@ -1686,15 +1752,18 @@ export const appRouter = router({
         );
         const teamsRes = await getSeasonTeams(input.season, resolved.leagueId, ctx.user?.id ?? undefined);
         if (teamsRes.count > 0) {
-          const mapped = teamsRes.rows.map((t) => {
-            const teamId = Number(t.teamId ?? t.id);
+          const mapped = teamsRes.rows
+            .map((t) => {
+            const teamIdRaw = Number(t.teamId ?? t.id);
+            if (!Number.isFinite(teamIdRaw) || teamIdRaw <= 0) return null;
+            const teamId = teamIdRaw;
             const wins = Number(t.wins ?? 0) || 0;
             const losses = Number(t.losses ?? 0) || 0;
             const ties = Number(t.ties ?? 0) || 0;
             const pointsFor = Number(t.pointsFor ?? t.points ?? 0) || 0;
             const pointsAgainst = Number(t.pointsAgainst ?? 0) || 0;
             const rankFinal = Number(t.rankCalculatedFinal ?? t.rankFinal ?? 99) || 99;
-            const memberIds = (t.memberIds as string[]) || [];
+            const memberIds = coerceOwnerIdList(t.memberIds);
             const ownersStr = String(t.owners ?? "").trim();
             const ownerNames =
               memberIds.length > 0
@@ -1707,7 +1776,7 @@ export const appRouter = router({
               teamName: String(t.name ?? t.nickname ?? `Team ${teamId}`),
               location: String(t.location ?? ""),
               nickname: String(t.nickname ?? ""),
-              owners: ownerNames,
+              owners: ownerNames.length > 0 ? ownerNames : ownersStr || `Team ${teamId}`,
               memberIds: ownerNames,
               wins,
               losses,
@@ -1725,7 +1794,8 @@ export const appRouter = router({
                 overall: { wins, losses, ties, pointsFor, pointsAgainst },
               },
             };
-          });
+          })
+            .filter((row): row is NonNullable<typeof row> => row != null);
           return mapped.sort((a, b) => (a.rankFinal || 99) - (b.rankFinal || 99));
         }
         const data = await getSeasonData(input.season, undefined, ctx.user?.id);
@@ -4430,6 +4500,10 @@ export const appRouter = router({
         cacheSeasons: number[];
         emptySeasons: number[];
         coverageWarning: boolean;
+        /** Sample team slots that could not be mapped to an owner (max 40). */
+        unresolvedTeamSamples: { season: number; teamId: number }[];
+        /** Owners present on rosters but with zero completed H2H games counted (possible mapping gaps). */
+        ownersWithZeroH2H: string[];
       };
       type H2HReturn = {
         owners: string[];
@@ -4442,6 +4516,8 @@ export const appRouter = router({
         missingScores: 0, skippedUnresolvedOwners: 0, skippedSameOwner: 0,
         totalDedupedMatchups: 0, dbSeasons: [], cacheSeasons: [], emptySeasons: [],
         coverageWarning: false,
+        unresolvedTeamSamples: [],
+        ownersWithZeroH2H: [],
       };
 
       const { leagueId } = await resolveActiveLeagueId(
@@ -4458,20 +4534,30 @@ export const appRouter = router({
           teamId: gmTeams.teamId,
           name: gmTeams.name,
           ownerName: gmTeams.ownerName,
+          ownerId: gmTeams.ownerId,
         })
         .from(gmTeams)
         .where(eqDrizzle(gmTeams.leagueId, leagueId))
         .orderBy(ascDrizzle(gmTeams.season));
 
-      // season:teamId → ownerKey  +  ownerKey → displayName
+      // Same owner-key strategy as allTimeH2H: ESPN ownerId when present, else name + cross-ref.
+      const nameToOwnerIdH2h = new Map<string, string>();
+      for (const t of allTeams) {
+        const id = (t.ownerId || "").trim();
+        if (!id) continue;
+        const norm = normalizeOwnerStr(t.ownerName || t.name || "");
+        if (norm && !nameToOwnerIdH2h.has(norm)) nameToOwnerIdH2h.set(norm, id);
+      }
+
       const teamToOwnerKey = new Map<string, string>();
       const ownerDisplay = new Map<string, string>();
       for (const t of allTeams) {
         const rawName = (t.ownerName || t.name || `Team ${t.teamId}`).trim();
-        const ownerKey = normalizeOwnerStr(rawName);
-        const display = cleanOwnerDisplay(rawName) || rawName;
+        const ownerKey = resolveOwnerKey(t.ownerId, t.ownerName, t.name || `Team ${t.teamId}`, nameToOwnerIdH2h);
         teamToOwnerKey.set(`${t.season}:${t.teamId}`, ownerKey);
-        ownerDisplay.set(ownerKey, display);
+        const display = cleanOwnerDisplay(rawName);
+        if (display && !display.startsWith("(")) ownerDisplay.set(ownerKey, display);
+        else if (!ownerDisplay.has(ownerKey)) ownerDisplay.set(ownerKey, display || rawName);
       }
 
       // ── Phase 1: Load from normalized gmMatchups ──────────────────────────
@@ -4543,6 +4629,15 @@ export const appRouter = router({
       };
 
       const seenH2HKeys = new Set<string>();
+      const unresolvedSampleKeys = new Set<string>();
+      const unresolvedTeamSamples: { season: number; teamId: number }[] = [];
+      const pushUnresolved = (season: number, teamId: number) => {
+        const u = `${season}:${teamId}`;
+        if (unresolvedSampleKeys.has(u) || unresolvedTeamSamples.length >= 40) return;
+        unresolvedSampleKeys.add(u);
+        unresolvedTeamSamples.push({ season, teamId });
+      };
+
       let uniqueMatchups = 0;
       let duplicateMatchups = 0;
       let unresolvedTeamMappings = 0;
@@ -4565,8 +4660,8 @@ export const appRouter = router({
 
         const hk = teamToOwnerKey.get(`${m.season}:${homeId}`);
         const ak = teamToOwnerKey.get(`${m.season}:${awayId}`);
-        if (!hk) unresolvedTeamMappings++;
-        if (!ak) unresolvedTeamMappings++;
+        if (!hk) { unresolvedTeamMappings++; pushUnresolved(m.season, homeId); }
+        if (!ak) { unresolvedTeamMappings++; pushUnresolved(m.season, awayId); }
         if (!hk || !ak) { ownerResolutionFailures++; skippedUnresolvedOwners++; continue; }
         if (hk === ak) { skippedSameOwner++; continue; }
 
@@ -4582,6 +4677,21 @@ export const appRouter = router({
       }
 
       const ownerPairCount = Math.floor(h2h.size / 2);
+
+      const ownerKeys = [...ownerDisplay.keys()].sort((a, b) =>
+        (ownerDisplay.get(a) ?? a).localeCompare(ownerDisplay.get(b) ?? b),
+      );
+      const ownersWithZeroH2H = ownerKeys
+        .filter((k) => {
+          let gp = 0;
+          for (const other of ownerKeys) {
+            if (other === k) continue;
+            gp += h2h.get(`${k}|${other}`)?.gamesPlayed ?? 0;
+          }
+          return gp === 0;
+        })
+        .map((k) => ownerDisplay.get(k) ?? k);
+
       const diagnostics: H2HDiagnostics = {
         rawMatchupRows: allMatchups.length,
         uniqueMatchups,
@@ -4597,11 +4707,10 @@ export const appRouter = router({
         cacheSeasons,
         emptySeasons,
         coverageWarning: emptySeasons.length > 0,
+        unresolvedTeamSamples,
+        ownersWithZeroH2H,
       };
 
-      const ownerKeys = [...ownerDisplay.keys()].sort((a, b) =>
-        (ownerDisplay.get(a) ?? a).localeCompare(ownerDisplay.get(b) ?? b),
-      );
       const owners = ownerKeys.map((k) => ownerDisplay.get(k) ?? k);
       const matrix = ownerKeys.map((ownerKey) => ({
         owner: ownerDisplay.get(ownerKey) ?? ownerKey,
@@ -5000,18 +5109,28 @@ export const appRouter = router({
           teamId: gmTeams.teamId,
           name: gmTeams.name,
           ownerName: gmTeams.ownerName,
+          ownerId: gmTeams.ownerId,
         })
         .from(gmTeams)
         .where(eqDrizzle(gmTeams.leagueId, leagueId));
+
+      const nameToOwnerIdRec = new Map<string, string>();
+      for (const t of allTeams) {
+        const id = (t.ownerId || "").trim();
+        if (!id) continue;
+        const norm = normalizeOwnerStr(t.ownerName || t.name || "");
+        if (norm && !nameToOwnerIdRec.has(norm)) nameToOwnerIdRec.set(norm, id);
+      }
 
       const teamToOwnerKey = new Map<string, string>();
       const ownerDisplay = new Map<string, string>();
       for (const t of allTeams) {
         const rawName = (t.ownerName || t.name || `Team ${t.teamId}`).trim();
-        const ownerKey = normalizeOwnerStr(rawName);
-        const display = cleanOwnerDisplay(rawName) || rawName;
+        const ownerKey = resolveOwnerKey(t.ownerId, t.ownerName, t.name || `Team ${t.teamId}`, nameToOwnerIdRec);
         teamToOwnerKey.set(`${t.season}:${t.teamId}`, ownerKey);
-        if (display) ownerDisplay.set(ownerKey, display);
+        const display = cleanOwnerDisplay(rawName);
+        if (display && !display.startsWith("(")) ownerDisplay.set(ownerKey, display);
+        else if (!ownerDisplay.has(ownerKey)) ownerDisplay.set(ownerKey, display || rawName);
       }
 
       // ── Phase 1: Load from normalized gmMatchups ──────────────────────────
@@ -9129,40 +9248,609 @@ if (pickOrder.length > 0) {
       );
       const lid = leagueId || "457622";
       const db = await getDb();
-      if (!db) return { active: [] as OwnerSummaryRow[], graveyard: [] as OwnerSummaryRow[] };
+      if (!db) {
+        return {
+          active: [] as OwnerSummaryRow[],
+          graveyard: [] as OwnerSummaryRow[],
+          powerRankings: [] as OwnerPowerRankingRow[],
+          ownerAwards: [] as OwnerAwardRow[],
+          canonicalLeagueDebug: {} as Record<string, never>,
+        };
+      }
 
       const teamRows = await db
-        .select({ ownerName: gmTeams.ownerName, season: gmTeams.season, wins: gmTeams.wins, losses: gmTeams.losses, ties: gmTeams.ties, name: gmTeams.name })
-        .from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))
+        .select({
+          ownerName: gmTeams.ownerName,
+          ownerId: gmTeams.ownerId,
+          season: gmTeams.season,
+          name: gmTeams.name,
+          teamId: gmTeams.teamId,
+          rawTeam: gmTeams.rawTeam,
+          pointsFor: gmTeams.pointsFor,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, lid))
         .orderBy(ascDrizzle(gmTeams.season));
 
-      const om = new Map<string, OwnerSummaryRow>();
+      const fullRows = teamRows as GmTeamRow[];
+      const nameToOwnerId = buildNameToOwnerId(fullRows);
+      const teamToOwnerKey = buildTeamToOwnerKey(fullRows);
+      const flatRS = await loadFlatRegularSeasonMatchups({ db, leagueId: lid, userId });
+      const wlByOwnerSeason = aggregateMatchupWLByOwnerSeason(flatRS, teamToOwnerKey);
+
+      const careerWL = new Map<string, { wins: number; losses: number; ties: number }>();
+      for (const [k, rec] of wlByOwnerSeason) {
+        const ix = k.indexOf("##");
+        if (ix < 0) continue;
+        const ownerKey = k.slice(ix + 2);
+        if (!careerWL.has(ownerKey)) careerWL.set(ownerKey, { wins: 0, losses: 0, ties: 0 });
+        const c = careerWL.get(ownerKey)!;
+        c.wins += rec.wins;
+        c.losses += rec.losses;
+        c.ties += rec.ties;
+      }
+
+      type RowMeta = {
+        seasons: Set<number>;
+        teamNames: Set<string>;
+        maxSeason: number;
+        displayName: string;
+        currentTeam: string;
+      };
+      const metaByKey = new Map<string, RowMeta>();
+      const activityByOwner = new Map<
+        string,
+        { totalMoves: number; seasonsWithMoves: number; acquisitions: number; trades: number }
+      >();
+      const h2hByOwner = new Map<string, { w: number; l: number; t: number }>();
+
       for (const row of teamRows) {
-        const on = row.ownerName; if (!on) continue;
-        if (!om.has(on)) om.set(on, { ownerName:on, seasons:[], currentTeam:"", totalWins:0, totalLosses:0, totalTies:0, winPct:0, championships:0, runnerUps:0, thirdPlace:0 });
-        const o = om.get(on)!;
-        o.seasons.push(row.season); o.totalWins+=row.wins; o.totalLosses+=row.losses; o.totalTies+=row.ties;
-        o.currentTeam = row.name;
+        const on = (row.ownerName || "").trim();
+        if (!on) continue;
+        const ownerKey = resolveOwnerKey(
+          String(row.ownerId || "").trim(),
+          row.ownerName || "",
+          row.name || "",
+          nameToOwnerId,
+        );
+        if (!metaByKey.has(ownerKey)) {
+          metaByKey.set(ownerKey, {
+            seasons: new Set<number>(),
+            teamNames: new Set<string>(),
+            maxSeason: row.season,
+            displayName: cleanOwnerDisplay(on) || on,
+            currentTeam: row.name || "",
+          });
+        }
+        const meta = metaByKey.get(ownerKey)!;
+        meta.seasons.add(row.season);
+        if (row.name?.trim()) meta.teamNames.add(row.name.trim());
+        if (row.season >= meta.maxSeason) {
+          meta.maxSeason = row.season;
+          meta.currentTeam = row.name || meta.currentTeam;
+          meta.displayName = cleanOwnerDisplay((row.ownerName || "").trim()) || meta.displayName;
+        }
+
+        if (!activityByOwner.has(ownerKey)) {
+          activityByOwner.set(ownerKey, { totalMoves: 0, seasonsWithMoves: 0, acquisitions: 0, trades: 0 });
+        }
+        let seasonMoves = 0;
+        try {
+          const raw = JSON.parse(row.rawTeam || "{}") as Record<string, unknown>;
+          const tc = (raw.transactionCounter ?? {}) as Record<string, number>;
+          const acq = Number(tc.acquisitions ?? 0);
+          const trd = Number(tc.trades ?? 0);
+          seasonMoves =
+            acq +
+            Number(tc.drops ?? 0) +
+            trd +
+            Number(tc.moveToActive ?? 0) +
+            Number(tc.moveToIR ?? 0);
+          const act = activityByOwner.get(ownerKey)!;
+          act.acquisitions += acq;
+          act.trades += trd;
+        } catch {
+          seasonMoves = 0;
+        }
+        const act = activityByOwner.get(ownerKey)!;
+        act.totalMoves += seasonMoves;
+        if (seasonMoves > 0) act.seasonsWithMoves++;
       }
-      const medalRows = await db.select({ season:leagueMedals.season, c:leagueMedals.championOwner, r:leagueMedals.runnerUpOwner, t:leagueMedals.thirdPlaceOwner }).from(leagueMedals).where(eqDrizzle(leagueMedals.leagueId, lid));
+
+      for (const k of metaByKey.keys()) {
+        h2hByOwner.set(k, { w: 0, l: 0, t: 0 });
+      }
+      for (const k of careerWL.keys()) {
+        if (!h2hByOwner.has(k)) h2hByOwner.set(k, { w: 0, l: 0, t: 0 });
+        if (!activityByOwner.has(k)) {
+          activityByOwner.set(k, { totalMoves: 0, seasonsWithMoves: 0, acquisitions: 0, trades: 0 });
+        }
+      }
+
+      const medalRows = await db
+        .select({
+          season: leagueMedals.season,
+          c: leagueMedals.championOwner,
+          r: leagueMedals.runnerUpOwner,
+          t: leagueMedals.thirdPlaceOwner,
+        })
+        .from(leagueMedals)
+        .where(eqDrizzle(leagueMedals.leagueId, lid));
+
+      const medalsByKey = new Map<string, { championships: number; runnerUps: number; thirdPlace: number }>();
+      const ensureMed = (key: string | null) => {
+        if (!key) return;
+        if (!medalsByKey.has(key)) {
+          medalsByKey.set(key, { championships: 0, runnerUps: 0, thirdPlace: 0 });
+        }
+      };
       for (const m of medalRows) {
-        if (om.has(m.c)) om.get(m.c)!.championships++;
-        if (om.has(m.r)) om.get(m.r)!.runnerUps++;
-        if (om.has(m.t)) om.get(m.t)!.thirdPlace++;
+        const ck = resolveMedalTeamToOwnerKey(m.season, m.c, fullRows, nameToOwnerId);
+        if (ck) {
+          ensureMed(ck);
+          medalsByKey.get(ck)!.championships++;
+        }
+        const rk = resolveMedalTeamToOwnerKey(m.season, m.r, fullRows, nameToOwnerId);
+        if (rk) {
+          ensureMed(rk);
+          medalsByKey.get(rk)!.runnerUps++;
+        }
+        const tk = resolveMedalTeamToOwnerKey(m.season, m.t, fullRows, nameToOwnerId);
+        if (tk) {
+          ensureMed(tk);
+          medalsByKey.get(tk)!.thirdPlace++;
+        }
       }
-      const all = Array.from(om.values()).map(o => {
-        const seasons = [...new Set(o.seasons)].sort((a,b)=>a-b);
-        const g = o.totalWins+o.totalLosses+o.totalTies;
-        return { ...o, seasons, winPct: g>0?Number(((o.totalWins/g)*100).toFixed(1)):0 };
+
+      const matchupRows = await db
+        .select({
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          winnerTeamId: gmMatchups.winnerTeamId,
+          season: gmMatchups.season,
+        })
+        .from(gmMatchups)
+        .where(
+          andDrizzle(
+            eqDrizzle(gmMatchups.leagueId, lid),
+            eqDrizzle(gmMatchups.isPlayoff, 0),
+            eqDrizzle(gmMatchups.isCompleted, 1),
+          ),
+        );
+
+      for (const m of matchupRows) {
+        const homeKey = teamToOwnerKey.get(`${m.season}:${m.homeTeamId}`);
+        const awayKey = teamToOwnerKey.get(`${m.season}:${m.awayTeamId}`);
+        if (!homeKey || !awayKey || homeKey === awayKey) continue;
+        const hRec = h2hByOwner.get(homeKey);
+        const aRec = h2hByOwner.get(awayKey);
+        if (!hRec || !aRec) continue;
+        if (!m.winnerTeamId) {
+          hRec.t++;
+          aRec.t++;
+        } else if (m.winnerTeamId === m.homeTeamId) {
+          hRec.w++;
+          aRec.l++;
+        } else {
+          hRec.l++;
+          aRec.w++;
+        }
+      }
+
+      const om = new Map<string, OwnerSummaryRow>();
+      const ownerKeys = new Set([...metaByKey.keys(), ...careerWL.keys(), ...medalsByKey.keys()]);
+      for (const ownerKey of ownerKeys) {
+        const meta = metaByKey.get(ownerKey);
+        const wl = careerWL.get(ownerKey) ?? { wins: 0, losses: 0, ties: 0 };
+        const md = medalsByKey.get(ownerKey) ?? { championships: 0, runnerUps: 0, thirdPlace: 0 };
+        const displayName =
+          meta?.displayName ||
+          (ownerKey.startsWith("name:")
+            ? cleanOwnerDisplay(ownerKey.slice(5).replace(/-/g, " ")) || ownerKey
+            : ownerKey);
+        om.set(ownerKey, {
+          ownerKey,
+          ownerName: displayName,
+          seasons: meta ? [...meta.seasons].sort((a, b) => a - b) : [],
+          currentTeam: meta?.currentTeam ?? "",
+          totalWins: wl.wins,
+          totalLosses: wl.losses,
+          totalTies: wl.ties,
+          winPct: 0,
+          championships: md.championships,
+          runnerUps: md.runnerUps,
+          thirdPlace: md.thirdPlace,
+        });
+      }
+
+      const all = Array.from(om.values()).map((o) => {
+        const seasons = [...new Set(o.seasons)].sort((a, b) => a - b);
+        const g = o.totalWins + o.totalLosses + o.totalTies;
+        return {
+          ...o,
+          seasons,
+          winPct: g > 0 ? Number((((o.totalWins + 0.5 * o.totalTies) / g) * 100).toFixed(1)) : 0,
+        };
       });
+
+      const powerRankings: OwnerPowerRankingRow[] = [...all]
+        .map((o) => {
+          const h2h = h2hByOwner.get(o.ownerKey) ?? { w: 0, l: 0, t: 0 };
+          const act = activityByOwner.get(o.ownerKey) ?? {
+            totalMoves: 0,
+            seasonsWithMoves: 0,
+            acquisitions: 0,
+            trades: 0,
+          };
+          const seasonCount = o.seasons.length || 1;
+          const activityAvgPerSeason =
+            seasonCount > 0 ? Number((act.totalMoves / seasonCount).toFixed(1)) : 0;
+          const h2hPct = h2hWinPctForPower(h2h.w, h2h.l, h2h.t);
+          const h2hGames = h2h.w + h2h.l + h2h.t;
+          const wpPart = Math.round(o.winPct * 100);
+          const medalPart =
+            o.championships * 8000 + o.runnerUps * 2500 + o.thirdPlace * 900;
+          const h2hPart = Math.min(
+            5200,
+            Math.round(h2hPct * 45) + (h2h.w - h2h.l) * 18 + Math.min(h2hGames, 40) * 6,
+          );
+          const actPart = Math.min(
+            2800,
+            Math.floor(Math.min(act.totalMoves, 800) * 2.2) + act.seasonsWithMoves * 35,
+          );
+          const score = wpPart + medalPart + h2hPart + actPart;
+          const rec =
+            o.totalTies > 0
+              ? `${o.totalWins}-${o.totalLosses}-${o.totalTies}`
+              : `${o.totalWins}-${o.totalLosses}`;
+          const reason = buildOwnerPowerReason({
+            winPct: o.winPct,
+            championships: o.championships,
+            runnerUps: o.runnerUps,
+            thirdPlace: o.thirdPlace,
+            h2hWins: h2h.w,
+            h2hLosses: h2h.l,
+            h2hTies: h2h.t,
+            activityAvgPerSeason,
+          });
+          return {
+            rank: 0,
+            ownerName: o.ownerName,
+            currentTeam: o.currentTeam,
+            score,
+            record: rec,
+            winPct: o.winPct,
+            championships: o.championships,
+            medals: { runnerUps: o.runnerUps, thirdPlace: o.thirdPlace },
+            reason,
+          };
+        })
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          if (b.championships !== a.championships) return b.championships - a.championships;
+          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+          return a.ownerName.localeCompare(b.ownerName);
+        })
+        .map((row, i) => ({ ...row, rank: i + 1 }));
+
+      const allLeagueTeamsForDraft = teamRows
+        .filter((r) => r.ownerName)
+        .map((r) => ({
+          season: r.season,
+          teamId: r.teamId,
+          name: r.name,
+          ownerName: r.ownerName as string,
+          ownerId: String(r.ownerId || "").trim() || undefined,
+        }));
+      const teamsBySeasonAwards = buildTeamsBySeason(allLeagueTeamsForDraft);
+
+      const draftRowsForAwards = await db
+        .select({
+          position: gmDraftPicks.position,
+          roundId: gmDraftPicks.roundId,
+          isKeeper: gmDraftPicks.isKeeper,
+          season: gmDraftPicks.season,
+          teamId: gmDraftPicks.teamId,
+          rawPick: gmDraftPicks.rawPick,
+        })
+        .from(gmDraftPicks)
+        .where(eqDrizzle(gmDraftPicks.leagueId, lid));
+
+      type DraftAgg = { totalPicks: number; earlyPremium: number; keeperPicks: number; sumRound: number };
+      const draftAgg = new Map<string, DraftAgg>();
+      for (const on of om.keys()) {
+        draftAgg.set(on, { totalPicks: 0, earlyPremium: 0, keeperPicks: 0, sumRound: 0 });
+      }
+      for (const row of draftRowsForAwards) {
+        const teamNameFromPick = parseDraftPickTeamNameFromRawPick(row.rawPick);
+        const res = resolveDraftPickOwner(
+          { season: row.season, teamId: row.teamId, teamName: teamNameFromPick },
+          teamsBySeasonAwards,
+        );
+        const seasonList = teamsBySeasonAwards.get(row.season) ?? [];
+        const rowById = seasonList.find((t) => t.teamId === row.teamId);
+        const pickKey = rowById
+          ? resolveOwnerKey(
+              String(rowById.ownerId ?? "").trim(),
+              rowById.ownerName,
+              rowById.name,
+              nameToOwnerId,
+            )
+          : resolveOwnerKey("", res.ownerName, teamNameFromPick ?? "", nameToOwnerId);
+        const d = draftAgg.get(pickKey);
+        if (!d) continue;
+        d.totalPicks++;
+        d.sumRound += row.roundId;
+        if (row.isKeeper === 1) d.keeperPicks++;
+        const pos = String(row.position ?? "").toUpperCase();
+        if (row.roundId <= 3 && (pos === "RB" || pos === "WR")) d.earlyPremium++;
+      }
+
+      const MIN_DRAFT = 12;
+      const ownerAwards: OwnerAwardRow[] = [];
+      const pushAward = (a: OwnerAwardRow | null) => {
+        if (a && a.ownerName) ownerAwards.push(a);
+      };
+
+      const activeMulti = all.filter((o) => o.seasons.length >= 2);
+      const draftEligible = activeMulti.filter(
+        (o) => (draftAgg.get(o.ownerKey)?.totalPicks ?? 0) >= MIN_DRAFT,
+      );
+
+      if (draftEligible.length > 0) {
+        const bestSorted = [...draftEligible].sort((a, b) => {
+          const da = draftAgg.get(a.ownerKey)!;
+          const db = draftAgg.get(b.ownerKey)!;
+          if (db.earlyPremium !== da.earlyPremium) return db.earlyPremium - da.earlyPremium;
+          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+          return a.ownerName.localeCompare(b.ownerName);
+        });
+        const best = bestSorted[0]!;
+        const bd = draftAgg.get(best.ownerKey)!;
+        pushAward({
+          awardName: "Best Drafter",
+          ownerName: best.ownerName,
+          value: bd.earlyPremium,
+          reason: `Most RB/WR heat in rounds 1–3 (${bd.earlyPremium} hits on ${bd.totalPicks} resolved picks).`,
+        });
+        if (draftEligible.length >= 2) {
+          const worstSorted = [...draftEligible].sort((a, b) => {
+            const da = draftAgg.get(a.ownerKey)!;
+            const db = draftAgg.get(b.ownerKey)!;
+            if (da.earlyPremium !== db.earlyPremium) return da.earlyPremium - db.earlyPremium;
+            const avgA = da.sumRound / da.totalPicks;
+            const avgB = db.sumRound / db.totalPicks;
+            if (avgB !== avgA) return avgB - avgA;
+            return a.ownerName.localeCompare(b.ownerName);
+          });
+          const worst = worstSorted[0]!;
+          if (worst.ownerName !== best.ownerName) {
+            const wd = draftAgg.get(worst.ownerKey)!;
+            pushAward({
+              awardName: "Worst Drafter",
+              ownerName: worst.ownerName,
+              value: wd.earlyPremium,
+              reason: `Fewest early RB/WR strikes (${wd.earlyPremium}) on ${wd.totalPicks} picks — premium window closed early.`,
+            });
+          }
+        }
+      }
+
+      const keeperCandidates = activeMulti.filter((o) => {
+        const d = draftAgg.get(o.ownerKey);
+        return d && d.totalPicks >= 10 && d.keeperPicks >= 2;
+      });
+      if (keeperCandidates.length > 0) {
+        const sortedK = [...keeperCandidates].sort((a, b) => {
+          const da = draftAgg.get(a.ownerKey)!;
+          const db = draftAgg.get(b.ownerKey)!;
+          const ra = (da.keeperPicks / da.totalPicks) * 100;
+          const rb = (db.keeperPicks / db.totalPicks) * 100;
+          if (Math.abs(rb - ra) > 0.001) return rb - ra;
+          if (db.keeperPicks !== da.keeperPicks) return db.keeperPicks - da.keeperPicks;
+          return a.ownerName.localeCompare(b.ownerName);
+        });
+        const wk = sortedK[0]!;
+        const kd = draftAgg.get(wk.ownerKey)!;
+        const rate = Number(((kd.keeperPicks / kd.totalPicks) * 100).toFixed(1));
+        pushAward({
+          awardName: "Keeper King",
+          ownerName: wk.ownerName,
+          value: `${rate}%`,
+          reason: `${kd.keeperPicks} keepers / ${kd.totalPicks} picks (${rate}%) — rent-controlled roster spots.`,
+        });
+      }
+
+      const acqCand = activeMulti.filter((o) => (activityByOwner.get(o.ownerKey)?.acquisitions ?? 0) > 0);
+      if (acqCand.length > 0) {
+        const wa = [...acqCand].sort((a, b) => {
+          const ca = activityByOwner.get(a.ownerKey)?.acquisitions ?? 0;
+          const cb = activityByOwner.get(b.ownerKey)?.acquisitions ?? 0;
+          if (cb !== ca) return cb - ca;
+          return a.ownerName.localeCompare(b.ownerName);
+        })[0]!;
+        const ac = activityByOwner.get(wa.ownerKey)?.acquisitions ?? 0;
+        pushAward({
+          awardName: "Transaction Addict",
+          ownerName: wa.ownerName,
+          value: ac,
+          reason: `${ac} lifetime acquisitions — waiver wire is cardio.`,
+        });
+      }
+
+      const tradeCand = activeMulti.filter((o) => (activityByOwner.get(o.ownerKey)?.trades ?? 0) > 0);
+      if (tradeCand.length > 0) {
+        const wt = [...tradeCand].sort((a, b) => {
+          const ca = activityByOwner.get(a.ownerKey)?.trades ?? 0;
+          const cb = activityByOwner.get(b.ownerKey)?.trades ?? 0;
+          if (cb !== ca) return cb - ca;
+          return a.ownerName.localeCompare(b.ownerName);
+        })[0]!;
+        const tc = activityByOwner.get(wt.ownerKey)?.trades ?? 0;
+        pushAward({
+          awardName: "Trade Shark",
+          ownerName: wt.ownerName,
+          value: tc,
+          reason: `${tc} completed trades — roster diplomacy with teeth.`,
+        });
+      }
+
+      const bullyCand = activeMulti.filter((o) => o.totalWins + o.totalLosses + o.totalTies >= 14);
+      if (bullyCand.length > 0) {
+        const wb = [...bullyCand].sort((a, b) => {
+          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+          if (b.totalWins !== a.totalWins) return b.totalWins - a.totalWins;
+          return a.ownerName.localeCompare(b.ownerName);
+        })[0]!;
+        pushAward({
+          awardName: "Regular Season Bully",
+          ownerName: wb.ownerName,
+          value: `${wb.winPct}%`,
+          reason: `${wb.totalWins}-${wb.totalLosses}-${wb.totalTies} ledger at ${wb.winPct}% — spreadsheet villain arc.`,
+        });
+      }
+
+      const hasMedalPodium = all.some((o) => o.runnerUps + o.thirdPlace > 0);
+      if (hasMedalPodium) {
+        const wp = [...all]
+          .sort((a, b) => {
+            const pa = a.runnerUps + a.thirdPlace;
+            const pb = b.runnerUps + b.thirdPlace;
+            if (pb !== pa) return pb - pa;
+            if (a.championships !== b.championships) return a.championships - b.championships;
+            return a.ownerName.localeCompare(b.ownerName);
+          })[0]!;
+        if (wp.runnerUps + wp.thirdPlace > 0) {
+          pushAward({
+            awardName: "Playoff Merchant",
+            ownerName: wp.ownerName,
+            value: `${wp.runnerUps} RU · ${wp.thirdPlace} 3rd`,
+            reason: `${wp.runnerUps + wp.thirdPlace} podium trips vs ${wp.championships} titles — always open for January business.`,
+          });
+        }
+      }
+
+      const rkCand = activeMulti.filter((o) => {
+        const h = h2hByOwner.get(o.ownerKey);
+        return h && h.w + h.l + h.t >= 10;
+      });
+      if (rkCand.length > 0) {
+        const wr = [...rkCand].sort((a, b) => {
+          const ha = h2hByOwner.get(a.ownerKey)!;
+          const hb = h2hByOwner.get(b.ownerKey)!;
+          const da = ha.w - ha.l;
+          const db = hb.w - hb.l;
+          if (db !== da) return db - da;
+          const pa = h2hWinPctForPower(ha.w, ha.l, ha.t);
+          const pb = h2hWinPctForPower(hb.w, hb.l, hb.t);
+          if (pb !== pa) return pb - pa;
+          return a.ownerName.localeCompare(b.ownerName);
+        })[0]!;
+        const h = h2hByOwner.get(wr.ownerKey)!;
+        const net = h.w - h.l;
+        pushAward({
+          awardName: "Rivalry Killer",
+          ownerName: wr.ownerName,
+          value: `${h.w}-${h.l}-${h.t}`,
+          reason: `${net >= 0 ? "+" : ""}${net} net H2H (${h2hWinPctForPower(h.w, h.l, h.t)}% in ${h.w + h.l + h.t} games) — receipts filed.`,
+        });
+      }
+
+      const grave = all.filter((o) => o.seasons.length === 1);
+      if (grave.length > 0) {
+        const ow = [...grave].sort((a, b) => {
+          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+          return a.ownerName.localeCompare(b.ownerName);
+        })[0]!;
+        pushAward({
+          awardName: "One-Year Wonder",
+          ownerName: ow.ownerName,
+          value: `${ow.winPct}%`,
+          reason: `Single-season ${ow.totalWins}-${ow.totalLosses}-${ow.totalTies} at ${ow.winPct}% — comet, not constellation.`,
+        });
+        const legend = [...grave].sort((a, b) => {
+          const rowA = teamRows.find((r) => {
+            const k = resolveOwnerKey(String(r.ownerId || "").trim(), r.ownerName || "", r.name || "", nameToOwnerId);
+            return k === a.ownerKey && a.seasons.includes(r.season);
+          });
+          const rowB = teamRows.find((r) => {
+            const k = resolveOwnerKey(String(r.ownerId || "").trim(), r.ownerName || "", r.name || "", nameToOwnerId);
+            return k === b.ownerKey && b.seasons.includes(r.season);
+          });
+          const pfa = Number(rowA?.pointsFor ?? 0);
+          const pfb = Number(rowB?.pointsFor ?? 0);
+          if (pfb !== pfa) return pfb - pfa;
+          return a.ownerName.localeCompare(b.ownerName);
+        })[0]!;
+        const prow = teamRows.find((r) => {
+          const k = resolveOwnerKey(String(r.ownerId || "").trim(), r.ownerName || "", r.name || "", nameToOwnerId);
+          return k === legend.ownerKey && legend.seasons.includes(r.season);
+        });
+        const pf = Number(prow?.pointsFor ?? 0);
+        pushAward({
+          awardName: "Graveyard Legend",
+          ownerName: legend.ownerName,
+          value: Number(pf.toFixed(1)),
+          reason: `One-season ${pf.toFixed(1)} PF before exit — ghosted the league like a legend should.`,
+        });
+      }
+
+      const CANON_DEBUG = new Set(["christian edmondson", "rod sellers"]);
+      const canonicalLeagueDebug: Record<
+        string,
+        {
+          ownerKey: string;
+          displayName: string;
+          mergedOwnerAliases: string[];
+          mergedTeamNames: string[];
+          recordSource: string;
+          totalResolvedMatchups: number;
+          missingSeasons: number[];
+          wins: number;
+          losses: number;
+          ties: number;
+          serviceVersion: string;
+        }
+      > = {};
+      for (const o of all) {
+        const n = normalizeOwnerStr(o.ownerName);
+        if (!CANON_DEBUG.has(n)) continue;
+        const meta = metaByKey.get(o.ownerKey);
+        canonicalLeagueDebug[o.ownerName] = {
+          ownerKey: o.ownerKey,
+          displayName: o.ownerName,
+          mergedOwnerAliases: meta ? [...new Set(teamRows.filter((r) => {
+            const k = resolveOwnerKey(String(r.ownerId || "").trim(), r.ownerName || "", r.name || "", nameToOwnerId);
+            return k === o.ownerKey;
+          }).map((r) => (r.ownerName || "").trim()))].filter(Boolean).sort() : [],
+          mergedTeamNames: meta ? [...meta.teamNames].sort() : [],
+          recordSource: "gmMatchupsCompletedRegularSeason",
+          totalResolvedMatchups: o.totalWins + o.totalLosses + o.totalTies,
+          missingSeasons: [],
+          wins: o.totalWins,
+          losses: o.totalLosses,
+          ties: o.totalTies,
+          serviceVersion: "owner-canon-v3",
+        };
+      }
+
       return {
-        active:    all.filter(o=>o.seasons.length>=2).sort((a,b)=>b.totalWins-a.totalWins),
-        graveyard: all.filter(o=>o.seasons.length===1).sort((a,b)=>b.seasons[0]-a.seasons[0]),
+        active: all.filter((o) => o.seasons.length >= 2).sort((a, b) => b.totalWins - a.totalWins),
+        graveyard: all.filter((o) => o.seasons.length === 1).sort((a, b) => b.seasons[0] - a.seasons[0]),
+        powerRankings,
+        ownerAwards,
+        canonicalLeagueDebug,
       };
     }),
 
+    /** Full profile panel: `buildOwnerProfilePayload` in `server/ownerProfileService.ts` (matchup-based RS records). */
     ownerProfile: publicProcedure
-      .input(z.object({ ownerName: z.string().min(1).max(255) }))
+      .input(
+        z.object({
+          ownerName: z.string().min(1).max(255),
+          compareWith: z.string().min(1).max(255).optional(),
+        }),
+      )
       .query(async ({ ctx, input }) => {
         const userId = ctx.user?.id ?? 0;
         const { leagueId } = await resolveActiveLeagueId(
@@ -9172,350 +9860,128 @@ if (pickOrder.length > 0) {
         const db = await getDb();
         if (!db) return null;
         const ownerName = input.ownerName.trim();
+        const compareRaw = input.compareWith?.trim() ?? "";
 
-        const teamRows = await db
+        const allGmRows = await db
           .select()
           .from(gmTeams)
-          .where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), eqDrizzle(gmTeams.ownerName, ownerName)))
-          .orderBy(ascDrizzle(gmTeams.season));
-        if (teamRows.length === 0) return null;
+          .where(eqDrizzle(gmTeams.leagueId, lid))
+          .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.teamId));
 
-        const allLeagueTeams = await db
-          .select({
-            season: gmTeams.season,
-            teamId: gmTeams.teamId,
-            name: gmTeams.name,
-            ownerName: gmTeams.ownerName,
-          })
-          .from(gmTeams)
-          .where(eqDrizzle(gmTeams.leagueId, lid));
-        const teamsBySeason = buildTeamsBySeason(allLeagueTeams);
+        const resolvedPrimary = resolveOwnerTeamsForProfile(allGmRows, ownerName);
+        if (!resolvedPrimary) return null;
+        const { profileOwnerKey, ownerTeamRows } = resolvedPrimary;
 
-        // ownerTeamIds + l1 map used by matchup intel below
-        const ownerTeamIds = teamRows.map(t => t.teamId).filter((id): id is number => id > 0);
-        const l1 = new Map<string, string>(); // "season:teamId" → ownerName
-        for (const t of allLeagueTeams) {
-          if (t.ownerName && t.teamId > 0) l1.set(`${t.season}:${t.teamId}`, t.ownerName);
+        const { allLeagueTeams, teamsBySeason, draftRows, medalRows } = await loadOwnerProfileSharedData({
+          db,
+          leagueId: lid,
+        });
+
+        const comparisonOwnerKeys = new Set<string>();
+        const comparisonCandidates: string[] = [];
+        for (const t of allGmRows) {
+          const on = (t.ownerName || "").trim();
+          if (!on) continue;
+          const r = resolveOwnerTeamsForProfile(allGmRows, on);
+          if (!r || r.profileOwnerKey === profileOwnerKey) continue;
+          if (comparisonOwnerKeys.has(r.profileOwnerKey)) continue;
+          comparisonOwnerKeys.add(r.profileOwnerKey);
+          const rep = r.ownerTeamRows[r.ownerTeamRows.length - 1]?.ownerName?.trim() || on;
+          comparisonCandidates.push(rep);
+        }
+        comparisonCandidates.sort((a, b) => a.localeCompare(b));
+
+        const flatRS = await loadFlatRegularSeasonMatchups({ db, leagueId: lid, userId });
+        const intelRows = flatMatchupsToIntelRows(flatRS);
+        const allMatchupRows = intelRows.length > 0 ? intelRows : null;
+
+        const recordPrimary = computeOwnerProfileRecordBundle({
+          profileOwnerKey,
+          ownerTeamRows,
+          allLeagueGmRows: allGmRows,
+          medalRows,
+          flatRegularSeason: flatRS,
+        });
+
+        const compareResolved = compareRaw ? resolveOwnerTeamsForProfile(allGmRows, compareRaw) : null;
+        const compareOk =
+          compareRaw &&
+          compareResolved &&
+          compareResolved.profileOwnerKey !== profileOwnerKey;
+        const compareName = compareOk
+          ? compareResolved.ownerTeamRows[compareResolved.ownerTeamRows.length - 1]?.ownerName?.trim() ||
+            compareRaw
+          : "";
+
+        let compareTeamRows: typeof ownerTeamRows | null = null;
+        let recordCompare: Awaited<ReturnType<typeof computeOwnerProfileRecordBundle>> | null = null;
+        if (compareName && compareResolved) {
+          compareTeamRows = compareResolved.ownerTeamRows;
+          recordCompare = computeOwnerProfileRecordBundle({
+            profileOwnerKey: compareResolved.profileOwnerKey,
+            ownerTeamRows: compareTeamRows,
+            allLeagueGmRows: allGmRows,
+            medalRows,
+            flatRegularSeason: flatRS,
+          });
         }
 
-        const draftRows = await db
-          .select({
-            playerName: gmDraftPicks.playerName,
-            position: gmDraftPicks.position,
-            roundId: gmDraftPicks.roundId,
-            isKeeper: gmDraftPicks.isKeeper,
-            season: gmDraftPicks.season,
-            teamId: gmDraftPicks.teamId,
-            rawPick: gmDraftPicks.rawPick,
-          })
-          .from(gmDraftPicks)
-          .where(eqDrizzle(gmDraftPicks.leagueId, lid))
-          .orderBy(ascDrizzle(gmDraftPicks.season), ascDrizzle(gmDraftPicks.roundId));
+        const primary = await buildOwnerProfilePayload({
+          db,
+          ownerName,
+          profileOwnerKey,
+          allLeagueGmRows: allGmRows,
+          teamRows: ownerTeamRows,
+          teamsBySeason,
+          draftRows,
+          medalRows,
+          allMatchupRows,
+          recordBundle: recordPrimary,
+        });
 
-        const unresolvedDiag = new Set<string>();
-        const ownedPicks: Array<{
-          playerName: string | null;
-          position: string | null;
-          roundId: number;
-          isKeeper: number;
-          season: number;
-          teamId: number;
-        }> = [];
-        for (const row of draftRows) {
-          const teamNameFromPick = parseDraftPickTeamNameFromRawPick(row.rawPick);
-          const res = resolveDraftPickOwner(
-            { season: row.season, teamId: row.teamId, teamName: teamNameFromPick },
+        let comparison: Awaited<ReturnType<typeof buildOwnerProfilePayload>> | null = null;
+        if (compareName && compareTeamRows?.length && recordCompare) {
+          comparison = await buildOwnerProfilePayload({
+            db,
+            ownerName: compareName,
+            profileOwnerKey: compareResolved.profileOwnerKey,
+            allLeagueGmRows: allGmRows,
+            teamRows: compareTeamRows,
             teamsBySeason,
-          );
-          if (res.source === "unknown") {
-            const label =
-              teamNameFromPick && teamNameFromPick.trim().length > 0
-                ? teamNameFromPick.trim()
-                : `(teamId ${row.teamId}, season ${row.season})`;
-            unresolvedDiag.add(label);
-          }
-          if (res.ownerName === ownerName) {
-            ownedPicks.push({
-              playerName: row.playerName,
-              position: row.position,
-              roundId: row.roundId,
-              isKeeper: row.isKeeper,
-              season: row.season,
-              teamId: row.teamId,
-            });
-          }
+            draftRows,
+            medalRows,
+            allMatchupRows,
+            recordBundle: recordCompare,
+          });
         }
-        const ownerResolutionDiagnostics = {
-          unresolvedTeamNames: [...unresolvedDiag].sort((a, b) => a.localeCompare(b)),
-        };
 
-        const medalRows = await db.select().from(leagueMedals).where(eqDrizzle(leagueMedals.leagueId, lid));
-        const champSeasons = medalRows.filter((m) => m.championOwner === ownerName).map((m) => m.season);
-        const runnerUpSeasons = medalRows.filter((m) => m.runnerUpOwner === ownerName).map((m) => m.season);
-        const thirdSeasons = medalRows.filter((m) => m.thirdPlaceOwner === ownerName).map((m) => m.season);
-
-        const totalWins = teamRows.reduce((s, r) => s + r.wins, 0);
-        const totalLosses = teamRows.reduce((s, r) => s + r.losses, 0);
-        const totalTies = teamRows.reduce((s, r) => s + r.ties, 0);
-        const totalGames = totalWins + totalLosses + totalTies;
-        const winPct = totalGames > 0 ? Number(((totalWins / totalGames) * 100).toFixed(1)) : 0;
-        const seasons = [...new Set(teamRows.map((t) => t.season))].sort((a, b) => a - b);
-        const currentTeam = teamRows[teamRows.length - 1]?.name ?? ownerName;
-
-        const seasonRecords = teamRows.map((t) => ({
-          season: t.season,
-          teamName: t.name,
-          wins: t.wins,
-          losses: t.losses,
-          ties: t.ties,
-          pointsFor: Number(t.pointsFor),
-          pointsAgainst: Number(t.pointsAgainst),
-          playoffSeed: t.playoffSeed,
-          finalStanding: t.finalStanding,
-          isChampion: champSeasons.includes(t.season),
-          isRunnerUp: runnerUpSeasons.includes(t.season),
-          isThirdPlace: thirdSeasons.includes(t.season),
-        }));
-        const bestSeason = [...seasonRecords].sort((a, b) => b.wins - a.wins)[0];
-        const worstSeason = [...seasonRecords].sort((a, b) => a.wins - b.wins)[0];
-
-        const totalPicks = ownedPicks.length;
-        const posDist: Record<string, number> = {};
-        const earlyPos: Record<string, number> = {};
-        const posRoundSum: Record<string, number> = {};
-        const posRoundCount: Record<string, number> = {};
-        for (const p of ownedPicks) {
-          const pos = p.position || "UNK";
-          posDist[pos] = (posDist[pos] ?? 0) + 1;
-          if (p.roundId <= 3) earlyPos[pos] = (earlyPos[pos] ?? 0) + 1;
-          posRoundSum[pos] = (posRoundSum[pos] ?? 0) + p.roundId;
-          posRoundCount[pos] = (posRoundCount[pos] ?? 0) + 1;
-        }
-        const posShare: Record<string, number> = {};
-        for (const [pos, cnt] of Object.entries(posDist)) {
-          posShare[pos] = totalPicks > 0 ? Number(((cnt / totalPicks) * 100).toFixed(1)) : 0;
-        }
-        const avgRoundByPos: Record<string, number> = {};
-        for (const [pos, sum] of Object.entries(posRoundSum)) {
-          avgRoundByPos[pos] = Number((sum / posRoundCount[pos]).toFixed(1));
-        }
-        const mostDraftedPos = Object.entries(posDist)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3)
-          .map(([pos]) => pos);
-
-        const keeperPicks = ownedPicks.filter((p) => p.isKeeper === 1);
-        const totalKeepers = keeperPicks.length;
-        const keeperRate = totalPicks > 0 ? Number(((totalKeepers / totalPicks) * 100).toFixed(1)) : 0;
-        const keeperPosDist: Record<string, number> = {};
-        let keeperRoundSum = 0;
-        for (const p of keeperPicks) {
-          const pos = p.position || "UNK";
-          keeperPosDist[pos] = (keeperPosDist[pos] ?? 0) + 1;
-          keeperRoundSum += p.roundId;
-        }
-        const avgKeeperRound = totalKeepers > 0 ? Number((keeperRoundSum / totalKeepers).toFixed(1)) : null;
-        const lastYearKeepers = keeperPicks
-          .filter((p) => p.season === Math.max(...seasons))
-          .map((p) => ({
-            playerName: p.playerName ?? "",
-            position: p.position ?? "",
-            round: p.roundId,
-          }));
-
-        type TxnSeason = {
-          season: number;
-          acquisitions: number;
-          drops: number;
-          trades: number;
-          moveToActive: number;
-          moveToIR: number;
-          total: number;
-        };
-        const txnSeasons: TxnSeason[] = [];
-        for (const t of teamRows) {
-          try {
-            const raw = JSON.parse(t.rawTeam || "{}") as Record<string, unknown>;
-            const tc = (raw.transactionCounter ?? {}) as Record<string, number>;
-            const acq = Number(tc.acquisitions ?? 0);
-            const drp = Number(tc.drops ?? 0);
-            const trd = Number(tc.trades ?? 0);
-            const mta = Number(tc.moveToActive ?? 0);
-            const mir = Number(tc.moveToIR ?? 0);
-            txnSeasons.push({
-              season: t.season,
-              acquisitions: acq,
-              drops: drp,
-              trades: trd,
-              moveToActive: mta,
-              moveToIR: mir,
-              total: acq + drp + trd + mta + mir,
-            });
-          } catch {
-            txnSeasons.push({
-              season: t.season,
-              acquisitions: 0,
-              drops: 0,
-              trades: 0,
-              moveToActive: 0,
-              moveToIR: 0,
-              total: 0,
-            });
-          }
-        }
-        const txnSeasonsWithData = txnSeasons.filter((s) => s.total > 0);
-        const totalAcq = txnSeasons.reduce((s, t) => s + t.acquisitions, 0);
-        const totalDrops = txnSeasons.reduce((s, t) => s + t.drops, 0);
-        const totalTrades = txnSeasons.reduce((s, t) => s + t.trades, 0);
-        const totalIR = txnSeasons.reduce((s, t) => s + t.moveToIR, 0);
-        const avgTxnPerSeason =
-          txnSeasonsWithData.length > 0
-            ? Number((txnSeasonsWithData.reduce((s, t) => s + t.total, 0) / txnSeasonsWithData.length).toFixed(1))
-            : 0;
-        const mostActiveSeason =
-          txnSeasons.length > 0 ? txnSeasons.reduce((best, cur) => (cur.total > best.total ? cur : best)) : null;
-
-        const topPos = mostDraftedPos[0] ?? "unknown";
-        const champStr =
-          champSeasons.length > 0
-            ? `${champSeasons.length}-time champion (${champSeasons.join(", ")})`
-            : "no championships yet";
-        const keeperStr =
-          keeperRate > 20
-            ? `heavy keeper user (${keeperRate}% keeper rate)`
-            : keeperRate > 10
-              ? "moderate keeper user"
-              : "rarely uses keepers";
-        const txnStyle =
-          avgTxnPerSeason > 60
-            ? "high-activity manager — frequent FA and waiver moves"
-            : avgTxnPerSeason > 30
-              ? "moderate transaction volume"
-              : avgTxnPerSeason > 0
-                ? "low transaction volume — set-and-forget style"
-                : "transaction data not available";
-        const draftStyle =
-          (earlyPos["RB"] ?? 0) > (earlyPos["WR"] ?? 0)
-            ? "RB-heavy early drafter"
-            : (earlyPos["WR"] ?? 0) > (earlyPos["RB"] ?? 0)
-              ? "WR-heavy early drafter"
-              : "balanced early-round approach";
-
-        const scoutingSummary = [
-          `${ownerName} has been active for ${seasons.length} season${seasons.length !== 1 ? "s" : ""} (${seasons[0]}–${seasons[seasons.length - 1]}) with a ${totalWins}–${totalLosses} record (${winPct}% win rate).`,
-          `They are ${champStr}.`,
-          `Draft profile: ${draftStyle}, with ${topPos} as their most drafted position (${posShare[topPos] ?? 0}% of picks).`,
-          `Keeper profile: ${keeperStr}${avgKeeperRound != null ? `, averaging keeper round ${avgKeeperRound}` : ""}.`,
-          `Activity profile: ${txnStyle}.`,
-        ].join(" ");
-
-        // ── Matchup Intel ─────────────────────────────────────────────────
-        // Source: gmMatchups (regular season only, completed games).
-        // Resolution: season+teamId → ownerName via l1 map built above.
-        // Returns empty array with diagnostic count if data unavailable.
-        const ownerTeamIdSet = new Set(ownerTeamIds);
-        let matchupIntel: Array<{
-          opponentOwner: string;
-          games: number; wins: number; losses: number; ties: number;
-          winPct: number; tag: string;
-        }> = [];
-        let unresolvedMatchupCount = 0;
-
-        if (ownerTeamIds.length > 0) {
-          const allMatchupRows = await db
-            .select({
-              homeTeamId:   gmMatchups.homeTeamId,
-              awayTeamId:   gmMatchups.awayTeamId,
-              winnerTeamId: gmMatchups.winnerTeamId,
-              season:       gmMatchups.season,
-            })
-            .from(gmMatchups)
-            .where(andDrizzle(
-              eqDrizzle(gmMatchups.leagueId, lid),
-              eqDrizzle(gmMatchups.isPlayoff, 0),
-              eqDrizzle(gmMatchups.isCompleted, 1),
-            ));
-
-          const ownerMatchups = allMatchupRows.filter(
-            m => ownerTeamIdSet.has(m.homeTeamId) || ownerTeamIdSet.has(m.awayTeamId),
-          );
-
-          const h2h = new Map<string, { games: number; wins: number; losses: number; ties: number }>();
-
-          for (const m of ownerMatchups) {
-            const isHome   = ownerTeamIdSet.has(m.homeTeamId);
-            const myId     = isHome ? m.homeTeamId : m.awayTeamId;
-            const oppId    = isHome ? m.awayTeamId : m.homeTeamId;
-            const oppOwner = l1.get(`${m.season}:${oppId}`);
-            if (!oppOwner || oppOwner === ownerName) { unresolvedMatchupCount++; continue; }
-            if (!h2h.has(oppOwner)) h2h.set(oppOwner, { games: 0, wins: 0, losses: 0, ties: 0 });
-            const rec = h2h.get(oppOwner)!;
-            rec.games++;
-            if (!m.winnerTeamId) rec.ties++;
-            else if (m.winnerTeamId === myId) rec.wins++;
-            else rec.losses++;
-          }
-
-          matchupIntel = [...h2h.entries()].map(([opponentOwner, rec]) => {
-            const wp = rec.games > 0 ? Number(((rec.wins / rec.games) * 100).toFixed(1)) : 0;
-            let tag = "Normal";
-            if (rec.games >= 3) {
-              if (wp >= 75) tag = "Punching Bag";
-              else if (wp <= 25) tag = "Nemesis";
-              else if (rec.games >= 5 && Math.abs(wp - 50) <= 12) tag = "Rival";
-              else if (wp > 55) tag = "Favorable";
-              else if (wp < 45) tag = "Difficult";
-            }
-            return { opponentOwner, ...rec, winPct: wp, tag };
-          }).sort((a, b) => b.games - a.games);
-        }
+        const h2hRow = comparison
+          ? primary.matchupIntel.find((m) => m.opponentOwner === compareName)
+          : undefined;
+        const headToHead =
+          comparison && h2hRow
+            ? {
+                games: h2hRow.games,
+                winsForOwner: h2hRow.wins,
+                lossesForOwner: h2hRow.losses,
+                ties: h2hRow.ties,
+                recordVs: `${h2hRow.wins}-${h2hRow.losses}${h2hRow.ties ? `-${h2hRow.ties}` : ""}`,
+              }
+            : comparison
+              ? {
+                  games: 0,
+                  winsForOwner: 0,
+                  lossesForOwner: 0,
+                  ties: 0,
+                  recordVs: "0-0",
+                }
+              : null;
 
         return {
-          ownerName,
-          snapshot: {
-            seasons,
-            currentTeam,
-            totalWins,
-            totalLosses,
-            totalTies,
-            winPct,
-            championships: champSeasons.length,
-            runnerUps: runnerUpSeasons.length,
-            thirdPlace: thirdSeasons.length,
-            champSeasons,
-            runnerUpSeasons,
-            thirdSeasons,
-            bestSeason,
-            worstSeason,
-            seasonRecords,
-          },
-          draftDNA: {
-            totalPicks,
-            posShare,
-            earlyPos,
-            avgRoundByPos,
-            mostDraftedPos,
-          },
-          keeperDNA: {
-            totalKeepers,
-            keeperRate,
-            keeperPosDist,
-            avgKeeperRound,
-            lastYearKeepers,
-          },
-          activityDNA: {
-            totalAcq,
-            totalDrops,
-            totalTrades,
-            totalIR,
-            avgTxnPerSeason,
-            mostActiveSeason,
-            txnSeasons,
-          },
-          scoutingSummary,
-          ownerResolutionDiagnostics,
-          matchupIntel,
-          matchupIntelDiagnostics: { unresolvedMatchups: unresolvedMatchupCount },
+          ...primary,
+          comparisonCandidates,
+          comparison,
+          headToHead,
         };
       }),
 
