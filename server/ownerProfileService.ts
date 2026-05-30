@@ -403,6 +403,7 @@ export function resolveOwnerTeamsForProfile(
   const remap = buildRawKeyToCanonicalProfileKey(allRows);
   const rowKey = (t: GmTeamRow) =>
     resolveOwnerKey(String(t.ownerId || "").trim(), t.ownerName || "", t.name || "", nameToOwnerId);
+  const rowCanonical = (t: GmTeamRow) => remap.get(rowKey(t)) ?? rowKey(t);
 
   let seedCanonical: string | null = null;
 
@@ -412,25 +413,33 @@ export function resolveOwnerTeamsForProfile(
     const raw = rowKey(hit);
     seedCanonical = remap.get(raw) ?? raw;
   } else {
-    const seeds = allRows.filter((t) => {
-      if (t.teamId <= 0) return false;
-      const o = (t.ownerName || "").trim();
-      if (o) {
-        return o === trimmed || normalizeOwnerStr(o) === normIn || personMergeKey(o) === pkWant;
-      }
-      const tn = (t.name || "").trim();
-      return Boolean(tn && personMergeKey(tn) === pkWant);
-    });
-    if (seeds.length === 0) return null;
-    const raw0 = rowKey(seeds[0]!);
-    seedCanonical = remap.get(raw0) ?? raw0;
+    /** `owners.ownerList.ownerKey` — canonical `id:…` / `name:…` (must match list remap, not display label). */
+    if (trimmed.startsWith("id:") || trimmed.startsWith("name:")) {
+      const hit = allRows.find((t) => t.teamId > 0 && rowCanonical(t) === trimmed);
+      if (hit) seedCanonical = trimmed;
+    }
+    if (!seedCanonical) {
+      const seeds = allRows.filter((t) => {
+        if (t.teamId <= 0) return false;
+        const o = (t.ownerName || "").trim();
+        if (o) {
+          return o === trimmed || normalizeOwnerStr(o) === normIn || personMergeKey(o) === pkWant;
+        }
+        const tn = (t.name || "").trim();
+        return Boolean(tn && personMergeKey(tn) === pkWant);
+      });
+      if (seeds.length === 0) return null;
+      const raw0 = rowKey(seeds[0]!);
+      seedCanonical = remap.get(raw0) ?? raw0;
+    }
   }
+
+  if (!seedCanonical) return null;
 
   const ownerTeamRows = allRows
     .filter((t) => {
       if (t.teamId <= 0) return false;
-      const raw = rowKey(t);
-      return (remap.get(raw) ?? raw) === seedCanonical;
+      return rowCanonical(t) === seedCanonical;
     })
     .sort((a, b) => a.season - b.season || a.teamId - b.teamId);
 
@@ -443,6 +452,8 @@ export function resolveOwnerTeamsForProfile(
   let resolvedBy: OwnerIdentityMergeDiagnostics["resolvedBy"] = "unknown";
   if (opts?.season != null && opts?.teamId != null) {
     resolvedBy = "teamId";
+  } else if (trimmed.startsWith("id:") || trimmed.startsWith("name:")) {
+    resolvedBy = "canonicalMerge";
   } else if (rawKeysInCluster.size > 1 || distinctOwnerIds.size > 1) {
     resolvedBy = "canonicalMerge";
   } else {

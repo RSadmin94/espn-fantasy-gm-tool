@@ -154,19 +154,22 @@ function cmpRankLowerWins(a: number, b: number): "left" | "right" | "tie" {
 }
 
 function ProfilePanel({
-  ownerName,
+  profileLookupKey,
+  headerDisplayName,
   powerRankings,
   ownerAwards,
 }: {
-  ownerName: string;
+  /** Canonical `owners.ownerList.ownerKey` — passed as `owners.ownerProfile` input `ownerName`. */
+  profileLookupKey: string;
+  headerDisplayName: string;
   powerRankings: any[];
   ownerAwards: any[];
 }) {
   const trpcAny = trpc as any;
   const [compareWith, setCompareWith] = useState("");
   const q = trpcAny.owners.ownerProfile.useQuery(
-    { ownerName, ...(compareWith ? { compareWith } : {}) },
-    { enabled: !!ownerName },
+    { ownerName: profileLookupKey, ...(compareWith ? { compareWith } : {}) },
+    { enabled: !!profileLookupKey },
   );
   const p = q.data as any;
   const [intelExpanded, setIntelExpanded] = useState<string | null>(null);
@@ -174,7 +177,7 @@ function ProfilePanel({
   useEffect(() => {
     setIntelExpanded(null);
     setCompareWith("");
-  }, [ownerName]);
+  }, [profileLookupKey]);
 
   if (q.isLoading) return (
     <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -227,11 +230,21 @@ function ProfilePanel({
 
   return (
     <div className="space-y-4">
+      <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-[11px] font-mono text-muted-foreground space-y-0.5">
+        <div>
+          <span className="text-muted-foreground/80">selected ownerKey (list):</span>{" "}
+          <span className="text-foreground">{profileLookupKey}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground/80">profile lookup key (query input):</span>{" "}
+          <span className="text-foreground">{profileLookupKey}</span>
+        </div>
+      </div>
       {/* Header */}
       <div className="rounded-lg border border-border bg-card px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-foreground">{ownerName}</h2>
+            <h2 className="text-xl font-bold text-foreground">{headerDisplayName}</h2>
             <p className="text-sm text-muted-foreground mt-0.5">{str(snap.currentTeam)}</p>
           </div>
           <div className="flex gap-1.5 flex-wrap justify-end">
@@ -278,15 +291,15 @@ function ProfilePanel({
           <div className="p-4 overflow-x-auto">
             <div className="grid grid-cols-[minmax(7.5rem,1fr)_1fr_1fr] gap-x-2 gap-y-1 min-w-[300px]">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground py-2">Metric</div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-500/90 py-2 truncate" title={ownerName}>{ownerName}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-500/90 py-2 truncate" title={headerDisplayName}>{headerDisplayName}</div>
               <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-500/90 py-2 truncate" title={compareWith}>{compareWith}</div>
 
               {(() => {
-                const prL = powerRankings.find((r: any) => r.ownerName === ownerName);
+                const prL = powerRankings.find((r: any) => r.ownerKey === profileLookupKey);
                 const prR = powerRankings.find((r: any) => r.ownerName === compareWith);
                 const rankL = prL ? num(prL.rank) : 999;
                 const rankR = prR ? num(prR.rank) : 999;
-                const awardsL = ownerAwards.filter((a: any) => a.ownerName === ownerName).length;
+                const awardsL = ownerAwards.filter((a: any) => a.ownerKey === profileLookupKey).length;
                 const awardsR = ownerAwards.filter((a: any) => a.ownerName === compareWith).length;
                 const topL = topDraftedPosCount(draft as Record<string, unknown>);
                 const topR = topDraftedPosCount(draftP as Record<string, unknown>);
@@ -776,7 +789,7 @@ function ProfilePanel({
 export function OwnerProfiles() {
   const trpcAny = trpc as any;
   const listQ = trpcAny.owners.ownerList.useQuery();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedOwnerKey, setSelectedOwnerKey] = useState<string | null>(null);
   const [showGraveyard, setShowGraveyard] = useState(false);
 
   const active    = useMemo(() => (listQ.data?.active    ?? []) as any[], [listQ.data]);
@@ -784,9 +797,17 @@ export function OwnerProfiles() {
   const powerRankings = useMemo(() => (listQ.data?.powerRankings ?? []) as any[], [listQ.data]);
   const ownerAwards = useMemo(() => (listQ.data?.ownerAwards ?? []) as any[], [listQ.data]);
 
-  useMemo(() => {
-    if (!selected && active.length > 0) setSelected(active[0].ownerName);
-  }, [active, selected]);
+  useEffect(() => {
+    if (selectedOwnerKey != null) return;
+    const first = active[0]?.ownerKey as string | undefined;
+    if (first) setSelectedOwnerKey(first);
+  }, [active, selectedOwnerKey]);
+
+  const headerDisplayName = useMemo(() => {
+    if (!selectedOwnerKey) return "";
+    const row = [...active, ...graveyard].find((o: any) => o.ownerKey === selectedOwnerKey);
+    return (row?.ownerName as string) || selectedOwnerKey;
+  }, [active, graveyard, selectedOwnerKey]);
 
   if (listQ.isLoading) return (
     <div className="flex items-center justify-center py-24 text-muted-foreground">
@@ -829,18 +850,18 @@ export function OwnerProfiles() {
               </thead>
               <tbody>
                 {powerRankings.map((row: any) => {
-                  const sel = selected === row.ownerName;
+                  const sel = selectedOwnerKey === row.ownerKey;
                   const m = row.medals ?? {};
                   return (
                     <tr
-                      key={row.ownerName}
+                      key={row.ownerKey}
                       role="button"
                       tabIndex={0}
-                      onClick={() => setSelected(row.ownerName)}
+                      onClick={() => setSelectedOwnerKey(row.ownerKey)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
-                          setSelected(row.ownerName);
+                          setSelectedOwnerKey(row.ownerKey);
                         }
                       }}
                       className={cn(
@@ -883,12 +904,12 @@ export function OwnerProfiles() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
             {ownerAwards.map((a: any) => {
-              const sel = selected === a.ownerName;
+              const sel = selectedOwnerKey === a.ownerKey;
               return (
                 <button
-                  key={a.awardName}
+                  key={`${a.awardName}-${a.ownerKey}`}
                   type="button"
-                  onClick={() => setSelected(a.ownerName)}
+                  onClick={() => setSelectedOwnerKey(a.ownerKey)}
                   className={cn(
                     "rounded-lg border text-left p-3 transition-colors",
                     sel
@@ -910,7 +931,7 @@ export function OwnerProfiles() {
       <div className="flex gap-6">
         <div className="w-72 shrink-0 space-y-2">
           {active.map((o: any) => (
-            <OwnerCard key={o.ownerName} o={o} selected={selected === o.ownerName} onClick={() => setSelected(o.ownerName)} />
+            <OwnerCard key={o.ownerKey} o={o} selected={selectedOwnerKey === o.ownerKey} onClick={() => setSelectedOwnerKey(o.ownerKey)} />
           ))}
 
           {graveyard.length > 0 && (
@@ -927,10 +948,10 @@ export function OwnerProfiles() {
                     One-season owners. They came, they lost, they left.
                   </p>
                   {graveyard.map((o: any) => (
-                    <button key={o.ownerName} type="button" onClick={() => setSelected(o.ownerName)}
+                    <button key={o.ownerKey} type="button" onClick={() => setSelectedOwnerKey(o.ownerKey)}
                       className={cn(
                         "w-full rounded border text-left px-3 py-2 text-xs transition-colors",
-                        selected === o.ownerName ? "border-primary/40 bg-primary/5" : "border-border/40 hover:bg-muted/20",
+                        selectedOwnerKey === o.ownerKey ? "border-primary/40 bg-primary/5" : "border-border/40 hover:bg-muted/20",
                       )}>
                       <span className="text-muted-foreground font-medium">{o.ownerName}</span>
                       <span className="ml-2 text-muted-foreground/50">{Array.isArray(o.seasons) ? o.seasons[0] : ""}</span>
@@ -943,8 +964,13 @@ export function OwnerProfiles() {
         </div>
 
         <div className="flex-1 min-w-0">
-          {selected ? (
-            <ProfilePanel ownerName={selected} powerRankings={powerRankings} ownerAwards={ownerAwards} />
+          {selectedOwnerKey ? (
+            <ProfilePanel
+              profileLookupKey={selectedOwnerKey}
+              headerDisplayName={headerDisplayName}
+              powerRankings={powerRankings}
+              ownerAwards={ownerAwards}
+            />
           ) : (
             <div className="flex items-center justify-center h-64 rounded-lg border border-border text-muted-foreground text-sm">
               Select an owner to view their profile.

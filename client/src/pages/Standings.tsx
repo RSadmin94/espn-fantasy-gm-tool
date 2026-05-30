@@ -19,7 +19,7 @@ interface TeamRow {
   teamId: number;
   teamName: string;
   abbrev?: string;
-  owners?: string;
+  owners?: unknown;
   wins?: number;
   losses?: number;
   ties?: number;
@@ -90,6 +90,37 @@ function formatDiff(pf: number, pa: number): { text: string; positive: boolean; 
   const positive = d > 0;
   const sign = zero ? "" : d > 0 ? "+" : "";
   return { text: `${sign}${d.toFixed(1)}`, positive, zero };
+}
+
+/** Normalize ESPN `owners` / member-ish payloads for display (never throws). */
+function safeOwnerDisplayLabel(owners: unknown): string {
+  if (owners == null || owners === false) return "Unknown";
+  if (typeof owners === "string") {
+    const t = owners.trim().replace(/\s+/g, " ");
+    return t || "Unknown";
+  }
+  if (typeof owners === "number" || typeof owners === "boolean") {
+    return String(owners).trim() || "Unknown";
+  }
+  if (Array.isArray(owners)) {
+    const parts = owners
+      .map((x) => safeOwnerDisplayLabel(x))
+      .map((s) => s.trim())
+      .filter((s) => s && s !== "Unknown");
+    const j = parts.join(", ").replace(/\s+/g, " ").trim();
+    return j || "Unknown";
+  }
+  if (typeof owners === "object") {
+    const o = owners as Record<string, unknown>;
+    for (const k of ["ownerName", "displayName", "name", "fullName", "nickname", "firstName"] as const) {
+      const v = o[k];
+      if (typeof v === "string" && v.trim()) return v.trim().replace(/\s+/g, " ");
+    }
+    const id = o.id ?? o.memberId ?? o.userId;
+    if (id != null && String(id).trim()) return `id:${String(id).trim()}`;
+    return "Unknown";
+  }
+  return "Unknown";
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -290,6 +321,15 @@ export function Standings() {
                     const diff = formatDiff(pf, pa);
                     const moves = moveCountByTeam.get(team.teamId) ?? 0;
                     const logo = (team.logoUrl || "").trim();
+                    const ownerLabel = safeOwnerDisplayLabel(team.owners);
+                    const teamNameSafe =
+                      typeof team.teamName === "string"
+                        ? team.teamName.trim()
+                        : team.teamName != null
+                          ? safeOwnerDisplayLabel(team.teamName)
+                          : "";
+                    const abbrevSafe =
+                      typeof team.abbrev === "string" ? team.abbrev.trim() : String(team.abbrev ?? "").trim();
 
                     return (
                       <tr
@@ -311,19 +351,17 @@ export function Standings() {
                                 />
                               ) : (
                                 <span className="flex h-full w-full items-center justify-center text-[10px] font-bold text-muted-foreground">
-                                  {(team.abbrev || team.teamName || "?").slice(0, 3).toUpperCase()}
+                                  {(abbrevSafe || teamNameSafe || "?").slice(0, 3).toUpperCase()}
                                 </span>
                               )}
                             </div>
                             <div className="min-w-0 leading-tight">
                               <div className="truncate font-medium text-foreground">
-                                {team.teamName?.trim() || `Team ${team.teamId}`}
+                                {teamNameSafe || `Team ${team.teamId}`}
                               </div>
-                              {(team.owners || "").trim() !== "" && (
-                                <div className="truncate text-xs text-muted-foreground">
-                                  {team.owners}
-                                </div>
-                              )}
+                              <div className="truncate text-xs text-muted-foreground">
+                                {ownerLabel}
+                              </div>
                             </div>
                           </div>
                         </td>

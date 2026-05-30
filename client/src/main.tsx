@@ -23,7 +23,6 @@ import { Matchups } from "./pages/Matchups";
 import { LeagueHistory } from "./pages/LeagueHistory";
 import { DraftHistory } from "./pages/DraftHistory";
 import { KeeperAdvisor } from "./pages/KeeperAdvisor";
-import { Championships } from "./pages/Championships";
 import { LeagueSettings } from "./pages/LeagueSettings";
 import { OwnerProfiles } from "./pages/OwnerProfiles";
 import { RingOfHonor } from "./pages/RingOfHonor";
@@ -128,7 +127,6 @@ const router = createBrowserRouter([
           { path: "/history", element: <LeagueHistory /> },
           { path: "/draft-history", element: <DraftHistory /> },
           { path: "/keeper-advisor", element: <KeeperAdvisor /> },
-          { path: "/championships", element: <Championships /> },
           { path: "/ring-of-honor", element: <RingOfHonor /> },
           { path: "/roster", element: <Roster /> },
           { path: "/trades", element: <Trades /> },
@@ -139,6 +137,7 @@ const router = createBrowserRouter([
           // Chrome extension posts here after ESPN connect
           { path: "/command-center", element: <Navigate to="/dashboard" replace /> },
           // Renamed routes
+          { path: "/championships", element: <Navigate to="/ring-of-honor" replace /> },
           { path: "/rosters", element: <Navigate to="/roster" replace /> },
           { path: "/refresh", element: <Navigate to="/sync" replace /> },
           { path: "/data-center", element: <Navigate to="/sync" replace /> },

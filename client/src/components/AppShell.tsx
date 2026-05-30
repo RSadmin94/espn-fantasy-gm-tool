@@ -64,7 +64,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { kind: "link", label: "Standings",      href: "/standings",      icon: Trophy },
       { kind: "link", label: "League History", href: "/history",        icon: History },
-      { kind: "link", label: "Championships",  href: "/championships",  icon: Trophy },
       { kind: "link", label: "Ring of Honor",  href: "/ring-of-honor",  icon: Trophy },
       { kind: "link", label: "Owner Profiles", href: "/owner-profiles", icon: Users },
       { kind: "link", label: "Matchups",       href: "/matchups",       icon: LayoutGrid },
@@ -283,7 +282,9 @@ function NavItemRow({
   }
 
   const Icon = entry.icon;
-  const isActive = pathname === entry.href;
+  const isActive =
+    pathname === entry.href ||
+    (entry.href === "/ring-of-honor" && pathname === "/championships");
   return (
     <li>
       <Link

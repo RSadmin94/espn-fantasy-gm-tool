@@ -327,6 +327,8 @@ type OwnerSummaryRow = {
 /** Deterministic power ranking row (Owner Profiles V1). */
 type OwnerPowerRankingRow = {
   rank: number;
+  /** Canonical key for `owners.ownerProfile` input (same as `OwnerSummaryRow.ownerKey`). */
+  ownerKey: string;
   ownerName: string;
   currentTeam: string;
   score: number;
@@ -340,6 +342,7 @@ type OwnerPowerRankingRow = {
 /** Deterministic league award (Owner Awards V1). */
 type OwnerAwardRow = {
   awardName: string;
+  ownerKey: string;
   ownerName: string;
   value: string | number;
   reason: string;
@@ -9526,6 +9529,7 @@ if (pickOrder.length > 0) {
           });
           return {
             rank: 0,
+            ownerKey: o.ownerKey,
             ownerName: o.ownerName,
             currentTeam: o.currentTeam,
             score,
@@ -9601,7 +9605,7 @@ if (pickOrder.length > 0) {
       const MIN_DRAFT = 12;
       const ownerAwards: OwnerAwardRow[] = [];
       const pushAward = (a: OwnerAwardRow | null) => {
-        if (a && a.ownerName) ownerAwards.push(a);
+        if (a && a.ownerName && a.ownerKey) ownerAwards.push(a);
       };
 
       const activeMulti = all.filter((o) => o.seasons.length >= 2);
@@ -9621,6 +9625,7 @@ if (pickOrder.length > 0) {
         const bd = draftAgg.get(best.ownerKey)!;
         pushAward({
           awardName: "Best Drafter",
+          ownerKey: best.ownerKey,
           ownerName: best.ownerName,
           value: bd.earlyPremium,
           reason: `Most RB/WR heat in rounds 1–3 (${bd.earlyPremium} hits on ${bd.totalPicks} resolved picks).`,
@@ -9640,6 +9645,7 @@ if (pickOrder.length > 0) {
             const wd = draftAgg.get(worst.ownerKey)!;
             pushAward({
               awardName: "Worst Drafter",
+              ownerKey: worst.ownerKey,
               ownerName: worst.ownerName,
               value: wd.earlyPremium,
               reason: `Fewest early RB/WR strikes (${wd.earlyPremium}) on ${wd.totalPicks} picks — premium window closed early.`,
@@ -9667,6 +9673,7 @@ if (pickOrder.length > 0) {
         const rate = Number(((kd.keeperPicks / kd.totalPicks) * 100).toFixed(1));
         pushAward({
           awardName: "Keeper King",
+          ownerKey: wk.ownerKey,
           ownerName: wk.ownerName,
           value: `${rate}%`,
           reason: `${kd.keeperPicks} keepers / ${kd.totalPicks} picks (${rate}%) — rent-controlled roster spots.`,
@@ -9684,6 +9691,7 @@ if (pickOrder.length > 0) {
         const ac = activityByOwner.get(wa.ownerKey)?.acquisitions ?? 0;
         pushAward({
           awardName: "Transaction Addict",
+          ownerKey: wa.ownerKey,
           ownerName: wa.ownerName,
           value: ac,
           reason: `${ac} lifetime acquisitions — waiver wire is cardio.`,
@@ -9701,6 +9709,7 @@ if (pickOrder.length > 0) {
         const tc = activityByOwner.get(wt.ownerKey)?.trades ?? 0;
         pushAward({
           awardName: "Trade Shark",
+          ownerKey: wt.ownerKey,
           ownerName: wt.ownerName,
           value: tc,
           reason: `${tc} completed trades — roster diplomacy with teeth.`,
@@ -9716,6 +9725,7 @@ if (pickOrder.length > 0) {
         })[0]!;
         pushAward({
           awardName: "Regular Season Bully",
+          ownerKey: wb.ownerKey,
           ownerName: wb.ownerName,
           value: `${wb.winPct}%`,
           reason: `${wb.totalWins}-${wb.totalLosses}-${wb.totalTies} ledger at ${wb.winPct}% — spreadsheet villain arc.`,
@@ -9735,6 +9745,7 @@ if (pickOrder.length > 0) {
         if (wp.runnerUps + wp.thirdPlace > 0) {
           pushAward({
             awardName: "Playoff Merchant",
+            ownerKey: wp.ownerKey,
             ownerName: wp.ownerName,
             value: `${wp.runnerUps} RU · ${wp.thirdPlace} 3rd`,
             reason: `${wp.runnerUps + wp.thirdPlace} podium trips vs ${wp.championships} titles — always open for January business.`,
@@ -9762,6 +9773,7 @@ if (pickOrder.length > 0) {
         const net = h.w - h.l;
         pushAward({
           awardName: "Rivalry Killer",
+          ownerKey: wr.ownerKey,
           ownerName: wr.ownerName,
           value: `${h.w}-${h.l}-${h.t}`,
           reason: `${net >= 0 ? "+" : ""}${net} net H2H (${h2hWinPctForPower(h.w, h.l, h.t)}% in ${h.w + h.l + h.t} games) — receipts filed.`,
@@ -9776,6 +9788,7 @@ if (pickOrder.length > 0) {
         })[0]!;
         pushAward({
           awardName: "One-Year Wonder",
+          ownerKey: ow.ownerKey,
           ownerName: ow.ownerName,
           value: `${ow.winPct}%`,
           reason: `Single-season ${ow.totalWins}-${ow.totalLosses}-${ow.totalTies} at ${ow.winPct}% — comet, not constellation.`,
@@ -9801,6 +9814,7 @@ if (pickOrder.length > 0) {
         const pf = Number(prow?.pointsFor ?? 0);
         pushAward({
           awardName: "Graveyard Legend",
+          ownerKey: legend.ownerKey,
           ownerName: legend.ownerName,
           value: Number(pf.toFixed(1)),
           reason: `One-season ${pf.toFixed(1)} PF before exit — ghosted the league like a legend should.`,
@@ -9975,7 +9989,7 @@ if (pickOrder.length > 0) {
         });
 
         let comparison: Awaited<ReturnType<typeof buildOwnerProfilePayload>> | null = null;
-        if (compareName && compareTeamRows?.length && recordCompare) {
+        if (compareName && compareResolved && compareTeamRows?.length && recordCompare) {
           comparison = await buildOwnerProfilePayload({
             db,
             ownerName: compareName,
