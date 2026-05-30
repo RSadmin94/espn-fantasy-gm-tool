@@ -120,12 +120,14 @@ export async function getLeagueScoringSettings(season?: number, userId?: number)
   }
 
   try {
-    // Try current season first, then fall back to most recent cached season
-    let cached = await getCachedView(targetSeason, "mSettings", undefined, { userId });
+    // Sync stores the full ESPN payload under viewName="combined", never "mSettings".
+    // Both mSettings data (data.settings.scoringSettings) and all other views
+    // are merged into the single combined row — read from there.
+    let cached = await getCachedView(targetSeason, "combined", undefined, { userId });
 
-    // Try previous season if current not cached
+    // Fall back to previous season if current season not yet synced
     if (!cached) {
-      cached = await getCachedView(targetSeason - 1, "mSettings", undefined, { userId });
+      cached = await getCachedView(targetSeason - 1, "combined", undefined, { userId });
     }
 
     if (cached?.payload) {
@@ -133,7 +135,6 @@ export async function getLeagueScoringSettings(season?: number, userId?: number)
       const settings = (payload.settings as Record<string, unknown>) || {};
       const scoringSettings = (settings.scoringSettings as Record<string, unknown>) || {};
       const rawItems = (scoringSettings.scoringItems as ScoringItem[]) || [];
-      const scoringType = (scoringSettings.scoringType as string) || "HALF_PPR";
 
       const scoringMap: Record<number, number> = {};
       for (const item of rawItems) {
@@ -142,7 +143,14 @@ export async function getLeagueScoringSettings(season?: number, userId?: number)
         }
       }
 
-      const result = buildScoringSettings(scoringType, scoringMap, rawItems);
+      // Derive PPR type from the actual reception points value (stat 41).
+      // ESPN's scoringType string is unreliable — e.g. it returns "STANDARD"
+      // for Full PPR leagues. Derive from the map instead.
+      const receptionPts = scoringMap[41] ?? 0;
+      const derivedScoringType =
+        receptionPts >= 1 ? "PPR" : receptionPts > 0 ? "HALF_PPR" : "STANDARD";
+
+      const result = buildScoringSettings(derivedScoringType, scoringMap, rawItems);
       scoringSettingsCache.set(cacheKey, { settings: result, loadedAt: Date.now() });
       return result;
     }
