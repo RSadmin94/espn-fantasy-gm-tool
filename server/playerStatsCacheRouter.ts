@@ -129,9 +129,125 @@ export const playerStatsCacheRouter = router({
       };
     }),
 
+  /**
+   * Read every combined/mRoster row already in espn_raw_cache,
+   * extract player identity (id, name, position, NFL team) from each
+   * team roster, and upsert into gm_player_registry.
+   * No new ESPN fetches required — works entirely off existing cache data.
+   */
+  syncPlayersFromCache: publicProcedure
+    .mutation(async () => {
+      const db = await getDb();
+      if (!db) return { ok: false, error: "DB unavailable", inserted: 0, updated: 0, skipped: 0 };
+
+      // Load all combined/mRoster rows for every season
+      const [cacheRows] = await db.execute(
+        drizzleSql`SELECT season, viewName, payload FROM espn_raw_cache WHERE leagueId = ${LEAGUE_ID} ORDER BY season ASC`
+      ) as unknown as Array<any>;
+
+      const rows = (cacheRows as any) as Array<{ season: number; viewName: string; payload: string }> ?? [];
+
+      // Pre-load existing registry index
+      const regRows = await db.select({
+          id: gmPlayerRegistry.id,
+          espnPlayerId: gmPlayerRegistry.espnPlayerId,
+        }).from(gmPlayerRegistry).limit(200_000);
+
+      const byEspnId = new Map<string, number>(
+        regRows.filter(r => r.espnPlayerId).map(r => [r.espnPlayerId!, r.id])
+      );
+
+      let inserted = 0, updated = 0, skipped = 0;
+
+      for (const row of rows) {
+        let payload: Record<string, unknown>;
+        try { payload = JSON.parse(row.payload); } catch { continue; }
+
+        const season = row.season;
+        const isLegacy = season <= 2017;
+
+        // Extract teams array — handles both array and object-keyed formats
+        const rawTeams = payload.teams;
+        const teams: Record<string, unknown>[] = Array.isArray(rawTeams)
+          ? rawTeams as Record<string, unknown>[]
+          : rawTeams && typeof rawTeams === "object"
+            ? Object.values(rawTeams as Record<string, Record<string, unknown>>)
+            : [];
+
+        for (const team of teams) {
+          const entries: Record<string, unknown>[] =
+            ((team.roster as any)?.entries as Record<string, unknown>[]) ?? [];
+
+          for (const entry of entries) {
+            const pool   = (entry.playerPoolEntry as Record<string, unknown>) ?? {};
+            const player = (pool.player as Record<string, unknown>) ?? {};
+
+            const espnId   = Number(player.id);
+            const fullName = String(player.fullName ?? "").trim();
+            if (!espnId || !fullName) { skipped++; continue; }
+
+            const posId    = Number(player.defaultPositionId);
+            const position = ESPN_POS_MAP[posId] ?? "";
+            if (!position) { skipped++; continue; }
+
+            const nflTeam       = toNflTeam(player.proTeamId as number | undefined);
+            const normalizedName = normalizePlayerName(fullName);
+            const eid            = String(espnId);
+
+            const existingId = byEspnId.get(eid);
+
+            if (existingId) {
+              // Update lastSeasonSeen
+              try {
+                await db.update(gmPlayerRegistry)
+                  .set({
+                    lastSeasonSeen: drizzleSql`GREATEST(last_season_seen, ${season})`,
+                    currentNflTeam: nflTeam ?? drizzleSql`current_nfl_team`,
+                    updatedAt:      new Date(),
+                  })
+                  .where(eqD(gmPlayerRegistry.id, existingId));
+                updated++;
+              } catch { skipped++; }
+            } else {
+              // Insert new
+              try {
+                await db.insert(gmPlayerRegistry).values({
+                  espnPlayerId:    eid,
+                  fullName,
+                  normalizedName,
+                  position,
+                  currentNflTeam:  nflTeam,
+                  firstSeasonSeen: season,
+                  lastSeasonSeen:  season,
+                  isActive:        true,
+                  needsReview:     isLegacy,
+                  reviewReason:    isLegacy ? "Legacy season" : null,
+                }).onDuplicateKeyUpdate({
+                  set: {
+                    lastSeasonSeen:  drizzleSql`GREATEST(last_season_seen, ${season})`,
+                    currentNflTeam:  nflTeam ?? drizzleSql`current_nfl_team`,
+                    updatedAt:       new Date(),
+                  },
+                });
+
+                const [ins] = await db.select({ id: gmPlayerRegistry.id })
+                  .from(gmPlayerRegistry)
+                  .where(eqD(gmPlayerRegistry.espnPlayerId, eid))
+                  .limit(1);
+                if (ins) { byEspnId.set(eid, ins.id); inserted++; }
+                else { skipped++; }
+              } catch { skipped++; }
+            }
+          }
+        }
+      }
+
+      return { ok: true, seasonsScanned: rows.length, inserted, updated, skipped };
+    }),
+
 });
 
-// ── Ingestion logic (server-side, called after cache write) ───────────────────
+// -- Ingestion logic (server-side, called after cache write) ───────────────────
 
 type IngestResult = {
   playersUpserted: number;

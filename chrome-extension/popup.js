@@ -311,16 +311,30 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   document.getElementById("histTest")?.addEventListener("click", async () => {
-    const lid    = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
-    const season = new Date().getFullYear() - 1;  // most recent completed season
-    setHistOut(`Syncing player stats: season ${season}, first 3 weeks...\nThis tests the full pipeline end-to-end.`);
+    setHistOut("Populating player registry from cached ESPN data...\n(reads all seasons already in espn_raw_cache, no ESPN fetch needed)");
     try {
-      const r = await chrome.runtime.sendMessage({
-        type: MSG_HIST_TEST,
-        leagueId: lid,
-        season,
-        weeks: 3,
-      });
+      const r = await chrome.runtime.sendMessage({ type: MSG_HIST_TEST });
+      if (!r?.ok) {
+        setHistOut(`Error: ${r?.error || "unknown"}`);
+        return;
+      }
+      const res = r.result || {};
+      const lines = [
+        `Seasons scanned:  ${res.seasonsScanned ?? "?"}`,
+        `Players inserted: ${res.inserted ?? 0}`,
+        `Players updated:  ${res.updated ?? 0}`,
+        `Skipped:          ${res.skipped ?? 0}`,
+        `Total in registry: ${(res.inserted ?? 0) + (res.updated ?? 0)}`,
+        "",
+        (res.inserted + res.updated) >= 250
+          ? "\u2713 Player registry populated successfully."
+          : `\u26A0 Only ${(res.inserted ?? 0) + (res.updated ?? 0)} players found. Run full ESPN sync to get more data.`,
+      ];
+      setHistOut(lines.join("\n"));
+    } catch (e) {
+      setHistOut(e instanceof Error ? e.message : String(e));
+    }
+  });
       if (!r?.ok) {
         setHistOut(`Error: ${r?.error || "unknown"}\n\n${JSON.stringify(r, null, 2)}`);
         return;

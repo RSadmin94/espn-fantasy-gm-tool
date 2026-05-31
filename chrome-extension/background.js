@@ -360,6 +360,7 @@ const TRPC_SEASON_ROSTER_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestSe
 // ─── P2 player stats (uses playerStatsCache tRPC router) ───
 const TRPC_SAVE_PLAYER_STATS_URL   = `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCache.saveWeeklyPlayerStats`;
 const TRPC_PLAYER_STATS_STATUS_URL = `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCache.getPlayerStatsCacheStatus`;
+const TRPC_SYNC_PLAYERS_URL      = `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCache.syncPlayersFromCache`;
 const MSG_SYNC_PLAYER_STATS        = "GMWR_SYNC_PLAYER_STATS";
 const TRPC_IMPORT_DRAFT_API_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.importDraftFromEspnApi`;
 const TRPC_HIST_STATUS_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.historicalImportStatus`;
@@ -2493,87 +2494,32 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
     const testTimer = setTimeout(
       () => onceRespond({ ok: false, error: "extension_internal_timeout" }),
-      110000,
+      60000,
     );
 
     (async () => {
-      const leagueId = String(message?.leagueId || "457622").trim();
-      const season   = Number(message?.season) || 2024;
-      const weeks    = Number(message?.weeks)  || 3;   // default: test first 3 weeks only
-      console.info("[GMWR] playerStats test", { leagueId, season, weeks });
-
-      const { swid, espnS2 } = await getEspnCookieValues();
-      if (!swid || !espnS2) {
-        onceRespond({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
-        return;
-      }
       const warRoomCookieHeader = await getWarRoomCookieHeaderString();
       if (!warRoomCookieHeader) {
-        onceRespond({ ok: false, error: "GM War Room session not found." });
+        onceRespond({ ok: false, error: "GM War Room session not found. Sign in at gmwarroom.online first." });
         return;
       }
 
-      const result = { season, weeksAttempted: 0, weeksFetched: 0, weeksFailed: 0, weeksEmpty: 0, errors: [] };
+      // POST to server — reads existing espn_raw_cache rows, extracts all rostered players,
+      // upserts into gm_player_registry. No ESPN fetch required.
+      const post = await postTrpcHistJson(TRPC_SYNC_PLAYERS_URL, warRoomCookieHeader, {}, null);
 
-      for (let week = 1; week <= weeks; week++) {
-        await sleep(500);
-        result.weeksAttempted++;
-
-        const statsUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=mMatchupScore&scoringPeriodId=${week}&matchupPeriodId=${week}`;
-        console.info("[GMWR:diag] POST \u2192", statsUrl);
-
-        const sr = await fetchEspnJsonWithBackoff(statsUrl, { label: `playerStats:${season}:${week}` });
-
-        if (!sr.ok) {
-          if (sr.status === 401 || sr.status === 403 || sr.error === "ESPN login expired") {
-            result.errors.push(`w${week}: ESPN_login_expired`);
-            break;
-          }
-          if (sr.status === 404) {
-            result.errors.push(`w${week}: 404_no_data`);
-            break;
-          }
-          result.weeksFailed++;
-          result.errors.push(`w${week}: HTTP_${sr.status} ${sr.error || ""}`);
-          continue;
-        }
-
-        if (!sr.data) { result.weeksEmpty++; continue; }
-
-        let entryCount = 0;
-        for (const m of (sr.data.schedule || [])) {
-          for (const side of ["home", "away"]) {
-            const entries =
-              m[side]?.rosterForCurrentScoringPeriod?.entries ??
-              m[side]?.rosterForMatchupPeriod?.entries ?? [];
-            entryCount += entries.length;
-          }
-        }
-
-        if (entryCount === 0) { result.weeksEmpty++; continue; }
-
-        const post = await postTrpcHistJson(
-          TRPC_SAVE_PLAYER_STATS_URL,
-          warRoomCookieHeader,
-          { season, week, payload: sr.data },
-          null,
-        );
-
-        if (post.ok) {
-          result.weeksFetched++;
-        } else {
-          result.weeksFailed++;
-          result.errors.push(`w${week}: ${post.error || "post_failed"}`);
-        }
+      if (!post.ok) {
+        onceRespond({ ok: false, error: post.error || "sync_failed" });
+        return;
       }
 
-      onceRespond({ ok: result.weeksFetched > 0 || result.weeksAttempted > 0, result });
+      const result = post.parsed?.[0]?.result?.data?.json ?? post.parsed?.result?.data?.json ?? post.parsed;
+      onceRespond({ ok: true, result });
     })().catch((err) => {
       onceRespond({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
     return true;
   }
-
 
   if (t === MSG_HIST_FULL) {
     (async () => {
