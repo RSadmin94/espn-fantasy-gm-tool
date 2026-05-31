@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Flame, Loader2, RefreshCw, Trophy } from "lucide-react";
+import { Flame, Loader2, RefreshCw, Trophy, Zap, AlertTriangle, TrendingUp, Target, Shield, ChevronRight, Lock, Activity } from "lucide-react";
 import { DevBuildDiagnostics } from "@/components/DevBuildDiagnostics";
 import { DashboardLeagueHealthCard } from "@/components/dashboard/DashboardLeagueHealthCard";
 import { DashboardMatchupMarquee, type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
