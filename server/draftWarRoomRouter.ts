@@ -457,6 +457,22 @@ async function loadRoster(db: any, season: number) {
     playerDraftRoundMap.set(key, Number(p.roundId));
   }
 
+  // Consecutive keeper check: players kept in BOTH (season-1) AND (season-2) are ineligible
+  // League rule: max 2 consecutive keeper years
+  const [keeperHistRows] = await db.execute(drizzleSql`
+    SELECT playerName, season FROM draft_picks
+    WHERE leagueId = ${LEAGUE_ID} AND isKeeper = 1 AND season >= ${season - 2}
+  `) as unknown as [any[]];
+  const keptByYear = new Map<number, Set<string>>();
+  for (const row of keeperHistRows as any[]) {
+    const yr = Number((row as any).season);
+    if (!keptByYear.has(yr)) keptByYear.set(yr, new Set());
+    keptByYear.get(yr)!.add(String((row as any).playerName).toLowerCase().trim());
+  }
+  const yr1kept = keptByYear.get(season - 1) ?? new Set<string>();
+  const yr2kept = keptByYear.get(season - 2) ?? new Set<string>();
+  const consecutiveKeptPlayers = new Set<string>([...yr1kept].filter(n => yr2kept.has(n)));
+
   const byTeam = new Map<number, any[]>();
   for (const r of (rosterRows as any[])) {
     const tid = Number(r.teamId);
@@ -471,11 +487,14 @@ async function loadRoster(db: any, season: number) {
     allPicks: allPickRows as any[],
     prevByTeam,
     playerDraftRoundMap,
+    consecutiveKeptPlayers,  // players kept 2 years straight — ineligible this year
   };
 }
 
 // ── Keeper predictions (Phase 1.5: with KVS) ─────────────────────────────────
 // keeperRound = keeper *cost* (draft round from history or default R7), never the 2026 draft board slot.
+// Positions eligible to be kept. K and DEF/D/ST are NEVER keeper candidates.
+const KEEPER_ELIGIBLE_POSITIONS = new Set(["QB", "RB", "WR", "TE"]);
 // keeperSlotRound = round on the current-season draft board (for mock draft + manual overrides).
 
 function predictKeepers(
@@ -484,6 +503,9 @@ function predictKeepers(
   keeperSlots: any[],
   playerDraftRoundMap: Map<string, number>,
   prevByTeam: Map<number, Set<string>>,
+  consecutiveKeptPlayers: Set<string> = new Set(),
+  adpByName: Map<string, number> = new Map(),
+  teamCount: number = 14,
 ) {
   const predictions: any[] = [];
   const slotsByTeam = new Map<number, any[]>();
@@ -499,17 +521,31 @@ function predictKeepers(
     const slots = slotsByTeam.get(tid);
     const prevRoster = prevByTeam.get(tid) ?? new Set<string>();
     const starters = [...roster]
-      .filter(p => p.playerName && p.slotId !== 20 && p.slotId !== 21 && p.projectedPoints > 0)
+      .filter(p => p.playerName
+          && KEEPER_ELIGIBLE_POSITIONS.has(p.position)   // No K/DEF/IDP keepers
+          && p.slotId !== 20 && p.slotId !== 21          // No bench/IR
+          && p.projectedPoints > 0
+          && !consecutiveKeptPlayers.has(p.playerName.toLowerCase().trim())) // Max 2 consecutive years
       .sort((a, b) => b.projectedPoints - a.projectedPoints);
 
     const nameKey = (n: string) => n.toLowerCase().trim();
+
+    // ADP-based cost: when no draft history, infer keeper cost from ADP (not Round 7 default)
+    // Brock Bowers ADP 2.34 → Round 1 cost, not Round 7 free-steal
+    const inferAdpRound = (name: string): number | null => {
+      const adp = adpByName.get(name.toLowerCase().trim());
+      if (!adp || adp <= 0) return null;
+      return Math.min(14, Math.max(1, Math.ceil(adp / teamCount)));
+    };
 
     const scoreCandidates = (excludeNames: Set<string>) =>
       starters
         .filter(p => !excludeNames.has(p.playerName))
         .map(p => {
           const actualRound = playerDraftRoundMap.get(nameKey(p.playerName));
-          const cost = actualRound ?? DEFAULT_KEEPER_ROUND;
+          const adpRound = actualRound == null ? inferAdpRound(p.playerName) : null;
+          const cost = actualRound ?? adpRound ?? DEFAULT_KEEPER_ROUND;
+          const costSource = actualRound != null ? "history" : adpRound != null ? "adp" : "default";
           const wasKeptLastYear = prevRoster.has(nameKey(p.playerName));
           const kvsResult = calcKVS({ projectedPoints: p.projectedPoints, position: p.position, keeperRound: cost });
           return {
@@ -517,7 +553,7 @@ function predictKeepers(
             ...kvsResult,
             keeperRound: cost,
             wasKeptLastYear,
-            draftRoundSource: actualRound != null ? "history" : "default",
+            draftRoundSource: costSource,
           };
         })
         .sort((a, b) => (b.kvsRaw ?? b.kvs) - (a.kvsRaw ?? a.kvs));
@@ -903,7 +939,7 @@ export const draftWarRoomRouter = router({
       if (!db) return { ok: false, error: "DB unavailable" };
       const { season } = input;
 
-      const { byTeam, teams, keepers, allPicks, prevByTeam, playerDraftRoundMap } = await loadRoster(db, season);
+      const { byTeam, teams, keepers, allPicks, prevByTeam, playerDraftRoundMap, consecutiveKeptPlayers } = await loadRoster(db, season);
       if (teams.length === 0) return { ok: false, error: `No roster data for ${season}` };
 
       // Player pool
@@ -995,7 +1031,7 @@ export const draftWarRoomRouter = router({
       }
 
       // Phase 1: Keeper + Roster
-      const keeperPredictions = predictKeepers(teams, byTeam, effectiveKeepers, playerDraftRoundMap, prevByTeam);
+      const keeperPredictions = predictKeepers(teams, byTeam, effectiveKeepers, playerDraftRoundMap, prevByTeam, consecutiveKeptPlayers, adpByName, teams.length);
       const rosterNeeds       = buildRosterNeeds(teams, byTeam, keeperPredictions);
 
       // Phase 1.5: Traded picks + Shock Meters
