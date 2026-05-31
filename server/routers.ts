@@ -152,6 +152,7 @@ import { loadRecentLeagueTransactionEvents } from "./recentLeagueEventsService";
 import { buildHallOfFamePayload } from "./hallOfFameService";
 import { playerStatsCacheRouter } from "./playerStatsCacheRouter";
 import { playerStatsRouter } from "./playerStatsRouter";
+import { leagueWireRouter } from "./leagueWireRouter";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -470,6 +471,7 @@ export const appRouter = router({
   simulation: simulationRouter,
   playerStats: playerStatsRouter,
   playerStatsCache: playerStatsCacheRouter,
+  leagueWire: leagueWireRouter,
   dna: dnaRouter,
   agents: agentRouter,
   champ: champRouter,

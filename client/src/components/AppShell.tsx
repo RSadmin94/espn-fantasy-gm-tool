@@ -29,6 +29,7 @@ import {
   Swords,
   Dna,
   Database,
+  Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -79,6 +80,7 @@ const NAV_GROUPS: NavGroup[] = [
       { kind: "placeholder", label: "Draft DNA", icon: Dna },
       { kind: "link", label: "Player Intelligence", href: "/player-intelligence", icon: UserSearch },
       { kind: "link", label: "Player Database", href: "/player-database", icon: Database },
+      { kind: "link", label: "League Wire",     href: "/league-wire",     icon: Radio },
       { kind: "link", label: "Keeper Advisor", href: "/keeper-advisor", icon: Calculator },
       { kind: "link", label: "Trade Analyzer", href: "/trades", icon: Repeat2 },
     ],
