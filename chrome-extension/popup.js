@@ -331,27 +331,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       setHistOut(e instanceof Error ? e.message : String(e));
     }
   });
-      if (!r?.ok) {
-        setHistOut(`Error: ${r?.error || "unknown"}\n\n${JSON.stringify(r, null, 2)}`);
-        return;
-      }
-      const res = r.result || {};
-      const lines = [
-        `Season: ${res.season}`,
-        `Weeks attempted: ${res.weeksAttempted}`,
-        `Weeks fetched:   ${res.weeksFetched}`,
-        `Weeks failed:    ${res.weeksFailed}`,
-        `Weeks empty:     ${res.weeksEmpty}`,
-      ];
-      if (res.errors?.length) lines.push(`\nErrors:\n${res.errors.map(e => "  " + e).join("\n")}`);
-      lines.push(res.weeksFetched > 0
-        ? "\n\u2713 Player stats pipeline working."
-        : "\n\u26A0 No weeks fetched \u2014 check errors above.");
-      setHistOut(lines.join("\n"));
-    } catch (e) {
-      setHistOut(e instanceof Error ? e.message : String(e));
-    }
-  });
 
 
   document.getElementById("histFull")?.addEventListener("click", async () => {
