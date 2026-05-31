@@ -17,6 +17,12 @@
     "import:draft-drizzle": "tsx scripts/import-draft-history-drizzle.ts",
     "fetch:history": "tsx scripts/fetch-all-historical-data.ts",
     "fetch:matchups": "tsx scripts/fetch-historical-matchups.ts",
+    "p2:discover":    "tsx scripts/discoverPayloads.ts",
+    "p2:ingest":      "tsx scripts/runIngestionPipeline.ts",
+    "p2:ingest:all":  "tsx scripts/runIngestionPipeline.ts --all",
+    "p2:validate":    "tsx scripts/validateIngestion.ts",
+    "p2:sanity":      "tsx scripts/sanityCheckPlayers.ts",
+    "p2:rollback":    "tsx scripts/rollbackIngestion.ts",
     "format": "prettier --write .",
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
