@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import {
@@ -480,9 +480,40 @@ function TradedPicksBadge({ tradedPicks }: { tradedPicks: any[] }) {
 // ── Mock draft board ──────────────────────────────────────────────────────────
 
 function MockDraftBoard({ picks, teams }: { picks: any[]; teams: any[] }) {
-  const [view, setView]       = useState<"board" | "team">("board");
+  const [view, setView]       = useState<"board" | "team" | "live">("live");
   const [selTeam, setSelTeam] = useState<number | null>(null);
   const [expandPick, setExp]  = useState<number | null>(null);
+  // Live simulation state
+  const [liveIdx, setLiveIdx]     = useState(0);   // current pick index shown
+  const [simState, setSimState]   = useState<"idle"|"running"|"done">("idle");
+  const simRef = useRef<NodeJS.Timeout | null>(null);
+
+  const SPEED_MS = 600; // ms per pick
+
+  function startSim() {
+    setLiveIdx(0);
+    setSimState("running");
+  }
+  function pauseSim() {
+    setSimState(s => s === "running" ? "idle" : "running");
+  }
+  function skipSim() {
+    if (simRef.current) clearTimeout(simRef.current);
+    setLiveIdx(picks.length);
+    setSimState("done");
+  }
+  function resetSim() {
+    if (simRef.current) clearTimeout(simRef.current);
+    setLiveIdx(0);
+    setSimState("idle");
+  }
+
+  useEffect(() => {
+    if (simState !== "running") return;
+    if (liveIdx >= picks.length) { setSimState("done"); return; }
+    simRef.current = setTimeout(() => setLiveIdx(i => i + 1), SPEED_MS);
+    return () => { if (simRef.current) clearTimeout(simRef.current); };
+  }, [simState, liveIdx, picks.length]);
 
   const rounds = useMemo(() => {
     const r = new Map<number, any[]>();
@@ -504,12 +535,12 @@ function MockDraftBoard({ picks, teams }: { picks: any[]; teams: any[] }) {
 
   return (
     <div>
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-zinc-800/40">
-        {["board", "team"].map(v => (
-          <button key={v} onClick={() => setView(v as any)}
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-zinc-800/40 flex-wrap">
+        {(["live","board","team"] as const).map(v => (
+          <button key={v} onClick={() => { setView(v); if (v === "live") resetSim(); }}
             className={cn("px-3 py-1.5 rounded text-xs font-bold transition-colors",
               view === v ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300")}>
-            {v === "board" ? "Draft Board" : "By Team"}
+            {v === "live" ? "⚡ Live Draft" : v === "board" ? "Draft Board" : "By Team"}
           </button>
         ))}
         {view === "team" && (
@@ -519,7 +550,103 @@ function MockDraftBoard({ picks, teams }: { picks: any[]; teams: any[] }) {
             {teams.map((t: any) => <option key={t.teamId} value={t.teamId}>{t.teamName}</option>)}
           </select>
         )}
+        {view === "live" && (
+          <div className="flex items-center gap-2 ml-auto">
+            {simState === "idle" && liveIdx === 0 && (
+              <button onClick={startSim} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-500/25">
+                ▶ Start Draft
+              </button>
+            )}
+            {(simState === "running" || simState === "idle" && liveIdx > 0) && liveIdx < picks.length && (
+              <button onClick={pauseSim} className="px-3 py-1.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold">
+                {simState === "running" ? "⏸ Pause" : "▶ Resume"}
+              </button>
+            )}
+            {liveIdx < picks.length && liveIdx > 0 && (
+              <button onClick={skipSim} className="px-2 py-1.5 rounded text-zinc-500 text-xs hover:text-zinc-300">⏩ Skip</button>
+            )}
+            {(simState === "done" || liveIdx > 0) && (
+              <button onClick={resetSim} className="px-2 py-1.5 rounded text-zinc-500 text-xs hover:text-zinc-300">↺ Reset</button>
+            )}
+            <span className="text-[10px] text-zinc-600 tabular-nums">
+              Pick {Math.min(liveIdx, picks.length)}/{picks.length}
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* Live Draft view */}
+      {view === "live" && (
+        <div>
+          {simState === "idle" && liveIdx === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-4">
+              <div className="text-5xl">⚡</div>
+              <h3 className="text-zinc-200 font-black text-lg">Live Mock Draft Simulator</h3>
+              <p className="text-zinc-500 text-sm text-center max-w-md">
+                Watch the full {picks.length}-pick draft unfold pick by pick. Based on keeper predictions, roster needs, and historical owner tendencies. PREDICTED — NOT OFFICIAL.
+              </p>
+              <button onClick={startSim} className="mt-2 px-6 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-black text-sm hover:bg-emerald-500/25 transition-colors">
+                ▶ Start Draft Simulation
+              </button>
+            </div>
+          ) : (
+            <div>
+              {/* Progress bar */}
+              <div className="h-1 bg-zinc-800">
+                <div className="h-full bg-emerald-500 transition-all duration-300"
+                  style={{ width: `${(liveIdx / picks.length) * 100}%` }} />
+              </div>
+              {/* Current/Last pick spotlight */}
+              {liveIdx > 0 && (() => {
+                const currentPick = picks[Math.min(liveIdx, picks.length) - 1];
+                return (
+                  <div className={cn("px-5 py-4 border-b border-zinc-800/40 transition-all",
+                    simState === "running" ? "bg-emerald-500/5" : "bg-zinc-900/20")}>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-zinc-500">On the clock:</span>
+                        <span className="font-black text-zinc-100">{currentPick?.ownerName}</span>
+                        <span className="text-zinc-600 text-[10px]">{currentPick?.teamName}</span>
+                      </div>
+                      <div className="flex items-center gap-2 ml-auto">
+                        <span className="text-[10px] text-zinc-600">Pick {currentPick?.pickNumber} · Rd {currentPick?.round}</span>
+                      </div>
+                    </div>
+                    {liveIdx <= picks.length && (
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className="font-black text-xl text-white">{currentPick?.player}</span>
+                        <PosPill pos={currentPick?.position} />
+                        {currentPick?.projectedPoints > 0 && <span className="text-zinc-500 text-xs">{currentPick?.projectedPoints?.toFixed(0)} pts</span>}
+                        {currentPick?.isKeeperSlot && <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">KEEPER</span>}
+                        {currentPick?.tradedPickContext?.type === "ACQUIRED" && <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 rounded">TRADED PICK</span>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              {/* Recent picks feed */}
+              <div className="divide-y divide-zinc-800/20 max-h-[500px] overflow-auto" style={{ direction: "rtl" }}>
+                <div style={{ direction: "ltr" }}>
+                  {picks.slice(0, liveIdx).reverse().map((p: any) => (
+                    <div key={p.pickNumber} className={cn("flex items-center gap-3 px-5 py-2 hover:bg-zinc-800/20",
+                      p.isKeeperSlot && "bg-amber-500/5",
+                      p.pickNumber === liveIdx && "bg-emerald-500/5 border-l-2 border-l-emerald-500")}>
+                      <span className="text-[10px] text-zinc-600 w-10 tabular-nums shrink-0">
+                        {p.round}.{String(p.roundPick).padStart(2,"0")}
+                      </span>
+                      <PosPill pos={p.position} />
+                      <span className="text-sm font-bold text-zinc-200 flex-1 truncate">{p.player}</span>
+                      <span className="text-[10px] text-zinc-500 shrink-0 truncate max-w-[120px]">{p.ownerName}</span>
+                      {p.projectedPoints > 0 && <span className="text-[10px] text-zinc-600 tabular-nums shrink-0">{p.projectedPoints?.toFixed(0)}</span>}
+                      <div className="w-12 shrink-0"><ConfBar value={p.confidence} small /></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Board view */}
       {view === "board" && (

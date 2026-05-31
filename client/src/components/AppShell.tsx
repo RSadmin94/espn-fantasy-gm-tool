@@ -72,7 +72,7 @@ const NAV_GROUPS: NavGroup[] = [
       { kind: "placeholder", label: "Franchise Dashboard", icon: Building2 },
       { kind: "link", label: "Owner Profiles", href: "/owner-profiles", icon: Users },
       { kind: "link", label: "Hall of Fame", href: "/hall-of-fame", icon: Award },
-      { kind: "link", label: "League Timeline", href: "/league-timeline", icon: Calendar },
+      // League Timeline removed from nav — kept as route, no data value currently
     ],
   },
   {

@@ -49,21 +49,37 @@ const POS_SCARCITY: Record<string, number> = {
 
 // Round position weights for mock draft
 const ROUND_POS_WEIGHTS: Record<number, Record<string, number>> = {
-  1:  { RB: 40, WR: 35, QB: 15, TE: 10 },
-  2:  { RB: 35, WR: 40, QB: 10, TE: 15 },
-  3:  { WR: 35, RB: 30, QB: 20, TE: 15 },
-  4:  { WR: 30, RB: 25, QB: 25, TE: 20 },
-  5:  { WR: 28, RB: 22, QB: 20, TE: 15, K: 7, DEF: 8 },
-  6:  { WR: 26, RB: 20, QB: 18, TE: 16, K: 10, DEF: 10 },
-  7:  { WR: 24, RB: 18, QB: 17, TE: 15, K: 13, DEF: 13 },
-  8:  { WR: 22, RB: 17, QB: 16, TE: 15, K: 15, DEF: 15 },
-  9:  { WR: 20, RB: 16, QB: 16, TE: 14, K: 17, DEF: 17 },
-  10: { WR: 20, RB: 15, QB: 14, TE: 13, K: 19, DEF: 19 },
-  11: { WR: 20, RB: 15, QB: 12, TE: 13, K: 20, DEF: 20 },
-  12: { WR: 20, RB: 15, QB: 12, TE: 13, K: 20, DEF: 20 },
-  13: { WR: 20, RB: 15, QB: 12, TE: 13, K: 20, DEF: 20 },
-  14: { WR: 20, RB: 15, QB: 12, TE: 13, K: 20, DEF: 20 },
+  // R1-R2: elite RB/WR/TE only — almost never QB (use VORP tier filter instead)
+  1:  { RB: 48, WR: 46, QB:  2, TE:  4 },
+  2:  { RB: 40, WR: 42, QB:  6, TE: 12 },
+  3:  { RB: 35, WR: 38, QB: 12, TE: 15 },
+  4:  { WR: 32, RB: 28, QB: 22, TE: 18 },
+  5:  { WR: 28, RB: 22, QB: 26, TE: 14, K:  5, DEF:  5 },
+  6:  { WR: 25, RB: 20, QB: 28, TE: 12, K:  8, DEF:  7 },
+  7:  { WR: 24, RB: 18, QB: 22, TE: 14, K: 12, DEF: 10 },
+  8:  { WR: 22, RB: 17, QB: 18, TE: 13, K: 15, DEF: 15 },
+  9:  { WR: 20, RB: 15, QB: 16, TE: 12, K: 18, DEF: 19 },
+  10: { WR: 18, RB: 14, QB: 14, TE: 11, K: 22, DEF: 21 },
+  11: { WR: 18, RB: 14, QB: 12, TE: 10, K: 23, DEF: 23 },
+  12: { WR: 18, RB: 14, QB: 12, TE: 10, K: 23, DEF: 23 },
+  13: { WR: 18, RB: 14, QB: 10, TE: 10, K: 24, DEF: 24 },
+  14: { WR: 18, RB: 14, QB: 10, TE: 10, K: 24, DEF: 24 },
 };
+
+// VBD replacement baselines for 14-team 1QB/2RB/2WR/1TE/1K/2FLEX league
+// Calibrated to push QBs to rounds 3-5 where they are actually drafted
+const VBD_BASELINE: Record<string, number> = {
+  QB:  380,  // 12th QB -- teams wait until late rounds for QB2
+  RB:  140,  // 28th RB (2 starters + flex shares)
+  WR:  130,  // 28th WR
+  TE:  110,  // 14th TE (only 1 starter)
+  K:    90,  // 14th K
+  DEF:  80,
+};
+
+function vorp(projectedPoints: number, position: string): number {
+  return projectedPoints - (VBD_BASELINE[position] ?? 100);
+}
 
 function roundWeights(round: number) {
   return ROUND_POS_WEIGHTS[Math.min(round, 14)] ?? ROUND_POS_WEIGHTS[14];
@@ -80,6 +96,7 @@ function calcKVS(params: {
   keeperRound:     number;
 }): {
   kvs:          number;
+  kvsRaw:       number;
   breakEven:    number;
   surplus:      number;
   surplusLabel: string;
@@ -105,7 +122,7 @@ function calcKVS(params: {
     `Value surplus: ${surplus > 0 ? "+" : ""}${surplus} pts → ${surplusLabel}`,
   ];
 
-  return { kvs, breakEven: expectedAtRound, surplus, surplusLabel, evidence };
+  return { kvs, kvsRaw, breakEven: expectedAtRound, surplus, surplusLabel, evidence };
 }
 
 // ── Traded pick detection ─────────────────────────────────────────────────────
@@ -784,7 +801,9 @@ export const draftWarRoomRouter = router({
         playerPool.push({ name: reg.fullName, position: pos, projectedPoints: POS_BASELINE[pos]?.[tier] ?? 0, espnId: reg.espnPlayerId });
         inPool.add(reg.fullName.toLowerCase());
       }
-      playerPool.sort((a, b) => b.projectedPoints - a.projectedPoints);
+      // Sort by VBD VORP (Value Over Replacement Player) — not raw projected points
+      // This naturally pushes QBs to rounds 3-5 where they belong
+      playerPool.sort((a, b) => vorp(b.projectedPoints, b.position) - vorp(a.projectedPoints, a.position));
 
       // Phase 1: Keeper + Roster
       const keeperPredictions = predictKeepers(teams, byTeam, keepers);
