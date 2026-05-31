@@ -66,6 +66,79 @@ export const playerStatsCacheRouter = router({
    * Receives the raw mMatchupScore payload, validates it, stores it in
    * espn_raw_cache, then immediately runs ingestion for that week.
    */
+  /**
+   * Called by the extension after fetching ?view=mRoster for a season.
+   * Accepts the raw player list and upserts into gm_player_registry.
+   */
+  saveRosterPlayers: publicProcedure
+    .input(z.object({
+      season:  z.number().int().min(2009).max(2030),
+      players: z.array(z.object({
+        espnId:   z.number().int(),
+        fullName: z.string().min(1).max(100),
+        position: z.string().max(10),
+        nflTeam:  z.string().max(5).nullable().optional(),
+      })).min(1).max(500),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { ok: false, error: "DB unavailable", inserted: 0, updated: 0 };
+
+      const { season, players } = input;
+      const isLegacy = season <= 2017;
+
+      // Pre-load existing ESPN IDs
+      const existing = await db
+        .select({ id: gmPlayerRegistry.id, espnPlayerId: gmPlayerRegistry.espnPlayerId })
+        .from(gmPlayerRegistry).limit(200_000);
+      const byEspnId = new Map(existing.filter(r => r.espnPlayerId).map(r => [r.espnPlayerId!, r.id]));
+
+      let inserted = 0, updated = 0;
+
+      for (const p of players) {
+        const eid  = String(p.espnId);
+        const norm = normalizePlayerName(p.fullName);
+
+        if (byEspnId.has(eid)) {
+          await db.update(gmPlayerRegistry)
+            .set({
+              lastSeasonSeen: drizzleSql`GREATEST(last_season_seen, ${season})`,
+              currentNflTeam: p.nflTeam ?? drizzleSql`current_nfl_team`,
+              updatedAt:      new Date(),
+            })
+            .where(eqD(gmPlayerRegistry.id, byEspnId.get(eid)!));
+          updated++;
+        } else {
+          try {
+            await db.insert(gmPlayerRegistry).values({
+              espnPlayerId:    eid,
+              fullName:        p.fullName,
+              normalizedName:  norm,
+              position:        p.position,
+              currentNflTeam:  p.nflTeam ?? null,
+              firstSeasonSeen: season,
+              lastSeasonSeen:  season,
+              isActive:        true,
+              needsReview:     isLegacy,
+              reviewReason:    isLegacy ? "Legacy season" : null,
+            }).onDuplicateKeyUpdate({
+              set: {
+                lastSeasonSeen: drizzleSql`GREATEST(last_season_seen, ${season})`,
+                currentNflTeam: p.nflTeam ?? drizzleSql`current_nfl_team`,
+                updatedAt:      new Date(),
+              },
+            });
+            const [ins] = await db.select({ id: gmPlayerRegistry.id })
+              .from(gmPlayerRegistry)
+              .where(eqD(gmPlayerRegistry.espnPlayerId, eid)).limit(1);
+            if (ins) { byEspnId.set(eid, ins.id); inserted++; }
+          } catch { /* duplicate race — skip */ }
+        }
+      }
+
+      return { ok: true, season, inserted, updated, total: inserted + updated };
+    }),
+
   saveWeeklyPlayerStats: publicProcedure
     .input(z.object({
       season:  z.number().int().min(2009).max(2030),

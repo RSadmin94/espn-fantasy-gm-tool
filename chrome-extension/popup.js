@@ -311,25 +311,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   document.getElementById("histTest")?.addEventListener("click", async () => {
-    setHistOut("Populating player registry from cached ESPN data...\n(reads all seasons already in espn_raw_cache, no ESPN fetch needed)");
+    const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
+    setHistOut("Fetching rosters from ESPN API (2018-2025)...");
     try {
-      const r = await chrome.runtime.sendMessage({ type: MSG_HIST_TEST });
-      if (!r?.ok) {
-        setHistOut(`Error: ${r?.error || "unknown"}`);
-        return;
+      const r = await chrome.runtime.sendMessage({ type: MSG_HIST_TEST, leagueId: lid });
+      if (!r?.ok) { setHistOut("Error: " + (r?.error || "unknown")); return; }
+      const lines = ["Season  Players  Inserted  Updated  Status"];
+      for (const s of (r.summary || [])) {
+        const status = s.ok ? "\u2713" : "\u2717 " + (s.error || "");
+        lines.push(`${s.season}   ${String(s.players).padStart(7)}  ${String(s.inserted ?? 0).padStart(8)}  ${String(s.updated ?? 0).padStart(7)}  ${status}`);
       }
-      const res = r.result || {};
-      const lines = [
-        `Seasons scanned:  ${res.seasonsScanned ?? "?"}`,
-        `Players inserted: ${res.inserted ?? 0}`,
-        `Players updated:  ${res.updated ?? 0}`,
-        `Skipped:          ${res.skipped ?? 0}`,
-        `Total in registry: ${(res.inserted ?? 0) + (res.updated ?? 0)}`,
-        "",
-        (res.inserted + res.updated) >= 250
-          ? "\u2713 Player registry populated successfully."
-          : `\u26A0 Only ${(res.inserted ?? 0) + (res.updated ?? 0)} players found. Run full ESPN sync to get more data.`,
-      ];
+      lines.push("");
+      lines.push(`Total players synced: ${r.totalPlayers}`);
+      lines.push(r.totalPlayers >= 250 ? "\u2713 Player registry populated." : `\u26A0 ${r.totalPlayers} players found.`);
       setHistOut(lines.join("\n"));
     } catch (e) {
       setHistOut(e instanceof Error ? e.message : String(e));

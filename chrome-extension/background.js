@@ -361,6 +361,7 @@ const TRPC_SEASON_ROSTER_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestSe
 const TRPC_SAVE_PLAYER_STATS_URL   = `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCache.saveWeeklyPlayerStats`;
 const TRPC_PLAYER_STATS_STATUS_URL = `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCache.getPlayerStatsCacheStatus`;
 const TRPC_SYNC_PLAYERS_URL      = `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCache.syncPlayersFromCache`;
+const TRPC_SAVE_ROSTER_URL       = `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCache.saveRosterPlayers`;
 const MSG_SYNC_PLAYER_STATS        = "GMWR_SYNC_PLAYER_STATS";
 const TRPC_IMPORT_DRAFT_API_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.importDraftFromEspnApi`;
 const TRPC_HIST_STATUS_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.historicalImportStatus`;
@@ -2494,27 +2495,66 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
     const testTimer = setTimeout(
       () => onceRespond({ ok: false, error: "extension_internal_timeout" }),
-      60000,
+      120000,
     );
 
     (async () => {
+      const leagueId = String(message?.leagueId || "457622").trim();
       const warRoomCookieHeader = await getWarRoomCookieHeaderString();
       if (!warRoomCookieHeader) {
-        onceRespond({ ok: false, error: "GM War Room session not found. Sign in at gmwarroom.online first." });
+        onceRespond({ ok: false, error: "Sign in at gmwarroom.online first." });
         return;
       }
 
-      // POST to server — reads existing espn_raw_cache rows, extracts all rostered players,
-      // upserts into gm_player_registry. No ESPN fetch required.
-      const post = await postTrpcHistJson(TRPC_SYNC_PLAYERS_URL, warRoomCookieHeader, {}, null);
+      const SEASONS = [2018,2019,2020,2021,2022,2023,2024,2025];
+      const summary = [];
+      let totalPlayers = 0;
 
-      if (!post.ok) {
-        onceRespond({ ok: false, error: post.error || "sync_failed" });
-        return;
+      for (const season of SEASONS) {
+        await sleep(400);
+
+        // Fetch the roster for this season from ESPN using the extension's live session
+        const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=mRoster`;
+        const r = await fetchEspnJsonWithBackoff(url, { label: `mRoster:${season}` });
+
+        if (!r.ok) {
+          summary.push({ season, ok: false, error: r.error || `HTTP ${r.status}`, players: 0 });
+          continue;
+        }
+
+        // Extract players from teams[].roster.entries[].playerPoolEntry.player
+        const players = [];
+        const teams = Array.isArray(r.data.teams) ? r.data.teams : Object.values(r.data.teams || {});
+        for (const team of teams) {
+          for (const entry of (team.roster?.entries || [])) {
+            const player = entry.playerPoolEntry?.player;
+            if (!player?.id || !player?.fullName) continue;
+            const posId = player.defaultPositionId;
+            const pos = { 1:"QB",2:"RB",3:"WR",4:"TE",5:"K",16:"DEF" }[posId];
+            if (!pos) continue;
+            players.push({
+              espnId:   Number(player.id),
+              fullName: String(player.fullName),
+              position: pos,
+              nflTeam:  { 1:"ATL",2:"BUF",3:"CHI",4:"CIN",5:"CLE",6:"DAL",7:"DEN",8:"DET",9:"GB",10:"TEN",11:"IND",12:"KC",13:"LV",14:"LAR",15:"MIA",16:"MIN",17:"NE",18:"NO",19:"NYG",20:"NYJ",21:"PHI",22:"ARI",23:"PIT",24:"LAC",25:"SF",26:"SEA",27:"TB",28:"WSH",29:"CAR",30:"JAX",33:"BAL",34:"HOU" }[player.proTeamId] || null,
+            });
+          }
+        }
+
+        if (players.length === 0) {
+          summary.push({ season, ok: false, error: "no_players_in_roster", players: 0 });
+          continue;
+        }
+
+        // POST to server
+        const post = await postTrpcHistJson(TRPC_SAVE_ROSTER_URL, warRoomCookieHeader, { season, players }, null);
+        const res  = post.ok ? (post.parsed?.[0]?.result?.data?.json ?? post.parsed?.result?.data?.json ?? {}) : {};
+
+        summary.push({ season, ok: post.ok, players: players.length, inserted: res.inserted ?? 0, updated: res.updated ?? 0, error: post.error || null });
+        if (post.ok) totalPlayers += players.length;
       }
 
-      const result = post.parsed?.[0]?.result?.data?.json ?? post.parsed?.result?.data?.json ?? post.parsed;
-      onceRespond({ ok: true, result });
+      onceRespond({ ok: true, summary, totalPlayers });
     })().catch((err) => {
       onceRespond({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
