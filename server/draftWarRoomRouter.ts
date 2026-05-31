@@ -1,14 +1,13 @@
 /**
- * draftWarRoomRouter.ts — Draft War Room MVP
+ * draftWarRoomRouter.ts — Draft War Room Phase 1 + 1.5
  *
- * Phase 1 implementation:
- *   - Keeper predictions (evidence-backed, confidence-scored)
- *   - Roster construction analysis (needs + strengths)
- *   - Owner-tendency mock draft (deterministic, no LLM)
+ * Phase 1.5 additions:
+ *   - Keeper Value Score (KVS) replacing simple projection sort
+ *   - Draft Capital Awareness (traded pick detection)
+ *   - Draft Shock Meter (predictability per owner)
+ *   - Confidence Dashboard (league-wide summary)
  *
- * Data sources: roster_entries, teams, draft_picks, gm_player_registry
- * No fabricated ADP, rankings, or player values.
- * Every prediction includes evidence[] and confidence (0-100).
+ * All deterministic. No LLM. No fabricated ADP or rankings.
  */
 
 import { z }                       from "zod";
@@ -18,19 +17,18 @@ import { sql as drizzleSql }       from "drizzle-orm";
 
 const LEAGUE_ID = "457622";
 
-// ── Slot ID → position/type mapping ──────────────────────────────────────────
+// ── Slot → position ───────────────────────────────────────────────────────────
 const SLOT_MAP: Record<number, string> = {
   0: "QB", 2: "RB", 4: "WR", 6: "TE",
   15: "RB", 16: "DEF", 17: "K", 20: "BE", 21: "IR", 23: "FLEX",
 };
 
-// Starting lineup requirements for this league
 const LINEUP_REQS: Record<string, number> = {
-  QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2, K: 1, DEF: 0,
+  QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2, K: 1,
 };
 
-// Position draft value tiers (projected points baseline when roster data unavailable)
-const POS_BASELINE: Record<string, number[]> = {
+// Position-round expected value (projected pts per round, avg)
+const POS_ROUND_VALUE: Record<string, number[]> = {
   QB:  [480, 440, 400, 370, 340, 310, 280, 260, 240, 220, 200, 180, 160, 140],
   RB:  [350, 310, 275, 250, 225, 205, 185, 165, 145, 130, 115, 100,  85,  70],
   WR:  [340, 305, 270, 245, 220, 200, 180, 160, 143, 126, 110,  95,  80,  65],
@@ -39,90 +37,341 @@ const POS_BASELINE: Record<string, number[]> = {
   DEF: [160, 145, 130, 118, 106,  95,  84,  74,  65,  57,  49,  42,  35,  29],
 };
 
-// Round-position tendencies (what most fantasy owners pick in each round)
+// Position scarcity weight (higher = scarcer at high value)
+const POS_SCARCITY: Record<string, number> = {
+  QB: 0.85, RB: 1.10, WR: 1.05, TE: 1.15, K: 0.70, DEF: 0.70,
+};
+
+// Round position weights for mock draft
 const ROUND_POS_WEIGHTS: Record<number, Record<string, number>> = {
   1:  { RB: 40, WR: 35, QB: 15, TE: 10 },
   2:  { RB: 35, WR: 40, QB: 10, TE: 15 },
   3:  { WR: 35, RB: 30, QB: 20, TE: 15 },
   4:  { WR: 30, RB: 25, QB: 25, TE: 20 },
-  5:  { WR: 30, RB: 25, QB: 20, TE: 15, K: 5, DEF: 5 },
-  6:  { WR: 28, RB: 22, QB: 20, TE: 15, K: 8, DEF: 7 },
-  7:  { WR: 25, RB: 20, QB: 18, TE: 17, K: 10, DEF: 10 },
-  8:  { WR: 22, RB: 18, QB: 20, TE: 18, K: 12, DEF: 10 },
-  9:  { WR: 20, RB: 18, QB: 22, TE: 18, K: 12, DEF: 10 },
-  10: { WR: 20, RB: 18, QB: 15, TE: 15, K: 15, DEF: 17 },
-  11: { WR: 22, RB: 20, QB: 12, TE: 14, K: 16, DEF: 16 },
-  12: { WR: 22, RB: 20, QB: 12, TE: 14, K: 16, DEF: 16 },
-  13: { WR: 22, RB: 20, QB: 12, TE: 14, K: 16, DEF: 16 },
-  14: { WR: 22, RB: 20, QB: 12, TE: 14, K: 16, DEF: 16 },
+  5:  { WR: 28, RB: 22, QB: 20, TE: 15, K: 7, DEF: 8 },
+  6:  { WR: 26, RB: 20, QB: 18, TE: 16, K: 10, DEF: 10 },
+  7:  { WR: 24, RB: 18, QB: 17, TE: 15, K: 13, DEF: 13 },
+  8:  { WR: 22, RB: 17, QB: 16, TE: 15, K: 15, DEF: 15 },
+  9:  { WR: 20, RB: 16, QB: 16, TE: 14, K: 17, DEF: 17 },
+  10: { WR: 20, RB: 15, QB: 14, TE: 13, K: 19, DEF: 19 },
+  11: { WR: 20, RB: 15, QB: 12, TE: 13, K: 20, DEF: 20 },
+  12: { WR: 20, RB: 15, QB: 12, TE: 13, K: 20, DEF: 20 },
+  13: { WR: 20, RB: 15, QB: 12, TE: 13, K: 20, DEF: 20 },
+  14: { WR: 20, RB: 15, QB: 12, TE: 13, K: 20, DEF: 20 },
 };
 
-function roundWeights(round: number): Record<string, number> {
+function roundWeights(round: number) {
   return ROUND_POS_WEIGHTS[Math.min(round, 14)] ?? ROUND_POS_WEIGHTS[14];
 }
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── KVS (Keeper Value Score) ──────────────────────────────────────────────────
+// Measures how much value the player gives relative to their keeper cost.
+// KVS = (projectedPts / expectedValueAtCostRound) × scarcityMultiplier × 100
+// Capped 0-200 (100 = break-even, >100 = value, <100 = overpay)
 
-export interface KeeperPrediction {
-  teamId: number; teamName: string; ownerName: string;
-  keeperRound: number; keeperRoundPick: number;
-  predictedPlayer: string; position: string;
-  projectedPoints: number; confidence: number;
-  evidence: string[];
-  status: "PREDICTED" | "CONFIRMED";
-  alternatives: Array<{ player: string; position: string; projectedPoints: number; reason: string }>;
+function calcKVS(params: {
+  projectedPoints: number;
+  position:        string;
+  keeperRound:     number;
+}): {
+  kvs:          number;
+  breakEven:    number;
+  surplus:      number;
+  surplusLabel: string;
+  evidence:     string[];
+} {
+  const { projectedPoints, position, keeperRound } = params;
+  const roundIdx = Math.min(keeperRound - 1, (POS_ROUND_VALUE[position]?.length ?? 1) - 1);
+  const expectedAtRound = POS_ROUND_VALUE[position]?.[roundIdx] ?? 100;
+  const scarcity = POS_SCARCITY[position] ?? 1.0;
+
+  const raw = projectedPoints > 0
+    ? (projectedPoints / expectedAtRound) * scarcity * 100
+    : 0;
+
+  const kvs = Math.round(Math.min(200, Math.max(0, raw)));
+  const surplus = Math.round(projectedPoints - expectedAtRound);
+  const surplusLabel = surplus > 50 ? "ELITE VALUE" : surplus > 20 ? "GOOD VALUE" : surplus > 0 ? "SLIGHT VALUE" : surplus > -30 ? "FAIR" : "OVERPAY";
+
+  const evidence = [
+    `Projected ${projectedPoints.toFixed(0)} pts vs expected ${expectedAtRound} pts at Round ${keeperRound}`,
+    `Position scarcity multiplier: ${scarcity}× (${position})`,
+    `Value surplus: ${surplus > 0 ? "+" : ""}${surplus} pts → ${surplusLabel}`,
+  ];
+
+  return { kvs, breakEven: expectedAtRound, surplus, surplusLabel, evidence };
 }
 
-export interface RosterNeed {
-  teamId: number; teamName: string; ownerName: string;
-  projectedTotal: number;
-  positionCounts: Record<string, number>;
-  starterProjections: Record<string, number>;
-  needs: Array<{
-    position: string;
-    urgency: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
-    have: number; need: number; gap: number;
-    topPlayer: string; topProj: number;
-    evidence: string[];
-  }>;
-  strengths: Array<{ position: string; count: number; topPlayer: string }>;
-  draftPriority: string[];
-  overallRank: number;
+// ── Traded pick detection ─────────────────────────────────────────────────────
+// A team has a traded pick if they have MORE than 1 pick in any round.
+// A team has traded away a pick if they have 0 picks in any round (but are in the league).
+
+export interface TradedPickInfo {
+  round:          number;
+  teamId:         number;
+  teamName:       string;
+  ownerName:      string;
+  type:           "ACQUIRED" | "TRADED_AWAY";
+  pickNumber:     number | null;
+  evidence:       string[];
 }
 
-export interface MockPick {
-  pickNumber: number; round: number; roundPick: number;
-  teamId: number; teamName: string; ownerName: string;
-  player: string; position: string; espnId: string | null;
-  projectedPoints: number; confidence: number;
-  reasoning: string; evidence: string[];
-  alternatePicks: Array<{ player: string; position: string; projectedPoints: number }>;
-  isKeeperSlot: boolean;
+function detectTradedPicks(
+  picks: Array<{ roundId: number; roundPick: number; overallPick: number; teamId: number }>,
+  teams: any[]
+): TradedPickInfo[] {
+  const teamIds = teams.map(t => Number(t.teamId));
+  const totalRounds = Math.max(...picks.map(p => p.roundId), 14);
+  const result: TradedPickInfo[] = [];
+
+  // Team map for lookup
+  const teamMap = new Map(teams.map(t => [Number(t.teamId), t]));
+
+  for (let round = 1; round <= totalRounds; round++) {
+    const roundPicks = picks.filter(p => p.roundId === round);
+
+    // Count picks per team this round
+    const teamPickCounts = new Map<number, number[]>();
+    for (const p of roundPicks) {
+      const tid = Number(p.teamId);
+      if (!teamPickCounts.has(tid)) teamPickCounts.set(tid, []);
+      teamPickCounts.get(tid)!.push(p.overallPick);
+    }
+
+    for (const tid of teamIds) {
+      const myPicks = teamPickCounts.get(tid) ?? [];
+      const team = teamMap.get(tid);
+      if (!team) continue;
+
+      if (myPicks.length > 1) {
+        // Has extra picks — acquired from trade
+        for (const pickNum of myPicks.slice(1)) {
+          result.push({
+            round, teamId: tid, teamName: team.name, ownerName: team.ownerName,
+            type: "ACQUIRED", pickNumber: pickNum,
+            evidence: [
+              `Has ${myPicks.length} picks in Round ${round} (expected 1)`,
+              `Extra pick #${pickNum} was acquired via trade`,
+            ],
+          });
+        }
+      } else if (myPicks.length === 0) {
+        // Missing pick — traded away
+        result.push({
+          round, teamId: tid, teamName: team.name, ownerName: team.ownerName,
+          type: "TRADED_AWAY", pickNumber: null,
+          evidence: [
+            `Has 0 picks in Round ${round} (expected 1)`,
+            `Round ${round} pick was traded to another team`,
+          ],
+        });
+      }
+    }
+  }
+
+  return result;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Draft Shock Meter ─────────────────────────────────────────────────────────
+// Measures how predictable/surprising an owner's draft will be.
 
-function confidenceFromEvidence(signals: number[]): number {
-  // Average of 0-1 signals → 0-100 score
-  const avg = signals.reduce((s, v) => s + v, 0) / (signals.length || 1);
-  return Math.round(Math.min(95, Math.max(35, avg * 100)));
+export interface ShockMeter {
+  teamId:              number;
+  teamName:            string;
+  ownerName:           string;
+  predictabilityScore: number;   // 0-100 (100 = totally predictable)
+  surpriseProbability: number;   // 0-100
+  mostLikelyPosition:  string;
+  mostLikelyPickType:  "VALUE" | "NEED" | "REACH" | "UNKNOWN";
+  draftCapital:        "ABOVE_AVERAGE" | "AVERAGE" | "BELOW_AVERAGE";
+  evidence:            string[];
+  signals:             Array<{ label: string; value: string; impact: "PREDICTABLE" | "UNPREDICTABLE" | "NEUTRAL" }>;
 }
 
-function urgency(have: number, need: number): "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" {
-  const gap = need - have;
-  if (gap >= need) return "CRITICAL";
-  if (gap >= 1)    return "HIGH";
-  if (gap === 0)   return "MEDIUM";
-  return "LOW";
+function calcShockMeter(params: {
+  teamId:        number;
+  teamName:      string;
+  ownerName:     string;
+  rosterNeeds:   Array<{ position: string; urgency: string }>;
+  keeperPred:    Array<{ confidence: number; status: string }>;
+  tradedPicks:   TradedPickInfo[];
+  draftSlot:     number;  // 1-14
+  teamCount:     number;
+}): ShockMeter {
+  const { teamId, teamName, ownerName, rosterNeeds, keeperPred, tradedPicks, draftSlot, teamCount } = params;
+
+  const signals: ShockMeter["signals"] = [];
+  const predictSignals: number[] = [];
+
+  // Signal 1: Need concentration (many critical needs = less predictable)
+  const critNeeds   = rosterNeeds.filter(n => n.urgency === "CRITICAL").length;
+  const highNeeds   = rosterNeeds.filter(n => n.urgency === "HIGH").length;
+  const needSpread  = critNeeds + highNeeds;
+  if (needSpread === 0) {
+    signals.push({ label: "No critical needs", value: "Balanced roster", impact: "UNPREDICTABLE" });
+    predictSignals.push(0.45);
+  } else if (needSpread === 1) {
+    signals.push({ label: "Single clear need", value: rosterNeeds[0]?.position ?? "?", impact: "PREDICTABLE" });
+    predictSignals.push(0.85);
+  } else if (needSpread === 2) {
+    signals.push({ label: "Two positional needs", value: `${rosterNeeds[0]?.position}+${rosterNeeds[1]?.position}`, impact: "PREDICTABLE" });
+    predictSignals.push(0.72);
+  } else {
+    signals.push({ label: "Multiple critical needs", value: `${needSpread} positions`, impact: "UNPREDICTABLE" });
+    predictSignals.push(0.50);
+  }
+
+  // Signal 2: Keeper confidence
+  const avgKeeperConf = keeperPred.length > 0
+    ? keeperPred.reduce((s, k) => s + k.confidence, 0) / keeperPred.length
+    : 50;
+  const hasConfirmed = keeperPred.some(k => k.status === "CONFIRMED");
+  if (hasConfirmed) {
+    signals.push({ label: "Confirmed keeper", value: "Known", impact: "PREDICTABLE" });
+    predictSignals.push(0.88);
+  } else if (keeperPred.length > 0) {
+    signals.push({ label: "Keeper predicted", value: `${avgKeeperConf}% conf`, impact: avgKeeperConf > 70 ? "PREDICTABLE" : "UNPREDICTABLE" });
+    predictSignals.push(avgKeeperConf / 100);
+  } else {
+    signals.push({ label: "No keeper", value: "Open slot", impact: "UNPREDICTABLE" });
+    predictSignals.push(0.60);
+  }
+
+  // Signal 3: Draft capital situation
+  const acquired    = tradedPicks.filter(p => p.teamId === teamId && p.type === "ACQUIRED").length;
+  const tradedAway  = tradedPicks.filter(p => p.teamId === teamId && p.type === "TRADED_AWAY").length;
+  const capitalDiff = acquired - tradedAway;
+  let capitalStatus: ShockMeter["draftCapital"] = "AVERAGE";
+  if (capitalDiff > 0) {
+    capitalStatus = "ABOVE_AVERAGE";
+    signals.push({ label: "Extra draft capital", value: `+${capitalDiff} picks`, impact: "UNPREDICTABLE" });
+    predictSignals.push(0.50);
+  } else if (capitalDiff < 0) {
+    capitalStatus = "BELOW_AVERAGE";
+    signals.push({ label: "Fewer picks", value: `${capitalDiff} picks`, impact: "PREDICTABLE" });
+    predictSignals.push(0.80);
+  } else {
+    signals.push({ label: "Standard draft capital", value: "Normal picks", impact: "NEUTRAL" });
+    predictSignals.push(0.70);
+  }
+
+  // Signal 4: Draft position (early vs late)
+  if (draftSlot <= 3) {
+    signals.push({ label: "Top-3 pick", value: `Slot #${draftSlot}`, impact: "PREDICTABLE" });
+    predictSignals.push(0.82);
+  } else if (draftSlot >= teamCount - 2) {
+    signals.push({ label: "Late pick", value: `Slot #${draftSlot}`, impact: "UNPREDICTABLE" });
+    predictSignals.push(0.60);
+  } else {
+    signals.push({ label: "Mid-round pick", value: `Slot #${draftSlot}`, impact: "NEUTRAL" });
+    predictSignals.push(0.70);
+  }
+
+  const avgPredict = predictSignals.reduce((s, v) => s + v, 0) / predictSignals.length;
+  const predictabilityScore = Math.round(Math.min(97, Math.max(30, avgPredict * 100)));
+  const surpriseProbability = 100 - predictabilityScore;
+
+  // Most likely position = top urgency need
+  const topNeed = rosterNeeds.find(n => ["CRITICAL","HIGH"].includes(n.urgency));
+  const mostLikelyPosition = topNeed?.position ?? "ANY";
+
+  // Pick type prediction
+  let mostLikelyPickType: ShockMeter["mostLikelyPickType"] = "NEED";
+  if (needSpread === 0 && capitalStatus === "ABOVE_AVERAGE") mostLikelyPickType = "VALUE";
+  else if (avgKeeperConf < 50 && needSpread > 2) mostLikelyPickType = "REACH";
+  else if (needSpread >= 1) mostLikelyPickType = "NEED";
+  else mostLikelyPickType = "UNKNOWN";
+
+  const evidence = [
+    `Predictability: ${predictabilityScore}% (${predictSignals.map(s => (s * 100).toFixed(0)).join(", ")} signals)`,
+    `Need spread: ${needSpread} high-urgency positions`,
+    `Draft capital: ${capitalStatus} (${capitalDiff > 0 ? "+" : ""}${capitalDiff})`,
+    `Draft slot: #${draftSlot} of ${teamCount}`,
+  ];
+
+  return {
+    teamId, teamName, ownerName,
+    predictabilityScore, surpriseProbability,
+    mostLikelyPosition, mostLikelyPickType,
+    draftCapital: capitalStatus, evidence, signals,
+  };
 }
 
-// ── Roster data loader ────────────────────────────────────────────────────────
+// ── Confidence Dashboard ──────────────────────────────────────────────────────
 
-async function loadRoster(db: any, season: number): Promise<{
-  byTeam: Map<number, any[]>;
-  teams: any[];
-  keepers: any[];
-}> {
+export interface ConfidenceDashboard {
+  mostPredictable:   { teamName: string; ownerName: string; score: number; reason: string };
+  leastPredictable:  { teamName: string; ownerName: string; score: number; reason: string };
+  biggestReach:      { teamName: string; ownerName: string; position: string; reason: string } | null;
+  biggestRosterHole: { teamName: string; ownerName: string; position: string; urgency: string; reason: string } | null;
+  bestKeeperValue:   { teamName: string; ownerName: string; player: string; kvs: number; reason: string } | null;
+  mostLikelyToChange:{ teamName: string; ownerName: string; score: number; reason: string };
+}
+
+function buildConfidenceDashboard(
+  shockMeters: ShockMeter[],
+  rosterNeeds: any[],
+  keeperPredictions: any[]
+): ConfidenceDashboard {
+  const sorted = [...shockMeters].sort((a, b) => b.predictabilityScore - a.predictabilityScore);
+
+  const mostPredictable = sorted[0];
+  const leastPredictable = sorted[sorted.length - 1];
+  const mostLikelyToChange = [...shockMeters].sort((a, b) => b.surpriseProbability - a.surpriseProbability)[0];
+
+  // Biggest roster hole = team with CRITICAL need at highest urgency
+  const allCritical = rosterNeeds
+    .flatMap(n => n.needs.filter((nd: any) => nd.urgency === "CRITICAL").map((nd: any) => ({ ...nd, teamName: n.teamName, ownerName: n.ownerName })))
+    .sort((a: any, b: any) => b.gap - a.gap);
+  const biggestRosterHole = allCritical[0] ? {
+    teamName: allCritical[0].teamName, ownerName: allCritical[0].ownerName,
+    position: allCritical[0].position, urgency: "CRITICAL",
+    reason: `Missing ${allCritical[0].gap} starter(s) at ${allCritical[0].position}`,
+  } : null;
+
+  // Best keeper value = highest KVS from keeper predictions
+  const kvsKeepers = keeperPredictions
+    .filter((k: any) => k.kvs !== undefined)
+    .sort((a: any, b: any) => b.kvs - a.kvs);
+  const bestKeeperValue = kvsKeepers[0] ? {
+    teamName: kvsKeepers[0].teamName, ownerName: kvsKeepers[0].ownerName,
+    player: kvsKeepers[0].predictedPlayer, kvs: kvsKeepers[0].kvs,
+    reason: `KVS ${kvsKeepers[0].kvs} — ${kvsKeepers[0].surplusLabel ?? "value"}`,
+  } : null;
+
+  // Biggest projected reach = team drafting from depth when already stacked (value pick expected but filling need)
+  // Determine by finding team with highest predicted "reach": low draft slot + stacked position = reach
+  const biggestReach = shockMeters.find(s => s.mostLikelyPickType === "REACH") ?? null;
+
+  return {
+    mostPredictable: {
+      teamName: mostPredictable.teamName, ownerName: mostPredictable.ownerName,
+      score: mostPredictable.predictabilityScore,
+      reason: mostPredictable.signals.filter(s => s.impact === "PREDICTABLE").map(s => s.label).join(", ") || "Stable roster",
+    },
+    leastPredictable: {
+      teamName: leastPredictable.teamName, ownerName: leastPredictable.ownerName,
+      score: leastPredictable.predictabilityScore,
+      reason: leastPredictable.signals.filter(s => s.impact === "UNPREDICTABLE").map(s => s.label).join(", ") || "Multiple unknowns",
+    },
+    biggestReach: biggestReach ? {
+      teamName: biggestReach.teamName, ownerName: biggestReach.ownerName,
+      position: biggestReach.mostLikelyPosition,
+      reason: "Projected to reach based on need vs capital mismatch",
+    } : null,
+    biggestRosterHole,
+    bestKeeperValue,
+    mostLikelyToChange: {
+      teamName: mostLikelyToChange.teamName, ownerName: mostLikelyToChange.ownerName,
+      score: mostLikelyToChange.surpriseProbability,
+      reason: mostLikelyToChange.signals.filter(s => s.impact === "UNPREDICTABLE").map(s => s.label).join(", ") || "Unpredictable roster",
+    },
+  };
+}
+
+// ── Roster loader ─────────────────────────────────────────────────────────────
+
+async function loadRoster(db: any, season: number) {
   const [rosterRows] = await db.execute(drizzleSql`
     SELECT r.teamId, r.playerName, r.position, r.slotId,
            r.projectedPoints, r.injuryStatus, r.acquisitionType,
@@ -135,8 +384,7 @@ async function loadRoster(db: any, season: number): Promise<{
 
   const [teamRows] = await db.execute(drizzleSql`
     SELECT teamId, name, ownerName FROM teams
-    WHERE leagueId = ${LEAGUE_ID} AND season = ${season}
-    ORDER BY teamId
+    WHERE leagueId = ${LEAGUE_ID} AND season = ${season} ORDER BY teamId
   `) as unknown as [any[]];
 
   const [keeperRows] = await db.execute(drizzleSql`
@@ -144,6 +392,13 @@ async function loadRoster(db: any, season: number): Promise<{
     FROM draft_picks
     WHERE leagueId = ${LEAGUE_ID} AND season = ${season} AND isKeeper = 1
     ORDER BY teamId, roundId
+  `) as unknown as [any[]];
+
+  const [allPickRows] = await db.execute(drizzleSql`
+    SELECT teamId, roundId, roundPick, overallPick, playerName, position, isKeeper
+    FROM draft_picks
+    WHERE leagueId = ${LEAGUE_ID} AND season = ${season}
+    ORDER BY overallPick
   `) as unknown as [any[]];
 
   const byTeam = new Map<number, any[]>();
@@ -155,21 +410,16 @@ async function loadRoster(db: any, season: number): Promise<{
 
   return {
     byTeam,
-    teams: teamRows as any[],
-    keepers: keeperRows as any[],
+    teams:    teamRows as any[],
+    keepers:  keeperRows as any[],
+    allPicks: allPickRows as any[],
   };
 }
 
-// ── Keeper predictions ────────────────────────────────────────────────────────
+// ── Keeper predictions (Phase 1.5: with KVS) ─────────────────────────────────
 
-function predictKeepers(
-  teams: any[],
-  byTeam: Map<number, any[]>,
-  keeperSlots: any[]
-): KeeperPrediction[] {
-  const predictions: KeeperPrediction[] = [];
-
-  // Group keeper slots by team
+function predictKeepers(teams: any[], byTeam: Map<number, any[]>, keeperSlots: any[]) {
+  const predictions: any[] = [];
   const slotsByTeam = new Map<number, any[]>();
   for (const k of keeperSlots) {
     const tid = Number(k.teamId);
@@ -182,81 +432,77 @@ function predictKeepers(
     const team   = teams.find(t => Number(t.teamId) === tid);
     if (!team) continue;
 
-    // Sort roster by projected points desc (best players first)
-    const sorted = [...roster]
-      .filter(p => p.playerName && p.slotId !== 20 && p.slotId !== 21) // exclude bench/IR
+    // Starters sorted by projected points
+    const starters = [...roster]
+      .filter(p => p.playerName && p.slotId !== 20 && p.slotId !== 21)
       .sort((a, b) => b.projectedPoints - a.projectedPoints);
 
-    // For each keeper slot, predict the best available player
     const used = new Set<string>();
+
     for (const slot of slots) {
       const keeperRound = Number(slot.roundId);
-      // Confirmed if the draft_pick has a playerName
-      const isConfirmed = slot.playerName && slot.playerName.trim() !== "" && slot.position !== "?";
+      const isConfirmed = slot.playerName?.trim() && slot.position !== "?";
 
       if (isConfirmed) {
+        const kvsResult = calcKVS({ projectedPoints: 0, position: slot.position, keeperRound });
         predictions.push({
           teamId: tid, teamName: team.name, ownerName: team.ownerName,
           keeperRound, keeperRoundPick: Number(slot.roundPick),
           predictedPlayer: slot.playerName, position: slot.position,
-          projectedPoints: sorted.find(p => p.playerName === slot.playerName)?.projectedPoints ?? 0,
-          confidence: 100,
-          evidence: [`Official keeper confirmed for Round ${keeperRound}`],
-          status: "CONFIRMED",
-          alternatives: [],
+          projectedPoints: 0, confidence: 100,
+          ...kvsResult,
+          evidence: [`Official keeper confirmed for Round ${keeperRound}`, ...kvsResult.evidence],
+          status: "CONFIRMED", alternatives: [],
         });
         used.add(slot.playerName);
         continue;
       }
 
-      // Predict: look for highest-projected player whose cost round makes sense
-      // Keeper cost = round 14 means player value ≤ round 14 pick value
-      // Best prediction: highest projected non-keeper-yet player
-      const candidate = sorted.find(p => p.playerName && !used.has(p.playerName));
+      // Phase 1.5: Score ALL players by KVS and pick best
+      const candidates = starters
+        .filter(p => p.playerName && !used.has(p.playerName) && p.projectedPoints > 0)
+        .map(p => {
+          const kvsResult = calcKVS({ projectedPoints: p.projectedPoints, position: p.position, keeperRound });
+          return { ...p, ...kvsResult };
+        })
+        .sort((a, b) => b.kvs - a.kvs);
 
-      if (!candidate) {
+      const best = candidates[0];
+      if (!best) {
         predictions.push({
           teamId: tid, teamName: team.name, ownerName: team.ownerName,
           keeperRound, keeperRoundPick: Number(slot.roundPick),
           predictedPlayer: "Unknown", position: "?",
-          projectedPoints: 0, confidence: 20,
-          evidence: ["Roster data insufficient to predict keeper"],
-          status: "PREDICTED",
-          alternatives: [],
+          projectedPoints: 0, kvs: 0, confidence: 20,
+          evidence: ["Insufficient roster data to predict keeper"], status: "PREDICTED", alternatives: [],
         });
         continue;
       }
 
-      used.add(candidate.playerName);
+      used.add(best.playerName);
 
-      const altCandidates = sorted
-        .filter(p => p.playerName && !used.has(p.playerName))
-        .slice(0, 3)
-        .map(p => ({ player: p.playerName, position: p.position, projectedPoints: p.projectedPoints, reason: `Projected ${p.projectedPoints.toFixed(0)} pts` }));
-
-      // Confidence signals
-      const signals = [
-        candidate.projectedPoints > 250 ? 0.9 : 0.6,   // high value player
-        candidate.slotId === 0 || candidate.slotId < 20 ? 0.85 : 0.5, // is a starter
-        keeperRound >= 10 ? 0.85 : 0.6,                 // late-round keeper (better value)
+      const confSignals = [
+        best.kvs >= 120 ? 0.90 : best.kvs >= 100 ? 0.78 : 0.62,
+        best.slotId < 20 ? 0.85 : 0.55,
+        keeperRound >= 10 ? 0.82 : 0.65,
       ];
+      const confidence = Math.round(Math.min(95, Math.max(35, (confSignals.reduce((s,v) => s+v, 0)/confSignals.length)*100)));
 
-      const evidence = [
-        `Round ${keeperRound} keeper slot assigned`,
-        `${candidate.playerName} is projected #1 non-confirmed keeper on roster (${candidate.projectedPoints.toFixed(0)} pts)`,
-        `Position: ${candidate.position} — currently slotted as ${SLOT_MAP[candidate.slotId] ?? "starter"}`,
-      ];
+      const alts = candidates.slice(1, 4).map(c => ({
+        player: c.playerName, position: c.position,
+        projectedPoints: c.projectedPoints, kvs: c.kvs, reason: `KVS ${c.kvs} (${c.surplusLabel})`,
+      }));
 
       predictions.push({
         teamId: tid, teamName: team.name, ownerName: team.ownerName,
         keeperRound, keeperRoundPick: Number(slot.roundPick),
-        predictedPlayer: candidate.playerName,
-        position: candidate.position,
-        projectedPoints: candidate.projectedPoints,
-        confidence: confidenceFromEvidence(signals),
-        evidence,
-        status: "PREDICTED",
-        alternatives: altCandidates,
+        predictedPlayer: best.playerName, position: best.position,
+        projectedPoints: best.projectedPoints,
+        kvs: best.kvs, breakEven: best.breakEven, surplus: best.surplus, surplusLabel: best.surplusLabel,
+        confidence,
+        evidence: [...best.evidence, `Selected over ${candidates.length - 1} other candidates based on KVS`],
+        status: "PREDICTED" as const,
+        alternatives: alts,
       });
     }
   }
@@ -264,53 +510,45 @@ function predictKeepers(
   return predictions;
 }
 
-// ── Roster construction ────────────────────────────────────────────────────────
+// ── Roster needs ──────────────────────────────────────────────────────────────
 
-function buildRosterNeeds(
-  teams: any[],
-  byTeam: Map<number, any[]>,
-  keeperPredictions: KeeperPrediction[]
-): RosterNeed[] {
-  const needs: RosterNeed[] = [];
+function buildRosterNeeds(teams: any[], byTeam: Map<number, any[]>, keeperPredictions: any[]) {
+  const needs: any[] = [];
+  const urgOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
 
   for (const team of teams) {
     const tid    = Number(team.teamId);
     const roster = byTeam.get(tid) ?? [];
-
     const posCount: Record<string, number> = {};
     const posPlayers: Record<string, any[]> = {};
     let projTotal = 0;
 
     for (const p of roster) {
       if (!p.playerName) continue;
-      const pos = p.position;
-      posCount[pos] = (posCount[pos] ?? 0) + 1;
-      if (!posPlayers[pos]) posPlayers[pos] = [];
-      posPlayers[pos].push(p);
+      posCount[p.position] = (posCount[p.position] ?? 0) + 1;
+      if (!posPlayers[p.position]) posPlayers[p.position] = [];
+      posPlayers[p.position].push(p);
       if (p.slotId !== 20 && p.slotId !== 21) projTotal += p.projectedPoints;
     }
 
-    // Starters by position (non-bench, non-IR)
     const starters = roster.filter(p => p.slotId !== 20 && p.slotId !== 21);
     const starterByPos: Record<string, any[]> = {};
     for (const p of starters) {
-      const pos = p.position;
-      if (!starterByPos[pos]) starterByPos[pos] = [];
-      starterByPos[pos].push(p);
+      if (!starterByPos[p.position]) starterByPos[p.position] = [];
+      starterByPos[p.position].push(p);
     }
 
-    const rosterNeeds: RosterNeed["needs"] = [];
-    const strengths: RosterNeed["strengths"] = [];
+    const rosterNeeds: any[] = [];
+    const strengths: any[] = [];
     const priority: string[] = [];
 
     for (const [pos, needed] of Object.entries(LINEUP_REQS)) {
-      if (needed === 0) continue;
       const have = (starterByPos[pos] ?? []).length;
       const gap  = Math.max(0, needed - have);
       const top  = (posPlayers[pos] ?? []).sort((a, b) => b.projectedPoints - a.projectedPoints)[0];
+      const urg  = gap >= needed ? "CRITICAL" : gap >= 1 ? "HIGH" : have > needed + 2 ? "LOW" : "MEDIUM";
 
       if (gap > 0) {
-        const urg = urgency(have, needed);
         rosterNeeds.push({
           position: pos, urgency: urg, have, need: needed, gap,
           topPlayer: top?.playerName ?? "None",
@@ -321,198 +559,172 @@ function buildRosterNeeds(
           ],
         });
         if (urg === "CRITICAL" || urg === "HIGH") priority.push(pos);
-      } else if (have > needed + 2) {
-        const top3 = (posPlayers[pos] ?? []).slice(0, 3);
+      }
+      if (have > needed + 2) {
+        const top3 = (posPlayers[pos] ?? []).slice(0,3);
         strengths.push({ position: pos, count: have, topPlayer: top3[0]?.playerName ?? "?" });
       }
     }
 
-    // Sort needs by urgency
-    const urgOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-    rosterNeeds.sort((a, b) => urgOrder[a.urgency] - urgOrder[b.urgency]);
-
+    rosterNeeds.sort((a: any, b: any) => (urgOrder[a.urgency as keyof typeof urgOrder] ?? 3) - (urgOrder[b.urgency as keyof typeof urgOrder] ?? 3));
     needs.push({
       teamId: tid, teamName: team.name, ownerName: team.ownerName,
       projectedTotal: Math.round(projTotal),
       positionCounts: posCount,
-      starterProjections: Object.fromEntries(
-        Object.entries(starterByPos).map(([pos, ps]) => [pos, Math.round(ps.reduce((s, p) => s + p.projectedPoints, 0))])
-      ),
-      needs: rosterNeeds,
-      strengths,
-      draftPriority: priority.slice(0, 4),
-      overallRank: 0, // set after sort
+      needs: rosterNeeds, strengths,
+      draftPriority: priority.slice(0,4),
+      overallRank: 0,
     });
   }
 
-  // Rank by projected total
   needs.sort((a, b) => b.projectedTotal - a.projectedTotal);
   needs.forEach((n, i) => n.overallRank = i + 1);
-
   return needs;
 }
 
-// ── Mock draft engine ─────────────────────────────────────────────────────────
+// ── Mock draft ────────────────────────────────────────────────────────────────
 
 function buildMockDraft(params: {
-  teams: any[];
-  rosterNeeds: RosterNeed[];
-  keeperPredictions: KeeperPrediction[];
+  allPicks: any[];
+  rosterNeeds: any[];
+  keeperPredictions: any[];
+  tradedPicks: TradedPickInfo[];
   playerPool: Array<{ name: string; position: string; projectedPoints: number; espnId: string | null }>;
-  totalRounds: number;
-}): MockPick[] {
-  const { teams, rosterNeeds, keeperPredictions, playerPool, totalRounds } = params;
+}) {
+  const { allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool } = params;
+  const picks: any[] = [];
+  const drafted = new Set<string>();
 
-  const teamCount  = teams.length;
-  const picks: MockPick[] = [];
-  const drafted    = new Set<string>();
-
-  // Build keeper slots map: teamId → Set of rounds that are keeper slots
-  const keeperSlotMap = new Map<number, Map<number, string>>();
+  // Pre-mark keeper players as drafted
+  const keeperByTeamRound = new Map<string, string>();
   for (const kp of keeperPredictions) {
-    if (!keeperSlotMap.has(kp.teamId)) keeperSlotMap.set(kp.teamId, new Map());
-    keeperSlotMap.get(kp.teamId)!.set(kp.keeperRound, kp.predictedPlayer);
-    if (kp.predictedPlayer && kp.predictedPlayer !== "Unknown") drafted.add(kp.predictedPlayer);
+    if (kp.predictedPlayer && kp.predictedPlayer !== "Unknown") {
+      drafted.add(kp.predictedPlayer);
+      keeperByTeamRound.set(`${kp.teamId}_${kp.keeperRound}`, kp.predictedPlayer);
+    }
   }
 
-  // Sort player pool by projected points desc
   const pool = [...playerPool].sort((a, b) => b.projectedPoints - a.projectedPoints);
-
-  // Build team need maps
-  const needMap = new Map<number, RosterNeed>();
-  for (const n of rosterNeeds) needMap.set(n.teamId, n);
-
-  // Track picks per team per position
+  const needMap = new Map(rosterNeeds.map(n => [n.teamId, n]));
   const teamPosCounts = new Map<number, Record<string, number>>();
-  for (const t of teams) teamPosCounts.set(Number(t.teamId), {});
+  for (const p of allPicks) teamPosCounts.set(Number(p.teamId), {});
 
-  // Snake draft order
-  const draftOrder: number[] = [];
-  const teamIds = teams.map(t => Number(t.teamId));
-  for (let round = 1; round <= totalRounds; round++) {
-    const order = round % 2 === 1 ? teamIds : [...teamIds].reverse();
-    draftOrder.push(...order);
+  // Traded pick context
+  const tradedPickMap = new Map<string, TradedPickInfo>();
+  for (const tp of tradedPicks) {
+    if (tp.pickNumber) tradedPickMap.set(`${tp.round}_${tp.teamId}`, tp);
   }
 
-  let pickNum = 1;
-  for (let round = 1; round <= totalRounds; round++) {
-    const roundOrder = round % 2 === 1 ? teamIds : [...teamIds].reverse();
-    for (let rp = 1; rp <= roundOrder.length; rp++) {
-      const tid    = roundOrder[rp - 1];
-      const team   = teams.find(t => Number(t.teamId) === tid)!;
-      const needs  = needMap.get(tid);
-      const counts = teamPosCounts.get(tid) ?? {};
+  let processedPick = 0;
+  for (const draftPick of allPicks) {
+    processedPick++;
+    const pickNum = Number(draftPick.overallPick);
+    const round   = Number(draftPick.roundId);
+    const rp      = Number(draftPick.roundPick);
+    const tid     = Number(draftPick.teamId);
 
-      // Check if this is a keeper slot
-      const keeperSlots = keeperSlotMap.get(tid);
-      const keeperPlayer = keeperSlots?.get(round);
-      if (keeperPlayer && keeperPlayer !== "Unknown") {
-        picks.push({
-          pickNumber: pickNum, round, roundPick: rp,
-          teamId: tid, teamName: team.name, ownerName: team.ownerName,
-          player: keeperPlayer, position: "?", espnId: null,
-          projectedPoints: 0, confidence: 100,
-          reasoning: `Keeper slot — Round ${round} reserved`,
-          evidence: [`Official keeper in Round ${round}`],
-          alternatePicks: [],
-          isKeeperSlot: true,
-        });
-        counts["?"] = (counts["?"] ?? 0) + 1;
-        pickNum++;
-        continue;
-      }
+    // Find team info from roster needs
+    const teamData = rosterNeeds.find(n => n.teamId === tid);
+    const teamName = teamData?.teamName ?? `Team ${tid}`;
+    const ownerName = teamData?.ownerName ?? "Unknown";
+    const needs    = needMap.get(tid);
+    const counts   = teamPosCounts.get(tid) ?? {};
 
-      // Determine which position to target
-      const weights = roundWeights(round);
-
-      // Adjust weights by roster needs
-      const needWeights = { ...weights };
-      if (needs) {
-        for (const n of needs.needs) {
-          const urgBoost = { CRITICAL: 2.0, HIGH: 1.5, MEDIUM: 1.2, LOW: 1.0 }[n.urgency] ?? 1.0;
-          if (needWeights[n.position] !== undefined) {
-            needWeights[n.position] = Math.round(needWeights[n.position] * urgBoost);
-          }
-        }
-      }
-
-      // Avoid over-rostering a position
-      for (const [pos, cnt] of Object.entries(counts)) {
-        const maxAlloc = { QB: 2, RB: 5, WR: 6, TE: 3, K: 2, DEF: 2 }[pos] ?? 3;
-        if (cnt >= maxAlloc && needWeights[pos] !== undefined) {
-          needWeights[pos] = Math.max(1, Math.round(needWeights[pos] * 0.2));
-        }
-      }
-
-      // Pick position via weighted random (deterministic: use pickNum as seed)
-      const posEntries = Object.entries(needWeights).filter(([, w]) => w > 0);
-      const totalWeight = posEntries.reduce((s, [, w]) => s + w, 0);
-      let cumulative = 0;
-      const seed = (pickNum * 2654435761) >>> 0;
-      const threshold = (seed % 10000) / 10000 * totalWeight;
-      let targetPos = posEntries[0][0];
-      for (const [pos, w] of posEntries) {
-        cumulative += w;
-        if (threshold <= cumulative) { targetPos = pos; break; }
-      }
-
-      // Find best available player at target position
-      const available = pool.filter(p => p.position === targetPos && !drafted.has(p.name));
-      const pick = available[0];
-
-      if (!pick) {
-        // Fall back to best available any position
-        const anyAvail = pool.filter(p => !drafted.has(p.name));
-        const fallback = anyAvail[0];
-        if (!fallback) { pickNum++; continue; }
-        drafted.add(fallback.name);
-        counts[fallback.position] = (counts[fallback.position] ?? 0) + 1;
-        picks.push({
-          pickNumber: pickNum, round, roundPick: rp,
-          teamId: tid, teamName: team.name, ownerName: team.ownerName,
-          player: fallback.name, position: fallback.position, espnId: fallback.espnId,
-          projectedPoints: fallback.projectedPoints, confidence: 45,
-          reasoning: `No ${targetPos} available — selected best player on board`,
-          evidence: [`Target position ${targetPos} exhausted`, `Best available: ${fallback.name} (${fallback.projectedPoints.toFixed(0)} pts)`],
-          alternatePicks: [],
-          isKeeperSlot: false,
-        });
-        pickNum++;
-        continue;
-      }
-
-      drafted.add(pick.name);
-      counts[targetPos] = (counts[targetPos] ?? 0) + 1;
-
-      // Calculate confidence
-      const needUrg = needs?.needs.find(n => n.position === targetPos)?.urgency;
-      const confSignals = [
-        pick.projectedPoints > 200 ? 0.9 : pick.projectedPoints > 100 ? 0.75 : 0.55,
-        needUrg === "CRITICAL" ? 0.95 : needUrg === "HIGH" ? 0.85 : needUrg === "MEDIUM" ? 0.75 : 0.65,
-        available.length > 5 ? 0.8 : available.length > 2 ? 0.7 : 0.6,
-      ];
-      const conf = confidenceFromEvidence(confSignals);
-
-      const alts = available.slice(1, 4).map(p => ({ player: p.name, position: p.position, projectedPoints: p.projectedPoints }));
-
-      const evidence = [
-        `Round ${round} weight for ${targetPos}: ${needWeights[targetPos]}%`,
-        needUrg ? `Team ${targetPos} urgency: ${needUrg}` : `Following round ${round} position trend`,
-        `${pick.name} is #${pool.filter(p => p.position === targetPos).findIndex(p => p.name === pick.name) + 1} available ${targetPos} (${pick.projectedPoints.toFixed(0)} pts projected)`,
-      ];
-
+    // Keeper slot?
+    const keeperPlayer = keeperByTeamRound.get(`${tid}_${round}`);
+    if (keeperPlayer && keeperPlayer !== "Unknown") {
+      const kp = keeperPredictions.find(k => k.teamId === tid && k.keeperRound === round);
+      const tradeCtx = tradedPickMap.get(`${round}_${tid}`);
       picks.push({
         pickNumber: pickNum, round, roundPick: rp,
-        teamId: tid, teamName: team.name, ownerName: team.ownerName,
-        player: pick.name, position: targetPos, espnId: pick.espnId,
-        projectedPoints: pick.projectedPoints, confidence: conf,
-        reasoning: `${team.ownerName} targets ${targetPos} in Round ${round}${needUrg ? ` (${needUrg} need)` : ""}`,
-        evidence,
-        alternatePicks: alts,
-        isKeeperSlot: false,
+        teamId: tid, teamName, ownerName,
+        player: keeperPlayer,
+        position: kp?.position ?? "?",
+        espnId: null,
+        projectedPoints: kp?.projectedPoints ?? 0,
+        confidence: kp?.confidence ?? 100,
+        reasoning: `Keeper slot — Round ${round} reserved`,
+        evidence: kp?.evidence ?? [`Keeper in Round ${round}`],
+        alternatePicks: [],
+        isKeeperSlot: true,
+        tradedPickContext: tradeCtx ? {
+          type: tradeCtx.type, evidence: tradeCtx.evidence
+        } : null,
+        kvs: kp?.kvs,
       });
-      pickNum++;
+      counts[kp?.position ?? "?"] = (counts[kp?.position ?? "?"] ?? 0) + 1;
+      continue;
     }
+
+    // Check if this is a traded pick
+    const tradeCtx = tradedPickMap.get(`${round}_${tid}`);
+
+    // Determine position to target
+    const weights = roundWeights(round);
+    const needWeights = { ...weights };
+    if (needs) {
+      for (const n of needs.needs) {
+        const boost = ({ CRITICAL: 2.0, HIGH: 1.5, MEDIUM: 1.2, LOW: 1.0 } as Record<string,number>)[n.urgency] ?? 1.0;
+        if (needWeights[n.position] !== undefined) needWeights[n.position] = Math.round(needWeights[n.position] * boost);
+      }
+    }
+    // Cap over-rostered positions
+    for (const [pos, cnt] of Object.entries(counts)) {
+      const cap = { QB: 2, RB: 5, WR: 6, TE: 3, K: 2, DEF: 2 }[pos] ?? 3;
+      if (cnt >= cap && needWeights[pos] !== undefined) needWeights[pos] = Math.max(1, Math.round(needWeights[pos] * 0.2));
+    }
+
+    // Deterministic weighted pick
+    const posEntries = Object.entries(needWeights).filter(([, w]) => w > 0);
+    const totalW = posEntries.reduce((s, [, w]) => s + w, 0);
+    const seed = (pickNum * 2654435761) >>> 0;
+    const threshold = ((seed % 10000) / 10000) * totalW;
+    let cumulative = 0;
+    let targetPos = posEntries[0][0];
+    for (const [pos, w] of posEntries) {
+      cumulative += w;
+      if (threshold <= cumulative) { targetPos = pos; break; }
+    }
+
+    const available = pool.filter(p => p.position === targetPos && !drafted.has(p.name));
+    const pick = available[0] ?? pool.filter(p => !drafted.has(p.name))[0];
+
+    if (!pick) { continue; }
+    drafted.add(pick.name);
+    counts[pick.position] = (counts[pick.position] ?? 0) + 1;
+
+    const needUrg = needs?.needs.find((n: any) => n.position === targetPos)?.urgency;
+    const confSignals = [
+      pick.projectedPoints > 200 ? 0.9 : pick.projectedPoints > 100 ? 0.75 : 0.55,
+      needUrg === "CRITICAL" ? 0.95 : needUrg === "HIGH" ? 0.85 : 0.70,
+      available.length > 5 ? 0.80 : 0.65,
+    ];
+    const conf = Math.round(Math.min(95, Math.max(35, (confSignals.reduce((s,v)=>s+v,0)/confSignals.length)*100)));
+
+    const tradeNote = tradeCtx
+      ? tradeCtx.type === "ACQUIRED"
+        ? `[TRADED PICK] Acquired pick — ${ownerName} has extra Round ${round} capital`
+        : `[TRADED PICK] This pick was traded in`
+      : null;
+
+    const evidence = [
+      `Round ${round} ${targetPos} weight: ${needWeights[targetPos]}%`,
+      needUrg ? `${teamName} ${targetPos} urgency: ${needUrg}` : `Round ${round} positional tendency`,
+      `#${pool.filter(p => p.position === targetPos).findIndex(p => p.name === pick.name) + 1} available ${targetPos} (${pick.projectedPoints.toFixed(0)} pts)`,
+      ...(tradeNote ? [tradeNote] : []),
+    ];
+
+    picks.push({
+      pickNumber: pickNum, round, roundPick: rp,
+      teamId: tid, teamName, ownerName,
+      player: pick.name, position: pick.position, espnId: pick.espnId,
+      projectedPoints: pick.projectedPoints, confidence: conf,
+      reasoning: `${ownerName} targets ${targetPos} Round ${round}${needUrg ? ` [${needUrg} need]` : ""}${tradeCtx ? " [TRADED PICK]" : ""}`,
+      evidence,
+      alternatePicks: available.slice(1, 4).map(p => ({ player: p.name, position: p.position, projectedPoints: p.projectedPoints })),
+      isKeeperSlot: false,
+      tradedPickContext: tradeCtx ? { type: tradeCtx.type, evidence: tradeCtx.evidence } : null,
+    });
   }
 
   return picks;
@@ -522,7 +734,6 @@ function buildMockDraft(params: {
 
 export const draftWarRoomRouter = router({
 
-  /** Full draft war room data for a season */
   getDraftWarRoomData: publicProcedure
     .input(z.object({ season: z.number().int().min(2018).max(2030) }))
     .query(async ({ input }) => {
@@ -530,31 +741,28 @@ export const draftWarRoomRouter = router({
       if (!db) return { ok: false, error: "DB unavailable" };
       const { season } = input;
 
-      const { byTeam, teams, keepers } = await loadRoster(db, season);
-
+      const { byTeam, teams, keepers, allPicks } = await loadRoster(db, season);
       if (teams.length === 0) return { ok: false, error: `No roster data for ${season}` };
 
-      // Load player pool from gm_player_registry
+      // Player pool
       const [regRows] = await db.execute(drizzleSql`
-        SELECT fullName, position, currentNflTeam, espnPlayerId
-        FROM gm_player_registry
-        WHERE position IN ('QB','RB','WR','TE','K','DEF')
-        ORDER BY lastSeasonSeen DESC, id ASC
-        LIMIT 500
+        SELECT fullName, position, espnPlayerId
+        FROM gm_player_registry WHERE position IN ('QB','RB','WR','TE','K','DEF')
+        ORDER BY lastSeasonSeen DESC, id ASC LIMIT 500
       `) as unknown as [any[]];
 
-      // Build player pool with projected points from roster_entries where available
-      const rosterPlayerMap = new Map<string, number>();
-      for (const [, players] of byTeam.entries()) {
-        for (const p of players) {
-          if (p.playerName) rosterPlayerMap.set(p.playerName.toLowerCase(), p.projectedPoints);
-        }
-      }
-
-      const playerPool: Array<{ name: string; position: string; projectedPoints: number; espnId: string | null }> = [];
       const inPool = new Set<string>();
+      const playerPool: any[] = [];
+      const posCounters: Record<string, number> = {};
+      const POS_BASELINE: Record<string, number[]> = {
+        QB:  [480,440,400,370,340,310,280,260,240,220,200,180,160,140],
+        RB:  [350,310,275,250,225,205,185,165,145,130,115,100,85,70],
+        WR:  [340,305,270,245,220,200,180,160,143,126,110,95,80,65],
+        TE:  [290,240,200,175,155,135,115,100,85,72,60,50,42,35],
+        K:   [175,160,148,135,122,110,98,88,78,68,58,50,42,35],
+        DEF: [160,145,130,118,106,95,84,74,65,57,49,42,35,29],
+      };
 
-      // First add players from roster_entries (have projected points)
       for (const [, players] of byTeam.entries()) {
         for (const p of players) {
           if (!p.playerName || inPool.has(p.playerName.toLowerCase())) continue;
@@ -562,44 +770,62 @@ export const draftWarRoomRouter = router({
           inPool.add(p.playerName.toLowerCase());
         }
       }
-
-      // Then add from registry (free agents — estimated points by position)
-      const posCounters: Record<string, number> = {};
       for (const reg of (regRows as any[])) {
         if (inPool.has(reg.fullName.toLowerCase())) continue;
         const pos = reg.position as string;
         posCounters[pos] = (posCounters[pos] ?? 0) + 1;
         const tier = Math.min(posCounters[pos] - 1, (POS_BASELINE[pos]?.length ?? 1) - 1);
-        const proj = POS_BASELINE[pos]?.[tier] ?? 0;
-        playerPool.push({ name: reg.fullName, position: pos, projectedPoints: proj, espnId: reg.espnPlayerId });
+        playerPool.push({ name: reg.fullName, position: pos, projectedPoints: POS_BASELINE[pos]?.[tier] ?? 0, espnId: reg.espnPlayerId });
         inPool.add(reg.fullName.toLowerCase());
       }
-
-      // Sort combined pool
       playerPool.sort((a, b) => b.projectedPoints - a.projectedPoints);
 
-      // Phase 1: Keeper predictions
+      // Phase 1: Keeper + Roster
       const keeperPredictions = predictKeepers(teams, byTeam, keepers);
+      const rosterNeeds       = buildRosterNeeds(teams, byTeam, keeperPredictions);
 
-      // Phase 2: Roster needs
-      const rosterNeeds = buildRosterNeeds(teams, byTeam, keeperPredictions);
+      // Phase 1.5: Traded picks + Shock Meters
+      const tradedPicks = detectTradedPicks(allPicks, teams);
 
-      // Phase 3: Mock draft
-      const totalRounds = 14; // standard 14-team, 14-round draft
-      const mockDraft = buildMockDraft({ teams, rosterNeeds, keeperPredictions, playerPool, totalRounds });
+      // Build draft slot map (position in round 1 snake)
+      const round1 = allPicks.filter(p => p.roundId === 1).sort((a, b) => a.roundPick - b.roundPick);
+      const draftSlotMap = new Map<number, number>();
+      round1.forEach((p, i) => draftSlotMap.set(Number(p.teamId), i + 1));
+
+      const shockMeters = teams.map(t => {
+        const tid    = Number(t.teamId);
+        const needs  = rosterNeeds.find(n => n.teamId === tid);
+        const kpreds = keeperPredictions.filter(k => k.teamId === tid);
+        return calcShockMeter({
+          teamId: tid, teamName: t.name, ownerName: t.ownerName,
+          rosterNeeds: needs?.needs ?? [],
+          keeperPred: kpreds,
+          tradedPicks,
+          draftSlot: draftSlotMap.get(tid) ?? 7,
+          teamCount: teams.length,
+        });
+      });
+
+      const confidenceDashboard = buildConfidenceDashboard(shockMeters, rosterNeeds, keeperPredictions);
+
+      // Phase 1.5 Mock draft with traded pick awareness
+      const mockDraft = buildMockDraft({ allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool });
 
       return {
-        ok: true,
-        season,
+        ok: true, season,
         teamCount: teams.length,
         keeperPredictions,
         rosterNeeds,
+        tradedPicks,
+        shockMeters,
+        confidenceDashboard,
         mockDraft,
         totalPicks: mockDraft.length,
         dataAvailability: {
-          roster:  byTeam.size > 0,
+          roster: byTeam.size > 0,
           keepers: keepers.length > 0,
           playerRegistry: (regRows as any[]).length > 0,
+          tradedPicks: tradedPicks.length > 0,
         },
       };
     }),
