@@ -30,6 +30,7 @@ import {
   Dna,
   Database,
   Radio,
+  Newspaper,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -60,6 +61,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { kind: "link", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { kind: "link", label: "AI Advisor", href: "/advisor", icon: Bot },
+      { kind: "link", label: "League Wire",  href: "/league-wire",  icon: Newspaper },
     ],
   },
   {

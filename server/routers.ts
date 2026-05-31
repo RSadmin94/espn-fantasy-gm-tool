@@ -153,6 +153,7 @@ import { buildHallOfFamePayload } from "./hallOfFameService";
 import { playerStatsCacheRouter } from "./playerStatsCacheRouter";
 import { playerStatsRouter } from "./playerStatsRouter";
 import { leagueWireRouter } from "./leagueWireRouter";
+import { leagueNewsroomRouter } from "./leagueNewsroomRouter";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -472,6 +473,7 @@ export const appRouter = router({
   playerStats: playerStatsRouter,
   playerStatsCache: playerStatsCacheRouter,
   leagueWire: leagueWireRouter,
+  leagueNewsroom: leagueNewsroomRouter,
   dna: dnaRouter,
   agents: agentRouter,
   champ: champRouter,

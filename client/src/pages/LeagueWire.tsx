@@ -1,338 +1,429 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import {
-  ChevronDown, Trophy, Zap, ArrowRight,
-  Share2, AlertCircle, TrendingUp, Swords, Radio,
+  Radio, BookOpen, Trophy, Loader2, RefreshCw,
+  Sparkles, Archive, FileText, Calendar, ChevronRight,
+  AlertCircle, Newspaper, Zap,
 } from "lucide-react";
 
-// ── Types (mirrors server MatchupReport) ─────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-interface TeamSide { teamId: number; name: string; ownerName: string; score: number }
-interface MatchupReport {
-  matchupId: number; season: number; week: number;
-  isPlayoff: boolean; isCompleted: boolean;
-  winner: TeamSide | null; loser: TeamSide | null;
-  margin: number | null; combinedScore: number | null;
-  gameType: "blowout" | "comfortable" | "close" | "nailbiter" | null;
-  headline: string; shortRecap: string; shareableLine: string;
-  keyStat: { label: string; value: string; evidence: string } | null;
-  playerOfGame: null; benchRegret: null;
-  rivalryNote: { seriesRecord: string; winnerLeads: boolean; evidence: string } | null;
-  playoffImpact: { summary: string; winnerRecord: string; loserRecord: string; evidence: string } | null;
+interface Article {
+  id: number; season: number; articleType: string; slug: string;
+  category: string; headline: string; subheadline?: string; body: string;
+  byline?: string; isPredicted: boolean; createdAt: string;
 }
 
-// ── Game type config ──────────────────────────────────────────────────────────
-
-const GAME_TYPE_CFG = {
-  blowout:     { color: "text-red-400",     bg: "bg-red-500/10 border-red-500/30",     label: "BLOWOUT"    },
-  comfortable: { color: "text-amber-400",   bg: "bg-amber-500/10 border-amber-500/30", label: "COMFORTABLE"},
-  close:       { color: "text-sky-400",     bg: "bg-sky-500/10 border-sky-500/30",     label: "CLOSE GAME" },
-  nailbiter:   { color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30", label: "NAIL-BITER" },
+const ARTICLE_TYPE_CFG: Record<string, { icon: any; color: string; label: string; bg: string }> = {
+  championship_march: { icon: Trophy,     color: "text-amber-400",   label: "Championship March", bg: "bg-amber-500/10 border-amber-500/30" },
+  keeper_preview:     { icon: Zap,        color: "text-emerald-400", label: "Keeper Preview",     bg: "bg-emerald-500/10 border-emerald-500/30" },
+  roster_construction:{ icon: Sparkles,   color: "text-sky-400",     label: "Roster Report",      bg: "bg-sky-500/10 border-sky-500/30" },
+  season_archive:     { icon: Archive,    color: "text-zinc-400",    label: "Season Archive",     bg: "bg-zinc-800 border-zinc-700" },
 };
 
-// ── Score box ─────────────────────────────────────────────────────────────────
+// ── Markdown-lite renderer ─────────────────────────────────────────────────────
 
-function ScoreBox({ team, isWinner }: { team: TeamSide; isWinner: boolean }) {
+function ArticleBody({ body }: { body: string }) {
+  const lines = body.split("\n");
   return (
-    <div className={cn("flex flex-col items-center gap-1 px-4 py-3 rounded-lg min-w-[100px]",
-      isWinner ? "bg-emerald-500/10 border border-emerald-500/25" : "bg-zinc-800/40 border border-zinc-700/40"
-    )}>
-      {isWinner && <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400 mb-0.5">WINNER</span>}
-      <span className={cn("text-3xl font-black tabular-nums tracking-tight",
-        isWinner ? "text-white" : "text-zinc-500"
-      )}>{team.score.toFixed(2)}</span>
-      <span className={cn("text-[11px] font-bold text-center leading-tight max-w-[110px] truncate",
-        isWinner ? "text-zinc-200" : "text-zinc-500"
-      )}>{team.name}</span>
-      <span className={cn("text-[10px] text-center leading-tight max-w-[110px] truncate",
-        isWinner ? "text-zinc-400" : "text-zinc-600"
-      )}>{team.ownerName.replace(/[()]/g, "")}</span>
+    <div className="prose prose-invert prose-sm max-w-none text-zinc-300 space-y-2">
+      {lines.map((line, i) => {
+        if (!line.trim()) return <div key={i} className="h-2" />;
+        if (line.startsWith("**") && line.endsWith("**") && line.length > 4) {
+          return <h3 key={i} className="text-zinc-100 font-black text-base mt-4">{line.slice(2, -2)}</h3>;
+        }
+        if (line.startsWith("*") && line.endsWith("*") && !line.startsWith("**")) {
+          return <p key={i} className="text-zinc-500 italic text-xs">{line.slice(1, -1)}</p>;
+        }
+        if (line.startsWith("**Evidence:")) {
+          return <p key={i} className="text-[10px] text-zinc-600 border-t border-zinc-800 pt-2 mt-3">{line.replace(/\*\*/g,"")}</p>;
+        }
+        return <p key={i} className="text-sm leading-relaxed">{line}</p>;
+      })}
     </div>
   );
 }
 
-// ── Single matchup card ───────────────────────────────────────────────────────
+// ── Article card ───────────────────────────────────────────────────────────────
 
-function MatchupCard({ report }: { report: MatchupReport }) {
-  const [copied, setCopied] = useState(false);
-  const gtCfg = report.gameType ? GAME_TYPE_CFG[report.gameType] : null;
+function ArticleCard({ article, onOpen }: { article: Article; onOpen: (a: Article) => void }) {
+  const cfg = ARTICLE_TYPE_CFG[article.articleType] ?? ARTICLE_TYPE_CFG.season_archive;
+  const Icon = cfg.icon;
+  const preview = article.body.replace(/\*\*/g, "").replace(/\*/g, "").split("\n").filter(l => l.trim() && !l.startsWith("Evidence")).slice(2, 4).join(" ").slice(0, 180);
 
-  function copyShareable() {
-    navigator.clipboard?.writeText(report.shareableLine);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  return (
+    <button
+      onClick={() => onOpen(article)}
+      className="text-left rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-4 hover:border-zinc-600/60 hover:bg-zinc-800/40 transition-all group w-full"
+    >
+      <div className="flex items-start gap-3">
+        <div className={cn("p-2 rounded-lg border shrink-0 mt-0.5", cfg.bg)}>
+          <Icon className={cn("h-3.5 w-3.5", cfg.color)} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <span className={cn("text-[9px] font-black uppercase tracking-widest", cfg.color)}>{cfg.label}</span>
+            <span className="text-zinc-700 text-[9px]">· {article.season}</span>
+            {article.isPredicted && (
+              <span className="text-[8px] font-bold uppercase text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1 rounded">PREDICTED</span>
+            )}
+          </div>
+          <h3 className="font-bold text-zinc-100 text-sm leading-snug group-hover:text-white line-clamp-2">{article.headline}</h3>
+          {preview && <p className="text-zinc-500 text-[11px] mt-1.5 leading-relaxed line-clamp-2">{preview}…</p>}
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-[10px] text-zinc-600">{article.byline ?? "League Wire Staff"}</span>
+            <span className="text-zinc-700">·</span>
+            <span className="text-[10px] text-zinc-700">{new Date(article.createdAt).toLocaleDateString()}</span>
+            <ChevronRight className="h-3 w-3 text-zinc-700 ml-auto group-hover:text-zinc-400 transition-colors" />
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ── Article reader ─────────────────────────────────────────────────────────────
+
+function ArticleReader({ article, onClose }: { article: Article; onClose: () => void }) {
+  const cfg = ARTICLE_TYPE_CFG[article.articleType] ?? ARTICLE_TYPE_CFG.season_archive;
+  const Icon = cfg.icon;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-zinc-950/95 backdrop-blur overflow-y-auto">
+      <div className="max-w-3xl mx-auto px-6 py-8">
+        <button onClick={onClose} className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors mb-6">
+          ← Back to Newsroom
+        </button>
+
+        {/* Article header */}
+        <div className="border-b-2 border-zinc-800 pb-6 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <div className={cn("p-1.5 rounded-lg border", cfg.bg)}>
+              <Icon className={cn("h-3.5 w-3.5", cfg.color)} />
+            </div>
+            <span className={cn("text-[10px] font-black uppercase tracking-widest", cfg.color)}>{cfg.label}</span>
+            <span className="text-zinc-600 text-[10px]">· {LEAGUE_NAME} · Season {article.season}</span>
+            {article.isPredicted && (
+              <span className="text-[9px] font-bold uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded ml-auto">PREDICTED — NOT OFFICIAL</span>
+            )}
+          </div>
+          <h1 className="text-2xl font-black text-white leading-tight mb-2">{article.headline}</h1>
+          {article.subheadline && <p className="text-zinc-400 text-sm italic">{article.subheadline}</p>}
+          <div className="flex items-center gap-3 mt-3 text-[11px] text-zinc-600">
+            <span>{article.byline ?? "League Wire Staff"}</span>
+            <span>·</span>
+            <span>{new Date(article.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>
+          </div>
+        </div>
+
+        {/* Article body */}
+        <ArticleBody body={article.body} />
+
+        {/* AI disclaimer */}
+        <div className="mt-8 p-3 rounded-lg border border-zinc-800/40 bg-zinc-900/20 flex items-start gap-2">
+          <AlertCircle className="h-3.5 w-3.5 text-zinc-600 shrink-0 mt-0.5" />
+          <p className="text-[10px] text-zinc-600 leading-relaxed">
+            Generated by League Wire AI from verified database records. All scores, records, and standings are sourced directly from the {LEAGUE_NAME} database. No statistics were fabricated.
+            {article.isPredicted && " Keeper predictions are estimated from historical data and are NOT official decisions."}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Generate button ────────────────────────────────────────────────────────────
+
+function GenerateControls({ onRefresh }: { onRefresh: () => void }) {
+  const _trpc = trpc as any;
+  const [status, setStatus] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+
+  const genAll   = _trpc.leagueNewsroom.generateAllChampionshipMarches.useMutation();
+  const genRoster = _trpc.leagueNewsroom.generateRosterConstruction.useMutation();
+  const genKeeper = _trpc.leagueNewsroom.generateKeeperPreviews.useMutation();
+
+  async function handleGenAll() {
+    setLoading(true);
+    setStatus("Generating championship march articles for all seasons…");
+    try {
+      const r = await genAll.mutateAsync();
+      const done = r.results?.filter((x: any) => x.status === "generated").length ?? 0;
+      const cached = r.results?.filter((x: any) => x.status === "cached").length ?? 0;
+      setStatus(`✓ Generated ${done} new articles (${cached} already cached)`);
+      onRefresh();
+    } catch (e: any) {
+      setStatus(`Error: ${e.message}`);
+    } finally { setLoading(false); }
   }
 
-  if (!report.isCompleted || !report.winner || !report.loser) {
-    return (
-      <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-5">
-        <p className="text-zinc-500 text-sm">Matchup not yet completed.</p>
-      </div>
-    );
+  async function handleRoster() {
+    setLoading(true);
+    setStatus("Generating 2026 roster construction report…");
+    try {
+      const r = await genRoster.mutateAsync({ season: 2026 });
+      setStatus(`✓ ${r.headline}`);
+      onRefresh();
+    } catch (e: any) { setStatus(`Error: ${e.message}`); }
+    finally { setLoading(false); }
+  }
+
+  async function handleKeeper() {
+    setLoading(true);
+    setStatus("Generating keeper preview article…");
+    try {
+      const r = await genKeeper.mutateAsync({ draftYear: new Date().getFullYear() });
+      setStatus(`✓ ${r.headline}`);
+      onRefresh();
+    } catch (e: any) { setStatus(`Error: ${e.message}`); }
+    finally { setLoading(false); }
   }
 
   return (
-    <div className={cn(
-      "rounded-xl border bg-zinc-900/50 overflow-hidden",
-      report.isPlayoff ? "border-amber-500/30" : "border-zinc-800/60"
-    )}>
-      {/* Playoff banner */}
-      {report.isPlayoff && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1.5 flex items-center gap-2">
-          <Trophy className="h-3 w-3 text-amber-400" />
-          <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">Playoff Game</span>
-        </div>
-      )}
-
-      {/* Score header */}
-      <div className="p-5">
-        <div className="flex items-center justify-between gap-4 mb-4">
-          <ScoreBox team={report.winner} isWinner={true} />
-          <div className="flex flex-col items-center gap-1">
-            {gtCfg && (
-              <span className={cn("text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border", gtCfg.bg, gtCfg.color)}>
-                {gtCfg.label}
-              </span>
-            )}
-            <ArrowRight className="h-4 w-4 text-zinc-600" />
-            <span className="text-xs text-zinc-600 font-mono">+{report.margin?.toFixed(2)}</span>
-          </div>
-          <ScoreBox team={report.loser} isWinner={false} />
-        </div>
-
-        {/* Headline */}
-        <h3 className="text-sm font-bold text-zinc-100 leading-snug mb-2">{report.headline}</h3>
-
-        {/* Short recap */}
-        <p className="text-xs text-zinc-400 leading-relaxed">{report.shortRecap}</p>
+    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-emerald-400" />
+        <span className="text-sm font-bold text-zinc-200">Generate Articles</span>
       </div>
-
-      {/* Stats strip */}
-      {report.keyStat && (
-        <div className="border-t border-zinc-800/40 px-5 py-3 flex items-center gap-3 bg-zinc-900/30">
-          <Zap className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{report.keyStat.label}:</span>
-            <span className="text-xs font-bold text-zinc-200 ml-1.5">{report.keyStat.value}</span>
-            <span className="text-[10px] text-zinc-600 ml-1.5">— {report.keyStat.evidence}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Conditional insight cards */}
-      <div className="border-t border-zinc-800/40 divide-y divide-zinc-800/30">
-
-        {/* Rivalry note */}
-        {report.rivalryNote && (
-          <div className="px-5 py-3 flex items-start gap-3">
-            <Swords className="h-3.5 w-3.5 text-violet-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-violet-400">Series Record</span>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                {report.winner.name} now leads {report.loser.name}{" "}
-                <span className="font-bold text-zinc-200">{report.rivalryNote.seriesRecord}</span> in their H2H series.{" "}
-                <span className="text-zinc-600">({report.rivalryNote.evidence})</span>
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Playoff impact */}
-        {report.playoffImpact && (
-          <div className="px-5 py-3 flex items-start gap-3">
-            <TrendingUp className="h-3.5 w-3.5 text-sky-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-sky-400">Standings Impact</span>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                <span className="text-zinc-200 font-semibold">{report.winner.name}</span>{" "}
-                moves to <span className="font-bold text-emerald-400">{report.playoffImpact.winnerRecord}</span>.{" "}
-                <span className="text-zinc-200 font-semibold">{report.loser.name}</span>{" "}
-                falls to <span className="font-bold text-rose-400">{report.playoffImpact.loserRecord}</span>.{" "}
-                <span className="text-zinc-600">({report.playoffImpact.evidence})</span>
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Hidden sections with guardrail note */}
-        <div className="px-5 py-2.5 flex items-center gap-2">
-          <AlertCircle className="h-3 w-3 text-zinc-700 shrink-0" />
-          <span className="text-[10px] text-zinc-700">
-            Player of the game &amp; bench regret hidden — weekly player stats not yet populated.
-          </span>
-        </div>
-      </div>
-
-      {/* Shareable footer */}
-      <div className="border-t border-zinc-800/40 px-5 py-3 flex items-center justify-between gap-3 bg-zinc-900/20">
-        <span className="text-[10px] text-zinc-600 font-mono truncate flex-1">{report.shareableLine}</span>
-        <button onClick={copyShareable}
-          className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400 hover:text-zinc-200 transition-colors shrink-0">
-          <Share2 className="h-3 w-3" />
-          {copied ? "Copied!" : "Copy"}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={handleGenAll}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+        >
+          <Trophy className="h-3 w-3" />
+          All Championship Marches
+        </button>
+        <button
+          onClick={handleRoster}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs font-bold hover:bg-sky-500/20 transition-colors disabled:opacity-50"
+        >
+          <Sparkles className="h-3 w-3" />
+          2026 Roster Report
+        </button>
+        <button
+          onClick={handleKeeper}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+        >
+          <Zap className="h-3 w-3" />
+          Keeper Preview
         </button>
       </div>
-    </div>
-  );
-}
-
-// ── Week selector ─────────────────────────────────────────────────────────────
-
-function WeekSelector({
-  weeks, season, week,
-  onSelect
-}: {
-  weeks: { season: number; week: number; count: number }[];
-  season: number; week: number;
-  onSelect: (s: number, w: number) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const seasons = [...new Set(weeks.map(w => w.season))].sort((a, b) => b - a);
-
-  return (
-    <div className="relative">
-      <button onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-sm text-zinc-200 hover:border-zinc-500 transition-colors font-medium">
-        <Radio className="h-3.5 w-3.5 text-emerald-400" />
-        Season {season} — Week {week}
-        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
-      </button>
-      {open && (
-        <div className="absolute top-full mt-1 left-0 w-60 rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl z-20 overflow-hidden max-h-80 overflow-y-auto">
-          {seasons.map(s => (
-            <div key={s}>
-              <div className="px-3 py-1.5 bg-zinc-800/60 text-[10px] font-black uppercase tracking-widest text-zinc-500 sticky top-0">
-                {s} Season
-              </div>
-              {weeks.filter(w => w.season === s).map(w => (
-                <button key={`${w.season}-${w.week}`}
-                  onClick={() => { onSelect(w.season, w.week); setOpen(false); }}
-                  className={cn(
-                    "w-full text-left px-4 py-2 text-sm transition-colors hover:bg-zinc-800",
-                    w.season === season && w.week === week
-                      ? "text-emerald-400 font-bold bg-emerald-500/5"
-                      : "text-zinc-400"
-                  )}>
-                  Week {w.week} <span className="text-zinc-600 text-xs">({w.count} games)</span>
-                </button>
-              ))}
-            </div>
-          ))}
+      {(loading || status) && (
+        <div className="flex items-center gap-2 text-xs">
+          {loading && <Loader2 className="h-3 w-3 animate-spin text-emerald-400" />}
+          <span className={loading ? "text-zinc-400" : "text-emerald-400"}>{status}</span>
         </div>
       )}
     </div>
   );
 }
+
+// ── League name constant ───────────────────────────────────────────────────────
+
+const LEAGUE_NAME = "ATLANTAS FINEST FF";
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function LeagueWire() {
   const _trpc = trpc as any;
+  const [view, setView]               = useState<"feed" | "archive">("feed");
+  const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
+  const [openArticle, setOpenArticle] = useState<Article | null>(null);
+  const [refreshKey, setRefreshKey]   = useState(0);
 
-  const { data: availableWeeks = [], isLoading: weeksLoading } =
-    _trpc.leagueWire.getAvailableWeeks.useQuery();
-
-  // Default to most recent completed week
-  const defaultWeek = availableWeeks[0] ?? null;
-  const [season, setSeason] = useState<number | null>(null);
-  const [week, setWeek]     = useState<number | null>(null);
-
-  const activeSeason = season ?? defaultWeek?.season ?? null;
-  const activeWeek   = week   ?? defaultWeek?.week   ?? null;
-
-  const { data: reports = [], isLoading: reportsLoading } =
-    _trpc.leagueWire.getPostgameReports.useQuery(
-      { season: activeSeason!, week: activeWeek! },
-      { enabled: activeSeason !== null && activeWeek !== null }
+  const { data: seasons = [] } = _trpc.leagueNewsroom.getArchiveSeasons.useQuery();
+  const { data: feedArticles = [], isLoading: feedLoading, refetch: refetchFeed } =
+    _trpc.leagueNewsroom.getNewsroomFeed.useQuery({ limit: 30 }, { queryKey: ["feed", refreshKey] });
+  const { data: seasonArticles = [], isLoading: seasonLoading } =
+    _trpc.leagueNewsroom.getSeasonArticles.useQuery(
+      { season: selectedSeason! },
+      { enabled: selectedSeason !== null }
     );
 
-  const isLoading = weeksLoading || reportsLoading;
+  // Also pull legacy wire reports
+  const { data: availableWeeks = [] } = _trpc.leagueWire.getAvailableWeeks.useQuery();
+  const latestWireWeek = useMemo(() => availableWeeks[0] ?? null, [availableWeeks]);
+  const { data: wireReports = [] } = _trpc.leagueWire.getPostgameReports.useQuery(
+    { season: latestWireWeek?.season, week: latestWireWeek?.week },
+    { enabled: latestWireWeek !== null }
+  );
 
-  function handleSelect(s: number, w: number) {
-    setSeason(s); setWeek(w);
-  }
+  const displayArticles = view === "archive" && selectedSeason ? seasonArticles : feedArticles;
+  const isLoading = view === "archive" && selectedSeason ? seasonLoading : feedLoading;
 
   return (
-    <div className="min-h-screen bg-[#09090e] text-zinc-100">
+    <div className="min-h-screen bg-[#08080d] text-zinc-100">
 
-      {/* Header */}
-      <div className="border-b border-zinc-800/80 bg-zinc-900/50 px-6 py-5">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5 mb-1">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
-                <Radio className="h-3.5 w-3.5 text-emerald-400" />
-              </div>
-              <h1 className="text-xl font-black tracking-tight text-white">League Wire</h1>
+      {/* Open article overlay */}
+      {openArticle && <ArticleReader article={openArticle} onClose={() => setOpenArticle(null)} />}
+
+      {/* Masthead */}
+      <div className="border-b border-zinc-800/80 bg-zinc-900/50">
+        <div className="max-w-6xl mx-auto px-6 py-5">
+          <div className="flex items-center gap-3 mb-1">
+            <Newspaper className="h-6 w-6 text-zinc-300" />
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-white leading-none">League Wire</h1>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-semibold mt-0.5">{LEAGUE_NAME} · Official Newsroom</p>
             </div>
-            <p className="text-xs text-zinc-500 ml-9">
-              Deterministic ESPN-style postgame reports · verified DB data only
-            </p>
           </div>
 
-          {availableWeeks.length > 0 && activeSeason !== null && activeWeek !== null && (
-            <WeekSelector
-              weeks={availableWeeks}
-              season={activeSeason}
-              week={activeWeek}
-              onSelect={handleSelect}
-            />
-          )}
+          {/* Nav tabs */}
+          <div className="flex items-center gap-0 mt-4 border-b border-zinc-800/60 -mb-[1px]">
+            <button onClick={() => { setView("feed"); setSelectedSeason(null); }}
+              className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors",
+                view === "feed" ? "border-zinc-100 text-zinc-100" : "border-transparent text-zinc-500 hover:text-zinc-300")}>
+              <Radio className="h-3 w-3 inline mr-1.5" />Latest News
+            </button>
+            <button onClick={() => setView("archive")}
+              className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors",
+                view === "archive" ? "border-amber-400 text-amber-400" : "border-transparent text-zinc-500 hover:text-zinc-300")}>
+              <BookOpen className="h-3 w-3 inline mr-1.5" />Historical Archive
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-5xl mx-auto px-6 py-6">
+      <div className="max-w-6xl mx-auto px-6 py-6 space-y-6">
 
-        {isLoading && (
-          <div className="flex items-center justify-center py-24 gap-2 text-zinc-500 text-sm">
-            <Radio className="h-4 w-4 animate-pulse text-emerald-400" />
-            Loading reports…
-          </div>
-        )}
-
-        {!isLoading && availableWeeks.length === 0 && (
-          <div className="text-center py-24 space-y-3">
-            <Radio className="h-8 w-8 text-zinc-700 mx-auto" />
-            <p className="text-zinc-400 font-semibold">No completed matchups found</p>
-            <p className="text-zinc-600 text-sm">Run a Full Import to bring in historical season data.</p>
-          </div>
-        )}
-
-        {!isLoading && reports.length > 0 && (
-          <>
-            {/* Week summary bar */}
-            <div className="flex items-center gap-3 mb-5">
-              <div className="text-sm font-black text-zinc-300">
-                Season {activeSeason} — Week {activeWeek}
-              </div>
-              <div className="flex-1 h-px bg-zinc-800/60" />
-              <div className="text-xs text-zinc-500">{reports.length} matchups</div>
-              <div className="text-xs text-zinc-500">
-                High: <span className="text-zinc-300 font-bold">
-                  {Math.max(...reports.flatMap((r: MatchupReport) => [r.winner?.score ?? 0, r.loser?.score ?? 0])).toFixed(2)}
-                </span>
-              </div>
-            </div>
-
-            {/* Matchup cards grid */}
-            <div className="grid gap-4 md:grid-cols-2">
-              {(reports as MatchupReport[]).map(r => (
-                <MatchupCard key={r.matchupId} report={r} />
+        {/* Archive season selector */}
+        {view === "archive" && (
+          <div>
+            <p className="text-xs text-zinc-500 mb-3 uppercase tracking-wider font-semibold">Select Season</p>
+            <div className="flex flex-wrap gap-2">
+              {(seasons as number[]).map(s => (
+                <button key={s} onClick={() => setSelectedSeason(s)}
+                  className={cn("px-3 py-1.5 rounded-lg text-sm font-bold border transition-all",
+                    selectedSeason === s
+                      ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
+                      : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
+                  )}>
+                  {s}
+                </button>
               ))}
             </div>
+          </div>
+        )}
 
-            {/* Data sources note */}
-            <div className="mt-6 p-3 rounded-lg border border-zinc-800/40 bg-zinc-900/20 flex items-start gap-2">
-              <AlertCircle className="h-3.5 w-3.5 text-zinc-600 shrink-0 mt-0.5" />
-              <p className="text-[10px] text-zinc-600 leading-relaxed">
-                All reports generated deterministically from verified database records (matchups · teams · standings).
-                Player of the game and bench regret sections are hidden until <code className="text-zinc-500">gm_weekly_player_stats</code> is populated via weekly sync.
-                No LLM inference. No estimated values.
-              </p>
+        {/* Generate controls */}
+        <GenerateControls onRefresh={() => setRefreshKey(k => k + 1)} />
+
+        {/* Live Wire reports (latest scores) - only in feed view */}
+        {view === "feed" && (wireReports as any[]).length > 0 && (
+          <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/20 overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-800/40">
+              <Radio className="h-3.5 w-3.5 text-emerald-400 animate-pulse" />
+              <span className="text-xs font-black text-zinc-200 uppercase tracking-wider">Live Wire</span>
+              <span className="text-[10px] text-zinc-600">Season {latestWireWeek?.season} · Week {latestWireWeek?.week}</span>
             </div>
-          </>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-px bg-zinc-800/30">
+              {(wireReports as any[]).filter(r => r.winner).map((r: any) => (
+                <div key={r.matchupId} className="p-3 bg-zinc-900/60">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-zinc-100 truncate max-w-[140px]">{r.winner.name}</div>
+                      <div className="text-[10px] text-zinc-600 truncate max-w-[140px]">{r.loser?.name}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-black text-emerald-400 tabular-nums">{r.winner.score.toFixed(2)}</div>
+                      <div className="text-xs text-zinc-600 tabular-nums">{r.loser?.score.toFixed(2)}</div>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 mt-1.5 line-clamp-1">{r.shortRecap?.split(".")[0]}.</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Articles */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16 gap-2 text-zinc-500 text-sm">
+            <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+            Loading articles…
+          </div>
+        ) : (displayArticles as Article[]).length === 0 ? (
+          <div className="text-center py-20 space-y-4">
+            <FileText className="h-8 w-8 text-zinc-700 mx-auto" />
+            <p className="text-zinc-400 font-semibold">
+              {view === "archive" && selectedSeason ? `No articles for ${selectedSeason} yet` : "No articles yet"}
+            </p>
+            <p className="text-zinc-600 text-sm">
+              Use the Generate Articles buttons above to create the first League Wire stories.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <h2 className="text-xs font-black uppercase tracking-widest text-zinc-500">
+                {view === "archive" && selectedSeason ? `${selectedSeason} Season Archive` : "Latest Stories"}
+              </h2>
+              <div className="flex-1 h-px bg-zinc-800/60" />
+              <span className="text-[10px] text-zinc-600">{(displayArticles as Article[]).length} articles</span>
+            </div>
+
+            {/* Championship march gets featured treatment */}
+            {(() => {
+              const champArticle = (displayArticles as Article[]).find(a => a.articleType === "championship_march");
+              const otherArticles = (displayArticles as Article[]).filter(a => a.articleType !== "championship_march" || a.id !== champArticle?.id);
+
+              return (
+                <div className="space-y-6">
+                  {champArticle && (
+                    <button
+                      onClick={() => setOpenArticle(champArticle)}
+                      className="w-full text-left rounded-xl border border-amber-500/25 bg-gradient-to-br from-amber-500/5 to-zinc-900/60 p-5 hover:border-amber-500/40 transition-all group"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Trophy className="h-4 w-4 text-amber-400" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">Championship March · {champArticle.season}</span>
+                      </div>
+                      <h2 className="text-xl font-black text-white leading-snug group-hover:text-amber-100 transition-colors mb-2">
+                        {champArticle.headline}
+                      </h2>
+                      <p className="text-zinc-400 text-sm leading-relaxed line-clamp-3">
+                        {champArticle.body.replace(/\*\*/g,"").replace(/\*/g,"").split("\n").filter(l => l.trim()).slice(3,5).join(" ").slice(0, 250)}…
+                      </p>
+                      <div className="flex items-center gap-2 mt-3 text-[10px] text-zinc-600">
+                        <span>{champArticle.byline}</span>
+                        <span>·</span>
+                        <span>{new Date(champArticle.createdAt).toLocaleDateString()}</span>
+                        <ChevronRight className="h-3 w-3 ml-auto text-zinc-700 group-hover:text-amber-400 transition-colors" />
+                      </div>
+                    </button>
+                  )}
+
+                  {otherArticles.length > 0 && (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {otherArticles.map(a => <ArticleCard key={a.id} article={a} onOpen={setOpenArticle} />)}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Archive index — seasons with articles */}
+        {view === "feed" && (seasons as number[]).length > 0 && (
+          <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/20 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Archive className="h-3.5 w-3.5 text-zinc-500" />
+              <span className="text-xs font-black uppercase tracking-wider text-zinc-500">Historical Archive</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(seasons as number[]).map(s => (
+                <button key={s} onClick={() => { setView("archive"); setSelectedSeason(s); }}
+                  className="px-2.5 py-1 rounded text-xs font-bold border border-zinc-800 text-zinc-600 hover:border-amber-500/40 hover:text-amber-400 transition-colors">
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
