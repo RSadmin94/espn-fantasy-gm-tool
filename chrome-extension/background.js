@@ -357,6 +357,10 @@ async function removeSaveCredentialsCookieRule() {
 const TRPC_PARSED_DRAFT_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestParsedDraftPicks`;
 const TRPC_LEGACY_DRAFT_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestLegacyDraftRecap`;
 const TRPC_SEASON_ROSTER_INGEST_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestSeasonRosters`;
+// ─── P2 player stats (uses playerStatsCache tRPC router) ───
+const TRPC_SAVE_PLAYER_STATS_URL   = `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCache.saveWeeklyPlayerStats`;
+const TRPC_PLAYER_STATS_STATUS_URL = `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCache.getPlayerStatsCacheStatus`;
+const MSG_SYNC_PLAYER_STATS        = "GMWR_SYNC_PLAYER_STATS";
 const TRPC_IMPORT_DRAFT_API_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.importDraftFromEspnApi`;
 const TRPC_HIST_STATUS_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.historicalImportStatus`;
 const DNR_TRPC_HIST_RULE_ID = 8844210;
@@ -450,6 +454,30 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
+      {
+        id: DNR_TRPC_HIST_RULE_ID + 5,
+        priority: 1,
+        action: {
+          type: "modifyHeaders",
+          requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
+        },
+        condition: {
+          urlFilter: "https://gmwarroom.online/api/trpc/playerStatsCache.saveWeeklyPlayerStats*",
+          resourceTypes: ["xmlhttprequest", "other"],
+        },
+      },
+      {
+        id: DNR_TRPC_HIST_RULE_ID + 6,
+        priority: 1,
+        action: {
+          type: "modifyHeaders",
+          requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
+        },
+        condition: {
+          urlFilter: "https://gmwarroom.online/api/trpc/playerStatsCache.getPlayerStatsCacheStatus*",
+          resourceTypes: ["xmlhttprequest", "other"],
+        },
+      },
     ],
   });
 }
@@ -457,7 +485,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
 async function removeWarRoomTrpcHistRule() {
   try {
     await chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1, DNR_TRPC_HIST_RULE_ID + 2, DNR_TRPC_HIST_RULE_ID + 3, DNR_TRPC_HIST_RULE_ID + 4],
+      removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1, DNR_TRPC_HIST_RULE_ID + 2, DNR_TRPC_HIST_RULE_ID + 3, DNR_TRPC_HIST_RULE_ID + 4, DNR_TRPC_HIST_RULE_ID + 5, DNR_TRPC_HIST_RULE_ID + 6],
     });
   } catch {
     /* ignore */
@@ -2202,6 +2230,150 @@ async function postSaveCredentials({ swid, espnS2, leagueId, warRoomCookieHeader
   }
 }
 
+
+// ─── P2: Sync Weekly Player Stats ───────────────────────────────────────────
+/**
+ * handleSyncPlayerStats
+ * For each season/week, fetches mMatchupScore from ESPN (using the extension's
+ * existing DNR-injected ESPN session), POSTs the raw payload to
+ * playerStatsCache.saveWeeklyPlayerStats, and returns a progress summary.
+ *
+ * No league_connections, no SWID lookup, no espn_s2 lookup.
+ * Uses: fetchEspnJsonWithBackoff (existing) + postTrpcHistJson (existing).
+ */
+async function handleSyncPlayerStats({ leagueId, seasons, skipExisting, sendUpdate }) {
+  const lid = String(leagueId || "457622").trim();
+  const WEEKS = 17; // regular season + one playoff buffer
+  const DELAY_MS = 700; // between ESPN requests
+
+  const warRoomCookieHeader = await getWarRoomCookieHeaderString();
+
+  // Load already-cached weeks from the server to support skip-existing
+  let cachedSet = new Set();
+  if (skipExisting) {
+    try {
+      await applyWarRoomTrpcHistRule(warRoomCookieHeader);
+      const statusRes = await fetch(TRPC_PLAYER_STATS_STATUS_URL, {
+        credentials: "include",
+      });
+      await removeWarRoomTrpcHistRule();
+      if (statusRes.ok) {
+        const json = await statusRes.json();
+        const data = json?.result?.data?.json ?? json?.result?.data ?? {};
+        for (const row of data.seasons || []) {
+          // cachedSet entries: "season:week" — we only know season-level count,
+          // so we can't skip individual weeks here. Skip entire seasons if all
+          // weeks are already present.
+          if (row.cachedWeeks >= WEEKS) {
+            for (let w = 1; w <= WEEKS; w++) cachedSet.add(`${row.season}:${w}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[GMWR:playerStats] status check failed", e);
+    }
+  }
+
+  const summary = [];
+  let totalWeeksFetched = 0;
+  let totalPlayerEntries = 0;
+  let totalCacheWrites = 0;
+
+  for (const season of seasons) {
+    const seasonResult = {
+      season,
+      weeksAttempted: 0,
+      weeksFetched: 0,
+      weeksSkipped: 0,
+      weeksEmpty: 0,
+      weeksFailed: 0,
+      playerEntries: 0,
+      error: null,
+    };
+
+    for (let week = 1; week <= WEEKS; week++) {
+      if (cachedSet.has(`${season}:${week}`)) {
+        seasonResult.weeksSkipped++;
+        continue;
+      }
+
+      seasonResult.weeksAttempted++;
+
+      const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${lid}?view=mMatchupScore&scoringPeriodId=${week}&matchupPeriodId=${week}`;
+
+      await new Promise(r => setTimeout(r, DELAY_MS));
+      const r = await fetchEspnJsonWithBackoff(url, { label: `playerStats:${season}:${week}` });
+
+      if (!r.ok) {
+        if (r.error === "ESPN login expired" || r.status === 401 || r.status === 403) {
+          seasonResult.error = "ESPN login expired";
+          break; // stop this season
+        }
+        if (r.status === 404) {
+          seasonResult.weeksEmpty++;
+          break; // no data for this season onward
+        }
+        seasonResult.weeksFailed++;
+        continue;
+      }
+
+      if (!r.data) { seasonResult.weeksEmpty++; continue; }
+
+      // Count player entries before posting
+      let entryCount = 0;
+      const sched = r.data.schedule || [];
+      for (const m of sched) {
+        for (const side of ["home", "away"]) {
+          const team = m[side];
+          const entries =
+            team?.rosterForCurrentScoringPeriod?.entries ??
+            team?.rosterForMatchupPeriod?.entries ?? [];
+          entryCount += entries.length;
+        }
+      }
+
+      if (entryCount === 0) {
+        seasonResult.weeksEmpty++;
+        continue;
+      }
+
+      // POST to server
+      const post = await postTrpcHistJson(
+        TRPC_SAVE_PLAYER_STATS_URL,
+        warRoomCookieHeader,
+        { season, week, payload: r.data },
+        null
+      );
+
+      if (post.ok) {
+        seasonResult.weeksFetched++;
+        seasonResult.playerEntries += entryCount;
+        totalCacheWrites++;
+        totalPlayerEntries += entryCount;
+        totalWeeksFetched++;
+      } else {
+        seasonResult.weeksFailed++;
+        console.warn("[GMWR:playerStats] POST failed", { season, week, error: post.error });
+      }
+
+      if (sendUpdate) {
+        sendUpdate({ type: "progress", season, week, entryCount, ok: post.ok });
+      }
+    }
+
+    summary.push(seasonResult);
+    console.info("[GMWR:playerStats] season done", seasonResult);
+  }
+
+  return {
+    ok: true,
+    seasons: summary,
+    totalWeeksFetched,
+    totalPlayerEntries,
+    totalCacheWrites,
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const t = message?.type;
 
@@ -2873,6 +3045,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       onceRespondRoster({ ok: allOk, results, leagueId });
     })().catch((err) => {
       onceRespondRoster({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    });
+    return true;
+  }
+
+
+  // ─── P2: Sync Weekly Player Stats ────────────────────────────────────────
+  if (t === MSG_SYNC_PLAYER_STATS) {
+    let responded = false;
+    const onceRespond = (v) => { if (!responded) { responded = true; sendResponse(v); } };
+
+    ;(async () => {
+      const leagueId  = String(message?.leagueId || "457622").trim();
+      const seasons   = Array.isArray(message?.seasons) ? message.seasons : [2018,2019,2020,2021,2022,2023,2024,2025];
+      const skipExisting = Boolean(message?.skipExisting ?? true);
+
+      const result = await handleSyncPlayerStats({
+        leagueId,
+        seasons,
+        skipExisting,
+        sendUpdate: null,
+      });
+
+      onceRespond(result);
+    })().catch((err) => {
+      onceRespond({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
     return true;
   }
