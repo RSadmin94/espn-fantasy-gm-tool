@@ -29,6 +29,7 @@ const SLOT_MAP: Record<number, string> = {
 
 const LINEUP_REQS: Record<string, number> = {
   QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2, K: 1,
+  // DEF removed — this league uses individual defensive players (DL, LB, DB, S, CB)
 };
 
 // Position-round expected value (projected pts per round, avg)
@@ -93,7 +94,8 @@ function calcKVS(params: {
     ? (projectedPoints / expectedAtRound) * scarcity * 100
     : 0;
 
-  const kvs = Math.round(Math.min(200, Math.max(0, raw)));
+  const kvsRaw = Math.round(Math.max(0, raw));           // uncapped — used for sorting
+  const kvs    = Math.round(Math.min(200, kvsRaw));         // capped at 200 — used for display
   const surplus = Math.round(projectedPoints - expectedAtRound);
   const surplusLabel = surplus > 50 ? "ELITE VALUE" : surplus > 20 ? "GOOD VALUE" : surplus > 0 ? "SLIGHT VALUE" : surplus > -30 ? "FAIR" : "OVERPAY";
 
@@ -469,7 +471,7 @@ function predictKeepers(teams: any[], byTeam: Map<number, any[]>, keeperSlots: a
           const kvsResult = calcKVS({ projectedPoints: p.projectedPoints, position: p.position, keeperRound });
           return { ...p, ...kvsResult };
         })
-        .sort((a, b) => b.kvs - a.kvs);
+        .sort((a, b) => (b.kvsRaw ?? b.kvs) - (a.kvsRaw ?? a.kvs));
 
       const best = candidates[0];
       if (!best) {

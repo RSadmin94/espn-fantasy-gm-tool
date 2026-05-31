@@ -912,7 +912,7 @@ export function DraftWarRoom() {
                 <Zap className="h-4 w-4 text-emerald-400" />
               </div>
               <h1 className="text-xl font-black tracking-tight text-white">Draft War Room</h1>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 ml-1">{season} · Phase 1.5</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 ml-1">{season} · Phase 1.75</span>
             </div>
             <p className="text-xs text-zinc-500 ml-10">
               League-specific behavioral prediction · {teamCount} teams · {totalPicks} picks · {maxRound} rounds
@@ -938,6 +938,18 @@ export function DraftWarRoom() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-5">
+
+        {/* Diagnostic strip */}
+        <div className="flex items-center gap-4 px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800/40 text-[10px] font-mono text-zinc-600 flex-wrap">
+          <span className="text-zinc-500 font-bold">DIAGNOSTICS</span>
+          <span>Route: <span className="text-emerald-400">/draft-war-room ✓</span></span>
+          <span>Data: <span className="text-emerald-400">{data?.ok ? "loaded ✓" : "error"}</span></span>
+          <span>Teams: <span className="text-zinc-300">{teamCount}</span></span>
+          <span>Keepers: <span className="text-zinc-300">{keeperPredictions?.length ?? 0}</span></span>
+          <span>Players: <span className="text-zinc-300">{(rosterNeeds ?? []).reduce((s:number, n:any) => s + Object.values(n.positionCounts ?? {}).reduce((a:number,b:any) => a + (b as number), 0), 0)}</span></span>
+          <span>Mock Picks: <span className={totalPicks > 0 ? "text-emerald-400" : "text-red-400"}>{totalPicks} {totalPicks > 0 ? "✓" : "⚠ EMPTY"}</span></span>
+          <span>Build: <span className="text-amber-400">18fd312-fix</span></span>
+        </div>
 
         {/* Disclaimer */}
         <div className="flex items-center gap-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800/60 text-[10px] text-zinc-500">
@@ -995,7 +1007,7 @@ export function DraftWarRoom() {
         </Section>
 
         {/* 10. Mock Draft Board */}
-        <Section title="Mock Draft Board" icon={Target} badge={totalPicks} defaultOpen={false}>
+        <Section title="Mock Draft Board" icon={Target} badge={totalPicks} defaultOpen={true}>
           <MockDraftBoard picks={mockDraft ?? []}
             teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))} />
         </Section>

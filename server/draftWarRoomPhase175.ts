@@ -77,7 +77,7 @@ export function calcKeeperCompression(
   keeperPredictions: any[],
   playerPool: Array<{ name: string; position: string; projectedPoints: number }>,
 ): KeeperCompressionResult[] {
-  const positions = ["QB", "RB", "WR", "TE", "K", "DEF"];
+  const positions = ["QB", "RB", "WR", "TE", "K"]; // DEF excluded: league uses DL/LB/DB individuals
   const results: KeeperCompressionResult[] = [];
 
   // Count keepers per position (only those with known position)
@@ -145,7 +145,7 @@ export function calcScarcityAlerts(params: {
   totalRounds:       number;
 }): ScarcityAlert[] {
   const { rosterNeeds, playerPool, keeperPredictions, totalTeams, totalRounds } = params;
-  const positions = ["QB", "RB", "WR", "TE", "K", "DEF"];
+  const positions = ["QB", "RB", "WR", "TE", "K"]; // DEF excluded: league uses DL/LB/DB individuals
   const alerts: ScarcityAlert[] = [];
 
   // Players already locked by keepers
@@ -219,7 +219,7 @@ export function calcPositionRunAlerts(params: {
   totalTeams:        number;
 }): PositionRunAlert[] {
   const { rosterNeeds, scarcityAlerts, keeperPredictions, mockDraft, totalTeams } = params;
-  const positions = ["QB", "RB", "WR", "TE", "K", "DEF"];
+  const positions = ["QB", "RB", "WR", "TE", "K"]; // DEF excluded: league uses DL/LB/DB individuals
   const alerts: PositionRunAlert[] = [];
 
   for (const pos of positions) {
@@ -307,7 +307,7 @@ export function calcDraftBoardPressure(params: {
   totalRounds:       number;
 }): PressureByRound[] {
   const { rosterNeeds, scarcityAlerts, totalTeams, totalRounds } = params;
-  const positions = ["QB", "RB", "WR", "TE", "K", "DEF"];
+  const positions = ["QB", "RB", "WR", "TE", "K"]; // DEF excluded: league uses DL/LB/DB individuals
   const rounds: PressureByRound[] = [];
 
   // Running remaining supply (start from elite supply)
