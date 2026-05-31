@@ -2559,6 +2559,39 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const last5 = parsedPicks.slice(-5);
       console.info("[GMWR:BG] sending success response", { season: TEST_SEASON, picks: picksPayload.length });
 
+
+      // ── Player stats fetch for TEST_SEASON ──────────────────────────────
+      const warRoomCookieHeader = await getWarRoomCookieHeaderString();
+      const playerStatsResults = { season: TEST_SEASON, weeksFetched: 0, weeksFailed: 0, weeksEmpty: 0, error: null };
+      if (warRoomCookieHeader) {
+        for (let week = 1; week <= 17; week++) {
+          await sleep(400);
+          const statsUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${TEST_SEASON}/segments/0/leagues/${TEST_LEAGUE}?view=mMatchupScore&scoringPeriodId=${week}&matchupPeriodId=${week}`;
+          console.info("[GMWR:diag] POST →", statsUrl);
+          const sr = await fetchEspnJsonWithBackoff(statsUrl, { label: `playerStats:${TEST_SEASON}:${week}` });
+          if (!sr.ok) {
+            if (sr.status === 401 || sr.status === 403 || sr.error === "ESPN login expired") { playerStatsResults.error = "ESPN_login_expired"; break; }
+            if (sr.status === 404) { playerStatsResults.weeksEmpty++; break; }
+            playerStatsResults.weeksFailed++;
+            continue;
+          }
+          if (!sr.data) { playerStatsResults.weeksEmpty++; continue; }
+          let entryCount = 0;
+          for (const m of (sr.data.schedule || [])) {
+            for (const side of ["home", "away"]) {
+              const entries = m[side]?.rosterForCurrentScoringPeriod?.entries ?? m[side]?.rosterForMatchupPeriod?.entries ?? [];
+              entryCount += entries.length;
+            }
+          }
+          if (entryCount === 0) { playerStatsResults.weeksEmpty++; continue; }
+          const post = await postTrpcHistJson(TRPC_SAVE_PLAYER_STATS_URL, warRoomCookieHeader, { season: TEST_SEASON, week, payload: sr.data }, null);
+          if (post.ok) { playerStatsResults.weeksFetched++; }
+          else { playerStatsResults.weeksFailed++; playerStatsResults.error = post.error; }
+        }
+      } else {
+        playerStatsResults.error = "warRoom_session_missing";
+      }
+
       onceRespond({
         ok: true,
         mode: "draft_recap_dom_parsed",
@@ -2568,6 +2601,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         picks: picksPayload,
         first5ParsedRows: first5,
         last5ParsedRows: last5,
+        playerStats: playerStatsResults,
       });
     })().catch((err) => {
       onceRespond({ ok: false, error: err instanceof Error ? err.message : String(err) });
@@ -2676,43 +2710,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         results.push(row);
         console.info("[GMWR] mDraftDetail import season", row);
 
-        // ── P2: fetch per-week player scoring for this season ─────────────
-        // Uses the same ESPN session already active. Fetches mMatchupScore for
-        // weeks 1-17 and POSTs each week's payload to espn_raw_cache via
-        // playerStatsCache.saveWeeklyPlayerStats, which also runs ingestion
-        // immediately into gm_player_registry + gm_weekly_player_stats.
-        {
-          const WEEKS = 17;
-          const statsResults = { season, weeksFetched: 0, weeksFailed: 0, weeksEmpty: 0 };
-          for (let week = 1; week <= WEEKS; week++) {
-            await sleep(500);
-            const statsUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=mMatchupScore&scoringPeriodId=${week}&matchupPeriodId=${week}`;
-            _diagStage = `espn_fetch:s${season}:w${week}`; _diagUrl = statsUrl;
-            const sr = await fetchEspnJsonWithBackoff(statsUrl, { label: `playerStats:${season}:${week}` });
-            if (!sr.ok) {
-              if (sr.status === 401 || sr.status === 403 || sr.error === "ESPN login expired") break;
-              if (sr.status === 404) break;
-              statsResults.weeksFailed++;
-              continue;
-            }
-            if (!sr.data) { statsResults.weeksEmpty++; continue; }
-            // Count entries — skip empty weeks
-            let entryCount = 0;
-            for (const m of (sr.data.schedule || [])) {
-              for (const side of ["home", "away"]) {
-                const entries = m[side]?.rosterForCurrentScoringPeriod?.entries ?? m[side]?.rosterForMatchupPeriod?.entries ?? [];
-                entryCount += entries.length;
-              }
-            }
-            if (entryCount === 0) { statsResults.weeksEmpty++; continue; }
-            _diagStage = `player_stats_post:s${season}:w${week}`; _diagUrl = TRPC_SAVE_PLAYER_STATS_URL;
-            const post = await postTrpcHistJson(TRPC_SAVE_PLAYER_STATS_URL, warRoomCookieHeader, { season, week, payload: sr.data }, null);
-            if (post.ok) { statsResults.weeksFetched++; }
-            else { statsResults.weeksFailed++; }
-          }
-          console.info("[GMWR] playerStats sync", statsResults);
-          row.playerStats = statsResults;
-        }
       }
 
       const allOk = results.length > 0 && results.every((x) => x.ok);
