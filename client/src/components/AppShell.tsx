@@ -31,6 +31,7 @@ import {
   Database,
   Radio,
   Newspaper,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -82,6 +83,7 @@ const NAV_GROUPS: NavGroup[] = [
       { kind: "placeholder", label: "Draft DNA", icon: Dna },
       { kind: "link", label: "Player Intelligence", href: "/player-intelligence", icon: UserSearch },
       { kind: "link", label: "Player Database", href: "/player-database", icon: Database },
+      { kind: "placeholder", label: "Draft War Room", icon: Zap },
       { kind: "link", label: "Trade Analyzer", href: "/trades", icon: Repeat2 },
     ],
   },
@@ -267,7 +269,7 @@ function NavItemRow({
     return (
       <li>
         <div
-          className="flex cursor-not-allowed items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-sm font-medium text-zinc-600 opacity-90"
+          className="flex cursor-not-allowed items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-xs font-medium text-zinc-700"
           aria-disabled
         >
           <Icon className="h-4 w-4 shrink-0 text-zinc-600" />
@@ -294,15 +296,15 @@ function NavItemRow({
         to={entry.href}
         onClick={onNavigate}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+          "flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-all",
           isActive
-            ? "border border-red-500/40 border-l-[3px] border-l-red-500 bg-gradient-to-r from-red-500/20 via-red-500/10 to-transparent text-red-50 shadow-[0_0_26px_-12px_rgba(239,68,68,0.5)]"
-            : "border border-transparent text-zinc-400 hover:border-white/[0.06] hover:bg-white/[0.04] hover:text-zinc-100"
+            ? "border-l-2 border-l-emerald-500 border border-emerald-500/20 bg-emerald-500/8 text-zinc-100 bg-zinc-800/60"
+            : "border border-transparent text-zinc-500 hover:border-zinc-700/50 hover:bg-zinc-800/40 hover:text-zinc-200 transition-all"
         )}
       >
-        <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-red-400" : "text-zinc-500")} />
+        <Icon className={cn("h-3.5 w-3.5 shrink-0", isActive ? "text-emerald-400" : "text-zinc-500 group-hover:text-zinc-400")} />
         <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-        {isActive && <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-red-400/80" />}
+        {isActive && <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-emerald-400/80" />}
       </Link>
     </li>
   );
@@ -318,7 +320,7 @@ function NavGroupList({
   onNavigate?: () => void;
 }) {
   return (
-    <ul className="space-y-0.5 pb-1">
+    <ul className="space-y-0.5">
       {group.items.map((entry) => (
         <NavItemRow
           key={entry.kind === "link" ? entry.href : entry.label}
@@ -334,9 +336,9 @@ function NavGroupList({
 function SidebarFooter() {
   const { user, isLoaded } = useUser();
   return (
-    <div className="space-y-2 border-t border-white/[0.06] p-3">
+    <div className="space-y-2 border-t border-zinc-800/60 p-3">
       {isLoaded && user ? (
-        <div className="flex items-center gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
+        <div className="flex items-center gap-2.5 rounded-lg border border-zinc-800/60 bg-zinc-900/40 px-2.5 py-2">
           <img
             src={user.imageUrl}
             alt=""
@@ -354,8 +356,8 @@ function SidebarFooter() {
           </div>
         </div>
       ) : null}
-      <div className="rounded-lg border border-red-500/10 bg-red-500/[0.03] px-3 py-2 text-[10px] leading-snug text-zinc-500">
-        <span className="font-semibold text-red-400/90">ESPN Fantasy</span> · GM War Room
+      <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-2 text-[10px] leading-snug text-zinc-600">
+        <span className="font-semibold text-emerald-500/80">ESPN Fantasy</span> · GM War Room
       </div>
     </div>
   );
@@ -384,7 +386,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   }, [isMobile]);
 
   return (
-    <div className="flex h-full flex-col border-r border-white/[0.06] bg-[#070a10]">
+    <div className="flex h-full flex-col border-r border-zinc-800/60 bg-[#09090e]">
       {/* Logo */}
       <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
         <div className="flex items-center gap-2">
@@ -413,7 +415,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           {NAV_GROUPS.map((group, idx) => {
             if (!isMobile) {
               return (
-                <div key={group.id} className={cn(idx > 0 && "mt-1 border-t border-white/[0.06] pt-2")}>
+                <div key={group.id} className={cn(idx > 0 && "mt-2 border-t border-zinc-800/40 pt-2")}>
                   <SidebarGroupTitle title={group.title} isFirst={idx === 0} />
                   <NavGroupList group={group} pathname={pathname} onNavigate={onClose} />
                 </div>
