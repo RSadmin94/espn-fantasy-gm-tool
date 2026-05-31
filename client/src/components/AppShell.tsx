@@ -28,6 +28,7 @@ import {
   Building2,
   Swords,
   Dna,
+  Database,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -77,6 +78,7 @@ const NAV_GROUPS: NavGroup[] = [
       { kind: "link", label: "Rivalry Center", href: "/matchups", icon: Swords },
       { kind: "placeholder", label: "Draft DNA", icon: Dna },
       { kind: "link", label: "Player Intelligence", href: "/player-intelligence", icon: UserSearch },
+      { kind: "link", label: "Player Database", href: "/player-database", icon: Database },
       { kind: "link", label: "Keeper Advisor", href: "/keeper-advisor", icon: Calculator },
       { kind: "link", label: "Trade Analyzer", href: "/trades", icon: Repeat2 },
     ],

@@ -30,6 +30,7 @@ import { HallOfFame } from "./pages/HallOfFame";
 import { LeagueDataHealth } from "./pages/LeagueDataHealth";
 import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
 import { PlayerIntelligence } from "./pages/PlayerIntelligence";
+import { PlayerDatabase }    from "./pages/PlayerDatabase";
 import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
@@ -128,6 +129,7 @@ const router = createBrowserRouter([
           { path: "/league-data-health",     element: <LeagueDataHealth /> },
           { path: "/owner-identity-review",  element: <OwnerIdentityReview /> },
           { path: "/player-intelligence",    element: <PlayerIntelligence /> },
+          { path: "/player-database",         element: <PlayerDatabase /> },
           { path: "/transactions", element: <Transactions /> },
           { path: "/standings", element: <Standings /> },
           { path: "/matchups", element: <Matchups /> },
