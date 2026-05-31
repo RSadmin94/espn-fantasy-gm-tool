@@ -43,7 +43,40 @@ function TeamBadge({ team }: { team: string | null }) {
   );
 }
 
-// ── Sort helpers ──────────────────────────────────────────────────────────────
+// -- Player headshot ---------------------------------------------------------
+
+function PlayerHeadshot({ espnId, name, pos }: { espnId: string | null; name: string; pos: string }) {
+  const c = POS_COLORS[pos] ?? { bg: "bg-zinc-800", text: "text-zinc-400", border: "border-zinc-600" };
+  const initials = name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+  if (!espnId) {
+    return (
+      <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold border shrink-0", c.bg, c.text, c.border)}>
+        {initials}
+      </div>
+    );
+  }
+  const src = `https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/${espnId}.png&w=80&h=58&cb=1`;
+  return (
+    <div className="relative w-10 h-10 rounded-full overflow-hidden bg-zinc-800 border border-zinc-700 shrink-0">
+      <img
+        src={src}
+        alt={name}
+        className="absolute inset-0 w-full h-full object-cover object-top scale-110"
+        onError={(e) => {
+          const img = e.currentTarget as HTMLImageElement;
+          img.style.display = "none";
+          const fb = img.parentElement?.querySelector(".fb-initials") as HTMLElement;
+          if (fb) fb.style.display = "flex";
+        }}
+      />
+      <div className={cn("fb-initials absolute inset-0 items-center justify-center text-xs font-bold hidden", c.bg, c.text)}>
+        {initials}
+      </div>
+    </div>
+  );
+}
+
+// -- Sort helpers -------------------------------------------------------------// ── Sort helpers ──────────────────────────────────────────────────────────────
 
 type SortField = "fullName" | "position" | "currentNflTeam" | "firstSeasonSeen" | "lastSeasonSeen";
 type SortDir   = "asc" | "desc";
@@ -266,7 +299,12 @@ export function PlayerDatabase() {
 
                     {/* Player name */}
                     <td className="px-4 py-3">
-                      <span className="font-semibold text-zinc-100">{p.fullName}</span>
+                      <div className="flex items-center gap-3">
+                        <PlayerHeadshot espnId={p.espnPlayerId} name={p.fullName} pos={p.position} />
+                        <div>
+                          <div className="font-semibold text-zinc-100 leading-tight">{p.fullName}</div>
+                        </div>
+                      </div>
                     </td>
 
                     {/* Position */}
