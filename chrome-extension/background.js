@@ -1964,30 +1964,43 @@ function buildRosterMatrixRow(season, endpointType, r) {
 
 async function postTrpcHistJson(url, warRoomCookieHeader, jsonInput, authToken) {
   const body = JSON.stringify({ json: jsonInput });
+  console.info("[GMWR:diag] POST →", url);
   await applyWarRoomTrpcHistRule(warRoomCookieHeader);
   const extraHeaders = authToken ? { "Authorization": `Bearer ${authToken}` } : {};
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...extraHeaders },
-      body,
-      credentials: "include",
-    });
+    let res;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...extraHeaders },
+        body,
+        credentials: "include",
+      });
+    } catch (fetchErr) {
+      const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+      const diag = `SERVER_POST_FAILED | url=${url} | network=${msg}`;
+      console.error("[GMWR:diag]", diag);
+      throw new Error(diag);
+    }
     const status = res.status;
     let parsed = null;
+    let rawBody = "";
     const ct = res.headers.get("content-type") || "";
     try {
       if (ct.includes("application/json")) parsed = await res.json();
-      else await res.text();
-    } catch {
-      /* ignore */
-    }
+      else rawBody = await res.text();
+    } catch { /* ignore */ }
     if (!res.ok) {
-      return { ok: false, status, error: safeErrorSummary(status, parsed), parsed };
+      const err = safeErrorSummary(status, parsed);
+      console.warn("[GMWR:diag] POST not-ok", { url, status, err, rawBody: rawBody.slice(0,200) });
+      return { ok: false, status, error: `SERVER_POST_FAILED | url=${url} | HTTP ${status} | ${err}`, parsed };
     }
     if (hasTrpcError(parsed)) {
-      return { ok: false, status, error: safeErrorSummary(status, parsed), parsed };
+      const err = safeErrorSummary(status, parsed);
+      console.warn("[GMWR:diag] POST tRPC error", { url, status, err });
+      return { ok: false, status, error: `SERVER_POST_FAILED | url=${url} | tRPC | ${err}`, parsed };
     }
+    console.info("[GMWR:diag] POST ok", { url, status });
     return { ok: true, status, parsed };
   } finally {
     await removeWarRoomTrpcHistRule();
@@ -2585,6 +2598,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const clerkToken = typeof message?.clerkToken === "string" ? message.clerkToken : "";
       const espnCreds = { swid, espnS2 };
       const results = [];
+      let _diagStage = "init";
+      let _diagUrl   = "";
 
       // 2010–2017: ESPN API has no draft data for these seasons — scrape Draft Recap HTML directly.
       // Uses ingestLegacyDraftRecap so rows land with source='legacy_draft_recap',
@@ -2594,6 +2609,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       for (let season = LEGACY_SCRAPE_MIN; season <= LEGACY_SCRAPE_MAX; season++) {
         await sleep(800);
         console.info("[GMWR] legacy draft scrape", { leagueId, season });
+        _diagStage = `scrape:s${season}`; _diagUrl = "";
         const scrapeResult = await scrapeDraftRecapPage(leagueId, season);
         if (!scrapeResult?.ok || !Array.isArray(scrapeResult.picks) || scrapeResult.picks.length === 0) {
           const row = {
@@ -2616,6 +2632,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
         const picksPayload = picksPayloadForIngestParsedDraft(parsedPicks);
         // postIngestLegacyDraftRecap writes source='legacy_draft_recap' — visible to DraftHistory
+        _diagStage = `legacy_ingest:s${season}`; _diagUrl = TRPC_LEGACY_DRAFT_INGEST_URL;
         const ingest = await postIngestLegacyDraftRecap(season, picksPayload, warRoomCookieHeader, clerkToken);
         const row = {
           season,
@@ -2636,6 +2653,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const currentYear = new Date().getFullYear();
       for (let season = API_MIN; season <= currentYear; season++) {
         await sleep(500);
+        _diagStage = `api_draft_import:s${season}`; _diagUrl = TRPC_IMPORT_DRAFT_API_URL;
         const imp = await postImportDraftFromEspnApi(leagueId, season, espnCreds, warRoomCookieHeader, clerkToken);
         const r = imp.result;
         const row = {
@@ -2667,6 +2685,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           for (let week = 1; week <= WEEKS; week++) {
             await sleep(500);
             const statsUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=mMatchupScore&scoringPeriodId=${week}&matchupPeriodId=${week}`;
+            _diagStage = `espn_fetch:s${season}:w${week}`; _diagUrl = statsUrl;
             const sr = await fetchEspnJsonWithBackoff(statsUrl, { label: `playerStats:${season}:${week}` });
             if (!sr.ok) {
               if (sr.status === 401 || sr.status === 403 || sr.error === "ESPN login expired") break;
@@ -2684,6 +2703,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               }
             }
             if (entryCount === 0) { statsResults.weeksEmpty++; continue; }
+            _diagStage = `player_stats_post:s${season}:w${week}`; _diagUrl = TRPC_SAVE_PLAYER_STATS_URL;
             const post = await postTrpcHistJson(TRPC_SAVE_PLAYER_STATS_URL, warRoomCookieHeader, { season, week, payload: sr.data }, null);
             if (post.ok) { statsResults.weeksFetched++; }
             else { statsResults.weeksFailed++; }
@@ -2696,7 +2716,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const allOk = results.length > 0 && results.every((x) => x.ok);
       sendResponse({ ok: allOk, results, aborted: false, leagueId });
     })().catch((err) => {
-      sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err), results: [] });
+      sendResponse({ ok: false, error: `DIAG:stage=${_diagStage} url=${_diagUrl} | ${err instanceof Error ? err.message : String(err)}`, results: [] });
     });
     return true;
   }
