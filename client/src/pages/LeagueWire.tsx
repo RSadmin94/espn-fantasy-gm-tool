@@ -135,7 +135,7 @@ function ArticleReader({ article, onClose }: { article: Article; onClose: () => 
 
 // ── Generate button ────────────────────────────────────────────────────────────
 
-function GenerateControls({ onRefresh }: { onRefresh: () => void }) {
+function GenerateControls({ onRefresh, onSwitchToFeed }: { onRefresh: () => void; onSwitchToFeed: () => void }) {
   const _trpc = trpc as any;
   const [status, setStatus] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -151,8 +151,9 @@ function GenerateControls({ onRefresh }: { onRefresh: () => void }) {
       const r = await genAll.mutateAsync();
       const done = r.results?.filter((x: any) => x.status === "generated").length ?? 0;
       const cached = r.results?.filter((x: any) => x.status === "cached").length ?? 0;
-      setStatus(`✓ Generated ${done} new articles (${cached} already cached)`);
+      setStatus(`✓ Generated ${done} new articles (${cached} already cached). Switching to feed...`);
       onRefresh();
+      setTimeout(() => onSwitchToFeed(), 500);
     } catch (e: any) {
       setStatus(`Error: ${e.message}`);
     } finally { setLoading(false); }
@@ -165,6 +166,7 @@ function GenerateControls({ onRefresh }: { onRefresh: () => void }) {
       const r = await genRoster.mutateAsync({ season: 2026 });
       setStatus(`✓ ${r.headline}`);
       onRefresh();
+      setTimeout(() => onSwitchToFeed(), 500);
     } catch (e: any) { setStatus(`Error: ${e.message}`); }
     finally { setLoading(false); }
   }
@@ -237,7 +239,7 @@ export function LeagueWire() {
 
   const { data: seasons = [] } = _trpc.leagueNewsroom.getArchiveSeasons.useQuery();
   const { data: feedArticles = [], isLoading: feedLoading, refetch: refetchFeed } =
-    _trpc.leagueNewsroom.getNewsroomFeed.useQuery({ limit: 30 }, { queryKey: ["feed", refreshKey] });
+    _trpc.leagueNewsroom.getNewsroomFeed.useQuery({ limit: 30 });
   const { data: seasonArticles = [], isLoading: seasonLoading } =
     _trpc.leagueNewsroom.getSeasonArticles.useQuery(
       { season: selectedSeason! },
@@ -310,7 +312,7 @@ export function LeagueWire() {
         )}
 
         {/* Generate controls */}
-        <GenerateControls onRefresh={() => setRefreshKey(k => k + 1)} />
+        <GenerateControls onRefresh={() => { void refetchFeed(); }} onSwitchToFeed={() => { setView("feed"); setSelectedSeason(null); }} />
 
         {/* Live Wire reports (latest scores) - only in feed view */}
         {view === "feed" && (wireReports as any[]).length > 0 && (

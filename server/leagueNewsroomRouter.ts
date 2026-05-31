@@ -258,10 +258,9 @@ export const leagueNewsroomRouter = router({
       if (!db) return { ok: false, error: "DB unavailable" };
 
       const [seasonRows] = await db.execute(drizzleSql`
-        SELECT DISTINCT m.season FROM matchups m
-        INNER JOIN league_medals lm ON lm.leagueId = m.leagueId AND lm.season = m.season
-        WHERE m.leagueId = ${LEAGUE_ID} AND m.isCompleted = 1
-        ORDER BY m.season ASC
+        SELECT DISTINCT season FROM league_medals
+        WHERE leagueId = ${LEAGUE_ID}
+        ORDER BY season ASC
       `) as unknown as [any[]];
 
       const seasons = (seasonRows as any[]).map(r => Number(r.season));
