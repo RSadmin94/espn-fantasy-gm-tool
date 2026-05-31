@@ -311,25 +311,38 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   document.getElementById("histTest")?.addEventListener("click", async () => {
-    setHistOut("2010 draft recap: scrape → parse → ingest…");
+    const lid    = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
+    const season = new Date().getFullYear() - 1;  // most recent completed season
+    setHistOut(`Syncing player stats: season ${season}, first 3 weeks...\nThis tests the full pipeline end-to-end.`);
     try {
-      const r = await chrome.runtime.sendMessage({ type: MSG_HIST_TEST });
-      const lines = [];
-      if (r?.summary) {
-        lines.push(`bodyLength: ${r.summary.bodyLength}`);
-        lines.push(`candidates: ${r.summary.candidatesCount}`);
-        lines.push("first 20 candidate texts:");
-        for (const t of r.summary.first20CandidateTexts || []) {
-          lines.push(typeof t === "string" ? t : JSON.stringify(t));
-        }
+      const r = await chrome.runtime.sendMessage({
+        type: MSG_HIST_TEST,
+        leagueId: lid,
+        season,
+        weeks: 3,
+      });
+      if (!r?.ok) {
+        setHistOut(`Error: ${r?.error || "unknown"}\n\n${JSON.stringify(r, null, 2)}`);
+        return;
       }
-      lines.push("");
-      lines.push(JSON.stringify(r, null, 2));
+      const res = r.result || {};
+      const lines = [
+        `Season: ${res.season}`,
+        `Weeks attempted: ${res.weeksAttempted}`,
+        `Weeks fetched:   ${res.weeksFetched}`,
+        `Weeks failed:    ${res.weeksFailed}`,
+        `Weeks empty:     ${res.weeksEmpty}`,
+      ];
+      if (res.errors?.length) lines.push(`\nErrors:\n${res.errors.map(e => "  " + e).join("\n")}`);
+      lines.push(res.weeksFetched > 0
+        ? "\n\u2713 Player stats pipeline working."
+        : "\n\u26A0 No weeks fetched \u2014 check errors above.");
       setHistOut(lines.join("\n"));
     } catch (e) {
       setHistOut(e instanceof Error ? e.message : String(e));
     }
   });
+
 
   document.getElementById("histFull")?.addEventListener("click", async () => {
     const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";

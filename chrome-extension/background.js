@@ -2483,131 +2483,97 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (t === MSG_HIST_TEST) {
     let responded = false;
-    // MV3 keepalive: prevent service worker termination during long tab-scrape (tab load can take 30+ seconds)
     const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
     function onceRespond(response) {
       if (responded) return;
       responded = true;
       clearInterval(keepAlive);
-      clearTimeout(internalTimer);
+      clearTimeout(testTimer);
       sendResponse(response);
     }
-    const internalTimer = setTimeout(
+    const testTimer = setTimeout(
       () => onceRespond({ ok: false, error: "extension_internal_timeout" }),
       110000,
     );
 
     (async () => {
-      const TEST_LEAGUE = "457622";
-      const TEST_SEASON = Number(message?.season) || 2010;
-      console.info("[GMWR:BG] MSG_HIST_TEST received", { season: TEST_SEASON });
+      const leagueId = String(message?.leagueId || "457622").trim();
+      const season   = Number(message?.season) || 2024;
+      const weeks    = Number(message?.weeks)  || 3;   // default: test first 3 weeks only
+      console.info("[GMWR] playerStats test", { leagueId, season, weeks });
+
       const { swid, espnS2 } = await getEspnCookieValues();
       if (!swid || !espnS2) {
-        console.warn("[GMWR:BG] cookies missing — ESPN login expired");
         onceRespond({ ok: false, error: "ESPN login expired", details: "missing_cookies" });
         return;
       }
-      console.info("[GMWR:BG] cookies present, calling scrapeDraftRecapPage", { season: TEST_SEASON });
-
-      const full = await scrapeDraftRecapPage(TEST_LEAGUE, TEST_SEASON);
-      console.info("[GMWR] draft recap scrape result", { season: TEST_SEASON, ok: full?.ok, pickCount: full?.pickCount });
-
-      const probeOk = Boolean(full && full.ok !== false && full.error == null);
-      if (!probeOk) {
-        onceRespond({
-          ok: false,
-          error: full?.message || full?.error || "scrape_probe_failed",
-          mode: "draft_recap_scrape_probe",
-          scrape: { ok: full?.ok, pickCount: full?.pickCount, title: full?.title },
-        });
-        return;
-      }
-
-      // Convert DOM-structured picks directly — no text-line parsing needed
-      const { picks: parsedPicks, parseErrors } = parseDraftRecapDomResult(full, TEST_LEAGUE, TEST_SEASON);
-      console.info("[GMWR:BG] picks parsed from DOM", { count: parsedPicks.length, errors: parseErrors });
-
-      if (TEST_SEASON === 2010) {
-        const v = validateDraftRecap2010ParsedPicks(parsedPicks);
-        if (!v.ok) {
-          console.warn("[GMWR] draft recap DOM parse validation failed", v.reason, { parsedCount: parsedPicks.length });
-          onceRespond({
-            ok: false,
-            error: v.reason || "draft_recap_parse_failed",
-            mode: "draft_recap_parse_failed",
-            parseErrors,
-            parsedCount: parsedPicks.length,
-            validationReason: v.reason,
-          });
-          return;
-        }
-      }
-
-      if (parsedPicks.length === 0) {
-        onceRespond({
-          ok: false,
-          error: "draft_recap_parse_empty",
-          mode: "draft_recap_parse_empty",
-          parseErrors,
-          parsedCount: 0,
-        });
-        return;
-      }
-
-      const picksPayload = picksPayloadForIngestParsedDraft(parsedPicks);
-      const first5 = parsedPicks.slice(0, 5);
-      const last5 = parsedPicks.slice(-5);
-      console.info("[GMWR:BG] sending success response", { season: TEST_SEASON, picks: picksPayload.length });
-
-
-      // ── Player stats fetch for TEST_SEASON ──────────────────────────────
       const warRoomCookieHeader = await getWarRoomCookieHeaderString();
-      const playerStatsResults = { season: TEST_SEASON, weeksFetched: 0, weeksFailed: 0, weeksEmpty: 0, error: null };
-      if (warRoomCookieHeader) {
-        for (let week = 1; week <= 17; week++) {
-          await sleep(400);
-          const statsUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${TEST_SEASON}/segments/0/leagues/${TEST_LEAGUE}?view=mMatchupScore&scoringPeriodId=${week}&matchupPeriodId=${week}`;
-          console.info("[GMWR:diag] POST →", statsUrl);
-          const sr = await fetchEspnJsonWithBackoff(statsUrl, { label: `playerStats:${TEST_SEASON}:${week}` });
-          if (!sr.ok) {
-            if (sr.status === 401 || sr.status === 403 || sr.error === "ESPN login expired") { playerStatsResults.error = "ESPN_login_expired"; break; }
-            if (sr.status === 404) { playerStatsResults.weeksEmpty++; break; }
-            playerStatsResults.weeksFailed++;
-            continue;
-          }
-          if (!sr.data) { playerStatsResults.weeksEmpty++; continue; }
-          let entryCount = 0;
-          for (const m of (sr.data.schedule || [])) {
-            for (const side of ["home", "away"]) {
-              const entries = m[side]?.rosterForCurrentScoringPeriod?.entries ?? m[side]?.rosterForMatchupPeriod?.entries ?? [];
-              entryCount += entries.length;
-            }
-          }
-          if (entryCount === 0) { playerStatsResults.weeksEmpty++; continue; }
-          const post = await postTrpcHistJson(TRPC_SAVE_PLAYER_STATS_URL, warRoomCookieHeader, { season: TEST_SEASON, week, payload: sr.data }, null);
-          if (post.ok) { playerStatsResults.weeksFetched++; }
-          else { playerStatsResults.weeksFailed++; playerStatsResults.error = post.error; }
-        }
-      } else {
-        playerStatsResults.error = "warRoom_session_missing";
+      if (!warRoomCookieHeader) {
+        onceRespond({ ok: false, error: "GM War Room session not found." });
+        return;
       }
 
-      onceRespond({
-        ok: true,
-        mode: "draft_recap_dom_parsed",
-        leagueId: TEST_LEAGUE,
-        season: TEST_SEASON,
-        parsedCount: parsedPicks.length,
-        picks: picksPayload,
-        first5ParsedRows: first5,
-        last5ParsedRows: last5,
-        playerStats: playerStatsResults,
-      });
+      const result = { season, weeksAttempted: 0, weeksFetched: 0, weeksFailed: 0, weeksEmpty: 0, errors: [] };
+
+      for (let week = 1; week <= weeks; week++) {
+        await sleep(500);
+        result.weeksAttempted++;
+
+        const statsUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=mMatchupScore&scoringPeriodId=${week}&matchupPeriodId=${week}`;
+        console.info("[GMWR:diag] POST \u2192", statsUrl);
+
+        const sr = await fetchEspnJsonWithBackoff(statsUrl, { label: `playerStats:${season}:${week}` });
+
+        if (!sr.ok) {
+          if (sr.status === 401 || sr.status === 403 || sr.error === "ESPN login expired") {
+            result.errors.push(`w${week}: ESPN_login_expired`);
+            break;
+          }
+          if (sr.status === 404) {
+            result.errors.push(`w${week}: 404_no_data`);
+            break;
+          }
+          result.weeksFailed++;
+          result.errors.push(`w${week}: HTTP_${sr.status} ${sr.error || ""}`);
+          continue;
+        }
+
+        if (!sr.data) { result.weeksEmpty++; continue; }
+
+        let entryCount = 0;
+        for (const m of (sr.data.schedule || [])) {
+          for (const side of ["home", "away"]) {
+            const entries =
+              m[side]?.rosterForCurrentScoringPeriod?.entries ??
+              m[side]?.rosterForMatchupPeriod?.entries ?? [];
+            entryCount += entries.length;
+          }
+        }
+
+        if (entryCount === 0) { result.weeksEmpty++; continue; }
+
+        const post = await postTrpcHistJson(
+          TRPC_SAVE_PLAYER_STATS_URL,
+          warRoomCookieHeader,
+          { season, week, payload: sr.data },
+          null,
+        );
+
+        if (post.ok) {
+          result.weeksFetched++;
+        } else {
+          result.weeksFailed++;
+          result.errors.push(`w${week}: ${post.error || "post_failed"}`);
+        }
+      }
+
+      onceRespond({ ok: result.weeksFetched > 0 || result.weeksAttempted > 0, result });
     })().catch((err) => {
       onceRespond({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
     return true;
   }
+
 
   if (t === MSG_HIST_FULL) {
     (async () => {
