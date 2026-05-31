@@ -82,61 +82,85 @@ export const playerStatsCacheRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) return { ok: false, error: "DB unavailable", inserted: 0, updated: 0 };
+      if (!db) return { ok: false, error: "DB unavailable", received: 0, valid: 0, inserted: 0, updated: 0, skipped: 0, skipReasons: [] };
 
       const { season, players } = input;
       const isLegacy = season <= 2017;
 
-      // Pre-load existing ESPN IDs
-      const existing = await db
-        .select({ id: gmPlayerRegistry.id, espnPlayerId: gmPlayerRegistry.espnPlayerId })
-        .from(gmPlayerRegistry).limit(200_000);
-      const byEspnId = new Map(existing.filter(r => r.espnPlayerId).map(r => [r.espnPlayerId!, r.id]));
+      const received   = players.length;
+      let inserted     = 0;
+      let updated      = 0;
+      let skipped      = 0;
+      const skipReasons: string[] = [];
 
-      let inserted = 0, updated = 0;
+      // Load existing ESPN IDs into memory to decide insert vs update
+      const existing = await db.execute(
+        drizzleSql`SELECT id, espnPlayerId FROM gm_player_registry WHERE espnPlayerId IS NOT NULL LIMIT 200000`
+      ) as unknown as Array<any>;
+      const existingRows = ((existing as any)?.[0] ?? []) as Array<{ id: number; espnPlayerId: string }>;
+      const byEspnId = new Map<string, number>(existingRows.map(r => [String(r.espnPlayerId), r.id]));
 
       for (const p of players) {
-        const eid  = String(p.espnId);
-        const norm = normalizePlayerName(p.fullName);
+        const eid      = String(p.espnId);
+        const pos      = p.position?.trim();
+        const fullName = p.fullName?.trim();
+        const nflTeam  = p.nflTeam ?? null;
 
-        if (byEspnId.has(eid)) {
-          await db.update(gmPlayerRegistry)
-            .set({
-              lastSeasonSeen: drizzleSql`GREATEST(last_season_seen, ${season})`,
-              currentNflTeam: p.nflTeam ?? drizzleSql`current_nfl_team`,
-              updatedAt:      new Date(),
-            })
-            .where(eqD(gmPlayerRegistry.id, byEspnId.get(eid)!));
-          updated++;
-        } else {
-          try {
-            await db.insert(gmPlayerRegistry).values({
-              espnPlayerId:    eid,
-              fullName:        p.fullName,
-              normalizedName:  norm,
-              position:        p.position,
-              currentNflTeam:  p.nflTeam ?? null,
-              firstSeasonSeen: season,
-              lastSeasonSeen:  season,
-              isActive:        true,
-              needsReview:     isLegacy,
-              reviewReason:    isLegacy ? "Legacy season" : null,
-            }).onDuplicateKeyUpdate({
-              set: {
-                lastSeasonSeen: drizzleSql`GREATEST(last_season_seen, ${season})`,
-                currentNflTeam: p.nflTeam ?? drizzleSql`current_nfl_team`,
-                updatedAt:      new Date(),
-              },
-            });
-            const [ins] = await db.select({ id: gmPlayerRegistry.id })
-              .from(gmPlayerRegistry)
-              .where(eqD(gmPlayerRegistry.espnPlayerId, eid)).limit(1);
-            if (ins) { byEspnId.set(eid, ins.id); inserted++; }
-          } catch { /* duplicate race — skip */ }
+        if (!eid || !fullName || !pos) {
+          skipped++;
+          skipReasons.push(`espnId=${p.espnId}: missing required field (name=${!!fullName} pos=${!!pos})`);
+          continue;
+        }
+
+        const norm = normalizePlayerName(fullName);
+
+        try {
+          if (byEspnId.has(eid)) {
+            // Update lastSeasonSeen if higher, refresh NFL team
+            await db.execute(drizzleSql`
+              UPDATE gm_player_registry
+              SET lastSeasonSeen = GREATEST(lastSeasonSeen, ${season}),
+                  currentNflTeam = ${nflTeam},
+                  updatedAt      = NOW()
+              WHERE espnPlayerId = ${eid}
+            `);
+            updated++;
+          } else {
+            // Insert new player
+            await db.execute(drizzleSql`
+              INSERT INTO gm_player_registry
+                (espnPlayerId, fullName, normalizedName, position, currentNflTeam,
+                 firstSeasonSeen, lastSeasonSeen, isActive, needsReview, reviewReason,
+                 createdAt, updatedAt)
+              VALUES
+                (${eid}, ${fullName}, ${norm}, ${pos}, ${nflTeam},
+                 ${season}, ${season}, 1, ${isLegacy ? 1 : 0}, ${isLegacy ? "Legacy season" : null},
+                 NOW(), NOW())
+              ON DUPLICATE KEY UPDATE
+                lastSeasonSeen = GREATEST(lastSeasonSeen, ${season}),
+                currentNflTeam = ${nflTeam},
+                updatedAt      = NOW()
+            `);
+            byEspnId.set(eid, -1); // mark as known
+            inserted++;
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          skipped++;
+          if (skipReasons.length < 5) skipReasons.push(`espnId=${eid} ${fullName}: ${msg.slice(0, 80)}`);
         }
       }
 
-      return { ok: true, season, inserted, updated, total: inserted + updated };
+      return {
+        ok:          true,
+        season,
+        received,
+        valid:       received - skipped,
+        inserted,
+        updated,
+        skipped,
+        skipReasons: skipReasons.slice(0, 5),
+      };
     }),
 
   saveWeeklyPlayerStats: publicProcedure
