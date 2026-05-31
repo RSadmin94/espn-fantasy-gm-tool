@@ -392,7 +392,7 @@ function trpcResultJson(parsed) {
 
 async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
   await chrome.declarativeNetRequest.updateSessionRules({
-    removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1, DNR_TRPC_HIST_RULE_ID + 2, DNR_TRPC_HIST_RULE_ID + 3],
+    removeRuleIds: [DNR_TRPC_HIST_RULE_ID, DNR_TRPC_HIST_RULE_ID + 1, DNR_TRPC_HIST_RULE_ID + 2, DNR_TRPC_HIST_RULE_ID + 3, DNR_TRPC_HIST_RULE_ID + 4, DNR_TRPC_HIST_RULE_ID + 5, DNR_TRPC_HIST_RULE_ID + 6],
     addRules: [
       {
         id: DNR_TRPC_HIST_RULE_ID,
