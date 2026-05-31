@@ -2512,7 +2512,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       // Returns ~1000 scorable players (QB/RB/WR/TE/K/DST) sorted by ownership.
       const filter = JSON.stringify({
         players: {
-          limit: 1000,
+          limit: 500,
           offset: 0,
           sortPercOwned: { sortAsc: false, sortPriority: 1 },
           filterSlotIds: { value: [0, 2, 4, 6, 16, 17, 23] },
