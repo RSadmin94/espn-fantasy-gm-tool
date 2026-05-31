@@ -21,6 +21,7 @@ import { DashboardTimelineStrip, type TimelineChamp } from "@/components/dashboa
 import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
 import { useRivalryDossierScan } from "@/components/dashboard/rivalryDossierScan";
 import { DashboardRecentLeagueEvents } from "@/components/dashboard/DashboardRecentLeagueEvents";
+import { LeagueWireNewsFeed } from "@/components/dashboard/LeagueWireNewsFeed";
 import { MiniTable, StatusBadge } from "@/components/dashboard/DashboardPrimitives";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -798,6 +799,8 @@ export function Dashboard() {
         currentSeason={season}
       />
 
+
+      <LeagueWireNewsFeed />
       <DevBuildDiagnostics compact />
     </div>
   );
