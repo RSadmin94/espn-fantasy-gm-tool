@@ -82,20 +82,21 @@ export interface RawStatLine {
 // ─── ESPN stat ID → RawStatLine field mapping ─────────────────────────────────
 
 const STAT_ID_TO_FIELD: Record<number, keyof RawStatLine> = {
-  4:  "passingYards",
-  5:  "passingTDs",
-  3:  "completions",
-  0:  "passingAttempts",
-  6:  "interceptions",
-  24: "rushingYards",
-  25: "rushingTDs",
-  23: "rushingAttempts",
-  42: "receivingYards",
-  43: "receivingTDs",
-  41: "receptions",
-  58: "targets",
-  72: "fumblesLost",
-  20: "fumblesLost",
+  // Verified ESPN scoring item stat IDs
+  3:  'passingYards',       // statId 3=passYards (VERIFIED 0.04/yd)
+  4:  'passingTDs',         // statId 4=passingTD (VERIFIED 6pts)
+  5:  'interceptions',      // legacy
+  6:  'interceptions',      // legacy
+  57: 'interceptions',      // statId 57=INT (VERIFIED)
+  19: 'twoPointConversions',
+  24: 'rushingYards',       // VERIFIED 0.1/yd
+  25: 'rushingTDs',         // VERIFIED 6pts
+  42: 'receivingYards',     // VERIFIED 0.1/yd
+  43: 'receivingTDs',       // VERIFIED 6pts
+  53: 'receptions',         // statId 53=receptions (VERIFIED 1pt)
+  41: 'receptions',         // legacy
+  72: 'fumblesLost',
+  20: 'fumblesLost',
 };
 
 // ─── In-memory cache (per season + user league resolution) ────────────────────
@@ -108,20 +109,21 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // Fallback for league 457622 (Atlantas Finest FF) actual settings.
 // Used only when ESPN combined cache is unavailable.
 // Full PPR, 6-pt passing TD, standard yardage, sacks enabled.
+// VERIFIED fallback values matching actual ESPN scoring item stat IDs
 const FALLBACK_SCORING_MAP: Record<number, number> = {
-  4:   0.04,  // 1 pt per 25 pass yards
-  5:   6,     // 6 pts per pass TD  ← Full PPR league rule
-  6:  -2,     // -2 per INT
-  24:  0.1,   // 1 pt per 10 rush yards
-  25:  6,     // 6 pts per rush TD
-  42:  0.1,   // 1 pt per 10 rec yards
-  43:  6,     // 6 pts per rec TD
-  41:  1,     // 1 pt per reception  ← Full PPR
+  3:   0.04,  // 1 pt per 25 pass yards (statId 3 VERIFIED)
+  4:   6,     // 6 pts per pass TD (statId 4 VERIFIED)
+  57: -2,     // -2 per INT thrown (statId 57 VERIFIED)
+  6:  -2,     // -2 per INT (legacy fallback)
+  24:  0.1,   // 1 pt per 10 rush yards (VERIFIED)
+  25:  6,     // 6 pts per rush TD (VERIFIED)
+  42:  0.1,   // 1 pt per 10 rec yards (VERIFIED)
+  43:  6,     // 6 pts per rec TD (VERIFIED)
+  53:  1.0,   // 1 pt per reception - Full PPR (statId 53 VERIFIED)
+  41:  1.0,   // legacy fallback
   72: -2,     // -2 per fumble lost
   20: -2,     // -2 per fumble lost (alt ID)
-  99: -1,     // -1 per sack
 };
-
 // ─── Scoring settings loader ──────────────────────────────────────────────────
 
 /**
@@ -196,16 +198,17 @@ function buildScoringSettings(
   scoringMap: Record<number, number>,
   rawItems: ScoringItem[]
 ): LeagueScoringSettings {
-  const receptionPoints = scoringMap[41] ?? 0.5;
-  const passingTDPoints = scoringMap[5] ?? 4;
-  const rushingTDPoints = scoringMap[25] ?? 6;
-  const receivingTDPoints = scoringMap[43] ?? 6;
-  const interceptionPoints = scoringMap[6] ?? -2;
-
+  // VERIFIED ESPN scoring stat IDs from cache: 53=receptions, 4=passingTD, 3=passYards
+  const receptionPoints    = scoringMap[53]  ?? scoringMap[41]  ?? 0;    // 53=receptions (VERIFIED)
+  const passingTDPoints    = scoringMap[4]   ?? scoringMap[5]   ?? 6;    // 4=passingTD (VERIFIED)
+  const rushingTDPoints    = scoringMap[25]  ?? 6;                       // 25=rushingTD (VERIFIED)
+  const receivingTDPoints  = scoringMap[43]  ?? 6;                       // 43=recTD (VERIFIED)
+  const interceptionPoints = scoringMap[57]  ?? scoringMap[6]   ?? -2;   // 57=INT (VERIFIED)
   // Yards-per-point: ESPN stores as "points per yard" (e.g. 0.04 = 1pt/25yds)
-  const passYardsPerPt = scoringMap[4] ? Math.round(1 / scoringMap[4]) : 25;
-  const rushYardsPerPt = scoringMap[24] ? Math.round(1 / scoringMap[24]) : 10;
+  // Yards-per-point: statId 3=passYards (VERIFIED 0.04/yd), NOT statId 4 (=passingTD)
+  const passYardsPerPt = scoringMap[3]  ? Math.round(1 / scoringMap[3])  : 25; // 3=passYds VERIFIED
   const recYardsPerPt = scoringMap[42] ? Math.round(1 / scoringMap[42]) : 10;
+  const rushYardsPerPt = scoringMap[24] ? Math.round(1 / scoringMap[24]) : 10;
 
   const scoringDescription = buildScoringDescription({
     receptionPoints,
@@ -360,10 +363,10 @@ export function getScoringBreakdown(settings: LeagueScoringSettings): {
     { category: "Rushing", statId: 24, label: "Rushing Yards",       perUnit: "per yard" },
     { category: "Rushing", statId: 25, label: "Rushing TD",          perUnit: "each" },
     // Receiving
-    { category: "Receiving", statId: 41, label: "Reception",         perUnit: "each" },
-    { category: "Receiving", statId: 42, label: "Receiving Yards",   perUnit: "per yard" },
-    { category: "Receiving", statId: 43, label: "Receiving TD",      perUnit: "each" },
-    { category: "Receiving", statId: 58, label: "Target",            perUnit: "each" },
+    { category: 'Receiving', statId: 53, label: 'Reception',         perUnit: 'each' },
+    { category: 'Receiving', statId: 41, label: 'Reception (alt)',   perUnit: 'each' },
+    { category: 'Receiving', statId: 42, label: 'Receiving Yards',   perUnit: 'per yard' },
+    { category: 'Receiving', statId: 43, label: 'Receiving TD',      perUnit: 'each' },
     // Misc
     { category: "Misc", statId: 72,  label: "Fumble Lost",          perUnit: "each" },
     { category: "Misc", statId: 20,  label: "Fumble Lost (alt)",    perUnit: "each" },
