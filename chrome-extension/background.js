@@ -2569,21 +2569,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return;
       }
 
-      // POST to War Room server
-      const post = await postTrpcHistJson(
-        TRPC_SAVE_ROSTER_URL,
-        warRoomCookieHeader,
-        { season, players },
-        null,
-      );
-
-      if (!post.ok) {
-        onceRespond({ ok: false, error: post.error || "server_post_failed" });
-        return;
+      // POST in batches of 450 — stays under server Zod limit regardless of deploy version
+      const BATCH_SIZE = 450;
+      let totalInserted = 0, totalUpdated = 0;
+      for (let offset = 0; offset < players.length; offset += BATCH_SIZE) {
+        const batch = players.slice(offset, offset + BATCH_SIZE);
+        await sleep(300);
+        const post = await postTrpcHistJson(TRPC_SAVE_ROSTER_URL, warRoomCookieHeader, { season, players: batch }, null);
+        if (!post.ok) {
+          onceRespond({ ok: false, error: post.error || "server_post_failed", fetched: players.length, batchAt: offset });
+          return;
+        }
+        const res = post.parsed?.[0]?.result?.data?.json ?? post.parsed?.result?.data?.json ?? {};
+        totalInserted += res.inserted ?? 0;
+        totalUpdated  += res.updated  ?? 0;
       }
-
-      const res = post.parsed?.[0]?.result?.data?.json ?? post.parsed?.result?.data?.json ?? {};
-      onceRespond({ ok: true, fetched: players.length, inserted: res.inserted ?? 0, updated: res.updated ?? 0, season });
+      onceRespond({ ok: true, fetched: players.length, inserted: totalInserted, updated: totalUpdated, season });
     })().catch((err) => {
       onceRespond({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
