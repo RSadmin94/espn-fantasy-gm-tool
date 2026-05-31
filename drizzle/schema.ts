@@ -1298,3 +1298,79 @@ export const ownerAliases = mysqlTable(
   (t) => [uniqueIndex("uq_owner_aliases").on(t.leagueId, t.legacyTeamName)]
 );
 export type OwnerAlias = typeof ownerAliases.$inferSelect;
+
+// ── P2 Player Intelligence Pipeline ──────────────────────────────────────────
+//
+// gmPlayerRegistry  → canonical player identity (one row per player, ever)
+// gmWeeklyPlayerStats → canonical weekly fantasy performance
+//
+// Named differently from the existing `gmPlayers` (season cache) and
+// `weeklyPlayerStats` (raw stat columns) tables to avoid collisions.
+//
+// Valid position values (enforced in application logic, not DB ENUM so that
+// adding new positions does not require a schema migration):
+//   QB | RB | WR | TE | K | DEF | DL | LB | DB
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const gmPlayerRegistry = mysqlTable(
+  "gm_player_registry",
+  {
+    id:              bigint("id",          { mode: "number" }).autoincrement().primaryKey(),
+    espnPlayerId:    varchar("espnPlayerId",   { length: 50  }),
+    sleeperPlayerId: varchar("sleeperPlayerId",{ length: 50  }),
+    fullName:        varchar("fullName",       { length: 100 }).notNull(),
+    normalizedName:  varchar("normalizedName", { length: 100 }).notNull(),
+    position:        varchar("position",       { length: 10  }).notNull().default(""),
+    currentNflTeam:  varchar("currentNflTeam", { length: 3   }),
+    firstSeasonSeen: int("firstSeasonSeen"),
+    lastSeasonSeen:  int("lastSeasonSeen"),
+    isActive:        boolean("isActive").notNull().default(true),
+    needsReview:     boolean("needsReview").notNull().default(false),
+    reviewReason:    varchar("reviewReason",   { length: 255 }),
+    createdAt:       timestamp("createdAt").defaultNow().notNull(),
+    updatedAt:       timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_gm_player_registry_espn").on(t.espnPlayerId),
+    uniqueIndex("uq_gm_player_registry_sleeper").on(t.sleeperPlayerId),
+    index("idx_gm_player_registry_norm").on(t.normalizedName),
+    index("idx_gm_player_registry_position").on(t.position),
+    index("idx_gm_player_registry_active").on(t.isActive),
+    index("idx_gm_player_registry_review").on(t.needsReview),
+  ]
+);
+
+export type GmPlayerRegistry      = typeof gmPlayerRegistry.$inferSelect;
+export type InsertGmPlayerRegistry = typeof gmPlayerRegistry.$inferInsert;
+
+export const gmWeeklyPlayerStats = mysqlTable(
+  "gm_weekly_player_stats",
+  {
+    id:               bigint("id",             { mode: "number" }).autoincrement().primaryKey(),
+    playerId:         bigint("playerId",        { mode: "number" }).notNull(),
+    season:           int("season").notNull(),
+    week:             int("week").notNull(),
+    pointsScored:     decimal("pointsScored",   { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    rosterSlotId:     int("rosterSlotId").notNull().default(0),
+    isStarter:        boolean("isStarter").notNull().default(false),
+    ownerKey:         varchar("ownerKey",       { length: 50 }).notNull(),
+    teamId:           int("teamId"),
+    source:           varchar("source",         { length: 50 }).notNull().default("espn"),
+    sourceConfidence: decimal("sourceConfidence", { precision: 5, scale: 2, mode: "number" }).notNull().default(100),
+    needsReview:      boolean("needsReview").notNull().default(false),
+    reviewReason:     varchar("reviewReason",   { length: 255 }),
+    createdAt:        timestamp("createdAt").defaultNow().notNull(),
+    updatedAt:        timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_gm_wps").on(t.playerId, t.season, t.week, t.ownerKey),
+    index("idx_gm_wps_season_player").on(t.season, t.playerId),
+    index("idx_gm_wps_owner_season").on(t.ownerKey, t.season),
+    index("idx_gm_wps_season_week").on(t.season, t.week),
+    index("idx_gm_wps_team_season").on(t.teamId, t.season),
+    index("idx_gm_wps_review").on(t.needsReview),
+  ]
+);
+
+export type GmWeeklyPlayerStats       = typeof gmWeeklyPlayerStats.$inferSelect;
+export type InsertGmWeeklyPlayerStats  = typeof gmWeeklyPlayerStats.$inferInsert;

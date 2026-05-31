@@ -150,6 +150,7 @@ import {
 import { loadRivalryDossier } from "./rivalryDossierService";
 import { loadRecentLeagueTransactionEvents } from "./recentLeagueEventsService";
 import { buildHallOfFamePayload } from "./hallOfFameService";
+import { playerStatsRouter } from "./playerStatsRouter";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -466,6 +467,7 @@ export const appRouter = router({
   onboarding: onboardingRouter,
   injury: injuryRouter,
   simulation: simulationRouter,
+  playerStats: playerStatsRouter,
   dna: dnaRouter,
   agents: agentRouter,
   champ: champRouter,
