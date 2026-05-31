@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Flame, Loader2, RefreshCw, Trophy, Zap, AlertTriangle, Target, ChevronRight, Lock as LockIcon, Activity } from "lucide-react";
+import { Flame, Loader2, RefreshCw, Trophy, Zap, AlertTriangle, Target, ChevronRight, Lock as LockIcon, Activity, Swords, FileText, Star, TrendingUp, ShieldAlert } from "lucide-react";
 import { DevBuildDiagnostics } from "@/components/DevBuildDiagnostics";
 import { DashboardLeagueHealthCard } from "@/components/dashboard/DashboardLeagueHealthCard";
 import { DashboardMatchupMarquee, type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
@@ -677,6 +677,138 @@ export function Dashboard() {
           </section>
         );
       })()}
+      {/* ── Intelligence Briefing Layer: Rival Threats · Decision Memo · Historical Receipts ── */}
+      <section aria-label="Intelligence briefing" className="grid gap-4 lg:grid-cols-3 mb-2">
+
+        {/* 1. Rival Threat Window */}
+        <div className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-[#130d0d] via-[#0e0e14] to-[#09090e] p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-red-500/10 border border-red-500/25 flex items-center justify-center shrink-0">
+              <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
+            </div>
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-red-400/80">Rival Threat Window</p>
+              <p className="text-[10px] text-zinc-600">Highest-scoring opponents</p>
+            </div>
+          </div>
+          {standingsQ.isLoading ? (
+            <div className="space-y-2">{[0,1,2].map(i => <div key={i} className="h-8 rounded-lg bg-zinc-800/60 animate-pulse" />)}</div>
+          ) : (() => {
+            const threats = (ranked ?? [])
+              .slice().sort((a: any, b: any) => (b.pointsFor ?? 0) - (a.pointsFor ?? 0))
+              .slice(0, 4);
+            if (!threats.length) return <p className="text-xs text-zinc-600">Sync league data to see threats.</p>;
+            return (
+              <ul className="space-y-2">
+                {threats.map((t: any, i: number) => (
+                  <li key={t.teamId ?? i} className="flex items-center gap-3 rounded-lg bg-zinc-900/50 border border-zinc-800/40 px-3 py-2">
+                    <span className={cn("text-[10px] font-black w-5 text-center tabular-nums", i === 0 ? "text-red-400" : i === 1 ? "text-orange-400/80" : "text-zinc-600")}>#{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-zinc-200 truncate">{t.ownerName ?? t.teamName ?? "—"}</p>
+                      <p className="text-[10px] text-zinc-600">{t.wins ?? 0}W–{t.losses ?? 0}L</p>
+                    </div>
+                    <span className="text-xs font-black tabular-nums text-zinc-300">{typeof t.pointsFor === "number" ? t.pointsFor.toFixed(0) : "—"}</span>
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
+          <Link to="/owner-profiles" className="mt-4 flex items-center gap-1 text-[10px] font-bold text-red-400/80 hover:text-red-300 transition-colors">
+            Owner profiles <ChevronRight className="h-3 w-3" />
+          </Link>
+        </div>
+
+        {/* 2. Decision Memo */}
+        <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-[#0a1210] via-[#0b0e14] to-[#09090e] p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center shrink-0">
+              <FileText className="h-3.5 w-3.5 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400/80">Decision Memo</p>
+              <p className="text-[10px] text-zinc-600">Your draft action plan</p>
+            </div>
+          </div>
+          {(draftIntelQ as any)?.isLoading ? (
+            <div className="space-y-2">{[0,1,2].map(i => <div key={i} className="h-8 rounded-lg bg-zinc-800/60 animate-pulse" />)}</div>
+          ) : (() => {
+            const di = (draftIntelQ as any)?.data;
+            if (!di?.ok) return <p className="text-xs text-zinc-600">Sync draft data to generate memo.</p>;
+            const kps: any[] = di.keeperPredictions ?? [];
+            const top = kps.slice().sort((a: any, b: any) => (b.kvs ?? 0) - (a.kvs ?? 0))[0];
+            const sas: any[] = di.scarcityAlerts ?? [];
+            const crit = sas.find((a: any) => a.urgency === "CRITICAL" || a.urgency === "HIGH");
+            const runs: any[] = di.positionRunAlerts ?? [];
+            const topRun = runs[0];
+            const memo = [
+              { label: "Primary",     color: "text-emerald-400", text: top ? `Lock ${top.predictedPlayer} as keeper — KVS ${top.kvs} at Round ${top.keeperRound}` : "Review keeper eligibility before draft" },
+              { label: "Contingency", color: "text-amber-400",   text: crit ? `Secure ${crit.position} depth early — scarcity window active` : "Monitor waiver wire for positional value" },
+              { label: "Avoid",       color: "text-red-400",     text: topRun ? `Reaching for ${topRun.position} before ${topRun.roundWindow} — run expected` : "Panic drafting in rounds 1–3" },
+            ];
+            return (
+              <ul className="space-y-2.5">
+                {memo.map((m, i) => (
+                  <li key={i} className="flex gap-2.5 text-xs">
+                    <span className={cn("shrink-0 font-black w-18 text-right", m.color)} style={{minWidth:"68px"}}>{m.label}:</span>
+                    <span className="text-zinc-400 leading-snug">{m.text}</span>
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
+          <Link to="/draft-war-room" className="mt-4 flex items-center gap-1 text-[10px] font-bold text-emerald-400/80 hover:text-emerald-300 transition-colors">
+            Full Draft War Room <ChevronRight className="h-3 w-3" />
+          </Link>
+        </div>
+
+        {/* 3. Historical Receipts */}
+        <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-[#13100a] via-[#0e0e14] to-[#09090e] p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center shrink-0">
+              <Star className="h-3.5 w-3.5 text-amber-400" />
+            </div>
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-amber-400/80">Historical Receipts</p>
+              <p className="text-[10px] text-zinc-600">League decisions on record</p>
+            </div>
+          </div>
+          {hofQ.isLoading ? (
+            <div className="space-y-2">{[0,1,2].map(i => <div key={i} className="h-8 rounded-lg bg-zinc-800/60 animate-pulse" />)}</div>
+          ) : (() => {
+            const champions: any[] = hofQ.data?.championships?.history ?? [];
+            if (!champions.length) return (
+              <div className="space-y-2">
+                <p className="text-xs text-zinc-600">No championship records found.</p>
+                <p className="text-[10px] text-zinc-700">Import historical data to unlock receipts.</p>
+              </div>
+            );
+            return (
+              <ul className="space-y-2">
+                {champions.slice().reverse().slice(0, 4).map((c: any, i: number) => (
+                  <li key={i} className="flex items-center gap-3 rounded-lg bg-zinc-900/50 border border-zinc-800/40 px-3 py-2">
+                    <span className="text-[10px] font-black text-amber-400 tabular-nums w-10 shrink-0">{c.season ?? "—"}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-zinc-200 truncate">{c.displayName ?? c.ownerName ?? "—"}</p>
+                      <p className="text-[10px] text-zinc-600">Champion{c.playoffSeed ? ` · Seed ${c.playoffSeed}` : ""}</p>
+                    </div>
+                    <Trophy className="h-3 w-3 text-amber-500/60 shrink-0" />
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
+          <div className="mt-4 flex items-center gap-3">
+            <Link to="/draft-history" className="flex items-center gap-1 text-[10px] font-bold text-amber-400/80 hover:text-amber-300 transition-colors">
+              Draft History <ChevronRight className="h-3 w-3" />
+            </Link>
+            <span className="text-zinc-700">·</span>
+            <Link to="/hall-of-fame" className="flex items-center gap-1 text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors">
+              Hall of Fame <ChevronRight className="h-3 w-3" />
+            </Link>
+          </div>
+        </div>
+
+      </section>
       {/* Hero — three prestige cards */}
       <section aria-label="League highlights" className="grid gap-4 md:grid-cols-3">
         <div className="flex min-h-[240px] flex-col rounded-2xl border border-amber-500/25 bg-gradient-to-br from-[#141820] to-[#0c0f14] p-5 shadow-[0_0_40px_-12px_rgba(245,158,11,0.35)]">

@@ -165,7 +165,6 @@ const router = createBrowserRouter([
           { path: "/billing/success", element: <Navigate to="/settings" replace /> },
           { path: "/billing/cancel", element: <Navigate to="/settings" replace /> },
           // All other old hub/feature paths → dashboard
-          { path: "/draft-war-room", element: <Navigate to="/dashboard" replace /> },
           { path: "/keeper-lab", element: <Navigate to="/dashboard" replace /> },
           { path: "/waiver-lab", element: <Navigate to="/dashboard" replace /> },
           { path: "/waiver", element: <Navigate to="/dashboard" replace /> },

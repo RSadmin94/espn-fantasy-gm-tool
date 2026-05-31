@@ -1302,49 +1302,49 @@ export function DraftWarRoom() {
         </div>
 
         {/* 1. Confidence Dashboard */}
-        <Section title="Draft Confidence Dashboard" icon={ShieldCheck}
+        <Section title="Draft Briefing" icon={ShieldCheck}
           accent="border-amber-500/20 bg-zinc-900/40" defaultOpen={true}>
           <ConfidenceDashboard data={confidenceDashboard} />
         </Section>
 
         {/* 2. Keeper Predictions */}
-        <Section title="Keeper Predictions" icon={Trophy} badge={keeperPredictions?.length}>
+        <Section title="Keeper Strategy" icon={Trophy} badge={keeperPredictions?.length}>
           <KeeperSection predictions={keeperPredictions ?? []} />
         </Section>
 
         {/* 3. Roster Construction */}
-        <Section title="Roster Construction" icon={BarChart2} badge={rosterNeeds?.length}>
+        <Section title="Build Targets" icon={BarChart2} badge={rosterNeeds?.length}>
           <RosterNeedsSection needs={rosterNeeds ?? []} />
         </Section>
 
         {/* 4. Draft Shock Meter */}
-        <Section title="Draft Shock Meter" icon={Activity} badge={shockMeters?.length}>
+        <Section title="Owner Tendencies" icon={Activity} badge={shockMeters?.length}>
           <ShockMeterSection meters={shockMeters ?? []} />
         </Section>
 
         {/* 5. Draft Environment Dashboard — PHASE 1.75 */}
-        <Section title="Draft Environment" icon={Gauge}
+        <Section title="League Context" icon={Gauge}
           accent="border-emerald-500/20 bg-zinc-900/40" defaultOpen={true}>
           <DraftEnvironmentSection env={draftEnvironment} />
         </Section>
 
         {/* 6. Position Run Alerts — PHASE 1.75 */}
-        <Section title="Position Run Alerts" icon={Flame} badge={positionRunAlerts?.length ?? 0}>
+        <Section title="Position Run Windows" icon={Flame} badge={positionRunAlerts?.length ?? 0}>
           <RunAlertsSection alerts={positionRunAlerts ?? []} />
         </Section>
 
         {/* 7. Scarcity Detection — PHASE 1.75 */}
-        <Section title="Scarcity Detection" icon={Wind} badge={scarcityAlerts?.length ?? 0}>
+        <Section title="Value Windows" icon={Wind} badge={scarcityAlerts?.length ?? 0}>
           <ScarcitySection alerts={scarcityAlerts ?? []} />
         </Section>
 
         {/* 8. Keeper Compression — PHASE 1.75 */}
-        <Section title="Keeper Compression" icon={Lock} badge={keeperCompression?.length ?? 0} defaultOpen={false}>
+        <Section title="Capital Compression" icon={Lock} badge={keeperCompression?.length ?? 0} defaultOpen={false}>
           <CompressionSection compression={keeperCompression ?? []} />
         </Section>
 
         {/* 9. Draft Capital (Traded Picks) */}
-        <Section title="Draft Capital" icon={TrendingUp} badge={tradedPicks?.length ?? 0} defaultOpen={false}>
+        <Section title="Pick Capital" icon={TrendingUp} badge={tradedPicks?.length ?? 0} defaultOpen={false}>
           <TradedPicksBadge tradedPicks={tradedPicks ?? []} />
         </Section>
 
