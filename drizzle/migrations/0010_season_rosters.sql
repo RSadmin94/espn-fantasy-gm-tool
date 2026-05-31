@@ -1,7 +1,7 @@
 -- season_rosters: end-of-season roster snapshots scraped from the ESPN League Rosters page.
 -- One row per player per team per season. Unique on (leagueId, season, teamName, playerName).
 -- acquisitionType = Draft | Trade | Free Agency  (empty for seasons where ESPN omits it).
--- ownerName is resolved from gmTeams at query time; stored blank initially.
+-- ownerName is resolved from gmTeams at query time (stored blank initially).
 
 CREATE TABLE IF NOT EXISTS season_rosters (
   id              INT          AUTO_INCREMENT PRIMARY KEY,

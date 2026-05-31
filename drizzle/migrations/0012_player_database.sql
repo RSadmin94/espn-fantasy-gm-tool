@@ -5,7 +5,7 @@
 --
 -- TiDB-specific notes:
 --   • BIGINT AUTO_INCREMENT PRIMARY KEY: TiDB uses a clustered index on PKs by default.
---   • No GENERATED columns: TiDB 5.x support is limited; isStarter computed in app.
+--   • No GENERATED columns: TiDB 5.x support is limited, isStarter computed in app.
 --   • No PostgreSQL-only syntax (no SERIAL, no RETURNING, no ON CONFLICT).
 --   • All indexes created explicitly after table creation for clarity.
 --   • UNIQUE INDEX names prefixed with "uq_", regular indexes with "idx_".
@@ -38,9 +38,9 @@ CREATE TABLE IF NOT EXISTS `gm_player_registry` (
 -- ─── Table 2: gm_weekly_player_stats ─────────────────────────────────────────
 -- One row per (playerId, season, week, ownerKey).
 -- pointsScored = fantasy points earned in this week under the ownerKey's scoring system.
--- rosterSlotId: 0=Bench, 1=Starter, 2=IR; unknown slot IDs preserved as-is.
+-- rosterSlotId: 0=Bench, 1=Starter, 2=IR, unknown slot IDs preserved as-is.
 -- isStarter: computed during ingestion from rosterSlotId and lineup slot rules.
--- sourceConfidence: 100.00 = verified ESPN payload; lower if inferred/reconstructed.
+-- sourceConfidence: 100.00 = verified ESPN payload, lower if inferred/reconstructed.
 CREATE TABLE IF NOT EXISTS `gm_weekly_player_stats` (
   `id`               BIGINT         NOT NULL AUTO_INCREMENT,
   `playerId`         BIGINT         NOT NULL,
