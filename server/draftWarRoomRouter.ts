@@ -758,7 +758,16 @@ function buildMockDraft(params: {
 export const draftWarRoomRouter = router({
 
   getDraftWarRoomData: publicProcedure
-    .input(z.object({ season: z.number().int().min(2018).max(2030) }))
+    .input(z.object({
+      season: z.number().int().min(2018).max(2030),
+      keeperOverrides: z.array(z.object({
+        teamId:      z.number().int(),
+        playerName:  z.string(),
+        position:    z.string(),
+        keeperRound: z.number().int(),
+        keeperRoundPick: z.number().int().optional(),
+      })).optional(),
+    }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return { ok: false, error: "DB unavailable" };
@@ -805,8 +814,28 @@ export const draftWarRoomRouter = router({
       // This naturally pushes QBs to rounds 3-5 where they belong
       playerPool.sort((a, b) => vorp(b.projectedPoints, b.position) - vorp(a.projectedPoints, a.position));
 
+      // Apply keeper overrides if provided
+      let effectiveKeepers = keepers;
+      if (input.keeperOverrides?.length) {
+        const overriddenTeams = new Set(input.keeperOverrides.map(o => o.teamId));
+        // Remove existing keeper slots for overridden teams, replace with manual picks
+        effectiveKeepers = [
+          ...keepers.filter(k => !overriddenTeams.has(Number(k.teamId))),
+          ...input.keeperOverrides.map(o => ({
+            teamId:       o.teamId,
+            roundId:      o.keeperRound,
+            roundPick:    o.keeperRoundPick ?? 1,
+            overallPick:  0,
+            playerName:   o.playerName,
+            position:     o.position,
+            isKeeper:     1,
+            isManualOverride: true,
+          })),
+        ];
+      }
+
       // Phase 1: Keeper + Roster
-      const keeperPredictions = predictKeepers(teams, byTeam, keepers);
+      const keeperPredictions = predictKeepers(teams, byTeam, effectiveKeepers);
       const rosterNeeds       = buildRosterNeeds(teams, byTeam, keeperPredictions);
 
       // Phase 1.5: Traded picks + Shock Meters
@@ -843,10 +872,20 @@ export const draftWarRoomRouter = router({
       const pressureByRound   = calcDraftBoardPressure({ rosterNeeds, scarcityAlerts, keeperPredictions, totalTeams: teams.length, totalRounds: 14 });
       const draftEnvironment  = buildDraftEnvironmentDashboard({ scarcityAlerts, runAlerts: positionRunAlerts, compression: keeperCompression, pressureByRound, playerPool });
 
+      // Return top 100 available players with syntheticADP for frontend use
+      const keptNames = new Set(keeperPredictions.filter(k => k.predictedPlayer && k.predictedPlayer !== "Unknown").map(k => k.predictedPlayer.toLowerCase()));
+      const availablePool = playerPool.filter(p => !keptNames.has(p.name.toLowerCase())).slice(0, 150).map((p, idx) => ({
+        name: p.name, position: p.position,
+        projectedPoints: p.projectedPoints,
+        syntheticADP: idx + 1,
+        vorp: Math.round(vorp(p.projectedPoints, p.position)),
+      }));
+
       return {
         ok: true, season,
         teamCount: teams.length,
         keeperPredictions,
+        availablePool,
         rosterNeeds,
         tradedPicks,
         shockMeters,

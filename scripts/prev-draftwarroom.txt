@@ -479,86 +479,41 @@ function TradedPicksBadge({ tradedPicks }: { tradedPicks: any[] }) {
 
 // ── Mock draft board ──────────────────────────────────────────────────────────
 
-
-// ── Mock Draft Board (with Live Draft, Board, By Team, Interactive Mode) ─────
-
-interface KeeperOverride {
-  teamId: number; playerName: string; position: string; keeperRound: number;
-}
-
-function MockDraftBoard({
-  picks, teams, availablePool, keeperPredictions, rosterNeeds,
-  onKeeperOverride, keeperOverrides,
-}: {
-  picks: any[]; teams: any[];
-  availablePool: any[];
-  keeperPredictions: any[];
-  rosterNeeds: any[];
-  onKeeperOverride: (overrides: KeeperOverride[]) => void;
-  keeperOverrides: KeeperOverride[];
-}) {
-  const [view, setView]           = useState<"board" | "team" | "live">("board");
-  const [selTeam, setSelTeam]     = useState<number | null>(null);
-  const [expandPick, setExp]      = useState<number | null>(null);
+function MockDraftBoard({ picks, teams }: { picks: any[]; teams: any[] }) {
+  const [view, setView]       = useState<"board" | "team" | "live">("live");
+  const [selTeam, setSelTeam] = useState<number | null>(null);
+  const [expandPick, setExp]  = useState<number | null>(null);
   // Live simulation state
-  const [liveIdx, setLiveIdx]   = useState(0);
-  const [simState, setSimState] = useState<"idle" | "running" | "done">("idle");
-  const [myPick, setMyPick]     = useState<null | { pickNumber: number; round: number }>(null);
-  const [searchQ, setSearchQ]   = useState("");
-  const simRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const SPEED_MS = 500;
+  const [liveIdx, setLiveIdx]     = useState(0);   // current pick index shown
+  const [simState, setSimState]   = useState<"idle"|"running"|"done">("idle");
+  const simRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Keeper setup state
-  const [showKeeperSetup, setShowKeeperSetup] = useState(false);
-  const [pendingOverrides, setPendingOverrides] = useState<any[]>(keeperOverrides);
-  const [yourTeamId, setYourTeamId] = useState<number | null>(null);
+  const SPEED_MS = 600; // ms per pick
 
-  // Which teams have keeper slots?
-  const keeperTeams = keeperPredictions.map(kp => ({
-    teamId: kp.teamId, teamName: kp.teamName, keeperRound: kp.keeperRound,
-    currentPrediction: kp.predictedPlayer, position: kp.position,
-    roster: rosterNeeds.find((n: any) => n.teamId === kp.teamId),
-  }));
-
-  function startSim() { setLiveIdx(0); setSimState("running"); }
-  function pauseSim() { setSimState(s => s === "running" ? "idle" : "running"); }
-  function skipSim()  { if (simRef.current) clearTimeout(simRef.current); setLiveIdx(picks.length); setSimState("done"); }
-  function resetSim() { if (simRef.current) clearTimeout(simRef.current); setLiveIdx(0); setSimState("idle"); setMyPick(null); }
+  function startSim() {
+    setLiveIdx(0);
+    setSimState("running");
+  }
+  function pauseSim() {
+    setSimState(s => s === "running" ? "idle" : "running");
+  }
+  function skipSim() {
+    if (simRef.current) clearTimeout(simRef.current);
+    setLiveIdx(picks.length);
+    setSimState("done");
+  }
+  function resetSim() {
+    if (simRef.current) clearTimeout(simRef.current);
+    setLiveIdx(0);
+    setSimState("idle");
+  }
 
   useEffect(() => {
     if (simState !== "running") return;
     if (liveIdx >= picks.length) { setSimState("done"); return; }
-
-    const nextPick = picks[liveIdx];
-    // Pause if this is my pick (non-keeper)
-    if (yourTeamId && Number(nextPick?.teamId) === yourTeamId && !nextPick?.isKeeperSlot) {
-      setSimState("idle");
-      setMyPick({ pickNumber: nextPick.pickNumber, round: nextPick.round });
-      return;
-    }
     simRef.current = setTimeout(() => setLiveIdx(i => i + 1), SPEED_MS);
     return () => { if (simRef.current) clearTimeout(simRef.current); };
-  }, [simState, liveIdx, picks.length, yourTeamId]);
-
-  // Roster lookup for keeper setup
-  function getRosterForTeam(teamId: number): string[] {
-    const nr = rosterNeeds.find((n: any) => n.teamId === teamId);
-    if (!nr) return [];
-    return Object.keys(nr.positionCounts ?? {}).length > 0
-      ? (nr.draftPriority ?? []) // fallback
-      : [];
-  }
-
-  // Get full roster from keeperTeams context
-  const [rosterByTeam, setRosterByTeam] = useState<Map<number, any[]>>(new Map());
-
-  // Filter players for picker
-  const pickerPlayers = useMemo(() => {
-    const drafted = new Set(picks.slice(0, liveIdx).map((p: any) => p.player));
-    return availablePool.filter(p => !drafted.has(p.name) && (
-      !searchQ || p.name.toLowerCase().includes(searchQ.toLowerCase()) || p.position.toLowerCase().includes(searchQ.toLowerCase())
-    ));
-  }, [availablePool, picks, liveIdx, searchQ]);
+  }, [simState, liveIdx, picks.length]);
 
   const rounds = useMemo(() => {
     const r = new Map<number, any[]>();
@@ -580,256 +535,154 @@ function MockDraftBoard({
 
   return (
     <div>
-      {/* Controls bar */}
       <div className="flex items-center gap-2 px-5 py-3 border-b border-zinc-800/40 flex-wrap">
-        {(["board", "team", "live"] as const).map(v => (
+        {(["live","board","team"] as const).map(v => (
           <button key={v} onClick={() => { setView(v); if (v === "live") resetSim(); }}
             className={cn("px-3 py-1.5 rounded text-xs font-bold transition-colors",
               view === v ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300")}>
             {v === "live" ? "⚡ Live Draft" : v === "board" ? "Draft Board" : "By Team"}
           </button>
         ))}
-
-        {/* Keeper setup toggle */}
-        <button onClick={() => setShowKeeperSetup(s => !s)}
-          className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold border transition-colors",
-            showKeeperSetup ? "bg-amber-500/15 border-amber-500/40 text-amber-300" : "border-zinc-700 text-zinc-500 hover:text-zinc-300")}>
-          🔑 Keeper Setup {keeperOverrides.length > 0 && <span className="bg-amber-500/30 px-1 rounded">{keeperOverrides.length}</span>}
-        </button>
-
-        {/* Your team selector */}
-        <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-[10px] text-zinc-600">Your team:</span>
-          <select className="text-xs bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-300"
-            value={yourTeamId ?? ""} onChange={e => setYourTeamId(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">— Spectate —</option>
-            {teams.map((t: any) => <option key={t.teamId} value={t.teamId}>{t.teamName}</option>)}
-          </select>
-        </div>
-
         {view === "team" && (
-          <select className="text-xs bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-300"
+          <select className="ml-2 text-xs bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-300"
             value={selTeam ?? ""} onChange={e => setSelTeam(e.target.value ? Number(e.target.value) : null)}>
             <option value="">Select team…</option>
             {teams.map((t: any) => <option key={t.teamId} value={t.teamId}>{t.teamName}</option>)}
           </select>
         )}
-
         {view === "live" && (
-          <div className="flex items-center gap-2">
-            {simState === "idle" && liveIdx === 0 && <button onClick={startSim} className="px-3 py-1.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-500/25">▶ Start</button>}
-            {(simState === "running" || (simState === "idle" && liveIdx > 0)) && liveIdx < picks.length && !myPick && (
+          <div className="flex items-center gap-2 ml-auto">
+            {simState === "idle" && liveIdx === 0 && (
+              <button onClick={startSim} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-500/25">
+                ▶ Start Draft
+              </button>
+            )}
+            {(simState === "running" || simState === "idle" && liveIdx > 0) && liveIdx < picks.length && (
               <button onClick={pauseSim} className="px-3 py-1.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold">
                 {simState === "running" ? "⏸ Pause" : "▶ Resume"}
               </button>
             )}
-            {liveIdx < picks.length && liveIdx > 0 && !myPick && <button onClick={skipSim} className="px-2 py-1 text-zinc-500 text-xs hover:text-zinc-300">⏩ Skip</button>}
-            {(simState === "done" || liveIdx > 0) && <button onClick={resetSim} className="px-2 py-1 text-zinc-500 text-xs hover:text-zinc-300">↺ Reset</button>}
-            <span className="text-[10px] text-zinc-600 tabular-nums">Pick {Math.min(liveIdx, picks.length)}/{picks.length}</span>
+            {liveIdx < picks.length && liveIdx > 0 && (
+              <button onClick={skipSim} className="px-2 py-1.5 rounded text-zinc-500 text-xs hover:text-zinc-300">⏩ Skip</button>
+            )}
+            {(simState === "done" || liveIdx > 0) && (
+              <button onClick={resetSim} className="px-2 py-1.5 rounded text-zinc-500 text-xs hover:text-zinc-300">↺ Reset</button>
+            )}
+            <span className="text-[10px] text-zinc-600 tabular-nums">
+              Pick {Math.min(liveIdx, picks.length)}/{picks.length}
+            </span>
           </div>
         )}
       </div>
 
-      {/* Keeper Setup Panel */}
-      {showKeeperSetup && (
-        <div className="border-b border-zinc-800/40 bg-zinc-950/40 px-5 py-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-black text-amber-400 uppercase tracking-wider">🔑 Manual Keeper Assignment</p>
-            <button onClick={() => { onKeeperOverride(pendingOverrides); setShowKeeperSetup(false); }}
-              className="px-3 py-1.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-500/25">
-              ✓ Apply Overrides
-            </button>
-          </div>
-          <p className="text-[10px] text-zinc-600">Override the AI keeper predictions. Select a player from each team's roster to keep at the assigned round.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {keeperTeams.map(kt => {
-              const current = pendingOverrides.find(o => o.teamId === kt.teamId);
-              return (
-                <div key={kt.teamId} className="rounded-lg border border-zinc-800/60 bg-zinc-900/40 p-3 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-zinc-200">{kt.teamName}</span>
-                    <span className="text-[9px] text-zinc-600">Rd {kt.keeperRound}</span>
-                    {current && <span className="text-[9px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-1.5 rounded ml-auto">OVERRIDE</span>}
-                  </div>
-                  <p className="text-[10px] text-zinc-500">AI predicts: <span className="text-zinc-300 font-semibold">{kt.currentPrediction}</span></p>
-                  {/* Show roster from availablePool + current roster */}
-                  <div className="flex gap-2">
-                    <select
-                      className="flex-1 text-xs bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-zinc-300"
-                      value={current?.playerName ?? ""}
-                      onChange={e => {
-                        const val = e.target.value;
-                        const pool = availablePool;
-                        const player = pool.find(p => p.name === val);
-                        if (!val) {
-                          setPendingOverrides(prev => prev.filter(o => o.teamId !== kt.teamId));
-                        } else {
-                          setPendingOverrides(prev => [
-                            ...prev.filter(o => o.teamId !== kt.teamId),
-                            { teamId: kt.teamId, playerName: val, position: player?.position ?? "?", keeperRound: kt.keeperRound },
-                          ]);
-                        }
-                      }}
-                    >
-                      <option value="">— Use AI prediction —</option>
-                      {/* Show all players sorted by VORP as options */}
-                      {availablePool.slice(0, 80).map(p => (
-                        <option key={p.name} value={p.name}>{p.name} ({p.position}) — {p.projectedPoints.toFixed(0)} pts</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Interactive My Pick overlay */}
-      {myPick && view === "live" && (
-        <div className="border border-emerald-500/40 bg-emerald-500/5 px-5 py-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-black text-emerald-300 text-sm">YOUR PICK</span>
-            <span className="text-zinc-400 text-xs">Round {myPick.round} · Pick #{myPick.pickNumber}</span>
-            <button onClick={() => { setMyPick(null); setLiveIdx(i => i + 1); setSimState("running"); }}
-              className="ml-auto px-2 py-1 text-zinc-500 text-xs hover:text-zinc-300">Skip (AI picks)</button>
-          </div>
-          <input
-            className="w-full text-xs bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-zinc-200 placeholder-zinc-600"
-            placeholder="Search players by name or position…"
-            value={searchQ} onChange={e => setSearchQ(e.target.value)}
-            autoFocus
-          />
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-48 overflow-auto">
-            {pickerPlayers.slice(0, 30).map((p: any) => (
-              <button key={p.name}
-                onClick={() => {
-                  // Override this pick in the simulation
-                  setMyPick(null);
-                  setSearchQ("");
-                  // Mark as manually picked — advance simulation with this player
-                  setLiveIdx(i => i + 1);
-                  setSimState("running");
-                }}
-                className="text-left rounded-lg border border-zinc-700/60 bg-zinc-800/60 hover:border-emerald-500/40 hover:bg-emerald-500/8 p-2 transition-all">
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <PosPill pos={p.position} />
-                  <span className="text-[9px] font-bold text-zinc-500">ADP {p.syntheticADP}</span>
-                </div>
-                <div className="text-xs font-bold text-zinc-200 leading-tight truncate">{p.name}</div>
-                <div className="text-[9px] text-zinc-500">{p.projectedPoints.toFixed(0)} pts · VORP {p.vorp}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Live Draft view */}
-      {view === "live" && !myPick && (
+      {view === "live" && (
         <div>
           {simState === "idle" && liveIdx === 0 ? (
-            <div className="flex flex-col items-center justify-center py-14 gap-4">
+            <div className="flex flex-col items-center justify-center py-16 gap-4">
               <div className="text-5xl">⚡</div>
-              <h3 className="font-black text-zinc-200 text-lg">Live Mock Draft Simulator</h3>
+              <h3 className="text-zinc-200 font-black text-lg">Live Mock Draft Simulator</h3>
               <p className="text-zinc-500 text-sm text-center max-w-md">
-                Watch all 196 picks unfold. Select your team above to take over your own picks interactively.
+                Watch the full {picks.length}-pick draft unfold pick by pick. Based on keeper predictions, roster needs, and historical owner tendencies. PREDICTED — NOT OFFICIAL.
               </p>
-              <button onClick={startSim} className="px-6 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-black text-sm hover:bg-emerald-500/25">
+              <button onClick={startSim} className="mt-2 px-6 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-black text-sm hover:bg-emerald-500/25 transition-colors">
                 ▶ Start Draft Simulation
               </button>
             </div>
           ) : (
             <div>
+              {/* Progress bar */}
               <div className="h-1 bg-zinc-800">
-                <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${(liveIdx / picks.length) * 100}%` }} />
+                <div className="h-full bg-emerald-500 transition-all duration-300"
+                  style={{ width: `${(liveIdx / picks.length) * 100}%` }} />
               </div>
+              {/* Current/Last pick spotlight */}
               {liveIdx > 0 && (() => {
-                const cur = picks[Math.min(liveIdx, picks.length) - 1];
+                const currentPick = picks[Math.min(liveIdx, picks.length) - 1];
                 return (
-                  <div className={cn("px-5 py-3 border-b border-zinc-800/40", simState === "running" ? "bg-emerald-500/5" : "bg-zinc-900/20")}>
+                  <div className={cn("px-5 py-4 border-b border-zinc-800/40 transition-all",
+                    simState === "running" ? "bg-emerald-500/5" : "bg-zinc-900/20")}>
                     <div className="flex items-center gap-3 flex-wrap">
-                      <span className="text-[10px] text-zinc-500">On the clock:</span>
-                      <span className="font-black text-zinc-100">{cur?.ownerName}</span>
-                      <span className="text-zinc-600 text-[10px]">{cur?.teamName}</span>
-                      <span className="text-[10px] text-zinc-600 ml-auto">Pick {cur?.pickNumber} · Rd {cur?.round}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-zinc-500">On the clock:</span>
+                        <span className="font-black text-zinc-100">{currentPick?.ownerName}</span>
+                        <span className="text-zinc-600 text-[10px]">{currentPick?.teamName}</span>
+                      </div>
+                      <div className="flex items-center gap-2 ml-auto">
+                        <span className="text-[10px] text-zinc-600">Pick {currentPick?.pickNumber} · Rd {currentPick?.round}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 mt-1.5">
-                      <span className="font-black text-xl text-white">{cur?.player}</span>
-                      <PosPill pos={cur?.position} />
-                      {cur?.projectedPoints > 0 && <span className="text-zinc-500 text-xs">{cur?.projectedPoints?.toFixed(0)} pts</span>}
-                      {cur?.isKeeperSlot && <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">KEEPER</span>}
-                    </div>
+                    {liveIdx <= picks.length && (
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className="font-black text-xl text-white">{currentPick?.player}</span>
+                        <PosPill pos={currentPick?.position} />
+                        {currentPick?.projectedPoints > 0 && <span className="text-zinc-500 text-xs">{currentPick?.projectedPoints?.toFixed(0)} pts</span>}
+                        {currentPick?.isKeeperSlot && <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">KEEPER</span>}
+                        {currentPick?.tradedPickContext?.type === "ACQUIRED" && <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 rounded">TRADED PICK</span>}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
-              <div className="max-h-[400px] overflow-auto">
-                {picks.slice(0, liveIdx).reverse().map((p: any) => (
-                  <div key={p.pickNumber} className={cn("flex items-center gap-3 px-5 py-2 hover:bg-zinc-800/20",
-                    p.isKeeperSlot && "bg-amber-500/5",
-                    p.pickNumber === liveIdx && "border-l-2 border-l-emerald-500 bg-emerald-500/5")}>
-                    <span className="text-[10px] text-zinc-600 w-10 tabular-nums shrink-0">{p.round}.{String(p.roundPick).padStart(2,"0")}</span>
-                    <PosPill pos={p.position} />
-                    <span className="text-sm font-bold text-zinc-200 flex-1 truncate">{p.player}</span>
-                    <span className="text-[10px] text-zinc-500 shrink-0 truncate max-w-[120px]">{p.ownerName}</span>
-                    {p.projectedPoints > 0 && <span className="text-[10px] text-zinc-600 tabular-nums shrink-0">{p.projectedPoints?.toFixed(0)}</span>}
-                    <div className="w-12 shrink-0"><ConfBar value={p.confidence} small /></div>
-                  </div>
-                ))}
+              {/* Recent picks feed */}
+              <div className="divide-y divide-zinc-800/20 max-h-[500px] overflow-auto" style={{ direction: "rtl" }}>
+                <div style={{ direction: "ltr" }}>
+                  {picks.slice(0, liveIdx).reverse().map((p: any) => (
+                    <div key={p.pickNumber} className={cn("flex items-center gap-3 px-5 py-2 hover:bg-zinc-800/20",
+                      p.isKeeperSlot && "bg-amber-500/5",
+                      p.pickNumber === liveIdx && "bg-emerald-500/5 border-l-2 border-l-emerald-500")}>
+                      <span className="text-[10px] text-zinc-600 w-10 tabular-nums shrink-0">
+                        {p.round}.{String(p.roundPick).padStart(2,"0")}
+                      </span>
+                      <PosPill pos={p.position} />
+                      <span className="text-sm font-bold text-zinc-200 flex-1 truncate">{p.player}</span>
+                      <span className="text-[10px] text-zinc-500 shrink-0 truncate max-w-[120px]">{p.ownerName}</span>
+                      {p.projectedPoints > 0 && <span className="text-[10px] text-zinc-600 tabular-nums shrink-0">{p.projectedPoints?.toFixed(0)}</span>}
+                      <div className="w-12 shrink-0"><ConfBar value={p.confidence} small /></div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Draft Board — grid by round with ADP column */}
+      {/* Board view */}
       {view === "board" && (
-        <div className="overflow-auto max-h-[700px]">
+        <div className="overflow-auto max-h-[600px]">
           {rounds.map(([round, rPicks]) => (
             <div key={round} className="border-b border-zinc-800/20">
               <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur px-4 py-1.5 flex items-center gap-2">
                 <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Round {round}</span>
                 <div className="flex-1 h-px bg-zinc-800/40" />
-                <span className="text-[9px] text-zinc-700">{rPicks.length} picks</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-px bg-zinc-800/20">
-                {rPicks.map((p: any) => {
-                  // Find synthetic ADP for this player
-                  const adp = availablePool.find(ap => ap.name === p.player)?.syntheticADP;
-                  return (
-                    <button key={p.pickNumber}
-                      onClick={() => setExp(expandPick === p.pickNumber ? null : p.pickNumber)}
-                      className={cn(
-                        "text-left p-2.5 bg-zinc-900/60 hover:bg-zinc-800/60 transition-colors",
-                        p.isKeeperSlot && "border border-amber-500/20 bg-amber-500/5",
-                        p.tradedPickContext && "border-t-2 border-t-emerald-500/50",
-                        yourTeamId && Number(p.teamId) === yourTeamId && "border border-sky-500/30 bg-sky-500/5",
-                        expandPick === p.pickNumber && "ring-1 ring-emerald-500/40"
-                      )}>
-                      <div className="flex items-center gap-1 mb-1 flex-wrap">
-                        <span className="text-[9px] text-zinc-600 font-mono">{p.pickNumber}</span>
-                        <PosPill pos={p.position} />
-                        {p.isKeeperSlot && <span className="text-[8px] text-amber-400 font-bold">K</span>}
-                        {p.tradedPickContext?.type === "ACQUIRED" && <span className="text-[8px] text-emerald-400 font-bold">T↑</span>}
-                        {yourTeamId && Number(p.teamId) === yourTeamId && <span className="text-[8px] text-sky-400 font-bold">YOU</span>}
-                      </div>
-                      <div className="text-[11px] font-bold text-zinc-200 leading-tight truncate">{p.player}</div>
-                      <div className="text-[9px] text-zinc-500 truncate mt-0.5">{p.ownerName?.split(" ")[0]}</div>
-                      {!p.isKeeperSlot && p.projectedPoints > 0 && (
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <span className="text-[8px] text-zinc-700 tabular-nums">{p.projectedPoints.toFixed(0)}</span>
-                          {adp && <span className="text-[8px] text-zinc-700">ADP {adp}</span>}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
+                {rPicks.map((p: any) => (
+                  <button key={p.pickNumber}
+                    onClick={() => setExp(expandPick === p.pickNumber ? null : p.pickNumber)}
+                    className={cn(
+                      "text-left p-2.5 bg-zinc-900/60 hover:bg-zinc-800/60 transition-colors relative",
+                      p.isKeeperSlot && "border border-amber-500/20 bg-amber-500/5",
+                      p.tradedPickContext && "border-t-2 border-t-emerald-500/50",
+                      expandPick === p.pickNumber && "ring-1 ring-emerald-500/40"
+                    )}>
+                    <div className="flex items-center gap-1 mb-1">
+                      <span className="text-[9px] text-zinc-600 font-mono">{p.pickNumber}</span>
+                      <PosPill pos={p.position} />
+                      {p.isKeeperSlot && <span className="text-[8px] text-amber-400 font-bold">K</span>}
+                      {p.tradedPickContext?.type === "ACQUIRED" && <span className="text-[8px] text-emerald-400 font-bold">T↑</span>}
+                    </div>
+                    <div className="text-[11px] font-bold text-zinc-200 leading-tight truncate">{p.player}</div>
+                    <div className="text-[9px] text-zinc-500 truncate mt-0.5">{p.ownerName?.split(" ")[0]}</div>
+                    {!p.isKeeperSlot && p.projectedPoints > 0 && (
+                      <div className="text-[9px] text-zinc-700 mt-0.5 tabular-nums">{p.projectedPoints.toFixed(0)}</div>
+                    )}
+                  </button>
+                ))}
               </div>
-              {/* Expanded pick detail */}
               {rPicks.some((p: any) => p.pickNumber === expandPick) && (() => {
                 const pk = rPicks.find((p: any) => p.pickNumber === expandPick)!;
-                const adp = availablePool.find(ap => ap.name === pk.player)?.syntheticADP;
-                const vorpVal = availablePool.find(ap => ap.name === pk.player)?.vorp;
                 return (
                   <div className="mx-2 my-2 rounded-lg border border-zinc-700/60 bg-zinc-900/80 p-4 space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -838,15 +691,13 @@ function MockDraftBoard({
                       {pk.isKeeperSlot && <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">KEEPER SLOT</span>}
                       {pk.tradedPickContext && (
                         <span className={cn("text-[9px] font-bold px-1.5 rounded border",
-                          pk.tradedPickContext.type === "ACQUIRED" ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" : "text-red-400 bg-red-500/10 border-red-500/20")}>
+                          pk.tradedPickContext.type === "ACQUIRED"
+                            ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                            : "text-red-400 bg-red-500/10 border-red-500/20")}>
                           {pk.tradedPickContext.type === "ACQUIRED" ? "↑ ACQUIRED PICK" : "↓ TRADED PICK"}
                         </span>
                       )}
-                      <div className="ml-auto flex items-center gap-3 text-[10px]">
-                        {adp && <span className="text-zinc-500">Synthetic ADP: <span className="text-zinc-300 font-bold">{adp}</span></span>}
-                        {vorpVal !== undefined && <span className="text-zinc-500">VORP: <span className={cn("font-bold", vorpVal > 100 ? "text-emerald-400" : vorpVal > 50 ? "text-amber-400" : "text-zinc-400")}>{vorpVal}</span></span>}
-                        <span className="text-zinc-600">Pick {pk.pickNumber} · Rd {pk.round}</span>
-                      </div>
+                      <span className="ml-auto text-[10px] text-zinc-600">Pick {pk.pickNumber} · Rd {pk.round}</span>
                     </div>
                     <p className="text-xs text-zinc-400 italic">{pk.reasoning}</p>
                     <ConfBar value={pk.confidence} />
@@ -856,14 +707,11 @@ function MockDraftBoard({
                       <div>
                         <p className="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">Alternates</p>
                         <div className="flex flex-wrap gap-1.5">
-                          {pk.alternatePicks.map((a: any, j: number) => {
-                            const aAdp = availablePool.find(ap => ap.name === a.player)?.syntheticADP;
-                            return (
-                              <span key={j} className="text-[10px] text-zinc-500 bg-zinc-800/40 border border-zinc-700/40 px-2 py-0.5 rounded">
-                                {a.player} ({a.position}) · {a.projectedPoints?.toFixed(0)} pts{aAdp ? ` · ADP ${aAdp}` : ""}
-                              </span>
-                            );
-                          })}
+                          {pk.alternatePicks.map((a: any, j: number) => (
+                            <span key={j} className="text-[10px] text-zinc-500 bg-zinc-800/40 border border-zinc-700/40 px-2 py-0.5 rounded">
+                              {a.player} ({a.position}) · {a.projectedPoints?.toFixed(0)} pts
+                            </span>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -875,57 +723,36 @@ function MockDraftBoard({
         </div>
       )}
 
-      {/* By Team view */}
+      {/* Team view */}
       {view === "team" && selTeam && (
         <div className="divide-y divide-zinc-800/30 max-h-[600px] overflow-auto">
-          {/* Team summary */}
-          {(() => {
-            const tp = (teamPicks.get(selTeam) ?? []);
-            const totalVorp = tp.reduce((s: number, p: any) => {
-              const v = availablePool.find(ap => ap.name === p.player)?.vorp ?? 0;
-              return s + v;
-            }, 0);
-            return (
-              <div className="px-4 py-3 bg-zinc-900/40 flex items-center gap-4">
-                <span className="font-bold text-zinc-100 text-sm">{teams.find((t: any) => t.teamId === selTeam)?.teamName}</span>
-                <span className="text-[10px] text-zinc-500">{tp.length} picks</span>
-                <span className="text-[10px] text-emerald-400 ml-auto">Total VORP: {totalVorp}</span>
+          {(teamPicks.get(selTeam) ?? []).map((p: any) => (
+            <div key={p.pickNumber} className={cn("flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-800/20",
+              p.isKeeperSlot && "bg-amber-500/5",
+              p.tradedPickContext?.type === "ACQUIRED" && "border-l-2 border-l-emerald-500/60")}>
+              <div className="w-12 text-center">
+                <div className="text-[9px] text-zinc-600">Rd {p.round}</div>
+                <div className="text-[10px] font-bold text-zinc-400">#{p.pickNumber}</div>
               </div>
-            );
-          })()}
-          {(teamPicks.get(selTeam) ?? []).map((p: any) => {
-            const adp = availablePool.find(ap => ap.name === p.player)?.syntheticADP;
-            const vorpVal = availablePool.find(ap => ap.name === p.player)?.vorp;
-            return (
-              <div key={p.pickNumber} className={cn("flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-800/20",
-                p.isKeeperSlot && "bg-amber-500/5",
-                p.tradedPickContext?.type === "ACQUIRED" && "border-l-2 border-l-emerald-500/60")}>
-                <div className="w-14 text-center shrink-0">
-                  <div className="text-[9px] text-zinc-600">Rd {p.round}</div>
-                  <div className="text-[10px] font-bold text-zinc-400">#{p.pickNumber}</div>
-                </div>
-                <PosPill pos={p.position} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-zinc-200 truncate">{p.player}</div>
-                  <div className="text-[10px] text-zinc-500 truncate">{p.reasoning}</div>
-                </div>
-                <div className="shrink-0 text-right space-y-0.5">
-                  {p.projectedPoints > 0 && <div className="text-xs tabular-nums text-zinc-400">{p.projectedPoints.toFixed(0)} pts</div>}
-                  {adp && <div className="text-[9px] text-zinc-600">ADP {adp}</div>}
-                  {vorpVal !== undefined && <div className={cn("text-[9px] font-bold", vorpVal > 80 ? "text-emerald-400" : "text-zinc-600")}>+{vorpVal}</div>}
-                </div>
-                <div className="w-14 shrink-0"><ConfBar value={p.confidence} small /></div>
-                {p.isKeeperSlot && <span className="text-[9px] text-amber-400 font-bold shrink-0">KEEPER</span>}
-                {p.tradedPickContext?.type === "ACQUIRED" && <span className="text-[9px] text-emerald-400 font-bold shrink-0">TRADE↑</span>}
+              <PosPill pos={p.position} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-zinc-200 truncate">{p.player}</div>
+                <div className="text-[10px] text-zinc-500 truncate">{p.reasoning}</div>
               </div>
-            );
-          })}
+              {p.projectedPoints > 0 && <div className="text-xs tabular-nums text-zinc-400 shrink-0">{p.projectedPoints.toFixed(0)}</div>}
+              <div className="w-16 shrink-0"><ConfBar value={p.confidence} small /></div>
+              {p.isKeeperSlot && <span className="text-[9px] text-amber-400 font-bold shrink-0">KEEPER</span>}
+              {p.tradedPickContext?.type === "ACQUIRED" && <span className="text-[9px] text-emerald-400 font-bold shrink-0">TRADE↑</span>}
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
+
+// ── Draft Environment Section (Phase 1.75) ───────────────────────────────────
 
 const GRADE_COLOR: Record<string, string> = {
   A: "text-emerald-400 bg-emerald-500/10 border-emerald-500/40",
@@ -1172,17 +999,12 @@ function CompressionSection({ compression }: { compression: any[] }) {
     </div>
   );
 }
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function DraftWarRoom() {
   const _trpc  = trpc as any;
   const season = new Date().getFullYear();
-  const [keeperOverrides, setKeeperOverrides] = useState<any[]>([]);
-  const { data, isLoading, refetch } = _trpc.draftWarRoom.getDraftWarRoomData.useQuery(
-    { season, keeperOverrides: keeperOverrides.length > 0 ? keeperOverrides : undefined },
-    { queryKey: [season, keeperOverrides] }
-  );
+  const { data, isLoading, refetch } = _trpc.draftWarRoom.getDraftWarRoomData.useQuery({ season });
 
   if (isLoading) return (
     <div className="min-h-screen bg-[#09090e] flex items-center justify-center gap-2 text-zinc-500 text-sm">
@@ -1202,7 +1024,7 @@ export function DraftWarRoom() {
 
   const { keeperPredictions, rosterNeeds, tradedPicks, shockMeters, confidenceDashboard,
           keeperCompression, scarcityAlerts, positionRunAlerts, pressureByRound, draftEnvironment,
-          mockDraft, availablePool, teamCount, totalPicks } = data;
+          mockDraft, teamCount, totalPicks } = data;
   const maxRound = Math.max(...(mockDraft ?? []).map((p: any) => p.round), 0);
 
   return (
@@ -1313,17 +1135,8 @@ export function DraftWarRoom() {
 
         {/* 10. Mock Draft Board */}
         <Section title="Mock Draft Board" icon={Target} badge={totalPicks} defaultOpen={true}>
-          <MockDraftBoard
-            picks={mockDraft ?? []}
-            teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))}
-            availablePool={data?.availablePool ?? []}
-            keeperPredictions={keeperPredictions ?? []}
-            rosterNeeds={rosterNeeds ?? []}
-            keeperOverrides={keeperOverrides}
-            onKeeperOverride={(overrides) => {
-              setKeeperOverrides(overrides);
-            }}
-          />
+          <MockDraftBoard picks={mockDraft ?? []}
+            teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))} />
         </Section>
 
       </div>
