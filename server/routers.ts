@@ -7828,7 +7828,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       // ── 2. League scoring settings (from leagueScoringService) ──────────────
       const leagueScoringSettings = await getLeagueScoringSettings(undefined, ctx.user?.id).catch(() => null);
       const scoringMap: Record<number, number> = leagueScoringSettings?.scoringMap ?? {};
-      const scoringDesc = leagueScoringSettings?.scoringDescription ?? `Half PPR (0.5/rec), 6pts/TD, 4pts/pass TD, 1pt/25 pass yds, 1pt/10 rush yds, 1pt/10 rec yds`;
+      const scoringDesc = leagueScoringSettings?.scoringDescription ?? "Full PPR (1 pt/rec) · 6 pts/pass TD · 6 pts/rush TD · 6 pts/rec TD · 1 pt/25 pass yds · 1 pt/10 rush yds · 1 pt/10 rec yds · 3 pts/INT";
 
       // ── 3. Build player roster index ──────────────────────────────────────
       interface PlayerInfo {
