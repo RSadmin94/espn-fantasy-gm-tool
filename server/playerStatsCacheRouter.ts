@@ -78,7 +78,7 @@ export const playerStatsCacheRouter = router({
         fullName: z.string().min(1).max(100),
         position: z.string().max(10),
         nflTeam:  z.string().max(5).nullable().optional(),
-      })).min(1).max(1500),
+      })).min(1).max(2000),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
