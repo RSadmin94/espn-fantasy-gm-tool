@@ -74,6 +74,27 @@ function fmt(n: number | null | undefined, decimals = 1) {
   return Number(n).toFixed(decimals);
 }
 
+function warRoomKvsForPlayer(keeperPredictions: any[] | undefined, teamId: number, playerName: string | undefined) {
+  if (!keeperPredictions?.length || !playerName) return null;
+  const key = playerName.toLowerCase().trim();
+  for (const k of keeperPredictions) {
+    if (Number(k.teamId) !== teamId) continue;
+    const topName = (k.predictedPlayer as string | undefined)?.toLowerCase().trim();
+    if (topName === key && typeof k.kvs === "number") return { kvs: k.kvs, isTop: true };
+    const alt = (k.alternatives as any[] | undefined)?.find(
+      (a: any) => (a.player as string | undefined)?.toLowerCase().trim() === key,
+    );
+    if (alt && typeof alt.kvs === "number") return { kvs: alt.kvs, isTop: false };
+  }
+  return null;
+}
+
+function kvsRecStyle(kvs: number) {
+  if (kvs >= 150) return { label: "Keep", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" };
+  if (kvs >= 100) return { label: "Consider", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30" };
+  return { label: "Pass", cls: "bg-zinc-800/60 text-zinc-500 border-zinc-700/40" };
+}
+
 function slotOrder(slot: string | undefined) {
   const idx = SLOT_ORDER.indexOf(slot ?? "");
   return idx === -1 ? 99 : idx;
@@ -136,7 +157,20 @@ function AcqBadge({ type }: { type: string | undefined }) {
 
 // ── Roster grouped by slot ────────────────────────────────────────────────────
 
-function RosterTable({ players }: { players: RosterEntry[] }) {
+function RosterTable({
+  players,
+  keeperPredictions,
+  warRoomColumns,
+  warRoomLoading,
+  warRoomFailed,
+}: {
+  players: RosterEntry[];
+  keeperPredictions?: any[];
+  /** When true, show Keeper Value / Recommendation columns (synced seasons only). */
+  warRoomColumns: boolean;
+  warRoomLoading?: boolean;
+  warRoomFailed?: boolean;
+}) {
   // Group by lineup slot, sorted by slot order
   const groups = useMemo(() => {
     const map = new Map<string, RosterEntry[]>();
@@ -151,24 +185,40 @@ function RosterTable({ players }: { players: RosterEntry[] }) {
     );
   }, [players]);
 
+  const hasPred = keeperPredictions != null && keeperPredictions.length > 0;
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border">
-            <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground w-20">Slot</th>
-            <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Player</th>
-            <th className="px-4 py-2.5 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground w-12">Pos</th>
-            <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground w-16">Avg</th>
-            <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground w-16">Total</th>
-            <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground w-16 hidden md:table-cell">Proj</th>
-            <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground hidden lg:table-cell">Acq</th>
+            <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground w-20">Slot</th>
+            <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Player</th>
+            <th className="px-4 py-2.5 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground w-12">Pos</th>
+            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground w-16">Avg</th>
+            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground w-16">Total</th>
+            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground w-16 hidden md:table-cell">Proj</th>
+            {warRoomColumns && (
+              <>
+                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-muted-foreground w-24">
+                  War Room KVS
+                </th>
+                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-muted-foreground w-28">
+                  Rec.
+                </th>
+              </>
+            )}
+            <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground hidden lg:table-cell">Acq</th>
           </tr>
         </thead>
         <tbody>
           {groups.map(([slot, entries]) =>
             entries.map((p, i) => {
               const injColor = INJURY_COLORS[p.injuryStatus ?? ""] ?? "";
+              const wr =
+                warRoomColumns && hasPred && !warRoomLoading && !warRoomFailed
+                  ? warRoomKvsForPlayer(keeperPredictions, p.teamId, p.playerName)
+                  : null;
               return (
                 <tr
                   key={`${slot}-${p.playerId}-${i}`}
@@ -178,7 +228,7 @@ function RosterTable({ players }: { players: RosterEntry[] }) {
                     {i === 0 ? <SlotBadge slot={slot} /> : null}
                   </td>
                   <td className="px-4 py-2.5">
-                    <span className={cn("font-medium", injColor || "text-foreground")}>
+                    <span className={cn("text-sm font-medium", injColor || "text-foreground")}>
                       {p.playerName ?? "Unknown"}
                     </span>
                     {p.injuryStatus && p.injuryStatus !== "ACTIVE" && (
@@ -199,6 +249,51 @@ function RosterTable({ players }: { players: RosterEntry[] }) {
                   <td className="hidden px-4 py-2.5 text-right font-mono text-muted-foreground md:table-cell">
                     {fmt(p.projectedTotal, 0)}
                   </td>
+                  {warRoomColumns && (
+                    <>
+                      <td className="px-3 py-2.5 text-right">
+                        {warRoomLoading ? (
+                          <span className="text-muted-foreground text-xs tabular-nums">…</span>
+                        ) : warRoomFailed ? (
+                          <span className="text-muted-foreground text-xs" title="Draft War Room unavailable">
+                            —
+                          </span>
+                        ) : !hasPred ? (
+                          <span className="text-muted-foreground text-xs" title="No keeper predictions for this season">
+                            —
+                          </span>
+                        ) : !wr ? (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        ) : (
+                          (() => {
+                            const colorClass =
+                              wr.kvs >= 150
+                                ? "text-emerald-500"
+                                : wr.kvs >= 100
+                                  ? "text-amber-500"
+                                  : wr.kvs >= 70
+                                    ? "text-foreground"
+                                    : "text-red-500";
+                            return (
+                              <span className={cn("text-xs font-bold tabular-nums", colorClass)}>{wr.kvs}</span>
+                            );
+                          })()
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        {warRoomLoading || warRoomFailed || !hasPred ? null : !wr?.isTop ? null : (
+                          (() => {
+                            const { label, cls } = kvsRecStyle(wr.kvs);
+                            return (
+                              <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border", cls)}>
+                                {label}
+                              </span>
+                            );
+                          })()
+                        )}
+                      </td>
+                    </>
+                  )}
                   <td className="hidden px-4 py-2.5 lg:table-cell">
                     <AcqBadge type={p.acquisitionType} />
                   </td>
@@ -296,6 +391,26 @@ export function Roster() {
     { season, teamId: teamId === "ALL" ? undefined : teamId },
     { enabled: !isNotCached }
   );
+  const _trpc = trpc as any;
+  const warRoomQ = _trpc.draftWarRoom.getDraftWarRoomData.useQuery(
+    { season },
+    {
+      enabled: !isNotCached,
+      staleTime: 5 * 60 * 1000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      gcTime: 10 * 60 * 1000,
+    },
+  );
+  const keeperPredWar =
+    warRoomQ.data?.ok === true && Array.isArray(warRoomQ.data.keeperPredictions)
+      ? (warRoomQ.data.keeperPredictions as any[])
+      : undefined;
+  const warRoomFailed =
+    warRoomQ.isError ||
+    (warRoomQ.data != null &&
+      typeof warRoomQ.data === "object" &&
+      (warRoomQ.data as { ok?: boolean }).ok === false);
   const draftYear  = new Date().getFullYear();
   const [kaOpen,   setKaOpen]   = useState(false);
   const keeperPoolQ = trpc.espn.keeperPool.useQuery({ draftYear });
@@ -451,7 +566,13 @@ export function Roster() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <RosterTable players={allPlayers} />
+            <RosterTable
+              players={allPlayers}
+              keeperPredictions={keeperPredWar}
+              warRoomColumns={!isNotCached}
+              warRoomLoading={warRoomQ.isFetching}
+              warRoomFailed={warRoomFailed}
+            />
           </CardContent>
         </Card>
       )}
@@ -480,7 +601,13 @@ export function Roster() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-0">
-                    <RosterTable players={players} />
+                    <RosterTable
+                      players={players}
+                      keeperPredictions={keeperPredWar}
+                      warRoomColumns={!isNotCached}
+                      warRoomLoading={warRoomQ.isFetching}
+                      warRoomFailed={warRoomFailed}
+                    />
                   </CardContent>
                 </Card>
               );

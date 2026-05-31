@@ -1163,6 +1163,15 @@ export const appRouter = router({
       .input(z.object({ season: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const settings = await getLeagueScoringSettings(input.season, ctx.user?.id);
+        // Scoring validation: raw cache stat ID → parsed displayed value
+        const scoringValidation = settings.scoringDataSource !== "fallback_defaults" ? [
+          { statId: 4,  label: "Passing TD",       cached: settings.scoringMap[4]  ?? null, displayed: settings.passingTDPoints,       status: settings.scoringMap[4]  !== undefined ? "live" : "fallback" },
+          { statId: 3,  label: "Passing Yds/yd",  cached: settings.scoringMap[3]  ?? null, displayed: settings.passingYardsPerPoint,  status: settings.scoringMap[3]  !== undefined ? "live" : "fallback" },
+          { statId: 25, label: "Rushing TD",       cached: settings.scoringMap[25] ?? null, displayed: settings.rushingTDPoints,       status: settings.scoringMap[25] !== undefined ? "live" : "fallback" },
+          { statId: 43, label: "Receiving TD",     cached: settings.scoringMap[43] ?? null, displayed: settings.receivingTDPoints,     status: settings.scoringMap[43] !== undefined ? "live" : "fallback" },
+          { statId: 53, label: "Receptions",       cached: settings.scoringMap[53] ?? null, displayed: settings.receptionPoints,       status: settings.scoringMap[53] !== undefined ? "live" : "fallback" },
+          { statId: 57, label: "INT Thrown",       cached: settings.scoringMap[57] ?? null, displayed: settings.interceptionPoints,    status: settings.scoringMap[57] !== undefined ? "live" : "fallback" },
+        ] : null;
         return {
           scoringType: settings.scoringType,
           scoringDescription: settings.scoringDescription,
@@ -1175,6 +1184,8 @@ export const appRouter = router({
           receivingYardsPerPoint: settings.receivingYardsPerPoint,
           interceptionPoints: settings.interceptionPoints,
           breakdown: getScoringBreakdown(settings),
+          scoringValidation,
+          scoringMap: settings.scoringMap,
           fetchedAt: settings.fetchedAt.toISOString(),
           scoringDataSource: settings.scoringDataSource,
           scoringCacheSeason: settings.scoringCacheSeason,

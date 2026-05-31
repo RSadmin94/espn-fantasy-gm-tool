@@ -1,0 +1,10 @@
+
+> espn_ff_gm_tool@1.0.0 dev C:\Users\RODERICK\Projects\espn-fantasy-gm-tool
+> cross-env NODE_ENV=development tsx watch server/_core/index.ts
+
+[OAuth] Initialized with baseURL: 
+[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable.
+[Stripe] STRIPE_SECRET_KEY is not set — billing features will be disabled.
+[migrations] Starting migration check...
+[migrations] Using directory: C:\Users\RODERICK\Projects\espn-fantasy-gm-tool\drizzle\migrations
+[migrations] Done. No new migrations.

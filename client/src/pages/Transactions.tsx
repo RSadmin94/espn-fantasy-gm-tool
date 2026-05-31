@@ -927,6 +927,16 @@ export function Transactions() {
   );
   const teamsQ = trpc.espn.teams.useQuery({ season }, { enabled, staleTime: 0 });
   const rostersQ = trpc.espn.rosters.useQuery({ season }, { enabled, staleTime: 0 });
+  const pulseQ = trpc.weeklyAssessment.leaguePulse.useQuery(
+    { season },
+    {
+      enabled,
+      staleTime: 5 * 60 * 1000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      gcTime: 10 * 60 * 1000,
+    },
+  );
 
   const teams = (teamsQ.data as TeamRow[] | undefined) ?? [];
   const rawTxns = (txQ.data as TxnRow[] | undefined) ?? [];
@@ -964,6 +974,26 @@ export function Transactions() {
   const displayList = useMemo(() => {
     const q = search.trim().toLowerCase();
     let rows = rawTxns;
+
+    const calendarYear = new Date().getFullYear();
+    const pulseWeek = pulseQ.data?.week;
+    const pulseComplete = !!pulseQ.data?.isSeasonComplete;
+    const seasonStarted =
+      pulseQ.isSuccess &&
+      typeof pulseWeek === "number" &&
+      pulseWeek >= 1 &&
+      !pulseComplete;
+    const isPreseason =
+      enabled &&
+      season === calendarYear &&
+      pulseQ.isSuccess &&
+      !pulseComplete &&
+      !seasonStarted;
+
+    if (isPreseason) {
+      rows = rows.filter(r => isTradeType(r.type));
+    }
+
     if (q) {
       rows = rows.filter(r => rowMatchesSearch(r, q));
     }
@@ -1026,7 +1056,7 @@ export function Transactions() {
     });
 
     return filtered;
-  }, [rawTxns, search, tradeStatusFilter]);
+  }, [rawTxns, search, tradeStatusFilter, enabled, season, pulseQ.isSuccess, pulseQ.data?.week, pulseQ.data?.isSeasonComplete]);
 
   const isNotCached = !cachedSeasons.includes(season);
 

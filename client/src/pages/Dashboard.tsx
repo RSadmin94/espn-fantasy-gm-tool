@@ -55,6 +55,14 @@ function unwrapMaybe<T>(m: MaybeAvail<T> | undefined | null): T | null {
 const CURRENT_YEAR = new Date().getFullYear();
 const SEASONS_DESC = Array.from({ length: CURRENT_YEAR - 2009 + 1 }, (_, i) => CURRENT_YEAR - i);
 
+/** Dashboard: avoid refetch storms on tab focus / route remount */
+const DASH_QUERY_OPTS = {
+  staleTime: 5 * 60 * 1000,
+  refetchOnMount: false,
+  refetchOnWindowFocus: false,
+  gcTime: 10 * 60 * 1000,
+} as const;
+
 function num(n: number | undefined | null): number {
   const v = Number(n);
   return Number.isFinite(v) ? v : 0;
@@ -204,8 +212,8 @@ function classifyPlayoff(
 
 export function Dashboard() {
   const leagueCtx = useLeagueContext();
-  const activeLeagueQ = trpc.league.getActive.useQuery(undefined, { staleTime: 30_000 });
-  const cachedSeasonsQ = trpc.espn.cachedSeasons.useQuery(undefined, { staleTime: 60_000 });
+  const activeLeagueQ = trpc.league.getActive.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 30_000 });
+  const cachedSeasonsQ = trpc.espn.cachedSeasons.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 60_000 });
   const cachedSeasons = cachedSeasonsQ.data ?? [];
 
   const defaultSeason =
@@ -223,20 +231,22 @@ export function Dashboard() {
     }
   }, [cachedSeasons]);
 
-  const hofQ = trpc.espn.hallOfFame.useQuery(undefined, { staleTime: 60_000 });
-  const ownerListQ = trpc.owners.ownerList.useQuery(undefined, { staleTime: 60_000 });
-  const dataHealthQ = trpc.dataHealth.leagueOverview.useQuery(undefined, { staleTime: 60_000 });
-  const coverageQ = trpc.espn.ownerMatchupCoverage.useQuery(undefined, { staleTime: 60_000 });
+  const hofQ = trpc.espn.hallOfFame.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 60_000 });
+  const ownerListQ = trpc.owners.ownerList.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 60_000 });
+  const dataHealthQ = trpc.dataHealth.leagueOverview.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 60_000 });
+  const coverageQ = trpc.espn.ownerMatchupCoverage.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 60_000 });
 
   const pulseQ = trpc.weeklyAssessment.leaguePulse.useQuery(
     { season },
-    { retry: false, staleTime: 30_000 },
+    { ...DASH_QUERY_OPTS, retry: false, staleTime: 30_000 },
   );
 
   const week = pulseQ.data?.week ?? 0;
+
   const scoreboardQ = trpc.espn.matchupsScoreboard.useQuery(
     { season, week: week >= 1 ? week : 1 },
     {
+      ...DASH_QUERY_OPTS,
       enabled: week >= 1 && pulseQ.isSuccess && !pulseQ.isFetching,
       staleTime: 30_000,
     },
@@ -244,7 +254,7 @@ export function Dashboard() {
 
   const standingsQ = trpc.espn.standings.useQuery(
     { season },
-    { enabled: !leagueCtx.isLoading, staleTime: 60_000 },
+    { ...DASH_QUERY_OPTS, enabled: !leagueCtx.isLoading, staleTime: 60_000 },
   );
 
   // pulseTeams must be declared before `ranked` so we can overlay real ownerNames.
@@ -400,7 +410,7 @@ export function Dashboard() {
   const _trpc = trpc as any;
   const draftIntelQ = _trpc.draftWarRoom.getDraftWarRoomData.useQuery(
     { season: CURRENT_YEAR },
-    { staleTime: 5 * 60 * 1000 }
+    { ...DASH_QUERY_OPTS, staleTime: 5 * 60 * 1000 },
   );
 
   const powerTop = (ownerListQ.data?.powerRankings ?? []).slice(0, 5);
@@ -547,7 +557,7 @@ export function Dashboard() {
           : "Draft intelligence ready — " + CURRENT_YEAR + " season";
         const conf = topKeeper?.confidence ?? 0;
         const evidence: string[] = [
-          topKeeper ? topKeeper.teamName + ": " + topKeeper.predictedPlayer + " KVS " + topKeeper.kvs + " — " + (topKeeper.surplusLabel ?? "value") + " at Round " + topKeeper.keeperRound : "",
+          topKeeper ? topKeeper.teamName + ": " + topKeeper.predictedPlayer + " KVS " + topKeeper.kvs + " — " + (topKeeper.surplusLabel ?? "value") + " at cost Round " + topKeeper.keeperRound : "",
           urgentScarcity ? urgentScarcity.position + " scarcity: " + urgentScarcity.eliteSupply + " elite available, demand " + (urgentScarcity.demandScore?.toFixed(2) ?? "0") : "",
           topRun ? topRun.teamCount + " owners project " + topRun.position + " as top need — " + topRun.roundWindow : "",
           tradedPick ? tradedPick.ownerName + " holds extra Round " + tradedPick.round + " pick — capital advantage" : "",
@@ -614,7 +624,7 @@ export function Dashboard() {
                   ) : topKeeper ? (
                     <>
                       <p className="text-sm font-bold text-zinc-100 truncate">{topKeeper.predictedPlayer}</p>
-                      <p className="text-[10px] text-zinc-500">{topKeeper.teamName} · KVS {topKeeper.kvs} · Rd {topKeeper.keeperRound}</p>
+                      <p className="text-[10px] text-zinc-500">{topKeeper.teamName} · KVS {topKeeper.kvs} · Cost Rd {topKeeper.keeperRound}</p>
                     </>
                   ) : (
                     <p className="text-xs text-zinc-600">No keepers found</p>

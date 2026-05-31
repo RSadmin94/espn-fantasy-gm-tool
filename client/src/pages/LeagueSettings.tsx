@@ -137,6 +137,43 @@ export function LeagueSettings() {
         <Row label="Receiving Yards"  value={`1 pt / ${s.receivingYardsPerPoint} yds`} />
       </SectionCard>
 
+      {/* 1b. Scoring Validation Report */}
+      {s && (s as any).scoringValidation && (
+        <details className="rounded-lg border border-zinc-700/50 bg-zinc-900/30">
+          <summary className="cursor-pointer px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-zinc-500 hover:text-zinc-300">
+            Scoring Validation Report (Cache → Displayed)
+          </summary>
+          <div className="overflow-x-auto px-4 pb-3">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-zinc-800 text-left text-zinc-600">
+                  <th className="py-1.5 pr-4">Stat</th>
+                  <th className="py-1.5 pr-4">statId</th>
+                  <th className="py-1.5 pr-4">Cache Value</th>
+                  <th className="py-1.5 pr-4">Displayed</th>
+                  <th className="py-1.5">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {((s as any).scoringValidation as Array<{statId:number;label:string;cached:number|null;displayed:number;status:string}>).map((row) => (
+                  <tr key={row.statId} className="border-b border-zinc-800/40">
+                    <td className="py-1.5 pr-4 text-zinc-300 font-medium">{row.label}</td>
+                    <td className="py-1.5 pr-4 text-zinc-500 font-mono">{row.statId}</td>
+                    <td className="py-1.5 pr-4 font-mono text-zinc-300">{row.cached !== null ? row.cached : <span className="text-amber-400">missing</span>}</td>
+                    <td className="py-1.5 pr-4 font-mono text-zinc-100 font-bold">{row.displayed}</td>
+                    <td className="py-1.5">
+                      <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold uppercase", row.status === "live" ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300")}>
+                        {row.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+
       {/* 2. Core Scoring Rules */}
       {coreRows.length > 0 && (
         <SectionCard title="Core Scoring Rules">

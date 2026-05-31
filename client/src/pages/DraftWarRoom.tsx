@@ -190,10 +190,15 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
                 <span className="text-xs font-bold text-zinc-100">{k.teamName}</span>
                 <span className="text-[10px] text-zinc-600">· {k.ownerName}</span>
                 {k.status === "CONFIRMED"
-                  ? <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 rounded"><CheckCircle className="h-2.5 w-2.5" />CONFIRMED</span>
-                  : <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">PREDICTED</span>
+                  ? <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 rounded"><CheckCircle className="h-2.5 w-2.5" />CONFIRMED</span>
+                  : k.status === "HYPOTHETICAL"
+                    ? <span className="text-[10px] font-bold text-sky-400 bg-sky-500/10 border border-sky-500/20 px-1.5 rounded">HYPOTHETICAL</span>
+                    : <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">PREDICTED</span>
                 }
-                <span className="text-[9px] text-zinc-600 ml-auto">Rd {k.keeperRound}</span>
+                <span className="text-[10px] text-zinc-600 ml-auto tabular-nums">
+                  {k.keeperSlotRound != null ? <>Slot Rd {k.keeperSlotRound} · </> : null}
+                  Cost Rd {k.keeperRound}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-black text-zinc-100 text-base">{k.predictedPlayer}</span>
@@ -483,7 +488,11 @@ function TradedPicksBadge({ tradedPicks }: { tradedPicks: any[] }) {
 // ── Mock Draft Board (with Live Draft, Board, By Team, Interactive Mode) ─────
 
 interface KeeperOverride {
-  teamId: number; playerName: string; position: string; keeperRound: number;
+  teamId: number;
+  playerName: string;
+  position: string;
+  /** Draft board round (matches `draft_picks.roundId` for keeper slot), not keeper cost round */
+  keeperRound: number;
 }
 
 function MockDraftBoard({
@@ -513,12 +522,18 @@ function MockDraftBoard({
   const [pendingOverrides, setPendingOverrides] = useState<any[]>(keeperOverrides);
   const [yourTeamId, setYourTeamId] = useState<number | null>(null);
 
-  // Which teams have keeper slots?
-  const keeperTeams = keeperPredictions.map(kp => ({
-    teamId: kp.teamId, teamName: kp.teamName, keeperRound: kp.keeperRound,
-    currentPrediction: kp.predictedPlayer, position: kp.position,
-    roster: rosterNeeds.find((n: any) => n.teamId === kp.teamId),
-  }));
+  // Teams with an official keeper slot on the board (excludes hypothetical-only rows)
+  const keeperTeams = keeperPredictions
+    .filter((kp: any) => kp.status !== "HYPOTHETICAL" && kp.keeperSlotRound != null && Number(kp.keeperSlotRound) > 0)
+    .map((kp: any) => ({
+      teamId: kp.teamId,
+      teamName: kp.teamName,
+      keeperSlotRound: Number(kp.keeperSlotRound),
+      keeperCostRound: Number(kp.keeperRound),
+      currentPrediction: kp.predictedPlayer,
+      position: kp.position,
+      roster: rosterNeeds.find((n: any) => n.teamId === kp.teamId),
+    }));
 
   function startSim() { setLiveIdx(0); setSimState("running"); }
   function pauseSim() { setSimState(s => s === "running" ? "idle" : "running"); }
@@ -643,12 +658,12 @@ function MockDraftBoard({
           <p className="text-[10px] text-zinc-600">Override the AI keeper predictions. Select a player from each team's roster to keep at the assigned round.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {keeperTeams.map(kt => {
-              const current = pendingOverrides.find(o => o.teamId === kt.teamId);
+              const current = pendingOverrides.find(o => o.teamId === kt.teamId && o.keeperRound === kt.keeperSlotRound);
               return (
-                <div key={kt.teamId} className="rounded-lg border border-zinc-800/60 bg-zinc-900/40 p-3 space-y-2">
+                <div key={`${kt.teamId}-${kt.keeperSlotRound}`} className="rounded-lg border border-zinc-800/60 bg-zinc-900/40 p-3 space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-zinc-200">{kt.teamName}</span>
-                    <span className="text-[9px] text-zinc-600">Rd {kt.keeperRound}</span>
+                    <span className="text-[10px] text-zinc-600 tabular-nums">Slot Rd {kt.keeperSlotRound} · Cost Rd {kt.keeperCostRound}</span>
                     {current && <span className="text-[9px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-1.5 rounded ml-auto">OVERRIDE</span>}
                   </div>
                   <p className="text-[10px] text-zinc-500">AI predicts: <span className="text-zinc-300 font-semibold">{kt.currentPrediction}</span></p>
@@ -662,20 +677,42 @@ function MockDraftBoard({
                         const pool = availablePool;
                         const player = pool.find(p => p.name === val);
                         if (!val) {
-                          setPendingOverrides(prev => prev.filter(o => o.teamId !== kt.teamId));
+                          setPendingOverrides(prev => prev.filter(o => !(o.teamId === kt.teamId && o.keeperRound === kt.keeperSlotRound)));
                         } else {
                           setPendingOverrides(prev => [
-                            ...prev.filter(o => o.teamId !== kt.teamId),
-                            { teamId: kt.teamId, playerName: val, position: player?.position ?? "?", keeperRound: kt.keeperRound },
+                            ...prev.filter(o => !(o.teamId === kt.teamId && o.keeperRound === kt.keeperSlotRound)),
+                            {
+                              teamId: kt.teamId,
+                              playerName: val,
+                              position: player?.position ?? "?",
+                              keeperRound: kt.keeperSlotRound,
+                            },
                           ]);
                         }
                       }}
                     >
                       <option value="">— Use AI prediction —</option>
-                      {/* Show all players sorted by VORP as options */}
-                      {availablePool.slice(0, 80).map(p => (
-                        <option key={p.name} value={p.name}>{p.name} ({p.position}) — {p.projectedPoints.toFixed(0)} pts</option>
-                      ))}
+                      {(() => {
+                        const teamRoster = rosterNeeds.find((n: any) => n.teamId === kt.teamId);
+                        const rosterPlayers: string[] = (teamRoster?.allPlayers ?? teamRoster?.draftPriority ?? []) as string[];
+                        const options = rosterPlayers.length > 0
+                          ? rosterPlayers.map((name: string) => {
+                              const p = availablePool.find((ap: any) => ap.name === name);
+                              return { name, position: p?.position ?? "?", pts: p?.projectedPoints ?? 0, adp: p?.syntheticADP };
+                            })
+                          : availablePool.slice(0, 80).map((p: any) => ({
+                              name: p.name,
+                              position: p.position,
+                              pts: p.projectedPoints,
+                              adp: p.syntheticADP,
+                            }));
+                        return options.map((p: any) => (
+                          <option key={p.name} value={p.name}>
+                            {p.name} ({p.position ?? "?"}) · {Number(p.pts ?? 0).toFixed(0)} pts
+                            {p.adp != null ? ` · ADP ${p.adp}` : ""}
+                          </option>
+                        ));
+                      })()}
                     </select>
                   </div>
                 </div>
