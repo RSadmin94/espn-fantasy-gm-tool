@@ -311,20 +311,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   document.getElementById("histTest")?.addEventListener("click", async () => {
-    const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
-    setHistOut("Fetching rosters from ESPN API (2018-2025)...");
+    const lid    = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
+    const season = new Date().getFullYear();
+    setHistOut(`Fetching ${season} player universe from ESPN...`);
     try {
-      const r = await chrome.runtime.sendMessage({ type: MSG_HIST_TEST, leagueId: lid });
+      const r = await chrome.runtime.sendMessage({ type: MSG_HIST_TEST, leagueId: lid, season });
       if (!r?.ok) { setHistOut("Error: " + (r?.error || "unknown")); return; }
-      const lines = ["Season  Players  Inserted  Updated  Status"];
-      for (const s of (r.summary || [])) {
-        const status = s.ok ? "\u2713" : "\u2717 " + (s.error || "");
-        lines.push(`${s.season}   ${String(s.players).padStart(7)}  ${String(s.inserted ?? 0).padStart(8)}  ${String(s.updated ?? 0).padStart(7)}  ${status}`);
-      }
-      lines.push("");
-      lines.push(`Total players synced: ${r.totalPlayers}`);
-      lines.push(r.totalPlayers >= 250 ? "\u2713 Player registry populated." : `\u26A0 ${r.totalPlayers} players found.`);
-      setHistOut(lines.join("\n"));
+      setHistOut([
+        `Season:   ${r.season}`,
+        `Fetched:  ${r.fetched} players from ESPN`,
+        `Inserted: ${r.inserted} new players`,
+        `Updated:  ${r.updated} existing players`,
+        ``,
+        r.inserted + r.updated >= 250
+          ? "\u2713 Player registry populated."
+          : `\u26A0 Only ${r.inserted + r.updated} players \u2014 check ESPN session.`,
+      ].join("\n"));
     } catch (e) {
       setHistOut(e instanceof Error ? e.message : String(e));
     }

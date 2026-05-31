@@ -2495,66 +2495,95 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
     const testTimer = setTimeout(
       () => onceRespond({ ok: false, error: "extension_internal_timeout" }),
-      120000,
+      60000,
     );
 
     (async () => {
       const leagueId = String(message?.leagueId || "457622").trim();
+      const season   = Number(message?.season)   || 2026;
+
       const warRoomCookieHeader = await getWarRoomCookieHeaderString();
       if (!warRoomCookieHeader) {
         onceRespond({ ok: false, error: "Sign in at gmwarroom.online first." });
         return;
       }
 
-      const SEASONS = [2018,2019,2020,2021,2022,2023,2024,2025];
-      const summary = [];
-      let totalPlayers = 0;
+      // Fetch the full ESPN player universe using kona_player_info + x-fantasy-filter.
+      // Returns ~1000 scorable players (QB/RB/WR/TE/K/DST) sorted by ownership.
+      const filter = JSON.stringify({
+        players: {
+          limit: 1000,
+          offset: 0,
+          sortPercOwned: { sortAsc: false, sortPriority: 1 },
+          filterSlotIds: { value: [0, 2, 4, 6, 16, 17, 23] },
+        },
+      });
 
-      for (const season of SEASONS) {
-        await sleep(400);
+      const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=kona_player_info`;
 
-        // Fetch the roster for this season from ESPN using the extension's live session
-        const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=mRoster`;
-        const r = await fetchEspnJsonWithBackoff(url, { label: `mRoster:${season}` });
-
-        if (!r.ok) {
-          summary.push({ season, ok: false, error: r.error || `HTTP ${r.status}`, players: 0 });
-          continue;
-        }
-
-        // Extract players from teams[].roster.entries[].playerPoolEntry.player
-        const players = [];
-        const teams = Array.isArray(r.data.teams) ? r.data.teams : Object.values(r.data.teams || {});
-        for (const team of teams) {
-          for (const entry of (team.roster?.entries || [])) {
-            const player = entry.playerPoolEntry?.player;
-            if (!player?.id || !player?.fullName) continue;
-            const posId = player.defaultPositionId;
-            const pos = { 1:"QB",2:"RB",3:"WR",4:"TE",5:"K",16:"DEF" }[posId];
-            if (!pos) continue;
-            players.push({
-              espnId:   Number(player.id),
-              fullName: String(player.fullName),
-              position: pos,
-              nflTeam:  { 1:"ATL",2:"BUF",3:"CHI",4:"CIN",5:"CLE",6:"DAL",7:"DEN",8:"DET",9:"GB",10:"TEN",11:"IND",12:"KC",13:"LV",14:"LAR",15:"MIA",16:"MIN",17:"NE",18:"NO",19:"NYG",20:"NYJ",21:"PHI",22:"ARI",23:"PIT",24:"LAC",25:"SF",26:"SEA",27:"TB",28:"WSH",29:"CAR",30:"JAX",33:"BAL",34:"HOU" }[player.proTeamId] || null,
-            });
-          }
-        }
-
-        if (players.length === 0) {
-          summary.push({ season, ok: false, error: "no_players_in_roster", players: 0 });
-          continue;
-        }
-
-        // POST to server
-        const post = await postTrpcHistJson(TRPC_SAVE_ROSTER_URL, warRoomCookieHeader, { season, players }, null);
-        const res  = post.ok ? (post.parsed?.[0]?.result?.data?.json ?? post.parsed?.result?.data?.json ?? {}) : {};
-
-        summary.push({ season, ok: post.ok, players: players.length, inserted: res.inserted ?? 0, updated: res.updated ?? 0, error: post.error || null });
-        if (post.ok) totalPlayers += players.length;
+      // Use DNR to inject ESPN cookies, then fetch with the fantasy filter header
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        onceRespond({ ok: false, error: "ESPN login expired." });
+        return;
       }
 
-      onceRespond({ ok: true, summary, totalPlayers });
+      await applyEspnHistoricalFetchDnr(buildEspnCookieHeader(swid, espnS2));
+      let espnData = null;
+      try {
+        const r = await fetch(url, {
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+            "x-fantasy-filter": filter,
+            "X-Fantasy-Source": "kona",
+            "X-Fantasy-Platform": "kona",
+          },
+        });
+        if (r.ok) espnData = await r.json();
+        else { onceRespond({ ok: false, error: `ESPN HTTP ${r.status}` }); return; }
+      } finally {
+        await removeEspnHistoricalFetchDnr();
+      }
+
+      const rawPlayers = espnData?.players || [];
+      const POSITIONS = { 1:"QB", 2:"RB", 3:"WR", 4:"TE", 5:"K", 16:"DEF" };
+      const PRO_TEAMS = { 1:"ATL",2:"BUF",3:"CHI",4:"CIN",5:"CLE",6:"DAL",7:"DEN",8:"DET",9:"GB",10:"TEN",11:"IND",12:"KC",13:"LV",14:"LAR",15:"MIA",16:"MIN",17:"NE",18:"NO",19:"NYG",20:"NYJ",21:"PHI",22:"ARI",23:"PIT",24:"LAC",25:"SF",26:"SEA",27:"TB",28:"WSH",29:"CAR",30:"JAX",33:"BAL",34:"HOU" };
+
+      const players = rawPlayers
+        .map(entry => {
+          const p = entry.player || {};
+          const pos = POSITIONS[p.defaultPositionId];
+          if (!pos || !p.id || !p.fullName) return null;
+          return {
+            espnId:   Number(p.id),
+            fullName: String(p.fullName),
+            position: pos,
+            nflTeam:  PRO_TEAMS[p.proTeamId] || null,
+          };
+        })
+        .filter(Boolean);
+
+      if (players.length === 0) {
+        onceRespond({ ok: false, error: "No players extracted from ESPN response." });
+        return;
+      }
+
+      // POST to War Room server
+      const post = await postTrpcHistJson(
+        TRPC_SAVE_ROSTER_URL,
+        warRoomCookieHeader,
+        { season, players },
+        null,
+      );
+
+      if (!post.ok) {
+        onceRespond({ ok: false, error: post.error || "server_post_failed" });
+        return;
+      }
+
+      const res = post.parsed?.[0]?.result?.data?.json ?? post.parsed?.result?.data?.json ?? {};
+      onceRespond({ ok: true, fetched: players.length, inserted: res.inserted ?? 0, updated: res.updated ?? 0, season });
     })().catch((err) => {
       onceRespond({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
