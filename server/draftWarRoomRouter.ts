@@ -778,9 +778,9 @@ export const draftWarRoomRouter = router({
 
       // Player pool
       const [regRows] = await db.execute(drizzleSql`
-        SELECT fullName, position, espnPlayerId
-        FROM gm_player_registry WHERE position IN ('QB','RB','WR','TE','K','DEF')
-        ORDER BY lastSeasonSeen DESC, id ASC LIMIT 500
+        SELECT fullName, position, espnPlayerId, adp, percentOwned, auctionValue
+        FROM gm_player_registry WHERE position IN ('QB','RB','WR','TE','K','DEF','DL','LB','DB')
+        ORDER BY adp ASC, lastSeasonSeen DESC, id ASC LIMIT 700
       `) as unknown as [any[]];
 
       const inPool = new Set<string>();
@@ -795,10 +795,21 @@ export const draftWarRoomRouter = router({
         DEF: [160,145,130,118,106,95,84,74,65,57,49,42,35,29],
       };
 
+      // Build a quick ESPN ID → adp map from registry for roster players
+      const [espnAdpRows] = await db.execute(drizzleSql`
+        SELECT fullName, adp, percentOwned FROM gm_player_registry WHERE adp IS NOT NULL LIMIT 700
+      `) as unknown as [any[]];
+      const adpByName = new Map<string, number>(
+        (espnAdpRows as any[]).filter(r => r.adp).map(r => [r.fullName.toLowerCase(), parseFloat(r.adp)])
+      );
+
       for (const [, players] of byTeam.entries()) {
         for (const p of players) {
           if (!p.playerName || inPool.has(p.playerName.toLowerCase())) continue;
-          playerPool.push({ name: p.playerName, position: p.position, projectedPoints: p.projectedPoints, espnId: null });
+          playerPool.push({
+            name: p.playerName, position: p.position, projectedPoints: p.projectedPoints, espnId: null,
+            adp: adpByName.get(p.playerName.toLowerCase()) ?? null,
+          });
           inPool.add(p.playerName.toLowerCase());
         }
       }
@@ -807,7 +818,13 @@ export const draftWarRoomRouter = router({
         const pos = reg.position as string;
         posCounters[pos] = (posCounters[pos] ?? 0) + 1;
         const tier = Math.min(posCounters[pos] - 1, (POS_BASELINE[pos]?.length ?? 1) - 1);
-        playerPool.push({ name: reg.fullName, position: pos, projectedPoints: POS_BASELINE[pos]?.[tier] ?? 0, espnId: reg.espnPlayerId });
+        playerPool.push({
+          name: reg.fullName, position: pos,
+          projectedPoints: POS_BASELINE[pos]?.[tier] ?? 0,
+          espnId: reg.espnPlayerId,
+          adp: reg.adp ? parseFloat(reg.adp) : null,
+          percentOwned: reg.percentOwned ? parseFloat(reg.percentOwned) : null,
+        });
         inPool.add(reg.fullName.toLowerCase());
       }
       // Sort by VBD VORP (Value Over Replacement Player) — not raw projected points
