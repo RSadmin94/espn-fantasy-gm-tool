@@ -29,6 +29,7 @@ import { OwnerProfiles } from "./pages/OwnerProfiles";
 import { HallOfFame } from "./pages/HallOfFame";
 import { LeagueDataHealth } from "./pages/LeagueDataHealth";
 import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
+import { PlayerIntelligence } from "./pages/PlayerIntelligence";
 import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
@@ -126,6 +127,7 @@ const router = createBrowserRouter([
           { path: "/owner-profiles",         element: <OwnerProfiles /> },
           { path: "/league-data-health",     element: <LeagueDataHealth /> },
           { path: "/owner-identity-review",  element: <OwnerIdentityReview /> },
+          { path: "/player-intelligence",    element: <PlayerIntelligence /> },
           { path: "/transactions", element: <Transactions /> },
           { path: "/standings", element: <Standings /> },
           { path: "/matchups", element: <Matchups /> },

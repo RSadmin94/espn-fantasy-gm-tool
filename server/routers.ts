@@ -69,7 +69,7 @@ import {
   getSeasonTeams,
 } from "./historicalDataService";
 import { upsertMatchups } from "./espnPersistence";
-import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmSeasonRosters, gmLeagueSettings, gmMatchups, syncRuns, leagueMedals, ownerAliases } from "../drizzle/schema";
+import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmSeasonRosters, gmLeagueSettings, gmMatchups, syncRuns, leagueMedals, ownerAliases, gmTransactions, gmRosterEntries, gmPlayers } from "../drizzle/schema";
 import {
   eq as eqDrizzle,
   and as andDrizzle,
@@ -79,6 +79,7 @@ import {
   sql,
   max as maxDrizzle,
   count as sqlCount,
+  like as likeDrizzle,
 } from "drizzle-orm";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
@@ -399,6 +400,64 @@ function buildOwnerPowerReason(input: {
   else if (input.activityAvgPerSeason <= 12 && hg >= 6) parts.push("low-volume operator");
   if (parts.length === 0) parts.push("balanced résumé");
   return parts.slice(0, 3).join(" · ");
+}
+
+// ── buildPlayerStory ── Deterministic league story from aggregated data ───────
+function buildPlayerStory(args: {
+  playerName: string; position: string; nflTeam: string;
+  ownershipTimeline: Array<{ ownerName: string; season: number; isKeeper: boolean; isChampionSeason: boolean }>;
+  enrichedDraft:  Array<{ season: number; round: number; ownerName: string; isKeeper: boolean; isChampionSeason: boolean }>;
+  enrichedTrades: Array<{ season: number; fromOwner: string; toOwner: string }>;
+  keeperHistory:  Array<{ season: number; round: number; ownerName: string }>;
+  champSeasons:   number[];
+  uniqueOwners:   string[];
+  firstSeason:    number | null;
+  lastSeason:     number | null;
+}): string {
+  const { playerName, position, nflTeam, ownershipTimeline, enrichedDraft, enrichedTrades, keeperHistory, champSeasons, uniqueOwners, firstSeason, lastSeason } = args;
+  if (ownershipTimeline.length === 0 && enrichedDraft.length === 0) {
+    return `${playerName} has been searched in this league but no draft or roster history was found in the database.`;
+  }
+  const parts: string[] = [];
+  const nfl = nflTeam ? ` (${nflTeam})` : "";
+  const pos = position || "player";
+  const seasons = lastSeason && firstSeason ? (firstSeason === lastSeason ? `${firstSeason}` : `${firstSeason}–${lastSeason}`) : (firstSeason ? String(firstSeason) : "");
+  const origDraft = [...enrichedDraft].sort((a,b) => a.season - b.season)[0];
+  if (origDraft) {
+    parts.push(`${playerName}${nfl} first appeared in this league in ${origDraft.season}, originally drafted in Round ${origDraft.round} by ${origDraft.ownerName}.`);
+  }
+  if (uniqueOwners.length > 1) {
+    parts.push(`Over ${ownershipTimeline.length} season${ownershipTimeline.length === 1 ? "" : "s"}, ${playerName} passed through ${uniqueOwners.length} different managers: ${uniqueOwners.slice(0, 3).join(", ")}${uniqueOwners.length > 3 ? `, and ${uniqueOwners.length - 3} more` : ""}.`);
+  } else if (uniqueOwners.length === 1) {
+    parts.push(`${uniqueOwners[0]} has owned ${playerName} for ${ownershipTimeline.length === 1 ? "one season" : `all ${ownershipTimeline.length} seasons`} tracked in this league.`);
+  }
+  if (enrichedTrades.length > 0) {
+    const lastTrade = enrichedTrades[0];
+    parts.push(`The most recent trade moved ${playerName} from ${lastTrade.fromOwner} to ${lastTrade.toOwner} in ${lastTrade.season}.`);
+  }
+  if (keeperHistory.length > 0) {
+    const mostKeptOwner = (() => {
+      const cnt: Record<string, number> = {};
+      for (const k of keeperHistory) cnt[k.ownerName] = (cnt[k.ownerName] ?? 0) + 1;
+      return Object.entries(cnt).sort((a,b) => b[1]-a[1])[0];
+    })();
+    if (mostKeptOwner) {
+      parts.push(`${mostKeptOwner[0]} has kept ${playerName} ${mostKeptOwner[1] === 1 ? "once" : `${mostKeptOwner[1]} times`} — the longest keeper tenure in league history for this ${pos}.`);
+    }
+    const expensiveKeep = [...keeperHistory].sort((a,b) => a.round - b.round)[0];
+    if (expensiveKeep && expensiveKeep.round <= 3) {
+      parts.push(`The most expensive keeper slot used for ${playerName} was Round ${expensiveKeep.round} in ${expensiveKeep.season} by ${expensiveKeep.ownerName} — signaling high confidence in their value.`);
+    }
+  }
+  if (champSeasons.length > 0) {
+    const champOwner = ownershipTimeline.find(t => t.isChampionSeason && champSeasons.includes(t.season));
+    if (champOwner) {
+      parts.push(`${playerName} was on the championship roster in ${champSeasons.join(" and ")} — ${champOwner.ownerName} rode their ${pos} performance to a title.`);
+    }
+  } else if (seasons) {
+    parts.push(`Across ${seasons}, ${playerName} has yet to be on a championship roster in this league.`);
+  }
+  return parts.length > 0 ? parts.join(" ") : `${playerName} has a presence in league records spanning ${seasons || "multiple seasons"}.`;
 }
 
 export const appRouter = router({
@@ -9586,6 +9645,291 @@ if (pickOrder.length > 0) {
   // identityScan: legacy team-name resolution scan + fuzzy confidence.
   // saveAlias: commissioner-approved mapping saved to owner_aliases table.
   // ─────────────────────────────────────────────────────────────────────────
+
+  // ─── Player Intelligence ─────────────────────────────────────────────────
+  // keeper records, championship impact, owner relationships, league story.
+  // Sources: gmDraftPicks, gmTransactions (TRADE), gmSeasonRosters, gmTeams,
+  //          leagueMedals. No new schema, no new imports.
+  // ─────────────────────────────────────────────────────────────────────────
+  playerIntelligence: router({
+    // Search: fuzzy player name lookup across gmDraftPicks
+    search: publicProcedure
+      .input(z.object({ query: z.string().min(1).max(120) }))
+      .query(async ({ ctx, input }) => {
+        const userId = ctx.user?.id ?? 0;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: userId ? { id: userId } : undefined }, null, undefined,
+        );
+        const lid = leagueId || "457622";
+        const db = await getDb();
+        if (!db) return [];
+        const q = input.query.trim();
+        const rows = await db
+          .select({
+            playerName: gmDraftPicks.playerName,
+            position:   gmDraftPicks.position,
+            cnt:        sql<number>`COUNT(DISTINCT ${gmDraftPicks.season})`.mapWith(Number),
+            keeperCnt:  sql<number>`SUM(CASE WHEN ${gmDraftPicks.isKeeper}=1 THEN 1 ELSE 0 END)`.mapWith(Number),
+            maxSeason:  sql<number>`MAX(${gmDraftPicks.season})`.mapWith(Number),
+          })
+          .from(gmDraftPicks)
+          .where(andDrizzle(
+            eqDrizzle(gmDraftPicks.leagueId, lid),
+            likeDrizzle(gmDraftPicks.playerName, `%${q}%`),
+          ))
+          .groupBy(gmDraftPicks.playerName, gmDraftPicks.position)
+          .orderBy(descDrizzle(sql`MAX(${gmDraftPicks.season})`), ascDrizzle(gmDraftPicks.playerName))
+          .limit(20);
+        return rows.filter(r => r.playerName).map(r => ({
+          playerName: r.playerName!,
+          position:   r.position ?? "",
+          seasons:    r.cnt ?? 0,
+          keeperCount: r.keeperCnt ?? 0,
+          lastSeason: r.maxSeason ?? 0,
+        }));
+      }),
+
+    // Full player profile — all league history for one player by name
+    profile: publicProcedure
+      .input(z.object({ playerName: z.string().min(1).max(255) }))
+      .query(async ({ ctx, input }) => {
+        const userId = ctx.user?.id ?? 0;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: userId ? { id: userId } : undefined }, null, undefined,
+        );
+        const lid = leagueId || "457622";
+        const db = await getDb();
+        if (!db) return null;
+
+        const pName = input.playerName.trim();
+
+        // ── 1. Draft history (gmDraftPicks) ───────────────────────────────
+        const draftRows = await db
+          .select({
+            season:       gmDraftPicks.season,
+            roundId:      gmDraftPicks.roundId,
+            roundPick:    gmDraftPicks.roundPick,
+            overallPick:  gmDraftPicks.overallPick,
+            teamId:       gmDraftPicks.teamId,
+            isKeeper:     gmDraftPicks.isKeeper,
+            position:     gmDraftPicks.position,
+          })
+          .from(gmDraftPicks)
+          .where(andDrizzle(
+            eqDrizzle(gmDraftPicks.leagueId, lid),
+            likeDrizzle(gmDraftPicks.playerName, pName),
+          ))
+          .orderBy(descDrizzle(gmDraftPicks.season));
+
+        // ── 2. Trade history (gmTransactions, type TRADE) ─────────────────
+        const tradeRows = await db
+          .select({
+            season:       gmTransactions.season,
+            fromTeamId:   gmTransactions.fromTeamId,
+            toTeamId:     gmTransactions.toTeamId,
+            processedDate: gmTransactions.processedDate,
+            type:         gmTransactions.type,
+            status:       gmTransactions.status,
+          })
+          .from(gmTransactions)
+          .where(andDrizzle(
+            eqDrizzle(gmTransactions.leagueId, lid),
+            likeDrizzle(gmTransactions.playerName, pName),
+            sql`LOWER(${gmTransactions.type}) LIKE "%trade%"`,
+          ))
+          .orderBy(descDrizzle(gmTransactions.season), descDrizzle(gmTransactions.processedDate));
+
+        // ── 3. Roster/ownership (gmSeasonRosters) ─────────────────────────
+        const rosterRows = await db
+          .select({
+            season:          gmSeasonRosters.season,
+            ownerName:       gmSeasonRosters.ownerName,
+            teamName:        gmSeasonRosters.teamName,
+            position:        gmSeasonRosters.position,
+            nflTeam:         gmSeasonRosters.nflTeam,
+            acquisitionType: gmSeasonRosters.acquisitionType,
+          })
+          .from(gmSeasonRosters)
+          .where(andDrizzle(
+            eqDrizzle(gmSeasonRosters.leagueId, lid),
+            likeDrizzle(gmSeasonRosters.playerName, pName),
+          ))
+          .orderBy(descDrizzle(gmSeasonRosters.season));
+
+        // ── 4. gmTeams lookup (teamId → ownerName) per season ─────────────
+        const allSeasons = [...new Set([
+          ...draftRows.map(r => r.season),
+          ...tradeRows.map(r => r.season),
+        ])];
+        let teamRows: { season: number; teamId: number; ownerName: string | null; name: string | null }[] = [];
+        if (allSeasons.length > 0) {
+          teamRows = await db
+            .select({
+              season:    gmTeams.season,
+              teamId:    gmTeams.teamId,
+              ownerName: gmTeams.ownerName,
+              name:      gmTeams.name,
+            })
+            .from(gmTeams)
+            .where(andDrizzle(
+              eqDrizzle(gmTeams.leagueId, lid),
+              inArrayDrizzle(gmTeams.season, allSeasons),
+            ));
+        }
+        const teamMap = new Map<string, { ownerName: string; teamName: string }>();
+        for (const t of teamRows) {
+          if (t.teamId && t.season)
+            teamMap.set(`${t.season}:${t.teamId}`, {
+              ownerName: t.ownerName?.trim() || `Team ${t.teamId}`,
+              teamName:  t.name?.trim()      || `Team ${t.teamId}`,
+            });
+        }
+        const resolveOwner = (season: number, teamId: number | null) =>
+          teamId ? (teamMap.get(`${season}:${teamId}`) ?? { ownerName: `Team ${teamId}`, teamName: `Team ${teamId}` }) : null;
+
+        // ── 5. Championships (leagueMedals) ───────────────────────────────
+        const medals = await db
+          .select({
+            season:          leagueMedals.season,
+            championOwner:   leagueMedals.championOwner,
+            runnerUpOwner:   leagueMedals.runnerUpOwner,
+            thirdPlaceOwner: leagueMedals.thirdPlaceOwner,
+          })
+          .from(leagueMedals)
+          .where(eqDrizzle(leagueMedals.leagueId, lid));
+        const champMap = new Map<number, { champion: string; runnerUp: string; third: string }>();
+        for (const m of medals) {
+          champMap.set(m.season, {
+            champion:  m.championOwner  ?? "",
+            runnerUp:  m.runnerUpOwner  ?? "",
+            third:     m.thirdPlaceOwner ?? "",
+          });
+        }
+
+        // ── 6. Enrich draft rows ──────────────────────────────────────────
+        const enrichedDraft = draftRows.map(r => {
+          const owner = resolveOwner(r.season, r.teamId);
+          const champ  = champMap.get(r.season);
+          const isChampion = champ && owner ? (
+            champ.champion.toLowerCase().includes(owner.ownerName.toLowerCase().slice(0,5)) ||
+            owner.ownerName.toLowerCase().includes(champ.champion.toLowerCase().slice(0,5))
+          ) : false;
+          return {
+            season:      r.season,
+            round:       r.roundId,
+            pick:        r.roundPick,
+            overallPick: r.overallPick,
+            isKeeper:    (r.isKeeper ?? 0) === 1,
+            position:    r.position ?? "",
+            ownerName:   owner?.ownerName ?? "",
+            teamName:    owner?.teamName  ?? "",
+            isChampionSeason: !!isChampion,
+          };
+        });
+
+        // ── 7. Enrich trade rows ──────────────────────────────────────────
+        const enrichedTrades = tradeRows.map(r => {
+          const from = resolveOwner(r.season, r.fromTeamId ?? null);
+          const to   = resolveOwner(r.season, r.toTeamId   ?? null);
+          return {
+            season:       r.season,
+            fromOwner:    from?.ownerName ?? "Unknown",
+            fromTeam:     from?.teamName  ?? "",
+            toOwner:      to?.ownerName   ?? "Unknown",
+            toTeam:       to?.teamName    ?? "",
+            processedDate: r.processedDate ?? null,
+          };
+        }).filter(r => r.fromOwner !== r.toOwner);
+
+        // ── 8. Keeper history ─────────────────────────────────────────────
+        const keeperHistory = enrichedDraft.filter(d => d.isKeeper);
+
+        // ── 9. Ownership timeline ─────────────────────────────────────────
+        // Merge rosterRows + draftRows into one ownership map keyed by season
+        const ownershipMap = new Map<number, {
+          ownerName: string; teamName: string; season: number;
+          acquisitionType: string; position: string; nflTeam: string;
+          isKeeper: boolean; isChampionSeason: boolean;
+        }>();
+        for (const r of rosterRows) {
+          const champ = champMap.get(r.season);
+          const n = r.ownerName?.trim() || "";
+          const isChamp = champ ? (
+            champ.champion.toLowerCase().includes(n.toLowerCase().slice(0,5)) ||
+            n.toLowerCase().includes(champ.champion.toLowerCase().slice(0,5))
+          ) : false;
+          ownershipMap.set(r.season, {
+            ownerName:       n || r.teamName || "",
+            teamName:        r.teamName || "",
+            season:          r.season,
+            acquisitionType: r.acquisitionType || "",
+            position:        r.position || "",
+            nflTeam:         r.nflTeam || "",
+            isKeeper:        r.acquisitionType?.toLowerCase().includes("keep") ?? false,
+            isChampionSeason: !!isChamp,
+          });
+        }
+        // Fill any draft-season gaps not in rosterRows
+        for (const d of enrichedDraft) {
+          if (!ownershipMap.has(d.season)) {
+            ownershipMap.set(d.season, {
+              ownerName: d.ownerName, teamName: d.teamName, season: d.season,
+              acquisitionType: d.isKeeper ? "Keeper" : "Draft",
+              position: d.position, nflTeam: "",
+              isKeeper: d.isKeeper,
+              isChampionSeason: d.isChampionSeason,
+            });
+          }
+        }
+        const ownershipTimeline = [...ownershipMap.values()]
+          .sort((a, b) => a.season - b.season);
+
+        // ── 10. Stats summary ─────────────────────────────────────────────
+        const uniqueOwners = [...new Set(ownershipTimeline.map(t => t.ownerName).filter(Boolean))];
+        const champSeasons = ownershipTimeline.filter(t => t.isChampionSeason).map(t => t.season);
+        const firstSeason = ownershipTimeline[0]?.season ?? null;
+        const lastSeason  = ownershipTimeline[ownershipTimeline.length - 1]?.season ?? null;
+        const position    = enrichedDraft[0]?.position || rosterRows[0]?.position || "";
+        const nflTeam     = rosterRows.find(r => r.nflTeam)?.nflTeam || "";
+
+        // ── 11. Auto-generated league story (deterministic) ───────────────
+        const story = buildPlayerStory({
+          playerName: pName, position, nflTeam,
+          ownershipTimeline, enrichedDraft, enrichedTrades,
+          keeperHistory, champSeasons, uniqueOwners, firstSeason, lastSeason,
+        });
+
+        // ── 12. Owner relationship cards ──────────────────────────────────
+        const ownerRelations = uniqueOwners.map(ownerName => {
+          const seasons = ownershipTimeline.filter(t => t.ownerName === ownerName).map(t => t.season);
+          const drafts  = enrichedDraft.filter(d => d.ownerName === ownerName);
+          const kepts   = keeperHistory.filter(k => k.ownerName === ownerName);
+          const trades  = enrichedTrades.filter(t => t.toOwner === ownerName || t.fromOwner === ownerName);
+          const champs  = seasons.filter(s => champSeasons.includes(s));
+          return { ownerName, seasons, draftCount: drafts.length, keeperCount: kepts.length, tradeCount: trades.length, champSeasons: champs };
+        }).sort((a, b) => b.seasons.length - a.seasons.length);
+
+        return {
+          playerName:      pName,
+          position,
+          nflTeam,
+          firstSeason,
+          lastSeason,
+          totalSeasons:    ownershipTimeline.length,
+          uniqueOwnerCount: uniqueOwners.length,
+          keeperCount:     keeperHistory.length,
+          champSeasons,
+          story,
+          ownershipTimeline,
+          draftHistory:    enrichedDraft,
+          tradeHistory:    enrichedTrades,
+          keeperHistory,
+          ownerRelations,
+        };
+      }),
+
+  }),
+
   dataHealth: router({
 
     leagueOverview: publicProcedure.query(async ({ ctx }) => {
