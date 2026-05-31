@@ -827,9 +827,21 @@ export const draftWarRoomRouter = router({
         });
         inPool.add(reg.fullName.toLowerCase());
       }
-      // Sort by VBD VORP (Value Over Replacement Player) — not raw projected points
-      // This naturally pushes QBs to rounds 3-5 where they belong
-      playerPool.sort((a, b) => vorp(b.projectedPoints, b.position) - vorp(a.projectedPoints, a.position));
+
+      // Composite sort: 80% ESPN ADP + 20% VORP rank
+      const withVorp = playerPool.map(p => ({ ...p, vorpScore: vorp(p.projectedPoints, p.position) }));
+      withVorp.sort((a, b) => b.vorpScore - a.vorpScore);
+      const vorpRankMap = new Map(withVorp.map((p: any, i: number) => [p.name, i + 1]));
+      playerPool.sort((a, b) => {
+        const aAdp = adpByName.get(a.name.toLowerCase()) ?? a.adp ?? null;
+        const bAdp = adpByName.get(b.name.toLowerCase()) ?? b.adp ?? null;
+        const aVorp = vorpRankMap.get(a.name) ?? 999;
+        const bVorp = vorpRankMap.get(b.name) ?? 999;
+        if (aAdp !== null && bAdp !== null) return (aAdp * 0.8 + aVorp * 0.2) - (bAdp * 0.8 + bVorp * 0.2);
+        if (aAdp !== null) return -1;
+        if (bAdp !== null) return 1;
+        return aVorp - bVorp;
+      });
 
       // Apply keeper overrides if provided
       let effectiveKeepers = keepers;
