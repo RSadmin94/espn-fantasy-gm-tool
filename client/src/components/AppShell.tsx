@@ -57,54 +57,40 @@ type NavGroup = { id: string; title: string; items: NavEntry[] };
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    id: "command-center",
-    title: "COMMAND CENTER",
+    id: "war-rooms",
+    title: "WAR ROOMS",
     items: [
-      { kind: "link", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { kind: "link", label: "AI Advisor", href: "/advisor", icon: Bot },
-      { kind: "link", label: "League Wire",  href: "/league-wire",  icon: Newspaper },
-    ],
-  },
-  {
-    id: "dynasty",
-    title: "DYNASTY",
-    items: [
-      { kind: "placeholder", label: "Franchise Dashboard", icon: Building2 },
-      { kind: "link", label: "Owner Profiles", href: "/owner-profiles", icon: Users },
-      { kind: "link", label: "Hall of Fame", href: "/hall-of-fame", icon: Award },
-      // League Timeline removed from nav — kept as route, no data value currently
-    ],
-  },
-  {
-    id: "intelligence",
-    title: "INTELLIGENCE",
-    items: [
-      { kind: "link", label: "Rivalry Center", href: "/matchups", icon: Swords },
-      { kind: "placeholder", label: "Draft DNA", icon: Dna },
-      { kind: "link", label: "Player Intelligence", href: "/player-intelligence", icon: UserSearch },
-      { kind: "link", label: "Player Database", href: "/player-database", icon: Database },
+      { kind: "link", label: "Dashboard",      href: "/dashboard",      icon: LayoutDashboard },
       { kind: "link", label: "Draft War Room", href: "/draft-war-room", icon: Zap },
-      { kind: "link", label: "Trade Analyzer", href: "/trades", icon: Repeat2 },
+      { kind: "link", label: "AI Advisor",     href: "/advisor",        icon: Bot },
+      { kind: "link", label: "Trade Analyzer", href: "/trades",         icon: Repeat2 },
+      { kind: "link", label: "League Wire",    href: "/league-wire",    icon: Newspaper },
     ],
   },
   {
-    id: "league",
-    title: "LEAGUE",
+    id: "action-tools",
+    title: "ACTION TOOLS",
     items: [
-      { kind: "link", label: "Standings", href: "/standings", icon: Trophy },
-      { kind: "link", label: "Matchups", href: "/matchups", icon: Swords },
-      { kind: "link", label: "Rosters", href: "/roster", icon: Users },
-      { kind: "link", label: "Transactions", href: "/transactions", icon: ArrowLeftRight },
+      { kind: "link", label: "Owner Profiles",     href: "/owner-profiles",       icon: Users },
+      { kind: "link", label: "Rivalry Center",     href: "/matchups",             icon: Swords },
+      { kind: "link", label: "Player Intelligence",href: "/player-intelligence",  icon: UserSearch },
+      { kind: "link", label: "Player Database",    href: "/player-database",      icon: Database },
+      { kind: "link", label: "Standings",          href: "/standings",            icon: Trophy },
+      { kind: "link", label: "Rosters",            href: "/roster",               icon: Users },
+      { kind: "link", label: "Transactions",       href: "/transactions",         icon: ArrowLeftRight },
+      { kind: "link", label: "Hall of Fame",       href: "/hall-of-fame",         icon: Award },
+      { kind: "link", label: "Draft History",      href: "/draft-history",        icon: Calendar },
+      { kind: "link", label: "Keeper Advisor",     href: "/keeper-advisor",       icon: Calculator },
     ],
   },
   {
-    id: "commissioner",
-    title: "COMMISSIONER",
+    id: "settings-admin",
+    title: "SETTINGS & ADMIN",
     items: [
-      { kind: "link", label: "League Settings", href: "/league-settings", icon: Settings },
-      { kind: "link", label: "Sync Data", href: "/sync", icon: RefreshCw },
-      { kind: "link", label: "Data Health", href: "/league-data-health", icon: ShieldCheck },
-      { kind: "link", label: "Identity Review", href: "/owner-identity-review", icon: UserSearch },
+      { kind: "link", label: "League Settings", href: "/league-settings",        icon: Settings },
+      { kind: "link", label: "Sync Data",       href: "/sync",                   icon: RefreshCw },
+      { kind: "link", label: "Data Health",     href: "/league-data-health",     icon: ShieldCheck },
+      { kind: "link", label: "Identity Review", href: "/owner-identity-review",  icon: UserSearch },
     ],
   },
 ];
