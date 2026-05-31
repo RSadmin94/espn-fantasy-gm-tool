@@ -2600,6 +2600,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const results = [];
       let _diagStage = "init";
       let _diagUrl   = "";
+      // MV3 keepalive: prevent service worker termination during long import
+      const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
 
       // 2010–2017: ESPN API has no draft data for these seasons — scrape Draft Recap HTML directly.
       // Uses ingestLegacyDraftRecap so rows land with source='legacy_draft_recap',
@@ -2714,8 +2716,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
 
       const allOk = results.length > 0 && results.every((x) => x.ok);
+      clearInterval(keepAlive);
       sendResponse({ ok: allOk, results, aborted: false, leagueId });
     })().catch((err) => {
+      clearInterval(keepAlive);
       sendResponse({ ok: false, error: `DIAG:stage=${_diagStage} url=${_diagUrl} | ${err instanceof Error ? err.message : String(err)}`, results: [] });
     });
     return true;
