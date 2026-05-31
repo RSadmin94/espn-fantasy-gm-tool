@@ -5,6 +5,7 @@ import {
   Zap, BarChart2, RefreshCw, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, Info, Trophy, Target,
   ShieldCheck, TrendingUp, Activity, ArrowUpRight, ArrowDownRight,
+  Flame, Lock, Gauge, Wind,
 } from "lucide-react";
 
 // ── Shared UI atoms ───────────────────────────────────────────────────────────
@@ -623,6 +624,254 @@ function MockDraftBoard({ picks, teams }: { picks: any[]; teams: any[] }) {
   );
 }
 
+
+// ── Draft Environment Section (Phase 1.75) ───────────────────────────────────
+
+const GRADE_COLOR: Record<string, string> = {
+  A: "text-emerald-400 bg-emerald-500/10 border-emerald-500/40",
+  B: "text-sky-400 bg-sky-500/10 border-sky-500/40",
+  C: "text-amber-400 bg-amber-500/10 border-amber-500/40",
+  D: "text-orange-400 bg-orange-500/10 border-orange-500/40",
+  F: "text-red-400 bg-red-500/10 border-red-500/40",
+};
+
+function DraftEnvironmentSection({ env }: { env: any }) {
+  if (!env) return <div className="px-5 py-6 text-zinc-600 text-sm">No environment data.</div>;
+
+  const envCards = [
+    { icon: TrendingUp,    label: "Strongest Position", val: env.strongestPosition?.position ?? "—", sub: env.strongestPosition?.reason, color: "text-emerald-400", border: "border-emerald-500/25 bg-emerald-500/5" },
+    { icon: Wind,          label: "Weakest Position",   val: env.weakestPosition?.position ?? "—",   sub: env.weakestPosition?.reason,   color: "text-red-400",     border: "border-red-500/25 bg-red-500/5" },
+    { icon: Flame,         label: "Biggest Run Risk",   val: env.biggestRunRisk?.position ?? "—",     sub: env.biggestRunRisk?.reason,    color: "text-amber-400",   border: "border-amber-500/25 bg-amber-500/5" },
+    { icon: Target,        label: "Best Value Pocket",  val: env.biggestValuePocket?.position ?? "—", sub: env.biggestValuePocket?.reason, color: "text-sky-400",    border: "border-sky-500/25 bg-sky-500/5" },
+    { icon: Lock,          label: "Keeper Distortion",  val: env.mostDistortedByKeepers?.position ?? "—", sub: env.mostDistortedByKeepers?.reason, color: "text-violet-400", border: "border-violet-500/25 bg-violet-500/5" },
+  ];
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* Stat cards row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+        {envCards.map((c, i) => {
+          const Icon = c.icon;
+          return (
+            <div key={i} className={cn("rounded-xl border p-3 space-y-1", c.border)}>
+              <div className="flex items-center gap-1.5">
+                <Icon className={cn("h-3 w-3 shrink-0", c.color)} />
+                <span className={cn("text-[9px] font-black uppercase tracking-wider", c.color)}>{c.label}</span>
+              </div>
+              <div className={cn("text-2xl font-black", c.color)}>{c.val}</div>
+              <p className="text-[9px] text-zinc-600 leading-relaxed line-clamp-2">{c.sub}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* League depth grade table */}
+      {env.leagueDepthGrade && (
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-2">League Depth Grades</p>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(env.leagueDepthGrade).map(([pos, grade]) => (
+              <div key={pos} className={cn("rounded-lg border px-3 py-2 flex items-center gap-2", GRADE_COLOR[grade as string] ?? "text-zinc-400 bg-zinc-800 border-zinc-700")}>
+                <PosPill pos={pos} />
+                <span className="text-sm font-black">{grade as string}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[9px] text-zinc-600 mt-2">Grade = elite supply vs. league-wide starters needed. A = deep, F = barren.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Run Alerts Section (Phase 1.75) ──────────────────────────────────────────
+
+function RunAlertsSection({ alerts }: { alerts: any[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  if (!alerts.length) return <div className="px-5 py-6 text-zinc-600 text-sm text-center">No position run alerts detected.</div>;
+
+  return (
+    <div className="divide-y divide-zinc-800/30">
+      {alerts.map((a, i) => (
+        <div key={i} className="px-5 py-4">
+          <button
+            onClick={() => setExpanded(expanded === a.position ? null : a.position)}
+            className="w-full text-left space-y-2"
+          >
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Flame className="h-4 w-4 text-amber-400" />
+                <span className="font-black text-zinc-100 text-base">{a.position} Run</span>
+                <PosPill pos={a.position} />
+              </div>
+              <div className="flex items-center gap-2 ml-auto">
+                <span className="text-[10px] text-zinc-500">{a.roundWindow}</span>
+                <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">{a.teamCount} teams</span>
+                <span className="text-[10px] text-zinc-600">Rd {a.expectedRound}</span>
+              </div>
+            </div>
+            <ConfBar value={a.confidence} />
+          </button>
+
+          {expanded === a.position && (
+            <div className="mt-3 space-y-2">
+              <div>
+                <p className="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">Affected Owners</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(a.affectedOwners ?? []).map((o: string, j: number) => (
+                    <span key={j} className="text-[10px] text-zinc-300 bg-zinc-800/60 border border-zinc-700/40 px-2 py-0.5 rounded">{o}</span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">Mock Draft Triggers</p>
+                <div className="space-y-0.5">
+                  {(a.triggerPicks ?? []).map((tp: string, j: number) => (
+                    <div key={j} className="text-[10px] text-zinc-500 flex items-start gap-1.5">
+                      <span className="text-amber-600 shrink-0">→</span>{tp}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <EvidenceList items={a.evidence} />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Scarcity Section (Phase 1.75) ─────────────────────────────────────────────
+
+const SCARCITY_COLORS = {
+  CRITICAL: "border-red-500/40 bg-red-500/8 text-red-400",
+  HIGH:     "border-amber-500/40 bg-amber-500/8 text-amber-400",
+  MEDIUM:   "border-sky-500/40 bg-sky-500/8 text-sky-400",
+  LOW:      "border-zinc-700 bg-zinc-900/40 text-zinc-400",
+};
+
+function ScarcitySection({ alerts }: { alerts: any[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  if (!alerts.length) return <div className="px-5 py-6 text-zinc-600 text-sm text-center">No scarcity data.</div>;
+
+  return (
+    <div className="p-4 space-y-3">
+      {/* Visual scarcity bar grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 mb-2">
+        {alerts.map(a => {
+          const urg = a.urgency as keyof typeof SCARCITY_COLORS;
+          const fillPct = Math.min(100, Math.round(a.demandScore * 50));
+          return (
+            <button key={a.position}
+              onClick={() => setExpanded(expanded === a.position ? null : a.position)}
+              className={cn("rounded-xl border p-3 text-left transition-all hover:scale-105", SCARCITY_COLORS[urg] ?? SCARCITY_COLORS.LOW)}>
+              <div className="flex items-center justify-between mb-1.5">
+                <PosPill pos={a.position} />
+                <span className="text-[9px] font-black uppercase">{a.urgency}</span>
+              </div>
+              <div className="text-xl font-black tabular-nums">{a.eliteSupply}</div>
+              <div className="text-[9px] opacity-70">elite available</div>
+              <div className="mt-2 h-1 bg-black/30 rounded-full overflow-hidden">
+                <div className="h-full rounded-full bg-current opacity-70 transition-all" style={{ width: `${fillPct}%` }} />
+              </div>
+              <div className="text-[9px] mt-1 opacity-60">Demand: {a.demandScore.toFixed(2)}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Expanded detail */}
+      {expanded && (() => {
+        const a = alerts.find(x => x.position === expanded);
+        if (!a) return null;
+        return (
+          <div className="rounded-xl border border-zinc-700/60 bg-zinc-900/80 p-4 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <PosPill pos={a.position} />
+              <span className="font-bold text-zinc-100">{a.position} Scarcity Analysis</span>
+              <span className={cn("text-[9px] font-black uppercase px-2 py-0.5 rounded border ml-auto", SCARCITY_COLORS[a.urgency as keyof typeof SCARCITY_COLORS] ?? SCARCITY_COLORS.LOW)}>{a.urgency}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { l: "Total Pool",    v: a.totalPool },
+                { l: "Elite Supply",  v: a.eliteSupply },
+                { l: "Demand Score",  v: a.demandScore.toFixed(2) },
+              ].map(s => (
+                <div key={s.l} className="text-center bg-zinc-800/40 rounded-lg p-2">
+                  <div className="text-lg font-black text-white">{s.v}</div>
+                  <div className="text-[9px] text-zinc-600 uppercase">{s.l}</div>
+                </div>
+              ))}
+            </div>
+            {/* Round-by-round remaining */}
+            <div>
+              <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1.5">Projected Remaining Supply by Round</p>
+              <div className="flex gap-1.5 flex-wrap">
+                {Object.entries(a.remainingAfterRound ?? {}).slice(0, 10).map(([rd, rem]: [string, any]) => (
+                  <div key={rd} className={cn("text-center rounded px-2 py-1 min-w-[32px]",
+                    rem <= 0 ? "bg-red-500/20 text-red-400" : rem <= 3 ? "bg-amber-500/20 text-amber-400" : "bg-zinc-800/60 text-zinc-300")}>
+                    <div className="text-xs font-black">{rem}</div>
+                    <div className="text-[8px] text-zinc-600">R{rd}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <EvidenceList items={a.evidence} />
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+// ── Compression Section (Phase 1.75) ─────────────────────────────────────────
+
+const TIER_CONFIG = {
+  HEAVY:    { color: "text-red-400",    bg: "bg-red-500/15 border-red-500/40" },
+  MODERATE: { color: "text-amber-400",  bg: "bg-amber-500/15 border-amber-500/40" },
+  LIGHT:    { color: "text-sky-400",    bg: "bg-sky-500/15 border-sky-500/40" },
+  NONE:     { color: "text-zinc-500",   bg: "bg-zinc-800/60 border-zinc-700/40" },
+};
+
+function CompressionSection({ compression }: { compression: any[] }) {
+  if (!compression.length) return <div className="px-5 py-6 text-zinc-600 text-sm text-center">No keeper compression data.</div>;
+
+  return (
+    <div className="p-4 space-y-3">
+      {/* Summary bar chart */}
+      <div className="space-y-2">
+        {compression.map(c => {
+          const cfg = TIER_CONFIG[c.effectiveTier as keyof typeof TIER_CONFIG] ?? TIER_CONFIG.NONE;
+          const barW = Math.min(100, Math.round(c.compressionPct * 4));  // scale: 25% = full bar
+          return (
+            <div key={c.position} className="space-y-1">
+              <div className="flex items-center gap-3">
+                <PosPill pos={c.position} />
+                <div className="flex-1 h-3 bg-zinc-800/60 rounded-full overflow-hidden">
+                  <div className={cn("h-full rounded-full transition-all", cfg.color.replace("text-", "bg-"))} style={{ width: `${barW}%` }} />
+                </div>
+                <div className="w-28 shrink-0 flex items-center justify-between">
+                  <span className={cn("text-xs font-black", cfg.color)}>{c.compressionPct}%</span>
+                  <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase", cfg.bg, cfg.color)}>{c.effectiveTier}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 pl-10 text-[9px] text-zinc-600">
+                <span>{c.keepersAtPosition} locked / {c.totalPoolSize} pool</span>
+                {c.draftInflation > 0 && <span className="text-amber-500">Draft {c.draftInflation} round(s) earlier</span>}
+              </div>
+              <EvidenceList items={c.evidence.slice(0,2)} />
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[9px] text-zinc-700 border-t border-zinc-800/40 pt-2">
+        Compression = % of position pool locked by keeper predictions. Higher compression = earlier draft urgency.
+        Unknown-position keepers are estimated proportionally by round-1 draft rate.
+      </p>
+    </div>
+  );
+}
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function DraftWarRoom() {
@@ -646,7 +895,9 @@ export function DraftWarRoom() {
     </div>
   );
 
-  const { keeperPredictions, rosterNeeds, tradedPicks, shockMeters, confidenceDashboard, mockDraft, teamCount, totalPicks } = data;
+  const { keeperPredictions, rosterNeeds, tradedPicks, shockMeters, confidenceDashboard,
+          keeperCompression, scarcityAlerts, positionRunAlerts, pressureByRound, draftEnvironment,
+          mockDraft, teamCount, totalPicks } = data;
   const maxRound = Math.max(...(mockDraft ?? []).map((p: any) => p.round), 0);
 
   return (
@@ -717,12 +968,33 @@ export function DraftWarRoom() {
           <ShockMeterSection meters={shockMeters ?? []} />
         </Section>
 
-        {/* 5. Draft Capital (Traded Picks) */}
+        {/* 5. Draft Environment Dashboard — PHASE 1.75 */}
+        <Section title="Draft Environment" icon={Gauge}
+          accent="border-emerald-500/20 bg-zinc-900/40" defaultOpen={true}>
+          <DraftEnvironmentSection env={draftEnvironment} />
+        </Section>
+
+        {/* 6. Position Run Alerts — PHASE 1.75 */}
+        <Section title="Position Run Alerts" icon={Flame} badge={positionRunAlerts?.length ?? 0}>
+          <RunAlertsSection alerts={positionRunAlerts ?? []} />
+        </Section>
+
+        {/* 7. Scarcity Detection — PHASE 1.75 */}
+        <Section title="Scarcity Detection" icon={Wind} badge={scarcityAlerts?.length ?? 0}>
+          <ScarcitySection alerts={scarcityAlerts ?? []} />
+        </Section>
+
+        {/* 8. Keeper Compression — PHASE 1.75 */}
+        <Section title="Keeper Compression" icon={Lock} badge={keeperCompression?.length ?? 0} defaultOpen={false}>
+          <CompressionSection compression={keeperCompression ?? []} />
+        </Section>
+
+        {/* 9. Draft Capital (Traded Picks) */}
         <Section title="Draft Capital" icon={TrendingUp} badge={tradedPicks?.length ?? 0} defaultOpen={false}>
           <TradedPicksBadge tradedPicks={tradedPicks ?? []} />
         </Section>
 
-        {/* 6. Mock Draft Board */}
+        {/* 10. Mock Draft Board */}
         <Section title="Mock Draft Board" icon={Target} badge={totalPicks} defaultOpen={false}>
           <MockDraftBoard picks={mockDraft ?? []}
             teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))} />

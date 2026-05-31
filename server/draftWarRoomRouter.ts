@@ -14,6 +14,10 @@ import { z }                       from "zod";
 import { router, publicProcedure } from "./_core/trpc";
 import { getDb }                   from "./db";
 import { sql as drizzleSql }       from "drizzle-orm";
+import {
+  calcKeeperCompression, calcScarcityAlerts, calcPositionRunAlerts,
+  calcDraftBoardPressure, buildDraftEnvironmentDashboard,
+} from "./draftWarRoomPhase175";
 
 const LEAGUE_ID = "457622";
 
@@ -811,6 +815,13 @@ export const draftWarRoomRouter = router({
       // Phase 1.5 Mock draft with traded pick awareness
       const mockDraft = buildMockDraft({ allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool });
 
+      // Phase 1.75 — Pressure Engine
+      const keeperCompression = calcKeeperCompression(keeperPredictions, playerPool);
+      const scarcityAlerts    = calcScarcityAlerts({ rosterNeeds, playerPool, keeperPredictions, totalTeams: teams.length, totalRounds: 14 });
+      const positionRunAlerts = calcPositionRunAlerts({ rosterNeeds, scarcityAlerts, keeperPredictions, mockDraft, totalTeams: teams.length });
+      const pressureByRound   = calcDraftBoardPressure({ rosterNeeds, scarcityAlerts, keeperPredictions, totalTeams: teams.length, totalRounds: 14 });
+      const draftEnvironment  = buildDraftEnvironmentDashboard({ scarcityAlerts, runAlerts: positionRunAlerts, compression: keeperCompression, pressureByRound, playerPool });
+
       return {
         ok: true, season,
         teamCount: teams.length,
@@ -819,6 +830,11 @@ export const draftWarRoomRouter = router({
         tradedPicks,
         shockMeters,
         confidenceDashboard,
+        keeperCompression,
+        scarcityAlerts,
+        positionRunAlerts,
+        pressureByRound,
+        draftEnvironment,
         mockDraft,
         totalPicks: mockDraft.length,
         dataAvailability: {
