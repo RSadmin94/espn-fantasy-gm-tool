@@ -32,6 +32,7 @@ import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
 import { PlayerIntelligence } from "./pages/PlayerIntelligence";
 import { PlayerDatabase }    from "./pages/PlayerDatabase";
 import { LeagueWire }         from "./pages/LeagueWire";
+import { DraftWarRoom }      from "./pages/DraftWarRoom";
 import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
@@ -132,6 +133,7 @@ const router = createBrowserRouter([
           { path: "/player-intelligence",    element: <PlayerIntelligence /> },
           { path: "/player-database",         element: <PlayerDatabase /> },
           { path: "/league-wire",               element: <LeagueWire /> },
+          { path: "/draft-war-room",           element: <DraftWarRoom /> },
           { path: "/transactions", element: <Transactions /> },
           { path: "/standings", element: <Standings /> },
           { path: "/matchups", element: <Matchups /> },

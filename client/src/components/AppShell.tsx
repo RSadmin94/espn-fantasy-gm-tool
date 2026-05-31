@@ -83,7 +83,7 @@ const NAV_GROUPS: NavGroup[] = [
       { kind: "placeholder", label: "Draft DNA", icon: Dna },
       { kind: "link", label: "Player Intelligence", href: "/player-intelligence", icon: UserSearch },
       { kind: "link", label: "Player Database", href: "/player-database", icon: Database },
-      { kind: "placeholder", label: "Draft War Room", icon: Zap },
+      { kind: "link", label: "Draft War Room", href: "/draft-war-room", icon: Zap },
       { kind: "link", label: "Trade Analyzer", href: "/trades", icon: Repeat2 },
     ],
   },

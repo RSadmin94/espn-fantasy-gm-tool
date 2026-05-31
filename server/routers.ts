@@ -154,6 +154,7 @@ import { playerStatsCacheRouter } from "./playerStatsCacheRouter";
 import { playerStatsRouter } from "./playerStatsRouter";
 import { leagueWireRouter } from "./leagueWireRouter";
 import { leagueNewsroomRouter } from "./leagueNewsroomRouter";
+import { draftWarRoomRouter }    from "./draftWarRoomRouter";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -474,6 +475,7 @@ export const appRouter = router({
   playerStatsCache: playerStatsCacheRouter,
   leagueWire: leagueWireRouter,
   leagueNewsroom: leagueNewsroomRouter,
+  draftWarRoom: draftWarRoomRouter,
   dna: dnaRouter,
   agents: agentRouter,
   champ: champRouter,
