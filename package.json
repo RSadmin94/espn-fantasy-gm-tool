@@ -23,6 +23,9 @@
     "p2:validate":    "tsx scripts/validateIngestion.ts",
     "p2:sanity":      "tsx scripts/sanityCheckPlayers.ts",
     "p2:rollback":    "tsx scripts/rollbackIngestion.ts",
+    "player:fetch":   "tsx scripts/fetchEspnWeeklyPlayerStats.ts",
+    "player:ingest":  "tsx scripts/runIngestionPipeline.ts --all",
+    "player:validate": "tsx scripts/validatePlayerStatsIngestion.ts",
     "format": "prettier --write .",
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"

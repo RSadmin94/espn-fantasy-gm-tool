@@ -307,14 +307,20 @@ function parsePayload(payloadStr: string, season: number): ExtractedEntry[] {
   if (!payload || typeof payload !== "object") return [];
 
   const p = payload as Record<string, unknown>;
-  const scoringPeriodId = Number(p.scoringPeriodId ?? 0);
+  // Use _fetchedWeek (tagged by fetchEspnWeeklyPlayerStats) first, then scoringPeriodId
+  const scoringPeriodId = Number(p._fetchedWeek ?? p.scoringPeriodId ?? 0);
   const results: ExtractedEntry[] = [];
 
   // Helper: extract entries from a team roster
+  // Handles all ESPN roster container keys across API versions:
+  //   - roster.entries                        (mRoster / mTeam views)
+  //   - rosterForCurrentScoringPeriod.entries (mMatchupScore current week)
+  //   - rosterForMatchupPeriod.entries        (mMatchupScore historical matchup)
   const extractTeamEntries = (team: Record<string, unknown>, teamId: number) => {
     const rosterEntries: unknown[] =
       (team.roster as any)?.entries ??
       (team.rosterForCurrentScoringPeriod as any)?.entries ??
+      (team.rosterForMatchupPeriod as any)?.entries ??
       [];
 
     for (const entry of rosterEntries) {
@@ -444,7 +450,7 @@ async function ingestSeason(db: AppDb, season: number) {
     .limit(500);
 
   const lineupRows = cacheRows.filter(r =>
-    ["mRoster","mMatchup","mMatchupScore","mScoringPeriod","mLiveScoring","mBoxscore","kona_game_state","mTeam"].some(
+    ["playerStats:", "mRoster","mMatchup","mMatchupScore","mScoringPeriod","mLiveScoring","mBoxscore","kona_game_state","mTeam"].some(
       v => r.viewName.toLowerCase().includes(v.toLowerCase())
     )
   );
