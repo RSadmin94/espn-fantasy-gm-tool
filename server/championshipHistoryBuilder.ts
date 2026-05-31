@@ -34,7 +34,8 @@ export interface OwnerTrophyRecord {
  * Returns a map of memberId → OwnerTrophyRecord.
  */
 export async function computeAllTrophyHistory(
-  seasons?: number[]
+  seasons?: number[],
+  userId?: number
 ): Promise<Map<string, OwnerTrophyRecord>> {
   const trophyMap = new Map<string, OwnerTrophyRecord>();
 
@@ -43,13 +44,13 @@ export async function computeAllTrophyHistory(
   const yearsToScan = seasons ?? Array.from({ length: currentYear - 2009 }, (_, i) => 2010 + i);
 
   // Determine available seasons from DB if not specified
-  const availableSeasons = seasons ?? (await getAllCachedSeasons());
+  const availableSeasons = seasons ?? (await getAllCachedSeasons(undefined, userId));
   const yearsToProcess = yearsToScan.filter(y => availableSeasons.includes(y));
 
   for (const year of yearsToProcess) {
     let combined: Record<string, unknown> | null = null;
     try {
-      const row = await getCachedView(year, "combined");
+      const row = await getCachedView(year, "combined", undefined, { userId });
       if (!row) continue;
       const payload = (row as Record<string, unknown>).payload;
       combined = typeof payload === "string" ? JSON.parse(payload) : (payload as Record<string, unknown>);

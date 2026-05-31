@@ -104,8 +104,8 @@ function isRod(name: string): boolean {
  * Compute rivalry scores for all opponents vs the primary user (Rod).
  * Reads from the ESPN season cache — no live API calls.
  */
-export async function computeRivalryScores(): Promise<RivalryPair[]> {
-  const cachedSeasons = await getAllCachedSeasons();
+export async function computeRivalryScores(userId?: number): Promise<RivalryPair[]> {
+  const cachedSeasons = await getAllCachedSeasons(undefined, userId);
   if (cachedSeasons.length === 0) return [];
 
   // memberId → display name
@@ -175,7 +175,7 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
 
   // ── Pass 1: Matchup H2H ──────────────────────────────────────────────────
   for (const season of sortedSeasons) {
-    const row = await getCachedView(season, "combined");
+    const row = await getCachedView(season, "combined", undefined, { userId });
     if (!row) continue;
     const data = row.payload as Record<string, unknown>;
 
@@ -309,7 +309,7 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
   // We re-run the simplified trade verdict logic from tradeAging
   // (only need winner/loser per trade, not full value breakdown)
   for (const season of sortedSeasons) {
-    const row = await getCachedView(season, "combined");
+    const row = await getCachedView(season, "combined", undefined, { userId });
     if (!row) continue;
     const data = row.payload as Record<string, unknown>;
     const teamToMember = seasonTeamToMember.get(season);
@@ -371,7 +371,7 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
   let liveProfiles: Map<string, { career: { playoffWins: number; playoffLosses: number } }> | null = null;
   try {
     const { buildLiveOpponentProfiles } = await import('./liveOpponentProfile');
-    liveProfiles = await buildLiveOpponentProfiles() as Map<string, { career: { playoffWins: number; playoffLosses: number } }>;
+    liveProfiles = await buildLiveOpponentProfiles(userId) as Map<string, { career: { playoffWins: number; playoffLosses: number } }>;
   } catch { /* non-fatal */ }
 
   // ── Build final rivalry pairs ─────────────────────────────────────────────
@@ -634,8 +634,8 @@ export async function getRivalryScoresFromDb(memberId: string): Promise<RivalryP
  * Full pipeline: compute → persist → return.
  * Called from the scheduled refresh and manual refresh procedures.
  */
-export async function refreshRivalryScores(): Promise<RivalryPair[]> {
-  const pairs = await computeRivalryScores();
+export async function refreshRivalryScores(userId?: number): Promise<RivalryPair[]> {
+  const pairs = await computeRivalryScores(userId);
   await persistRivalryScores(pairs);
   return pairs;
 }

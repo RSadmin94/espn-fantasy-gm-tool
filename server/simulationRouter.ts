@@ -198,7 +198,7 @@ export const simulationRouter = router({
       opponentLineup: z.array(SimPlayerInput).default([]),
       context: z.string().optional().default(""),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       // Step 1: Enrich all players with injury data
       const injuryEnriched = await enrichWithInjury([
         input.playerA as SimPlayer,
@@ -278,7 +278,7 @@ export const simulationRouter = router({
       const beatSection = beatBlock ? `\n\nBEAT REPORTER INTELLIGENCE:\n${beatBlock}` : "";
 
       // Step 4: Load league scoring settings for LLM context
-      const leagueScoring = await getLeagueScoringSettings().catch(() => null);
+      const leagueScoring = await getLeagueScoringSettings(undefined, ctx.user?.id).catch(() => null);
       const scoringLine = leagueScoring?.scoringDescription
         ? `\n\nLEAGUE SCORING: ${leagueScoring.scoringDescription}`
         : "";

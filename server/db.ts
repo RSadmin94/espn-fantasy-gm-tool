@@ -1,8 +1,11 @@
-import { eq, desc, and, gt, or } from "drizzle-orm";
+import { eq, desc, and, gt, or, like, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import type { MySql2Database } from "drizzle-orm/mysql2";
+import * as schema from "../drizzle/schema";
+import type { EspnRawCache, EspnSeasonCache, FantasyDataCache, RefreshManifest } from "../drizzle/schema";
 import {
-  InsertUser, users, espnSeasonCache, refreshManifest, chatHistory,
-  pickTrades, InsertPickTrade, espnViewHealth, InsertEspnViewHealth,
+  InsertUser, users, fantasyDataCache, chatHistory,
+  pickTrades, InsertPickTrade, espnViewHealth,
   weeklyPlayerStats, InsertWeeklyPlayerStats,
   scheduledJobs, ScheduledJob,
   userMemory, UserMemory,
@@ -10,17 +13,29 @@ import {
   llmUsage,
   scrapedTrades, InsertScrapedTrade,
   leagueEvents, InsertLeagueEvent,
+  espnRawCache,
+  espnSeasonCache,
+  syncRuns,
+  gmTeams,
 } from "../drizzle/schema";
+import { upsertRawEspnCache, writeLegacyEspnCaches } from "./espnPersistence";
 import type { EspnCreds } from "./espnService";
 import { decryptCredentialsFromDb } from "./_core/crypto";
 import { ENV } from "./_core/env";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+/** Drizzle client typed with the app schema (matches `espnPersistence` `AppDb`). */
+export type AppDb = MySql2Database<typeof schema>;
 
-export async function getDb() {
+let _db: AppDb | null = null;
+
+export async function getDb(): Promise<AppDb | null> {
   if (!_db && process.env.DATABASE_URL) {
-    try { _db = drizzle(process.env.DATABASE_URL); }
-    catch (error) { console.warn("[Database] Failed to connect:", error); _db = null; }
+    try {
+      _db = drizzle(process.env.DATABASE_URL, { schema, mode: "default" });
+    } catch (error) {
+      console.warn("[Database] Failed to connect:", error);
+      _db = null;
+    }
   }
   return _db;
 }
@@ -57,43 +72,246 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function getCachedView(season: number, viewName: string, leagueId?: string) {
+/** Cache key for ESPN view payloads in `fantasy_data_cache`. */
+export function buildEspnFantasyDataCacheKey(leagueId: string, season: number, viewName: string): string {
+  return `espn:${leagueId}:${season}:${viewName}`;
+}
+
+export function parseEspnFantasyDataCacheKey(key: string): { leagueId: string; season: number; viewName: string } | null {
+  if (!key.startsWith("espn:")) return null;
+  const rest = key.slice(5);
+  const firstColon = rest.indexOf(":");
+  if (firstColon < 0) return null;
+  const leagueId = rest.slice(0, firstColon);
+  const afterLid = rest.slice(firstColon + 1);
+  const secondColon = afterLid.indexOf(":");
+  if (secondColon < 0) return null;
+  const seasonStr = afterLid.slice(0, secondColon);
+  const viewName = afterLid.slice(secondColon + 1);
+  const season = Number(seasonStr);
+  if (!Number.isFinite(season)) return null;
+  return { leagueId, season, viewName };
+}
+
+function escapeMysqlLikePattern(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+/** Row shape returned from ESPN cache reads (`payload` is decoded JSON). */
+export type CachedEspnSeasonRow = {
+  id: number;
+  cacheKey: string;
+  leagueId: string;
+  season: number;
+  viewName: string;
+  payload: unknown;
+  fetchedAt: Date;
+  updatedAt: Date;
+};
+
+function decodeFantasyDataJsonPayload(raw: unknown): unknown {
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch {
+      return {};
+    }
+  }
+  return raw ?? {};
+}
+
+function fantasyDataRowToCachedEspnSeason(row: FantasyDataCache): CachedEspnSeasonRow {
+  const meta = parseEspnFantasyDataCacheKey(row.cacheKey);
+  return {
+    id: row.id,
+    cacheKey: row.cacheKey,
+    leagueId: meta?.leagueId ?? "default",
+    season: meta?.season ?? 0,
+    viewName: meta?.viewName ?? "",
+    payload: decodeFantasyDataJsonPayload(row.payload),
+    fetchedAt: row.fetchedAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function rawEspnCacheRowToCached(row: EspnRawCache): CachedEspnSeasonRow {
+  return {
+    id: row.id,
+    cacheKey: buildEspnFantasyDataCacheKey(row.leagueId, row.season, row.viewName),
+    leagueId: row.leagueId,
+    season: row.season,
+    viewName: row.viewName,
+    payload: decodeFantasyDataJsonPayload(row.payload),
+    fetchedAt: row.fetchedAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function espnSeasonCacheRowToCached(row: EspnSeasonCache): CachedEspnSeasonRow {
+  return {
+    id: row.id,
+    cacheKey: buildEspnFantasyDataCacheKey(row.leagueId, row.season, row.viewName),
+    leagueId: row.leagueId,
+    season: row.season,
+    viewName: row.viewName,
+    payload: decodeFantasyDataJsonPayload(row.payload),
+    fetchedAt: row.fetchedAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+export type CachedViewStorageTier = "espn_raw_cache" | "fantasy_data_cache" | "espn_season_cache";
+
+/**
+ * Same resolution order as {@link getCachedView}, but records which persistence layer served the row.
+ */
+export async function getCachedViewWithTier(
+  season: number,
+  viewName: string,
+  leagueId?: string,
+  opts?: { userId?: number }
+): Promise<{ row: CachedEspnSeasonRow; tier: CachedViewStorageTier } | null> {
   const db = await getDb();
   if (!db) return null;
-  const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
-  // ORDER BY fetchedAt DESC ensures we always get the most recent row.
-  // Without this, duplicate rows (from missing unique constraint) could
-  // return stale data from an earlier refresh instead of the latest one.
-  const result = await db.select().from(espnSeasonCache)
-    .where(and(
-      eq(espnSeasonCache.leagueId, lid),
-      eq(espnSeasonCache.season, season),
-      eq(espnSeasonCache.viewName, viewName)
-    ))
-    .orderBy(desc(espnSeasonCache.fetchedAt))
-    .limit(1);
-  // Fallback: if no row found with leagueId, try the legacy "default" row (backward compat)
-  if (!result[0] && lid !== "default") {
-    const legacy = await db.select().from(espnSeasonCache)
-      .where(and(
-        eq(espnSeasonCache.leagueId, "default"),
-        eq(espnSeasonCache.season, season),
-        eq(espnSeasonCache.viewName, viewName)
-      ))
-      .orderBy(desc(espnSeasonCache.fetchedAt))
-      .limit(1);
-    return legacy[0] ?? null;
+  const yr = Math.floor(Number(season));
+  const vn = String(viewName).slice(0, 64);
+  let lid: string;
+  if (leagueId != null && String(leagueId).trim() !== "") {
+    lid = String(leagueId).trim().slice(0, 32);
+  } else {
+    const resolved = await resolveActiveLeagueId(
+      { user: opts?.userId != null ? { id: opts.userId } : undefined },
+      null,
+      yr
+    );
+    lid = resolved.leagueId;
   }
-  return result[0] ?? null;
+
+  const rawPrimary = await db
+    .select()
+    .from(espnRawCache)
+    .where(and(eq(espnRawCache.leagueId, lid), eq(espnRawCache.season, yr), eq(espnRawCache.viewName, vn)))
+    .orderBy(desc(espnRawCache.updatedAt))
+    .limit(1);
+  if (rawPrimary[0]) return { row: rawEspnCacheRowToCached(rawPrimary[0]), tier: "espn_raw_cache" };
+
+  if (lid !== "default") {
+    const rawDefault = await db
+      .select()
+      .from(espnRawCache)
+      .where(and(eq(espnRawCache.leagueId, "default"), eq(espnRawCache.season, yr), eq(espnRawCache.viewName, vn)))
+      .orderBy(desc(espnRawCache.updatedAt))
+      .limit(1);
+    if (rawDefault[0]) return { row: rawEspnCacheRowToCached(rawDefault[0]), tier: "espn_raw_cache" };
+  }
+
+  const primaryKey = buildEspnFantasyDataCacheKey(lid, yr, vn);
+  const primary = await db
+    .select()
+    .from(fantasyDataCache)
+    .where(eq(fantasyDataCache.cacheKey, primaryKey))
+    .orderBy(desc(fantasyDataCache.updatedAt))
+    .limit(1);
+  if (primary[0]) return { row: fantasyDataRowToCachedEspnSeason(primary[0]), tier: "fantasy_data_cache" };
+
+  if (lid !== "default") {
+    const legacyKey = buildEspnFantasyDataCacheKey("default", yr, vn);
+    const legacy = await db
+      .select()
+      .from(fantasyDataCache)
+      .where(eq(fantasyDataCache.cacheKey, legacyKey))
+      .orderBy(desc(fantasyDataCache.updatedAt))
+      .limit(1);
+    if (legacy[0]) return { row: fantasyDataRowToCachedEspnSeason(legacy[0]), tier: "fantasy_data_cache" };
+  }
+
+  const escPrimary = await db
+    .select()
+    .from(espnSeasonCache)
+    .where(and(eq(espnSeasonCache.leagueId, lid), eq(espnSeasonCache.season, yr), eq(espnSeasonCache.viewName, vn)))
+    .orderBy(desc(espnSeasonCache.updatedAt))
+    .limit(1);
+  if (escPrimary[0]) return { row: espnSeasonCacheRowToCached(escPrimary[0]), tier: "espn_season_cache" };
+
+  if (lid !== "default") {
+    const escDefault = await db
+      .select()
+      .from(espnSeasonCache)
+      .where(
+        and(eq(espnSeasonCache.leagueId, "default"), eq(espnSeasonCache.season, yr), eq(espnSeasonCache.viewName, vn))
+      )
+      .orderBy(desc(espnSeasonCache.updatedAt))
+      .limit(1);
+    if (escDefault[0]) return { row: espnSeasonCacheRowToCached(escDefault[0]), tier: "espn_season_cache" };
+  }
+
+  return null;
+}
+
+export async function getCachedView(
+  season: number,
+  viewName: string,
+  leagueId?: string,
+  opts?: { userId?: number }
+): Promise<CachedEspnSeasonRow | null> {
+  const hit = await getCachedViewWithTier(season, viewName, leagueId, opts);
+  return hit?.row ?? null;
+}
+
+/**
+ * Load `espn_raw_cache` **only** (not `fantasy_data_cache` / `espn_season_cache`).
+ * Used to backfill normalized tables from stored combined JSON without re-fetching ESPN.
+ *
+ * Resolution order: primary `leagueId`, then `457622`, then `default` (newest `updatedAt` wins).
+ */
+export async function getEspnRawCacheCombinedPayload(
+  leagueId: string,
+  season: number
+): Promise<Record<string, unknown> | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const yr = Math.floor(Number(season));
+  const lid = String(leagueId).trim().slice(0, 32);
+  const candidates = [lid, "457622", "default"].filter((v, i, arr) => arr.indexOf(v) === i);
+  for (const key of candidates) {
+    const rows = await db
+      .select()
+      .from(espnRawCache)
+      .where(
+        and(eq(espnRawCache.leagueId, key), eq(espnRawCache.season, yr), eq(espnRawCache.viewName, "combined"))
+      )
+      .orderBy(desc(espnRawCache.updatedAt))
+      .limit(1);
+    const raw = rows[0]?.payload;
+    const decoded = decodeFantasyDataJsonPayload(raw);
+    if (decoded && typeof decoded === "object" && !Array.isArray(decoded)) {
+      const obj = decoded as Record<string, unknown>;
+      if (Object.keys(obj).length > 0) return obj;
+    }
+  }
+  return null;
 }
 
 export async function upsertCachedView(season: number, viewName: string, payload: unknown, leagueId?: string) {
-  const db = await getDb();
-  if (!db) return;
-  const lid = leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default";
-  await db.insert(espnSeasonCache)
-    .values({ leagueId: lid, season, viewName, payload: payload as Record<string, unknown> })
-    .onDuplicateKeyUpdate({ set: { payload: payload as Record<string, unknown>, updatedAt: new Date() } });
+  if (String(viewName) === "combined") {
+    console.warn(
+      '[db] upsertCachedView(..., "combined", ...) is deprecated; use syncEspnCombinedFullPipeline from ./espnPersistence'
+    );
+    return;
+  }
+  const lid = String(leagueId ?? process.env.ESPN_LEAGUE_ID ?? "default").slice(0, 32);
+  const yr = Math.floor(Number(season));
+  const vn = String(viewName).slice(0, 64);
+  try {
+    await upsertRawEspnCache(lid, yr, vn, payload);
+  } catch (e) {
+    console.warn("[db] upsertCachedView upsertRawEspnCache failed:", { season: yr, viewName: vn, leagueId: lid, err: e });
+  }
+  try {
+    await writeLegacyEspnCaches(lid, yr, vn, payload);
+  } catch (e) {
+    console.warn("[db] upsertCachedView writeLegacyEspnCaches failed:", { season: yr, viewName: vn, leagueId: lid, err: e });
+  }
 }
 
 export async function getAllCachedSeasons(
@@ -102,16 +320,59 @@ export async function getAllCachedSeasons(
 ): Promise<number[]> {
   const db = await getDb();
   if (!db) return [];
-  const lid = leagueId ?? (await resolveActiveLeagueId(userId));
-  // Include both the exact leagueId and "default" (legacy rows) for backward compat
-  const result = await db.selectDistinct({ season: espnSeasonCache.season })
+  const { leagueId: resolvedLid } = await resolveActiveLeagueId(
+    { user: userId != null ? { id: userId } : undefined },
+    leagueId ?? null,
+    undefined
+  );
+  const lid = String(resolvedLid).slice(0, 32);
+  const esc = escapeMysqlLikePattern(lid);
+  const rows = await db
+    .select({ cacheKey: fantasyDataCache.cacheKey })
+    .from(fantasyDataCache)
+    .where(
+      and(
+        like(fantasyDataCache.cacheKey, "espn:%"),
+        or(
+          like(fantasyDataCache.cacheKey, `espn:${esc}:%`),
+          like(fantasyDataCache.cacheKey, "espn:default:%")
+        )
+      )
+    );
+  const seasons = new Set<number>();
+  for (const { cacheKey } of rows) {
+    const parsed = parseEspnFantasyDataCacheKey(cacheKey);
+    if (!parsed || parsed.season <= 2000) continue;
+    if (parsed.leagueId === lid || parsed.leagueId === "default") {
+      seasons.add(parsed.season);
+    }
+  }
+
+  const rawLeagueWhere =
+    lid !== "default"
+      ? or(eq(espnRawCache.leagueId, lid), eq(espnRawCache.leagueId, "default"))
+      : eq(espnRawCache.leagueId, lid);
+  const rawSeasonRows = await db
+    .selectDistinct({ season: espnRawCache.season })
+    .from(espnRawCache)
+    .where(rawLeagueWhere);
+  for (const r of rawSeasonRows) {
+    if (r.season > 2000) seasons.add(r.season);
+  }
+
+  const seasonCacheLeagueWhere =
+    lid !== "default"
+      ? or(eq(espnSeasonCache.leagueId, lid), eq(espnSeasonCache.leagueId, "default"))
+      : eq(espnSeasonCache.leagueId, lid);
+  const escSeasonRows = await db
+    .selectDistinct({ season: espnSeasonCache.season })
     .from(espnSeasonCache)
-    .where(and(
-      gt(espnSeasonCache.season, 2000),
-      or(eq(espnSeasonCache.leagueId, lid), eq(espnSeasonCache.leagueId, "default"))
-    ))
-    .orderBy(desc(espnSeasonCache.season));
-  return result.map((r) => r.season);
+    .where(seasonCacheLeagueWhere);
+  for (const r of escSeasonRows) {
+    if (r.season > 2000) seasons.add(r.season);
+  }
+
+  return Array.from(seasons).sort((a, b) => b - a);
 }
 
 /**
@@ -128,27 +389,139 @@ export async function getCompletedSeasonForOffseason(): Promise<number | null> {
   return completed.length > 0 ? completed[0] : null; // already sorted desc
 }
 
-export async function getRefreshManifests() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(refreshManifest).orderBy(desc(refreshManifest.season));
+type SyncRunRow = typeof syncRuns.$inferSelect;
+
+/** Manifest row derived from `sync_runs` (includes fields not on legacy `refresh_manifest` table type). */
+export type SeasonCacheManifest = RefreshManifest & {
+  standingsCount: number;
+  rawSyncStatus: SyncRunRow["status"];
+};
+
+/** NFL fantasy season currently in play (open for ESPN refresh). */
+export const ESPN_SYNC_CURRENT_SEASON = 2026;
+export const ESPN_HISTORICAL_COMPLETED_MIN = 2009;
+export const ESPN_HISTORICAL_COMPLETED_MAX = 2025;
+
+export function isHistoricalCompletedSeason(season: number): boolean {
+  return season >= ESPN_HISTORICAL_COMPLETED_MIN && season <= ESPN_HISTORICAL_COMPLETED_MAX;
 }
 
-export async function upsertRefreshManifest(season: number, data: {
-  teamCount?: number; rosterCount?: number; matchupCount?: number;
-  draftPickCount?: number; transactionCount?: number;
-  status: "success" | "partial" | "failed"; errorMessage?: string; viewsRefreshed?: string[];
-}) {
-  const db = await getDb();
-  if (!db) return;
-  const updateSet = {
-    lastRefreshedAt: new Date(), teamCount: data.teamCount ?? null,
-    rosterCount: data.rosterCount ?? null, matchupCount: data.matchupCount ?? null,
-    draftPickCount: data.draftPickCount ?? null, transactionCount: data.transactionCount ?? null,
-    status: data.status, errorMessage: data.errorMessage ?? null, viewsRefreshed: data.viewsRefreshed ?? null,
+/**
+ * Latest sync for a completed season is considered fully normalized when the pipeline finished in success,
+ * saved teams, and persisted at least one of matchups / draft picks / transactions / standings.
+ */
+export function isHistoricallyFullyNormalizedFromManifest(m: {
+  status?: string | null;
+  teamCount?: number | null;
+  matchupCount?: number | null;
+  draftPickCount?: number | null;
+  transactionCount?: number | null;
+  standingsCount?: number | null;
+}): boolean {
+  if (m.status !== "success") return false;
+  const teams = Number(m.teamCount) || 0;
+  if (teams <= 0) return false;
+  const keys =
+    (Number(m.matchupCount) || 0) +
+    (Number(m.draftPickCount) || 0) +
+    (Number(m.transactionCount) || 0) +
+    (Number(m.standingsCount) || 0);
+  return keys > 0;
+}
+
+/** Newest run wins: finishedAt (or startedAt if still running), then higher id. */
+function pickNewestSyncRun(pool: SyncRunRow[]): SyncRunRow | null {
+  if (pool.length === 0) return null;
+  return pool.reduce((best, r) => {
+    const tBest = (best.finishedAt ?? best.startedAt).getTime();
+    const tR = (r.finishedAt ?? r.startedAt).getTime();
+    if (tR !== tBest) return tR > tBest ? r : best;
+    return r.id > best.id ? r : best;
+  });
+}
+
+/**
+ * One manifest per season: latest `sync_runs` row for that season (by finishedAt/startedAt, then id).
+ * Does not read `league_connections` so cache status still renders if that table is missing or errors.
+ */
+export async function getRefreshManifests(): Promise<SeasonCacheManifest[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+
+    const runs = await db.select().from(syncRuns);
+
+    const bySeason = new Map<number, SyncRunRow[]>();
+    for (const r of runs) {
+      const list = bySeason.get(r.season) ?? [];
+      list.push(r);
+      bySeason.set(r.season, list);
+    }
+
+    const deduped: SyncRunRow[] = [];
+    for (const [, seasonRuns] of bySeason) {
+      const chosen = pickNewestSyncRun(seasonRuns);
+      if (chosen) deduped.push(chosen);
+    }
+
+    deduped.sort((a, b) => b.season - a.season);
+    return deduped.map(mapSyncRunToRefreshManifest);
+  } catch (e) {
+    console.warn("[getRefreshManifests] failed:", e);
+    return [];
+  }
+}
+
+const MAX_REFRESH_MANIFEST_ERROR_LEN = 16_000;
+
+function truncateRefreshManifestError(msg: string | null): string | null {
+  if (msg == null) return null;
+  if (msg.length <= MAX_REFRESH_MANIFEST_ERROR_LEN) return msg;
+  return `${msg.slice(0, MAX_REFRESH_MANIFEST_ERROR_LEN)}…(truncated)`;
+}
+
+function mapSyncRunToRefreshManifest(r: typeof syncRuns.$inferSelect): SeasonCacheManifest {
+  const lastAt = r.finishedAt ?? r.startedAt;
+  const manifestStatus: "success" | "partial" | "failed" =
+    r.status === "success"
+      ? "success"
+      : r.status === "failed"
+        ? "failed"
+        : "partial"; // running | partial → partial for legacy enum
+  const views =
+    r.rawViewsSaved > 0 ? (["combined"] as unknown as RefreshManifest["viewsRefreshed"]) : null;
+  return {
+    id: r.id,
+    season: r.season,
+    lastRefreshedAt: lastAt,
+    viewsRefreshed: views,
+    teamCount: r.teamsSaved,
+    rosterCount: r.rosterEntriesSaved,
+    matchupCount: r.matchupsSaved,
+    draftPickCount: r.draftPicksSaved,
+    transactionCount: r.transactionsSaved,
+    standingsCount: r.standingsSaved,
+    rawSyncStatus: r.status,
+    status: manifestStatus,
+    errorMessage: truncateRefreshManifestError(r.errorMessage ?? null),
   };
-  await db.insert(refreshManifest).values({ season, ...updateSet })
-    .onDuplicateKeyUpdate({ set: updateSet });
+}
+
+/** @deprecated No-op — `refresh_manifest` retired; pipeline persists to `sync_runs` only. */
+export async function upsertRefreshManifest(
+  _season: number,
+  _data: {
+    teamCount?: number;
+    rosterCount?: number;
+    matchupCount?: number;
+    draftPickCount?: number;
+    transactionCount?: number;
+    status: "success" | "partial" | "failed";
+    errorMessage?: string;
+    viewsRefreshed?: string[];
+  }
+): Promise<void> {
+  return;
 }
 
 export async function getChatHistory(userId: number, season?: number) {
@@ -196,32 +569,104 @@ export async function removePickTrade(id: number) {
 
 // ── ESPN View Health helpers ──────────────────────────────────────────────────
 
-/** Active ESPN league id for cron/global jobs (first active DB connection, else env). */
-export async function getDefaultEspnLeagueId(): Promise<string> {
-  const db = await getDb();
-  if (db) {
-    const rows = await db
-      .select({
-        leagueId: leagueConnections.leagueId,
-        credentials: leagueConnections.credentials,
-      })
-      .from(leagueConnections)
-      .where(
-        and(
-          eq(leagueConnections.isActive, true),
-          eq(leagueConnections.provider, "espn")
-        )
-      )
-      .orderBy(desc(leagueConnections.updatedAt))
+async function resolveLatestLeagueFromSyncRunsById(): Promise<{ leagueId: string; source: string } | null> {
+  try {
+    const db = await getDb();
+    if (!db) return null;
+    const row = await db
+      .select({ leagueId: syncRuns.leagueId })
+      .from(syncRuns)
+      .orderBy(desc(syncRuns.id))
       .limit(1);
-    if (rows[0]) {
-      const creds = decryptCredentialsFromDb(rows[0].credentials) as Record<string, string> | null;
-      return (creds?.leagueId as string) ?? rows[0].leagueId;
-    }
+    const lid = row[0]?.leagueId != null ? String(row[0].leagueId).trim().slice(0, 32) : "";
+    if (!lid) return null;
+    return { leagueId: lid, source: "sync_runs_latest" };
+  } catch {
+    return null;
   }
-  return process.env.ESPN_LEAGUE_ID ?? "default";
 }
 
+async function resolveLatestLeagueFromGmTeamsById(): Promise<{ leagueId: string; source: string } | null> {
+  try {
+    const db = await getDb();
+    if (!db) return null;
+    const row = await db
+      .select({ leagueId: gmTeams.leagueId })
+      .from(gmTeams)
+      .orderBy(desc(gmTeams.id))
+      .limit(1);
+    const lid = row[0]?.leagueId != null ? String(row[0].leagueId).trim().slice(0, 32) : "";
+    if (!lid) return null;
+    return { leagueId: lid, source: "teams_latest" };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Active ESPN league id: active `league_connections` row when readable, else latest `sync_runs`,
+ * else latest `teams` row, else `LEAGUE_ID` / `ESPN_LEAGUE_ID`. Never throws; returns null if nothing applies.
+ */
+export async function getDefaultEspnLeagueId(): Promise<string | null> {
+  const db = await getDb();
+  if (db) {
+    try {
+      const rows = await db
+        .select({
+          leagueId: leagueConnections.leagueId,
+          credentials: leagueConnections.credentials,
+        })
+        .from(leagueConnections)
+        .where(
+          and(
+            eq(leagueConnections.isActive, true),
+            eq(leagueConnections.provider, "espn")
+          )
+        )
+        .orderBy(desc(leagueConnections.updatedAt))
+        .limit(1);
+      if (rows[0]) {
+        const creds = decryptCredentialsFromDb(rows[0].credentials) as Record<string, string> | null;
+        const lid = String((creds?.leagueId as string) ?? rows[0].leagueId).trim().slice(0, 32);
+        if (lid) return lid;
+      }
+    } catch (e) {
+      console.warn("[getDefaultEspnLeagueId] league_connections unavailable:", e);
+    }
+  }
+
+  const fromSync = (await resolveLatestLeagueFromSyncRunsById())?.leagueId ?? null;
+  if (fromSync) return fromSync;
+
+  const fromTeams = (await resolveLatestLeagueFromGmTeamsById())?.leagueId ?? null;
+  if (fromTeams) return fromTeams;
+
+  const envLeague = (process.env.LEAGUE_ID ?? process.env.ESPN_LEAGUE_ID)?.trim().slice(0, 32);
+  if (envLeague) return envLeague;
+
+  return null;
+}
+
+/** True when we can read at least one active ESPN row from `league_connections` (table missing → false). */
+export async function hasActiveEspnLeagueConnection(): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    const rows = await db
+      .select({ id: leagueConnections.id })
+      .from(leagueConnections)
+      .where(and(eq(leagueConnections.isActive, true), eq(leagueConnections.provider, "espn")))
+      .limit(1);
+    return rows.length > 0;
+  } catch (e) {
+    console.warn("[hasActiveEspnLeagueConnection] league_connections unavailable:", e);
+    return false;
+  }
+}
+
+/**
+ * Upsert ESPN view health by (season, viewName) using raw SQL + `ON DUPLICATE KEY UPDATE`.
+ */
 export async function upsertViewHealth(
   season: number,
   viewName: string,
@@ -229,16 +674,32 @@ export async function upsertViewHealth(
 ) {
   const db = await getDb();
   if (!db) return;
-  const updateSet = {
-    status: data.status,
-    errorMessage: data.errorMessage ?? null,
-    recordCount: data.recordCount ?? null,
-    fetchedAt: new Date(),
-    updatedAt: new Date(),
-  };
-  await db.insert(espnViewHealth)
-    .values({ season, viewName, ...updateSet })
-    .onDuplicateKeyUpdate({ set: updateSet });
+
+  const yr = Math.floor(Number(season));
+  if (!Number.isFinite(yr) || yr < 1900 || yr > 2200) {
+    console.warn("[upsertViewHealth] invalid season:", season);
+    return;
+  }
+  const vn = String(viewName).slice(0, 64);
+
+  const now = new Date();
+  const st = data.status;
+  const err = data.errorMessage ?? null;
+  const rc = data.recordCount ?? null;
+
+  await db.execute(sql`
+    INSERT INTO \`espn_view_health\` (
+      \`season\`, \`viewName\`, \`status\`, \`errorMessage\`, \`recordCount\`, \`fetchedAt\`, \`updatedAt\`
+    ) VALUES (
+      ${yr}, ${vn}, ${st}, ${err}, ${rc}, ${now}, ${now}
+    )
+    ON DUPLICATE KEY UPDATE
+      \`status\` = VALUES(\`status\`),
+      \`errorMessage\` = VALUES(\`errorMessage\`),
+      \`recordCount\` = VALUES(\`recordCount\`),
+      \`fetchedAt\` = VALUES(\`fetchedAt\`),
+      \`updatedAt\` = VALUES(\`updatedAt\`)
+  `);
 }
 
 export async function getViewHealthForSeason(season: number) {
@@ -433,72 +894,234 @@ export async function upsertUserMemory(userId: number, data: {
  * Callers should fall back to env vars when undefined is returned.
  */
 export async function getActiveEspnCredentials(userId: number): Promise<EspnCreds | undefined> {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db
-    .select()
-    .from(leagueConnections)
-    .where(and(
-      eq(leagueConnections.userId, userId),
-      eq(leagueConnections.provider, "espn"),
-      eq(leagueConnections.isActive, true)
-    ))
-    .orderBy(desc(leagueConnections.updatedAt))
-    .limit(1);
-  if (!rows.length) return undefined;
-  const row = rows[0];
-  // Decrypt credentials (supports both encrypted enc:v1 and legacy plain-object formats)
-  const creds = decryptCredentialsFromDb(row.credentials) as Record<string, string> | null;
-  if (!creds?.swid || !creds?.espnS2) return undefined;
-  return {
-    leagueId: (creds.leagueId as string) ?? row.leagueId,
-    swid: creds.swid,
-    espnS2: creds.espnS2,
-  };
+  try {
+    const db = await getDb();
+    if (!db) return undefined;
+    const rows = await db
+      .select()
+      .from(leagueConnections)
+      .where(and(
+        eq(leagueConnections.userId, userId),
+        eq(leagueConnections.provider, "espn"),
+        eq(leagueConnections.isActive, true)
+      ))
+      .orderBy(desc(leagueConnections.updatedAt))
+      .limit(1);
+    if (!rows.length) return undefined;
+    const row = rows[0];
+    // Decrypt credentials (supports both encrypted enc:v1 and legacy plain-object formats)
+    const creds = decryptCredentialsFromDb(row.credentials) as Record<string, string> | null;
+    if (!creds?.swid || !creds?.espnS2) return undefined;
+    return {
+      leagueId: (creds.leagueId as string) ?? row.leagueId,
+      swid: creds.swid,
+      espnS2: creds.espnS2,
+    };
+  } catch (e) {
+    console.warn("[getActiveEspnCredentials] league_connections unavailable:", e);
+    return undefined;
+  }
 }
 
 // ─── Active League Context ─────────────────────────────────────────────────
 
-let _cachedDefaultLeagueId: { id: string; expiresAt: number } | null = null;
+export type ActiveLeagueResolveCtx = { user?: { id: number } | null };
 
-/**
- * Resolve ESPN cache league id: user's active connection, then any active ESPN
- * connection, then ESPN_LEAGUE_ID env, then "default".
- */
-export async function resolveActiveLeagueId(userId?: number): Promise<string> {
-  const now = Date.now();
-  if (!userId && _cachedDefaultLeagueId && _cachedDefaultLeagueId.expiresAt > now) {
-    return _cachedDefaultLeagueId.id;
-  }
+export type ResolvedActiveLeagueId = { leagueId: string; source: string };
 
-  const db = await getDb();
-  let leagueId: string | undefined;
+function logActiveLeagueResolve(opts: {
+  requestedSeason: number | null;
+  inputLeagueId: string | null;
+  resolvedLeagueId: string;
+  source: string;
+}) {
+  console.warn("[resolveActiveLeagueId]", JSON.stringify(opts));
+}
 
-  if (userId && db) {
-    const row = await getActiveLeagueForUser(userId);
-    if (row?.leagueId) leagueId = row.leagueId;
-  }
-
-  if (!leagueId && db) {
+export async function getUserEspnLeagueIds(userId: number): Promise<string[]> {
+  try {
+    const db = await getDb();
+    if (!db) return [];
     const rows = await db
       .select({ leagueId: leagueConnections.leagueId })
       .from(leagueConnections)
       .where(
         and(
-          eq(leagueConnections.isActive, true),
-          eq(leagueConnections.provider, "espn")
+          eq(leagueConnections.userId, userId),
+          eq(leagueConnections.provider, "espn"),
+          eq(leagueConnections.isActive, true)
         )
-      )
-      .orderBy(desc(leagueConnections.updatedAt))
-      .limit(1);
-    leagueId = rows[0]?.leagueId;
+      );
+    const out = new Set<string>();
+    for (const r of rows) {
+      if (r.leagueId) out.add(String(r.leagueId).trim().slice(0, 32));
+    }
+    return Array.from(out);
+  } catch (e) {
+    console.warn("[getUserEspnLeagueIds] league_connections unavailable:", e);
+    return [];
+  }
+}
+
+/**
+ * For a season: pick leagueId from recent successful sync_runs, preferring rows
+ * whose league matches the user's ESPN connections, then a single-league season, then most recent.
+ */
+async function resolveLeagueFromSyncRunsForSeason(
+  season: number,
+  userId?: number
+): Promise<{ leagueId: string; source: string } | null> {
+  try {
+    const db = await getDb();
+    if (!db) return null;
+    const yr = Math.floor(Number(season));
+    if (!Number.isFinite(yr) || yr < 1900 || yr > 2200) return null;
+
+    const runs = await db
+      .select({ leagueId: syncRuns.leagueId })
+      .from(syncRuns)
+      .where(and(eq(syncRuns.season, yr), eq(syncRuns.status, "success")))
+      .orderBy(desc(syncRuns.finishedAt))
+      .limit(40);
+
+    if (!runs.length) return null;
+
+    if (userId != null) {
+      const allowed = new Set(await getUserEspnLeagueIds(userId));
+      for (const r of runs) {
+        const id = String(r.leagueId).trim().slice(0, 32);
+        if (allowed.has(id)) return { leagueId: id, source: "sync_runs_user_recent" };
+      }
+    }
+
+    const distinct = Array.from(new Set(runs.map(r => String(r.leagueId).trim().slice(0, 32))));
+    if (distinct.length === 1) return { leagueId: distinct[0]!, source: "sync_runs_single_league" };
+
+    const first = String(runs[0].leagueId).trim().slice(0, 32);
+    return { leagueId: first, source: "sync_runs_recent_any" };
+  } catch (e) {
+    console.warn("[resolveLeagueFromSyncRunsForSeason]", e);
+    return null;
+  }
+}
+
+/**
+ * Resolve ESPN cache / normalized-table league id for reads.
+ *
+ * Order: explicit input → user's ESPN credentials leagueId → sync_runs for season
+ * (prefer user's leagues, else single-league season, else most recent) → latest `sync_runs` by id
+ * → latest `teams` row → `LEAGUE_ID` / `ESPN_LEAGUE_ID` → non-production dev fallback → default.
+ */
+export async function resolveActiveLeagueId(
+  ctx: ActiveLeagueResolveCtx,
+  inputLeagueId?: string | null,
+  season?: number
+): Promise<ResolvedActiveLeagueId> {
+  const inL =
+    inputLeagueId != null && String(inputLeagueId).trim() !== ""
+      ? String(inputLeagueId).trim().slice(0, 32)
+      : null;
+  if (inL) {
+    const r = { leagueId: inL, source: "input" };
+    logActiveLeagueResolve({
+      requestedSeason: season ?? null,
+      inputLeagueId: inputLeagueId ?? null,
+      resolvedLeagueId: r.leagueId,
+      source: r.source,
+    });
+    return r;
   }
 
-  const resolved = leagueId || process.env.ESPN_LEAGUE_ID || "default";
-  if (!userId) {
-    _cachedDefaultLeagueId = { id: resolved, expiresAt: now + 60_000 };
+  const uid = ctx.user?.id ?? undefined;
+  if (uid != null) {
+    const creds = await getActiveEspnCredentials(uid);
+    const cid = creds?.leagueId ? String(creds.leagueId).trim().slice(0, 32) : "";
+    if (cid) {
+      const r = { leagueId: cid, source: "credentials" };
+      logActiveLeagueResolve({
+        requestedSeason: season ?? null,
+        inputLeagueId: inputLeagueId ?? null,
+        resolvedLeagueId: r.leagueId,
+        source: r.source,
+      });
+      return r;
+    }
   }
-  return resolved;
+
+  const syncSeason =
+    season != null && Number.isFinite(Number(season)) ? Math.floor(Number(season)) : null;
+  const allowSeasonScopedSync = syncSeason != null && syncSeason >= 2000;
+  const allowLatestSyncFallback =
+    season === null || season === undefined || allowSeasonScopedSync;
+
+  if (allowSeasonScopedSync) {
+    const fromRuns = await resolveLeagueFromSyncRunsForSeason(syncSeason!, uid);
+    if (fromRuns) {
+      logActiveLeagueResolve({
+        requestedSeason: season ?? null,
+        inputLeagueId: inputLeagueId ?? null,
+        resolvedLeagueId: fromRuns.leagueId,
+        source: fromRuns.source,
+      });
+      return { leagueId: fromRuns.leagueId, source: fromRuns.source };
+    }
+  }
+
+  if (allowLatestSyncFallback) {
+    const latestSync = await resolveLatestLeagueFromSyncRunsById();
+    if (latestSync) {
+      logActiveLeagueResolve({
+        requestedSeason: season ?? null,
+        inputLeagueId: inputLeagueId ?? null,
+        resolvedLeagueId: latestSync.leagueId,
+        source: latestSync.source,
+      });
+      return latestSync;
+    }
+    const latestTeams = await resolveLatestLeagueFromGmTeamsById();
+    if (latestTeams) {
+      logActiveLeagueResolve({
+        requestedSeason: season ?? null,
+        inputLeagueId: inputLeagueId ?? null,
+        resolvedLeagueId: latestTeams.leagueId,
+        source: latestTeams.source,
+      });
+      return latestTeams;
+    }
+  }
+
+  const envId = (process.env.LEAGUE_ID ?? process.env.ESPN_LEAGUE_ID)?.trim().slice(0, 32);
+  if (envId) {
+    const r = { leagueId: envId, source: "env_league_id" };
+    logActiveLeagueResolve({
+      requestedSeason: season ?? null,
+      inputLeagueId: inputLeagueId ?? null,
+      resolvedLeagueId: r.leagueId,
+      source: r.source,
+    });
+    return r;
+  }
+
+  const isNonProd = process.env.NODE_ENV !== "production";
+  if (isNonProd) {
+    const r = { leagueId: "457622", source: "dev_fallback_league" };
+    logActiveLeagueResolve({
+      requestedSeason: season ?? null,
+      inputLeagueId: inputLeagueId ?? null,
+      resolvedLeagueId: r.leagueId,
+      source: r.source,
+    });
+    return r;
+  }
+
+  const r = { leagueId: "default", source: "fallback_default" };
+  logActiveLeagueResolve({
+    requestedSeason: season ?? null,
+    inputLeagueId: inputLeagueId ?? null,
+    resolvedLeagueId: r.leagueId,
+    source: r.source,
+  });
+  return r;
 }
 
 /**

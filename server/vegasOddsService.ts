@@ -292,17 +292,18 @@ async function setCachedOdds(odds: NFLGameOdds[]): Promise<void> {
   const db = await getDb();
   if (!db) return;
   const now = new Date();
+  const body = JSON.stringify(odds);
   await db
     .insert(fantasyDataCache)
     .values({
       cacheKey: CACHE_KEY,
-      payload: odds,
+      payload: body,
       fetchedAt: now,
       updatedAt: now,
     })
     .onDuplicateKeyUpdate({
       set: {
-        payload: odds,
+        payload: body,
         updatedAt: now,
       },
     });

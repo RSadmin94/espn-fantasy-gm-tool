@@ -304,6 +304,17 @@ function mergePlayers(
   });
 }
 
+function parseMergedPlayersPayload(raw: unknown): MergedPlayer[] {
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as MergedPlayer[];
+    } catch {
+      return [];
+    }
+  }
+  return (raw as MergedPlayer[]) ?? [];
+}
+
 // ─── Cache helpers ────────────────────────────────────────────────────────────
 
 /** Runtime self-heal when migration has not been applied yet. */
@@ -316,7 +327,7 @@ export async function ensureFantasyDataTables(): Promise<void> {
       CREATE TABLE IF NOT EXISTS fantasy_data_cache (
         id int AUTO_INCREMENT NOT NULL,
         cacheKey varchar(64) NOT NULL,
-        payload json NOT NULL,
+        payload longtext NOT NULL,
         fetchedAt timestamp NOT NULL DEFAULT (now()),
         updatedAt timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
         CONSTRAINT fantasy_data_cache_id PRIMARY KEY(id),
@@ -356,7 +367,7 @@ async function getCached(key: string): Promise<{ data: MergedPlayer[]; fetchedAt
     if (!rows.length) return null;
     const row = rows[0];
     if (Date.now() - row.fetchedAt.getTime() > CACHE_TTL_MS) return null;
-    return { data: row.payload as unknown as MergedPlayer[], fetchedAt: row.fetchedAt };
+    return { data: parseMergedPlayersPayload(row.payload), fetchedAt: row.fetchedAt };
   } catch (err) {
     console.warn("[fantasyDataService] getCached failed (non-fatal):", err);
     return null;
@@ -368,12 +379,13 @@ async function setCached(key: string, data: MergedPlayer[]): Promise<void> {
   if (!db) return;
   try {
     await ensureFantasyDataTables();
+    const body = JSON.stringify(data);
     await db
       .insert(fantasyDataCache)
-      .values({ cacheKey: key, payload: data as unknown as Record<string, unknown>[] })
+      .values({ cacheKey: key, payload: body, fetchedAt: new Date(), updatedAt: new Date() })
       .onDuplicateKeyUpdate({
         set: {
-          payload: data as unknown as Record<string, unknown>[],
+          payload: body,
           fetchedAt: new Date(),
           updatedAt: new Date(),
         },
@@ -444,10 +456,11 @@ export async function getDraftBoard(forceRefresh = false): Promise<DraftBoardRes
     }
     if (staleRows.length) {
       const stale = staleRows[0];
+      const stalePlayers = parseMergedPlayersPayload(stale.payload);
       return {
-        players: stale.payload as unknown as MergedPlayer[],
+        players: stalePlayers,
         fetchedAt: stale.fetchedAt,
-        sources: { ecr: 0, adp: 0, pfr: 0, merged: (stale.payload as unknown[]).length },
+        sources: { ecr: 0, adp: 0, pfr: 0, merged: stalePlayers.length },
         fromCache: true,
       };
     }

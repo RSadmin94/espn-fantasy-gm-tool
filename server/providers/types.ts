@@ -157,7 +157,7 @@ export interface UniversalLeague {
  * The adapter is responsible for:
  *  1. Fetching raw data from the provider API
  *  2. Normalizing it into UniversalLeague
- *  3. Persisting the raw payload to the cache (espnSeasonCache or equivalent)
+ *  3. Persisting the raw payload to the cache (`fantasy_data_cache` with `espn:*` keys)
  *
  * The intelligence engine only ever calls `fetchAndNormalize()` or
  * `normalizeFromCache()` — it never touches provider-specific APIs.

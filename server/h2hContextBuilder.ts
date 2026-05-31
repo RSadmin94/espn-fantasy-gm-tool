@@ -14,8 +14,12 @@
  * Cached in memCache for 10 min to avoid redundant season scans.
  */
 
-import { getAllCachedSeasons, getCachedView } from "./db";
-import { normalizeMatchups, normalizeTeams } from "./espnService";
+import { getCachedView } from "./db";
+import {
+  getSeasonMatchups,
+  getSeasonTeams,
+  listSeasonsForLeagueHistorical,
+} from "./historicalDataService";
 import { memCache } from "./memCache";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -78,11 +82,12 @@ export async function computeRichH2H(
   memberAId: string,
   memberBId: string,
   memberAName = "Owner A",
-  memberBName = "Owner B"
+  memberBName = "Owner B",
+  userId?: number
 ): Promise<RichH2HStats> {
-  const cacheKey = `richH2H:${memberAId}:${memberBId}`;
+  const cacheKey = `richH2H:${memberAId}:${memberBId}:${userId ?? "anon"}`;
   return memCache(cacheKey, 10 * 60_000, async () => {
-    return _computeRichH2H(memberAId, memberBId, memberAName, memberBName);
+    return _computeRichH2H(memberAId, memberBId, memberAName, memberBName, userId);
   });
 }
 
@@ -90,27 +95,30 @@ async function _computeRichH2H(
   memberAId: string,
   memberBId: string,
   memberAName: string,
-  memberBName: string
+  memberBName: string,
+  userId?: number
 ): Promise<RichH2HStats> {
-  const cachedSeasons = await getAllCachedSeasons();
-  const sortedSeasons = [...cachedSeasons].sort((a, b) => a - b);
+  const sortedSeasons: number[] = await listSeasonsForLeagueHistorical(undefined, userId);
 
   const matchups: H2HMatchup[] = [];
 
   for (const season of sortedSeasons) {
-    const row = await getCachedView(season, "combined");
-    if (!row) continue;
-    const data = row.payload as Record<string, unknown>;
+    const matchRes = await getSeasonMatchups(season, undefined, userId);
+    if (matchRes.count === 0) continue;
 
-    // Build teamId → memberId map
-    const teams = normalizeTeams(data);
+    const teamRes = await getSeasonTeams(season, undefined, userId);
     const teamToMember = new Map<number, string>();
-    for (const team of teams) {
-      const primaryOwner = (team as any).primaryOwner || ((team as any).memberIds?.[0] ?? "");
-      if (primaryOwner) teamToMember.set((team as any).teamId as number, primaryOwner);
+    for (const team of teamRes.rows) {
+      const tr = team as Record<string, unknown>;
+      const primaryOwner = String(tr.primaryOwner || (Array.isArray(tr.memberIds) ? tr.memberIds[0] : "") || "").trim();
+      const tid = Number(tr.teamId);
+      if (primaryOwner && tid) teamToMember.set(tid, primaryOwner);
     }
 
-    // Resolve member names from members array if not provided
+    const row = await getCachedView(season, "combined", undefined, { userId });
+    const data = (row?.payload as Record<string, unknown>) || {};
+
+    // Resolve member names from members array when combined cache has it
     const members = (data.members as Record<string, unknown>[]) || [];
     for (const m of members) {
       const mid = m.id as string;
@@ -119,12 +127,7 @@ async function _computeRichH2H(
       if (mid === memberBId && memberBName === "Owner B") memberBName = name;
     }
 
-    // Playoff start period
-    const settings = (data.settings as Record<string, unknown>) || {};
-    const scheduleSettings = (settings.scheduleSettings as Record<string, unknown>) || {};
-    const playoffStart: number = ((scheduleSettings.matchupPeriodCount as number) ?? 14) + 1;
-
-    const normalizedMatchups = normalizeMatchups(data) as Record<string, unknown>[];
+    const normalizedMatchups = matchRes.rows as Record<string, unknown>[];
 
     for (const m of normalizedMatchups) {
       const homeId = m.homeTeamId as number;
@@ -151,7 +154,15 @@ async function _computeRichH2H(
       const period = m.matchupPeriodId as number;
       const isPlayoff = !(!m.playoffTierType || (m.playoffTierType as string) === "NONE");
 
-      matchups.push({ season, period, isPlayoff, memberAScore: aScore, memberBScore: bScore, memberAWon: aWon });
+      const seasonYear = (m.season as number) ?? season;
+      matchups.push({
+        season: seasonYear,
+        period,
+        isPlayoff,
+        memberAScore: aScore,
+        memberBScore: bScore,
+        memberAWon: aWon,
+      });
     }
   }
 
@@ -305,11 +316,12 @@ export function buildH2HPromptBlock(stats: RichH2HStats, label = "H2H vs Rod Sel
 
 const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
 
-export async function resolveRodMemberId(): Promise<string | null> {
-  return memCache("rodMemberId", 60 * 60_000, async () => {
-    const seasons = await getAllCachedSeasons();
-    for (const season of seasons.sort((a, b) => b - a)) {
-      const row = await getCachedView(season, "combined");
+export async function resolveRodMemberId(userId?: number): Promise<string | null> {
+  return memCache(`rodMemberId:${userId ?? "anon"}`, 60 * 60_000, async () => {
+    const seasons: number[] = await listSeasonsForLeagueHistorical(undefined, userId);
+    seasons.sort((a: number, b: number) => b - a);
+    for (const season of seasons) {
+      const row = await getCachedView(season, "combined", undefined, { userId });
       if (!row) continue;
       const data = row.payload as Record<string, unknown>;
       const members = (data.members as Record<string, unknown>[]) || [];

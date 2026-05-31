@@ -341,9 +341,10 @@ export async function getLatestFearIndexFromDb(season: number): Promise<FearInde
  */
 export async function refreshFearIndex(
   season: number,
-  rosterHealthOverride?: Record<number, number>
+  rosterHealthOverride?: Record<number, number>,
+  userId?: number
 ): Promise<FearIndexEntry[]> {
-  const payload = await getCachedView(season, "combined");
+  const payload = await getCachedView(season, "combined", undefined, { userId });
   if (!payload) {
     console.warn(`[fearIndex] No cached data for season ${season}`);
     return [];

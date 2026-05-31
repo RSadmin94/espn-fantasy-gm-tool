@@ -5,7 +5,7 @@
  * Replaces the static opponentData.ts hardcoded file.
  *
  * Data sources:
- *   - espnSeasonCache (teams, schedule, transactions, draftPicks) per season
+ *   - fantasy_data_cache ESPN rows (teams, schedule, transactions, draftPicks) per season
  *   - calcManagerBehavior() from analytics.ts for GM archetypes
  *
  * The returned shape is compatible with the OpponentData interface from
@@ -76,8 +76,8 @@ const ROD_MEMBER_IDS = [
 
 // ── Main builder ──────────────────────────────────────────────────────────────
 
-export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOpponentData>> {
-  const cachedSeasons = await getAllCachedSeasons();
+export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<string, LiveOpponentData>> {
+  const cachedSeasons = await getAllCachedSeasons(undefined, userId);
   if (cachedSeasons.length === 0) return new Map();
 
   // memberId → accumulated data
@@ -99,7 +99,7 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
   const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
 
   for (const season of cachedSeasons.sort((a, b) => b - a)) {
-    const row = await getCachedView(season, "combined");
+    const row = await getCachedView(season, "combined", undefined, { userId });
     if (!row) continue;
     const data = row.payload as Record<string, unknown>;
     const members = (data.members as Record<string, unknown>[]) || [];
@@ -387,8 +387,8 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
  * Find a single opponent profile by memberId.
  * Falls back to fuzzy name match if exact ID not found.
  */
-export async function findLiveOpponentProfile(memberId: string): Promise<LiveOpponentData | null> {
-  const profiles = await buildLiveOpponentProfiles();
+export async function findLiveOpponentProfile(memberId: string, userId?: number): Promise<LiveOpponentData | null> {
+  const profiles = await buildLiveOpponentProfiles(userId);
   if (profiles.has(memberId)) return profiles.get(memberId)!;
 
   // Fuzzy match by partial memberId (ESPN IDs are GUIDs, sometimes truncated)
@@ -405,14 +405,14 @@ export async function findLiveOpponentProfile(memberId: string): Promise<LiveOpp
  * Get GM style context for the trade offer generator.
  * Returns a minimal object compatible with the existing trade generator prompt.
  */
-export async function getGmStyleForTradeGenerator(memberId: string): Promise<{
+export async function getGmStyleForTradeGenerator(memberId: string, userId?: number): Promise<{
   archetype: string;
   avgTrades: number;
   h2hVsRod: { wins: number; losses: number };
   strengthsWeaknesses: LiveStrengthWeakness[];
   draftStyleBadge: string;
 } | null> {
-  const profile = await findLiveOpponentProfile(memberId);
+  const profile = await findLiveOpponentProfile(memberId, userId);
   if (!profile) return null;
   return {
     archetype: profile.gmArchetype,

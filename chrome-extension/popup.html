@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GM War Room</title>
+    <style>
+      body {
+        font: 13px/1.4 system-ui, sans-serif;
+        margin: 0;
+        padding: 12px;
+        width: 320px;
+        color: #e8e8e8;
+        background: #121212;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 8px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 10px;
+        color: #b0b0b0;
+      }
+      button {
+        width: 100%;
+        padding: 10px 12px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        background: #16a34a;
+        color: #fff;
+      }
+      button.secondary {
+        background: #3f3f46;
+        margin-bottom: 8px;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .ok {
+        color: #4ade80;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      .err {
+        color: #f87171;
+        font-size: 12px;
+        margin-top: 8px;
+      }
+      .meta {
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 8px;
+      }
+      .league-list {
+        max-height: 220px;
+        overflow: auto;
+        margin: 0 0 10px;
+        padding: 8px;
+        background: #1e1e1e;
+        border-radius: 8px;
+        border: 1px solid #333;
+      }
+      .league-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 6px 0;
+        border-bottom: 1px solid #2a2a2a;
+      }
+      .league-row:last-child {
+        border-bottom: none;
+      }
+      .league-row label {
+        cursor: pointer;
+        flex: 1;
+        line-height: 1.35;
+        color: #ddd;
+      }
+      .league-row input {
+        margin-top: 2px;
+      }
+      .lid {
+        color: #888;
+        font-size: 11px;
+      }
+      h2.h2 {
+        font-size: 13px;
+        margin: 0 0 8px;
+        font-weight: 600;
+      }
+      pre#histOut {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>GM War Room</h1>
+    <div id="root"></div>
+    <hr style="border: none; border-top: 1px solid #333; margin: 12px 0" />
+    <h2 class="h2">Import Historical League Data</h2>
+    <p class="meta">Same ESPN + War Room session as Sync. No SQL — data posts to War Room.</p>
+    <label class="meta" for="histLeagueId">League ID</label>
+    <input
+      id="histLeagueId"
+      type="text"
+      value="457622"
+      style="width: 100%; margin-bottom: 8px; padding: 6px; border-radius: 6px; border: 1px solid #444; background: #1e1e1e; color: #eee; box-sizing: border-box"
+    />
+    <div style="display: flex; gap: 6px; margin-bottom: 8px">
+      <button type="button" class="secondary" id="histDiscover" style="flex: 1">Discover seasons</button>
+      <button type="button" class="secondary" id="histStatus" style="flex: 1">DB status</button>
+    </div>
+    <button type="button" class="secondary" id="histRoster2017Poc" style="margin-bottom: 8px">
+      POC: 2017 rosters (DOM JSON)
+    </button>
+    <button type="button" class="secondary" id="histRosterMatrix" style="margin-bottom: 8px">
+      DEBUG: roster endpoint matrix
+    </button>
+    <button type="button" class="secondary" id="histTest" style="margin-bottom: 8px">POPULATE PLAYER REGISTRY (ESPN Universe)</button>
+    <button type="button" id="histFull" style="margin-bottom: 8px">FULL IMPORT</button>
+    <pre id="histOut"></pre>
+
+    <hr style="border: none; border-top: 1px solid #333; margin: 12px 0" />
+    <h2 class="h2">Historical Roster Capture</h2>
+    <p class="meta">Scrapes ESPN League Rosters page for 2018–2025. One tab per season (~6 min total).</p>
+    <button type="button" id="rosterFull" style="margin-bottom: 8px">ROSTER IMPORT (2018–2025)</button>
+    <pre id="rosterOut"></pre>
+
+        <script src="popup.js"></script>
+  </body>
+</html>

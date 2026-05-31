@@ -13,6 +13,9 @@
  *   4. parsePickRecommendation() — parse the LLM JSON response.
  *
  * No ESPN API calls. No DB writes. All inputs come from existing procedures.
+ *
+ * QUARANTINE: Active draft / war-room tools only — not Draft History V3 display.
+ * Historical board: `draftRecapCanonical` / docs/DRAFT_HISTORY_CANONICAL.md
  */
 
 // ─── Types ────────────────────────────────────────────────────────────────────

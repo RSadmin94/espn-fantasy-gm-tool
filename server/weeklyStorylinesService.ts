@@ -588,12 +588,12 @@ export async function getLatestWeeklyStorylinesFromDb(
  * Called from the weekly refresh handler and manual refresh procedures.
  * Uses existing cached ESPN data — no new ESPN API calls.
  */
-export async function refreshWeeklyStorylines(season: number): Promise<WeeklyStorylineRow[]> {
+export async function refreshWeeklyStorylines(season: number, userId?: number): Promise<WeeklyStorylineRow[]> {
   const db = await getDb();
   if (!db) return [];
 
   // Load cached season data
-  const data = await getCachedView(season, "combined");
+  const data = await getCachedView(season, "combined", undefined, { userId });
   if (!data) return [];
   const payload = data.payload as Record<string, unknown>;
 
@@ -663,7 +663,7 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
   // Load previous season ranks (for COLLAPSE detection)
   const prevSeasonRanks: Record<number, number> = {};
   const prevSeason = season - 1;
-  const prevData = await getCachedView(prevSeason, "combined");
+  const prevData = await getCachedView(prevSeason, "combined", undefined, { userId });
   if (prevData) {
     const prevPayload = prevData.payload as Record<string, unknown>;
     const prevTeams = normalizeTeams(prevPayload);
@@ -682,7 +682,7 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
   const ownerPlayoffRecords: Record<string, { playoffWins: number; playoffLosses: number }> = {};
   try {
     const { buildLiveOpponentProfiles } = await import('./liveOpponentProfile');
-    const profiles = await buildLiveOpponentProfiles() as Map<string, { career: { playoffWins: number; playoffLosses: number } }>;
+    const profiles = await buildLiveOpponentProfiles(userId) as Map<string, { career: { playoffWins: number; playoffLosses: number } }>;
     for (const [memberId, profile] of Array.from(profiles.entries())) {
       ownerPlayoffRecords[memberId] = {
         playoffWins: profile.career.playoffWins ?? 0,
@@ -695,7 +695,7 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
   const ownerTrophyBlocks: Record<string, string> = {};
   try {
     const { computeAllTrophyHistory, buildTrophySummary } = await import('./championshipHistoryBuilder');
-    const trophyMap = await computeAllTrophyHistory();
+    const trophyMap = await computeAllTrophyHistory(undefined, userId);
     for (const [memberId, rec] of Array.from(trophyMap.entries())) {
       ownerTrophyBlocks[memberId] = buildTrophySummary(rec);
     }
@@ -706,7 +706,7 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
   if (rodMemberIds.length > 0) {
     try {
       const { resolveRodMemberId, computeRichH2H, buildH2HPromptBlock } = await import('./h2hContextBuilder');
-      const rodId = await resolveRodMemberId();
+      const rodId = await resolveRodMemberId(userId);
       if (rodId) {
         // Resolve member names from current season data
         const membersArr = (payload.members as Record<string, unknown>[]) || [];
@@ -719,7 +719,7 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
         const rodName = memberNameMap.get(rodId) || 'Rod Sellers';
         for (const rp of rivalryPairs) {
           const rivalName = memberNameMap.get(rp.rivalId) || rp.rivalName;
-          const h2h = await computeRichH2H(rodId, rp.rivalId, rodName, rivalName);
+          const h2h = await computeRichH2H(rodId, rp.rivalId, rodName, rivalName, userId);
           if (h2h.rsTotalGames > 0) {
             rivalH2HBlocks[rp.rivalId] = buildH2HPromptBlock(h2h, `Rod vs ${rivalName}`);
           }
