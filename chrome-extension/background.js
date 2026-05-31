@@ -363,6 +363,7 @@ const TRPC_PLAYER_STATS_STATUS_URL = `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCac
 const TRPC_SYNC_PLAYERS_URL      = `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCache.syncPlayersFromCache`;
 const TRPC_SAVE_ROSTER_URL       = `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCache.saveRosterPlayers`;
 const MSG_SYNC_PLAYER_STATS        = "GMWR_SYNC_PLAYER_STATS";
+const MSG_SYNC_TRENDS              = "GMWR_SYNC_TRENDS";
 const TRPC_IMPORT_DRAFT_API_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.importDraftFromEspnApi`;
 const TRPC_HIST_STATUS_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.historicalImportStatus`;
 const DNR_TRPC_HIST_RULE_ID = 8844210;
@@ -2587,6 +2588,141 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       onceRespond({ ok: true, fetched: players.length, inserted: totalInserted, updated: totalUpdated, season });
     })().catch((err) => {
       onceRespond({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    });
+    return true;
+  }
+
+  if (t === MSG_SYNC_TRENDS) {
+    let responded = false;
+    const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
+    function onceTrends(response) {
+      if (responded) return;
+      responded = true;
+      clearInterval(keepAlive);
+      clearTimeout(trendTimer);
+      sendResponse(response);
+    }
+    const trendTimer = setTimeout(
+      () => onceTrends({ ok: false, error: "extension_internal_timeout" }),
+      60000,
+    );
+
+    (async () => {
+      const leagueId = String(message?.leagueId || "457622").trim();
+      const season   = Number(message?.season)   || 2026;
+
+      const warRoomCookieHeader = await getWarRoomCookieHeaderString();
+      if (!warRoomCookieHeader) {
+        onceTrends({ ok: false, error: "Sign in at gmwarroom.online first." });
+        return;
+      }
+
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        onceTrends({ ok: false, error: "ESPN login expired. Open ESPN Fantasy in this browser and sign in, then retry." });
+        return;
+      }
+
+      // Same kona_player_info universe the populate action uses — but this time
+      // we KEEP the live draft-trend fields ESPN returns under player.ownership.
+      const filter = JSON.stringify({
+        players: {
+          limit: 700,
+          offset: 0,
+          sortPercOwned: { sortAsc: false, sortPriority: 1 },
+          filterSlotIds: { value: [0, 2, 4, 6, 8, 9, 10, 11, 16, 17, 23] },
+        },
+      });
+      const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}?view=kona_player_info`;
+
+      await applyEspnHistoricalFetchDnr(buildEspnCookieHeader(swid, espnS2));
+      let espnData = null;
+      try {
+        const r = await fetch(url, {
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+            "x-fantasy-filter": filter,
+            "X-Fantasy-Source": "kona",
+            "X-Fantasy-Platform": "kona",
+          },
+        });
+        if (r.ok) espnData = await r.json();
+        else { onceTrends({ ok: false, error: `ESPN HTTP ${r.status}` }); return; }
+      } finally {
+        await removeEspnHistoricalFetchDnr();
+      }
+
+      const rawPlayers = espnData?.players || [];
+      const POSITIONS = { 1:"QB", 2:"RB", 3:"WR", 4:"TE", 5:"K", 9:"DL", 10:"DL", 11:"LB", 12:"DB", 13:"DB", 16:"DEF" };
+      const PRO_TEAMS = { 1:"ATL",2:"BUF",3:"CHI",4:"CIN",5:"CLE",6:"DAL",7:"DEN",8:"DET",9:"GB",10:"TEN",11:"IND",12:"KC",13:"LV",14:"LAR",15:"MIA",16:"MIN",17:"NE",18:"NO",19:"NYG",20:"NYJ",21:"PHI",22:"ARI",23:"PIT",24:"LAC",25:"SF",26:"SEA",27:"TB",28:"WSH",29:"CAR",30:"JAX",33:"BAL",34:"HOU" };
+      const num = (v) => (typeof v === "number" && Number.isFinite(v)) ? v : null;
+
+      let fetched = rawPlayers.length;
+      let withAdp = 0;
+      let skippedNoAdp = 0;
+
+      const players = rawPlayers
+        .map(entry => {
+          const p = entry.player || {};
+          const pos = POSITIONS[p.defaultPositionId];
+          if (!pos || !p.id || !p.fullName) return null;
+          const own = p.ownership || {};
+          const adpRaw = num(own.averageDraftPosition);
+          const adp = (adpRaw != null && adpRaw > 0) ? adpRaw : null;
+          const ranks = p.draftRanksByRankType || {};
+          const rankObj = ranks.PPR || ranks.STANDARD || null;
+          const espnRank = rankObj ? num(rankObj.rank) : null;
+          if (adp != null) withAdp++; else skippedNoAdp++;
+          return {
+            espnId:   Number(p.id),
+            fullName: String(p.fullName),
+            position: pos,
+            nflTeam:  PRO_TEAMS[p.proTeamId] || null,
+            adp,
+            percentOwned: num(own.percentOwned),
+            auctionValue: num(own.auctionValueAverage),
+            adpChange:    num(own.averageDraftPositionPercentChange),
+            espnRank,
+          };
+        })
+        .filter(Boolean);
+
+      if (players.length === 0) {
+        onceTrends({ ok: false, error: "No players extracted from ESPN response.", fetched });
+        return;
+      }
+
+      const BATCH_SIZE = 450;
+      let totalInserted = 0, totalUpdated = 0, errors = 0;
+      const errorSamples = [];
+      for (let offset = 0; offset < players.length; offset += BATCH_SIZE) {
+        const batch = players.slice(offset, offset + BATCH_SIZE);
+        await sleep(300);
+        const post = await postTrpcHistJson(TRPC_SAVE_ROSTER_URL, warRoomCookieHeader, { season, players: batch }, null);
+        if (!post.ok) {
+          errors += batch.length;
+          if (errorSamples.length < 3) errorSamples.push(post.error || "server_post_failed");
+          continue;
+        }
+        const res = post.parsed?.[0]?.result?.data?.json ?? post.parsed?.result?.data?.json ?? {};
+        totalInserted += res.inserted ?? 0;
+        totalUpdated  += res.updated  ?? 0;
+      }
+
+      onceTrends({
+        ok: true,
+        season,
+        fetched,
+        withAdp,
+        skippedNoAdp,
+        inserted: totalInserted,
+        updated: totalUpdated,
+        errors,
+        errorSamples,
+      });
+    })().catch((err) => {
+      onceTrends({ ok: false, error: err instanceof Error ? err.message : String(err) });
     });
     return true;
   }

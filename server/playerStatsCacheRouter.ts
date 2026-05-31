@@ -78,6 +78,13 @@ export const playerStatsCacheRouter = router({
         fullName: z.string().min(1).max(100),
         position: z.string().max(10),
         nflTeam:  z.string().max(5).nullable().optional(),
+        // Optional ESPN live draft-trend fields (sent by "Sync ESPN Trends / ADP").
+        // Omitted by the legacy roster/registry populate path.
+        adp:          z.number().nullable().optional(),
+        percentOwned: z.number().nullable().optional(),
+        auctionValue: z.number().nullable().optional(),
+        adpChange:    z.number().nullable().optional(),
+        espnRank:     z.number().int().nullable().optional(),
       })).min(1).max(2000),
     }))
     .mutation(async ({ input }) => {
@@ -105,6 +112,12 @@ export const playerStatsCacheRouter = router({
         const pos      = p.position?.trim();
         const fullName = p.fullName?.trim();
         const nflTeam  = p.nflTeam ?? null;
+        // Optional draft-trend values (null when sent by the legacy populate path)
+        const adp          = p.adp ?? null;
+        const percentOwned = p.percentOwned ?? null;
+        const auctionValue = p.auctionValue ?? null;
+        const adpChange    = p.adpChange ?? null;
+        const espnRank     = p.espnRank ?? null;
 
         if (!eid || !fullName || !pos) {
           skipped++;
@@ -120,7 +133,12 @@ export const playerStatsCacheRouter = router({
             await db.execute(drizzleSql`
               UPDATE gm_player_registry
               SET lastSeasonSeen = GREATEST(lastSeasonSeen, ${season}),
-                  currentNflTeam = ${nflTeam},
+                  currentNflTeam = COALESCE(${nflTeam}, currentNflTeam),
+                  adp            = COALESCE(${adp}, adp),
+                  percentOwned   = COALESCE(${percentOwned}, percentOwned),
+                  auctionValue   = COALESCE(${auctionValue}, auctionValue),
+                  adpChange      = COALESCE(${adpChange}, adpChange),
+                  espnRank       = COALESCE(${espnRank}, espnRank),
                   updatedAt      = NOW()
               WHERE espnPlayerId = ${eid}
             `);
@@ -131,14 +149,21 @@ export const playerStatsCacheRouter = router({
               INSERT INTO gm_player_registry
                 (espnPlayerId, fullName, normalizedName, position, currentNflTeam,
                  firstSeasonSeen, lastSeasonSeen, isActive, needsReview, reviewReason,
+                 adp, percentOwned, auctionValue, adpChange, espnRank,
                  createdAt, updatedAt)
               VALUES
                 (${eid}, ${fullName}, ${norm}, ${pos}, ${nflTeam},
                  ${season}, ${season}, 1, ${isLegacy ? 1 : 0}, ${isLegacy ? "Legacy season" : null},
+                 ${adp}, ${percentOwned}, ${auctionValue}, ${adpChange}, ${espnRank},
                  NOW(), NOW())
               ON DUPLICATE KEY UPDATE
                 lastSeasonSeen = GREATEST(lastSeasonSeen, ${season}),
-                currentNflTeam = ${nflTeam},
+                currentNflTeam = COALESCE(${nflTeam}, currentNflTeam),
+                adp            = COALESCE(${adp}, adp),
+                percentOwned   = COALESCE(${percentOwned}, percentOwned),
+                auctionValue   = COALESCE(${auctionValue}, auctionValue),
+                adpChange      = COALESCE(${adpChange}, adpChange),
+                espnRank       = COALESCE(${espnRank}, espnRank),
                 updatedAt      = NOW()
             `);
             byEspnId.set(eid, -1); // mark as known

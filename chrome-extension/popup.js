@@ -6,6 +6,7 @@ const MSG_DISCOVER_LEAGUES = "GMWR_DISCOVER_LEAGUES_2026";
 const MSG_SYNC_SELECTED_LEAGUES = "GMWR_SYNC_SELECTED_LEAGUES";
 const MSG_HIST_DISCOVER = "GMWR_HIST_DISCOVER";
 const MSG_HIST_TEST = "GMWR_HIST_TEST";
+const MSG_SYNC_TRENDS = "GMWR_SYNC_TRENDS";
 const MSG_HIST_FULL = "GMWR_HIST_FULL";
 const MSG_HIST_STATUS = "GMWR_HIST_STATUS";
 const MSG_ROSTER_MATRIX_TEST = "GMWR_ROSTER_MATRIX_TEST";
@@ -327,6 +328,33 @@ document.addEventListener("DOMContentLoaded", async () => {
           ? "\u2713 Player registry populated."
           : `\u26A0 Only ${r.inserted + r.updated} players \u2014 check ESPN session.`,
       ].join("\n"));
+    } catch (e) {
+      setHistOut(e instanceof Error ? e.message : String(e));
+    }
+  });
+
+
+  document.getElementById("syncTrends")?.addEventListener("click", async () => {
+    const lid    = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
+    const season = new Date().getFullYear();
+    setHistOut(`Syncing ${season} ESPN live draft trends / ADP...`);
+    try {
+      const r = await chrome.runtime.sendMessage({ type: MSG_SYNC_TRENDS, leagueId: lid, season });
+      if (!r?.ok) { setHistOut("Error: " + (r?.error || "unknown")); return; }
+      const lines = [
+        `Season:        ${r.season}`,
+        `Fetched:       ${r.fetched} players from ESPN`,
+        `With ADP:      ${r.withAdp}`,
+        `No ADP (skip): ${r.skippedNoAdp}`,
+        `Inserted:      ${r.inserted}`,
+        `Updated:       ${r.updated}`,
+        `Errors:        ${r.errors}`,
+      ];
+      if (r.errors && r.errorSamples?.length) lines.push(``, `First error: ${r.errorSamples[0]}`);
+      lines.push(``, r.withAdp >= 100
+        ? "\u2713 ADP / draft trends synced."
+        : `\u26A0 Only ${r.withAdp} players have ADP \u2014 ESPN may not have ${r.season} draft data yet.`);
+      setHistOut(lines.join("\n"));
     } catch (e) {
       setHistOut(e instanceof Error ? e.message : String(e));
     }
