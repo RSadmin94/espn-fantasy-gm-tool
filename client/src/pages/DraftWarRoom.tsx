@@ -57,19 +57,19 @@ function Section({ title, icon, badge, children, defaultOpen = true, accent }: {
   const [open, setOpen] = useState(defaultOpen);
   const Icon = icon;
   return (
-    <div className={cn("rounded-xl border overflow-hidden", accent ?? "border-zinc-800/60 bg-zinc-900/30")}>
+    <div className="rounded-2xl border border-white/[0.07] bg-[#11161f] overflow-hidden">
       <button onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-zinc-800/20 transition-colors">
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors">
         <div className="flex items-center gap-2.5">
-          <Icon className={cn("h-4 w-4", accent ? "text-amber-400" : "text-red-400")} />
-          <span className="font-bold text-zinc-100 text-sm">{title}</span>
+          <Icon className="h-5 w-5 text-red-500" />
+          <span className="font-extrabold tracking-tight text-zinc-50 text-[19px]">{title}</span>
           {badge !== undefined && (
-            <span className="px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 text-[10px] font-bold">{badge}</span>
+            <span className="px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-300 text-[11px] font-bold">{badge}</span>
           )}
         </div>
         {open ? <ChevronUp className="h-4 w-4 text-zinc-600" /> : <ChevronDown className="h-4 w-4 text-zinc-600" />}
       </button>
-      {open && <div className="border-t border-zinc-800/40">{children}</div>}
+      {open && <div className="border-t border-white/[0.06]">{children}</div>}
     </div>
   );
 }
@@ -399,19 +399,19 @@ function ShockMeterSection({ meters }: { meters: any[] }) {
                 <p className="text-xs text-zinc-500">{m.ownerName}</p>
               </div>
               <div className="flex items-center gap-3">
-                <div className="text-center px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40">
+                <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#11161f] border border-white/[0.07]">
                   <div className="text-lg font-black text-white">{m.predictabilityScore}%</div>
                   <div className="text-[9px] text-zinc-600 uppercase">Predictable</div>
                 </div>
-                <div className="text-center px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40">
+                <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#11161f] border border-white/[0.07]">
                   <div className={cn("text-lg font-black", m.surpriseProbability >= 50 ? "text-red-400" : "text-zinc-300")}>{m.surpriseProbability}%</div>
                   <div className="text-[9px] text-zinc-600 uppercase">Surprise</div>
                 </div>
-                <div className="text-center px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40">
+                <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#11161f] border border-white/[0.07]">
                   <PosPill pos={m.mostLikelyPosition} />
                   <div className="text-[9px] text-zinc-600 uppercase mt-1">Likely Pick</div>
                 </div>
-                <div className="text-center px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40">
+                <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#11161f] border border-white/[0.07]">
                   <div className={cn("text-sm font-black uppercase", CAPITAL_CFG[m.draftCapital as keyof typeof CAPITAL_CFG] ?? "text-zinc-400")}>
                     {m.draftCapital?.replace("_", " ")}
                   </div>
@@ -1484,17 +1484,17 @@ export function DraftWarRoom() {
   const maxRound = Math.max(...(mockDraft ?? []).map((p: any) => p.round), 0);
 
   return (
-    <div className="min-h-screen bg-[#0a0e14] text-zinc-100">
+    <div className="min-h-screen text-zinc-100" style={{ background: "radial-gradient(circle at 82% -8%,rgba(239,68,68,.18),transparent 42%),linear-gradient(180deg,#0b0f17,#080b11)" }}>
 
       {/* Header */}
-      <div className="border-b border-zinc-800/80 bg-zinc-900/50 px-6 py-5">
+      <div className="border-b border-white/[0.06] px-6 py-6">
         <div className="max-w-7xl mx-auto flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
               <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center">
                 <Zap className="h-4 w-4 text-red-400" />
               </div>
-              <h1 className="text-xl font-black tracking-tight text-white">Draft War Room</h1>
+              <h1 className="text-3xl font-black tracking-tight text-white">Draft War Room</h1>
               <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 ml-1">{season} · Phase 1.75</span>
             </div>
             <p className="text-xs text-zinc-500 ml-10">
@@ -1508,8 +1508,8 @@ export function DraftWarRoom() {
               { l: "TRADED PICKS", v: tradedPicks?.length ?? 0 },
               { l: "ROUNDS", v: maxRound },
             ].map(s => (
-              <div key={s.l} className="text-center px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40">
-                <div className="text-base font-black text-white">{s.v}</div>
+              <div key={s.l} className="text-center px-3.5 py-2.5 rounded-xl bg-[#11161f] border border-white/[0.07]">
+                <div className="text-xl font-black text-white">{s.v}</div>
                 <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">{s.l}</div>
               </div>
             ))}
