@@ -294,7 +294,7 @@ export function HallOfFame() {
   const legacyBestWinPct = [...data.ownerRecords].sort((a, b) => b.winPct - a.winPct || b.gamesPlayed - a.gamesPlayed)[0];
   const legacyLongestTenure = [...data.ownerRecords].sort((a, b) => b.seasonsActive - a.seasonsActive || b.gamesPlayed - a.gamesPlayed)[0];
 
-  const cemetery = ((ownerListQ.data?.allOwners ?? []) as any[]).filter((o) => { const n = Array.isArray(o.seasons) ? o.seasons.length : 0; return n > 0 && n < 2; }).map((o) => ({ name: o.ownerName ?? o.ownerKey, years: (Array.isArray(o.seasons) ? [...o.seasons] : []).sort((x: number, y: number) => x - y) })).sort((p, q) => (p.years[0] ?? 0) - (q.years[0] ?? 0));
+  const cemetery = (() => { const activeNames = new Set(((ownerListQ.data?.active ?? []) as any[]).map((o: any) => String(o.ownerName ?? o.ownerKey).trim().toLowerCase())); const byName = new Map<string, { name: string; years: number[]; champs: number }>(); for (const o of ((ownerListQ.data?.allOwners ?? []) as any[])) { const nm = String(o.ownerName ?? o.ownerKey).trim(); const k = nm.toLowerCase(); const e = byName.get(k) ?? { name: nm, years: [], champs: 0 }; if (Array.isArray(o.seasons)) for (const s of o.seasons) { const y = Number(s); if (y && !e.years.includes(y)) e.years.push(y); } e.champs += Number(o.championships ?? 0); byName.set(k, e); } return [...byName.values()].filter((e) => e.years.length > 0 && e.years.length < 2 && e.champs === 0 && !activeNames.has(e.name.toLowerCase())).map((e) => ({ name: e.name, years: [...e.years].sort((x, y) => x - y) })).sort((p, q) => (p.years[0] ?? 0) - (q.years[0] ?? 0)); })();
 
   const tabs = [
     { id: "champions" as const, label: "Champions", Icon: Trophy },

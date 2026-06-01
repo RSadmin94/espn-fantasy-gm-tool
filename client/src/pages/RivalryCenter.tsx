@@ -101,6 +101,9 @@ export function RivalryCenter() {
 
   const allOwners: Array<{ ownerKey: string; ownerName?: string; seasons?: number[]; championships?: number }> =
     listQ.data?.allOwners ?? [];
+  const activeOwners: Array<{ ownerKey: string; ownerName?: string }> =
+    (listQ.data?.active ?? []) as any[];
+  const activeKeys = activeOwners.map((o) => o.ownerKey);
 
   const pickerOptions = useMemo<RivalryPickerOption[]>(
     () => allOwners.map((o) => ({ ownerKey: o.ownerKey, label: String(o.ownerName ?? o.ownerKey) })),
@@ -151,9 +154,9 @@ export function RivalryCenter() {
     aWins: number; aLosses: number; lastSeason: number | null; heat: string;
   };
   const leagueQueries = (trpc as any).useQueries((t: any) =>
-    allOwners.map((o) =>
+    activeOwners.map((o) =>
       t.owners.rivalryDossier(
-        { ownerKey: o.ownerKey, includeHistoricalOwners: true },
+        { ownerKey: o.ownerKey, includeHistoricalOwners: false, rivalryEligibleOwnerKeys: activeKeys },
         { staleTime: 600_000 },
       ),
     ),
@@ -173,8 +176,8 @@ export function RivalryCenter() {
     if (!maxSeason) maxSeason = activeSeason;
     (leagueQueries as any[]).forEach((q, i) => {
       const d = q?.data;
-      const aKey = allOwners[i]?.ownerKey;
-      const aName = String(d?.ownerDisplayName ?? allOwners[i]?.ownerName ?? aKey ?? "");
+      const aKey = activeOwners[i]?.ownerKey;
+      const aName = String(d?.ownerDisplayName ?? activeOwners[i]?.ownerName ?? aKey ?? "");
       if (!d || !aKey || !Array.isArray(d.opponents)) return;
       for (const op of d.opponents) {
         const bKey = String(op.opponentOwnerKey ?? "");
@@ -207,6 +210,51 @@ export function RivalryCenter() {
   }, [leagueQueries, allOwners, activeSeason]);
   const openLeague = (lp: LeaguePair) =>
     setOpen({ focalKey: lp.aKey, focalName: lp.aName, rivalKey: lp.bKey, rivalName: lp.bName });
+
+  // ── active-owner head-to-head grid + nemesis ────────────────────────────
+  const gridOwners = useMemo(
+    () =>
+      activeOwners
+        .map((o, i) => ({
+          key: o.ownerKey,
+          name: String((leagueQueries as any[])[i]?.data?.ownerDisplayName ?? o.ownerName ?? o.ownerKey),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [activeOwners, leagueQueries],
+  );
+  const recordMap = useMemo(() => {
+    const m: Record<string, Record<string, { w: number; l: number; t: number }>> = {};
+    (leagueQueries as any[]).forEach((q, i) => {
+      const aKey = activeOwners[i]?.ownerKey;
+      if (!aKey || !q?.data?.opponents) return;
+      m[aKey] = {};
+      for (const op of q.data.opponents)
+        m[aKey][String(op.opponentOwnerKey)] = { w: n(op.wins), l: n(op.losses), t: n(op.ties) };
+    });
+    return m;
+  }, [leagueQueries, activeOwners]);
+  const nemeses = useMemo(() => {
+    const out: Array<{ key: string; name: string; rivalKey: string; rivalName: string; w: number; l: number; pct: number }> = [];
+    for (const o of gridOwners) {
+      const row = recordMap[o.key];
+      if (!row) continue;
+      let worst: { rivalKey: string; w: number; l: number; pct: number } | null = null;
+      for (const [rk, rec] of Object.entries(row)) {
+        const g = rec.w + rec.l + rec.t;
+        if (g < 3) continue;
+        const pct = g ? (rec.w / g) * 100 : 100;
+        if (!worst || pct < worst.pct || (pct === worst.pct && rec.l > worst.l))
+          worst = { rivalKey: rk, w: rec.w, l: rec.l, pct };
+      }
+      if (worst) {
+        const rn = gridOwners.find((g2) => g2.key === worst!.rivalKey)?.name ?? worst.rivalKey;
+        out.push({ key: o.key, name: o.name, rivalKey: worst.rivalKey, rivalName: rn, w: worst.w, l: worst.l, pct: worst.pct });
+      }
+    }
+    return out.sort((a, b) => a.pct - b.pct);
+  }, [gridOwners, recordMap]);
+  const firstName = (s: string) => String(s).trim().split(/\s+/)[0] ?? s;
+
 
 
   const [open, setOpen] = useState<{ focalKey?: string; focalName?: string; rivalKey?: string; rivalName: string } | null>(null);
@@ -462,6 +510,82 @@ export function RivalryCenter() {
             </section>
 
             {/* ── SECTION 4 — Historical Receipts ──────────────────── */}
+            {/* Head-to-head grid (active owners) */}
+            {gridOwners.length > 1 && (
+              <section className="mt-12">
+                <div className="border-b pb-2" style={{ borderColor: LINE }}>
+                  <Kicker>Head-to-Head Grid</Kicker>
+                  <h3 className="mt-1 text-2xl font-black uppercase tracking-tight">The Matrix</h3>
+                </div>
+                {leagueLoading ? (
+                  <div className="py-8 text-center text-sm" style={{ color: MUTED }}>Building the grid…</div>
+                ) : (
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="border-collapse text-center text-xs">
+                      <thead>
+                        <tr>
+                          <th className="sticky left-0 z-10 px-2 py-2 text-left" style={{ background: INK, color: MUTED }}>Row vs column</th>
+                          {gridOwners.map((c) => (
+                            <th key={c.key} className="px-2 py-2 font-bold" style={{ color: MUTED }} title={c.name}>{firstName(c.name)}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gridOwners.map((rw) => (
+                          <tr key={rw.key}>
+                            <td className="sticky left-0 z-10 whitespace-nowrap px-2 py-1.5 text-left font-bold" style={{ background: INK, color: TEXT }}>{rw.name}</td>
+                            {gridOwners.map((c) => {
+                              if (c.key === rw.key)
+                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "#3a3d44" }}>—</td>;
+                              const rec = recordMap[rw.key]?.[c.key];
+                              if (!rec || rec.w + rec.l + rec.t === 0)
+                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "#3a3d44" }}>·</td>;
+                              const win = rec.w > rec.l;
+                              const lose = rec.l > rec.w;
+                              return (
+                                <td key={c.key} className="px-1 py-1">
+                                  <button
+                                    onClick={() => setOpen({ focalKey: rw.key, focalName: rw.name, rivalKey: c.key, rivalName: c.name })}
+                                    className="rounded px-1.5 py-0.5 font-bold tabular-nums"
+                                    style={{ color: win ? "#34d399" : lose ? CRIMSON : MUTED, background: win ? "rgba(52,211,153,0.08)" : lose ? "rgba(226,59,59,0.08)" : "transparent" }}
+                                    title={`${rw.name} vs ${c.name}`}
+                                  >
+                                    {rec.w}-{rec.l}{rec.t ? `-${rec.t}` : ""}
+                                  </button>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <p className="mt-2 text-[11px]" style={{ color: MUTED }}>Each cell is the row owner's all-time record vs the column owner. Tap a cell for the dossier.</p>
+              </section>
+            )}
+            {/* Nemesis board */}
+            {nemeses.length > 0 && (
+              <section className="mt-12">
+                <div className="border-b pb-2" style={{ borderColor: LINE }}>
+                  <Kicker>Who Owns Whom</Kicker>
+                  <h3 className="mt-1 flex items-center gap-2 text-2xl font-black uppercase tracking-tight"><Skull className="h-5 w-5" style={{ color: CRIMSON }} /> Nemesis Board</h3>
+                </div>
+                <div className="mt-4 grid gap-2 md:grid-cols-2">
+                  {nemeses.map((nm) => (
+                    <button key={nm.key} onClick={() => setOpen({ focalKey: nm.key, focalName: nm.name, rivalKey: nm.rivalKey, rivalName: nm.rivalName })} className="flex items-center justify-between rounded-lg border p-3 text-left" style={{ borderColor: LINE, background: PAPER }}>
+                      <div className="min-w-0">
+                        <div className="truncate font-bold">{nm.name}</div>
+                        <div className="text-xs" style={{ color: MUTED }}>Nemesis: <span style={{ color: CRIMSON }}>{nm.rivalName}</span> · {nm.name} is {nm.w}-{nm.l} vs them</div>
+                      </div>
+                      <span className="shrink-0 text-sm font-black tabular-nums" style={{ color: CRIMSON }}>{Math.round(100 - nm.pct)}%</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px]" style={{ color: MUTED }}>Nemesis = the active owner you've lost to most (min 3 meetings). Percent is their win rate against you.</p>
+              </section>
+            )}
+
             <section id="receipts" className="mt-12 scroll-mt-6">
               <div className="border-b pb-2" style={{ borderColor: LINE }}>
                 <Kicker>The Evidence Locker</Kicker>
