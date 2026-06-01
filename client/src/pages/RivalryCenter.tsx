@@ -141,8 +141,72 @@ export function RivalryCenter() {
   }, [scoresQ.data]);
 
   const keyForRival = (p: Pair) => nameToKey[norm(p.rivalName)] ?? undefined;
+  // ── league-wide all-pairs rivalries (every owner's dossier) ──────────────
+  type LeaguePair = {
+    key: string; aKey: string; aName: string; bKey: string; bName: string;
+    score: number; meetings: number; playoff: number; close: number;
+    aWins: number; aLosses: number; lastSeason: number | null; heat: string;
+  };
+  const leagueQueries = (trpc as any).useQueries((t: any) =>
+    allOwners.map((o) =>
+      t.owners.rivalryDossier(
+        { ownerKey: o.ownerKey, includeHistoricalOwners: true },
+        { staleTime: 600_000 },
+      ),
+    ),
+  );
+  const leagueLoading =
+    allOwners.length > 0 && (leagueQueries as any[]).some((q) => q?.isLoading);
+  const leaguePairs = useMemo<LeaguePair[]>(() => {
+    const heatOf = (s: number) =>
+      s >= 150 ? "Inferno" : s >= 100 ? "Burning" : s >= 60 ? "Heated" : s >= 30 ? "Simmering" : "Cold";
+    const seen = new Map<string, LeaguePair>();
+    let maxSeason = 0;
+    (leagueQueries as any[]).forEach((q) => {
+      const d = q?.data;
+      for (const m of (d?.opponents?.flatMap((o: any) => o.lastTenMeetings ?? []) ?? []))
+        maxSeason = Math.max(maxSeason, Number(m.season) || 0);
+    });
+    if (!maxSeason) maxSeason = activeSeason;
+    (leagueQueries as any[]).forEach((q, i) => {
+      const d = q?.data;
+      const aKey = allOwners[i]?.ownerKey;
+      const aName = String(d?.ownerDisplayName ?? allOwners[i]?.ownerName ?? aKey ?? "");
+      if (!d || !aKey || !Array.isArray(d.opponents)) return;
+      for (const op of d.opponents) {
+        const bKey = String(op.opponentOwnerKey ?? "");
+        if (!bKey || bKey === aKey) continue;
+        const pk = [aKey, bKey].sort().join("::");
+        if (seen.has(pk)) continue;
+        const meetings = n(op.gamesPlayed);
+        if (meetings < 2) continue;
+        const playoff = n(op.playoffEncounters);
+        const close = n(op.heartbreakLosses) + n(op.heartbreakWins);
+        const recent = (op.lastTenMeetings ?? []).filter(
+          (m: any) => Number(m.season) >= maxSeason - 2,
+        ).length;
+        const winPct = n(op.winPct);
+        const balance = Math.max(0, 20 - Math.abs(winPct - 50) / 2.5);
+        const score = Math.round(meetings * 3 + playoff * 25 + close * 6 + recent * 4 + balance);
+        const last = (op.lastTenMeetings ?? []).reduce(
+          (mx: number, m: any) => Math.max(mx, Number(m.season) || 0),
+          0,
+        );
+        seen.set(pk, {
+          key: pk, aKey, aName, bKey, bName: String(op.opponentDisplayName ?? bKey),
+          score, meetings, playoff, close,
+          aWins: n(op.wins), aLosses: n(op.losses),
+          lastSeason: last || null, heat: heatOf(score),
+        });
+      }
+    });
+    return [...seen.values()].sort((a, b) => b.score - a.score);
+  }, [leagueQueries, allOwners, activeSeason]);
+  const openLeague = (lp: LeaguePair) =>
+    setOpen({ focalKey: lp.aKey, focalName: lp.aName, rivalKey: lp.bKey, rivalName: lp.bName });
 
-  const [open, setOpen] = useState<{ rivalKey?: string; rivalName: string } | null>(null);
+
+  const [open, setOpen] = useState<{ focalKey?: string; focalName?: string; rivalKey?: string; rivalName: string } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -152,7 +216,7 @@ export function RivalryCenter() {
   }, [open]);
 
   const openDossier = (p: Pair) =>
-    setOpen({ rivalKey: keyForRival(p), rivalName: String(p.rivalName ?? "Rival") });
+    setOpen({ focalKey: rodKey, focalName: "Rod", rivalKey: keyForRival(p), rivalName: String(p.rivalName ?? "Rival") });
 
   const loading = scoresQ.isLoading || listQ.isLoading;
   const hero = pairs[0];
@@ -265,11 +329,71 @@ export function RivalryCenter() {
             )}
 
             {/* ── SECTION 2 — Power Rankings ───────────────────────── */}
+            {/* League-wide all-pairs rankings */}
             <section className="mt-12">
               <div className="flex items-end justify-between border-b pb-2" style={{ borderColor: LINE }}>
                 <div>
                   <Kicker>League Rivalry Power Rankings</Kicker>
                   <h3 className="mt-1 text-2xl font-black uppercase tracking-tight">The Ledger</h3>
+                </div>
+                <span className="text-xs" style={{ color: MUTED }}>
+                  Every pairing in league history
+                </span>
+              </div>
+              {leagueLoading ? (
+                <div className="py-8 text-center text-sm" style={{ color: MUTED }}>
+                  Reading every head-to-head in league history…
+                </div>
+              ) : leaguePairs.length === 0 ? (
+                <p className="py-6 text-sm" style={{ color: MUTED }}>
+                  Not enough cross-league matchup history yet.
+                </p>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  {leaguePairs.slice(0, 10).map((lp, i) => {
+                    const h = HEAT[lp.heat] ?? HEAT.Cold;
+                    return (
+                      <button
+                        key={lp.key}
+                        onClick={() => openLeague(lp)}
+                        className="group flex w-full items-center gap-4 rounded-lg border p-4 text-left"
+                        style={{ borderColor: LINE, background: PAPER }}
+                      >
+                        <div className="w-9 shrink-0 text-center text-2xl font-black" style={{ color: i === 0 ? GOLD : MUTED }}>
+                          {i + 1}
+                        </div>
+                        <div className="h-10 w-1 shrink-0 rounded-full" style={{ background: h.c }} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-lg font-bold">
+                              {lp.aName} <span style={{ color: MUTED }}>vs</span> {lp.bName}
+                            </span>
+                            <HeatBadge label={lp.heat} />
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs" style={{ color: MUTED }}>
+                            <span>Meetings <b style={{ color: TEXT }}>{lp.meetings}</b></span>
+                            <span>Playoff <b style={{ color: TEXT }}>{lp.playoff}</b></span>
+                            <span>One-score games <b style={{ color: TEXT }}>{lp.close}</b></span>
+                            {lp.lastSeason && <span>Last <b style={{ color: TEXT }}>{lp.lastSeason}</b></span>}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-3xl font-black" style={{ color: GOLD }}>{lp.score}</div>
+                          <div className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>score</div>
+                        </div>
+                        <ChevronRight className="h-5 w-5 shrink-0 opacity-40 transition group-hover:translate-x-0.5 group-hover:opacity-90" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <section className="mt-12">
+              <div className="flex items-end justify-between border-b pb-2" style={{ borderColor: LINE }}>
+                <div>
+                  <Kicker>Rod’s Rivalries</Kicker>
+                  <h3 className="mt-1 text-2xl font-black uppercase tracking-tight">Your Feuds</h3>
                 </div>
                 <span className="text-xs" style={{ color: MUTED }}>
                   Tap any rivalry for the full dossier
@@ -486,7 +610,7 @@ export function RivalryCenter() {
               <div className="flex items-center gap-2" style={{ color: CRIMSON }}>
                 <Swords className="h-4 w-4" />
                 <span className="text-[11px] font-bold uppercase tracking-[0.35em]">Rivalry Dossier</span>
-                <span className="text-sm font-bold" style={{ color: TEXT }}>· Rod vs {open.rivalName}</span>
+                <span className="text-sm font-bold" style={{ color: TEXT }}>· {open.focalName ?? "Rod"} vs {open.rivalName}</span>
               </div>
               <button
                 onClick={() => setOpen(null)}
@@ -499,8 +623,8 @@ export function RivalryCenter() {
             </div>
             <div className="p-4 md:p-5">
               <RivalryDossierPanel
-                key={open.rivalKey ?? "default"}
-                focalOwnerKey={rodKey}
+                key={`${open.focalKey ?? rodKey}:${open.rivalKey ?? "default"}`}
+                focalOwnerKey={open.focalKey ?? rodKey}
                 initialOpponentKey={open.rivalKey}
                 pickerOptions={pickerOptions}
                 rivalryEligibleOwnerKeys={eligible}

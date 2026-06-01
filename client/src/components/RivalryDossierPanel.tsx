@@ -381,6 +381,55 @@ export function RivalryDossierPanel({
             </div>
           </div>
 
+          {/* Rivalry Timeline (from head-to-head history) */}
+          {pd.headToHeadHistory.length > 0 && (
+            <div className="rounded-xl border border-white/[0.08] bg-black/25 p-3">
+              <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                <Calendar className="h-4 w-4" />
+                Rivalry Timeline
+              </div>
+              {(() => {
+                const hist = pd.headToHeadHistory;
+                const bySeasonAsc = [...hist].sort((a, b) => a.season - b.season || a.week - b.week);
+                const firstPlayoff = bySeasonAsc.find((m) => m.isPlayoff) || null;
+                const closest = [...hist].sort((a, b) => Math.abs(a.margin) - Math.abs(b.margin))[0] || null;
+                const blowout = [...hist].sort((a, b) => Math.abs(b.margin) - Math.abs(a.margin))[0] || null;
+                const fmt = (m: any) => `${m.ownerScore.toFixed(1)}-${m.opponentScore.toFixed(1)} ${m.result}`;
+                type Ev = { season: number; title: string; detail: string };
+                const evs: Ev[] = [];
+                if (pd.firstMeetingSeason != null && bySeasonAsc[0])
+                  evs.push({ season: pd.firstMeetingSeason, title: "First Meeting", detail: fmt(bySeasonAsc[0]) });
+                if (firstPlayoff)
+                  evs.push({ season: firstPlayoff.season, title: "First Playoff Meeting", detail: fmt(firstPlayoff) });
+                if (closest)
+                  evs.push({ season: closest.season, title: "Closest Game", detail: `${Math.abs(closest.margin).toFixed(1)} pt margin · ${fmt(closest)}` });
+                if (blowout && Math.abs(blowout.margin) > 0)
+                  evs.push({ season: blowout.season, title: "Biggest Blowout", detail: `${Math.abs(blowout.margin).toFixed(1)} pt margin · ${fmt(blowout)}` });
+                if (pd.lastMeeting)
+                  evs.push({ season: pd.lastMeeting.season, title: "Latest Showdown", detail: fmt(pd.lastMeeting) });
+                const seen = new Set<string>();
+                const items = evs
+                  .filter((e) => { const k = e.season + e.title; if (seen.has(k)) return false; seen.add(k); return true; })
+                  .sort((a, b) => a.season - b.season);
+                if (items.length === 0) return null;
+                return (
+                  <ol className="relative ml-2 border-l border-white/15 pl-4">
+                    {items.map((e, i) => (
+                      <li key={i} className="mb-3 last:mb-0">
+                        <span className="absolute -left-[5px] mt-1 h-2.5 w-2.5 rounded-full" style={{ background: "rgba(248,113,113,0.9)" }} />
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-sm font-black text-zinc-100">{e.season}</span>
+                          <span className="text-xs font-bold uppercase tracking-wide text-zinc-300">{e.title}</span>
+                        </div>
+                        <div className="text-xs text-zinc-500">{e.detail}</div>
+                      </li>
+                    ))}
+                  </ol>
+                );
+              })()}
+            </div>
+          )}
+
           {/* Chart */}
           <div className="rounded-xl border border-white/[0.08] bg-black/25 p-3">
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
