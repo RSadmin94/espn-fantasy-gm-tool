@@ -285,13 +285,13 @@ function NavItemRow({
         className={cn(
           "group flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all",
           isActive
-            ? "border border-emerald-500/25 border-l-2 border-l-emerald-400 bg-emerald-500/10 text-zinc-50"
+            ? "border border-red-500/25 border-l-2 border-l-red-400 bg-red-500/10 text-zinc-50"
             : "border border-transparent text-zinc-400 hover:border-zinc-700/50 hover:bg-zinc-800/40 hover:text-zinc-100"
         )}
       >
-        <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-emerald-300" : "text-zinc-500 group-hover:text-zinc-300")} />
+        <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-red-300" : "text-zinc-500 group-hover:text-zinc-300")} />
         <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-        {isActive && <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-emerald-400/80" />}
+        {isActive && <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-red-400/80" />}
       </Link>
     </li>
   );
@@ -344,7 +344,7 @@ function SidebarFooter() {
         </div>
       ) : null}
       <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-2 text-[10px] leading-snug text-zinc-600">
-        <span className="font-semibold text-emerald-500/80">ESPN Fantasy</span> · GM War Room
+        <span className="font-semibold text-red-500/80">ESPN Fantasy</span> · GM War Room
       </div>
     </div>
   );
@@ -373,12 +373,12 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   }, [isMobile]);
 
   return (
-    <div className="flex h-full flex-col border-r border-zinc-800/60 bg-[#09090e]">
+    <div className="flex h-full flex-col border-r border-zinc-800/60 bg-[#0a0e16]">
       {/* Logo */}
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400/20 to-emerald-500/20 ring-1 ring-amber-400/30">
-            <Crown className="h-5 w-5 text-amber-300" strokeWidth={2.25} />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-red-400/20 to-red-500/20 ring-1 ring-red-400/30">
+            <Trophy className="h-5 w-5 text-red-300" strokeWidth={2.25} />
           </div>
           <div className="flex min-w-0 flex-col leading-none">
             <span className="text-[15px] font-black tracking-tight text-zinc-50">
@@ -466,8 +466,8 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
           <Menu className="h-5 w-5" />
         </button>
         <span className="flex items-center gap-2 md:hidden">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-amber-400/20 to-emerald-500/20 ring-1 ring-amber-400/30">
-            <Crown className="h-4 w-4 text-amber-300" strokeWidth={2.25} />
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-red-400/20 to-red-500/20 ring-1 ring-red-400/30">
+            <Trophy className="h-4 w-4 text-red-300" strokeWidth={2.25} />
           </span>
           <span className="text-base font-black tracking-tight text-zinc-50">GM War Room</span>
         </span>
@@ -497,7 +497,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0b0e14]">
+    <div className="flex h-screen overflow-hidden bg-[#0a0e16]">
       <aside className="hidden w-64 shrink-0 md:block">
         <Sidebar />
       </aside>
@@ -521,7 +521,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto bg-[#0b0e14] p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-[#0a0e16] p-4 md:p-6">{children}</main>
       </div>
     </div>
   );
