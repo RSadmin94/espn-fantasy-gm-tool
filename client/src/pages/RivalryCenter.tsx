@@ -101,8 +101,12 @@ export function RivalryCenter() {
 
   const allOwners: Array<{ ownerKey: string; ownerName?: string; seasons?: number[]; championships?: number }> =
     listQ.data?.allOwners ?? [];
-  const activeOwners: Array<{ ownerKey: string; ownerName?: string }> =
-    (listQ.data?.active ?? []) as any[];
+  const graveNames = new Set(
+    ((listQ.data?.graveyard ?? []) as any[]).map((o: any) => String(o.ownerName ?? o.ownerKey).trim().toLowerCase()),
+  );
+  const activeOwners: Array<{ ownerKey: string; ownerName?: string }> = (
+    (listQ.data?.active ?? []) as any[]
+  ).filter((o: any) => !graveNames.has(String(o.ownerName ?? o.ownerKey).trim().toLowerCase()));
   const activeKeys = activeOwners.map((o) => o.ownerKey);
 
   const pickerOptions = useMemo<RivalryPickerOption[]>(
@@ -143,8 +147,10 @@ export function RivalryCenter() {
 
   const pairs = useMemo<Pair[]>(() => {
     const arr: Pair[] = Array.isArray(scoresQ.data) ? scoresQ.data : [];
-    return [...arr].sort((a, b) => n(b.rivalryScore) - n(a.rivalryScore));
-  }, [scoresQ.data]);
+    return [...arr]
+      .filter((p) => !graveNames.has(String(p.rivalName ?? "").trim().toLowerCase()))
+      .sort((a, b) => n(b.rivalryScore) - n(a.rivalryScore));
+  }, [scoresQ.data, listQ.data]);
 
   const keyForRival = (p: Pair) => nameToKey[norm(p.rivalName)] ?? undefined;
   // ── league-wide all-pairs rivalries (every owner's dossier) ──────────────
