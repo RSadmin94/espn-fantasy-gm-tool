@@ -13,6 +13,7 @@ import { AppShell } from "./components/AppShell";
 import { ConnectESPN } from "./pages/ConnectESPN";
 import { SyncData } from "./pages/SyncData";
 import { Dashboard } from "./pages/Dashboard";
+import { CommandDashboard } from "./pages/CommandDashboard";
 import { Transactions } from "./pages/Transactions";
 import { Standings } from "./pages/Standings";
 import { Roster } from "./pages/Roster";
@@ -123,7 +124,7 @@ const router = createBrowserRouter([
         children: [
           // ── Active routes ─────────────────────────────────────────────
           { path: "/", element: <Navigate to="/dashboard" replace /> },
-          { path: "/dashboard", element: <Dashboard /> },
+          { path: "/dashboard", element: <CommandDashboard /> },
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/sync", element: <SyncData /> },
           { path: "/league-settings",      element: <LeagueSettings /> },
