@@ -55,7 +55,7 @@ function ArticleCard({ article, onOpen }: { article: Article; onOpen: (a: Articl
   return (
     <button
       onClick={() => onOpen(article)}
-      className="text-left rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-4 hover:border-zinc-600/60 hover:bg-zinc-800/40 transition-all group w-full"
+      className="text-left rounded-[12px] border border-white/[0.07] bg-white/[0.03] p-4 hover:border-white/[0.14] hover:bg-white/[0.05] transition-all group w-full"
     >
       <div className="flex items-start gap-3">
         <div className={cn("p-2 rounded-lg border shrink-0 mt-0.5", cfg.bg)}>
@@ -183,10 +183,10 @@ function GenerateControls({ onRefresh, onSwitchToFeed }: { onRefresh: () => void
   }
 
   return (
-    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4 space-y-3">
+    <div className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#141a24,#0e131c)] p-4 space-y-3">
       <div className="flex items-center gap-2">
         <Sparkles className="h-4 w-4 text-emerald-400" />
-        <span className="text-sm font-bold text-zinc-200">Generate Articles</span>
+        <span className="text-sm font-bold text-[#f3f8ff]">Generate Articles</span>
       </div>
       <div className="flex flex-wrap gap-2">
         <button
@@ -258,51 +258,51 @@ export function LeagueWire() {
   const isLoading = view === "archive" && selectedSeason ? seasonLoading : feedLoading;
 
   return (
-    <div className="min-h-screen bg-[#08080d] text-zinc-100">
+    <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(60% 80% at 80% -10%, rgba(45,212,191,.10), transparent 42%), #0a0e16" }}>
 
       {/* Open article overlay */}
       {openArticle && <ArticleReader article={openArticle} onClose={() => setOpenArticle(null)} />}
 
       {/* Masthead */}
-      <div className="border-b border-zinc-800/80 bg-zinc-900/50">
-        <div className="max-w-6xl mx-auto px-6 py-5">
+      <div className="border-b border-white/[0.06]">
+        <div className="px-0 pb-4">
           <div className="flex items-center gap-3 mb-1">
-            <Newspaper className="h-6 w-6 text-zinc-300" />
+            <Newspaper className="h-7 w-7 text-[#2dd4bf]" />
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-white leading-none">League Wire</h1>
-              <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-semibold mt-0.5">{LEAGUE_NAME} · Official Newsroom</p>
+              <h1 className="text-3xl md:text-4xl font-black tracking-tight text-[#f3f8ff] leading-none">League Wire</h1>
+              <p className="text-[11px] text-[#8b97a8] uppercase tracking-[0.2em] font-bold mt-1">{LEAGUE_NAME} · Official Newsroom</p>
             </div>
           </div>
 
           {/* Nav tabs */}
-          <div className="flex items-center gap-0 mt-4 border-b border-zinc-800/60 -mb-[1px]">
+          <div className="flex items-center gap-0 mt-4 border-b border-white/[0.06] -mb-[1px]">
             <button onClick={() => { setView("feed"); setSelectedSeason(null); }}
               className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors",
-                view === "feed" ? "border-zinc-100 text-zinc-100" : "border-transparent text-zinc-500 hover:text-zinc-300")}>
+                view === "feed" ? "border-[#f3f8ff] text-[#f3f8ff]" : "border-transparent text-[#8b97a8] hover:text-[#dbe4f0]")}>
               <Radio className="h-3 w-3 inline mr-1.5" />Latest News
             </button>
             <button onClick={() => setView("archive")}
               className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors",
-                view === "archive" ? "border-amber-400 text-amber-400" : "border-transparent text-zinc-500 hover:text-zinc-300")}>
+                view === "archive" ? "border-[#2dd4bf] text-[#2dd4bf]" : "border-transparent text-[#8b97a8] hover:text-[#dbe4f0]")}>
               <BookOpen className="h-3 w-3 inline mr-1.5" />Historical Archive
             </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-6 space-y-6">
+      <div className="px-0 py-6 space-y-6">
 
         {/* Archive season selector */}
         {view === "archive" && (
           <div>
-            <p className="text-xs text-zinc-500 mb-3 uppercase tracking-wider font-semibold">Select Season</p>
+            <p className="text-xs text-[#8b97a8] mb-3 uppercase tracking-[0.2em] font-bold">Select Season</p>
             <div className="flex flex-wrap gap-2">
               {(seasons as number[]).map(s => (
                 <button key={s} onClick={() => setSelectedSeason(s)}
                   className={cn("px-3 py-1.5 rounded-lg text-sm font-bold border transition-all",
                     selectedSeason === s
-                      ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
-                      : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
+                      ? "border-[#2dd4bf]/50 bg-[#2dd4bf]/10 text-[#2dd4bf]"
+                      : "border-white/10 text-[#8b97a8] hover:border-white/25 hover:text-[#dbe4f0]"
                   )}>
                   {s}
                 </button>
@@ -316,15 +316,15 @@ export function LeagueWire() {
 
         {/* Live Wire reports (latest scores) - only in feed view */}
         {view === "feed" && (wireReports as any[]).length > 0 && (
-          <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/20 overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-800/40">
-              <Radio className="h-3.5 w-3.5 text-emerald-400 animate-pulse" />
-              <span className="text-xs font-black text-zinc-200 uppercase tracking-wider">Live Wire</span>
+          <div className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#141a24,#0e131c)] overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
+              <Radio className="h-3.5 w-3.5 text-[#2dd4bf] animate-pulse" />
+              <span className="text-xs font-black text-[#f3f8ff] uppercase tracking-wider">Live Wire</span>
               <span className="text-[10px] text-zinc-600">Season {latestWireWeek?.season} · Week {latestWireWeek?.week}</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-px bg-zinc-800/30">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-px bg-white/[0.06]">
               {(wireReports as any[]).filter(r => r.winner).map((r: any) => (
-                <div key={r.matchupId} className="p-3 bg-zinc-900/60">
+                <div key={r.matchupId} className="p-3 bg-white/[0.02]">
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-xs font-bold text-zinc-100 truncate max-w-[140px]">{r.winner.name}</div>
@@ -345,7 +345,7 @@ export function LeagueWire() {
         {/* Articles */}
         {isLoading ? (
           <div className="flex items-center justify-center py-16 gap-2 text-zinc-500 text-sm">
-            <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+            <Loader2 className="h-4 w-4 animate-spin text-[#2dd4bf]" />
             Loading articles…
           </div>
         ) : (displayArticles as Article[]).length === 0 ? (
@@ -361,7 +361,7 @@ export function LeagueWire() {
         ) : (
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <h2 className="text-xs font-black uppercase tracking-widest text-zinc-500">
+              <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[#8b97a8]">
                 {view === "archive" && selectedSeason ? `${selectedSeason} Season Archive` : "Latest Stories"}
               </h2>
               <div className="flex-1 h-px bg-zinc-800/60" />
