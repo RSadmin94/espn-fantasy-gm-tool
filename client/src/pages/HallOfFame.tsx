@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { Loader2, Trophy, Medal, Crown, Swords, Landmark, ChevronDown } from "lucide-react";
+import { Loader2, Trophy, Medal, Crown, Swords, Landmark, ChevronDown, Skull } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -154,13 +154,14 @@ function ClosestChampionshipCard({ hasPlayoffGmMatchups }: { hasPlayoffGmMatchup
 export function HallOfFame() {
   const [backfilling, setBackfilling] = useState(false);
   const [backfillNote, setBackfillNote] = useState<string | null>(null);
-  const [hofTab, setHofTab] = useState<"champions" | "records" | "dynasties" | "rivalries" | "legacy">("champions");
+  const [hofTab, setHofTab] = useState<"champions" | "records" | "dynasties" | "rivalries" | "legacy" | "cemetery">("champions");
   const [coverageOpen, setCoverageOpen] = useState(false);
   const utils = trpc.useUtils();
 
   const hofQ = trpc.espn.hallOfFame.useQuery(undefined, { staleTime: 60_000 });
   const activeLeagueQ = trpc.league.getActive.useQuery(undefined, { staleTime: 30_000 });
   const coverageQ = trpc.espn.ownerMatchupCoverage.useQuery(undefined, { staleTime: 60_000 });
+  const ownerListQ = (trpc as any).owners.ownerList.useQuery(undefined, { staleTime: 60_000 });
   const backfillMut = trpc.espn.backfillMatchupsFromCache.useMutation({
     onSuccess: (data) => {
       const written = data.results.filter((r) => r.status === "backfilled");
@@ -293,12 +294,15 @@ export function HallOfFame() {
   const legacyBestWinPct = [...data.ownerRecords].sort((a, b) => b.winPct - a.winPct || b.gamesPlayed - a.gamesPlayed)[0];
   const legacyLongestTenure = [...data.ownerRecords].sort((a, b) => b.seasonsActive - a.seasonsActive || b.gamesPlayed - a.gamesPlayed)[0];
 
+  const cemetery = ((ownerListQ.data?.allOwners ?? []) as any[]).filter((o) => { const n = Array.isArray(o.seasons) ? o.seasons.length : 0; return n > 0 && n < 2; }).map((o) => ({ name: o.ownerName ?? o.ownerKey, years: (Array.isArray(o.seasons) ? [...o.seasons] : []).sort((x: number, y: number) => x - y) })).sort((p, q) => (p.years[0] ?? 0) - (q.years[0] ?? 0));
+
   const tabs = [
     { id: "champions" as const, label: "Champions", Icon: Trophy },
     { id: "records" as const, label: "Records", Icon: Medal },
     { id: "dynasties" as const, label: "Dynasties", Icon: Crown },
     { id: "rivalries" as const, label: "Rivalries", Icon: Swords },
     { id: "legacy" as const, label: "Legacy", Icon: Landmark },
+    { id: "cemetery" as const, label: "Cemetery", Icon: Skull },
   ];
 
   return (
@@ -644,6 +648,35 @@ export function HallOfFame() {
                 </GoldGlowCard>
               ) : (
                 <UnavailableBlock title="Highest winning %" />
+              )}
+            </div>
+          )}
+          {hofTab === "cemetery" && (
+            <div>
+              <p className="mb-5 max-w-2xl text-sm text-zinc-500">
+                The dearly departed - owners who lasted less than two seasons. They came, they lost, they left.
+              </p>
+              {cemetery.length === 0 ? (
+                <p className="text-center text-sm text-zinc-500">No short-timers - everyone who joined stuck around.</p>
+              ) : (
+                <div className="rounded-2xl border border-white/[0.06] bg-[linear-gradient(180deg,#0c0f16,#090b11)] px-5 pt-8 pb-4">
+                  <div className="grid grid-cols-2 gap-x-5 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
+                    {cemetery.map((g, i) => (
+                      <div key={g.name + i} className="flex flex-col items-center">
+                        <div className="relative flex w-full max-w-[170px] flex-col items-center rounded-t-[80px] rounded-b-md border border-zinc-700/60 bg-[linear-gradient(180deg,#3a4150,#20242e)] px-4 pt-7 pb-6 text-center shadow-[inset_0_2px_12px_rgba(0,0,0,.45),0_10px_20px_-12px_rgba(0,0,0,.8)]">
+                          <span className="text-[10px] font-bold tracking-[0.35em] text-zinc-500">R . I . P</span>
+                          <span className="my-2 block h-px w-10 bg-white/15" />
+                          <Skull className="mb-2 h-5 w-5 text-zinc-500" />
+                          <span className="font-serif text-[15px] font-bold leading-tight text-zinc-200">{g.name}</span>
+                          <span className="mt-1.5 text-xs tabular-nums text-zinc-400">{g.years.length ? g.years.join(" - ") : "Unknown"}</span>
+                          <span className="mt-2 text-[9px] italic text-zinc-600">gone too soon</span>
+                        </div>
+                        <span className="h-3 w-[88%] max-w-[150px] rounded-b-sm bg-[linear-gradient(180deg,#1a1d24,#11141a)] shadow-[0_6px_8px_-6px_rgba(0,0,0,.9)]" />
+                        <span className="mb-6 h-1.5 w-[96%] max-w-[160px] rounded-full bg-emerald-900/30 blur-[1px]" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           )}
