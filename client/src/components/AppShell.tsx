@@ -128,7 +128,7 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
   if (leagues.length === 0) {
     return (
       <div className="border-b border-white/[0.06] px-3 py-3">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b97a8]">
           League
         </p>
         <Button asChild variant="outline" size="sm" className="h-auto w-full justify-center gap-2 py-2">
@@ -149,11 +149,11 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
   if (leagues.length === 1) {
     return (
       <div className="border-b border-white/[0.06] px-3 py-3">
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b97a8]">
           Active league
         </p>
         <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
-          <p className="truncate text-sm font-medium text-zinc-100">{label}</p>
+          <p className="truncate text-sm font-semibold text-[#f3f8ff]">{label}</p>
           <p className="text-xs text-zinc-500">{year}</p>
         </div>
       </div>
@@ -162,7 +162,7 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
 
   return (
     <div className="border-b border-white/[0.06] px-3 py-3">
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b97a8]">
         Active league
       </p>
       <DropdownMenu>
@@ -175,7 +175,7 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
             aria-label="Switch active league"
           >
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="truncate text-sm font-medium text-zinc-100">{label}</span>
+              <span className="truncate text-sm font-semibold text-[#f3f8ff]">{label}</span>
               <span className="text-xs text-zinc-500">{year}</span>
             </span>
             {busy ? (
@@ -233,7 +233,7 @@ function SidebarGroupTitle({ title, isFirst }: { title: string; isFirst?: boolea
   return (
     <div
       className={cn(
-        "px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-600",
+        "px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b97a8]",
         isFirst ? "pt-0" : "pt-4"
       )}
     >
@@ -283,13 +283,13 @@ function NavItemRow({
         to={entry.href}
         onClick={onNavigate}
         className={cn(
-          "group flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all",
+          "group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all",
           isActive
-            ? "border border-teal-500/30 border-l-2 border-l-teal-400 bg-teal-500/10 text-zinc-50"
-            : "border border-transparent text-zinc-400 hover:border-zinc-700/50 hover:bg-zinc-800/40 hover:text-zinc-100"
+            ? "border border-teal-500/30 border-l-2 border-l-teal-400 bg-teal-500/10 text-[#f3f8ff]"
+            : "border border-transparent text-[#aab4c2] hover:border-white/[0.08] hover:bg-white/[0.04] hover:text-[#f3f8ff]"
         )}
       >
-        <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-teal-300" : "text-zinc-500 group-hover:text-zinc-300")} />
+        <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-teal-300" : "text-[#8b97a8] group-hover:text-[#dbe4f0]")} />
         <span className="min-w-0 flex-1 truncate">{entry.label}</span>
         {isActive && <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-teal-400/80" />}
       </Link>
@@ -381,10 +381,10 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
             <Trophy className="h-5 w-5 text-teal-300" strokeWidth={2.25} />
           </div>
           <div className="flex min-w-0 flex-col leading-none">
-            <span className="text-[15px] font-black tracking-tight text-zinc-50">
+            <span className="text-[15px] font-black tracking-tight text-[#f3f8ff]">
               GM War Room
             </span>
-            <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500">
+            <span className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b97a8]">
               League Intelligence Desk
             </span>
           </div>
@@ -428,7 +428,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
               >
                 <CollapsibleTrigger
                   type="button"
-                  className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500 transition-colors hover:bg-white/[0.04] hover:text-zinc-200"
+                  className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b97a8] transition-colors hover:bg-white/[0.04] hover:text-zinc-200"
                 >
                   <span>{group.title}</span>
                   <ChevronDown
