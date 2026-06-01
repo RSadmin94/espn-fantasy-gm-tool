@@ -72,9 +72,9 @@ function ProfileShellCard({
   return (
     <div className={cn(PROFILE_SURFACE, "flex flex-col overflow-hidden")}>
       <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-4 py-3">
-        <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400">
+        <h3 className="flex items-center gap-2 text-[15px] font-extrabold tracking-tight text-[#f3f8ff]">
           {title}
-          <Info className="h-3.5 w-3.5 text-zinc-600" aria-hidden />
+          <Info className="h-3.5 w-3.5 text-[#8b97a8]" aria-hidden />
         </h3>
         {right}
       </div>
@@ -91,8 +91,8 @@ function Section({ title, icon, children, defaultOpen = true }: {
     <div className={cn(PROFILE_SURFACE, "overflow-hidden")}>
       <button type="button" onClick={() => setOpen(v => !v)}
         className="flex w-full items-center gap-2 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left transition-colors hover:bg-white/[0.04]">
-        <span className="text-zinc-500">{icon}</span>
-        <span className="text-sm font-semibold tracking-tight text-zinc-100 flex-1">{title}</span>
+        <span className="text-[#2dd4bf]">{icon}</span>
+        <span className="text-[15px] font-extrabold tracking-tight text-[#f3f8ff] flex-1">{title}</span>
         {open ? <ChevronDown className="h-4 w-4 text-zinc-500" /> : <ChevronRight className="h-4 w-4 text-zinc-500" />}
       </button>
       {open && <div className="px-4 py-3">{children}</div>}
@@ -162,13 +162,13 @@ function OwnerCard({ o, selected, onClick }: { o: any; selected: boolean; onClic
         "w-full rounded-xl border text-left px-4 py-3 transition-all",
         PROFILE_SURFACE,
         selected
-          ? "border-red-500/45 ring-1 ring-red-500/25 shadow-[0_0_24px_-10px_rgba(239,68,68,0.35)]"
-          : "border-white/[0.08] hover:border-red-500/20 hover:bg-white/[0.03]",
+          ? "border-[#2dd4bf]/50 ring-1 ring-[#2dd4bf]/25 shadow-[0_0_24px_-10px_rgba(45,212,191,0.35)]"
+          : "border-white/[0.08] hover:border-[#2dd4bf]/25 hover:bg-white/[0.03]",
       )}>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="font-semibold text-sm text-zinc-100">{o.ownerName}</p>
-          <p className="text-xs text-zinc-500 mt-0.5">{o.currentTeam}</p>
+          <p className="font-bold text-sm text-[#f3f8ff]">{o.ownerName}</p>
+          <p className="text-xs text-[#8b97a8] mt-0.5">{o.currentTeam}</p>
         </div>
         <div className="flex gap-1 flex-wrap justify-end">
           {num(o.championships) > 0 && <Badge color="gold">🏆 {num(o.championships)}</Badge>}
@@ -430,7 +430,7 @@ function ProfilePanel({
       <div className={cn(PROFILE_SURFACE, "overflow-hidden")}>
         <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-start">
           <div
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-red-500/50 bg-zinc-900 text-lg font-bold text-zinc-100 shadow-[0_0_28px_-6px_rgba(239,68,68,0.55)]"
+            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-[#2dd4bf]/50 bg-zinc-900 text-lg font-bold text-zinc-100 shadow-[0_0_28px_-6px_rgba(239,68,68,0.55)]"
             aria-hidden
           >
             {headerDisplayName
@@ -501,11 +501,11 @@ function ProfilePanel({
                 className={cn(
                   "flex flex-1 flex-col items-center gap-1.5 border-b-2 py-3 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors sm:flex-row sm:justify-center sm:gap-2 sm:text-xs",
                   active
-                    ? "border-red-500 text-red-400"
+                    ? "border-[#2dd4bf] text-[#2dd4bf]"
                     : "border-transparent text-zinc-500 hover:text-zinc-300",
                 )}
               >
-                <Icon className={cn("h-4 w-4", active ? "text-red-400" : "text-zinc-600")} aria-hidden />
+                <Icon className={cn("h-4 w-4", active ? "text-[#2dd4bf]" : "text-zinc-600")} aria-hidden />
                 {label}
               </button>
             );
@@ -1334,13 +1334,13 @@ export function OwnerProfiles() {
   return (
     <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 80% -10%,rgba(45,212,191,.16),transparent 42%),linear-gradient(180deg,#0a0e16,#070a11)" }}>
       <div className="mb-5 flex items-center gap-3">
-        <div className="grid place-items-center rounded-2xl shrink-0" style={{ width: 46, height: 46, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)" }}>
-          <Users className="h-6 w-6 text-red-400" />
+        <div className="grid place-items-center rounded-2xl shrink-0" style={{ width: 46, height: 46, background: "rgba(45,212,191,.10)", border: "1px solid rgba(45,212,191,.30)" }}>
+          <Users className="h-6 w-6 text-[#2dd4bf]" />
         </div>
         <div className="min-w-0">
-          <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-zinc-500">League Intelligence Desk</div>
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white leading-none">Owner Profiles</h1>
-          <p className="mt-1.5 text-sm text-zinc-500">{active.length} active owner{active.length !== 1 ? "s" : ""} - click to view full profile</p>
+          <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#8b97a8]">League Intelligence Desk</div>
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-[#f3f8ff] leading-none">Owner Profiles</h1>
+          <p className="mt-1.5 text-sm text-[#8b97a8]">{active.length} active owner{active.length !== 1 ? "s" : ""} - click to view full profile</p>
         </div>
       </div>
 
@@ -1379,7 +1379,7 @@ export function OwnerProfiles() {
                       className={cn(
                         "w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors",
                         listRowLookupKey(o) !== "" && selectedOwnerKey === listRowLookupKey(o)
-                          ? "border-red-500/40 bg-red-500/10 text-zinc-100"
+                          ? "border-[#2dd4bf]/45 bg-[#2dd4bf]/10 text-zinc-100"
                           : "border-white/[0.06] text-zinc-400 hover:bg-white/[0.04]",
                       )}>
                       <span className="font-medium">{o.ownerName}</span>
