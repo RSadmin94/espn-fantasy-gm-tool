@@ -1068,14 +1068,23 @@ export const draftWarRoomRouter = router({
       const pressureByRound   = calcDraftBoardPressure({ rosterNeeds, scarcityAlerts, keeperPredictions, totalTeams: teams.length, totalRounds: 14 });
       const draftEnvironment  = buildDraftEnvironmentDashboard({ scarcityAlerts, runAlerts: positionRunAlerts, compression: keeperCompression, pressureByRound, playerPool });
 
-      // Return top 100 available players with syntheticADP for frontend use
+      // Return available players (real ADP + stable id) for the live draft + board.
       const keptNames = new Set(keeperPredictions.filter(k => k.predictedPlayer && k.predictedPlayer !== "Unknown").map(k => k.predictedPlayer.toLowerCase()));
-      const availablePool = playerPool.filter(p => !keptNames.has(p.name.toLowerCase())).slice(0, 150).map((p, idx) => ({
-        name: p.name, position: p.position,
-        projectedPoints: p.projectedPoints,
-        syntheticADP: idx + 1,
-        vorp: Math.round(vorp(p.projectedPoints, p.position)),
-      }));
+      const DRAFT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
+      const availablePool = playerPool
+        .filter(p => !keptNames.has(p.name.toLowerCase()) && DRAFT_POSITIONS.has(p.position))
+        .slice(0, 320)
+        .map((p, idx) => ({
+          id: p.espnId ? `espn:${p.espnId}` : `name:${p.name.toLowerCase().trim()}`,
+          espnId: p.espnId ?? null,
+          name: p.name, position: p.position,
+          projectedPoints: p.projectedPoints,
+          adp: p.adp ?? null,
+          percentOwned: p.percentOwned ?? null,
+          rank: idx + 1,
+          syntheticADP: idx + 1,
+          vorp: Math.round(vorp(p.projectedPoints, p.position)),
+        }));
 
       return {
         ok: true, season,

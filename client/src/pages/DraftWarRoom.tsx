@@ -495,6 +495,232 @@ interface KeeperOverride {
   keeperRound: number;
 }
 
+// ── Live Draft Engine (real, stateful: AI fills other teams, you take your picks) ──
+function LiveDraftEngine({
+  picks, teams, availablePool, yourTeamId,
+}: {
+  picks: any[]; teams: any[]; availablePool: any[]; yourTeamId: number | null;
+}) {
+  const keyOf = (p: any) => p?.id ?? `name:${String(p?.name ?? "").toLowerCase().trim()}`;
+  const POS_CAPS: Record<string, number> = { QB: 2, RB: 6, WR: 6, TE: 2, K: 1, DEF: 1 };
+
+  const schedule = useMemo(() => [...picks].sort((a, b) => a.pickNumber - b.pickNumber), [picks]);
+  const totalRounds = useMemo(() => schedule.reduce((m, s) => Math.max(m, Number(s.round) || 0), 0), [schedule]);
+
+  // Keeper slots are pre-filled before the draft starts
+  const initialResults = useMemo(() => {
+    const r: Record<number, any> = {};
+    for (const s of schedule) {
+      if (s.isKeeperSlot && s.player) {
+        r[s.pickNumber] = {
+          id: `keeper:${String(s.player).toLowerCase().trim()}`,
+          name: s.player, position: s.position,
+          projectedPoints: s.projectedPoints ?? 0, adp: null, vorp: 0, isKeeper: true,
+        };
+      }
+    }
+    return r;
+  }, [schedule]);
+
+  const [results, setResults] = useState<Record<number, any>>(initialResults);
+  const [idx, setIdx]         = useState(0);
+  const [running, setRunning] = useState(false);
+  const [sort, setSort]       = useState<"adp" | "proj" | "vorp" | "pos" | "name">("adp");
+  const [posFilter, setPos]   = useState<string>("ALL");
+  const [searchQ, setSearchQ] = useState("");
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const SPEED_MS = 450;
+
+  useEffect(() => {
+    setResults(initialResults); setIdx(0); setRunning(false);
+    if (timer.current) clearTimeout(timer.current);
+  }, [initialResults]);
+
+  const byAdp = (p: any) => (p.adp != null ? Number(p.adp) : (p.rank ?? p.syntheticADP ?? 9999));
+
+  const draftedKeys = useMemo(() => {
+    const s = new Set<string>();
+    for (const k of Object.keys(results)) s.add(keyOf(results[Number(k)]));
+    return s;
+  }, [results]);
+
+  const available = useMemo(() => {
+    let list = availablePool.filter((p: any) => !draftedKeys.has(keyOf(p)));
+    if (posFilter !== "ALL") list = list.filter((p: any) => p.position === posFilter);
+    if (searchQ) {
+      const q = searchQ.toLowerCase();
+      list = list.filter((p: any) => p.name.toLowerCase().includes(q) || (p.position ?? "").toLowerCase().includes(q));
+    }
+    const s = [...list];
+    if (sort === "adp") s.sort((a, b) => byAdp(a) - byAdp(b));
+    else if (sort === "proj") s.sort((a, b) => (b.projectedPoints ?? 0) - (a.projectedPoints ?? 0));
+    else if (sort === "vorp") s.sort((a, b) => (b.vorp ?? 0) - (a.vorp ?? 0));
+    else if (sort === "pos") s.sort((a, b) => (a.position ?? "").localeCompare(b.position ?? "") || byAdp(a) - byAdp(b));
+    else s.sort((a, b) => a.name.localeCompare(b.name));
+    return s;
+  }, [availablePool, draftedKeys, posFilter, searchQ, sort]);
+
+  const rostersByTeam = useMemo(() => {
+    const m = new Map<number, any[]>();
+    for (const s of schedule) {
+      const res = results[s.pickNumber];
+      if (!res) continue;
+      const tid = Number(s.teamId);
+      if (!m.has(tid)) m.set(tid, []);
+      m.get(tid)!.push({ ...res, round: s.round, pickNumber: s.pickNumber });
+    }
+    return m;
+  }, [schedule, results]);
+
+  const slot = schedule[idx];
+  const done = idx >= schedule.length;
+  const awaitingUser = !!slot && !slot.isKeeperSlot && yourTeamId != null && Number(slot.teamId) === yourTeamId && !results[slot.pickNumber];
+  const onClock = slot ? teams.find((t: any) => Number(t.teamId) === Number(slot.teamId)) : null;
+
+  // Step engine: keeper slots auto-advance, AI auto-picks, your pick pauses
+  useEffect(() => {
+    if (!running || done) return;
+    const cur = schedule[idx];
+    if (!cur) return;
+    if (cur.isKeeperSlot) { timer.current = setTimeout(() => setIdx(i => i + 1), 50); return () => clearTimeout(timer.current!); }
+    if (yourTeamId != null && Number(cur.teamId) === yourTeamId) { setRunning(false); return; }
+    timer.current = setTimeout(() => {
+      setResults(prev => {
+        if (prev[cur.pickNumber]) return prev;
+        const taken = new Set<string>();
+        const counts: Record<string, number> = {};
+        for (const k of Object.keys(prev)) {
+          const r = prev[Number(k)];
+          taken.add(keyOf(r));
+          const sd = schedule.find(s => s.pickNumber === Number(k));
+          if (sd && Number(sd.teamId) === Number(cur.teamId)) counts[r.position] = (counts[r.position] ?? 0) + 1;
+        }
+        const late = Number(cur.round) > totalRounds - 2;
+        const pool = availablePool.filter((p: any) => !taken.has(keyOf(p))).sort((a, b) => byAdp(a) - byAdp(b));
+        const pick = pool.find((p: any) => {
+          if ((p.position === "K" || p.position === "DEF") && !late) return false;
+          if ((counts[p.position] ?? 0) >= (POS_CAPS[p.position] ?? 99)) return false;
+          return true;
+        }) ?? pool[0];
+        if (!pick) return prev;
+        return { ...prev, [cur.pickNumber]: { ...pick, byAI: true } };
+      });
+      setIdx(i => i + 1);
+    }, SPEED_MS);
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, [running, idx, done, schedule, yourTeamId, totalRounds, availablePool]);
+
+  function userDraft(p: any) {
+    const cur = schedule[idx];
+    if (!cur) return;
+    setResults(prev => ({ ...prev, [cur.pickNumber]: { ...p, byUser: true } }));
+    setIdx(i => i + 1);
+    setSearchQ("");
+    setRunning(true);
+  }
+  function reset() {
+    if (timer.current) clearTimeout(timer.current);
+    setResults(initialResults); setIdx(0); setRunning(false);
+  }
+
+  const SORTS: [typeof sort, string][] = [["adp","ADP"],["proj","Proj"],["vorp","VORP"],["pos","Pos"],["name","Name"]];
+  const POSES = ["ALL","QB","RB","WR","TE","K","DEF"];
+
+  return (
+    <div className="p-4">
+      {/* Control bar */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {!running && !done && <button onClick={() => setRunning(true)} className="px-4 py-1.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-black hover:bg-emerald-500/25">{idx === 0 ? "▶ Start Draft" : "▶ Resume"}</button>}
+        {running && <button onClick={() => setRunning(false)} className="px-4 py-1.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-black">⏸ Pause</button>}
+        {idx > 0 && <button onClick={reset} className="px-3 py-1.5 rounded text-zinc-500 text-xs hover:text-zinc-300 border border-zinc-700">↺ Reset</button>}
+        <span className="text-[11px] text-zinc-500 tabular-nums ml-1">Pick {Math.min(idx, schedule.length)}/{schedule.length}</span>
+        <span className="text-[10px] text-zinc-600 ml-auto">{yourTeamId == null ? "Spectating — AI drafts everyone" : "AI drafts other teams; you pick for your team"}</span>
+      </div>
+
+      {/* On the clock */}
+      {!done && onClock && (
+        <div className={cn("rounded-lg border px-4 py-2.5 mb-3 flex items-center gap-3 flex-wrap",
+          awaitingUser ? "border-emerald-500/50 bg-emerald-500/10" : "border-zinc-800 bg-zinc-900/40")}>
+          {awaitingUser ? <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> : null}
+          <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{awaitingUser ? "Your pick" : "On the clock"}</span>
+          <span className="font-black text-zinc-100">{onClock.teamName}</span>
+          <span className="text-[10px] text-zinc-600">{onClock.ownerName}</span>
+          <span className="text-[10px] text-zinc-600 ml-auto tabular-nums">Round {slot?.round} · Pick #{slot?.pickNumber}</span>
+        </div>
+      )}
+      {done && <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/5 px-4 py-3 mb-3 text-center text-emerald-300 font-black text-sm">✓ Draft complete — {schedule.length} picks</div>}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Available pool (sortable) */}
+        <div className="lg:col-span-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span className="text-xs font-black text-zinc-300 uppercase tracking-wider">Available</span>
+            <span className="text-[10px] text-zinc-600">{available.length} players</span>
+            <div className="flex gap-1 ml-auto">
+              {SORTS.map(([k, lbl]) => (
+                <button key={k} onClick={() => setSort(k)} className={cn("px-2 py-0.5 rounded text-[10px] font-bold", sort === k ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300")}>{lbl}</button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-1 mb-2 flex-wrap">
+            {POSES.map(p => (
+              <button key={p} onClick={() => setPos(p)} className={cn("px-2 py-0.5 rounded text-[10px] font-bold", posFilter === p ? "bg-emerald-600/30 text-emerald-200" : "text-zinc-500 hover:text-zinc-300 border border-zinc-800")}>{p}</button>
+            ))}
+            <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search…" className="ml-auto text-[11px] bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-zinc-200 placeholder-zinc-600" />
+          </div>
+          <div className="rounded-lg border border-zinc-800/60 divide-y divide-zinc-800/40 max-h-[460px] overflow-auto">
+            {available.slice(0, 120).map((p: any) => (
+              <button key={keyOf(p)} disabled={!awaitingUser}
+                onClick={() => awaitingUser && userDraft(p)}
+                className={cn("w-full flex items-center gap-2 px-3 py-1.5 text-left",
+                  awaitingUser ? "hover:bg-emerald-500/10 cursor-pointer" : "cursor-default")}>
+                <span className="text-[10px] text-zinc-600 w-8 tabular-nums shrink-0">{p.adp != null ? p.adp.toFixed(1) : p.rank}</span>
+                <PosPill pos={p.position} />
+                <span className="text-xs font-bold text-zinc-200 flex-1 truncate">{p.name}</span>
+                <span className="text-[10px] text-zinc-500 tabular-nums shrink-0">{Math.round(p.projectedPoints ?? 0)} pts</span>
+                <span className="text-[10px] text-zinc-600 tabular-nums shrink-0 w-10 text-right">V{p.vorp}</span>
+                {awaitingUser && <span className="text-[9px] font-black text-emerald-400 shrink-0">DRAFT</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Live team rosters */}
+        <div>
+          <span className="text-xs font-black text-zinc-300 uppercase tracking-wider mb-2 block">Teams</span>
+          <div className="space-y-2 max-h-[500px] overflow-auto pr-1">
+            {teams.map((t: any) => {
+              const tid = Number(t.teamId);
+              const roster = (rostersByTeam.get(tid) ?? []).sort((a, b) => a.pickNumber - b.pickNumber);
+              const isOnClock = !done && slot && Number(slot.teamId) === tid;
+              const isYou = yourTeamId === tid;
+              return (
+                <div key={tid} className={cn("rounded-lg border p-2", isOnClock ? "border-emerald-500/50 bg-emerald-500/5" : isYou ? "border-sky-500/30 bg-sky-500/5" : "border-zinc-800/60 bg-zinc-900/30")}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-[11px] font-black text-zinc-200 truncate">{t.teamName}</span>
+                    {isYou && <span className="text-[8px] font-black text-sky-300 bg-sky-500/15 px-1 rounded">YOU</span>}
+                    <span className="text-[9px] text-zinc-600 ml-auto tabular-nums">{roster.length}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {roster.map((r: any) => (
+                      <span key={r.pickNumber} className={cn("text-[9px] px-1.5 py-0.5 rounded border truncate max-w-[120px]",
+                        r.isKeeper ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-zinc-700/60 bg-zinc-800/50 text-zinc-300")}
+                        title={`${r.name} (${r.position}) R${r.round}`}>
+                        <span className="text-zinc-500">{r.position}</span> {r.name.split(" ").slice(-1)[0]}
+                      </span>
+                    ))}
+                    {roster.length === 0 && <span className="text-[9px] text-zinc-600">—</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MockDraftBoard({
   picks, teams, availablePool, keeperPredictions, rosterNeeds,
   onKeeperOverride, keeperOverrides,
@@ -630,7 +856,7 @@ function MockDraftBoard({
           </select>
         )}
 
-        {view === "live" && (
+        {false && view === "live" && (
           <div className="flex items-center gap-2">
             {simState === "idle" && liveIdx === 0 && <button onClick={startSim} className="px-3 py-1.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-500/25">▶ Start</button>}
             {(simState === "running" || (simState === "idle" && liveIdx > 0)) && liveIdx < picks.length && !myPick && (
@@ -723,7 +949,7 @@ function MockDraftBoard({
       )}
 
       {/* Interactive My Pick overlay */}
-      {myPick && view === "live" && (
+      {false && myPick && view === "live" && (
         <div className="border border-emerald-500/40 bg-emerald-500/5 px-5 py-4 space-y-3">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -762,8 +988,13 @@ function MockDraftBoard({
         </div>
       )}
 
-      {/* Live Draft view */}
-      {view === "live" && !myPick && (
+      {/* Live Draft (new stateful engine) */}
+      {view === "live" && (
+        <LiveDraftEngine picks={picks} teams={teams} availablePool={availablePool} yourTeamId={yourTeamId} />
+      )}
+
+      {/* Old playback live view (disabled) */}
+      {false && view === "live" && !myPick && (
         <div>
           {simState === "idle" && liveIdx === 0 ? (
             <div className="flex flex-col items-center justify-center py-14 gap-4">
