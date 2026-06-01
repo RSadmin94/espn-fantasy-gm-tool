@@ -287,9 +287,9 @@ function ProfilePanel({
     setProfileTab("draft");
     setDataSourceOpen(false);
   }, [profileLookupKey]);
-  const cachedSeasonsQ2 = trpcAny.espn.cachedSeasons.useQuery(undefined, { staleTime: 60_000 });
-  const draftSeasonList: number[] = Array.isArray(cachedSeasonsQ2.data) ? (cachedSeasonsQ2.data as number[]) : [];
-  const draftSeasonQueries = (trpc as any).useQueries((t: any) => draftSeasonList.map((s) => t.espn.draftPicks({ season: s }, { staleTime: 300_000 })));
+  const allSeasonsQ2 = trpcAny.espn.allSeasons.useQuery(undefined, { staleTime: 60_000 });
+  const draftSeasonList: number[] = Array.isArray(allSeasonsQ2.data) ? (allSeasonsQ2.data as number[]) : [];
+  const draftSeasonQueries = (trpc as any).useQueries((t: any) => draftSeasonList.map((s) => (s >= 2010 && s <= 2017) ? t.espn.legacyDraftPicks({ season: s }, { staleTime: 300_000 }) : t.espn.draftPicks({ season: s }, { staleTime: 300_000 })));
 
   if (q.isPending || q.isLoading) return (
     <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -358,12 +358,15 @@ function ProfilePanel({
   const ownerTeamBySeason: Record<number, string> = {};
   for (const sr of (seasonRecords as any[])) { const yr = Number(sr.season); if (yr) ownerTeamBySeason[yr] = String(sr.teamName || "").trim().toLowerCase(); }
   const liveOwnerPicks: Array<{ season: number; round: number; position: string; playerName: string; isKeeper: boolean }> = [];
+  const ownerNameNorm = String(headerDisplayName || "").trim().toLowerCase();
   draftSeasonList.forEach((s: number, idx: number) => {
-    const picks = ((draftSeasonQueries as any[])[idx]?.data ?? []) as any[];
+    const raw = (draftSeasonQueries as any[])[idx]?.data;
+    const picks = (Array.isArray(raw) ? raw : (raw?.picks ?? [])) as any[];
     const myTeam = ownerTeamBySeason[Number(s)];
-    if (!myTeam) return;
     for (const pk of picks) {
-      if (String(pk.teamName || "").trim().toLowerCase() === myTeam) {
+      const byOwner = pk.ownerName ? String(pk.ownerName).trim().toLowerCase() === ownerNameNorm : false;
+      const byTeam = myTeam ? String(pk.teamName || "").trim().toLowerCase() === myTeam : false;
+      if (byOwner || byTeam) {
         liveOwnerPicks.push({ season: Number(s), round: Number(pk.roundId) || 0, position: String(pk.position || "UNK"), playerName: String(pk.playerName || ""), isKeeper: Boolean(pk.isKeeper) });
       }
     }
