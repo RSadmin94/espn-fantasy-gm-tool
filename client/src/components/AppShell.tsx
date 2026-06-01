@@ -32,6 +32,7 @@ import {
   Radio,
   Newspaper,
   Zap,
+  Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -282,13 +283,13 @@ function NavItemRow({
         to={entry.href}
         onClick={onNavigate}
         className={cn(
-          "flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-all",
+          "group flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all",
           isActive
-            ? "border-l-2 border-l-emerald-500 border border-emerald-500/20 bg-emerald-500/8 text-zinc-100 bg-zinc-800/60"
-            : "border border-transparent text-zinc-500 hover:border-zinc-700/50 hover:bg-zinc-800/40 hover:text-zinc-200 transition-all"
+            ? "border border-emerald-500/25 border-l-2 border-l-emerald-400 bg-emerald-500/10 text-zinc-50"
+            : "border border-transparent text-zinc-400 hover:border-zinc-700/50 hover:bg-zinc-800/40 hover:text-zinc-100"
         )}
       >
-        <Icon className={cn("h-3.5 w-3.5 shrink-0", isActive ? "text-emerald-400" : "text-zinc-500 group-hover:text-zinc-400")} />
+        <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-emerald-300" : "text-zinc-500 group-hover:text-zinc-300")} />
         <span className="min-w-0 flex-1 truncate">{entry.label}</span>
         {isActive && <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-emerald-400/80" />}
       </Link>
@@ -374,12 +375,19 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   return (
     <div className="flex h-full flex-col border-r border-zinc-800/60 bg-[#09090e]">
       {/* Logo */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-bold tracking-tight">
-            <span className="text-red-500">GM</span>
-            <span className="text-zinc-100"> War Room</span>
-          </span>
+      <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400/20 to-emerald-500/20 ring-1 ring-amber-400/30">
+            <Crown className="h-5 w-5 text-amber-300" strokeWidth={2.25} />
+          </div>
+          <div className="flex min-w-0 flex-col leading-none">
+            <span className="text-[15px] font-black tracking-tight text-zinc-50">
+              GM War Room
+            </span>
+            <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500">
+              League Intelligence Desk
+            </span>
+          </div>
         </div>
         {onClose && (
           <button
@@ -457,9 +465,11 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <span className="text-lg font-bold md:hidden">
-          <span className="text-red-500">GM</span>
-          <span className="text-zinc-100"> War Room</span>
+        <span className="flex items-center gap-2 md:hidden">
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-amber-400/20 to-emerald-500/20 ring-1 ring-amber-400/30">
+            <Crown className="h-4 w-4 text-amber-300" strokeWidth={2.25} />
+          </span>
+          <span className="text-base font-black tracking-tight text-zinc-50">GM War Room</span>
         </span>
       </div>
 
