@@ -287,6 +287,9 @@ function ProfilePanel({
     setProfileTab("draft");
     setDataSourceOpen(false);
   }, [profileLookupKey]);
+  const cachedSeasonsQ2 = trpcAny.espn.cachedSeasons.useQuery(undefined, { staleTime: 60_000 });
+  const draftSeasonList: number[] = Array.isArray(cachedSeasonsQ2.data) ? (cachedSeasonsQ2.data as number[]) : [];
+  const draftSeasonQueries = (trpc as any).useQueries((t: any) => draftSeasonList.map((s) => t.espn.draftPicks({ season: s }, { staleTime: 300_000 })));
 
   if (q.isPending || q.isLoading) return (
     <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -352,6 +355,24 @@ function ProfilePanel({
   const avgRoundByPos = (draft.avgRoundByPos ?? {}) as Record<string, number>;
   const mostDraftedPos = Array.isArray(draft.mostDraftedPos) ? draft.mostDraftedPos as string[] : [];
   const byRound = Array.isArray((draft as any).byRound) ? ((draft as any).byRound as any[]) : [];
+  const ownerTeamBySeason: Record<number, string> = {};
+  for (const sr of (seasonRecords as any[])) { const yr = Number(sr.season); if (yr) ownerTeamBySeason[yr] = String(sr.teamName || "").trim().toLowerCase(); }
+  const liveOwnerPicks: Array<{ season: number; round: number; position: string; playerName: string; isKeeper: boolean }> = [];
+  draftSeasonList.forEach((s: number, idx: number) => {
+    const picks = ((draftSeasonQueries as any[])[idx]?.data ?? []) as any[];
+    const myTeam = ownerTeamBySeason[Number(s)];
+    if (!myTeam) return;
+    for (const pk of picks) {
+      if (String(pk.teamName || "").trim().toLowerCase() === myTeam) {
+        liveOwnerPicks.push({ season: Number(s), round: Number(pk.roundId) || 0, position: String(pk.position || "UNK"), playerName: String(pk.playerName || ""), isKeeper: Boolean(pk.isKeeper) });
+      }
+    }
+  });
+  const liveByRoundMap = new Map<number, any[]>();
+  for (const pk of liveOwnerPicks) { if (pk.round <= 0) continue; if (!liveByRoundMap.has(pk.round)) liveByRoundMap.set(pk.round, []); liveByRoundMap.get(pk.round)!.push(pk); }
+  const liveByRound = [...liveByRoundMap.entries()].sort((a, b) => a[0] - b[0]).map(([round, picks]) => { const sorted = [...picks].sort((a, b) => b.season - a.season); const posCounts: Record<string, number> = {}; for (const p2 of sorted) posCounts[p2.position] = (posCounts[p2.position] ?? 0) + 1; const top = Object.entries(posCounts).sort((a, b) => b[1] - a[1])[0]; return { round, seasons: sorted.length, topPosition: top?.[0] ?? "UNK", topCount: top?.[1] ?? 0, posCounts, picks: sorted }; });
+  const effectiveByRound = liveByRound.length ? liveByRound : byRound;
+  const draftSeasonsCovered = [...new Set((effectiveByRound as any[]).flatMap((r: any) => (Array.isArray(r.picks) ? r.picks : []).map((pk: any) => Number(pk.season))))].filter((n: number) => n > 0).sort((a: number, b: number) => a - b);
   const keeperPosDist = (keeper.keeperPosDist ?? {}) as Record<string, number>;
   const lastYearKeepers = Array.isArray(keeper.lastYearKeepers) ? keeper.lastYearKeepers : [];
   const txnSeasons  = Array.isArray(activity.txnSeasons)    ? activity.txnSeasons  : [];
@@ -770,11 +791,14 @@ function ProfilePanel({
       {profileTab === "draft" && (
         <div className="space-y-4">
           <ProfileShellCard title="Draft tendencies by round">
-            {byRound.length === 0 ? (
+            {draftSeasonsCovered.length > 0 && (
+              <p className="mb-3 text-[11px] text-zinc-500">Drafts analyzed: <span className="font-semibold text-zinc-300">{draftSeasonsCovered[0]}{draftSeasonsCovered.length > 1 ? `-${draftSeasonsCovered[draftSeasonsCovered.length - 1]}` : ""}</span> ({draftSeasonsCovered.length} season{draftSeasonsCovered.length === 1 ? "" : "s"})</p>
+            )}
+            {effectiveByRound.length === 0 ? (
               <p className="text-sm text-zinc-500">No draft history yet.</p>
             ) : (
               <div className="space-y-2">
-                {byRound.map((r: any) => {
+                {effectiveByRound.map((r: any) => {
                   const pu = String(r.topPosition || "UNK").toUpperCase();
                   return (
                     <div key={r.round} className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
