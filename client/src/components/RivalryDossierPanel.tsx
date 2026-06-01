@@ -114,14 +114,12 @@ export function RivalryDossierPanel({
 
   useEffect(() => {
     const opps = q.data?.opponents;
-    if (!opps?.length) {
-      setOpponentKey("");
-      return;
-    }
-    setOpponentKey((cur) => {
-      if (cur && opps.some((o) => o.opponentOwnerKey === cur)) return cur;
-      return opps[0]!.opponentOwnerKey;
-    });
+    // React #185 fix: opponentKey is part of the query key, so changing it makes
+    // q.data briefly undefined during the refetch. Never clear the selection here —
+    // clearing flipped opponentKey ""<->opps[0] forever. Preserve the current pick
+    // across query transitions; auto-select only once, when nothing is selected yet.
+    if (!opps?.length) return;
+    setOpponentKey((cur) => (cur ? cur : opps[0]!.opponentOwnerKey));
   }, [q.data?.opponents]);
 
   if (!queryKey) {
