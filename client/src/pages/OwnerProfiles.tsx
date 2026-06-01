@@ -113,7 +113,7 @@ const TAG_STYLES: Record<string, string> = {
 
 /** Owner profile / Draft DNA surface — matches command-center mockup cards */
 const PROFILE_SURFACE =
-  "rounded-xl border border-white/[0.08] bg-[#0f131c]/95 shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
+  "rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#141a24,#0e131c)] shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
 
 const POS_TEXT: Record<string, string> = {
   RB: "text-red-400",
@@ -1266,12 +1266,16 @@ export function OwnerProfiles() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl bg-[#0b0e14] px-4 py-6 sm:px-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-zinc-50">Owner Profiles</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          {active.length} active owner{active.length !== 1 ? "s" : ""} · click to view full profile
-        </p>
+    <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 80% -10%,rgba(239,68,68,.18),transparent 40%),linear-gradient(180deg,#0a0e16,#070a11)" }}>
+      <div className="mb-5 flex items-center gap-3">
+        <div className="grid place-items-center rounded-2xl shrink-0" style={{ width: 46, height: 46, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)" }}>
+          <Users className="h-6 w-6 text-red-400" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-zinc-500">League Intelligence Desk</div>
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white leading-none">Owner Profiles</h1>
+          <p className="mt-1.5 text-sm text-zinc-500">{active.length} active owner{active.length !== 1 ? "s" : ""} - click to view full profile</p>
+        </div>
       </div>
 
       <div className="flex gap-6">
