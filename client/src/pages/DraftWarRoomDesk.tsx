@@ -48,8 +48,8 @@ function Bar({ label, value, color }: { label: string; value: number; color: str
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[11px] uppercase tracking-wider" style={{ color: MUTED }}>{label}</span>
-        <span className="text-[11px] font-bold" style={{ color }}>{v}</span>
+        <span className="text-[12px] uppercase tracking-wider" style={{ color: MUTED }}>{label}</span>
+        <span className="text-[12px] font-bold" style={{ color }}>{v}</span>
       </div>
       <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,.06)" }}>
         <div className="h-full rounded-full" style={{ width: v + "%", background: color }} />
@@ -83,7 +83,7 @@ function Panel({ children, className = "" }: any) {
 function Pill({ children, color, strong, dot }: any) {
   return (
     <span
-      className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] font-bold"
+      className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-bold"
       style={{
         background: strong ? color : "rgba(255,255,255,.05)",
         color: strong ? "#0b0f17" : color,
@@ -217,7 +217,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
             <Crosshair className="h-6 w-6" style={{ color: GOLD }} />
           </div>
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color: MUTED }}>League Intelligence Desk</div>
+            <div className="text-[12px] font-bold uppercase tracking-[0.22em]" style={{ color: MUTED }}>League Intelligence Desk</div>
             <h2 className="text-3xl md:text-4xl font-black tracking-tight leading-none" style={{ color: TEXT }}>On the Clock</h2>
           </div>
         </div>
@@ -242,7 +242,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
                   <Avatar name={t.ownerName} color={c} />
                   <div className="min-w-0 flex-1">
                     <div className="text-[15px] font-bold truncate" style={{ color: TEXT }}>{t.ownerName}</div>
-                    <div className="text-[12px] truncate" style={{ color: MUTED }}>{t.teamName} · {t.mostLikelyPosition} threat</div>
+                    <div className="text-[13px] truncate" style={{ color: MUTED }}>{t.teamName} · {t.mostLikelyPosition} threat</div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-[20px] font-black leading-none" style={{ color: c }}>{clamp(t.surpriseProbability || 0)}%</div>
@@ -266,10 +266,10 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
               {(topThreat.evidence || []).slice(0, 2).map((e: string, i: number) => (
                 <div key={i} className="flex items-start gap-2 mb-2">
                   <ChevronRight className="h-4 w-4 mt-0.5 shrink-0" style={{ color: MUTED }} />
-                  <span className="text-[12px]" style={{ color: MUTED }}>{e}</span>
+                  <span className="text-[13px]" style={{ color: MUTED }}>{e}</span>
                 </div>
               ))}
-              <div className="mt-3 text-[11px] font-bold uppercase tracking-wider" style={{ color: TEAL }}>
+              <div className="mt-3 text-[12px] font-bold uppercase tracking-wider" style={{ color: TEAL }}>
                 Receipt confidence: {clamp(topThreat.predictabilityScore || 0) >= 60 ? "High" : "Moderate"}
               </div>
             </div>
@@ -289,7 +289,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
             ))}
           </div>
           <div className="mt-4 pt-3 border-t border-white/[0.07] flex items-center justify-between">
-            <span className="text-[11px] uppercase tracking-wider" style={{ color: MUTED }}>Memo confidence</span>
+            <span className="text-[12px] uppercase tracking-wider" style={{ color: MUTED }}>Memo confidence</span>
             <span className="text-[16px] font-black" style={{ color: TEAL }}>{memoConfidence}%</span>
           </div>
         </Panel>
@@ -301,7 +301,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
           <Panel>
             <div className="flex items-center justify-between gap-3">
               <SectionTitle icon={Target} kicker={`Pick ${round}.${pad2(roundPick)} · best available`} title="Next-Pick Command Board" color={GOLD} />
-              <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-full shrink-0" style={{ color: GOLD, background: GOLD + "14" }}>Top {board.length}</span>
+              <span className="text-[12px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-full shrink-0" style={{ color: GOLD, background: GOLD + "14" }}>Top {board.length}</span>
             </div>
             <div className="space-y-2.5 mt-4">
               {board.length === 0 && <Empty>No available players — sync player registry.</Empty>}
@@ -319,12 +319,12 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-[16px] font-bold truncate" style={{ color: TEXT }}>{p.name}</span>
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded shrink-0" style={{ color: MUTED, background: "rgba(255,255,255,.05)" }}>{p.position} · #{p.posRank}</span>
+                        <span className="text-[12px] font-bold px-2 py-0.5 rounded shrink-0" style={{ color: MUTED, background: "rgba(255,255,255,.05)" }}>{p.position} · #{p.posRank}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded" style={{ color: fit.c, background: fit.c + "18" }}>{fit.t}</span>
+                        <span className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ color: fit.c, background: fit.c + "18" }}>{fit.t}</span>
                         {p.rival && (
-                          <span className="text-[11px] px-2 py-0.5 rounded" style={{ color: riskColor(p.rival.surpriseProbability || 0), background: riskColor(p.rival.surpriseProbability || 0) + "14" }}>
+                          <span className="text-[12px] px-2 py-0.5 rounded" style={{ color: riskColor(p.rival.surpriseProbability || 0), background: riskColor(p.rival.surpriseProbability || 0) + "14" }}>
                             {p.rival.ownerName} may target ({clamp(p.rival.surpriseProbability || 0)}%)
                           </span>
                         )}
@@ -351,7 +351,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
                   <Avatar name={m.ownerName} color={m.arc.color} size={36} />
                   <div className="min-w-0 flex-1">
                     <div className="text-[14px] font-bold truncate" style={{ color: TEXT }}>{m.ownerName}</div>
-                    <div className="text-[11px] truncate" style={{ color: MUTED }}>{m.teamName}</div>
+                    <div className="text-[12px] truncate" style={{ color: MUTED }}>{m.teamName}</div>
                   </div>
                   <span className="text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ color: m.arc.color, background: m.arc.color + "18" }}>{m.arc.label}</span>
                 </div>
@@ -371,7 +371,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
         <Panel>
           <div className="flex items-center justify-between gap-3">
             <SectionTitle icon={Clock} kicker="Projected" title="Mock Against Your League" color={TEAL} />
-            <span className="text-[11px] font-bold px-2.5 py-1.5 rounded-full shrink-0" style={{ color: TEAL, background: TEAL + "14" }}>{timelineConf}% conf</span>
+            <span className="text-[12px] font-bold px-2.5 py-1.5 rounded-full shrink-0" style={{ color: TEAL, background: TEAL + "14" }}>{timelineConf}% conf</span>
           </div>
           <div className="space-y-3 mt-4">
             {timeline.length === 0 && <Empty>No upcoming picks projected.</Empty>}
@@ -383,7 +383,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
                 <Avatar name={p.ownerName} color={CYAN} size={36} />
                 <div className="min-w-0 flex-1">
                   <div className="text-[14px] font-bold truncate" style={{ color: TEXT }}>{p.ownerName} <span style={{ color: MUTED, fontWeight: 400 }}>likely {p.position}</span></div>
-                  <div className="text-[12px] truncate" style={{ color: MUTED }}>e.g. {p.player}</div>
+                  <div className="text-[13px] truncate" style={{ color: MUTED }}>e.g. {p.player}</div>
                 </div>
                 <div className="text-[13px] font-bold shrink-0" style={{ color: riskColor(100 - (p.confidence || 0)) }}>{clamp(p.confidence || 0)}%</div>
               </div>
@@ -405,7 +405,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
                     <span className="text-[14px] font-bold" style={{ color: TEXT }}>{t.position} run forming</span>
                     <span className="text-[10px] font-black px-2.5 py-1 rounded-full shrink-0" style={{ color: c, background: c + "18" }}>{(t.confidence || 0) >= 70 ? "HIGH" : (t.confidence || 0) >= 50 ? "MED" : "LOW"} IMPACT</span>
                   </div>
-                  <p className="text-[12px] leading-snug" style={{ color: MUTED }}>
+                  <p className="text-[13px] leading-snug" style={{ color: MUTED }}>
                     {n} owners need {t.position} · projected window Round {t.expectedRound ?? t.roundWindow ?? "?"}{owners ? ` · ${owners}` : ""}
                   </p>
                 </div>

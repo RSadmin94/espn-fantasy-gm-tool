@@ -1485,11 +1485,11 @@ export function DraftWarRoom() {
   const maxRound = Math.max(...(mockDraft ?? []).map((p: any) => p.round), 0);
 
   return (
-    <div className="min-h-screen text-zinc-100" style={{ background: "radial-gradient(circle at 85% -10%,rgba(245,197,24,.06),transparent 45%),linear-gradient(180deg,#0b0f17,#080b11)" }}>
+    <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 85% -10%,rgba(245,197,24,.06),transparent 45%),linear-gradient(180deg,#0b0f17,#080b11)" }}>
 
       {/* Header */}
-      <div className="border-b border-white/[0.06] px-6 py-6">
-        <div className="max-w-7xl mx-auto flex items-start justify-between gap-4 flex-wrap">
+      <div className="mb-5">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
               <div className="w-8 h-8 rounded-lg bg-amber-400/10 border border-amber-400/30 flex items-center justify-center">
@@ -1521,7 +1521,7 @@ export function DraftWarRoom() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6 space-y-5">
+      <div className="space-y-5">
 
         {/* Editorial intelligence desk — mockup layout, real data */}
         <DraftWarRoomDesk data={data} />
