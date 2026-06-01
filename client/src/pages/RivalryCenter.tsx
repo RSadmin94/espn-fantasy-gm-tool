@@ -95,6 +95,9 @@ export function RivalryCenter() {
   const cachedQ = (trpc as any).espn.cachedSeasons.useQuery(undefined, {
     staleTime: 60_000,
   });
+  const refreshScores = (trpc as any).rivalry.refresh.useMutation({
+    onSuccess: () => scoresQ.refetch(),
+  });
 
   const allOwners: Array<{ ownerKey: string; ownerName?: string; seasons?: number[]; championships?: number }> =
     listQ.data?.allOwners ?? [];
@@ -219,6 +222,7 @@ export function RivalryCenter() {
     setOpen({ focalKey: rodKey, focalName: "Rod", rivalKey: keyForRival(p), rivalName: String(p.rivalName ?? "Rival") });
 
   const loading = scoresQ.isLoading || listQ.isLoading;
+  const allEmpty = !leagueLoading && leaguePairs.length === 0 && pairs.length === 0;
   const hero = pairs[0];
   const ranked = pairs.slice(0, 10);
 
@@ -249,7 +253,7 @@ export function RivalryCenter() {
           <div className="py-24 text-center text-sm" style={{ color: MUTED }}>
             Loading league rivalries…
           </div>
-        ) : pairs.length === 0 ? (
+        ) : allEmpty ? (
           <div
             className="my-10 rounded-lg border p-10 text-center"
             style={{ borderColor: LINE, background: PAPER }}
@@ -399,6 +403,14 @@ export function RivalryCenter() {
                   Tap any rivalry for the full dossier
                 </span>
               </div>
+              {ranked.length === 0 && (
+                <div className="mt-4 rounded-lg border p-5 text-sm" style={{ borderColor: LINE, background: PAPER, color: MUTED }}>
+                  Your personalized rivalry scores haven’t been generated yet.{" "}
+                  <button onClick={() => refreshScores.mutate()} disabled={refreshScores.isPending} className="ml-1 rounded-md px-3 py-1 text-xs font-bold" style={{ background: CRIMSON, color: "#fff" }}>
+                    {refreshScores.isPending ? "Generating…" : "Generate my rivalry scores"}
+                  </button>
+                </div>
+              )}
               <div className="mt-4 space-y-2">
                 {ranked.map((p, i) => {
                   const h = HEAT[p.heatLabel ?? "Cold"] ?? HEAT.Cold;
