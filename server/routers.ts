@@ -516,6 +516,7 @@ export const appRouter = router({
       type P = { a: string; b: string; aWins: number; aLosses: number; ties: number; meetings: number; playoff: number; close10: number; close5: number; firstSeason: number; lastSeason: number };
       const pairMap = new Map<string, P>();
       const ownerSet = new Set<string>();
+      const seasonsByOwner = new Map<string, Set<number>>();
       for (const season of seasons) {
         const row = await getCachedView(season, "combined", undefined, { userId });
         if (!row) continue;
@@ -545,6 +546,10 @@ export const appRouter = router({
           const as = Number(m.awayTotalPoints ?? 0);
           ownerSet.add(hName);
           ownerSet.add(aName);
+          if (!seasonsByOwner.has(hName)) seasonsByOwner.set(hName, new Set());
+          if (!seasonsByOwner.has(aName)) seasonsByOwner.set(aName, new Set());
+          seasonsByOwner.get(hName)!.add(season);
+          seasonsByOwner.get(aName)!.add(season);
           const [A, B] = [hName, aName].sort();
           const key = `${A}\u0000${B}`;
           let p = pairMap.get(key);
@@ -561,7 +566,8 @@ export const appRouter = router({
           if (aWon) p.aWins += 1; else p.aLosses += 1;
         }
       }
-      return { owners: [...ownerSet].sort(), pairs: [...pairMap.values()] };
+      const owners = [...seasonsByOwner.entries()].map(([name, set]) => ({ name, seasons: set.size })).sort((x, y) => x.name.localeCompare(y.name));
+      return { owners, pairs: [...pairMap.values()] };
     }),
 
     refresh: protectedProcedure.mutation(async ({ ctx }) => {
