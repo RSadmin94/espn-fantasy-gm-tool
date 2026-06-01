@@ -24,8 +24,21 @@ import {
   YAxis,
 } from "recharts";
 
-const ACCENT_RED = "rgba(248, 113, 113, 0.95)";
-const ACCENT_BLUE = "rgba(96, 165, 250, 0.95)";
+// ── theme (matches Command Dashboard / Rivalry Center) ───────────────────────
+const TEXT = "#f3f8ff";
+const MUTED = "#8b97a8";
+const GOLD = "#f5c518";
+const ACCENT = "#2dd4bf";
+const GREEN = "#22c55e";
+const RED = "#ef4444";
+const BLUE = "#55a7ff";
+const LINE = "rgba(255,255,255,0.07)";
+const PANEL: React.CSSProperties = { background: "linear-gradient(180deg,#141a24,#0e131c)", border: `1px solid ${LINE}`, borderRadius: 15 };
+const SUB: React.CSSProperties = { background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 10 };
+const FIELD: React.CSSProperties = { background: "#141a24", border: "1px solid rgba(255,255,255,.12)", color: TEXT };
+
+const CHART_FOCAL = ACCENT;
+const CHART_OPP = BLUE;
 
 const getErrorMessage = (err: unknown) =>
   err && typeof err === "object" && "message" in err
@@ -112,20 +125,20 @@ export function RivalryDossierPanel({
   }, [q.data?.opponents]);
 
   if (!queryKey) {
-    return <p className="text-sm text-muted-foreground">Select an owner to load the dossier.</p>;
+    return <p className="text-sm" style={{ color: MUTED }}>Select an owner to load the dossier.</p>;
   }
 
   if (q.isPending || q.isLoading) {
     return (
-      <div className="flex items-center gap-2 py-8 text-muted-foreground text-sm">
-        <Loader2 className="h-5 w-5 animate-spin" /> Loading rivalry dossier…
+      <div className="flex items-center gap-2 py-8 text-sm" style={{ color: MUTED }}>
+        <Loader2 className="h-5 w-5 animate-spin" /> Loading rivalry dossier\u2026
       </div>
     );
   }
 
   if (q.isError) {
     return (
-      <p className="text-sm text-destructive">
+      <p className="text-sm" style={{ color: RED }}>
         Could not load dossier: {getErrorMessage(q.error)}
       </p>
     );
@@ -134,8 +147,8 @@ export function RivalryDossierPanel({
   const data = q.data;
   if (!data) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No dossier for this owner — they may not resolve against gmTeams / gmMatchups yet.
+      <p className="text-sm" style={{ color: MUTED }}>
+        No dossier for this owner \u2014 they may not resolve against gmTeams / gmMatchups yet.
       </p>
     );
   }
@@ -144,57 +157,37 @@ export function RivalryDossierPanel({
   const oppRow = data.opponents.find((o) => o.opponentOwnerKey === opponentKey);
 
   return (
-    <div className="space-y-5 rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#0c1018] to-[#070a10] p-4 shadow-[0_0_40px_rgba(0,0,0,0.45)]">
+    <div className="space-y-5 p-4" style={{ ...PANEL, boxShadow: "0 0 40px rgba(0,0,0,0.45)" }}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-zinc-100">
-            <ScrollText className="h-4 w-4 text-sky-400/90" />
-            <h3 className="text-base font-bold uppercase tracking-[0.18em]">Rivalry Dossier</h3>
+          <div className="flex items-center gap-2" style={{ color: TEXT }}>
+            <ScrollText className="h-4 w-4" style={{ color: ACCENT }} />
+            <h3 className="text-base font-extrabold uppercase tracking-[0.18em]">Rivalry Dossier</h3>
           </div>
-          <p className="mt-1 text-[11px] text-zinc-500">
-            gmMatchups · completed games (RS + playoffs) · {data.matchupRowsUsed} deduped rows · season{" "}
-            {activeSeason ?? "—"}
+          <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
+            Completed games (RS + playoffs) \u00b7 {data.matchupRowsUsed} deduped rows \u00b7 season {activeSeason ?? "\u2014"}
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-6">
-          <div className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-black/30 px-3 py-2">
-            <Switch
-              id="hist-own"
-              checked={includeHistoricalOwners}
-              onCheckedChange={(v) => setIncludeHistoricalOwners(Boolean(v))}
-            />
-            <Label htmlFor="hist-own" className="cursor-pointer text-xs text-zinc-300">
-              Include Historical Owners
-            </Label>
+          <div className="flex items-center gap-2 rounded-[10px] px-3 py-2" style={SUB}>
+            <Switch id="hist-own" checked={includeHistoricalOwners} onCheckedChange={(v) => setIncludeHistoricalOwners(Boolean(v))} />
+            <Label htmlFor="hist-own" className="cursor-pointer text-xs" style={{ color: TEXT }}>Include Historical Owners</Label>
           </div>
           {filteredPickers.length > 0 && (
-            <label className="flex flex-col gap-1 text-xs text-zinc-500">
+            <label className="flex flex-col gap-1 text-xs" style={{ color: MUTED }}>
               <span>Focal owner</span>
-              <select
-                className="rounded-md border border-white/[0.12] bg-[#0b0e14] px-2 py-1.5 text-sm text-zinc-100 min-w-[200px] max-w-full"
-                value={queryKey}
-                onChange={(e) => setQueryKey(e.target.value)}
-              >
-                {filteredPickers.map((o) => (
-                  <option key={o.ownerKey} value={o.ownerKey}>
-                    {o.label}
-                  </option>
-                ))}
+              <select className="rounded-md px-2 py-1.5 text-sm min-w-[200px] max-w-full" style={FIELD} value={queryKey} onChange={(e) => setQueryKey(e.target.value)}>
+                {filteredPickers.map((o) => (<option key={o.ownerKey} value={o.ownerKey}>{o.label}</option>))}
               </select>
             </label>
           )}
           {data.opponents.length > 0 && (
-            <label className="flex flex-col gap-1 text-xs text-zinc-500">
+            <label className="flex flex-col gap-1 text-xs" style={{ color: MUTED }}>
               <span>Rival</span>
-              <select
-                className="rounded-md border border-white/[0.12] bg-[#0b0e14] px-2 py-1.5 text-sm text-zinc-100 min-w-[200px] max-w-full"
-                value={opponentKey}
-                onChange={(e) => setOpponentKey(e.target.value)}
-              >
+              <select className="rounded-md px-2 py-1.5 text-sm min-w-[200px] max-w-full" style={FIELD} value={opponentKey} onChange={(e) => setOpponentKey(e.target.value)}>
                 {data.opponents.map((o) => (
                   <option key={o.opponentOwnerKey} value={o.opponentOwnerKey}>
-                    {o.opponentDisplayName} ({o.wins}–{o.losses}
-                    {o.ties ? `–${o.ties}` : ""})
+                    {o.opponentDisplayName} ({o.wins}\u2013{o.losses}{o.ties ? `\u2013${o.ties}` : ""})
                   </option>
                 ))}
               </select>
@@ -204,70 +197,52 @@ export function RivalryDossierPanel({
       </div>
 
       {!pd || !oppRow ? (
-        <p className="rounded-lg border border-dashed border-white/[0.12] py-10 text-center text-sm text-zinc-500">
+        <p className="rounded-[10px] border border-dashed py-10 text-center text-sm" style={{ borderColor: "rgba(255,255,255,.12)", color: MUTED }}>
           {data.opponents.length === 0
             ? "No head-to-head opponents match the current filters."
             : "Select a rival with recorded games to view the dossier."}
         </p>
       ) : (
         <>
-          {/* Hero */}
+          {/* Hero: focal vs opponent */}
           <div className="relative grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-stretch">
-            <div
-              className={cn(
-                "relative overflow-hidden rounded-2xl border p-4 shadow-[0_0_24px_rgba(239,68,68,0.12)]",
-                "border-red-500/40 bg-gradient-to-br from-red-950/40 to-transparent",
-              )}
-            >
-              <div className="pointer-events-none absolute inset-0 opacity-[0.07] bg-[radial-gradient(circle_at_20%_20%,#f87171,transparent_55%)]" />
+            <div className="relative overflow-hidden p-4" style={{ ...SUB, borderTop: `3px solid ${ACCENT}` }}>
               <div className="relative flex items-start gap-3">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-red-400/50 bg-red-950/60 text-lg font-bold text-red-100">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-black" style={{ border: `2px solid ${ACCENT}66`, background: "rgba(45,212,191,.10)", color: ACCENT }}>
                   {initials(pd.focalDisplayName)}
                 </div>
                 <div className="min-w-0 space-y-1">
-                  <div className="truncate text-lg font-semibold text-zinc-50">{pd.focalDisplayName}</div>
-                  <div className="inline-flex items-center gap-1 rounded border border-red-500/35 bg-red-950/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-200/90">
+                  <div className="truncate text-lg font-bold" style={{ color: TEXT }}>{pd.focalDisplayName}</div>
+                  <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ border: `1px solid ${ACCENT}55`, background: "rgba(45,212,191,.10)", color: ACCENT }}>
                     {pd.focalTag}
                   </div>
-                  <p className="text-[11px] text-zinc-400">
-                    Active since {pd.firstMeetingSeason ?? "—"}
-                  </p>
-                  <p className="text-sm font-medium tabular-nums text-zinc-200">
-                    Record vs {pd.opponentDisplayName}: {pd.recordFocalVs.wins}–{pd.recordFocalVs.losses}
-                    {pd.recordFocalVs.ties ? `–${pd.recordFocalVs.ties}` : ""}
+                  <p className="text-[11px]" style={{ color: MUTED }}>Active since {pd.firstMeetingSeason ?? "\u2014"}</p>
+                  <p className="text-sm font-medium tabular-nums" style={{ color: TEXT }}>
+                    Record vs {pd.opponentDisplayName}: {pd.recordFocalVs.wins}\u2013{pd.recordFocalVs.losses}{pd.recordFocalVs.ties ? `\u2013${pd.recordFocalVs.ties}` : ""}
                   </p>
                 </div>
               </div>
             </div>
 
             <div className="flex items-center justify-center py-2 lg:py-0">
-              <div className="flex h-20 w-20 items-center justify-center rounded-xl border-2 border-amber-400/50 bg-gradient-to-br from-amber-500/20 to-amber-900/10 text-xl font-black italic tracking-tight text-amber-200 shadow-[0_0_20px_rgba(250,204,21,0.15)]">
+              <div className="flex h-20 w-20 items-center justify-center rounded-xl text-xl font-black italic tracking-tight" style={{ border: `2px solid ${GOLD}55`, background: "rgba(245,198,90,.10)", color: GOLD }}>
                 VS
               </div>
             </div>
 
-            <div
-              className={cn(
-                "relative overflow-hidden rounded-2xl border p-4 shadow-[0_0_24px_rgba(59,130,246,0.12)]",
-                "border-blue-500/40 bg-gradient-to-bl from-blue-950/40 to-transparent",
-              )}
-            >
-              <div className="pointer-events-none absolute inset-0 opacity-[0.07] bg-[radial-gradient(circle_at_80%_20%,#60a5fa,transparent_55%)]" />
+            <div className="relative overflow-hidden p-4" style={{ ...SUB, borderTop: `3px solid ${BLUE}` }}>
               <div className="relative flex items-start gap-3">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-blue-400/50 bg-blue-950/60 text-lg font-bold text-blue-100">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-black" style={{ border: `2px solid ${BLUE}66`, background: "rgba(85,167,255,.10)", color: BLUE }}>
                   {initials(pd.opponentDisplayName)}
                 </div>
                 <div className="min-w-0 space-y-1">
-                  <div className="truncate text-lg font-semibold text-zinc-50">{pd.opponentDisplayName}</div>
-                  <div className="inline-flex items-center gap-1 rounded border border-blue-500/35 bg-blue-950/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-200/90">
+                  <div className="truncate text-lg font-bold" style={{ color: TEXT }}>{pd.opponentDisplayName}</div>
+                  <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ border: `1px solid ${BLUE}55`, background: "rgba(85,167,255,.10)", color: BLUE }}>
                     {pd.opponentTag}
                   </div>
-                  <p className="text-[11px] text-zinc-400">
-                    Active since {pd.firstMeetingSeason ?? "—"}
-                  </p>
-                  <p className="text-sm font-medium tabular-nums text-zinc-200">
-                    Record vs {pd.focalDisplayName}: {pd.recordFocalVs.losses}–{pd.recordFocalVs.wins}
-                    {pd.recordFocalVs.ties ? `–${pd.recordFocalVs.ties}` : ""}
+                  <p className="text-[11px]" style={{ color: MUTED }}>Active since {pd.firstMeetingSeason ?? "\u2014"}</p>
+                  <p className="text-sm font-medium tabular-nums" style={{ color: TEXT }}>
+                    Record vs {pd.focalDisplayName}: {pd.recordFocalVs.losses}\u2013{pd.recordFocalVs.wins}{pd.recordFocalVs.ties ? `\u2013${pd.recordFocalVs.ties}` : ""}
                   </p>
                 </div>
               </div>
@@ -276,81 +251,39 @@ export function RivalryDossierPanel({
 
           {/* Stat strip */}
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <StatCard
-              icon={<Swords className="h-4 w-4 text-zinc-400" />}
-              label="All-Time Record"
-              value={`${pd.recordFocalVs.wins}–${pd.recordFocalVs.losses}${pd.recordFocalVs.ties ? `–${pd.recordFocalVs.ties}` : ""}`}
-              sub="Head-to-head (RS + playoffs)"
-            />
-            <StatCard
-              icon={<HeartCrack className="h-4 w-4 text-rose-400" />}
-              label="Heartbreak Index"
-              value={String(pd.heartbreakLossesFocal)}
-              sub="Losses by ≤3 pts"
-              valueClass="text-rose-300"
-            />
-            <StatCard
-              icon={<Calendar className="h-4 w-4 text-zinc-400" />}
-              label="Last Meeting"
-              value={pd.lastMeeting ? `${pd.lastMeeting.season} · Wk ${pd.lastMeeting.week}` : "—"}
-              sub={
-                pd.lastMeeting
-                  ? `${pd.lastMeeting.result} ${pd.lastMeeting.ownerScore.toFixed(1)}–${pd.lastMeeting.opponentScore.toFixed(1)}`
-                  : "—"
-              }
-            />
-            <StatCard
-              icon={<Trophy className="h-4 w-4 text-amber-400/90" />}
-              label="Playoff Encounters"
-              value={String(pd.playoffEncounters)}
-              sub="From playoff gmMatchups"
-            />
-            <StatCard
-              icon={<Crosshair className="h-4 w-4 text-zinc-400" />}
-              label="Waiver Snipes"
-              value={pd.waiverSnipes.available ? String(pd.waiverSnipes.count) : "—"}
-              sub={pd.waiverSnipes.available ? "Detected from transactions" : pd.waiverSnipes.label}
-            />
+            <StatCard icon={<Swords className="h-4 w-4" style={{ color: MUTED }} />} label="All-Time Record" value={`${pd.recordFocalVs.wins}\u2013${pd.recordFocalVs.losses}${pd.recordFocalVs.ties ? `\u2013${pd.recordFocalVs.ties}` : ""}`} sub="Head-to-head (RS + playoffs)" />
+            <StatCard icon={<HeartCrack className="h-4 w-4" style={{ color: RED }} />} label="Heartbreak Index" value={String(pd.heartbreakLossesFocal)} sub="Losses by \u22643 pts" valueColor={RED} />
+            <StatCard icon={<Calendar className="h-4 w-4" style={{ color: MUTED }} />} label="Last Meeting" value={pd.lastMeeting ? `${pd.lastMeeting.season} \u00b7 Wk ${pd.lastMeeting.week}` : "\u2014"} sub={pd.lastMeeting ? `${pd.lastMeeting.result} ${pd.lastMeeting.ownerScore.toFixed(1)}\u2013${pd.lastMeeting.opponentScore.toFixed(1)}` : "\u2014"} />
+            <StatCard icon={<Trophy className="h-4 w-4" style={{ color: GOLD }} />} label="Playoff Encounters" value={String(pd.playoffEncounters)} sub="From playoff gmMatchups" />
+            <StatCard icon={<Crosshair className="h-4 w-4" style={{ color: ACCENT }} />} label="Waiver Snipes" value={pd.waiverSnipes.available ? String(pd.waiverSnipes.count) : "\u2014"} sub={pd.waiverSnipes.available ? "Detected from transactions" : pd.waiverSnipes.label} />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
             {/* H2H table */}
-            <div className="rounded-xl border border-white/[0.08] bg-black/25 p-3">
-              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                <ChartLine className="h-4 w-4" />
+            <div className="p-3" style={SUB}>
+              <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+                <ChartLine className="h-4 w-4" style={{ color: ACCENT }} />
                 Head-to-Head History
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[420px] text-left text-[11px]">
                   <thead>
-                    <tr className="border-b border-white/[0.08] text-[10px] uppercase tracking-wide text-zinc-500">
+                    <tr className="border-b text-[10px] uppercase tracking-wide" style={{ borderColor: LINE, color: MUTED }}>
                       <th className="py-2 pr-2">Season</th>
                       <th className="py-2 pr-2">Week</th>
-                      <th className="py-2 pr-2 text-right text-red-200/90">{pd.focalDisplayName}</th>
-                      <th className="py-2 pr-2 text-right text-blue-200/90">{pd.opponentDisplayName}</th>
+                      <th className="py-2 pr-2 text-right" style={{ color: ACCENT }}>{pd.focalDisplayName}</th>
+                      <th className="py-2 pr-2 text-right" style={{ color: BLUE }}>{pd.opponentDisplayName}</th>
                       <th className="py-2 text-center">Result</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pd.headToHeadHistory.map((g, i) => (
-                      <tr key={`${g.season}-${g.matchupPeriodId}-${i}`} className="border-b border-white/[0.04] text-zinc-300">
+                      <tr key={`${g.season}-${g.matchupPeriodId}-${i}`} className="border-b" style={{ borderColor: "rgba(255,255,255,.04)", color: TEXT }}>
                         <td className="py-1.5 pr-2 tabular-nums">{g.season}</td>
-                        <td className="py-1.5 pr-2">
-                          {g.week}
-                          {g.isPlayoff ? <span className="text-amber-400/90"> (P)</span> : null}
-                        </td>
-                        <td className="py-1.5 pr-2 text-right tabular-nums text-red-200/90">{g.ownerScore.toFixed(1)}</td>
-                        <td className="py-1.5 pr-2 text-right tabular-nums text-blue-200/90">{g.opponentScore.toFixed(1)}</td>
-                        <td
-                          className={cn(
-                            "py-1.5 text-center font-bold",
-                            g.result === "W" && "text-emerald-400",
-                            g.result === "L" && "text-rose-400",
-                            g.result === "T" && "text-zinc-500",
-                          )}
-                        >
-                          {g.result}
-                        </td>
+                        <td className="py-1.5 pr-2">{g.week}{g.isPlayoff ? <span style={{ color: GOLD }}> (P)</span> : null}</td>
+                        <td className="py-1.5 pr-2 text-right tabular-nums" style={{ color: ACCENT }}>{g.ownerScore.toFixed(1)}</td>
+                        <td className="py-1.5 pr-2 text-right tabular-nums" style={{ color: BLUE }}>{g.opponentScore.toFixed(1)}</td>
+                        <td className="py-1.5 text-center font-bold" style={{ color: g.result === "W" ? GREEN : g.result === "L" ? RED : MUTED }}>{g.result}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -359,20 +292,17 @@ export function RivalryDossierPanel({
             </div>
 
             {/* Insights */}
-            <div className="rounded-xl border border-amber-500/25 bg-amber-950/10 p-3">
-              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200/90">
+            <div className="p-3" style={SUB}>
+              <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: GOLD }}>
                 <Lightbulb className="h-4 w-4" />
                 Rivalry Insights
               </div>
               {pd.insights.length === 0 ? (
-                <p className="text-sm text-zinc-500">Not enough data for rivalry insights yet.</p>
+                <p className="text-sm" style={{ color: MUTED }}>Not enough data for rivalry insights yet.</p>
               ) : (
                 <ul className="space-y-2">
                   {pd.insights.map((line, i) => (
-                    <li
-                      key={i}
-                      className="rounded-lg border border-amber-500/20 bg-black/20 px-3 py-2 text-sm leading-snug text-zinc-200"
-                    >
+                    <li key={i} className="rounded-[8px] px-3 py-2 text-sm leading-snug" style={{ border: `1px solid ${GOLD}26`, background: "rgba(245,198,90,.06)", color: TEXT }}>
                       {line}
                     </li>
                   ))}
@@ -383,9 +313,9 @@ export function RivalryDossierPanel({
 
           {/* Rivalry Timeline (from head-to-head history) */}
           {pd.headToHeadHistory.length > 0 && (
-            <div className="rounded-xl border border-white/[0.08] bg-black/25 p-3">
-              <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                <Calendar className="h-4 w-4" />
+            <div className="p-3" style={SUB}>
+              <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+                <Calendar className="h-4 w-4" style={{ color: ACCENT }} />
                 Rivalry Timeline
               </div>
               {(() => {
@@ -402,9 +332,9 @@ export function RivalryDossierPanel({
                 if (firstPlayoff)
                   evs.push({ season: firstPlayoff.season, title: "First Playoff Meeting", detail: fmt(firstPlayoff) });
                 if (closest)
-                  evs.push({ season: closest.season, title: "Closest Game", detail: `${Math.abs(closest.margin).toFixed(1)} pt margin · ${fmt(closest)}` });
+                  evs.push({ season: closest.season, title: "Closest Game", detail: `${Math.abs(closest.margin).toFixed(1)} pt margin \u00b7 ${fmt(closest)}` });
                 if (blowout && Math.abs(blowout.margin) > 0)
-                  evs.push({ season: blowout.season, title: "Biggest Blowout", detail: `${Math.abs(blowout.margin).toFixed(1)} pt margin · ${fmt(blowout)}` });
+                  evs.push({ season: blowout.season, title: "Biggest Blowout", detail: `${Math.abs(blowout.margin).toFixed(1)} pt margin \u00b7 ${fmt(blowout)}` });
                 if (pd.lastMeeting)
                   evs.push({ season: pd.lastMeeting.season, title: "Latest Showdown", detail: fmt(pd.lastMeeting) });
                 const seen = new Set<string>();
@@ -413,15 +343,15 @@ export function RivalryDossierPanel({
                   .sort((a, b) => a.season - b.season);
                 if (items.length === 0) return null;
                 return (
-                  <ol className="relative ml-2 border-l border-white/15 pl-4">
+                  <ol className="relative ml-2 border-l pl-4" style={{ borderColor: "rgba(255,255,255,.15)" }}>
                     {items.map((e, i) => (
                       <li key={i} className="mb-3 last:mb-0">
-                        <span className="absolute -left-[5px] mt-1 h-2.5 w-2.5 rounded-full" style={{ background: "rgba(248,113,113,0.9)" }} />
+                        <span className="absolute -left-[5px] mt-1 h-2.5 w-2.5 rounded-full" style={{ background: ACCENT }} />
                         <div className="flex items-baseline gap-2">
-                          <span className="text-sm font-black text-zinc-100">{e.season}</span>
-                          <span className="text-xs font-bold uppercase tracking-wide text-zinc-300">{e.title}</span>
+                          <span className="text-sm font-black" style={{ color: TEXT }}>{e.season}</span>
+                          <span className="text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>{e.title}</span>
                         </div>
-                        <div className="text-xs text-zinc-500">{e.detail}</div>
+                        <div className="text-xs" style={{ color: MUTED }}>{e.detail}</div>
                       </li>
                     ))}
                   </ol>
@@ -431,9 +361,9 @@ export function RivalryDossierPanel({
           )}
 
           {/* Chart */}
-          <div className="rounded-xl border border-white/[0.08] bg-black/25 p-3">
-            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-              <ChartLine className="h-4 w-4" />
+          <div className="p-3" style={SUB}>
+            <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+              <ChartLine className="h-4 w-4" style={{ color: ACCENT }} />
               Matchup History Chart
             </div>
             {pd.chartSeries.length >= 2 ? (
@@ -441,37 +371,21 @@ export function RivalryDossierPanel({
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={pd.chartSeries} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="label" tick={{ fill: "#71717a", fontSize: 9 }} interval="preserveStartEnd" />
-                    <YAxis domain={["auto", "auto"]} tick={{ fill: "#71717a", fontSize: 10 }} width={36} />
-                    <Tooltip
-                      contentStyle={{ background: "#0b0e14", border: "1px solid rgba(255,255,255,0.1)", fontSize: 11 }}
-                      labelStyle={{ color: "#a1a1aa" }}
-                    />
-                    <Line type="monotone" dataKey="ownerScore" name={pd.focalDisplayName} stroke={ACCENT_RED} dot={false} strokeWidth={2} />
-                    <Line
-                      type="monotone"
-                      dataKey="opponentScore"
-                      name={pd.opponentDisplayName}
-                      stroke={ACCENT_BLUE}
-                      dot={false}
-                      strokeWidth={2}
-                    />
+                    <XAxis dataKey="label" tick={{ fill: MUTED, fontSize: 9 }} interval="preserveStartEnd" />
+                    <YAxis domain={["auto", "auto"]} tick={{ fill: MUTED, fontSize: 10 }} width={36} />
+                    <Tooltip contentStyle={{ background: "#141a24", border: "1px solid rgba(255,255,255,0.1)", fontSize: 11 }} labelStyle={{ color: MUTED }} />
+                    <Line type="monotone" dataKey="ownerScore" name={pd.focalDisplayName} stroke={CHART_FOCAL} dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="opponentScore" name={pd.opponentDisplayName} stroke={CHART_OPP} dot={false} strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
-                <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-zinc-500">
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-4 rounded-sm" style={{ background: ACCENT_RED }} />
-                    {pd.focalDisplayName}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-4 rounded-sm" style={{ background: ACCENT_BLUE }} />
-                    {pd.opponentDisplayName}
-                  </span>
+                <div className="mt-2 flex flex-wrap gap-3 text-[10px]" style={{ color: MUTED }}>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-4 rounded-sm" style={{ background: CHART_FOCAL }} />{pd.focalDisplayName}</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-4 rounded-sm" style={{ background: CHART_OPP }} />{pd.opponentDisplayName}</span>
                 </div>
               </div>
             ) : (
-              <div className="flex min-h-[140px] items-center justify-center rounded-lg border border-dashed border-white/[0.08] text-sm text-zinc-500">
-                Matchup History Chart — Coming Soon
+              <div className="flex min-h-[140px] items-center justify-center rounded-[8px] border border-dashed text-sm" style={{ borderColor: "rgba(255,255,255,.08)", color: MUTED }}>
+                Matchup History Chart \u2014 Coming Soon
               </div>
             )}
           </div>
@@ -486,22 +400,22 @@ function StatCard({
   label,
   value,
   sub,
-  valueClass,
+  valueColor,
 }: {
   icon: ReactNode;
   label: string;
   value: string;
   sub: string;
-  valueClass?: string;
+  valueColor?: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-black/30 px-3 py-2.5">
-      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+    <div className="px-3 py-2.5" style={SUB}>
+      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>
         {icon}
         {label}
       </div>
-      <div className={cn("mt-1 text-xl font-bold tabular-nums text-zinc-50", valueClass)}>{value}</div>
-      <div className="mt-0.5 text-[10px] leading-snug text-zinc-500">{sub}</div>
+      <div className="mt-1 text-xl font-extrabold tabular-nums" style={{ color: valueColor ?? TEXT }}>{value}</div>
+      <div className="mt-0.5 text-[10px] leading-snug" style={{ color: MUTED }}>{sub}</div>
     </div>
   );
 }

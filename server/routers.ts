@@ -504,14 +504,51 @@ export const appRouter = router({
         if (ROD_NAMES.some(n => name.toLowerCase().includes(n))) { rodMemberId = m.id as string; break; }
       }
       if (!rodMemberId) return [];
-      return getRivalryScoresFromDb(rodMemberId);
+      const rodName = (() => {
+        for (const m of members) {
+          if (m.id === rodMemberId) {
+            return `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || "";
+          }
+        }
+        return "";
+      })();
+      const scores = await getRivalryScoresFromDb(rodMemberId);
+      // Attach canonical owner-keys so the dossier popup resolves (gmTeams.ownerId === ESPN memberId).
+      const { leagueId: scoreLid } = await resolveActiveLeagueId(
+        { user: ctx.user?.id ? { id: ctx.user.id } : undefined }, null, undefined,
+      );
+      const lid = scoreLid || "457622";
+      const db = await getDb();
+      const allGmRows = db
+        ? ((await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))) as GmTeamRow[])
+        : [];
+      const remap = buildRawKeyToCanonicalProfileKey(allGmRows);
+      const nameToOwnerId = buildNameToOwnerId(allGmRows);
+      const canonicalForMember = (mid: string, nm: string): string => {
+        const direct = remap.get(`id:${mid}`);
+        if (direct) return direct;
+        const raw = resolveOwnerKey("", nm, nm, nameToOwnerId);
+        return remap.get(raw) ?? raw;
+      };
+      const focalKey = canonicalForMember(rodMemberId, rodName);
+      return scores.map((p) => ({
+        ...p,
+        focalKey,
+        rivalKey: canonicalForMember(String(p.rivalId), String(p.rivalName ?? "")),
+      }));
     }),
     /** Compute and persist rivalry scores (manual trigger) */
     /** All-time head-to-head by owner identity, computed from the ESPN combined cache (same source the Matchups tab falls back to). */
     h2h: publicProcedure.query(async ({ ctx }) => {
       const userId = ctx.user?.id ?? undefined;
+      const { leagueId: h2hLid } = await resolveActiveLeagueId(
+        { user: userId != null ? { id: userId } : undefined }, null, undefined,
+      );
+      const lid = h2hLid || "457622";
+      // Cache the whole all-pairs scan (≈18 sequential cache reads) for 10 min, per league/user.
+      return memCache(`rivalryH2H:${lid}:${userId ?? "anon"}`, 10 * 60_000, async () => {
       const seasons = await getAllCachedSeasons(undefined, userId);
-      if (!seasons.length) return { owners: [] as string[], pairs: [] as Array<Record<string, unknown>> };
+      if (!seasons.length) return { owners: [] as Array<{ name: string; seasons: number; ownerKey: string }>, pairs: [] as Array<Record<string, unknown>> };
       const memberName = new Map<string, string>();
       type P = { a: string; b: string; aWins: number; aLosses: number; ties: number; meetings: number; playoff: number; close10: number; close5: number; firstSeason: number; lastSeason: number };
       const pairMap = new Map<string, P>();
@@ -566,8 +603,35 @@ export const appRouter = router({
           if (aWon) p.aWins += 1; else p.aLosses += 1;
         }
       }
-      const owners = [...seasonsByOwner.entries()].map(([name, set]) => ({ name, seasons: set.size })).sort((x, y) => x.name.localeCompare(y.name));
-      return { owners, pairs: [...pairMap.values()] };
+      // Canonical owner-key bridge so the dossier popup resolves cleanly.
+      // gmTeams.ownerId === ESPN memberId, so remap.get(`id:${memberId}`) yields the
+      // exact canonical key loadRivalryDossier expects; fall back to a name bridge.
+      const db = await getDb();
+      const allGmRows = db
+        ? ((await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))) as GmTeamRow[])
+        : [];
+      const remap = buildRawKeyToCanonicalProfileKey(allGmRows);
+      const nameToOwnerId = buildNameToOwnerId(allGmRows);
+      const canonicalForMember = (mid: string, nm: string): string => {
+        const direct = remap.get(`id:${mid}`);
+        if (direct) return direct;
+        const raw = resolveOwnerKey("", nm, nm, nameToOwnerId);
+        return remap.get(raw) ?? raw;
+      };
+      const canonByName = new Map<string, string>();
+      for (const [mid, nm] of memberName) {
+        if (!canonByName.has(nm)) canonByName.set(nm, canonicalForMember(String(mid), nm));
+      }
+      const owners = [...seasonsByOwner.entries()]
+        .map(([name, set]) => ({ name, seasons: set.size, ownerKey: canonByName.get(name) ?? "" }))
+        .sort((x, y) => x.name.localeCompare(y.name));
+      const pairs = [...pairMap.values()].map((p) => ({
+        ...p,
+        aKey: canonByName.get(p.a) ?? "",
+        bKey: canonByName.get(p.b) ?? "",
+      }));
+      return { owners, pairs };
+      });
     }),
 
     refresh: protectedProcedure.mutation(async ({ ctx }) => {

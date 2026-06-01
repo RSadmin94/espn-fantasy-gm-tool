@@ -14,20 +14,33 @@ import {
   Crosshair,
   Crown,
   ScrollText,
+  Users,
+  RefreshCw,
   X,
   ChevronRight,
 } from "lucide-react";
 
-// ── theme (editorial: ESPN / NFL Films / The Athletic — not neon) ───────────
+// ── theme (matches Command Dashboard: dark slate panels, teal accent) ────────
 const INK = "#0a0e16";
-const PAGEBG = "radial-gradient(circle at 80% -10%,rgba(45,212,191,.16),transparent 42%),linear-gradient(180deg,#0a0e16,#070a11)";
+const PAGEBG: React.CSSProperties = {
+  background:
+    "radial-gradient(circle at 80% -10%,rgba(45,212,191,.16),transparent 42%),linear-gradient(180deg,#0a0e16,#070a11)",
+  color: "#f3f8ff",
+};
 const PAPER = "linear-gradient(180deg,#141a24,#0e131c)";
 const PAPER2 = "#141a24";
 const LINE = "rgba(255,255,255,0.07)";
 const TEXT = "#f3f8ff";
 const MUTED = "#8b97a8";
-const CRIMSON = "#e23b3b";
 const GOLD = "#f5c518";
+const ACCENT = "#2dd4bf";
+const GREEN = "#22c55e";
+const RED = "#ef4444";
+const ORANGE = "#f7902f";
+const BLUE = "#55a7ff";
+const CRIMSON = "#e23b3b";
+const PANEL: React.CSSProperties = { background: PAPER, border: `1px solid ${LINE}`, borderRadius: 15 };
+const SUB: React.CSSProperties = { background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 10 };
 
 const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell", "rod s"];
 
@@ -61,16 +74,57 @@ type Pair = {
   loreSentence?: string | null;
   rivalPlayoffWins?: number;
   rivalPlayoffLosses?: number;
+  /** Canonical owner-keys from rivalry.getScores — used to open the dossier reliably. */
+  focalKey?: string;
+  rivalKey?: string;
 };
 
-function Kicker({ children }: { children: React.ReactNode }) {
+function Pill({ children, gold }: { children: React.ReactNode; gold?: boolean }) {
   return (
-    <div
-      className="text-[11px] font-bold uppercase tracking-[0.32em]"
-      style={{ color: MUTED }}
+    <span
+      className="px-4 py-2.5 rounded-[10px] text-[13px] font-extrabold inline-flex items-center"
+      style={
+        gold
+          ? { color: GOLD, border: "1px solid rgba(245,198,90,.46)", background: "rgba(245,198,90,.10)" }
+          : { border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: TEXT }
+      }
     >
       {children}
+    </span>
+  );
+}
+
+function SectionHead({
+  icon: Icon,
+  title,
+  caption,
+  right,
+  iconColor = ACCENT,
+}: {
+  icon: any;
+  title: string;
+  caption?: string;
+  right?: React.ReactNode;
+  iconColor?: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2">
+          <Icon className="h-5 w-5" style={{ color: iconColor }} /> {title}
+        </h3>
+        {caption && <p className="mt-1 text-xs" style={{ color: MUTED }}>{caption}</p>}
+      </div>
+      {right}
     </div>
+  );
+}
+
+function Panel({ children, className = "", id }: { children: React.ReactNode; className?: string; id?: string }) {
+  return (
+    <section id={id} style={PANEL} className={`overflow-hidden ${className}`}>
+      <div className="p-[18px] md:p-5">{children}</div>
+    </section>
   );
 }
 
@@ -115,6 +169,11 @@ export function RivalryCenter() {
     [allOwners],
   );
 
+  const activeSeason = useMemo(() => {
+    const c: number[] = cachedQ.data ?? [];
+    return c.length ? Math.max(...c) : new Date().getFullYear();
+  }, [cachedQ.data]);
+
   const eligible = useMemo(
     () =>
       buildDefaultRivalryEligibleOwnerKeys(
@@ -123,14 +182,10 @@ export function RivalryCenter() {
           seasons: Array.isArray(o.seasons) ? o.seasons : [],
           championships: n(o.championships),
         })),
+        activeSeason,
       ),
-    [allOwners],
+    [allOwners, activeSeason],
   );
-
-  const activeSeason = useMemo(() => {
-    const c: number[] = cachedQ.data ?? [];
-    return c.length ? Math.max(...c) : new Date().getFullYear();
-  }, [cachedQ.data]);
 
   const nameToKey = useMemo(() => {
     const m: Record<string, string> = {};
@@ -166,7 +221,16 @@ export function RivalryCenter() {
     const pairs: any[] = Array.isArray(data.pairs) ? data.pairs : [];
     const nameToKey = new Map<string, string>();
     for (const o of allOwners) nameToKey.set(String(o.ownerName ?? "").trim().toLowerCase(), o.ownerKey);
-    const keyFor = (name: string) => nameToKey.get(String(name).trim().toLowerCase()) ?? String(name);
+    // Prefer the canonical ownerKey the server attached to each h2h owner row; fall back to name match.
+    const serverKeyByName = new Map<string, string>();
+    for (const o of ownersRaw) {
+      const nm = String(o?.name ?? "").trim().toLowerCase();
+      if (nm && o?.ownerKey) serverKeyByName.set(nm, String(o.ownerKey));
+    }
+    const keyFor = (name: string) =>
+      serverKeyByName.get(String(name).trim().toLowerCase()) ??
+      nameToKey.get(String(name).trim().toLowerCase()) ??
+      String(name);
     const activeNames = ownersRaw.filter((o) => Number(o.seasons) >= 2).map((o) => String(o.name));
     const activeSet = new Set(activeNames);
     const keyOfName = new Map<string, string>();
@@ -230,8 +294,6 @@ export function RivalryCenter() {
     return out.filter((x) => (seen.has(x.title) ? false : (seen.add(x.title), true)));
   }, [leaguePairs]);
 
-
-
   const [open, setOpen] = useState<{ focalKey?: string; focalName?: string; rivalKey?: string; rivalName: string } | null>(null);
 
   useEffect(() => {
@@ -242,7 +304,12 @@ export function RivalryCenter() {
   }, [open]);
 
   const openDossier = (p: Pair) =>
-    setOpen({ focalKey: rodKey, focalName: "Rod", rivalKey: keyForRival(p), rivalName: String(p.rivalName ?? "Rival") });
+    setOpen({
+      focalKey: p.focalKey ?? rodKey,
+      focalName: "Rod",
+      rivalKey: p.rivalKey ?? keyForRival(p),
+      rivalName: String(p.rivalName ?? "Rival"),
+    });
 
   const loading = scoresQ.isLoading || listQ.isLoading;
   const allEmpty = !leagueLoading && leaguePairs.length === 0 && pairs.length === 0;
@@ -250,131 +317,104 @@ export function RivalryCenter() {
   const ranked = pairs.slice(0, 10);
 
   return (
-    <div
-      className="-m-4 min-h-full p-5 md:-m-6 md:p-7"
-      style={{ background: PAGEBG, color: TEXT }}
-    >
-      {/* ── Masthead ─────────────────────────────────────────────── */}
-      <header className="mx-auto max-w-6xl border-b pb-6" style={{ borderColor: LINE }}>
-        <div className="flex items-center gap-2" style={{ color: CRIMSON }}>
-          <Swords className="h-4 w-4" />
-          <span className="text-[11px] font-bold uppercase tracking-[0.4em]">GM War Room</span>
+    <div style={PAGEBG} className="-m-4 md:-m-6 p-5 md:p-7 min-h-full">
+      {/* ── Header (dashboard style) ─────────────────────────────── */}
+      <div className="mx-auto max-w-6xl flex flex-wrap items-start justify-between gap-4 mb-5">
+        <div>
+          <h2 className="text-3xl md:text-4xl font-black tracking-tight leading-none">Rivalry Center</h2>
+          <p className="mt-2 text-sm" style={{ color: MUTED }}>
+            Head-to-head records, heat, playoff scars, and the receipts behind every feud.
+          </p>
         </div>
-        <h1
-          className="mt-2 text-5xl font-black uppercase leading-[0.95] tracking-tight md:text-7xl"
-          style={{ color: TEXT }}
-        >
-          Rivalry Center
-        </h1>
-        <p className="mt-2 text-lg italic" style={{ color: MUTED }}>
-          Every feud has a history.
-        </p>
-      </header>
-
-      <main className="mx-auto max-w-6xl">
-        {loading ? (
-          <div className="py-24 text-center text-sm" style={{ color: MUTED }}>
-            Loading league rivalries…
-          </div>
-        ) : allEmpty ? (
-          <div
-            className="my-10 rounded-[12px] border p-10 text-center"
-            style={{ borderColor: LINE, background: PAPER }}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Pill gold>{activeSeason} Season</Pill>
+          <Pill>{(gridOwners.length || allOwners.length) ? `${gridOwners.length || allOwners.length} Owners` : "League"}</Pill>
+          <button
+            onClick={() => refreshScores.mutate()}
+            disabled={refreshScores.isPending}
+            className="px-3 py-2.5 rounded-[10px] text-[13px] font-extrabold inline-flex items-center gap-2"
+            style={{ border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: MUTED }}
           >
-            <Swords className="mx-auto mb-3 h-8 w-8" style={{ color: MUTED }} />
-            <div className="text-lg font-bold">No rivalry data yet</div>
-            <p className="mt-1 text-sm" style={{ color: MUTED }}>
-              Rivalry scores are computed from synced matchups, playoffs and trades. Sync more
-              seasons to light up the board.
-            </p>
-          </div>
+            <RefreshCw className="h-3.5 w-3.5" /> {refreshScores.isPending ? "Generating\u2026" : "Refresh"}
+          </button>
+        </div>
+      </div>
+
+      <main className="mx-auto max-w-6xl space-y-3">
+        {loading ? (
+          <Panel>
+            <div className="py-16 text-center text-sm" style={{ color: MUTED }}>Loading league rivalries\u2026</div>
+          </Panel>
+        ) : allEmpty ? (
+          <Panel>
+            <div className="py-12 text-center">
+              <Swords className="mx-auto mb-3 h-8 w-8" style={{ color: MUTED }} />
+              <div className="text-lg font-extrabold">No rivalry data yet</div>
+              <p className="mt-1 text-sm" style={{ color: MUTED }}>
+                Rivalry scores are computed from synced matchups, playoffs and trades. Sync more seasons to light up the board.
+              </p>
+            </div>
+          </Panel>
         ) : (
           <>
-            {/* ── SECTION 1 — Rivalry of the Year ──────────────────── */}
+            {/* ── Rivalry of the Year (featured) ─────────────────── */}
             {hero && (
-              <section className="mt-8">
-                <Kicker>Rivalry of the Year</Kicker>
-                <div
-                  className="mt-3 overflow-hidden rounded-[15px] border"
-                  style={{
-                    borderColor: `${CRIMSON}66`,
-                    background: `linear-gradient(135deg, ${PAPER2} 0%, ${INK} 70%)`,
-                    boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.03)`,
-                  }}
-                >
-                  <div className="flex flex-col gap-6 p-6 md:flex-row md:items-center md:p-8">
-                    <div className="flex-1">
-                      <div className="mb-2 flex items-center gap-3">
-                        <HeatBadge label={hero.heatLabel} />
-                        {hero.revengeAchieved === false && n(hero.playoffEliminations) > 0 && (
-                          <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: CRIMSON }}>
-                            Revenge pending
-                          </span>
-                        )}
-                      </div>
-                      <h2 className="text-4xl font-black leading-tight md:text-5xl">
-                        Rod <span style={{ color: MUTED }}>vs</span>{" "}
-                        <span style={{ color: CRIMSON }}>{String(hero.rivalName ?? "Rival")}</span>
-                      </h2>
-                      {hero.loreSentence && (
-                        <p className="mt-3 max-w-xl text-[15px] leading-relaxed" style={{ color: "#cfd2d8" }}>
-                          {hero.loreSentence}
-                        </p>
-                      )}
-                      <div className="mt-5 flex flex-wrap gap-3">
-                        <button
-                          onClick={() => openDossier(hero)}
-                          className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-bold"
-                          style={{ background: CRIMSON, color: "#fff" }}
-                        >
-                          View Full Rivalry <ChevronRight className="h-4 w-4" />
-                        </button>
-                        <a
-                          href="#receipts"
-                          className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-bold"
-                          style={{ borderColor: LINE, color: TEXT }}
-                        >
-                          View Receipts
-                        </a>
-                      </div>
-                    </div>
-                    <div
-                      className="flex shrink-0 flex-col items-center justify-center rounded-[12px] border px-8 py-6"
-                      style={{ borderColor: LINE, background: "rgba(0,0,0,0.25)" }}
-                    >
-                      <div className="text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>
-                        Rivalry Score
-                      </div>
-                      <div className="text-6xl font-black" style={{ color: GOLD }}>
-                        {n(hero.rivalryScore)}
-                      </div>
+              <Panel>
+                <SectionHead
+                  icon={Flame}
+                  title="Rivalry of the Year"
+                  caption="Your hottest active feud right now."
+                  right={<HeatBadge label={hero.heatLabel} />}
+                />
+                <div className="mt-4 flex flex-col gap-5 md:flex-row md:items-center">
+                  <div className="flex-1">
+                    <h3 className="text-3xl md:text-4xl font-black leading-tight">
+                      Rod <span style={{ color: MUTED }}>vs</span>{" "}
+                      <span style={{ color: ACCENT }}>{String(hero.rivalName ?? "Rival")}</span>
+                    </h3>
+                    {hero.revengeAchieved === false && n(hero.playoffEliminations) > 0 && (
+                      <span className="mt-2 inline-block text-[11px] font-bold uppercase tracking-wider" style={{ color: RED }}>
+                        Revenge pending
+                      </span>
+                    )}
+                    {hero.loreSentence && (
+                      <p className="mt-3 max-w-xl text-[15px] leading-relaxed" style={{ color: "#cfd2d8" }}>
+                        {hero.loreSentence}
+                      </p>
+                    )}
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <button
+                        onClick={() => openDossier(hero)}
+                        className="inline-flex items-center gap-2 rounded-[10px] px-4 py-2.5 text-sm font-extrabold"
+                        style={{ background: ACCENT, color: "#06231f" }}
+                      >
+                        View Full Rivalry <ChevronRight className="h-4 w-4" />
+                      </button>
+                      <a
+                        href="#receipts"
+                        className="inline-flex items-center gap-2 rounded-[10px] px-4 py-2.5 text-sm font-extrabold"
+                        style={{ border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: TEXT }}
+                      >
+                        View Receipts
+                      </a>
                     </div>
                   </div>
-                  <HeroStrip p={hero} />
+                  <div style={SUB} className="flex shrink-0 flex-col items-center justify-center px-8 py-6">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>Rivalry Score</div>
+                    <div className="text-6xl font-black" style={{ color: GOLD }}>{n(hero.rivalryScore)}</div>
+                  </div>
                 </div>
-              </section>
+                <div className="mt-4"><HeroStrip p={hero} /></div>
+              </Panel>
             )}
 
-            {/* ── SECTION 2 — Power Rankings ───────────────────────── */}
-            {/* League-wide all-pairs rankings */}
-            <section className="mt-12">
-              <div className="flex items-end justify-between border-b pb-2" style={{ borderColor: LINE }}>
-                <div>
-                  <Kicker>League Rivalry Power Rankings</Kicker>
-                  <h3 className="mt-1 text-2xl font-black uppercase tracking-tight">The Ledger</h3>
-                </div>
-                <span className="text-xs" style={{ color: MUTED }}>
-                  Every pairing in league history
-                </span>
-              </div>
+            {/* ── The Ledger (league-wide power rankings) ────────── */}
+            <Panel>
+              <SectionHead icon={Flame} title="The Ledger" caption="League rivalry power rankings \u2014 every pairing in league history." />
               {leagueLoading ? (
-                <div className="py-8 text-center text-sm" style={{ color: MUTED }}>
-                  Reading every head-to-head in league history…
-                </div>
+                <div className="py-8 text-center text-sm" style={{ color: MUTED }}>Reading every head-to-head in league history\u2026</div>
               ) : leaguePairs.length === 0 ? (
-                <p className="py-6 text-sm" style={{ color: MUTED }}>
-                  Not enough cross-league matchup history yet.
-                </p>
+                <p className="py-6 text-sm" style={{ color: MUTED }}>Not enough cross-league matchup history yet.</p>
               ) : (
                 <div className="mt-4 space-y-2">
                   {leaguePairs.slice(0, 10).map((lp, i) => {
@@ -383,18 +423,14 @@ export function RivalryCenter() {
                       <button
                         key={lp.key}
                         onClick={() => openLeague(lp)}
-                        className="group flex w-full items-center gap-4 rounded-[12px] border p-4 text-left"
-                        style={{ borderColor: LINE, background: PAPER }}
+                        style={SUB}
+                        className="group flex w-full items-center gap-4 p-4 text-left transition-colors hover:brightness-125"
                       >
-                        <div className="w-9 shrink-0 text-center text-2xl font-black" style={{ color: i === 0 ? GOLD : MUTED }}>
-                          {i + 1}
-                        </div>
+                        <div className="w-9 shrink-0 text-center text-2xl font-black" style={{ color: i === 0 ? GOLD : MUTED }}>{i + 1}</div>
                         <div className="h-10 w-1 shrink-0 rounded-full" style={{ background: h.c }} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="truncate text-lg font-bold">
-                              {lp.aName} <span style={{ color: MUTED }}>vs</span> {lp.bName}
-                            </span>
+                            <span className="truncate text-lg font-bold">{lp.aName} <span style={{ color: MUTED }}>vs</span> {lp.bName}</span>
                             <HeatBadge label={lp.heat} />
                           </div>
                           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs" style={{ color: MUTED }}>
@@ -414,23 +450,21 @@ export function RivalryCenter() {
                   })}
                 </div>
               )}
-            </section>
+            </Panel>
 
-            <section className="mt-12">
-              <div className="flex items-end justify-between border-b pb-2" style={{ borderColor: LINE }}>
-                <div>
-                  <Kicker>Rod’s Rivalries</Kicker>
-                  <h3 className="mt-1 text-2xl font-black uppercase tracking-tight">Your Feuds</h3>
-                </div>
-                <span className="text-xs" style={{ color: MUTED }}>
-                  Tap any rivalry for the full dossier
-                </span>
-              </div>
+            {/* ── Your Feuds (Rod's personalized rivalries) ──────── */}
+            <Panel>
+              <SectionHead icon={Swords} title="Your Feuds" caption="Tap any rivalry for the full dossier." />
               {ranked.length === 0 && (
-                <div className="mt-4 rounded-[12px] border p-5 text-sm" style={{ borderColor: LINE, background: PAPER, color: MUTED }}>
-                  Your personalized rivalry scores haven’t been generated yet.{" "}
-                  <button onClick={() => refreshScores.mutate()} disabled={refreshScores.isPending} className="ml-1 rounded-md px-3 py-1 text-xs font-bold" style={{ background: CRIMSON, color: "#fff" }}>
-                    {refreshScores.isPending ? "Generating…" : "Generate my rivalry scores"}
+                <div style={SUB} className="mt-4 p-5 text-sm">
+                  <span style={{ color: MUTED }}>Your personalized rivalry scores haven&rsquo;t been generated yet. </span>
+                  <button
+                    onClick={() => refreshScores.mutate()}
+                    disabled={refreshScores.isPending}
+                    className="ml-1 rounded-md px-3 py-1 text-xs font-extrabold"
+                    style={{ background: ACCENT, color: "#06231f" }}
+                  >
+                    {refreshScores.isPending ? "Generating\u2026" : "Generate my rivalry scores"}
                   </button>
                 </div>
               )}
@@ -441,36 +475,20 @@ export function RivalryCenter() {
                     <button
                       key={`${p.rivalId ?? p.rivalName ?? i}`}
                       onClick={() => openDossier(p)}
-                      className="group flex w-full items-center gap-4 rounded-[12px] border p-4 text-left transition-colors"
-                      style={{ borderColor: LINE, background: PAPER }}
+                      style={SUB}
+                      className="group flex w-full items-center gap-4 p-4 text-left transition-colors hover:brightness-125"
                     >
-                      <div
-                        className="w-9 shrink-0 text-center text-2xl font-black"
-                        style={{ color: i === 0 ? GOLD : MUTED }}
-                      >
-                        {i + 1}
-                      </div>
-                      <div
-                        className="h-10 w-1 shrink-0 rounded-full"
-                        style={{ background: h.c }}
-                      />
+                      <div className="w-9 shrink-0 text-center text-2xl font-black" style={{ color: i === 0 ? GOLD : MUTED }}>{i + 1}</div>
+                      <div className="h-10 w-1 shrink-0 rounded-full" style={{ background: h.c }} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="truncate text-lg font-bold">
-                            Rod <span style={{ color: MUTED }}>vs</span> {String(p.rivalName ?? "Rival")}
-                          </span>
+                          <span className="truncate text-lg font-bold">Rod <span style={{ color: MUTED }}>vs</span> {String(p.rivalName ?? "Rival")}</span>
                           <HeatBadge label={p.heatLabel} />
                         </div>
                         <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs" style={{ color: MUTED }}>
-                          <span>
-                            Series <b style={{ color: TEXT }}>{n(p.h2hWins)}–{n(p.h2hLosses)}{n(p.h2hTies) ? `–${n(p.h2hTies)}` : ""}</b>
-                          </span>
-                          <span>
-                            Playoff elims <b style={{ color: TEXT }}>{n(p.playoffEliminations)}</b>
-                          </span>
-                          <span>
-                            Heartbreak losses <b style={{ color: TEXT }}>{n(p.closeLossCount)}</b>
-                          </span>
+                          <span>Series <b style={{ color: TEXT }}>{n(p.h2hWins)}\u2013{n(p.h2hLosses)}{n(p.h2hTies) ? `\u2013${n(p.h2hTies)}` : ""}</b></span>
+                          <span>Playoff elims <b style={{ color: TEXT }}>{n(p.playoffEliminations)}</b></span>
+                          <span>Heartbreak losses <b style={{ color: TEXT }}>{n(p.closeLossCount)}</b></span>
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
@@ -482,50 +500,41 @@ export function RivalryCenter() {
                   );
                 })}
               </div>
-            </section>
+            </Panel>
 
-            {/* ── SECTION 4 — Historical Receipts ──────────────────── */}
-            {/* League Mythology */}
+            {/* ── The Legends (league mythology) ─────────────────── */}
             {mythology.length > 0 && (
-              <section className="mt-12">
-                <div className="border-b pb-2" style={{ borderColor: LINE }}>
-                  <Kicker>League Mythology</Kicker>
-                  <h3 className="mt-1 text-2xl font-black uppercase tracking-tight">The Legends</h3>
-                </div>
+              <Panel>
+                <SectionHead icon={Crown} title="The Legends" caption="League mythology, pulled from every recorded meeting." iconColor={GOLD} />
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
                   {mythology.map((m, i) => (
                     <button
                       key={i}
                       onClick={() => setOpen({ focalKey: m.aKey, focalName: m.a, rivalKey: m.bKey, rivalName: m.b })}
-                      className="rounded-[15px] border p-4 text-left"
-                      style={{ borderColor: LINE, background: PAPER }}
+                      style={SUB}
+                      className="p-4 text-left transition-colors hover:brightness-125"
                     >
                       <div className="text-[11px] font-bold uppercase tracking-[0.25em]" style={{ color: GOLD }}>{m.title}</div>
-                      <div className="mt-1 text-lg font-black leading-tight">
-                        {m.a} <span style={{ color: MUTED }}>vs</span> {m.b}
-                      </div>
+                      <div className="mt-1 text-lg font-black leading-tight">{m.a} <span style={{ color: MUTED }}>vs</span> {m.b}</div>
                       <div className="mt-1 text-xs" style={{ color: MUTED }}>{m.detail}</div>
                     </button>
                   ))}
                 </div>
-              </section>
+              </Panel>
             )}
 
-            {/* Head-to-head grid (active owners) */}
+            {/* ── The Matrix (head-to-head grid) ─────────────────── */}
             {gridOwners.length > 1 && (
-              <section className="mt-12">
-                <div className="border-b pb-2" style={{ borderColor: LINE }}>
-                  <Kicker>Head-to-Head Grid</Kicker>
-                  <h3 className="mt-1 text-2xl font-black uppercase tracking-tight">The Matrix</h3>
-                </div>
+              <Panel>
+                <SectionHead icon={Users} title="The Matrix" caption="Each cell is the row owner's all-time record vs the column owner. Tap a cell for the dossier." />
                 {leagueLoading ? (
-                  <div className="py-8 text-center text-sm" style={{ color: MUTED }}>Building the grid…</div>
+                  <div className="py-8 text-center text-sm" style={{ color: MUTED }}>Building the grid\u2026</div>
                 ) : (
                   <div className="mt-4 overflow-x-auto">
                     <table className="border-collapse text-center text-xs">
                       <thead>
                         <tr>
-                          <th className="sticky left-0 z-10 px-2 py-2 text-left" style={{ background: INK, color: MUTED }}>Row vs column</th>
+                          <th className="sticky left-0 z-10 px-2 py-2 text-left" style={{ background: PAPER2, color: MUTED }}>Row vs column</th>
                           {gridOwners.map((c) => (
                             <th key={c.key} className="px-2 py-2 font-bold" style={{ color: MUTED }} title={c.name}>{firstName(c.name)}</th>
                           ))}
@@ -534,13 +543,13 @@ export function RivalryCenter() {
                       <tbody>
                         {gridOwners.map((rw) => (
                           <tr key={rw.key}>
-                            <td className="sticky left-0 z-10 whitespace-nowrap px-2 py-1.5 text-left font-bold" style={{ background: INK, color: TEXT }}>{rw.name}</td>
+                            <td className="sticky left-0 z-10 whitespace-nowrap px-2 py-1.5 text-left font-bold" style={{ background: PAPER2, color: TEXT }}>{rw.name}</td>
                             {gridOwners.map((c) => {
                               if (c.key === rw.key)
-                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "#3a3d44" }}>—</td>;
+                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "#3a3d44" }}>\u2014</td>;
                               const rec = recordMap[rw.key]?.[c.key];
                               if (!rec || rec.w + rec.l + rec.t === 0)
-                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "#3a3d44" }}>·</td>;
+                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "#3a3d44" }}>\u00b7</td>;
                               const win = rec.w > rec.l;
                               const lose = rec.l > rec.w;
                               return (
@@ -548,7 +557,7 @@ export function RivalryCenter() {
                                   <button
                                     onClick={() => setOpen({ focalKey: rw.key, focalName: rw.name, rivalKey: c.key, rivalName: c.name })}
                                     className="rounded px-1.5 py-0.5 font-bold tabular-nums"
-                                    style={{ color: win ? "#34d399" : lose ? CRIMSON : MUTED, background: win ? "rgba(52,211,153,0.08)" : lose ? "rgba(226,59,59,0.08)" : "transparent" }}
+                                    style={{ color: win ? GREEN : lose ? RED : MUTED, background: win ? "rgba(34,197,94,0.10)" : lose ? "rgba(239,68,68,0.10)" : "transparent" }}
                                     title={`${rw.name} vs ${c.name}`}
                                   >
                                     {rec.w}-{rec.l}{rec.t ? `-${rec.t}` : ""}
@@ -562,38 +571,35 @@ export function RivalryCenter() {
                     </table>
                   </div>
                 )}
-                <p className="mt-2 text-[11px]" style={{ color: MUTED }}>Each cell is the row owner's all-time record vs the column owner. Tap a cell for the dossier.</p>
-              </section>
+              </Panel>
             )}
-            {/* Nemesis board */}
+
+            {/* ── Nemesis Board ──────────────────────────────────── */}
             {nemeses.length > 0 && (
-              <section className="mt-12">
-                <div className="border-b pb-2" style={{ borderColor: LINE }}>
-                  <Kicker>Who Owns Whom</Kicker>
-                  <h3 className="mt-1 flex items-center gap-2 text-2xl font-black uppercase tracking-tight"><Skull className="h-5 w-5" style={{ color: CRIMSON }} /> Nemesis Board</h3>
-                </div>
+              <Panel>
+                <SectionHead icon={Skull} title="Nemesis Board" caption="The active owner each manager has lost to most (min 3 meetings). Percent is the rival's win rate." iconColor={RED} />
                 <div className="mt-4 grid gap-2 md:grid-cols-2">
                   {nemeses.map((nm) => (
-                    <button key={nm.key} onClick={() => setOpen({ focalKey: nm.key, focalName: nm.name, rivalKey: nm.rivalKey, rivalName: nm.rivalName })} className="flex items-center justify-between rounded-[12px] border p-3 text-left" style={{ borderColor: LINE, background: PAPER }}>
+                    <button
+                      key={nm.key}
+                      onClick={() => setOpen({ focalKey: nm.key, focalName: nm.name, rivalKey: nm.rivalKey, rivalName: nm.rivalName })}
+                      style={SUB}
+                      className="flex items-center justify-between p-3 text-left transition-colors hover:brightness-125"
+                    >
                       <div className="min-w-0">
                         <div className="truncate font-bold">{nm.name}</div>
-                        <div className="text-xs" style={{ color: MUTED }}>Nemesis: <span style={{ color: CRIMSON }}>{nm.rivalName}</span> · {nm.name} is {nm.w}-{nm.l} vs them</div>
+                        <div className="text-xs" style={{ color: MUTED }}>Nemesis: <span style={{ color: RED }}>{nm.rivalName}</span> \u00b7 {nm.name} is {nm.w}-{nm.l} vs them</div>
                       </div>
-                      <span className="shrink-0 text-sm font-black tabular-nums" style={{ color: CRIMSON }}>{Math.round(100 - nm.pct)}%</span>
+                      <span className="shrink-0 text-sm font-black tabular-nums" style={{ color: RED }}>{Math.round(100 - nm.pct)}%</span>
                     </button>
                   ))}
                 </div>
-                <p className="mt-2 text-[11px]" style={{ color: MUTED }}>Nemesis = the active owner you've lost to most (min 3 meetings). Percent is their win rate against you.</p>
-              </section>
+              </Panel>
             )}
 
-            <section id="receipts" className="mt-12 scroll-mt-6">
-              <div className="border-b pb-2" style={{ borderColor: LINE }}>
-                <Kicker>The Evidence Locker</Kicker>
-                <h3 className="mt-1 flex items-center gap-2 text-2xl font-black uppercase tracking-tight">
-                  <ScrollText className="h-5 w-5" style={{ color: CRIMSON }} /> Historical Receipts
-                </h3>
-              </div>
+            {/* ── Historical Receipts ────────────────────────────── */}
+            <Panel id="receipts">
+              <SectionHead icon={ScrollText} title="Historical Receipts" caption="Evidence from synced matchups, playoffs and trades." />
               {(() => {
                 type R = { season: number | null; evidence: string; impact: string; tone: "bad" | "good" };
                 const out: R[] = [];
@@ -618,7 +624,7 @@ export function RivalryCenter() {
                   if (p.revengeAchieved && n(p.playoffEliminations) > 0) {
                     out.push({
                       season: p.lastMatchupSeason ?? null,
-                      evidence: `Revenge served — Rod struck back against ${name}.`,
+                      evidence: `Revenge served \u2014 Rod struck back against ${name}.`,
                       impact: "Receipt collected",
                       tone: "good",
                     });
@@ -626,21 +632,14 @@ export function RivalryCenter() {
                 }
                 out.sort((a, b) => (b.season ?? 0) - (a.season ?? 0));
                 if (out.length === 0)
-                  return <p className="py-6 text-sm" style={{ color: MUTED }}>No receipts on file yet — the data hasn't surfaced a defining moment.</p>;
+                  return <p className="py-6 text-sm" style={{ color: MUTED }}>No receipts on file yet \u2014 the data hasn't surfaced a defining moment.</p>;
                 return (
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     {out.slice(0, 8).map((r, i) => (
-                      <div key={i} className="rounded-[12px] border p-4" style={{ borderColor: LINE, background: PAPER }}>
+                      <div key={i} style={SUB} className="p-4">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold uppercase tracking-widest" style={{ color: MUTED }}>
-                            {r.season ?? "—"}
-                          </span>
-                          <span
-                            className="text-[10px] font-bold uppercase tracking-wider"
-                            style={{ color: r.tone === "good" ? GOLD : CRIMSON }}
-                          >
-                            {r.impact}
-                          </span>
+                          <span className="text-xs font-bold uppercase tracking-widest" style={{ color: MUTED }}>{r.season ?? "\u2014"}</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: r.tone === "good" ? GOLD : RED }}>{r.impact}</span>
                         </div>
                         <p className="mt-2 text-[15px] leading-snug">{r.evidence}</p>
                       </div>
@@ -648,17 +647,12 @@ export function RivalryCenter() {
                   </div>
                 );
               })()}
-            </section>
+            </Panel>
 
-            {/* ── SECTIONS 6 + 10 — Revenge Watch & Trophies ───────── */}
-            <section className="mt-12 grid gap-6 md:grid-cols-2">
-              <div>
-                <div className="border-b pb-2" style={{ borderColor: LINE }}>
-                  <Kicker>Unfinished Business</Kicker>
-                  <h3 className="mt-1 flex items-center gap-2 text-2xl font-black uppercase tracking-tight">
-                    <Crosshair className="h-5 w-5" style={{ color: CRIMSON }} /> Revenge Watch
-                  </h3>
-                </div>
+            {/* ── Revenge Watch + Trophies ───────────────────────── */}
+            <div className="grid gap-3 md:grid-cols-2">
+              <Panel>
+                <SectionHead icon={Crosshair} title="Revenge Watch" caption="Unfinished business \u2014 outstanding playoff debts." iconColor={RED} />
                 {(() => {
                   const rev = pairs.filter((p) => n(p.playoffEliminations) > 0 && !p.revengeAchieved);
                   if (rev.length === 0)
@@ -666,34 +660,23 @@ export function RivalryCenter() {
                   return (
                     <div className="mt-4 space-y-2">
                       {rev.map((p, i) => (
-                        <button
-                          key={i}
-                          onClick={() => openDossier(p)}
-                          className="flex w-full items-center justify-between rounded-[12px] border p-3 text-left"
-                          style={{ borderColor: LINE, background: PAPER }}
-                        >
+                        <button key={i} onClick={() => openDossier(p)} style={SUB} className="flex w-full items-center justify-between p-3 text-left transition-colors hover:brightness-125">
                           <div>
                             <div className="font-bold">{String(p.rivalName)}</div>
-                            <div className="text-xs" style={{ color: MUTED }}>
-                              Eliminated Rod {n(p.playoffEliminations)}× · revenge pending
-                            </div>
+                            <div className="text-xs" style={{ color: MUTED }}>Eliminated Rod {n(p.playoffEliminations)}\u00d7 \u00b7 revenge pending</div>
                           </div>
-                          <Skull className="h-5 w-5" style={{ color: CRIMSON }} />
+                          <Skull className="h-5 w-5" style={{ color: RED }} />
                         </button>
                       ))}
                     </div>
                   );
                 })()}
-              </div>
-              <div>
-                <div className="border-b pb-2" style={{ borderColor: LINE }}>
-                  <Kicker>Rivalry Hardware</Kicker>
-                  <h3 className="mt-1 flex items-center gap-2 text-2xl font-black uppercase tracking-tight">
-                    <Trophy className="h-5 w-5" style={{ color: GOLD }} /> Trophies
-                  </h3>
-                </div>
+              </Panel>
+
+              <Panel>
+                <SectionHead icon={Trophy} title="Trophies" caption="Rivalry hardware across your feuds." iconColor={GOLD} />
                 {(() => {
-                  if (pairs.length === 0) return null;
+                  if (pairs.length === 0) return <p className="py-6 text-sm" style={{ color: MUTED }}>No trophies yet.</p>;
                   const by = (f: (p: Pair) => number) => [...pairs].sort((a, b) => f(b) - f(a))[0];
                   const nemesis = by((p) => n(p.rivalryScore));
                   const dealer = by((p) => n(p.playoffEliminations));
@@ -703,15 +686,13 @@ export function RivalryCenter() {
                     { icon: <Skull className="h-4 w-4" />, t: "The Nemesis", who: nemesis?.rivalName, d: `Highest rivalry score (${n(nemesis?.rivalryScore)})` },
                     { icon: <HeartCrack className="h-4 w-4" />, t: "Heartbreak Dealer", who: dealer?.rivalName, d: `${n(dealer?.playoffEliminations)} playoff eliminations of Rod` },
                     { icon: <Flame className="h-4 w-4" />, t: "House of Pain", who: pain?.rivalName, d: `${n(pain?.closeLossCount)} heartbreak losses` },
-                    { icon: <Crown className="h-4 w-4" />, t: "Rod Owns Them", who: king?.rivalName, d: `Best series margin (${n(king?.h2hWins)}–${n(king?.h2hLosses)})` },
+                    { icon: <Crown className="h-4 w-4" />, t: "Rod Owns Them", who: king?.rivalName, d: `Best series margin (${n(king?.h2hWins)}\u2013${n(king?.h2hLosses)})` },
                   ].filter((x) => x.who);
                   return (
                     <div className="mt-4 grid gap-2">
                       {items.map((x, i) => (
-                        <div key={i} className="flex items-center gap-3 rounded-[12px] border p-3" style={{ borderColor: LINE, background: PAPER }}>
-                          <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: `${GOLD}1a`, color: GOLD }}>
-                            {x.icon}
-                          </span>
+                        <div key={i} style={SUB} className="flex items-center gap-3 p-3">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: `${GOLD}1a`, color: GOLD }}>{x.icon}</span>
                           <div className="min-w-0">
                             <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>{x.t}</div>
                             <div className="truncate font-bold">{String(x.who)}</div>
@@ -722,13 +703,13 @@ export function RivalryCenter() {
                     </div>
                   );
                 })()}
-              </div>
-            </section>
+              </Panel>
+            </div>
           </>
         )}
       </main>
 
-      {/* ── POPUP — Rivalry Dossier ──────────────────────────────── */}
+      {/* ── Dossier popup ──────────────────────────────────────── */}
       {open && (
         <div
           className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 md:p-8"
@@ -737,24 +718,16 @@ export function RivalryCenter() {
         >
           <div
             className="relative w-full max-w-5xl rounded-2xl border"
-            style={{ borderColor: `${CRIMSON}55`, background: INK, boxShadow: "0 30px 80px rgba(0,0,0,0.6)" }}
+            style={{ borderColor: `${ACCENT}55`, background: INK, boxShadow: "0 30px 80px rgba(0,0,0,0.6)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div
-              className="sticky top-0 z-10 flex items-center justify-between rounded-t-2xl border-b px-5 py-3"
-              style={{ borderColor: LINE, background: INK }}
-            >
-              <div className="flex items-center gap-2" style={{ color: CRIMSON }}>
+            <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-2xl border-b px-5 py-3" style={{ borderColor: LINE, background: INK }}>
+              <div className="flex items-center gap-2" style={{ color: ACCENT }}>
                 <Swords className="h-4 w-4" />
                 <span className="text-[11px] font-bold uppercase tracking-[0.35em]">Rivalry Dossier</span>
-                <span className="text-sm font-bold" style={{ color: TEXT }}>· {open.focalName ?? "Rod"} vs {open.rivalName}</span>
+                <span className="text-sm font-bold" style={{ color: TEXT }}>\u00b7 {open.focalName ?? "Rod"} vs {open.rivalName}</span>
               </div>
-              <button
-                onClick={() => setOpen(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border"
-                style={{ borderColor: LINE, color: TEXT }}
-                aria-label="Close"
-              >
+              <button onClick={() => setOpen(null)} className="flex h-8 w-8 items-center justify-center rounded-full border" style={{ borderColor: LINE, color: TEXT }} aria-label="Close">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -777,13 +750,13 @@ export function RivalryCenter() {
 
 // ── Hero stat strip ─────────────────────────────────────────────────────────
 function HeroStrip({ p }: { p: Pair }) {
-  const series = `${n(p.h2hWins)}–${n(p.h2hLosses)}${n(p.h2hTies) ? `–${n(p.h2hTies)}` : ""}`;
+  const series = `${n(p.h2hWins)}\u2013${n(p.h2hLosses)}${n(p.h2hTies) ? `\u2013${n(p.h2hTies)}` : ""}`;
   const playoff =
     p.rivalPlayoffWins != null || p.rivalPlayoffLosses != null
-      ? `${n(p.rivalPlayoffWins)}–${n(p.rivalPlayoffLosses)}`
+      ? `${n(p.rivalPlayoffWins)}\u2013${n(p.rivalPlayoffLosses)}`
       : `${n(p.playoffEliminations)} elim`;
-  const heartbreak = p.painfulLossMargin != null ? `${Number(p.painfulLossMargin).toFixed(1)} pts` : "—";
-  const last = p.lastMatchupSeason != null ? String(p.lastMatchupSeason) : "—";
+  const heartbreak = p.painfulLossMargin != null ? `${Number(p.painfulLossMargin).toFixed(1)} pts` : "\u2014";
+  const last = p.lastMatchupSeason != null ? String(p.lastMatchupSeason) : "\u2014";
   const cells: Array<[string, string]> = [
     ["Series Record", series],
     ["Playoff Record", playoff],
@@ -792,15 +765,11 @@ function HeroStrip({ p }: { p: Pair }) {
     ["Recent Losses", String(n(p.recentLosses))],
   ];
   return (
-    <div className="grid grid-cols-2 border-t md:grid-cols-5" style={{ borderColor: LINE }}>
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
       {cells.map(([k, v], i) => (
-        <div
-          key={i}
-          className="border-b border-r px-4 py-4 md:border-b-0"
-          style={{ borderColor: LINE }}
-        >
-          <div className="text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: MUTED }}>{k}</div>
-          <div className="mt-1 text-2xl font-black" style={{ color: TEXT }}>{v}</div>
+        <div key={i} style={SUB} className="px-3 py-3">
+          <div className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: MUTED }}>{k}</div>
+          <div className="mt-1 text-xl font-black" style={{ color: TEXT }}>{v}</div>
         </div>
       ))}
     </div>
