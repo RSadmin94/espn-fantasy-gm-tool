@@ -1485,15 +1485,15 @@ export function DraftWarRoom() {
   const maxRound = Math.max(...(mockDraft ?? []).map((p: any) => p.round), 0);
 
   return (
-    <div className="min-h-screen text-zinc-100" style={{ background: "radial-gradient(circle at 82% -8%,rgba(239,68,68,.18),transparent 42%),linear-gradient(180deg,#0b0f17,#080b11)" }}>
+    <div className="min-h-screen text-zinc-100" style={{ background: "radial-gradient(circle at 85% -10%,rgba(245,197,24,.06),transparent 45%),linear-gradient(180deg,#0b0f17,#080b11)" }}>
 
       {/* Header */}
       <div className="border-b border-white/[0.06] px-6 py-6">
         <div className="max-w-7xl mx-auto flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
-              <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center">
-                <Zap className="h-4 w-4 text-red-400" />
+              <div className="w-8 h-8 rounded-lg bg-amber-400/10 border border-amber-400/30 flex items-center justify-center">
+                <Zap className="h-4 w-4 text-amber-400" />
               </div>
               <h1 className="text-3xl font-black tracking-tight text-white">Draft War Room</h1>
               <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-600 ml-1">{season} · Phase 1.75</span>
