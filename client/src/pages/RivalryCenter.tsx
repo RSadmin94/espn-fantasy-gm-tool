@@ -148,93 +148,39 @@ export function RivalryCenter() {
 
   const keyForRival = (p: Pair) => nameToKey[norm(p.rivalName)] ?? undefined;
   // ── league-wide all-pairs rivalries (every owner's dossier) ──────────────
-  type LeaguePair = {
-    key: string; aKey: string; aName: string; bKey: string; bName: string;
-    score: number; meetings: number; playoff: number; close: number;
-    aWins: number; aLosses: number; lastSeason: number | null; heat: string;
-  };
-  const leagueQueries = (trpc as any).useQueries((t: any) =>
-    activeOwners.map((o) =>
-      t.owners.rivalryDossier(
-        { ownerKey: o.ownerKey, includeHistoricalOwners: false, rivalryEligibleOwnerKeys: activeKeys },
-        { staleTime: 600_000 },
-      ),
-    ),
-  );
-  const leagueLoading =
-    allOwners.length > 0 && (leagueQueries as any[]).some((q) => q?.isLoading);
-  const leaguePairs = useMemo<LeaguePair[]>(() => {
-    const heatOf = (s: number) =>
-      s >= 150 ? "Inferno" : s >= 100 ? "Burning" : s >= 60 ? "Heated" : s >= 30 ? "Simmering" : "Cold";
-    const seen = new Map<string, LeaguePair>();
-    let maxSeason = 0;
-    (leagueQueries as any[]).forEach((q) => {
-      const d = q?.data;
-      for (const m of (d?.opponents?.flatMap((o: any) => o.lastTenMeetings ?? []) ?? []))
-        maxSeason = Math.max(maxSeason, Number(m.season) || 0);
-    });
-    if (!maxSeason) maxSeason = activeSeason;
-    (leagueQueries as any[]).forEach((q, i) => {
-      const d = q?.data;
-      const aKey = activeOwners[i]?.ownerKey;
-      const aName = String(d?.ownerDisplayName ?? activeOwners[i]?.ownerName ?? aKey ?? "");
-      if (!d || !aKey || !Array.isArray(d.opponents)) return;
-      for (const op of d.opponents) {
-        const bKey = String(op.opponentOwnerKey ?? "");
-        if (!bKey || bKey === aKey) continue;
-        const pk = [aKey, bKey].sort().join("::");
-        if (seen.has(pk)) continue;
-        const meetings = n(op.gamesPlayed);
-        if (meetings < 2) continue;
-        const playoff = n(op.playoffEncounters);
-        const close = n(op.heartbreakLosses) + n(op.heartbreakWins);
-        const recent = (op.lastTenMeetings ?? []).filter(
-          (m: any) => Number(m.season) >= maxSeason - 2,
-        ).length;
-        const winPct = n(op.winPct);
-        const balance = Math.max(0, 20 - Math.abs(winPct - 50) / 2.5);
-        const score = Math.round(meetings * 3 + playoff * 25 + close * 6 + recent * 4 + balance);
-        const last = (op.lastTenMeetings ?? []).reduce(
-          (mx: number, m: any) => Math.max(mx, Number(m.season) || 0),
-          0,
-        );
-        seen.set(pk, {
-          key: pk, aKey, aName, bKey, bName: String(op.opponentDisplayName ?? bKey),
-          score, meetings, playoff, close,
-          aWins: n(op.wins), aLosses: n(op.losses),
-          lastSeason: last || null, heat: heatOf(score),
-        });
-      }
-    });
-    return [...seen.values()].sort((a, b) => b.score - a.score);
-  }, [leagueQueries, allOwners, activeSeason]);
-  const openLeague = (lp: LeaguePair) =>
-    setOpen({ focalKey: lp.aKey, focalName: lp.aName, rivalKey: lp.bKey, rivalName: lp.bName });
-
-  // ── active-owner head-to-head grid + nemesis ────────────────────────────
-  const gridOwners = useMemo(
-    () =>
-      activeOwners
-        .map((o, i) => ({
-          key: o.ownerKey,
-          name: String((leagueQueries as any[])[i]?.data?.ownerDisplayName ?? o.ownerName ?? o.ownerKey),
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [activeOwners, leagueQueries],
-  );
-  const recordMap = useMemo(() => {
-    const m: Record<string, Record<string, { w: number; l: number; t: number }>> = {};
-    (leagueQueries as any[]).forEach((q, i) => {
-      const aKey = activeOwners[i]?.ownerKey;
-      if (!aKey || !q?.data?.opponents) return;
-      m[aKey] = {};
-      for (const op of q.data.opponents)
-        m[aKey][String(op.opponentOwnerKey)] = { w: n(op.wins), l: n(op.losses), t: n(op.ties) };
-    });
-    return m;
-  }, [leagueQueries, activeOwners]);
-  const nemeses = useMemo(() => {
-    const out: Array<{ key: string; name: string; rivalKey: string; rivalName: string; w: number; l: number; pct: number }> = [];
+  type LeaguePair = { key: string; aKey: string; aName: string; bKey: string; bName: string; score: number; meetings: number; playoff: number; close: number; aWins: number; aLosses: number; lastSeason: number | null; heat: string };
+  const h2hQ = (trpc as any).rivalry.h2h.useQuery(undefined, { staleTime: 600_000 });
+  const leagueLoading = h2hQ.isLoading;
+  const firstName = (s: string) => String(s).trim().split(/\s+/)[0] ?? s;
+  const heatOf = (s: number) => (s >= 150 ? "Inferno" : s >= 100 ? "Burning" : s >= 60 ? "Heated" : s >= 30 ? "Simmering" : "Cold");
+  const { recordMap, leaguePairs, gridOwners, nemeses } = useMemo(() => {
+    const pairs: any[] = h2hQ.data?.pairs ?? [];
+    const activeByNorm = new Map<string, { key: string; name: string }>();
+    for (const o of activeOwners) {
+      const nm = String(o.ownerName ?? o.ownerKey);
+      activeByNorm.set(nm.trim().toLowerCase(), { key: o.ownerKey, name: nm });
+    }
+    const keyOf = (name: string) => activeByNorm.get(String(name).trim().toLowerCase());
+    const recordMap: Record<string, Record<string, { w: number; l: number; t: number }>> = {};
+    const lps: LeaguePair[] = [];
+    const maxSeason = pairs.reduce((mx, p) => Math.max(mx, Number(p.lastSeason) || 0), 0) || activeSeason;
+    for (const p of pairs) {
+      const A = keyOf(p.a);
+      const B = keyOf(p.b);
+      if (!A || !B) continue;
+      const aWins = n(p.aWins), aLosses = n(p.aLosses), ties = n(p.ties);
+      (recordMap[A.key] ??= {})[B.key] = { w: aWins, l: aLosses, t: ties };
+      (recordMap[B.key] ??= {})[A.key] = { w: aLosses, l: aWins, t: ties };
+      const meetings = n(p.meetings), playoff = n(p.playoff), close = n(p.close10);
+      const recent = Number(p.lastSeason) >= maxSeason - 2 ? Math.min(3, meetings) : 0;
+      const winPct = meetings ? (aWins / meetings) * 100 : 50;
+      const balance = Math.max(0, 20 - Math.abs(winPct - 50) / 2.5);
+      const score = Math.round(meetings * 3 + playoff * 25 + close * 6 + recent * 4 + balance);
+      lps.push({ key: `${A.key}::${B.key}`, aKey: A.key, aName: A.name, bKey: B.key, bName: B.name, score, meetings, playoff, close, aWins, aLosses, lastSeason: Number(p.lastSeason) || null, heat: heatOf(score) });
+    }
+    lps.sort((a, b) => b.score - a.score);
+    const gridOwners = [...activeByNorm.values()].map((o) => ({ key: o.key, name: o.name })).sort((a, b) => a.name.localeCompare(b.name));
+    const nemeses: Array<{ key: string; name: string; rivalKey: string; rivalName: string; w: number; l: number; pct: number }> = [];
     for (const o of gridOwners) {
       const row = recordMap[o.key];
       if (!row) continue;
@@ -243,46 +189,38 @@ export function RivalryCenter() {
         const g = rec.w + rec.l + rec.t;
         if (g < 3) continue;
         const pct = g ? (rec.w / g) * 100 : 100;
-        if (!worst || pct < worst.pct || (pct === worst.pct && rec.l > worst.l))
-          worst = { rivalKey: rk, w: rec.w, l: rec.l, pct };
+        if (!worst || pct < worst.pct || (pct === worst.pct && rec.l > worst.l)) worst = { rivalKey: rk, w: rec.w, l: rec.l, pct };
       }
       if (worst) {
         const rn = gridOwners.find((g2) => g2.key === worst!.rivalKey)?.name ?? worst.rivalKey;
-        out.push({ key: o.key, name: o.name, rivalKey: worst.rivalKey, rivalName: rn, w: worst.w, l: worst.l, pct: worst.pct });
+        nemeses.push({ key: o.key, name: o.name, rivalKey: worst.rivalKey, rivalName: rn, w: worst.w, l: worst.l, pct: worst.pct });
       }
     }
-    return out.sort((a, b) => a.pct - b.pct);
-  }, [gridOwners, recordMap]);
-
+    nemeses.sort((a, b) => a.pct - b.pct);
+    return { recordMap, leaguePairs: lps, gridOwners, nemeses };
+  }, [h2hQ.data, activeOwners, activeSeason]);
+  const openLeague = (lp: LeaguePair) => setOpen({ focalKey: lp.aKey, focalName: lp.aName, rivalKey: lp.bKey, rivalName: lp.bName });
   const mythology = useMemo(() => {
     type M = { title: string; a: string; b: string; aKey: string; bKey: string; detail: string };
     const ps = leaguePairs;
     if (ps.length === 0) return [] as M[];
-    const mk = (lp: any, title: string, detail: string): M => ({
-      title, a: lp.aName, b: lp.bName, aKey: lp.aKey, bKey: lp.bKey, detail,
-    });
+    const mk = (lp: any, title: string, detail: string): M => ({ title, a: lp.aName, b: lp.bName, aKey: lp.aKey, bKey: lp.bKey, detail });
     const out: M[] = [];
     const bitter = ps[0];
-    if (bitter) out.push(mk(bitter, "Most Bitter Rivalry", `Rivalry score ${bitter.score} · ${bitter.meetings} meetings`));
+    if (bitter) out.push(mk(bitter, "Most Bitter Rivalry", `Rivalry score ${bitter.score} \u00b7 ${bitter.meetings} meetings`));
     const longest = [...ps].sort((a, b) => b.meetings - a.meetings)[0];
     if (longest) out.push(mk(longest, "Longest Grudge", `${longest.meetings} all-time meetings`));
     const playoff = [...ps].filter((p) => p.playoff > 0).sort((a, b) => b.playoff - a.playoff)[0];
     if (playoff) out.push(mk(playoff, "Most Playoff Pain", `${playoff.playoff} playoff meetings`));
-    const sided = [...ps]
-      .filter((p) => p.meetings >= 5)
-      .sort((a, b) => Math.abs(b.aWins - b.aLosses) / b.meetings - Math.abs(a.aWins - a.aLosses) / a.meetings)[0];
+    const sided = [...ps].filter((p) => p.meetings >= 5).sort((a, b) => Math.abs(b.aWins - b.aLosses) / b.meetings - Math.abs(a.aWins - a.aLosses) / a.meetings)[0];
     if (sided) out.push(mk(sided, "Most One-Sided", `${Math.max(sided.aWins, sided.aLosses)}-${Math.min(sided.aWins, sided.aLosses)} series`));
-    const tight = [...ps]
-      .filter((p) => p.meetings >= 6)
-      .sort((a, b) => Math.abs(a.aWins - a.aLosses) - Math.abs(b.aWins - b.aLosses) || b.meetings - a.meetings)[0];
+    const tight = [...ps].filter((p) => p.meetings >= 6).sort((a, b) => Math.abs(a.aWins - a.aLosses) - Math.abs(b.aWins - b.aLosses) || b.meetings - a.meetings)[0];
     if (tight) out.push(mk(tight, "Dead Even", `${tight.aWins}-${tight.aLosses} across ${tight.meetings} games`));
     const close = [...ps].sort((a, b) => b.close - a.close)[0];
     if (close && close.close > 0) out.push(mk(close, "Most Heartbreak", `${close.close} one-score games`));
     const seen = new Set<string>();
     return out.filter((x) => (seen.has(x.title) ? false : (seen.add(x.title), true)));
   }, [leaguePairs]);
-
-  const firstName = (s: string) => String(s).trim().split(/\s+/)[0] ?? s;
 
 
 

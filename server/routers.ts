@@ -507,6 +507,91 @@ export const appRouter = router({
       return getRivalryScoresFromDb(rodMemberId);
     }),
     /** Compute and persist rivalry scores (manual trigger) */
+    /** All-time head-to-head by owner name, computed from gmMatchups + gmTeams (same source as the Matchups scoreboard). */
+    h2h: publicProcedure.query(async ({ ctx }) => {
+      const resolved = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const leagueId = resolved.leagueId || "457622";
+      const db = await getDb();
+      if (!db) return { owners: [] as string[], pairs: [] as Array<Record<string, unknown>> };
+
+      const teamRows = await db
+        .select({ season: gmTeams.season, teamId: gmTeams.teamId, ownerName: gmTeams.ownerName })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId));
+      const ownerBySeasonTeam = new Map<string, string>();
+      for (const t of teamRows) {
+        const nm = (t.ownerName && String(t.ownerName).trim()) || "";
+        if (!nm) continue;
+        ownerBySeasonTeam.set(`${Number(t.season)}:${Number(t.teamId)}`, nm);
+      }
+
+      const mrows = await db
+        .select({
+          season: gmMatchups.season,
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          homeScore: gmMatchups.homeScore,
+          awayScore: gmMatchups.awayScore,
+          winnerTeamId: gmMatchups.winnerTeamId,
+          isCompleted: gmMatchups.isCompleted,
+          isPlayoff: gmMatchups.isPlayoff,
+        })
+        .from(gmMatchups)
+        .where(eqDrizzle(gmMatchups.leagueId, leagueId));
+
+      type P = {
+        a: string; b: string; aWins: number; aLosses: number; ties: number;
+        meetings: number; playoff: number; close10: number; close5: number;
+        firstSeason: number; lastSeason: number;
+      };
+      const pairMap = new Map<string, P>();
+      const ownerSet = new Set<string>();
+      for (const m of mrows) {
+        const season = Number(m.season);
+        const hOwner = ownerBySeasonTeam.get(`${season}:${Number(m.homeTeamId)}`);
+        const aOwner = ownerBySeasonTeam.get(`${season}:${Number(m.awayTeamId)}`);
+        if (!hOwner || !aOwner || hOwner === aOwner) continue;
+        const hs = Number(m.homeScore ?? 0);
+        const as = Number(m.awayScore ?? 0);
+        const completed = m.isCompleted != null ? Boolean(m.isCompleted) : hs + as > 0;
+        if (!completed) continue;
+        ownerSet.add(hOwner);
+        ownerSet.add(aOwner);
+        const [a, b] = [hOwner, aOwner].sort();
+        const key = `${a}\u0000${b}`;
+        let p = pairMap.get(key);
+        if (!p) {
+          p = { a, b, aWins: 0, aLosses: 0, ties: 0, meetings: 0, playoff: 0, close10: 0, close5: 0, firstSeason: season, lastSeason: season };
+          pairMap.set(key, p);
+        }
+        p.meetings += 1;
+        if (m.isPlayoff) p.playoff += 1;
+        const margin = Math.abs(hs - as);
+        if (margin < 10) p.close10 += 1;
+        if (margin < 5) p.close5 += 1;
+        if (season < p.firstSeason) p.firstSeason = season;
+        if (season > p.lastSeason) p.lastSeason = season;
+        const wid = m.winnerTeamId != null ? Number(m.winnerTeamId) : null;
+        let homeWon: boolean | null = null;
+        if (wid === Number(m.homeTeamId)) homeWon = true;
+        else if (wid === Number(m.awayTeamId)) homeWon = false;
+        else if (hs > as) homeWon = true;
+        else if (as > hs) homeWon = false;
+        if (homeWon === null) {
+          p.ties += 1;
+        } else {
+          const aWon = (homeWon && hOwner === a) || (!homeWon && hOwner !== a);
+          if (aWon) p.aWins += 1;
+          else p.aLosses += 1;
+        }
+      }
+      return { owners: [...ownerSet].sort(), pairs: [...pairMap.values()] };
+    }),
+
     refresh: protectedProcedure.mutation(async ({ ctx }) => {
       const { refreshRivalryScores } = await import("./rivalryService");
       const pairs = await refreshRivalryScores(ctx.user.id);
