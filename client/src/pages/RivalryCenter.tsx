@@ -19,12 +19,13 @@ import {
 } from "lucide-react";
 
 // ── theme (editorial: ESPN / NFL Films / The Athletic — not neon) ───────────
-const INK = "#0c0d10";
-const PAPER = "#15161b";
-const PAPER2 = "#1b1d24";
-const LINE = "rgba(255,255,255,0.10)";
-const TEXT = "#f4f1ea";
-const MUTED = "#8b8f98";
+const INK = "#0a0e16";
+const PAGEBG = "radial-gradient(circle at 80% -10%,rgba(45,212,191,.16),transparent 42%),linear-gradient(180deg,#0a0e16,#070a11)";
+const PAPER = "linear-gradient(180deg,#141a24,#0e131c)";
+const PAPER2 = "#141a24";
+const LINE = "rgba(255,255,255,0.07)";
+const TEXT = "#f3f8ff";
+const MUTED = "#8b97a8";
 const CRIMSON = "#e23b3b";
 const GOLD = "#f5c518";
 
@@ -250,8 +251,8 @@ export function RivalryCenter() {
 
   return (
     <div
-      className="-m-4 min-h-full p-5 md:-m-6 md:p-8"
-      style={{ background: INK, color: TEXT }}
+      className="-m-4 min-h-full p-5 md:-m-6 md:p-7"
+      style={{ background: PAGEBG, color: TEXT }}
     >
       {/* ── Masthead ─────────────────────────────────────────────── */}
       <header className="mx-auto max-w-6xl border-b pb-6" style={{ borderColor: LINE }}>
@@ -277,7 +278,7 @@ export function RivalryCenter() {
           </div>
         ) : allEmpty ? (
           <div
-            className="my-10 rounded-lg border p-10 text-center"
+            className="my-10 rounded-[12px] border p-10 text-center"
             style={{ borderColor: LINE, background: PAPER }}
           >
             <Swords className="mx-auto mb-3 h-8 w-8" style={{ color: MUTED }} />
@@ -294,7 +295,7 @@ export function RivalryCenter() {
               <section className="mt-8">
                 <Kicker>Rivalry of the Year</Kicker>
                 <div
-                  className="mt-3 overflow-hidden rounded-xl border"
+                  className="mt-3 overflow-hidden rounded-[15px] border"
                   style={{
                     borderColor: `${CRIMSON}66`,
                     background: `linear-gradient(135deg, ${PAPER2} 0%, ${INK} 70%)`,
@@ -338,7 +339,7 @@ export function RivalryCenter() {
                       </div>
                     </div>
                     <div
-                      className="flex shrink-0 flex-col items-center justify-center rounded-lg border px-8 py-6"
+                      className="flex shrink-0 flex-col items-center justify-center rounded-[12px] border px-8 py-6"
                       style={{ borderColor: LINE, background: "rgba(0,0,0,0.25)" }}
                     >
                       <div className="text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>
@@ -382,7 +383,7 @@ export function RivalryCenter() {
                       <button
                         key={lp.key}
                         onClick={() => openLeague(lp)}
-                        className="group flex w-full items-center gap-4 rounded-lg border p-4 text-left"
+                        className="group flex w-full items-center gap-4 rounded-[12px] border p-4 text-left"
                         style={{ borderColor: LINE, background: PAPER }}
                       >
                         <div className="w-9 shrink-0 text-center text-2xl font-black" style={{ color: i === 0 ? GOLD : MUTED }}>
@@ -426,7 +427,7 @@ export function RivalryCenter() {
                 </span>
               </div>
               {ranked.length === 0 && (
-                <div className="mt-4 rounded-lg border p-5 text-sm" style={{ borderColor: LINE, background: PAPER, color: MUTED }}>
+                <div className="mt-4 rounded-[12px] border p-5 text-sm" style={{ borderColor: LINE, background: PAPER, color: MUTED }}>
                   Your personalized rivalry scores haven’t been generated yet.{" "}
                   <button onClick={() => refreshScores.mutate()} disabled={refreshScores.isPending} className="ml-1 rounded-md px-3 py-1 text-xs font-bold" style={{ background: CRIMSON, color: "#fff" }}>
                     {refreshScores.isPending ? "Generating…" : "Generate my rivalry scores"}
@@ -440,7 +441,7 @@ export function RivalryCenter() {
                     <button
                       key={`${p.rivalId ?? p.rivalName ?? i}`}
                       onClick={() => openDossier(p)}
-                      className="group flex w-full items-center gap-4 rounded-lg border p-4 text-left transition-colors"
+                      className="group flex w-full items-center gap-4 rounded-[12px] border p-4 text-left transition-colors"
                       style={{ borderColor: LINE, background: PAPER }}
                     >
                       <div
@@ -496,7 +497,7 @@ export function RivalryCenter() {
                     <button
                       key={i}
                       onClick={() => setOpen({ focalKey: m.aKey, focalName: m.a, rivalKey: m.bKey, rivalName: m.b })}
-                      className="rounded-xl border p-4 text-left"
+                      className="rounded-[15px] border p-4 text-left"
                       style={{ borderColor: LINE, background: PAPER }}
                     >
                       <div className="text-[11px] font-bold uppercase tracking-[0.25em]" style={{ color: GOLD }}>{m.title}</div>
@@ -573,7 +574,7 @@ export function RivalryCenter() {
                 </div>
                 <div className="mt-4 grid gap-2 md:grid-cols-2">
                   {nemeses.map((nm) => (
-                    <button key={nm.key} onClick={() => setOpen({ focalKey: nm.key, focalName: nm.name, rivalKey: nm.rivalKey, rivalName: nm.rivalName })} className="flex items-center justify-between rounded-lg border p-3 text-left" style={{ borderColor: LINE, background: PAPER }}>
+                    <button key={nm.key} onClick={() => setOpen({ focalKey: nm.key, focalName: nm.name, rivalKey: nm.rivalKey, rivalName: nm.rivalName })} className="flex items-center justify-between rounded-[12px] border p-3 text-left" style={{ borderColor: LINE, background: PAPER }}>
                       <div className="min-w-0">
                         <div className="truncate font-bold">{nm.name}</div>
                         <div className="text-xs" style={{ color: MUTED }}>Nemesis: <span style={{ color: CRIMSON }}>{nm.rivalName}</span> · {nm.name} is {nm.w}-{nm.l} vs them</div>
@@ -629,7 +630,7 @@ export function RivalryCenter() {
                 return (
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     {out.slice(0, 8).map((r, i) => (
-                      <div key={i} className="rounded-lg border p-4" style={{ borderColor: LINE, background: PAPER }}>
+                      <div key={i} className="rounded-[12px] border p-4" style={{ borderColor: LINE, background: PAPER }}>
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold uppercase tracking-widest" style={{ color: MUTED }}>
                             {r.season ?? "—"}
@@ -668,7 +669,7 @@ export function RivalryCenter() {
                         <button
                           key={i}
                           onClick={() => openDossier(p)}
-                          className="flex w-full items-center justify-between rounded-lg border p-3 text-left"
+                          className="flex w-full items-center justify-between rounded-[12px] border p-3 text-left"
                           style={{ borderColor: LINE, background: PAPER }}
                         >
                           <div>
@@ -707,7 +708,7 @@ export function RivalryCenter() {
                   return (
                     <div className="mt-4 grid gap-2">
                       {items.map((x, i) => (
-                        <div key={i} className="flex items-center gap-3 rounded-lg border p-3" style={{ borderColor: LINE, background: PAPER }}>
+                        <div key={i} className="flex items-center gap-3 rounded-[12px] border p-3" style={{ borderColor: LINE, background: PAPER }}>
                           <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: `${GOLD}1a`, color: GOLD }}>
                             {x.icon}
                           </span>
