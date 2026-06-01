@@ -351,6 +351,7 @@ function ProfilePanel({
   const earlyPos    = (draft.earlyPos     ?? {}) as Record<string, number>;
   const avgRoundByPos = (draft.avgRoundByPos ?? {}) as Record<string, number>;
   const mostDraftedPos = Array.isArray(draft.mostDraftedPos) ? draft.mostDraftedPos as string[] : [];
+  const byRound = Array.isArray((draft as any).byRound) ? ((draft as any).byRound as any[]) : [];
   const keeperPosDist = (keeper.keeperPosDist ?? {}) as Record<string, number>;
   const lastYearKeepers = Array.isArray(keeper.lastYearKeepers) ? keeper.lastYearKeepers : [];
   const txnSeasons  = Array.isArray(activity.txnSeasons)    ? activity.txnSeasons  : [];
@@ -768,6 +769,43 @@ function ProfilePanel({
 
       {profileTab === "draft" && (
         <div className="space-y-4">
+          <ProfileShellCard title="Draft tendencies by round">
+            {byRound.length === 0 ? (
+              <p className="text-sm text-zinc-500">No draft history yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {byRound.map((r: any) => {
+                  const pu = String(r.topPosition || "UNK").toUpperCase();
+                  return (
+                    <div key={r.round} className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                      <div className="flex items-start gap-3">
+                        <div className="grid shrink-0 place-items-center rounded-md bg-white/[0.05] text-[11px] font-black text-zinc-300" style={{ width: 36, height: 36 }}>R{r.round}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm leading-tight">
+                            <span className={cn("font-bold", POS_TEXT[pu] ?? "text-zinc-200")}>{pu === "UNK" ? "Mixed" : pu}</span>
+                            <span className="text-zinc-500"> in </span>
+                            <span className="font-semibold text-zinc-100">{r.topCount} of {r.seasons}</span>
+                            <span className="text-zinc-500"> {r.seasons === 1 ? "year" : "years"}</span>
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {(r.picks ?? []).map((pk: any, i: number) => (
+                              <span key={i} className="inline-flex items-center gap-1 rounded border border-white/[0.07] bg-white/[0.03] px-1.5 py-0.5 text-[10px]">
+                                <span className="tabular-nums text-zinc-500">{pk.season}</span>
+                                <span className={cn("font-bold", POS_TEXT[String(pk.position || "UNK").toUpperCase()] ?? "text-zinc-300")}>{String(pk.position || "UNK").toUpperCase()}</span>
+                                <span className="max-w-[130px] truncate text-zinc-400">{pk.playerName}</span>
+                                {pk.isKeeper && <span className="font-bold text-amber-400/90">K</span>}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </ProfileShellCard>
+
           <div className="grid gap-3 lg:grid-cols-2">
             <ProfileShellCard title="Position distribution">
               {sortedPos.length > 0 ? (

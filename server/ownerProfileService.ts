@@ -144,6 +144,7 @@ export type OwnerProfilePayload = {
     earlyPos: Record<string, number>;
     avgRoundByPos: Record<string, number>;
     mostDraftedPos: string[];
+    byRound: Array<{ round: number; seasons: number; topPosition: string; topCount: number; posCounts: Record<string, number>; picks: Array<{ season: number; position: string; playerName: string; isKeeper: boolean }> }>;
   };
   keeperDNA: {
     totalKeepers: number;
@@ -1057,6 +1058,23 @@ export async function buildOwnerProfilePayload(args: {
     .slice(0, 3)
     .map(([pos]) => pos);
 
+  const byRoundMap = new Map<number, Array<{ season: number; position: string; playerName: string; isKeeper: boolean }>>();
+  for (const p of ownedPicks) {
+    const r = Number(p.roundId) || 0;
+    if (r <= 0) continue;
+    if (!byRoundMap.has(r)) byRoundMap.set(r, []);
+    byRoundMap.get(r)!.push({ season: p.season, position: p.position || "UNK", playerName: p.playerName || "", isKeeper: !!p.isKeeper });
+  }
+  const byRound = [...byRoundMap.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([round, picks]) => {
+      const sorted = [...picks].sort((a, b) => b.season - a.season);
+      const posCounts: Record<string, number> = {};
+      for (const pk of sorted) posCounts[pk.position] = (posCounts[pk.position] ?? 0) + 1;
+      const top = Object.entries(posCounts).sort((a, b) => b[1] - a[1])[0];
+      return { round, seasons: sorted.length, topPosition: top?.[0] ?? "UNK", topCount: top?.[1] ?? 0, posCounts, picks: sorted };
+    });
+
   const keeperPicks = ownedPicks.filter((p) => p.isKeeper === 1);
   const totalKeepers = keeperPicks.length;
   const keeperRate = totalPicks > 0 ? Number(((totalKeepers / totalPicks) * 100).toFixed(1)) : 0;
@@ -1279,6 +1297,7 @@ export async function buildOwnerProfilePayload(args: {
       earlyPos,
       avgRoundByPos,
       mostDraftedPos,
+      byRound,
     },
     keeperDNA: {
       totalKeepers,
