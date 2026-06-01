@@ -341,6 +341,15 @@ const CAPITAL_CFG = {
   BELOW_AVERAGE: "text-red-400",
 };
 
+function ownerArchetype(m: any): { label: string; cls: string } {
+  const pred = Number(m?.predictabilityScore ?? 0);
+  const surp = Number(m?.surpriseProbability ?? 0);
+  if (surp >= 55) return { label: "Panic Pivot", cls: "text-red-300 border-red-500/30 bg-red-500/10" };
+  if (pred >= 72) return { label: "By-the-Book", cls: "text-emerald-300 border-emerald-500/30 bg-emerald-500/10" };
+  if (pred >= 55) return { label: "Steady Hand", cls: "text-sky-300 border-sky-500/30 bg-sky-500/10" };
+  return { label: "Wildcard", cls: "text-amber-300 border-amber-500/30 bg-amber-500/10" };
+}
+
 function ShockMeterSection({ meters }: { meters: any[] }) {
   const [sel, setSel] = useState<number | null>(null);
   const sorted = useMemo(() => [...meters].sort((a, b) => b.surpriseProbability - a.surpriseProbability), [meters]);
@@ -356,6 +365,7 @@ function ShockMeterSection({ meters }: { meters: any[] }) {
                 sel === m.teamId ? "border-emerald-500/40 bg-zinc-800/60 shadow-lg" : "border-zinc-800/60 bg-zinc-900/40 hover:border-zinc-700")}>
               <div className="text-[9px] font-black uppercase tracking-wider text-zinc-600 truncate">{m.teamName}</div>
               <div className="text-[10px] text-zinc-500 truncate">{m.ownerName?.split(" ")[0]}</div>
+              {(() => { const __a = ownerArchetype(m); return <span className={cn("inline-block text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border", __a.cls)}>{__a.label}</span>; })()}
               {/* Predict bar */}
               <div>
                 <div className="flex items-center justify-between mb-0.5">
@@ -1512,17 +1522,7 @@ export function DraftWarRoom() {
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-5">
 
-        {/* Diagnostic strip */}
-        <div className="flex items-center gap-4 px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800/40 text-[10px] font-mono text-zinc-600 flex-wrap">
-          <span className="text-zinc-500 font-bold">DIAGNOSTICS</span>
-          <span>Route: <span className="text-emerald-400">/draft-war-room ✓</span></span>
-          <span>Data: <span className="text-emerald-400">{data?.ok ? "loaded ✓" : "error"}</span></span>
-          <span>Teams: <span className="text-zinc-300">{teamCount}</span></span>
-          <span>Keepers: <span className="text-zinc-300">{keeperPredictions?.length ?? 0}</span></span>
-          <span>Players: <span className="text-zinc-300">{(rosterNeeds ?? []).reduce((s:number, n:any) => s + Object.values(n.positionCounts ?? {}).reduce((a:number,b:any) => a + (b as number), 0), 0)}</span></span>
-          <span>Mock Picks: <span className={totalPicks > 0 ? "text-emerald-400" : "text-red-400"}>{totalPicks} {totalPicks > 0 ? "✓" : "⚠ EMPTY"}</span></span>
-          <span>Build: <span className="text-amber-400">18fd312-fix</span></span>
-        </div>
+        {/* Diagnostics hidden for clean UI */}
 
         {/* Disclaimer */}
         <div className="flex items-center gap-2 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800/60 text-[10px] text-zinc-500">
@@ -1549,15 +1549,12 @@ export function DraftWarRoom() {
         </Section>
 
         {/* 4. Draft Shock Meter */}
-        <Section title="Owner Tendencies" icon={Activity} badge={shockMeters?.length}>
+        <Section title="Owner DNA Map" icon={Activity} badge={shockMeters?.length}>
           <ShockMeterSection meters={shockMeters ?? []} />
         </Section>
 
         {/* 5. Draft Environment Dashboard — PHASE 1.75 */}
-        <Section title="League Context" icon={Gauge}
-          accent="border-emerald-500/20 bg-zinc-900/40" defaultOpen={true}>
-          <DraftEnvironmentSection env={draftEnvironment} />
-        </Section>
+        {/* League Context removed; format shown in header chips */}
 
         {/* 6. Position Run Alerts — PHASE 1.75 */}
         <Section title="Position Run Windows" icon={Flame} badge={positionRunAlerts?.length ?? 0}>
