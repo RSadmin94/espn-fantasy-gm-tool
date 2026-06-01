@@ -64,6 +64,30 @@ type Props = {
   initialOpponentKey?: string;
 };
 
+function formatSeasonRanges(years: number[]): string {
+  const s = [...years].sort((a, b) => a - b);
+  const out: string[] = [];
+  let i = 0;
+  while (i < s.length) {
+    let j = i;
+    while (j + 1 < s.length && s[j + 1] === s[j]! + 1) j++;
+    out.push(i === j ? String(s[i]) : `${s[i]}-${s[j]}`);
+    i = j + 1;
+  }
+  return out.join(", ");
+}
+
+function coverageNote(c: { seasonsWithData: number[]; missingSeasons: number[]; partial: boolean }): string {
+  if (!c || !c.partial) return "";
+  if (c.seasonsWithData.length === 1) {
+    return `Only ${c.seasonsWithData[0]} matchup history available. Run historical matchup sync.`;
+  }
+  if (c.missingSeasons.length) {
+    return `Partial matchup history: seasons ${formatSeasonRanges(c.missingSeasons)} not synced. Records reflect available seasons only.`;
+  }
+  return "Partial matchup history. Records reflect available seasons only.";
+}
+
 export function RivalryDossierPanel({
   focalOwnerKey,
   pickerOptions,
@@ -193,6 +217,15 @@ export function RivalryDossierPanel({
           )}
         </div>
       </div>
+
+      {data.coverage?.partial && (
+        <div
+          className="rounded-[10px] px-3 py-2 text-xs"
+          style={{ border: `1px solid ${GOLD}40`, background: "rgba(245,198,90,.08)", color: GOLD }}
+        >
+          {coverageNote(data.coverage)}
+        </div>
+      )}
 
       {!pd || !oppRow ? (
         <p className="rounded-[10px] border border-dashed py-10 text-center text-sm" style={{ borderColor: "rgba(255,255,255,.12)", color: MUTED }}>

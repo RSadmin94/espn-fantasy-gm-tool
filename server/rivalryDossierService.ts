@@ -5,10 +5,13 @@
 import { gmMatchups, gmTeams } from "../drizzle/schema";
 import { and as andDrizzle, asc as ascDrizzle, eq as eqDrizzle } from "drizzle-orm";
 import type { AppDb } from "./db";
+import { getCachedViewWithTier } from "./db";
+import { normalizeMatchups } from "./espnService";
 import {
   buildTeamToCanonicalProfileKey,
   cleanOwnerDisplay,
   resolveOwnerTeamsForProfile,
+  OWNER_PROFILE_HIST_SEASONS,
   type GmTeamRow,
 } from "./ownerProfileService";
 
@@ -67,10 +70,16 @@ export type RivalryDossierPayload = {
   ownerKey: string;
   ownerDisplayName: string;
   opponents: RivalryOpponentRow[];
-  /** gmMatchups rows used after dedupe (completed RS + playoffs). */
+  /** Completed matchups used after dedupe (gmMatchups + combined-cache fallback). */
   matchupRowsUsed: number;
   includeHistoricalOwners: boolean;
   pairDetail: RivalryPairDetail | null;
+  /** Seasons that produced data + interior gaps, for partial-history labeling. */
+  coverage: {
+    seasonsWithData: number[];
+    missingSeasons: number[];
+    partial: boolean;
+  };
 };
 
 /** Tag rules (focal owner's win % vs opponent). */
@@ -287,7 +296,9 @@ export async function loadRivalryDossier(args: {
 
   const seen = new Set<string>();
   const matchups: DbMatchupRow[] = [];
+  const covered = new Set<number>();
   for (const r of dbRows) {
+    covered.add(r.season);
     const hid = Number(r.homeTeamId);
     const aid = Number(r.awayTeamId);
     if (!hid || !aid) continue;
@@ -306,6 +317,50 @@ export async function loadRivalryDossier(args: {
       awayScore: Number(r.awayScore),
       isPlayoff: isPo,
     });
+  }
+
+  // Historical coverage: gmMatchups only holds some seasons for this league.
+  // For any season without completed gmMatchups rows, fall back to the ESPN
+  // combined cache (the same source the Rivalry Center grid reads), including
+  // playoffs. Mirrors loadFlatRegularSeasonMatchups in ownerProfileService.
+  const seasonsWithData = new Set<number>(covered);
+  for (const s of OWNER_PROFILE_HIST_SEASONS) {
+    if (covered.has(s)) continue;
+    const hit = await getCachedViewWithTier(s, "combined", lid);
+    const payload = hit?.row?.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) continue;
+    try {
+      const norm = normalizeMatchups(payload as Record<string, unknown>);
+      for (const mm of norm) {
+        const row = mm as Record<string, unknown>;
+        const hid = Number(row.homeTeamId);
+        const aid = Number(row.awayTeamId);
+        if (!hid || !aid || !Number.isFinite(hid) || !Number.isFinite(aid)) continue;
+        const winnerStr = String(row.winner ?? "UNDECIDED");
+        if (winnerStr !== "HOME" && winnerStr !== "AWAY") continue;
+        const tier = String(row.playoffTierType || "");
+        const isPo = tier !== "" && tier !== "NONE";
+        const mpid = Number(row.matchupPeriodId) || 0;
+        const week = Number(row.scoringPeriodId) || 0;
+        const mk = `${s}|${mpid}|${hid}|${aid}|${isPo ? "P" : "R"}`;
+        if (seen.has(mk)) continue;
+        seen.add(mk);
+        matchups.push({
+          season: s,
+          matchupPeriodId: mpid,
+          week,
+          homeTeamId: hid,
+          awayTeamId: aid,
+          winnerTeamId: winnerStr === "HOME" ? hid : aid,
+          homeScore: Number(row.homeTotalPoints ?? 0) || 0,
+          awayScore: Number(row.awayTotalPoints ?? 0) || 0,
+          isPlayoff: isPo,
+        });
+        seasonsWithData.add(s);
+      }
+    } catch {
+      /* skip malformed cache payloads */
+    }
   }
 
   const byOpp = new Map<string, Agg>();
@@ -433,6 +488,19 @@ export async function loadRivalryDossier(args: {
     }
   }
 
+  const sortedSeasons = [...seasonsWithData].sort((a, b) => a - b);
+  const missingSeasons: number[] = [];
+  if (sortedSeasons.length > 1) {
+    for (let s = sortedSeasons[0]!; s <= sortedSeasons[sortedSeasons.length - 1]!; s++) {
+      if (!seasonsWithData.has(s)) missingSeasons.push(s);
+    }
+  }
+  const coverage = {
+    seasonsWithData: sortedSeasons,
+    missingSeasons,
+    partial: missingSeasons.length > 0 || sortedSeasons.length <= 1,
+  };
+
   return {
     ownerKey: profileOwnerKey,
     ownerDisplayName: focalDisplay,
@@ -440,5 +508,6 @@ export async function loadRivalryDossier(args: {
     matchupRowsUsed: matchups.length,
     includeHistoricalOwners,
     pairDetail,
+    coverage,
   };
 }
