@@ -1267,7 +1267,7 @@ export function OwnerProfiles() {
   );
 
   return (
-    <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 80% -10%,rgba(239,68,68,.18),transparent 40%),linear-gradient(180deg,#0a0e16,#070a11)" }}>
+    <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 80% -10%,rgba(45,212,191,.16),transparent 42%),linear-gradient(180deg,#0a0e16,#070a11)" }}>
       <div className="mb-5 flex items-center gap-3">
         <div className="grid place-items-center rounded-2xl shrink-0" style={{ width: 46, height: 46, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)" }}>
           <Users className="h-6 w-6 text-red-400" />

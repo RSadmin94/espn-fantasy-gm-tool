@@ -4,10 +4,10 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { Zap, Repeat2, Trophy, Newspaper, Users, Flame, Star, Activity, ChevronRight, RefreshCw } from "lucide-react";
 
-const GOLD="#f5c518", TEAL="#22c55e", MUTED="#8b97a8", RED="#ef4444", ORANGE="#f7902f", GREEN="#22c55e", BLUE="#55a7ff", TEXT="#f3f8ff";
+const GOLD="#f5c518", TEAL="#22c55e", MUTED="#8b97a8", RED="#ef4444", ORANGE="#f7902f", GREEN="#22c55e", BLUE="#55a7ff", TEXT="#f3f8ff", ACCENT="#2dd4bf";
 const PANEL: React.CSSProperties = { background:"linear-gradient(180deg,#141a24,#0e131c)", border:"1px solid rgba(255,255,255,.07)", borderRadius:15 };
 const SUB: React.CSSProperties = { background:"rgba(255,255,255,.03)", border:"1px solid rgba(255,255,255,.06)", borderRadius:10 };
-const PAGEBG: React.CSSProperties = { background:"radial-gradient(circle at 80% -10%,rgba(239,68,68,.18),transparent 40%),linear-gradient(180deg,#0a0e16,#070a11)", color:TEXT };
+const PAGEBG: React.CSSProperties = { background:"radial-gradient(circle at 80% -10%,rgba(45,212,191,.16),transparent 42%),linear-gradient(180deg,#0a0e16,#070a11)", color:TEXT };
 
 function firstName(s: any){ return String(s||"").trim().split(" ")[0] || "Owner"; }
 function archetype(m: any){ const pred=Number(m?.predictabilityScore??0), surp=Number(m?.surpriseProbability??0);
@@ -97,7 +97,7 @@ export function CommandDashboard(){
         <div style={PANEL} className="overflow-hidden">
           <div className="p-5">
             <div className="flex items-start justify-between gap-3">
-              <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Star className="h-5 w-5" style={{color:RED}}/> Today's GM Briefing</h3>
+              <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Star className="h-5 w-5" style={{color:ACCENT}}/> Today's GM Briefing</h3>
               <span className="px-2 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap" style={{background:"rgba(34,197,94,.10)",border:"1px solid rgba(34,197,94,.33)",color:TEAL}}>{pulse.length} signals</span>
             </div>
             <div className="mt-3 text-[19px] leading-snug font-black" style={{color:GOLD}}>{memo}</div>
@@ -113,7 +113,7 @@ export function CommandDashboard(){
         </div>
 
         <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Activity className="h-5 w-5" style={{color:RED}}/> League Intelligence Pulse</h3>
+          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Activity className="h-5 w-5" style={{color:ACCENT}}/> League Intelligence Pulse</h3>
           <div className="mt-3">
             {pulse.length===0 && <div className="text-sm py-6 text-center" style={{color:MUTED}}>No live signals yet.</div>}
             {pulse.map((p:any,i:number)=>(
@@ -125,7 +125,7 @@ export function CommandDashboard(){
         </div></div>
 
         <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Zap className="h-5 w-5" style={{color:RED}}/> Data Health</h3>
+          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Zap className="h-5 w-5" style={{color:ACCENT}}/> Data Health</h3>
           <div className="grid grid-cols-2 gap-2.5 mt-4">
             {[{b:"League",s:d.ok?"Synced":"\u2014"},{b:"Draft",s:(d.totalPicks??0)>0?"Live":"Indexed"},{b:"Owners",s:meters.length?`${meters.length} read`:"\u2014"},{b:"AI Memo",s:d.confidenceDashboard?"Ready":"\u2014"}].map((x:any,i:number)=>(
               <div key={i} style={SUB} className="p-3"><b className="block mb-1">{x.b}</b><span className="inline-block px-2 py-1 rounded-lg text-xs font-extrabold" style={{background:"rgba(34,197,94,.10)",border:"1px solid rgba(34,197,94,.33)",color:TEAL}}>{x.s}</span></div>
@@ -136,11 +136,11 @@ export function CommandDashboard(){
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr_1fr] gap-3 mb-3">
         <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2" style={{color:TEXT}}><span style={{color:RED}}>&rarr;</span> Action Queue</h3>
+          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2" style={{color:TEXT}}><span style={{color:ACCENT}}>&rarr;</span> Action Queue</h3>
           <div className="mt-3 space-y-2.5">
             {actions.map((a:any,i:number)=>(
               <Link key={i} to={a.to} className="grid items-center gap-2.5 no-underline" style={{gridTemplateColumns:"34px 1fr 78px",...SUB,padding:"8px 10px",minHeight:60,color:TEXT}}>
-                <span className="w-[30px] h-[30px] rounded-full flex items-center justify-center font-black" style={{background:"rgba(239,68,68,.14)",border:"1px solid rgba(239,68,68,.45)",color:RED}}>{i+1}</span>
+                <span className="w-[30px] h-[30px] rounded-full flex items-center justify-center font-black" style={{background:"rgba(45,212,191,.14)",border:"1px solid rgba(45,212,191,.45)",color:ACCENT}}>{i+1}</span>
                 <span><b className="block text-sm">{a.t}</b><span className="text-xs" style={{color:MUTED}}>{a.d}</span></span>
                 <span className="text-center text-xs font-extrabold rounded-md px-2 py-1.5" style={{border:"1px solid rgba(34,197,94,.35)",background:"rgba(34,197,94,.08)",color:TEAL}}>{a.cta}</span>
               </Link>
@@ -149,7 +149,7 @@ export function CommandDashboard(){
         </div></div>
 
         <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><span style={{color:RED}}>&#9638;</span> War Room Shortcuts</h3>
+          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><span style={{color:ACCENT}}>&#9638;</span> War Room Shortcuts</h3>
           <div className="grid grid-cols-2 gap-2.5 mt-3">
             {shortcuts.map((s:any,i:number)=>(
               <Link key={i} to={s.to} className="no-underline p-3.5 block" style={{...SUB,borderRadius:12,minHeight:94,color:TEXT}}>
@@ -161,7 +161,7 @@ export function CommandDashboard(){
         </div></div>
 
         <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Users className="h-5 w-5" style={{color:RED}}/> Owner DNA Snapshot</h3>
+          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Users className="h-5 w-5" style={{color:ACCENT}}/> Owner DNA Snapshot</h3>
           <div className="mt-2">
             {dnaOwners.length===0 && <div className="text-sm py-6 text-center" style={{color:MUTED}}>No owner reads yet.</div>}
             {dnaOwners.map((m:any,i:number)=>{ const a=archetype(m); return (
@@ -177,7 +177,7 @@ export function CommandDashboard(){
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.18fr_1fr] gap-3">
         <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Newspaper className="h-5 w-5" style={{color:RED}}/> League Receipts</h3>
+          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Newspaper className="h-5 w-5" style={{color:ACCENT}}/> League Receipts</h3>
           <p className="text-xs mt-1" style={{color:MUTED}}>Behavioral evidence pulled from your league's draft signals.</p>
           <div className="mt-3">
             {receipts.length===0 && <div className="text-sm py-6 text-center" style={{color:MUTED}}>No receipts generated yet \u2014 sync draft history to populate.</div>}
@@ -191,7 +191,7 @@ export function CommandDashboard(){
         </div></div>
 
         <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Trophy className="h-5 w-5" style={{color:RED}}/> GM Readiness</h3>
+          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Trophy className="h-5 w-5" style={{color:ACCENT}}/> GM Readiness</h3>
           <div className="grid grid-cols-3 gap-2.5 mt-3">
             {rings.map((r:any,i:number)=>(
               <div key={i} style={SUB} className="flex flex-col items-center justify-center py-4" >
