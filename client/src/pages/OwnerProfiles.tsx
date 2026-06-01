@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment, useEffect } from "react";
+import { useState, useMemo, Fragment, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   Loader2,
@@ -1215,6 +1215,7 @@ export function OwnerProfiles() {
   }, [listQ.data?.allOwners, dossierActiveSeason]);
   const [selectedOwnerKey, setSelectedOwnerKey] = useState<string | null>(null);
   const [showGraveyard, setShowGraveyard] = useState(false);
+  const profileRef = useRef<HTMLDivElement | null>(null);
 
   const active    = useMemo(() => (listQ.data?.active    ?? []) as any[], [listQ.data]);
   const graveyard = useMemo(() => (listQ.data?.graveyard ?? []) as any[], [listQ.data]);
@@ -1287,7 +1288,7 @@ export function OwnerProfiles() {
               selected={listRowLookupKey(o) !== "" && selectedOwnerKey === listRowLookupKey(o)}
               onClick={() => {
                 const id = listRowLookupKey(o);
-                if (id) setSelectedOwnerKey(id);
+                if (id) { setSelectedOwnerKey(id); setTimeout(() => profileRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }
               }}
             />
           ))}
@@ -1308,7 +1309,7 @@ export function OwnerProfiles() {
                   {graveyard.map((o: any, gi: number) => (
                     <button key={listRowLookupKey(o) || `grave-${gi}`} type="button" onClick={() => {
                       const id = listRowLookupKey(o);
-                      if (id) setSelectedOwnerKey(id);
+                      if (id) { setSelectedOwnerKey(id); setTimeout(() => profileRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }
                     }}
                       className={cn(
                         "w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors",
@@ -1326,7 +1327,7 @@ export function OwnerProfiles() {
           )}
         </div>
 
-        <div className="flex-1 min-w-0">
+        <div ref={profileRef} className="flex-1 min-w-0">
           {selectedOwnerKey ? (
             <ProfilePanel
               profileLookupKey={selectedOwnerKey}
