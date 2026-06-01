@@ -253,6 +253,35 @@ export function RivalryCenter() {
     }
     return out.sort((a, b) => a.pct - b.pct);
   }, [gridOwners, recordMap]);
+
+  const mythology = useMemo(() => {
+    type M = { title: string; a: string; b: string; aKey: string; bKey: string; detail: string };
+    const ps = leaguePairs;
+    if (ps.length === 0) return [] as M[];
+    const mk = (lp: any, title: string, detail: string): M => ({
+      title, a: lp.aName, b: lp.bName, aKey: lp.aKey, bKey: lp.bKey, detail,
+    });
+    const out: M[] = [];
+    const bitter = ps[0];
+    if (bitter) out.push(mk(bitter, "Most Bitter Rivalry", `Rivalry score ${bitter.score} · ${bitter.meetings} meetings`));
+    const longest = [...ps].sort((a, b) => b.meetings - a.meetings)[0];
+    if (longest) out.push(mk(longest, "Longest Grudge", `${longest.meetings} all-time meetings`));
+    const playoff = [...ps].filter((p) => p.playoff > 0).sort((a, b) => b.playoff - a.playoff)[0];
+    if (playoff) out.push(mk(playoff, "Most Playoff Pain", `${playoff.playoff} playoff meetings`));
+    const sided = [...ps]
+      .filter((p) => p.meetings >= 5)
+      .sort((a, b) => Math.abs(b.aWins - b.aLosses) / b.meetings - Math.abs(a.aWins - a.aLosses) / a.meetings)[0];
+    if (sided) out.push(mk(sided, "Most One-Sided", `${Math.max(sided.aWins, sided.aLosses)}-${Math.min(sided.aWins, sided.aLosses)} series`));
+    const tight = [...ps]
+      .filter((p) => p.meetings >= 6)
+      .sort((a, b) => Math.abs(a.aWins - a.aLosses) - Math.abs(b.aWins - b.aLosses) || b.meetings - a.meetings)[0];
+    if (tight) out.push(mk(tight, "Dead Even", `${tight.aWins}-${tight.aLosses} across ${tight.meetings} games`));
+    const close = [...ps].sort((a, b) => b.close - a.close)[0];
+    if (close && close.close > 0) out.push(mk(close, "Most Heartbreak", `${close.close} one-score games`));
+    const seen = new Set<string>();
+    return out.filter((x) => (seen.has(x.title) ? false : (seen.add(x.title), true)));
+  }, [leaguePairs]);
+
   const firstName = (s: string) => String(s).trim().split(/\s+/)[0] ?? s;
 
 
@@ -510,6 +539,32 @@ export function RivalryCenter() {
             </section>
 
             {/* ── SECTION 4 — Historical Receipts ──────────────────── */}
+            {/* League Mythology */}
+            {mythology.length > 0 && (
+              <section className="mt-12">
+                <div className="border-b pb-2" style={{ borderColor: LINE }}>
+                  <Kicker>League Mythology</Kicker>
+                  <h3 className="mt-1 text-2xl font-black uppercase tracking-tight">The Legends</h3>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  {mythology.map((m, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setOpen({ focalKey: m.aKey, focalName: m.a, rivalKey: m.bKey, rivalName: m.b })}
+                      className="rounded-xl border p-4 text-left"
+                      style={{ borderColor: LINE, background: PAPER }}
+                    >
+                      <div className="text-[11px] font-bold uppercase tracking-[0.25em]" style={{ color: GOLD }}>{m.title}</div>
+                      <div className="mt-1 text-lg font-black leading-tight">
+                        {m.a} <span style={{ color: MUTED }}>vs</span> {m.b}
+                      </div>
+                      <div className="mt-1 text-xs" style={{ color: MUTED }}>{m.detail}</div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* Head-to-head grid (active owners) */}
             {gridOwners.length > 1 && (
               <section className="mt-12">
