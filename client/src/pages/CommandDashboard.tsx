@@ -2,217 +2,137 @@ import { useMemo } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
-import { Zap, Repeat2, Trophy, Newspaper, Users, Flame, Star, Activity, ChevronRight, RefreshCw } from "lucide-react";
+import { DashboardRecentLeagueEvents } from "@/components/dashboard/DashboardRecentLeagueEvents";
+import { Shield, Trophy, Award, Hexagon, Crown, ChevronRight } from "lucide-react";
 
-const GOLD="#f5c518", TEAL="#22c55e", MUTED="#8b97a8", RED="#ef4444", ORANGE="#f7902f", GREEN="#22c55e", BLUE="#55a7ff", TEXT="#f3f8ff";
-const PANEL: React.CSSProperties = { background:"linear-gradient(180deg,#141a24,#0e131c)", border:"1px solid rgba(255,255,255,.07)", borderRadius:15 };
-const SUB: React.CSSProperties = { background:"rgba(255,255,255,.03)", border:"1px solid rgba(255,255,255,.06)", borderRadius:10 };
-const PAGEBG: React.CSSProperties = { background:"radial-gradient(circle at 80% -10%,rgba(239,68,68,.10),transparent 40%),linear-gradient(180deg,#0a0e16,#070a11)", color:TEXT };
+const BG="#0a0e14", CARD="#11161f", CARD2="#0e131c", LINE="rgba(255,255,255,.07)", SUBBG="rgba(255,255,255,.03)";
+const RED="#ef4444", GREEN="#22c55e", GOLD="#f5c518", MUTED="#8b97a8", TEXT="#f3f8ff";
+const PAGE: React.CSSProperties = { background:"radial-gradient(circle at 82% -8%,rgba(239,68,68,.10),transparent 42%),linear-gradient(180deg,#0b0f17,#080b11)", color:TEXT };
+const PANEL: React.CSSProperties = { background:CARD, border:`1px solid ${LINE}`, borderRadius:14 };
 
-function firstName(s: any){ return String(s||"").trim().split(" ")[0] || "Owner"; }
-function archetype(m: any){ const pred=Number(m?.predictabilityScore??0), surp=Number(m?.surpriseProbability??0);
-  if(surp>=55) return {label:"Panic Pivot", color:RED};
-  if(pred>=72) return {label:"By-the-Book", color:GREEN};
-  if(pred>=55) return {label:"Steady Hand", color:BLUE};
-  return {label:"Wildcard", color:ORANGE}; }
-function sev(c: number){ return c>=60?{t:"High",color:RED}:c>=40?{t:"Med",color:ORANGE}:{t:"Low",color:GREEN}; }
+const nn=(x:any)=>{ const v=Number(x); return Number.isFinite(v)?v:0; };
+function normalize(raw:any){ if(!raw||typeof raw!=="object")return null; const teamId=nn(raw.teamId??raw.id); if(!teamId)return null;
+  const teamName=String(raw.teamName??raw.name??("Team "+teamId)).trim()||("Team "+teamId);
+  const ownerName=String(raw.owners??raw.ownerName??raw.owner??"").trim();
+  let rankFinal:any=null; for(const k of ["rankFinal","rank","standing"]){ const v=raw[k]; if(v!=null&&Number.isFinite(Number(v))&&Number(v)>0){rankFinal=Number(v);break;} }
+  return { teamId, teamName, ownerName, wins:nn(raw.wins), losses:nn(raw.losses), ties:nn(raw.ties), pointsFor:nn(raw.pointsFor??raw.PF), rankFinal, logoUrl:String(raw.logoUrl??raw.logo??"").trim()||undefined }; }
+function winPct(t:any){ const w=nn(t.wins),l=nn(t.losses),ti=nn(t.ties),g=w+l+ti; return g>0?(w+0.5*ti)/g:0; }
+function rankRows(rows:any[]){ const s=[...rows].sort((a,b)=>{ const d=winPct(b)-winPct(a); if(Math.abs(d)>1e-9)return d; return nn(b.pointsFor)-nn(a.pointsFor); }); return s.map((t,i)=>({...t,displayRank:i+1})); }
+function ordinal(num:number){ const s=["th","st","nd","rd"], v=num%100; return num+(s[(v-20)%10]||s[v]||s[0]); }
+function pct3(x:number){ return x.toFixed(3).replace(/^0/,""); }
 
 export function CommandDashboard(){
-  const lg: any = useLeagueContext();
+  const lg:any = useLeagueContext();
   const season = lg?.season ?? new Date().getFullYear();
-  const scoring: string = lg?.scoringType ?? "";
-  const draftQ = (trpc as any).draftWarRoom.getDraftWarRoomData.useQuery({ season }, { staleTime:300000, refetchOnWindowFocus:false, enabled: !!season });
-  const d: any = draftQ.data ?? {};
-  const meters: any[] = d.shockMeters ?? [];
-  const runs: any[] = d.positionRunAlerts ?? [];
-  const scarce: any[] = d.scarcityAlerts ?? [];
-  const teamCount: number = d.teamCount ?? lg?.teamCount ?? 0;
-  const loading = draftQ.isLoading;
+  const teamCount0 = lg?.teamCount ?? 0;
+  const myTeamId:number|null = lg?.myTeamId ?? null;
 
-  const bySurprise = useMemo(()=>[...meters].sort((a,b)=>(b.surpriseProbability??0)-(a.surpriseProbability??0)),[meters]);
-  const byPredict = useMemo(()=>[...meters].sort((a,b)=>(b.predictabilityScore??0)-(a.predictabilityScore??0)),[meters]);
-  const topRuns = useMemo(()=>[...runs].sort((a,b)=>(b.confidence??0)-(a.confidence??0)),[runs]);
-  const dnaOwners = byPredict.slice(0,4);
-  const avgPredict = meters.length ? Math.round(meters.reduce((s,m)=>s+(m.predictabilityScore??0),0)/meters.length) : 0;
-  const ownerCoverage = teamCount ? Math.min(100, Math.round((meters.length/teamCount)*100)) : 0;
-  const topSurprise = bySurprise[0];
-  const topRun = topRuns[0];
+  const pulseQ = trpc.weeklyAssessment.leaguePulse.useQuery({ season }, { retry:false, staleTime:60000, refetchOnWindowFocus:false } as any);
+  const week = (pulseQ.data as any)?.week ?? 0;
+  const standingsQ = trpc.espn.standings.useQuery({ season }, { staleTime:60000, refetchOnWindowFocus:false } as any);
+  const scoreboardQ = trpc.espn.matchupsScoreboard.useQuery({ season, week: week>=1?week:1 }, { enabled: week>=1 && pulseQ.isSuccess, staleTime:60000, refetchOnWindowFocus:false } as any);
+  const hofQ = trpc.espn.hallOfFame.useQuery(undefined, { staleTime:120000, refetchOnWindowFocus:false } as any);
 
-  const memo = loading ? "Loading league intelligence\u2026"
-    : meters.length===0 ? "Sync your league to generate today's GM briefing."
-    : `Draft prep is live. ${topSurprise ? firstName(topSurprise.ownerName)+" is your least predictable rival ("+(topSurprise.mostLikelyPosition||"flex")+" lean). " : ""}${topRun ? topRun.position+" run risk is the strongest board signal. " : ""}Protect leverage where value is thin.`;
+  const pulseTeams:any[] = (pulseQ.data as any)?.teams ?? [];
+  const ownerMap = useMemo(()=>{ const m=new Map<number,string>(); for(const t of pulseTeams){ if(t.teamId>0 && t.ownerName?.trim()) m.set(t.teamId, t.ownerName.trim()); } return m; }, [pulseTeams]);
+  const ranked = useMemo(()=>{ const raw=(standingsQ.data as any); const arr=Array.isArray(raw)?raw:(raw?.teams ?? raw?.standings ?? []); const base=(arr as any[]).map(normalize).filter(Boolean) as any[]; return rankRows(base).map(t=>({ ...t, ownerName: ownerMap.get(t.teamId) || t.ownerName || t.teamName })); }, [standingsQ.data, ownerMap]);
+  const teamCount = teamCount0 || ranked.length;
 
-  const pulse: any[] = [
-    ...topRuns.slice(0,2).map((r:any)=>({ icon:"\u2316", text:`${r.position} scarcity run forming`, s:sev(r.confidence??0) })),
-    ...(scarce[0] ? [{ icon:"\u25CC", text:`${scarce[0].position||"Value"} value window open`, s:sev(45) }] : []),
-    ...(topSurprise ? [{ icon:"\u273A", text:`${firstName(topSurprise.ownerName)} surprise risk ${Math.round(topSurprise.surpriseProbability??0)}%`, s:sev(topSurprise.surpriseProbability??0) }] : []),
-  ];
+  const myRow = useMemo(()=> (myTeamId? ranked.find(t=>t.teamId===myTeamId):null) ?? ranked[0] ?? null, [ranked, myTeamId]);
+  const champRecord = useMemo(()=>{ const recs=(hofQ.data as any)?.ownerRecords ?? []; if(!myRow) return null; return recs.find((r:any)=> (r.ownerName||"").trim().toLowerCase()===(myRow.ownerName||"").trim().toLowerCase()) ?? null; }, [hofQ.data, myRow]);
+  const champs = champRecord?.championships ?? 0;
+  const lastWon = useMemo(()=>{ const hist=(hofQ.data as any)?.championships?.history ?? []; if(!myRow) return null; const mine=hist.filter((h:any)=> (h.ownerName||"").trim().toLowerCase()===(myRow.ownerName||"").trim().toLowerCase()).map((h:any)=>nn(h.season||h.year)).filter(Boolean); return mine.length?Math.max(...mine):null; }, [hofQ.data, myRow]);
 
-  const receipts = meters.flatMap((m:any)=> (m.evidence??[]).slice(0,1).map((e:any)=>({ owner:firstName(m.ownerName), text: typeof e==="string"?e:(e?.text||e?.label||""), arch: archetype(m).label }))).filter((r:any)=>r.text).slice(0,4);
-
-  const metrics = [
-    topSurprise && { b:`${Math.round(topSurprise.surpriseProbability??0)}%`, s:`${firstName(topSurprise.ownerName)} surprise` },
-    bySurprise[1] && { b:`${Math.round(bySurprise[1].surpriseProbability??0)}%`, s:`${firstName(bySurprise[1].ownerName)} surprise` },
-    topRun && { b:`${Math.round(topRun.confidence??0)}%`, s:`${topRun.position} run risk` },
-    { b:`${pulse.length}`, s:"Live signals" },
-  ].filter(Boolean) as any[];
-  const shortcuts = [
-    { t:"Draft War Room", to:"/draft-war-room", d:"Live pick board, rival threat windows, and decision memo." },
-    { t:"Rivalry Center", to:"/matchups", d:"Head-to-head records, heat, and matchup history." },
-    { t:"League Wire", to:"/league-wire", d:"Newsfeed, transactions, and league movement." },
-    { t:"Owner Profiles", to:"/owner-profiles", d:"Owner DNA, historical behavior, and dossiers." },
-  ];
-  const actions = [
-    { t:"Open Draft War Room", to:"/draft-war-room", d: topRun?`${topRun.position} run risk building \u2014 get owner-risk context.`:"Next pick needs owner-risk context.", cta:"Review" },
-    { t:"Scan Owner DNA", to:"/owner-profiles", d: topSurprise?`${firstName(topSurprise.ownerName)} is trending unpredictable.`:"Review owner tendencies.", cta:"Analyze" },
-    { t:"Check Keeper Lab", to:"/keeper-advisor", d:"Confirm your value holds before the draft.", cta:"Compare" },
-  ];
-  const rings = [
-    { v: ownerCoverage, label:"Owner Read", sub:`${meters.length}/${teamCount||"?"} profiled`, color:TEAL },
-    { v: avgPredict, label:"Predictability", sub:"League avg", color:GOLD },
-    { v: topRun?Math.round(topRun.confidence??0):0, label:"Top Signal", sub: topRun?`${topRun.position} run`:"\u2014", color:BLUE },
-  ];
-  const readinessTable = [
-    { k:"Owners profiled", v:`${meters.length}/${teamCount||"?"}` },
-    { k:"Position run windows", v:`${runs.length}` },
-    { k:"Value windows", v:`${scarce.length}` },
-  ];
+  const scoreRows:any[] = (scoreboardQ.data as any)?.matchups ?? [];
+  const loading = standingsQ.isLoading || pulseQ.isLoading;
 
   return (
-    <div style={PAGEBG} className="-m-4 md:-m-6 p-5 md:p-7 min-h-full">
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
-        <div>
-          <h2 className="text-3xl md:text-4xl font-black tracking-tight leading-none">Command Dashboard</h2>
-          <p className="mt-2 text-sm" style={{color:MUTED}}>Your private league-intelligence briefing across draft, trade, waiver, and rivalry signals.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <Pill gold>{season} Season</Pill>
-          <Pill>{teamCount?`${teamCount}-Team`:"League"}{scoring?` ${scoring}`:""}</Pill>
-          <Pill><span style={{display:"inline-block",width:8,height:8,background:TEAL,borderRadius:999,marginRight:8}}/>ESPN Synced</Pill>
-          <button onClick={()=>draftQ.refetch?.()} className="px-3 py-2.5 rounded-[10px] text-[13px] font-extrabold inline-flex items-center gap-2" style={{border:"1px solid rgba(255,255,255,.07)",background:"rgba(255,255,255,.04)",color:MUTED}}><RefreshCw className="h-3.5 w-3.5"/>Refresh</button>
-        </div>
+    <div style={PAGE} className="-m-4 md:-m-6 p-5 md:p-6 min-h-full">
+      {/* Hero stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+        <StatCard icon={<Shield className="h-7 w-7" style={{color:GREEN}}/>} label="YOUR LEAGUE RECORD"
+          value={myRow?`${myRow.wins}-${myRow.losses}`:"\u2014"} valueColor={GREEN}
+          sub={myRow?`WIN PCT ${pct3(winPct(myRow))}`:""} />
+        <StatCard icon={<Trophy className="h-7 w-7" style={{color:GOLD}}/>} label="CHAMPIONSHIPS"
+          value={String(champs)} valueColor={TEXT}
+          sub={lastWon?`LAST WON: ${lastWon}`:"\u2014"} subColor={GOLD} />
+        <StatCard icon={<Award className="h-7 w-7" style={{color:GREEN}}/>} label="CURRENT RANK"
+          value={myRow?ordinal(myRow.displayRank):"\u2014"} valueColor={GREEN}
+          sub={`OUT OF ${teamCount||"?"} TEAMS`} />
+        <StatCard icon={<Hexagon className="h-7 w-7" style={{color:GREEN}}/>} label="POINTS FOR"
+          value={myRow?Math.round(myRow.pointsFor).toLocaleString():"\u2014"} valueColor={GREEN}
+          sub="THIS SEASON" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_1fr_1fr] gap-3 mb-3">
+      {/* Standings + Matchups */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.55fr_1fr] gap-3 mb-3">
         <div style={PANEL} className="overflow-hidden">
-          <div className="p-5">
-            <div className="flex items-start justify-between gap-3">
-              <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Star className="h-5 w-5" style={{color:GOLD}}/> Today's GM Briefing</h3>
-              <span className="px-2 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap" style={{background:"rgba(34,197,94,.10)",border:"1px solid rgba(34,197,94,.33)",color:TEAL}}>{pulse.length} signals</span>
+          <div className="flex items-center justify-between px-5 py-4">
+            <h3 className="text-lg font-black tracking-tight">LEAGUE STANDINGS</h3>
+            <Link to="/standings" className="text-xs font-bold flex items-center gap-1 no-underline" style={{color:RED}}>VIEW FULL STANDINGS <ChevronRight className="h-3.5 w-3.5"/></Link>
+          </div>
+          <div className="px-2 pb-2">
+            <div className="grid items-center px-3 py-2 text-[10px] font-bold uppercase tracking-wider" style={{gridTemplateColumns:"44px 1fr 48px 48px 96px 64px", color:MUTED}}>
+              <span>Rank</span><span>Owner</span><span className="text-center">W</span><span className="text-center">L</span><span className="text-right">Points For</span><span className="text-right">Win%</span>
             </div>
-            <div className="mt-3 text-[19px] leading-snug font-black" style={{color:GOLD}}>{memo}</div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4">
-              {metrics.map((m:any,i:number)=>(
-                <div key={i} style={SUB} className="p-2.5">
-                  <b className="block text-xl">{m.b}</b>
-                  <span className="text-xs" style={{color:MUTED}}>{m.s}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Activity className="h-5 w-5" style={{color:TEAL}}/> League Intelligence Pulse</h3>
-          <div className="mt-3">
-            {pulse.length===0 && <div className="text-sm py-6 text-center" style={{color:MUTED}}>No live signals yet.</div>}
-            {pulse.map((p:any,i:number)=>(
-              <div key={i} className="grid items-center gap-2 h-9 text-sm" style={{gridTemplateColumns:"26px 1fr 58px",borderTop:"1px solid rgba(255,255,255,.06)"}}>
-                <span style={{color:MUTED}}>{p.icon}</span><span>{p.text}</span><b className="text-right font-black" style={{color:p.s.color}}>{p.s.t}</b>
-              </div>
-            ))}
-          </div>
-        </div></div>
-
-        <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Zap className="h-5 w-5" style={{color:TEAL}}/> Data Health</h3>
-          <div className="grid grid-cols-2 gap-2.5 mt-4">
-            {[{b:"League",s:d.ok?"Synced":"\u2014"},{b:"Draft",s:(d.totalPicks??0)>0?"Live":"Indexed"},{b:"Owners",s:meters.length?`${meters.length} read`:"\u2014"},{b:"AI Memo",s:d.confidenceDashboard?"Ready":"\u2014"}].map((x:any,i:number)=>(
-              <div key={i} style={SUB} className="p-3"><b className="block mb-1">{x.b}</b><span className="inline-block px-2 py-1 rounded-lg text-xs font-extrabold" style={{background:"rgba(34,197,94,.10)",border:"1px solid rgba(34,197,94,.33)",color:TEAL}}>{x.s}</span></div>
-            ))}
-          </div>
-        </div></div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr_1fr] gap-3 mb-3">
-        <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2" style={{color:TEXT}}><span style={{color:GOLD}}>&rarr;</span> Action Queue</h3>
-          <div className="mt-3 space-y-2.5">
-            {actions.map((a:any,i:number)=>(
-              <Link key={i} to={a.to} className="grid items-center gap-2.5 no-underline" style={{gridTemplateColumns:"34px 1fr 78px",...SUB,padding:"8px 10px",minHeight:60,color:TEXT}}>
-                <span className="w-[30px] h-[30px] rounded-full flex items-center justify-center font-black" style={{background:"rgba(245,198,90,.12)",border:"1px solid rgba(245,198,90,.42)",color:GOLD}}>{i+1}</span>
-                <span><b className="block text-sm">{a.t}</b><span className="text-xs" style={{color:MUTED}}>{a.d}</span></span>
-                <span className="text-center text-xs font-extrabold rounded-md px-2 py-1.5" style={{border:"1px solid rgba(34,197,94,.35)",background:"rgba(34,197,94,.08)",color:TEAL}}>{a.cta}</span>
-              </Link>
-            ))}
-          </div>
-        </div></div>
-
-        <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><span style={{color:TEAL}}>&#9638;</span> War Room Shortcuts</h3>
-          <div className="grid grid-cols-2 gap-2.5 mt-3">
-            {shortcuts.map((s:any,i:number)=>(
-              <Link key={i} to={s.to} className="no-underline p-3.5 block" style={{...SUB,borderRadius:12,minHeight:94,color:TEXT}}>
-                <b className="block text-[15px]">{s.t}</b>
-                <p className="mt-2 text-xs leading-snug" style={{color:MUTED}}>{s.d}</p>
-              </Link>
-            ))}
-          </div>
-        </div></div>
-
-        <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Users className="h-5 w-5" style={{color:TEAL}}/> Owner DNA Snapshot</h3>
-          <div className="mt-2">
-            {dnaOwners.length===0 && <div className="text-sm py-6 text-center" style={{color:MUTED}}>No owner reads yet.</div>}
-            {dnaOwners.map((m:any,i:number)=>{ const a=archetype(m); return (
-              <div key={i} className="grid items-center gap-2.5 h-[50px]" style={{gridTemplateColumns:"36px 1fr 70px",borderTop:"1px solid rgba(255,255,255,.06)"}}>
-                <span className="w-8 h-8 rounded-full flex items-center justify-center font-black text-white" style={{background:a.color}}>{firstName(m.ownerName).charAt(0).toUpperCase()}</span>
-                <span><b className="block text-sm">{firstName(m.ownerName)}</b><span className="text-xs" style={{color:MUTED}}>{a.label}</span></span>
-                <span className="text-right font-black" style={{color:TEAL}}>{Math.round(m.predictabilityScore??0)}%</span>
+            {loading && <div className="px-3 py-8 text-center text-sm" style={{color:MUTED}}>Loading standings\u2026</div>}
+            {!loading && ranked.length===0 && <div className="px-3 py-8 text-center text-sm" style={{color:MUTED}}>No standings yet \u2014 sync your league.</div>}
+            {ranked.map((t:any)=>{ const mine=myTeamId && t.teamId===myTeamId; return (
+              <div key={t.teamId} className="grid items-center px-3 py-2.5 rounded-lg" style={{gridTemplateColumns:"44px 1fr 48px 48px 96px 64px", background: mine?"rgba(239,68,68,.10)":"transparent", border: mine?"1px solid rgba(239,68,68,.30)":"1px solid transparent"}}>
+                <span className="flex items-center gap-1.5 font-black">{t.displayRank}{t.displayRank<=3 && <Crown className="h-3.5 w-3.5" style={{color: t.displayRank===1?GOLD:(t.displayRank===2?"#c0c6d0":"#cd7f32")}}/>}</span>
+                <span className="font-bold truncate" style={{color: mine?RED:TEXT}}>{t.ownerName}</span>
+                <span className="text-center font-bold" style={{color:GREEN}}>{t.wins}</span>
+                <span className="text-center font-bold" style={{color:"#c0566b"}}>{t.losses}</span>
+                <span className="text-right tabular-nums">{Math.round(t.pointsFor).toLocaleString()}</span>
+                <span className="text-right tabular-nums font-bold" style={{color:GREEN}}>{pct3(winPct(t))}</span>
               </div>
             );})}
           </div>
-        </div></div>
+        </div>
+
+        <div style={PANEL} className="overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4">
+            <h3 className="text-lg font-black tracking-tight">THIS WEEK'S MATCHUPS</h3>
+            <span className="text-xs font-bold" style={{color:RED}}>{week>=1?`WEEK ${week}`:""}</span>
+          </div>
+          <div className="px-3 pb-3 space-y-2">
+            {scoreRows.length===0 && <div className="px-3 py-8 text-center text-sm" style={{color:MUTED}}>No matchups available yet.</div>}
+            {scoreRows.slice(0,6).map((m:any,i:number)=>(
+              <div key={i} style={{background:SUBBG,border:`1px solid ${LINE}`,borderRadius:10}} className="p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold truncate flex-1">{ownerMap.get(m.homeTeamId)||m.home?.ownerName||m.home?.teamName||"\u2014"}</span>
+                  <span className="font-black tabular-nums" style={{color:TEXT}}>{m.homeProjected!=null?Number(m.homeProjected).toFixed(1):"\u2013"}</span>
+                  <span className="text-xs px-2" style={{color:MUTED}}>vs</span>
+                  <span className="font-black tabular-nums" style={{color:TEXT}}>{m.awayProjected!=null?Number(m.awayProjected).toFixed(1):"\u2013"}</span>
+                  <span className="font-bold truncate flex-1 text-right">{ownerMap.get(m.awayTeamId)||m.away?.ownerName||m.away?.teamName||"\u2014"}</span>
+                </div>
+                <div className="text-[10px] mt-1 text-center" style={{color:MUTED}}>PROJECTED</div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.18fr_1fr] gap-3">
-        <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Newspaper className="h-5 w-5" style={{color:GOLD}}/> League Receipts</h3>
-          <p className="text-xs mt-1" style={{color:MUTED}}>Behavioral evidence pulled from your league's draft signals.</p>
-          <div className="mt-3">
-            {receipts.length===0 && <div className="text-sm py-6 text-center" style={{color:MUTED}}>No receipts generated yet \u2014 sync draft history to populate.</div>}
-            {receipts.map((r:any,i:number)=>(
-              <div key={i} className="grid items-center gap-3 h-[55px] text-sm" style={{gridTemplateColumns:"96px 1fr 74px",borderTop:"1px solid rgba(255,255,255,.06)"}}>
-                <b style={{color:TEAL}}>{r.owner}</b><span className="truncate" title={r.text}>{r.text}</span>
-                <span className="text-center text-xs font-extrabold rounded-md px-1.5 py-1.5" style={{border:"1px solid rgba(245,198,90,.35)",background:"rgba(245,198,90,.08)",color:GOLD}}>{r.arch}</span>
-              </div>
-            ))}
-          </div>
-        </div></div>
-
-        <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Trophy className="h-5 w-5" style={{color:TEAL}}/> GM Readiness</h3>
-          <div className="grid grid-cols-3 gap-2.5 mt-3">
-            {rings.map((r:any,i:number)=>(
-              <div key={i} style={SUB} className="flex flex-col items-center justify-center py-4" >
-                <div className="w-[62px] h-[62px] rounded-full flex items-center justify-center text-xl font-black mb-2" style={{border:`5px solid ${r.color}`}}>{r.v}{typeof r.v==="number"&&r.v<=100?"":""}</div>
-                <b className="text-sm">{r.label}</b><span className="text-xs" style={{color:MUTED}}>{r.sub}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3">
-            {readinessTable.map((t:any,i:number)=>(
-              <div key={i} className="grid items-center h-7 text-sm" style={{gridTemplateColumns:"1fr 80px",borderTop:"1px solid rgba(255,255,255,.06)"}}>
-                <span style={{color:MUTED}}>{t.k}</span><b className="text-right" style={{color:TEAL}}>{t.v}</b>
-              </div>
-            ))}
-          </div>
-        </div></div>
+      {/* Recent activity */}
+      <div style={PANEL} className="overflow-hidden">
+        <div className="px-5 py-4"><h3 className="text-lg font-black tracking-tight">RECENT ACTIVITY FEED</h3></div>
+        <div className="px-3 pb-3">
+          <DashboardRecentLeagueEvents seasons={[season]} enabled={!!season} />
+        </div>
       </div>
     </div>
   );
 }
 
-function Pill({ children, gold }: any){
-  return <span className="px-4 py-2.5 rounded-[10px] text-[13px] font-extrabold inline-flex items-center" style={ gold ? {color:GOLD,border:"1px solid rgba(245,198,90,.46)",background:"rgba(245,198,90,.10)"} : {border:"1px solid rgba(255,255,255,.07)",background:"rgba(255,255,255,.04)",color:TEXT} }>{children}</span>;
+function StatCard({ icon, label, value, sub, valueColor, subColor }: any){
+  return (
+    <div style={PANEL} className="px-5 py-4 flex items-center gap-4">
+      <div className="shrink-0 h-14 w-14 rounded-full flex items-center justify-center" style={{ border:`2px solid ${LINE}`, background:"rgba(255,255,255,.02)" }}>{icon}</div>
+      <div className="min-w-0">
+        <div className="text-[11px] font-bold uppercase tracking-wider" style={{color:MUTED}}>{label}</div>
+        <div className="text-3xl font-black leading-tight" style={{color: valueColor||TEXT}}>{value}</div>
+        {sub && <div className="text-[11px] font-bold uppercase tracking-wide" style={{color: subColor||MUTED}}>{sub}</div>}
+      </div>
+    </div>
+  );
 }
