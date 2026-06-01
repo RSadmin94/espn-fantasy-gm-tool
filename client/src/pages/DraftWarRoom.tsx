@@ -12,7 +12,7 @@ import {
 
 const POS_CFG: Record<string, { pill: string }> = {
   QB:  { pill: "bg-red-500/20 text-red-300 border-red-500/40" },
-  RB:  { pill: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" },
+  RB:  { pill: "bg-red-500/20 text-red-300 border-red-500/40" },
   WR:  { pill: "bg-sky-500/20 text-sky-300 border-sky-500/40" },
   TE:  { pill: "bg-orange-500/20 text-orange-300 border-orange-500/40" },
   K:   { pill: "bg-zinc-700 text-zinc-300 border-zinc-600" },
@@ -26,8 +26,8 @@ function PosPill({ pos }: { pos: string }) {
 }
 
 function ConfBar({ value, small }: { value: number; small?: boolean }) {
-  const color = value >= 80 ? "bg-emerald-500" : value >= 60 ? "bg-amber-500" : "bg-zinc-500";
-  const text  = value >= 80 ? "text-emerald-400" : value >= 60 ? "text-amber-400" : "text-zinc-400";
+  const color = value >= 80 ? "bg-red-500" : value >= 60 ? "bg-amber-500" : "bg-zinc-500";
+  const text  = value >= 80 ? "text-red-400" : value >= 60 ? "text-amber-400" : "text-zinc-400";
   return (
     <div className="flex items-center gap-2">
       <div className={cn("flex-1 bg-zinc-800 rounded-full overflow-hidden", small ? "h-1" : "h-1.5")}>
@@ -43,7 +43,7 @@ function EvidenceList({ items }: { items: string[] }) {
     <ul className="space-y-0.5 mt-1.5">
       {items.map((e, i) => (
         <li key={i} className="flex items-start gap-1.5 text-[10px] text-zinc-500">
-          <span className="text-emerald-600 shrink-0 mt-0.5">→</span>{e}
+          <span className="text-red-600 shrink-0 mt-0.5">→</span>{e}
         </li>
       ))}
     </ul>
@@ -61,7 +61,7 @@ function Section({ title, icon, badge, children, defaultOpen = true, accent }: {
       <button onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-zinc-800/20 transition-colors">
         <div className="flex items-center gap-2.5">
-          <Icon className={cn("h-4 w-4", accent ? "text-amber-400" : "text-emerald-400")} />
+          <Icon className={cn("h-4 w-4", accent ? "text-amber-400" : "text-red-400")} />
           <span className="font-bold text-zinc-100 text-sm">{title}</span>
           {badge !== undefined && (
             <span className="px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 text-[10px] font-bold">{badge}</span>
@@ -77,7 +77,7 @@ function Section({ title, icon, badge, children, defaultOpen = true, accent }: {
 // ── KVS badge ─────────────────────────────────────────────────────────────────
 
 function KvsBadge({ kvs, label }: { kvs: number; label?: string }) {
-  const color = kvs >= 130 ? "text-emerald-300 bg-emerald-500/15 border-emerald-500/40"
+  const color = kvs >= 130 ? "text-red-300 bg-red-500/15 border-red-500/40"
               : kvs >= 100 ? "text-sky-300 bg-sky-500/15 border-sky-500/40"
               : kvs >= 80  ? "text-amber-300 bg-amber-500/15 border-amber-500/40"
               : "text-red-300 bg-red-500/15 border-red-500/40";
@@ -101,8 +101,8 @@ function ConfidenceDashboard({ data }: { data: any }) {
       sub: data.mostPredictable?.ownerName,
       value: `${data.mostPredictable?.score}%`,
       detail: data.mostPredictable?.reason,
-      color: "border-emerald-500/25 bg-emerald-500/5",
-      iconColor: "text-emerald-400",
+      color: "border-red-500/25 bg-red-500/5",
+      iconColor: "text-red-400",
     },
     {
       icon: Activity, label: "Least Predictable",
@@ -190,7 +190,7 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
                 <span className="text-xs font-bold text-zinc-100">{k.teamName}</span>
                 <span className="text-[10px] text-zinc-600">· {k.ownerName}</span>
                 {k.status === "CONFIRMED"
-                  ? <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 rounded"><CheckCircle className="h-2.5 w-2.5" />CONFIRMED</span>
+                  ? <span className="flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 rounded"><CheckCircle className="h-2.5 w-2.5" />CONFIRMED</span>
                   : k.status === "HYPOTHETICAL"
                     ? <span className="text-[10px] font-bold text-sky-400 bg-sky-500/10 border border-sky-500/20 px-1.5 rounded">HYPOTHETICAL</span>
                     : <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">PREDICTED</span>
@@ -213,7 +213,7 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
                   <KvsBadge kvs={k.kvs} />
                   {k.surplusLabel && (
                     <span className={cn("text-[9px] font-bold uppercase",
-                      k.surplus > 50 ? "text-emerald-400" : k.surplus > 0 ? "text-sky-400" : k.surplus > -30 ? "text-amber-400" : "text-red-400"
+                      k.surplus > 50 ? "text-red-400" : k.surplus > 0 ? "text-sky-400" : k.surplus > -30 ? "text-amber-400" : "text-red-400"
                     )}>{k.surplusLabel}</span>
                   )}
                 </div>
@@ -230,7 +230,7 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
             <div className="flex items-center gap-4 px-3 py-2 rounded-lg bg-zinc-900/60 border border-zinc-800/40 text-[10px]">
               <div><span className="text-zinc-600">Projected:</span> <span className="text-zinc-200 font-bold">{k.projectedPoints?.toFixed(0)} pts</span></div>
               <div><span className="text-zinc-600">Break-even (Rd {k.keeperRound}):</span> <span className="text-zinc-200 font-bold">{k.breakEven} pts</span></div>
-              <div><span className="text-zinc-600">Surplus:</span> <span className={cn("font-bold", k.surplus >= 0 ? "text-emerald-400" : "text-red-400")}>{k.surplus >= 0 ? "+" : ""}{k.surplus} pts</span></div>
+              <div><span className="text-zinc-600">Surplus:</span> <span className={cn("font-bold", k.surplus >= 0 ? "text-red-400" : "text-red-400")}>{k.surplus >= 0 ? "+" : ""}{k.surplus} pts</span></div>
             </div>
           )}
 
@@ -272,8 +272,8 @@ function RosterNeedsSection({ needs }: { needs: any[] }) {
         {needs.map(n => (
           <button key={n.teamId} onClick={() => setSel(sel === n.teamId ? null : n.teamId)}
             className={cn("rounded-lg border p-2.5 text-left transition-all hover:scale-105",
-              sel === n.teamId ? "border-emerald-500/40 bg-emerald-500/8 shadow-lg" : "border-zinc-800/60 bg-zinc-900/40 hover:border-zinc-700")}>
-            <div className={cn("text-xl font-black tabular-nums", sel === n.teamId ? "text-emerald-400" : "text-zinc-200")}>#{n.overallRank}</div>
+              sel === n.teamId ? "border-red-500/40 bg-red-500/8 shadow-lg" : "border-zinc-800/60 bg-zinc-900/40 hover:border-zinc-700")}>
+            <div className={cn("text-xl font-black tabular-nums", sel === n.teamId ? "text-red-400" : "text-zinc-200")}>#{n.overallRank}</div>
             <div className="text-[10px] font-bold text-zinc-300 leading-tight mt-0.5 truncate">{n.teamName}</div>
             <div className="text-[9px] text-zinc-600 mt-0.5">{n.projectedTotal?.toLocaleString()} pts</div>
             <div className="flex flex-wrap gap-0.5 mt-1.5">{n.draftPriority?.slice(0,3).map((p: string) => <PosPill key={p} pos={p} />)}</div>
@@ -330,13 +330,13 @@ function RosterNeedsSection({ needs }: { needs: any[] }) {
 // ── Draft Shock Meter ─────────────────────────────────────────────────────────
 
 const SIGNAL_CFG = {
-  PREDICTABLE:   "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+  PREDICTABLE:   "text-red-400 bg-red-500/10 border-red-500/30",
   UNPREDICTABLE: "text-red-400 bg-red-500/10 border-red-500/30",
   NEUTRAL:       "text-zinc-400 bg-zinc-800/60 border-zinc-700/40",
 };
 
 const CAPITAL_CFG = {
-  ABOVE_AVERAGE: "text-emerald-400",
+  ABOVE_AVERAGE: "text-red-400",
   AVERAGE:       "text-zinc-400",
   BELOW_AVERAGE: "text-red-400",
 };
@@ -345,7 +345,7 @@ function ownerArchetype(m: any): { label: string; cls: string } {
   const pred = Number(m?.predictabilityScore ?? 0);
   const surp = Number(m?.surpriseProbability ?? 0);
   if (surp >= 55) return { label: "Panic Pivot", cls: "text-red-300 border-red-500/30 bg-red-500/10" };
-  if (pred >= 72) return { label: "By-the-Book", cls: "text-emerald-300 border-emerald-500/30 bg-emerald-500/10" };
+  if (pred >= 72) return { label: "By-the-Book", cls: "text-red-300 border-red-500/30 bg-red-500/10" };
   if (pred >= 55) return { label: "Steady Hand", cls: "text-sky-300 border-sky-500/30 bg-sky-500/10" };
   return { label: "Wildcard", cls: "text-amber-300 border-amber-500/30 bg-amber-500/10" };
 }
@@ -362,7 +362,7 @@ function ShockMeterSection({ meters }: { meters: any[] }) {
           return (
             <button key={m.teamId} onClick={() => setSel(sel === m.teamId ? null : m.teamId)}
               className={cn("rounded-lg border p-3 text-left transition-all hover:scale-105 space-y-1.5",
-                sel === m.teamId ? "border-emerald-500/40 bg-zinc-800/60 shadow-lg" : "border-zinc-800/60 bg-zinc-900/40 hover:border-zinc-700")}>
+                sel === m.teamId ? "border-red-500/40 bg-zinc-800/60 shadow-lg" : "border-zinc-800/60 bg-zinc-900/40 hover:border-zinc-700")}>
               <div className="text-[9px] font-black uppercase tracking-wider text-zinc-600 truncate">{m.teamName}</div>
               <div className="text-[10px] text-zinc-500 truncate">{m.ownerName?.split(" ")[0]}</div>
               {(() => { const __a = ownerArchetype(m); return <span className={cn("inline-block text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border", __a.cls)}>{__a.label}</span>; })()}
@@ -370,7 +370,7 @@ function ShockMeterSection({ meters }: { meters: any[] }) {
               <div>
                 <div className="flex items-center justify-between mb-0.5">
                   <span className="text-[8px] text-zinc-600">PREDICT</span>
-                  <span className={cn("text-[9px] font-bold", isHighSurprise ? "text-red-400" : "text-emerald-400")}>
+                  <span className={cn("text-[9px] font-bold", isHighSurprise ? "text-red-400" : "text-red-400")}>
                     {m.predictabilityScore}%
                   </span>
                 </div>
@@ -456,16 +456,16 @@ function TradedPicksBadge({ tradedPicks }: { tradedPicks: any[] }) {
     <div className="p-4 space-y-4">
       {acquired.length > 0 && (
         <div>
-          <p className="text-[10px] font-black uppercase tracking-wider text-emerald-400 mb-2 flex items-center gap-1.5">
+          <p className="text-[10px] font-black uppercase tracking-wider text-red-400 mb-2 flex items-center gap-1.5">
             <ArrowUpRight className="h-3 w-3" /> Acquired Picks ({acquired.length})
           </p>
           <div className="space-y-1.5">
             {acquired.map((t: any, i: number) => (
-              <div key={i} className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
-                <span className="text-xs font-bold text-emerald-300">Rd {t.round}</span>
+              <div key={i} className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
+                <span className="text-xs font-bold text-red-300">Rd {t.round}</span>
                 <span className="text-xs text-zinc-200">{t.teamName}</span>
                 <span className="text-[10px] text-zinc-500">· {t.ownerName}</span>
-                <span className="text-[10px] text-emerald-500 ml-auto">Pick #{t.pickNumber}</span>
+                <span className="text-[10px] text-red-500 ml-auto">Pick #{t.pickNumber}</span>
               </div>
             ))}
           </div>
@@ -640,7 +640,7 @@ function LiveDraftEngine({
     <div className="p-4">
       {/* Control bar */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        {!running && !done && <button onClick={() => setRunning(true)} className="px-4 py-1.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-black hover:bg-emerald-500/25">{idx === 0 ? "▶ Start Draft" : "▶ Resume"}</button>}
+        {!running && !done && <button onClick={() => setRunning(true)} className="px-4 py-1.5 rounded bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-black hover:bg-red-500/25">{idx === 0 ? "▶ Start Draft" : "▶ Resume"}</button>}
         {running && <button onClick={() => setRunning(false)} className="px-4 py-1.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-black">⏸ Pause</button>}
         {idx > 0 && <button onClick={reset} className="px-3 py-1.5 rounded text-zinc-500 text-xs hover:text-zinc-300 border border-zinc-700">↺ Reset</button>}
         <span className="text-[11px] text-zinc-500 tabular-nums ml-1">Pick {Math.min(idx, schedule.length)}/{schedule.length}</span>
@@ -650,15 +650,15 @@ function LiveDraftEngine({
       {/* On the clock */}
       {!done && onClock && (
         <div className={cn("rounded-lg border px-4 py-2.5 mb-3 flex items-center gap-3 flex-wrap",
-          awaitingUser ? "border-emerald-500/50 bg-emerald-500/10" : "border-zinc-800 bg-zinc-900/40")}>
-          {awaitingUser ? <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> : null}
+          awaitingUser ? "border-red-500/50 bg-red-500/10" : "border-zinc-800 bg-zinc-900/40")}>
+          {awaitingUser ? <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" /> : null}
           <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{awaitingUser ? "Your pick" : "On the clock"}</span>
           <span className="font-black text-zinc-100">{onClock.teamName}</span>
           <span className="text-[10px] text-zinc-600">{onClock.ownerName}</span>
           <span className="text-[10px] text-zinc-600 ml-auto tabular-nums">Round {slot?.round} · Pick #{slot?.pickNumber}</span>
         </div>
       )}
-      {done && <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/5 px-4 py-3 mb-3 text-center text-emerald-300 font-black text-sm">✓ Draft complete — {schedule.length} picks</div>}
+      {done && <div className="rounded-lg border border-red-500/40 bg-red-500/5 px-4 py-3 mb-3 text-center text-red-300 font-black text-sm">✓ Draft complete — {schedule.length} picks</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Available pool (sortable) */}
@@ -674,7 +674,7 @@ function LiveDraftEngine({
           </div>
           <div className="flex gap-1 mb-2 flex-wrap">
             {POSES.map(p => (
-              <button key={p} onClick={() => setPos(p)} className={cn("px-2 py-0.5 rounded text-[10px] font-bold", posFilter === p ? "bg-emerald-600/30 text-emerald-200" : "text-zinc-500 hover:text-zinc-300 border border-zinc-800")}>{p}</button>
+              <button key={p} onClick={() => setPos(p)} className={cn("px-2 py-0.5 rounded text-[10px] font-bold", posFilter === p ? "bg-red-600/30 text-red-200" : "text-zinc-500 hover:text-zinc-300 border border-zinc-800")}>{p}</button>
             ))}
             <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search…" className="ml-auto text-[11px] bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-zinc-200 placeholder-zinc-600" />
           </div>
@@ -683,13 +683,13 @@ function LiveDraftEngine({
               <button key={keyOf(p)} disabled={!awaitingUser}
                 onClick={() => awaitingUser && userDraft(p)}
                 className={cn("w-full flex items-center gap-2 px-3 py-1.5 text-left",
-                  awaitingUser ? "hover:bg-emerald-500/10 cursor-pointer" : "cursor-default")}>
+                  awaitingUser ? "hover:bg-red-500/10 cursor-pointer" : "cursor-default")}>
                 <span className="text-[10px] text-zinc-600 w-8 tabular-nums shrink-0">{p.adp != null ? p.adp.toFixed(1) : p.rank}</span>
                 <PosPill pos={p.position} />
                 <span className="text-xs font-bold text-zinc-200 flex-1 truncate">{p.name}</span>
                 <span className="text-[10px] text-zinc-500 tabular-nums shrink-0">{Math.round(p.projectedPoints ?? 0)} pts</span>
                 <span className="text-[10px] text-zinc-600 tabular-nums shrink-0 w-10 text-right">V{p.vorp}</span>
-                {awaitingUser && <span className="text-[9px] font-black text-emerald-400 shrink-0">DRAFT</span>}
+                {awaitingUser && <span className="text-[9px] font-black text-red-400 shrink-0">DRAFT</span>}
               </button>
             ))}
           </div>
@@ -705,7 +705,7 @@ function LiveDraftEngine({
               const isOnClock = !done && slot && Number(slot.teamId) === tid;
               const isYou = yourTeamId === tid;
               return (
-                <div key={tid} className={cn("rounded-lg border p-2", isOnClock ? "border-emerald-500/50 bg-emerald-500/5" : isYou ? "border-sky-500/30 bg-sky-500/5" : "border-zinc-800/60 bg-zinc-900/30")}>
+                <div key={tid} className={cn("rounded-lg border p-2", isOnClock ? "border-red-500/50 bg-red-500/5" : isYou ? "border-sky-500/30 bg-sky-500/5" : "border-zinc-800/60 bg-zinc-900/30")}>
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="text-[11px] font-black text-zinc-200 truncate">{t.teamName}</span>
                     {isYou && <span className="text-[8px] font-black text-sky-300 bg-sky-500/15 px-1 rounded">YOU</span>}
@@ -868,7 +868,7 @@ function MockDraftBoard({
 
         {false && view === "live" && (
           <div className="flex items-center gap-2">
-            {simState === "idle" && liveIdx === 0 && <button onClick={startSim} className="px-3 py-1.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-500/25">▶ Start</button>}
+            {simState === "idle" && liveIdx === 0 && <button onClick={startSim} className="px-3 py-1.5 rounded bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-bold hover:bg-red-500/25">▶ Start</button>}
             {(simState === "running" || (simState === "idle" && liveIdx > 0)) && liveIdx < picks.length && !myPick && (
               <button onClick={pauseSim} className="px-3 py-1.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold">
                 {simState === "running" ? "⏸ Pause" : "▶ Resume"}
@@ -887,7 +887,7 @@ function MockDraftBoard({
           <div className="flex items-center justify-between">
             <p className="text-xs font-black text-amber-400 uppercase tracking-wider">🔑 Manual Keeper Assignment</p>
             <button onClick={() => { onKeeperOverride(pendingOverrides); setShowKeeperSetup(false); }}
-              className="px-3 py-1.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-500/25">
+              className="px-3 py-1.5 rounded bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-bold hover:bg-red-500/25">
               ✓ Apply Overrides
             </button>
           </div>
@@ -960,10 +960,10 @@ function MockDraftBoard({
 
       {/* Interactive My Pick overlay */}
       {false && myPick && view === "live" && (
-        <div className="border border-emerald-500/40 bg-emerald-500/5 px-5 py-4 space-y-3">
+        <div className="border border-red-500/40 bg-red-500/5 px-5 py-4 space-y-3">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-black text-emerald-300 text-sm">YOUR PICK</span>
+            <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+            <span className="font-black text-red-300 text-sm">YOUR PICK</span>
             <span className="text-zinc-400 text-xs">Round {myPick.round} · Pick #{myPick.pickNumber}</span>
             <button onClick={() => { setMyPick(null); setLiveIdx(i => i + 1); setSimState("running"); }}
               className="ml-auto px-2 py-1 text-zinc-500 text-xs hover:text-zinc-300">Skip (AI picks)</button>
@@ -985,7 +985,7 @@ function MockDraftBoard({
                   setLiveIdx(i => i + 1);
                   setSimState("running");
                 }}
-                className="text-left rounded-lg border border-zinc-700/60 bg-zinc-800/60 hover:border-emerald-500/40 hover:bg-emerald-500/8 p-2 transition-all">
+                className="text-left rounded-lg border border-zinc-700/60 bg-zinc-800/60 hover:border-red-500/40 hover:bg-red-500/8 p-2 transition-all">
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <PosPill pos={p.position} />
                   <span className="text-[9px] font-bold text-zinc-500">ADP {p.syntheticADP}</span>
@@ -1013,19 +1013,19 @@ function MockDraftBoard({
               <p className="text-zinc-500 text-sm text-center max-w-md">
                 Watch all 196 picks unfold. Select your team above to take over your own picks interactively.
               </p>
-              <button onClick={startSim} className="px-6 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-black text-sm hover:bg-emerald-500/25">
+              <button onClick={startSim} className="px-6 py-3 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 font-black text-sm hover:bg-red-500/25">
                 ▶ Start Draft Simulation
               </button>
             </div>
           ) : (
             <div>
               <div className="h-1 bg-zinc-800">
-                <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${(liveIdx / picks.length) * 100}%` }} />
+                <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(liveIdx / picks.length) * 100}%` }} />
               </div>
               {liveIdx > 0 && (() => {
                 const cur = picks[Math.min(liveIdx, picks.length) - 1];
                 return (
-                  <div className={cn("px-5 py-3 border-b border-zinc-800/40", simState === "running" ? "bg-emerald-500/5" : "bg-zinc-900/20")}>
+                  <div className={cn("px-5 py-3 border-b border-zinc-800/40", simState === "running" ? "bg-red-500/5" : "bg-zinc-900/20")}>
                     <div className="flex items-center gap-3 flex-wrap">
                       <span className="text-[10px] text-zinc-500">On the clock:</span>
                       <span className="font-black text-zinc-100">{cur?.ownerName}</span>
@@ -1045,7 +1045,7 @@ function MockDraftBoard({
                 {picks.slice(0, liveIdx).reverse().map((p: any) => (
                   <div key={p.pickNumber} className={cn("flex items-center gap-3 px-5 py-2 hover:bg-zinc-800/20",
                     p.isKeeperSlot && "bg-amber-500/5",
-                    p.pickNumber === liveIdx && "border-l-2 border-l-emerald-500 bg-emerald-500/5")}>
+                    p.pickNumber === liveIdx && "border-l-2 border-l-red-500 bg-red-500/5")}>
                     <span className="text-[10px] text-zinc-600 w-10 tabular-nums shrink-0">{p.round}.{String(p.roundPick).padStart(2,"0")}</span>
                     <PosPill pos={p.position} />
                     <span className="text-sm font-bold text-zinc-200 flex-1 truncate">{p.player}</span>
@@ -1080,15 +1080,15 @@ function MockDraftBoard({
                       className={cn(
                         "text-left p-2.5 bg-zinc-900/60 hover:bg-zinc-800/60 transition-colors",
                         p.isKeeperSlot && "border border-amber-500/20 bg-amber-500/5",
-                        p.tradedPickContext && "border-t-2 border-t-emerald-500/50",
+                        p.tradedPickContext && "border-t-2 border-t-red-500/50",
                         yourTeamId && Number(p.teamId) === yourTeamId && "border border-sky-500/30 bg-sky-500/5",
-                        expandPick === p.pickNumber && "ring-1 ring-emerald-500/40"
+                        expandPick === p.pickNumber && "ring-1 ring-red-500/40"
                       )}>
                       <div className="flex items-center gap-1 mb-1 flex-wrap">
                         <span className="text-[9px] text-zinc-600 font-mono">{p.pickNumber}</span>
                         <PosPill pos={p.position} />
                         {p.isKeeperSlot && <span className="text-[8px] text-amber-400 font-bold">K</span>}
-                        {p.tradedPickContext?.type === "ACQUIRED" && <span className="text-[8px] text-emerald-400 font-bold">T↑</span>}
+                        {p.tradedPickContext?.type === "ACQUIRED" && <span className="text-[8px] text-red-400 font-bold">T↑</span>}
                         {yourTeamId && Number(p.teamId) === yourTeamId && <span className="text-[8px] text-sky-400 font-bold">YOU</span>}
                       </div>
                       <div className="text-[11px] font-bold text-zinc-200 leading-tight truncate">{p.player}</div>
@@ -1116,13 +1116,13 @@ function MockDraftBoard({
                       {pk.isKeeperSlot && <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">KEEPER SLOT</span>}
                       {pk.tradedPickContext && (
                         <span className={cn("text-[9px] font-bold px-1.5 rounded border",
-                          pk.tradedPickContext.type === "ACQUIRED" ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" : "text-red-400 bg-red-500/10 border-red-500/20")}>
+                          pk.tradedPickContext.type === "ACQUIRED" ? "text-red-400 bg-red-500/10 border-red-500/20" : "text-red-400 bg-red-500/10 border-red-500/20")}>
                           {pk.tradedPickContext.type === "ACQUIRED" ? "↑ ACQUIRED PICK" : "↓ TRADED PICK"}
                         </span>
                       )}
                       <div className="ml-auto flex items-center gap-3 text-[10px]">
                         {adp && <span className="text-zinc-500">Synthetic ADP: <span className="text-zinc-300 font-bold">{adp}</span></span>}
-                        {vorpVal !== undefined && <span className="text-zinc-500">VORP: <span className={cn("font-bold", vorpVal > 100 ? "text-emerald-400" : vorpVal > 50 ? "text-amber-400" : "text-zinc-400")}>{vorpVal}</span></span>}
+                        {vorpVal !== undefined && <span className="text-zinc-500">VORP: <span className={cn("font-bold", vorpVal > 100 ? "text-red-400" : vorpVal > 50 ? "text-amber-400" : "text-zinc-400")}>{vorpVal}</span></span>}
                         <span className="text-zinc-600">Pick {pk.pickNumber} · Rd {pk.round}</span>
                       </div>
                     </div>
@@ -1167,7 +1167,7 @@ function MockDraftBoard({
               <div className="px-4 py-3 bg-zinc-900/40 flex items-center gap-4">
                 <span className="font-bold text-zinc-100 text-sm">{teams.find((t: any) => t.teamId === selTeam)?.teamName}</span>
                 <span className="text-[10px] text-zinc-500">{tp.length} picks</span>
-                <span className="text-[10px] text-emerald-400 ml-auto">Total VORP: {totalVorp}</span>
+                <span className="text-[10px] text-red-400 ml-auto">Total VORP: {totalVorp}</span>
               </div>
             );
           })()}
@@ -1177,7 +1177,7 @@ function MockDraftBoard({
             return (
               <div key={p.pickNumber} className={cn("flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-800/20",
                 p.isKeeperSlot && "bg-amber-500/5",
-                p.tradedPickContext?.type === "ACQUIRED" && "border-l-2 border-l-emerald-500/60")}>
+                p.tradedPickContext?.type === "ACQUIRED" && "border-l-2 border-l-red-500/60")}>
                 <div className="w-14 text-center shrink-0">
                   <div className="text-[9px] text-zinc-600">Rd {p.round}</div>
                   <div className="text-[10px] font-bold text-zinc-400">#{p.pickNumber}</div>
@@ -1190,11 +1190,11 @@ function MockDraftBoard({
                 <div className="shrink-0 text-right space-y-0.5">
                   {p.projectedPoints > 0 && <div className="text-xs tabular-nums text-zinc-400">{p.projectedPoints.toFixed(0)} pts</div>}
                   {adp && <div className="text-[9px] text-zinc-600">ADP {adp}</div>}
-                  {vorpVal !== undefined && <div className={cn("text-[9px] font-bold", vorpVal > 80 ? "text-emerald-400" : "text-zinc-600")}>+{vorpVal}</div>}
+                  {vorpVal !== undefined && <div className={cn("text-[9px] font-bold", vorpVal > 80 ? "text-red-400" : "text-zinc-600")}>+{vorpVal}</div>}
                 </div>
                 <div className="w-14 shrink-0"><ConfBar value={p.confidence} small /></div>
                 {p.isKeeperSlot && <span className="text-[9px] text-amber-400 font-bold shrink-0">KEEPER</span>}
-                {p.tradedPickContext?.type === "ACQUIRED" && <span className="text-[9px] text-emerald-400 font-bold shrink-0">TRADE↑</span>}
+                {p.tradedPickContext?.type === "ACQUIRED" && <span className="text-[9px] text-red-400 font-bold shrink-0">TRADE↑</span>}
               </div>
             );
           })}
@@ -1206,7 +1206,7 @@ function MockDraftBoard({
 
 
 const GRADE_COLOR: Record<string, string> = {
-  A: "text-emerald-400 bg-emerald-500/10 border-emerald-500/40",
+  A: "text-red-400 bg-red-500/10 border-red-500/40",
   B: "text-sky-400 bg-sky-500/10 border-sky-500/40",
   C: "text-amber-400 bg-amber-500/10 border-amber-500/40",
   D: "text-orange-400 bg-orange-500/10 border-orange-500/40",
@@ -1217,7 +1217,7 @@ function DraftEnvironmentSection({ env }: { env: any }) {
   if (!env) return <div className="px-5 py-6 text-zinc-600 text-sm">No environment data.</div>;
 
   const envCards = [
-    { icon: TrendingUp,    label: "Strongest Position", val: env.strongestPosition?.position ?? "—", sub: env.strongestPosition?.reason, color: "text-emerald-400", border: "border-emerald-500/25 bg-emerald-500/5" },
+    { icon: TrendingUp,    label: "Strongest Position", val: env.strongestPosition?.position ?? "—", sub: env.strongestPosition?.reason, color: "text-red-400", border: "border-red-500/25 bg-red-500/5" },
     { icon: Wind,          label: "Weakest Position",   val: env.weakestPosition?.position ?? "—",   sub: env.weakestPosition?.reason,   color: "text-red-400",     border: "border-red-500/25 bg-red-500/5" },
     { icon: Flame,         label: "Biggest Run Risk",   val: env.biggestRunRisk?.position ?? "—",     sub: env.biggestRunRisk?.reason,    color: "text-amber-400",   border: "border-amber-500/25 bg-amber-500/5" },
     { icon: Target,        label: "Best Value Pocket",  val: env.biggestValuePocket?.position ?? "—", sub: env.biggestValuePocket?.reason, color: "text-sky-400",    border: "border-sky-500/25 bg-sky-500/5" },
@@ -1463,13 +1463,13 @@ export function DraftWarRoom() {
   );
 
   if (isLoading) return (
-    <div className="min-h-screen bg-[#09090e] flex items-center justify-center gap-2 text-zinc-500 text-sm">
-      <RefreshCw className="h-4 w-4 animate-spin text-emerald-400" />Building Draft War Room…
+    <div className="min-h-screen bg-[#0a0e14] flex items-center justify-center gap-2 text-zinc-500 text-sm">
+      <RefreshCw className="h-4 w-4 animate-spin text-red-400" />Building Draft War Room…
     </div>
   );
 
   if (!data?.ok) return (
-    <div className="min-h-screen bg-[#09090e] flex items-center justify-center text-center px-6">
+    <div className="min-h-screen bg-[#0a0e14] flex items-center justify-center text-center px-6">
       <div>
         <AlertTriangle className="h-8 w-8 text-amber-400 mx-auto mb-3" />
         <p className="text-zinc-300 font-semibold">{data?.error ?? "Failed to load"}</p>
@@ -1484,15 +1484,15 @@ export function DraftWarRoom() {
   const maxRound = Math.max(...(mockDraft ?? []).map((p: any) => p.round), 0);
 
   return (
-    <div className="min-h-screen bg-[#09090e] text-zinc-100">
+    <div className="min-h-screen bg-[#0a0e14] text-zinc-100">
 
       {/* Header */}
       <div className="border-b border-zinc-800/80 bg-zinc-900/50 px-6 py-5">
         <div className="max-w-7xl mx-auto flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
-                <Zap className="h-4 w-4 text-emerald-400" />
+              <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                <Zap className="h-4 w-4 text-red-400" />
               </div>
               <h1 className="text-xl font-black tracking-tight text-white">Draft War Room</h1>
               <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 ml-1">{season} · Phase 1.75</span>
