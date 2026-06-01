@@ -1,0 +1,12 @@
+import 'dotenv/config';
+import mysql from 'mysql2/promise';
+const conn = await mysql.createConnection(process.env.DATABASE_URL);
+const [s] = await conn.query(SELECT season, COUNT(*) as picks, SUM(isKeeper) as keepers FROM draft_picks WHERE leagueId='457622' GROUP BY season ORDER BY season DESC);
+console.log('SEASONS:', JSON.stringify(s));
+const [kp] = await conn.query(SELECT season, position, COUNT(*) as cnt FROM draft_picks WHERE leagueId='457622' AND isKeeper=1 GROUP BY season, position ORDER BY season DESC);
+console.log('KEEPER_POS:', JSON.stringify(kp));
+const [ki] = await conn.query(SELECT season, playerName, position, roundId FROM draft_picks WHERE leagueId='457622' AND position='K' ORDER BY season DESC LIMIT 10);
+console.log('KICKERS:', JSON.stringify(ki));
+const [tabs] = await conn.query(SHOW TABLES);
+console.log('TABLES:', Object.values(tabs[0]??{}).concat(Object.values(tabs[1]??{})).join(', '));
+await conn.end();

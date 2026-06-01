@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { DraftWarRoomDesk } from "./DraftWarRoomDesk";
 import {
   Zap, BarChart2, RefreshCw, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, Info, Trophy, Target,
@@ -1521,6 +1522,16 @@ export function DraftWarRoom() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-5">
+
+        {/* Editorial intelligence desk — mockup layout, real data */}
+        <DraftWarRoomDesk data={data} />
+
+        {/* Detailed analytics divider */}
+        <div className="flex items-center gap-3 pt-1">
+          <div className="h-px flex-1 bg-white/[0.08]" />
+          <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-zinc-600">Detailed Analytics</span>
+          <div className="h-px flex-1 bg-white/[0.08]" />
+        </div>
 
         {/* Diagnostics hidden for clean UI */}
 

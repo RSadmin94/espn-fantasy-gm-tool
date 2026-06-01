@@ -1,0 +1,10 @@
+import 'dotenv/config';
+import mysql from 'mysql2/promise';
+const conn = await mysql.createConnection(process.env.DATABASE_URL);
+const [adpRows] = await conn.query("SELECT fullName, position, adp, percentOwned FROM gm_player_registry WHERE adp IS NOT NULL AND leagueId='457622' ORDER BY CAST(adp AS FLOAT) ASC LIMIT 20");
+console.log('ADP SAMPLE:', JSON.stringify(adpRows));
+const [teRows] = await conn.query("SELECT fullName, position, adp FROM gm_player_registry WHERE position='TE' AND leagueId='457622' ORDER BY CAST(adp AS FLOAT) ASC LIMIT 10");
+console.log('TEs:', JSON.stringify(teRows));
+const [brock] = await conn.query("SELECT fullName, adp, position FROM gm_player_registry WHERE fullName LIKE '%Bowers%' AND leagueId='457622'");
+console.log('Brock:', JSON.stringify(brock));
+await conn.end();
