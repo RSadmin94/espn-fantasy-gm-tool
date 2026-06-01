@@ -201,8 +201,7 @@ function buildPairDetail(args: {
     meetingsChrono.length > 0 ? meetingsChrono.reduce((min, x) => Math.min(min, x.season), meetingsChrono[0]!.season) : null;
 
   const headToHeadHistory = [...agg.meetings]
-    .sort((a, b) => meetingSortKey(b) - meetingSortKey(a))
-    .slice(0, 10);
+    .sort((a, b) => meetingSortKey(b) - meetingSortKey(a));
 
   const lastMeeting = headToHeadHistory[0] ?? null;
 
