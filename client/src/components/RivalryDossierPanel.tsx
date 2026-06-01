@@ -47,6 +47,8 @@ type Props = {
   /** Default rivalry filter: current season + recent alumni / champions (omit when historical toggle on). */
   rivalryEligibleOwnerKeys?: string[];
   activeSeason?: number;
+  /** Preselect this opponent when the panel mounts (used by Rivalry Center popups). */
+  initialOpponentKey?: string;
 };
 
 export function RivalryDossierPanel({
@@ -54,10 +56,11 @@ export function RivalryDossierPanel({
   pickerOptions,
   rivalryEligibleOwnerKeys,
   activeSeason,
+  initialOpponentKey,
 }: Props) {
   const [queryKey, setQueryKey] = useState(focalOwnerKey.trim());
   const [includeHistoricalOwners, setIncludeHistoricalOwners] = useState(false);
-  const [opponentKey, setOpponentKey] = useState<string>("");
+  const [opponentKey, setOpponentKey] = useState<string>(initialOpponentKey ?? "");
 
   useEffect(() => {
     setQueryKey(focalOwnerKey.trim());

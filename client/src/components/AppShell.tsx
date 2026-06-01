@@ -73,7 +73,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: "ACTION TOOLS",
     items: [
       { kind: "link", label: "Owner Profiles",     href: "/owner-profiles",       icon: Users },
-      { kind: "link", label: "Rivalry Center",     href: "/matchups",             icon: Swords },
+      { kind: "link", label: "Rivalry Center",     href: "/rivalry-center",       icon: Swords },
       { kind: "link", label: "Player Intelligence",href: "/player-intelligence",  icon: UserSearch },
       { kind: "link", label: "Player Database",    href: "/player-database",      icon: Database },
       { kind: "link", label: "Standings",          href: "/standings",            icon: Trophy },
