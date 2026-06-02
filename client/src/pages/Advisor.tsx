@@ -19,6 +19,9 @@ import {
   User,
   Dna,
   BarChart3,
+  Swords,
+  Flame,
+  ArrowRight,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -107,6 +110,127 @@ function InsightCard({ icon, tag, children }: { icon: React.ReactNode; tag: stri
   );
 }
 
+// ── Biggest Threat card (LeagueDNA Advisor — Increment 2) ────────────────────
+// Consumes me.biggestThreat (deterministic, no LLM). Renders one prominent card
+// near the top, or hides entirely when no threat is available.
+
+const THREAT_COLORS: Record<string, { text: string; ring: string; bg: string }> = {
+  "Apex Threat":     { text: "#ef4444", ring: "rgba(239,68,68,.50)",   bg: "rgba(239,68,68,.08)" },
+  "Major Threat":    { text: "#f7902f", ring: "rgba(247,144,47,.50)",  bg: "rgba(247,144,47,.07)" },
+  "Moderate Threat": { text: "#f5c518", ring: "rgba(245,197,24,.45)",  bg: "rgba(245,197,24,.06)" },
+  "Minor Threat":    { text: "#a3e635", ring: "rgba(163,230,53,.40)",  bg: "rgba(163,230,53,.05)" },
+  "Negligible":      { text: "#8b97a8", ring: "rgba(139,151,168,.35)", bg: "rgba(139,151,168,.05)" },
+};
+
+interface ThreatStats {
+  h2hRecordVsYou: string;
+  playoffEliminations: number;
+  championships: number;
+  runnerUps: number;
+  heatLabel: string;
+  gmArchetype: string | null;
+  exploitabilityLabel: string | null;
+  currentStreak: string;
+}
+interface ThreatData {
+  threat: {
+    ownerName: string;
+    threatScore: number;
+    threatLevel: string;
+    reason: string;
+    stats: ThreatStats;
+  } | null;
+}
+
+function BiggestThreatCard({ data, loading }: { data: ThreatData | undefined; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          <Swords className="h-4 w-4" /> Biggest Threat
+        </div>
+        <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Scanning the league for your biggest threat&hellip;
+        </div>
+      </div>
+    );
+  }
+
+  const threat = data?.threat ?? null;
+  if (!threat) return null; // clean hide when no threat exists
+
+  const c = THREAT_COLORS[threat.threatLevel] ?? THREAT_COLORS["Negligible"];
+  const s = threat.stats;
+
+  const chips: string[] = [`${s.h2hRecordVsYou} vs you`];
+  if (s.playoffEliminations > 0)
+    chips.push(`${s.playoffEliminations}\u00d7 knocked you out`);
+  if (s.championships > 0) chips.push(`${s.championships}\u00d7 champion`);
+  else if (s.runnerUps > 0) chips.push(`${s.runnerUps}\u00d7 finalist`);
+  if (s.heatLabel) chips.push(`${s.heatLabel} rivalry`);
+  if (s.exploitabilityLabel) chips.push(s.exploitabilityLabel);
+
+  const showStreak = !!s.currentStreak && !s.currentStreak.startsWith("No active");
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl border p-6"
+      style={{ borderColor: c.ring, background: `linear-gradient(135deg, ${c.bg}, transparent 62%)` }}
+    >
+      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest" style={{ color: c.text }}>
+        <Swords className="h-4 w-4" /> Biggest Threat
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-2xl font-black tracking-tight text-foreground">{threat.ownerName}</h2>
+          <span
+            className="mt-1.5 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide"
+            style={{ color: c.text, background: c.bg, border: `1px solid ${c.ring}` }}
+          >
+            {threat.threatLevel}
+          </span>
+        </div>
+        <div className="flex shrink-0 flex-col items-center">
+          <div
+            className="flex h-16 w-16 items-center justify-center rounded-full border-2"
+            style={{ borderColor: c.ring, color: c.text, background: c.bg }}
+          >
+            <span className="text-2xl font-black tabular-nums">{threat.threatScore}</span>
+          </div>
+          <span className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">Threat / 100</span>
+        </div>
+      </div>
+
+      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-foreground">{threat.reason}</p>
+
+      {showStreak && (
+        <p className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold" style={{ color: c.text }}>
+          <Flame className="h-3.5 w-3.5" /> {s.currentStreak}
+        </p>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {chips.map((chip, i) => (
+          <span key={i} className="rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground">
+            {chip}
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-4">
+        <a
+          href="/rivalry-center"
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-opacity hover:opacity-85"
+          style={{ color: c.text, background: c.bg, border: `1px solid ${c.ring}` }}
+        >
+          Open Rivalry Center <ArrowRight className="h-3.5 w-3.5" />
+        </a>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ───────────────────────────────────────────────────────────────
 
 export function Advisor() {
@@ -117,6 +241,7 @@ export function Advisor() {
   // League-wide briefing data (no focal-user dependency — safe for all users)
   const profileQ = (trpc as any).me.activeProfile.useQuery(undefined, { retry: false, staleTime: 600_000 });
   const summaryQ = (trpc as any).me.leagueSummary.useQuery(undefined, { staleTime: 600_000 });
+  const threatQ = (trpc as any).me.biggestThreat.useQuery(undefined, { staleTime: 600_000, retry: false });
   const ownersQ = (trpc as any).owners.ownerList.useQuery(undefined, { staleTime: 300_000 });
 
   const ownerName: string | null = profileQ.data?.isSetupComplete ? (profileQ.data.selectedOwnerName ?? null) : null;
@@ -251,6 +376,9 @@ export function Advisor() {
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{heroLine}</p>
         <p className="mt-1 text-xs text-muted-foreground/70">The only AI trained on your league's history.</p>
       </div>
+
+      {/* Biggest Threat (LeagueDNA Advisor — Increment 2) */}
+      <BiggestThreatCard data={threatQ.data} loading={threatQ.isLoading} />
 
       {/* League-wide insight cards */}
       <div className="grid gap-4 sm:grid-cols-2">
