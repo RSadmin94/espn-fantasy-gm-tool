@@ -12,6 +12,7 @@ const MSG_HIST_STATUS = "GMWR_HIST_STATUS";
 const MSG_ROSTER_MATRIX_TEST = "GMWR_ROSTER_MATRIX_TEST";
 const MSG_ROSTER_2017_POC = "GMWR_ROSTER_2017_POC";
 const MSG_ROSTER_FULL = "GMWR_ROSTER_FULL";
+const MSG_CAPTURE_WEEKLY_STATS = "GMWR_CAPTURE_WEEKLY_STATS";
 
 let discoveredSeasons = /** @type {number[]} */ ([]);
 
@@ -398,6 +399,70 @@ document.addEventListener("DOMContentLoaded", async () => {
       setRosterOut(JSON.stringify(r, null, 2));
     } catch (e) {
       setRosterOut(e instanceof Error ? e.message : String(e));
+    }
+  });
+
+  // â”€â”€â”€ Weekly Player Stats Capture â”€â”€â”€
+  function setWsOut(text) {
+    const el = document.getElementById("wsOut");
+    if (el) el.textContent = text;
+  }
+
+  // Capture ALL seasons 2018-2025 in one click (each with its correct week range).
+  document.getElementById("captureAllSeasons")?.addEventListener("click", async () => {
+    const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
+    // 2018-2020 ran 16 weeks; 2021+ ran 17. 2025 already captured but re-running is idempotent (upsert).
+    const SEASONS = [
+      { season: 2018, fromWeek: 1, toWeek: 16 },
+      { season: 2019, fromWeek: 1, toWeek: 16 },
+      { season: 2020, fromWeek: 1, toWeek: 16 },
+      { season: 2021, fromWeek: 1, toWeek: 17 },
+      { season: 2022, fromWeek: 1, toWeek: 17 },
+      { season: 2023, fromWeek: 1, toWeek: 17 },
+      { season: 2024, fromWeek: 1, toWeek: 17 },
+      { season: 2025, fromWeek: 1, toWeek: 17 },
+    ];
+    const summary = [];
+    for (let i = 0; i < SEASONS.length; i++) {
+      const { season, fromWeek, toWeek } = SEASONS[i];
+      setWsOut(
+        `[${i + 1}/${SEASONS.length}] Capturing ${season} weeks ${fromWeek}-${toWeek}…\n` +
+        `Done so far:\n` + summary.map((s) => `  ${s.season}: ${s.totalStats} stats (${s.ok ? "ok" : "ERR " + s.error})`).join("\n") +
+        `\n\nKeep this open. This runs all 8 seasons (~10-15 min total).`
+      );
+      try {
+        const r = await chrome.runtime.sendMessage({
+          type: MSG_CAPTURE_WEEKLY_STATS,
+          leagueId: lid,
+          season,
+          fromWeek,
+          toWeek,
+        });
+        summary.push({ season, ok: !!r?.ok, totalStats: r?.totalStats ?? 0, error: r?.error ?? null });
+      } catch (e) {
+        summary.push({ season, ok: false, totalStats: 0, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+    const grand = summary.reduce((a, s) => a + (s.totalStats || 0), 0);
+    setWsOut("ALL SEASONS COMPLETE\n\n" + JSON.stringify({ grandTotalStats: grand, seasons: summary }, null, 2));
+  });
+  document.getElementById("captureWeeklyStats")?.addEventListener("click", async () => {
+    const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
+    const season = parseInt((document.getElementById("wsSeason")?.value || "2025").trim(), 10) || 2025;
+    const fromWeek = parseInt((document.getElementById("wsFromWeek")?.value || "1").trim(), 10) || 1;
+    const toWeek = parseInt((document.getElementById("wsToWeek")?.value || "17").trim(), 10) || 17;
+    setWsOut(`Capturing ${season} weeks ${fromWeek}-${toWeek}â€¦\nFetching box scores from ESPN and ingesting. Keep this open (~1-2 min).`);
+    try {
+      const r = await chrome.runtime.sendMessage({
+        type: MSG_CAPTURE_WEEKLY_STATS,
+        leagueId: lid,
+        season,
+        fromWeek,
+        toWeek,
+      });
+      setWsOut(JSON.stringify(r, null, 2));
+    } catch (e) {
+      setWsOut(e instanceof Error ? e.message : String(e));
     }
   });
 

@@ -383,6 +383,7 @@ const MSG_HIST_MATCHUPS = "GMWR_HIST_MATCHUPS";
 const MSG_LEAGUE_HISTORY_MEDALS = "GMWR_LEAGUE_HISTORY_MEDALS";
 /** Page (gmwarroom) → background: credentialed GET to fantasy.espn.com for browser-session sync. */
 const MSG_PAGE_ESPN_FETCH = "GMWR_PAGE_ESPN_FETCH";
+const MSG_CAPTURE_WEEKLY_STATS = "GMWR_CAPTURE_WEEKLY_STATS";
 
 function trpcResultJson(parsed) {
   if (!parsed || typeof parsed !== "object") return null;
@@ -2285,6 +2286,109 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     })().catch((e) => {
       const msg = e instanceof Error ? e.message : String(e);
       sendResponse({ ok: false, status: 0, error: msg, result: null, bodyText: "" });
+    });
+    return true;
+  }
+
+  // â”€â”€â”€ Capture per-player WEEKLY stats: loops weeks, fetches mMatchupScore box scores,
+  //     posts each to playerStatsCache.saveWeeklyPlayerStats (fills gm_weekly_player_stats). â”€â”€â”€
+  if (t === MSG_CAPTURE_WEEKLY_STATS) {
+    let respondedWS = false;
+    const keepAliveWS = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
+    function onceRespondWS(response) {
+      if (respondedWS) return;
+      respondedWS = true;
+      clearInterval(keepAliveWS);
+      clearTimeout(wsTimer);
+      sendResponse(response);
+    }
+    // up to ~17 weeks x a few seconds each; hard cap 720s.
+    const wsTimer = setTimeout(
+      () => onceRespondWS({ ok: false, error: "extension_internal_timeout" }),
+      720000,
+    );
+
+    (async () => {
+      const leagueId = String(message?.leagueId || "457622").trim();
+      const season = Math.floor(Number(message?.season || 2025));
+      const fromWeek = Math.max(1, Math.floor(Number(message?.fromWeek || 1)));
+      const toWeek = Math.min(22, Math.floor(Number(message?.toWeek || 17)));
+      const clerkToken = typeof message?.clerkToken === "string" ? message.clerkToken : "";
+
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        onceRespondWS({ ok: false, error: "ESPN login expired", details: "missing_espn_cookies" });
+        return;
+      }
+      const warRoomCookieHeader = await getWarRoomCookieHeaderString();
+      if (!warRoomCookieHeader) {
+        onceRespondWS({ ok: false, error: "GM War Room session not found. Sign in at gmwarroom.online, then retry." });
+        return;
+      }
+
+      // count per-player roster entries present in an ESPN payload (so we know if a URL shape actually carried player data)
+      function countRosterEntries(data, week) {
+        const sched = (data && data.schedule) || [];
+        let sides = 0, entries = 0;
+        for (const s of sched) {
+          if (week && s.matchupPeriodId !== week && s.scoringPeriodId !== week) continue;
+          for (const side of ["home", "away"]) {
+            const r = s && s[side] && (s[side].rosterForCurrentScoringPeriod || s[side].rosterForMatchupPeriod);
+            if (r && r.entries && r.entries.length) { sides++; entries += r.entries.length; }
+          }
+        }
+        return { sides, entries };
+      }
+
+      const results = [];
+      let totalStats = 0;
+      for (let week = fromWeek; week <= toWeek; week++) {
+        await sleep(700);
+        const base = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${encodeURIComponent(leagueId)}`;
+        // URL A: league-wide boxscore for the scoring period (returns all teams' rosters in one call)
+        const urlA = `${base}?view=mBoxscore&view=mScoreboard&view=mMatchupScore&scoringPeriodId=${week}&matchupPeriodId=${week}`;
+        let fetched = await fetchEspnJsonWithBackoff(urlA, { label: `weeklyStats_A_w${week}` });
+        let usedUrl = "A";
+        let counts = fetched.ok && fetched.data ? countRosterEntries(fetched.data, week) : { sides: 0, entries: 0 };
+
+        if (!fetched.ok || counts.entries === 0) {
+          // URL B: plain mBoxscore without matchupPeriodId (some seasons key only on scoringPeriodId)
+          await sleep(400);
+          const urlB = `${base}?view=mBoxscore&view=mMatchupScore&scoringPeriodId=${week}`;
+          const fb = await fetchEspnJsonWithBackoff(urlB, { label: `weeklyStats_B_w${week}` });
+          const cb = fb.ok && fb.data ? countRosterEntries(fb.data, week) : { sides: 0, entries: 0 };
+          if (fb.ok && cb.entries > counts.entries) { fetched = fb; counts = cb; usedUrl = "B"; }
+        }
+
+        if (!fetched.ok || fetched.data == null) {
+          results.push({ week, ok: false, error: fetched.error || "espn_fetch_failed", usedUrl, rosterEntries: 0 });
+          console.warn("[GMWR] weeklyStats fetch failed", { season, week, error: fetched.error });
+          continue;
+        }
+
+        const post = await postTrpcHistJson(
+          TRPC_SAVE_PLAYER_STATS_URL,
+          warRoomCookieHeader,
+          { season, week, payload: fetched.data },
+          clerkToken,
+        );
+        const r = post?.parsed?.result?.data?.json ?? post?.parsed?.result?.data ?? {};
+        const upserted = Number(r.statsUpserted ?? 0) || 0;
+        totalStats += upserted;
+        results.push({
+          week, ok: post.ok, usedUrl,
+          rosterEntries: counts.entries, rosterSides: counts.sides,
+          statsUpserted: upserted, players: r.playersUpserted ?? null,
+          postStatus: post.status ?? null, error: post.error || null,
+        });
+        console.info("[GMWR] weeklyStats week done", { season, week, usedUrl, rosterEntries: counts.entries, upserted, ok: post.ok });
+      }
+
+      onceRespondWS({ ok: true, season, totalStats, weeks: results });
+    })().catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[GMWR] weeklyStats capture failed", { error: msg });
+      onceRespondWS({ ok: false, error: msg });
     });
     return true;
   }

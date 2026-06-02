@@ -23,6 +23,7 @@ import { providerRouter } from "./providerRouter";
 import { billingRouter } from "./billingRouter";
 import { onboardingRouter } from "./onboardingRouter";
 import { meRouter } from "./meRouter";
+import { draftRealityRouter } from "./draftRealityRouter";
 import { offseasonRouter } from "./offseasonRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
@@ -472,6 +473,7 @@ export const appRouter = router({
   system: systemRouter,
   billing: billingRouter,
   me: meRouter,
+  draftReality: draftRealityRouter,
   onboarding: onboardingRouter,
   injury: injuryRouter,
   simulation: simulationRouter,

@@ -132,6 +132,18 @@
     <button type="button" id="rosterFull" style="margin-bottom: 8px">ROSTER IMPORT (2018–2025)</button>
     <pre id="rosterOut"></pre>
 
+    <hr style="border: none; border-top: 1px solid #333; margin: 12px 0" />
+    <h2 class="h2">Weekly Player Stats Capture</h2>
+    <p class="meta">Fetches per-week box scores and ingests per-player weekly points (gm_weekly_player_stats). Needed for Draft Reality Simulator.</p>
+    <div style="display: flex; gap: 8px; margin-bottom: 8px">
+      <input id="wsSeason" type="text" value="2025" style="flex: 1" placeholder="Season" />
+      <input id="wsFromWeek" type="text" value="1" style="width: 64px" placeholder="From" />
+      <input id="wsToWeek" type="text" value="17" style="width: 64px" placeholder="To" />
+    </div>
+    <button type="button" id="captureWeeklyStats" style="margin-bottom: 8px">CAPTURE WEEKLY STATS</button>
+    <button type="button" id="captureAllSeasons" style="margin-bottom: 8px">CAPTURE ALL SEASONS (2018-2025)</button>
+    <pre id="wsOut"></pre>
+
         <script src="popup.js"></script>
   </body>
 </html>

@@ -33,6 +33,7 @@ import {
   Newspaper,
   Zap,
   Crown,
+  FlaskConical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -63,6 +64,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { kind: "link", label: "Dashboard",      href: "/dashboard",      icon: LayoutDashboard },
       { kind: "link", label: "Draft War Room", href: "/draft-war-room", icon: Zap },
+      { kind: "link", label: "Draft Reality Sim", href: "/draft-reality", icon: FlaskConical },
       { kind: "link", label: "LeagueDNA Advisor", href: "/advisor",        icon: Dna },
       { kind: "link", label: "Trade Analyzer", href: "/trades",         icon: Repeat2 },
       { kind: "link", label: "League Wire",    href: "/league-wire",    icon: Newspaper },
