@@ -31,6 +31,7 @@
 
 import { getAllCachedSeasons, getCachedView, getDb } from "./db";
 import { reputationEvents } from "../drizzle/schema";
+import { isMissingTableError } from "./optionalEnrichmentTable";
 import { eq, desc } from "drizzle-orm";
 import {
   normalizeTeams,
@@ -397,27 +398,35 @@ async function upsertReputationEvent(
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  await db
-    .insert(reputationEvents)
-    .values({
-      memberId: event.memberId,
-      ownerName: event.ownerName,
-      season: event.season,
-      eventType: event.eventType,
-      eventLabel: event.eventLabel,
-      eventSentence: sentence,
-      supportingStat: event.supportingStat,
-      severity: event.severity,
-    })
-    .onDuplicateKeyUpdate({
-      set: {
+  try {
+    await db
+      .insert(reputationEvents)
+      .values({
+        memberId: event.memberId,
+        ownerName: event.ownerName,
+        season: event.season,
+        eventType: event.eventType,
         eventLabel: event.eventLabel,
+        eventSentence: sentence,
         supportingStat: event.supportingStat,
         severity: event.severity,
-        // Only update sentence if we have a new one
-        eventSentence: sentence,
-      },
-    });
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          eventLabel: event.eventLabel,
+          supportingStat: event.supportingStat,
+          severity: event.severity,
+          // Only update sentence if we have a new one
+          eventSentence: sentence,
+        },
+      });
+  } catch (e) {
+    if (isMissingTableError(e)) {
+      console.warn("[enrichment] upsertReputationEvent: reputation_events table absent, skipping reputation persistence.");
+      return;
+    }
+    throw e;
+  }
 }
 
 /** Read all reputation events for a member, sorted by season desc. */
@@ -436,11 +445,19 @@ export async function getReputationEventsFromDb(
 }>> {
   const db = await getDb();
   if (!db) return [];
-  return db
-    .select()
-    .from(reputationEvents)
-    .where(eq(reputationEvents.memberId, memberId))
-    .orderBy(desc(reputationEvents.season));
+  try {
+    return await db
+      .select()
+      .from(reputationEvents)
+      .where(eq(reputationEvents.memberId, memberId))
+      .orderBy(desc(reputationEvents.season));
+  } catch (e) {
+    if (isMissingTableError(e)) {
+      console.warn("[enrichment] getReputationEventsFromDb: reputation_events table absent, returning empty enrichment.");
+      return [];
+    }
+    throw e;
+  }
 }
 
 /** Read all reputation events for a season. */
@@ -459,11 +476,19 @@ export async function getSeasonReputationEventsFromDb(
 }>> {
   const db = await getDb();
   if (!db) return [];
-  return db
-    .select()
-    .from(reputationEvents)
-    .where(eq(reputationEvents.season, season))
-    .orderBy(desc(reputationEvents.season));
+  try {
+    return await db
+      .select()
+      .from(reputationEvents)
+      .where(eq(reputationEvents.season, season))
+      .orderBy(desc(reputationEvents.season));
+  } catch (e) {
+    if (isMissingTableError(e)) {
+      console.warn("[enrichment] getSeasonReputationEventsFromDb: reputation_events table absent, returning empty enrichment.");
+      return [];
+    }
+    throw e;
+  }
 }
 
 /** Read all reputation events for all members (for the reputation timeline). */
@@ -480,10 +505,18 @@ export async function getAllReputationEventsFromDb(): Promise<Array<{
 }>> {
   const db = await getDb();
   if (!db) return [];
-  return db
-    .select()
-    .from(reputationEvents)
-    .orderBy(desc(reputationEvents.season));
+  try {
+    return await db
+      .select()
+      .from(reputationEvents)
+      .orderBy(desc(reputationEvents.season));
+  } catch (e) {
+    if (isMissingTableError(e)) {
+      console.warn("[enrichment] getAllReputationEventsFromDb: reputation_events table absent, returning empty enrichment.");
+      return [];
+    }
+    throw e;
+  }
 }
 
 // ─── Refresh (compute + persist) ─────────────────────────────────────────────

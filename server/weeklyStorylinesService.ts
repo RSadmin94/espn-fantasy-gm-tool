@@ -25,6 +25,7 @@
 
 import { getDb, getCachedView } from "./db";
 import { weeklyStorylines, rivalryScores } from "../drizzle/schema";
+import { isMissingTableError } from "./optionalEnrichmentTable";
 import { eq, and, desc } from "drizzle-orm";
 import {
   normalizeTeams,
@@ -644,15 +645,24 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
   if (rodMemberIds.length > 0) {
     // Try each of Rod's memberIds
     for (const mid of rodMemberIds) {
-      const rows = await db
-        .select({
-          rivalId: rivalryScores.rivalId,
-          rivalName: rivalryScores.rivalName,
-          h2hLosses: rivalryScores.h2hLosses,
-          playoffEliminations: rivalryScores.playoffEliminations,
-        })
-        .from(rivalryScores)
-        .where(eq(rivalryScores.memberId, mid));
+      let rows: typeof rivalryPairs = [];
+      try {
+        rows = await db
+          .select({
+            rivalId: rivalryScores.rivalId,
+            rivalName: rivalryScores.rivalName,
+            h2hLosses: rivalryScores.h2hLosses,
+            playoffEliminations: rivalryScores.playoffEliminations,
+          })
+          .from(rivalryScores)
+          .where(eq(rivalryScores.memberId, mid));
+      } catch (e) {
+        if (isMissingTableError(e)) {
+          console.warn("[enrichment] weeklyStorylines: rivalry_scores table absent, skipping rivalry enrichment.");
+          break;
+        }
+        throw e;
+      }
       if (rows.length > 0) {
         rivalryPairs = rows;
         break;

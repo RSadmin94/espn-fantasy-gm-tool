@@ -27,6 +27,7 @@ import {
 } from "./espnService";
 import { invokeLLM } from "./_core/llm";
 import { rivalryScores } from "../drizzle/schema";
+import { isMissingTableError } from "./optionalEnrichmentTable";
 import { eq, and } from "drizzle-orm";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -524,11 +525,20 @@ export async function persistRivalryScores(pairs: RivalryPair[]): Promise<void> 
 
   for (const pair of pairs) {
     // Check if existing score is materially different (>10 pts) to decide lore regen
-    const [existing] = await db
-      .select({ rivalryScore: rivalryScores.rivalryScore, loreSentence: rivalryScores.loreSentence })
-      .from(rivalryScores)
-      .where(and(eq(rivalryScores.memberId, pair.memberId), eq(rivalryScores.rivalId, pair.rivalId)))
-      .limit(1);
+    let existing: { rivalryScore: number | null; loreSentence: string | null } | undefined;
+    try {
+      [existing] = await db
+        .select({ rivalryScore: rivalryScores.rivalryScore, loreSentence: rivalryScores.loreSentence })
+        .from(rivalryScores)
+        .where(and(eq(rivalryScores.memberId, pair.memberId), eq(rivalryScores.rivalId, pair.rivalId)))
+        .limit(1);
+    } catch (e) {
+      if (isMissingTableError(e)) {
+        console.warn("[enrichment] persistRivalryScores: rivalry_scores table absent, skipping rivalry-score persistence.");
+        return;
+      }
+      throw e;
+    }
 
     let loreSentence = existing?.loreSentence ?? null;
     let loreGeneratedAt: Date | null = null;
@@ -596,11 +606,20 @@ export async function getRivalryScoresFromDb(memberId: string): Promise<RivalryP
   const db = await getDb();
   if (!db) return [];
 
-  const rows = await db
-    .select()
-    .from(rivalryScores)
-    .where(eq(rivalryScores.memberId, memberId))
-    .orderBy(rivalryScores.rivalryScore);
+  let rows: Array<typeof rivalryScores.$inferSelect>;
+  try {
+    rows = await db
+      .select()
+      .from(rivalryScores)
+      .where(eq(rivalryScores.memberId, memberId))
+      .orderBy(rivalryScores.rivalryScore);
+  } catch (e) {
+    if (isMissingTableError(e)) {
+      console.warn("[enrichment] getRivalryScoresFromDb: rivalry_scores table absent, returning empty enrichment.");
+      return [];
+    }
+    throw e;
+  }
 
   return rows
     .map((r) => ({
