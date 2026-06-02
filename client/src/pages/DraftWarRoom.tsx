@@ -58,12 +58,12 @@ function Section({ title, icon, badge, children, defaultOpen = true, accent }: {
   const [open, setOpen] = useState(defaultOpen);
   const Icon = icon;
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-[#1b131f] overflow-hidden">
+    <div className="rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#1b131f,#140e17)] overflow-hidden">
       <button onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors">
         <div className="flex items-center gap-2.5">
-          <Icon className="h-5 w-5 text-red-500" />
-          <span className="font-extrabold tracking-tight text-zinc-50 text-[19px]">{title}</span>
+          <Icon className="h-5 w-5 text-lime-400" />
+          <span className="font-extrabold tracking-tight text-zinc-50 text-[20px]">{title}</span>
           {badge !== undefined && (
             <span className="px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-300 text-[11px] font-bold">{badge}</span>
           )}
@@ -78,10 +78,10 @@ function Section({ title, icon, badge, children, defaultOpen = true, accent }: {
 // ── KVS badge ─────────────────────────────────────────────────────────────────
 
 function KvsBadge({ kvs, label }: { kvs: number; label?: string }) {
-  const color = kvs >= 130 ? "text-red-300 bg-red-500/15 border-red-500/40"
+  const color = kvs >= 130 ? "text-lime-300 bg-lime-500/15 border-lime-500/40"
               : kvs >= 100 ? "text-violet-300 bg-violet-500/15 border-violet-500/40"
               : kvs >= 80  ? "text-amber-300 bg-amber-500/15 border-amber-500/40"
-              : "text-red-300 bg-red-500/15 border-red-500/40";
+              : "text-zinc-300 bg-white/[0.06] border-white/[0.12]";
   return (
     <div className={cn("flex flex-col items-center px-2 py-1 rounded-lg border shrink-0", color)}>
       <span className="text-sm font-black tabular-nums leading-none">{kvs}</span>
@@ -102,8 +102,8 @@ function ConfidenceDashboard({ data }: { data: any }) {
       sub: data.mostPredictable?.ownerName,
       value: `${data.mostPredictable?.score}%`,
       detail: data.mostPredictable?.reason,
-      color: "border-red-500/25 bg-red-500/5",
-      iconColor: "text-red-400",
+      color: "border-lime-500/25 bg-lime-500/5",
+      iconColor: "text-lime-400",
     },
     {
       icon: Activity, label: "Least Predictable",
@@ -111,8 +111,8 @@ function ConfidenceDashboard({ data }: { data: any }) {
       sub: data.leastPredictable?.ownerName,
       value: `${data.leastPredictable?.score}%`,
       detail: data.leastPredictable?.reason,
-      color: "border-red-500/25 bg-red-500/5",
-      iconColor: "text-red-400",
+      color: "border-violet-500/25 bg-violet-500/5",
+      iconColor: "text-violet-400",
     },
     {
       icon: ArrowUpRight, label: "Biggest Roster Hole",
