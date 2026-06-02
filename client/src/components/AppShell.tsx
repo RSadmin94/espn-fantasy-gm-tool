@@ -36,6 +36,7 @@ import {
   FlaskConical,
   HelpCircle,
   Route,
+  ShoppingCart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -69,6 +70,7 @@ const NAV_GROUPS: NavGroup[] = [
       { kind: "link", label: "Draft Reality Sim", href: "/draft-reality", icon: FlaskConical },
       { kind: "link", label: "Why Haven't I Won?", href: "/why-havent-i-won", icon: HelpCircle },
       { kind: "link", label: "Championship Path", href: "/championship-path", icon: Route },
+      { kind: "link", label: "Acquisition Impact", href: "/acquisition-impact", icon: ShoppingCart },
       { kind: "link", label: "LeagueDNA Advisor", href: "/advisor",        icon: Dna },
       { kind: "link", label: "Trade Analyzer", href: "/trades",         icon: Repeat2 },
       { kind: "link", label: "League Wire",    href: "/league-wire",    icon: Newspaper },

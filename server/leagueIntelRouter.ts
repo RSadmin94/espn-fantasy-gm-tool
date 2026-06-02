@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
 import { computeWhyHaventIWon } from "./whyHaventIWon";
 import { computeChampionshipPath } from "./championshipPath";
+import { computeAcquisitionImpact } from "./acquisitionImpact";
 
 /**
  * LeagueDNA Intelligence — next-generation deterministic league analysis.
@@ -22,5 +23,12 @@ export const leagueIntelRouter = router({
     .input(z.object({ ownerKey: z.string().max(64).optional() }).optional())
     .query(async ({ ctx, input }) => {
       return computeChampionshipPath(ctx.user?.id, input?.ownerKey ?? null);
+    }),
+
+  /** Feature 3 — Acquisition Impact™ */
+  acquisitionImpact: publicProcedure
+    .input(z.object({ ownerKey: z.string().max(64).optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      return computeAcquisitionImpact(ctx.user?.id, input?.ownerKey ?? null);
     }),
 });
