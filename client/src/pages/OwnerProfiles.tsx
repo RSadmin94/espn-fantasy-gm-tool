@@ -91,7 +91,7 @@ function Section({ title, icon, children, defaultOpen = true }: {
     <div className={cn(PROFILE_SURFACE, "overflow-hidden")}>
       <button type="button" onClick={() => setOpen(v => !v)}
         className="flex w-full items-center gap-2 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left transition-colors hover:bg-white/[0.04]">
-        <span className="text-[#2dd4bf]">{icon}</span>
+        <span className="text-[#a3e635]">{icon}</span>
         <span className="text-[15px] font-extrabold tracking-tight text-[#f3f8ff] flex-1">{title}</span>
         {open ? <ChevronDown className="h-4 w-4 text-zinc-500" /> : <ChevronRight className="h-4 w-4 text-zinc-500" />}
       </button>
@@ -138,7 +138,7 @@ const POS_BAR: Record<string, string> = {
 const EARLY_CONIC: Record<string, string> = {
   RB: "#ef4444",
   WR: "#3b82f6",
-  QB: "#22c55e",
+  QB: "#a3e635",
   TE: "#a855f7",
   K: "#f97316",
   DEF: "#71717a",
@@ -162,8 +162,8 @@ function OwnerCard({ o, selected, onClick }: { o: any; selected: boolean; onClic
         "w-full rounded-xl border text-left px-4 py-3 transition-all",
         PROFILE_SURFACE,
         selected
-          ? "border-[#2dd4bf]/50 ring-1 ring-[#2dd4bf]/25 shadow-[0_0_24px_-10px_rgba(45,212,191,0.35)]"
-          : "border-white/[0.08] hover:border-[#2dd4bf]/25 hover:bg-white/[0.03]",
+          ? "border-[#a3e635]/50 ring-1 ring-[#a3e635]/25 shadow-[0_0_24px_-10px_rgba(45,212,191,0.35)]"
+          : "border-white/[0.08] hover:border-[#a3e635]/25 hover:bg-white/[0.03]",
       )}>
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -430,7 +430,7 @@ function ProfilePanel({
       <div className={cn(PROFILE_SURFACE, "overflow-hidden")}>
         <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-start">
           <div
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-[#2dd4bf]/50 bg-zinc-900 text-lg font-bold text-zinc-100 shadow-[0_0_28px_-6px_rgba(239,68,68,0.55)]"
+            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-[#a3e635]/50 bg-zinc-900 text-lg font-bold text-zinc-100 shadow-[0_0_28px_-6px_rgba(239,68,68,0.55)]"
             aria-hidden
           >
             {headerDisplayName
@@ -501,11 +501,11 @@ function ProfilePanel({
                 className={cn(
                   "flex flex-1 flex-col items-center gap-1.5 border-b-2 py-3 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors sm:flex-row sm:justify-center sm:gap-2 sm:text-xs",
                   active
-                    ? "border-[#2dd4bf] text-[#2dd4bf]"
+                    ? "border-[#a3e635] text-[#a3e635]"
                     : "border-transparent text-zinc-500 hover:text-zinc-300",
                 )}
               >
-                <Icon className={cn("h-4 w-4", active ? "text-[#2dd4bf]" : "text-zinc-600")} aria-hidden />
+                <Icon className={cn("h-4 w-4", active ? "text-[#a3e635]" : "text-zinc-600")} aria-hidden />
                 {label}
               </button>
             );
@@ -1335,7 +1335,7 @@ export function OwnerProfiles() {
     <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 80% -10%,rgba(45,212,191,.16),transparent 42%),linear-gradient(180deg,#0a0e16,#070a11)" }}>
       <div className="mb-5 flex items-center gap-3">
         <div className="grid place-items-center rounded-2xl shrink-0" style={{ width: 46, height: 46, background: "rgba(45,212,191,.10)", border: "1px solid rgba(45,212,191,.30)" }}>
-          <Users className="h-6 w-6 text-[#2dd4bf]" />
+          <Users className="h-6 w-6 text-[#a3e635]" />
         </div>
         <div className="min-w-0">
           <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#8b97a8]">League Intelligence Desk</div>
@@ -1379,7 +1379,7 @@ export function OwnerProfiles() {
                       className={cn(
                         "w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors",
                         listRowLookupKey(o) !== "" && selectedOwnerKey === listRowLookupKey(o)
-                          ? "border-[#2dd4bf]/45 bg-[#2dd4bf]/10 text-zinc-100"
+                          ? "border-[#a3e635]/45 bg-[#a3e635]/10 text-zinc-100"
                           : "border-white/[0.06] text-zinc-400 hover:bg-white/[0.04]",
                       )}>
                       <span className="font-medium">{o.ownerName}</span>

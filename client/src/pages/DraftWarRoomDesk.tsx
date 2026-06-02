@@ -7,7 +7,7 @@ import { useLeagueContext } from "@/hooks/useLeagueContext";
 
 /* ── palette: navy desk · gold = priority/rank/pick · teal/cyan = live read · red/orange = risk ── */
 const GOLD = "#f5c518";
-const TEAL = "#2dd4bf";
+const TEAL = "#a3e635";
 const CYAN = "#22d3ee";
 const RISK = "#f87171";
 const WARN = "#fb923c";

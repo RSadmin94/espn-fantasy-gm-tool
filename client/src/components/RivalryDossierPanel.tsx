@@ -28,10 +28,10 @@ import {
 const TEXT = "#f3f8ff";
 const MUTED = "#8b97a8";
 const GOLD = "#f5c518";
-const ACCENT = "#2dd4bf";
-const GREEN = "#22c55e";
+const ACCENT = "#a3e635";
+const GREEN = "#a3e635";
 const RED = "#ef4444";
-const BLUE = "#55a7ff";
+const BLUE = "#8b5cf6";
 const LINE = "rgba(255,255,255,0.07)";
 const PANEL: React.CSSProperties = { background: "linear-gradient(180deg,#141a24,#0e131c)", border: `1px solid ${LINE}`, borderRadius: 15 };
 const SUB: React.CSSProperties = { background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 10 };

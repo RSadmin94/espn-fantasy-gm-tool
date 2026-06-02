@@ -4,10 +4,10 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { Zap, Repeat2, Trophy, Newspaper, Users, Flame, Star, Activity, ChevronRight, RefreshCw } from "lucide-react";
 
-const GOLD="#f5c518", TEAL="#22c55e", MUTED="#8b97a8", RED="#ef4444", ORANGE="#f7902f", GREEN="#22c55e", BLUE="#55a7ff", TEXT="#f3f8ff", ACCENT="#2dd4bf";
-const PANEL: React.CSSProperties = { background:"linear-gradient(180deg,#141a24,#0e131c)", border:"1px solid rgba(255,255,255,.07)", borderRadius:15 };
+const GOLD="#f5c518", TEAL="#a3e635", MUTED="#8b97a8", RED="#ef4444", ORANGE="#f7902f", GREEN="#a3e635", BLUE="#8b5cf6", TEXT="#f3f8ff", ACCENT="#a3e635";
+const PANEL: React.CSSProperties = { background:"linear-gradient(180deg,#16131f,#0f0c17)", border:"1px solid rgba(255,255,255,.07)", borderRadius:15 };
 const SUB: React.CSSProperties = { background:"rgba(255,255,255,.03)", border:"1px solid rgba(255,255,255,.06)", borderRadius:10 };
-const PAGEBG: React.CSSProperties = { background:"radial-gradient(circle at 80% -10%,rgba(45,212,191,.16),transparent 42%),linear-gradient(180deg,#0a0e16,#070a11)", color:TEXT };
+const PAGEBG: React.CSSProperties = { background:"radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0b0910,#060509)", color:TEXT };
 
 function firstName(s: any){ return String(s||"").trim().split(" ")[0] || "Owner"; }
 function archetype(m: any){ const pred=Number(m?.predictabilityScore??0), surp=Number(m?.surpriseProbability??0);

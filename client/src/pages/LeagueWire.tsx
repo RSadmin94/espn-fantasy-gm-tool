@@ -267,7 +267,7 @@ export function LeagueWire() {
       <div className="border-b border-white/[0.06]">
         <div className="px-0 pb-4">
           <div className="flex items-center gap-3 mb-1">
-            <Newspaper className="h-7 w-7 text-[#2dd4bf]" />
+            <Newspaper className="h-7 w-7 text-[#a3e635]" />
             <div>
               <h1 className="text-3xl md:text-4xl font-black tracking-tight text-[#f3f8ff] leading-none">League Wire</h1>
               <p className="text-[11px] text-[#8b97a8] uppercase tracking-[0.2em] font-bold mt-1">{LEAGUE_NAME} · Official Newsroom</p>
@@ -283,7 +283,7 @@ export function LeagueWire() {
             </button>
             <button onClick={() => setView("archive")}
               className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors",
-                view === "archive" ? "border-[#2dd4bf] text-[#2dd4bf]" : "border-transparent text-[#8b97a8] hover:text-[#dbe4f0]")}>
+                view === "archive" ? "border-[#a3e635] text-[#a3e635]" : "border-transparent text-[#8b97a8] hover:text-[#dbe4f0]")}>
               <BookOpen className="h-3 w-3 inline mr-1.5" />Historical Archive
             </button>
           </div>
@@ -301,7 +301,7 @@ export function LeagueWire() {
                 <button key={s} onClick={() => setSelectedSeason(s)}
                   className={cn("px-3 py-1.5 rounded-lg text-sm font-bold border transition-all",
                     selectedSeason === s
-                      ? "border-[#2dd4bf]/50 bg-[#2dd4bf]/10 text-[#2dd4bf]"
+                      ? "border-[#a3e635]/50 bg-[#a3e635]/10 text-[#a3e635]"
                       : "border-white/10 text-[#8b97a8] hover:border-white/25 hover:text-[#dbe4f0]"
                   )}>
                   {s}
@@ -318,7 +318,7 @@ export function LeagueWire() {
         {view === "feed" && (wireReports as any[]).length > 0 && (
           <div className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#141a24,#0e131c)] overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
-              <Radio className="h-3.5 w-3.5 text-[#2dd4bf] animate-pulse" />
+              <Radio className="h-3.5 w-3.5 text-[#a3e635] animate-pulse" />
               <span className="text-xs font-black text-[#f3f8ff] uppercase tracking-wider">Live Wire</span>
               <span className="text-[10px] text-zinc-600">Season {latestWireWeek?.season} · Week {latestWireWeek?.week}</span>
             </div>
@@ -345,7 +345,7 @@ export function LeagueWire() {
         {/* Articles */}
         {isLoading ? (
           <div className="flex items-center justify-center py-16 gap-2 text-zinc-500 text-sm">
-            <Loader2 className="h-4 w-4 animate-spin text-[#2dd4bf]" />
+            <Loader2 className="h-4 w-4 animate-spin text-[#a3e635]" />
             Loading articles…
           </div>
         ) : (displayArticles as Article[]).length === 0 ? (
