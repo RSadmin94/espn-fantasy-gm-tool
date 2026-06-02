@@ -14,7 +14,7 @@
  * Cached in memCache for 10 min to avoid redundant season scans.
  */
 
-import { getCachedView } from "./db";
+import { getCachedView, resolveActiveProfile } from "./db";
 import {
   getSeasonMatchups,
   getSeasonTeams,
@@ -318,6 +318,14 @@ const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
 
 export async function resolveRodMemberId(userId?: number): Promise<string | null> {
   return memCache(`rodMemberId:${userId ?? "anon"}`, 60 * 60_000, async () => {
+    // Prefer the authenticated user's selected profile when onboarding is complete.
+    // selectedOwnerKey is stored as `id:{GUID}`; the ESPN member id is the bare `{GUID}`.
+    if (userId != null) {
+      const profile = await resolveActiveProfile({ id: userId });
+      if (profile.isSetupComplete && profile.selectedOwnerKey) {
+        return profile.selectedOwnerKey.replace(/^id:/, "");
+      }
+    }
     const seasons: number[] = await listSeasonsForLeagueHistorical(undefined, userId);
     seasons.sort((a: number, b: number) => b - a);
     for (const season of seasons) {
