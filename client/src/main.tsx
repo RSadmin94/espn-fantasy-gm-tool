@@ -30,6 +30,7 @@ import { OwnerProfiles } from "./pages/OwnerProfiles";
 import { HallOfFame } from "./pages/HallOfFame";
 import { DraftRealitySimulator } from "./pages/DraftRealitySimulator";
 import { WhyHaventIWon } from "./pages/WhyHaventIWon";
+import { ChampionshipPath } from "./pages/ChampionshipPath";
 import { LeagueDataHealth } from "./pages/LeagueDataHealth";
 import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
 import { PlayerIntelligence } from "./pages/PlayerIntelligence";
@@ -149,6 +150,7 @@ const router = createBrowserRouter([
           { path: "/hall-of-fame", element: <HallOfFame /> },
           { path: "/draft-reality", element: <DraftRealitySimulator /> },
           { path: "/why-havent-i-won", element: <WhyHaventIWon /> },
+          { path: "/championship-path", element: <ChampionshipPath /> },
           { path: "/ring-of-honor", element: <Navigate to="/hall-of-fame" replace /> },
           { path: "/roster", element: <Roster /> },
           { path: "/trades", element: <Trades /> },
