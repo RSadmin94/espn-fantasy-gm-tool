@@ -63,7 +63,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { kind: "link", label: "Dashboard",      href: "/dashboard",      icon: LayoutDashboard },
       { kind: "link", label: "Draft War Room", href: "/draft-war-room", icon: Zap },
-      { kind: "link", label: "AI Advisor",     href: "/advisor",        icon: Bot },
+      { kind: "link", label: "LeagueDNA Advisor", href: "/advisor",        icon: Dna },
       { kind: "link", label: "Trade Analyzer", href: "/trades",         icon: Repeat2 },
       { kind: "link", label: "League Wire",    href: "/league-wire",    icon: Newspaper },
     ],

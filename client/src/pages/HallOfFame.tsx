@@ -11,7 +11,13 @@ import {
 
 /** Matches Owner Profiles / Dashboard prestige surfaces */
 const PROFILE_SURFACE =
-  "rounded-xl border border-white/[0.08] bg-[#18111c]/95 shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
+  "rounded-xl border border-white/[0.08] bg-[linear-gradient(180deg,#1b131f,#140e17)] shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
+
+const PAGEBG: React.CSSProperties = {
+  background:
+    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0e0a10,#080609)",
+  color: "#f3f8ff",
+};
 
 type MaybeAvail<T> = { available: true; value: T } | { available: false; reason: string };
 
@@ -253,7 +259,7 @@ export function HallOfFame() {
 
   if (hofQ.isLoading) {
     return (
-      <div className="flex items-center justify-center gap-2 bg-[#110c14] py-20 text-zinc-500">
+      <div className="flex items-center justify-center gap-2 bg-[#0e0a10] py-20 text-zinc-500">
         <Loader2 className="h-5 w-5 animate-spin" /> Loading Hall of Fame…
       </div>
     );
@@ -261,7 +267,7 @@ export function HallOfFame() {
 
   if (hofQ.isError || !data) {
     return (
-      <div className="mx-auto max-w-6xl bg-[#110c14] px-4 py-12 text-sm text-red-400 sm:px-6">
+      <div className="mx-auto max-w-6xl bg-[#0e0a10] px-4 py-12 text-sm text-red-400 sm:px-6">
         Could not load Hall of Fame: {hofQ.isError ? String(hofQ.error?.message ?? hofQ.error) : "no data"}
       </div>
     );
@@ -306,7 +312,8 @@ export function HallOfFame() {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 bg-[#110c14] px-4 pb-20 pt-6 sm:px-6">
+    <div style={PAGEBG} className="-m-4 md:-m-6 px-4 pt-6 pb-20 sm:px-6 min-h-full">
+      <div className="mx-auto max-w-6xl space-y-8">
       {/* HERO */}
       <section className="space-y-4">
         <div className="text-center">
@@ -659,7 +666,7 @@ export function HallOfFame() {
               {cemetery.length === 0 ? (
                 <p className="text-center text-sm text-zinc-500">No short-timers - everyone who joined stuck around.</p>
               ) : (
-                <div className="rounded-2xl border border-white/[0.06] bg-[linear-gradient(180deg,#130e16,#0f0b11)] px-5 pt-8 pb-4">
+                <div className="rounded-2xl border border-white/[0.06] bg-[linear-gradient(180deg,#1b131f,#140e17)] px-5 pt-8 pb-4">
                   <div className="grid grid-cols-2 gap-x-5 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
                     {cemetery.map((g, i) => (
                       <div key={g.name + i} className="flex flex-col items-center">
@@ -786,6 +793,7 @@ export function HallOfFame() {
           </div>
         </CollapsibleContent>
       </Collapsible>
+      </div>
     </div>
   );
 }
