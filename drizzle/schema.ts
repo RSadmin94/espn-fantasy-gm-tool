@@ -794,6 +794,13 @@ export const leagueConnections = mysqlTable(
     dnaProfile: json("dnaProfile"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    // ── P0 profile-identity columns ("which team is mine"); additive, nullable ──
+    selectedTeamId: int("selectedTeamId"),
+    selectedOwnerKey: varchar("selectedOwnerKey", { length: 64 }),
+    selectedOwnerName: varchar("selectedOwnerName", { length: 255 }),
+    selectedFranchiseName: varchar("selectedFranchiseName", { length: 255 }),
+    selectedSeason: int("selectedSeason"),
+    isDefault: boolean("isDefault").default(false).notNull(),
   },
   (t) => [
     index("idx_lc_user").on(t.userId),

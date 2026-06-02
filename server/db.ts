@@ -1341,3 +1341,83 @@ export async function getLeagueEventsSummary(leagueId: string, season?: number) 
     .orderBy(desc(leagueEvents.processedAt))
     .limit(500);
 }
+
+// ─── Active user profile resolution (P0) ─────────────────────────────────────
+/**
+ * Stable shape describing the logged-in user's active league/team identity.
+ * `isSetupComplete` is false until the user has both an active connection and a
+ * selected team. Consumers should treat a falsy `isSetupComplete` as "needs onboarding".
+ */
+export interface ActiveProfile {
+  clerkUserId: string | null;
+  leagueId: string | null;
+  leagueName: string | null;
+  selectedTeamId: number | null;
+  selectedOwnerKey: string | null;
+  selectedOwnerName: string | null;
+  selectedFranchiseName: string | null;
+  selectedSeason: number | null;
+  isSetupComplete: boolean;
+}
+
+function emptyActiveProfile(clerkUserId: string | null): ActiveProfile {
+  return {
+    clerkUserId,
+    leagueId: null,
+    leagueName: null,
+    selectedTeamId: null,
+    selectedOwnerKey: null,
+    selectedOwnerName: null,
+    selectedFranchiseName: null,
+    selectedSeason: null,
+    isSetupComplete: false,
+  };
+}
+
+/**
+ * Resolve the active user's league/team profile from their `league_connections` row.
+ *
+ * Never throws on missing data; returns a stable ActiveProfile:
+ *   - null/undefined user                       -> setup incomplete (no clerkUserId)
+ *   - authenticated user, no active connection  -> setup incomplete
+ *   - connection without a selected team        -> setup incomplete (leagueId populated)
+ *   - connection with a selected team           -> setup complete
+ *
+ * NOTE: This does NOT alter or remove the existing 457622 fallback in
+ * `resolveActiveLeagueId`. As of this commit nothing consumes this resolver yet;
+ * wiring the Rod-specific call sites to it is a separate, later phase.
+ */
+export async function resolveActiveProfile(
+  user: { id: number; openId?: string | null } | null | undefined,
+): Promise<ActiveProfile> {
+  if (!user) return emptyActiveProfile(null);
+  const clerkUserId = user.openId ?? null;
+  const db = await getDb();
+  if (!db) return emptyActiveProfile(clerkUserId);
+
+  const [conn] = await db
+    .select()
+    .from(leagueConnections)
+    .where(
+      and(
+        eq(leagueConnections.userId, user.id),
+        eq(leagueConnections.isActive, true),
+      ),
+    )
+    .orderBy(desc(leagueConnections.isDefault), desc(leagueConnections.updatedAt))
+    .limit(1);
+
+  if (!conn) return emptyActiveProfile(clerkUserId);
+
+  return {
+    clerkUserId,
+    leagueId: conn.leagueId ?? null,
+    leagueName: conn.leagueName ?? null,
+    selectedTeamId: conn.selectedTeamId ?? null,
+    selectedOwnerKey: conn.selectedOwnerKey ?? null,
+    selectedOwnerName: conn.selectedOwnerName ?? null,
+    selectedFranchiseName: conn.selectedFranchiseName ?? null,
+    selectedSeason: conn.selectedSeason ?? null,
+    isSetupComplete: conn.selectedTeamId != null,
+  };
+}
