@@ -376,19 +376,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
     <div className="flex h-full flex-col border-r border-white/[0.06] bg-[linear-gradient(180deg,#15111f,#0b0910)]">
       {/* Logo */}
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-4">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-lime-400/20 to-lime-500/20 ring-1 ring-lime-400/30">
-            <Trophy className="h-5 w-5 text-lime-300" strokeWidth={2.25} />
-          </div>
-          <div className="flex min-w-0 flex-col leading-none">
-            <span className="text-[15px] font-black tracking-tight text-[#f3f8ff]">
-              Fantasy Football Rivals
-            </span>
-            <span className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b97a8]">
-              OWN YOUR RIVALS
-            </span>
-          </div>
-        </div>
+        <img src="/logo.png" alt="Fantasy Football Rivals - Own Your Rivals" className="max-h-20 w-auto object-contain" />
         {onClose && (
           <button
             type="button"
@@ -465,11 +453,8 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <span className="flex items-center gap-2 md:hidden">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-lime-400/20 to-lime-500/20 ring-1 ring-lime-400/30">
-            <Trophy className="h-4 w-4 text-lime-300" strokeWidth={2.25} />
-          </span>
-          <span className="text-base font-black tracking-tight text-zinc-50">Fantasy Football Rivals</span>
+        <span className="flex items-center md:hidden">
+          <img src="/logo.png" alt="Fantasy Football Rivals" className="h-9 w-auto object-contain" />
         </span>
       </div>
 
