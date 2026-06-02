@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -25,6 +23,73 @@ import {
   ChevronUp,
   Info,
 } from "lucide-react";
+
+// ── theme (matches Command Dashboard) ───────────────────────────────────────
+const TEXT = "#f3f8ff",
+  MUTED = "#8b97a8",
+  GOLD = "#f5c518",
+  ACCENT = "#a3e635",
+  RED = "#ef4444",
+  LINE = "rgba(255,255,255,.07)";
+const PAGEBG: React.CSSProperties = {
+  background:
+    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0e0a10,#080609)",
+  color: TEXT,
+};
+const PANEL: React.CSSProperties = {
+  background: "linear-gradient(180deg,#1b131f,#140e17)",
+  border: `1px solid ${LINE}`,
+  borderRadius: 15,
+};
+const SUB: React.CSSProperties = {
+  background: "rgba(255,255,255,.03)",
+  border: "1px solid rgba(255,255,255,.06)",
+  borderRadius: 10,
+};
+
+function Pill({ children, gold }: { children: React.ReactNode; gold?: boolean }) {
+  return (
+    <span
+      className="px-4 py-2.5 rounded-[10px] text-[13px] font-extrabold inline-flex items-center"
+      style={
+        gold
+          ? { color: GOLD, border: "1px solid rgba(245,198,90,.46)", background: "rgba(245,198,90,.10)" }
+          : { border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: TEXT }
+      }
+    >
+      {children}
+    </span>
+  );
+}
+
+function SectionHead({
+  icon: Icon,
+  title,
+  right,
+  iconColor = ACCENT,
+}: {
+  icon: any;
+  title: React.ReactNode;
+  right?: React.ReactNode;
+  iconColor?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <h3 className="text-[18px] md:text-[20px] font-extrabold tracking-tight flex items-center gap-2 min-w-0">
+        <Icon className="h-5 w-5 shrink-0" style={{ color: iconColor }} /> <span className="truncate">{title}</span>
+      </h3>
+      {right}
+    </div>
+  );
+}
+
+function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <section style={PANEL} className={`overflow-hidden ${className}`}>
+      <div className="p-[18px] md:p-5">{children}</div>
+    </section>
+  );
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,7 +135,7 @@ const INJURY_COLORS: Record<string, string> = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(n: number | null | undefined, decimals = 1) {
-  if (n == null) return "—";
+  if (n == null) return "\u2014";
   return Number(n).toFixed(decimals);
 }
 
@@ -121,18 +186,18 @@ function PosBadge({ pos }: { pos: string | undefined }) {
 
 function SlotBadge({ slot }: { slot: string | undefined }) {
   if (!slot || slot === "Bench" || slot === "BE") {
-    return <span className="text-xs text-muted-foreground italic">Bench</span>;
+    return <span className="text-xs italic" style={{ color: MUTED }}>Bench</span>;
   }
   if (slot === "IR") {
     return <span className="text-xs text-red-400 font-medium">IR</span>;
   }
-  return <span className="text-xs text-muted-foreground">{slot}</span>;
+  return <span className="text-xs" style={{ color: MUTED }}>{slot}</span>;
 }
 
 function AcqBadge({ type }: { type: string | undefined }) {
   if (!type) return null;
   const map: Record<string, string> = {
-    DRAFT: "border-primary/20 bg-primary/5 text-primary/80",
+    DRAFT: "border-lime-500/20 bg-lime-500/5 text-lime-400/80",
     WAIVER: "border-violet-500/20 bg-violet-500/5 text-violet-400/80",
     FREE_AGENT: "border-slate-500/20 bg-slate-500/5 text-slate-400/80",
     TRADE: "border-orange-500/20 bg-orange-500/5 text-orange-400/80",
@@ -191,24 +256,24 @@ function RosterTable({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border">
-            <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground w-20">Slot</th>
-            <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Player</th>
-            <th className="px-4 py-2.5 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground w-12">Pos</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground w-16">Avg</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground w-16">Total</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground w-16 hidden md:table-cell">Proj</th>
+          <tr style={{ borderBottom: "1px solid rgba(255,255,255,.08)" }}>
+            <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide w-20" style={{ color: MUTED }}>Slot</th>
+            <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide" style={{ color: MUTED }}>Player</th>
+            <th className="px-4 py-2.5 text-center text-[11px] font-medium uppercase tracking-wide w-12" style={{ color: MUTED }}>Pos</th>
+            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide w-16" style={{ color: MUTED }}>Avg</th>
+            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide w-16" style={{ color: MUTED }}>Total</th>
+            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide w-16 hidden md:table-cell" style={{ color: MUTED }}>Proj</th>
             {warRoomColumns && (
               <>
-                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-muted-foreground w-24">
+                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide w-24" style={{ color: MUTED }}>
                   War Room KVS
                 </th>
-                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-muted-foreground w-28">
+                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide w-28" style={{ color: MUTED }}>
                   Rec.
                 </th>
               </>
             )}
-            <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground hidden lg:table-cell">Acq</th>
+            <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide hidden lg:table-cell" style={{ color: MUTED }}>Acq</th>
           </tr>
         </thead>
         <tbody>
@@ -222,13 +287,14 @@ function RosterTable({
               return (
                 <tr
                   key={`${slot}-${p.playerId}-${i}`}
-                  className="border-b border-border/50 last:border-0 hover:bg-accent/20 transition-colors"
+                  className="hover:bg-white/[0.03] transition-colors"
+                  style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}
                 >
                   <td className="px-4 py-2.5">
                     {i === 0 ? <SlotBadge slot={slot} /> : null}
                   </td>
                   <td className="px-4 py-2.5">
-                    <span className={cn("text-sm font-medium", injColor || "text-foreground")}>
+                    <span className={cn("text-sm font-medium", injColor)} style={injColor ? undefined : { color: TEXT }}>
                       {p.playerName ?? "Unknown"}
                     </span>
                     {p.injuryStatus && p.injuryStatus !== "ACTIVE" && (
@@ -240,30 +306,30 @@ function RosterTable({
                   <td className="px-4 py-2.5 text-center">
                     <PosBadge pos={p.position} />
                   </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-foreground">
+                  <td className="px-4 py-2.5 text-right font-mono" style={{ color: TEXT }}>
                     {fmt(p.appliedAverage)}
                   </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-foreground">
+                  <td className="px-4 py-2.5 text-right font-mono" style={{ color: TEXT }}>
                     {fmt(p.appliedTotal, 0)}
                   </td>
-                  <td className="hidden px-4 py-2.5 text-right font-mono text-muted-foreground md:table-cell">
+                  <td className="hidden px-4 py-2.5 text-right font-mono md:table-cell" style={{ color: MUTED }}>
                     {fmt(p.projectedTotal, 0)}
                   </td>
                   {warRoomColumns && (
                     <>
                       <td className="px-3 py-2.5 text-right">
                         {warRoomLoading ? (
-                          <span className="text-muted-foreground text-xs tabular-nums">…</span>
+                          <span className="text-xs tabular-nums" style={{ color: MUTED }}>\u2026</span>
                         ) : warRoomFailed ? (
-                          <span className="text-muted-foreground text-xs" title="Draft War Room unavailable">
-                            —
+                          <span className="text-xs" style={{ color: MUTED }} title="Draft War Room unavailable">
+                            \u2014
                           </span>
                         ) : !hasPred ? (
-                          <span className="text-muted-foreground text-xs" title="No keeper predictions for this season">
-                            —
+                          <span className="text-xs" style={{ color: MUTED }} title="No keeper predictions for this season">
+                            \u2014
                           </span>
                         ) : !wr ? (
-                          <span className="text-muted-foreground text-xs">—</span>
+                          <span className="text-xs" style={{ color: MUTED }}>\u2014</span>
                         ) : (
                           (() => {
                             const colorClass =
@@ -306,9 +372,6 @@ function RosterTable({
     </div>
   );
 }
-
-// ── Main page ─────────────────────────────────────────────────────────────────
-
 
 // ── Keeper types & logic (merged from KeeperAdvisor) ─────────────────────────
 
@@ -366,6 +429,8 @@ function RecBadge({ rec, last }: { rec: Recommendation; last: boolean }) {
     </span>
   );
 }
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export function Roster() {
   const allSeasonsQ = trpc.espn.allSeasons.useQuery();
@@ -446,32 +511,32 @@ export function Roster() {
     : null;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+    <div style={PAGEBG} className="-m-4 md:-m-6 p-5 md:p-7 min-h-full">
+      {/* ── Header (dashboard style) ─────────────────────────────── */}
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Roster</h1>
-          <p className="mt-1 text-muted-foreground">
-            Team rosters and player details by season.
+          <h2 className="text-3xl md:text-4xl font-black tracking-tight leading-none">Roster</h2>
+          <p className="mt-2 text-sm" style={{ color: MUTED }}>
+            Team rosters, scoring, projections and keeper value by season.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          disabled={rosterQ.isFetching || isNotCached}
-          onClick={() => void rosterQ.refetch()}
-        >
-          {rosterQ.isFetching
-            ? <Loader2 className="h-4 w-4 animate-spin" />
-            : <RefreshCw className="h-4 w-4" />}
-          Refresh
-        </Button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Pill gold>{season} Season</Pill>
+          {allPlayers.length > 0 && <Pill>{allPlayers.length} Players</Pill>}
+          <button
+            disabled={rosterQ.isFetching || isNotCached}
+            onClick={() => void rosterQ.refetch()}
+            className="px-3 py-2.5 rounded-[10px] text-[13px] font-extrabold inline-flex items-center gap-2 disabled:opacity-60"
+            style={{ border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: MUTED }}
+          >
+            {rosterQ.isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Refresh
+          </button>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        {/* Season */}
+      {/* ── Filters ──────────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-3 mb-3">
         <Select
           value={String(season)}
           onValueChange={v => {
@@ -487,16 +552,13 @@ export function Roster() {
               <SelectItem key={s} value={String(s)}>
                 <span className="flex items-center gap-1.5">
                   {s}
-                  {cachedSeasons.includes(s) && (
-                    <span className="text-lime-400 text-xs">✓</span>
-                  )}
+                  {cachedSeasons.includes(s) && <span className="text-lime-400 text-xs">&#10003;</span>}
                 </span>
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        {/* Team */}
         <Select
           value={teamId === "ALL" ? "ALL" : String(teamId)}
           onValueChange={v => setTeamId(v === "ALL" ? "ALL" : Number(v))}
@@ -514,238 +576,242 @@ export function Roster() {
             ))}
           </SelectContent>
         </Select>
-
-        {allPlayers.length > 0 && (
-          <span className="self-center text-xs text-muted-foreground">
-            {allPlayers.length} players
-          </span>
-        )}
       </div>
 
       {/* Not-cached notice */}
       {isNotCached && (
-        <div className="flex items-center gap-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-300">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          Season {season} hasn't been synced yet.{" "}
-          <a href="/sync" className="underline underline-offset-2">Sync it now</a>.
+        <div style={SUB} className="flex items-center gap-3 p-4 text-sm mb-3">
+          <AlertCircle className="h-4 w-4 shrink-0" style={{ color: GOLD }} />
+          <span style={{ color: "#e7c46b" }}>
+            Season {season} hasn't been synced yet.{" "}
+            <a href="/sync" className="underline underline-offset-2">Sync it now</a>.
+          </span>
         </div>
       )}
 
       {/* Loading */}
       {rosterQ.isLoading && !isNotCached && (
-        <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" /> Loading roster…
-        </div>
+        <Panel>
+          <div className="flex items-center justify-center py-20 gap-2" style={{ color: MUTED }}>
+            <Loader2 className="h-5 w-5 animate-spin" /> Loading roster&hellip;
+          </div>
+        </Panel>
       )}
 
       {/* Error */}
       {rosterQ.isError && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          {rosterQ.error.message}
+        <div style={{ ...SUB, borderColor: "rgba(239,68,68,.3)" }} className="flex items-center gap-3 p-4 text-sm mb-3">
+          <AlertCircle className="h-4 w-4 shrink-0" style={{ color: RED }} />
+          <span style={{ color: "#f3a3a3" }}>{rosterQ.error.message}</span>
         </div>
       )}
 
       {/* Empty */}
       {!rosterQ.isLoading && !rosterQ.isError && !isNotCached && allPlayers.length === 0 && (
-        <div className="rounded-lg border border-dashed border-border px-4 py-16 text-center text-sm text-muted-foreground">
-          No roster data for {season}.
-        </div>
-      )}
-
-      {/* Single team view */}
-      {teamId !== "ALL" && allPlayers.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4 text-primary" />
-              {selectedTeam
-                ? `${selectedTeam.teamName}${selectedTeam.owners ? ` — ${selectedTeam.owners}` : ""}`
-                : `Team ${teamId}`}
-              <span className="text-sm font-normal text-muted-foreground">· {season}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <RosterTable
-              players={allPlayers}
-              keeperPredictions={keeperPredWar}
-              warRoomColumns={!isNotCached}
-              warRoomLoading={warRoomQ.isFetching}
-              warRoomFailed={warRoomFailed}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* All teams view — one card per team */}
-      {teamId === "ALL" && playersByTeam && playersByTeam.size > 0 && (
-        <div className="space-y-4">
-          {teams
-            .filter(t => playersByTeam.has(t.teamId))
-            .map(t => {
-              const players = playersByTeam.get(t.teamId) ?? [];
-              return (
-                <Card key={t.teamId}>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-foreground">{t.teamName || `Team ${t.teamId}`}</span>
-                        {t.owners && (
-                          <span className="text-muted-foreground font-normal">— {t.owners}</span>
-                        )}
-                      </span>
-                      <span className="text-xs text-muted-foreground font-normal">
-                        {players.length} players
-                      </span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <RosterTable
-                      players={players}
-                      keeperPredictions={keeperPredWar}
-                      warRoomColumns={!isNotCached}
-                      warRoomLoading={warRoomQ.isFetching}
-                      warRoomFailed={warRoomFailed}
-                    />
-                  </CardContent>
-                </Card>
-              );
-            })}
-        </div>
-      )}
-
-      {/* ── Keeper Analysis (merged from KeeperAdvisor) ─────────────── */}
-      <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/30 overflow-hidden">
-        <button
-          onClick={() => setKaOpen(o => !o)}
-          className="w-full flex items-center justify-between px-5 py-4 hover:bg-zinc-800/30 transition-colors"
-        >
-          <div className="flex items-center gap-2.5">
-            <Key className="h-4 w-4 text-red-400" />
-            <span className="font-bold text-zinc-100 text-sm">Keeper Advisor {draftYear}</span>
-            {keeperPool.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold">
-                {keeperPool.length} eligible
-              </span>
-            )}
-            {finalYearKeepers.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold">
-                {finalYearKeepers.length} last-year
-              </span>
-            )}
+        <Panel>
+          <div className="py-16 text-center text-sm" style={{ color: MUTED }}>
+            No roster data for {season}.
           </div>
-          {kaOpen ? <ChevronUp className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />}
-        </button>
+        </Panel>
+      )}
 
-        {kaOpen && (
-          <div className="border-t border-zinc-800/60 divide-y divide-zinc-800/30">
-            {keeperPoolQ.isLoading ? (
-              <div className="flex items-center justify-center gap-2 py-12 text-zinc-500 text-sm">
-                <Loader2 className="h-4 w-4 animate-spin" /> Building keeper pool…
-              </div>
-            ) : keeperPool.length === 0 ? (
-              <div className="px-5 py-10 text-center space-y-2">
-                <AlertTriangle className="h-6 w-6 text-amber-400 mx-auto" />
-                <p className="text-zinc-400 text-sm font-semibold">No keeper data found</p>
-                <p className="text-zinc-600 text-xs">Run Full Import to load draft history.</p>
-              </div>
-            ) : (
-              <>
-                {/* Keeper table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-zinc-900/60 text-zinc-500 text-[10px] uppercase tracking-wider">
-                        <th className="px-4 py-2.5 text-left">Player</th>
-                        <th className="px-3 py-2.5 text-center">Pos</th>
-                        <th className="px-3 py-2.5 text-center">Team</th>
-                        <th className="px-3 py-2.5 text-center">Round Cost</th>
-                        <th className="px-3 py-2.5 text-center">KVS</th>
-                        <th className="px-4 py-2.5 text-center">Recommendation</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-800/40">
-                      {[...keeperPool].sort((a,b) => calcKVS(b) - calcKVS(a)).map((k, i) => {
-                        const kvs  = calcKVS(k);
-                        const rec  = kvsRec(kvs, k.isLastKeeperYear);
-                        return (
-                          <tr key={i} className={cn("transition-colors hover:bg-zinc-800/30", i%2===0?"bg-transparent":"bg-zinc-900/20")}>
-                            <td className="px-4 py-2.5">
-                              <div className="font-semibold text-zinc-100 text-xs leading-tight">{k.playerName}</div>
-                              <div className="text-[10px] text-zinc-500">{k.ownerName}</div>
-                            </td>
-                            <td className="px-3 py-2.5 text-center">
-                              <span className={cn("text-xs font-bold", KA_POS[k.position] ?? "text-zinc-400")}>{k.position}</span>
-                            </td>
-                            <td className="px-3 py-2.5 text-center">
-                              <span className="text-[10px] font-semibold text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">{k.nflTeam || "—"}</span>
-                            </td>
-                            <td className="px-3 py-2.5 text-center">
-                              <span className={cn("text-xs font-bold tabular-nums",
-                                k.keeperRoundCost <= 3 ? "text-lime-400" : k.keeperRoundCost <= 6 ? "text-amber-400" : "text-zinc-300"
-                              )}>Rd {k.keeperRoundCost}</span>
-                              {k.isLastKeeperYear && <div className="text-[9px] text-amber-500 font-bold uppercase mt-0.5">Last Year</div>}
-                            </td>
-                            <td className="px-3 py-2.5 text-center">
-                              <span className={cn("text-xl font-black tabular-nums", kvsColor(kvs))}>{kvs}</span>
-                            </td>
-                            <td className="px-4 py-2.5 text-center">
-                              <RecBadge rec={rec} last={k.isLastKeeperYear} />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+      <div className="space-y-3">
+        {/* Single team view */}
+        {teamId !== "ALL" && allPlayers.length > 0 && (
+          <Panel>
+            <SectionHead
+              icon={Users}
+              title={
+                <>
+                  {selectedTeam
+                    ? `${selectedTeam.teamName}${selectedTeam.owners ? ` \u2014 ${selectedTeam.owners}` : ""}`
+                    : `Team ${teamId}`}
+                  <span className="ml-2 text-sm font-normal" style={{ color: MUTED }}>&middot; {season}</span>
+                </>
+              }
+            />
+            <div className="mt-4 -mx-[18px] md:-mx-5">
+              <RosterTable
+                players={allPlayers}
+                keeperPredictions={keeperPredWar}
+                warRoomColumns={!isNotCached}
+                warRoomLoading={warRoomQ.isFetching}
+                warRoomFailed={warRoomFailed}
+              />
+            </div>
+          </Panel>
+        )}
+
+        {/* All teams view — one panel per team */}
+        {teamId === "ALL" && playersByTeam && playersByTeam.size > 0 && (
+          <>
+            {teams
+              .filter(t => playersByTeam.has(t.teamId))
+              .map(t => {
+                const players = playersByTeam.get(t.teamId) ?? [];
+                return (
+                  <Panel key={t.teamId}>
+                    <SectionHead
+                      icon={Users}
+                      title={
+                        <>
+                          {t.teamName || `Team ${t.teamId}`}
+                          {t.owners && (
+                            <span className="ml-2 text-sm font-normal" style={{ color: MUTED }}>&mdash; {t.owners}</span>
+                          )}
+                        </>
+                      }
+                      right={
+                        <span className="text-xs font-normal shrink-0" style={{ color: MUTED }}>
+                          {players.length} players
+                        </span>
+                      }
+                    />
+                    <div className="mt-4 -mx-[18px] md:-mx-5">
+                      <RosterTable
+                        players={players}
+                        keeperPredictions={keeperPredWar}
+                        warRoomColumns={!isNotCached}
+                        warRoomLoading={warRoomQ.isFetching}
+                        warRoomFailed={warRoomFailed}
+                      />
+                    </div>
+                  </Panel>
+                );
+              })}
+          </>
+        )}
+
+        {/* ── Keeper Advisor (merged from KeeperAdvisor) ─────────────── */}
+        <section style={PANEL} className="overflow-hidden">
+          <button
+            onClick={() => setKaOpen(o => !o)}
+            className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.03] transition-colors"
+          >
+            <div className="flex items-center gap-2.5">
+              <Key className="h-4 w-4" style={{ color: RED }} />
+              <span className="font-bold text-sm" style={{ color: TEXT }}>Keeper Advisor {draftYear}</span>
+              {keeperPool.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold">
+                  {keeperPool.length} eligible
+                </span>
+              )}
+              {finalYearKeepers.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold">
+                  {finalYearKeepers.length} last-year
+                </span>
+              )}
+            </div>
+            {kaOpen ? <ChevronUp className="h-4 w-4" style={{ color: MUTED }} /> : <ChevronDown className="h-4 w-4" style={{ color: MUTED }} />}
+          </button>
+
+          {kaOpen && (
+            <div style={{ borderTop: "1px solid rgba(255,255,255,.07)" }}>
+              {keeperPoolQ.isLoading ? (
+                <div className="flex items-center justify-center gap-2 py-12 text-sm" style={{ color: MUTED }}>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Building keeper pool&hellip;
                 </div>
-                <div className="px-4 py-2 flex items-center gap-1.5 bg-zinc-900/20">
-                  <Info className="h-3 w-3 text-zinc-600" />
-                  <span className="text-[10px] text-zinc-600">KVS = Keeper Value Score · * = Last eligible year for this player</span>
+              ) : keeperPool.length === 0 ? (
+                <div className="px-5 py-10 text-center space-y-2">
+                  <AlertTriangle className="h-6 w-6 text-amber-400 mx-auto" />
+                  <p className="text-sm font-semibold" style={{ color: TEXT }}>No keeper data found</p>
+                  <p className="text-xs" style={{ color: MUTED }}>Run Full Import to load draft history.</p>
                 </div>
-              </>
-            )}
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-[10px] uppercase tracking-wider" style={{ background: "rgba(255,255,255,.03)", color: MUTED }}>
+                          <th className="px-4 py-2.5 text-left">Player</th>
+                          <th className="px-3 py-2.5 text-center">Pos</th>
+                          <th className="px-3 py-2.5 text-center">Team</th>
+                          <th className="px-3 py-2.5 text-center">Round Cost</th>
+                          <th className="px-3 py-2.5 text-center">KVS</th>
+                          <th className="px-4 py-2.5 text-center">Recommendation</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...keeperPool].sort((a,b) => calcKVS(b) - calcKVS(a)).map((k, i) => {
+                          const kvs  = calcKVS(k);
+                          const rec  = kvsRec(kvs, k.isLastKeeperYear);
+                          return (
+                            <tr key={i} className="transition-colors hover:bg-white/[0.03]" style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}>
+                              <td className="px-4 py-2.5">
+                                <div className="font-semibold text-xs leading-tight" style={{ color: TEXT }}>{k.playerName}</div>
+                                <div className="text-[10px]" style={{ color: MUTED }}>{k.ownerName}</div>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <span className={cn("text-xs font-bold", KA_POS[k.position] ?? "text-zinc-400")}>{k.position}</span>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ color: MUTED, background: "rgba(255,255,255,.06)" }}>{k.nflTeam || "\u2014"}</span>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <span className={cn("text-xs font-bold tabular-nums",
+                                  k.keeperRoundCost <= 3 ? "text-lime-400" : k.keeperRoundCost <= 6 ? "text-amber-400" : "text-zinc-300"
+                                )}>Rd {k.keeperRoundCost}</span>
+                                {k.isLastKeeperYear && <div className="text-[9px] text-amber-500 font-bold uppercase mt-0.5">Last Year</div>}
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <span className={cn("text-xl font-black tabular-nums", kvsColor(kvs))}>{kvs}</span>
+                              </td>
+                              <td className="px-4 py-2.5 text-center">
+                                <RecBadge rec={rec} last={k.isLastKeeperYear} />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="px-4 py-2 flex items-center gap-1.5" style={{ background: "rgba(255,255,255,.02)", borderTop: "1px solid rgba(255,255,255,.06)" }}>
+                    <Info className="h-3 w-3" style={{ color: MUTED }} />
+                    <span className="text-[10px]" style={{ color: MUTED }}>KVS = Keeper Value Score &middot; * = Last eligible year for this player</span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* ── Keeper Eligibility Expiring ──────────────────────────── */}
+        {finalYearKeepers.length > 0 && (
+          <div className="rounded-[15px] border border-amber-500/25 bg-amber-500/5 overflow-hidden">
+            <div className="px-5 py-3.5 flex items-center gap-2.5 border-b border-amber-500/20">
+              <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+              <div>
+                <span className="font-bold text-amber-300 text-sm">Keeper Eligibility Expiring</span>
+                <span className="text-amber-500/60 text-xs ml-2">&mdash; keep or lose forever after {draftYear}</span>
+              </div>
+              <span className="ml-auto px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold">
+                {finalYearKeepers.length} players
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-4">
+              {finalYearKeepers.map((k, i) => {
+                const kvs = calcKVS(k);
+                return (
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg" style={SUB}>
+                    <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 border border-white/10",
+                      KA_POS[k.position] ?? "text-zinc-400")} style={{ background: "rgba(255,255,255,.05)" }}>
+                      {k.playerName.split(" ").map((w: string) => w[0]).slice(0,2).join("")}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate" style={{ color: TEXT }}>{k.playerName}</div>
+                      <div className="text-[10px] truncate" style={{ color: MUTED }}>{k.ownerName} &middot; Rd {k.keeperRoundCost}</div>
+                    </div>
+                    <span className={cn("text-base font-black tabular-nums shrink-0", kvsColor(kvs))}>{kvs}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 py-2.5 border-t border-amber-500/10 text-[10px] text-amber-600/90" style={{ background: "rgba(255,255,255,.02)" }}>
+              These players cannot be kept in the {draftYear + 1} draft. Make your decision before the {draftYear} draft.
+            </div>
           </div>
         )}
       </div>
-
-      {/* ── Keeper Non-Eligibility Tracker ───────────────────────────── */}
-      {finalYearKeepers.length > 0 && (
-        <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 overflow-hidden">
-          <div className="px-5 py-3.5 flex items-center gap-2.5 border-b border-amber-500/20">
-            <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
-            <div>
-              <span className="font-bold text-amber-300 text-sm">Keeper Eligibility Expiring</span>
-              <span className="text-amber-500/60 text-xs ml-2">— keep or lose forever after {draftYear}</span>
-            </div>
-            <span className="ml-auto px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold">
-              {finalYearKeepers.length} players
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-4">
-            {finalYearKeepers.map((k, i) => {
-              const kvs = calcKVS(k);
-              return (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800/60">
-                  <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 border",
-                    "bg-zinc-800 border-zinc-700", KA_POS[k.position] ?? "text-zinc-400")}>
-                    {k.playerName.split(" ").map((w: string) => w[0]).slice(0,2).join("")}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold text-zinc-100 truncate">{k.playerName}</div>
-                    <div className="text-[10px] text-zinc-500 truncate">{k.ownerName} · Rd {k.keeperRoundCost}</div>
-                  </div>
-                  <span className={cn("text-base font-black tabular-nums shrink-0", kvsColor(kvs))}>{kvs}</span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="px-5 py-2.5 bg-zinc-900/30 border-t border-amber-500/10 text-[10px] text-amber-600">
-            These players cannot be kept in the {draftYear + 1} draft. Make your decision before the {draftYear} draft.
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }
