@@ -11,16 +11,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  AlertCircle,
   Bot,
   Loader2,
   RotateCcw,
   Send,
   Sparkles,
   User,
+  Dna,
+  BarChart3,
 } from "lucide-react";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -34,36 +35,45 @@ interface HistoryRow {
   createdAt?: Date | string;
 }
 
-// ── Prompt chips ──────────────────────────────────────────────────────────────
+interface OwnerRow {
+  ownerKey: string;
+  ownerName?: string;
+  seasons?: number[];
+  championships?: number;
+}
+
+// ── Suggested questions (LeagueDNA framing) ─────────────────────────────────
 
 const SUGGESTED_PROMPTS = [
-  "Who should I start this week?",
-  "Who should I target in a trade?",
-  "What is my biggest roster weakness?",
-  "Who should I drop from my bench?",
-  "How do my playoff odds look?",
-  "Who is the best keeper value on my roster?",
+  "Why haven't I won?",
+  "Who is my biggest rival?",
+  "What does a championship team look like in this league?",
+  "What patterns do champions follow?",
+  "Who always reaches in the draft?",
+  "How can I win this year?",
 ];
 
-// ── Message bubble ────────────────────────────────────────────────────────────
+function timeGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+// ── Chat message bubble ─────────────────────────────────────────────────────
 
 function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isUser = msg.role === "user";
   return (
     <div className={cn("flex gap-3 items-start", isUser && "flex-row-reverse")}>
-      {/* Avatar */}
       <div className={cn(
         "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border",
         isUser
           ? "border-primary/30 bg-primary/10 text-primary"
           : "border-border bg-card text-muted-foreground"
       )}>
-        {isUser
-          ? <User className="h-3.5 w-3.5" />
-          : <Bot className="h-3.5 w-3.5" />}
+        {isUser ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
       </div>
-
-      {/* Bubble */}
       <div className={cn(
         "max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
         isUser
@@ -73,7 +83,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         {msg.pending
           ? <span className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Thinking…
+              Thinking...
             </span>
           : <span className="whitespace-pre-wrap">{msg.content}</span>}
       </div>
@@ -81,14 +91,51 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── League-wide insight card ────────────────────────────────────────────────
+
+function InsightCard({ icon, tag, children }: { icon: React.ReactNode; tag: string; children: React.ReactNode }) {
+  return (
+    <Card className="overflow-hidden">
+      <CardContent className="p-5">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
+          {icon}
+          {tag}
+        </div>
+        <div className="mt-3 text-sm leading-relaxed text-foreground">{children}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Main page ───────────────────────────────────────────────────────────────
 
 export function Advisor() {
   const cachedQ = trpc.espn.cachedSeasons.useQuery();
   const cachedSeasons: number[] = cachedQ.data ?? [];
-  const defaultSeason = cachedSeasons.length > 0
-    ? Math.max(...cachedSeasons)
-    : 2025;
+  const defaultSeason = cachedSeasons.length > 0 ? Math.max(...cachedSeasons) : 2025;
+
+  // League-wide briefing data (no focal-user dependency — safe for all users)
+  const profileQ = (trpc as any).me.activeProfile.useQuery(undefined, { retry: false, staleTime: 600_000 });
+  const summaryQ = (trpc as any).me.leagueSummary.useQuery(undefined, { staleTime: 600_000 });
+  const ownersQ = (trpc as any).owners.ownerList.useQuery(undefined, { staleTime: 300_000 });
+
+  const ownerName: string | null = profileQ.data?.isSetupComplete ? (profileQ.data.selectedOwnerName ?? null) : null;
+  const firstName = ownerName ? String(ownerName).split(/\s+/)[0] : null;
+
+  const allOwners: OwnerRow[] = ownersQ.data?.allOwners ?? [];
+  const seasonsCount: number = summaryQ.data?.seasons ?? cachedSeasons.length;
+  const ownersCount = allOwners.length;
+  const matchupsCount: number | null = summaryQ.data?.matchups ?? null;
+  const picksCount: number | null = summaryQ.data?.draftPicks ?? null;
+
+  const totalTitles = allOwners.reduce((s, o) => s + (o.championships ?? 0), 0);
+  const championCount = allOwners.filter((o) => (o.championships ?? 0) > 0).length;
+  const topChamp = allOwners.length
+    ? [...allOwners].sort((a, b) => (b.championships ?? 0) - (a.championships ?? 0))[0]
+    : null;
+  const mostTenured = allOwners.length
+    ? [...allOwners].sort((a, b) => (b.seasons?.length ?? 0) - (a.seasons?.length ?? 0))[0]
+    : null;
 
   const [season, setSeason] = useState(defaultSeason);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -98,40 +145,33 @@ export function Advisor() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load chat history from DB on mount / season change
   const historyQ = trpc.advisor.history.useQuery(
     { season },
-    {
-      retry: false,
-      refetchOnWindowFocus: false,
-    }
+    { retry: false, refetchOnWindowFocus: false }
   );
 
   useEffect(() => {
     if (historyQ.data && !historyLoaded) {
       const rows = historyQ.data as HistoryRow[];
       const mapped: ChatMessage[] = rows
-        .filter(r => r.role === "user" || r.role === "assistant")
-        .map(r => ({ role: r.role as "user" | "assistant", content: r.content }));
+        .filter((r) => r.role === "user" || r.role === "assistant")
+        .map((r) => ({ role: r.role as "user" | "assistant", content: r.content }));
       if (mapped.length > 0) setMessages(mapped);
       setHistoryLoaded(true);
     }
   }, [historyQ.data, historyLoaded]);
 
-  // Reset history flag when season changes
   useEffect(() => {
     setHistoryLoaded(false);
     setMessages([]);
   }, [season]);
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const utils = trpc.useUtils();
 
-  // Clear history mutation
   const clearMutation = trpc.advisor.clearHistory.useMutation({
     onSuccess: () => {
       setMessages([]);
@@ -139,28 +179,26 @@ export function Advisor() {
     },
   });
 
-  // Chat mutation
   const chatMutation = trpc.advisor.chat.useMutation({
     onSuccess: (data) => {
       const resp = data as { message: string };
-      setMessages(prev => {
-        // Replace the last pending bubble with the real response
-        const withoutPending = prev.filter(m => !m.pending);
+      setMessages((prev) => {
+        const withoutPending = prev.filter((m) => !m.pending);
         return [...withoutPending, { role: "assistant", content: resp.message }];
       });
     },
     onError: (err) => {
-      setMessages(prev => {
-        const withoutPending = prev.filter(m => !m.pending);
+      setMessages((prev) => {
+        const withoutPending = prev.filter((m) => !m.pending);
         return [
           ...withoutPending,
           {
             role: "assistant",
             content: err.message.includes("trial")
-              ? "⚠️ Your free trial has ended. Upgrade to continue using the AI Advisor."
+              ? "Your free trial has ended. Upgrade to continue using the advisor."
               : err.message.includes("Rate limit")
-                ? "⚠️ You've hit the rate limit. Please wait a moment before sending another message."
-                : `⚠️ Error: ${err.message}`,
+                ? "You've hit the rate limit. Please wait a moment before sending another message."
+                : "Error: " + err.message,
           },
         ];
       });
@@ -172,17 +210,13 @@ export function Advisor() {
   function sendMessage(text: string) {
     const msg = text.trim();
     if (!msg || isSending) return;
-
     setInput("");
-    setMessages(prev => [
+    setMessages((prev) => [
       ...prev,
       { role: "user", content: msg },
       { role: "assistant", content: "", pending: true },
     ]);
-
     chatMutation.mutate({ message: msg, season });
-
-    // Refocus input
     setTimeout(() => inputRef.current?.focus(), 50);
   }
 
@@ -195,93 +229,127 @@ export function Advisor() {
 
   const isEmpty = messages.length === 0 && !historyQ.isLoading;
 
+  const heroLine =
+    "I've analyzed " +
+    (seasonsCount ? seasonsCount + " seasons" : "your league") +
+    (matchupsCount != null ? ", " + matchupsCount.toLocaleString() + " matchups" : "") +
+    (ownersCount ? ", " + ownersCount + " owners" : "") +
+    (picksCount != null ? ", and " + picksCount.toLocaleString() + " draft picks" : ", and your draft history") +
+    ". Here are today's insights.";
+
   return (
-    <div className="mx-auto flex max-w-3xl flex-col" style={{ height: "calc(100vh - 8rem)" }}>
-      {/* Header */}
-      <div className="flex items-center justify-between pb-4 shrink-0">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">AI Advisor</h1>
-          <p className="mt-1 text-muted-foreground text-sm">
-            Ask your GM strategy questions — backed by real league data.
-          </p>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 pb-10">
+      {/* Hero */}
+      <div className="rounded-2xl border border-border bg-gradient-to-b from-card to-background p-6">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+          <Dna className="h-4 w-4" />
+          LeagueDNA Advisor
         </div>
-
-        <div className="flex items-center gap-2">
-          {/* Season context */}
-          <Select
-            value={String(season)}
-            onValueChange={v => setSeason(Number(v))}
-          >
-            <SelectTrigger className="h-8 w-24 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[...cachedSeasons].reverse().map(s => (
-                <SelectItem key={s} value={String(s)} className="text-xs">
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Clear history */}
-          {messages.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-1.5 text-xs text-muted-foreground"
-              disabled={clearMutation.isPending}
-              onClick={() => clearMutation.mutate()}
-            >
-              {clearMutation.isPending
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <RotateCcw className="h-3.5 w-3.5" />}
-              Clear
-            </Button>
-          )}
-        </div>
+        <h1 className="mt-2 text-2xl font-bold text-foreground">
+          {timeGreeting()}{firstName ? ", " + firstName : ""}.
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{heroLine}</p>
+        <p className="mt-1 text-xs text-muted-foreground/70">The only AI trained on your league's history.</p>
       </div>
 
-      {/* Chat area */}
-      <Card className="flex flex-1 flex-col overflow-hidden min-h-0">
-        <CardContent className="flex flex-1 flex-col p-0 min-h-0">
+      {/* League-wide insight cards */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <InsightCard icon={<Dna className="h-3.5 w-3.5" />} tag="League DNA">
+          {topChamp ? (
+            <>
+              <span className="font-semibold text-foreground">{topChamp.ownerName ?? "Unknown"}</span>
+              {" "}leads the league with{" "}
+              <span className="font-semibold text-foreground">{topChamp.championships ?? 0}</span>
+              {" "}{(topChamp.championships ?? 0) === 1 ? "title" : "titles"}.
+              <div className="mt-2 text-muted-foreground">
+                {championCount} of {ownersCount} owners have won a championship
+                {seasonsCount ? " across " + seasonsCount + " seasons" : ""}. Total titles awarded: {totalTitles}.
+              </div>
+            </>
+          ) : (
+            <span className="text-muted-foreground">Loading league championship history...</span>
+          )}
+        </InsightCard>
+
+        <InsightCard icon={<BarChart3 className="h-3.5 w-3.5" />} tag="League at a Glance">
+          {mostTenured ? (
+            <>
+              <span className="font-semibold text-foreground">{ownersCount}</span> managers have competed
+              {seasonsCount ? <> across <span className="font-semibold text-foreground">{seasonsCount}</span> seasons</> : null}
+              {matchupsCount != null ? <> and <span className="font-semibold text-foreground">{matchupsCount.toLocaleString()}</span> matchups</> : null}.
+              <div className="mt-2 text-muted-foreground">
+                Longest-tenured: <span className="text-foreground">{mostTenured.ownerName ?? "Unknown"}</span>
+                {" "}({mostTenured.seasons?.length ?? 0} seasons).
+              </div>
+            </>
+          ) : (
+            <span className="text-muted-foreground">Loading league overview...</span>
+          )}
+        </InsightCard>
+      </div>
+
+      {/* Ask LeagueDNA Advisor (chat) */}
+      <Card className="flex flex-col overflow-hidden">
+        <CardContent className="flex flex-col p-0">
+          {/* Chat header */}
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold text-foreground">Ask LeagueDNA Advisor</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
+                <SelectTrigger className="h-8 w-24 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[...cachedSeasons].reverse().map((s) => (
+                    <SelectItem key={s} value={String(s)} className="text-xs">{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {messages.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs text-muted-foreground"
+                  disabled={clearMutation.isPending}
+                  onClick={() => clearMutation.mutate()}
+                >
+                  {clearMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
+
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 min-h-0">
-            {/* Loading history */}
+          <div className="h-[420px] space-y-4 overflow-y-auto px-4 py-4">
             {historyQ.isLoading && (
-              <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground text-sm">
+              <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Loading history…
+                Loading history...
               </div>
             )}
-
-            {/* Empty state */}
             {isEmpty && (
-              <div className="flex flex-col items-center justify-center h-full py-12 text-center space-y-3">
+              <div className="flex h-full flex-col items-center justify-center space-y-3 py-10 text-center">
                 <div className="flex h-14 w-14 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
                   <Sparkles className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <p className="font-semibold text-foreground">GM Advisor</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Ask anything about your league, roster, or strategy.
-                  </p>
+                  <p className="font-semibold text-foreground">Ask anything about your league</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Rivals, draft patterns, championship paths -- backed by your real history.</p>
                 </div>
               </div>
             )}
-
-            {/* Messages */}
-            {messages.map((msg, i) => (
-              <MessageBubble key={i} msg={msg} />
-            ))}
-
+            {messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Suggested prompts — only shown when chat is empty and history loaded */}
+          {/* Suggested prompts */}
           {isEmpty && (
-            <div className="px-4 pb-3 flex flex-wrap gap-2 shrink-0">
-              {SUGGESTED_PROMPTS.map(prompt => (
+            <div className="flex flex-wrap gap-2 px-4 pb-3">
+              {SUGGESTED_PROMPTS.map((prompt) => (
                 <button
                   key={prompt}
                   onClick={() => sendMessage(prompt)}
@@ -295,15 +363,15 @@ export function Advisor() {
           )}
 
           {/* Input */}
-          <div className="border-t border-border p-3 shrink-0">
+          <div className="border-t border-border p-3">
             <div className="flex items-end gap-2">
               <textarea
                 ref={inputRef}
                 rows={1}
                 value={input}
-                onChange={e => setInput(e.target.value)}
+                onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask your GM advisor… (Enter to send, Shift+Enter for newline)"
+                placeholder="Ask your LeagueDNA Advisor... (Enter to send, Shift+Enter for newline)"
                 disabled={isSending}
                 className={cn(
                   "flex-1 resize-none rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground",
@@ -318,13 +386,11 @@ export function Advisor() {
                 disabled={!input.trim() || isSending}
                 onClick={() => sendMessage(input)}
               >
-                {isSending
-                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : <Send className="h-4 w-4" />}
+                {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
             <p className="mt-1.5 text-center text-xs text-muted-foreground">
-              Responses use real {season} season data · Requires active subscription
+              Responses use real {season} season data &middot; Requires active subscription
             </p>
           </div>
         </CardContent>
