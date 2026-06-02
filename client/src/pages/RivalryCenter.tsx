@@ -150,6 +150,7 @@ export function RivalryCenter() {
   const cachedQ = (trpc as any).espn.cachedSeasons.useQuery(undefined, {
     staleTime: 60_000,
   });
+  const profileQ = (trpc as any).me.activeProfile.useQuery(undefined, { staleTime: 600_000, retry: false });
   const refreshScores = (trpc as any).rivalry.refresh.useMutation({
     onSuccess: () => scoresQ.refetch(),
   });
@@ -194,12 +195,16 @@ export function RivalryCenter() {
   }, [allOwners]);
 
   const rodKey = useMemo(() => {
+    // Prefer the signed-in user's selected owner from their active profile.
+    const sel: string | null = profileQ.data?.isSetupComplete ? profileQ.data.selectedOwnerKey : null;
+    if (sel && allOwners.some((o) => o.ownerKey === sel)) return sel;
+    // Fallback (unchanged): focal-name match, else first picker option.
     for (const o of allOwners) {
       const nm = norm(o.ownerName);
       if (ROD_NAMES.some((r) => nm.includes(r))) return o.ownerKey;
     }
     return pickerOptions[0]?.ownerKey ?? "";
-  }, [allOwners, pickerOptions]);
+  }, [allOwners, pickerOptions, profileQ.data]);
 
   const pairs = useMemo<Pair[]>(() => {
     const arr: Pair[] = Array.isArray(scoresQ.data) ? scoresQ.data : [];

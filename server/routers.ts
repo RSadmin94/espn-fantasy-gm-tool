@@ -22,6 +22,7 @@ import { weeklyAssessmentRouter } from "./weeklyAssessmentRouter";
 import { providerRouter } from "./providerRouter";
 import { billingRouter } from "./billingRouter";
 import { onboardingRouter } from "./onboardingRouter";
+import { meRouter } from "./meRouter";
 import { offseasonRouter } from "./offseasonRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
@@ -468,6 +469,7 @@ function buildPlayerStory(args: {
 export const appRouter = router({
   system: systemRouter,
   billing: billingRouter,
+  me: meRouter,
   onboarding: onboardingRouter,
   injury: injuryRouter,
   simulation: simulationRouter,
