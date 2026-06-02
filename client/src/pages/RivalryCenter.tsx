@@ -21,14 +21,14 @@ import {
 } from "lucide-react";
 
 // ── theme (matches Command Dashboard: dark slate panels, teal accent) ────────
-const INK = "#130e16";
+const INK = "#140e17";
 const PAGEBG: React.CSSProperties = {
   background:
-    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.16),transparent 42%),linear-gradient(180deg,#130e16,#0f0b11)",
+    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0e0a10,#080609)",
   color: "#f3f8ff",
 };
-const PAPER = "linear-gradient(180deg,#1f1624,#18111c)";
-const PAPER2 = "#1f1624";
+const PAPER = "linear-gradient(180deg,#1b131f,#140e17)";
+const PAPER2 = "#1b131f";
 const LINE = "rgba(255,255,255,0.07)";
 const TEXT = "#f3f8ff";
 const MUTED = "#8b97a8";
@@ -324,7 +324,7 @@ export function RivalryCenter() {
   return (
     <div style={PAGEBG} className="-m-4 md:-m-6 p-5 md:p-7 min-h-full">
       {/* ── Header (dashboard style) ─────────────────────────────── */}
-      <div className="mx-auto max-w-6xl flex flex-wrap items-start justify-between gap-4 mb-5">
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
         <div>
           <h2 className="text-3xl md:text-4xl font-black tracking-tight leading-none">Rivalry Center</h2>
           <p className="mt-2 text-sm" style={{ color: MUTED }}>
@@ -345,7 +345,7 @@ export function RivalryCenter() {
         </div>
       </div>
 
-      <main className="mx-auto max-w-6xl space-y-3">
+      <main className="space-y-3">
         {loading ? (
           <Panel>
             <div className="py-16 text-center text-sm" style={{ color: MUTED }}>Loading league rivalries\u2026</div>
@@ -414,6 +414,7 @@ export function RivalryCenter() {
             )}
 
             {/* ── The Ledger (league-wide power rankings) ────────── */}
+            <div className="grid gap-3 lg:grid-cols-2 items-start">
             <Panel>
               <SectionHead icon={Flame} title="The Ledger" caption="League rivalry power rankings \u2014 every pairing in league history." />
               {leagueLoading ? (
@@ -508,6 +509,8 @@ export function RivalryCenter() {
             </Panel>
 
             {/* ── The Legends (league mythology) ─────────────────── */}
+            </div>
+
             {mythology.length > 0 && (
               <Panel>
                 <SectionHead icon={Crown} title="The Legends" caption="League mythology, pulled from every recorded meeting." iconColor={GOLD} />
