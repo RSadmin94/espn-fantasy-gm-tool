@@ -442,7 +442,7 @@ export function Dashboard() {
 
   if (pageLoading) {
     return (
-      <div className="mx-auto max-w-[1400px] space-y-4 bg-[#07090e] px-4 py-6" aria-busy="true">
+      <div className="mx-auto max-w-[1400px] space-y-4 bg-[#0c090e] px-4 py-6" aria-busy="true">
         <Skeleton className="h-10 w-72 max-w-full" />
         <Skeleton className="h-4 w-96 max-w-full" />
         <div className="grid gap-3 md:grid-cols-3">
@@ -467,7 +467,7 @@ export function Dashboard() {
   const playoffSpots = leagueCtx.playoffTeams > 0 ? leagueCtx.playoffTeams : 6;
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-10 bg-[#07090e] px-4 pb-16 pt-6 sm:px-6">
+    <div className="mx-auto max-w-[1400px] space-y-10 bg-[#0c090e] px-4 pb-16 pt-6 sm:px-6">
       <header className="flex flex-col gap-4 border-b border-white/[0.06] pb-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-lime-500/90">Fantasy Football Rivals</p>
@@ -477,7 +477,7 @@ export function Dashboard() {
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
           <div className="w-full min-w-[160px] sm:w-48">
             <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
-              <SelectTrigger className="border-white/[0.08] bg-[#0f131c] text-zinc-100">
+              <SelectTrigger className="border-white/[0.08] bg-[#18111c] text-zinc-100">
                 <SelectValue placeholder="Season" />
               </SelectTrigger>
               <SelectContent>
@@ -565,7 +565,7 @@ export function Dashboard() {
         return (
           <section className="grid gap-4 lg:grid-cols-12 mb-6" aria-label="Draft intelligence brief">
             {/* Main hero card */}
-            <div className="lg:col-span-8 rounded-2xl border border-lime-500/25 bg-gradient-to-br from-[#0d1812] via-[#0b1015] to-[#09090e] p-6 shadow-[0_0_60px_-20px_rgba(16,185,129,0.3)]">
+            <div className="lg:col-span-8 rounded-2xl border border-lime-500/25 bg-gradient-to-br from-[#150f18] via-[#120d15] to-[#0c090e] p-6 shadow-[0_0_60px_-20px_rgba(163,230,53,0.3)]">
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-lime-500/15 border border-lime-500/30 flex items-center justify-center shrink-0">
@@ -681,7 +681,7 @@ export function Dashboard() {
       <section aria-label="Intelligence briefing" className="grid gap-4 lg:grid-cols-3 mb-2">
 
         {/* 1. Rival Threat Window */}
-        <div className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-[#130d0d] via-[#0e0e14] to-[#09090e] p-5">
+        <div className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-[#130d0d] via-[#110c14] to-[#0c090e] p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-7 h-7 rounded-lg bg-red-500/10 border border-red-500/25 flex items-center justify-center shrink-0">
               <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
@@ -719,7 +719,7 @@ export function Dashboard() {
         </div>
 
         {/* 2. Decision Memo */}
-        <div className="rounded-2xl border border-lime-500/20 bg-gradient-to-br from-[#0a1210] via-[#0b0e14] to-[#09090e] p-5">
+        <div className="rounded-2xl border border-lime-500/20 bg-gradient-to-br from-[#0f0b12] via-[#110c14] to-[#0c090e] p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-7 h-7 rounded-lg bg-lime-500/10 border border-lime-500/25 flex items-center justify-center shrink-0">
               <FileText className="h-3.5 w-3.5 text-lime-400" />
@@ -762,7 +762,7 @@ export function Dashboard() {
         </div>
 
         {/* 3. Historical Receipts */}
-        <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-[#13100a] via-[#0e0e14] to-[#09090e] p-5">
+        <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-[#13100a] via-[#110c14] to-[#0c090e] p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center shrink-0">
               <Star className="h-3.5 w-3.5 text-amber-400" />
@@ -811,7 +811,7 @@ export function Dashboard() {
       </section>
       {/* Hero — three prestige cards */}
       <section aria-label="League highlights" className="grid gap-4 md:grid-cols-3">
-        <div className="flex min-h-[240px] flex-col rounded-2xl border border-amber-500/25 bg-gradient-to-br from-[#141820] to-[#0c0f14] p-5 shadow-[0_0_40px_-12px_rgba(245,158,11,0.35)]">
+        <div className="flex min-h-[240px] flex-col rounded-2xl border border-amber-500/25 bg-gradient-to-br from-[#1c1420] to-[#110c14] p-5 shadow-[0_0_40px_-12px_rgba(245,158,11,0.35)]">
           <div className="flex items-start justify-between gap-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-400/90">Hall of Fame leader</p>
             <Trophy className="h-4 w-4 shrink-0 text-amber-400/80" aria-hidden />
@@ -856,7 +856,7 @@ export function Dashboard() {
           </Link>
         </div>
 
-        <div className="flex min-h-[240px] flex-col rounded-2xl border border-red-500/25 bg-gradient-to-br from-[#16121a] to-[#0c0f14] p-5 shadow-[0_0_36px_-12px_rgba(239,68,68,0.3)]">
+        <div className="flex min-h-[240px] flex-col rounded-2xl border border-red-500/25 bg-gradient-to-br from-[#16101a] to-[#110c14] p-5 shadow-[0_0_36px_-12px_rgba(239,68,68,0.3)]">
           <div className="flex items-start justify-between gap-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-400/90">Hottest rivalry</p>
             <Flame className="h-4 w-4 shrink-0 text-red-400/80" aria-hidden />
@@ -925,7 +925,7 @@ export function Dashboard() {
       {/* Row 2 — standings | marquee matchup | records */}
       <section className="grid gap-4 xl:grid-cols-12" aria-label="League board">
         <div className="space-y-3 xl:col-span-3">
-          <div className="flex min-h-[280px] flex-col rounded-2xl border border-white/[0.08] bg-[#0f131c]/95 shadow-lg shadow-black/40">
+          <div className="flex min-h-[280px] flex-col rounded-2xl border border-white/[0.08] bg-[#18111c]/95 shadow-lg shadow-black/40">
             <div className="border-b border-white/[0.06] px-4 py-3">
               <h3 className="text-sm font-semibold text-zinc-50">Current standings</h3>
               <p className="text-xs text-zinc-500">Top 6 · Season {season}</p>
@@ -983,7 +983,7 @@ export function Dashboard() {
         </div>
 
         <div className="space-y-3 xl:col-span-3">
-          <div className="flex min-h-[280px] flex-col rounded-2xl border border-amber-500/20 bg-[#0f131c]/95 shadow-[0_0_28px_-12px_rgba(245,158,11,0.22)]">
+          <div className="flex min-h-[280px] flex-col rounded-2xl border border-amber-500/20 bg-[#18111c]/95 shadow-[0_0_28px_-12px_rgba(245,158,11,0.22)]">
             <div className="border-b border-white/[0.06] px-4 py-3">
               <h3 className="text-sm font-semibold text-zinc-50">League records</h3>
               <p className="text-xs text-zinc-500">All-time marks</p>
@@ -1037,7 +1037,7 @@ export function Dashboard() {
 
       {/* Row 3 — events | power | playoff */}
       <section className="grid gap-4 lg:grid-cols-3" aria-label="League insights">
-        <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#0f131c]/95">
+        <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#18111c]/95">
           <div className="border-b border-white/[0.06] px-4 py-3">
             <h3 className="text-sm font-semibold text-zinc-50">Recent League Events</h3>
             <p className="text-xs text-zinc-500">Latest completed transactions (stored league data)</p>
@@ -1045,7 +1045,7 @@ export function Dashboard() {
           <DashboardRecentLeagueEvents seasons={eventSeasons} enabled={eventSeasons.length > 0} />
         </div>
 
-        <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#0f131c]/95">
+        <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#18111c]/95">
           <div className="border-b border-white/[0.06] px-4 py-3">
             <h3 className="text-sm font-semibold text-zinc-50">Dynasty power rankings</h3>
             <p className="text-xs text-zinc-500">Top 5 · owners.ownerList</p>
@@ -1080,7 +1080,7 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#0f131c]/95">
+        <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#18111c]/95">
           <div className="border-b border-white/[0.06] px-4 py-3">
             <h3 className="text-sm font-semibold text-zinc-50">Playoff picture</h3>
             <p className="text-xs text-zinc-500">Seed-based · top 6 · no fabricated odds</p>

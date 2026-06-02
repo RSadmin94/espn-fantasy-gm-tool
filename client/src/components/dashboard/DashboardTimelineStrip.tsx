@@ -29,7 +29,7 @@ export function DashboardTimelineStrip({
         </Link>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-white/[0.06] bg-[#0a0d12]/90 px-2 py-4 shadow-inner shadow-black/40 sm:px-4">
+      <div className="overflow-x-auto rounded-xl border border-white/[0.06] bg-[#0f0b12]/90 px-2 py-4 shadow-inner shadow-black/40 sm:px-4">
         {isLoading ? (
           <div className="flex justify-center py-10 text-zinc-500">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -50,7 +50,7 @@ export function DashboardTimelineStrip({
                   className={cn(
                     "flex w-[100px] shrink-0 flex-col items-center gap-2 rounded-xl border px-2 py-3 text-center transition-colors",
                     row.isCurrentSeason
-                      ? "border-violet-500/40 bg-violet-500/[0.07] shadow-[0_0_20px_-8px_rgba(59,130,246,0.45)]"
+                      ? "border-violet-500/40 bg-violet-500/[0.07] shadow-[0_0_20px_-8px_rgba(139,92,246,0.45)]"
                       : "border-white/[0.06] bg-white/[0.02]",
                   )}
                 >

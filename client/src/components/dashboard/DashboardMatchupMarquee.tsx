@@ -62,7 +62,7 @@ export function DashboardMatchupMarquee({
   const aPct = winProbPct != null ? Math.round(Math.min(100, Math.max(0, winProbPct))) : null;
 
   return (
-    <div className="relative flex min-h-[320px] flex-col overflow-hidden rounded-2xl border border-red-500/15 bg-gradient-to-b from-[#121722] via-[#0f131c] to-[#0b0e14] p-5 shadow-[0_0_48px_-16px_rgba(239,68,68,0.35)] sm:p-7">
+    <div className="relative flex min-h-[320px] flex-col overflow-hidden rounded-2xl border border-red-500/15 bg-gradient-to-b from-[#1d1522] via-[#18111c] to-[#110c14] p-5 shadow-[0_0_48px_-16px_rgba(239,68,68,0.35)] sm:p-7">
       <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-red-500/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-violet-500/5 blur-3xl" />
 

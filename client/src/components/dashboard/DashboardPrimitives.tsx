@@ -7,8 +7,8 @@ const accentRing: Record<"none" | "gold" | "red" | "green" | "blue", string> = {
   none: "border-white/[0.06] shadow-sm shadow-black/20",
   gold: "border-amber-500/20 shadow-[0_0_24px_-8px_rgba(245,158,11,0.35)]",
   red: "border-red-500/20 shadow-[0_0_24px_-8px_rgba(239,68,68,0.25)]",
-  green: "border-lime-500/20 shadow-[0_0_24px_-8px_rgba(16,185,129,0.22)]",
-  blue: "border-violet-500/20 shadow-[0_0_24px_-8px_rgba(59,130,246,0.22)]",
+  green: "border-lime-500/20 shadow-[0_0_24px_-8px_rgba(163,230,53,0.22)]",
+  blue: "border-violet-500/20 shadow-[0_0_24px_-8px_rgba(139,92,246,0.22)]",
 };
 
 export function DashboardCard({
@@ -31,7 +31,7 @@ export function DashboardCard({
   return (
     <div
       className={cn(
-        "flex flex-col rounded-xl border bg-[#0f131c]/90 backdrop-blur-sm",
+        "flex flex-col rounded-xl border bg-[#18111c]/90 backdrop-blur-sm",
         accentRing[accent],
         className,
       )}

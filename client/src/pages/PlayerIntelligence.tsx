@@ -515,7 +515,7 @@ export function PlayerIntelligence() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#07090e]">
+    <div className="min-h-screen bg-[#0c090e]">
       {selectedPlayer
         ? <ProfileView playerName={selectedPlayer} onBack={handleBack} />
         : <SearchView onSelect={handleSelect} />

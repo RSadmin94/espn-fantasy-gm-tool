@@ -63,7 +63,7 @@ export function LeagueDataHealth() {
   const legacySeasons = seasons.filter((s: any) => !s.apiSeason);
   const fullCount    = apiSeasons.filter((s: any) => s.teams > 0 && s.draftPicks > 0 && s.matchups > 0).length;
 
-  const ringColor = readiness >= 85 ? "#10b981" : readiness >= 65 ? "#f59e0b" : "#ef4444";
+  const ringColor = readiness >= 85 ? "#a3e635" : readiness >= 65 ? "#f59e0b" : "#ef4444";
   const circumference = 2 * Math.PI * 40;
   const dash = (readiness / 100) * circumference;
 

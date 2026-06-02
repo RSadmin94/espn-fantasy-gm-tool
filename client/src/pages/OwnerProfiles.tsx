@@ -113,7 +113,7 @@ const TAG_STYLES: Record<string, string> = {
 
 /** Owner profile / Draft DNA surface — matches command-center mockup cards */
 const PROFILE_SURFACE =
-  "rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#141a24,#0e131c)] shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
+  "rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#1f1624,#18111c)] shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
 
 const POS_TEXT: Record<string, string> = {
   RB: "text-red-400",
@@ -137,7 +137,7 @@ const POS_BAR: Record<string, string> = {
 
 const EARLY_CONIC: Record<string, string> = {
   RB: "#ef4444",
-  WR: "#3b82f6",
+  WR: "#8b5cf6",
   QB: "#a3e635",
   TE: "#a855f7",
   K: "#f97316",
@@ -162,7 +162,7 @@ function OwnerCard({ o, selected, onClick }: { o: any; selected: boolean; onClic
         "w-full rounded-xl border text-left px-4 py-3 transition-all",
         PROFILE_SURFACE,
         selected
-          ? "border-[#a3e635]/50 ring-1 ring-[#a3e635]/25 shadow-[0_0_24px_-10px_rgba(45,212,191,0.35)]"
+          ? "border-[#a3e635]/50 ring-1 ring-[#a3e635]/25 shadow-[0_0_24px_-10px_rgba(139,92,246,0.35)]"
           : "border-white/[0.08] hover:border-[#a3e635]/25 hover:bg-white/[0.03]",
       )}>
       <div className="flex items-start justify-between gap-2">
@@ -396,7 +396,7 @@ function ProfilePanel({
   const earlyConicStyle: CSSProperties =
     earlyConicParts.length > 0
       ? { background: `conic-gradient(${earlyConicParts.join(", ")})` }
-      : { background: "conic-gradient(#27272a 0deg 360deg)" };
+      : { background: "conic-gradient(#241a2a 0deg 360deg)" };
 
   const tablePositions = [...new Set([...Object.keys(avgRoundByPos), ...Object.keys(posShare)])].sort(
     (a, b) => num(posShare[b] ?? 0) - num(posShare[a] ?? 0),
@@ -526,7 +526,7 @@ function ProfilePanel({
             </label>
             <select
               id="owner-compare-select"
-              className="min-w-[160px] max-w-full rounded-md border border-white/[0.1] bg-[#0b0e14] px-2 py-1.5 text-sm text-zinc-100"
+              className="min-w-[160px] max-w-full rounded-md border border-white/[0.1] bg-[#110c14] px-2 py-1.5 text-sm text-zinc-100"
               value={compareWith}
               onChange={(e) => setCompareWith(e.target.value)}
             >
@@ -902,11 +902,11 @@ function ProfilePanel({
                 <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-10">
                   <div className="relative h-44 w-44 shrink-0">
                     <div
-                      className="absolute inset-0 rounded-full shadow-[inset_0_0_0_12px_#0b0e14]"
+                      className="absolute inset-0 rounded-full shadow-[inset_0_0_0_12px_#110c14]"
                       style={earlyConicStyle}
                     />
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full border border-white/[0.08] bg-[#0b0e14]/95 text-lg" aria-hidden>
+                      <div className="flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full border border-white/[0.08] bg-[#110c14]/95 text-lg" aria-hidden>
                         🏈
                       </div>
                     </div>
@@ -1094,7 +1094,7 @@ function ProfilePanel({
           </button>
         </div>
         {showRivalryDossier && (
-          <div className="mb-4 rounded-xl border border-white/[0.08] bg-[#0b0e14]/80 p-4">
+          <div className="mb-4 rounded-xl border border-white/[0.08] bg-[#110c14]/80 p-4">
             <RivalryDossierPanel
               focalOwnerKey={profileLookupKey}
               pickerOptions={dossierPickerOptions}
@@ -1332,9 +1332,9 @@ export function OwnerProfiles() {
   );
 
   return (
-    <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 80% -10%,rgba(45,212,191,.16),transparent 42%),linear-gradient(180deg,#0a0e16,#070a11)" }}>
+    <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 80% -10%,rgba(139,92,246,.16),transparent 42%),linear-gradient(180deg,#130e16,#0f0b11)" }}>
       <div className="mb-5 flex items-center gap-3">
-        <div className="grid place-items-center rounded-2xl shrink-0" style={{ width: 46, height: 46, background: "rgba(45,212,191,.10)", border: "1px solid rgba(45,212,191,.30)" }}>
+        <div className="grid place-items-center rounded-2xl shrink-0" style={{ width: 46, height: 46, background: "rgba(139,92,246,.10)", border: "1px solid rgba(139,92,246,.30)" }}>
           <Users className="h-6 w-6 text-[#a3e635]" />
         </div>
         <div className="min-w-0">
@@ -1405,7 +1405,7 @@ export function OwnerProfiles() {
               rivalryEligibleOwnerKeysForDossier={rivalryEligibleOwnerKeysForDossier}
             />
           ) : (
-            <div className="flex h-64 items-center justify-center rounded-xl border border-white/[0.08] bg-[#0f131c]/50 text-sm text-zinc-500">
+            <div className="flex h-64 items-center justify-center rounded-xl border border-white/[0.08] bg-[#18111c]/50 text-sm text-zinc-500">
               Select an owner to view their profile.
             </div>
           )}

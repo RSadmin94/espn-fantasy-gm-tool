@@ -131,7 +131,7 @@ function KeeperDNA({ pool, ownerFilter }: { pool: KeeperEntry[]; ownerFilter: st
   const topPosPct = topPos && total > 0 ? Math.round((topPos[1] / total) * 100) : 0;
 
   return (
-    <div className="rounded-xl border border-zinc-700/60 bg-[#0f131c] p-4">
+    <div className="rounded-xl border border-zinc-700/60 bg-[#18111c] p-4">
       <div className="mb-3 flex items-center gap-2">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-lime-900/40">
           <Dna className="h-4 w-4 text-lime-400" />
@@ -270,7 +270,7 @@ export function KeeperAdvisor() {
   }
 
   return (
-    <div className="min-h-screen bg-[#07090e] px-4 py-6 sm:px-6">
+    <div className="min-h-screen bg-[#0c090e] px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-[1400px]">
 
         {/* ── Header ───────────────────────────────────────────────────── */}
@@ -292,7 +292,7 @@ export function KeeperAdvisor() {
         </div>
 
         {/* ── Filter bar ───────────────────────────────────────────────── */}
-        <div className="mb-6 flex flex-wrap items-center gap-4 rounded-xl border border-zinc-800 bg-[#0d1017] px-5 py-4">
+        <div className="mb-6 flex flex-wrap items-center gap-4 rounded-xl border border-zinc-800 bg-[#140e17] px-5 py-4">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Owner:</span>
             <Select value={ownerFilter} onValueChange={setOwnerFilter}>
@@ -342,7 +342,7 @@ export function KeeperAdvisor() {
         <div className="flex gap-5">
 
           {/* Table */}
-          <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-zinc-800 bg-[#0d1017]">
+          <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-zinc-800 bg-[#140e17]">
             {filtered.length === 0 ? (
               <div className="px-6 py-16 text-center text-sm text-zinc-500">
                 No players match the current filters.
@@ -462,7 +462,7 @@ export function KeeperAdvisor() {
             <AIInsight pool={pool} ownerFilter={ownerFilter} />
 
             {/* Keep rules card */}
-            <div className="rounded-xl border border-zinc-800 bg-[#0d1017] p-4 text-xs text-zinc-500 space-y-1.5">
+            <div className="rounded-xl border border-zinc-800 bg-[#140e17] p-4 text-xs text-zinc-500 space-y-1.5">
               <p className="font-semibold uppercase tracking-wide text-zinc-400">League Rules</p>
               <p>Max keeper duration: <span className="text-zinc-300">2 consecutive years</span></p>
               <p>FA pickup cost: <span className="text-zinc-300">Round 7</span></p>

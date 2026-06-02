@@ -21,14 +21,14 @@ import {
 } from "lucide-react";
 
 // ── theme (matches Command Dashboard: dark slate panels, teal accent) ────────
-const INK = "#0a0e16";
+const INK = "#130e16";
 const PAGEBG: React.CSSProperties = {
   background:
-    "radial-gradient(circle at 80% -10%,rgba(45,212,191,.16),transparent 42%),linear-gradient(180deg,#0a0e16,#070a11)",
+    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.16),transparent 42%),linear-gradient(180deg,#130e16,#0f0b11)",
   color: "#f3f8ff",
 };
-const PAPER = "linear-gradient(180deg,#141a24,#0e131c)";
-const PAPER2 = "#141a24";
+const PAPER = "linear-gradient(180deg,#1f1624,#18111c)";
+const PAPER2 = "#1f1624";
 const LINE = "rgba(255,255,255,0.07)";
 const TEXT = "#f3f8ff";
 const MUTED = "#8b97a8";
@@ -391,7 +391,7 @@ export function RivalryCenter() {
                       <button
                         onClick={() => openDossier(hero)}
                         className="inline-flex items-center gap-2 rounded-[10px] px-4 py-2.5 text-sm font-extrabold"
-                        style={{ background: ACCENT, color: "#06231f" }}
+                        style={{ background: ACCENT, color: "#1e1623" }}
                       >
                         View Full Rivalry <ChevronRight className="h-4 w-4" />
                       </button>
@@ -467,7 +467,7 @@ export function RivalryCenter() {
                     onClick={() => refreshScores.mutate()}
                     disabled={refreshScores.isPending}
                     className="ml-1 rounded-md px-3 py-1 text-xs font-extrabold"
-                    style={{ background: ACCENT, color: "#06231f" }}
+                    style={{ background: ACCENT, color: "#1e1623" }}
                   >
                     {refreshScores.isPending ? "Generating\u2026" : "Generate my rivalry scores"}
                   </button>
@@ -562,7 +562,7 @@ export function RivalryCenter() {
                                   <button
                                     onClick={() => setOpen({ focalKey: rw.key, focalName: rw.name, rivalKey: c.key, rivalName: c.name })}
                                     className="rounded px-1.5 py-0.5 font-bold tabular-nums"
-                                    style={{ color: win ? GREEN : lose ? RED : MUTED, background: win ? "rgba(34,197,94,0.10)" : lose ? "rgba(239,68,68,0.10)" : "transparent" }}
+                                    style={{ color: win ? GREEN : lose ? RED : MUTED, background: win ? "rgba(163,230,53,0.10)" : lose ? "rgba(239,68,68,0.10)" : "transparent" }}
                                     title={`${rw.name} vs ${c.name}`}
                                   >
                                     {rec.w}-{rec.l}{rec.t ? `-${rec.t}` : ""}

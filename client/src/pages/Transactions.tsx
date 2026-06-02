@@ -641,7 +641,7 @@ function ReceivesPanel({
       <div
         className={cn(
           "rounded-lg border border-violet-500/25 bg-violet-500/[0.06] p-3 text-center text-xs text-muted-foreground",
-          "shadow-[0_0_14px_rgba(56,189,248,0.12)]"
+          "shadow-[0_0_14px_rgba(139,92,246,0.12)]"
         )}
       >
         No assets listed for this side.
@@ -652,7 +652,7 @@ function ReceivesPanel({
     <div
       className={cn(
         "space-y-2.5 rounded-lg border border-violet-500/25 bg-violet-500/[0.06] p-3",
-        "shadow-[0_0_14px_rgba(56,189,248,0.12)]"
+        "shadow-[0_0_14px_rgba(139,92,246,0.12)]"
       )}
     >
       <div className="text-[11px] font-semibold uppercase tracking-wide text-violet-300/90">{title}</div>
@@ -843,7 +843,7 @@ function TradeComparisonCard({
             </div>
 
             <div className="flex justify-center py-1 lg:items-start lg:justify-center lg:pt-12">
-              <div className="rounded-full border border-violet-500/30 bg-violet-500/10 p-2 text-violet-400 shadow-[0_0_16px_rgba(56,189,248,0.25)]">
+              <div className="rounded-full border border-violet-500/30 bg-violet-500/10 p-2 text-violet-400 shadow-[0_0_16px_rgba(139,92,246,0.25)]">
                 <ArrowLeftRight className="h-5 w-5" aria-hidden />
               </div>
             </div>

@@ -33,9 +33,9 @@ const GREEN = "#a3e635";
 const RED = "#ef4444";
 const BLUE = "#8b5cf6";
 const LINE = "rgba(255,255,255,0.07)";
-const PANEL: React.CSSProperties = { background: "linear-gradient(180deg,#141a24,#0e131c)", border: `1px solid ${LINE}`, borderRadius: 15 };
+const PANEL: React.CSSProperties = { background: "linear-gradient(180deg,#1f1624,#18111c)", border: `1px solid ${LINE}`, borderRadius: 15 };
 const SUB: React.CSSProperties = { background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 10 };
-const FIELD: React.CSSProperties = { background: "#141a24", border: "1px solid rgba(255,255,255,.12)", color: TEXT };
+const FIELD: React.CSSProperties = { background: "#1f1624", border: "1px solid rgba(255,255,255,.12)", color: TEXT };
 
 const CHART_FOCAL = ACCENT;
 const CHART_OPP = BLUE;
@@ -239,12 +239,12 @@ export function RivalryDossierPanel({
           <div className="relative grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-stretch">
             <div className="relative overflow-hidden p-4" style={{ ...SUB, borderTop: `3px solid ${ACCENT}` }}>
               <div className="relative flex items-start gap-3">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-black" style={{ border: `2px solid ${ACCENT}66`, background: "rgba(45,212,191,.10)", color: ACCENT }}>
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-black" style={{ border: `2px solid ${ACCENT}66`, background: "rgba(139,92,246,.10)", color: ACCENT }}>
                   {initials(pd.focalDisplayName)}
                 </div>
                 <div className="min-w-0 space-y-1">
                   <div className="truncate text-lg font-bold" style={{ color: TEXT }}>{pd.focalDisplayName}</div>
-                  <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ border: `1px solid ${ACCENT}55`, background: "rgba(45,212,191,.10)", color: ACCENT }}>
+                  <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ border: `1px solid ${ACCENT}55`, background: "rgba(139,92,246,.10)", color: ACCENT }}>
                     {pd.focalTag}
                   </div>
                   <p className="text-[11px]" style={{ color: MUTED }}>Active since {pd.firstMeetingSeason ?? "\u2014"}</p>
@@ -263,12 +263,12 @@ export function RivalryDossierPanel({
 
             <div className="relative overflow-hidden p-4" style={{ ...SUB, borderTop: `3px solid ${BLUE}` }}>
               <div className="relative flex items-start gap-3">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-black" style={{ border: `2px solid ${BLUE}66`, background: "rgba(85,167,255,.10)", color: BLUE }}>
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-black" style={{ border: `2px solid ${BLUE}66`, background: "rgba(139,92,246,.10)", color: BLUE }}>
                   {initials(pd.opponentDisplayName)}
                 </div>
                 <div className="min-w-0 space-y-1">
                   <div className="truncate text-lg font-bold" style={{ color: TEXT }}>{pd.opponentDisplayName}</div>
-                  <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ border: `1px solid ${BLUE}55`, background: "rgba(85,167,255,.10)", color: BLUE }}>
+                  <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ border: `1px solid ${BLUE}55`, background: "rgba(139,92,246,.10)", color: BLUE }}>
                     {pd.opponentTag}
                   </div>
                   <p className="text-[11px]" style={{ color: MUTED }}>Active since {pd.firstMeetingSeason ?? "\u2014"}</p>
@@ -404,7 +404,7 @@ export function RivalryDossierPanel({
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                     <XAxis dataKey="label" tick={{ fill: MUTED, fontSize: 9 }} interval="preserveStartEnd" />
                     <YAxis domain={["auto", "auto"]} tick={{ fill: MUTED, fontSize: 10 }} width={36} />
-                    <Tooltip contentStyle={{ background: "#141a24", border: "1px solid rgba(255,255,255,0.1)", fontSize: 11 }} labelStyle={{ color: MUTED }} />
+                    <Tooltip contentStyle={{ background: "#1f1624", border: "1px solid rgba(255,255,255,0.1)", fontSize: 11 }} labelStyle={{ color: MUTED }} />
                     <Line type="monotone" dataKey="ownerScore" name={pd.focalDisplayName} stroke={CHART_FOCAL} dot={false} strokeWidth={2} />
                     <Line type="monotone" dataKey="opponentScore" name={pd.opponentDisplayName} stroke={CHART_OPP} dot={false} strokeWidth={2} />
                   </LineChart>

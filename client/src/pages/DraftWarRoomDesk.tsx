@@ -15,7 +15,7 @@ const TEXT = "#eaf1fb";
 const MUTED = "#8b97a8";
 
 /* match Command Dashboard panel system */
-const PANEL: any = { background: "linear-gradient(180deg,#141a24,#0e131c)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 15 };
+const PANEL: any = { background: "linear-gradient(180deg,#1f1624,#18111c)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 15 };
 const SUB: any = { background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 12 };
 
 const pad2 = (n: number) => String(Math.max(0, n || 0)).padStart(2, "0");
@@ -86,7 +86,7 @@ function Pill({ children, color, strong, dot }: any) {
       className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-bold"
       style={{
         background: strong ? color : "rgba(255,255,255,.05)",
-        color: strong ? "#0b0f17" : color,
+        color: strong ? "#140e17" : color,
         border: strong ? "none" : "1px solid rgba(255,255,255,.10)",
       }}
     >

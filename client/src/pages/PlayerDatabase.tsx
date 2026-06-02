@@ -10,14 +10,14 @@ import {
 
 const POS_CFG: Record<string, { pill: string; text: string; bar: string; accent: string }> = {
   QB:  { pill: "bg-red-500/20 text-red-300 border-red-500/40",       text: "text-red-400",     bar: "bg-gradient-to-r from-red-600 to-red-400",        accent: "#ef4444" },
-  RB:  { pill: "bg-lime-500/20 text-lime-300 border-lime-500/40", text: "text-lime-400", bar: "bg-gradient-to-r from-lime-600 to-lime-400", accent: "#10b981" },
-  WR:  { pill: "bg-violet-500/20 text-violet-300 border-violet-500/40",       text: "text-violet-400",     bar: "bg-gradient-to-r from-violet-600 to-violet-400",        accent: "#0ea5e9" },
+  RB:  { pill: "bg-lime-500/20 text-lime-300 border-lime-500/40", text: "text-lime-400", bar: "bg-gradient-to-r from-lime-600 to-lime-400", accent: "#a3e635" },
+  WR:  { pill: "bg-violet-500/20 text-violet-300 border-violet-500/40",       text: "text-violet-400",     bar: "bg-gradient-to-r from-violet-600 to-violet-400",        accent: "#8b5cf6" },
   TE:  { pill: "bg-orange-500/20 text-orange-300 border-orange-500/40", text: "text-orange-400", bar: "bg-gradient-to-r from-orange-600 to-orange-400",  accent: "#f97316" },
   K:   { pill: "bg-zinc-700 text-zinc-300 border-zinc-600",           text: "text-zinc-400",    bar: "bg-gradient-to-r from-zinc-600 to-zinc-400",      accent: "#71717a" },
   DEF: { pill: "bg-violet-500/20 text-violet-300 border-violet-500/40", text: "text-violet-400", bar: "bg-gradient-to-r from-violet-600 to-violet-400",  accent: "#8b5cf6" },
   DL:  { pill: "bg-rose-500/20 text-rose-300 border-rose-500/40",     text: "text-rose-400",    bar: "bg-gradient-to-r from-rose-600 to-rose-400",      accent: "#f43f5e" },
   LB:  { pill: "bg-amber-500/20 text-amber-300 border-amber-500/40",  text: "text-amber-400",   bar: "bg-gradient-to-r from-amber-600 to-amber-400",    accent: "#f59e0b" },
-  DB:  { pill: "bg-lime-500/20 text-lime-300 border-lime-500/40",     text: "text-lime-400",    bar: "bg-gradient-to-r from-lime-600 to-lime-400",      accent: "#14b8a6" },
+  DB:  { pill: "bg-lime-500/20 text-lime-300 border-lime-500/40",     text: "text-lime-400",    bar: "bg-gradient-to-r from-lime-600 to-lime-400",      accent: "#a3e635" },
 };
 
 const TABS = ["ALL PLAYERS", "WATCHLIST", "DYNASTY RANKS", "SCORES", "BILLING"] as const;
@@ -183,7 +183,7 @@ export function PlayerDatabase() {
   const maxPosCnt = Math.max(...posDistEntries.map(e => e[1]), 1);
 
   return (
-    <div className="min-h-screen bg-[#09090e] text-zinc-100 flex flex-col">
+    <div className="min-h-screen bg-[#0c090e] text-zinc-100 flex flex-col">
 
       {/* ── Top header ──────────────────────────────────────────────── */}
       <div className="border-b border-zinc-800/80 bg-zinc-900/50 px-6 py-4">

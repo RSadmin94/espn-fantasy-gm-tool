@@ -5,9 +5,9 @@ import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { Zap, Repeat2, Trophy, Newspaper, Users, Flame, Star, Activity, ChevronRight, RefreshCw } from "lucide-react";
 
 const GOLD="#f5c518", TEAL="#a3e635", MUTED="#8b97a8", RED="#ef4444", ORANGE="#f7902f", GREEN="#a3e635", BLUE="#8b5cf6", TEXT="#f3f8ff", ACCENT="#a3e635";
-const PANEL: React.CSSProperties = { background:"linear-gradient(180deg,#16131f,#0f0c17)", border:"1px solid rgba(255,255,255,.07)", borderRadius:15 };
+const PANEL: React.CSSProperties = { background:"linear-gradient(180deg,#1b131f,#140e17)", border:"1px solid rgba(255,255,255,.07)", borderRadius:15 };
 const SUB: React.CSSProperties = { background:"rgba(255,255,255,.03)", border:"1px solid rgba(255,255,255,.06)", borderRadius:10 };
-const PAGEBG: React.CSSProperties = { background:"radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0b0910,#060509)", color:TEXT };
+const PAGEBG: React.CSSProperties = { background:"radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0e0a10,#080609)", color:TEXT };
 
 function firstName(s: any){ return String(s||"").trim().split(" ")[0] || "Owner"; }
 function archetype(m: any){ const pred=Number(m?.predictabilityScore??0), surp=Number(m?.surpriseProbability??0);
@@ -98,7 +98,7 @@ export function CommandDashboard(){
           <div className="p-5">
             <div className="flex items-start justify-between gap-3">
               <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Star className="h-5 w-5" style={{color:ACCENT}}/> Today's GM Briefing</h3>
-              <span className="px-2 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap" style={{background:"rgba(34,197,94,.10)",border:"1px solid rgba(34,197,94,.33)",color:TEAL}}>{pulse.length} signals</span>
+              <span className="px-2 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap" style={{background:"rgba(163,230,53,.10)",border:"1px solid rgba(163,230,53,.33)",color:TEAL}}>{pulse.length} signals</span>
             </div>
             <div className="mt-3 text-[19px] leading-snug font-black" style={{color:GOLD}}>{memo}</div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4">
@@ -128,7 +128,7 @@ export function CommandDashboard(){
           <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Zap className="h-5 w-5" style={{color:ACCENT}}/> Data Health</h3>
           <div className="grid grid-cols-2 gap-2.5 mt-4">
             {[{b:"League",s:d.ok?"Synced":"\u2014"},{b:"Draft",s:(d.totalPicks??0)>0?"Live":"Indexed"},{b:"Owners",s:meters.length?`${meters.length} read`:"\u2014"},{b:"AI Memo",s:d.confidenceDashboard?"Ready":"\u2014"}].map((x:any,i:number)=>(
-              <div key={i} style={SUB} className="p-3"><b className="block mb-1">{x.b}</b><span className="inline-block px-2 py-1 rounded-lg text-xs font-extrabold" style={{background:"rgba(34,197,94,.10)",border:"1px solid rgba(34,197,94,.33)",color:TEAL}}>{x.s}</span></div>
+              <div key={i} style={SUB} className="p-3"><b className="block mb-1">{x.b}</b><span className="inline-block px-2 py-1 rounded-lg text-xs font-extrabold" style={{background:"rgba(163,230,53,.10)",border:"1px solid rgba(163,230,53,.33)",color:TEAL}}>{x.s}</span></div>
             ))}
           </div>
         </div></div>
@@ -140,9 +140,9 @@ export function CommandDashboard(){
           <div className="mt-3 space-y-2.5">
             {actions.map((a:any,i:number)=>(
               <Link key={i} to={a.to} className="grid items-center gap-2.5 no-underline" style={{gridTemplateColumns:"34px 1fr 78px",...SUB,padding:"8px 10px",minHeight:60,color:TEXT}}>
-                <span className="w-[30px] h-[30px] rounded-full flex items-center justify-center font-black" style={{background:"rgba(45,212,191,.14)",border:"1px solid rgba(45,212,191,.45)",color:ACCENT}}>{i+1}</span>
+                <span className="w-[30px] h-[30px] rounded-full flex items-center justify-center font-black" style={{background:"rgba(139,92,246,.14)",border:"1px solid rgba(139,92,246,.45)",color:ACCENT}}>{i+1}</span>
                 <span><b className="block text-sm">{a.t}</b><span className="text-xs" style={{color:MUTED}}>{a.d}</span></span>
-                <span className="text-center text-xs font-extrabold rounded-md px-2 py-1.5" style={{border:"1px solid rgba(34,197,94,.35)",background:"rgba(34,197,94,.08)",color:TEAL}}>{a.cta}</span>
+                <span className="text-center text-xs font-extrabold rounded-md px-2 py-1.5" style={{border:"1px solid rgba(163,230,53,.35)",background:"rgba(163,230,53,.08)",color:TEAL}}>{a.cta}</span>
               </Link>
             ))}
           </div>

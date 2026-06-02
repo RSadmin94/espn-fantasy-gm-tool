@@ -11,7 +11,7 @@ import {
 
 /** Matches Owner Profiles / Dashboard prestige surfaces */
 const PROFILE_SURFACE =
-  "rounded-xl border border-white/[0.08] bg-[#0f131c]/95 shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
+  "rounded-xl border border-white/[0.08] bg-[#18111c]/95 shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
 
 type MaybeAvail<T> = { available: true; value: T } | { available: false; reason: string };
 
@@ -253,7 +253,7 @@ export function HallOfFame() {
 
   if (hofQ.isLoading) {
     return (
-      <div className="flex items-center justify-center gap-2 bg-[#0b0e14] py-20 text-zinc-500">
+      <div className="flex items-center justify-center gap-2 bg-[#110c14] py-20 text-zinc-500">
         <Loader2 className="h-5 w-5 animate-spin" /> Loading Hall of Fame…
       </div>
     );
@@ -261,7 +261,7 @@ export function HallOfFame() {
 
   if (hofQ.isError || !data) {
     return (
-      <div className="mx-auto max-w-6xl bg-[#0b0e14] px-4 py-12 text-sm text-red-400 sm:px-6">
+      <div className="mx-auto max-w-6xl bg-[#110c14] px-4 py-12 text-sm text-red-400 sm:px-6">
         Could not load Hall of Fame: {hofQ.isError ? String(hofQ.error?.message ?? hofQ.error) : "no data"}
       </div>
     );
@@ -306,7 +306,7 @@ export function HallOfFame() {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 bg-[#0b0e14] px-4 pb-20 pt-6 sm:px-6">
+    <div className="mx-auto max-w-6xl space-y-8 bg-[#110c14] px-4 pb-20 pt-6 sm:px-6">
       {/* HERO */}
       <section className="space-y-4">
         <div className="text-center">
@@ -659,11 +659,11 @@ export function HallOfFame() {
               {cemetery.length === 0 ? (
                 <p className="text-center text-sm text-zinc-500">No short-timers - everyone who joined stuck around.</p>
               ) : (
-                <div className="rounded-2xl border border-white/[0.06] bg-[linear-gradient(180deg,#0c0f16,#090b11)] px-5 pt-8 pb-4">
+                <div className="rounded-2xl border border-white/[0.06] bg-[linear-gradient(180deg,#130e16,#0f0b11)] px-5 pt-8 pb-4">
                   <div className="grid grid-cols-2 gap-x-5 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
                     {cemetery.map((g, i) => (
                       <div key={g.name + i} className="flex flex-col items-center">
-                        <div className="relative flex w-full max-w-[170px] flex-col items-center rounded-t-[80px] rounded-b-md border border-zinc-700/60 bg-[linear-gradient(180deg,#3a4150,#20242e)] px-4 pt-7 pb-6 text-center shadow-[inset_0_2px_12px_rgba(0,0,0,.45),0_10px_20px_-12px_rgba(0,0,0,.8)]">
+                        <div className="relative flex w-full max-w-[170px] flex-col items-center rounded-t-[80px] rounded-b-md border border-zinc-700/60 bg-[linear-gradient(180deg,#3a4150,#281d2e)] px-4 pt-7 pb-6 text-center shadow-[inset_0_2px_12px_rgba(0,0,0,.45),0_10px_20px_-12px_rgba(0,0,0,.8)]">
                           <span className="text-[10px] font-bold tracking-[0.35em] text-zinc-500">R . I . P</span>
                           <span className="my-2 block h-px w-10 bg-white/15" />
                           <Skull className="mb-2 h-5 w-5 text-zinc-500" />
@@ -671,7 +671,7 @@ export function HallOfFame() {
                           <span className="mt-1.5 text-xs tabular-nums text-zinc-400">{g.years.length ? g.years.join(" - ") : "Unknown"}</span>
                           <span className="mt-2 text-[9px] italic text-zinc-600">gone too soon</span>
                         </div>
-                        <span className="h-3 w-[88%] max-w-[150px] rounded-b-sm bg-[linear-gradient(180deg,#1a1d24,#11141a)] shadow-[0_6px_8px_-6px_rgba(0,0,0,.9)]" />
+                        <span className="h-3 w-[88%] max-w-[150px] rounded-b-sm bg-[linear-gradient(180deg,#1f1624,#16101a)] shadow-[0_6px_8px_-6px_rgba(0,0,0,.9)]" />
                         <span className="mb-6 h-1.5 w-[96%] max-w-[160px] rounded-full bg-lime-900/30 blur-[1px]" />
                       </div>
                     ))}

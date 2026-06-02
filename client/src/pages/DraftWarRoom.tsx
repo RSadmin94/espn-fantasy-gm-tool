@@ -58,7 +58,7 @@ function Section({ title, icon, badge, children, defaultOpen = true, accent }: {
   const [open, setOpen] = useState(defaultOpen);
   const Icon = icon;
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-[#11161f] overflow-hidden">
+    <div className="rounded-2xl border border-white/[0.07] bg-[#1b131f] overflow-hidden">
       <button onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors">
         <div className="flex items-center gap-2.5">
@@ -400,19 +400,19 @@ function ShockMeterSection({ meters }: { meters: any[] }) {
                 <p className="text-xs text-zinc-500">{m.ownerName}</p>
               </div>
               <div className="flex items-center gap-3">
-                <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#11161f] border border-white/[0.07]">
+                <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#1b131f] border border-white/[0.07]">
                   <div className="text-lg font-black text-white">{m.predictabilityScore}%</div>
                   <div className="text-[10px] text-zinc-600 uppercase">Predictable</div>
                 </div>
-                <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#11161f] border border-white/[0.07]">
+                <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#1b131f] border border-white/[0.07]">
                   <div className={cn("text-lg font-black", m.surpriseProbability >= 50 ? "text-red-400" : "text-zinc-300")}>{m.surpriseProbability}%</div>
                   <div className="text-[10px] text-zinc-600 uppercase">Surprise</div>
                 </div>
-                <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#11161f] border border-white/[0.07]">
+                <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#1b131f] border border-white/[0.07]">
                   <PosPill pos={m.mostLikelyPosition} />
                   <div className="text-[10px] text-zinc-600 uppercase mt-1">Likely Pick</div>
                 </div>
-                <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#11161f] border border-white/[0.07]">
+                <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#1b131f] border border-white/[0.07]">
                   <div className={cn("text-sm font-black uppercase", CAPITAL_CFG[m.draftCapital as keyof typeof CAPITAL_CFG] ?? "text-zinc-400")}>
                     {m.draftCapital?.replace("_", " ")}
                   </div>
@@ -1464,13 +1464,13 @@ export function DraftWarRoom() {
   );
 
   if (isLoading) return (
-    <div className="min-h-screen bg-[#0a0e14] flex items-center justify-center gap-2 text-zinc-500 text-sm">
+    <div className="min-h-screen bg-[#110c14] flex items-center justify-center gap-2 text-zinc-500 text-sm">
       <RefreshCw className="h-4 w-4 animate-spin text-red-400" />Building Draft War Room…
     </div>
   );
 
   if (!data?.ok) return (
-    <div className="min-h-screen bg-[#0a0e14] flex items-center justify-center text-center px-6">
+    <div className="min-h-screen bg-[#110c14] flex items-center justify-center text-center px-6">
       <div>
         <AlertTriangle className="h-8 w-8 text-amber-400 mx-auto mb-3" />
         <p className="text-zinc-300 font-semibold">{data?.error ?? "Failed to load"}</p>
@@ -1485,7 +1485,7 @@ export function DraftWarRoom() {
   const maxRound = Math.max(...(mockDraft ?? []).map((p: any) => p.round), 0);
 
   return (
-    <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 85% -10%,rgba(245,197,24,.06),transparent 45%),linear-gradient(180deg,#0b0f17,#080b11)" }}>
+    <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 85% -10%,rgba(245,197,24,.06),transparent 45%),linear-gradient(180deg,#140e17,#0f0b11)" }}>
 
       {/* Header */}
       <div className="mb-5">
@@ -1509,7 +1509,7 @@ export function DraftWarRoom() {
               { l: "TRADED PICKS", v: tradedPicks?.length ?? 0 },
               { l: "ROUNDS", v: maxRound },
             ].map(s => (
-              <div key={s.l} className="text-center px-3.5 py-2.5 rounded-xl bg-[#11161f] border border-white/[0.07]">
+              <div key={s.l} className="text-center px-3.5 py-2.5 rounded-xl bg-[#1b131f] border border-white/[0.07]">
                 <div className="text-xl font-black text-white">{s.v}</div>
                 <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{s.l}</div>
               </div>

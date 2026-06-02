@@ -183,7 +183,7 @@ function GenerateControls({ onRefresh, onSwitchToFeed }: { onRefresh: () => void
   }
 
   return (
-    <div className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#141a24,#0e131c)] p-4 space-y-3">
+    <div className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#1f1624,#18111c)] p-4 space-y-3">
       <div className="flex items-center gap-2">
         <Sparkles className="h-4 w-4 text-lime-400" />
         <span className="text-sm font-bold text-[#f3f8ff]">Generate Articles</span>
@@ -258,7 +258,7 @@ export function LeagueWire() {
   const isLoading = view === "archive" && selectedSeason ? seasonLoading : feedLoading;
 
   return (
-    <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(60% 80% at 80% -10%, rgba(45,212,191,.10), transparent 42%), #0a0e16" }}>
+    <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(60% 80% at 80% -10%, rgba(139,92,246,.10), transparent 42%), #130e16" }}>
 
       {/* Open article overlay */}
       {openArticle && <ArticleReader article={openArticle} onClose={() => setOpenArticle(null)} />}
@@ -316,7 +316,7 @@ export function LeagueWire() {
 
         {/* Live Wire reports (latest scores) - only in feed view */}
         {view === "feed" && (wireReports as any[]).length > 0 && (
-          <div className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#141a24,#0e131c)] overflow-hidden">
+          <div className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#1f1624,#18111c)] overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
               <Radio className="h-3.5 w-3.5 text-[#a3e635] animate-pulse" />
               <span className="text-xs font-black text-[#f3f8ff] uppercase tracking-wider">Live Wire</span>

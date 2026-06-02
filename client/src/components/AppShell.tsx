@@ -373,7 +373,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   }, [isMobile]);
 
   return (
-    <div className="flex h-full flex-col border-r border-white/[0.06] bg-[linear-gradient(180deg,#15111f,#0b0910)]">
+    <div className="flex h-full flex-col border-r border-white/[0.06] bg-[linear-gradient(180deg,#1b131f,#0e0a10)]">
       {/* Logo */}
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-4">
         <img src="/logo.png" alt="Fantasy Football Rivals - Own Your Rivals" className="max-h-20 w-auto object-contain" />
@@ -443,7 +443,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { signOut } = useClerk();
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-white/[0.06] bg-[#070a10]/95 px-4 backdrop-blur-md md:px-6">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-white/[0.06] bg-[#0e0a10]/95 px-4 backdrop-blur-md md:px-6">
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -482,7 +482,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0a0e16]">
+    <div className="flex h-screen overflow-hidden bg-[#130e16]">
       <aside className="hidden w-64 shrink-0 md:block">
         <Sidebar />
       </aside>
@@ -506,7 +506,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto bg-[#0a0e16] p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-[#130e16] p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

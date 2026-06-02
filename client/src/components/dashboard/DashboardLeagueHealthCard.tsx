@@ -47,7 +47,7 @@ export function DashboardLeagueHealthCard({
 }) {
   if (isLoading) {
     return (
-      <div className="flex min-h-[220px] flex-col rounded-xl border border-lime-500/20 bg-[#0f131c]/95 p-5 shadow-[0_0_28px_-12px_rgba(16,185,129,0.25)]">
+      <div className="flex min-h-[220px] flex-col rounded-xl border border-lime-500/20 bg-[#18111c]/95 p-5 shadow-[0_0_28px_-12px_rgba(163,230,53,0.25)]">
         <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-lime-400/90">League health</p>
         <div className="mt-6 flex flex-1 items-center justify-center gap-2 text-sm text-zinc-500">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading…
@@ -58,7 +58,7 @@ export function DashboardLeagueHealthCard({
 
   if (!data) {
     return (
-      <div className="flex min-h-[220px] flex-col rounded-xl border border-lime-500/20 bg-[#0f131c]/95 p-5 shadow-[0_0_28px_-12px_rgba(16,185,129,0.2)]">
+      <div className="flex min-h-[220px] flex-col rounded-xl border border-lime-500/20 bg-[#18111c]/95 p-5 shadow-[0_0_28px_-12px_rgba(163,230,53,0.2)]">
         <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-lime-400/90">League health</p>
         <div className="mt-4 flex flex-1 flex-col justify-center text-sm text-zinc-500">
           <p className="font-medium text-zinc-300">Not Yet Available</p>
@@ -89,7 +89,7 @@ export function DashboardLeagueHealthCard({
   const readiness = Number.isFinite(data.readinessScore) ? data.readinessScore : null;
 
   return (
-    <div className="flex min-h-[220px] flex-col rounded-xl border border-lime-500/20 bg-[#0f131c]/95 p-5 shadow-[0_0_32px_-12px_rgba(16,185,129,0.28)]">
+    <div className="flex min-h-[220px] flex-col rounded-xl border border-lime-500/20 bg-[#18111c]/95 p-5 shadow-[0_0_32px_-12px_rgba(163,230,53,0.28)]">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-lime-400/90">League health</p>
@@ -102,7 +102,7 @@ export function DashboardLeagueHealthCard({
               background: `conic-gradient(rgb(52 211 153) ${readiness ?? 0}%, rgba(39,39,42,0.9) 0deg)`,
             }}
           />
-          <div className="absolute inset-[4px] flex flex-col items-center justify-center rounded-full bg-[#0f131c] text-center">
+          <div className="absolute inset-[4px] flex flex-col items-center justify-center rounded-full bg-[#18111c] text-center">
             <span className="text-lg font-black tabular-nums leading-none text-lime-300">
               {readiness != null ? readiness : "—"}
             </span>
