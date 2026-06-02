@@ -24,6 +24,7 @@ import { billingRouter } from "./billingRouter";
 import { onboardingRouter } from "./onboardingRouter";
 import { meRouter } from "./meRouter";
 import { draftRealityRouter } from "./draftRealityRouter";
+import { leagueIntelRouter } from "./leagueIntelRouter";
 import { offseasonRouter } from "./offseasonRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
@@ -474,6 +475,7 @@ export const appRouter = router({
   billing: billingRouter,
   me: meRouter,
   draftReality: draftRealityRouter,
+  leagueIntel: leagueIntelRouter,
   onboarding: onboardingRouter,
   injury: injuryRouter,
   simulation: simulationRouter,
