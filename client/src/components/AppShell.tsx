@@ -344,7 +344,7 @@ function SidebarFooter() {
         </div>
       ) : null}
       <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-2 text-[10px] leading-snug text-zinc-600">
-        <span className="font-semibold text-lime-500/80">ESPN Fantasy</span> · GM War Room
+        <span className="font-semibold text-lime-500/80">ESPN Fantasy</span> · Fantasy Football Rivals
       </div>
     </div>
   );
@@ -382,10 +382,10 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
           <div className="flex min-w-0 flex-col leading-none">
             <span className="text-[15px] font-black tracking-tight text-[#f3f8ff]">
-              GM War Room
+              Fantasy Football Rivals
             </span>
             <span className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b97a8]">
-              League Intelligence Desk
+              OWN YOUR RIVALS
             </span>
           </div>
         </div>
@@ -469,7 +469,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-lime-400/20 to-lime-500/20 ring-1 ring-lime-400/30">
             <Trophy className="h-4 w-4 text-lime-300" strokeWidth={2.25} />
           </span>
-          <span className="text-base font-black tracking-tight text-zinc-50">GM War Room</span>
+          <span className="text-base font-black tracking-tight text-zinc-50">Fantasy Football Rivals</span>
         </span>
       </div>
 

@@ -470,7 +470,7 @@ export function Dashboard() {
     <div className="mx-auto max-w-[1400px] space-y-10 bg-[#07090e] px-4 pb-16 pt-6 sm:px-6">
       <header className="flex flex-col gap-4 border-b border-white/[0.06] pb-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-red-500/90">GM War Room</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-lime-500/90">Fantasy Football Rivals</p>
           <h1 className="truncate text-3xl font-bold tracking-tight text-zinc-50 md:text-4xl">{leagueName}</h1>
           <p className="text-sm text-zinc-400">{subtitle}</p>
         </div>
