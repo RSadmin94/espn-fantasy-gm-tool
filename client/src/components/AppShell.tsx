@@ -376,7 +376,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
     <div className="flex h-full flex-col border-r border-white/[0.06] bg-[linear-gradient(180deg,#1b131f,#0e0a10)]">
       {/* Logo */}
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-4">
-        <img src="/logo.png" alt="Fantasy Football Rivals - Own Your Rivals" className="max-h-20 w-auto object-contain" />
+        <img src="/logo.png" alt="Fantasy Football Rivals - Own Your Rivals" className="max-h-[92px] w-auto object-contain" />
         {onClose && (
           <button
             type="button"
@@ -454,7 +454,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
           <Menu className="h-5 w-5" />
         </button>
         <span className="flex items-center md:hidden">
-          <img src="/logo.png" alt="Fantasy Football Rivals" className="h-9 w-auto object-contain" />
+          <img src="/logo.png" alt="Fantasy Football Rivals" className="h-[41px] w-auto object-contain" />
         </span>
       </div>
 
