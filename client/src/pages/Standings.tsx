@@ -206,7 +206,7 @@ export function Standings() {
                   <span className="flex items-center gap-1.5">
                     {s}
                     {cachedSeasons.includes(s) && (
-                      <span className="text-xs text-emerald-400">✓</span>
+                      <span className="text-xs text-lime-400">✓</span>
                     )}
                   </span>
                 </SelectItem>
@@ -384,7 +384,7 @@ export function Standings() {
                           className={cn(
                             "px-2 py-2.5 text-right font-mono text-xs font-semibold tabular-nums",
                             diff.zero && "text-muted-foreground",
-                            !diff.zero && diff.positive && "text-emerald-400",
+                            !diff.zero && diff.positive && "text-lime-400",
                             !diff.zero && !diff.positive && "text-red-400"
                           )}
                         >

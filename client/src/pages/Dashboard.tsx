@@ -506,9 +506,9 @@ export function Dashboard() {
 
 {/* League Pulse Strip */}
       {(draftIntelQ as any)?.data?.ok && (
-        <div className="flex items-center gap-3 overflow-x-auto rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-2.5 text-xs mb-4 scrollbar-none">
-          <Zap className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-          <span className="font-black text-emerald-400 uppercase tracking-widest text-[9px] shrink-0">League Pulse</span>
+        <div className="flex items-center gap-3 overflow-x-auto rounded-xl border border-lime-500/20 bg-lime-500/5 px-4 py-2.5 text-xs mb-4 scrollbar-none">
+          <Zap className="h-3.5 w-3.5 text-lime-400 shrink-0" />
+          <span className="font-black text-lime-400 uppercase tracking-widest text-[9px] shrink-0">League Pulse</span>
           <span className="text-zinc-700 mx-1 shrink-0">|</span>
           <span className="text-zinc-600 shrink-0">Keepers:</span>
           <span className="text-zinc-300 font-semibold shrink-0 mr-2">{(draftIntelQ as any).data.keeperPredictions?.length ?? 0} predicted</span>
@@ -527,7 +527,7 @@ export function Dashboard() {
           </span>
           <span className="text-zinc-700 shrink-0">·</span>
           <span className="text-zinc-600 mx-1 shrink-0">Capital:</span>
-          <span className="text-sky-400 font-semibold shrink-0">
+          <span className="text-violet-400 font-semibold shrink-0">
             {((draftIntelQ as any).data.tradedPicks ?? []).filter((p: any) => p.type === "ACQUIRED").length > 0
               ? ((draftIntelQ as any).data.tradedPicks ?? []).filter((p: any) => p.type === "ACQUIRED")[0].ownerName?.split(" ")[0] + " +1 Rd" + ((draftIntelQ as any).data.tradedPicks ?? []).filter((p: any) => p.type === "ACQUIRED")[0].round
               : "Standard"}
@@ -565,27 +565,27 @@ export function Dashboard() {
         return (
           <section className="grid gap-4 lg:grid-cols-12 mb-6" aria-label="Draft intelligence brief">
             {/* Main hero card */}
-            <div className="lg:col-span-8 rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-[#0d1812] via-[#0b1015] to-[#09090e] p-6 shadow-[0_0_60px_-20px_rgba(16,185,129,0.3)]">
+            <div className="lg:col-span-8 rounded-2xl border border-lime-500/25 bg-gradient-to-br from-[#0d1812] via-[#0b1015] to-[#09090e] p-6 shadow-[0_0_60px_-20px_rgba(16,185,129,0.3)]">
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                    <Target className="h-4 w-4 text-emerald-400" />
+                  <div className="w-8 h-8 rounded-lg bg-lime-500/15 border border-lime-500/30 flex items-center justify-center shrink-0">
+                    <Target className="h-4 w-4 text-lime-400" />
                   </div>
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400/80">Best Move Now</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-lime-400/80">Best Move Now</p>
                     <p className="text-[10px] text-zinc-500">{CURRENT_YEAR} Draft Intelligence</p>
                   </div>
                 </div>
                 {conf > 0 && (
                   <div className="text-right shrink-0">
-                    <div className="text-2xl font-black text-emerald-400 tabular-nums">{conf}%</div>
+                    <div className="text-2xl font-black text-lime-400 tabular-nums">{conf}%</div>
                     <div className="text-[9px] text-zinc-600 uppercase tracking-wider">Confidence</div>
                   </div>
                 )}
               </div>
               {di.isLoading ? (
                 <div className="flex items-center gap-2 text-zinc-500 text-sm py-4">
-                  <Loader2 className="h-4 w-4 animate-spin text-emerald-400" /> Loading draft intelligence…
+                  <Loader2 className="h-4 w-4 animate-spin text-lime-400" /> Loading draft intelligence…
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -593,12 +593,12 @@ export function Dashboard() {
                   <ul className="space-y-1.5">
                     {evidence.map((e, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-zinc-400">
-                        <span className="text-emerald-500 shrink-0 mt-0.5">→</span>{e}
+                        <span className="text-lime-500 shrink-0 mt-0.5">→</span>{e}
                       </li>
                     ))}
                   </ul>
                   <div className="flex items-center gap-3 pt-1 border-t border-zinc-800/40 mt-4">
-                    <Link to="/draft-war-room" className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors">
+                    <Link to="/draft-war-room" className="flex items-center gap-1.5 text-xs font-bold text-lime-400 hover:text-lime-300 transition-colors">
                       Full Draft War Room <ChevronRight className="h-3.5 w-3.5" />
                     </Link>
                     <span className="text-zinc-700">·</span>
@@ -653,12 +653,12 @@ export function Dashboard() {
               </div>
 
               {/* Draft capital */}
-              <div className="flex-1 rounded-xl border border-sky-500/20 bg-zinc-900/50 p-4 flex items-start gap-3">
-                <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/25 flex items-center justify-center shrink-0">
-                  <Activity className="h-3.5 w-3.5 text-sky-400" />
+              <div className="flex-1 rounded-xl border border-violet-500/20 bg-zinc-900/50 p-4 flex items-start gap-3">
+                <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/25 flex items-center justify-center shrink-0">
+                  <Activity className="h-3.5 w-3.5 text-violet-400" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-sky-400/80 mb-0.5">Draft Capital</p>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-violet-400/80 mb-0.5">Draft Capital</p>
                   {di.isLoading ? (
                     <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse" />
                   ) : tradedPick ? (
@@ -719,13 +719,13 @@ export function Dashboard() {
         </div>
 
         {/* 2. Decision Memo */}
-        <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-[#0a1210] via-[#0b0e14] to-[#09090e] p-5">
+        <div className="rounded-2xl border border-lime-500/20 bg-gradient-to-br from-[#0a1210] via-[#0b0e14] to-[#09090e] p-5">
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center shrink-0">
-              <FileText className="h-3.5 w-3.5 text-emerald-400" />
+            <div className="w-7 h-7 rounded-lg bg-lime-500/10 border border-lime-500/25 flex items-center justify-center shrink-0">
+              <FileText className="h-3.5 w-3.5 text-lime-400" />
             </div>
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400/80">Decision Memo</p>
+              <p className="text-[9px] font-black uppercase tracking-widest text-lime-400/80">Decision Memo</p>
               <p className="text-[10px] text-zinc-600">Your draft action plan</p>
             </div>
           </div>
@@ -741,7 +741,7 @@ export function Dashboard() {
             const runs: any[] = di.positionRunAlerts ?? [];
             const topRun = runs[0];
             const memo = [
-              { label: "Primary",     color: "text-emerald-400", text: top ? `Lock ${top.predictedPlayer} as keeper — KVS ${top.kvs} at Round ${top.keeperRound}` : "Review keeper eligibility before draft" },
+              { label: "Primary",     color: "text-lime-400", text: top ? `Lock ${top.predictedPlayer} as keeper — KVS ${top.kvs} at Round ${top.keeperRound}` : "Review keeper eligibility before draft" },
               { label: "Contingency", color: "text-amber-400",   text: crit ? `Secure ${crit.position} depth early — scarcity window active` : "Monitor waiver wire for positional value" },
               { label: "Avoid",       color: "text-red-400",     text: topRun ? `Reaching for ${topRun.position} before ${topRun.roundWindow} — run expected` : "Panic drafting in rounds 1–3" },
             ];
@@ -756,7 +756,7 @@ export function Dashboard() {
               </ul>
             );
           })()}
-          <Link to="/draft-war-room" className="mt-4 flex items-center gap-1 text-[10px] font-bold text-emerald-400/80 hover:text-emerald-300 transition-colors">
+          <Link to="/draft-war-room" className="mt-4 flex items-center gap-1 text-[10px] font-bold text-lime-400/80 hover:text-lime-300 transition-colors">
             Full Draft War Room <ChevronRight className="h-3 w-3" />
           </Link>
         </div>
@@ -963,7 +963,7 @@ export function Dashboard() {
               )}
             </div>
             <div className="border-t border-white/[0.06] px-4 py-2">
-              <Link to="/standings" className="text-xs font-medium text-blue-400 hover:text-blue-300">
+              <Link to="/standings" className="text-xs font-medium text-violet-400 hover:text-violet-300">
                 View full standings →
               </Link>
             </div>
@@ -1066,7 +1066,7 @@ export function Dashboard() {
                     <div className="truncate font-medium text-zinc-100">{o.ownerName}</div>
                     <div className="truncate text-[10px] text-zinc-600">{o.currentTeam}</div>
                   </div>,
-                  <span key="s" className="tabular-nums font-semibold text-emerald-300/90">
+                  <span key="s" className="tabular-nums font-semibold text-lime-300/90">
                     {o.score}
                   </span>,
                 ])}
@@ -1074,7 +1074,7 @@ export function Dashboard() {
             )}
           </div>
           <div className="border-t border-white/[0.06] px-4 py-2">
-            <Link to="/owner-profiles" className="text-xs font-medium text-blue-400 hover:text-blue-300">
+            <Link to="/owner-profiles" className="text-xs font-medium text-violet-400 hover:text-violet-300">
               Owner profiles →
             </Link>
           </div>

@@ -12,8 +12,8 @@ const trpcA = () => (trpc as any);
 
 const POS_PILL: Record<string, string> = {
   QB: "bg-red-900/30 text-red-300 border border-red-700",
-  RB: "bg-emerald-900/30 text-emerald-300 border border-emerald-700",
-  WR: "bg-blue-900/30 text-blue-300 border border-blue-700",
+  RB: "bg-lime-900/30 text-lime-300 border border-lime-700",
+  WR: "bg-violet-900/30 text-violet-300 border border-violet-700",
   TE: "bg-orange-900/30 text-orange-300 border border-orange-700",
   K:  "bg-zinc-800 text-zinc-300 border border-zinc-700",
   "D/ST": "bg-violet-900/30 text-violet-300 border border-violet-700",
@@ -33,10 +33,10 @@ function PosPill({ pos }: { pos: string }) {
 function TlDot({ type }: { type: "champ" | "keeper" | "draft" | "trade" | "active" }) {
   const styles = {
     champ:  "border-amber-500 bg-amber-900/40",
-    keeper: "border-blue-500 bg-blue-900/40",
+    keeper: "border-violet-500 bg-violet-900/40",
     draft:  "border-zinc-500 bg-zinc-800",
     trade:  "border-red-500 bg-red-900/30",
-    active: "border-emerald-500 bg-emerald-900/30",
+    active: "border-lime-500 bg-lime-900/30",
   };
   return (
     <div className={cn("absolute left-[-17px] top-[5px] h-[10px] w-[10px] rounded-full border-2", styles[type])} />
@@ -54,8 +54,8 @@ function tlType(row: { isKeeper: boolean; isChampionSeason: boolean; acquisition
 
 function Tag({ children, color = "zinc" }: { children: React.ReactNode; color?: "green" | "blue" | "amber" | "red" | "zinc" }) {
   const c = {
-    green: "bg-emerald-900/30 text-emerald-300 border-emerald-700",
-    blue:  "bg-blue-900/30 text-blue-300 border-blue-700",
+    green: "bg-lime-900/30 text-lime-300 border-lime-700",
+    blue:  "bg-violet-900/30 text-violet-300 border-violet-700",
     amber: "bg-amber-900/30 text-amber-300 border-amber-700",
     red:   "bg-red-900/30 text-red-300 border-red-700",
     zinc:  "bg-zinc-800 text-zinc-300 border-zinc-700",
@@ -421,7 +421,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
                         <td className="py-2 text-center">
                           <span className={cn(
                             "rounded border px-1.5 py-0.5 text-[10px] font-semibold",
-                            row.round <= 3 ? "border-emerald-700 bg-emerald-900/30 text-emerald-300" :
+                            row.round <= 3 ? "border-lime-700 bg-lime-900/30 text-lime-300" :
                             row.round <= 6 ? "border-amber-700 bg-amber-900/30 text-amber-300" :
                             "border-zinc-700 bg-zinc-800 text-zinc-300"
                           )}>

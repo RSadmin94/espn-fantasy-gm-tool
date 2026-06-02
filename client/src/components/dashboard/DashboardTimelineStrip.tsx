@@ -50,14 +50,14 @@ export function DashboardTimelineStrip({
                   className={cn(
                     "flex w-[100px] shrink-0 flex-col items-center gap-2 rounded-xl border px-2 py-3 text-center transition-colors",
                     row.isCurrentSeason
-                      ? "border-blue-500/40 bg-blue-500/[0.07] shadow-[0_0_20px_-8px_rgba(59,130,246,0.45)]"
+                      ? "border-violet-500/40 bg-violet-500/[0.07] shadow-[0_0_20px_-8px_rgba(59,130,246,0.45)]"
                       : "border-white/[0.06] bg-white/[0.02]",
                   )}
                 >
                   <span
                     className={cn(
                       "text-[10px] font-black tabular-nums tracking-widest",
-                      row.isCurrentSeason ? "text-blue-300" : "text-zinc-500",
+                      row.isCurrentSeason ? "text-violet-300" : "text-zinc-500",
                     )}
                   >
                     {row.season}
@@ -66,7 +66,7 @@ export function DashboardTimelineStrip({
                     className={cn(
                       "flex h-12 w-12 items-center justify-center rounded-full border text-[11px] font-bold",
                       row.isCurrentSeason
-                        ? "border-blue-400/50 bg-blue-500/15 text-blue-100"
+                        ? "border-violet-400/50 bg-violet-500/15 text-violet-100"
                         : "border-amber-500/30 bg-amber-500/10 text-amber-100",
                     )}
                   >

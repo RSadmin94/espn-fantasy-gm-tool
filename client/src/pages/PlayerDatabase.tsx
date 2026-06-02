@@ -10,14 +10,14 @@ import {
 
 const POS_CFG: Record<string, { pill: string; text: string; bar: string; accent: string }> = {
   QB:  { pill: "bg-red-500/20 text-red-300 border-red-500/40",       text: "text-red-400",     bar: "bg-gradient-to-r from-red-600 to-red-400",        accent: "#ef4444" },
-  RB:  { pill: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40", text: "text-emerald-400", bar: "bg-gradient-to-r from-emerald-600 to-emerald-400", accent: "#10b981" },
-  WR:  { pill: "bg-sky-500/20 text-sky-300 border-sky-500/40",       text: "text-sky-400",     bar: "bg-gradient-to-r from-sky-600 to-sky-400",        accent: "#0ea5e9" },
+  RB:  { pill: "bg-lime-500/20 text-lime-300 border-lime-500/40", text: "text-lime-400", bar: "bg-gradient-to-r from-lime-600 to-lime-400", accent: "#10b981" },
+  WR:  { pill: "bg-violet-500/20 text-violet-300 border-violet-500/40",       text: "text-violet-400",     bar: "bg-gradient-to-r from-violet-600 to-violet-400",        accent: "#0ea5e9" },
   TE:  { pill: "bg-orange-500/20 text-orange-300 border-orange-500/40", text: "text-orange-400", bar: "bg-gradient-to-r from-orange-600 to-orange-400",  accent: "#f97316" },
   K:   { pill: "bg-zinc-700 text-zinc-300 border-zinc-600",           text: "text-zinc-400",    bar: "bg-gradient-to-r from-zinc-600 to-zinc-400",      accent: "#71717a" },
   DEF: { pill: "bg-violet-500/20 text-violet-300 border-violet-500/40", text: "text-violet-400", bar: "bg-gradient-to-r from-violet-600 to-violet-400",  accent: "#8b5cf6" },
   DL:  { pill: "bg-rose-500/20 text-rose-300 border-rose-500/40",     text: "text-rose-400",    bar: "bg-gradient-to-r from-rose-600 to-rose-400",      accent: "#f43f5e" },
   LB:  { pill: "bg-amber-500/20 text-amber-300 border-amber-500/40",  text: "text-amber-400",   bar: "bg-gradient-to-r from-amber-600 to-amber-400",    accent: "#f59e0b" },
-  DB:  { pill: "bg-teal-500/20 text-teal-300 border-teal-500/40",     text: "text-teal-400",    bar: "bg-gradient-to-r from-teal-600 to-teal-400",      accent: "#14b8a6" },
+  DB:  { pill: "bg-lime-500/20 text-lime-300 border-lime-500/40",     text: "text-lime-400",    bar: "bg-gradient-to-r from-lime-600 to-lime-400",      accent: "#14b8a6" },
 };
 
 const TABS = ["ALL PLAYERS", "WATCHLIST", "DYNASTY RANKS", "SCORES", "BILLING"] as const;
@@ -68,7 +68,7 @@ function Headshot({ espnId, name, pos }: { espnId: string | null; name: string; 
 function DynBar({ value, pos }: { value: number; pos: string }) {
   const cfg = POS_CFG[pos] ?? POS_CFG.K;
   const pct = value;
-  const color = value >= 75 ? "bg-gradient-to-r from-emerald-600 to-emerald-400"
+  const color = value >= 75 ? "bg-gradient-to-r from-lime-600 to-lime-400"
     : value >= 55 ? "bg-gradient-to-r from-amber-600 to-amber-400"
     : "bg-gradient-to-r from-zinc-600 to-zinc-500";
   return (
@@ -76,7 +76,7 @@ function DynBar({ value, pos }: { value: number; pos: string }) {
       <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
         <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
       </div>
-      <span className={cn("text-xs font-bold tabular-nums w-6 text-right", value >= 75 ? "text-emerald-400" : value >= 55 ? "text-amber-400" : "text-zinc-500")}>
+      <span className={cn("text-xs font-bold tabular-nums w-6 text-right", value >= 75 ? "text-lime-400" : value >= 55 ? "text-amber-400" : "text-zinc-500")}>
         {value}
       </span>
     </div>
@@ -90,10 +90,10 @@ type InsightType = keyof typeof INSIGHT_ICONS;
 function InsightCard({ type, title, body, tag }: { type: InsightType; title: string; body: string; tag?: string }) {
   const Icon = INSIGHT_ICONS[type];
   const colors: Record<InsightType, string> = {
-    up:    "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+    up:    "text-lime-400 bg-lime-500/10 border-lime-500/20",
     down:  "text-rose-400 bg-rose-500/10 border-rose-500/20",
     alert: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-    zap:   "text-sky-400 bg-sky-500/10 border-sky-500/20",
+    zap:   "text-violet-400 bg-violet-500/10 border-violet-500/20",
   };
   return (
     <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/60 p-3 space-y-1.5">
@@ -216,7 +216,7 @@ export function PlayerDatabase() {
               className={cn(
                 "px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors",
                 tab === i
-                  ? "border-emerald-400 text-emerald-400"
+                  ? "border-lime-400 text-lime-400"
                   : "border-transparent text-zinc-500 hover:text-zinc-300"
               )}
             >
@@ -225,7 +225,7 @@ export function PlayerDatabase() {
             </button>
           ))}
           <button onClick={() => refetch()} className="ml-auto text-zinc-600 hover:text-zinc-300 p-1.5 transition-colors">
-            <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin text-emerald-400")} />
+            <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin text-lime-400")} />
           </button>
         </div>
       </div>
@@ -238,7 +238,7 @@ export function PlayerDatabase() {
           <input
             type="text" value={search} onChange={e => handleSearch(e.target.value)}
             placeholder="Search players, teams, positions…"
-            className="w-full pl-9 pr-8 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/40 transition-colors"
+            className="w-full pl-9 pr-8 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-lime-500/40 transition-colors"
           />
           {search && (
             <button onClick={() => { setSearch(""); setQ(""); setPage(0); }}
@@ -280,7 +280,7 @@ export function PlayerDatabase() {
                 <button key={opt} onClick={() => toggleSort(opt)}
                   className={cn(
                     "w-full text-left px-3 py-2 text-xs hover:bg-zinc-800 transition-colors first:rounded-t-lg last:rounded-b-lg",
-                    sortOpt === opt ? "text-emerald-400 font-semibold" : "text-zinc-400"
+                    sortOpt === opt ? "text-lime-400 font-semibold" : "text-zinc-400"
                   )}>
                   {opt}
                   {sortOpt === opt && (sortDir === "desc" ? " ↓" : " ↑")}
@@ -313,7 +313,7 @@ export function PlayerDatabase() {
 
           {isLoading && (
             <div className="flex items-center justify-center gap-2 py-20 text-zinc-500 text-sm">
-              <RefreshCw className="h-4 w-4 animate-spin text-emerald-400" /> Loading…
+              <RefreshCw className="h-4 w-4 animate-spin text-lime-400" /> Loading…
             </div>
           )}
 
@@ -337,7 +337,7 @@ export function PlayerDatabase() {
                     "grid items-center px-4 py-2.5 transition-colors cursor-pointer group",
                     "hover:bg-zinc-800/40 border-l-2",
                     i % 2 === 0 ? "bg-zinc-900/10" : "bg-transparent",
-                    isHigh ? "border-l-emerald-500/60" : "border-l-zinc-800"
+                    isHigh ? "border-l-lime-500/60" : "border-l-zinc-800"
                   )}
                   style={{ gridTemplateColumns: "36px 1fr 80px 100px 130px 80px 72px" }}
                 >
@@ -374,8 +374,8 @@ export function PlayerDatabase() {
                   {/* Status */}
                   <div>
                     {p.isActive ? (
-                      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow shadow-emerald-400/60" />Active
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-lime-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-lime-400 shadow shadow-lime-400/60" />Active
                       </span>
                     ) : (
                       <span className="text-[10px] font-bold text-zinc-600">Inactive</span>
@@ -403,7 +403,7 @@ export function PlayerDatabase() {
                   return (
                     <button key={pg} onClick={() => setPage(pg)}
                       className={cn("w-8 h-7 rounded border text-xs font-semibold transition-colors",
-                        pg === page ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300" : "border-zinc-700 hover:border-zinc-500 text-zinc-400")}>
+                        pg === page ? "border-lime-500/60 bg-lime-500/10 text-lime-300" : "border-zinc-700 hover:border-zinc-500 text-zinc-400")}>
                       {pg + 1}
                     </button>
                   );
@@ -419,7 +419,7 @@ export function PlayerDatabase() {
         <div className="w-72 shrink-0 border-l border-zinc-800/60 bg-zinc-900/30 flex flex-col overflow-y-auto">
           <div className="px-4 py-3 border-b border-zinc-800/60">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-emerald-400" />
+              <Sparkles className="h-4 w-4 text-lime-400" />
               <span className="text-xs font-black uppercase tracking-widest text-zinc-300">AI Database Insights</span>
             </div>
             <p className="text-[10px] text-zinc-600 mt-1">Analysis based on your registry data</p>

@@ -58,7 +58,7 @@ const SLOT_ORDER = [
 ];
 
 const INJURY_COLORS: Record<string, string> = {
-  ACTIVE:       "text-emerald-400",
+  ACTIVE:       "text-lime-400",
   QUESTIONABLE: "text-yellow-400",
   DOUBTFUL:     "text-orange-400",
   OUT:          "text-red-400",
@@ -90,7 +90,7 @@ function warRoomKvsForPlayer(keeperPredictions: any[] | undefined, teamId: numbe
 }
 
 function kvsRecStyle(kvs: number) {
-  if (kvs >= 150) return { label: "Keep", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" };
+  if (kvs >= 150) return { label: "Keep", cls: "bg-lime-500/15 text-lime-300 border-lime-500/30" };
   if (kvs >= 100) return { label: "Consider", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30" };
   return { label: "Pass", cls: "bg-zinc-800/60 text-zinc-500 border-zinc-700/40" };
 }
@@ -103,8 +103,8 @@ function slotOrder(slot: string | undefined) {
 function PosBadge({ pos }: { pos: string | undefined }) {
   const colors: Record<string, string> = {
     QB:   "border-red-500/30 bg-red-500/10 text-red-400",
-    RB:   "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-    WR:   "border-blue-500/30 bg-blue-500/10 text-blue-400",
+    RB:   "border-lime-500/30 bg-lime-500/10 text-lime-400",
+    WR:   "border-violet-500/30 bg-violet-500/10 text-violet-400",
     TE:   "border-orange-500/30 bg-orange-500/10 text-orange-400",
     K:    "border-purple-500/30 bg-purple-500/10 text-purple-400",
     "D/ST": "border-slate-500/30 bg-slate-500/10 text-slate-400",
@@ -133,10 +133,10 @@ function AcqBadge({ type }: { type: string | undefined }) {
   if (!type) return null;
   const map: Record<string, string> = {
     DRAFT: "border-primary/20 bg-primary/5 text-primary/80",
-    WAIVER: "border-blue-500/20 bg-blue-500/5 text-blue-400/80",
+    WAIVER: "border-violet-500/20 bg-violet-500/5 text-violet-400/80",
     FREE_AGENT: "border-slate-500/20 bg-slate-500/5 text-slate-400/80",
     TRADE: "border-orange-500/20 bg-orange-500/5 text-orange-400/80",
-    KEEPER: "border-emerald-500/20 bg-emerald-500/5 text-emerald-400/80",
+    KEEPER: "border-lime-500/20 bg-lime-500/5 text-lime-400/80",
   };
   const label: Record<string, string> = {
     DRAFT: "Draft",
@@ -268,7 +268,7 @@ function RosterTable({
                           (() => {
                             const colorClass =
                               wr.kvs >= 150
-                                ? "text-emerald-500"
+                                ? "text-lime-500"
                                 : wr.kvs >= 100
                                   ? "text-amber-500"
                                   : wr.kvs >= 70
@@ -337,16 +337,16 @@ function kvsRec(kvs: number, last: boolean): Recommendation {
   return "DROP";
 }
 function kvsColor(kvs: number) {
-  return kvs >= 70 ? "text-emerald-400" : kvs >= 48 ? "text-amber-400" : "text-red-400";
+  return kvs >= 70 ? "text-lime-400" : kvs >= 48 ? "text-amber-400" : "text-red-400";
 }
 const KA_POS: Record<string, string> = {
-  QB: "text-red-400", RB: "text-emerald-400", WR: "text-blue-400",
+  QB: "text-red-400", RB: "text-lime-400", WR: "text-violet-400",
   TE: "text-orange-400", K: "text-zinc-400", "D/ST": "text-violet-400",
 };
 function RecBadge({ rec, last }: { rec: Recommendation; last: boolean }) {
   if (rec === "KEEP") return (
     <span className={cn("inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold border uppercase",
-      last ? "border-amber-600 bg-amber-600/15 text-amber-300" : "border-emerald-600 bg-emerald-600/15 text-emerald-300")}>
+      last ? "border-amber-600 bg-amber-600/15 text-amber-300" : "border-lime-600 bg-lime-600/15 text-lime-300")}>
       <CheckCircle className="h-2.5 w-2.5" />{last ? "KEEP*" : "KEEP"}
     </span>
   );
@@ -488,7 +488,7 @@ export function Roster() {
                 <span className="flex items-center gap-1.5">
                   {s}
                   {cachedSeasons.includes(s) && (
-                    <span className="text-emerald-400 text-xs">✓</span>
+                    <span className="text-lime-400 text-xs">✓</span>
                   )}
                 </span>
               </SelectItem>
@@ -683,7 +683,7 @@ export function Roster() {
                             </td>
                             <td className="px-3 py-2.5 text-center">
                               <span className={cn("text-xs font-bold tabular-nums",
-                                k.keeperRoundCost <= 3 ? "text-emerald-400" : k.keeperRoundCost <= 6 ? "text-amber-400" : "text-zinc-300"
+                                k.keeperRoundCost <= 3 ? "text-lime-400" : k.keeperRoundCost <= 6 ? "text-amber-400" : "text-zinc-300"
                               )}>Rd {k.keeperRoundCost}</span>
                               {k.isLastKeeperYear && <div className="text-[9px] text-amber-500 font-bold uppercase mt-0.5">Last Year</div>}
                             </td>

@@ -41,8 +41,8 @@ function SyncBadge({ status }: { status: string | null | undefined }) {
   if (!status) return null;
   const map: Record<string, string> = {
     pending: "bg-yellow-500/15 text-yellow-400 border-yellow-500/20",
-    syncing: "bg-blue-500/15 text-blue-400 border-blue-500/20",
-    success: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+    syncing: "bg-violet-500/15 text-violet-400 border-violet-500/20",
+    success: "bg-lime-500/15 text-lime-400 border-lime-500/20",
     failed:  "bg-red-500/15 text-red-400 border-red-500/20",
   };
   return (
@@ -300,8 +300,8 @@ function SubscriptionSection() {
   const sub = subQ.data;
 
   const statusConfig: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
-    active:    { label: "Active",    className: "border-emerald-500/20 bg-emerald-500/10 text-emerald-400", icon: <CheckCircle2 className="h-4 w-4" /> },
-    trialing:  { label: "Trial",     className: "border-blue-500/20 bg-blue-500/10 text-blue-400",         icon: <Clock className="h-4 w-4" /> },
+    active:    { label: "Active",    className: "border-lime-500/20 bg-lime-500/10 text-lime-400", icon: <CheckCircle2 className="h-4 w-4" /> },
+    trialing:  { label: "Trial",     className: "border-violet-500/20 bg-violet-500/10 text-violet-400",         icon: <Clock className="h-4 w-4" /> },
     canceled:  { label: "Canceled",  className: "border-red-500/20 bg-red-500/10 text-red-400",            icon: <AlertCircle className="h-4 w-4" /> },
     past_due:  { label: "Past due",  className: "border-orange-500/20 bg-orange-500/10 text-orange-400",   icon: <AlertTriangle className="h-4 w-4" /> },
     inactive:  { label: "Inactive",  className: "border-border bg-muted/30 text-muted-foreground",         icon: <ShieldCheck className="h-4 w-4" /> },
@@ -444,7 +444,7 @@ function DangerZone() {
               Permanently deletes all AI chat messages across all seasons.
             </div>
             {clearState === "success" && (
-              <div className="flex items-center gap-1.5 text-xs text-emerald-400 mt-1">
+              <div className="flex items-center gap-1.5 text-xs text-lime-400 mt-1">
                 <CheckCircle2 className="h-3 w-3" /> History cleared.
               </div>
             )}

@@ -43,13 +43,13 @@ type RefreshResult = {
 
 function SeasonStatusIcon({ status }: { status: string | undefined }) {
   switch (status) {
-    case "success": return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
-    case "complete": return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
+    case "success": return <CheckCircle2 className="h-4 w-4 text-lime-400" />;
+    case "complete": return <CheckCircle2 className="h-4 w-4 text-lime-400" />;
     case "partial": return <AlertTriangle className="h-4 w-4 text-yellow-400" />;
     case "failed":  return <XCircle className="h-4 w-4 text-red-400" />;
     case "skipped": return <SkipForward className="h-4 w-4 text-muted-foreground" />;
     case "no_cache": return <Database className="h-4 w-4 text-muted-foreground" />;
-    case "running": return <Loader2 className="h-4 w-4 animate-spin text-blue-400" />;
+    case "running": return <Loader2 className="h-4 w-4 animate-spin text-violet-400" />;
     default:        return <Clock className="h-4 w-4 text-muted-foreground" />;
   }
 }
@@ -57,14 +57,14 @@ function SeasonStatusIcon({ status }: { status: string | undefined }) {
 function SeasonStatusBadge({ status }: { status: string | null | undefined }) {
   if (!status) return <span className="text-xs text-muted-foreground">—</span>;
   const map: Record<string, string> = {
-    success: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-    complete: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+    success: "bg-lime-500/15 text-lime-400 border-lime-500/20",
+    complete: "bg-lime-500/15 text-lime-400 border-lime-500/20",
     partial: "bg-yellow-500/15 text-yellow-400 border-yellow-500/20",
     failed:  "bg-red-500/15 text-red-400 border-red-500/20",
     skipped: "bg-muted/50 text-muted-foreground border-border",
     no_cache: "bg-muted/50 text-muted-foreground border-border",
-    pending: "bg-blue-500/15 text-blue-400 border-blue-500/20",
-    running: "bg-blue-500/15 text-blue-400 border-blue-500/20",
+    pending: "bg-violet-500/15 text-violet-400 border-violet-500/20",
+    running: "bg-violet-500/15 text-violet-400 border-violet-500/20",
   };
   return (
     <span className={cn(
@@ -79,12 +79,12 @@ function SeasonStatusBadge({ status }: { status: string | null | undefined }) {
 /** Cache / normalization health (manifest-driven), not the same as last ESPN refresh status. */
 function CacheHealthBadge({ label }: { label: string }) {
   const map: Record<string, string> = {
-    Complete: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+    Complete: "bg-lime-500/15 text-lime-400 border-lime-500/20",
     "Needs backfill": "bg-amber-500/15 text-amber-200 border-amber-500/25",
     Partial: "bg-yellow-500/15 text-yellow-400 border-yellow-500/20",
     Failed: "bg-red-500/15 text-red-400 border-red-500/20",
     "No cache": "bg-muted/50 text-muted-foreground border-border",
-    Running: "bg-blue-500/15 text-blue-400 border-blue-500/20",
+    Running: "bg-violet-500/15 text-violet-400 border-violet-500/20",
   };
   return (
     <span
@@ -249,7 +249,7 @@ function ManifestCard({ manifest, refreshResult }: {
                         className={cn(
                           "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs",
                           status === "ok"
-                            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                            ? "border-lime-500/20 bg-lime-500/10 text-lime-400"
                             : status === "error"
                               ? "border-red-500/20 bg-red-500/10 text-red-400"
                               : "border-border bg-muted/30 text-muted-foreground"
@@ -1080,7 +1080,7 @@ export function SyncData() {
       )}
 
       {autoSync2026RefreshDone && (
-        <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3">
+        <div className="rounded-lg border border-lime-500/25 bg-lime-500/10 px-4 py-3">
           <Button asChild variant="default" className="gap-2">
             <Link to="/dashboard">Go to Dashboard</Link>
           </Button>
@@ -1153,7 +1153,7 @@ export function SyncData() {
                         isSelected
                           ? "border-primary bg-primary/15 text-primary"
                           : isCached
-                            ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-300 hover:border-emerald-500/50"
+                            ? "border-lime-500/30 bg-lime-500/5 text-lime-300 hover:border-lime-500/50"
                             : "border-border bg-muted/30 text-muted-foreground hover:border-border/80 hover:bg-muted/50"
                       )}
                     >
@@ -1308,7 +1308,7 @@ export function SyncData() {
             <Button
               type="button"
               variant="default"
-              className={`gap-2 ${browserSessionBulkBusy ? "" : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700"}`}
+              className={`gap-2 ${browserSessionBulkBusy ? "" : "bg-lime-600 hover:bg-lime-700 text-white border-lime-700"}`}
               disabled={browserSessionBulkBusy}
               onClick={() => void handleBrowserSyncOtherSeasons()}
             >
@@ -1367,7 +1367,7 @@ export function SyncData() {
             <Button
               type="button"
               variant="default"
-              className={`gap-2 ${matchupsBusy ? "" : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700"}`}
+              className={`gap-2 ${matchupsBusy ? "" : "bg-lime-600 hover:bg-lime-700 text-white border-lime-700"}`}
               disabled={matchupsBusy}
               onClick={() => void handleBrowserSyncMatchups(Array.from({ length: 2025 - 2010 + 1 }, (_, i) => 2010 + i))}
             >
@@ -1420,7 +1420,7 @@ export function SyncData() {
             <Button
               type="button"
               variant="default"
-              className={`gap-2 ${standingsBusy ? "" : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700"}`}
+              className={`gap-2 ${standingsBusy ? "" : "bg-lime-600 hover:bg-lime-700 text-white border-lime-700"}`}
               disabled={standingsBusy}
               onClick={() => void handleBrowserSyncStandings([2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017])}
             >
@@ -1913,9 +1913,9 @@ export function SyncData() {
         const seasonsFilled = ALL_MEDAL_SEASONS.filter((yr) => medalEntries[yr]?.champion.trim()).length;
         const seasonsWithStandings = ALL_MEDAL_SEASONS.filter((yr) => perSeasonTopThree.has(yr)).length;
         return (
-          <Card className="border-blue-500/30 bg-blue-500/5">
+          <Card className="border-violet-500/30 bg-violet-500/5">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base text-blue-300">League History Medals</CardTitle>
+              <CardTitle className="text-base text-violet-300">League History Medals</CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
                 Source of truth for dynasty titles — from ESPN League History page. {seasonsFilled}/{ALL_MEDAL_SEASONS.length} seasons filled.
               </CardDescription>
@@ -1997,7 +1997,7 @@ export function SyncData() {
                     ))}
                     {/* Status */}
                     <div className="flex justify-center text-sm" title={status}>
-                      {status === "saved"   && <span className="text-emerald-400">✓</span>}
+                      {status === "saved"   && <span className="text-lime-400">✓</span>}
                       {status === "edited"  && <span className="text-amber-400">✎</span>}
                       {status === "missing" && <span className="text-red-400/60">⚠</span>}
                     </div>

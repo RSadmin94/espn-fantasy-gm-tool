@@ -97,8 +97,8 @@ function pickLabel(year: number, round: number, pick: number, via?: string) { re
 function pickShort(year: number, round: number, pick: number, via?: string) { return formatPick(year, round, pick, via); }
 
 const GRADE_CONFIG: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
-  "FAIR":          { label: "Fair Trade",        className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400", icon: <Scale className="h-4 w-4" /> },
-  "SLIGHT EDGE A": { label: "Slight Edge: You",  className: "border-blue-500/30 bg-blue-500/10 text-blue-400",         icon: <TrendingUp className="h-4 w-4" /> },
+  "FAIR":          { label: "Fair Trade",        className: "border-lime-500/30 bg-lime-500/10 text-lime-400", icon: <Scale className="h-4 w-4" /> },
+  "SLIGHT EDGE A": { label: "Slight Edge: You",  className: "border-violet-500/30 bg-violet-500/10 text-violet-400",         icon: <TrendingUp className="h-4 w-4" /> },
   "SLIGHT EDGE B": { label: "Slight Edge: Them", className: "border-yellow-500/30 bg-yellow-500/10 text-yellow-400",   icon: <TrendingDown className="h-4 w-4" /> },
   "A WINS":        { label: "You Win",            className: "border-primary/30 bg-primary/10 text-primary",            icon: <TrendingUp className="h-4 w-4" /> },
   "B WINS":        { label: "They Win",           className: "border-red-500/30 bg-red-500/10 text-red-400",            icon: <TrendingDown className="h-4 w-4" /> },
@@ -108,8 +108,8 @@ const GRADE_CONFIG: Record<string, { label: string; className: string; icon: Rea
 function PosBadge({ pos }: { pos: string | undefined }) {
   const colors: Record<string, string> = {
     QB: "border-red-500/30 bg-red-500/10 text-red-400",
-    RB: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-    WR: "border-blue-500/30 bg-blue-500/10 text-blue-400",
+    RB: "border-lime-500/30 bg-lime-500/10 text-lime-400",
+    WR: "border-violet-500/30 bg-violet-500/10 text-violet-400",
     TE: "border-orange-500/30 bg-orange-500/10 text-orange-400",
     K:  "border-purple-500/30 bg-purple-500/10 text-purple-400",
     "D/ST": "border-slate-500/30 bg-slate-500/10 text-slate-400",
@@ -713,7 +713,7 @@ export function Trades() {
               <SelectItem key={s} value={String(s)}>
                 <span className="flex items-center gap-1.5">
                   {s}
-                  {cachedSeasons.includes(s) && <span className="text-emerald-400 text-xs">✓</span>}
+                  {cachedSeasons.includes(s) && <span className="text-lime-400 text-xs">✓</span>}
                 </span>
               </SelectItem>
             ))}

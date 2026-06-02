@@ -56,8 +56,8 @@ function SyncBadge({ status }: { status: string | null | undefined }) {
   if (!status) return null;
   const map: Record<string, string> = {
     pending: "bg-yellow-500/15 text-yellow-400 border-yellow-500/20",
-    syncing: "bg-blue-500/15 text-blue-400 border-blue-500/20",
-    success: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+    syncing: "bg-violet-500/15 text-violet-400 border-violet-500/20",
+    success: "bg-lime-500/15 text-lime-400 border-lime-500/20",
     failed: "bg-red-500/15 text-red-400 border-red-500/20",
   };
   return (
@@ -227,7 +227,7 @@ function DiagnosticsCard() {
                 <div className={cn(
                   "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium",
                   ok
-                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                    ? "border-lime-500/20 bg-lime-500/10 text-lime-300"
                     : "border-red-500/20 bg-red-500/10 text-red-300"
                 )}>
                   {ok
@@ -380,9 +380,9 @@ export function ConnectESPN() {
       {/* ── Primary connection card ── */}
       <Card className={cn(
         "border-2 transition-colors",
-        newLeague ? "border-emerald-500/40 bg-emerald-500/5"
+        newLeague ? "border-lime-500/40 bg-lime-500/5"
           : isWaiting ? "border-primary/30 bg-primary/5"
-          : alreadyConnected ? "border-emerald-500/20 bg-emerald-500/5"
+          : alreadyConnected ? "border-lime-500/20 bg-lime-500/5"
           : "border-primary/20 bg-primary/5"
       )}>
         <CardContent className="pt-6 pb-5 space-y-5">
@@ -391,11 +391,11 @@ export function ConnectESPN() {
           {newLeague && (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-lime-500/20">
+                  <CheckCircle2 className="h-5 w-5 text-lime-400" />
                 </div>
                 <div>
-                  <div className="font-semibold text-emerald-400 text-base">ESPN Connected</div>
+                  <div className="font-semibold text-lime-400 text-base">ESPN Connected</div>
                   <div className="text-sm text-muted-foreground">
                     {newLeague.leagueName || `League ${newLeague.leagueId}`}
                     {newLeague.leagueId && (
@@ -486,8 +486,8 @@ export function ConnectESPN() {
             <div className="space-y-4">
               {alreadyConnected && (
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  <span className="text-sm text-emerald-400 font-medium">
+                  <CheckCircle2 className="h-4 w-4 text-lime-400" />
+                  <span className="text-sm text-lime-400 font-medium">
                     League already connected
                   </span>
                 </div>

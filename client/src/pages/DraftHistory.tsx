@@ -295,7 +295,7 @@ export function DraftHistory() {
                   <SelectItem key={s} value={String(s)}>
                     {s}
                     {cachedSeasons.includes(s) && (
-                      <span className="ml-1 text-xs text-emerald-400">✓</span>
+                      <span className="ml-1 text-xs text-lime-400">✓</span>
                     )}
                   </SelectItem>
                 ))}
@@ -315,7 +315,7 @@ export function DraftHistory() {
           className={cn(
             "rounded-lg border px-3 py-2 text-xs font-medium",
             sourceLabel === "ESPN mDraftDetail"
-              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+              ? "border-lime-500/20 bg-lime-500/10 text-lime-400"
               : "border-amber-500/20 bg-amber-500/10 text-amber-400",
           )}
         >
@@ -373,7 +373,7 @@ export function DraftHistory() {
               </span>
             </div>
             {scrapeEspnNote && (
-              <p className="text-xs text-emerald-400">{scrapeEspnNote}</p>
+              <p className="text-xs text-lime-400">{scrapeEspnNote}</p>
             )}
             {scrapeEspnErr && (
               <div className="flex items-start gap-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">
@@ -441,7 +441,7 @@ export function DraftHistory() {
               </div>
             )}
             {ingestLegacyMutation.isSuccess && (
-              <p className="text-xs text-emerald-400">
+              <p className="text-xs text-lime-400">
                 Imported {ingestLegacyMutation.data.upserted} picks for {season}.
               </p>
             )}

@@ -25,11 +25,11 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 const CONF_COLOR = (c: number) =>
-  c >= 88 ? "text-emerald-400" : c >= 60 ? "text-amber-400" : "text-red-400";
+  c >= 88 ? "text-lime-400" : c >= 60 ? "text-amber-400" : "text-red-400";
 
 const CONF_BG = (c: number) =>
   c >= 88
-    ? "border-emerald-700 bg-emerald-900/20 text-emerald-300"
+    ? "border-lime-700 bg-lime-900/20 text-lime-300"
     : c >= 60
     ? "border-amber-700 bg-amber-900/20 text-amber-300"
     : "border-red-700 bg-red-900/20 text-red-300";
@@ -71,7 +71,7 @@ function AliasRow({ item, knownOwners, onSave }: {
         </div>
 
         {saved === "approved" ? (
-          <div className="flex items-center gap-1.5 text-xs text-emerald-400">
+          <div className="flex items-center gap-1.5 text-xs text-lime-400">
             <Check className="h-3.5 w-3.5" />
             <span>{item.savedOwner}</span>
           </div>
@@ -104,7 +104,7 @@ function AliasRow({ item, knownOwners, onSave }: {
                 ? onSave(item.legacyTeamName, selectedOwner, "approved", item.confidence, item.method)
                 : onSave(item.legacyTeamName, null, "rejected", 0, "manual")}
               disabled={!selectedOwner}
-              className="p-1.5 rounded border border-emerald-700 bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="p-1.5 rounded border border-lime-700 bg-lime-900/20 text-lime-400 hover:bg-lime-900/40 disabled:opacity-40 disabled:cursor-not-allowed"
               title="Approve"
             >
               <Check className="h-3.5 w-3.5" />
@@ -209,7 +209,7 @@ export function OwnerIdentityReview() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Known owners (2018+)",  value: stats.known        ?? 0, color: "text-foreground" },
-          { label: "Auto-resolved (≥88%)",  value: stats.autoResolved ?? 0, color: "text-emerald-400" },
+          { label: "Auto-resolved (≥88%)",  value: stats.autoResolved ?? 0, color: "text-lime-400" },
           { label: "Needs review (50–87%)", value: stats.needsReview  ?? 0, color: "text-amber-400" },
           { label: "Unresolved (<50%)",     value: stats.unresolved   ?? 0, color: "text-red-400" },
         ].map(s => (

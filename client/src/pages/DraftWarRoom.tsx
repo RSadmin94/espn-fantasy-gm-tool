@@ -14,7 +14,7 @@ import {
 const POS_CFG: Record<string, { pill: string }> = {
   QB:  { pill: "bg-red-500/20 text-red-300 border-red-500/40" },
   RB:  { pill: "bg-red-500/20 text-red-300 border-red-500/40" },
-  WR:  { pill: "bg-sky-500/20 text-sky-300 border-sky-500/40" },
+  WR:  { pill: "bg-violet-500/20 text-violet-300 border-violet-500/40" },
   TE:  { pill: "bg-orange-500/20 text-orange-300 border-orange-500/40" },
   K:   { pill: "bg-zinc-700 text-zinc-300 border-zinc-600" },
   DEF: { pill: "bg-violet-500/20 text-violet-300 border-violet-500/40" },
@@ -79,7 +79,7 @@ function Section({ title, icon, badge, children, defaultOpen = true, accent }: {
 
 function KvsBadge({ kvs, label }: { kvs: number; label?: string }) {
   const color = kvs >= 130 ? "text-red-300 bg-red-500/15 border-red-500/40"
-              : kvs >= 100 ? "text-sky-300 bg-sky-500/15 border-sky-500/40"
+              : kvs >= 100 ? "text-violet-300 bg-violet-500/15 border-violet-500/40"
               : kvs >= 80  ? "text-amber-300 bg-amber-500/15 border-amber-500/40"
               : "text-red-300 bg-red-500/15 border-red-500/40";
   return (
@@ -129,8 +129,8 @@ function ConfidenceDashboard({ data }: { data: any }) {
       sub: data.bestKeeperValue?.teamName ?? "",
       value: data.bestKeeperValue ? `KVS ${data.bestKeeperValue.kvs}` : "—",
       detail: data.bestKeeperValue?.reason ?? "No keepers predicted",
-      color: "border-sky-500/25 bg-sky-500/5",
-      iconColor: "text-sky-400",
+      color: "border-violet-500/25 bg-violet-500/5",
+      iconColor: "text-violet-400",
     },
     {
       icon: ArrowDownRight, label: "Projected Reach",
@@ -193,7 +193,7 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
                 {k.status === "CONFIRMED"
                   ? <span className="flex items-center gap-1 text-[11px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 rounded"><CheckCircle className="h-2.5 w-2.5" />CONFIRMED</span>
                   : k.status === "HYPOTHETICAL"
-                    ? <span className="text-[11px] font-bold text-sky-400 bg-sky-500/10 border border-sky-500/20 px-1.5 rounded">HYPOTHETICAL</span>
+                    ? <span className="text-[11px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-1.5 rounded">HYPOTHETICAL</span>
                     : <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">PREDICTED</span>
                 }
                 <span className="text-[11px] text-zinc-600 ml-auto tabular-nums">
@@ -214,7 +214,7 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
                   <KvsBadge kvs={k.kvs} />
                   {k.surplusLabel && (
                     <span className={cn("text-[10px] font-bold uppercase",
-                      k.surplus > 50 ? "text-red-400" : k.surplus > 0 ? "text-sky-400" : k.surplus > -30 ? "text-amber-400" : "text-red-400"
+                      k.surplus > 50 ? "text-red-400" : k.surplus > 0 ? "text-violet-400" : k.surplus > -30 ? "text-amber-400" : "text-red-400"
                     )}>{k.surplusLabel}</span>
                   )}
                 </div>
@@ -261,7 +261,7 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
 const URG_CFG = {
   CRITICAL: { cls: "text-red-400 bg-red-500/10 border-red-500/30", icon: "🚨" },
   HIGH:     { cls: "text-amber-400 bg-amber-500/10 border-amber-500/30", icon: "⚠️" },
-  MEDIUM:   { cls: "text-sky-400 bg-sky-500/10 border-sky-500/30", icon: "📋" },
+  MEDIUM:   { cls: "text-violet-400 bg-violet-500/10 border-violet-500/30", icon: "📋" },
   LOW:      { cls: "text-zinc-400 bg-zinc-800 border-zinc-700", icon: "✓" },
 };
 
@@ -347,7 +347,7 @@ function ownerArchetype(m: any): { label: string; cls: string } {
   const surp = Number(m?.surpriseProbability ?? 0);
   if (surp >= 55) return { label: "Panic Pivot", cls: "text-red-300 border-red-500/30 bg-red-500/10" };
   if (pred >= 72) return { label: "By-the-Book", cls: "text-red-300 border-red-500/30 bg-red-500/10" };
-  if (pred >= 55) return { label: "Steady Hand", cls: "text-sky-300 border-sky-500/30 bg-sky-500/10" };
+  if (pred >= 55) return { label: "Steady Hand", cls: "text-violet-300 border-violet-500/30 bg-violet-500/10" };
   return { label: "Wildcard", cls: "text-amber-300 border-amber-500/30 bg-amber-500/10" };
 }
 
@@ -706,10 +706,10 @@ function LiveDraftEngine({
               const isOnClock = !done && slot && Number(slot.teamId) === tid;
               const isYou = yourTeamId === tid;
               return (
-                <div key={tid} className={cn("rounded-lg border p-2", isOnClock ? "border-red-500/50 bg-red-500/5" : isYou ? "border-sky-500/30 bg-sky-500/5" : "border-white/[0.06] bg-white/[0.03]")}>
+                <div key={tid} className={cn("rounded-lg border p-2", isOnClock ? "border-red-500/50 bg-red-500/5" : isYou ? "border-violet-500/30 bg-violet-500/5" : "border-white/[0.06] bg-white/[0.03]")}>
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="text-[11px] font-black text-zinc-200 truncate">{t.teamName}</span>
-                    {isYou && <span className="text-[10px] font-black text-sky-300 bg-sky-500/15 px-1 rounded">YOU</span>}
+                    {isYou && <span className="text-[10px] font-black text-violet-300 bg-violet-500/15 px-1 rounded">YOU</span>}
                     <span className="text-[10px] text-zinc-600 ml-auto tabular-nums">{roster.length}</span>
                   </div>
                   <div className="flex flex-wrap gap-1">
@@ -1082,7 +1082,7 @@ function MockDraftBoard({
                         "text-left p-2.5 bg-zinc-900/60 hover:bg-white/[0.04] transition-colors",
                         p.isKeeperSlot && "border border-amber-500/20 bg-amber-500/5",
                         p.tradedPickContext && "border-t-2 border-t-red-500/50",
-                        yourTeamId && Number(p.teamId) === yourTeamId && "border border-sky-500/30 bg-sky-500/5",
+                        yourTeamId && Number(p.teamId) === yourTeamId && "border border-violet-500/30 bg-violet-500/5",
                         expandPick === p.pickNumber && "ring-1 ring-red-500/40"
                       )}>
                       <div className="flex items-center gap-1 mb-1 flex-wrap">
@@ -1090,7 +1090,7 @@ function MockDraftBoard({
                         <PosPill pos={p.position} />
                         {p.isKeeperSlot && <span className="text-[10px] text-amber-400 font-bold">K</span>}
                         {p.tradedPickContext?.type === "ACQUIRED" && <span className="text-[10px] text-red-400 font-bold">T↑</span>}
-                        {yourTeamId && Number(p.teamId) === yourTeamId && <span className="text-[10px] text-sky-400 font-bold">YOU</span>}
+                        {yourTeamId && Number(p.teamId) === yourTeamId && <span className="text-[10px] text-violet-400 font-bold">YOU</span>}
                       </div>
                       <div className="text-[11px] font-bold text-zinc-200 leading-tight truncate">{p.player}</div>
                       <div className="text-[10px] text-zinc-500 truncate mt-0.5">{p.ownerName?.split(" ")[0]}</div>
@@ -1208,7 +1208,7 @@ function MockDraftBoard({
 
 const GRADE_COLOR: Record<string, string> = {
   A: "text-red-400 bg-red-500/10 border-red-500/40",
-  B: "text-sky-400 bg-sky-500/10 border-sky-500/40",
+  B: "text-violet-400 bg-violet-500/10 border-violet-500/40",
   C: "text-amber-400 bg-amber-500/10 border-amber-500/40",
   D: "text-orange-400 bg-orange-500/10 border-orange-500/40",
   F: "text-red-400 bg-red-500/10 border-red-500/40",
@@ -1221,7 +1221,7 @@ function DraftEnvironmentSection({ env }: { env: any }) {
     { icon: TrendingUp,    label: "Strongest Position", val: env.strongestPosition?.position ?? "—", sub: env.strongestPosition?.reason, color: "text-red-400", border: "border-red-500/25 bg-red-500/5" },
     { icon: Wind,          label: "Weakest Position",   val: env.weakestPosition?.position ?? "—",   sub: env.weakestPosition?.reason,   color: "text-red-400",     border: "border-red-500/25 bg-red-500/5" },
     { icon: Flame,         label: "Biggest Run Risk",   val: env.biggestRunRisk?.position ?? "—",     sub: env.biggestRunRisk?.reason,    color: "text-amber-400",   border: "border-amber-500/25 bg-amber-500/5" },
-    { icon: Target,        label: "Best Value Pocket",  val: env.biggestValuePocket?.position ?? "—", sub: env.biggestValuePocket?.reason, color: "text-sky-400",    border: "border-sky-500/25 bg-sky-500/5" },
+    { icon: Target,        label: "Best Value Pocket",  val: env.biggestValuePocket?.position ?? "—", sub: env.biggestValuePocket?.reason, color: "text-violet-400",    border: "border-violet-500/25 bg-violet-500/5" },
     { icon: Lock,          label: "Keeper Distortion",  val: env.mostDistortedByKeepers?.position ?? "—", sub: env.mostDistortedByKeepers?.reason, color: "text-violet-400", border: "border-violet-500/25 bg-violet-500/5" },
   ];
 
@@ -1326,7 +1326,7 @@ function RunAlertsSection({ alerts }: { alerts: any[] }) {
 const SCARCITY_COLORS = {
   CRITICAL: "border-red-500/40 bg-red-500/8 text-red-400",
   HIGH:     "border-amber-500/40 bg-amber-500/8 text-amber-400",
-  MEDIUM:   "border-sky-500/40 bg-sky-500/8 text-sky-400",
+  MEDIUM:   "border-violet-500/40 bg-violet-500/8 text-violet-400",
   LOW:      "border-zinc-700 bg-white/[0.03] text-zinc-400",
 };
 
@@ -1409,7 +1409,7 @@ function ScarcitySection({ alerts }: { alerts: any[] }) {
 const TIER_CONFIG = {
   HEAVY:    { color: "text-red-400",    bg: "bg-red-500/15 border-red-500/40" },
   MODERATE: { color: "text-amber-400",  bg: "bg-amber-500/15 border-amber-500/40" },
-  LIGHT:    { color: "text-sky-400",    bg: "bg-sky-500/15 border-sky-500/40" },
+  LIGHT:    { color: "text-violet-400",    bg: "bg-violet-500/15 border-violet-500/40" },
   NONE:     { color: "text-zinc-500",   bg: "bg-white/[0.04] border-white/[0.08]" },
 };
 

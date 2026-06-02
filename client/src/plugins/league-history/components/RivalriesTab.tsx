@@ -213,7 +213,7 @@ export function RivalriesTab({
                       <div
                         className={cn(
                           "text-2xl font-bold tabular-nums",
-                          winning && "text-emerald-400",
+                          winning && "text-lime-400",
                           losing && "text-red-400",
                           !winning && !losing && "text-muted-foreground",
                         )}
@@ -229,7 +229,7 @@ export function RivalriesTab({
                           <div
                             className={cn(
                               "h-full rounded-full transition-all",
-                              winning ? "bg-emerald-400" : losing ? "bg-red-400" : "bg-muted-foreground",
+                              winning ? "bg-lime-400" : losing ? "bg-red-400" : "bg-muted-foreground",
                             )}
                             style={{ width: `${winFrac}%` }}
                           />

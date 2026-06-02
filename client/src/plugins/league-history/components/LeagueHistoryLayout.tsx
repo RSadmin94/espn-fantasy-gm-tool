@@ -64,7 +64,7 @@ export function LeagueHistoryPlugin() {
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-1 pb-12">
       <div className="space-y-0.5">
-        <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400">League History</div>
+        <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-lime-400">League History</div>
         <h1 className="text-3xl font-bold text-foreground">League Timeline</h1>
         <p className="text-sm text-muted-foreground">History · Dynasties · Rivalries</p>
       </div>

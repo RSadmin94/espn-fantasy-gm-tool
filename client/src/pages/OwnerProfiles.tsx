@@ -104,9 +104,9 @@ function Section({ title, icon, children, defaultOpen = true }: {
 
 const TAG_STYLES: Record<string, string> = {
   "Nemesis":      "border-red-700 bg-red-900/30 text-red-300",
-  "Punching Bag": "border-emerald-700 bg-emerald-900/30 text-emerald-300",
+  "Punching Bag": "border-lime-700 bg-lime-900/30 text-lime-300",
   "Rival":        "border-amber-700 bg-amber-900/30 text-amber-300",
-  "Favorable":    "border-blue-700 bg-blue-900/30 text-blue-300",
+  "Favorable":    "border-violet-700 bg-violet-900/30 text-violet-300",
   "Difficult":    "border-orange-700 bg-orange-900/30 text-orange-300",
   "Normal":       "border-border bg-muted/30 text-muted-foreground",
 };
@@ -117,8 +117,8 @@ const PROFILE_SURFACE =
 
 const POS_TEXT: Record<string, string> = {
   RB: "text-red-400",
-  WR: "text-blue-400",
-  QB: "text-emerald-400",
+  WR: "text-violet-400",
+  QB: "text-lime-400",
   TE: "text-purple-400",
   K: "text-orange-400",
   DEF: "text-zinc-400",
@@ -127,8 +127,8 @@ const POS_TEXT: Record<string, string> = {
 
 const POS_BAR: Record<string, string> = {
   RB: "bg-red-500",
-  WR: "bg-blue-500",
-  QB: "bg-emerald-500",
+  WR: "bg-violet-500",
+  QB: "bg-lime-500",
   TE: "bg-purple-500",
   K: "bg-orange-500",
   DEF: "bg-zinc-500",
@@ -213,7 +213,7 @@ function CompareCell({ tone, children }: { tone: "win" | "lose" | "tie"; childre
     <div
       className={cn(
         "rounded-md border px-3 py-2 text-sm tabular-nums",
-        tone === "win" && "border-emerald-500/30 bg-emerald-500/10 text-zinc-100",
+        tone === "win" && "border-lime-500/30 bg-lime-500/10 text-zinc-100",
         tone === "lose" && "border-white/[0.06] bg-white/[0.02] text-zinc-500",
         tone === "tie" && "border-white/[0.08] bg-white/[0.03] text-zinc-200",
       )}
@@ -517,7 +517,7 @@ function ProfilePanel({
       <div className={cn(PROFILE_SURFACE, "overflow-hidden")}>
         <div className="flex flex-col gap-3 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2">
-            <GitCompare className="h-4 w-4 text-blue-400/90" />
+            <GitCompare className="h-4 w-4 text-violet-400/90" />
             <h2 className="text-sm font-semibold tracking-tight text-zinc-100">Compare Owners</h2>
           </div>
           <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
@@ -549,7 +549,7 @@ function ProfilePanel({
             <div className="grid min-w-[300px] grid-cols-[minmax(7.5rem,1fr)_1fr_1fr] gap-x-2 gap-y-1">
               <div className="py-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Metric</div>
               <div
-                className="truncate py-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-400/90"
+                className="truncate py-2 text-[10px] font-semibold uppercase tracking-wide text-lime-400/90"
                 title={headerDisplayName}
               >
                 {headerDisplayName}
@@ -1088,7 +1088,7 @@ function ProfilePanel({
           <button
             type="button"
             onClick={() => setShowRivalryDossier((v) => !v)}
-            className="text-xs font-medium text-blue-400 underline-offset-2 hover:text-blue-300 hover:underline"
+            className="text-xs font-medium text-violet-400 underline-offset-2 hover:text-violet-300 hover:underline"
           >
             {showRivalryDossier ? "Hide rivalry dossier" : "Rivalry dossier (gmMatchups)"}
           </button>
@@ -1157,7 +1157,7 @@ function ProfilePanel({
                             className={cn(
                               "font-medium",
                               num(row.winPct) >= 60
-                                ? "text-emerald-400"
+                                ? "text-lime-400"
                                 : num(row.winPct) <= 40
                                   ? "text-red-400"
                                   : "text-foreground",

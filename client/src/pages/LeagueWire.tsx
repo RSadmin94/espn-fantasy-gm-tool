@@ -17,8 +17,8 @@ interface Article {
 
 const ARTICLE_TYPE_CFG: Record<string, { icon: any; color: string; label: string; bg: string }> = {
   championship_march: { icon: Trophy,     color: "text-amber-400",   label: "Championship March", bg: "bg-amber-500/10 border-amber-500/30" },
-  keeper_preview:     { icon: Zap,        color: "text-emerald-400", label: "Keeper Preview",     bg: "bg-emerald-500/10 border-emerald-500/30" },
-  roster_construction:{ icon: Sparkles,   color: "text-sky-400",     label: "Roster Report",      bg: "bg-sky-500/10 border-sky-500/30" },
+  keeper_preview:     { icon: Zap,        color: "text-lime-400", label: "Keeper Preview",     bg: "bg-lime-500/10 border-lime-500/30" },
+  roster_construction:{ icon: Sparkles,   color: "text-violet-400",     label: "Roster Report",      bg: "bg-violet-500/10 border-violet-500/30" },
   season_archive:     { icon: Archive,    color: "text-zinc-400",    label: "Season Archive",     bg: "bg-zinc-800 border-zinc-700" },
 };
 
@@ -185,7 +185,7 @@ function GenerateControls({ onRefresh, onSwitchToFeed }: { onRefresh: () => void
   return (
     <div className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#141a24,#0e131c)] p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-emerald-400" />
+        <Sparkles className="h-4 w-4 text-lime-400" />
         <span className="text-sm font-bold text-[#f3f8ff]">Generate Articles</span>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -200,7 +200,7 @@ function GenerateControls({ onRefresh, onSwitchToFeed }: { onRefresh: () => void
         <button
           onClick={handleRoster}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs font-bold hover:bg-sky-500/20 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 text-violet-300 text-xs font-bold hover:bg-violet-500/20 transition-colors disabled:opacity-50"
         >
           <Sparkles className="h-3 w-3" />
           2026 Roster Report
@@ -208,7 +208,7 @@ function GenerateControls({ onRefresh, onSwitchToFeed }: { onRefresh: () => void
         <button
           onClick={handleKeeper}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-lime-500/10 border border-lime-500/30 text-lime-300 text-xs font-bold hover:bg-lime-500/20 transition-colors disabled:opacity-50"
         >
           <Zap className="h-3 w-3" />
           Keeper Preview
@@ -216,8 +216,8 @@ function GenerateControls({ onRefresh, onSwitchToFeed }: { onRefresh: () => void
       </div>
       {(loading || status) && (
         <div className="flex items-center gap-2 text-xs">
-          {loading && <Loader2 className="h-3 w-3 animate-spin text-emerald-400" />}
-          <span className={loading ? "text-zinc-400" : "text-emerald-400"}>{status}</span>
+          {loading && <Loader2 className="h-3 w-3 animate-spin text-lime-400" />}
+          <span className={loading ? "text-zinc-400" : "text-lime-400"}>{status}</span>
         </div>
       )}
     </div>
@@ -331,7 +331,7 @@ export function LeagueWire() {
                       <div className="text-[10px] text-zinc-600 truncate max-w-[140px]">{r.loser?.name}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-sm font-black text-emerald-400 tabular-nums">{r.winner.score.toFixed(2)}</div>
+                      <div className="text-sm font-black text-lime-400 tabular-nums">{r.winner.score.toFixed(2)}</div>
                       <div className="text-xs text-zinc-600 tabular-nums">{r.loser?.score.toFixed(2)}</div>
                     </div>
                   </div>

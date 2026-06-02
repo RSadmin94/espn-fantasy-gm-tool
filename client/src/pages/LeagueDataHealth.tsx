@@ -9,7 +9,7 @@ function StatusDot({ ok }: { ok: boolean }) {
     <span
       className={cn(
         "inline-block w-2.5 h-2.5 rounded-full flex-shrink-0",
-        ok ? "bg-emerald-500" : "bg-muted-foreground/30"
+        ok ? "bg-lime-500" : "bg-muted-foreground/30"
       )}
     />
   );
@@ -21,7 +21,7 @@ function GateRow({ name, status, reason }: { name: string; status: string; reaso
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-border/40 last:border-0 text-sm">
       {isUnlocked ? (
-        <Unlock className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+        <Unlock className="h-4 w-4 text-lime-500 flex-shrink-0" />
       ) : isWarning ? (
         <AlertTriangle className="h-4 w-4 text-amber-400 flex-shrink-0" />
       ) : (
@@ -132,7 +132,7 @@ export function LeagueDataHealth() {
                     <td className="py-2 px-4 font-medium text-foreground">{s.season}</td>
                     <td className="text-center px-3">
                       <span className={cn("inline-block px-1.5 py-0.5 rounded text-[10px] font-medium",
-                        s.apiSeason ? "bg-blue-900/30 text-blue-300 border border-blue-700" : "bg-muted/40 text-muted-foreground border border-border")}>
+                        s.apiSeason ? "bg-violet-900/30 text-violet-300 border border-violet-700" : "bg-muted/40 text-muted-foreground border border-border")}>
                         {s.apiSeason ? "API" : "Legacy"}
                       </span>
                     </td>

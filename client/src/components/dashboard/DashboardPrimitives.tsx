@@ -7,8 +7,8 @@ const accentRing: Record<"none" | "gold" | "red" | "green" | "blue", string> = {
   none: "border-white/[0.06] shadow-sm shadow-black/20",
   gold: "border-amber-500/20 shadow-[0_0_24px_-8px_rgba(245,158,11,0.35)]",
   red: "border-red-500/20 shadow-[0_0_24px_-8px_rgba(239,68,68,0.25)]",
-  green: "border-emerald-500/20 shadow-[0_0_24px_-8px_rgba(16,185,129,0.22)]",
-  blue: "border-blue-500/20 shadow-[0_0_24px_-8px_rgba(59,130,246,0.22)]",
+  green: "border-lime-500/20 shadow-[0_0_24px_-8px_rgba(16,185,129,0.22)]",
+  blue: "border-violet-500/20 shadow-[0_0_24px_-8px_rgba(59,130,246,0.22)]",
 };
 
 export function DashboardCard({
@@ -45,7 +45,7 @@ export function DashboardCard({
         <div className="border-t border-white/[0.06] px-4 py-2">
           <Link
             to={to}
-            className="inline-flex items-center gap-1 text-xs font-medium text-blue-400 transition-colors hover:text-blue-300"
+            className="inline-flex items-center gap-1 text-xs font-medium text-violet-400 transition-colors hover:text-violet-300"
           >
             {toLabel}
             <ChevronRight className="h-3 w-3" />
@@ -89,9 +89,9 @@ export function MetricPill({
       : variant === "red"
         ? "border-red-500/25 bg-red-500/10 text-red-200"
         : variant === "green"
-          ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
+          ? "border-lime-500/25 bg-lime-500/10 text-lime-200"
           : variant === "blue"
-            ? "border-blue-500/25 bg-blue-500/10 text-blue-200"
+            ? "border-violet-500/25 bg-violet-500/10 text-violet-200"
             : "border-white/[0.08] bg-white/[0.03] text-foreground";
   return (
     <div className={cn("rounded-lg border px-2.5 py-1.5", v)}>
@@ -148,13 +148,13 @@ export function StatusBadge({
 }) {
   const cls =
     tone === "success"
-      ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+      ? "border-lime-500/30 bg-lime-500/15 text-lime-300"
       : tone === "warning"
         ? "border-amber-500/30 bg-amber-500/15 text-amber-200"
         : tone === "danger"
           ? "border-red-500/30 bg-red-500/15 text-red-200"
           : tone === "info"
-            ? "border-blue-500/30 bg-blue-500/15 text-blue-200"
+            ? "border-violet-500/30 bg-violet-500/15 text-violet-200"
             : "border-white/[0.1] bg-white/[0.04] text-muted-foreground";
   return (
     <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", cls)}>

@@ -21,8 +21,8 @@ interface MatchupReport {
 const GAME_BADGE: Record<string, { cls: string; label: string }> = {
   blowout:     { cls: "text-red-400 bg-red-500/10 border-red-500/20",       label: "BLOWOUT" },
   comfortable: { cls: "text-amber-400 bg-amber-500/10 border-amber-500/20", label: "WIN" },
-  close:       { cls: "text-sky-400 bg-sky-500/10 border-sky-500/20",       label: "CLOSE" },
-  nailbiter:   { cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20", label: "NAIL-BITER" },
+  close:       { cls: "text-violet-400 bg-violet-500/10 border-violet-500/20",       label: "CLOSE" },
+  nailbiter:   { cls: "text-lime-400 bg-lime-500/10 border-lime-500/20", label: "NAIL-BITER" },
 };
 
 function WireCard({ report }: { report: MatchupReport }) {
@@ -38,7 +38,7 @@ function WireCard({ report }: { report: MatchupReport }) {
           <div className="text-zinc-500 text-xs truncate">{report.loser.name}</div>
         </div>
         <div className="text-right shrink-0">
-          <div className="font-black text-emerald-400 text-sm tabular-nums">{report.winner.score.toFixed(2)}</div>
+          <div className="font-black text-lime-400 text-sm tabular-nums">{report.winner.score.toFixed(2)}</div>
           <div className="text-zinc-600 text-xs tabular-nums">{report.loser.score.toFixed(2)}</div>
         </div>
         {badge && (
@@ -57,7 +57,7 @@ function WireCard({ report }: { report: MatchupReport }) {
           </span>
         )}
         {report.playoffImpact && (
-          <span className="flex items-center gap-1 text-sky-500">
+          <span className="flex items-center gap-1 text-violet-500">
             <TrendingUp className="h-2.5 w-2.5" />
             {report.playoffImpact.winnerRecord}
           </span>
@@ -89,7 +89,7 @@ export function LeagueWireNewsFeed() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/40">
         <div className="flex items-center gap-2">
-          <Radio className="h-3.5 w-3.5 text-emerald-400" />
+          <Radio className="h-3.5 w-3.5 text-lime-400" />
           <span className="text-sm font-black text-zinc-200 tracking-tight">League Wire</span>
           <span className="text-[10px] text-zinc-600 font-medium">
             S{latest.season} · Wk{latest.week}

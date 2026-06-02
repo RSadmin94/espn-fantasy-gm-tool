@@ -64,7 +64,7 @@ export function DashboardMatchupMarquee({
   return (
     <div className="relative flex min-h-[320px] flex-col overflow-hidden rounded-2xl border border-red-500/15 bg-gradient-to-b from-[#121722] via-[#0f131c] to-[#0b0e14] p-5 shadow-[0_0_48px_-16px_rgba(239,68,68,0.35)] sm:p-7">
       <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-red-500/10 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-blue-500/5 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-violet-500/5 blur-3xl" />
 
       <div className="relative flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -147,7 +147,7 @@ export function DashboardMatchupMarquee({
               {aPct != null ? (
                 <div className="flex h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
                   <div className="bg-gradient-to-r from-red-500 to-red-400" style={{ width: `${aPct}%` }} />
-                  <div className="flex-1 bg-blue-500/25" />
+                  <div className="flex-1 bg-violet-500/25" />
                 </div>
               ) : (
                 <div className="rounded-md border border-white/[0.05] bg-white/[0.02] px-3 py-2 text-center text-[11px] text-zinc-500">

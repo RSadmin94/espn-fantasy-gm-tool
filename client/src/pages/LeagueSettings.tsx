@@ -9,7 +9,7 @@ function Row({ label, value, highlight }: { label: string; value: string; highli
   return (
     <div className="flex items-center justify-between gap-4 border-b border-border/50 py-2.5 last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className={cn("text-sm font-medium", highlight ? "text-emerald-400" : "text-foreground")}>
+      <span className={cn("text-sm font-medium", highlight ? "text-lime-400" : "text-foreground")}>
         {value}
       </span>
     </div>
@@ -162,7 +162,7 @@ export function LeagueSettings() {
                     <td className="py-1.5 pr-4 font-mono text-zinc-300">{row.cached !== null ? row.cached : <span className="text-amber-400">missing</span>}</td>
                     <td className="py-1.5 pr-4 font-mono text-zinc-100 font-bold">{row.displayed}</td>
                     <td className="py-1.5">
-                      <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold uppercase", row.status === "live" ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300")}>
+                      <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold uppercase", row.status === "live" ? "bg-lime-500/20 text-lime-300" : "bg-amber-500/20 text-amber-300")}>
                         {row.status}
                       </span>
                     </td>

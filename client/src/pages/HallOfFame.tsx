@@ -672,7 +672,7 @@ export function HallOfFame() {
                           <span className="mt-2 text-[9px] italic text-zinc-600">gone too soon</span>
                         </div>
                         <span className="h-3 w-[88%] max-w-[150px] rounded-b-sm bg-[linear-gradient(180deg,#1a1d24,#11141a)] shadow-[0_6px_8px_-6px_rgba(0,0,0,.9)]" />
-                        <span className="mb-6 h-1.5 w-[96%] max-w-[160px] rounded-full bg-emerald-900/30 blur-[1px]" />
+                        <span className="mb-6 h-1.5 w-[96%] max-w-[160px] rounded-full bg-lime-900/30 blur-[1px]" />
                       </div>
                     ))}
                   </div>

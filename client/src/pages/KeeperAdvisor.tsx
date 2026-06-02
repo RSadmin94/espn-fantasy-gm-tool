@@ -61,15 +61,15 @@ function kvsToRecommendation(kvs: number, isLastYear: boolean): Recommendation {
 
 const POS_STYLE: Record<string, string> = {
   QB:   "text-red-400 font-bold",
-  RB:   "text-emerald-400 font-bold",
-  WR:   "text-blue-400 font-bold",
+  RB:   "text-lime-400 font-bold",
+  WR:   "text-violet-400 font-bold",
   TE:   "text-orange-400 font-bold",
   K:    "text-zinc-400 font-bold",
   "D/ST": "text-violet-400 font-bold",
 };
 
 function kvsColor(kvs: number) {
-  if (kvs >= 70) return "text-emerald-400";
+  if (kvs >= 70) return "text-lime-400";
   if (kvs >= 48) return "text-amber-400";
   return "text-red-400";
 }
@@ -78,8 +78,8 @@ function kvsColor(kvs: number) {
 
 function ConfidenceBadge({ conf }: { conf: Confidence }) {
   const styles: Record<Confidence, string> = {
-    ELITE:  "text-emerald-400 font-semibold",
-    HIGH:   "text-emerald-300 font-semibold",
+    ELITE:  "text-lime-400 font-semibold",
+    HIGH:   "text-lime-300 font-semibold",
     MEDIUM: "text-amber-400 font-semibold",
     LOW:    "text-red-400 font-semibold",
   };
@@ -91,7 +91,7 @@ function RecButton({ rec, isLastYear }: { rec: Recommendation; isLastYear: boole
   if (rec === "KEEP") return (
     <span className={cn(base, isLastYear
       ? "border-amber-600 bg-amber-600/20 text-amber-300"
-      : "border-emerald-600 bg-emerald-600/20 text-emerald-300")}>
+      : "border-lime-600 bg-lime-600/20 text-lime-300")}>
       <CheckCircle className="h-3 w-3" /> {isLastYear ? "KEEP*" : "KEEP"}
     </span>
   );
@@ -133,8 +133,8 @@ function KeeperDNA({ pool, ownerFilter }: { pool: KeeperEntry[]; ownerFilter: st
   return (
     <div className="rounded-xl border border-zinc-700/60 bg-[#0f131c] p-4">
       <div className="mb-3 flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-900/40">
-          <Dna className="h-4 w-4 text-emerald-400" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-lime-900/40">
+          <Dna className="h-4 w-4 text-lime-400" />
         </div>
         <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-100">Your Keeper DNA</h3>
       </div>
@@ -407,7 +407,7 @@ export function KeeperAdvisor() {
                           <td className="px-3 py-3 text-center">
                             <span className={cn(
                               "text-sm font-semibold",
-                              entry.keeperRoundCost <= 3 ? "text-emerald-400" :
+                              entry.keeperRoundCost <= 3 ? "text-lime-400" :
                               entry.keeperRoundCost <= 6 ? "text-amber-400" : "text-zinc-300"
                             )}>
                               Round {entry.keeperRoundCost}

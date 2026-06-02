@@ -613,7 +613,7 @@ function statusBadgeClasses(statusRaw: string | null): string {
   const n = normalizeStatusForMatch(statusRaw);
   const base =
     "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide";
-  if (n === "EXECUTED") return cn(base, "border-emerald-500/40 bg-emerald-500/15 text-emerald-300");
+  if (n === "EXECUTED") return cn(base, "border-lime-500/40 bg-lime-500/15 text-lime-300");
   if (n === "PROPOSED" || n === "PENDING")
     return cn(base, "border-amber-500/40 bg-amber-500/15 text-amber-200");
   if (n === "CANCELED" || n === "CANCELLED") return cn(base, "border-red-500/40 bg-red-500/15 text-red-300");
@@ -640,7 +640,7 @@ function ReceivesPanel({
     return (
       <div
         className={cn(
-          "rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-3 text-center text-xs text-muted-foreground",
+          "rounded-lg border border-violet-500/25 bg-violet-500/[0.06] p-3 text-center text-xs text-muted-foreground",
           "shadow-[0_0_14px_rgba(56,189,248,0.12)]"
         )}
       >
@@ -651,11 +651,11 @@ function ReceivesPanel({
   return (
     <div
       className={cn(
-        "space-y-2.5 rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-3",
+        "space-y-2.5 rounded-lg border border-violet-500/25 bg-violet-500/[0.06] p-3",
         "shadow-[0_0_14px_rgba(56,189,248,0.12)]"
       )}
     >
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-300/90">{title}</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-violet-300/90">{title}</div>
       {hasPlayers ? (
         <div>
           <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -687,7 +687,7 @@ function ReceivesPanel({
                 {pk.rNotation || pk.overallText ? (
                   <div className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 pl-3.5">
                     {pk.rNotation ? (
-                      <span className="font-semibold tabular-nums tracking-tight text-sky-200">
+                      <span className="font-semibold tabular-nums tracking-tight text-violet-200">
                         {pk.rNotation}
                       </span>
                     ) : null}
@@ -712,7 +712,7 @@ function TypeBadge({ type }: { type: string }) {
   const base = "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium";
   if (type === "ADD")
     return (
-      <span className={cn(base, "border-emerald-500/25 bg-emerald-500/10 text-emerald-400")}>
+      <span className={cn(base, "border-lime-500/25 bg-lime-500/10 text-lime-400")}>
         <ArrowDownToLine className="h-3 w-3" />
         Add
       </span>
@@ -733,7 +733,7 @@ function TypeBadge({ type }: { type: string }) {
     );
   if (isTradeType(type))
     return (
-      <span className={cn(base, "border-sky-500/25 bg-sky-500/10 text-sky-300")}>
+      <span className={cn(base, "border-violet-500/25 bg-violet-500/10 text-violet-300")}>
         <Repeat2 className="h-3 w-3" />
         {TX_TYPE_LABELS[type] ?? "Trade"}
       </span>
@@ -749,7 +749,7 @@ function RosterLinks({ season, teams }: { season: number; teams: { tid: number; 
         <Link
           key={tid}
           to={`/roster?season=${season}&teamId=${tid}`}
-          className="text-xs font-medium text-sky-400 hover:text-sky-300 hover:underline"
+          className="text-xs font-medium text-violet-400 hover:text-violet-300 hover:underline"
         >
           {name} roster
         </Link>
@@ -817,7 +817,7 @@ function TradeComparisonCard({
           {time ? <div>{time}</div> : null}
         </div>
         <details className="group text-right">
-          <summary className="cursor-pointer list-none text-xs font-medium text-sky-400 hover:text-sky-300 [&::-webkit-details-marker]:hidden">
+          <summary className="cursor-pointer list-none text-xs font-medium text-violet-400 hover:text-violet-300 [&::-webkit-details-marker]:hidden">
             View Details
           </summary>
           <div className="mt-2 max-w-prose space-y-2 rounded-md border border-border/60 bg-muted/15 p-2.5 text-left text-xs text-muted-foreground">
@@ -843,7 +843,7 @@ function TradeComparisonCard({
             </div>
 
             <div className="flex justify-center py-1 lg:items-start lg:justify-center lg:pt-12">
-              <div className="rounded-full border border-sky-500/30 bg-sky-500/10 p-2 text-sky-400 shadow-[0_0_16px_rgba(56,189,248,0.25)]">
+              <div className="rounded-full border border-violet-500/30 bg-violet-500/10 p-2 text-violet-400 shadow-[0_0_16px_rgba(56,189,248,0.25)]">
                 <ArrowLeftRight className="h-5 w-5" aria-hidden />
               </div>
             </div>
@@ -863,7 +863,7 @@ function TradeComparisonCard({
             <span
               className={cn(
                 "font-medium",
-                normalizeStatusForMatch(tradeStatusLine) === "EXECUTED" && "text-emerald-400",
+                normalizeStatusForMatch(tradeStatusLine) === "EXECUTED" && "text-lime-400",
                 (normalizeStatusForMatch(tradeStatusLine) === "PROPOSED" ||
                   normalizeStatusForMatch(tradeStatusLine) === "PENDING") &&
                   "text-amber-300",
@@ -1102,7 +1102,7 @@ export function Transactions() {
                   <SelectItem key={s} value={String(s)}>
                     <span className="flex items-center gap-1.5">
                       {s}
-                      {cachedSeasons.includes(s) && <span className="text-emerald-400 text-xs">✓</span>}
+                      {cachedSeasons.includes(s) && <span className="text-lime-400 text-xs">✓</span>}
                     </span>
                   </SelectItem>
                 ))}

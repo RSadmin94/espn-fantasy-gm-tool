@@ -45,7 +45,7 @@ function chipStyle(place: number | null | undefined): string {
   if (place === 1) return "bg-yellow-500/20 text-yellow-300 border-yellow-500/40 font-bold";
   if (place === 2) return "bg-slate-400/15 text-slate-300 border-slate-400/30";
   if (place === 3) return "bg-amber-700/15 text-amber-500 border-amber-600/30";
-  if (place <= 6)  return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+  if (place <= 6)  return "bg-lime-500/10 text-lime-400 border-lime-500/20";
   return "bg-muted/20 text-muted-foreground/50 border-transparent";
 }
 
@@ -161,7 +161,7 @@ export function LeagueTimeline() {
 
       {/* ── Page header ── */}
       <div className="space-y-0.5">
-        <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400">
+        <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-lime-400">
           LEAGUE TIMELINE V1 ACTIVE
         </div>
         <h1 className="text-3xl font-bold text-foreground">League Timeline</h1>
@@ -192,17 +192,17 @@ export function LeagueTimeline() {
           )}>
             <span className="text-foreground/60 font-semibold">diag</span>
             {" · "}seasons: <span className="text-foreground">{allSeasonCount}</span>
-            {" · "}medals: <span className={cn(missingMedals > 0 ? "text-red-400 font-bold" : "text-emerald-400")}>
+            {" · "}medals: <span className={cn(missingMedals > 0 ? "text-red-400 font-bold" : "text-lime-400")}>
               {medalSeasons}/{allSeasonCount}{missingMedals > 0 ? ` (${missingMedals} missing)` : " ok"}
             </span>
-            {" · "}medal-match: <span className={cn(ownerNormalizationMisses > 0 ? "text-amber-400 font-bold" : medalSeasons > 0 ? "text-emerald-400" : "text-muted-foreground")}
+            {" · "}medal-match: <span className={cn(ownerNormalizationMisses > 0 ? "text-amber-400 font-bold" : medalSeasons > 0 ? "text-lime-400" : "text-muted-foreground")}
               title={ownerNormalizationMisses > 0 ? unmatchedChampionNames.join(", ") : undefined}>
               {ownerNormalizationMisses > 0 ? `${ownerNormalizationMisses} unmatched` : medalSeasons > 0 ? "ok" : "…"}
             </span>
-            {" · "}standings: <span className={cn(dupStandingSeasons + missingRankSeasons > 0 ? "text-amber-400" : d ? "text-emerald-400" : "text-muted-foreground")}>
+            {" · "}standings: <span className={cn(dupStandingSeasons + missingRankSeasons > 0 ? "text-amber-400" : d ? "text-lime-400" : "text-muted-foreground")}>
               {dupStandingSeasons > 0 ? `${dupStandingSeasons} dup-ranks` : missingRankSeasons > 0 ? `${missingRankSeasons} missing-ranks` : d ? "ok" : "…"}
             </span>
-            {" · "}matchups: <span className={cn(dupMatchupSeasons + mismatchSeasons > 0 ? "text-red-400 font-bold" : missingScoreSeasons > 0 ? "text-amber-400" : d ? "text-emerald-400" : "text-muted-foreground")}>
+            {" · "}matchups: <span className={cn(dupMatchupSeasons + mismatchSeasons > 0 ? "text-red-400 font-bold" : missingScoreSeasons > 0 ? "text-amber-400" : d ? "text-lime-400" : "text-muted-foreground")}>
               {dupMatchupSeasons > 0 ? `${dupMatchupSeasons} dups` : mismatchSeasons > 0 ? `${mismatchSeasons} mismatches` : missingScoreSeasons > 0 ? `${missingScoreSeasons} missing-scores` : d ? "ok" : "…"}
             </span>
             {h2dDiag && (
@@ -218,7 +218,7 @@ export function LeagueTimeline() {
                 {h2dDiag.ownerResolutionFailures > 0 && (
                   <>{" · "}h2h-fail: <span className="text-red-400 font-bold">{h2dDiag.ownerResolutionFailures}</span></>
                 )}
-                {" · "}h2h-pairs: <span className={cn(h2dDiag.ownerPairCount > 0 ? "text-emerald-400" : "text-muted-foreground")}>{h2dDiag.ownerPairCount}</span>
+                {" · "}h2h-pairs: <span className={cn(h2dDiag.ownerPairCount > 0 ? "text-lime-400" : "text-muted-foreground")}>{h2dDiag.ownerPairCount}</span>
               </>
             )}
           </div>
@@ -447,9 +447,9 @@ export function LeagueTimeline() {
                     </div>
                   )}
                   {topScorer && topScorer.owner !== seasonRows[0]?.owner && (
-                    <div className="flex-1 rounded-lg bg-blue-500/10 border border-blue-500/15 p-3 text-center">
-                      <div className="text-[10px] uppercase tracking-widest font-semibold text-blue-400 mb-1">Top Scorer</div>
-                      <div className="font-semibold text-blue-300">{topScorer.owner}</div>
+                    <div className="flex-1 rounded-lg bg-violet-500/10 border border-violet-500/15 p-3 text-center">
+                      <div className="text-[10px] uppercase tracking-widest font-semibold text-violet-400 mb-1">Top Scorer</div>
+                      <div className="font-semibold text-violet-300">{topScorer.owner}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
                         {topScorer.pointsFor.toFixed(1)} pts
                       </div>
@@ -574,7 +574,7 @@ export function LeagueTimeline() {
                                 </div>
                                 <div className={cn(
                                   "text-2xl font-bold tabular-nums",
-                                  winning && "text-emerald-400",
+                                  winning && "text-lime-400",
                                   losing  && "text-red-400",
                                   !winning && !losing && "text-muted-foreground",
                                 )}>
@@ -590,7 +590,7 @@ export function LeagueTimeline() {
                                     <div
                                       className={cn(
                                         "h-full rounded-full transition-all",
-                                        winning ? "bg-emerald-400" : losing ? "bg-red-400" : "bg-muted-foreground",
+                                        winning ? "bg-lime-400" : losing ? "bg-red-400" : "bg-muted-foreground",
                                       )}
                                       style={{ width: `${winFrac}%` }}
                                     />

@@ -157,12 +157,12 @@ export function Matchups() {
           Head-to-head scores by week (from synced league data).
         </p>
         {boardSource === "verified_manual" && (
-          <p className="mt-2 rounded-md border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200">
+          <p className="mt-2 rounded-md border border-lime-500/35 bg-lime-500/10 px-3 py-2 text-xs font-medium text-lime-200">
             Source: verified_manual
           </p>
         )}
         {boardSource === "cache" && (
-          <p className="mt-2 rounded-md border border-blue-500/35 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-300">
+          <p className="mt-2 rounded-md border border-violet-500/35 bg-violet-500/10 px-3 py-2 text-xs font-medium text-violet-300">
             Source: ESPN combined cache (not yet backfilled to DB)
           </p>
         )}
@@ -180,7 +180,7 @@ export function Matchups() {
                   <span className="flex items-center gap-1.5">
                     {s}
                     {cachedSeasons.includes(s) && (
-                      <span className="text-xs text-emerald-400">✓</span>
+                      <span className="text-xs text-lime-400">✓</span>
                     )}
                   </span>
                 </SelectItem>

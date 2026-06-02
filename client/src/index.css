@@ -72,7 +72,7 @@
     box-shadow: 0 0 0 1px oklch(0.27 0.035 300), 0 4px 24px oklch(0.03 0.01 300 / 0.85);
   }
   /* Stat highlight */
-  .stat-positive { @apply text-emerald-400; }
+  .stat-positive { @apply text-lime-400; }
   .stat-negative { @apply text-red-400; }
   .stat-neutral { @apply text-muted-foreground; }
 }

@@ -87,9 +87,9 @@ export function SeasonExplorerTab({
                 </div>
               ) : null}
               {showTopScorer && topScorer ? (
-                <div className="flex-1 rounded-lg border border-blue-500/15 bg-blue-500/10 p-3 text-center">
-                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-blue-400">Top Scorer</div>
-                  <div className="font-semibold text-blue-300">{topScorer.owner}</div>
+                <div className="flex-1 rounded-lg border border-violet-500/15 bg-violet-500/10 p-3 text-center">
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-violet-400">Top Scorer</div>
+                  <div className="font-semibold text-violet-300">{topScorer.owner}</div>
                   <div className="mt-0.5 text-xs text-muted-foreground">{topScorer.pointsFor.toFixed(1)} pts</div>
                 </div>
               ) : null}

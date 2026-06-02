@@ -25,7 +25,7 @@ function chipStyle(place: number | null | undefined): string {
   if (place === 1) return "bg-yellow-500/20 text-yellow-300 border-yellow-500/40 font-bold";
   if (place === 2) return "bg-slate-400/15 text-slate-300 border-slate-400/30";
   if (place === 3) return "bg-amber-700/15 text-amber-500 border-amber-600/30";
-  if (place <= 6) return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+  if (place <= 6) return "bg-lime-500/10 text-lime-400 border-lime-500/20";
   return "bg-muted/20 text-muted-foreground/50 border-transparent";
 }
 
