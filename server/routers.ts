@@ -60,6 +60,8 @@ import {
   resolveActiveLeagueId,
   persistLlmUsage,
   getLlmUsageSummary,
+  resolveActiveProfile,
+  memberIdFromOwnerKey,
 } from "./db";
 import {
   buildCombinedPayloadFromNormalized,
@@ -501,9 +503,11 @@ export const appRouter = router({
       const data = row.payload as Record<string, unknown>;
       const members = (data.members as Record<string, unknown>[]) || [];
       let rodMemberId: string | null = null;
+      const __profile = await resolveActiveProfile(ctx.user ? { id: ctx.user.id } : null);
+      if (__profile.isSetupComplete) rodMemberId = memberIdFromOwnerKey(__profile.selectedOwnerKey);
       for (const m of members) {
         const name = `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || "";
-        if (ROD_NAMES.some(n => name.toLowerCase().includes(n))) { rodMemberId = m.id as string; break; }
+        if (!rodMemberId && ROD_NAMES.some(n => name.toLowerCase().includes(n))) { rodMemberId = m.id as string; break; }
       }
       if (!rodMemberId) return [];
       const rodName = (() => {

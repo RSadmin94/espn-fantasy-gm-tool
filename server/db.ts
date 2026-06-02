@@ -1387,6 +1387,13 @@ function emptyActiveProfile(clerkUserId: string | null): ActiveProfile {
  * `resolveActiveLeagueId`. As of this commit nothing consumes this resolver yet;
  * wiring the Rod-specific call sites to it is a separate, later phase.
  */
+/**
+ * Strip the canonical `id:` prefix from an owner key to get the bare ESPN member id.
+ * `"id:{GUID}"` -> `"{GUID}"`. Returns null for null/empty input.
+ */
+export function memberIdFromOwnerKey(ownerKey: string | null | undefined): string | null {
+  return ownerKey ? ownerKey.replace(/^id:/, "") : null;
+}
 export async function resolveActiveProfile(
   user: { id: number; openId?: string | null } | null | undefined,
 ): Promise<ActiveProfile> {

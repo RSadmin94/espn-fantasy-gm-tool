@@ -12,7 +12,7 @@
  * opponentData.ts so existing callers require minimal changes.
  */
 
-import { getAllCachedSeasons, getCachedView } from "./db";
+import { getAllCachedSeasons, getCachedView, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
 import {
   normalizeTeams,
   normalizeMatchups,
@@ -96,6 +96,11 @@ export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<st
 
   // Identify Rod's member ID from the first available season
   let rodMemberId: string | null = null;
+  // Wave 2: prefer the authenticated user's selected owner; the name match below is the fallback.
+  if (userId != null) {
+    const __profile = await resolveActiveProfile({ id: userId });
+    if (__profile.isSetupComplete) rodMemberId = memberIdFromOwnerKey(__profile.selectedOwnerKey);
+  }
   const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
 
   for (const season of cachedSeasons.sort((a, b) => b - a)) {

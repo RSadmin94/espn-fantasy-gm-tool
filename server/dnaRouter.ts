@@ -17,7 +17,7 @@
 
 import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
-import { getCachedView, getAllCachedSeasons } from "./db";
+import { getCachedView, getAllCachedSeasons, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
 import {
   calcLeagueDNA,
   calcManagerDNA,
@@ -62,6 +62,11 @@ export async function buildManagerRawData(userId?: number): Promise<ManagerRawDa
 
   // Identify Rod's memberId (will be used for h2h tracking)
   let rodMemberId: string | null = null;
+  // Wave 2: prefer the authenticated user's selected owner; the name match below is the fallback.
+  if (userId != null) {
+    const __profile = await resolveActiveProfile({ id: userId });
+    if (__profile.isSetupComplete) rodMemberId = memberIdFromOwnerKey(__profile.selectedOwnerKey);
+  }
 
   for (const season of ANALYSIS_SEASONS) {
     const row = await getCachedView(season, "combined", undefined, { userId });

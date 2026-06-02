@@ -18,7 +18,7 @@
  *   150+   → "Inferno"
  */
 
-import { getAllCachedSeasons, getCachedView, getDb } from "./db";
+import { getAllCachedSeasons, getCachedView, getDb, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
 import {
   normalizeTeams,
   normalizeMatchups,
@@ -116,6 +116,11 @@ export async function computeRivalryScores(userId?: number): Promise<RivalryPair
 
   // Rod's memberId (resolved from first available season)
   let rodMemberId: string | null = null;
+  // Wave 2: prefer the authenticated user's selected owner; the name match below is the fallback.
+  if (userId != null) {
+    const __profile = await resolveActiveProfile({ id: userId });
+    if (__profile.isSetupComplete) rodMemberId = memberIdFromOwnerKey(__profile.selectedOwnerKey);
+  }
 
   // Per-opponent accumulators
   interface Acc {
