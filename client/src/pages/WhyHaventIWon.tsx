@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { type ReactNode, type CSSProperties } from "react";
 import {
   Loader2, HelpCircle, Trophy, Target, TrendingDown, Swords, Crown, Calendar, ShoppingCart,
-  Medal, Activity, Shield, Sparkles, Flame, ChevronRight,
+  Medal, Activity, Shield, Sparkles, Flame, Gauge, AlertTriangle, CheckCircle2, ArrowDown, ArrowUp,
 } from "lucide-react";
 
 const PAGEBG: CSSProperties = {
@@ -24,7 +24,6 @@ const CATEGORY_ICON: Record<string, ReactNode> = {
   close_games: <Target className="h-5 w-5" />,
 };
 
-// Career Arc -> visual identity (badge gradient + accent + icon)
 const ARC_STYLE: Record<string, { grad: string; text: string; ring: string; icon: ReactNode; blurb: string }> = {
   "The Dynasty":     { grad: "from-amber-400/25 to-yellow-600/10", text: "text-amber-300", ring: "border-amber-400/40", icon: <Crown className="h-4 w-4" />, blurb: "Repeat champion" },
   "The Breakthrough":{ grad: "from-lime-400/25 to-emerald-600/10", text: "text-lime-300", ring: "border-lime-400/40", icon: <Sparkles className="h-4 w-4" />, blurb: "Reached the mountaintop" },
@@ -34,6 +33,19 @@ const ARC_STYLE: Record<string, { grad: string; text: string; ring: string; icon
   "The Builder":     { grad: "from-teal-400/25 to-emerald-600/10", text: "text-teal-300", ring: "border-teal-400/40", icon: <Activity className="h-4 w-4" />, blurb: "Active roster constructor" },
   "The Underdog":    { grad: "from-slate-300/20 to-slate-600/10", text: "text-slate-300", ring: "border-slate-400/40", icon: <Target className="h-4 w-4" />, blurb: "Persistent against the odds" },
 };
+
+const TIER_COLOR: Record<string, string> = {
+  "Championship-Ready": "text-amber-300",
+  "Contender": "text-lime-400",
+  "Rising": "text-cyan-300",
+  "Rebuilding": "text-orange-300",
+  "Foundation": "text-white/60",
+};
+
+function scoreColor(n: number): string { return n >= 70 ? "text-lime-400" : n >= 50 ? "text-amber-300" : "text-red-400"; }
+function scoreBar(n: number): string { return n >= 70 ? "bg-lime-400" : n >= 50 ? "bg-amber-400" : "bg-red-500"; }
+function sevText(s: string): string { return s === "high" ? "text-red-400" : s === "medium" ? "text-orange-300" : s === "low" ? "text-lime-400" : "text-white/75"; }
+function sevBorder(s: string): string { return s === "high" ? "border-red-500/25" : s === "medium" ? "border-orange-400/20" : "border-white/[0.06]"; }
 
 function severityColor(s: number): string {
   if (s >= 80) return "text-red-400";
@@ -57,7 +69,6 @@ function Stat({ label, value, accent }: { label: string; value: ReactNode; accen
   );
 }
 
-// One season node in the timeline.
 function TimelineRow({ card }: { card: any }) {
   const champ = card.isChampion;
   const runner = card.isRunnerUp;
@@ -77,12 +88,10 @@ function TimelineRow({ card }: { card: any }) {
 
   return (
     <div className="relative flex gap-4">
-      {/* rail + node */}
       <div className="relative flex w-12 shrink-0 flex-col items-center">
         <div className={cn("z-10 mt-1 h-3.5 w-3.5 rounded-full ring-4", dot)} />
         <div className="absolute top-1 bottom-[-20px] w-px bg-white/[0.08]" />
       </div>
-      {/* card */}
       <div
         className={cn(
           "mb-3 flex-1 rounded-xl border bg-white/[0.02] p-3.5 sm:p-4",
@@ -122,18 +131,26 @@ function TimelineRow({ card }: { card: any }) {
   );
 }
 
+const POS_ORDER = ["QB", "RB", "WR", "TE"];
+
 export function WhyHaventIWon() {
   const q = trpc.leagueIntel.careerReport.useQuery(undefined, { staleTime: 60_000 });
   const data = q.data;
   const snap = data?.snapshot ?? null;
   const arc = data?.careerArc ?? null;
   const arcStyle = (arc && ARC_STYLE[arc]) || null;
+  const readiness = data?.readiness ?? null;
+  const patterns = data?.patterns ?? [];
   const isWin = data?.mode === "why-you-won" || data?.mode === "why-you-broke-through";
 
   const reasonsHeading =
     data?.mode === "why-you-won" ? "Top Reasons You Won"
     : data?.mode === "why-you-broke-through" ? "Why You Broke Through"
     : "Top Reasons You Haven't Won";
+
+  const sortedPositional = readiness
+    ? [...readiness.positional].sort((a: any, b: any) => POS_ORDER.indexOf(a.position) - POS_ORDER.indexOf(b.position))
+    : [];
 
   return (
     <div className="min-h-screen w-full" style={PAGEBG}>
@@ -195,19 +212,26 @@ export function WhyHaventIWon() {
                   <Stat label="Win %" value={`${Math.round(snap.careerWinRate * 100)}%`} accent={snap.careerWinRate >= 0.5 ? "text-lime-400" : "text-white/90"} />
                   <Stat label="Best Finish" value={snap.bestFinish ? `#${snap.bestFinish}` : "-"} />
                 </div>
-                {snap.activityDna.primary && (
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-white/50">
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-white/50">
+                  {snap.activityDna.primary && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
                       <Activity className="h-3.5 w-3.5 text-lime-400" /> Activity DNA: <span className="font-semibold text-white/80">{snap.activityDna.primary}</span>
                       {snap.activityDna.secondary && <span className="text-white/40">/ {snap.activityDna.secondary}</span>}
                     </span>
-                    {snap.titles > 0 && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-amber-300">
-                        <Crown className="h-3.5 w-3.5" /> {snap.championSeasons.join(", ")}
-                      </span>
-                    )}
-                  </div>
-                )}
+                  )}
+                  {readiness && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                      <Gauge className="h-3.5 w-3.5 text-lime-400" /> Championship Readiness:
+                      <span className={cn("font-bold", scoreColor(readiness.score))}>{readiness.score}</span>
+                      <span className="text-white/40">({readiness.tier})</span>
+                    </span>
+                  )}
+                  {snap.titles > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-amber-300">
+                      <Crown className="h-3.5 w-3.5" /> {snap.championSeasons.join(", ")}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
 
@@ -227,7 +251,110 @@ export function WhyHaventIWon() {
               </div>
             )}
 
-            {/* SECTION 5 - Preserved coaching (reasons) */}
+            {/* SECTION 3 - Pattern Detection */}
+            {patterns.length > 0 && (
+              <div className={cn(PANEL, "p-5 sm:p-6")}>
+                <div className="mb-4 flex items-center gap-3">
+                  <span className="text-orange-300"><AlertTriangle className="h-5 w-5" /></span>
+                  <div>
+                    <h2 className="text-[20px] font-extrabold leading-tight">Pattern Detection</h2>
+                    <p className="text-[13px] text-white/45">The recurring signals in your league history</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                  {patterns.map((p: any) => (
+                    <div key={p.id} className={cn("rounded-xl border bg-white/[0.02] p-4", sevBorder(p.severity))}>
+                      <div className={cn("text-[26px] font-black leading-none tabular-nums", sevText(p.severity))}>{p.value}</div>
+                      <div className="mt-1.5 text-[13px] font-semibold text-white/85">{p.label}</div>
+                      <div className="mt-1 text-[11.5px] leading-snug text-white/40">{p.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SECTION 4 - Championship Readiness Score */}
+            {readiness && (
+              <div className={cn(PANEL, "p-5 sm:p-6")}>
+                <div className="mb-5 flex items-center gap-3">
+                  <span className="text-lime-400"><Gauge className="h-5 w-5" /></span>
+                  <div>
+                    <h2 className="text-[20px] font-extrabold leading-tight">Championship Readiness Score</h2>
+                    <p className="text-[13px] text-white/45">Positional 40% &middot; Playoff 15% &middot; Acquisitions 15% &middot; Draft 15% &middot; Roster Mgmt 10% &middot; Activity 5%</p>
+                  </div>
+                </div>
+
+                {/* score hero */}
+                <div className="flex items-center gap-5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                  <div className="text-center">
+                    <div className={cn("text-[56px] font-black leading-none tabular-nums", scoreColor(readiness.score))}>{readiness.score}</div>
+                    <div className="text-[11px] uppercase tracking-wide text-white/40">out of 100</div>
+                  </div>
+                  <div className="flex-1">
+                    <div className={cn("text-[18px] font-extrabold", TIER_COLOR[readiness.tier] ?? "text-white/80")}>{readiness.tier}</div>
+                    <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/[0.07]">
+                      <div className={cn("h-full rounded-full", scoreBar(readiness.score))} style={{ width: `${readiness.score}%` }} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* component breakdown */}
+                <div className="mt-4 grid gap-2.5">
+                  {readiness.components.map((c: any) => (
+                    <div key={c.key} className="flex items-center gap-3">
+                      <div className="w-40 shrink-0 text-[13px] text-white/60">{c.label} <span className="text-white/30">({Math.round(c.weight * 100)}%)</span></div>
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+                        <div className={cn("h-full rounded-full", scoreBar(c.score))} style={{ width: `${c.score}%` }} />
+                      </div>
+                      <div className={cn("w-9 shrink-0 text-right text-[13px] font-bold tabular-nums", scoreColor(c.score))}>{c.score}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* positional gap cards */}
+                {sortedPositional.length > 0 && (
+                  <>
+                    <div className="mt-6 mb-2 text-[12px] font-semibold uppercase tracking-wide text-white/40">Your starters vs the champion benchmark (pts/game)</div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {sortedPositional.map((g: any) => {
+                        const behind = g.gap > 0.05;
+                        const ahead = g.gap < -0.05;
+                        return (
+                          <div key={g.position} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-center">
+                            <div className="text-[12px] font-bold uppercase tracking-wide text-white/50">{g.position}</div>
+                            <div className="mt-1 text-[20px] font-black tabular-nums text-white/90">{g.ownerAvg.toFixed(1)}</div>
+                            <div className="text-[11px] text-white/35">champ {g.championAvg.toFixed(1)}</div>
+                            <div className={cn("mt-1 inline-flex items-center gap-1 text-[12px] font-bold tabular-nums", behind ? "text-red-400" : ahead ? "text-lime-400" : "text-white/50")}>
+                              {behind ? <ArrowDown className="h-3 w-3" /> : ahead ? <ArrowUp className="h-3 w-3" /> : null}
+                              {g.gap > 0 ? `-${g.gap.toFixed(1)}` : `+${Math.abs(g.gap).toFixed(1)}`}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {/* action plan */}
+                {readiness.topActions.length > 0 && (
+                  <>
+                    <div className="mt-6 mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-lime-400">
+                      <CheckCircle2 className="h-4 w-4" /> Action Plan
+                    </div>
+                    <div className="space-y-2">
+                      {readiness.topActions.map((a: string, i: number) => (
+                        <div key={i} className="flex items-start gap-3 rounded-xl border border-lime-400/15 bg-lime-400/[0.03] p-3">
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-lime-400/15 text-[11px] font-bold text-lime-400">{i + 1}</span>
+                          <span className="text-[14px] text-white/80">{a}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* SECTION 5 - Top Reasons (diagnostic) */}
             <div className={cn(PANEL, "p-5 sm:p-6")}>
               <div className="mb-4 flex items-center gap-3">
                 <span className="text-lime-400">{isWin ? <Trophy className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}</span>
@@ -258,12 +385,6 @@ export function WhyHaventIWon() {
                   <p className="text-[14px] text-white/50">No standout weaknesses found in the data - a balanced resume.</p>
                 )}
               </div>
-            </div>
-
-            {/* Coming next teaser */}
-            <div className={cn(PANEL, "flex items-center gap-3 p-4 text-[13px] text-white/45")}>
-              <ChevronRight className="h-4 w-4 text-violet-300" />
-              Coming next: Championship Readiness Score and Pattern Detection.
             </div>
 
             <p className="px-1 text-[12px] text-white/30">

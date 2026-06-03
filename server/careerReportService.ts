@@ -25,7 +25,11 @@ import {
   loadFlatRegularSeasonMatchups,
   computeOwnerProfileRecordBundle,
   cleanOwnerDisplay,
+  personMergeKey,
 } from "./ownerProfileService";
+import { computeChampionshipPath } from "./championshipPath";
+import { computeAcquisitionImpact } from "./acquisitionImpact";
+import { computeDraftReality } from "./draftRealitySimulator";
 
 export type CareerArc =
   | "The Dynasty" | "The Breakthrough" | "The Contender"
@@ -58,6 +62,16 @@ export type SeasonCard = {
   playerLevelAvailable: boolean;     // season >= 2021 (positional/draft/acq metrics exist)
 };
 
+export type ReadinessComponent = { key: string; label: string; score: number; weight: number };
+export type ChampionshipReadiness = {
+  score: number;
+  tier: string;
+  components: ReadinessComponent[];
+  positional: Array<{ position: string; ownerAvg: number; championAvg: number; gap: number; gapPct: number }>;
+  topActions: string[];
+};
+export type PatternStat = { id: string; label: string; value: string; detail: string; severity: "high" | "medium" | "low" | "info" };
+
 export type CareerReport = {
   leagueId: string;
   ownerKey: string | null;
@@ -70,6 +84,8 @@ export type CareerReport = {
   careerStory: string;
   snapshot: CareerSnapshot | null;
   timeline: SeasonCard[];
+  readiness: ChampionshipReadiness | null;
+  patterns: PatternStat[];
   topReasons: WhyFinding[];
   confidence: WhyHaventIWonResult["confidence"];
   dataCoverage: { teamLevel: string; playerLevel: string };
@@ -126,7 +142,7 @@ export async function computeCareerReport(
     return {
       leagueId, ownerKey: why.ownerKey, ownerName: why.ownerName, isSetupComplete: why.isSetupComplete,
       mode: why.pageMode, title, subtitle, careerArc: null, careerStory: "", snapshot: null,
-      timeline: [], topReasons: why.findings, confidence: why.confidence, dataCoverage, note: note ?? why.note,
+      timeline: [], readiness: null, patterns: [], topReasons: why.findings, confidence: why.confidence, dataCoverage, note: note ?? why.note,
     };
   };
   if (!db || !why.ownerName) return minimal();
@@ -214,6 +230,17 @@ export async function computeCareerReport(
       };
     });
 
+  // ---- Championship Readiness + Pattern Detection (player-level composition) ----
+  const focalKey = ownerKeyOverride ?? why.ownerKey;
+  const playerSeasons = snap.seasons.filter((s) => s >= 2021 && (latestCompletedSeason == null || s <= latestCompletedSeason));
+  const [cp, acq, draftResults] = await Promise.all([
+    computeChampionshipPath(userId, focalKey).catch(() => null),
+    computeAcquisitionImpact(userId, focalKey).catch(() => null),
+    Promise.all(playerSeasons.map((s) => computeDraftReality(s).catch(() => null))),
+  ]);
+  const readiness = buildReadiness({ cp, acq, draftResults, ownerName: why.ownerName, playoffTrips, seasonsPlayed, primary });
+  const patterns = buildPatterns({ cp, flatRS, resolved, allGmRows, playoffTrips, seasonsPlayed });
+
   const careerArc = computeArc({ titles, isReigning, runnerUps, winRate: careerWinRate, primary });
   const careerStory = buildStory({
     mode, titles, championSeasons, isReigning, primary, secondary, runnerUps, playoffTrips,
@@ -231,7 +258,7 @@ export async function computeCareerReport(
 
   return {
     leagueId, ownerKey: resolved.profileOwnerKey, ownerName: why.ownerName, isSetupComplete: why.isSetupComplete,
-    mode, title, subtitle, careerArc, careerStory, snapshot, timeline, topReasons: why.findings,
+    mode, title, subtitle, careerArc, careerStory, snapshot, timeline, readiness, patterns, topReasons: why.findings,
     confidence: why.confidence, dataCoverage, note: why.note,
   };
 }
@@ -295,4 +322,107 @@ function buildStory(c: {
     }
   }
   return s.join(" ");
+}
+
+
+// ===== Phase 1b helpers: Championship Readiness + Pattern Detection =====
+function rdAvg(xs: number[]): number { return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0; }
+function rdClamp(n: number): number { return Math.max(0, Math.min(100, n)); }
+function activityAlignmentScore(primary: string | null): number {
+  switch (primary) {
+    case "Roster Builder":
+    case "Waiver Aggressive":
+    case "Trade Opportunist": return 85;
+    case "High Activity": return 75;
+    case "Draft-and-Hold": return 45;
+    case "Low Activity": return 35;
+    default: return 60;
+  }
+}
+function buildReadiness(a: {
+  cp: Awaited<ReturnType<typeof computeChampionshipPath>> | null;
+  acq: Awaited<ReturnType<typeof computeAcquisitionImpact>> | null;
+  draftResults: Array<Awaited<ReturnType<typeof computeDraftReality>> | null>;
+  ownerName: string; playoffTrips: number; seasonsPlayed: number; primary: string | null;
+}): ChampionshipReadiness | null {
+  const comps: ReadinessComponent[] = [];
+  if (a.cp) {
+    const posScores: number[] = [];
+    for (const pos of ["QB", "RB", "WR", "TE"]) {
+      const champ = Number((a.cp.championProfile as any)?.[pos] ?? 0);
+      const own = Number((a.cp.ownerProfile as any)?.[pos] ?? 0);
+      if (champ > 0) posScores.push(rdClamp((100 * own) / champ));
+    }
+    if (posScores.length) comps.push({ key: "positional", label: "Positional strength", score: Math.round(rdAvg(posScores)), weight: 0.40 });
+  }
+  const playoffRate = a.seasonsPlayed > 0 ? a.playoffTrips / a.seasonsPlayed : 0;
+  comps.push({ key: "playoff", label: "Playoff appearances", score: Math.round(rdClamp((playoffRate / 0.5) * 100)), weight: 0.15 });
+  if (a.acq && a.acq.focal) comps.push({ key: "acquisition", label: "In-season acquisitions", score: Math.round(rdClamp(a.acq.focal.acquisitionImpactScore)), weight: 0.15 });
+  const fk = personMergeKey(a.ownerName);
+  const dg: number[] = [];
+  const rg: number[] = [];
+  for (const dr of a.draftResults) {
+    if (!dr) continue;
+    const oi = dr.ownerImpacts.find((o) => personMergeKey(o.ownerName) === fk);
+    if (oi) { dg.push(oi.draftGrade); rg.push(oi.rosterMgmtGrade); }
+  }
+  if (dg.length) comps.push({ key: "draft", label: "Draft quality", score: Math.round(rdAvg(dg)), weight: 0.15 });
+  if (rg.length) comps.push({ key: "rosterMgmt", label: "Roster management", score: Math.round(rdAvg(rg)), weight: 0.10 });
+  comps.push({ key: "activity", label: "Activity alignment", score: activityAlignmentScore(a.primary), weight: 0.05 });
+  if (!comps.length) return null;
+  const totalW = comps.reduce((s, c) => s + c.weight, 0);
+  const score = Math.round(comps.reduce((s, c) => s + c.score * c.weight, 0) / totalW);
+  const tier = score >= 80 ? "Championship-Ready" : score >= 65 ? "Contender" : score >= 50 ? "Rising" : score >= 35 ? "Rebuilding" : "Foundation";
+  const positional = (a.cp && a.cp.positionGaps ? a.cp.positionGaps : []).map((g) => ({ position: g.position as string, ownerAvg: g.ownerAvg, championAvg: g.championAvg, gap: g.gap, gapPct: g.gapPct }));
+  const acts = a.cp && a.cp.recommendedActions && a.cp.recommendedActions.length ? a.cp.recommendedActions : (a.cp && a.cp.topImprovements ? a.cp.topImprovements : []);
+  return { score, tier, components: comps, positional, topActions: acts.slice(0, 4) };
+}
+function buildPatterns(a: {
+  cp: Awaited<ReturnType<typeof computeChampionshipPath>> | null;
+  flatRS: any[]; resolved: any; allGmRows: any[]; playoffTrips: number; seasonsPlayed: number;
+}): PatternStat[] {
+  const out: PatternStat[] = [];
+  const missed = Math.max(0, a.seasonsPlayed - a.playoffTrips);
+  out.push({ id: "missed", label: "Missed the playoffs", value: String(missed), detail: "out of " + a.seasonsPlayed + " seasons played", severity: missed > a.seasonsPlayed / 2 ? "high" : "medium" });
+  if (a.cp && a.cp.pointsForGap > 0) {
+    out.push({ id: "pfgap", label: "Points/season below champions", value: "-" + Math.round(a.cp.pointsForGap), detail: "average regular-season scoring deficit vs title teams", severity: a.cp.pointsForGap > 150 ? "high" : "medium" });
+  }
+  const gaps = a.cp && a.cp.positionGaps ? a.cp.positionGaps.filter((x) => x.gap > 0).slice(0, 2) : [];
+  for (const g of gaps) {
+    out.push({ id: "pos-" + g.position, label: "Below champion " + g.position, value: "-" + g.gap.toFixed(1) + " PPG", detail: "your " + g.position + "s average " + g.ownerAvg.toFixed(1) + " vs champion " + g.championAvg.toFixed(1), severity: g.gapPct >= 20 ? "high" : "medium" });
+  }
+  const gp = countGamePatterns(a.flatRS, a.resolved, a.allGmRows);
+  if (gp.realLosses > 0) {
+    out.push({ id: "close", label: "Close losses (within 10 pts)", value: String(gp.closeLosses), detail: "games that could have flipped a playoff push", severity: gp.closeLosses >= 10 ? "high" : "medium" });
+    out.push({ id: "lostchamp", label: "Lost to the eventual champion", value: String(gp.lostToChamp), detail: "head-to-head losses to that season's champion (full-scoring era)", severity: gp.lostToChamp >= 6 ? "high" : "medium" });
+  }
+  return out;
+}
+function countGamePatterns(flatRS: any[], resolved: any, allGmRows: any[]): { closeLosses: number; lostToChamp: number; realLosses: number } {
+  const focalTeamBySeason = new Map<number, number>();
+  for (const t of (resolved && resolved.ownerTeamRows ? resolved.ownerTeamRows : [])) focalTeamBySeason.set(Number(t.season), Number(t.teamId));
+  const champTeamBySeason = new Map<number, number>();
+  for (const t of allGmRows) if (Number(t.finalStanding) === 1) champTeamBySeason.set(Number(t.season), Number(t.teamId));
+  const realSeasons = new Set<number>();
+  for (const m of flatRS) if (Number(m.homeScore) > 50 || Number(m.awayScore) > 50) realSeasons.add(Number(m.season));
+  let closeLosses = 0, lostToChamp = 0, realLosses = 0;
+  for (const m of flatRS) {
+    if (!Number(m.isCompleted)) continue;
+    const s = Number(m.season);
+    if (!realSeasons.has(s)) continue;
+    const ft = focalTeamBySeason.get(s);
+    if (ft == null) continue;
+    const isHome = Number(m.homeTeamId) === ft;
+    const isAway = Number(m.awayTeamId) === ft;
+    if (!isHome && !isAway) continue;
+    const my = isHome ? Number(m.homeScore) : Number(m.awayScore);
+    const opp = isHome ? Number(m.awayScore) : Number(m.homeScore);
+    const oppTeam = isHome ? Number(m.awayTeamId) : Number(m.homeTeamId);
+    const lost = m.winnerTeamId != null ? Number(m.winnerTeamId) === oppTeam : my < opp;
+    if (!lost) continue;
+    realLosses++;
+    if (Math.abs(my - opp) <= 10) closeLosses++;
+    if (champTeamBySeason.get(s) === oppTeam) lostToChamp++;
+  }
+  return { closeLosses, lostToChamp, realLosses };
 }
