@@ -1,9 +1,9 @@
 /**
- * careerReportService.ts  (Phase 0)
+ * careerReportService.ts  (Phase 0 + timeline)
  *
  * Orchestrator for the "Why Haven't I Won?" flagship redesign. Produces the page
- * mode/title, the Career Arc label, the Career Story Header, the career snapshot, and
- * the preserved findings (top reasons).
+ * mode/title, the Career Arc label, the Career Story Header, the career snapshot, the
+ * season-by-season timeline, and the preserved findings (top reasons).
  *
  * FULL-HISTORY facts come from the SAME identity-merged pipeline that powers Owner
  * Profiles (resolveOwnerTeamsForProfile + computeOwnerProfileRecordBundle over gm_teams
@@ -24,6 +24,7 @@ import {
   loadOwnerProfileSharedData,
   loadFlatRegularSeasonMatchups,
   computeOwnerProfileRecordBundle,
+  cleanOwnerDisplay,
 } from "./ownerProfileService";
 
 export type CareerArc =
@@ -45,6 +46,18 @@ export type CareerSnapshot = {
   biggestThreat: string | null;      // Phase 5
 };
 
+export type SeasonCard = {
+  season: number;
+  finish: number | null;             // finalStanding (null/0 -> in progress)
+  record: string;                    // "W-L" or "W-L-T"
+  pointsFor: number | null;
+  resultLabel: string;               // Champion / Runner-Up / 3rd Place / Nth Place / Missed Playoffs / In Progress
+  isChampion: boolean;
+  isRunnerUp: boolean;
+  championName: string | null;       // who won the league that season
+  playerLevelAvailable: boolean;     // season >= 2021 (positional/draft/acq metrics exist)
+};
+
 export type CareerReport = {
   leagueId: string;
   ownerKey: string | null;
@@ -56,6 +69,7 @@ export type CareerReport = {
   careerArc: CareerArc | null;
   careerStory: string;
   snapshot: CareerSnapshot | null;
+  timeline: SeasonCard[];
   topReasons: WhyFinding[];
   confidence: WhyHaventIWonResult["confidence"];
   dataCoverage: { teamLevel: string; playerLevel: string };
@@ -89,6 +103,12 @@ function timesWord(n: number): string {
   return n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
 }
 
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
+}
+
 const BUILDER_PRIMARIES = new Set(["Roster Builder", "Waiver Aggressive", "Trade Opportunist"]);
 const PASSIVE_DNA = new Set(["Draft-and-Hold", "Low Activity"]);
 
@@ -106,7 +126,7 @@ export async function computeCareerReport(
     return {
       leagueId, ownerKey: why.ownerKey, ownerName: why.ownerName, isSetupComplete: why.isSetupComplete,
       mode: why.pageMode, title, subtitle, careerArc: null, careerStory: "", snapshot: null,
-      topReasons: why.findings, confidence: why.confidence, dataCoverage, note: note ?? why.note,
+      timeline: [], topReasons: why.findings, confidence: why.confidence, dataCoverage, note: note ?? why.note,
     };
   };
   if (!db || !why.ownerName) return minimal();
@@ -133,6 +153,17 @@ export async function computeCareerReport(
   const primary = dna?.primaryDNA ?? null;
   const secondary = dna?.secondaryDNA ?? null;
 
+  // Champion display name per season (for the timeline).
+  const championNameBySeason = new Map<number, string>();
+  let latestCompletedSeason: number | null = null;
+  for (const t of allGmRows) {
+    if (Number(t.finalStanding) === 1) {
+      const s = Number(t.season);
+      championNameBySeason.set(s, cleanOwnerDisplay(String(t.ownerName ?? "")) || "Unknown");
+      if (latestCompletedSeason == null || s > latestCompletedSeason) latestCompletedSeason = s;
+    }
+  }
+
   const seasonsPlayed = snap.seasons.length;
   const titles = snap.championships;
   const championSeasons = snap.champSeasons.slice().sort((a, b) => a - b);
@@ -141,18 +172,11 @@ export async function computeCareerReport(
   const bestFinish = finishes.length ? Math.min(...finishes) : null;
   // Playoff-trip proxy: final standing in the top 6 (the playoff bracket). The playoffSeed
   // column is populated for nearly every team, so it cannot mark qualifiers. Refined to true
-  // bracket participation in the timeline phase.
+  // bracket participation in a later phase.
   const playoffTrips = finishes.filter((f) => f <= 6).length;
   const games = snap.totalWins + snap.totalLosses + snap.totalTies;
   const careerWinRate = games > 0 ? snap.totalWins / games : 0;
 
-  let latestCompletedSeason: number | null = null;
-  for (const t of allGmRows) {
-    if (Number(t.finalStanding) === 1) {
-      const s = Number(t.season);
-      if (latestCompletedSeason == null || s > latestCompletedSeason) latestCompletedSeason = s;
-    }
-  }
   const hasWon = titles > 0;
   const isReigning = latestCompletedSeason != null && championSeasons.includes(latestCompletedSeason);
   const mode: WhyHaventIWonResult["pageMode"] = isReigning ? "why-you-won" : hasWon ? "why-you-broke-through" : "why-havent-won";
@@ -161,6 +185,34 @@ export async function computeCareerReport(
     : seasonsPlayed;
   const debut = snap.seasons.length ? Math.min(...snap.seasons) : null;
   const latestTitle = championSeasons.length ? Math.max(...championSeasons) : null;
+
+  // ---- Season timeline (oldest -> newest) ----
+  const timeline: SeasonCard[] = snap.seasonRecords
+    .slice()
+    .sort((a, b) => a.season - b.season)
+    .map((r) => {
+      const fs = r.finalStanding;
+      const resultLabel = r.isChampion ? "Champion"
+        : r.isRunnerUp ? "Runner-Up"
+        : r.isThirdPlace ? "3rd Place"
+        : fs == null || fs <= 0 ? "In Progress"
+        : fs <= 6 ? `${ordinal(fs)} Place`
+        : "Missed Playoffs";
+      const ties = Number(r.ties ?? 0);
+      const record = `${r.wins}-${r.losses}${ties > 0 ? `-${ties}` : ""}`;
+      const hasMatchupPF = Number(r.pointsFor ?? 0) >= 100; // real fantasy total; pre-2018 stored win-indicators (PF==wins)
+      return {
+        season: r.season,
+        finish: fs ?? null,
+        record,
+        pointsFor: hasMatchupPF ? Math.round(Number(r.pointsFor ?? 0) * 10) / 10 : null,
+        resultLabel,
+        isChampion: !!r.isChampion,
+        isRunnerUp: !!r.isRunnerUp,
+        championName: championNameBySeason.get(r.season) ?? (r.isChampion ? (cleanOwnerDisplay(why.ownerName) || why.ownerName) : null),
+        playerLevelAvailable: r.season >= 2021,
+      };
+    });
 
   const careerArc = computeArc({ titles, isReigning, runnerUps, winRate: careerWinRate, primary });
   const careerStory = buildStory({
@@ -179,7 +231,7 @@ export async function computeCareerReport(
 
   return {
     leagueId, ownerKey: resolved.profileOwnerKey, ownerName: why.ownerName, isSetupComplete: why.isSetupComplete,
-    mode, title, subtitle, careerArc, careerStory, snapshot, topReasons: why.findings,
+    mode, title, subtitle, careerArc, careerStory, snapshot, timeline, topReasons: why.findings,
     confidence: why.confidence, dataCoverage, note: why.note,
   };
 }
