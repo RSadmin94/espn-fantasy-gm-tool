@@ -164,9 +164,9 @@ function BiggestThreatCard({ data, loading }: { data: ThreatData | undefined; lo
 
   const chips: string[] = [`${s.h2hRecordVsYou} vs you`];
   if (s.playoffEliminations > 0)
-    chips.push(`${s.playoffEliminations}\u00d7 knocked you out`);
-  if (s.championships > 0) chips.push(`${s.championships}\u00d7 champion`);
-  else if (s.runnerUps > 0) chips.push(`${s.runnerUps}\u00d7 finalist`);
+    chips.push(`${s.playoffEliminations}× knocked you out`);
+  if (s.championships > 0) chips.push(`${s.championships}× champion`);
+  else if (s.runnerUps > 0) chips.push(`${s.runnerUps}× finalist`);
   if (s.heatLabel) chips.push(`${s.heatLabel} rivalry`);
   if (s.exploitabilityLabel) chips.push(s.exploitabilityLabel);
 

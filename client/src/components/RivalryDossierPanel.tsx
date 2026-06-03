@@ -153,7 +153,7 @@ export function RivalryDossierPanel({
   if (q.isPending || q.isLoading) {
     return (
       <div className="flex items-center gap-2 py-8 text-sm" style={{ color: MUTED }}>
-        <Loader2 className="h-5 w-5 animate-spin" /> Loading rivalry dossier\u2026
+        <Loader2 className="h-5 w-5 animate-spin" /> Loading rivalry dossier…
       </div>
     );
   }
@@ -170,7 +170,7 @@ export function RivalryDossierPanel({
   if (!data) {
     return (
       <p className="text-sm" style={{ color: MUTED }}>
-        No dossier for this owner \u2014 they may not resolve against gmTeams / gmMatchups yet.
+        No dossier for this owner — they may not resolve against gmTeams / gmMatchups yet.
       </p>
     );
   }
@@ -187,7 +187,7 @@ export function RivalryDossierPanel({
             <h3 className="text-base font-extrabold uppercase tracking-[0.18em]">Rivalry Dossier</h3>
           </div>
           <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
-            Completed games (RS + playoffs) \u00b7 {data.matchupRowsUsed} deduped rows \u00b7 season {activeSeason ?? "\u2014"}
+            Completed games (RS + playoffs) · {data.matchupRowsUsed} deduped rows · season {activeSeason ?? "—"}
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-6">
@@ -209,7 +209,7 @@ export function RivalryDossierPanel({
               <select className="rounded-md px-2 py-1.5 text-sm min-w-[200px] max-w-full" style={FIELD} value={opponentKey} onChange={(e) => setOpponentKey(e.target.value)}>
                 {data.opponents.map((o) => (
                   <option key={o.opponentOwnerKey} value={o.opponentOwnerKey}>
-                    {o.opponentDisplayName} ({o.wins}\u2013{o.losses}{o.ties ? `\u2013${o.ties}` : ""})
+                    {o.opponentDisplayName} ({o.wins}–{o.losses}{o.ties ? `–${o.ties}` : ""})
                   </option>
                 ))}
               </select>
@@ -247,9 +247,9 @@ export function RivalryDossierPanel({
                   <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ border: `1px solid ${ACCENT}55`, background: "rgba(139,92,246,.10)", color: ACCENT }}>
                     {pd.focalTag}
                   </div>
-                  <p className="text-[11px]" style={{ color: MUTED }}>Active since {pd.firstMeetingSeason ?? "\u2014"}</p>
+                  <p className="text-[11px]" style={{ color: MUTED }}>Active since {pd.firstMeetingSeason ?? "—"}</p>
                   <p className="text-sm font-medium tabular-nums" style={{ color: TEXT }}>
-                    Record vs {pd.opponentDisplayName}: {pd.recordFocalVs.wins}\u2013{pd.recordFocalVs.losses}{pd.recordFocalVs.ties ? `\u2013${pd.recordFocalVs.ties}` : ""}
+                    Record vs {pd.opponentDisplayName}: {pd.recordFocalVs.wins}–{pd.recordFocalVs.losses}{pd.recordFocalVs.ties ? `–${pd.recordFocalVs.ties}` : ""}
                   </p>
                 </div>
               </div>
@@ -271,9 +271,9 @@ export function RivalryDossierPanel({
                   <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ border: `1px solid ${BLUE}55`, background: "rgba(139,92,246,.10)", color: BLUE }}>
                     {pd.opponentTag}
                   </div>
-                  <p className="text-[11px]" style={{ color: MUTED }}>Active since {pd.firstMeetingSeason ?? "\u2014"}</p>
+                  <p className="text-[11px]" style={{ color: MUTED }}>Active since {pd.firstMeetingSeason ?? "—"}</p>
                   <p className="text-sm font-medium tabular-nums" style={{ color: TEXT }}>
-                    Record vs {pd.focalDisplayName}: {pd.recordFocalVs.losses}\u2013{pd.recordFocalVs.wins}{pd.recordFocalVs.ties ? `\u2013${pd.recordFocalVs.ties}` : ""}
+                    Record vs {pd.focalDisplayName}: {pd.recordFocalVs.losses}–{pd.recordFocalVs.wins}{pd.recordFocalVs.ties ? `–${pd.recordFocalVs.ties}` : ""}
                   </p>
                 </div>
               </div>
@@ -282,11 +282,11 @@ export function RivalryDossierPanel({
 
           {/* Stat strip */}
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <StatCard icon={<Swords className="h-4 w-4" style={{ color: MUTED }} />} label="All-Time Record" value={`${pd.recordFocalVs.wins}\u2013${pd.recordFocalVs.losses}${pd.recordFocalVs.ties ? `\u2013${pd.recordFocalVs.ties}` : ""}`} sub="Head-to-head (RS + playoffs)" />
+            <StatCard icon={<Swords className="h-4 w-4" style={{ color: MUTED }} />} label="All-Time Record" value={`${pd.recordFocalVs.wins}–${pd.recordFocalVs.losses}${pd.recordFocalVs.ties ? `–${pd.recordFocalVs.ties}` : ""}`} sub="Head-to-head (RS + playoffs)" />
             <StatCard icon={<HeartCrack className="h-4 w-4" style={{ color: RED }} />} label="Heartbreak Index" value={String(pd.heartbreakLossesFocal)} sub="Losses by \u22643 pts" valueColor={RED} />
-            <StatCard icon={<Calendar className="h-4 w-4" style={{ color: MUTED }} />} label="Last Meeting" value={pd.lastMeeting ? `${pd.lastMeeting.season} \u00b7 Wk ${pd.lastMeeting.week}` : "\u2014"} sub={pd.lastMeeting ? `${pd.lastMeeting.result} ${pd.lastMeeting.ownerScore.toFixed(1)}\u2013${pd.lastMeeting.opponentScore.toFixed(1)}` : "\u2014"} />
+            <StatCard icon={<Calendar className="h-4 w-4" style={{ color: MUTED }} />} label="Last Meeting" value={pd.lastMeeting ? `${pd.lastMeeting.season} · Wk ${pd.lastMeeting.week}` : "—"} sub={pd.lastMeeting ? `${pd.lastMeeting.result} ${pd.lastMeeting.ownerScore.toFixed(1)}–${pd.lastMeeting.opponentScore.toFixed(1)}` : "—"} />
             <StatCard icon={<Trophy className="h-4 w-4" style={{ color: GOLD }} />} label="Playoff Encounters" value={String(pd.playoffEncounters)} sub="From playoff gmMatchups" />
-            <StatCard icon={<Crosshair className="h-4 w-4" style={{ color: ACCENT }} />} label="Waiver Snipes" value={pd.waiverSnipes.available ? String(pd.waiverSnipes.count) : "\u2014"} sub={pd.waiverSnipes.available ? "Detected from transactions" : pd.waiverSnipes.label} />
+            <StatCard icon={<Crosshair className="h-4 w-4" style={{ color: ACCENT }} />} label="Waiver Snipes" value={pd.waiverSnipes.available ? String(pd.waiverSnipes.count) : "—"} sub={pd.waiverSnipes.available ? "Detected from transactions" : pd.waiverSnipes.label} />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
@@ -363,9 +363,9 @@ export function RivalryDossierPanel({
                 if (firstPlayoff)
                   evs.push({ season: firstPlayoff.season, title: "First Playoff Meeting", detail: fmt(firstPlayoff) });
                 if (closest)
-                  evs.push({ season: closest.season, title: "Closest Game", detail: `${Math.abs(closest.margin).toFixed(1)} pt margin \u00b7 ${fmt(closest)}` });
+                  evs.push({ season: closest.season, title: "Closest Game", detail: `${Math.abs(closest.margin).toFixed(1)} pt margin · ${fmt(closest)}` });
                 if (blowout && Math.abs(blowout.margin) > 0)
-                  evs.push({ season: blowout.season, title: "Biggest Blowout", detail: `${Math.abs(blowout.margin).toFixed(1)} pt margin \u00b7 ${fmt(blowout)}` });
+                  evs.push({ season: blowout.season, title: "Biggest Blowout", detail: `${Math.abs(blowout.margin).toFixed(1)} pt margin · ${fmt(blowout)}` });
                 if (pd.lastMeeting)
                   evs.push({ season: pd.lastMeeting.season, title: "Latest Showdown", detail: fmt(pd.lastMeeting) });
                 const seen = new Set<string>();
@@ -416,7 +416,7 @@ export function RivalryDossierPanel({
               </div>
             ) : (
               <div className="flex min-h-[140px] items-center justify-center rounded-[8px] border border-dashed text-sm" style={{ borderColor: "rgba(255,255,255,.08)", color: MUTED }}>
-                Matchup History Chart \u2014 Coming Soon
+                Matchup History Chart — Coming Soon
               </div>
             )}
           </div>

@@ -38,7 +38,7 @@ export function CommandDashboard(){
   const topSurprise = bySurprise[0];
   const topRun = topRuns[0];
 
-  const memo = loading ? "Loading league intelligence\u2026"
+  const memo = loading ? "Loading league intelligence…"
     : meters.length===0 ? "Sync your league to generate today's GM briefing."
     : `Draft prep is live. ${topSurprise ? firstName(topSurprise.ownerName)+" is your least predictable rival ("+(topSurprise.mostLikelyPosition||"flex")+" lean). " : ""}${topRun ? topRun.position+" run risk is the strongest board signal. " : ""}Protect leverage where value is thin.`;
 
@@ -63,14 +63,14 @@ export function CommandDashboard(){
     { t:"Owner Profiles", to:"/owner-profiles", d:"Owner DNA, historical behavior, and dossiers." },
   ];
   const actions = [
-    { t:"Open Draft War Room", to:"/draft-war-room", d: topRun?`${topRun.position} run risk building \u2014 get owner-risk context.`:"Next pick needs owner-risk context.", cta:"Review" },
+    { t:"Open Draft War Room", to:"/draft-war-room", d: topRun?`${topRun.position} run risk building — get owner-risk context.`:"Next pick needs owner-risk context.", cta:"Review" },
     { t:"Scan Owner DNA", to:"/owner-profiles", d: topSurprise?`${firstName(topSurprise.ownerName)} is trending unpredictable.`:"Review owner tendencies.", cta:"Analyze" },
     { t:"Check Keeper Lab", to:"/keeper-advisor", d:"Confirm your value holds before the draft.", cta:"Compare" },
   ];
   const rings = [
     { v: ownerCoverage, label:"Owner Read", sub:`${meters.length}/${teamCount||"?"} profiled`, color:TEAL },
     { v: avgPredict, label:"Predictability", sub:"League avg", color:GOLD },
-    { v: topRun?Math.round(topRun.confidence??0):0, label:"Top Signal", sub: topRun?`${topRun.position} run`:"\u2014", color:BLUE },
+    { v: topRun?Math.round(topRun.confidence??0):0, label:"Top Signal", sub: topRun?`${topRun.position} run`:"—", color:BLUE },
   ];
   const readinessTable = [
     { k:"Owners profiled", v:`${meters.length}/${teamCount||"?"}` },
@@ -127,7 +127,7 @@ export function CommandDashboard(){
         <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
           <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Zap className="h-5 w-5" style={{color:ACCENT}}/> Data Health</h3>
           <div className="grid grid-cols-2 gap-2.5 mt-4">
-            {[{b:"League",s:d.ok?"Synced":"\u2014"},{b:"Draft",s:(d.totalPicks??0)>0?"Live":"Indexed"},{b:"Owners",s:meters.length?`${meters.length} read`:"\u2014"},{b:"AI Memo",s:d.confidenceDashboard?"Ready":"\u2014"}].map((x:any,i:number)=>(
+            {[{b:"League",s:d.ok?"Synced":"—"},{b:"Draft",s:(d.totalPicks??0)>0?"Live":"Indexed"},{b:"Owners",s:meters.length?`${meters.length} read`:"—"},{b:"AI Memo",s:d.confidenceDashboard?"Ready":"—"}].map((x:any,i:number)=>(
               <div key={i} style={SUB} className="p-3"><b className="block mb-1">{x.b}</b><span className="inline-block px-2 py-1 rounded-lg text-xs font-extrabold" style={{background:"rgba(163,230,53,.10)",border:"1px solid rgba(163,230,53,.33)",color:TEAL}}>{x.s}</span></div>
             ))}
           </div>
@@ -180,7 +180,7 @@ export function CommandDashboard(){
           <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Newspaper className="h-5 w-5" style={{color:ACCENT}}/> League Receipts</h3>
           <p className="text-xs mt-1" style={{color:MUTED}}>Behavioral evidence pulled from your league's draft signals.</p>
           <div className="mt-3">
-            {receipts.length===0 && <div className="text-sm py-6 text-center" style={{color:MUTED}}>No receipts generated yet \u2014 sync draft history to populate.</div>}
+            {receipts.length===0 && <div className="text-sm py-6 text-center" style={{color:MUTED}}>No receipts generated yet — sync draft history to populate.</div>}
             {receipts.map((r:any,i:number)=>(
               <div key={i} className="grid items-center gap-3 h-[55px] text-sm" style={{gridTemplateColumns:"96px 1fr 74px",borderTop:"1px solid rgba(255,255,255,.06)"}}>
                 <b style={{color:TEAL}}>{r.owner}</b><span className="truncate" title={r.text}>{r.text}</span>

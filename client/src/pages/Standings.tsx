@@ -348,7 +348,7 @@ export function Standings() {
           <SectionHead
             icon={Trophy}
             title={`${season} ${mode === "final" ? "Final" : "Regular season"} standings`}
-            caption="Logos, records, scoring splits and roster moves \u2014 sorted by the active tiebreak."
+            caption="Logos, records, scoring splits and roster moves — sorted by the active tiebreak."
           />
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[860px] border-collapse text-sm">
@@ -466,7 +466,7 @@ export function Standings() {
                         {diff.text}
                       </td>
                       <td className="px-2 py-2.5 text-center font-mono text-xs tabular-nums" style={{ color: MUTED }}>
-                        {txsQ.isLoading ? "\u2026" : moves}
+                        {txsQ.isLoading ? "…" : moves}
                       </td>
                     </tr>
                   );

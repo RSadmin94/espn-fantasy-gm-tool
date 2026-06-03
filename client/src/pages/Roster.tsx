@@ -135,7 +135,7 @@ const INJURY_COLORS: Record<string, string> = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(n: number | null | undefined, decimals = 1) {
-  if (n == null) return "\u2014";
+  if (n == null) return "—";
   return Number(n).toFixed(decimals);
 }
 
@@ -319,17 +319,17 @@ function RosterTable({
                     <>
                       <td className="px-3 py-2.5 text-right">
                         {warRoomLoading ? (
-                          <span className="text-xs tabular-nums" style={{ color: MUTED }}>\u2026</span>
+                          <span className="text-xs tabular-nums" style={{ color: MUTED }}>…</span>
                         ) : warRoomFailed ? (
                           <span className="text-xs" style={{ color: MUTED }} title="Draft War Room unavailable">
-                            \u2014
+                            —
                           </span>
                         ) : !hasPred ? (
                           <span className="text-xs" style={{ color: MUTED }} title="No keeper predictions for this season">
-                            \u2014
+                            —
                           </span>
                         ) : !wr ? (
-                          <span className="text-xs" style={{ color: MUTED }}>\u2014</span>
+                          <span className="text-xs" style={{ color: MUTED }}>—</span>
                         ) : (
                           (() => {
                             const colorClass =
@@ -624,7 +624,7 @@ export function Roster() {
               title={
                 <>
                   {selectedTeam
-                    ? `${selectedTeam.teamName}${selectedTeam.owners ? ` \u2014 ${selectedTeam.owners}` : ""}`
+                    ? `${selectedTeam.teamName}${selectedTeam.owners ? ` — ${selectedTeam.owners}` : ""}`
                     : `Team ${teamId}`}
                   <span className="ml-2 text-sm font-normal" style={{ color: MUTED }}>&middot; {season}</span>
                 </>
@@ -745,7 +745,7 @@ export function Roster() {
                                 <span className={cn("text-xs font-bold", KA_POS[k.position] ?? "text-zinc-400")}>{k.position}</span>
                               </td>
                               <td className="px-3 py-2.5 text-center">
-                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ color: MUTED, background: "rgba(255,255,255,.06)" }}>{k.nflTeam || "\u2014"}</span>
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ color: MUTED, background: "rgba(255,255,255,.06)" }}>{k.nflTeam || "—"}</span>
                               </td>
                               <td className="px-3 py-2.5 text-center">
                                 <span className={cn("text-xs font-bold tabular-nums",

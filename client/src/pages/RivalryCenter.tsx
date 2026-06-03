@@ -284,7 +284,7 @@ export function RivalryCenter() {
     const mk = (lp: any, title: string, detail: string): M => ({ title, a: lp.aName, b: lp.bName, aKey: lp.aKey, bKey: lp.bKey, detail });
     const out: M[] = [];
     const bitter = ps[0];
-    if (bitter) out.push(mk(bitter, "Most Bitter Rivalry", `Rivalry score ${bitter.score} \u00b7 ${bitter.meetings} meetings`));
+    if (bitter) out.push(mk(bitter, "Most Bitter Rivalry", `Rivalry score ${bitter.score} · ${bitter.meetings} meetings`));
     const longest = [...ps].sort((a, b) => b.meetings - a.meetings)[0];
     if (longest) out.push(mk(longest, "Longest Grudge", `${longest.meetings} all-time meetings`));
     const playoff = [...ps].filter((p) => p.playoff > 0).sort((a, b) => b.playoff - a.playoff)[0];
@@ -340,7 +340,7 @@ export function RivalryCenter() {
             className="px-3 py-2.5 rounded-[10px] text-[13px] font-extrabold inline-flex items-center gap-2"
             style={{ border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: MUTED }}
           >
-            <RefreshCw className="h-3.5 w-3.5" /> {refreshScores.isPending ? "Generating\u2026" : "Refresh"}
+            <RefreshCw className="h-3.5 w-3.5" /> {refreshScores.isPending ? "Generating…" : "Refresh"}
           </button>
         </div>
       </div>
@@ -348,7 +348,7 @@ export function RivalryCenter() {
       <main className="space-y-3">
         {loading ? (
           <Panel>
-            <div className="py-16 text-center text-sm" style={{ color: MUTED }}>Loading league rivalries\u2026</div>
+            <div className="py-16 text-center text-sm" style={{ color: MUTED }}>Loading league rivalries…</div>
           </Panel>
         ) : allEmpty ? (
           <Panel>
@@ -416,9 +416,9 @@ export function RivalryCenter() {
             {/* ── The Ledger (league-wide power rankings) ────────── */}
             <div className="grid gap-3 lg:grid-cols-2 items-start">
             <Panel>
-              <SectionHead icon={Flame} title="The Ledger" caption="League rivalry power rankings \u2014 every pairing in league history." />
+              <SectionHead icon={Flame} title="The Ledger" caption="League rivalry power rankings — every pairing in league history." />
               {leagueLoading ? (
-                <div className="py-8 text-center text-sm" style={{ color: MUTED }}>Reading every head-to-head in league history\u2026</div>
+                <div className="py-8 text-center text-sm" style={{ color: MUTED }}>Reading every head-to-head in league history…</div>
               ) : leaguePairs.length === 0 ? (
                 <p className="py-6 text-sm" style={{ color: MUTED }}>Not enough cross-league matchup history yet.</p>
               ) : (
@@ -470,7 +470,7 @@ export function RivalryCenter() {
                     className="ml-1 rounded-md px-3 py-1 text-xs font-extrabold"
                     style={{ background: ACCENT, color: "#1e1623" }}
                   >
-                    {refreshScores.isPending ? "Generating\u2026" : "Generate my rivalry scores"}
+                    {refreshScores.isPending ? "Generating…" : "Generate my rivalry scores"}
                   </button>
                 </div>
               )}
@@ -492,7 +492,7 @@ export function RivalryCenter() {
                           <HeatBadge label={p.heatLabel} />
                         </div>
                         <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs" style={{ color: MUTED }}>
-                          <span>Series <b style={{ color: TEXT }}>{n(p.h2hWins)}\u2013{n(p.h2hLosses)}{n(p.h2hTies) ? `\u2013${n(p.h2hTies)}` : ""}</b></span>
+                          <span>Series <b style={{ color: TEXT }}>{n(p.h2hWins)}–{n(p.h2hLosses)}{n(p.h2hTies) ? `–${n(p.h2hTies)}` : ""}</b></span>
                           <span>Playoff elims <b style={{ color: TEXT }}>{n(p.playoffEliminations)}</b></span>
                           <span>Heartbreak losses <b style={{ color: TEXT }}>{n(p.closeLossCount)}</b></span>
                         </div>
@@ -536,7 +536,7 @@ export function RivalryCenter() {
               <Panel>
                 <SectionHead icon={Users} title="The Matrix" caption="Each cell is the row owner's all-time record vs the column owner. Tap a cell for the dossier." />
                 {leagueLoading ? (
-                  <div className="py-8 text-center text-sm" style={{ color: MUTED }}>Building the grid\u2026</div>
+                  <div className="py-8 text-center text-sm" style={{ color: MUTED }}>Building the grid…</div>
                 ) : (
                   <div className="mt-4 overflow-x-auto">
                     <table className="border-collapse text-center text-xs">
@@ -554,10 +554,10 @@ export function RivalryCenter() {
                             <td className="sticky left-0 z-10 whitespace-nowrap px-2 py-1.5 text-left font-bold" style={{ background: PAPER2, color: TEXT }}>{rw.name}</td>
                             {gridOwners.map((c) => {
                               if (c.key === rw.key)
-                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "#3a3d44" }}>\u2014</td>;
+                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "#3a3d44" }}>—</td>;
                               const rec = recordMap[rw.key]?.[c.key];
                               if (!rec || rec.w + rec.l + rec.t === 0)
-                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "#3a3d44" }}>\u00b7</td>;
+                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "#3a3d44" }}>·</td>;
                               const win = rec.w > rec.l;
                               const lose = rec.l > rec.w;
                               return (
@@ -596,7 +596,7 @@ export function RivalryCenter() {
                     >
                       <div className="min-w-0">
                         <div className="truncate font-bold">{nm.name}</div>
-                        <div className="text-xs" style={{ color: MUTED }}>Nemesis: <span style={{ color: RED }}>{nm.rivalName}</span> \u00b7 {nm.name} is {nm.w}-{nm.l} vs them</div>
+                        <div className="text-xs" style={{ color: MUTED }}>Nemesis: <span style={{ color: RED }}>{nm.rivalName}</span> · {nm.name} is {nm.w}-{nm.l} vs them</div>
                       </div>
                       <span className="shrink-0 text-sm font-black tabular-nums" style={{ color: RED }}>{Math.round(100 - nm.pct)}%</span>
                     </button>
@@ -632,7 +632,7 @@ export function RivalryCenter() {
                   if (p.revengeAchieved && n(p.playoffEliminations) > 0) {
                     out.push({
                       season: p.lastMatchupSeason ?? null,
-                      evidence: `Revenge served \u2014 Rod struck back against ${name}.`,
+                      evidence: `Revenge served — Rod struck back against ${name}.`,
                       impact: "Receipt collected",
                       tone: "good",
                     });
@@ -640,13 +640,13 @@ export function RivalryCenter() {
                 }
                 out.sort((a, b) => (b.season ?? 0) - (a.season ?? 0));
                 if (out.length === 0)
-                  return <p className="py-6 text-sm" style={{ color: MUTED }}>No receipts on file yet \u2014 the data hasn't surfaced a defining moment.</p>;
+                  return <p className="py-6 text-sm" style={{ color: MUTED }}>No receipts on file yet — the data hasn't surfaced a defining moment.</p>;
                 return (
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     {out.slice(0, 8).map((r, i) => (
                       <div key={i} style={SUB} className="p-4">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold uppercase tracking-widest" style={{ color: MUTED }}>{r.season ?? "\u2014"}</span>
+                          <span className="text-xs font-bold uppercase tracking-widest" style={{ color: MUTED }}>{r.season ?? "—"}</span>
                           <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: r.tone === "good" ? GOLD : RED }}>{r.impact}</span>
                         </div>
                         <p className="mt-2 text-[15px] leading-snug">{r.evidence}</p>
@@ -660,7 +660,7 @@ export function RivalryCenter() {
             {/* ── Revenge Watch + Trophies ───────────────────────── */}
             <div className="grid gap-3 md:grid-cols-2">
               <Panel>
-                <SectionHead icon={Crosshair} title="Revenge Watch" caption="Unfinished business \u2014 outstanding playoff debts." iconColor={RED} />
+                <SectionHead icon={Crosshair} title="Revenge Watch" caption="Unfinished business — outstanding playoff debts." iconColor={RED} />
                 {(() => {
                   const rev = pairs.filter((p) => n(p.playoffEliminations) > 0 && !p.revengeAchieved);
                   if (rev.length === 0)
@@ -671,7 +671,7 @@ export function RivalryCenter() {
                         <button key={i} onClick={() => openDossier(p)} style={SUB} className="flex w-full items-center justify-between p-3 text-left transition-colors hover:brightness-125">
                           <div>
                             <div className="font-bold">{String(p.rivalName)}</div>
-                            <div className="text-xs" style={{ color: MUTED }}>Eliminated Rod {n(p.playoffEliminations)}\u00d7 \u00b7 revenge pending</div>
+                            <div className="text-xs" style={{ color: MUTED }}>Eliminated Rod {n(p.playoffEliminations)}× · revenge pending</div>
                           </div>
                           <Skull className="h-5 w-5" style={{ color: RED }} />
                         </button>
@@ -694,7 +694,7 @@ export function RivalryCenter() {
                     { icon: <Skull className="h-4 w-4" />, t: "The Nemesis", who: nemesis?.rivalName, d: `Highest rivalry score (${n(nemesis?.rivalryScore)})` },
                     { icon: <HeartCrack className="h-4 w-4" />, t: "Heartbreak Dealer", who: dealer?.rivalName, d: `${n(dealer?.playoffEliminations)} playoff eliminations of Rod` },
                     { icon: <Flame className="h-4 w-4" />, t: "House of Pain", who: pain?.rivalName, d: `${n(pain?.closeLossCount)} heartbreak losses` },
-                    { icon: <Crown className="h-4 w-4" />, t: "Rod Owns Them", who: king?.rivalName, d: `Best series margin (${n(king?.h2hWins)}\u2013${n(king?.h2hLosses)})` },
+                    { icon: <Crown className="h-4 w-4" />, t: "Rod Owns Them", who: king?.rivalName, d: `Best series margin (${n(king?.h2hWins)}–${n(king?.h2hLosses)})` },
                   ].filter((x) => x.who);
                   return (
                     <div className="mt-4 grid gap-2">
@@ -733,7 +733,7 @@ export function RivalryCenter() {
               <div className="flex items-center gap-2" style={{ color: ACCENT }}>
                 <Swords className="h-4 w-4" />
                 <span className="text-[11px] font-bold uppercase tracking-[0.35em]">Rivalry Dossier</span>
-                <span className="text-sm font-bold" style={{ color: TEXT }}>\u00b7 {open.focalName ?? "Rod"} vs {open.rivalName}</span>
+                <span className="text-sm font-bold" style={{ color: TEXT }}>· {open.focalName ?? "Rod"} vs {open.rivalName}</span>
               </div>
               <button onClick={() => setOpen(null)} className="flex h-8 w-8 items-center justify-center rounded-full border" style={{ borderColor: LINE, color: TEXT }} aria-label="Close">
                 <X className="h-4 w-4" />
@@ -758,13 +758,13 @@ export function RivalryCenter() {
 
 // ── Hero stat strip ─────────────────────────────────────────────────────────
 function HeroStrip({ p }: { p: Pair }) {
-  const series = `${n(p.h2hWins)}\u2013${n(p.h2hLosses)}${n(p.h2hTies) ? `\u2013${n(p.h2hTies)}` : ""}`;
+  const series = `${n(p.h2hWins)}–${n(p.h2hLosses)}${n(p.h2hTies) ? `–${n(p.h2hTies)}` : ""}`;
   const playoff =
     p.rivalPlayoffWins != null || p.rivalPlayoffLosses != null
-      ? `${n(p.rivalPlayoffWins)}\u2013${n(p.rivalPlayoffLosses)}`
+      ? `${n(p.rivalPlayoffWins)}–${n(p.rivalPlayoffLosses)}`
       : `${n(p.playoffEliminations)} elim`;
-  const heartbreak = p.painfulLossMargin != null ? `${Number(p.painfulLossMargin).toFixed(1)} pts` : "\u2014";
-  const last = p.lastMatchupSeason != null ? String(p.lastMatchupSeason) : "\u2014";
+  const heartbreak = p.painfulLossMargin != null ? `${Number(p.painfulLossMargin).toFixed(1)} pts` : "—";
+  const last = p.lastMatchupSeason != null ? String(p.lastMatchupSeason) : "—";
   const cells: Array<[string, string]> = [
     ["Series Record", series],
     ["Playoff Record", playoff],
