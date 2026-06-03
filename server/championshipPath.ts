@@ -71,6 +71,7 @@ export type ChampionshipPathResult = {
   pointsForGap: number;                 // champion PF - owner PF (per season)
   closestChampion: ChampionComparison | null;
   biggestThreat: PathThreat | null;     // rival who most blocks the path
+  biggestRival: PathThreat | null;      // most-contested opponent (longest H2H history)
   topImprovements: string[];            // top 3 required improvements
   draftContext: string | null;          // from Draft Reality outputs
   pastReasonContext: string | null;     // from Why Haven't I Won findings
@@ -237,6 +238,28 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
     }
   }
 
+  // Biggest rival = the opponent faced most often (longest, most-contested history),
+  // tie-broken by how close the all-time record is. Distinct from biggestThreat (who beats
+  // you most): a rival can be someone you are near-even with but have battled the most.
+  let biggestRival: PathThreat | null = null;
+  let bestRivalScore = -1;
+  for (const [g, rec] of h2h) {
+    const games = rec.w + rec.l;
+    if (games < 3) continue; // need a meaningful sample
+    const score = games * 10 - Math.abs(rec.w - rec.l);
+    if (score > bestRivalScore) {
+      bestRivalScore = score;
+      const nm = nameByOwner.get(g) ?? "A rival";
+      biggestRival = {
+        ownerName: nm,
+        record: `${rec.w}-${rec.l}`,
+        netLosses: rec.l - rec.w,
+        playoffLosses: rec.playoffL,
+        detail: `You have faced ${nm} ${games} times (${rec.w}-${rec.l})${rec.playoffL > 0 ? `, with ${rec.playoffL} playoff loss${rec.playoffL > 1 ? "es" : ""}` : ""} -- your most-contested matchup.`,
+      };
+    }
+  }
+
   // ── Cross-engine context: Why Haven't I Won + Draft Reality ───────────
   let pastReasonContext: string | null = null;
   let draftContext: string | null = null;
@@ -309,7 +332,7 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
     championProfile, championAvgPointsFor, championAvgWins,
     ownerProfile, ownerAvgPointsFor,
     positionGaps, biggestWeakness, pointsForGap, closestChampion,
-    biggestThreat, topImprovements: topImprovements.slice(0, 3), draftContext, pastReasonContext,
+    biggestThreat, biggestRival, topImprovements: topImprovements.slice(0, 3), draftContext, pastReasonContext,
     recommendedActions, headline, narrative, confidence,
   };
 }
@@ -321,7 +344,7 @@ function emptyResult(leagueId: string, ownerName: string, isSetupComplete: boole
     championProfile: zero, championAvgPointsFor: 0, championAvgWins: 0,
     ownerProfile: zero, ownerAvgPointsFor: 0,
     positionGaps: [], biggestWeakness: null, pointsForGap: 0, closestChampion: null,
-    biggestThreat: null, topImprovements: [], draftContext: null, pastReasonContext: null,
+    biggestThreat: null, biggestRival: null, topImprovements: [], draftContext: null, pastReasonContext: null,
     recommendedActions: [], headline: "Not enough data yet.", narrative: note, confidence: "Limited", note,
   };
 }

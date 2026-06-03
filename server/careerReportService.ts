@@ -171,25 +171,48 @@ export async function computeCareerReport(
 
   // Champion display name per season (for the timeline).
   const championNameBySeason = new Map<number, string>();
+  const minFsBySeason = new Map<number, number>();
   let latestCompletedSeason: number | null = null;
   for (const t of allGmRows) {
-    if (Number(t.finalStanding) === 1) {
-      const s = Number(t.season);
-      championNameBySeason.set(s, cleanOwnerDisplay(String(t.ownerName ?? "")) || "Unknown");
+    const s = Number(t.season);
+    const fsRaw = Number(t.finalStanding);
+    if (fsRaw > 0) {
+      if (!minFsBySeason.has(s) || fsRaw < (minFsBySeason.get(s) as number)) minFsBySeason.set(s, fsRaw);
       if (latestCompletedSeason == null || s > latestCompletedSeason) latestCompletedSeason = s;
     }
   }
+  // Champion per season = the rank-1 team (finalStanding == that season's minimum). This backfills
+  // pre-2018 winners too, since pre-2018 the champion is stored as finalStanding == 2, not 1.
+  for (const ct of allGmRows) {
+    const cs = Number(ct.season);
+    const cfs = Number(ct.finalStanding);
+    if (cfs > 0 && cfs === minFsBySeason.get(cs)) {
+      championNameBySeason.set(cs, cleanOwnerDisplay(String(ct.ownerName ?? "")) || "Unknown");
+    }
+  }
+  // Pre-2018 finalStanding for this league is offset by +1 (best team stored as 2, not 1, with
+  // no rank-1 present). Detect the offset per season dynamically (subtract that season's minimum
+  // standing) so the corrected rank is always 1-based; 2018+ already start at 1 -> unchanged.
+  const rankOf = (season: number, fs: number | null | undefined): number | null => {
+    const f = Number(fs);
+    if (!f || f <= 0) return null;
+    return f - (minFsBySeason.get(season) ?? 1) + 1;
+  };
 
   const seasonsPlayed = snap.seasons.length;
   const titles = snap.championships;
   const championSeasons = snap.champSeasons.slice().sort((a, b) => a - b);
   const runnerUps = snap.runnerUps;
-  const finishes = snap.seasonRecords.map((r) => r.finalStanding).filter((x): x is number => x != null && x > 0);
-  const bestFinish = finishes.length ? Math.min(...finishes) : null;
-  // Playoff-trip proxy: final standing in the top 6 (the playoff bracket). The playoffSeed
-  // column is populated for nearly every team, so it cannot mark qualifiers. Refined to true
-  // bracket participation in a later phase.
-  const playoffTrips = finishes.filter((f) => f <= 6).length;
+  const correctedRanks = snap.seasonRecords
+    .map((r) => rankOf(r.season, r.finalStanding))
+    .filter((x): x is number => x != null && x > 0);
+  const bestFinish = correctedRanks.length ? Math.min(...correctedRanks) : null;
+  // True playoff-bracket participation: offset-corrected final placement in the top 6. The
+  // championship bracket produces final placements 1-6; consolation teams land 7+. (isPlayoff on
+  // matchups is unusable here -- it also flags consolation games, so every team would qualify.)
+  const playoffTrips = snap.seasonRecords
+    .filter((r) => { const cr = rankOf(r.season, r.finalStanding); return cr != null && cr <= 6; })
+    .length;
   const games = snap.totalWins + snap.totalLosses + snap.totalTies;
   const careerWinRate = games > 0 ? snap.totalWins / games : 0;
 
@@ -208,18 +231,19 @@ export async function computeCareerReport(
     .sort((a, b) => a.season - b.season)
     .map((r) => {
       const fs = r.finalStanding;
+      const place = rankOf(r.season, fs);
       const resultLabel = r.isChampion ? "Champion"
         : r.isRunnerUp ? "Runner-Up"
         : r.isThirdPlace ? "3rd Place"
-        : fs == null || fs <= 0 ? "In Progress"
-        : fs <= 6 ? `${ordinal(fs)} Place`
+        : place == null ? "In Progress"
+        : place <= 6 ? `${ordinal(place)} Place`
         : "Missed Playoffs";
       const ties = Number(r.ties ?? 0);
       const record = `${r.wins}-${r.losses}${ties > 0 ? `-${ties}` : ""}`;
       const hasMatchupPF = Number(r.pointsFor ?? 0) >= 100; // real fantasy total; pre-2018 stored win-indicators (PF==wins)
       return {
         season: r.season,
-        finish: fs ?? null,
+        finish: place,
         record,
         pointsFor: hasMatchupPF ? Math.round(Number(r.pointsFor ?? 0) * 10) / 10 : null,
         resultLabel,
@@ -253,7 +277,9 @@ export async function computeCareerReport(
     championshipDrought: drought, runnerUps,
     careerWinRate: Math.round(careerWinRate * 1000) / 1000,
     activityDna: { primary, secondary },
-    leagueDnaRank: null, biggestRival: null, biggestThreat: null,
+    leagueDnaRank: null,
+    biggestRival: cp?.biggestRival?.ownerName ?? null,
+    biggestThreat: cp?.biggestThreat?.ownerName ?? null,
   };
 
   return {

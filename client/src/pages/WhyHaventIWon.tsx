@@ -226,6 +226,16 @@ export function WhyHaventIWon() {
                       <span className="text-white/40">({readiness.tier})</span>
                     </span>
                   )}
+                  {snap.biggestRival && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-1 text-violet-200">
+                      <Swords className="h-3.5 w-3.5 text-violet-300" /> Biggest Rival: <span className="font-semibold text-white/85">{snap.biggestRival}</span>
+                    </span>
+                  )}
+                  {snap.biggestThreat && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-400/25 bg-orange-500/10 px-3 py-1 text-orange-200">
+                      <Flame className="h-3.5 w-3.5 text-orange-300" /> Biggest Threat: <span className="font-semibold text-white/85">{snap.biggestThreat}</span>
+                    </span>
+                  )}
                   {snap.titles > 0 && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-amber-300">
                       <Crown className="h-3.5 w-3.5" /> {snap.championSeasons.join(", ")}
