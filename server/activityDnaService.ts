@@ -62,7 +62,8 @@ const DESCRIPTIVE: ArchetypeKey[] = [
 ];
 const TEMPO: ArchetypeKey[] = ["highActivity", "lowActivity"];
 
-const normGuid = (g: unknown) => String(g ?? "").toUpperCase().replace(/[^0-9A-F]/g, "");
+const normGuid = (g: unknown) =>
+  String(g ?? "").replace(/^id:/i, "").toUpperCase().replace(/[^0-9A-F]/g, "");
 const rowsOf = (res: any): any[] =>
   Array.isArray(res) ? (Array.isArray(res[0]) ? res[0] : res) : res?.rows ?? [];
 const pctRank = (vals: number[], v: number): number => {
