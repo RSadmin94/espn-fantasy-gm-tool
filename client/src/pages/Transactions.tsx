@@ -540,12 +540,11 @@ function isMeaningfulEntry(entry: DisplayEntry): boolean {
     return collectTradeAssets(entry.rows).length > 0;
   }
   const r = entry.row;
-  const hasPlayer = r.playerId != null && r.playerId > 0;
   const t = String(r.type || "").toUpperCase();
   const isMovement = t === "ADD" || t === "DROP" || t === "WAIVER";
   const raw = tryParseRaw(r.rawTransaction ?? undefined);
   const hasMemo = !!(raw && typeof raw.memo === "string" && raw.memo.trim());
-  return hasPlayer || isMovement || hasMemo;
+  return isMovement || hasMemo;
 }
 function buildTradeSidesModel(
   rows: TxnRow[],
