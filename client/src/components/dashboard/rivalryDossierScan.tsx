@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { displayOwnerName } from "@/lib/ownerName";
 
 const SLOT = 8;
 
@@ -124,7 +125,7 @@ export function useRivalryDossierScan(rivalryEligibleOwnerKeys: string[]): Rival
       if (!ownerKey) continue;
       const data = queries[i]?.data;
       if (!data?.opponents?.length) continue;
-      const focalDisplay = data.ownerDisplayName || ownerKey;
+      const focalDisplay = displayOwnerName(ownerKey, data.ownerDisplayName);
       for (const opp of data.opponents) {
         if (!activeSet.has(opp.opponentOwnerKey)) continue;
         if (opp.gamesPlayed <= 0) continue;

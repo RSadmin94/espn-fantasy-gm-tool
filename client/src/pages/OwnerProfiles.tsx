@@ -22,6 +22,7 @@ import {
   Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { displayOwnerName } from "@/lib/ownerName";
 import type { CSSProperties, ReactNode } from "react";
 import { RivalryDossierPanel, type RivalryPickerOption } from "@/components/RivalryDossierPanel";
 import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
@@ -1312,7 +1313,7 @@ export function OwnerProfiles() {
   const headerDisplayName = useMemo(() => {
     if (!selectedOwnerKey) return "";
     const row = [...active, ...graveyard].find((o: any) => listRowLookupKey(o) === selectedOwnerKey);
-    return (row?.ownerName as string) || selectedOwnerKey;
+    return displayOwnerName(selectedOwnerKey, row?.ownerName as string);
   }, [active, graveyard, selectedOwnerKey]);
 
   const dossierPickerOptions = useMemo((): RivalryPickerOption[] => {

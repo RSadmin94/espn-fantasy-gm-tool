@@ -148,7 +148,7 @@ function scoreThreat(
     ),
   );
 
-  const ownerName = r.rivalName || trophy?.name || dna?.ownerName || r.rivalId;
+  const ownerName = r.rivalName || trophy?.name || dna?.ownerName || "Unknown Owner";
 
   // Streak note
   let currentStreak = "No active streak.";

@@ -98,7 +98,7 @@ export async function computeAllTrophyHistory(
       if (!trophyMap.has(memberId)) {
         trophyMap.set(memberId, {
           memberId,
-          name: memberNameMap.get(memberId) ?? memberId,
+          name: memberNameMap.get(memberId) ?? "Unknown Owner",
           championships: 0,
           championshipYears: [],
           runnerUps: 0,

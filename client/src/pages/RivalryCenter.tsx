@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { displayOwnerName } from "@/lib/ownerName";
 import {
   RivalryDossierPanel,
   type RivalryPickerOption,
@@ -166,7 +167,7 @@ export function RivalryCenter() {
   const activeKeys = activeOwners.map((o) => o.ownerKey);
 
   const pickerOptions = useMemo<RivalryPickerOption[]>(
-    () => allOwners.map((o) => ({ ownerKey: o.ownerKey, label: String(o.ownerName ?? o.ownerKey) })),
+    () => allOwners.map((o) => ({ ownerKey: o.ownerKey, label: displayOwnerName(o.ownerKey, o.ownerName) })),
     [allOwners],
   );
 
@@ -271,7 +272,7 @@ export function RivalryCenter() {
         const pct = g ? (rec.w / g) * 100 : 100;
         if (!worst || pct < worst.pct || (pct === worst.pct && rec.l > worst.l)) worst = { rivalKey: rk, w: rec.w, l: rec.l, pct };
       }
-      if (worst) nemeses.push({ key: o.key, name: o.name, rivalKey: worst.rivalKey, rivalName: nameOfKey.get(worst.rivalKey) ?? worst.rivalKey, w: worst.w, l: worst.l, pct: worst.pct });
+      if (worst) nemeses.push({ key: o.key, name: o.name, rivalKey: worst.rivalKey, rivalName: displayOwnerName(worst.rivalKey, nameOfKey.get(worst.rivalKey)), w: worst.w, l: worst.l, pct: worst.pct });
     }
     nemeses.sort((a, b) => a.pct - b.pct);
     return { recordMap, leaguePairs: lps, gridOwners, nemeses };
