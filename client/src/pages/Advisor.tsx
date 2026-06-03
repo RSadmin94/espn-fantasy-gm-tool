@@ -258,6 +258,16 @@ export function Advisor() {
   const topChamp = allOwners.length
     ? [...allOwners].sort((a, b) => (b.championships ?? 0) - (a.championships ?? 0))[0]
     : null;
+  // Tie-aware title leaders: every owner sharing the max title count.
+  const maxTitles = topChamp?.championships ?? 0;
+  const titleLeaders = maxTitles > 0 ? allOwners.filter((o) => (o.championships ?? 0) === maxTitles) : [];
+  const leaderNames = titleLeaders.map((o) => o.ownerName ?? "Unknown Owner");
+  const leaderLabel =
+    leaderNames.length <= 1
+      ? (leaderNames[0] ?? "")
+      : leaderNames.length === 2
+        ? `${leaderNames[0]} and ${leaderNames[1]}`
+        : `${leaderNames.slice(0, -1).join(", ")}, and ${leaderNames[leaderNames.length - 1]}`;
   const mostTenured = allOwners.length
     ? [...allOwners].sort((a, b) => (b.seasons?.length ?? 0) - (a.seasons?.length ?? 0))[0]
     : null;
@@ -383,12 +393,12 @@ export function Advisor() {
       {/* League-wide insight cards */}
       <div className="grid gap-4 sm:grid-cols-2">
         <InsightCard icon={<Dna className="h-3.5 w-3.5" />} tag="League DNA">
-          {topChamp ? (
+          {titleLeaders.length > 0 ? (
             <>
-              <span className="font-semibold text-foreground">{topChamp.ownerName ?? "Unknown"}</span>
-              {" "}leads the league with{" "}
-              <span className="font-semibold text-foreground">{topChamp.championships ?? 0}</span>
-              {" "}{(topChamp.championships ?? 0) === 1 ? "title" : "titles"}.
+              <span className="font-semibold text-foreground">{leaderLabel}</span>
+              {titleLeaders.length === 1 ? " leads the league with " : " are tied for the league lead with "}
+              <span className="font-semibold text-foreground">{maxTitles}</span>
+              {" "}{maxTitles === 1 ? "title" : "titles"}.
               <div className="mt-2 text-muted-foreground">
                 {championCount} of {ownersCount} owners have won a championship
                 {seasonsCount ? " across " + seasonsCount + " seasons" : ""}. Total titles awarded: {totalTitles}.
