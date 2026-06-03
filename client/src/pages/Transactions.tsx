@@ -529,6 +529,24 @@ function isDraftAsset(a: TradeAsset): boolean {
   );
 }
 
+/**
+ * A transaction entry is "meaningful" if it carries real player/pick movement.
+ * Hides empty draft-pick shells, asset-less trades, and placeholder rows.
+ * Keeps adds/drops/waivers, real player moves, and trades (incl. cancelled/rejected)
+ * that actually contain assets.
+ */
+function isMeaningfulEntry(entry: DisplayEntry): boolean {
+  if (entry.kind === "trade") {
+    return collectTradeAssets(entry.rows).length > 0;
+  }
+  const r = entry.row;
+  const hasPlayer = r.playerId != null && r.playerId > 0;
+  const t = String(r.type || "").toUpperCase();
+  const isMovement = t === "ADD" || t === "DROP" || t === "WAIVER";
+  const raw = tryParseRaw(r.rawTransaction ?? undefined);
+  const hasMemo = !!(raw && typeof raw.memo === "string" && raw.memo.trim());
+  return hasPlayer || isMovement || hasMemo;
+}
 function buildTradeSidesModel(
   rows: TxnRow[],
   season: number,
@@ -1046,7 +1064,7 @@ export function Transactions() {
       entries.push({ kind: "simple", row: r });
     }
 
-    const filtered = entries;
+    const filtered = entries.filter(isMeaningfulEntry);
     filtered.sort((a, b) => {
       const ma =
         a.kind === "trade" ? Math.max(0, ...a.rows.map(eventMs)) : eventMs(a.row);
@@ -1178,7 +1196,7 @@ export function Transactions() {
 
           {!isNotCached && !txQ.isLoading && (
             <div className="ml-auto flex items-center self-center text-xs text-muted-foreground">
-              {displayList.length} event{displayList.length === 1 ? "" : "s"} · {rawTxns.length} row{rawTxns.length === 1 ? "" : "s"}
+              Showing {displayList.length} meaningful transaction{displayList.length === 1 ? "" : "s"} · {rawTxns.length} row{rawTxns.length === 1 ? "" : "s"}
             </div>
           )}
         </CardContent>
@@ -1219,7 +1237,7 @@ export function Transactions() {
                 ? "No more Canceled trades to show."
                 : rawTxns.length === 0
                   ? "No transactions found for this season."
-                  : "No transactions match the current filters."}
+                  : "No meaningful transactions found for this filter."}
         </div>
       )}
 
