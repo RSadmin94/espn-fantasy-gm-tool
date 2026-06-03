@@ -283,7 +283,7 @@ export function RivalryDossierPanel({
           {/* Stat strip */}
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <StatCard icon={<Swords className="h-4 w-4" style={{ color: MUTED }} />} label="All-Time Record" value={`${pd.recordFocalVs.wins}–${pd.recordFocalVs.losses}${pd.recordFocalVs.ties ? `–${pd.recordFocalVs.ties}` : ""}`} sub="Head-to-head (RS + playoffs)" />
-            <StatCard icon={<HeartCrack className="h-4 w-4" style={{ color: RED }} />} label="Heartbreak Index" value={String(pd.heartbreakLossesFocal)} sub="Losses by \u22643 pts" valueColor={RED} />
+            <StatCard icon={<HeartCrack className="h-4 w-4" style={{ color: RED }} />} label="Heartbreak Index" value={String(pd.heartbreakLossesFocal)} sub="Losses by ≤3 pts" valueColor={RED} />
             <StatCard icon={<Calendar className="h-4 w-4" style={{ color: MUTED }} />} label="Last Meeting" value={pd.lastMeeting ? `${pd.lastMeeting.season} · Wk ${pd.lastMeeting.week}` : "—"} sub={pd.lastMeeting ? `${pd.lastMeeting.result} ${pd.lastMeeting.ownerScore.toFixed(1)}–${pd.lastMeeting.opponentScore.toFixed(1)}` : "—"} />
             <StatCard icon={<Trophy className="h-4 w-4" style={{ color: GOLD }} />} label="Playoff Encounters" value={String(pd.playoffEncounters)} sub="From playoff gmMatchups" />
             <StatCard icon={<Crosshair className="h-4 w-4" style={{ color: ACCENT }} />} label="Waiver Snipes" value={pd.waiverSnipes.available ? String(pd.waiverSnipes.count) : "—"} sub={pd.waiverSnipes.available ? "Detected from transactions" : pd.waiverSnipes.label} />
