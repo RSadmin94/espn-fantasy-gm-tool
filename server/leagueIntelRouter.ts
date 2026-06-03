@@ -3,6 +3,7 @@ import { router, publicProcedure } from "./_core/trpc";
 import { computeWhyHaventIWon } from "./whyHaventIWon";
 import { computeChampionshipPath } from "./championshipPath";
 import { computeAcquisitionImpact } from "./acquisitionImpact";
+import { computeCareerReport } from "./careerReportService";
 
 /**
  * LeagueDNA Intelligence — next-generation deterministic league analysis.
@@ -16,6 +17,13 @@ export const leagueIntelRouter = router({
     .input(z.object({ ownerKey: z.string().max(64).optional() }).optional())
     .query(async ({ ctx, input }) => {
       return computeWhyHaventIWon(ctx.user?.id, input?.ownerKey ?? null);
+    }),
+
+  /** Career Report - redesigned Why Haven't I Won (Section 0 + snapshot + modes; Phase 0) */
+  careerReport: publicProcedure
+    .input(z.object({ ownerKey: z.string().max(64).optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      return computeCareerReport(ctx.user?.id, input?.ownerKey ?? null);
     }),
 
   /** Feature 2 — Championship Path™ */
