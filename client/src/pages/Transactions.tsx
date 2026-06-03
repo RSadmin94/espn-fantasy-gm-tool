@@ -328,47 +328,44 @@ function describeTrade(
   season: number
 ): string {
   const assets = collectTradeAssets(rows);
+  const isValidTeam = (n: number | null | undefined): n is number =>
+    typeof n === "number" && Number.isFinite(n) && n > 0;
+  const teamName = (id: number) => teamMap.get(id) || `Team ${id}`;
+
+  // Resolve the two trade parties: prefer asset-level team ids, then the row-level
+  // transaction team ids. Never use 0 / unresolved ids (would render "Team 0").
+  const assetTeamIds = [...new Set(assets.flatMap((a) => [a.fromTeamId, a.toTeamId]).filter(isValidTeam))];
+  const partyIds =
+    assetTeamIds.length >= 2
+      ? assetTeamIds
+      : [...new Set([...assetTeamIds, ...rows.flatMap((r) => [r.fromTeamId, r.toTeamId]).filter(isValidTeam)])];
+
+  // Unattributable: cannot name two real sides -> never show "Team 0".
+  if (partyIds.length < 2) {
+    return "Trade details unavailable.";
+  }
+
+  const [ta, tb] = partyIds;
+  const nameA = teamName(ta);
+  const nameB = teamName(tb);
+
   if (assets.length === 0) {
-    const st = rows.map(r => r.status).find(Boolean);
-    return st ? `Trade (${String(st)})` : "Trade (details unavailable — try re-syncing this season).";
+    const st = rows.map((r) => r.status).find(Boolean);
+    return st ? `${nameA} and ${nameB} - trade (${String(st)})` : `${nameA} and ${nameB} - trade`;
   }
 
-  const teamIds = new Set<number>();
-  for (const a of assets) {
-    if (a.fromTeamId != null && Number.isFinite(a.fromTeamId)) teamIds.add(a.fromTeamId);
-    if (a.toTeamId != null && Number.isFinite(a.toTeamId)) teamIds.add(a.toTeamId);
+  // Directional summary when asset-level direction is present.
+  const aGives = assets.filter((a) => a.fromTeamId === ta && a.toTeamId === tb).map((a) => assetToLabel(a, meta, season));
+  const bGives = assets.filter((a) => a.fromTeamId === tb && a.toTeamId === ta).map((a) => assetToLabel(a, meta, season));
+  if (aGives.length && bGives.length) {
+    return `${nameA} traded ${listPhrase(aGives)} to ${nameB} for ${listPhrase(bGives)}`;
   }
-  const teams = [...teamIds].filter(n => n > 0);
+  if (aGives.length) return `${nameA} traded ${listPhrase(aGives)} to ${nameB}`;
+  if (bGives.length) return `${nameB} traded ${listPhrase(bGives)} to ${nameA}`;
 
-  if (teams.length >= 2) {
-    const [ta, tb] = teams.slice(0, 2);
-    const aGives = assets
-      .filter(a => a.fromTeamId === ta && a.toTeamId === tb)
-      .map(a => assetToLabel(a, meta, season));
-    const bGives = assets
-      .filter(a => a.fromTeamId === tb && a.toTeamId === ta)
-      .map(a => assetToLabel(a, meta, season));
-    const nameA = teamMap.get(ta) || `Team ${ta}`;
-    const nameB = teamMap.get(tb) || `Team ${tb}`;
-    if (aGives.length || bGives.length) {
-      const left = listPhrase(aGives);
-      const right = listPhrase(bGives);
-      if (aGives.length && bGives.length) {
-        return `${nameA} traded ${left} to ${nameB} for ${right}`;
-      }
-      if (aGives.length) return `${nameA} traded ${left} to ${nameB}`;
-      if (bGives.length) return `${nameB} traded ${right} to ${nameA}`;
-    }
-  }
-
-  // Fallback: one line per asset with direction
-  return assets
-    .map(a => {
-      const from = a.fromTeamId != null ? teamMap.get(a.fromTeamId) || `Team ${a.fromTeamId}` : "?";
-      const to = a.toTeamId != null ? teamMap.get(a.toTeamId) || `Team ${a.toTeamId}` : "?";
-      return `${from} → ${assetToLabel(a, meta, season)} → ${to}`;
-    })
-    .join(" · ");
+  // Parties resolved (via row teams) but asset direction unknown: summarize without fabricating direction.
+  const allAssets = assets.map((a) => assetToLabel(a, meta, season));
+  return `${nameA} and ${nameB} traded ${listPhrase(allAssets)}`;
 }
 
 function dominantTradeType(rows: TxnRow[]): string {
@@ -537,7 +534,20 @@ function isDraftAsset(a: TradeAsset): boolean {
  */
 function isMeaningfulEntry(entry: DisplayEntry): boolean {
   if (entry.kind === "trade") {
-    return collectTradeAssets(entry.rows).length > 0;
+    const tAssets = collectTradeAssets(entry.rows);
+    if (tAssets.length === 0) return false;
+    // Require >=2 resolvable (>0) team ids (asset-level, then row-level fallback) so the
+    // trade can be attributed to real teams; otherwise it is an unattributable "Team 0" shell.
+    const tIds = new Set<number>();
+    for (const a of tAssets) {
+      if (a.fromTeamId && a.fromTeamId > 0) tIds.add(a.fromTeamId);
+      if (a.toTeamId && a.toTeamId > 0) tIds.add(a.toTeamId);
+    }
+    for (const row of entry.rows) {
+      if (row.fromTeamId && row.fromTeamId > 0) tIds.add(row.fromTeamId);
+      if (row.toTeamId && row.toTeamId > 0) tIds.add(row.toTeamId);
+    }
+    return tIds.size >= 2;
   }
   const r = entry.row;
   const t = String(r.type || "").toUpperCase();
