@@ -56,11 +56,17 @@ export function WhyHaventIWon() {
             <HelpCircle className="h-3.5 w-3.5" /> LeagueDNA Intelligence
           </div>
           <h1 className="text-[34px] font-black leading-[1.05] tracking-tight sm:text-[42px]">
-            Why Haven't I Won<span className="text-lime-400">?</span>™
+            {data?.pageMode === "why-you-won" ? (
+              <>Why You Won</>
+            ) : data?.pageMode === "why-you-broke-through" ? (
+              <>Why You Broke Through</>
+            ) : (
+              <>Why Haven't I Won<span className="text-lime-400">?</span>™</>
+            )}
           </h1>
           {data && (
             <p className="mt-2 max-w-2xl text-[15px] text-white/55">
-              A deterministic diagnosis for <span className="font-semibold text-white/85">{data.ownerName}</span> across{" "}
+              A deterministic {data.hasWon ? "breakdown of the title run" : "diagnosis"} for <span className="font-semibold text-white/85">{data.ownerName}</span> across{" "}
               {data.seasonsPlayed} season{data.seasonsPlayed === 1 ? "" : "s"} of real league data.
             </p>
           )}
@@ -101,10 +107,10 @@ export function WhyHaventIWon() {
             {/* Top reasons */}
             <div className={cn(PANEL, "p-5 sm:p-6")}>
               <div className="mb-4 flex items-center gap-3">
-                <span className="text-lime-400"><TrendingDown className="h-5 w-5" /></span>
+                <span className="text-lime-400">{data.hasWon ? <Trophy className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}</span>
                 <div>
-                  <h2 className="text-[20px] font-extrabold leading-tight">Top {data.findings.length} Reasons</h2>
-                  <p className="text-[13px] text-white/45">Ranked by deterministic severity</p>
+                  <h2 className="text-[20px] font-extrabold leading-tight">{data.hasWon ? "What Made It Work" : `Top ${data.findings.length} Reasons`}</h2>
+                  <p className="text-[13px] text-white/45">{data.hasWon ? "What made the title season work - and what must continue" : "Ranked by deterministic severity"}</p>
                 </div>
               </div>
               <div className="space-y-3">

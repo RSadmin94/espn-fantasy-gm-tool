@@ -58,6 +58,9 @@ export type WhyHaventIWonResult = {
   findings: WhyFinding[];     // top 5, ranked by severity
   narrative: string;          // templated LeagueDNA summary
   confidence: "High" | "Medium" | "Limited";
+  championSeasons: number[];
+  isReigningChampion: boolean;
+  pageMode: "why-havent-won" | "why-you-won" | "why-you-broke-through";
   note?: string;
 };
 
@@ -105,7 +108,7 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
   const ownerName = (focal && nameByOwner.get(focal)) || profile?.selectedOwnerName || "This owner";
 
   if (!focal) {
-    return { leagueId, ownerKey: null, ownerName, isSetupComplete, hasWon: false, titles: 0, seasonsPlayed: 0, bestFinish: null, playoffAppearances: 0, findings: [], narrative: "No league history available yet.", confidence: "Limited", note: "No owner data." };
+    return { leagueId, ownerKey: null, ownerName, isSetupComplete, hasWon: false, titles: 0, seasonsPlayed: 0, bestFinish: null, playoffAppearances: 0, findings: [], narrative: "No league history available yet.", confidence: "Limited", championSeasons: [], isReigningChampion: false, pageMode: "why-havent-won", note: "No owner data." };
   }
 
   // ── Focal summary stats ───────────────────────────────────────────────
@@ -117,6 +120,11 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
   // champion GUID per season
   const champBySeason = new Map<number, string>();
   for (const t of teams) if (t.finalStanding === 1) champBySeason.set(t.season, t.ownerId);
+
+  // Championship status for the focal owner (deterministic; no hardcoding).
+  const championSeasons = focalTeams.filter((t) => t.finalStanding === 1).map((t) => t.season).sort((a, b) => a - b);
+  const latestCompletedSeason = champBySeason.size ? Math.max(...champBySeason.keys()) : null;
+  const isReigningChampion = latestCompletedSeason != null && champBySeason.get(latestCompletedSeason) === focal;
 
   // playoff cutoff per season (finalStanding <= cutoff = made the playoff bracket).
   // ESPN flags consolation games isPlayoff=1 too, so finalStanding is the accurate gate.
@@ -347,7 +355,9 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
   } else {
     const lead = top[0];
     const intro = hasWon
-      ? `${ownerName} broke through for ${titles === 1 ? "a title" : titles + " titles"}, but for most seasons the same patterns held them back. `
+      ? (isReigningChampion
+          ? `${ownerName} is the reigning champion. Here's what made the title season work - and what must continue. `
+          : `${ownerName} broke through for ${titles === 1 ? "a title" : titles + " titles"}. Here's what made it work - and the patterns to keep in check. `)
       : `Across ${seasonsPlayed} seasons (best finish: ${bestFinish ?? "—"}), the data points to a clear story. `;
     const reasonLine = `The biggest factor: ${lead.headline.toLowerCase()} — ${lead.detail}`;
     const secondary = top.length > 1 ? ` It compounds with ${top.length - 1} other issue${top.length - 1 > 1 ? "s" : ""}, led by ${top[1].headline.toLowerCase()}.` : "";
@@ -356,9 +366,16 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
 
   const confidence: WhyHaventIWonResult["confidence"] = weeklyConfident ? "High" : matches.length > 0 ? "Medium" : "Limited";
 
+  const pageMode: WhyHaventIWonResult["pageMode"] = !hasWon
+    ? "why-havent-won"
+    : isReigningChampion
+      ? "why-you-won"
+      : "why-you-broke-through";
+
   return {
     leagueId, ownerKey: focal, ownerName, isSetupComplete,
     hasWon, titles, seasonsPlayed, bestFinish, playoffAppearances,
     findings: top, narrative, confidence,
+    championSeasons, isReigningChampion, pageMode,
   };
 }
