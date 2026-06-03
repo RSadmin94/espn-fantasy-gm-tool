@@ -111,3 +111,17 @@ temp/
 
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
+
+
+# --- Scratch / probe / one-off working files ---
+# Root-anchored (/_*) so it only catches the disposable _*.ts/_*.ps1/_*.txt/_*.mjs
+# files at the repo root. It deliberately does NOT match server/_core, shared/_core,
+# client/public/__manus__, or drizzle/meta/_journal.json (those live in subdirectories).
+/_*
+/dist-check/
+# ...but keep dry-run reference artifacts (data outputs worth holding onto)
+!/_dryrun/
+/_dryrun/*
+!/_dryrun/*.json
+!/_dryrun/*.csv
+!/_dryrun/*.sql
