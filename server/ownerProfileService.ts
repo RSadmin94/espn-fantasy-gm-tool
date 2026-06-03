@@ -14,6 +14,7 @@ import {
   resolveDraftPickOwner,
   type TeamSeasonRow,
 } from "./resolveDraftPickOwner";
+import { activityDnaNarrative, type ActivityDnaResult } from "./activityDnaService";
 
 /** Seasons we expect owner timelines / diagnostics to cover (inclusive). */
 export const OWNER_PROFILE_HIST_SEASONS: readonly number[] = Object.freeze(
@@ -939,6 +940,8 @@ export async function buildOwnerProfilePayload(args: {
   allMatchupRows: MatchupRowIn[] | null;
   recordBundle: OwnerProfileRecordBundle;
   identityMerge?: OwnerIdentityMergeDiagnostics;
+  /** Pre-computed Activity DNA for this owner (snapshot narrative); null when unavailable. */
+  activityDna?: ActivityDnaResult | null;
 }): Promise<OwnerProfilePayload> {
   const {
     ownerName,
@@ -950,6 +953,7 @@ export async function buildOwnerProfilePayload(args: {
     allMatchupRows,
     recordBundle,
     identityMerge: identityMergeIn,
+    activityDna,
   } = args;
   const snapR = recordBundle.snapshotFromRecords;
 
@@ -1185,7 +1189,7 @@ export async function buildOwnerProfilePayload(args: {
     `They are ${champStr}.`,
     `Draft profile: ${draftStyle}, with ${topPos} as their most drafted position (${posShare[topPos] ?? 0}% of picks).`,
     `Keeper profile: ${keeperStr}${avgKeeperRound != null ? `, averaging keeper round ${avgKeeperRound}` : ""}.`,
-    `Activity profile: ${txnStyle}.`,
+    `Activity profile: ${activityDnaNarrative(activityDna) ?? txnStyle}.`,
   ].join(" ");
 
   const ownerTeamIdSet = new Set(ownerTeamIds);

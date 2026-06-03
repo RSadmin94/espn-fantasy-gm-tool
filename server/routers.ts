@@ -26,6 +26,7 @@ import { meRouter } from "./meRouter";
 import { draftRealityRouter } from "./draftRealityRouter";
 import { leagueIntelRouter } from "./leagueIntelRouter";
 import { activityDnaRouter } from "./activityDnaRouter";
+import { getActivityDnaForOwner } from "./activityDnaService";
 import { offseasonRouter } from "./offseasonRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
@@ -11135,6 +11136,7 @@ if (pickOrder.length > 0) {
           });
         }
 
+        const primaryActivityDna = await getActivityDnaForOwner(lid, profileOwnerKey).catch(() => null);
         const primary = await buildOwnerProfilePayload({
           db,
           ownerName,
@@ -11146,11 +11148,13 @@ if (pickOrder.length > 0) {
           medalRows,
           allMatchupRows,
           recordBundle: recordPrimary,
+          activityDna: primaryActivityDna,
           identityMerge,
         });
 
         let comparison: Awaited<ReturnType<typeof buildOwnerProfilePayload>> | null = null;
         if (compareName && compareResolved && compareTeamRows?.length && recordCompare) {
+          const compareActivityDna = await getActivityDnaForOwner(lid, compareResolved.profileOwnerKey).catch(() => null);
           comparison = await buildOwnerProfilePayload({
             db,
             ownerName: compareName,
@@ -11162,6 +11166,7 @@ if (pickOrder.length > 0) {
             medalRows,
             allMatchupRows,
             recordBundle: recordCompare,
+          activityDna: compareActivityDna,
             identityMerge: compareResolved.identityMerge,
           });
         }

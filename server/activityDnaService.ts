@@ -281,3 +281,48 @@ export async function getActivityDnaForOwner(
   const target = normGuid(ownerKey);
   return all.find((r) => normGuid(r.ownerId) === target) ?? null;
 }
+
+/**
+ * Deterministic one-line activity narrative built from an Activity DNA result.
+ * Used by the Owner Profile snapshot. No LLM and no hardcoded owner names - the
+ * wording is derived purely from the owner's primary/secondary archetypes.
+ * Returns null when DNA is unavailable so callers can fall back to legacy text.
+ */
+export function activityDnaNarrative(dna: ActivityDnaResult | null | undefined): string | null {
+  if (!dna || !dna.primaryDNA) return null;
+  const primary = dna.primaryDNA;
+  const secondary = dna.secondaryDNA;
+
+  // Opening clause per primary archetype (only descriptive archetypes rank primary).
+  const primaryClause: Record<string, string> = {
+    "Trade Opportunist": "Trade Opportunist",
+    "Waiver Aggressive": "Waiver Aggressive manager who generates value through acquisitions",
+    "Roster Builder": "Roster Builder who upgrades the roster through steady moves",
+    "Draft-and-Hold": "Draft-and-Hold owner",
+    "Draft Reliant": "Draft Reliant owner who leans on draft-day capital",
+    "Streamer": "Streamer who churns the back of the roster weekly",
+  };
+
+  // Trailing clause per secondary archetype.
+  const secondaryTail: Record<string, string> = {
+    "Roster Builder": " with strong roster-building tendencies",
+    "Trade Opportunist": " with a clear willingness to trade",
+    "Waiver Aggressive": " backed by aggressive waiver-wire activity",
+    "Draft-and-Hold": " that tends to hold its drafted core",
+    "High Activity": " and a high overall transaction volume",
+    "Low Activity": " with below-average transaction activity",
+  };
+
+  const head = primaryClause[primary] ?? primary;
+  let tail = secondaryTail[secondary] ?? "";
+
+  // Redundancy guards: an active primary already implies high tempo, so a
+  // "High Activity" secondary adds nothing; never restate the same archetype;
+  // the Waiver Aggressive head already carries a clause, so keep it clean.
+  const activePrimaries = new Set(["Trade Opportunist", "Waiver Aggressive", "Roster Builder"]);
+  if (secondary === "High Activity" && activePrimaries.has(primary)) tail = "";
+  if (secondary === primary) tail = "";
+  if (primary === "Waiver Aggressive" && (secondary === "High Activity" || secondary === "Low Activity")) tail = "";
+
+  return head + tail;
+}
