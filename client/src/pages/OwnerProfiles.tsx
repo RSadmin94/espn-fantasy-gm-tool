@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { displayOwnerName } from "@/lib/ownerName";
 import type { CSSProperties, ReactNode } from "react";
 import { RivalryDossierPanel, type RivalryPickerOption } from "@/components/RivalryDossierPanel";
+import { ActivityDnaCard } from "@/components/ActivityDnaCard";
 import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
 import {
   Collapsible,
@@ -1031,53 +1032,7 @@ function ProfilePanel({
       )}
 
       {profileTab === "activity" && (
-        <div className={cn(PROFILE_SURFACE, "overflow-hidden p-4 sm:p-5")}>
-          <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-zinc-100">
-            <Zap className="h-4 w-4 text-amber-500/80" aria-hidden />
-            Activity DNA
-          </h3>
-          <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
-            <div>
-              <StatRow label="Total Acquisitions" value={num(activity.totalAcq)} />
-              <StatRow label="Total Drops"         value={num(activity.totalDrops)} />
-              <StatRow label="Total Trades"        value={num(activity.totalTrades)} />
-              <StatRow label="IR Moves"            value={num(activity.totalIR)} />
-            </div>
-            <div>
-              <StatRow label="Avg Txn / Season"   value={num(activity.avgTxnPerSeason)} />
-              {activity.mostActiveSeason && (
-                <StatRow label="Most Active Season"
-                  value={`${(activity.mostActiveSeason as any).season} (${(activity.mostActiveSeason as any).total} moves)`} />
-              )}
-            </div>
-          </div>
-          {txnSeasons.filter((t: any) => t.total > 0).length > 0 && (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-white/[0.08] text-zinc-500">
-                    <th className="py-1 pr-2 text-left">Season</th>
-                    <th className="pr-2 text-right">Acq</th>
-                    <th className="pr-2 text-right">Drops</th>
-                    <th className="pr-2 text-right">Trades</th>
-                    <th className="text-right">IR</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...txnSeasons].reverse().filter((t: any) => t.total > 0).map((t: any) => (
-                    <tr key={t.season} className="border-b border-white/[0.05] hover:bg-white/[0.03]">
-                      <td className="py-1 pr-2 font-medium text-zinc-200">{t.season}</td>
-                      <td className="pr-2 text-right text-zinc-500">{t.acquisitions}</td>
-                      <td className="pr-2 text-right text-zinc-500">{t.drops}</td>
-                      <td className="pr-2 text-right text-zinc-500">{t.trades}</td>
-                      <td className="text-right text-zinc-500">{t.moveToIR}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <ActivityDnaCard ownerKey={profileLookupKey} />
       )}
 
       {/* 5. Matchup Intel */}
