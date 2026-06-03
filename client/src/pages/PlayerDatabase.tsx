@@ -47,13 +47,13 @@ function Headshot({ espnId, name, pos }: { espnId: string | null; name: string; 
 
   if (!espnId || failed) {
     return (
-      <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 border-2 border-zinc-700", cfg.text, "bg-zinc-800/80")}>
+      <div className={cn("w-12 h-12 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border-2 border-zinc-700", cfg.text, "bg-zinc-800/80")}>
         {initials}
       </div>
     );
   }
   return (
-    <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-zinc-800 border-2 border-zinc-700/60">
+    <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 bg-zinc-800 border-2 border-zinc-700/60">
       <img
         src={`https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/${espnId}.png&w=80&h=58&cb=1`}
         alt={name}
@@ -299,15 +299,15 @@ export function PlayerDatabase() {
 
           {/* Column headers */}
           <div className="sticky top-0 z-10 bg-zinc-900/95 border-b border-zinc-800/80 backdrop-blur">
-            <div className="grid px-4 py-2.5"
+            <div className="grid px-4 py-3"
               style={{ gridTemplateColumns: "36px 1fr 80px 100px 130px 80px 72px" }}>
               <div className="text-[10px] font-semibold text-zinc-600 uppercase">#</div>
-              <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Player</div>
-              <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Pos</div>
-              <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">NFL Team</div>
-              <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Dynasty Value</div>
-              <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Status</div>
-              <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">First Yr</div>
+              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Player</div>
+              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Pos</div>
+              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">NFL Team</div>
+              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Dynasty Value</div>
+              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Status</div>
+              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">First Yr</div>
             </div>
           </div>
 
@@ -334,7 +334,7 @@ export function PlayerDatabase() {
               return (
                 <div key={p.id}
                   className={cn(
-                    "grid items-center px-4 py-2.5 transition-colors cursor-pointer group",
+                    "grid items-center px-4 py-3 transition-colors cursor-pointer group",
                     "hover:bg-zinc-800/40 border-l-2",
                     i % 2 === 0 ? "bg-zinc-900/10" : "bg-transparent",
                     isHigh ? "border-l-lime-500/60" : "border-l-zinc-800"
@@ -348,7 +348,7 @@ export function PlayerDatabase() {
                   <div className="flex items-center gap-2.5 min-w-0">
                     <Headshot espnId={p.espnPlayerId} name={p.fullName} pos={p.position} />
                     <div className="min-w-0">
-                      <div className="font-bold text-zinc-100 text-sm leading-tight truncate group-hover:text-white">{p.fullName}</div>
+                      <div className="font-bold text-zinc-100 text-base leading-tight truncate group-hover:text-white">{p.fullName}</div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {p.currentNflTeam && (
                           <span className="text-[10px] font-semibold bg-zinc-700/60 text-zinc-300 px-1 py-0 rounded">{p.currentNflTeam}</span>
