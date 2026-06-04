@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import {
   AlertCircle,
+  ChevronDown,
   ArrowDownToLine,
   ArrowLeftRight,
   ArrowUpFromLine,
@@ -921,11 +922,14 @@ function TradeComparisonCard({
           <div className="font-semibold text-foreground">{date}</div>
           {time ? <div>{time}</div> : null}
         </div>
-        <details className="group text-right">
-          <summary className="cursor-pointer list-none text-xs font-medium text-violet-400 hover:text-violet-300 [&::-webkit-details-marker]:hidden">
-            View Details
+        <details className="group">
+          <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-300 transition-colors hover:border-violet-400/60 hover:bg-violet-500/20 hover:text-violet-200">
+              <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+              View Details
+            </span>
           </summary>
-          <div className="mt-2 max-w-prose space-y-2 rounded-md border border-border/60 bg-muted/15 p-2.5 text-left text-xs text-muted-foreground">
+          <div className="mt-3 space-y-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-xs text-muted-foreground">
             <p className="leading-relaxed text-foreground/90">{narrative}</p>
             <div className="flex flex-wrap justify-end gap-2 border-t border-border/50 pt-2">
               <RosterLinks season={season} teams={rosterTeams} />

@@ -88,7 +88,6 @@ export const playerStatsRouter = router({
             lastSeasonSeen:  gmPlayerRegistry.lastSeasonSeen,
             isActive:        gmPlayerRegistry.isActive,
             needsReview:     gmPlayerRegistry.needsReview,
-            espnAdpPprRank:  gmPlayerRegistry.espnAdpPprRank,
           })
             .from(gmPlayerRegistry)
             .where(where)
@@ -133,8 +132,7 @@ export const playerStatsRouter = router({
         currentNflTeam:  r.currentNflTeam  ?? null,
         firstSeasonSeen: r.firstSeasonSeen ?? null,
         lastSeasonSeen:  r.lastSeasonSeen  ?? null,
-        // Prefer ESPN live ADP rank; fall back to historical avg from draft_picks
-        avgPick:         r.espnAdpPprRank ?? (r.espnPlayerId ? (avgPickByPlayerId.get(Number(r.espnPlayerId)) ?? null) : null),
+        avgPick:         r.espnPlayerId ? (avgPickByPlayerId.get(Number(r.espnPlayerId)) ?? null) : null,
       }));
 
       // For avgPick sort: sort in memory with null values at end, then paginate
@@ -393,11 +391,13 @@ export const playerStatsRouter = router({
         const rank: number | undefined = p?.draftRanksByRankType?.PPR?.rank;
         const espnId = String(p?.id ?? "").trim();
         if (!rank || rank >= 1000 || !espnId) continue;
-        await db
-          .update(gmPlayerRegistry)
-          .set({ espnAdpPprRank: rank })
-          .where(eqDrizzle(gmPlayerRegistry.espnPlayerId, espnId));
-        updated++;
+        try {
+          await db
+            .update(gmPlayerRegistry)
+            .set({ espnAdpPprRank: rank })
+            .where(eqDrizzle(gmPlayerRegistry.espnPlayerId, espnId));
+          updated++;
+        } catch { /* column may not exist yet — migration pending */ }
       }
 
       return { ok: true as const, updated };
