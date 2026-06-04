@@ -217,7 +217,7 @@ export async function computeCareerReport(
 
   const timeline: SeasonCard[] = snap.seasonRecords
     .slice()
-    .sort((a, b) => a.season - b.season)
+    .sort((a, b) => b.season - a.season)
     .map((r) => {
       const fs = r.finalStanding;
       const place = rankOf(r.season, fs);

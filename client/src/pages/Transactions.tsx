@@ -411,7 +411,7 @@ function parentStatusMatchesFilter(
 ): boolean {
   const n = normalizeStatusForMatch(statusRaw);
   if (n === "") return false;
-  if (filter === "EXECUTED") return n === "EXECUTED";
+  if (filter === "EXECUTED") return n === "EXECUTED" || n === "TRADE_UPHOLD" || n === "TRADE_ACCEPT";
   if (filter === "PROPOSED") return n === "PROPOSED" || n === "PENDING";
   return n === "CANCELED" || n === "CANCELLED";
 }

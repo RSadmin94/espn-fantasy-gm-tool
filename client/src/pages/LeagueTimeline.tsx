@@ -117,7 +117,7 @@ export function LeagueTimeline() {
   const ownerNormalizationMisses = unmatchedChampionNames.length;
 
   // ── Dynasty Board sort (client-side display sort only) ────────────────────
-  const owners = [...rawOwners].sort((a, b) => {
+  const owners = [...rawOwners].filter(o => o.seasons.length > 1).sort((a, b) => {
     const wA = a.seasons.reduce((s, r) => s + (r.entry.recordBasis === "rs_matchups" ? (r.entry.wins ?? 0) : 0), 0);
     const lA = a.seasons.reduce((s, r) => s + (r.entry.recordBasis === "rs_matchups" ? (r.entry.losses ?? 0) : 0), 0);
     const tA = a.seasons.reduce((s, r) => s + (r.entry.recordBasis === "rs_matchups" ? (r.entry.ties ?? 0) : 0), 0);

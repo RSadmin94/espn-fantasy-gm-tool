@@ -252,7 +252,7 @@ export function WhyHaventIWon() {
                   <span className="text-lime-400"><Calendar className="h-5 w-5" /></span>
                   <div>
                     <h2 className="text-[20px] font-extrabold leading-tight">Season Timeline</h2>
-                    <p className="text-[13px] text-white/45">Every season of your career, oldest to newest</p>
+                    <p className="text-[13px] text-white/45">Every season of your career, newest first</p>
                   </div>
                 </div>
                 <div className="pl-1">
