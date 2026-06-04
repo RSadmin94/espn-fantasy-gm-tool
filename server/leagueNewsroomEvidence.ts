@@ -7,7 +7,7 @@
 
 import { sql as drizzleSql } from "drizzle-orm";
 
-const LEAGUE_ID = "457622";
+// Phase B7: LEAGUE_ID constant removed — leagueId is passed in by callers.
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -84,18 +84,18 @@ function calcRunningRecords(matchups: any[], teamIds: number[]): Map<number, { w
 
 // ── Championship March Evidence ────────────────────────────────────────────────
 
-export async function buildChampionshipEvidence(db: any, season: number): Promise<ChampionshipEvidence | null> {
+export async function buildChampionshipEvidence(db: any, season: number, leagueId: string): Promise<ChampionshipEvidence | null> {
   // 1. Medal data
   const [medalRows] = await db.execute(drizzleSql`
     SELECT championOwner, runnerUpOwner, thirdPlaceOwner
-    FROM league_medals WHERE leagueId = ${LEAGUE_ID} AND season = ${season}
+    FROM league_medals WHERE leagueId = ${leagueId} AND season = ${season}
   `) as unknown as [any[]];
   const medals = (medalRows as any[])[0] as any;
   if (!medals) return null;
 
   // 2. All teams for this season
   const [teamRows] = await db.execute(drizzleSql`
-    SELECT teamId, name, ownerName FROM teams WHERE leagueId = ${LEAGUE_ID} AND season = ${season}
+    SELECT teamId, name, ownerName FROM teams WHERE leagueId = ${leagueId} AND season = ${season}
   `) as unknown as [any[]];
   const teams = teamRows as any[];
   const teamMap = new Map(teams.map((t: any) => [Number(t.teamId), t]));
@@ -120,7 +120,7 @@ export async function buildChampionshipEvidence(db: any, season: number): Promis
   const [matchupRows] = await db.execute(drizzleSql`
     SELECT m.week, m.homeTeamId, m.awayTeamId, m.homeScore, m.awayScore, m.winnerTeamId, m.isPlayoff
     FROM matchups m
-    WHERE m.leagueId = ${LEAGUE_ID} AND m.season = ${season} AND m.isCompleted = 1
+    WHERE m.leagueId = ${leagueId} AND m.season = ${season} AND m.isCompleted = 1
     ORDER BY m.week, m.id
   `) as unknown as [any[]];
   const allMatchups = (matchupRows as any[]).map((m: any) => ({

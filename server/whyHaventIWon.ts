@@ -20,7 +20,7 @@
 import { sql } from "drizzle-orm";
 import { getDb, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
 
-const DEFAULT_LEAGUE_ID = "457622";
+// Phase B3: DEFAULT_LEAGUE_ID constant removed — setup required if no active league.
 const WEEKLY_SEASONS = [2021, 2022, 2023, 2024, 2025]; // seasons with per-player weekly data
 
 function rowsOf(res: any): any[] {
@@ -72,7 +72,11 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
   if (!db) throw new Error("Database unavailable");
 
   const profile = await resolveActiveProfile(userId != null ? { id: userId } : null);
-  const leagueId = profile?.leagueId || DEFAULT_LEAGUE_ID;
+  // Phase B3: no fallback to hardcoded league — throw if no active league.
+  const leagueId = profile?.leagueId ?? "";
+  if (!leagueId || leagueId === "default") {
+    throw new Error("SETUP_REQUIRED: No active league — connect a league in Settings.");
+  }
   const isSetupComplete = !!profile?.isSetupComplete;
 
   // ── Load core tables (all seasons available) ──────────────────────────

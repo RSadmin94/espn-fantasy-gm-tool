@@ -19,7 +19,7 @@
 import { sql } from "drizzle-orm";
 import { getDb } from "./db";
 
-const LEAGUE_ID = "457622";
+// Phase B8: LEAGUE_ID constant removed — leagueId is passed in by callers.
 
 // ESPN defaultPositionId -> our position label (for draft picks, which carry ESPN player ids)
 const POS_BY_DEF_ID: Record<number, string> = { 1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST" };
@@ -89,13 +89,13 @@ function rowsOf(res: any): any[] {
 function r2(n: number): number { return Math.round(n * 100) / 100; }
 function clamp(n: number, lo = 0, hi = 100): number { return Math.max(lo, Math.min(hi, n)); }
 
-export async function computeDraftReality(season: number): Promise<DraftRealityResult> {
+export async function computeDraftReality(season: number, leagueId: string): Promise<DraftRealityResult> {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
 
   // 1) Load the combined cache payload for this season (draft, schedule, settings, teams, members)
   const cacheRows = rowsOf(await db.execute(
-    sql`SELECT payload FROM espn_raw_cache WHERE leagueId=${LEAGUE_ID} AND season=${season} AND viewName='combined' LIMIT 1`
+    sql`SELECT payload FROM espn_raw_cache WHERE leagueId=${leagueId} AND season=${season} AND viewName='combined' LIMIT 1`
   ));
   if (!cacheRows[0]?.payload) throw new Error(`No combined cache for season ${season}`);
   const combined = typeof cacheRows[0].payload === "string" ? JSON.parse(cacheRows[0].payload) : cacheRows[0].payload;
@@ -373,7 +373,7 @@ export async function computeDraftReality(season: number): Promise<DraftRealityR
   else if (weeksSimulated < 14) { confidence = "Medium"; confidenceReason = `Only ${weeksSimulated} weeks of player data available.`; }
 
   return {
-    season, leagueId: LEAGUE_ID,
+    season, leagueId,
     teamCount: actualStandings.length,
     weeksSimulated, confidence, confidenceReason,
     actualStandings, draftOnlyStandings, ownerImpacts, superlatives, insights,

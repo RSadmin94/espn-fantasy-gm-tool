@@ -40,26 +40,26 @@ export type CareerSnapshot = {
   titles: number;
   championSeasons: number[];
   bestFinish: number | null;
-  playoffTrips: number;              // top-6 finish proxy (refined in timeline phase)
-  championshipDrought: number;       // seasons since last title; seasonsPlayed if never won
+  playoffTrips: number;
+  championshipDrought: number;
   runnerUps: number;
-  careerWinRate: number;             // 0-1, regular season
+  careerWinRate: number;
   activityDna: { primary: string | null; secondary: string | null };
-  leagueDnaRank: number | null;      // Phase 5
-  biggestRival: string | null;       // Phase 5
-  biggestThreat: string | null;      // Phase 5
+  leagueDnaRank: number | null;
+  biggestRival: string | null;
+  biggestThreat: string | null;
 };
 
 export type SeasonCard = {
   season: number;
-  finish: number | null;             // finalStanding (null/0 -> in progress)
-  record: string;                    // "W-L" or "W-L-T"
+  finish: number | null;
+  record: string;
   pointsFor: number | null;
-  resultLabel: string;               // Champion / Runner-Up / 3rd Place / Nth Place / Missed Playoffs / In Progress
+  resultLabel: string;
   isChampion: boolean;
   isRunnerUp: boolean;
-  championName: string | null;       // who won the league that season
-  playerLevelAvailable: boolean;     // season >= 2021 (positional/draft/acq metrics exist)
+  championName: string | null;
+  playerLevelAvailable: boolean;
 };
 
 export type ReadinessComponent = { key: string; label: string; score: number; weight: number };
@@ -147,7 +147,6 @@ export async function computeCareerReport(
   };
   if (!db || !why.ownerName) return minimal();
 
-  // ---- Full-history facts via the identity-merged Owner Profile pipeline ----
   const allGmRows = await db
     .select().from(gmTeams).where(eq(gmTeams.leagueId, leagueId))
     .orderBy(asc(gmTeams.season), asc(gmTeams.teamId));
@@ -169,7 +168,6 @@ export async function computeCareerReport(
   const primary = dna?.primaryDNA ?? null;
   const secondary = dna?.secondaryDNA ?? null;
 
-  // Champion display name per season (for the timeline).
   const championNameBySeason = new Map<number, string>();
   const minFsBySeason = new Map<number, number>();
   let latestCompletedSeason: number | null = null;
@@ -181,8 +179,6 @@ export async function computeCareerReport(
       if (latestCompletedSeason == null || s > latestCompletedSeason) latestCompletedSeason = s;
     }
   }
-  // Champion per season = the rank-1 team (finalStanding == that season's minimum). This backfills
-  // pre-2018 winners too, since pre-2018 the champion is stored as finalStanding == 2, not 1.
   for (const ct of allGmRows) {
     const cs = Number(ct.season);
     const cfs = Number(ct.finalStanding);
@@ -190,9 +186,6 @@ export async function computeCareerReport(
       championNameBySeason.set(cs, cleanOwnerDisplay(String(ct.ownerName ?? "")) || "Unknown");
     }
   }
-  // Pre-2018 finalStanding for this league is offset by +1 (best team stored as 2, not 1, with
-  // no rank-1 present). Detect the offset per season dynamically (subtract that season's minimum
-  // standing) so the corrected rank is always 1-based; 2018+ already start at 1 -> unchanged.
   const rankOf = (season: number, fs: number | null | undefined): number | null => {
     const f = Number(fs);
     if (!f || f <= 0) return null;
@@ -207,9 +200,6 @@ export async function computeCareerReport(
     .map((r) => rankOf(r.season, r.finalStanding))
     .filter((x): x is number => x != null && x > 0);
   const bestFinish = correctedRanks.length ? Math.min(...correctedRanks) : null;
-  // True playoff-bracket participation: offset-corrected final placement in the top 6. The
-  // championship bracket produces final placements 1-6; consolation teams land 7+. (isPlayoff on
-  // matchups is unusable here -- it also flags consolation games, so every team would qualify.)
   const playoffTrips = snap.seasonRecords
     .filter((r) => { const cr = rankOf(r.season, r.finalStanding); return cr != null && cr <= 6; })
     .length;
@@ -225,7 +215,6 @@ export async function computeCareerReport(
   const debut = snap.seasons.length ? Math.min(...snap.seasons) : null;
   const latestTitle = championSeasons.length ? Math.max(...championSeasons) : null;
 
-  // ---- Season timeline (oldest -> newest) ----
   const timeline: SeasonCard[] = snap.seasonRecords
     .slice()
     .sort((a, b) => a.season - b.season)
@@ -240,7 +229,7 @@ export async function computeCareerReport(
         : "Missed Playoffs";
       const ties = Number(r.ties ?? 0);
       const record = `${r.wins}-${r.losses}${ties > 0 ? `-${ties}` : ""}`;
-      const hasMatchupPF = Number(r.pointsFor ?? 0) >= 100; // real fantasy total; pre-2018 stored win-indicators (PF==wins)
+      const hasMatchupPF = Number(r.pointsFor ?? 0) >= 100;
       return {
         season: r.season,
         finish: place,
@@ -254,13 +243,13 @@ export async function computeCareerReport(
       };
     });
 
-  // ---- Championship Readiness + Pattern Detection (player-level composition) ----
   const focalKey = ownerKeyOverride ?? why.ownerKey;
   const playerSeasons = snap.seasons.filter((s) => s >= 2021 && (latestCompletedSeason == null || s <= latestCompletedSeason));
   const [cp, acq, draftResults] = await Promise.all([
     computeChampionshipPath(userId, focalKey).catch(() => null),
     computeAcquisitionImpact(userId, focalKey).catch(() => null),
-    Promise.all(playerSeasons.map((s) => computeDraftReality(s).catch(() => null))),
+    // Phase B: pass leagueId to computeDraftReality — no implicit 457622 fallback.
+    Promise.all(playerSeasons.map((s) => computeDraftReality(s, leagueId).catch(() => null))),
   ]);
   const readiness = buildReadiness({ cp, acq, draftResults, ownerName: why.ownerName, playoffTrips, seasonsPlayed, primary });
   const patterns = buildPatterns({ cp, flatRS, resolved, allGmRows, playoffTrips, seasonsPlayed });
@@ -349,7 +338,6 @@ function buildStory(c: {
   }
   return s.join(" ");
 }
-
 
 // ===== Phase 1b helpers: Championship Readiness + Pattern Detection =====
 function rdAvg(xs: number[]): number { return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0; }

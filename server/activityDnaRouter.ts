@@ -8,12 +8,12 @@ import { computeActivityDna, getActivityDnaForOwner } from "./activityDnaService
  * Profile-aware (ctx.user -> resolveActiveProfile) and multi-league ready (keyed by resolved leagueId).
  * Deterministic only; the heavy lifting lives in activityDnaService.ts. No DB writes, no LLM.
  */
-const DEFAULT_LEAGUE_ID = "457622";
+// Phase B2: DEFAULT_LEAGUE_ID constant removed — no implicit 457622 fallback.
 
 async function resolveLeague(userId?: number): Promise<{ leagueId: string; ownerKey: string | null }> {
   const profile = await resolveActiveProfile(userId != null ? { id: userId } : null);
   return {
-    leagueId: profile?.leagueId || DEFAULT_LEAGUE_ID,
+    leagueId: profile?.leagueId ?? "",
     ownerKey: profile?.isSetupComplete ? profile?.selectedOwnerKey ?? null : null,
   };
 }
@@ -24,6 +24,8 @@ export const activityDnaRouter = router({
     .input(z.object({ ownerKey: z.string().max(64).optional() }).optional())
     .query(async ({ ctx, input }) => {
       const { leagueId, ownerKey } = await resolveLeague(ctx.user?.id);
+      // Phase B2: no fallback to 457622 — return null if no active league.
+      if (!leagueId || leagueId === "default") return null;
       const focal = input?.ownerKey ?? ownerKey;
       if (focal) {
         const r = await getActivityDnaForOwner(leagueId, focal);
@@ -37,6 +39,8 @@ export const activityDnaRouter = router({
   /** Whole-league Activity DNA (percentiles need the full field; used by leaderboards/integrations). */
   league: publicProcedure.query(async ({ ctx }) => {
     const { leagueId } = await resolveLeague(ctx.user?.id);
+    // Phase B2: no fallback to 457622 — return empty array if no active league.
+    if (!leagueId || leagueId === "default") return [];
     return computeActivityDna(leagueId);
   }),
 });

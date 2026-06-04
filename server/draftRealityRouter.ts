@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
+import { getDb, resolveActiveLeagueId } from "./db";
 import { computeDraftReality } from "./draftRealitySimulator";
 
 /**
@@ -10,8 +11,17 @@ import { computeDraftReality } from "./draftRealitySimulator";
 export const draftRealityRouter = router({
   simulate: publicProcedure
     .input(z.object({ season: z.number().int().min(2021).max(2025) }))
-    .query(async ({ input }) => {
-      return await computeDraftReality(input.season);
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.user?.id ?? 0;
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: userId ? { id: userId } : undefined },
+        null,
+        input.season,
+      );
+      if (!leagueId || leagueId === "default") {
+        return null;
+      }
+      return await computeDraftReality(input.season, leagueId);
     }),
 
   // Which seasons are available to simulate (data coverage gate).

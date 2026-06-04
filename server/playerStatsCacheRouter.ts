@@ -13,7 +13,7 @@
 
 import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
-import { getDb } from "./db";
+import { getDb, resolveActiveLeagueId } from "./db";
 import { espnRawCache, gmPlayerRegistry, gmWeeklyPlayerStats, gmTeams, ownerAliases } from "../drizzle/schema";
 import {
   eq  as eqD,
@@ -57,18 +57,14 @@ function toNflTeam(id?: number | null): string | null {
 // ── Batch size for inserts ────────────────────────────────────────────────────
 const BATCH = 50;
 
-const LEAGUE_ID = "457622";
+// Phase B9: LEAGUE_ID constant removed — leagueId is resolved per-request.
 
 export const playerStatsCacheRouter = router({
 
   /**
-   * Called by the Chrome extension once per week per season.
-   * Receives the raw mMatchupScore payload, validates it, stores it in
-   * espn_raw_cache, then immediately runs ingestion for that week.
-   */
-  /**
    * Called by the extension after fetching ?view=mRoster for a season.
    * Accepts the raw player list and upserts into gm_player_registry.
+   * gm_player_registry is a shared (cross-league) table — no leagueId needed.
    */
   saveRosterPlayers: publicProcedure
     .input(z.object({
@@ -78,8 +74,6 @@ export const playerStatsCacheRouter = router({
         fullName: z.string().min(1).max(100),
         position: z.string().max(10),
         nflTeam:  z.string().max(5).nullable().optional(),
-        // Optional ESPN live draft-trend fields (sent by "Sync ESPN Trends / ADP").
-        // Omitted by the legacy roster/registry populate path.
         adp:          z.number().nullable().optional(),
         percentOwned: z.number().nullable().optional(),
         auctionValue: z.number().nullable().optional(),
@@ -100,7 +94,6 @@ export const playerStatsCacheRouter = router({
       let skipped      = 0;
       const skipReasons: string[] = [];
 
-      // Load existing ESPN IDs into memory to decide insert vs update
       const existing = await db.execute(
         drizzleSql`SELECT id, espnPlayerId FROM gm_player_registry WHERE espnPlayerId IS NOT NULL LIMIT 200000`
       ) as unknown as Array<any>;
@@ -112,7 +105,6 @@ export const playerStatsCacheRouter = router({
         const pos      = p.position?.trim();
         const fullName = p.fullName?.trim();
         const nflTeam  = p.nflTeam ?? null;
-        // Optional draft-trend values (null when sent by the legacy populate path)
         const adp          = p.adp ?? null;
         const percentOwned = p.percentOwned ?? null;
         const auctionValue = p.auctionValue ?? null;
@@ -129,7 +121,6 @@ export const playerStatsCacheRouter = router({
 
         try {
           if (byEspnId.has(eid)) {
-            // Update lastSeasonSeen if higher, refresh NFL team
             await db.execute(drizzleSql`
               UPDATE gm_player_registry
               SET lastSeasonSeen = GREATEST(lastSeasonSeen, ${season}),
@@ -144,7 +135,6 @@ export const playerStatsCacheRouter = router({
             `);
             updated++;
           } else {
-            // Insert new player
             await db.execute(drizzleSql`
               INSERT INTO gm_player_registry
                 (espnPlayerId, fullName, normalizedName, position, currentNflTeam,
@@ -166,7 +156,7 @@ export const playerStatsCacheRouter = router({
                 espnRank       = COALESCE(${espnRank}, espnRank),
                 updatedAt      = NOW()
             `);
-            byEspnId.set(eid, -1); // mark as known
+            byEspnId.set(eid, -1);
             inserted++;
           }
         } catch (err: unknown) {
@@ -177,13 +167,8 @@ export const playerStatsCacheRouter = router({
       }
 
       return {
-        ok:          true,
-        season,
-        received,
-        valid:       received - skipped,
-        inserted,
-        updated,
-        skipped,
+        ok: true, season, received,
+        valid: received - skipped, inserted, updated, skipped,
         skipReasons: skipReasons.slice(0, 5),
       };
     }),
@@ -192,48 +177,59 @@ export const playerStatsCacheRouter = router({
     .input(z.object({
       season:  z.number().int().min(2009).max(2030),
       week:    z.number().int().min(1).max(22),
-      /** Raw ESPN mMatchupScore JSON for this season+week */
       payload: z.record(z.string(), z.unknown()),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { season, week, payload } = input;
       const viewName = `playerStats:${season}:${week}`;
 
-      // Tag payload with season/week so ingestion never guesses
+      // Phase B9: resolve leagueId per-request — no module-level constant.
+      const userId = ctx.user?.id ?? 0;
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: userId ? { id: userId } : undefined },
+        null,
+        season,
+      );
+
       const enriched = { ...payload, seasonId: season, _fetchedWeek: week };
 
-      // Write to espn_raw_cache
       try {
-        await upsertRawEspnCache(LEAGUE_ID, season, viewName, enriched);
+        await upsertRawEspnCache(leagueId, season, viewName, enriched);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error(`[saveWeeklyPlayerStats] cache write failed s${season}w${week}: ${msg}`);
         return { ok: false, error: msg, season, week, playersIngested: 0 };
       }
 
-      // Immediately run ingestion for this week
-      const result = await ingestWeekPayload(enriched, season, week);
+      const result = await ingestWeekPayload(enriched, season, week, leagueId);
       return { ok: true, season, week, ...result };
     }),
 
   /**
    * Returns how many playerStats cache rows exist per season.
-   * Used by the extension to show sync progress.
    */
   getPlayerStatsCacheStatus: publicProcedure
-    .query(async () => {
+    .query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) return { seasons: [] };
+
+      // Phase B9: resolve leagueId per-request.
+      const userId = ctx.user?.id ?? 0;
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: userId ? { id: userId } : undefined },
+        null,
+        undefined,
+      );
+
       const [rows] = await db.execute(
         drizzleSql`SELECT season,
           SUM(CASE WHEN viewName LIKE 'playerStats:%' THEN 1 ELSE 0 END) AS cached_weeks,
           COUNT(DISTINCT CASE WHEN viewName LIKE 'playerStats:%' THEN viewName END) AS distinct_weeks
-        FROM espn_raw_cache WHERE leagueId = ${LEAGUE_ID}
+        FROM espn_raw_cache WHERE leagueId = ${leagueId}
         GROUP BY season ORDER BY season DESC`
       ) as unknown as Array<any>;
       const seasons = (rows as any)?.[0] as Array<{season: number; cached_weeks: number}> ?? [];
 
-      // Also get ingested counts
       const [ingested] = await db.execute(
         drizzleSql`SELECT season, COUNT(*) AS stat_rows, COUNT(DISTINCT playerId) AS players
         FROM gm_weekly_player_stats GROUP BY season ORDER BY season DESC`
@@ -253,23 +249,27 @@ export const playerStatsCacheRouter = router({
 
   /**
    * Read every combined/mRoster row already in espn_raw_cache,
-   * extract player identity (id, name, position, NFL team) from each
-   * team roster, and upsert into gm_player_registry.
-   * No new ESPN fetches required — works entirely off existing cache data.
+   * extract player identity from each team roster, and upsert into gm_player_registry.
    */
   syncPlayersFromCache: publicProcedure
-    .mutation(async () => {
+    .mutation(async ({ ctx }) => {
       const db = await getDb();
       if (!db) return { ok: false, error: "DB unavailable", inserted: 0, updated: 0, skipped: 0 };
 
-      // Load all combined/mRoster rows for every season
+      // Phase B9: resolve leagueId per-request.
+      const userId = ctx.user?.id ?? 0;
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: userId ? { id: userId } : undefined },
+        null,
+        undefined,
+      );
+
       const [cacheRows] = await db.execute(
-        drizzleSql`SELECT season, viewName, payload FROM espn_raw_cache WHERE leagueId = ${LEAGUE_ID} ORDER BY season ASC`
+        drizzleSql`SELECT season, viewName, payload FROM espn_raw_cache WHERE leagueId = ${leagueId} ORDER BY season ASC`
       ) as unknown as Array<any>;
 
       const rows = (cacheRows as any) as Array<{ season: number; viewName: string; payload: string }> ?? [];
 
-      // Pre-load existing registry index
       const regRows = await db.select({
           id: gmPlayerRegistry.id,
           espnPlayerId: gmPlayerRegistry.espnPlayerId,
@@ -288,7 +288,6 @@ export const playerStatsCacheRouter = router({
         const season = row.season;
         const isLegacy = season <= 2017;
 
-        // Extract teams array — handles both array and object-keyed formats
         const rawTeams = payload.teams;
         const teams: Record<string, unknown>[] = Array.isArray(rawTeams)
           ? rawTeams as Record<string, unknown>[]
@@ -319,7 +318,6 @@ export const playerStatsCacheRouter = router({
             const existingId = byEspnId.get(eid);
 
             if (existingId) {
-              // Update lastSeasonSeen
               try {
                 await db.update(gmPlayerRegistry)
                   .set({
@@ -331,7 +329,6 @@ export const playerStatsCacheRouter = router({
                 updated++;
               } catch { skipped++; }
             } else {
-              // Insert new
               try {
                 await db.insert(gmPlayerRegistry).values({
                   espnPlayerId:    eid,
@@ -379,9 +376,10 @@ type IngestResult = {
 };
 
 async function ingestWeekPayload(
-  payload: Record<string, unknown>,
-  season:  number,
-  week:    number
+  payload:  Record<string, unknown>,
+  season:   number,
+  week:     number,
+  leagueId: string,
 ): Promise<IngestResult> {
   const db = await getDb();
   if (!db) return { playersUpserted: 0, statsUpserted: 0, skipped: 0, reviewItems: ["DB unavailable"] };
@@ -391,13 +389,14 @@ async function ingestWeekPayload(
   let playersUpserted = 0, statsUpserted = 0, skipped = 0;
 
   // ── 1. Build ownerKey map ──────────────────────────────────────────────────
+  // Phase B9: use leagueId parameter — no module-level constant.
   const [teamRows, aliasRows] = await Promise.all([
     db.select({ teamId: gmTeams.teamId, ownerName: gmTeams.ownerName, ownerId: gmTeams.ownerId })
       .from(gmTeams)
-      .where(andD(eqD(gmTeams.leagueId, LEAGUE_ID), eqD(gmTeams.season, season))),
+      .where(andD(eqD(gmTeams.leagueId, leagueId), eqD(gmTeams.season, season))),
     db.select({ legacyTeamName: ownerAliases.legacyTeamName, resolvedOwnerName: ownerAliases.resolvedOwnerName })
       .from(ownerAliases)
-      .where(andD(eqD(ownerAliases.leagueId, LEAGUE_ID), eqD(ownerAliases.status, "approved"))),
+      .where(andD(eqD(ownerAliases.leagueId, leagueId), eqD(ownerAliases.status, "approved"))),
   ]);
   const aliasMap = new Map(aliasRows.filter(a => a.resolvedOwnerName).map(a => [a.legacyTeamName.toLowerCase(), a.resolvedOwnerName!]));
   const ownerKeyMap = new Map<number, string>();
@@ -504,7 +503,6 @@ async function ingestWeekPayload(
       let registryId = byEspnId.get(eid) ?? byNormNamePos.get(npKey);
 
       if (!registryId) {
-        // Insert new player
         try {
           await db.insert(gmPlayerRegistry).values({
             espnPlayerId:    eid,
@@ -540,7 +538,6 @@ async function ingestWeekPayload(
           continue;
         }
       } else {
-        // Update existing player's lastSeasonSeen
         try {
           await db.update(gmPlayerRegistry)
             .set({ lastSeasonSeen: season, updatedAt: new Date() })

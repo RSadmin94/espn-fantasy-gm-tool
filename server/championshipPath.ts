@@ -16,7 +16,7 @@ import { getDb, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
 import { computeWhyHaventIWon } from "./whyHaventIWon";
 import { computeDraftReality } from "./draftRealitySimulator";
 
-const DEFAULT_LEAGUE_ID = "457622";
+// Phase B5: DEFAULT_LEAGUE_ID constant removed — setup required if no active league.
 const WEEKLY_SEASONS = [2021, 2022, 2023, 2024, 2025];
 const POSITIONS = ["QB", "RB", "WR", "TE"] as const;
 type Pos = (typeof POSITIONS)[number];
@@ -91,7 +91,11 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
   if (!db) throw new Error("Database unavailable");
 
   const profile = await resolveActiveProfile(userId != null ? { id: userId } : null);
-  const leagueId = profile?.leagueId || DEFAULT_LEAGUE_ID;
+  // Phase B5: no fallback to hardcoded league — throw if no active league.
+  const leagueId = profile?.leagueId ?? "";
+  if (!leagueId || leagueId === "default") {
+    throw new Error("SETUP_REQUIRED: No active league — connect a league in Settings.");
+  }
   const isSetupComplete = !!profile?.isSetupComplete;
 
   // ── teams: champions + focal identity ─────────────────────────────────
@@ -126,7 +130,6 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
   const hasWon = champions.some((c) => c.ownerId === focal);
 
   // ── positional starter scoring (weekly seasons only) ──────────────────
-  // We compute pts/game by position for: each champion (their season) and the focal owner.
   const weekly = rowsOf(await db.execute(sql`
     SELECT w.season AS season, w.teamId AS teamId, w.ownerKey AS ownerKey, w.isStarter AS isStarter,
            w.pointsScored AS pts, r.position AS position
@@ -181,23 +184,21 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
   for (const [season, teamId] of champTeamBySeason) {
     if (!WEEKLY_SEASONS.includes(season)) continue;
     const champ = champions.find((c) => c.season === season);
-    if (champ && champ.ownerId === focal) continue; // emulate OTHER champions, not your own title
+    if (champ && champ.ownerId === focal) continue;
     const sums: Record<Pos, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
     const cnts: Record<Pos, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
     for (const w of weekly) { if (w.season === season && w.teamId === teamId) { sums[w.position] += w.pts; cnts[w.position]++; } }
     const champPos: Record<Pos, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
     for (const p of POSITIONS) champPos[p] = cnts[p] ? sums[p] / cnts[p] : 0;
-    // similarity = 100 - normalized euclidean distance over positions
     let dist = 0, denom = 0;
     for (const p of POSITIONS) { const d = champPos[p] - ownerProfile[p]; dist += d * d; denom += champPos[p] * champPos[p]; }
     const sim = denom > 0 ? Math.max(0, Math.round(100 - (Math.sqrt(dist) / Math.sqrt(denom)) * 100)) : 0;
     if (sim > bestSim) { bestSim = sim; closestChampion = { season, ownerName: champ?.ownerName ?? "Champion", totalPointsFor: champ?.pf ?? 0, similarity: sim }; }
   }
 
-  // ── Biggest threat to path: focal's worst head-to-head rival ──────────
-  // teamId per (owner, season) for matchup joins
+  // ── Biggest threat / biggest rival ────────────────────────────────────
   const teamIdByOwnerSeason = new Map<string, number>();
-  const teamOwnerBySeasonTeam = new Map<string, string>(); // `${season}:${teamId}` -> ownerId
+  const teamOwnerBySeasonTeam = new Map<string, string>();
   for (const t of teams) {
     teamIdByOwnerSeason.set(`${t.ownerId}:${t.season}`, t.teamId);
     teamOwnerBySeasonTeam.set(`${t.season}:${t.teamId}`, t.ownerId);
@@ -222,39 +223,29 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
   let biggestThreat: PathThreat | null = null;
   let worstNet = 0;
   for (const [g, rec] of h2h) {
-    if (rec.w + rec.l < 3) continue; // need a meaningful sample
+    if (rec.w + rec.l < 3) continue;
     const net = rec.l - rec.w;
-    const score = net + rec.playoffL * 2; // weight playoff losses heavily
+    const score = net + rec.playoffL * 2;
     if (score > worstNet) {
       worstNet = score;
       const nm = nameByOwner.get(g) ?? "A rival";
       biggestThreat = {
-        ownerName: nm,
-        record: `${rec.w}-${rec.l}`,
-        netLosses: net,
-        playoffLosses: rec.playoffL,
+        ownerName: nm, record: `${rec.w}-${rec.l}`, netLosses: net, playoffLosses: rec.playoffL,
         detail: `You are ${rec.w}-${rec.l} against ${nm}${rec.playoffL > 0 ? `, including ${rec.playoffL} playoff loss${rec.playoffL > 1 ? "es" : ""}` : ""}. They are the rival most often standing in your way.`,
       };
     }
   }
-
-  // Biggest rival = the opponent faced most often (longest, most-contested history),
-  // tie-broken by how close the all-time record is. Distinct from biggestThreat (who beats
-  // you most): a rival can be someone you are near-even with but have battled the most.
   let biggestRival: PathThreat | null = null;
   let bestRivalScore = -1;
   for (const [g, rec] of h2h) {
     const games = rec.w + rec.l;
-    if (games < 3) continue; // need a meaningful sample
+    if (games < 3) continue;
     const score = games * 10 - Math.abs(rec.w - rec.l);
     if (score > bestRivalScore) {
       bestRivalScore = score;
       const nm = nameByOwner.get(g) ?? "A rival";
       biggestRival = {
-        ownerName: nm,
-        record: `${rec.w}-${rec.l}`,
-        netLosses: rec.l - rec.w,
-        playoffLosses: rec.playoffL,
+        ownerName: nm, record: `${rec.w}-${rec.l}`, netLosses: rec.l - rec.w, playoffLosses: rec.playoffL,
         detail: `You have faced ${nm} ${games} times (${rec.w}-${rec.l})${rec.playoffL > 0 ? `, with ${rec.playoffL} playoff loss${rec.playoffL > 1 ? "es" : ""}` : ""} -- your most-contested matchup.`,
       };
     }
@@ -268,8 +259,8 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
     if (why.findings.length) pastReasonContext = why.findings[0].headline;
   } catch { /* non-fatal */ }
   try {
-    // Draft Reality is per-season; use the most recent weekly season for draft-vs-management signal.
-    const dr = await computeDraftReality(2025);
+    // Phase B5: pass leagueId to computeDraftReality — no implicit 457622 fallback.
+    const dr = await computeDraftReality(2025, leagueId);
     const impact = dr.ownerImpacts.find((o) => o.ownerKey === focal);
     if (impact) {
       draftContext = `In 2025 your draft graded ${impact.draftGrade}/100 and your in-season management ${impact.rosterMgmtGrade}/100 (overall ${impact.overallGrade}).`;
@@ -312,7 +303,6 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
 
   const confidence: ChampionshipPathResult["confidence"] = weekly.length > 0 && champPerPos.QB.length > 0 ? "High" : "Limited";
 
-  // top 3 required improvements (positional gaps first, then output gap, then beating the threat)
   const topImprovements: string[] = [];
   for (const g of positionGaps.filter((x) => x.gap > 0).slice(0, 2)) {
     topImprovements.push(`Raise ${g.position} scoring by ${g.gap} pts/game to reach the champion bar (${g.ownerAvg} → ${g.championAvg}).`);

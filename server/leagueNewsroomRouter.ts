@@ -14,12 +14,12 @@
 
 import { z }                       from "zod";
 import { router, publicProcedure } from "./_core/trpc";
-import { getDb }                   from "./db";
+import { getDb, resolveActiveLeagueId } from "./db";
 import { sql as drizzleSql }       from "drizzle-orm";
 import { invokeLLM }               from "./_core/llm";
 import { buildChampionshipEvidence } from "./leagueNewsroomEvidence";
 
-const LEAGUE_ID = "457622";
+// Phase B6: LEAGUE_ID constant removed — leagueId is resolved per-request.
 const LEAGUE_NAME = "ATLANTAS FINEST FF";
 
 // ── LLM prompt templates ──────────────────────────────────────────────────────
@@ -107,14 +107,13 @@ Format output as JSON:
       ].filter((l, i, arr) => l !== "" || arr[i - 1] !== "").join("\n"),
     };
   } catch {
-    // Fall back to raw text
     return { headline, body: text };
   }
 }
 
 // ── Save article to DB ────────────────────────────────────────────────────────
 
-async function saveArticle(db: any, params: {
+async function saveArticle(db: any, leagueId: string, params: {
   season: number; articleType: string; slug: string; category: string;
   headline: string; subheadline?: string; body: string; byline?: string;
   evidenceJson?: Record<string, unknown>; isPredicted?: boolean;
@@ -124,7 +123,7 @@ async function saveArticle(db: any, params: {
     INSERT INTO league_wire_articles
       (leagueId, season, articleType, slug, category, headline, subheadline, body, byline, evidenceJson, isPredicted)
     VALUES
-      (${LEAGUE_ID}, ${params.season}, ${params.articleType}, ${params.slug}, ${params.category},
+      (${leagueId}, ${params.season}, ${params.articleType}, ${params.slug}, ${params.category},
        ${params.headline}, ${params.subheadline ?? null}, ${params.body}, ${params.byline ?? "League Wire Staff"},
        ${ev}, ${params.isPredicted ? 1 : 0})
     ON DUPLICATE KEY UPDATE
@@ -136,18 +135,31 @@ async function saveArticle(db: any, params: {
   `);
 }
 
+// ── League resolver helper ────────────────────────────────────────────────────
+
+async function resolveLeagueId(userId: number): Promise<string> {
+  const { leagueId } = await resolveActiveLeagueId(
+    { user: userId ? { id: userId } : undefined },
+    null,
+    undefined,
+  );
+  return leagueId;
+}
+
 // ── Router ────────────────────────────────────────────────────────────────────
 
 export const leagueNewsroomRouter = router({
 
   /** Available seasons for the archive */
   getArchiveSeasons: publicProcedure
-    .query(async () => {
+    .query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) return [];
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      if (!leagueId || leagueId === "default") return [];
       const [rows] = await db.execute(drizzleSql`
         SELECT DISTINCT season FROM league_medals
-        WHERE leagueId = ${LEAGUE_ID}
+        WHERE leagueId = ${leagueId}
         ORDER BY season DESC
       `) as unknown as [any[]];
       return (rows as any[]).map(r => Number(r.season));
@@ -156,13 +168,15 @@ export const leagueNewsroomRouter = router({
   /** Articles for a season (from cache) */
   getSeasonArticles: publicProcedure
     .input(z.object({ season: z.number().int(), category: z.string().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      if (!leagueId || leagueId === "default") return [];
       const [rows] = await db.execute(drizzleSql`
         SELECT id, season, articleType, slug, category, headline, subheadline, body, byline, isPredicted, createdAt
         FROM league_wire_articles
-        WHERE leagueId = ${LEAGUE_ID} AND season = ${input.season}
+        WHERE leagueId = ${leagueId} AND season = ${input.season}
         ${input.category ? drizzleSql`AND category = ${input.category}` : drizzleSql``}
         ORDER BY FIELD(articleType,'championship_march','season_summary','keeper_preview','roster_construction') ASC, createdAt DESC
       `) as unknown as [any[]];
@@ -172,13 +186,15 @@ export const leagueNewsroomRouter = router({
   /** All articles across all seasons for the newsroom feed */
   getNewsroomFeed: publicProcedure
     .input(z.object({ limit: z.number().int().min(1).max(50).default(20) }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      if (!leagueId || leagueId === "default") return [];
       const [rows] = await db.execute(drizzleSql`
         SELECT id, season, articleType, slug, category, headline, subheadline, body, byline, isPredicted, createdAt
         FROM league_wire_articles
-        WHERE leagueId = ${LEAGUE_ID} AND status = 'published'
+        WHERE leagueId = ${leagueId} AND status = 'published'
         ORDER BY season DESC, createdAt DESC
         LIMIT ${input.limit}
       `) as unknown as [any[]];
@@ -188,9 +204,11 @@ export const leagueNewsroomRouter = router({
   /** Generate Championship March article for a season */
   generateChampionshipMarch: publicProcedure
     .input(z.object({ season: z.number().int().min(2010).max(2030) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { ok: false, error: "DB unavailable" };
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      if (!leagueId || leagueId === "default") return { ok: false, error: "setup_required", requiresSetup: true };
 
       const { season } = input;
       const slug = `championship-march-${season}`;
@@ -198,17 +216,16 @@ export const leagueNewsroomRouter = router({
       // Check cache first
       const [existing] = await db.execute(drizzleSql`
         SELECT id, headline FROM league_wire_articles
-        WHERE leagueId = ${LEAGUE_ID} AND slug = ${slug}
+        WHERE leagueId = ${leagueId} AND slug = ${slug}
       `) as unknown as [any[]];
       if ((existing as any[]).length > 0) {
         return { ok: true, cached: true, id: (existing as any[])[0].id };
       }
 
-      // Build evidence
-      const evidence = await buildChampionshipEvidence(db, season);
+      // Build evidence — Phase B6: pass leagueId to evidence builder
+      const evidence = await buildChampionshipEvidence(db, season, leagueId);
       if (!evidence) return { ok: false, error: `No data found for season ${season}` };
 
-      // Prepare compact evidence for LLM (trim large arrays)
       const llmEvidence = {
         season,
         champion:     evidence.champion,
@@ -240,7 +257,7 @@ export const leagueNewsroomRouter = router({
         maxTokens: 2000,
       });
 
-      await saveArticle(db, {
+      await saveArticle(db, leagueId, {
         season, articleType: "championship_march", slug, category: "archive",
         headline, body,
         byline: "League Wire Historical Staff",
@@ -253,13 +270,15 @@ export const leagueNewsroomRouter = router({
 
   /** Generate all missing Championship March articles (batch) */
   generateAllChampionshipMarches: publicProcedure
-    .mutation(async () => {
+    .mutation(async ({ ctx }) => {
       const db = await getDb();
       if (!db) return { ok: false, error: "DB unavailable" };
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      if (!leagueId || leagueId === "default") return { ok: false, error: "setup_required", requiresSetup: true };
 
       const [seasonRows] = await db.execute(drizzleSql`
         SELECT DISTINCT season FROM league_medals
-        WHERE leagueId = ${LEAGUE_ID}
+        WHERE leagueId = ${leagueId}
         ORDER BY season ASC
       `) as unknown as [any[]];
 
@@ -269,7 +288,7 @@ export const leagueNewsroomRouter = router({
       for (const season of seasons) {
         const slug = `championship-march-${season}`;
         const [ex] = await db.execute(drizzleSql`
-          SELECT id FROM league_wire_articles WHERE leagueId = ${LEAGUE_ID} AND slug = ${slug}
+          SELECT id FROM league_wire_articles WHERE leagueId = ${leagueId} AND slug = ${slug}
         `) as unknown as [any[]];
 
         if ((ex as any[]).length > 0) {
@@ -278,7 +297,8 @@ export const leagueNewsroomRouter = router({
         }
 
         try {
-          const evidence = await buildChampionshipEvidence(db, season);
+          // Phase B6: pass leagueId to evidence builder
+          const evidence = await buildChampionshipEvidence(db, season, leagueId);
           if (!evidence) { results.push({ season, status: "no_data" }); continue; }
 
           const llmEvidence = {
@@ -303,14 +323,14 @@ export const leagueNewsroomRouter = router({
             maxTokens: 2000,
           });
 
-          await saveArticle(db, {
+          await saveArticle(db, leagueId, {
             season, articleType: "championship_march", slug, category: "archive",
             headline, body, byline: "League Wire Historical Staff",
             evidenceJson: llmEvidence,
           });
 
           results.push({ season, status: "generated", headline });
-          await new Promise(r => setTimeout(r, 1500)); // rate limit
+          await new Promise(r => setTimeout(r, 1500));
         } catch (err: unknown) {
           results.push({ season, status: "error", error: err instanceof Error ? err.message : String(err) });
         }
@@ -322,19 +342,19 @@ export const leagueNewsroomRouter = router({
   /** Generate keeper preview articles for upcoming season */
   generateKeeperPreviews: publicProcedure
     .input(z.object({ draftYear: z.number().int() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { ok: false, error: "DB unavailable" };
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      if (!leagueId || leagueId === "default") return { ok: false, error: "setup_required", requiresSetup: true };
       const { draftYear } = input;
 
-      // Get keeper pool from the espn keeperPool endpoint (data is already computed)
-      // We'll use the draft_picks table for historical keeper analysis
       const [keeperRows] = await db.execute(drizzleSql`
         SELECT d.playerName, d.position, d.roundId, d.isKeeper, d.season,
                t.name as teamName, t.ownerName
         FROM draft_picks d
         JOIN teams t ON t.season = d.season AND t.teamId = d.teamId
-        WHERE d.leagueId = ${LEAGUE_ID} AND d.isKeeper = 1
+        WHERE d.leagueId = ${leagueId} AND d.isKeeper = 1
         ORDER BY d.season DESC, d.roundId
       `) as unknown as [any[]];
 
@@ -344,7 +364,6 @@ export const leagueNewsroomRouter = router({
         return { ok: false, error: "No keeper data found. Run Full Import first." };
       }
 
-      // Group keepers by owner to find tendencies
       const byOwner = new Map<string, any[]>();
       for (const k of keepers) {
         const key = k.ownerName ?? k.teamName;
@@ -377,7 +396,7 @@ export const leagueNewsroomRouter = router({
         maxTokens: 1800,
       });
 
-      await saveArticle(db, {
+      await saveArticle(db, leagueId, {
         season: draftYear, articleType: "keeper_preview", slug, category: "preseason",
         headline, body, byline: "League Wire Draft Desk",
         evidenceJson, isPredicted: true,
@@ -389,25 +408,25 @@ export const leagueNewsroomRouter = router({
   /** Generate roster construction article for current season */
   generateRosterConstruction: publicProcedure
     .input(z.object({ season: z.number().int() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { ok: false, error: "DB unavailable" };
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      if (!leagueId || leagueId === "default") return { ok: false, error: "setup_required", requiresSetup: true };
       const { season } = input;
 
-      // Get current rosters with projections
       const [rosterRows] = await db.execute(drizzleSql`
         SELECT r.teamId, r.playerName, r.position, r.nflTeam, r.projectedPoints,
                r.slotId, r.injuryStatus, t.name as teamName, t.ownerName
         FROM roster_entries r
         JOIN teams t ON t.season = r.season AND t.teamId = r.teamId
-        WHERE r.leagueId = ${LEAGUE_ID} AND r.season = ${season} AND r.week = 0
+        WHERE r.leagueId = ${leagueId} AND r.season = ${season} AND r.week = 0
         ORDER BY r.teamId, r.projectedPoints DESC
       `) as unknown as [any[]];
 
       const rosters = rosterRows as any[];
       if (!rosters.length) return { ok: false, error: "No roster data for this season." };
 
-      // Group by team and build needs analysis
       const teamMap = new Map<number, any[]>();
       for (const r of rosters) {
         const tid = Number(r.teamId);
@@ -460,7 +479,7 @@ export const leagueNewsroomRouter = router({
         maxTokens: 2000,
       });
 
-      await saveArticle(db, {
+      await saveArticle(db, leagueId, {
         season, articleType: "roster_construction", slug, category: "preseason",
         headline, body, byline: "League Wire Draft Desk",
         evidenceJson, isPredicted: false,
@@ -472,12 +491,14 @@ export const leagueNewsroomRouter = router({
   /** Delete cached article to force regeneration */
   deleteArticle: publicProcedure
     .input(z.object({ slug: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { ok: false };
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      if (!leagueId || leagueId === "default") return { ok: false, error: "setup_required" };
       await db.execute(drizzleSql`
         DELETE FROM league_wire_articles
-        WHERE leagueId = ${LEAGUE_ID} AND slug = ${input.slug}
+        WHERE leagueId = ${leagueId} AND slug = ${input.slug}
       `);
       return { ok: true };
     }),

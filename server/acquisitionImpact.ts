@@ -20,7 +20,7 @@ import { sql } from "drizzle-orm";
 import { getDb, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
 import { computeDraftReality } from "./draftRealitySimulator";
 
-const DEFAULT_LEAGUE_ID = "457622";
+// Phase B4: DEFAULT_LEAGUE_ID constant removed — setup required if no active league.
 const WEEKLY_SEASONS = [2021, 2022, 2023, 2024, 2025];
 const MIN_SEASONS_FOR_RANKING = 2;
 
@@ -82,7 +82,11 @@ export async function computeAcquisitionImpact(userId?: number, ownerKeyOverride
   if (!db) throw new Error("Database unavailable");
 
   const profile = await resolveActiveProfile(userId != null ? { id: userId } : null);
-  const leagueId = profile?.leagueId || DEFAULT_LEAGUE_ID;
+  // Phase B4: no fallback to hardcoded league — throw if no active league.
+  const leagueId = profile?.leagueId ?? "";
+  if (!leagueId || leagueId === "default") {
+    throw new Error("SETUP_REQUIRED: No active league — connect a league in Settings.");
+  }
   const isSetupComplete = !!profile?.isSetupComplete;
 
   const limitationNote =
@@ -174,7 +178,7 @@ export async function computeAcquisitionImpact(userId?: number, ownerKeyOverride
   // ── Draft Reality grades (relative draft vs roster-management) ────────
   const drGradeByOwner = new Map<string, { draftGrade: number; mgmtGrade: number; n: number }>();
   try {
-    const drResults = await Promise.all(WEEKLY_SEASONS.map((s) => computeDraftReality(s)));
+    const drResults = await Promise.all(WEEKLY_SEASONS.map((s) => computeDraftReality(s, leagueId)));
     for (const dr of drResults) {
       for (const o of dr.ownerImpacts) {
         const g = normGuid(o.ownerKey)!;
