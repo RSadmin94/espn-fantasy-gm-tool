@@ -21,7 +21,7 @@ export function CommandDashboard(){
   const lg: any = useLeagueContext();
   const season = lg?.season ?? new Date().getFullYear();
   const scoring: string = lg?.scoringType ?? "";
-  const draftQ = (trpc as any).draftWarRoom.getDraftWarRoomData.useQuery({ season }, { staleTime:300000, refetchOnWindowFocus:false, enabled: !!season });
+  const draftQ = (trpc as any).draftWarRoom.getDraftWarRoomData.useQuery({ season }, { staleTime: 5 * 60_000, refetchOnMount: false, refetchOnWindowFocus:false, enabled: !!season });
   const d: any = draftQ.data ?? {};
   const meters: any[] = d.shockMeters ?? [];
   const runs: any[] = d.positionRunAlerts ?? [];

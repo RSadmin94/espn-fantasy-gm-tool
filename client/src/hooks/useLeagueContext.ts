@@ -80,9 +80,9 @@ export function useLeagueContext(): LeagueContext {
   const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const { user, isLoaded: userLoaded } = useUser();
 
-  const activeQ = trpc.league.getActive.useQuery(undefined, { staleTime: 30_000 });
-  const leaguesQ = trpc.league.getMyLeagues.useQuery(undefined, { staleTime: 30_000 });
-  const cachedQ = trpc.espn.cachedSeasons.useQuery(undefined, { staleTime: 30_000 });
+  const activeQ = trpc.league.getActive.useQuery(undefined, { staleTime: 5 * 60_000, refetchOnMount: false });
+  const leaguesQ = trpc.league.getMyLeagues.useQuery(undefined, { staleTime: 5 * 60_000, refetchOnMount: false });
+  const cachedQ = trpc.espn.cachedSeasons.useQuery(undefined, { staleTime: 5 * 60_000, refetchOnMount: false });
 
   const season = useMemo(() => {
     const arr = cachedQ.data;
@@ -96,15 +96,15 @@ export function useLeagueContext(): LeagueContext {
 
   const settingsQ = trpc.espn.settings.useQuery(
     { season },
-    { enabled: cacheReady, staleTime: 60_000 }
+    { enabled: cacheReady, staleTime: 10 * 60_000, refetchOnMount: false }
   );
   const teamsQ = trpc.espn.teams.useQuery(
     { season },
-    { enabled: cacheReady, staleTime: 60_000 }
+    { enabled: cacheReady, staleTime: 10 * 60_000, refetchOnMount: false }
   );
   const draftQ = trpc.espn.draftOrder.useQuery(
     { season },
-    { enabled: cacheReady, staleTime: 60_000 }
+    { enabled: cacheReady, staleTime: 10 * 60_000, refetchOnMount: false }
   );
 
   const settings = settingsQ.data as
