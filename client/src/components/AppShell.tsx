@@ -66,6 +66,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: "WAR ROOMS",
     items: [
       { kind: "link", label: "Dashboard",      href: "/dashboard",      icon: LayoutDashboard },
+      { kind: "link", label: "Commissioner Hub", href: "/commissioner-command-center", icon: Crown },
       { kind: "link", label: "Draft War Room", href: "/draft-war-room", icon: Zap },
       { kind: "link", label: "Draft Reality Sim", href: "/draft-reality", icon: FlaskConical },
       { kind: "link", label: "Why Haven't I Won?", href: "/why-havent-i-won", icon: HelpCircle },

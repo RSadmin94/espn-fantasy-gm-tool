@@ -39,6 +39,7 @@ import { PlayerDatabase }    from "./pages/PlayerDatabase";
 import { LeagueWire }         from "./pages/LeagueWire";
 import { DraftWarRoom }      from "./pages/DraftWarRoom";
 import { RivalryCenter }     from "./pages/RivalryCenter";
+import { CommissionerCommandCenter } from "./pages/CommissionerCommandCenter";
 import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
@@ -132,6 +133,7 @@ const router = createBrowserRouter([
           { path: "/dashboard", element: <CommandDashboard /> },
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/sync", element: <SyncData /> },
+          { path: "/commissioner-command-center", element: <CommissionerCommandCenter /> },
           { path: "/league-settings",      element: <LeagueSettings /> },
           { path: "/owner-profiles",         element: <OwnerProfiles /> },
           { path: "/league-data-health",     element: <LeagueDataHealth /> },
@@ -160,22 +162,17 @@ const router = createBrowserRouter([
           { path: "/settings", element: <Settings /> },
 
           // ── Legacy route redirects ────────────────────────────────────
-          // Chrome extension posts here after ESPN connect
           { path: "/command-center", element: <Navigate to="/dashboard" replace /> },
-          // Renamed routes
           { path: "/championships", element: <Navigate to="/hall-of-fame" replace /> },
           { path: "/rosters", element: <Navigate to="/roster" replace /> },
           { path: "/refresh", element: <Navigate to="/sync" replace /> },
           { path: "/data-center", element: <Navigate to="/sync" replace /> },
           { path: "/data-health", element: <Navigate to="/sync" replace /> },
-          // Trade-related old paths
           { path: "/trade", element: <Navigate to="/trades" replace /> },
           { path: "/trade-lab", element: <Navigate to="/trades" replace /> },
           { path: "/trade-offer", element: <Navigate to="/trades" replace /> },
-          // Billing routes now live under settings
           { path: "/billing/success", element: <Navigate to="/settings" replace /> },
           { path: "/billing/cancel", element: <Navigate to="/settings" replace /> },
-          // All other old hub/feature paths → dashboard
           { path: "/keeper-lab", element: <Navigate to="/dashboard" replace /> },
           { path: "/waiver-lab", element: <Navigate to="/dashboard" replace /> },
           { path: "/waiver", element: <Navigate to="/dashboard" replace /> },
