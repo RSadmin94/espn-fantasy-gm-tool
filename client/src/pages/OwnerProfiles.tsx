@@ -42,7 +42,7 @@ function str(v: unknown)  { return String(v ?? "—"); }
 function Badge({ children, color = "default" }: { children: ReactNode; color?: "gold" | "silver" | "bronze" | "default" }) {
   return (
     <span className={cn(
-      "inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-semibold",
+      "inline-flex items-center rounded border px-1.5 py-0.5 text-[12px] font-semibold",
       color === "gold"    && "border-amber-500/40 bg-amber-500/10 text-amber-200",
       color === "silver"  && "border-slate-500/40  bg-slate-500/10  text-slate-200",
       color === "bronze"  && "border-orange-600/40 bg-orange-500/10 text-orange-200",
@@ -149,7 +149,7 @@ const EARLY_CONIC: Record<string, string> = {
 
 function MatchupTag({ tag }: { tag: string }) {
   return (
-    <span className={cn("inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", TAG_STYLES[tag] ?? TAG_STYLES.Normal)}>
+    <span className={cn("inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide", TAG_STYLES[tag] ?? TAG_STYLES.Normal)}>
       {tag}
     </span>
   );
@@ -1294,7 +1294,7 @@ export function OwnerProfiles() {
           <Users className="h-6 w-6 text-[#a3e635]" />
         </div>
         <div className="min-w-0">
-          <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#8b97a8]">League Intelligence Desk</div>
+          <div className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#8b97a8]">League Intelligence Desk</div>
           <h1 className="text-3xl md:text-4xl font-black tracking-tight text-[#f3f8ff] leading-none">Owner Profiles</h1>
           <p className="mt-1.5 text-sm text-[#8b97a8]">{active.length} active owner{active.length !== 1 ? "s" : ""} - click to view full profile</p>
         </div>

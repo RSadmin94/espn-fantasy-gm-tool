@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { useLeagueContext } from "@/hooks/useLeagueContext";
 import {
   Loader2, AlertTriangle, CheckCircle, XCircle, MinusCircle,
   HelpCircle, Dna, Brain, Sparkles, ChevronDown, Info,
@@ -207,7 +208,8 @@ function AIInsight({ pool, ownerFilter }: { pool: KeeperEntry[]; ownerFilter: st
 
 export function KeeperAdvisor() {
   const draftYear    = new Date().getFullYear();
-  const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const { myOwnerName, teamCount } = useLeagueContext();
+  const [ownerFilter, setOwnerFilter] = useState<string>(() => myOwnerName ?? "all");
   const [posFilter,   setPosFilter]   = useState<string>("all");
   const [maxKeepers,  setMaxKeepers]  = useState<string>("all");
 
@@ -286,7 +288,7 @@ export function KeeperAdvisor() {
               Recommendations based on your league history and player performance
             </p>
             <p className="mt-0.5 text-xs text-zinc-600">
-              {pool.length} eligible players across {owners.length} teams · {draftYear - 1} season draft history
+              {pool.length} eligible players across {owners.length} teams{teamCount > 0 && owners.length < teamCount ? ` · ${teamCount - owners.length} team(s) need roster sync` : ""} · {draftYear - 1} season draft history
             </p>
           </div>
         </div>
@@ -344,24 +346,33 @@ export function KeeperAdvisor() {
           {/* Table */}
           <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-zinc-800 bg-[#140e17]">
             {filtered.length === 0 ? (
-              <div className="px-6 py-16 text-center text-sm text-zinc-500">
-                No players match the current filters.
+              <div className="px-6 py-16 text-center">
+                <p className="text-sm font-semibold text-zinc-300">
+                  {ownerFilter !== "all"
+                    ? `No keeper data found for ${ownerFilter}`
+                    : "No players match the current filters."}
+                </p>
+                {ownerFilter !== "all" && !owners.includes(ownerFilter) && (
+                  <p className="mt-2 text-xs text-zinc-600">
+                    This team's current roster hasn't been synced yet. Run a Full Sync from the extension to populate their players.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-zinc-800 bg-zinc-900/60">
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Player Name</th>
-                      <th className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Position</th>
-                      <th className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-500">NFL Team</th>
-                      <th className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Draft Round Cost</th>
-                      <th className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Proj Points</th>
-                      <th className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                      <th className="px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Player Name</th>
+                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Position</th>
+                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">NFL Team</th>
+                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Draft Round Cost</th>
+                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Proj Points</th>
+                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">
                         Keeper Value Score (KVS) <ChevronDown className="ml-1 inline h-3 w-3" />
                       </th>
-                      <th className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Confidence</th>
-                      <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Recommendation</th>
+                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Confidence</th>
+                      <th className="px-4 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Recommendation</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -386,7 +397,7 @@ export function KeeperAdvisor() {
                               </div>
                               <div>
                                 <div className="font-semibold text-zinc-100">{entry.playerName}</div>
-                                <div className="text-[11px] text-zinc-500">{entry.ownerName}</div>
+                                <div className="text-[12px] text-zinc-500">{entry.ownerName}</div>
                               </div>
                             </div>
                           </td>
@@ -413,7 +424,7 @@ export function KeeperAdvisor() {
                               Round {entry.keeperRoundCost}
                             </span>
                             {entry.isLastKeeperYear && (
-                              <div className="mt-0.5 text-[9px] font-bold uppercase text-amber-500 tracking-wide">Last Year</div>
+                              <div className="mt-0.5 text-[10px] font-bold uppercase text-amber-500 tracking-wide">Last Year</div>
                             )}
                           </td>
 
@@ -449,7 +460,7 @@ export function KeeperAdvisor() {
             {/* Table footer */}
             <div className="flex items-center gap-2 border-t border-zinc-800/60 px-4 py-2.5">
               <Info className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
-              <p className="text-[11px] text-zinc-600">
+              <p className="text-[12px] text-zinc-600">
                 KVS = Keeper Value Score. Higher scores indicate more value for your specific league and roster context.
                 Projected Points require the gmWeeklyPlayerStats pipeline (Phase 2).
               </p>

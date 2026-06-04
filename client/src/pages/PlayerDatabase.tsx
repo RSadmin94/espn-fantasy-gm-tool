@@ -256,7 +256,7 @@ export function PlayerDatabase() {
             return (
               <button key={p} onClick={() => { setPos(active && p !== "ALL" ? "ALL" : p); setPage(0); }}
                 className={cn(
-                  "px-2.5 py-1 rounded text-[11px] font-bold border transition-all",
+                  "px-2.5 py-1 rounded text-[12px] font-bold border transition-all",
                   active
                     ? p === "ALL"
                       ? "bg-zinc-100 text-zinc-900 border-zinc-100"
@@ -304,13 +304,13 @@ export function PlayerDatabase() {
             <div className="grid px-4 py-3"
               style={{ gridTemplateColumns: "36px 1fr 80px 100px 130px 80px 72px 76px" }}>
               <div className="text-[10px] font-semibold text-zinc-600 uppercase">#</div>
-              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Player</div>
-              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Pos</div>
-              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">NFL Team</div>
-              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Dynasty Value</div>
-              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Status</div>
-              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">First Yr</div>
-              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">AVG Pick</div>
+              <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">Player</div>
+              <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">Pos</div>
+              <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">NFL Team</div>
+              <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">Dynasty Value</div>
+              <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">Status</div>
+              <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">First Yr</div>
+              <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">AVG Pick</div>
             </div>
           </div>
 

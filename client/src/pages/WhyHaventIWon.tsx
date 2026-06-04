@@ -64,7 +64,7 @@ function Stat({ label, value, accent }: { label: string; value: ReactNode; accen
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-center">
       <div className={cn("text-[22px] font-black leading-none tabular-nums", accent ?? "text-white/90")}>{value}</div>
-      <div className="mt-1 text-[11px] uppercase tracking-wide text-white/40">{label}</div>
+      <div className="mt-1 text-[12px] uppercase tracking-wide text-white/40">{label}</div>
     </div>
   );
 }
@@ -124,7 +124,7 @@ function TimelineRow({ card }: { card: any }) {
           </div>
         )}
         {!card.playerLevelAvailable && !inProgress && (
-          <div className="mt-1.5 text-[11px] italic text-white/25">Player-level metrics unavailable before 2021. Team-level analysis available.</div>
+          <div className="mt-1.5 text-[12px] italic text-white/25">Player-level metrics unavailable before 2021. Team-level analysis available.</div>
         )}
       </div>
     </div>
@@ -275,8 +275,8 @@ export function WhyHaventIWon() {
                   {patterns.map((p: any) => (
                     <div key={p.id} className={cn("rounded-xl border bg-white/[0.02] p-4", sevBorder(p.severity))}>
                       <div className={cn("text-[26px] font-black leading-none tabular-nums", sevText(p.severity))}>{p.value}</div>
-                      <div className="mt-1.5 text-[13px] font-semibold text-white/85">{p.label}</div>
-                      <div className="mt-1 text-[11.5px] leading-snug text-white/40">{p.detail}</div>
+                      <div className="mt-1.5 text-[12px] font-semibold text-white/85">{p.label}</div>
+                      <div className="mt-1 text-[12px] leading-snug text-white/40">{p.detail}</div>
                     </div>
                   ))}
                 </div>
@@ -331,10 +331,10 @@ export function WhyHaventIWon() {
                         const ahead = g.gap < -0.05;
                         return (
                           <div key={g.position} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-center">
-                            <div className="text-[12px] font-bold uppercase tracking-wide text-white/50">{g.position}</div>
-                            <div className="mt-1 text-[20px] font-black tabular-nums text-white/90">{g.ownerAvg.toFixed(1)}</div>
-                            <div className="text-[11px] text-white/35">champ {g.championAvg.toFixed(1)}</div>
-                            <div className={cn("mt-1 inline-flex items-center gap-1 text-[12px] font-bold tabular-nums", behind ? "text-red-400" : ahead ? "text-lime-400" : "text-white/50")}>
+                            <div className="text-[13px] font-bold uppercase tracking-wide text-white/50">{g.position}</div>
+                            <div className="mt-1 text-[22px] font-black tabular-nums text-white/90">{g.ownerAvg.toFixed(1)}</div>
+                            <div className="text-[12px] text-white/35">champ {g.championAvg.toFixed(1)}</div>
+                            <div className={cn("mt-1 inline-flex items-center gap-1 text-[13px] font-bold tabular-nums", behind ? "text-red-400" : ahead ? "text-lime-400" : "text-white/50")}>
                               {behind ? <ArrowDown className="h-3 w-3" /> : ahead ? <ArrowUp className="h-3 w-3" /> : null}
                               {g.gap > 0 ? `-${g.gap.toFixed(1)}` : `+${Math.abs(g.gap).toFixed(1)}`}
                             </div>

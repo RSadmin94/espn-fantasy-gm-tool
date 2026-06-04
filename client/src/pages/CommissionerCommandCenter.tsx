@@ -130,8 +130,8 @@ function StatTile({
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-center">
       <div className={cn("text-[22px] font-black leading-none tabular-nums", accent ?? "text-white/90")}>{value}</div>
-      <div className="mt-1 text-[11px] uppercase tracking-wide text-white/40">{label}</div>
-      {sub && <div className="mt-1 text-[11px] text-white/30">{sub}</div>}
+      <div className="mt-1 text-[12px] uppercase tracking-wide text-white/40">{label}</div>
+      {sub && <div className="mt-1 text-[12px] text-white/30">{sub}</div>}
     </div>
   );
 }
@@ -193,28 +193,28 @@ function BroadcastCard({
     <div className={cn(PANEL, "p-4 space-y-3")}>
       <div className="flex items-center gap-2">
         <span className="text-violet-400 shrink-0">{icon}</span>
-        <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-white/40">{label}</span>
+        <span className="text-[12px] font-bold uppercase tracking-[0.15em] text-white/40">{label}</span>
       </div>
       <p className="text-[14px] leading-relaxed text-white/80 italic">"{fact}"</p>
       <div className="flex flex-wrap gap-2 pt-1">
         <button
           type="button"
           onClick={handleCopy}
-          className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-[11px] font-medium text-violet-200 transition-colors hover:bg-violet-500/20"
+          className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-[12px] font-medium text-violet-200 transition-colors hover:bg-violet-500/20"
         >
           {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-lime-400" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
           {copied ? "Copied!" : "Copy"}
         </button>
         <a
           href={email}
-          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium text-white/50 transition-colors hover:bg-white/[0.07] hover:text-white/80"
+          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-white/50 transition-colors hover:bg-white/[0.07] hover:text-white/80"
         >
           <Mail className="h-3.5 w-3.5" /> Email
         </a>
         <button
           type="button"
           onClick={() => copyText(discordText)}
-          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium text-white/50 transition-colors hover:bg-white/[0.07] hover:text-white/80"
+          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-white/50 transition-colors hover:bg-white/[0.07] hover:text-white/80"
         >
           <MessageSquare className="h-3.5 w-3.5" /> Discord
         </button>
@@ -428,7 +428,7 @@ export function CommissionerCommandCenter() {
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-violet-300">
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[12px] font-semibold uppercase tracking-wider text-violet-300">
                 <LayoutDashboard className="h-3.5 w-3.5" />
                 Commissioner Command Center
               </div>
@@ -492,7 +492,7 @@ export function CommissionerCommandCenter() {
               <div className={CARD}>
                 <div className="mb-3 flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-lime-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Most Active Owner</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Most Active Owner</span>
                 </div>
                 <p className="text-lg font-bold text-white/95">{mostActive.ownerName}</p>
                 <p className="mt-1 text-sm text-white/55">{mostActive.primaryDNA}</p>
@@ -509,7 +509,7 @@ export function CommissionerCommandCenter() {
               <div className={CARD}>
                 <div className="mb-3 flex items-center gap-2">
                   <TrendingDown className="h-4 w-4 text-zinc-500" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Least Active Owner</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Least Active Owner</span>
                 </div>
                 <p className="text-lg font-bold text-white/95">{leastActive.ownerName}</p>
                 <p className="mt-1 text-sm text-white/55">{leastActive.primaryDNA}</p>
@@ -526,7 +526,7 @@ export function CommissionerCommandCenter() {
               <div className={cn(CARD, "border-amber-500/20 bg-gradient-to-b from-amber-500/[0.06] to-transparent")}>
                 <div className="mb-3 flex items-center gap-2">
                   <Crown className="h-4 w-4 text-amber-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-300/60">Reigning Champion</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-amber-300/60">Reigning Champion</span>
                 </div>
                 <p className="text-xl font-black text-amber-200">{currentChampion.championOwner}</p>
                 <p className="mt-1 text-sm text-white/55">{currentChampion.season} season</p>
@@ -544,7 +544,7 @@ export function CommissionerCommandCenter() {
               <div className={cn(CARD, "sm:col-span-2 lg:col-span-1")}>
                 <div className="mb-3 flex items-center gap-2">
                   <Globe className="h-4 w-4 text-cyan-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Activity Snapshot</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Activity Snapshot</span>
                 </div>
                 <div className="space-y-2">
                   {dnaList
@@ -570,7 +570,7 @@ export function CommissionerCommandCenter() {
                       );
                     })}
                 </div>
-                <p className="mt-3 text-[11px] text-white/25">Activity percentile scores (0–100)</p>
+                <p className="mt-3 text-[12px] text-white/25">Activity percentile scores (0–100)</p>
               </div>
             ) : null}
 
@@ -578,7 +578,7 @@ export function CommissionerCommandCenter() {
             <div className={cn(CARD, "space-y-3")}>
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-violet-400" />
-                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">League Identity</span>
+                <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">League Identity</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="rounded-lg border border-white/[0.05] bg-white/[0.02] p-2.5 text-center">
@@ -626,7 +626,7 @@ export function CommissionerCommandCenter() {
                       <span className="text-[13px] text-white/80">{tx.playersLine}</span>
                     </div>
                     <div className="shrink-0 text-right">
-                      <div className="text-[11px] text-white/35">{tx.teamLabel}</div>
+                      <div className="text-[12px] text-white/35">{tx.teamLabel}</div>
                       <div className="text-[10px] text-white/25">{formatDate(tx.processedMs)}</div>
                     </div>
                   </div>
@@ -654,23 +654,23 @@ export function CommissionerCommandCenter() {
               <div className={cn(CARD, "border-red-500/15")}>
                 <div className="mb-3 flex items-center gap-2">
                   <Swords className="h-4 w-4 text-red-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Active Rivalry</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Active Rivalry</span>
                   <SmallBadge color="red">{biggestRivalry.heatLabel}</SmallBadge>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-center">
                     <p className="text-base font-bold text-white/90">You</p>
-                    <p className="text-[11px] text-white/40">{biggestRivalry.h2hWins}W</p>
+                    <p className="text-[12px] text-white/40">{biggestRivalry.h2hWins}W</p>
                   </div>
                   <div className="flex-1 text-center">
-                    <div className={cn("inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide", heatBg(biggestRivalry.heatLabel))}>
+                    <div className={cn("inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-bold uppercase tracking-wide", heatBg(biggestRivalry.heatLabel))}>
                       <span className={heatColor(biggestRivalry.heatLabel)}>{biggestRivalry.heatLabel}</span>
                     </div>
                     <p className="mt-1 text-[10px] text-white/25">score: {biggestRivalry.rivalryScore}</p>
                   </div>
                   <div className="text-center">
                     <p className="text-base font-bold text-white/90">{biggestRivalry.rivalName.split(" ")[0]}</p>
-                    <p className="text-[11px] text-white/40">{biggestRivalry.h2hLosses}W</p>
+                    <p className="text-[12px] text-white/40">{biggestRivalry.h2hLosses}W</p>
                   </div>
                 </div>
                 {biggestRivalry.loreSentence && (
@@ -689,7 +689,7 @@ export function CommissionerCommandCenter() {
               <div className={CARD}>
                 <div className="mb-2 flex items-center gap-2">
                   <Swords className="h-4 w-4 text-zinc-600" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Active Rivalry</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Active Rivalry</span>
                 </div>
                 <p className="text-sm text-white/30">No rivalry data yet. Sync seasons to populate.</p>
               </div>
@@ -701,7 +701,7 @@ export function CommissionerCommandCenter() {
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     {storyIcon((hottestStory as any).storyType)}
-                    <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Hottest Storyline</span>
+                    <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Hottest Storyline</span>
                   </div>
                   <SmallBadge color="orange">{(hottestStory as any).emotionalTag}</SmallBadge>
                 </div>
@@ -716,14 +716,14 @@ export function CommissionerCommandCenter() {
                       style={{ width: `${Math.min(100, (hottestStory as any).intensityScore ?? 0)}%` }}
                     />
                   </div>
-                  <span className="text-[11px] font-semibold tabular-nums text-orange-300">{(hottestStory as any).intensityScore}</span>
+                  <span className="text-[12px] font-semibold tabular-nums text-orange-300">{(hottestStory as any).intensityScore}</span>
                 </div>
               </div>
             ) : (
               <div className={CARD}>
                 <div className="mb-2 flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-zinc-600" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Hottest Storyline</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Hottest Storyline</span>
                 </div>
                 <p className="text-sm text-white/30">No storylines generated yet. Refresh to compute.</p>
               </div>
@@ -734,7 +734,7 @@ export function CommissionerCommandCenter() {
               <div className={CARD}>
                 <div className="mb-3 flex items-center gap-2">
                   <Skull className="h-4 w-4 text-zinc-500" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Longest Championship Drought</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Longest Championship Drought</span>
                 </div>
                 <p className="text-xl font-bold text-white/90">{droughtOwner.displayName}</p>
                 <p className="mt-2 text-[28px] font-black tabular-nums text-zinc-400">
@@ -750,7 +750,7 @@ export function CommissionerCommandCenter() {
               <div className={cn(CARD, "border-amber-500/10")}>
                 <div className="mb-3 flex items-center gap-2">
                   <Target className="h-4 w-4 text-amber-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Closest to First Championship</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Closest to First Championship</span>
                 </div>
                 <p className="text-xl font-bold text-white/90">{closestToFirst.displayName}</p>
                 <p className="mt-1 text-sm text-white/55">
@@ -783,11 +783,11 @@ export function CommissionerCommandCenter() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-bold uppercase tracking-wide text-white/30">{story.emotionalTag}</span>
-                          <span className="ml-auto text-[11px] font-semibold tabular-nums text-white/35">{story.intensityScore}</span>
+                          <span className="ml-auto text-[12px] font-semibold tabular-nums text-white/35">{story.intensityScore}</span>
                         </div>
                         <p className="mt-1 text-[13px] font-semibold text-white/85 leading-snug line-clamp-2">{story.headline}</p>
                         {story.supportingStat && (
-                          <p className="mt-1 text-[11px] text-white/35">{story.supportingStat}</p>
+                          <p className="mt-1 text-[12px] text-white/35">{story.supportingStat}</p>
                         )}
                       </div>
                     </div>
@@ -815,11 +815,11 @@ export function CommissionerCommandCenter() {
               <div className={cn(CARD, "border-lime-500/15")}>
                 <div className="mb-3 flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-lime-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Rising Contender</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Rising Contender</span>
                 </div>
                 <p className="text-xl font-bold text-white/95">{(risingContender as any).ownerName}</p>
                 <div className="mt-2 flex items-center gap-2">
-                  <div className={cn("rounded-full border px-2.5 py-1 text-[11px] font-bold", heatBg((risingContender as any).heatLabel))}>
+                  <div className={cn("rounded-full border px-2.5 py-1 text-[12px] font-bold", heatBg((risingContender as any).heatLabel))}>
                     <span className={heatColor((risingContender as any).heatLabel)}>{(risingContender as any).heatLabel}</span>
                   </div>
                   <span className="text-[12px] tabular-nums text-white/40">Fear: {(risingContender as any).fearScore}</span>
@@ -830,7 +830,7 @@ export function CommissionerCommandCenter() {
               <div className={CARD}>
                 <div className="mb-2 flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-zinc-600" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Rising Contender</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Rising Contender</span>
                 </div>
                 <p className="text-sm text-white/30">Run a Fear Index refresh to populate.</p>
               </div>
@@ -841,7 +841,7 @@ export function CommissionerCommandCenter() {
               <div className={cn(CARD, "border-red-500/15")}>
                 <div className="mb-3 flex items-center gap-2">
                   <TrendingDown className="h-4 w-4 text-red-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Regression</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Regression</span>
                 </div>
                 <p className="text-xl font-bold text-white/95">{(collapseStory as any).ownerName}</p>
                 <p className="mt-1 text-sm text-white/55">{(collapseStory as any).record}</p>
@@ -852,7 +852,7 @@ export function CommissionerCommandCenter() {
               <div className={CARD}>
                 <div className="mb-2 flex items-center gap-2">
                   <TrendingDown className="h-4 w-4 text-zinc-600" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Regression</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Regression</span>
                 </div>
                 <p className="text-sm text-white/30">
                   {storylinesQ.isLoading ? "Loading…" : "No collapse detected this week."}
@@ -865,7 +865,7 @@ export function CommissionerCommandCenter() {
               <div className={cn(CARD, "border-violet-500/15")}>
                 <div className="mb-3 flex items-center gap-2">
                   <Shield className="h-4 w-4 text-violet-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Silent Threat</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Silent Threat</span>
                 </div>
                 <p className="text-xl font-bold text-white/95">{(silentThreat as any).ownerName}</p>
                 <p className="mt-1 text-sm text-white/55">{(silentThreat as any).record}</p>
@@ -876,7 +876,7 @@ export function CommissionerCommandCenter() {
               <div className={CARD}>
                 <div className="mb-3 flex items-center gap-2">
                   <Activity className="h-4 w-4 text-violet-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">League Activity Leader</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">League Activity Leader</span>
                 </div>
                 <p className="text-xl font-bold text-white/95">{mostActive.ownerName}</p>
                 <p className="mt-1 text-sm text-white/55">{mostActive.primaryDNA}</p>
@@ -889,7 +889,7 @@ export function CommissionerCommandCenter() {
               <div className={cn(CARD, "border-lime-500/10")}>
                 <div className="mb-3 flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-lime-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Highest Readiness</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Highest Readiness</span>
                 </div>
                 {(() => {
                   const best = [...(pulseQ.data?.teams ?? [])].sort((a, b) => {
@@ -914,7 +914,7 @@ export function CommissionerCommandCenter() {
               <div className={cn(CARD, "border-red-500/10")}>
                 <div className="mb-3 flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-red-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Lowest Readiness</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Lowest Readiness</span>
                 </div>
                 {(() => {
                   const worst = [...(pulseQ.data?.teams ?? [])].sort((a, b) => {
@@ -946,7 +946,7 @@ export function CommissionerCommandCenter() {
                 <div className={CARD}>
                   <div className="mb-3 flex items-center gap-2">
                     <Zap className="h-4 w-4 text-amber-400" />
-                    <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Most Active Manager</span>
+                    <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Most Active Manager</span>
                   </div>
                   <p className="text-xl font-bold text-white/95">{mostImproved.ownerName}</p>
                   <p className="mt-1 text-sm text-white/55">{mostImproved.primaryDNA}</p>
@@ -1010,7 +1010,7 @@ export function CommissionerCommandCenter() {
               <div className={cn(CARD, "border-amber-500/20")}>
                 <div className="mb-3 flex items-center gap-2">
                   <Trophy className="h-4 w-4 text-amber-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-300/50">Defending Champion</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-amber-300/50">Defending Champion</span>
                 </div>
                 <p className="text-xl font-bold text-amber-200">{currentChampion.championOwner}</p>
                 <p className="mt-1 text-sm text-white/55">{currentChampion.season} Champion</p>
@@ -1027,11 +1027,11 @@ export function CommissionerCommandCenter() {
               <div className={cn(CARD, "border-red-500/20")}>
                 <div className="mb-3 flex items-center gap-2">
                   <Flame className="h-4 w-4 text-red-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Threat</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Threat</span>
                 </div>
                 <p className="text-xl font-bold text-white/95">{(mostFeared as any).ownerName}</p>
                 <div className="mt-2 flex items-center gap-2">
-                  <span className={cn("rounded-full border px-2.5 py-0.5 text-[11px] font-bold uppercase", heatBg((mostFeared as any).heatLabel))}>
+                  <span className={cn("rounded-full border px-2.5 py-0.5 text-[12px] font-bold uppercase", heatBg((mostFeared as any).heatLabel))}>
                     <span className={heatColor((mostFeared as any).heatLabel)}>{(mostFeared as any).heatLabel}</span>
                   </span>
                 </div>
@@ -1052,7 +1052,7 @@ export function CommissionerCommandCenter() {
               <div className={CARD}>
                 <div className="mb-2 flex items-center gap-2">
                   <Flame className="h-4 w-4 text-zinc-600" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Threat</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Threat</span>
                 </div>
                 <p className="text-sm text-white/30">Run Fear Index refresh to populate.</p>
               </div>
@@ -1063,7 +1063,7 @@ export function CommissionerCommandCenter() {
               <div className={cn(PANEL, "p-4 sm:p-5")}>
                 <div className="mb-3 flex items-center gap-2">
                   <Skull className="h-4 w-4 text-zinc-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Fear Index — Top 5</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Fear Index — Top 5</span>
                 </div>
                 <div className="space-y-2.5">
                   {fearEntries.slice(0, 5).map((e: any, i: number) => (
@@ -1072,7 +1072,7 @@ export function CommissionerCommandCenter() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[13px] font-semibold text-white/85 truncate">{e.ownerName.split(" ")[0]}</span>
-                          <span className={cn("text-[11px] font-bold", heatColor(e.heatLabel))}>{e.fearScore}</span>
+                          <span className={cn("text-[12px] font-bold", heatColor(e.heatLabel))}>{e.fearScore}</span>
                         </div>
                         <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
                           <div
@@ -1092,7 +1092,7 @@ export function CommissionerCommandCenter() {
               <div className={cn(CARD, "border-violet-500/15")}>
                 <div className="mb-3 flex items-center gap-2">
                   <Target className="h-4 w-4 text-violet-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Most Exploitable</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Most Exploitable</span>
                 </div>
                 <p className="text-xl font-bold text-white/95">{(mostExploitable as any).ownerName}</p>
                 <p className="mt-1 text-sm text-white/55">
@@ -1106,7 +1106,7 @@ export function CommissionerCommandCenter() {
               <div className={CARD}>
                 <div className="mb-2 flex items-center gap-2">
                   <Target className="h-4 w-4 text-zinc-600" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Most Exploitable</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Most Exploitable</span>
                 </div>
                 <p className="text-sm text-white/30">Fear Index data needed.</p>
               </div>
@@ -1117,7 +1117,7 @@ export function CommissionerCommandCenter() {
               <div className={CARD}>
                 <div className="mb-3 flex items-center gap-2">
                   <Activity className="h-4 w-4 text-lime-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Activity Leader</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Activity Leader</span>
                 </div>
                 <p className="text-xl font-bold text-white/95">{mostActive.ownerName}</p>
                 <p className="mt-1 text-sm text-white/55">{mostActive.primaryDNA}</p>
@@ -1130,7 +1130,7 @@ export function CommissionerCommandCenter() {
               <div className={cn(PANEL, "p-4 sm:p-5")}>
                 <div className="mb-3 flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-amber-400" />
-                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">Desperation Board</span>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Desperation Board</span>
                 </div>
                 <div className="space-y-2.5">
                   {[...(pulseQ.data?.teams ?? [])]
@@ -1141,7 +1141,7 @@ export function CommissionerCommandCenter() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-[13px] font-semibold text-white/85 truncate">{team.ownerName.split(" ")[0]}</span>
-                            <span className={cn("text-[11px] font-semibold", team.desperationScore >= 70 ? "text-red-400" : team.desperationScore >= 45 ? "text-amber-300" : "text-white/35")}>
+                            <span className={cn("text-[12px] font-semibold", team.desperationScore >= 70 ? "text-red-400" : team.desperationScore >= 45 ? "text-amber-300" : "text-white/35")}>
                               {team.desperationScore}
                             </span>
                           </div>
@@ -1158,7 +1158,7 @@ export function CommissionerCommandCenter() {
                       </div>
                     ))}
                 </div>
-                <p className="mt-3 text-[11px] text-white/20">Trade window scores (0–100). Higher = more likely to accept offers.</p>
+                <p className="mt-3 text-[12px] text-white/20">Trade window scores (0–100). Higher = more likely to accept offers.</p>
               </div>
             ) : null}
 
