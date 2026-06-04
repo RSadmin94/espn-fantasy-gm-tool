@@ -166,15 +166,20 @@ export function PlayerDatabase() {
 
   const players = useMemo(() => {
     const field = SORT_FIELD[sortOpt];
-    return [...raw]
+    const mapped = [...raw]
       .filter(p => isFlex ? FLEX_POS.has(p.position) : true)
-      .map(p => ({ ...p, dynastyValue: dynastyValue(p) }))
-      .sort((a, b) => {
-        const av = a[field] ?? (typeof a[field] === "number" ? 0 : "");
-        const bv = b[field] ?? (typeof b[field] === "number" ? 0 : "");
-        const cmp = typeof av === "number" ? (av as number) - (bv as number) : String(av).localeCompare(String(bv));
-        return sortDir === "asc" ? cmp : -cmp;
-      });
+      .map(p => ({ ...p, dynastyValue: dynastyValue(p) }));
+
+    // avgPick is sorted server-side (all 872 rows, nulls last).
+    // Do NOT re-sort client-side — it would corrupt the order (null becomes "" < numbers).
+    if (sortOpt === "Avg Pick Order") return mapped;
+
+    return mapped.sort((a, b) => {
+      const av = a[field] ?? (typeof a[field] === "number" ? 0 : "");
+      const bv = b[field] ?? (typeof b[field] === "number" ? 0 : "");
+      const cmp = typeof av === "number" ? (av as number) - (bv as number) : String(av).localeCompare(String(bv));
+      return sortDir === "asc" ? cmp : -cmp;
+    });
   }, [raw, sortOpt, sortDir, isFlex]);
 
   // Summary stats
