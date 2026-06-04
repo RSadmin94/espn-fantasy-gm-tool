@@ -965,7 +965,7 @@ function MockDraftBoard({
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
             <span className="font-black text-violet-300 text-sm">YOUR PICK</span>
-            <span className="text-zinc-400 text-xs">Round {myPick.round} · Pick #{myPick.pickNumber}</span>
+            <span className="text-zinc-400 text-xs">Round {myPick?.round} · Pick #{myPick?.pickNumber}</span>
             <button onClick={() => { setMyPick(null); setLiveIdx(i => i + 1); setSimState("running"); }}
               className="ml-auto px-2 py-1 text-zinc-500 text-xs hover:text-zinc-300">Skip (AI picks)</button>
           </div>

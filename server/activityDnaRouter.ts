@@ -1,19 +1,32 @@
 import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
-import { resolveActiveProfile } from "./db";
+import { resolveActiveProfile, resolveActiveLeagueId } from "./db";
 import { computeActivityDna, getActivityDnaForOwner } from "./activityDnaService";
 
 /**
  * Activity DNA™ tRPC surface.
  * Profile-aware (ctx.user -> resolveActiveProfile) and multi-league ready (keyed by resolved leagueId).
  * Deterministic only; the heavy lifting lives in activityDnaService.ts. No DB writes, no LLM.
+ *
+ * League resolution: active profile connection first, then the same `resolveActiveLeagueId` chain as
+ * the rest of the app (sync_runs / env / dev fallback). Keeps anonymous Owner Profile views working
+ * after B2 removed implicit league from profile-only resolution — we still never invent a league id
+ * without DB/env.
  */
-// Phase B2: DEFAULT_LEAGUE_ID constant removed — no implicit 457622 fallback.
-
 async function resolveLeague(userId?: number): Promise<{ leagueId: string; ownerKey: string | null }> {
   const profile = await resolveActiveProfile(userId != null ? { id: userId } : null);
+  let leagueId = (profile?.leagueId ?? "").trim();
+  if (!leagueId || leagueId === "default") {
+    const { leagueId: alt } = await resolveActiveLeagueId(
+      { user: userId ? { id: userId } : undefined },
+      null,
+      undefined,
+    );
+    const a = (alt ?? "").trim();
+    if (a && a !== "default") leagueId = a;
+  }
   return {
-    leagueId: profile?.leagueId ?? "",
+    leagueId,
     ownerKey: profile?.isSetupComplete ? profile?.selectedOwnerKey ?? null : null,
   };
 }
@@ -24,7 +37,6 @@ export const activityDnaRouter = router({
     .input(z.object({ ownerKey: z.string().max(64).optional() }).optional())
     .query(async ({ ctx, input }) => {
       const { leagueId, ownerKey } = await resolveLeague(ctx.user?.id);
-      // Phase B2: no fallback to 457622 — return null if no active league.
       if (!leagueId || leagueId === "default") return null;
       const focal = input?.ownerKey ?? ownerKey;
       if (focal) {
@@ -39,7 +51,6 @@ export const activityDnaRouter = router({
   /** Whole-league Activity DNA (percentiles need the full field; used by leaderboards/integrations). */
   league: publicProcedure.query(async ({ ctx }) => {
     const { leagueId } = await resolveLeague(ctx.user?.id);
-    // Phase B2: no fallback to 457622 — return empty array if no active league.
     if (!leagueId || leagueId === "default") return [];
     return computeActivityDna(leagueId);
   }),

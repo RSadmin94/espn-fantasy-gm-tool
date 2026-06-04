@@ -64,7 +64,7 @@ export const transactionAnalysisRouter = router({
             { role: "user",   content: userPrompt },
           ],
           maxTokens: 220,
-          callType: "analysis",
+          callType: "retrospective",
           temperature: 0.4,
         });
 
