@@ -220,7 +220,7 @@ export function createWarRoomCorsMiddleware(): RequestHandler {
   };
 }
 
-const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
+const LEAGUE_ID = process.env.ESPN_LEAGUE_ID ?? "";
 const ALL_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026];
 
 async function getSeasonData(season: number, leagueId?: string, userId?: number) {
@@ -532,7 +532,8 @@ export const appRouter = router({
       const { leagueId: scoreLid } = await resolveActiveLeagueId(
         { user: ctx.user?.id ? { id: ctx.user.id } : undefined }, null, undefined,
       );
-      const lid = scoreLid || "457622";
+      if (!scoreLid) return [];
+      const lid = scoreLid;
       const db = await getDb();
       const allGmRows = db
         ? ((await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))) as GmTeamRow[])
@@ -559,7 +560,8 @@ export const appRouter = router({
       const { leagueId: h2hLid } = await resolveActiveLeagueId(
         { user: userId != null ? { id: userId } : undefined }, null, undefined,
       );
-      const lid = h2hLid || "457622";
+      if (!h2hLid) return { owners: [] as Array<{ name: string; seasons: number; ownerKey: string }>, pairs: [] as Array<Record<string, unknown>> };
+      const lid = h2hLid;
       // Cache the whole all-pairs scan (≈18 sequential cache reads) for 10 min, per league/user.
       return memCache(`rivalryH2H:${lid}:${userId ?? "anon"}`, 10 * 60_000, async () => {
       const seasons = await getAllCachedSeasons(undefined, userId);
@@ -2123,7 +2125,8 @@ export const appRouter = router({
           null,
           yr,
         );
-        const lid = leagueId || "457622";
+        if (!leagueId) return { picks: [] as Array<{ overallPick: number; roundId: number; roundPick: number; playerName: string | null; position: string | null; nflTeam: string; teamName: string; ownerName: string; teamId: number; isKeeper: boolean }>, source: "legacy_draft_recap" as const };
+        const lid = leagueId;
         const db = await getDb();
         if (!db) return { picks: [] as Array<{ overallPick: number; roundId: number; roundPick: number; playerName: string | null; position: string | null; nflTeam: string; teamName: string; ownerName: string; teamId: number; isKeeper: boolean }>, source: "legacy_draft_recap" as const };
         const rows = await db
@@ -2202,16 +2205,18 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const yr = input.season;
         const userId = ctx.user?.id ?? 0;
-        const { leagueId } = await resolveActiveLeagueId(
-          { user: userId ? { id: userId } : undefined },
-          null,
-          yr,
-        );
-        const lid = leagueId || "457622";
-        // Phase B: all leagues require auth — 457622 bypass removed.
         if (!userId) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "You must be signed in." });
         }
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: userId } },
+          null,
+          yr,
+        );
+        if (!leagueId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "No active league found. Connect your ESPN league first." });
+        }
+        const lid = leagueId;
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
@@ -2302,16 +2307,18 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const yr = input.season;
         const userId = ctx.user?.id ?? 0;
-        const { leagueId } = await resolveActiveLeagueId(
-          { user: userId ? { id: userId } : undefined },
-          null,
-          yr,
-        );
-        const lid = leagueId || "457622";
-        // Phase B: all leagues require auth — 457622 bypass removed.
         if (!userId) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "You must be signed in." });
         }
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: userId } },
+          null,
+          yr,
+        );
+        if (!leagueId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "No active league found. Connect your ESPN league first." });
+        }
+        const lid = leagueId;
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
 
@@ -2379,7 +2386,8 @@ export const appRouter = router({
           null,
           yr,
         );
-        const lid = leagueId || "457622";
+        if (!leagueId) return { players: [], season: yr, leagueId: "" };
+        const lid = leagueId;
         const db = await getDb();
         if (!db) return { players: [], season: yr, leagueId: lid };
 
@@ -2408,7 +2416,8 @@ export const appRouter = router({
         null,
         undefined,
       );
-      const lid = leagueId || "457622";
+      if (!leagueId) return { seasons: [] };
+      const lid = leagueId;
       const db = await getDb();
       if (!db) return { seasons: [] };
 
@@ -2448,7 +2457,20 @@ export const appRouter = router({
           null,
           rosterSeason,
         );
-        const lid = leagueId || "457622";
+        if (!leagueId) {
+          return {
+            pool: [] as KeeperPoolEntry[],
+            draftYear,
+            rosterSeason,
+            leagueId: "",
+            prevSeason,
+            prev2Season,
+            error: "no_active_league",
+            hint: "Connect your ESPN league to use the Keeper Advisor.",
+            rosterProvenance: null as null,
+          };
+        }
+        const lid = leagueId;
         const db = await getDb();
 
         const draftData = await getSeasonData(prevSeason, undefined, userId);
@@ -2779,7 +2801,8 @@ export const appRouter = router({
         const { leagueId } = await resolveActiveLeagueId(
           { user: userId ? { id: userId } : undefined }, null, prevSeason,
         );
-        const lid = leagueId || "457622";
+        if (!leagueId) return { pool: [], draftYear, leagueId: "" };
+        const lid = leagueId;
         const db = await getDb();
         if (!db) return { pool: [], draftYear, leagueId: lid };
 
@@ -3335,7 +3358,8 @@ export const appRouter = router({
         const { leagueId } = await resolveActiveLeagueId(
           { user: userId ? { id: userId } : undefined }, null, undefined,
         );
-        const lid = leagueId || "457622";
+        if (!leagueId) return [];
+        const lid = leagueId;
         const db = await getDb();
         if (!db) return [];
         return loadRecentLeagueTransactionEvents({
@@ -5568,9 +5592,10 @@ export const appRouter = router({
         null,
         undefined,
       );
+      if (!leagueId) return null;
       const db = await getDb();
       if (!db) return null;
-      return buildHallOfFamePayload({ db, leagueId: leagueId || "457622", userId });
+      return buildHallOfFamePayload({ db, leagueId, userId });
     }),
 
     /** All-time owner W-L-T from deduped completed weekly matchups (not standings snapshots). */
@@ -9832,7 +9857,8 @@ if (pickOrder.length > 0) {
         const { leagueId } = await resolveActiveLeagueId(
           { user: userId ? { id: userId } : undefined }, null, undefined,
         );
-        const lid = leagueId || "457622";
+        if (!leagueId) return [];
+        const lid = leagueId;
         const db = await getDb();
         if (!db) return [];
         const q = input.query.trim();
@@ -9869,7 +9895,8 @@ if (pickOrder.length > 0) {
         const { leagueId } = await resolveActiveLeagueId(
           { user: userId ? { id: userId } : undefined }, null, undefined,
         );
-        const lid = leagueId || "457622";
+        if (!leagueId) return null;
+        const lid = leagueId;
         const db = await getDb();
         if (!db) return null;
 
@@ -10109,7 +10136,8 @@ if (pickOrder.length > 0) {
       const { leagueId } = await resolveActiveLeagueId(
         { user: userId ? { id: userId } : undefined }, null, undefined,
       );
-      const lid = leagueId || "457622";
+      if (!leagueId) return null;
+      const lid = leagueId;
       const db = await getDb();
       if (!db) return null;
 
@@ -10216,7 +10244,8 @@ if (pickOrder.length > 0) {
       const { leagueId } = await resolveActiveLeagueId(
         { user: userId ? { id: userId } : undefined }, null, undefined,
       );
-      const lid = leagueId || "457622";
+      if (!leagueId) return { knownOwners: [], legacyItems: [], savedAliases: [], stats: { known: 0, autoResolved: 0, needsReview: 0, unresolved: 0 } };
+      const lid = leagueId;
       const db = await getDb();
       if (!db) return { knownOwners: [], legacyItems: [], savedAliases: [], stats: { known: 0, autoResolved: 0, needsReview: 0, unresolved: 0 } };
 
@@ -10374,7 +10403,8 @@ if (pickOrder.length > 0) {
         const { leagueId } = await resolveActiveLeagueId(
           { user: userId ? { id: userId } : undefined }, null, undefined,
         );
-        const lid = leagueId || "457622";
+        if (!leagueId) return { ok: false };
+        const lid = leagueId;
         const db  = await getDb();
         if (!db) return { ok: false };
         try {
@@ -10410,7 +10440,17 @@ if (pickOrder.length > 0) {
       const { leagueId } = await resolveActiveLeagueId(
         { user: userId ? { id: userId } : undefined }, null, undefined,
       );
-      const lid = leagueId || "457622";
+      if (!leagueId) {
+        return {
+          active: [] as OwnerSummaryRow[],
+          graveyard: [] as OwnerSummaryRow[],
+          powerRankings: [] as OwnerPowerRankingRow[],
+          ownerAwards: [] as OwnerAwardRow[],
+          canonicalLeagueDebug: {} as Record<string, never>,
+          allOwners: [] as { ownerKey: string; ownerName: string; seasons: number[]; championships: number }[],
+        };
+      }
+      const lid = leagueId;
       const db = await getDb();
       if (!db) {
         return {
@@ -11077,7 +11117,8 @@ if (pickOrder.length > 0) {
         const { leagueId } = await resolveActiveLeagueId(
           { user: userId ? { id: userId } : undefined }, null, undefined,
         );
-        const lid = leagueId || "457622";
+        if (!leagueId) return null;
+        const lid = leagueId;
         const db = await getDb();
         if (!db) return null;
         const ownerName = (input.ownerKey ?? input.ownerName ?? "").trim();
@@ -11229,7 +11270,8 @@ if (pickOrder.length > 0) {
         const { leagueId } = await resolveActiveLeagueId(
           { user: userId ? { id: userId } : undefined }, null, undefined,
         );
-        const lid = leagueId || "457622";
+        if (!leagueId) return null;
+        const lid = leagueId;
         const db = await getDb();
         if (!db) return null;
         const includeHistoricalOwners = input.includeHistoricalOwners === true;
