@@ -239,7 +239,7 @@ export function RivalryDossierPanel({
           <div className="relative grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-stretch">
             <div className="relative overflow-hidden p-4" style={{ ...SUB, borderTop: `3px solid ${ACCENT}` }}>
               <div className="relative flex items-start gap-3">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-black" style={{ border: `2px solid ${ACCENT}66`, background: "rgba(139,92,246,.10)", color: ACCENT }}>
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-black" style={{ border: `2px solid ${ACCENT}66`, background: "rgba(139,92,246,.10)", color: ACCENT }}>
                   {initials(pd.focalDisplayName)}
                 </div>
                 <div className="min-w-0 space-y-1">
@@ -263,7 +263,7 @@ export function RivalryDossierPanel({
 
             <div className="relative overflow-hidden p-4" style={{ ...SUB, borderTop: `3px solid ${BLUE}` }}>
               <div className="relative flex items-start gap-3">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-black" style={{ border: `2px solid ${BLUE}66`, background: "rgba(139,92,246,.10)", color: BLUE }}>
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-black" style={{ border: `2px solid ${BLUE}66`, background: "rgba(139,92,246,.10)", color: BLUE }}>
                   {initials(pd.opponentDisplayName)}
                 </div>
                 <div className="min-w-0 space-y-1">

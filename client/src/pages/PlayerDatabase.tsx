@@ -22,10 +22,10 @@ const POS_CFG: Record<string, { pill: string; text: string; bar: string; accent:
 
 const TABS = ["ALL PLAYERS", "WATCHLIST", "DYNASTY RANKS", "SCORES", "BILLING"] as const;
 const POS_FILTERS = ["ALL", "QB", "RB", "WR", "TE", "K", "DL", "LB", "DB", "DEF"] as const;
-const SORT_OPTIONS = ["Dynasty Value", "Player Name", "NFL Team", "First Seen", "Last Seen"] as const;
+const SORT_OPTIONS = ["Dynasty Value", "Avg Pick Order", "Player Name", "NFL Team", "First Seen", "Last Seen"] as const;
 type SortOpt = typeof SORT_OPTIONS[number];
 type SortDir = "asc" | "desc";
-type SortField = "fullName" | "position" | "currentNflTeam" | "firstSeasonSeen" | "lastSeasonSeen" | "dynastyValue";
+type SortField = "fullName" | "position" | "currentNflTeam" | "firstSeasonSeen" | "lastSeasonSeen" | "dynastyValue" | "avgPick";
 
 const FLEX_POS = new Set(["RB", "WR", "TE"]);
 
@@ -158,6 +158,7 @@ export function PlayerDatabase() {
     "NFL Team":      "currentNflTeam",
     "First Seen":    "firstSeasonSeen",
     "Last Seen":     "lastSeasonSeen",
+    "Avg Pick Order": "avgPick",
   };
 
   const players = useMemo(() => {

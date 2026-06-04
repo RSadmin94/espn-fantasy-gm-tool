@@ -2740,7 +2740,7 @@ export const appRouter = router({
             // Cost for next draft year = this year's draft round − 1 (capped at round 1).
             // Applies whether the player was originally drafted or kept this year — the
             // 2025 draft slot already reflects the current keeper cost; subtract 1 more.
-            const keeperRoundCost = Math.max(1, round - 1);
+            const keeperRoundCost = round; // same round as last draft
             const costSource: KeeperPoolEntry["costSource"] = isKeptThisYear ? "espn_stored" : "draft_history_round";
             const costPart = isKeptThisYear
               ? "Keeper · draft (ESPN flag)"
