@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { setTrpcToken } from "@/lib/trpcAuth";
+import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -128,6 +129,7 @@ function sortDraftPicks(rows: DraftPickRow[]): DraftPickRow[] {
 
 export function DraftHistory() {
   const { getToken } = useAuth();
+  const { leagueId } = useLeagueContext();
   const allSeasonsQ = trpc.espn.allSeasons.useQuery();
   const cachedQ = trpc.espn.cachedSeasons.useQuery();
   const allSeasons: number[] = allSeasonsQ.data ?? [];
@@ -234,7 +236,7 @@ export function DraftHistory() {
         }
         window.addEventListener("message", onMsg);
         window.postMessage(
-          { type: "GMWR_HIST_TEST", id, leagueId: "457622", season, clerkToken },
+          { type: "GMWR_HIST_TEST", id, leagueId: leagueId || "", season, clerkToken },
           "*",
         );
         console.log("[GMWR:DH] GMWR_HIST_TEST posted — awaiting GMWR_HIST_TEST_REPLY");

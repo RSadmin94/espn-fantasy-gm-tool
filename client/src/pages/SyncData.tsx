@@ -397,7 +397,7 @@ export function SyncData() {
 
   // Always query draft_picks count for the hardcoded test league on mount — independent of ESPN connection.
   const draftPicks2010GateQuery = trpc.espn.browserSyncStatus.useQuery(
-    { leagueId: "457622", startSeason: 2010, endSeason: 2010 },
+    { leagueId: leagueId, startSeason: 2010, endSeason: 2010 },
     { staleTime: 60_000 },
   );
   const dbDraftPicks2010 =
@@ -551,7 +551,7 @@ export function SyncData() {
           resolve(d);
         }
         window.addEventListener("message", onMsg);
-        window.postMessage({ type: "GMWR_HIST_TEST", id, leagueId: "457622", clerkToken }, "*");
+        window.postMessage({ type: "GMWR_HIST_TEST", id, leagueId: leagueId, clerkToken }, "*");
       });
       setBrowserSync2010Raw(extResult);
 
@@ -574,9 +574,9 @@ export function SyncData() {
       setTrpcToken(token);
       let ingestResult: Record<string, unknown>;
       try {
-        console.log("[gmwr] ingestStart", { leagueId: "457622", season: 2010, pickCount: picks.length });
+        console.log("[gmwr] ingestStart", { leagueId: leagueId, season: 2010, pickCount: picks.length });
         ingestResult = await ingestParsedDraftPicksMutation.mutateAsync({
-          leagueId: "457622",
+          leagueId: leagueId,
           season: 2010,
           picks: picks as {
             overallPick: number;
@@ -656,7 +656,7 @@ export function SyncData() {
           }
           window.addEventListener("message", onMsg);
           window.postMessage(
-            { type: "GMWR_HIST_TEST", id, leagueId: "457622", season, clerkToken: token ?? "" },
+            { type: "GMWR_HIST_TEST", id, leagueId: leagueId, season, clerkToken: token ?? "" },
             "*",
           );
         });
@@ -677,7 +677,7 @@ export function SyncData() {
         setTrpcToken(token);
         try {
           const ingestResult = await ingestParsedDraftPicksMutation.mutateAsync({
-            leagueId: "457622",
+            leagueId: leagueId,
             season,
             picks: picks as {
               overallPick: number;
@@ -737,7 +737,7 @@ export function SyncData() {
             resolve(d);
           }
           window.addEventListener("message", onMsg);
-          window.postMessage({ type: "GMWR_HIST_STANDINGS", id, leagueId: "457622", season }, "*");
+          window.postMessage({ type: "GMWR_HIST_STANDINGS", id, leagueId: leagueId, season }, "*");
         });
         if (!extResult.ok) {
           results.push(`${season}: scrape failed — ${String(extResult.error ?? "unknown")}`);
@@ -752,7 +752,7 @@ export function SyncData() {
         setTrpcToken(token);
         try {
           const ingestResult = await ingestParsedStandingsMutation.mutateAsync({
-            leagueId: "457622",
+            leagueId: leagueId,
             season,
             rows: rows as {
               rank: number; teamName: string; ownerName: string;
@@ -804,7 +804,7 @@ export function SyncData() {
             resolve(d);
           }
           window.addEventListener("message", onMsg);
-          window.postMessage({ type: "GMWR_HIST_MATCHUPS", id, leagueId: "457622", season }, "*");
+          window.postMessage({ type: "GMWR_HIST_MATCHUPS", id, leagueId: leagueId, season }, "*");
         });
         if (!extResult.ok) {
           results.push(`${season}: scrape failed — ${String(extResult.error ?? "unknown")}`);
@@ -819,7 +819,7 @@ export function SyncData() {
         setTrpcToken(token);
         try {
           const ingestResult = await ingestParsedMatchupsMutation.mutateAsync({
-            leagueId: "457622",
+            leagueId: leagueId,
             season,
             rows: rows as {
               week: number; awayTeam: string; homeTeam: string;
@@ -1001,7 +1001,7 @@ export function SyncData() {
           resolve(d);
         }
         window.addEventListener("message", onMsg);
-        window.postMessage({ type: "GMWR_LEAGUE_HISTORY_MEDALS", id, leagueId: "457622" }, "*");
+        window.postMessage({ type: "GMWR_LEAGUE_HISTORY_MEDALS", id, leagueId: leagueId }, "*");
       });
 
       if (!extResult.ok) {
@@ -1497,7 +1497,7 @@ export function SyncData() {
           <CardTitle className="text-base">Temporary: 2010 draft ingest debug</CardTitle>
           <CardDescription>
             Calls <code className="text-xs">espn.debugHistoricalDraftIngest</code> for league{" "}
-            <span className="font-mono">457622</span> / season <span className="font-mono">2010</span>. Requires
+            <span className="font-mono">{leagueId || "?"}</span> / season <span className="font-mono">2010</span>. Requires
             sign-in and league access. Remove this card when done.
           </CardDescription>
         </CardHeader>
@@ -1509,7 +1509,7 @@ export function SyncData() {
             disabled={!isConnected || isDraftIngestDebugLoading}
             onClick={() =>
               debugDraftIngestMutation.mutate({
-                leagueId: "457622",
+                leagueId: leagueId,
                 season: 2010,
               })
             }
