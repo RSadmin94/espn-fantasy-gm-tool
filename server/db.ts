@@ -1009,61 +1009,85 @@ async function resolveLeagueFromSyncRunsForSeason(
 /**
  * Resolve ESPN cache / normalized-table league id for reads.
  *
- * Order: explicit input → user's ESPN credentials leagueId → sync_runs for season
- * (prefer user's leagues, else single-league season, else most recent) → latest `sync_runs` by id
- * → latest `teams` row → `LEAGUE_ID` / `ESPN_LEAGUE_ID` → non-production dev fallback → default.
+ * Two-path resolution to prevent cross-user league data leakage in multi-tenant scenarios:
+ *
+ * AUTHENTICATED USER PATH (uid present):
+ *   1. Explicit inputLeagueId override — always trusted
+ *   2. User's active ESPN credential leagueId (league_connections, user-scoped)
+ *   3. User-owned sync_runs for the requested season (strict: only "sync_runs_user_recent" accepted)
+ *   4. Return "" (setup_required) — never falls through to global tables, env var, or dev fallback
+ *
+ * BACKGROUND TASK / SYSTEM PATH (uid absent):
+ *   Continues with global fallbacks (sync_runs_latest, teams_latest, env_league_id, dev_fallback).
+ *   These are only reached by server-side scheduled tasks that don't carry a user context.
+ *   Anonymous callers are blocked earlier by per-procedure ctx.user?.id guards (Phase C).
  */
 export async function resolveActiveLeagueId(
   ctx: ActiveLeagueResolveCtx,
   inputLeagueId?: string | null,
   season?: number
 ): Promise<ResolvedActiveLeagueId> {
+  const log = (resolvedLeagueId: string, source: string) =>
+    logActiveLeagueResolve({
+      requestedSeason: season ?? null,
+      inputLeagueId: inputLeagueId ?? null,
+      resolvedLeagueId,
+      source,
+    });
+
+  // ── Step 1: Explicit input override (both paths) ─────────────────────────
   const inL =
     inputLeagueId != null && String(inputLeagueId).trim() !== ""
       ? String(inputLeagueId).trim().slice(0, 32)
       : null;
   if (inL) {
-    const r = { leagueId: inL, source: "input" };
-    logActiveLeagueResolve({
-      requestedSeason: season ?? null,
-      inputLeagueId: inputLeagueId ?? null,
-      resolvedLeagueId: r.leagueId,
-      source: r.source,
-    });
-    return r;
+    log(inL, "input");
+    return { leagueId: inL, source: "input" };
   }
 
   const uid = ctx.user?.id ?? undefined;
+  const syncSeason =
+    season != null && Number.isFinite(Number(season)) ? Math.floor(Number(season)) : null;
+
+  // ── AUTHENTICATED USER PATH ───────────────────────────────────────────────
   if (uid != null) {
+    // Step 2: User's active ESPN credentials
     const creds = await getActiveEspnCredentials(uid);
     const cid = creds?.leagueId ? String(creds.leagueId).trim().slice(0, 32) : "";
     if (cid) {
-      const r = { leagueId: cid, source: "credentials" };
-      logActiveLeagueResolve({
-        requestedSeason: season ?? null,
-        inputLeagueId: inputLeagueId ?? null,
-        resolvedLeagueId: r.leagueId,
-        source: r.source,
-      });
-      return r;
+      log(cid, "credentials");
+      return { leagueId: cid, source: "credentials" };
     }
+
+    // Step 3: User-owned sync_runs for the requested season.
+    // STRICT: only accept source "sync_runs_user_recent" (user's own leagues).
+    // "sync_runs_single_league" and "sync_runs_recent_any" are GLOBAL fallbacks
+    // that could return another user's league — explicitly rejected here.
+    if (syncSeason != null && syncSeason >= 2000) {
+      const fromRuns = await resolveLeagueFromSyncRunsForSeason(syncSeason, uid);
+      if (fromRuns?.source === "sync_runs_user_recent") {
+        log(fromRuns.leagueId, fromRuns.source);
+        return fromRuns;
+      }
+    }
+
+    // Step 4: No user-owned league found. Return empty — setup required.
+    // Do NOT fall through to global tables, env var, or dev fallback.
+    log("", "no_user_league_configured");
+    return { leagueId: "", source: "no_user_league_configured" };
   }
 
-  const syncSeason =
-    season != null && Number.isFinite(Number(season)) ? Math.floor(Number(season)) : null;
+  // ── BACKGROUND TASK / SYSTEM PATH (uid is undefined) ─────────────────────
+  // Reached only by scheduled tasks or callers without a user context.
+  // Anonymous callers are already blocked by per-procedure Phase C guards.
   const allowSeasonScopedSync = syncSeason != null && syncSeason >= 2000;
   const allowLatestSyncFallback =
     season === null || season === undefined || allowSeasonScopedSync;
 
   if (allowSeasonScopedSync) {
-    const fromRuns = await resolveLeagueFromSyncRunsForSeason(syncSeason!, uid);
+    const fromRuns = await resolveLeagueFromSyncRunsForSeason(syncSeason!, undefined);
     if (fromRuns) {
-      logActiveLeagueResolve({
-        requestedSeason: season ?? null,
-        inputLeagueId: inputLeagueId ?? null,
-        resolvedLeagueId: fromRuns.leagueId,
-        source: fromRuns.source,
-      });
+      log(fromRuns.leagueId, fromRuns.source);
       return { leagueId: fromRuns.leagueId, source: fromRuns.source };
     }
   }
@@ -1071,58 +1095,30 @@ export async function resolveActiveLeagueId(
   if (allowLatestSyncFallback) {
     const latestSync = await resolveLatestLeagueFromSyncRunsById();
     if (latestSync) {
-      logActiveLeagueResolve({
-        requestedSeason: season ?? null,
-        inputLeagueId: inputLeagueId ?? null,
-        resolvedLeagueId: latestSync.leagueId,
-        source: latestSync.source,
-      });
+      log(latestSync.leagueId, latestSync.source);
       return latestSync;
     }
     const latestTeams = await resolveLatestLeagueFromGmTeamsById();
     if (latestTeams) {
-      logActiveLeagueResolve({
-        requestedSeason: season ?? null,
-        inputLeagueId: inputLeagueId ?? null,
-        resolvedLeagueId: latestTeams.leagueId,
-        source: latestTeams.source,
-      });
+      log(latestTeams.leagueId, latestTeams.source);
       return latestTeams;
     }
   }
 
   const envId = (process.env.LEAGUE_ID ?? process.env.ESPN_LEAGUE_ID)?.trim().slice(0, 32);
   if (envId) {
-    const r = { leagueId: envId, source: "env_league_id" };
-    logActiveLeagueResolve({
-      requestedSeason: season ?? null,
-      inputLeagueId: inputLeagueId ?? null,
-      resolvedLeagueId: r.leagueId,
-      source: r.source,
-    });
-    return r;
+    log(envId, "env_league_id");
+    return { leagueId: envId, source: "env_league_id" };
   }
 
   const isNonProd = process.env.NODE_ENV !== "production";
   if (isNonProd) {
-    const r = { leagueId: "457622", source: "dev_fallback_league" };
-    logActiveLeagueResolve({
-      requestedSeason: season ?? null,
-      inputLeagueId: inputLeagueId ?? null,
-      resolvedLeagueId: r.leagueId,
-      source: r.source,
-    });
-    return r;
+    log("457622", "dev_fallback_league");
+    return { leagueId: "457622", source: "dev_fallback_league" };
   }
 
-  const r = { leagueId: "default", source: "fallback_default" };
-  logActiveLeagueResolve({
-    requestedSeason: season ?? null,
-    inputLeagueId: inputLeagueId ?? null,
-    resolvedLeagueId: r.leagueId,
-    source: r.source,
-  });
-  return r;
+  log("default", "fallback_default");
+  return { leagueId: "default", source: "fallback_default" };
 }
 
 /**
