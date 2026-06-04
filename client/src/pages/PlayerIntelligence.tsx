@@ -523,3 +523,26 @@ export function PlayerIntelligence() {
     </div>
   );
 }
+
+// ── Exported slide-over panel for use in PlayerDatabase ──────────────────────
+
+export function PlayerProfilePanel({ playerName, onClose }: { playerName: string; onClose: () => void }) {
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      {/* Panel */}
+      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col bg-[#0c090e] shadow-2xl border-l border-zinc-800">
+        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3 shrink-0">
+          <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400">Player Intelligence</span>
+          <button type="button" onClick={onClose} className="rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <ProfileView playerName={playerName} onBack={onClose} />
+        </div>
+      </div>
+    </>
+  );
+}

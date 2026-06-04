@@ -139,7 +139,7 @@ const router = createBrowserRouter([
           { path: "/owner-profiles",         element: <OwnerProfiles /> },
           { path: "/league-data-health",     element: <LeagueDataHealth /> },
           { path: "/owner-identity-review",  element: <OwnerIdentityReview /> },
-          { path: "/player-intelligence",    element: <PlayerIntelligence /> },
+          { path: "/player-intelligence",    element: <Navigate to="/player-database" replace /> },
           { path: "/player-database",         element: <PlayerDatabase /> },
           { path: "/league-wire",               element: <LeagueWire /> },
           { path: "/draft-war-room",           element: <DraftWarRoom /> },

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { PlayerProfilePanel } from "@/pages/PlayerIntelligence";
 import { cn } from "@/lib/utils";
 import {
   Search, ChevronDown, ChevronUp, ChevronsUpDown,
@@ -123,6 +124,7 @@ export function PlayerDatabase() {
   const [sortDir, setSortDir]   = useState<SortDir>("asc");
   const [page, setPage]         = useState(0);
   const [showSortDD, setDD]     = useState(false);
+  const [intelPlayer, setIntelPlayer] = useState<string | null>(null);
   const debRef                  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const PAGE_SIZE = 20;
@@ -402,6 +404,8 @@ export function PlayerDatabase() {
               );
             })}
           </div>
+
+          {intelPlayer && <PlayerProfilePanel playerName={intelPlayer} onClose={() => setIntelPlayer(null)} />}
 
           {/* Pagination */}
           {total > PAGE_SIZE && (
