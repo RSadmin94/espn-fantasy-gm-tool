@@ -36,7 +36,8 @@ export const activityDnaRouter = router({
   owner: publicProcedure
     .input(z.object({ ownerKey: z.string().max(64).optional() }).optional())
     .query(async ({ ctx, input }) => {
-      const { leagueId, ownerKey } = await resolveLeague(ctx.user?.id);
+      if (!ctx.user?.id) return null;
+      const { leagueId, ownerKey } = await resolveLeague(ctx.user.id);
       if (!leagueId || leagueId === "default") return null;
       const focal = input?.ownerKey ?? ownerKey;
       if (focal) {
@@ -50,7 +51,8 @@ export const activityDnaRouter = router({
 
   /** Whole-league Activity DNA (percentiles need the full field; used by leaderboards/integrations). */
   league: publicProcedure.query(async ({ ctx }) => {
-    const { leagueId } = await resolveLeague(ctx.user?.id);
+    if (!ctx.user?.id) return [];
+    const { leagueId } = await resolveLeague(ctx.user.id);
     if (!leagueId || leagueId === "default") return [];
     return computeActivityDna(leagueId);
   }),

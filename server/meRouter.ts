@@ -22,8 +22,9 @@ export const meRouter = router({
    * Powers the LeagueDNA Advisor hero ("analyzed N seasons / M matchups / ...").
    */
   leagueSummary: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.user?.id) return { leagueId: "", seasons: 0, matchups: 0, draftPicks: 0 };
     const { leagueId } = await resolveActiveLeagueId(
-      { user: ctx.user?.id ? { id: ctx.user.id } : undefined },
+      { user: { id: ctx.user.id } },
       null,
       undefined,
     );

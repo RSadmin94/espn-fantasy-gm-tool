@@ -940,9 +940,9 @@ export const draftWarRoomRouter = router({
       const { season } = input;
 
       // Phase B1: resolve leagueId per-request — no module-level constant.
-      const userId = ctx.user?.id ?? 0;
+      if (!ctx.user?.id) return { ok: false, error: "setup_required", requiresSetup: true };
       const { leagueId } = await resolveActiveLeagueId(
-        { user: userId ? { id: userId } : undefined },
+        { user: { id: ctx.user.id } },
         null,
         season,
       );

@@ -502,6 +502,7 @@ export const appRouter = router({
   rivalry: router({
     /** Get cached rivalry scores for the current user (Rod) from DB */
     getScores: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.id) return [];
       const { getRivalryScoresFromDb } = await import("./rivalryService");
       const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
       const seasons = await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined);
@@ -529,8 +530,9 @@ export const appRouter = router({
       })();
       const scores = await getRivalryScoresFromDb(rodMemberId);
       // Attach canonical owner-keys so the dossier popup resolves (gmTeams.ownerId === ESPN memberId).
+      if (!ctx.user?.id) return [];
       const { leagueId: scoreLid } = await resolveActiveLeagueId(
-        { user: ctx.user?.id ? { id: ctx.user.id } : undefined }, null, undefined,
+        { user: { id: ctx.user.id } }, null, undefined,
       );
       if (!scoreLid) return [];
       const lid = scoreLid;
@@ -557,8 +559,9 @@ export const appRouter = router({
     /** All-time head-to-head by owner identity, computed from the ESPN combined cache (same source the Matchups tab falls back to). */
     h2h: publicProcedure.query(async ({ ctx }) => {
       const userId = ctx.user?.id ?? undefined;
+      if (!userId) return { owners: [] as Array<{ name: string; seasons: number; ownerKey: string }>, pairs: [] as Array<Record<string, unknown>> };
       const { leagueId: h2hLid } = await resolveActiveLeagueId(
-        { user: userId != null ? { id: userId } : undefined }, null, undefined,
+        { user: { id: userId } }, null, undefined,
       );
       if (!h2hLid) return { owners: [] as Array<{ name: string; seasons: number; ownerKey: string }>, pairs: [] as Array<Record<string, unknown>> };
       const lid = h2hLid;
@@ -2120,8 +2123,9 @@ export const appRouter = router({
       .input(z.object({ season: z.number().int().min(2010).max(2017) }))
       .query(async ({ ctx, input }) => {
         const yr = input.season;
+        if (!ctx.user?.id) return { picks: [] as Array<{ overallPick: number; roundId: number; roundPick: number; playerName: string | null; position: string | null; nflTeam: string; teamName: string; ownerName: string; teamId: number; isKeeper: boolean }>, source: "legacy_draft_recap" as const };
         const { leagueId } = await resolveActiveLeagueId(
-          { user: ctx.user ? { id: ctx.user.id } : undefined },
+          { user: { id: ctx.user.id } },
           null,
           yr,
         );
@@ -2381,8 +2385,9 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const yr = input.season;
         const userId = ctx.user?.id ?? 0;
+        if (!userId) return { players: [], season: yr, leagueId: "" };
         const { leagueId } = await resolveActiveLeagueId(
-          { user: userId ? { id: userId } : undefined },
+          { user: { id: userId } },
           null,
           yr,
         );
@@ -2411,8 +2416,9 @@ export const appRouter = router({
     /** Which seasons have at least one scraped roster row. Used by the extension popup DB status. */
     seasonRosterCoverage: publicProcedure.query(async ({ ctx }) => {
       const userId = ctx.user?.id ?? 0;
+      if (!userId) return { seasons: [] };
       const { leagueId } = await resolveActiveLeagueId(
-        { user: userId ? { id: userId } : undefined },
+        { user: { id: userId } },
         null,
         undefined,
       );
@@ -2450,10 +2456,22 @@ export const appRouter = router({
         const rosterSeason = draftYear;
         const prevSeason = draftYear - 1;
         const prev2Season = draftYear - 2;
-        const userId = ctx.user?.id;
 
+        if (!ctx.user?.id) {
+          return {
+            pool: [] as KeeperPoolEntry[],
+            draftYear,
+            rosterSeason,
+            leagueId: "",
+            prevSeason,
+            prev2Season,
+            error: "no_active_league",
+            hint: "Connect your ESPN league to use the Keeper Advisor.",
+            rosterProvenance: null as null,
+          };
+        }
         const { leagueId } = await resolveActiveLeagueId(
-          { user: userId ? { id: userId } : undefined },
+          { user: { id: ctx.user.id } },
           null,
           rosterSeason,
         );
@@ -2473,7 +2491,7 @@ export const appRouter = router({
         const lid = leagueId;
         const db = await getDb();
 
-        const draftData = await getSeasonData(prevSeason, undefined, userId);
+        const draftData = await getSeasonData(prevSeason, undefined, ctx.user.id);
         if (!draftData) {
           return {
             pool: [] as KeeperPoolEntry[],
@@ -2512,7 +2530,7 @@ export const appRouter = router({
           if (kn) pickByName.set(kn, p);
         }
 
-        const dataPrev2 = await getSeasonData(prev2Season, undefined, userId);
+        const dataPrev2 = await getSeasonData(prev2Season, undefined, ctx.user.id);
         const keptPrev2 = new Set<string>();
         if (dataPrev2) {
           for (const p of normalizeDraftPicks(dataPrev2) as Array<Record<string, unknown>>) {
@@ -2542,7 +2560,7 @@ export const appRouter = router({
             .replace(/\s+/g, " ")
             .trim();
 
-        const cacheHit = await getCachedViewWithTier(rosterSeason, "combined", lid, { userId });
+        const cacheHit = await getCachedViewWithTier(rosterSeason, "combined", lid, { userId: ctx.user.id });
         const cachePayload = cacheHit?.row?.payload as Record<string, unknown> | undefined;
         const cacheUpdatedAt = cacheHit?.row?.updatedAt ?? null;
         const cacheRosters: RosterLite[] = [];
@@ -2798,8 +2816,9 @@ export const appRouter = router({
         const draftYear  = input.draftYear ?? currentYear;
         const prevSeason = draftYear - 1;
         const userId = ctx.user?.id ?? 0;
+        if (!userId) return { pool: [], draftYear, leagueId: "" };
         const { leagueId } = await resolveActiveLeagueId(
-          { user: userId ? { id: userId } : undefined }, null, prevSeason,
+          { user: { id: userId } }, null, prevSeason,
         );
         if (!leagueId) return { pool: [], draftYear, leagueId: "" };
         const lid = leagueId;
@@ -2829,8 +2848,9 @@ export const appRouter = router({
       .input(z.object({ season: z.number().int().min(2009).max(2030) }))
       .query(async ({ ctx, input }) => {
         const yr = input.season;
+        if (!ctx.user?.id) return { season: yr, leagueId: "", teamCount: 0, picks: [], diagnostics: { sourceUsed: "empty" as string, totalPicks: 0, warnings: [] as string[] } };
         const { leagueId } = await resolveActiveLeagueId(
-          { user: ctx.user ? { id: ctx.user.id } : undefined },
+          { user: { id: ctx.user.id } },
           null,
           yr,
         );
@@ -3003,8 +3023,9 @@ export const appRouter = router({
     draftRecapCanonical: publicProcedure
       .input(z.object({ season: z.number().int().min(2009).max(2030) }))
       .query(async ({ ctx, input }) => {
+        if (!ctx.user?.id) return null;
         const { leagueId } = await resolveActiveLeagueId(
-          { user: ctx.user ? { id: ctx.user.id } : undefined },
+          { user: { id: ctx.user.id } },
           null,
           input.season,
         );
@@ -3026,7 +3047,8 @@ export const appRouter = router({
     matchups: publicProcedure
       .input(z.object({ season: z.number(), matchupPeriodId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
-        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
+        if (!ctx.user?.id) return [];
+        const data = await getSeasonData(input.season, undefined, ctx.user.id);
         if (!data) return [];
         const matchups = normalizeMatchups(data);
         if (input.matchupPeriodId !== undefined) return matchups.filter((m: unknown) => (m as Record<string, unknown>).matchupPeriodId === input.matchupPeriodId);
@@ -3039,8 +3061,9 @@ export const appRouter = router({
     matchupsScoreboard: publicProcedure
       .input(z.object({ season: z.number(), week: z.number().int().min(1) }))
       .query(async ({ ctx, input }) => {
+        if (!ctx.user?.id) return { matchups: [], teams: [], week: input.week, season: input.season };
         const resolved = await resolveActiveLeagueId(
-          { user: ctx.user ? { id: ctx.user.id } : undefined },
+          { user: { id: ctx.user.id } },
           null,
           input.season
         );
@@ -3355,8 +3378,9 @@ export const appRouter = router({
       )
       .query(async ({ ctx, input }) => {
         const userId = ctx.user?.id ?? 0;
+        if (!userId) return [];
         const { leagueId } = await resolveActiveLeagueId(
-          { user: userId ? { id: userId } : undefined }, null, undefined,
+          { user: { id: userId } }, null, undefined,
         );
         if (!leagueId) return [];
         const lid = leagueId;
@@ -4688,8 +4712,9 @@ export const appRouter = router({
       type AggOwner = { ownerKey: string; displayName: string; seasonResults: SeasonResult[] };
       type Diagnostic = { ownerKey: string; displayName: string; seasonCount: number };
       const empty = { seasons: [] as number[], owners: [] as AggOwner[], diagnostics: [] as Diagnostic[] };
+      if (!ctx.user?.id) return empty;
       const { leagueId } = await resolveActiveLeagueId(
-        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        { user: { id: ctx.user.id } },
         null,
         undefined,
       );
@@ -4781,8 +4806,9 @@ export const appRouter = router({
     }),
 
     allTimeH2H: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.id) return { owners: [] as string[], matrix: [] as { owner: string; vs: Record<string, { wins: number; losses: number; ties: number }> }[] };
       const { leagueId } = await resolveActiveLeagueId(
-        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        { user: { id: ctx.user.id } },
         null,
         undefined,
       );
@@ -4885,6 +4911,7 @@ export const appRouter = router({
     // ── Clean League History endpoints ─────────────────────────────────────
 
     leagueHistoryStandings: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.id) return null;
       type SeasonEntry = {
         finalStanding: number | null;
         wins: number | null;
@@ -5015,6 +5042,7 @@ export const appRouter = router({
     }),
 
     leagueHistoryH2H: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.id) return null;
       const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
 
       type FlatMatchup = {
@@ -5268,8 +5296,9 @@ export const appRouter = router({
 
     /** Per-season diagnostic analysis: champions, standings integrity, matchup integrity. */
     leagueDiagnostics: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.id) return { champion: [], standings: [], matchups: [] };
       const { leagueId } = await resolveActiveLeagueId(
-        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        { user: { id: ctx.user.id } },
         null,
         undefined,
       );
@@ -5427,8 +5456,9 @@ export const appRouter = router({
 
     /** All medal records for the active league — source of truth for title counts. */
     leagueMedals: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.id) return [];
       const { leagueId } = await resolveActiveLeagueId(
-        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        { user: { id: ctx.user.id } },
         null,
         undefined,
       );
@@ -5453,6 +5483,7 @@ export const appRouter = router({
      * not to the team name itself.
      */
     ringOfHonor: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.id) return [];
       type ResolvedMedal = {
         season: number;
         championTeam: string | null;
@@ -5587,8 +5618,9 @@ export const appRouter = router({
     /** Hall of Fame — championships via league_medals; records from completed RS gmMatchups only (no gmTeams W/L). */
     hallOfFame: publicProcedure.query(async ({ ctx }) => {
       const userId = ctx.user?.id ?? 0;
+      if (!userId) return null;
       const { leagueId } = await resolveActiveLeagueId(
-        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        { user: { id: userId } },
         null,
         undefined,
       );
@@ -5600,6 +5632,7 @@ export const appRouter = router({
 
     /** All-time owner W-L-T from deduped completed weekly matchups (not standings snapshots). */
     ownerAllTimeRecords: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.id) return null;
       // Seasons we expect coverage for. Cache fallback is attempted for any season
       // not present in the normalized gmMatchups table.
       const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
@@ -5829,9 +5862,10 @@ export const appRouter = router({
 
     /** Per-season matchup coverage diagnostics: how many matchup rows exist per source per season. */
     ownerMatchupCoverage: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.id) return null;
       const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
       const { leagueId } = await resolveActiveLeagueId(
-        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        { user: { id: ctx.user.id } },
         null,
         undefined,
       );
@@ -5966,6 +6000,7 @@ export const appRouter = router({
      * Use this to prove where 0-0 H2H records come from before fixing anything.
      */
     h2hSourceDiagnostics: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.id) return null;
       const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
       const ROD_PATTERNS = ["rod sellers", "rod", "sellers"]; // normalized lowercase search
 
@@ -6277,8 +6312,9 @@ export const appRouter = router({
    * See docs/DRAFT_HISTORY_CANONICAL.md
    */
   playerProfiles: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.user?.id) return [];
     const { leagueId } = await resolveActiveLeagueId(
-      { user: ctx.user ? { id: ctx.user.id } : undefined },
+      { user: { id: ctx.user.id } },
       null,
       undefined
     );
@@ -7211,8 +7247,9 @@ Respond with JSON in this exact format:
   // ── League Draft Tendencies ──────────────────────────────────────────────
   // Aggregates all 14 managers' draft picks by round and position from 2018-2025
   leagueDraftTendencies: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.user?.id) return null;
     const { leagueId } = await resolveActiveLeagueId(
-      { user: ctx.user ? { id: ctx.user.id } : undefined },
+      { user: { id: ctx.user.id } },
       null,
       undefined
     );
@@ -9482,8 +9519,9 @@ if (pickOrder.length > 0) {
     managerBehavior: publicProcedure
       .input(z.object({ seasons: z.array(z.number()).optional() }))
       .query(async ({ ctx, input }) => {
+        if (!ctx.user?.id) return null;
         const { leagueId } = await resolveActiveLeagueId(
-          { user: ctx.user ? { id: ctx.user.id } : undefined },
+          { user: { id: ctx.user.id } },
           null,
           undefined
         );
@@ -9854,8 +9892,9 @@ if (pickOrder.length > 0) {
       .input(z.object({ query: z.string().min(1).max(120) }))
       .query(async ({ ctx, input }) => {
         const userId = ctx.user?.id ?? 0;
+        if (!userId) return [];
         const { leagueId } = await resolveActiveLeagueId(
-          { user: userId ? { id: userId } : undefined }, null, undefined,
+          { user: { id: userId } }, null, undefined,
         );
         if (!leagueId) return [];
         const lid = leagueId;
@@ -9892,8 +9931,9 @@ if (pickOrder.length > 0) {
       .input(z.object({ playerName: z.string().min(1).max(255) }))
       .query(async ({ ctx, input }) => {
         const userId = ctx.user?.id ?? 0;
+        if (!userId) return null;
         const { leagueId } = await resolveActiveLeagueId(
-          { user: userId ? { id: userId } : undefined }, null, undefined,
+          { user: { id: userId } }, null, undefined,
         );
         if (!leagueId) return null;
         const lid = leagueId;
@@ -10133,8 +10173,9 @@ if (pickOrder.length > 0) {
 
     leagueOverview: publicProcedure.query(async ({ ctx }) => {
       const userId = ctx.user?.id ?? 0;
+      if (!userId) return null;
       const { leagueId } = await resolveActiveLeagueId(
-        { user: userId ? { id: userId } : undefined }, null, undefined,
+        { user: { id: userId } }, null, undefined,
       );
       if (!leagueId) return null;
       const lid = leagueId;
@@ -10241,8 +10282,9 @@ if (pickOrder.length > 0) {
 
     identityScan: publicProcedure.query(async ({ ctx }) => {
       const userId = ctx.user?.id ?? 0;
+      if (!userId) return { knownOwners: [], legacyItems: [], savedAliases: [], stats: { known: 0, autoResolved: 0, needsReview: 0, unresolved: 0 } };
       const { leagueId } = await resolveActiveLeagueId(
-        { user: userId ? { id: userId } : undefined }, null, undefined,
+        { user: { id: userId } }, null, undefined,
       );
       if (!leagueId) return { knownOwners: [], legacyItems: [], savedAliases: [], stats: { known: 0, autoResolved: 0, needsReview: 0, unresolved: 0 } };
       const lid = leagueId;
@@ -10437,8 +10479,18 @@ if (pickOrder.length > 0) {
 
     ownerList: publicProcedure.query(async ({ ctx }) => {
       const userId = ctx.user?.id ?? 0;
+      if (!userId) {
+        return {
+          active: [] as OwnerSummaryRow[],
+          graveyard: [] as OwnerSummaryRow[],
+          powerRankings: [] as OwnerPowerRankingRow[],
+          ownerAwards: [] as OwnerAwardRow[],
+          canonicalLeagueDebug: {} as Record<string, never>,
+          allOwners: [] as { ownerKey: string; ownerName: string; seasons: number[]; championships: number }[],
+        };
+      }
       const { leagueId } = await resolveActiveLeagueId(
-        { user: userId ? { id: userId } : undefined }, null, undefined,
+        { user: { id: userId } }, null, undefined,
       );
       if (!leagueId) {
         return {
@@ -11114,8 +11166,9 @@ if (pickOrder.length > 0) {
       )
       .query(async ({ ctx, input }) => {
         const userId = ctx.user?.id ?? 0;
+        if (!userId) return null;
         const { leagueId } = await resolveActiveLeagueId(
-          { user: userId ? { id: userId } : undefined }, null, undefined,
+          { user: { id: userId } }, null, undefined,
         );
         if (!leagueId) return null;
         const lid = leagueId;
@@ -11267,8 +11320,9 @@ if (pickOrder.length > 0) {
       )
       .query(async ({ ctx, input }) => {
         const userId = ctx.user?.id ?? 0;
+        if (!userId) return null;
         const { leagueId } = await resolveActiveLeagueId(
-          { user: userId ? { id: userId } : undefined }, null, undefined,
+          { user: { id: userId } }, null, undefined,
         );
         if (!leagueId) return null;
         const lid = leagueId;
