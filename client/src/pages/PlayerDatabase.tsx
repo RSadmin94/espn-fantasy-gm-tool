@@ -119,8 +119,8 @@ export function PlayerDatabase() {
   const [search, setSearch]     = useState("");
   const [debouncedQ, setQ]      = useState("");
   const [posFilter, setPos]     = useState("ALL");
-  const [sortOpt, setSort]      = useState<SortOpt>("Dynasty Value");
-  const [sortDir, setSortDir]   = useState<SortDir>("desc");
+  const [sortOpt, setSort]      = useState<SortOpt>("Avg Pick Order");
+  const [sortDir, setSortDir]   = useState<SortDir>("asc");
   const [page, setPage]         = useState(0);
   const [showSortDD, setDD]     = useState(false);
   const debRef                  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
