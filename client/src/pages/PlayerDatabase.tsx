@@ -151,7 +151,7 @@ export function PlayerDatabase() {
 
   function toggleSort(opt: SortOpt) {
     if (sortOpt === opt) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSort(opt); setSortDir("desc"); }
+    else { setSort(opt); setSortDir(opt === "Avg Pick Order" ? "asc" : "desc"); setPage(0); }
     setDD(false);
   }
 

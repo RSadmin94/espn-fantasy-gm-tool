@@ -39,6 +39,54 @@ import {
   GetDraftPickPerformanceInput,
 } from "./playerStatsTypes";
 
+// ── ESPN ADP cache (module-level, survives across requests within one deploy) ──
+let _espnAdpCache: Map<string, number> | null = null;
+let _espnAdpCacheTime = 0;
+const ESPN_ADP_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+/** Fetch ESPN current-season PPR ADP for all players, caching for 4 hours.
+ * Paginates lm-api-reads 50 players at a time (no-auth endpoint). */
+async function getEspnAdpMap(): Promise<Map<string, number>> {
+  const now = Date.now();
+  if (_espnAdpCache && (now - _espnAdpCacheTime) < ESPN_ADP_TTL_MS) return _espnAdpCache;
+
+  const year = new Date().getFullYear();
+  const base = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${year}/players?scoringPeriodId=0&view=kona_player_info&limit=50`;
+
+  // Fetch up to 2 000 players (40 pages) concurrently in two batches of 20.
+  const offsets1 = Array.from({ length: 20 }, (_, i) => i * 50);
+  const offsets2 = Array.from({ length: 20 }, (_, i) => (i + 20) * 50);
+
+  const fetchPage = async (offset: number): Promise<any[]> => {
+    try {
+      const r = await fetch(`${base}&offset=${offset}`);
+      if (!r.ok) return [];
+      const d = await r.json();
+      return Array.isArray(d) ? d : [];
+    } catch { return []; }
+  };
+
+  const [batch1, batch2] = await Promise.all([
+    Promise.all(offsets1.map(fetchPage)),
+    Promise.all(offsets2.map(fetchPage)),
+  ]);
+  const allPlayers = [...batch1, ...batch2].flat();
+
+  const cache = new Map<string, number>();
+  for (const p of allPlayers) {
+    const rank: number | undefined = p?.draftRanksByRankType?.PPR?.rank;
+    const id = String(p?.id ?? "").trim();
+    // ESPN uses 1460 as sentinel for unranked — skip those
+    if (rank && rank < 1000 && id) cache.set(id, rank);
+  }
+
+  _espnAdpCache = cache;
+  _espnAdpCacheTime = now;
+  console.log(`[ESPN ADP] Cached ${cache.size} ranked players from ${allPlayers.length} fetched`);
+  return cache;
+}
+
+
 export const playerStatsRouter = router({
 
   // ── getCanonicalPlayers ──────────────────────────────────────────────────
@@ -100,8 +148,14 @@ export const playerStatsRouter = router({
             .where(where),
         ]);
 
-      // AVG Pick (ADP) per player - read-only AVG(overallPick) from draft_picks.
-      // For avgPick sort: compute for all rows, sort nulls-last, then paginate.
+      // When sorting by avgPick, prefer ESPN live ADP over historical league avg.
+      // ESPN data is fetched and cached for 4h via getEspnAdpMap().
+      let espnAdpMap = new Map<string, number>();
+      if (sortByAvgPick) {
+        try { espnAdpMap = await getEspnAdpMap(); } catch { /* fall through to DB avg */ }
+      }
+
+      // AVG Pick (ADP) from draft_picks — used as fallback when ESPN data unavailable.
       const draftPlayerIds = Array.from(new Set(
         allRows.map((r: any) => r.espnPlayerId).filter((v: any): v is string => !!v)
                .map(Number).filter((n: number) => Number.isFinite(n) && n > 0)
@@ -123,17 +177,22 @@ export const playerStatsRouter = router({
         }
       }
 
-      // Enrich rows with avgPick
-      const enriched = allRows.map((r: any) => ({
-        ...r,
-        isActive:        Boolean(r.isActive),
-        needsReview:     Boolean(r.needsReview),
-        espnPlayerId:    r.espnPlayerId    ?? null,
-        currentNflTeam:  r.currentNflTeam  ?? null,
-        firstSeasonSeen: r.firstSeasonSeen ?? null,
-        lastSeasonSeen:  r.lastSeasonSeen  ?? null,
-        avgPick:         r.espnPlayerId ? (avgPickByPlayerId.get(Number(r.espnPlayerId)) ?? null) : null,
-      }));
+      // Enrich rows: ESPN ADP preferred, falls back to league historical avg
+      const enriched = allRows.map((r: any) => {
+        const eid = String(r.espnPlayerId ?? "").trim();
+        const espnRank = eid ? espnAdpMap.get(eid) : undefined;
+        const dbAvg    = r.espnPlayerId ? (avgPickByPlayerId.get(Number(r.espnPlayerId)) ?? null) : null;
+        return {
+          ...r,
+          isActive:        Boolean(r.isActive),
+          needsReview:     Boolean(r.needsReview),
+          espnPlayerId:    r.espnPlayerId    ?? null,
+          currentNflTeam:  r.currentNflTeam  ?? null,
+          firstSeasonSeen: r.firstSeasonSeen ?? null,
+          lastSeasonSeen:  r.lastSeasonSeen  ?? null,
+          avgPick:         espnRank ?? dbAvg,
+        };
+      });
 
       // For avgPick sort: sort in memory with null values at end, then paginate
       let rows: typeof enriched;
