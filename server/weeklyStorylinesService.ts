@@ -89,7 +89,9 @@ export interface WeeklyStorylineRow {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function isRodTeam(name: string, abbrev: string, owners: string): boolean {
+function isFocalTeam(name: string, abbrev: string, owners: string): boolean {
+  // Kept for backward compat — now superseded by profile-based focalTeamId resolution.
+  // Returns true if team identifiers match the legacy focal-owner pattern.
   const n = name.toLowerCase();
   const o = owners.toLowerCase();
   return n.includes("str8") || n.includes("rodzilla") ||
@@ -194,8 +196,8 @@ export interface StorylinesInput {
     h2hLosses: number;
     playoffEliminations: number;
   }>;
-  rodTeamId: number | null;
-  rodMemberIds: string[];
+  focalTeamId: number | null;
+  focalMemberIds: string[];
   prevSeasonRanks: Record<number, number>; // teamId → final rank last season
   // memberId → { playoffWins, playoffLosses } for narrative context
   ownerPlayoffRecords?: Record<string, { playoffWins: number; playoffLosses: number }>;
@@ -208,7 +210,7 @@ export interface StorylinesInput {
 export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] {
   const {
     season, week, teams, matchups, transactions, ownerMap, teamNameMap,
-    rivalryPairs, rodTeamId, rodMemberIds, prevSeasonRanks,
+    rivalryPairs, focalTeamId, focalMemberIds, prevSeasonRanks,
     ownerPlayoffRecords = {},
     rivalH2HBlocks = {},
     ownerTrophyBlocks = {},
@@ -291,7 +293,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
     const ownerName = ownerMap[tid] || "Unknown";
     const record = `${wins}-${losses}`;
     const rank = standingMap[tid] || 14;
-    const isRod = tid === rodTeamId;
+    const isFocalOwner = tid === focalTeamId;
     const opponentTid = currentMatchupMap[tid] ?? null;
     const opponentName = opponentTid ? (ownerMap[opponentTid] || null) : null;
 
@@ -315,8 +317,8 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
     const prevRank = prevSeasonRanks[tid] ?? null;
     const totalTx = totalTxMap[tid] || 0;
 
-    // ── 1. REVENGE_GAME (Rod only) ────────────────────────────────────────
-    if (isRod && opponentTid) {
+    // ── 1. REVENGE_GAME (focal user's team only) ─────────────────────────
+    if (isFocalOwner && opponentTid) {
       const opponentMids = (teams.find(t => (t.teamId as number) === opponentTid)?.memberIds as string[]) || [];
       const matchingRivalry = rivalryPairs.find(
         (rp) => opponentMids.includes(rp.rivalId) && rp.h2hLosses >= 3
@@ -336,13 +338,13 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
           intensityScore: Math.min(100, 50 + matchingRivalry.h2hLosses * 5),
           supportingStat: `H2H record: ${matchingRivalry.h2hLosses} losses vs ${matchingRivalry.rivalName}`,
           opponentName,
-          llmContext: `Rod Sellers (${record}) faces ${matchingRivalry.rivalName} this week. Rod has lost to them ${matchingRivalry.h2hLosses} times head-to-head.${rivalPoStr} This is a revenge opportunity.${rivalH2HBlocks[matchingRivalry.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[matchingRivalry.rivalId]}` : ''}${(() => { const mids = (teams.find(t => opponentMids.includes((t.memberIds as string[])?.[0]))?.memberIds as string[]) || []; const trophyStr = mids.map(mid => ownerTrophyBlocks[mid]).find(Boolean); return trophyStr ? `\n\nOpponent prestige: ${trophyStr}` : ''; })()}`,
+          llmContext: `${ownerName} (${record}) faces ${matchingRivalry.rivalName} this week. ${ownerName} has lost to them ${matchingRivalry.h2hLosses} times head-to-head.${rivalPoStr} This is a revenge opportunity.${rivalH2HBlocks[matchingRivalry.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[matchingRivalry.rivalId]}` : ''}${(() => { const mids = (teams.find(t => opponentMids.includes((t.memberIds as string[])?.[0]))?.memberIds as string[]) || []; const trophyStr = mids.map(mid => ownerTrophyBlocks[mid]).find(Boolean); return trophyStr ? `\n\nOpponent prestige: ${trophyStr}` : ''; })()}`,
         });
       }
     }
 
-    // ── 2. HEARTBREAK_PENDING (Rod only) ─────────────────────────────────
-    if (isRod && opponentTid) {
+    // ── 2. HEARTBREAK_PENDING (focal user's team only) ───────────────────
+    if (isFocalOwner && opponentTid) {
       const opponentMids = (teams.find(t => (t.teamId as number) === opponentTid)?.memberIds as string[]) || [];
       const isEliminator = opponentMids.some((mid) => playoffEliminatorRivalIds.has(mid));
       if (isEliminator) {
@@ -361,9 +363,9 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
           ownerName,
           record,
           intensityScore: Math.min(100, 60 + (elimRival?.playoffEliminations ?? 1) * 15),
-          supportingStat: `${elimRival?.rivalName ?? opponentName} eliminated Rod from playoffs ${elimRival?.playoffEliminations ?? 1}x`,
+          supportingStat: `${elimRival?.rivalName ?? opponentName} eliminated ${ownerName} from playoffs ${elimRival?.playoffEliminations ?? 1}x`,
           opponentName,
-          llmContext: `Rod Sellers (${record}) faces ${opponentName} this week — the same manager who has eliminated Rod from the playoffs ${elimRival?.playoffEliminations ?? 1} time(s).${elimPoStr} This is unfinished business.${elimRival && rivalH2HBlocks[elimRival.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[elimRival.rivalId]}` : ''}${(() => { const trophyStr = opponentMids.map(mid => ownerTrophyBlocks[mid]).find(Boolean); return trophyStr ? `\n\nOpponent prestige: ${trophyStr}` : ''; })()}`,
+          llmContext: `${ownerName} (${record}) faces ${opponentName} this week — the same manager who has eliminated ${ownerName} from the playoffs ${elimRival?.playoffEliminations ?? 1} time(s).${elimPoStr} This is unfinished business.${elimRival && rivalH2HBlocks[elimRival.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[elimRival.rivalId]}` : ''}${(() => { const trophyStr = opponentMids.map(mid => ownerTrophyBlocks[mid]).find(Boolean); return trophyStr ? `\n\nOpponent prestige: ${trophyStr}` : ''; })()}`,
         });
       }
     }
@@ -404,7 +406,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
     }
 
     // ── 5. DESPERATION_WINDOW ────────────────────────────────────────────
-    if (despScore >= 60 && !isRod) {
+    if (despScore >= 60) {
       stories.push({
         storyType: "DESPERATION_WINDOW",
         emotionalTag: "TRADE WINDOW OPEN",
@@ -460,7 +462,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
     }
 
     // ── 8. FEAR_RISING ───────────────────────────────────────────────────
-    if (top2RecentTeamIds.has(tid) && !isRod) {
+    if (top2RecentTeamIds.has(tid)) {
       const pts = recentPtsMap[tid] || 0;
       stories.push({
         storyType: "FEAR_RISING",
@@ -620,18 +622,34 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
     memberIdsMap[tid] = (t.memberIds as string[]) || [];
   }
 
-  // Detect Rod's team
-  let rodTeamId: number | null = null;
-  let rodMemberIds: string[] = [];
-  for (const t of teams) {
-    const tid = t.teamId as number;
-    const name = (t.teamName as string) || "";
-    const abbrev = (t.abbrev as string) || "";
-    const owners = (t.owners as string) || "";
-    if (isRodTeam(name, abbrev, owners)) {
-      rodTeamId = tid;
-      rodMemberIds = memberIdsMap[tid] ?? [];
-      break;
+  // Detect focal user's team via their active profile (profile-based, not name-based).
+  let focalTeamId: number | null = null;
+  let focalMemberIds: string[] = [];
+  if (userId != null) {
+    const { resolveActiveProfile, memberIdFromOwnerKey } = await import("./db");
+    const __profile = await resolveActiveProfile({ id: userId });
+    if (__profile.isSetupComplete) {
+      const focalMemberId = memberIdFromOwnerKey(__profile.selectedOwnerKey) ?? "";
+      for (const t of teams) {
+        const tid = t.teamId as number;
+        const mids = memberIdsMap[tid] ?? [];
+        if (focalMemberId && mids.includes(focalMemberId)) {
+          focalTeamId = tid;
+          focalMemberIds = mids;
+          break;
+        }
+      }
+      // Fallback: try name-based detection if memberIds don't match
+      if (focalTeamId === null) {
+        for (const t of teams) {
+          const tid = t.teamId as number;
+          if (isFocalTeam((t.teamName as string) || "", (t.abbrev as string) || "", (t.owners as string) || "")) {
+            focalTeamId = tid;
+            focalMemberIds = memberIdsMap[tid] ?? [];
+            break;
+          }
+        }
+      }
     }
   }
 
@@ -642,9 +660,9 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
     h2hLosses: number;
     playoffEliminations: number;
   }> = [];
-  if (rodMemberIds.length > 0) {
+  if (focalMemberIds.length > 0) {
     // Try each of Rod's memberIds
-    for (const mid of rodMemberIds) {
+    for (const mid of focalMemberIds) {
       let rows: typeof rivalryPairs = [];
       try {
         rows = await db
@@ -713,7 +731,7 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
 
   // Build enriched H2H blocks for Rod's rivalry pairs
   const rivalH2HBlocks: Record<string, string> = {};
-  if (rodMemberIds.length > 0) {
+  if (focalMemberIds.length > 0) {
     try {
       const { resolveRodMemberId, computeRichH2H, buildH2HPromptBlock } = await import('./h2hContextBuilder');
       const rodId = await resolveRodMemberId(userId);
@@ -750,8 +768,8 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
     teamNameMap,
     memberIdsMap,
     rivalryPairs,
-    rodTeamId,
-    rodMemberIds,
+    focalTeamId,
+    focalMemberIds,
     prevSeasonRanks,
     ownerPlayoffRecords,
     rivalH2HBlocks,

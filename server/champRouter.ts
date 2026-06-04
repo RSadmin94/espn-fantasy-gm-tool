@@ -61,19 +61,19 @@ const TeamStandingInput = z.object({
   pointsFor: z.number(),
   projectedLineup: z.array(SimPlayerInput),
   remainingSchedule: z.array(z.number()),
-  isRod: z.boolean().default(false),
+  isFocalOwner: z.boolean().default(false),
 });
 
 // ─── ESPN data helper ─────────────────────────────────────────────────────────
 
 async function buildTeamStandings(season: number, userId?: number): Promise<{
   teams: TeamStanding[];
-  rodTeamId: number | null;
+  focalTeamId: number | null;
   currentWeek: number;
   playoffWeekStart: number;
 }> {
   const cached = await getCachedView(season, "combined", undefined, { userId });
-  if (!cached) return { teams: [], rodTeamId: null, currentWeek: 1, playoffWeekStart: 15 };
+  if (!cached) return { teams: [], focalTeamId: null, currentWeek: 1, playoffWeekStart: 15 };
 
   const data = cached.payload as Record<string, unknown>;
   const rawTeams = normalizeTeams(data);
@@ -127,13 +127,13 @@ async function buildTeamStandings(season: number, userId?: number): Promise<{
   }
 
   // Detect Rod's team
-  let rodTeamId: number | null = null;
+  let focalTeamId: number | null = null;
   for (const t of rawTeams) {
     const name = ((t.teamName as string) || "").toLowerCase();
     const owner = ((t.owners as string) || "").toLowerCase();
     if (name.includes("str8") || name.includes("rodzilla") ||
         owner.includes("rod") || owner.includes("sellers")) {
-      rodTeamId = t.teamId as number;
+      focalTeamId = t.teamId as number;
       break;
     }
   }
@@ -146,10 +146,10 @@ async function buildTeamStandings(season: number, userId?: number): Promise<{
     pointsFor: (t.pointsFor as number) || 0,
     projectedLineup: teamLineups.get(t.teamId as number) ?? [],
     remainingSchedule: teamRemainingSchedule.get(t.teamId as number) ?? [],
-    isRod: t.teamId === rodTeamId,
+    isFocalOwner: t.teamId === focalTeamId,
   }));
 
-  return { teams, rodTeamId, currentWeek, playoffWeekStart };
+  return { teams, focalTeamId, currentWeek, playoffWeekStart };
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
@@ -167,11 +167,11 @@ export const champRouter = router({
       simCount: z.number().min(500).max(5000).default(2000),
     }))
     .query(async ({ ctx, input }) => {
-      const { teams, rodTeamId, playoffWeekStart } = await buildTeamStandings(input.season, ctx.user?.id);
+      const { teams, focalTeamId, playoffWeekStart } = await buildTeamStandings(input.season, ctx.user?.id);
       if (teams.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season." });
-      if (!rodTeamId) throw new TRPCError({ code: "NOT_FOUND", message: "Could not identify Rod's team." });
+      if (!focalTeamId) throw new TRPCError({ code: "NOT_FOUND", message: "Could not identify Rod's team." });
 
-      const rodTeam = teams.find(t => t.teamId === rodTeamId);
+      const rodTeam = teams.find(t => t.teamId === focalTeamId);
       if (!rodTeam) throw new TRPCError({ code: "NOT_FOUND", message: "Rod's team not found." });
 
       // Separate starters (top 2 per skill position) and backups
@@ -189,7 +189,7 @@ export const champRouter = router({
         input.simCount
       );
 
-      return { ...result, season: input.season, rodTeamId };
+      return { ...result, season: input.season, focalTeamId };
     }),
 
   /**
@@ -218,12 +218,12 @@ export const champRouter = router({
       specificQuestion: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const { teams, rodTeamId } = await buildTeamStandings(input.season, ctx.user?.id);
-      if (!rodTeamId || teams.length === 0) {
+      const { teams, focalTeamId } = await buildTeamStandings(input.season, ctx.user?.id);
+      if (!focalTeamId || teams.length === 0) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Season data unavailable." });
       }
 
-      const rodTeam = teams.find(t => t.teamId === rodTeamId)!;
+      const rodTeam = teams.find(t => t.teamId === focalTeamId)!;
       const starters = rodTeam.projectedLineup.slice(0, 8);
       const backups = rodTeam.projectedLineup.slice(8);
 
@@ -279,24 +279,24 @@ Answer Rod's question using the championship equity data above as ground truth.`
       simCount: z.number().min(200).max(2000).default(500),
     }))
     .mutation(async ({ ctx, input }) => {
-      const { teams, rodTeamId } = await buildTeamStandings(input.season, ctx.user?.id);
-      if (!rodTeamId || teams.length === 0) {
+      const { teams, focalTeamId } = await buildTeamStandings(input.season, ctx.user?.id);
+      if (!focalTeamId || teams.length === 0) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Season data unavailable." });
       }
 
-      const rodTeamBase = teams.find(t => t.teamId === rodTeamId)!;
+      const rodTeamBase = teams.find(t => t.teamId === focalTeamId)!;
 
       // Before sim
       const beforeTeam: TeamStanding = { ...rodTeamBase, projectedLineup: input.beforeLineup as SimPlayer[] };
-      const teamsWithBefore = teams.map(t => t.teamId === rodTeamId ? beforeTeam : t);
+      const teamsWithBefore = teams.map(t => t.teamId === focalTeamId ? beforeTeam : t);
       const equityBefore = calcChampionshipEquity(teamsWithBefore, input.simCount);
-      const rodBefore = equityBefore.find(e => e.teamId === rodTeamId)!;
+      const rodBefore = equityBefore.find(e => e.teamId === focalTeamId)!;
 
       // After sim
       const afterTeam: TeamStanding = { ...rodTeamBase, projectedLineup: input.afterLineup as SimPlayer[] };
-      const teamsWithAfter = teams.map(t => t.teamId === rodTeamId ? afterTeam : t);
+      const teamsWithAfter = teams.map(t => t.teamId === focalTeamId ? afterTeam : t);
       const equityAfter = calcChampionshipEquity(teamsWithAfter, input.simCount);
-      const rodAfter = equityAfter.find(e => e.teamId === rodTeamId)!;
+      const rodAfter = equityAfter.find(e => e.teamId === focalTeamId)!;
 
       const champDelta = Math.round((rodAfter.champProbabilityAbsolute - rodBefore.champProbabilityAbsolute) * 10) / 10;
       const playoffDelta = rodAfter.playoffProbability - rodBefore.playoffProbability;

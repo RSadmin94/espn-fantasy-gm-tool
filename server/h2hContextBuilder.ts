@@ -312,30 +312,14 @@ export function buildH2HPromptBlock(stats: RichH2HStats, label = "H2H vs Rod Sel
   return lines.join("\n");
 }
 
-// ── Resolve Rod's member ID ───────────────────────────────────────────────────
-
-const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
+// Resolve the focal user ESPN member ID from their active profile.
 
 export async function resolveRodMemberId(userId?: number): Promise<string | null> {
-  return memCache(`rodMemberId:${userId ?? "anon"}`, 60 * 60_000, async () => {
-    // Prefer the authenticated user's selected profile when onboarding is complete.
-    // selectedOwnerKey is stored as `id:{GUID}`; the ESPN member id is the bare `{GUID}`.
+  return memCache(`focalMemberId:${userId ?? "anon"}`, 60 * 60_000, async () => {
     if (userId != null) {
       const profile = await resolveActiveProfile({ id: userId });
       if (profile.isSetupComplete && profile.selectedOwnerKey) {
         return profile.selectedOwnerKey.replace(/^id:/, "");
-      }
-    }
-    const seasons: number[] = await listSeasonsForLeagueHistorical(undefined, userId);
-    seasons.sort((a: number, b: number) => b - a);
-    for (const season of seasons) {
-      const row = await getCachedView(season, "combined", undefined, { userId });
-      if (!row) continue;
-      const data = row.payload as Record<string, unknown>;
-      const members = (data.members as Record<string, unknown>[]) || [];
-      for (const m of members) {
-        const name = `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || "";
-        if (ROD_NAMES.some(n => name.toLowerCase().includes(n))) return m.id as string;
       }
     }
     return null;

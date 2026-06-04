@@ -504,31 +504,26 @@ export const appRouter = router({
     getScores: publicProcedure.query(async ({ ctx }) => {
       if (!ctx.user?.id) return [];
       const { getRivalryScoresFromDb } = await import("./rivalryService");
-      const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
-      const seasons = await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined);
+      const seasons = await getAllCachedSeasons(undefined, ctx.user.id);
       if (seasons.length === 0) return [];
       const latestSeason = Math.max(...seasons);
-      const row = await getCachedView(latestSeason, "combined", undefined, { userId: ctx.user?.id });
+      const row = await getCachedView(latestSeason, "combined", undefined, { userId: ctx.user.id });
       if (!row) return [];
       const data = row.payload as Record<string, unknown>;
       const members = (data.members as Record<string, unknown>[]) || [];
-      let rodMemberId: string | null = null;
+      // Resolve focal member ID from the authenticated user's active profile.
       const __profile = await resolveActiveProfile(ctx.user ? { id: ctx.user.id } : null);
-      if (__profile.isSetupComplete) rodMemberId = memberIdFromOwnerKey(__profile.selectedOwnerKey);
-      for (const m of members) {
-        const name = `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || "";
-        if (!rodMemberId && ROD_NAMES.some(n => name.toLowerCase().includes(n))) { rodMemberId = m.id as string; break; }
-      }
-      if (!rodMemberId) return [];
-      const rodName = (() => {
-        for (const m of members) {
-          if (m.id === rodMemberId) {
+      const focalMemberId: string | null = __profile.isSetupComplete
+        ? memberIdFromOwnerKey(__profile.selectedOwnerKey)
+        : null;
+      if (!focalMemberId) return [];
+      const focalName = members.find(m => m.id === focalMemberId)
+        ? (() => {
+            const m = members.find(m2 => m2.id === focalMemberId)!;
             return `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || "";
-          }
-        }
-        return "";
-      })();
-      const scores = await getRivalryScoresFromDb(rodMemberId);
+          })()
+        : "";
+      const scores = await getRivalryScoresFromDb(focalMemberId);
       // Attach canonical owner-keys so the dossier popup resolves (gmTeams.ownerId === ESPN memberId).
       if (!ctx.user?.id) return [];
       const { leagueId: scoreLid } = await resolveActiveLeagueId(
@@ -548,7 +543,7 @@ export const appRouter = router({
         const raw = resolveOwnerKey("", nm, nm, nameToOwnerId);
         return remap.get(raw) ?? raw;
       };
-      const focalKey = canonicalForMember(rodMemberId, rodName);
+      const focalKey = canonicalForMember(focalMemberId, focalName);
       return scores.map((p) => ({
         ...p,
         focalKey,
@@ -11666,6 +11661,13 @@ if (pickOrder.length > 0) {
       // 2. DNA profiles
       const managers = await buildManagerRawData(ctx.user?.id);
       const dnaProfiles = calcLeagueDNA(managers);
+      // Resolve focal owner for isFocalOwner flag
+      const __draftProfile = ctx.user?.id
+        ? await resolveActiveProfile({ id: ctx.user.id })
+        : null;
+      const focalMemberId = __draftProfile?.isSetupComplete
+        ? memberIdFromOwnerKey(__draftProfile.selectedOwnerKey)
+        : null;
       // 3. Keeper eligibility
       const keepers2025: Record<number, Array<{ playerId: number; playerName: string; position: string; roundId: number }>> = {};
       const data2025picks = normalizeDraftPicks(data2025);
@@ -11735,15 +11737,19 @@ if (pickOrder.length > 0) {
           d.ownerName && ownerName.toLowerCase().includes(d.ownerName.toLowerCase().split(" ")[0].toLowerCase())
         ) ?? null;
         const rec = keeperRecs.find(r => r.teamId === tid) ?? null;
-        const isRod = teamName.toLowerCase().includes("str8") ||
-          teamName.toLowerCase().includes("rodzilla") ||
-          ownerName.toLowerCase().includes("rod");
+        // Determine if this slot belongs to the authenticated user's team via profile.
+        // Fall back to false if no profile is configured.
+        const teamMembers = (normalizeDraftOrder(data2025)?.pickOrder ?? []).find(s => s.teamId === tid);
+        const isFocalOwner = focalMemberId != null && (
+          (teamMembers as Record<string,unknown>)?.primaryOwner === focalMemberId ||
+          ownerName.toLowerCase().includes((focalMemberId ?? "").toLowerCase().slice(0, 4))
+        );
         return {
           teamId: tid,
           teamName,
           ownerName,
           draftSlot: slot.position,
-          isRod,
+          isFocalOwner,
           gmArchetype: dna?.gmArchetype ?? "Balanced Manager",
           draftStyleBadge: dna?.draft.draftStyleBadge ?? "Balanced",
           reachPositions: dna?.draft.reachPositions ?? [] as string[],

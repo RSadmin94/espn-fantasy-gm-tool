@@ -101,7 +101,7 @@ export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<st
     const __profile = await resolveActiveProfile({ id: userId });
     if (__profile.isSetupComplete) rodMemberId = memberIdFromOwnerKey(__profile.selectedOwnerKey);
   }
-  const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
+  // focalMemberId resolved from profile above — no name-based fallback.
 
   for (const season of cachedSeasons.sort((a, b) => b - a)) {
     const row = await getCachedView(season, "combined", undefined, { userId });
@@ -121,9 +121,7 @@ export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<st
       const mid = m.id as string;
       const name = `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || mid;
       memberIdToName.set(mid, name);
-      if (!rodMemberId && ROD_NAMES.some(n => name.toLowerCase().includes(n))) {
-        rodMemberId = mid;
-      }
+      // focalMemberId already resolved from profile — no name-based fallback here.
     }
 
     // Normalize data for this season

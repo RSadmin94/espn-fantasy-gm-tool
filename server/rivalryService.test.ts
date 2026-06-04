@@ -219,7 +219,7 @@ describe("rivalry score ordering invariants", () => {
 interface H2HAcc {
   h2hWins: number;
   h2hLosses: number;
-  totalRodPF: number;
+  totalOwnerPF: number;
   totalRivalPF: number;
   biggestRodWinMargin: number | null;
   biggestRodWinSeason: number | null;
@@ -234,7 +234,7 @@ interface H2HAcc {
 function makeAcc(): H2HAcc {
   return {
     h2hWins: 0, h2hLosses: 0,
-    totalRodPF: 0, totalRivalPF: 0,
+    totalOwnerPF: 0, totalRivalPF: 0,
     biggestRodWinMargin: null, biggestRodWinSeason: null,
     biggestRodLossMargin: null, biggestRodLossSeason: null,
     currentWinStreak: 0, longestWinStreak: 0, longestLossStreak: 0,
@@ -245,7 +245,7 @@ function makeAcc(): H2HAcc {
 function applyMatchup(acc: H2HAcc, season: number, rodScore: number, rivalScore: number): void {
   const margin = Math.abs(rodScore - rivalScore);
   const rodWon = rodScore > rivalScore;
-  acc.totalRodPF += rodScore;
+  acc.totalOwnerPF += rodScore;
   acc.totalRivalPF += rivalScore;
   let sb = acc.seasonBreakdown.find(s => s.season === season);
   if (!sb) { sb = { season, rodWins: 0, rodLosses: 0 }; acc.seasonBreakdown.push(sb); }
@@ -279,10 +279,10 @@ describe("rich H2H stat accumulator", () => {
     applyMatchup(acc, 2022, 80, 110);  // Rod loses
     applyMatchup(acc, 2023, 130, 90);  // Rod wins
     const totalGames = acc.h2hWins + acc.h2hLosses;
-    const avgRodPF = Math.round((acc.totalRodPF / totalGames) * 10) / 10;
+    const avgOwnerPF = Math.round((acc.totalOwnerPF / totalGames) * 10) / 10;
     const avgRivalPF = Math.round((acc.totalRivalPF / totalGames) * 10) / 10;
     expect(totalGames).toBe(3);
-    expect(avgRodPF).toBeCloseTo(110.0, 1); // (120+80+130)/3
+    expect(avgOwnerPF).toBeCloseTo(110.0, 1); // (120+80+130)/3
     expect(avgRivalPF).toBeCloseTo(100.0, 1); // (100+110+90)/3
   });
 
