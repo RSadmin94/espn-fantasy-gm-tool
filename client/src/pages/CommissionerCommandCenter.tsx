@@ -294,16 +294,24 @@ export function CommissionerCommandCenter() {
   const latestMedal = medals.length > 0 ? medals[medals.length - 1] : null;
   const currentChampion = latestMedal;
 
-  // Longest drought — among owners with 0 titles
+  // Longest drought -- among owners with 0 titles.
+  // Uses HoF championships leaderboard (identity-resolved) not raw medals (old team names).
   const droughtOwner = useMemo(() => {
     const allOwners = standingsQ.data?.owners ?? [];
-    const champKeys = new Set(medals.map((m) => m.championOwner?.toLowerCase().trim()).filter(Boolean));
-    const noTitles = allOwners.filter(
-      (o) => !champKeys.has(o.ownerKey?.toLowerCase().trim()) && !champKeys.has(o.displayName?.toLowerCase().trim()),
+    const hofLeaderboard: any[] = hofQ.data?.championships?.leaderboard ?? [];
+    const champOwnerKeys = new Set(
+      hofLeaderboard.filter(c => (c.titles ?? 0) > 0).map(c => String(c.ownerKey ?? "").toLowerCase().trim()),
+    );
+    const champDisplayNames = new Set(
+      hofLeaderboard.filter(c => (c.titles ?? 0) > 0).map(c => String(c.displayName ?? "").toLowerCase().trim()),
+    );
+    const noTitles = (allOwners as any[]).filter(
+      o => !champOwnerKeys.has(String(o.ownerKey ?? "").toLowerCase().trim()) &&
+           !champDisplayNames.has(String(o.displayName ?? "").toLowerCase().trim()),
     );
     if (!noTitles.length) return null;
-    return noTitles.sort((a, b) => b.seasons.length - a.seasons.length)[0] ?? null;
-  }, [standingsQ.data, medals]);
+    return noTitles.sort((a, b) => (b.seasons?.length ?? 0) - (a.seasons?.length ?? 0))[0] ?? null;
+  }, [standingsQ.data, hofQ.data]);
 
   // Rivalry — biggest active
   const rivalries = rivalryQ.data ?? [];
