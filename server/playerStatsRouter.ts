@@ -227,7 +227,8 @@ export const playerStatsRouter = router({
       const db = await getDb();
       if (!db) return [];
 
-      const leagueId = input.leagueId ?? "457622";
+      const leagueId = input.leagueId;
+      if (!leagueId) return [];
 
       // Step 1: Get draft picks for the season
       const picks = await db

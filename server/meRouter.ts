@@ -27,7 +27,8 @@ export const meRouter = router({
       null,
       undefined,
     );
-    const lid = String(leagueId || "457622").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
+    if (!leagueId) return { leagueId: "", seasons: 0, matchups: 0, draftPicks: 0 };
+    const lid = String(leagueId).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
     const db = await getDb();
     if (!db) return { leagueId: lid, seasons: 0, matchups: 0, draftPicks: 0 };
     const matchups = countOf(await db.execute("SELECT COUNT(*) AS c FROM matchups WHERE leagueId = '" + lid + "'"));
