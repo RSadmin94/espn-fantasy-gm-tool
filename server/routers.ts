@@ -26,6 +26,7 @@ import { meRouter } from "./meRouter";
 import { draftRealityRouter } from "./draftRealityRouter";
 import { leagueIntelRouter } from "./leagueIntelRouter";
 import { activityDnaRouter } from "./activityDnaRouter";
+import { transactionAnalysisRouter } from "./transactionAnalysisRouter";
 import { getActivityDnaForOwner } from "./activityDnaService";
 import { offseasonRouter } from "./offseasonRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
@@ -479,6 +480,7 @@ export const appRouter = router({
   draftReality: draftRealityRouter,
   leagueIntel: leagueIntelRouter,
   activityDna: activityDnaRouter,
+  transactionAnalysis: transactionAnalysisRouter,
   onboarding: onboardingRouter,
   injury: injuryRouter,
   simulation: simulationRouter,

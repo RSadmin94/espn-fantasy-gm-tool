@@ -245,7 +245,8 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
       const gap = leagueAvg[p] - focalAvg[p];
       if (gap > worstGap && focalAvg[p] > 0) { worstGap = gap; worstPos = p; }
     }
-    if (worstPos) {
+    // Skip positional-weakness finding for reigning champion — they already won.
+    if (worstPos && !isReigningChampion) {
       findings.push({
         id: "position_weakness", category: "position",
         severity: clamp(worstGap * 14 + 20),

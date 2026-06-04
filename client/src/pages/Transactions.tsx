@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Repeat2,
   Search,
+  Sparkles,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -95,7 +96,6 @@ function isTradeType(type: string | undefined): boolean {
   return t === "TRADE" || t.startsWith("TRADE_");
 }
 
-/** Canonical id so TRADE_PROPOSAL lines + TRADE_UPHOLD/ACCEPT merge into one card */
 function tradeClusterKey(r: TxnRow): string {
   const t = r.type || "";
   if (t === "TRADE_UPHOLD" || t === "TRADE_ACCEPT") {
@@ -332,15 +332,12 @@ function describeTrade(
     typeof n === "number" && Number.isFinite(n) && n > 0;
   const teamName = (id: number) => teamMap.get(id) || `Team ${id}`;
 
-  // Resolve the two trade parties: prefer asset-level team ids, then the row-level
-  // transaction team ids. Never use 0 / unresolved ids (would render "Team 0").
   const assetTeamIds = [...new Set(assets.flatMap((a) => [a.fromTeamId, a.toTeamId]).filter(isValidTeam))];
   const partyIds =
     assetTeamIds.length >= 2
       ? assetTeamIds
       : [...new Set([...assetTeamIds, ...rows.flatMap((r) => [r.fromTeamId, r.toTeamId]).filter(isValidTeam)])];
 
-  // Unattributable: cannot name two real sides -> never show "Team 0".
   if (partyIds.length < 2) {
     return "Trade details unavailable.";
   }
@@ -354,7 +351,6 @@ function describeTrade(
     return st ? `${nameA} and ${nameB} - trade (${String(st)})` : `${nameA} and ${nameB} - trade`;
   }
 
-  // Directional summary when asset-level direction is present.
   const aGives = assets.filter((a) => a.fromTeamId === ta && a.toTeamId === tb).map((a) => assetToLabel(a, meta, season));
   const bGives = assets.filter((a) => a.fromTeamId === tb && a.toTeamId === ta).map((a) => assetToLabel(a, meta, season));
   if (aGives.length && bGives.length) {
@@ -363,7 +359,6 @@ function describeTrade(
   if (aGives.length) return `${nameA} traded ${listPhrase(aGives)} to ${nameB}`;
   if (bGives.length) return `${nameB} traded ${listPhrase(bGives)} to ${nameA}`;
 
-  // Parties resolved (via row teams) but asset direction unknown: summarize without fabricating direction.
   const allAssets = assets.map((a) => assetToLabel(a, meta, season));
   return `${nameA} and ${nameB} traded ${listPhrase(allAssets)}`;
 }
@@ -376,7 +371,6 @@ function dominantTradeType(rows: TxnRow[]): string {
   return rows[0]?.type || "TRADE";
 }
 
-/** Status line under a trade card — prefer completed-trade rows so grouped proposals match ESPN. */
 function displayedTradeStatus(rows: TxnRow[]): string | null {
   const completed = rows.find(
     r => r.type === "TRADE_UPHOLD" || r.type === "TRADE_ACCEPT"
@@ -392,7 +386,6 @@ function normalizeStatusForMatch(status: string | null | undefined): string {
   return String(status ?? "").trim().toUpperCase();
 }
 
-/** Parent trade status from one row only: raw ESPN parent first, then row.status (never grouped peers). */
 function parentTradeStatusFromRow(r: TxnRow): string | null {
   const raw = tryParseRaw(r.rawTransaction ?? undefined);
   if (raw) {
@@ -416,7 +409,6 @@ function parentStatusMatchesFilter(
   return n === "CANCELED" || n === "CANCELLED";
 }
 
-/** Prefer parent-like trade rows (no player leg) for status reads; deprioritize draft legs and asset legs when possible. */
 function scorePrimaryTradeRowForStatusPick(r: TxnRow): number {
   const t = (r.type || "").toUpperCase();
   let s = 0;
@@ -429,10 +421,6 @@ function scorePrimaryTradeRowForStatusPick(r: TxnRow): number {
   return s;
 }
 
-/**
- * One row whose rawTransaction / status defines the parent trade for filter eligibility.
- * Excludes draft-pick transfer legs and player asset legs when a header-style row exists in the cluster.
- */
 function pickRowForParentTradeStatus(group: TxnRow[]): TxnRow | null {
   const trades = group.filter(r => isTradeType(r.type));
   if (trades.length === 0) return null;
@@ -526,18 +514,10 @@ function isDraftAsset(a: TradeAsset): boolean {
   );
 }
 
-/**
- * A transaction entry is "meaningful" if it carries real player/pick movement.
- * Hides empty draft-pick shells, asset-less trades, and placeholder rows.
- * Keeps adds/drops/waivers, real player moves, and trades (incl. cancelled/rejected)
- * that actually contain assets.
- */
 function isMeaningfulEntry(entry: DisplayEntry): boolean {
   if (entry.kind === "trade") {
     const tAssets = collectTradeAssets(entry.rows);
     if (tAssets.length === 0) return false;
-    // Require >=2 resolvable (>0) team ids (asset-level, then row-level fallback) so the
-    // trade can be attributed to real teams; otherwise it is an unattributable "Team 0" shell.
     const tIds = new Set<number>();
     for (const a of tAssets) {
       if (a.fromTeamId && a.fromTeamId > 0) tIds.add(a.fromTeamId);
@@ -556,6 +536,7 @@ function isMeaningfulEntry(entry: DisplayEntry): boolean {
   const hasMemo = !!(raw && typeof raw.memo === "string" && raw.memo.trim());
   return isMovement || hasMemo;
 }
+
 function buildTradeSidesModel(
   rows: TxnRow[],
   season: number,
@@ -577,27 +558,11 @@ function buildTradeSidesModel(
   const ta = sorted[0]!;
   const tb = sorted[1]!;
 
-  const sideA: TradeSideView = {
-    id: ta,
-    name: teamMap.get(ta) || `Team ${ta}`,
-    logoUrl: teamLogoById.get(ta),
-    players: [],
-    picks: [],
-  };
-  const sideB: TradeSideView = {
-    id: tb,
-    name: teamMap.get(tb) || `Team ${tb}`,
-    logoUrl: teamLogoById.get(tb),
-    players: [],
-    picks: [],
-  };
+  const sideA: TradeSideView = { id: ta, name: teamMap.get(ta) || `Team ${ta}`, logoUrl: teamLogoById.get(ta), players: [], picks: [] };
+  const sideB: TradeSideView = { id: tb, name: teamMap.get(tb) || `Team ${tb}`, logoUrl: teamLogoById.get(tb), players: [], picks: [] };
 
   const pushPick = (tid: number, a: TradeAsset, idx: number) => {
-    const vis = formatDraftPickVisual(season, {
-      round: a.round,
-      pickInRound: a.pickInRound,
-      overallPickNumber: a.overallPickNumber,
-    });
+    const vis = formatDraftPickVisual(season, { round: a.round, pickInRound: a.pickInRound, overallPickNumber: a.overallPickNumber });
     const key = `p-${tid}-${idx}-${vis.line1}-${vis.rNotation ?? ""}-${vis.overallText ?? ""}`;
     const pk: TradeReceivePick = { key, ...vis };
     if (tid === ta) sideA.picks.push(pk);
@@ -613,23 +578,14 @@ function buildTradeSidesModel(
   for (const a of assets) {
     const to = a.toTeamId != null && a.toTeamId > 0 ? a.toTeamId : null;
     if (to == null) continue;
-
-    if (isDraftAsset(a)) {
-      pushPick(to, a, pickIdx++);
-      continue;
-    }
+    if (isDraftAsset(a)) { pushPick(to, a, pickIdx++); continue; }
     if (a.playerId != null && a.playerId > 0) {
       const m = meta.get(a.playerId);
       const name = (a.playerName || "Unknown player").trim();
       const pos = (a.position || m?.position || "?").trim();
       const nflRaw = (m?.proTeam || "").trim();
       const nfl = nflRaw && nflRaw !== "?" ? nflRaw : "—";
-      pushPlayer(to, {
-        key: `pl-${a.playerId}-${to}-${name}`,
-        name,
-        position: pos,
-        nflTeam: nfl,
-      });
+      pushPlayer(to, { key: `pl-${a.playerId}-${to}-${name}`, name, position: pos, nflTeam: nfl });
     }
   }
 
@@ -638,11 +594,9 @@ function buildTradeSidesModel(
 
 function statusBadgeClasses(statusRaw: string | null): string {
   const n = normalizeStatusForMatch(statusRaw);
-  const base =
-    "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide";
+  const base = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide";
   if (n === "EXECUTED") return cn(base, "border-lime-500/40 bg-lime-500/15 text-lime-300");
-  if (n === "PROPOSED" || n === "PENDING")
-    return cn(base, "border-amber-500/40 bg-amber-500/15 text-amber-200");
+  if (n === "PROPOSED" || n === "PENDING") return cn(base, "border-amber-500/40 bg-amber-500/15 text-amber-200");
   if (n === "CANCELED" || n === "CANCELLED") return cn(base, "border-red-500/40 bg-red-500/15 text-red-300");
   return cn(base, "border-border/80 bg-muted/25 text-muted-foreground");
 }
@@ -652,60 +606,35 @@ function TradeStatusBadge({ status }: { status: string | null }) {
   return <span className={statusBadgeClasses(status)}>{label}</span>;
 }
 
-function ReceivesPanel({
-  title,
-  players,
-  picks,
-}: {
-  title: string;
-  players: TradeReceivePlayer[];
-  picks: TradeReceivePick[];
-}) {
+function ReceivesPanel({ title, players, picks }: { title: string; players: TradeReceivePlayer[]; picks: TradeReceivePick[] }) {
   const hasPlayers = players.length > 0;
   const hasPicks = picks.length > 0;
   if (!hasPlayers && !hasPicks) {
     return (
-      <div
-        className={cn(
-          "rounded-lg border border-violet-500/25 bg-violet-500/[0.06] p-3 text-center text-xs text-muted-foreground",
-          "shadow-[0_0_14px_rgba(139,92,246,0.12)]"
-        )}
-      >
+      <div className={cn("rounded-lg border border-violet-500/25 bg-violet-500/[0.06] p-3 text-center text-xs text-muted-foreground", "shadow-[0_0_14px_rgba(139,92,246,0.12)]")}>
         No assets listed for this side.
       </div>
     );
   }
   return (
-    <div
-      className={cn(
-        "space-y-2.5 rounded-lg border border-violet-500/25 bg-violet-500/[0.06] p-3",
-        "shadow-[0_0_14px_rgba(139,92,246,0.12)]"
-      )}
-    >
+    <div className={cn("space-y-2.5 rounded-lg border border-violet-500/25 bg-violet-500/[0.06] p-3", "shadow-[0_0_14px_rgba(139,92,246,0.12)]")}>
       <div className="text-[11px] font-semibold uppercase tracking-wide text-violet-300/90">{title}</div>
-      {hasPlayers ? (
+      {hasPlayers && (
         <div>
-          <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Players ({players.length})
-          </div>
+          <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Players ({players.length})</div>
           <ul className="space-y-1.5">
             {players.map(p => (
               <li key={p.key} className="text-sm leading-tight text-foreground">
                 • <span className="font-medium">{p.name}</span>
-                <span className="text-muted-foreground">
-                  {" "}
-                  · {p.position} · {p.nflTeam}
-                </span>
+                <span className="text-muted-foreground"> · {p.position} · {p.nflTeam}</span>
               </li>
             ))}
           </ul>
         </div>
-      ) : null}
-      {hasPicks ? (
+      )}
+      {hasPicks && (
         <div>
-          <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Draft Picks ({picks.length})
-          </div>
+          <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Draft Picks ({picks.length})</div>
           <ul className="space-y-2">
             {picks.map(pk => (
               <li key={pk.key} className="text-sm leading-snug text-foreground">
@@ -713,58 +642,26 @@ function ReceivesPanel({
                 <span className="text-[13px] font-medium text-foreground/95">{pk.line1}</span>
                 {pk.rNotation || pk.overallText ? (
                   <div className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 pl-3.5">
-                    {pk.rNotation ? (
-                      <span className="font-semibold tabular-nums tracking-tight text-violet-200">
-                        {pk.rNotation}
-                      </span>
-                    ) : null}
-                    {pk.rNotation && pk.overallText ? (
-                      <span className="text-[11px] text-muted-foreground">·</span>
-                    ) : null}
-                    {pk.overallText ? (
-                      <span className="text-[11px] text-muted-foreground">{pk.overallText}</span>
-                    ) : null}
+                    {pk.rNotation && <span className="font-semibold tabular-nums tracking-tight text-violet-200">{pk.rNotation}</span>}
+                    {pk.rNotation && pk.overallText && <span className="text-[11px] text-muted-foreground">·</span>}
+                    {pk.overallText && <span className="text-[11px] text-muted-foreground">{pk.overallText}</span>}
                   </div>
                 ) : null}
               </li>
             ))}
           </ul>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
 
 function TypeBadge({ type }: { type: string }) {
   const base = "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium";
-  if (type === "ADD")
-    return (
-      <span className={cn(base, "border-lime-500/25 bg-lime-500/10 text-lime-400")}>
-        <ArrowDownToLine className="h-3 w-3" />
-        Add
-      </span>
-    );
-  if (type === "DROP")
-    return (
-      <span className={cn(base, "border-red-500/25 bg-red-500/10 text-red-400")}>
-        <ArrowUpFromLine className="h-3 w-3" />
-        Drop
-      </span>
-    );
-  if (type === "WAIVER")
-    return (
-      <span className={cn(base, "border-violet-500/25 bg-violet-500/10 text-violet-300")}>
-        <Search className="h-3 w-3" />
-        Waiver
-      </span>
-    );
-  if (isTradeType(type))
-    return (
-      <span className={cn(base, "border-violet-500/25 bg-violet-500/10 text-violet-300")}>
-        <Repeat2 className="h-3 w-3" />
-        {TX_TYPE_LABELS[type] ?? "Trade"}
-      </span>
-    );
+  if (type === "ADD") return <span className={cn(base, "border-lime-500/25 bg-lime-500/10 text-lime-400")}><ArrowDownToLine className="h-3 w-3" />Add</span>;
+  if (type === "DROP") return <span className={cn(base, "border-red-500/25 bg-red-500/10 text-red-400")}><ArrowUpFromLine className="h-3 w-3" />Drop</span>;
+  if (type === "WAIVER") return <span className={cn(base, "border-violet-500/25 bg-violet-500/10 text-violet-300")}><Search className="h-3 w-3" />Waiver</span>;
+  if (isTradeType(type)) return <span className={cn(base, "border-violet-500/25 bg-violet-500/10 text-violet-300")}><Repeat2 className="h-3 w-3" />{TX_TYPE_LABELS[type] ?? "Trade"}</span>;
   return <span className={cn(base, "border-border bg-muted/30 text-muted-foreground")}>{type}</span>;
 }
 
@@ -773,11 +670,7 @@ function RosterLinks({ season, teams }: { season: number; teams: { tid: number; 
   return (
     <div className="flex flex-col items-end gap-1 text-right">
       {teams.map(({ tid, name }) => (
-        <Link
-          key={tid}
-          to={`/roster?season=${season}&teamId=${tid}`}
-          className="text-xs font-medium text-violet-400 hover:text-violet-300 hover:underline"
-        >
+        <Link key={tid} to={`/roster?season=${season}&teamId=${tid}`} className="text-xs font-medium text-violet-400 hover:text-violet-300 hover:underline">
           {name} roster
         </Link>
       ))}
@@ -789,17 +682,90 @@ function TeamHeaderBlock({ name, logoUrl }: { name: string; logoUrl?: string }) 
   return (
     <div className="flex flex-col items-center gap-2 text-center">
       {logoUrl ? (
-        <img
-          src={logoUrl}
-          alt=""
-          className="h-11 w-11 shrink-0 rounded-lg border border-border/70 bg-background object-cover shadow-sm"
-        />
+        <img src={logoUrl} alt="" className="h-11 w-11 shrink-0 rounded-lg border border-border/70 bg-background object-cover shadow-sm" />
       ) : (
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/25 text-[11px] font-bold uppercase text-muted-foreground">
           {name.trim().slice(0, 2) || "—"}
         </div>
       )}
       <div className="text-sm font-bold leading-snug text-foreground">{name}</div>
+    </div>
+  );
+}
+
+// ── AI Trade Analysis Panel ──────────────────────────────────────────────────
+
+function TradeAnalysisPanel({
+  rows,
+  season,
+  teamMap,
+  playerMeta,
+  isExecuted,
+}: {
+  rows: TxnRow[];
+  season: number;
+  teamMap: Map<number, string>;
+  playerMeta: Map<number, PlayerBits>;
+  isExecuted: boolean;
+}) {
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const analyzeMutation = trpc.transactionAnalysis.analyzeExecutedTrade.useMutation({
+    onSuccess: (data) => {
+      if (data.ok && data.analysis) setAnalysis(data.analysis);
+    },
+  });
+
+  if (!isExecuted) return null;
+
+  const assets = collectTradeAssets(rows);
+  const teamIds = [...new Set(assets.flatMap((a) => [a.fromTeamId, a.toTeamId]).filter((n): n is number => typeof n === "number" && n > 0))].sort((a, b) => a - b);
+  if (teamIds.length < 2) return null;
+
+  const [ta, tb] = teamIds;
+  const nameA = teamMap.get(ta) || `Team ${ta}`;
+  const nameB = teamMap.get(tb) || `Team ${tb}`;
+  const assetsToA = assets.filter(a => a.toTeamId === ta).map(a => assetToLabel(a, playerMeta, season));
+  const assetsToB = assets.filter(a => a.toTeamId === tb).map(a => assetToLabel(a, playerMeta, season));
+  const ms = Math.max(0, ...rows.map(eventMs));
+
+  return (
+    <div className="mt-3 border-t border-border/40 pt-3">
+      {!analysis && !analyzeMutation.isPending && (
+        <button
+          type="button"
+          onClick={() =>
+            analyzeMutation.mutate({
+              season,
+              teamA: nameA,
+              teamB: nameB,
+              assetsToA,
+              assetsToB,
+              processedDate: ms || undefined,
+            })
+          }
+          className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-300 transition-colors hover:bg-violet-500/20 hover:text-violet-200"
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          Analyze this trade
+        </button>
+      )}
+      {analyzeMutation.isPending && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Analyzing…
+        </div>
+      )}
+      {analysis && (
+        <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.05] p-3">
+          <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-300/80">
+            <Sparkles className="h-3 w-3" /> AI Trade Analysis
+          </div>
+          <p className="text-[13px] leading-relaxed text-foreground/85">{analysis}</p>
+        </div>
+      )}
+      {analyzeMutation.isError && (
+        <p className="text-xs text-red-400">Analysis failed — try again.</p>
+      )}
     </div>
   );
 }
@@ -827,17 +793,12 @@ function TradeComparisonCard({
   const narrative = describeTrade(rows, teamMap, playerMeta, season);
   const sides = buildTradeSidesModel(rows, season, teamMap, teamLogoById, playerMeta);
   const teamsCol = involvedTeamIds(rows);
-  const rosterTeams = teamsCol.map(tid => ({
-    tid,
-    name: teamMap.get(tid) || `Team ${tid}`,
-  }));
+  const rosterTeams = teamsCol.map(tid => ({ tid, name: teamMap.get(tid) || `Team ${tid}` }));
   const safeId = `trade-recap-${String(entry.key).replace(/[^a-zA-Z0-9_-]/g, "-")}-${idx}`;
+  const isExecuted = normalizeStatusForMatch(tradeStatusLine) === "EXECUTED";
 
   return (
-    <div
-      id={safeId}
-      className="border-b border-border/60 bg-gradient-to-b from-card/40 to-transparent px-3 py-4 sm:px-5"
-    >
+    <div id={safeId} className="border-b border-border/60 bg-gradient-to-b from-card/40 to-transparent px-3 py-4 sm:px-5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="text-xs text-muted-foreground">
           <div className="font-semibold text-foreground">{date}</div>
@@ -868,13 +829,11 @@ function TradeComparisonCard({
               <TeamHeaderBlock name={sides.sideA.name} logoUrl={sides.sideA.logoUrl} />
               <ReceivesPanel title="Receives" players={sides.sideA.players} picks={sides.sideA.picks} />
             </div>
-
             <div className="flex justify-center py-1 lg:items-start lg:justify-center lg:pt-12">
               <div className="rounded-full border border-violet-500/30 bg-violet-500/10 p-2 text-violet-400 shadow-[0_0_16px_rgba(139,92,246,0.25)]">
                 <ArrowLeftRight className="h-5 w-5" aria-hidden />
               </div>
             </div>
-
             <div className="flex min-w-0 flex-col gap-2">
               <TeamHeaderBlock name={sides.sideB.name} logoUrl={sides.sideB.logoUrl} />
               <ReceivesPanel title="Receives" players={sides.sideB.players} picks={sides.sideB.picks} />
@@ -887,18 +846,12 @@ function TradeComparisonCard({
           </p>
           <p className="mt-0.5 text-center text-[11px] text-muted-foreground">
             Status:{" "}
-            <span
-              className={cn(
-                "font-medium",
-                normalizeStatusForMatch(tradeStatusLine) === "EXECUTED" && "text-lime-400",
-                (normalizeStatusForMatch(tradeStatusLine) === "PROPOSED" ||
-                  normalizeStatusForMatch(tradeStatusLine) === "PENDING") &&
-                  "text-amber-300",
-                (normalizeStatusForMatch(tradeStatusLine) === "CANCELED" ||
-                  normalizeStatusForMatch(tradeStatusLine) === "CANCELLED") &&
-                  "text-red-400"
-              )}
-            >
+            <span className={cn(
+              "font-medium",
+              normalizeStatusForMatch(tradeStatusLine) === "EXECUTED" && "text-lime-400",
+              (normalizeStatusForMatch(tradeStatusLine) === "PROPOSED" || normalizeStatusForMatch(tradeStatusLine) === "PENDING") && "text-amber-300",
+              (normalizeStatusForMatch(tradeStatusLine) === "CANCELED" || normalizeStatusForMatch(tradeStatusLine) === "CANCELLED") && "text-red-400"
+            )}>
               {tradeStatusLine ?? "—"}
             </span>
           </p>
@@ -907,20 +860,25 @@ function TradeComparisonCard({
         <div className="mt-3 space-y-2 rounded-lg border border-border/70 bg-muted/10 p-3">
           <p className="text-sm leading-snug text-foreground">{narrative}</p>
           {tradeStatusLine ? (
-            <p className="text-xs text-muted-foreground">
-              Status: <span className="font-medium text-foreground">{tradeStatusLine}</span>
-            </p>
+            <p className="text-xs text-muted-foreground">Status: <span className="font-medium text-foreground">{tradeStatusLine}</span></p>
           ) : null}
           <div className="flex flex-wrap justify-end gap-2 pt-1">
             <RosterLinks season={season} teams={rosterTeams} />
           </div>
         </div>
       )}
+
+      {/* AI Trade Analysis — only for EXECUTED trades */}
+      <TradeAnalysisPanel
+        rows={rows}
+        season={season}
+        teamMap={teamMap}
+        playerMeta={playerMeta}
+        isExecuted={isExecuted}
+      />
     </div>
   );
 }
-
-// ── Row styling (ESPN-like colors) ───────────────────────────────────────────
 
 export function Transactions() {
   const allSeasonsQ = trpc.espn.allSeasons.useQuery();
@@ -939,31 +897,23 @@ export function Transactions() {
   const [season, setSeason] = useState<number>(defaultSeason);
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [teamFilter, setTeamFilter] = useState("ALL");
-  const [tradeStatusFilter, setTradeStatusFilter] = useState<
-    "ALL" | "EXECUTED" | "PROPOSED" | "CANCELED"
-  >("ALL");
+  const [tradeStatusFilter, setTradeStatusFilter] = useState<"ALL" | "EXECUTED" | "PROPOSED" | "CANCELED">("ALL");
   const [search, setSearch] = useState("");
 
   const enabled = cachedSeasons.includes(season);
   const teamIdArg = teamFilter !== "ALL" && Number.isFinite(Number(teamFilter)) ? Number(teamFilter) : undefined;
   const typeFilterArg = typeFilter !== "ALL" ? typeFilter : undefined;
 
-  const txQ = trpc.espn.transactions.useQuery(
-    { season, typeFilter: typeFilterArg, teamId: teamIdArg },
-    { enabled, staleTime: 0 }
-  );
+  const txQ = trpc.espn.transactions.useQuery({ season, typeFilter: typeFilterArg, teamId: teamIdArg }, { enabled, staleTime: 0 });
   const teamsQ = trpc.espn.teams.useQuery({ season }, { enabled, staleTime: 0 });
   const rostersQ = trpc.espn.rosters.useQuery({ season }, { enabled, staleTime: 0 });
-  const pulseQ = trpc.weeklyAssessment.leaguePulse.useQuery(
-    { season },
-    {
-      enabled,
-      staleTime: 5 * 60 * 1000,
-      refetchOnMount: false,
-      refetchOnWindowFocus: false,
-      gcTime: 10 * 60 * 1000,
-    },
-  );
+  const pulseQ = trpc.weeklyAssessment.leaguePulse.useQuery({ season }, {
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    gcTime: 10 * 60 * 1000,
+  });
 
   const teams = (teamsQ.data as TeamRow[] | undefined) ?? [];
   const rawTxns = (txQ.data as TxnRow[] | undefined) ?? [];
@@ -988,12 +938,7 @@ export function Transactions() {
     for (const r of (rostersQ.data ?? []) as RosterRow[]) {
       const pid = r.playerId;
       if (pid == null || pid <= 0) continue;
-      if (!m.has(pid)) {
-        m.set(pid, {
-          position: (r.position || "?").trim(),
-          proTeam: (r.proTeam || "?").trim(),
-        });
-      }
+      if (!m.has(pid)) m.set(pid, { position: (r.position || "?").trim(), proTeam: (r.proTeam || "?").trim() });
     }
     return m;
   }, [rostersQ.data]);
@@ -1005,25 +950,11 @@ export function Transactions() {
     const calendarYear = new Date().getFullYear();
     const pulseWeek = pulseQ.data?.week;
     const pulseComplete = !!pulseQ.data?.isSeasonComplete;
-    const seasonStarted =
-      pulseQ.isSuccess &&
-      typeof pulseWeek === "number" &&
-      pulseWeek >= 1 &&
-      !pulseComplete;
-    const isPreseason =
-      enabled &&
-      season === calendarYear &&
-      pulseQ.isSuccess &&
-      !pulseComplete &&
-      !seasonStarted;
+    const seasonStarted = pulseQ.isSuccess && typeof pulseWeek === "number" && pulseWeek >= 1 && !pulseComplete;
+    const isPreseason = enabled && season === calendarYear && pulseQ.isSuccess && !pulseComplete && !seasonStarted;
 
-    if (isPreseason) {
-      rows = rows.filter(r => isTradeType(r.type));
-    }
-
-    if (q) {
-      rows = rows.filter(r => rowMatchesSearch(r, q));
-    }
+    if (isPreseason) rows = rows.filter(r => isTradeType(r.type));
+    if (q) rows = rows.filter(r => rowMatchesSearch(r, q));
 
     if (tradeStatusFilter !== "ALL") {
       const preBuckets = new Map<string, TxnRow[]>();
@@ -1066,19 +997,13 @@ export function Transactions() {
     }
 
     const entries: DisplayEntry[] = [];
-    for (const [proposalKey, groupRows] of tradeBuckets) {
-      entries.push({ kind: "trade", key: proposalKey, rows: groupRows });
-    }
-    for (const r of simpleRows) {
-      entries.push({ kind: "simple", row: r });
-    }
+    for (const [proposalKey, groupRows] of tradeBuckets) entries.push({ kind: "trade", key: proposalKey, rows: groupRows });
+    for (const r of simpleRows) entries.push({ kind: "simple", row: r });
 
     const filtered = entries.filter(isMeaningfulEntry);
     filtered.sort((a, b) => {
-      const ma =
-        a.kind === "trade" ? Math.max(0, ...a.rows.map(eventMs)) : eventMs(a.row);
-      const mb =
-        b.kind === "trade" ? Math.max(0, ...b.rows.map(eventMs)) : eventMs(b.row);
+      const ma = a.kind === "trade" ? Math.max(0, ...a.rows.map(eventMs)) : eventMs(a.row);
+      const mb = b.kind === "trade" ? Math.max(0, ...b.rows.map(eventMs)) : eventMs(b.row);
       return mb - ma;
     });
 
@@ -1096,13 +1021,7 @@ export function Transactions() {
             Recent activity — adds, drops, waivers, and trades (grouped like ESPN).
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          disabled={txQ.isFetching || isNotCached}
-          onClick={() => void txQ.refetch()}
-        >
+        <Button variant="outline" size="sm" className="gap-2" disabled={txQ.isFetching || isNotCached} onClick={() => void txQ.refetch()}>
           {txQ.isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           Refresh
         </Button>
@@ -1111,26 +1030,12 @@ export function Transactions() {
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3 py-4">
           <div className="w-28">
-            <Select
-              value={String(season)}
-              onValueChange={v => {
-                setSeason(Number(v));
-                setTypeFilter("ALL");
-                setTeamFilter("ALL");
-                setTradeStatusFilter("ALL");
-                setSearch("");
-              }}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
+            <Select value={String(season)} onValueChange={v => { setSeason(Number(v)); setTypeFilter("ALL"); setTeamFilter("ALL"); setTradeStatusFilter("ALL"); setSearch(""); }}>
+              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {[...allSeasons].reverse().map(s => (
                   <SelectItem key={s} value={String(s)}>
-                    <span className="flex items-center gap-1.5">
-                      {s}
-                      {cachedSeasons.includes(s) && <span className="text-lime-400 text-xs">✓</span>}
-                    </span>
+                    <span className="flex items-center gap-1.5">{s}{cachedSeasons.includes(s) && <span className="text-lime-400 text-xs">✓</span>}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1140,30 +1045,15 @@ export function Transactions() {
           <div className="flex w-44 flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Type</span>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TX_TYPES.map(t => (
-                  <SelectItem key={t.value} value={t.value}>
-                    {t.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
+              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>{TX_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
             </Select>
           </div>
 
           <div className="flex w-40 flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Trade Status</span>
-            <Select
-              value={tradeStatusFilter}
-              onValueChange={v =>
-                setTradeStatusFilter(v as "ALL" | "EXECUTED" | "PROPOSED" | "CANCELED")
-              }
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
+            <Select value={tradeStatusFilter} onValueChange={v => setTradeStatusFilter(v as "ALL" | "EXECUTED" | "PROPOSED" | "CANCELED")}>
+              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All statuses</SelectItem>
                 <SelectItem value="EXECUTED">Executed</SelectItem>
@@ -1176,16 +1066,10 @@ export function Transactions() {
           <div className="flex w-48 flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Team</span>
             <Select value={teamFilter} onValueChange={setTeamFilter}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="All teams" />
-              </SelectTrigger>
+              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="All teams" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All teams</SelectItem>
-                {teams.map(t => (
-                  <SelectItem key={t.teamId} value={String(t.teamId)}>
-                    {t.teamName || t.owners || `Team ${t.teamId}`}
-                  </SelectItem>
-                ))}
+                {teams.map(t => <SelectItem key={t.teamId} value={String(t.teamId)}>{t.teamName || t.owners || `Team ${t.teamId}`}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -1194,12 +1078,7 @@ export function Transactions() {
             <span className="text-xs font-medium text-muted-foreground">Search</span>
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="h-9 pl-8 text-sm"
-                placeholder="Search player…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
+              <Input className="h-9 pl-8 text-sm" placeholder="Search player…" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
           </div>
 
@@ -1215,38 +1094,29 @@ export function Transactions() {
         <div className="flex items-center gap-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-300">
           <AlertCircle className="h-4 w-4 shrink-0" />
           Season {season} has not been synced yet. Go to{" "}
-          <a href="/sync" className="underline underline-offset-2">
-            Sync Data
-          </a>{" "}
-          to fetch it.
+          <a href="/sync" className="underline underline-offset-2">Sync Data</a>{" "}to fetch it.
         </div>
       )}
 
       {txQ.isLoading && (
         <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          Loading transactions…
+          <Loader2 className="h-5 w-5 animate-spin" />Loading transactions…
         </div>
       )}
 
       {txQ.isError && (
         <div className="flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          {txQ.error.message}
+          <AlertCircle className="h-4 w-4 shrink-0" />{txQ.error.message}
         </div>
       )}
 
       {!txQ.isLoading && !txQ.isError && !isNotCached && displayList.length === 0 && (
         <div className="rounded-lg border border-dashed border-border px-4 py-16 text-center text-sm text-muted-foreground">
-          {tradeStatusFilter === "EXECUTED"
-            ? "No more Executed trades to show."
-            : tradeStatusFilter === "PROPOSED"
-              ? "No more Proposed trades to show."
-              : tradeStatusFilter === "CANCELED"
-                ? "No more Canceled trades to show."
-                : rawTxns.length === 0
-                  ? "No transactions found for this season."
-                  : "No meaningful transactions found for this filter."}
+          {tradeStatusFilter === "EXECUTED" ? "No more Executed trades to show."
+            : tradeStatusFilter === "PROPOSED" ? "No more Proposed trades to show."
+            : tradeStatusFilter === "CANCELED" ? "No more Canceled trades to show."
+            : rawTxns.length === 0 ? "No transactions found for this season."
+            : "No meaningful transactions found for this filter."}
         </div>
       )}
 
@@ -1283,36 +1153,21 @@ export function Transactions() {
                 else {
                   const raw = tryParseRaw(r.rawTransaction ?? undefined);
                   const memo = raw && typeof raw.memo === "string" ? raw.memo : null;
-                  detail =
-                    memo ||
-                    [assetLabel(r, playerMeta, season), r.status ? `(${String(r.status)})` : ""]
-                      .filter(Boolean)
-                      .join(" ");
+                  detail = memo || [assetLabel(r, playerMeta, season), r.status ? `(${String(r.status)})` : ""].filter(Boolean).join(" ");
                 }
 
                 const teamsCol = involvedTeamIds([r]);
 
                 return (
-                  <div
-                    key={`${r.transactionId}-${r.playerId}-${idx}`}
-                    className="grid gap-3 px-4 py-4 sm:grid-cols-[5.5rem_minmax(0,auto)_1fr_minmax(0,7rem)] sm:items-start"
-                  >
+                  <div key={`${r.transactionId}-${r.playerId}-${idx}`} className="grid gap-3 px-4 py-4 sm:grid-cols-[5.5rem_minmax(0,auto)_1fr_minmax(0,7rem)] sm:items-start">
                     <div className="text-xs text-muted-foreground sm:pt-0.5">
                       <div className="font-medium text-foreground">{date}</div>
                       {time ? <div>{time}</div> : null}
                     </div>
-                    <div className="sm:pt-0.5">
-                      <TypeBadge type={t} />
-                    </div>
+                    <div className="sm:pt-0.5"><TypeBadge type={t} /></div>
                     <div className="min-w-0 text-sm leading-snug text-foreground">{detail}</div>
                     <div className="flex flex-col items-start gap-1 sm:items-end">
-                      <RosterLinks
-                        season={season}
-                        teams={teamsCol.map(tid => ({
-                          tid,
-                          name: teamMap.get(tid) || `Team ${tid}`,
-                        }))}
-                      />
+                      <RosterLinks season={season} teams={teamsCol.map(tid => ({ tid, name: teamMap.get(tid) || `Team ${tid}` }))} />
                     </div>
                   </div>
                 );
