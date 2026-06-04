@@ -334,6 +334,16 @@ export function CommissionerCommandCenter() {
   const recentTxns = recentTxQ.data ?? [];
 
   // Closest to first championship (most seasons played, 0 titles)
+
+  // Reigning champion display name from HoF (identity-resolved). Used to exclude from Desperation Board.
+  const reigningChampName = useMemo(() => {
+    const leaderboard: any[] = hofQ.data?.championships?.leaderboard ?? [];
+    const allSeasons = leaderboard.flatMap((c: any) => c.titleSeasons ?? []);
+    if (!allSeasons.length) return null;
+    const maxSeason = Math.max(...allSeasons.filter(Number.isFinite));
+    const champ = leaderboard.find((c: any) => (c.titleSeasons ?? []).includes(maxSeason));
+    return (champ?.displayName ?? "").toLowerCase().trim() || null;
+  }, [hofQ.data]);
   const closestToFirst = droughtOwner;
 
   // Biggest regression from storylines (COLLAPSE type)
@@ -1142,7 +1152,12 @@ export function CommissionerCommandCenter() {
                 </div>
                 <div className="space-y-2.5">
                   {[...(pulseQ.data?.teams ?? [])]
-                    .sort((a, b) => b.desperationScore - a.desperationScore)
+                    .filter((team: any) => {
+                      // Exclude reigning champion -- winners have leverage, not desperation
+                      if (!reigningChampName) return true;
+                      return !(team.ownerName ?? '').toLowerCase().includes(reigningChampName.split(' ')[0] ?? '');
+                    })
+                    .sort((a: any, b: any) => b.desperationScore - a.desperationScore)
                     .slice(0, 4)
                     .map((team, i) => (
                       <div key={team.teamId ?? i} className="flex items-center gap-3">

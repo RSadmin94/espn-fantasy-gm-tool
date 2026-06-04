@@ -178,6 +178,8 @@ export const GetCanonicalPlayersInput = z.object({
   isActive: z.boolean().optional(),
   page:     z.number().int().min(0).default(0),
   pageSize: z.number().int().min(1).max(100).default(25),
+  sortBy:   z.enum(["fullName", "avgPick", "firstSeasonSeen", "lastSeasonSeen"]).optional(),
+  sortDir:  z.enum(["asc", "desc"]).optional(),
 });
 
 export const GetCanonicalPlayersOutput = z.object({

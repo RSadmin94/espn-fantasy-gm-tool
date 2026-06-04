@@ -134,6 +134,9 @@ export function PlayerDatabase() {
     isActive: undefined,
     page,
     pageSize: PAGE_SIZE,
+    // For avgPick sort: delegate to server (sorts all rows, not just current page)
+    sortBy:   sortOpt === "Avg Pick Order" ? "avgPick" : undefined,
+    sortDir:  sortOpt === "Avg Pick Order" ? sortDir : undefined,
   }, { keepPreviousData: true });
 
   const raw: any[] = data?.players ?? [];

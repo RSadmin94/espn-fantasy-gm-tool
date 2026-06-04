@@ -68,35 +68,43 @@ export const playerStatsRouter = router({
 
       const where = conditions.length > 0 ? andDrizzle(...conditions as [any, ...any[]]) : undefined;
 
-      const [rows, countRow] = await Promise.all([
-        db.select({
-          id:              gmPlayerRegistry.id,
-          fullName:        gmPlayerRegistry.fullName,
-          normalizedName:  gmPlayerRegistry.normalizedName,
-          position:        gmPlayerRegistry.position,
-          currentNflTeam:  gmPlayerRegistry.currentNflTeam,
-          espnPlayerId:    gmPlayerRegistry.espnPlayerId,
-          firstSeasonSeen: gmPlayerRegistry.firstSeasonSeen,
-          lastSeasonSeen:  gmPlayerRegistry.lastSeasonSeen,
-          isActive:        gmPlayerRegistry.isActive,
-          needsReview:     gmPlayerRegistry.needsReview,
-        })
-          .from(gmPlayerRegistry)
-          .where(where)
-          .orderBy(ascDrizzle(gmPlayerRegistry.fullName))
-          .limit(input.pageSize)
-          .offset(input.page * input.pageSize),
+        // When sorting by avgPick, fetch all matching rows (no DB-level pagination),
+        // compute ADP in memory, sort nulls-last, then paginate manually.
+        const sortByAvgPick = input.sortBy === "avgPick";
+        const orderCol = input.sortBy === "firstSeasonSeen" ? gmPlayerRegistry.firstSeasonSeen
+                       : input.sortBy === "lastSeasonSeen"  ? gmPlayerRegistry.lastSeasonSeen
+                       : gmPlayerRegistry.fullName;
+        const orderFn = (input.sortDir === "desc" && !sortByAvgPick) ? descDrizzle : ascDrizzle;
 
-        db.select({ cnt: sql<number>`COUNT(*)`.mapWith(Number) })
-          .from(gmPlayerRegistry)
-          .where(where),
-      ]);
+        const [allRows, countRow] = await Promise.all([
+          db.select({
+            id:              gmPlayerRegistry.id,
+            fullName:        gmPlayerRegistry.fullName,
+            normalizedName:  gmPlayerRegistry.normalizedName,
+            position:        gmPlayerRegistry.position,
+            currentNflTeam:  gmPlayerRegistry.currentNflTeam,
+            espnPlayerId:    gmPlayerRegistry.espnPlayerId,
+            firstSeasonSeen: gmPlayerRegistry.firstSeasonSeen,
+            lastSeasonSeen:  gmPlayerRegistry.lastSeasonSeen,
+            isActive:        gmPlayerRegistry.isActive,
+            needsReview:     gmPlayerRegistry.needsReview,
+          })
+            .from(gmPlayerRegistry)
+            .where(where)
+            .orderBy(orderFn(orderCol as any))
+            .limit(sortByAvgPick ? 10000 : input.pageSize)
+            .offset(sortByAvgPick ? 0 : input.page * input.pageSize),
+
+          db.select({ cnt: sql<number>`COUNT(*)`.mapWith(Number) })
+            .from(gmPlayerRegistry)
+            .where(where),
+        ]);
 
       // AVG Pick (ADP) per player - read-only AVG(overallPick) from draft_picks.
-      // Joins draft_picks on numeric playerId (= registry espnPlayerId). No writes.
+      // For avgPick sort: compute for all rows, sort nulls-last, then paginate.
       const draftPlayerIds = Array.from(new Set(
-        rows.map(r => r.espnPlayerId).filter((v): v is string => !!v)
-            .map(Number).filter(n => Number.isFinite(n) && n > 0)
+        allRows.map((r: any) => r.espnPlayerId).filter((v: any): v is string => !!v)
+               .map(Number).filter((n: number) => Number.isFinite(n) && n > 0)
       ));
       const avgPickByPlayerId = new Map<number, number>();
       if (draftPlayerIds.length > 0) {
@@ -115,17 +123,34 @@ export const playerStatsRouter = router({
         }
       }
 
+      // Enrich rows with avgPick
+      const enriched = allRows.map((r: any) => ({
+        ...r,
+        isActive:        Boolean(r.isActive),
+        needsReview:     Boolean(r.needsReview),
+        espnPlayerId:    r.espnPlayerId    ?? null,
+        currentNflTeam:  r.currentNflTeam  ?? null,
+        firstSeasonSeen: r.firstSeasonSeen ?? null,
+        lastSeasonSeen:  r.lastSeasonSeen  ?? null,
+        avgPick:         r.espnPlayerId ? (avgPickByPlayerId.get(Number(r.espnPlayerId)) ?? null) : null,
+      }));
+
+      // For avgPick sort: sort in memory with null values at end, then paginate
+      let rows: typeof enriched;
+      if (sortByAvgPick) {
+        const dir = input.sortDir === "desc" ? -1 : 1;
+        const sorted = [...enriched].sort((a, b) => {
+          const av = a.avgPick != null ? Number(a.avgPick) : Infinity;
+          const bv = b.avgPick != null ? Number(b.avgPick) : Infinity;
+          return (av - bv) * dir;
+        });
+        rows = sorted.slice(input.page * input.pageSize, (input.page + 1) * input.pageSize);
+      } else {
+        rows = enriched;
+      }
+
       return {
-        players:  rows.map(r => ({
-          ...r,
-          isActive:        Boolean(r.isActive),
-          needsReview:     Boolean(r.needsReview),
-          espnPlayerId:    r.espnPlayerId    ?? null,
-          currentNflTeam:  r.currentNflTeam  ?? null,
-          firstSeasonSeen: r.firstSeasonSeen ?? null,
-          lastSeasonSeen:  r.lastSeasonSeen  ?? null,
-          avgPick:         r.espnPlayerId ? (avgPickByPlayerId.get(Number(r.espnPlayerId)) ?? null) : null,
-        })),
+        players:  rows,
         total:    countRow[0]?.cnt ?? 0,
         page:     input.page,
         pageSize: input.pageSize,
