@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
@@ -16,11 +16,13 @@ import {
   ArrowDownToLine,
   ArrowLeftRight,
   ArrowUpFromLine,
+  Globe,
   Loader2,
   RefreshCw,
   Repeat2,
   Search,
   Sparkles,
+  Trophy,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -693,7 +695,14 @@ function TeamHeaderBlock({ name, logoUrl }: { name: string; logoUrl?: string }) 
   );
 }
 
-// ── AI Trade Analysis Panel ──────────────────────────────────────────────────
+// ── Trade Verdict Panel ────────────────────────────────────────────────────
+
+interface TradeVerdict {
+  winner: "TEAM_A" | "TEAM_B" | "FAIR";
+  headline: string;
+  whyTheyWon: string;
+  leagueImpact: string;
+}
 
 function TradeAnalysisPanel({
   rows,
@@ -701,70 +710,178 @@ function TradeAnalysisPanel({
   teamMap,
   playerMeta,
   isExecuted,
+  autoTriggerDelay = 0,
 }: {
   rows: TxnRow[];
   season: number;
   teamMap: Map<number, string>;
   playerMeta: Map<number, PlayerBits>;
   isExecuted: boolean;
+  autoTriggerDelay?: number;
 }) {
-  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<TradeVerdict | null>(null);
+  const triggered = useRef(false);
+
   const analyzeMutation = trpc.transactionAnalysis.analyzeExecutedTrade.useMutation({
     onSuccess: (data) => {
-      if (data.ok && data.analysis) setAnalysis(data.analysis);
+      if (data.ok && data.verdict) setVerdict(data.verdict as TradeVerdict);
     },
   });
 
-  if (!isExecuted) return null;
-
   const assets = collectTradeAssets(rows);
-  const teamIds = [...new Set(assets.flatMap((a) => [a.fromTeamId, a.toTeamId]).filter((n): n is number => typeof n === "number" && n > 0))].sort((a, b) => a - b);
-  if (teamIds.length < 2) return null;
+  const teamIds = [...new Set(
+    assets.flatMap((a) => [a.fromTeamId, a.toTeamId])
+      .filter((n): n is number => typeof n === "number" && n > 0)
+  )].sort((a, b) => a - b);
 
-  const [ta, tb] = teamIds;
-  const nameA = teamMap.get(ta) || `Team ${ta}`;
-  const nameB = teamMap.get(tb) || `Team ${tb}`;
-  const assetsToA = assets.filter(a => a.toTeamId === ta).map(a => assetToLabel(a, playerMeta, season));
-  const assetsToB = assets.filter(a => a.toTeamId === tb).map(a => assetToLabel(a, playerMeta, season));
-  const ms = Math.max(0, ...rows.map(eventMs));
+  const ta = teamIds[0];
+  const tb = teamIds[1];
+
+  const buildInput = () => {
+    if (!ta || !tb) return null;
+    const nameA = teamMap.get(ta) || `Team ${ta}`;
+    const nameB = teamMap.get(tb) || `Team ${tb}`;
+    const assetsToA = assets.filter(a => a.toTeamId === ta).map(a => assetToLabel(a, playerMeta, season));
+    const assetsToB = assets.filter(a => a.toTeamId === tb).map(a => assetToLabel(a, playerMeta, season));
+    const ms = Math.max(0, ...rows.map(eventMs));
+    return { season, teamA: nameA, teamB: nameB, assetsToA, assetsToB, processedDate: ms || undefined };
+  };
+
+  // Auto-trigger once for executed trades
+  useEffect(() => {
+    if (!isExecuted || triggered.current || teamIds.length < 2) return;
+    const input = buildInput();
+    if (!input) return;
+    triggered.current = true;
+    const timer = setTimeout(() => analyzeMutation.mutate(input), autoTriggerDelay);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExecuted]);
+
+  if (!isExecuted || teamIds.length < 2) return null;
+
+  const nameA = teamMap.get(ta!) || `Team ${ta}`;
+  const nameB = teamMap.get(tb!) || `Team ${tb}`;
+
+  // Resolved winner name for display (used in winnerConfig labels below)
+  const _winnerName =
+    verdict?.winner === "TEAM_A" ? nameA
+    : verdict?.winner === "TEAM_B" ? nameB
+    : null;
+  void _winnerName;
+
+  const winnerConfig = (() => {
+    if (!verdict) return null;
+    if (verdict.winner === "TEAM_A") return {
+      banner: "bg-amber-500/15 border-amber-500/30",
+      badge: "bg-amber-400/20 text-amber-300 border-amber-400/40",
+      bar:   "bg-amber-400",
+      icon:  <Trophy className="h-4 w-4" />,
+      label: `${nameA} wins this trade`,
+    };
+    if (verdict.winner === "TEAM_B") return {
+      banner: "bg-violet-500/15 border-violet-500/30",
+      badge: "bg-violet-400/20 text-violet-300 border-violet-400/40",
+      bar:   "bg-violet-400",
+      icon:  <Trophy className="h-4 w-4" />,
+      label: `${nameB} wins this trade`,
+    };
+    return {
+      banner: "bg-white/[0.04] border-white/[0.08]",
+      badge: "bg-white/10 text-white/70 border-white/20",
+      bar:   "bg-white/30",
+      icon:  <ArrowLeftRight className="h-4 w-4" />,
+      label: "Fair trade",
+    };
+  })();
 
   return (
-    <div className="mt-3 border-t border-border/40 pt-3">
-      {!analysis && !analyzeMutation.isPending && (
-        <button
-          type="button"
-          onClick={() =>
-            analyzeMutation.mutate({
-              season,
-              teamA: nameA,
-              teamB: nameB,
-              assetsToA,
-              assetsToB,
-              processedDate: ms || undefined,
-            })
-          }
-          className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-300 transition-colors hover:bg-violet-500/20 hover:text-violet-200"
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          Analyze this trade
-        </button>
-      )}
-      {analyzeMutation.isPending && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Analyzing…
-        </div>
-      )}
-      {analysis && (
-        <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.05] p-3">
-          <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-300/80">
-            <Sparkles className="h-3 w-3" /> AI Trade Analysis
+    <div className="mt-4 border-t border-border/40 pt-4">
+      {/* Loading state */}
+      {analyzeMutation.isPending && !verdict && (
+        <div className={cn(
+          "flex items-center gap-3 rounded-xl border px-4 py-3",
+          "border-border/50 bg-muted/10",
+        )}>
+          <Loader2 className="h-4 w-4 animate-spin shrink-0 text-violet-400" />
+          <div>
+            <p className="text-sm font-semibold text-foreground/70">Generating trade verdict…</p>
+            <p className="text-xs text-muted-foreground">Analyzing assets and league impact</p>
           </div>
-          <p className="text-[13px] leading-relaxed text-foreground/85">{analysis}</p>
         </div>
       )}
-      {analyzeMutation.isError && (
-        <p className="text-xs text-red-400">Analysis failed — try again.</p>
+
+      {/* Error state */}
+      {analyzeMutation.isError && !verdict && (
+        <div className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          Trade verdict unavailable —{" "}
+          <button
+            type="button"
+            className="underline hover:no-underline"
+            onClick={() => { const input = buildInput(); if (input) analyzeMutation.mutate(input); }}
+          >
+            retry
+          </button>
+        </div>
+      )}
+
+      {/* Verdict card */}
+      {verdict && winnerConfig && (
+        <div className={cn(
+          "rounded-xl border overflow-hidden",
+          winnerConfig.banner,
+        )}>
+          {/* Winner banner */}
+          <div className={cn(
+            "flex items-center gap-2.5 px-4 py-2.5 border-b",
+            winnerConfig.banner,
+          )}>
+            <span className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide",
+              winnerConfig.badge,
+            )}>
+              {winnerConfig.icon}
+              {winnerConfig.label}
+            </span>
+            <span className="ml-auto flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+              <Sparkles className="h-3 w-3" /> AI Trade Verdict
+            </span>
+          </div>
+
+          {/* Content */}
+          <div className="space-y-3 p-4">
+            {/* Headline */}
+            <p className="text-[15px] font-semibold leading-snug text-foreground/95">
+              {verdict.headline}
+            </p>
+
+            {/* Why they won */}
+            <div>
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Trade breakdown
+              </div>
+              <p className="text-[13px] leading-relaxed text-foreground/80">
+                {verdict.whyTheyWon}
+              </p>
+            </div>
+
+            {/* League impact */}
+            {verdict.leagueImpact && (
+              <div className="flex items-start gap-2.5 rounded-lg border border-border/50 bg-background/40 px-3 py-2.5">
+                <Globe className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-400" />
+                <div>
+                  <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-400/80">
+                    League impact
+                  </div>
+                  <p className="text-[13px] leading-relaxed text-foreground/75">
+                    {verdict.leagueImpact}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -868,13 +985,14 @@ function TradeComparisonCard({
         </div>
       )}
 
-      {/* AI Trade Analysis — only for EXECUTED trades */}
+      {/* AI Trade Verdict — auto-triggers for EXECUTED trades, staggered by idx */}
       <TradeAnalysisPanel
         rows={rows}
         season={season}
         teamMap={teamMap}
         playerMeta={playerMeta}
         isExecuted={isExecuted}
+        autoTriggerDelay={300 + idx * 400}
       />
     </div>
   );
