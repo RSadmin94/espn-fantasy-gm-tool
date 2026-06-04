@@ -1125,8 +1125,8 @@ export async function ingestParsedDraftPicks(input: IngestParsedDraftPicksInput)
   const creds = await getActiveEspnCredentials(uid);
   if (creds?.leagueId) allowed.add(String(creds.leagueId).trim().slice(0, 32));
   const lid = String(input.leagueId).trim().slice(0, 32);
-  const allowLegacyTestLeague = lid === "457622";
-  if (!allowed.has(lid) && !allowLegacyTestLeague) {
+  // Phase B: allowLegacyTestLeague bypass removed — all leagues require a valid connection.
+  if (!allowed.has(lid)) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "League is not linked to your ESPN connections.",
@@ -1593,8 +1593,8 @@ export async function ingestParsedStandings(input: IngestParsedStandingsInput): 
   const creds = await getActiveEspnCredentials(uid);
   if (creds?.leagueId) allowed.add(String(creds.leagueId).trim().slice(0, 32));
   const lid = String(input.leagueId).trim().slice(0, 32);
-  const allowLegacyTestLeague = lid === "457622";
-  if (!allowed.has(lid) && !allowLegacyTestLeague) {
+  // Phase B: allowLegacyTestLeague bypass removed — all leagues require a valid connection.
+  if (!allowed.has(lid)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "League is not linked to your ESPN connections." });
   }
   const yr = Math.floor(Number(input.season));
@@ -1688,7 +1688,8 @@ export async function ingestParsedMatchups(input: IngestParsedMatchupsInput): Pr
   const creds = await getActiveEspnCredentials(uid);
   if (creds?.leagueId) allowed.add(String(creds.leagueId).trim().slice(0, 32));
   const lid = String(input.leagueId).trim().slice(0, 32);
-  if (!allowed.has(lid) && lid !== "457622") {
+  // Phase B: 457622 bypass removed — all leagues require a valid connection.
+  if (!allowed.has(lid)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "League is not linked to your ESPN connections." });
   }
   const yr = Math.floor(Number(input.season));

@@ -262,7 +262,7 @@ export async function getCachedView(
  * Load `espn_raw_cache` **only** (not `fantasy_data_cache` / `espn_season_cache`).
  * Used to backfill normalized tables from stored combined JSON without re-fetching ESPN.
  *
- * Resolution order: primary `leagueId`, then `457622`, then `default` (newest `updatedAt` wins).
+ * Resolution order: primary `leagueId` only (Phase B: cross-league fallback removed).
  */
 export async function getEspnRawCacheCombinedPayload(
   leagueId: string,
@@ -272,7 +272,8 @@ export async function getEspnRawCacheCombinedPayload(
   if (!db) return null;
   const yr = Math.floor(Number(season));
   const lid = String(leagueId).trim().slice(0, 32);
-  const candidates = [lid, "457622", "default"].filter((v, i, arr) => arr.indexOf(v) === i);
+  // Phase B (multi-league hardening): no cross-league fallback — caller handles null.
+  const candidates = [lid].filter((v, i, arr) => arr.indexOf(v) === i);
   for (const key of candidates) {
     const rows = await db
       .select()

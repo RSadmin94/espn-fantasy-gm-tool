@@ -1757,10 +1757,13 @@ export const appRouter = router({
           null,
           seasonList[0] ?? 2026
         );
+        // Phase B: env/457622 override removed — authenticated users with no active league
+        // must connect a league before backfilling.
         if (!leagueId || leagueId === "default") {
-          leagueId = String(process.env.ESPN_LEAGUE_ID || process.env.LEAGUE_ID || "457622")
-            .trim()
-            .slice(0, 32);
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "No active league — connect a league in Settings before backfilling.",
+          });
         }
 
         const results = await runEspnRawCacheNormalizedBackfill(leagueId, seasonList, {
@@ -1808,10 +1811,13 @@ export const appRouter = router({
           null,
           seasonList[0] ?? 2025
         );
+        // Phase B: env/457622 override removed — authenticated users with no active league
+        // must connect a league before enriching.
         if (!leagueId || leagueId === "default") {
-          leagueId = String(process.env.ESPN_LEAGUE_ID || process.env.LEAGUE_ID || "457622")
-            .trim()
-            .slice(0, 32);
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "No active league — connect a league in Settings before enriching seasons.",
+          });
         }
 
         const mergedCreds = { ...creds, leagueId };
@@ -2194,15 +2200,14 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const yr = input.season;
         const userId = ctx.user?.id ?? 0;
-        // Allow the extension to ingest for the test/primary league without full auth,
-        // same safety model as ingestParsedDraftPicks.
         const { leagueId } = await resolveActiveLeagueId(
           { user: userId ? { id: userId } : undefined },
           null,
           yr,
         );
         const lid = leagueId || "457622";
-        if (!userId && lid !== "457622") {
+        // Phase B: all leagues require auth — 457622 bypass removed.
+        if (!userId) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "You must be signed in." });
         }
         const db = await getDb();
@@ -2301,7 +2306,8 @@ export const appRouter = router({
           yr,
         );
         const lid = leagueId || "457622";
-        if (!userId && lid !== "457622") {
+        // Phase B: all leagues require auth — 457622 bypass removed.
+        if (!userId) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "You must be signed in." });
         }
         const db = await getDb();
@@ -4462,14 +4468,12 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         console.log("[AUTH USER]", ctx.auth?.userId, "dbUser:", ctx.user?.id ?? null);
         const userId = ctx.user?.id ?? 0;
-        if (!userId && input.leagueId !== "457622") {
+        // Phase B: all leagues require auth — 457622 bypass removed.
+        if (!userId) {
           throw new TRPCError({
             code: "UNAUTHORIZED",
             message: `ingestParsedDraftPicks: no db user (auth.userId=${ctx.auth?.userId ?? "none"})`,
           });
-        }
-        if (!userId) {
-          console.log("[ingestParsedDraftPicks] dbUser missing, allowing test league 457622");
         }
         return ingestParsedDraftPicks({
           userId,
@@ -4503,7 +4507,8 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const userId = ctx.user?.id ?? 0;
-        if (!userId && input.leagueId !== "457622") {
+        // Phase B: all leagues require auth — 457622 bypass removed.
+        if (!userId) {
           throw new TRPCError({
             code: "UNAUTHORIZED",
             message: `ingestParsedStandings: no db user (auth.userId=${ctx.auth?.userId ?? "none"})`,
@@ -4534,7 +4539,8 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const userId = ctx.user?.id ?? 0;
-        if (!userId && input.leagueId !== "457622") {
+        // Phase B: all leagues require auth — 457622 bypass removed.
+        if (!userId) {
           throw new TRPCError({
             code: "UNAUTHORIZED",
             message: `ingestParsedMatchups: no db user (auth.userId=${ctx.auth?.userId ?? "none"})`,
