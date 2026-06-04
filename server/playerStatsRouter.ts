@@ -43,46 +43,47 @@ import {
 let _espnAdpCache: Map<string, number> | null = null;
 let _espnAdpCacheTime = 0;
 const ESPN_ADP_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
-
-/** Fetch ESPN current-season PPR ADP for all players, caching for 4 hours.
- * Paginates lm-api-reads 50 players at a time (no-auth endpoint). */
+/** Fetch ESPN live PPR ADP from actual draft activity \u2014 same data as ESPN Live Draft Trends page.
+ * Uses leaguedefaults/3 endpoint with player.ownership.averageDraftPosition.
+ * Single request returns ~1025 ranked players. Cached for 4h. */
 async function getEspnAdpMap(): Promise<Map<string, number>> {
   const now = Date.now();
   if (_espnAdpCache && (now - _espnAdpCacheTime) < ESPN_ADP_TTL_MS) return _espnAdpCache;
 
   const year = new Date().getFullYear();
-  const base = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${year}/players?scoringPeriodId=0&view=kona_player_info&limit=50`;
+  const filter = JSON.stringify({
+    players: {
+      limit: 1500,
+      sortAdp: { sortPriority: 1, sortAsc: true },
+      filterRanksForScoringPeriodIds: { value: [1] },
+      filterRanksForRankTypes: { value: ["PPR"] },
+      filterSlotIds: { value: [0, 2, 4, 6, 17, 16, 23] },
+    },
+  });
 
-  // Fetch up to 2 000 players (40 pages) concurrently in two batches of 20.
-  const offsets1 = Array.from({ length: 20 }, (_, i) => i * 50);
-  const offsets2 = Array.from({ length: 20 }, (_, i) => (i + 20) * 50);
-
-  const fetchPage = async (offset: number): Promise<any[]> => {
-    try {
-      const r = await fetch(`${base}&offset=${offset}`);
-      if (!r.ok) return [];
-      const d = await r.json();
-      return Array.isArray(d) ? d : [];
-    } catch { return []; }
-  };
-
-  const [batch1, batch2] = await Promise.all([
-    Promise.all(offsets1.map(fetchPage)),
-    Promise.all(offsets2.map(fetchPage)),
-  ]);
-  const allPlayers = [...batch1, ...batch2].flat();
+  let players: any[] = [];
+  try {
+    const resp = await fetch(
+      `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${year}/segments/0/leaguedefaults/3?view=kona_player_info&scoringPeriodId=1`,
+      { headers: { "X-Fantasy-Filter": filter } },
+    );
+    if (resp.ok) {
+      const d = await resp.json();
+      players = d?.players ?? [];
+    }
+  } catch { /* network error - fall through to empty cache */ }
 
   const cache = new Map<string, number>();
-  for (const p of allPlayers) {
-    const rank: number | undefined = p?.draftRanksByRankType?.PPR?.rank;
-    const id = String(p?.id ?? "").trim();
-    // ESPN uses 1460 as sentinel for unranked — skip those
-    if (rank && rank < 1000 && id) cache.set(id, rank);
+  for (const entry of players) {
+    // Real live ADP lives at entry.player.ownership.averageDraftPosition
+    const adp: number | undefined = entry?.player?.ownership?.averageDraftPosition;
+    const id = String(entry?.id ?? "").trim();
+    if (adp && adp > 0 && adp < 500 && id) cache.set(id, Math.round(adp * 100) / 100);
   }
 
   _espnAdpCache = cache;
   _espnAdpCacheTime = now;
-  console.log(`[ESPN ADP] Cached ${cache.size} ranked players from ${allPlayers.length} fetched`);
+  console.log(`[ESPN ADP] Cached ${cache.size} ranked players from ${players.length} fetched`);
   return cache;
 }
 
