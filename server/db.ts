@@ -1051,13 +1051,26 @@ export async function resolveActiveLeagueId(
 
   // ── AUTHENTICATED USER PATH ───────────────────────────────────────────────
   if (uid != null) {
-    // Step 2: User's active ESPN credentials
+    // Step 2: User's active ESPN credentials (league_connections.credentials)
     const creds = await getActiveEspnCredentials(uid);
     const cid = creds?.leagueId ? String(creds.leagueId).trim().slice(0, 32) : "";
     if (cid) {
       log(cid, "credentials");
       return { leagueId: cid, source: "credentials" };
     }
+
+    // Step 2b: User's active profile leagueId (league_connections.leagueId column).
+    // This path catches users whose swid/espnS2 credentials are absent or not yet
+    // populated but who have a leagueId stored directly on the connection row.
+    // Still fully user-scoped — reads only from this user's league_connections row.
+    try {
+      const profile = await resolveActiveProfile({ id: uid });
+      const profileLid = (profile?.leagueId ?? "").trim().slice(0, 32);
+      if (profileLid && profileLid !== "default") {
+        log(profileLid, "active_profile");
+        return { leagueId: profileLid, source: "active_profile" };
+      }
+    } catch { /* non-fatal */ }
 
     // Step 3: User-owned sync_runs for the requested season.
     // STRICT: only accept source "sync_runs_user_recent" (user's own leagues).
