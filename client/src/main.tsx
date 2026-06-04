@@ -10,6 +10,7 @@ import {
   useAuth,
 } from "@clerk/react-router";
 import { AppShell } from "./components/AppShell";
+import { ThemeProvider } from "./context/ThemeContext";
 import { ConnectESPN } from "./pages/ConnectESPN";
 import { SyncData } from "./pages/SyncData";
 import { Dashboard } from "./pages/Dashboard";
@@ -206,10 +207,12 @@ const router = createBrowserRouter([
 ]);
 
 createRoot(document.getElementById("root")!).render(
-  <trpc.Provider client={trpcClient} queryClient={queryClient}>
+  <ThemeProvider>
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
     <QueryClientProvider client={queryClient}>
       <Toaster richColors closeButton />
       <RouterProvider router={router} />
     </QueryClientProvider>
   </trpc.Provider>
+  </ThemeProvider>
 );

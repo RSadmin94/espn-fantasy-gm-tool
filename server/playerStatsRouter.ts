@@ -88,6 +88,7 @@ export const playerStatsRouter = router({
             lastSeasonSeen:  gmPlayerRegistry.lastSeasonSeen,
             isActive:        gmPlayerRegistry.isActive,
             needsReview:     gmPlayerRegistry.needsReview,
+            espnAdpPprRank:  gmPlayerRegistry.espnAdpPprRank,
           })
             .from(gmPlayerRegistry)
             .where(where)
@@ -132,7 +133,8 @@ export const playerStatsRouter = router({
         currentNflTeam:  r.currentNflTeam  ?? null,
         firstSeasonSeen: r.firstSeasonSeen ?? null,
         lastSeasonSeen:  r.lastSeasonSeen  ?? null,
-        avgPick:         r.espnPlayerId ? (avgPickByPlayerId.get(Number(r.espnPlayerId)) ?? null) : null,
+        // Prefer ESPN live ADP rank; fall back to historical avg from draft_picks
+        avgPick:         r.espnAdpPprRank ?? (r.espnPlayerId ? (avgPickByPlayerId.get(Number(r.espnPlayerId)) ?? null) : null),
       }));
 
       // For avgPick sort: sort in memory with null values at end, then paginate
@@ -356,6 +358,50 @@ export const playerStatsRouter = router({
       return result.sort((a, b) => b.totalPointsScored - a.totalPointsScored);
     }),
 
+  // refreshAdpFromEspn
+  // Fetches live PPR ADP from ESPN player API and updates avgPick column.
+  // Called once per session from AppShell on login.
+  refreshAdpFromEspn: publicProcedure
+    .mutation(async () => {
+      const db = await getDb();
+      if (!db) return { ok: false as const, updated: 0, error: "no_db" };
+
+      const year = new Date().getFullYear();
+      const filter = JSON.stringify({
+        players: {
+          limit: 1000,
+          sortDraftRanks: { sortPriority: 100, sortAsc: true, value: "PPR" },
+          filterRanksForScoringPeriodIds: { value: [0] },
+          filterRanksForRankTypes: { value: ["PPR"] },
+        },
+      });
+
+      let rawPlayers: any[] = [];
+      try {
+        const resp = await fetch(
+          `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${year}/players?scoringPeriodId=0&view=kona_player_info&limit=1000`,
+          { headers: { "X-Fantasy-Filter": filter } },
+        );
+        if (!resp.ok) return { ok: false as const, updated: 0, error: `espn_${resp.status}` };
+        rawPlayers = (await resp.json()) as any[];
+      } catch (err) {
+        return { ok: false as const, updated: 0, error: String(err) };
+      }
+
+      let updated = 0;
+      for (const p of rawPlayers) {
+        const rank: number | undefined = p?.draftRanksByRankType?.PPR?.rank;
+        const espnId = String(p?.id ?? "").trim();
+        if (!rank || rank >= 1000 || !espnId) continue;
+        await db
+          .update(gmPlayerRegistry)
+          .set({ espnAdpPprRank: rank })
+          .where(eqDrizzle(gmPlayerRegistry.espnPlayerId, espnId));
+        updated++;
+      }
+
+      return { ok: true as const, updated };
+    }),
 });
 
 export type PlayerStatsRouter = typeof playerStatsRouter;

@@ -76,3 +76,88 @@
   .stat-negative { @apply text-red-400; }
   .stat-neutral { @apply text-muted-foreground; }
 }
+
+/* ── Light mode theme overrides ─────────────────────────────────────────── */
+/* Applied when <html data-theme="light"> is set by ThemeContext. */
+[data-theme="light"] {
+  color-scheme: light;
+  --color-background:      oklch(0.97 0.005 300);
+  --color-foreground:      oklch(0.12 0.015 300);
+  --color-card:            oklch(0.94 0.008 300);
+  --color-card-foreground: oklch(0.12 0.015 300);
+  --color-popover:         oklch(0.96 0.006 300);
+  --color-popover-foreground: oklch(0.12 0.015 300);
+  --color-primary:         oklch(0.72 0.205 128);
+  --color-primary-foreground: oklch(0.10 0.02 300);
+  --color-secondary:       oklch(0.88 0.012 300);
+  --color-secondary-foreground: oklch(0.12 0.015 300);
+  --color-muted:           oklch(0.91 0.010 300);
+  --color-muted-foreground: oklch(0.40 0.020 300);
+  --color-accent:          oklch(0.88 0.015 300);
+  --color-accent-foreground: oklch(0.12 0.015 300);
+  --color-destructive:     oklch(0.55 0.22 25);
+  --color-destructive-foreground: oklch(0.98 0.005 0);
+  --color-border:          oklch(0.82 0.018 300);
+  --color-input:           oklch(0.92 0.010 300);
+  --color-ring:            oklch(0.72 0.205 128);
+}
+
+/* Sidebar: override the hardcoded dark gradient */
+[data-theme="light"] [class*="border-r"][class*="flex-col"] {
+  background: linear-gradient(180deg, #f8f5fc, #f2eef9) !important;
+  border-color: #d8d0e8 !important;
+}
+
+/* Main page backgrounds that use hardcoded dark values */
+[data-theme="light"] .min-h-screen {
+  background: var(--color-background) !important;
+  color: var(--color-foreground) !important;
+}
+
+/* Override text-white/N patterns — critical for readability */
+[data-theme="light"] .text-white\/90,
+[data-theme="light"] .text-white\/85,
+[data-theme="light"] .text-white\/80,
+[data-theme="light"] .text-white\/75 { color: oklch(0.12 0.015 300 / 90%) !important; }
+[data-theme="light"] .text-white\/70,
+[data-theme="light"] .text-white\/65,
+[data-theme="light"] .text-white\/60 { color: oklch(0.12 0.015 300 / 75%) !important; }
+[data-theme="light"] .text-white\/55,
+[data-theme="light"] .text-white\/50,
+[data-theme="light"] .text-white\/45,
+[data-theme="light"] .text-white\/40 { color: oklch(0.12 0.015 300 / 55%) !important; }
+[data-theme="light"] .text-white\/35,
+[data-theme="light"] .text-white\/30,
+[data-theme="light"] .text-white\/25 { color: oklch(0.12 0.015 300 / 35%) !important; }
+[data-theme="light"] .text-foreground,
+[data-theme="light"] .text-white { color: oklch(0.12 0.015 300) !important; }
+
+/* Dark card/panel backgrounds */
+[data-theme="light"] .bg-card,
+[data-theme="light"] [class*="bg-\[linear-gradient"],
+[data-theme="light"] [class*="bg-\[#"] { background: var(--color-card) !important; }
+
+/* Zinc-based backgrounds */
+[data-theme="light"] .bg-zinc-900,
+[data-theme="light"] .bg-zinc-950 { background-color: #f4f1f9 !important; }
+[data-theme="light"] .bg-zinc-800 { background-color: #ece8f5 !important; }
+[data-theme="light"] .bg-zinc-700 { background-color: #ddd8ec !important; }
+
+/* Border colors */
+[data-theme="light"] .border-white\/\[0\.06\],
+[data-theme="light"] .border-white\/\[0\.07\],
+[data-theme="light"] .border-white\/\[0\.08\] { border-color: oklch(0.82 0.018 300) !important; }
+
+/* Panels with dark linear gradients */
+[data-theme="light"] [style*="linear-gradient(180deg,#"] {
+  background: var(--color-card) !important;
+}
+[data-theme="light"] [style*="radial-gradient"] {
+  background: var(--color-background) !important;
+}
+[data-theme="light"] [style*="0e0a10"],
+[data-theme="light"] [style*="080609"],
+[data-theme="light"] [style*="1b131f"],
+[data-theme="light"] [style*="140e17"] {
+  background: var(--color-card) !important;
+}

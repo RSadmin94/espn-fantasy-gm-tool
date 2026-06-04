@@ -33,6 +33,8 @@ import {
   Newspaper,
   Zap,
   Crown,
+  Sun,
+  Moon,
   FlaskConical,
   HelpCircle,
   Route,
@@ -53,6 +55,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { useTheme } from "@/context/ThemeContext";
 
 type NavEntry =
   | { kind: "link"; label: string; href: string; icon: LucideIcon }
@@ -363,6 +366,15 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   const location = useLocation();
   const pathname = location.pathname;
   const isMobile = useViewportMobile();
+  const { theme, toggle } = useTheme();
+  const adpMutation = trpc.playerStats.refreshAdpFromEspn.useMutation();
+  useEffect(() => {
+    if (sessionStorage.getItem("gmwr-adp-refreshed")) return;
+    sessionStorage.setItem("gmwr-adp-refreshed", "1");
+    adpMutation.mutate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {};
@@ -385,17 +397,28 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
     <div className="flex h-full flex-col border-r border-white/[0.06] bg-[linear-gradient(180deg,#1b131f,#0e0a10)]">
       {/* Logo */}
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-4">
-        <img src="/logo.png" alt="Fantasy Football Rivals - Own Your Rivals" className="max-h-[115px] w-auto object-contain" />
-        {onClose && (
+        <img src="/logo.png" alt="Fantasy Football Rivals - Own Your Rivals" className="max-h-[132px] w-auto object-contain" />
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <button
             type="button"
-            onClick={onClose}
-            className="text-muted-foreground transition-colors hover:text-foreground md:hidden"
-            aria-label="Close menu"
+            onClick={toggle}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.07] hover:text-foreground"
+            aria-label="Toggle colour scheme"
           >
-            <X className="h-5 w-5" />
+            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
-        )}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-muted-foreground transition-colors hover:text-foreground md:hidden"
+              aria-label="Close menu"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+        </div>
       </div>
 
       <LeagueSwitcher onAfterSwitch={onClose} />
@@ -463,7 +486,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
           <Menu className="h-5 w-5" />
         </button>
         <span className="flex items-center md:hidden">
-          <img src="/logo.png" alt="Fantasy Football Rivals" className="h-[51px] w-auto object-contain" />
+          <img src="/logo.png" alt="Fantasy Football Rivals" className="h-[59px] w-auto object-contain" />
         </span>
       </div>
 

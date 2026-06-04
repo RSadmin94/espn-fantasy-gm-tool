@@ -1333,6 +1333,7 @@ export const gmPlayerRegistry = mysqlTable(
     lastSeasonSeen:  int("lastSeasonSeen"),
     isActive:        boolean("isActive").notNull().default(true),
     needsReview:     boolean("needsReview").notNull().default(false),
+    espnAdpPprRank:  int("espnAdpPprRank"),
     reviewReason:    varchar("reviewReason",   { length: 255 }),
     createdAt:       timestamp("createdAt").defaultNow().notNull(),
     updatedAt:       timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
