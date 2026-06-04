@@ -1298,6 +1298,31 @@ export const appRouter = router({
         }
         return { success: true };
       }),
+    connectByLeagueId: protectedProcedure
+      .input(z.object({ leagueId: z.string().min(1).max(20) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { ok: false as const, error: "no_db" };
+        const lid = input.leagueId.trim();
+        const yr  = new Date().getFullYear();
+        let nm = `League ${lid}`;
+        try {
+          const resp = await fetch(`https://fantasy.espn.com/apis/v3/games/ffl/seasons/${yr}/segments/0/leagues/${lid}?view=mSettings`);
+          if (resp.ok) {
+            const dj = await resp.json() as any;
+            if (dj?.settings?.name) nm = String(dj.settings.name);
+          }
+        } catch { /**/ }
+        const existing = await db.select({ id: lcTable.id }).from(lcTable)
+          .where(andDrizzle(eqDrizzle(lcTable.userId, ctx.user.id), eqDrizzle(lcTable.leagueId, lid))).limit(1);
+        if (existing.length > 0)
+          return { ok: true as const, leagueConnectionId: existing[0]!.id, leagueName: nm, alreadyExisted: true };
+        await db.insert(lcTable).values({ userId: ctx.user.id, provider: "espn", leagueId: lid,
+          leagueName: nm, season: yr, isActive: true, syncStatus: "pending" } as any);
+        const nr = await db.select({ id: lcTable.id }).from(lcTable)
+          .where(andDrizzle(eqDrizzle(lcTable.userId, ctx.user.id), eqDrizzle(lcTable.leagueId, lid))).limit(1);
+        return { ok: true as const, leagueConnectionId: nr[0]?.id ?? 0, leagueName: nm, alreadyExisted: false };
+      }),
   }),
   offseason: offseasonRouter,
   leagueScoring: router({

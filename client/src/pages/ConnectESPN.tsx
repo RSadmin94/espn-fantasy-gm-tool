@@ -72,6 +72,74 @@ function SyncBadge({ status }: { status: string | null | undefined }) {
 
 // ── Manual credential form (collapsed fallback) ────────────────────────────────
 
+// ── Quick connect: just enter a League ID ────────────────────────────────────
+
+function QuickConnectCard({ onSuccess }: { onSuccess: (leagueId: string, leagueName: string) => void }) {
+  const [leagueId, setLeagueId] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const utils = trpc.useUtils();
+
+  const connectMutation = (trpc as any).league.connectByLeagueId.useMutation({
+    onSuccess: (data: any) => {
+      setError(null);
+      setLeagueId("");
+      void utils.league.getMyLeagues.invalidate();
+      void utils.league.getActive.invalidate();
+      onSuccess(data.leagueConnectionId?.toString() ?? "", data.leagueName ?? "");
+    },
+    onError: (err: any) => setError(err.message),
+  });
+
+  function submit() {
+    const id = leagueId.trim();
+    if (!id || isNaN(Number(id))) { setError("Enter a valid numeric League ID"); return; }
+    setError(null);
+    connectMutation.mutate({ leagueId: id });
+  }
+
+  return (
+    <Card className="border-2 border-primary/20 bg-primary/5">
+      <CardContent className="pt-5 pb-5 space-y-4">
+        <div>
+          <p className="text-base font-semibold text-foreground mb-0.5">Connect by League ID</p>
+          <p className="text-sm text-muted-foreground">
+            Find your League ID in the ESPN URL:{" "}
+            <code className="text-xs bg-muted px-1 py-0.5 rounded text-foreground">
+              fantasy.espn.com/football/league?leagueId=<span className="text-primary font-bold">457622</span>
+            </code>
+          </p>
+        </div>
+
+        {error && (
+          <div className="flex items-center gap-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Input
+            placeholder="e.g. 457622"
+            value={leagueId}
+            onChange={e => setLeagueId(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && submit()}
+            className="font-mono text-sm"
+            inputMode="numeric"
+            maxLength={12}
+          />
+          <Button onClick={submit} disabled={connectMutation.isPending} className="shrink-0 gap-2">
+            {connectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />}
+            {connectMutation.isPending ? "Connecting…" : "Connect"}
+          </Button>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          No credentials needed. Data sync still requires the Chrome extension.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ManualForm({ onSuccess }: { onSuccess: (leagueId: string) => void }) {
   const [open, setOpen] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -349,12 +417,11 @@ export function ConnectESPN() {
     if (timeoutHandleRef.current) clearTimeout(timeoutHandleRef.current);
   }
 
-  function handleManualSuccess(leagueId: string) {
-    setNewLeague(null); // let the leagues list refresh show it
+  function handleManualSuccess(leagueId: string, leagueName?: string) {
+    setNewLeague(null);
     void utils.league.getMyLeagues.invalidate();
     void utils.league.getActive.invalidate();
-    // show synthetic connected state with just the ID
-    setNewLeague({ id: 0, leagueId, leagueName: `ESPN League ${leagueId}`, season: 0, isActive: true, syncStatus: "pending", lastSyncedAt: null });
+    setNewLeague({ id: 0, leagueId, leagueName: leagueName ?? `ESPN League ${leagueId}`, season: 0, isActive: true, syncStatus: "pending", lastSyncedAt: null });
   }
 
   const removeMutation = trpc.league.removeLeague.useMutation({
@@ -376,6 +443,9 @@ export function ConnectESPN() {
           Link your ESPN Fantasy Football league via the GM War Room Chrome extension.
         </p>
       </div>
+
+      {/* Quick connect by League ID */}
+      <QuickConnectCard onSuccess={(id, name) => handleManualSuccess(id, name)} />
 
       {/* ── Primary connection card ── */}
       <Card className={cn(
