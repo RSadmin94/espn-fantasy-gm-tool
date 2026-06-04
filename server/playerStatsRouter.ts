@@ -29,6 +29,7 @@ import {
   desc  as descDrizzle,
   like  as likeDrizzle,
   gte   as gteDrizzle,
+  inArray as inArrayDrizzle,
   sql,
 } from "drizzle-orm";
 import {
@@ -91,6 +92,29 @@ export const playerStatsRouter = router({
           .where(where),
       ]);
 
+      // AVG Pick (ADP) per player - read-only AVG(overallPick) from draft_picks.
+      // Joins draft_picks on numeric playerId (= registry espnPlayerId). No writes.
+      const draftPlayerIds = Array.from(new Set(
+        rows.map(r => r.espnPlayerId).filter((v): v is string => !!v)
+            .map(Number).filter(n => Number.isFinite(n) && n > 0)
+      ));
+      const avgPickByPlayerId = new Map<number, number>();
+      if (draftPlayerIds.length > 0) {
+        const apRows = await db
+          .select({
+            playerId: gmDraftPicks.playerId,
+            avgPick:  sql<number>`AVG(${gmDraftPicks.overallPick})`.mapWith(Number),
+          })
+          .from(gmDraftPicks)
+          .where(inArrayDrizzle(gmDraftPicks.playerId, draftPlayerIds))
+          .groupBy(gmDraftPicks.playerId);
+        for (const ap of apRows) {
+          if (ap.playerId != null && Number.isFinite(ap.avgPick)) {
+            avgPickByPlayerId.set(Number(ap.playerId), Math.round(ap.avgPick * 10) / 10);
+          }
+        }
+      }
+
       return {
         players:  rows.map(r => ({
           ...r,
@@ -100,6 +124,7 @@ export const playerStatsRouter = router({
           currentNflTeam:  r.currentNflTeam  ?? null,
           firstSeasonSeen: r.firstSeasonSeen ?? null,
           lastSeasonSeen:  r.lastSeasonSeen  ?? null,
+          avgPick:         r.espnPlayerId ? (avgPickByPlayerId.get(Number(r.espnPlayerId)) ?? null) : null,
         })),
         total:    countRow[0]?.cnt ?? 0,
         page:     input.page,

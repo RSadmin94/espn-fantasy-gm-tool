@@ -57,6 +57,8 @@ function Headshot({ espnId, name, pos }: { espnId: string | null; name: string; 
       <img
         src={`https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/${espnId}.png&w=80&h=58&cb=1`}
         alt={name}
+        loading="lazy"
+        decoding="async"
         className="w-full h-full object-cover object-top scale-110"
         onError={() => setFailed(true)}
       />
@@ -300,7 +302,7 @@ export function PlayerDatabase() {
           {/* Column headers */}
           <div className="sticky top-0 z-10 bg-zinc-900/95 border-b border-zinc-800/80 backdrop-blur">
             <div className="grid px-4 py-3"
-              style={{ gridTemplateColumns: "36px 1fr 80px 100px 130px 80px 72px" }}>
+              style={{ gridTemplateColumns: "36px 1fr 80px 100px 130px 80px 72px 76px" }}>
               <div className="text-[10px] font-semibold text-zinc-600 uppercase">#</div>
               <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Player</div>
               <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Pos</div>
@@ -308,6 +310,7 @@ export function PlayerDatabase() {
               <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Dynasty Value</div>
               <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Status</div>
               <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">First Yr</div>
+              <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">AVG Pick</div>
             </div>
           </div>
 
@@ -339,7 +342,7 @@ export function PlayerDatabase() {
                     i % 2 === 0 ? "bg-zinc-900/10" : "bg-transparent",
                     isHigh ? "border-l-lime-500/60" : "border-l-zinc-800"
                   )}
-                  style={{ gridTemplateColumns: "36px 1fr 80px 100px 130px 80px 72px" }}
+                  style={{ gridTemplateColumns: "36px 1fr 80px 100px 130px 80px 72px 76px" }}
                 >
                   {/* # */}
                   <div className="text-zinc-600 text-xs tabular-nums font-mono">{page * PAGE_SIZE + i + 1}</div>
@@ -384,6 +387,8 @@ export function PlayerDatabase() {
 
                   {/* First yr */}
                   <div className="text-xs tabular-nums text-zinc-500 font-medium">{p.firstSeasonSeen ?? "—"}</div>
+                  {/* AVG Pick */}
+                  <div className="text-xs tabular-nums font-semibold text-zinc-300">{p.avgPick != null ? Number(p.avgPick).toFixed(1) : <span className="text-zinc-600">{"\u2014"}</span>}</div>
                 </div>
               );
             })}

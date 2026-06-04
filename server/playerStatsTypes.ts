@@ -192,6 +192,7 @@ export const GetCanonicalPlayersOutput = z.object({
     lastSeasonSeen:  z.number().nullable(),
     isActive:        z.boolean(),
     needsReview:     z.boolean(),
+    avgPick:         z.number().nullable(),
   })),
   total:    z.number(),
   page:     z.number(),
