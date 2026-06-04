@@ -2,8 +2,8 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { type ReactNode, type CSSProperties } from "react";
 import {
-  Loader2, HelpCircle, Trophy, Target, TrendingDown, Swords, Crown, Calendar, ShoppingCart,
-  Medal, Activity, Shield, Sparkles, Flame, Gauge, AlertTriangle, CheckCircle2, ArrowDown, ArrowUp,
+  Loader2, HelpCircle, Trophy, Target, TrendingDown, TrendingUp, Swords, Crown, Calendar, ShoppingCart,
+  Medal, Activity, Shield, Sparkles, Flame, Gauge, AlertTriangle, CheckCircle2, ArrowDown, ArrowUp, Star,
 } from "lucide-react";
 
 const PAGEBG: CSSProperties = {
@@ -22,6 +22,16 @@ const CATEGORY_ICON: Record<string, ReactNode> = {
   rivals: <Swords className="h-5 w-5" />,
   draft: <Crown className="h-5 w-5" />,
   close_games: <Target className="h-5 w-5" />,
+};
+
+/** Icons used in champion (positive) mode — same keys but upbeat icons. */
+const CHAMPION_ICON: Record<string, ReactNode> = {
+  scoring: <TrendingUp className="h-5 w-5" />,
+  position: <Shield className="h-5 w-5" />,
+  playoffs: <Trophy className="h-5 w-5" />,
+  acquisitions: <Activity className="h-5 w-5" />,
+  rivals: <Swords className="h-5 w-5" />,
+  draft: <Star className="h-5 w-5" />,
 };
 
 const ARC_STYLE: Record<string, { grad: string; text: string; ring: string; icon: ReactNode; blurb: string }> = {
@@ -46,6 +56,20 @@ function scoreColor(n: number): string { return n >= 70 ? "text-lime-400" : n >=
 function scoreBar(n: number): string { return n >= 70 ? "bg-lime-400" : n >= 50 ? "bg-amber-400" : "bg-red-500"; }
 function sevText(s: string): string { return s === "high" ? "text-red-400" : s === "medium" ? "text-orange-300" : s === "low" ? "text-lime-400" : "text-white/75"; }
 function sevBorder(s: string): string { return s === "high" ? "border-red-500/25" : s === "medium" ? "border-orange-400/20" : "border-white/[0.06]"; }
+
+/** Positive contribution strength — used in champion mode Top Reasons. High = gold, strong positive. */
+function strengthColor(s: number): string {
+  if (s >= 80) return "text-amber-300";
+  if (s >= 60) return "text-lime-400";
+  if (s >= 40) return "text-cyan-300";
+  return "text-white/60";
+}
+function strengthBar(s: number): string {
+  if (s >= 80) return "bg-amber-400";
+  if (s >= 60) return "bg-lime-400";
+  if (s >= 40) return "bg-cyan-400";
+  return "bg-white/30";
+}
 
 function severityColor(s: number): string {
   if (s >= 80) return "text-red-400";
@@ -261,26 +285,78 @@ export function WhyHaventIWon() {
               </div>
             )}
 
-            {/* SECTION 3 - Pattern Detection */}
+            {/* SECTION 3 - Pattern Detection / Championship Signals */}
             {patterns.length > 0 && (
               <div className={cn(PANEL, "p-5 sm:p-6")}>
                 <div className="mb-4 flex items-center gap-3">
-                  <span className="text-orange-300"><AlertTriangle className="h-5 w-5" /></span>
+                  <span className={isWin ? "text-amber-300" : "text-orange-300"}>
+                    {isWin ? <Trophy className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                  </span>
                   <div>
-                    <h2 className="text-[20px] font-extrabold leading-tight">Pattern Detection</h2>
-                    <p className="text-[13px] text-white/45">The recurring signals in your league history</p>
+                    <h2 className="text-[20px] font-extrabold leading-tight">
+                      {isWin ? "Championship Signals" : "Pattern Detection"}
+                    </h2>
+                    <p className="text-[13px] text-white/45">
+                      {isWin ? "The data behind your title run" : "The recurring signals in your league history"}
+                    </p>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
                   {patterns.map((p: any) => (
-                    <div key={p.id} className={cn("rounded-xl border bg-white/[0.02] p-4", sevBorder(p.severity))}>
-                      <div className={cn("text-[26px] font-black leading-none tabular-nums", sevText(p.severity))}>{p.value}</div>
+                    <div key={p.id} className={cn("rounded-xl border bg-white/[0.02] p-4", isWin ? "border-amber-400/20" : sevBorder(p.severity))}>
+                      <div className={cn("text-[26px] font-black leading-none tabular-nums", isWin ? sevText("low") : sevText(p.severity))}>{p.value}</div>
                       <div className="mt-1.5 text-[12px] font-semibold text-white/85">{p.label}</div>
                       <div className="mt-1 text-[12px] leading-snug text-white/40">{p.detail}</div>
                     </div>
                   ))}
                 </div>
               </div>
+            )}
+
+            {/* SECTION 3b - Obstacles You Overcame (champion modes only) */}
+            {isWin && data.obstaclesOvercome && (
+              (data.obstaclesOvercome.patterns.length > 0 || data.obstaclesOvercome.findings.length > 0) && (
+                <div className={cn(PANEL, "p-5 sm:p-6 border-white/[0.04]", "bg-[linear-gradient(180deg,#16121a,#110d14)]")}
+                  style={{ opacity: 0.85 }}>
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="text-white/35"><Shield className="h-5 w-5" /></span>
+                    <div>
+                      <h2 className="text-[20px] font-extrabold leading-tight text-white/60">Obstacles You Overcame</h2>
+                      <p className="text-[13px] text-white/30">The hurdles that make this title mean more</p>
+                    </div>
+                  </div>
+                  {data.obstaclesOvercome.patterns.length > 0 && (
+                    <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+                      {data.obstaclesOvercome.patterns.map((p: any) => (
+                        <div key={p.id} className="rounded-xl border border-white/[0.05] bg-white/[0.01] p-4">
+                          <div className="text-[26px] font-black leading-none tabular-nums text-white/40">{p.value}</div>
+                          <div className="mt-1.5 text-[12px] font-semibold text-white/55">{p.label}</div>
+                          <div className="mt-1 text-[12px] leading-snug text-white/25">{p.detail}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {data.obstaclesOvercome.findings.length > 0 && (
+                    <div className="space-y-2">
+                      {data.obstaclesOvercome.findings.map((f: any, i: number) => (
+                        <div key={f.id} className="rounded-xl border border-white/[0.05] bg-white/[0.01] p-3">
+                          <div className="flex items-start gap-3">
+                            <span className="mt-0.5 shrink-0 text-white/25">
+                              {CATEGORY_ICON[f.category] ?? <Target className="h-5 w-5" />}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-white/45">
+                                <span className="mr-2 text-white/20">{i + 1}.</span>{f.headline}
+                              </div>
+                              <p className="mt-1 text-[13px] text-white/30">{f.detail}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
             )}
 
             {/* SECTION 4 - Championship Readiness Score */}
@@ -367,32 +443,56 @@ export function WhyHaventIWon() {
             {/* SECTION 5 - Top Reasons (diagnostic) */}
             <div className={cn(PANEL, "p-5 sm:p-6")}>
               <div className="mb-4 flex items-center gap-3">
-                <span className="text-lime-400">{isWin ? <Trophy className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}</span>
+                <span className={isWin ? "text-amber-300" : "text-lime-400"}>
+                  {isWin ? <Crown className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
+                </span>
                 <div>
                   <h2 className="text-[20px] font-extrabold leading-tight">{reasonsHeading}</h2>
-                  <p className="text-[13px] text-white/45">Ranked by deterministic severity from real league data</p>
+                  <p className="text-[13px] text-white/45">
+                    {isWin
+                      ? "Ranked by contribution strength from real league data"
+                      : "Ranked by deterministic severity from real league data"}
+                  </p>
                 </div>
               </div>
               <div className="space-y-3">
-                {data.topReasons.map((f: any, i: number) => (
-                  <div key={f.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                    <div className="flex items-start gap-3">
-                      <span className={cn("mt-0.5 shrink-0", severityColor(f.severity))}>{CATEGORY_ICON[f.category] ?? <Target className="h-5 w-5" />}</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="font-bold text-white/90"><span className="mr-2 text-white/35">{i + 1}.</span>{f.headline}</div>
-                          <span className={cn("shrink-0 text-[13px] font-bold tabular-nums", severityColor(f.severity))}>{Math.round(f.severity)}</span>
-                        </div>
-                        <p className="mt-1 text-[14px] text-white/55">{f.detail}</p>
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                          <div className={cn("h-full rounded-full", severityBar(f.severity))} style={{ width: `${Math.round(f.severity)}%` }} />
+                {data.topReasons.map((f: any, i: number) => {
+                  const colorFn = isWin ? strengthColor : severityColor;
+                  const barFn = isWin ? strengthBar : severityBar;
+                  const iconMap = isWin ? CHAMPION_ICON : CATEGORY_ICON;
+                  return (
+                    <div key={f.id} className={cn(
+                      "rounded-xl border p-4",
+                      isWin ? "border-amber-400/15 bg-amber-400/[0.02]" : "border-white/[0.06] bg-white/[0.02]",
+                    )}>
+                      <div className="flex items-start gap-3">
+                        <span className={cn("mt-0.5 shrink-0", colorFn(f.severity))}>
+                          {iconMap[f.category] ?? <Target className="h-5 w-5" />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-bold text-white/90">
+                              <span className="mr-2 text-white/35">{i + 1}.</span>{f.headline}
+                            </div>
+                            <span className={cn("shrink-0 text-[13px] font-bold tabular-nums", colorFn(f.severity))}>
+                              {Math.round(f.severity)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[14px] text-white/55">{f.detail}</p>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                            <div className={cn("h-full rounded-full", barFn(f.severity))} style={{ width: `${Math.round(f.severity)}%` }} />
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {data.topReasons.length === 0 && (
-                  <p className="text-[14px] text-white/50">No standout weaknesses found in the data - a balanced resume.</p>
+                  <p className="text-[14px] text-white/50">
+                    {isWin
+                      ? "Championship data is still computing."
+                      : "No standout weaknesses found in the data - a balanced resume."}
+                  </p>
                 )}
               </div>
             </div>

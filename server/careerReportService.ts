@@ -90,6 +90,8 @@ export type CareerReport = {
   confidence: WhyHaventIWonResult["confidence"];
   dataCoverage: { teamLevel: string; playerLevel: string };
   note?: string;
+  /** Champion modes only: the failure-mode patterns/findings reframed as obstacles overcome. */
+  obstaclesOvercome?: { patterns: PatternStat[]; findings: WhyFinding[] };
 };
 
 function titleFor(mode: WhyHaventIWonResult["pageMode"]): { title: string; subtitle: string } {
@@ -252,7 +254,6 @@ export async function computeCareerReport(
     Promise.all(playerSeasons.map((s) => computeDraftReality(s, leagueId).catch(() => null))),
   ]);
   const readiness = buildReadiness({ cp, acq, draftResults, ownerName: why.ownerName, playoffTrips, seasonsPlayed, primary });
-  const patterns = buildPatterns({ cp, flatRS, resolved, allGmRows, playoffTrips, seasonsPlayed });
 
   const careerArc = computeArc({ titles, isReigning, runnerUps, winRate: careerWinRate, primary });
   const careerStory = buildStory({
@@ -271,9 +272,26 @@ export async function computeCareerReport(
     biggestThreat: cp?.biggestThreat?.ownerName ?? null,
   };
 
+  // Mode-aware: champions get positive drivers; failure mode gets historic failure analysis.
+  const failurePatterns = buildPatterns({ cp, flatRS, resolved, allGmRows, playoffTrips, seasonsPlayed });
+  const isWinner = mode !== "why-havent-won";
+  const titleSeason = championSeasons.length ? Math.max(...championSeasons) : null;
+  let finalPatterns: PatternStat[];
+  let finalTopReasons: WhyFinding[];
+  let obstaclesOvercome: CareerReport["obstaclesOvercome"];
+  if (isWinner) {
+    finalPatterns = buildChampionPatterns({ titleSeason, snap, cp, acq, primary, seasonsPlayed, titles, playoffTrips, championSeasons });
+    finalTopReasons = buildChampionDrivers({ titleSeason, snap, cp, acq, primary, secondary, seasonsPlayed, titles, playoffTrips, runnerUps, championSeasons, ownerName: why.ownerName });
+    obstaclesOvercome = { patterns: failurePatterns, findings: why.findings };
+  } else {
+    finalPatterns = failurePatterns;
+    finalTopReasons = why.findings;
+    obstaclesOvercome = undefined;
+  }
   return {
     leagueId, ownerKey: resolved.profileOwnerKey, ownerName: why.ownerName, isSetupComplete: why.isSetupComplete,
-    mode, title, subtitle, careerArc, careerStory, snapshot, timeline, readiness, patterns, topReasons: why.findings,
+    mode, title, subtitle, careerArc, careerStory, snapshot, timeline, readiness,
+    patterns: finalPatterns, topReasons: finalTopReasons, obstaclesOvercome,
     confidence: why.confidence, dataCoverage, note: why.note,
   };
 }
@@ -439,4 +457,266 @@ function countGamePatterns(flatRS: any[], resolved: any, allGmRows: any[]): { cl
     if (champTeamBySeason.get(s) === oppTeam) lostToChamp++;
   }
   return { closeLosses, lostToChamp, realLosses };
+}
+
+// ===== Phase 2: Champion-mode positive drivers =====
+
+/**
+ * Positive pattern stats for champion mode (Pattern Detection section).
+ * All values celebrate what the owner did RIGHT in their title run.
+ */
+function buildChampionPatterns(a: {
+  titleSeason: number | null;
+  snap: any;
+  cp: any | null;
+  acq: any | null;
+  primary: string | null;
+  seasonsPlayed: number;
+  titles: number;
+  playoffTrips: number;
+  championSeasons: number[];
+}): PatternStat[] {
+  const out: PatternStat[] = [];
+
+  const titleRecord = a.titleSeason
+    ? a.snap.seasonRecords?.find((r: any) => Number(r.season) === a.titleSeason)
+    : null;
+
+  // 1. Title season PF vs career average
+  if (titleRecord && Number(titleRecord.pointsFor ?? 0) > 100) {
+    const titlePF = Math.round(Number(titleRecord.pointsFor));
+    const careerPFs = (a.snap.seasonRecords ?? [])
+      .filter((r: any) => Number(r.pointsFor ?? 0) > 100)
+      .map((r: any) => Number(r.pointsFor));
+    const avgPF = careerPFs.length
+      ? careerPFs.reduce((s: number, v: number) => s + v, 0) / careerPFs.length
+      : 0;
+    const aboveAvg = avgPF > 0 && titlePF > avgPF;
+    out.push({
+      id: "title_pf",
+      label: `${a.titleSeason} Points Scored`,
+      value: titlePF.toLocaleString(),
+      detail: aboveAvg
+        ? `+${(titlePF - avgPF).toFixed(0)} above your career season avg (${Math.round(avgPF)})`
+        : `Season total points — ${Math.round(avgPF)} career avg`,
+      severity: aboveAvg ? "low" : "info",
+    });
+  }
+
+  // 2. Title season win-loss record
+  if (titleRecord) {
+    const wins = Number(titleRecord.wins ?? 0);
+    const losses = Number(titleRecord.losses ?? 0);
+    const total = wins + losses;
+    if (total > 0) {
+      const pct = Math.round((wins / total) * 100);
+      out.push({
+        id: "title_record",
+        label: `${a.titleSeason} Regular Season`,
+        value: `${wins}-${losses}`,
+        detail: `${pct}% win rate — above the ${Math.round(50 + (pct - 50) * 0.5)}% typical title-season pace`,
+        severity: pct >= 55 ? "low" : "info",
+      });
+    }
+  }
+
+  // 3. Strongest positional advantage vs champion benchmark
+  const posLeads = (a.cp?.positionGaps ?? []).filter((g: any) => g.gap < -0.5)
+    .sort((x: any, y: any) => x.gap - y.gap);
+  if (posLeads.length > 0) {
+    const best = posLeads[0];
+    out.push({
+      id: "pos_lead",
+      label: `${best.position} Edge`,
+      value: `+${Math.abs(best.gap).toFixed(1)} PPG`,
+      detail: `Above champion benchmark at ${best.position}: ${best.ownerAvg.toFixed(1)} vs ${best.championAvg.toFixed(1)} avg`,
+      severity: "low",
+    });
+  }
+
+  // 4. Career championship rate
+  if (a.titles > 0) {
+    const pct = Math.round((a.titles / a.seasonsPlayed) * 100);
+    out.push({
+      id: "title_rate",
+      label: "Career Titles",
+      value: String(a.titles),
+      detail: `${pct}% title rate — ${a.championSeasons.join(", ")} across ${a.seasonsPlayed} seasons`,
+      severity: "low",
+    });
+  }
+
+  // 5. Playoff qualification rate
+  const playoffRate = a.seasonsPlayed > 0 ? a.playoffTrips / a.seasonsPlayed : 0;
+  out.push({
+    id: "playoff_rate",
+    label: "Playoff Trips",
+    value: String(a.playoffTrips),
+    detail: `${Math.round(playoffRate * 100)}% qualification rate — consistent contender`,
+    severity: playoffRate >= 0.40 ? "low" : "info",
+  });
+
+  // 6. Acquisition edge
+  if (a.acq?.focal && Number(a.acq.focal.acquisitionImpactScore ?? 0) > 55) {
+    const score = Math.round(Number(a.acq.focal.acquisitionImpactScore));
+    out.push({
+      id: "acq_edge",
+      label: "Acquisition Impact",
+      value: `${score}/100`,
+      detail: "In-season roster moves above hold-your-draft baseline",
+      severity: score >= 70 ? "low" : "info",
+    });
+  }
+
+  return out.slice(0, 6);
+}
+
+/**
+ * Positive championship drivers for the Top Reasons section in champion mode.
+ * Ranked by contribution strength (severity = 0-100, higher = more impactful).
+ */
+function buildChampionDrivers(a: {
+  titleSeason: number | null;
+  snap: any;
+  cp: any | null;
+  acq: any | null;
+  primary: string | null;
+  secondary: string | null;
+  seasonsPlayed: number;
+  titles: number;
+  playoffTrips: number;
+  runnerUps: number;
+  championSeasons: number[];
+  ownerName: string;
+}): WhyFinding[] {
+  const findings: WhyFinding[] = [];
+
+  const titleRecord = a.titleSeason
+    ? a.snap.seasonRecords?.find((r: any) => Number(r.season) === a.titleSeason)
+    : null;
+
+  // 1. Scoring edge in title season vs champion benchmark
+  if (titleRecord && Number(titleRecord.pointsFor ?? 0) > 100) {
+    const titlePF = Number(titleRecord.pointsFor);
+    const careerPFs = (a.snap.seasonRecords ?? [])
+      .filter((r: any) => Number(r.pointsFor ?? 0) > 100)
+      .map((r: any) => Number(r.pointsFor));
+    const careerAvgPF = careerPFs.length
+      ? careerPFs.reduce((s: number, v: number) => s + v, 0) / careerPFs.length
+      : 0;
+    // Champion benchmark = career avg + the historical gap (cp.pointsForGap shows owner is X below champ avg)
+    const champBench = a.cp?.pointsForGap != null && careerAvgPF > 0
+      ? careerAvgPF + Number(a.cp.pointsForGap)
+      : null;
+    const aboveChampBench = champBench != null && titlePF >= champBench;
+    const aboveCareer = careerAvgPF > 0 && titlePF > careerAvgPF;
+    if (aboveChampBench && champBench) {
+      findings.push({
+        id: "scoring_champ",
+        headline: "Scored above the championship scoring threshold",
+        detail: `${Math.round(titlePF)} points in ${a.titleSeason} — clearing the historical champion benchmark of ~${Math.round(champBench)} pts. In title seasons, output above that bar is the single strongest predictor of winning.`,
+        category: "scoring",
+        severity: Math.min(95, 65 + Math.round(((titlePF - champBench) / champBench) * 300)),
+        metricValue: Math.round(titlePF), leagueBenchmark: Math.round(champBench),
+      });
+    } else if (aboveCareer) {
+      findings.push({
+        id: "scoring_peak",
+        headline: "Peaked in the right season",
+        detail: `${Math.round(titlePF)} points in ${a.titleSeason} — ${(titlePF - careerAvgPF).toFixed(0)} above your career seasonal avg (${Math.round(careerAvgPF)}). Championship teams score more than they typically do.`,
+        category: "scoring",
+        severity: 72,
+        metricValue: Math.round(titlePF), leagueBenchmark: Math.round(careerAvgPF),
+      });
+    }
+  }
+
+  // 2. Positional strengths vs champion benchmark
+  const posLeads = (a.cp?.positionGaps ?? []).filter((g: any) => g.gap < -0.5)
+    .sort((x: any, y: any) => x.gap - y.gap);
+  if (posLeads.length > 0) {
+    const best = posLeads[0];
+    const others = posLeads.slice(1).map((g: any) => g.position).join(", ");
+    findings.push({
+      id: "pos_strength",
+      headline: `${best.position} was a championship-level weapon`,
+      detail: `Your ${best.position}s averaged ${best.ownerAvg.toFixed(1)} pts/game vs the typical champion's ${best.championAvg.toFixed(1)}${others ? ` — also ahead at ${others}` : ""}. Positional advantage at the position accounts for 40% of the readiness score.`,
+      category: "position",
+      severity: Math.min(90, 58 + Math.round(Math.abs(best.gap) * 6)),
+        metricValue: Math.round(best.ownerAvg * 10) / 10, leagueBenchmark: Math.round(best.championAvg * 10) / 10,
+    });
+  }
+
+  // 3. Consistent playoff presence
+  const playoffRate = a.seasonsPlayed > 0 ? a.playoffTrips / a.seasonsPlayed : 0;
+  if (playoffRate >= 0.30) {
+    findings.push({
+      id: "playoff_consistency",
+      headline: "Consistent playoff presence built the runway to win",
+      detail: `${a.playoffTrips} playoff trips in ${a.seasonsPlayed} seasons (${Math.round(playoffRate * 100)}%). Repeated playoff exposure is the most reliable path to eventual championship — and you stayed in contention long enough to break through.`,
+      category: "playoffs",
+      severity: Math.min(85, 40 + Math.round(playoffRate * 90)),
+        metricValue: a.playoffTrips, leagueBenchmark: a.seasonsPlayed,
+    });
+  }
+
+  // 4. Activity DNA alignment
+  const dnaScore = activityAlignmentScore(a.primary);
+  if (dnaScore >= 70 && a.primary) {
+    const desc = a.primary;
+    const secondaryNote = a.secondary ? ` combined with ${a.secondary}` : "";
+    findings.push({
+      id: "dna_edge",
+      headline: `${desc} DNA drove championship-level roster agility`,
+      detail: `Your ${desc}${secondaryNote} style produces the in-season adaptability that title teams rely on. Owners who actively improve their roster mid-season outperform static draft-and-hold managers in this league.`,
+      category: "acquisitions",
+      severity: dnaScore,
+        metricValue: dnaScore, leagueBenchmark: 100,
+    });
+  }
+
+  // 5. In-season acquisition impact
+  if (a.acq?.focal && Number(a.acq.focal.acquisitionImpactScore ?? 0) > 55) {
+    const score = Math.round(Number(a.acq.focal.acquisitionImpactScore));
+    findings.push({
+      id: "acq_impact",
+      headline: "In-season roster moves added measurable winning edge",
+      detail: `Acquisition impact score of ${score}/100. Your waiver and trade activity throughout the season improved team strength above what you drafted — a consistent pattern in championship-winning rosters.`,
+      category: "acquisitions",
+      severity: Math.min(88, 38 + score),
+        metricValue: score, leagueBenchmark: 100,
+    });
+  }
+
+  // 6. Multi-title persistence
+  if (a.titles >= 2) {
+    const gap = a.championSeasons.length >= 2
+      ? Math.max(...a.championSeasons) - Math.min(...a.championSeasons)
+      : 0;
+    findings.push({
+      id: "multi_title",
+      headline: `${a.titles} championships proves the system is repeatable`,
+      detail: gap > 0
+        ? `First title in ${Math.min(...a.championSeasons)}, returned to the top ${gap} years later in ${Math.max(...a.championSeasons)}. Back-to-back decades of contention separates genuine systems from single-year runs.`
+        : `Multiple championships in ${a.championSeasons.join(", ")} — sustained excellence at the highest level.`,
+      category: "playoffs",
+      severity: Math.min(92, 55 + a.titles * 12 + Math.min(gap, 10)),
+      metricValue: a.titles, leagueBenchmark: 1,
+    });
+  }
+
+  // 7. Biggest rival overcome
+  if (a.cp?.biggestRival?.ownerName) {
+    const rival = String(a.cp.biggestRival.ownerName);
+    findings.push({
+      id: "rival_overcome",
+      headline: `Broke through despite ${rival} being your biggest rival`,
+      detail: `${rival} has been your toughest head-to-head opponent over your career. Winning the title means you navigated the full gauntlet — including your most dangerous competition.`,
+      category: "rivals",
+      severity: 68,
+        metricValue: 1, leagueBenchmark: 1,
+    });
+  }
+
+  return findings.sort((x, y) => y.severity - x.severity).slice(0, 6);
 }
