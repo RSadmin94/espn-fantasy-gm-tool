@@ -12,14 +12,14 @@
 
 import { z }                       from "zod";
 import { router, publicProcedure } from "./_core/trpc";
-import { getDb }                   from "./db";
+import { getDb, resolveActiveLeagueId } from "./db";
 import { sql as drizzleSql }       from "drizzle-orm";
 import {
   calcKeeperCompression, calcScarcityAlerts, calcPositionRunAlerts,
   calcDraftBoardPressure, buildDraftEnvironmentDashboard,
 } from "./draftWarRoomPhase175";
 
-const LEAGUE_ID = "457622";
+// Phase B1: LEAGUE_ID constant removed — leagueId is resolved per-request via resolveActiveLeagueId.
 
 /** League rule: no draft history row for player → keeper cost defaults to this round (not draft slot roundId). */
 const DEFAULT_KEEPER_ROUND = 7;
@@ -397,33 +397,33 @@ function buildConfidenceDashboard(
 
 // ── Roster loader ─────────────────────────────────────────────────────────────
 
-async function loadRoster(db: any, season: number) {
+async function loadRoster(db: any, season: number, leagueId: string) {
   const [rosterRows] = await db.execute(drizzleSql`
     SELECT r.teamId, r.playerName, r.position, r.slotId,
            r.projectedPoints, r.injuryStatus, r.acquisitionType,
            t.name as teamName, t.ownerName
     FROM roster_entries r
     JOIN teams t ON t.leagueId = r.leagueId AND t.season = r.season AND t.teamId = r.teamId
-    WHERE r.leagueId = ${LEAGUE_ID} AND r.season = ${season} AND r.week = 0
+    WHERE r.leagueId = ${leagueId} AND r.season = ${season} AND r.week = 0
     ORDER BY r.teamId, r.projectedPoints DESC
   `) as unknown as [any[]];
 
   const [teamRows] = await db.execute(drizzleSql`
     SELECT teamId, name, ownerName FROM teams
-    WHERE leagueId = ${LEAGUE_ID} AND season = ${season} ORDER BY teamId
+    WHERE leagueId = ${leagueId} AND season = ${season} ORDER BY teamId
   `) as unknown as [any[]];
 
   const [keeperRows] = await db.execute(drizzleSql`
     SELECT teamId, roundId, roundPick, overallPick, playerName, position, isKeeper
     FROM draft_picks
-    WHERE leagueId = ${LEAGUE_ID} AND season = ${season} AND isKeeper = 1
+    WHERE leagueId = ${leagueId} AND season = ${season} AND isKeeper = 1
     ORDER BY teamId, roundId
   `) as unknown as [any[]];
 
   const [allPickRows] = await db.execute(drizzleSql`
     SELECT teamId, roundId, roundPick, overallPick, playerName, position, isKeeper
     FROM draft_picks
-    WHERE leagueId = ${LEAGUE_ID} AND season = ${season}
+    WHERE leagueId = ${leagueId} AND season = ${season}
     ORDER BY overallPick
   `) as unknown as [any[]];
 
@@ -431,7 +431,7 @@ async function loadRoster(db: any, season: number) {
   const [prevRosterRows] = await db.execute(drizzleSql`
     SELECT r.teamId, r.playerName
     FROM roster_entries r
-    WHERE r.leagueId = ${LEAGUE_ID} AND r.season = ${season - 1} AND r.week = 0
+    WHERE r.leagueId = ${leagueId} AND r.season = ${season - 1} AND r.week = 0
       AND r.playerName IS NOT NULL AND r.playerName != ''
   `) as unknown as [any[]];
   const prevByTeam = new Map<number, Set<string>>();
@@ -445,7 +445,7 @@ async function loadRoster(db: any, season: number) {
   const [histPicks] = await db.execute(drizzleSql`
     SELECT playerName, roundId, season
     FROM draft_picks
-    WHERE leagueId = ${LEAGUE_ID}
+    WHERE leagueId = ${leagueId}
       AND playerName IS NOT NULL AND playerName != ''
       AND isKeeper = 0
     ORDER BY season DESC
@@ -461,7 +461,7 @@ async function loadRoster(db: any, season: number) {
   // League rule: max 2 consecutive keeper years
   const [keeperHistRows] = await db.execute(drizzleSql`
     SELECT playerName, season FROM draft_picks
-    WHERE leagueId = ${LEAGUE_ID} AND isKeeper = 1 AND season >= ${season - 2}
+    WHERE leagueId = ${leagueId} AND isKeeper = 1 AND season >= ${season - 2}
   `) as unknown as [any[]];
   const keptByYear = new Map<number, Set<string>>();
   for (const row of keeperHistRows as any[]) {
@@ -934,12 +934,23 @@ export const draftWarRoomRouter = router({
         keeperRoundPick: z.number().int().optional(),
       })).optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { ok: false, error: "DB unavailable" };
       const { season } = input;
 
-      const { byTeam, teams, keepers, allPicks, prevByTeam, playerDraftRoundMap, consecutiveKeptPlayers } = await loadRoster(db, season);
+      // Phase B1: resolve leagueId per-request — no module-level constant.
+      const userId = ctx.user?.id ?? 0;
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: userId ? { id: userId } : undefined },
+        null,
+        season,
+      );
+      if (!leagueId || leagueId === "default") {
+        return { ok: false, error: "setup_required", requiresSetup: true };
+      }
+
+      const { byTeam, teams, keepers, allPicks, prevByTeam, playerDraftRoundMap, consecutiveKeptPlayers } = await loadRoster(db, season, leagueId);
       if (teams.length === 0) return { ok: false, error: `No roster data for ${season}` };
 
       // Player pool
