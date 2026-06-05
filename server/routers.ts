@@ -1990,10 +1990,10 @@ export const appRouter = router({
         return { results };
       }),
 
-    manifests: publicProcedure.query(async () => {
+    manifests: publicProcedure.query(async ({ ctx }) => {
       const [manifests, hasConn] = await Promise.all([
-        getRefreshManifests(),
-        hasActiveEspnLeagueConnection(),
+        getRefreshManifests(undefined, ctx.user?.id ?? undefined),
+        hasActiveEspnLeagueConnection(ctx.user?.id ?? undefined),
       ]);
       return { manifests, leagueConnectionMissing: !hasConn };
     }),

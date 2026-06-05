@@ -442,15 +442,34 @@ function pickNewestSyncRun(pool: SyncRunRow[]): SyncRunRow | null {
 }
 
 /**
- * One manifest per season: latest `sync_runs` row for that season (by finishedAt/startedAt, then id).
- * Does not read `league_connections` so cache status still renders if that table is missing or errors.
+ * One manifest per season for the active league: latest `sync_runs` row for that
+ * season (by finishedAt/startedAt, then id), filtered by the resolved leagueId.
+ * Wrapped in try/catch so cache status still renders ([]) if league resolution or
+ * the query errors.
  */
-export async function getRefreshManifests(): Promise<SeasonCacheManifest[]> {
+export async function getRefreshManifests(
+  leagueId?: string,
+  userId?: number
+): Promise<SeasonCacheManifest[]> {
   try {
     const db = await getDb();
     if (!db) return [];
 
-    const runs = await db.select().from(syncRuns);
+    // League-scope the manifests: resolve the active league (mirrors
+    // getAllCachedSeasons) and filter sync_runs by it so one league's
+    // historical runs don't bleed into another league's Season Cache Status.
+    const { leagueId: resolvedLid } = await resolveActiveLeagueId(
+      { user: userId != null ? { id: userId } : undefined },
+      leagueId ?? null,
+      undefined
+    );
+    if (!resolvedLid) return [];
+    const lid = String(resolvedLid).slice(0, 32);
+
+    const runs = await db
+      .select()
+      .from(syncRuns)
+      .where(eq(syncRuns.leagueId, lid));
 
     const bySeason = new Map<number, SyncRunRow[]>();
     for (const r of runs) {
@@ -649,14 +668,20 @@ export async function getDefaultEspnLeagueId(): Promise<string | null> {
 }
 
 /** True when we can read at least one active ESPN row from `league_connections` (table missing → false). */
-export async function hasActiveEspnLeagueConnection(): Promise<boolean> {
+export async function hasActiveEspnLeagueConnection(userId?: number): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
   try {
     const rows = await db
       .select({ id: leagueConnections.id })
       .from(leagueConnections)
-      .where(and(eq(leagueConnections.isActive, true), eq(leagueConnections.provider, "espn")))
+      .where(
+        and(
+          eq(leagueConnections.isActive, true),
+          eq(leagueConnections.provider, "espn"),
+          ...(userId != null ? [eq(leagueConnections.userId, userId)] : [])
+        )
+      )
       .limit(1);
     return rows.length > 0;
   } catch (e) {
