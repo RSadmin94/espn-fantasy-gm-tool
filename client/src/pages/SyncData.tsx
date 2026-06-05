@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useAuth } from "@clerk/react-router";
 import { toast } from "sonner";
@@ -385,6 +385,26 @@ export function SyncData() {
   const manifestsQuery = trpc.espn.manifests.useQuery();
 
   const utils = trpc.useUtils();
+
+  // Active-league switch refresh: SyncData's espn.* queries take `undefined`
+  // input, so their React Query keys don't change when the server-side active
+  // league changes. Without this, switching leagues while on /sync shows the
+  // prior league's banner/coverage until navigating away. Refetch the
+  // league-scoped queries whenever the active leagueId changes. We track the
+  // last non-empty id and ignore the brief empty value during the swap so the
+  // invalidation reliably fires exactly once per real switch.
+  const prevLeagueIdRef = useRef<string>("");
+  useEffect(() => {
+    if (!leagueId) return;
+    if (prevLeagueIdRef.current && prevLeagueIdRef.current !== leagueId) {
+      void utils.espn.discoverLeagueHistory.invalidate();
+      void utils.espn.allSeasons.invalidate();
+      void utils.espn.cachedSeasons.invalidate();
+      void utils.espn.manifests.invalidate();
+      void utils.espn.browserSyncStatus.invalidate();
+    }
+    prevLeagueIdRef.current = leagueId;
+  }, [leagueId, utils]);
 
   const browserSyncStatusQuery = trpc.espn.browserSyncStatus.useQuery(
     {
