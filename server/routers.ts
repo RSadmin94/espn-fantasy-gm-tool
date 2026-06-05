@@ -2008,6 +2008,14 @@ export const appRouter = router({
       getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)
     ),
 
+    // Discover the active league's true season range (available vs synced) so the
+    // Sync page can prompt the user to backfill missing history. Active league only;
+    // reads status.previousSeasons from the cached payload first, no DB writes.
+    discoverLeagueHistory: protectedProcedure.query(async ({ ctx }) => {
+      const { discoverLeagueHistory } = await import("./leagueHistoryDiscovery");
+      return discoverLeagueHistory(undefined, ctx.user.id);
+    }),
+
     settings: publicProcedure
       .input(z.object({ season: z.number() }))
       .query(async ({ ctx, input }) => {

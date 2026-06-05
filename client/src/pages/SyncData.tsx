@@ -395,6 +395,14 @@ export function SyncData() {
     { enabled: Boolean(leagueId && isConnected), staleTime: 15_000 },
   );
 
+  // League history discovery: available (ESPN previousSeasons) vs synced (cache).
+  // Drives the "sync missing history" banner. Active league only.
+  const discoverHistoryQuery = trpc.espn.discoverLeagueHistory.useQuery(undefined, {
+    enabled: Boolean(isConnected),
+    staleTime: 60_000,
+  });
+  const leagueHistory = discoverHistoryQuery.data;
+
   // Always query draft_picks count for the hardcoded test league on mount — independent of ESPN connection.
   const draftPicks2010GateQuery = trpc.espn.browserSyncStatus.useQuery(
     { leagueId: leagueId, startSeason: 2010, endSeason: 2010 },
@@ -1085,6 +1093,100 @@ export function SyncData() {
             <Link to="/dashboard">Go to Dashboard</Link>
           </Button>
         </div>
+      )}
+
+      {/* ── League history coverage banner ─────────────────────────────────── */}
+      {leagueHistory && leagueHistory.missingSeasons.length > 0 && (
+        <Card className="border-violet-500/30 bg-violet-500/5">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Layers className="h-4 w-4 text-violet-400" />
+              League history not fully synced
+            </CardTitle>
+            <CardDescription>
+              {leagueHistory.detectedStartYear != null
+                ? `This league started in ${leagueHistory.detectedStartYear}. `
+                : ""}
+              {leagueHistory.syncedSeasons.length} of {leagueHistory.availableSeasons.length} seasons synced.
+              Sync {leagueHistory.missingSeasons.length} missing season
+              {leagueHistory.missingSeasons.length === 1 ? "" : "s"} to unlock full league history.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-1.5 text-xs text-muted-foreground sm:grid-cols-2">
+              <div>
+                <span className="font-medium text-foreground">Available:</span>{" "}
+                {leagueHistory.availableSeasons.length
+                  ? `${Math.min(...leagueHistory.availableSeasons)}–${Math.max(...leagueHistory.availableSeasons)}`
+                  : "—"}
+              </div>
+              <div>
+                <span className="font-medium text-foreground">Synced:</span>{" "}
+                {leagueHistory.syncedSeasons.length
+                  ? [...leagueHistory.syncedSeasons].sort((a, b) => a - b).join(", ")
+                  : "none"}
+              </div>
+              <div>
+                <span className="font-medium text-foreground">Missing:</span>{" "}
+                {[...leagueHistory.missingSeasons].sort((a, b) => a - b).join(", ")}
+              </div>
+              <div>
+                <span className="font-medium text-foreground">Confidence:</span>{" "}
+                {leagueHistory.confidence}
+              </div>
+            </div>
+            {leagueHistory.confidence === "low" && leagueHistory.warnings.length > 0 && (
+              <div className="flex items-start gap-2 rounded-md border border-yellow-500/25 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{leagueHistory.warnings[0]}</span>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => {
+                  setRunResults({});
+                  refreshMutation.mutate({ seasons: leagueHistory.missingSeasons, forceRefresh });
+                }}
+                disabled={refreshMutation.isPending || leagueHistory.missingSeasons.length === 0}
+                className="gap-2"
+              >
+                {refreshMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Sync Missing Seasons
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const latest = leagueHistory.availableSeasons[0];
+                  if (latest != null) {
+                    setRunResults({});
+                    refreshMutation.mutate({ season: latest, forceRefresh });
+                  }
+                }}
+                disabled={refreshMutation.isPending || leagueHistory.availableSeasons.length === 0}
+                className="gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Sync Latest Season
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRunResults({});
+                  refreshMutation.mutate({ seasons: leagueHistory.availableSeasons, forceRefresh });
+                }}
+                disabled={refreshMutation.isPending || leagueHistory.availableSeasons.length === 0}
+                className="gap-2"
+              >
+                <Layers className="h-4 w-4" />
+                Sync All Available Seasons
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* ── 1. Current season sync (API) ───────────────────────────────────── */}
