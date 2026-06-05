@@ -4159,28 +4159,48 @@ export const appRouter = router({
         const focalTeamRow = focalTeamId != null ? teams2025.find(t => (t.teamId as number) === focalTeamId) : undefined;
         const teamName = (focalTeamRow?.teamName as string) || (focalTeamId != null ? teamNames[focalTeamId] : "") || live.ownerName;
 
-        const careerSeasons = live.seasons.map(s => ({ season: s.season, wins: s.wins, losses: s.losses, pf: s.pf, pa: s.pa, seed: s.seed, teamName }));
-        const totalWins = live.career.wins;
-        const totalLosses = live.career.losses;
-        const totalGames = totalWins + totalLosses;
+        // A1 fix: compute all career totals defensively from careerSeasons with
+        // numeric guards. Do NOT trust live.career.* (can be NaN when older
+        // seasons have undefined W/L). Missing/undefined values are treated as 0,
+        // and every numeric output is coerced finite so the response has no NaN.
+        const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+        const r1 = (v: number) => Math.round(num(v) * 10) / 10;
+        const careerSeasons = live.seasons.map(s => ({
+          season: num(s.season),
+          wins: num(s.wins),
+          losses: num(s.losses),
+          ties: num((s as { ties?: unknown }).ties),
+          pf: num(s.pf),
+          pa: num(s.pa),
+          seed: num(s.seed),
+          teamName,
+        }));
+        const totalWins = careerSeasons.reduce((a, r) => a + r.wins, 0);
+        const totalLosses = careerSeasons.reduce((a, r) => a + r.losses, 0);
+        const totalTies = careerSeasons.reduce((a, r) => a + r.ties, 0);
+        const totalPF = careerSeasons.reduce((a, r) => a + r.pf, 0);
+        const totalPA = careerSeasons.reduce((a, r) => a + r.pa, 0);
+        const totalGames = totalWins + totalLosses + totalTies;
         const winPct = totalGames > 0 ? (totalWins / totalGames) * 100 : 0;
-        const avgPF = careerSeasons.length ? live.career.pf / careerSeasons.length : 0;
+        const avgPF = careerSeasons.length ? totalPF / careerSeasons.length : 0;
+        const avgPA = careerSeasons.length ? totalPA / careerSeasons.length : 0;
         const bestSeason = careerSeasons.length ? careerSeasons.reduce((b, r) => (r.wins > b.wins ? r : b)) : null;
         const worstSeason = careerSeasons.length ? careerSeasons.reduce((w, r) => (r.wins < w.wins ? r : w)) : null;
         const recent = careerSeasons.slice(-3);
-        const recentGames = recent.reduce((s, r) => s + r.wins + r.losses, 0);
-        const recentWinPct = recentGames > 0 ? (recent.reduce((s, r) => s + r.wins, 0) / recentGames) * 100 : winPct;
+        const recentGames = recent.reduce((a, r) => a + r.wins + r.losses + r.ties, 0);
+        const recentWinPct = recentGames > 0 ? (recent.reduce((a, r) => a + r.wins, 0) / recentGames) * 100 : winPct;
         const trend = recentWinPct > winPct + 5 ? "improving" : recentWinPct < winPct - 5 ? "declining" : "stable";
         const careerStats = {
-          totalWins, totalLosses,
-          winPct: Math.round(winPct * 10) / 10,
-          totalPF: Math.round(live.career.pf * 10) / 10,
-          totalPA: Math.round(live.career.pa * 10) / 10,
-          avgPF: Math.round(avgPF * 10) / 10,
-          playoffSeasons: live.career.playoffSeasons,
+          totalWins, totalLosses, totalTies,
+          winPct: r1(winPct),
+          totalPF: r1(totalPF),
+          totalPA: r1(totalPA),
+          avgPF: r1(avgPF),
+          avgPA: r1(avgPA),
+          playoffSeasons: num(live.career.playoffSeasons),
           totalSeasons: careerSeasons.length,
           bestSeason, worstSeason, trend,
-          recentWinPct: Math.round(recentWinPct * 10) / 10,
+          recentWinPct: r1(recentWinPct),
         };
 
         const keeperHistory: Array<{ season: number; playerName: string; position: string; round: number }> = [];
@@ -4206,7 +4226,7 @@ export const appRouter = router({
           draftStyleDesc: live.draftStyleDesc,
           earlyQbTendency: live.earlyQbTendency,
           earlyTeTendency: live.earlyTeTendency,
-          keeperEfficiencyAvg: live.keeperEfficiencyAvg,
+          keeperEfficiencyAvg: num(live.keeperEfficiencyAvg),
         };
         const gmActivityProfile = {
           seasonActivity: live.seasons.map(s => ({ season: s.season, acquisitions: s.acquisitions, drops: s.drops, trades: s.trades, rosterMoves: s.acquisitions + s.drops })),
