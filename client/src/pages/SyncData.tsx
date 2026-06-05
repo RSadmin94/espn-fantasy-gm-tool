@@ -499,8 +499,10 @@ export function SyncData() {
     };
   }, [manifestsQuery.data]);
 
-  // Latest season is default for single-season refresh
-  const latestSeason = allSeasons.length > 0 ? allSeasons[allSeasons.length - 1] : null;
+  // Current/latest season for single-season refresh. NOTE: espn.allSeasons is
+  // newest-first (descending), so use Math.max — not the last array element,
+  // which would pick the OLDEST season (e.g. 2009).
+  const latestSeason = allSeasons.length > 0 ? Math.max(...allSeasons) : null;
 
   const toggleSeason = (s: number) => {
     setSelectedSeasons(prev =>
