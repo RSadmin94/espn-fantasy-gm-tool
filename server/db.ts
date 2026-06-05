@@ -1177,6 +1177,17 @@ export async function getActiveLeagueForUser(userId: number) {
 export async function setActiveLeagueForUser(userId: number, leagueConnectionId: number) {
   const db = await getDb();
   if (!db) return false;
+  // Deactivate ALL connections for this user, then activate the selected one.
+  // resolveActiveProfile reads leagueConnections.isActive, not users.activeLeagueId,
+  // so we must flip the flag here for page data to switch correctly.
+  await db
+    .update(leagueConnections)
+    .set({ isActive: false })
+    .where(eq(leagueConnections.userId, userId));
+  await db
+    .update(leagueConnections)
+    .set({ isActive: true, updatedAt: new Date() })
+    .where(and(eq(leagueConnections.id, leagueConnectionId), eq(leagueConnections.userId, userId)));
   await db
     .update(users)
     .set({ activeLeagueId: leagueConnectionId, updatedAt: new Date() })
