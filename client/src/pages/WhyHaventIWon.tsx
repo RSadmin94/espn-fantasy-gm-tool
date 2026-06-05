@@ -178,7 +178,7 @@ export function WhyHaventIWon() {
 
   return (
     <div className="min-h-screen w-full" style={PAGEBG}>
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
+      <div className="px-6 py-6 max-w-[1400px]">
 
         {q.isLoading && (
           <div className={cn(PANEL, "flex items-center justify-center gap-3 p-16 text-white/50")}>
@@ -194,8 +194,17 @@ export function WhyHaventIWon() {
 
             {/* SECTION 0 - Career Story Header */}
             <div className={cn(PANEL, "overflow-hidden p-6 sm:p-8")}>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-violet-300">
-                <HelpCircle className="h-3.5 w-3.5" /> LeagueDNA Intelligence
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <div className="flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-violet-300">
+                  <HelpCircle className="h-3.5 w-3.5" /> LeagueDNA Intelligence
+                </div>
+                {snap && (
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">{snap.seasonsPlayed} Seasons</span>
+                    <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">14-Team League</span>
+                    {data.confidence && <span className={cn("rounded-full border px-3 py-1 text-[11px] font-semibold", data.confidence === "High" ? "border-lime-400/30 bg-lime-500/10 text-lime-300" : "border-amber-400/30 bg-amber-500/10 text-amber-300")}>Confidence: {data.confidence}</span>}
+                  </div>
+                )}
               </div>
 
               {arc && arcStyle && (
@@ -228,7 +237,7 @@ export function WhyHaventIWon() {
                 <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wide text-lime-400">
                   <Trophy className="h-4 w-4" /> Career Snapshot
                 </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
                   <Stat label="Seasons" value={snap.seasonsPlayed} />
                   <Stat label="Titles" value={snap.titles} accent={snap.titles > 0 ? "text-amber-300" : "text-white/90"} />
                   <Stat label="Runner-Ups" value={snap.runnerUps} accent={snap.runnerUps > 0 ? "text-violet-300" : "text-white/90"} />
@@ -301,7 +310,7 @@ export function WhyHaventIWon() {
                     </p>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                   {patterns.map((p: any) => (
                     <div key={p.id} className={cn("rounded-xl border bg-white/[0.02] p-4", isWin ? "border-amber-400/20" : sevBorder(p.severity))}>
                       <div className={cn("text-[26px] font-black leading-none tabular-nums", isWin ? sevText("low") : sevText(p.severity))}>{p.value}</div>

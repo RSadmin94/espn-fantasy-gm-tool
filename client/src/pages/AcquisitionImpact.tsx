@@ -86,16 +86,25 @@ export function AcquisitionImpact() {
 
   return (
     <div className="min-h-screen w-full" style={PAGEBG}>
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
+      <div className="px-6 py-6 max-w-[1400px]">
         {/* Hero */}
-        <div className="mb-6">
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[12px] font-semibold uppercase tracking-wider text-violet-300">
-            <ShoppingCart className="h-3.5 w-3.5" /> LeagueDNA Intelligence
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[12px] font-semibold uppercase tracking-wider text-violet-300">
+              <ShoppingCart className="h-3.5 w-3.5" /> LeagueDNA Intelligence
+            </div>
+            <h1 className="text-[34px] font-black leading-[1.05] tracking-tight sm:text-[42px]">
+              Acquisition Impact<span className="text-lime-400">™</span>
+            </h1>
+            <p className="mt-2 text-[15px] text-white/55">How much of your season was built after draft day?</p>
           </div>
-          <h1 className="text-[34px] font-black leading-[1.05] tracking-tight sm:text-[42px]">
-            Acquisition Impact<span className="text-lime-400">™</span>
-          </h1>
-          <p className="mt-2 text-[15px] text-white/55">How much of your season was built after draft day?</p>
+          {data && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2 pt-1">
+              <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">{data.qualifiedCount} Owners</span>
+              <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">17 Seasons</span>
+              <span className={cn("rounded-full border px-3 py-1 text-[11px] font-semibold", data.confidence === "High" ? "border-lime-400/30 bg-lime-500/10 text-lime-300" : "border-amber-400/30 bg-amber-500/10 text-amber-300")}>Confidence: {data.confidence}</span>
+            </div>
+          )}
         </div>
 
         {q.isLoading && (
@@ -134,7 +143,7 @@ export function AcquisitionImpact() {
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="mt-5 grid grid-cols-3 gap-3">
                 <StatCard icon={<TrendingUp className="h-4 w-4" />} label="Points Added" value={f.pointsAdded.toLocaleString()} sub={`${f.pointsAddedPerSeason}/season`} />
                 <StatCard icon={<Trophy className="h-4 w-4" />} label="Wins Added" value={f.decisiveAcqWins} sub={`of ${f.totalWins} wins (acq. decisive)`} />
                 <StatCard icon={<Layers className="h-4 w-4" />} label="Lineup Dependency" value={`${f.lineupDependency}%`} sub="of starting points" />

@@ -85,20 +85,26 @@ export function DraftRealitySimulator() {
 
   return (
     <div className="min-h-screen w-full" style={PAGEBG}>
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+      <div className="px-6 py-6 max-w-[1400px]">
         {/* Hero */}
-        <div className="mb-6">
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[12px] font-semibold uppercase tracking-wider text-violet-300">
-            <FlaskConical className="h-3.5 w-3.5" /> Draft Reality Simulator™
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[12px] font-semibold uppercase tracking-wider text-violet-300">
+              <FlaskConical className="h-3.5 w-3.5" /> Draft Reality Simulator™
+            </div>
+            <h1 className="text-[34px] font-black leading-[1.05] tracking-tight sm:text-[42px]">
+              What if nobody touched <span className="text-lime-400">their roster?</span>
+            </h1>
+            <p className="mt-2 max-w-2xl text-[15px] text-white/55">
+              We freeze every team on draft day, play the optimal best-ball lineup each week from only their drafted
+              players, and replay the real schedule. The result separates <span className="text-white/80">draft skill</span> from{" "}
+              <span className="text-white/80">in-season roster management</span>.
+            </p>
           </div>
-          <h1 className="text-[34px] font-black leading-[1.05] tracking-tight sm:text-[42px]">
-            What if nobody touched <span className="text-lime-400">their roster?</span>
-          </h1>
-          <p className="mt-2 max-w-2xl text-[15px] text-white/55">
-            We freeze every team on draft day, play the optimal best-ball lineup each week from only their drafted
-            players, and replay the real schedule. The result separates <span className="text-white/80">draft skill</span> from{" "}
-            <span className="text-white/80">in-season roster management</span>.
-          </p>
+          <div className="flex shrink-0 flex-wrap items-center gap-2 pt-1">
+            <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">14-Team League</span>
+            <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">Best-Ball Sim</span>
+          </div>
         </div>
 
         {/* Season selector + confidence */}
