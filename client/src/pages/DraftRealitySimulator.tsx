@@ -23,7 +23,7 @@ const PAGEBG: React.CSSProperties = {
 const PANEL =
   "rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#1b131f,#140e17)] shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
 
-const SEASONS = [2025, 2024, 2023, 2022, 2021];
+
 
 /* ── helpers ───────────────────────────────────────────────────────────── */
 function gradeColor(g: number): string {
@@ -79,8 +79,12 @@ function RankDelta({ delta }: { delta: number | null }) {
 
 /* ── main page ─────────────────────────────────────────────────────────── */
 export function DraftRealitySimulator() {
+  const seasonsQ = (trpc as any).draftReality.availableSeasons.useQuery(undefined, { staleTime: 300_000 });
+  const SEASONS: number[] = seasonsQ.data?.seasons ?? [2025, 2024, 2023, 2022, 2021];
   const [season, setSeason] = useState<number>(2025);
-  const simQ = trpc.draftReality.simulate.useQuery({ season }, { staleTime: 60_000 });
+  // Once seasons load, default to the most recent available
+  const activeSeason = SEASONS.includes(season) ? season : (SEASONS[0] ?? 2025);
+  const simQ = trpc.draftReality.simulate.useQuery({ season: activeSeason }, { staleTime: 60_000 });
   const data = simQ.data;
 
   return (
@@ -116,7 +120,7 @@ export function DraftRealitySimulator() {
                 onClick={() => setSeason(s)}
                 className={cn(
                   "rounded-lg px-4 py-2 text-[14px] font-bold transition",
-                  s === season
+                  s === activeSeason
                     ? "bg-lime-400 text-black shadow-[0_0_20px_-6px_rgba(163,230,53,0.6)]"
                     : "border border-white/10 bg-white/[0.03] text-white/70 hover:bg-white/[0.07]",
                 )}
