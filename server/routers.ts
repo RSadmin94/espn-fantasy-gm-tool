@@ -2000,7 +2000,13 @@ export const appRouter = router({
     cachedSeasons: publicProcedure.query(async ({ ctx }) =>
       getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)
     ),
-    allSeasons: publicProcedure.query(() => ALL_SEASONS),
+    // W1: league-aware season discovery. Returns the seasons that actually have
+    // data for the active league (newest-first), or [] when none exist. No longer
+    // returns the hardcoded ALL_SEASONS range, which leaked one league's window
+    // (2009-2026) into every league.
+    allSeasons: publicProcedure.query(async ({ ctx }) =>
+      getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)
+    ),
 
     settings: publicProcedure
       .input(z.object({ season: z.number() }))
