@@ -424,6 +424,8 @@ export function SyncData() {
       setRunResults(data as Record<number, RefreshResult>);
       void utils.espn.manifests.invalidate();
       void utils.espn.cachedSeasons.invalidate();
+      void utils.espn.allSeasons.invalidate();
+      void utils.espn.discoverLeagueHistory.invalidate();
     },
   });
 
@@ -1922,77 +1924,153 @@ export function SyncData() {
         </div>
       )}
 
-      {/* Manifests table */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">Season Cache Status</h2>
-          <span className="text-xs text-muted-foreground">
-            {cachedSeasons.length} of {allSeasons.length} seasons cached
-          </span>
-        </div>
+      {/* League History Coverage — available (ESPN) vs synced, per season.
+          Awareness only: read pages stay synced-only, no fake tabs. */}
+      {(() => {
+        const lh = leagueHistory;
+        const available = lh ? [...lh.availableSeasons].sort((a, b) => b - a) : [];
+        const syncedSet = new Set<number>(lh?.syncedSeasons ?? []);
+        const missing = lh?.missingSeasons ?? [];
+        const importedCount = available.filter((s) => syncedSet.has(s)).length;
+        const coverage = available.length
+          ? Math.round((importedCount / available.length) * 100)
+          : 0;
 
-        {manifestsQuery.isSuccess && leagueConnectionMissing && (
-          <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-            League not connected — showing cached seasons
-          </div>
-        )}
-
-        {manifestsQuery.isLoading && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading manifests…
-          </div>
-        )}
-
-        {manifests.length === 0 && !manifestsQuery.isLoading && (
-          <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-            No sync history yet. Run a sync to populate data.
-          </div>
-        )}
-
-        <div className="space-y-2">
-          {[...manifests]
-            .sort((a, b) => b.season - a.season)
-            .map((m) => (
-              <ManifestCard
-                key={m.season}
-                manifest={m}
-                refreshResult={runResults[m.season]}
-              />
-            ))}
-        </div>
-
-        {/* Seasons with no manifest but present in allSeasons */}
-        {allSeasons
-          .filter(s => !manifests.some(m => m.season === s))
-          .sort((a, b) => b - a)
-          .map(s => (
-            <div
-              key={s}
-              className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground"
-            >
-              {runResults[s] ? (
-                <SeasonStatusIcon
-                  status={
-                    runResults[s].status === "complete"
-                      ? "complete"
-                      : runResults[s].status === "running"
-                        ? "running"
-                        : runResults[s].status
-                  }
-                />
-              ) : (
-                <Clock className="h-4 w-4" />
-              )}
-              <span className="font-medium text-foreground">{s}</span>
-              <span>— No cache</span>
-              {runResults[s] && <SeasonStatusBadge status={runResults[s].status} />}
-              {runResults[s]?.message && (
-                <span className="w-full text-xs text-muted-foreground">{runResults[s].message}</span>
-              )}
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold text-foreground">League History Coverage</h2>
             </div>
-          ))}
-      </div>
+
+            {discoverHistoryQuery.isLoading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Detecting league history…
+              </div>
+            )}
+
+            {!discoverHistoryQuery.isLoading && available.length === 0 && (
+              <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                {leagueConnectionMissing
+                  ? "League not connected — connect ESPN to detect history."
+                  : "No league history detected yet."}
+              </div>
+            )}
+
+            {available.length > 0 && (
+              <>
+                <Card>
+                  <CardContent className="space-y-3 p-4">
+                    {lh?.detectedStartYear != null && (
+                      <p className="text-sm text-muted-foreground">
+                        League started in{" "}
+                        <span className="font-medium text-foreground">{lh.detectedStartYear}</span>
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
+                      <span>
+                        Available seasons:{" "}
+                        <span className="font-semibold text-foreground">{available.length}</span>
+                      </span>
+                      <span>
+                        Imported:{" "}
+                        <span className="font-semibold text-foreground">{importedCount}</span>
+                      </span>
+                      <span>
+                        Missing:{" "}
+                        <span className="font-semibold text-foreground">{missing.length}</span>
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Coverage</span>
+                        <span className="font-semibold text-foreground">{coverage}%</span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-lime-500 transition-all"
+                          style={{ width: `${coverage}%` }}
+                        />
+                      </div>
+                    </div>
+                    {lh && lh.confidence === "low" && lh.warnings.length > 0 && (
+                      <p className="text-xs text-amber-400">{lh.warnings[0]}</p>
+                    )}
+                    {missing.length > 0 && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setRunResults({});
+                          refreshMutation.mutate({ seasons: missing, forceRefresh });
+                        }}
+                        disabled={refreshMutation.isPending}
+                      >
+                        {refreshMutation.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                        )}
+                        Sync All Missing Seasons
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <div className="space-y-2">
+                  {available.map((s) => {
+                    const isSynced = syncedSet.has(s);
+                    return (
+                      <div
+                        key={s}
+                        className={cn(
+                          "flex flex-wrap items-center gap-2 rounded-lg border px-4 py-3 text-sm",
+                          isSynced
+                            ? "border-border bg-muted/20"
+                            : "border-amber-500/30 bg-amber-500/5",
+                        )}
+                      >
+                        {isSynced ? (
+                          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                        )}
+                        <span className="font-medium text-foreground">{s}</span>
+                        {isSynced ? (
+                          <span className="text-emerald-400">Synced</span>
+                        ) : (
+                          <span className="text-amber-400">Available — Not Synced</span>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {isSynced
+                            ? "Historical data imported and available across the platform."
+                            : "Season exists on ESPN and can be imported."}
+                        </span>
+                        {!isSynced && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="ml-auto"
+                            onClick={() => refreshMutation.mutate({ season: s, forceRefresh })}
+                            disabled={refreshMutation.isPending}
+                          >
+                            {refreshMutation.isPending ? (
+                              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                            )}
+                            Sync {s}
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── League History Medals (admin) ──────────────────────────────── */}
       {(() => {
