@@ -120,7 +120,10 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
 
   const setActive = trpc.league.setActive.useMutation({
     onSuccess: async () => {
-      await queryClient.invalidateQueries();
+      // Clear the entire React Query cache so every page reloads fresh data
+      // for the newly active league. invalidateQueries alone only marks stale
+      // but does not force mounted queries to refetch immediately.
+      queryClient.clear();
       onAfterSwitch?.();
     },
   });
