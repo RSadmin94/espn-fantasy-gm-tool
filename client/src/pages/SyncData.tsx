@@ -397,11 +397,11 @@ export function SyncData() {
   useEffect(() => {
     if (!leagueId) return;
     if (prevLeagueIdRef.current && prevLeagueIdRef.current !== leagueId) {
-      void utils.espn.discoverLeagueHistory.invalidate();
-      void utils.espn.allSeasons.invalidate();
-      void utils.espn.cachedSeasons.invalidate();
-      void utils.espn.manifests.invalidate();
-      void utils.espn.browserSyncStatus.invalidate();
+      // Invalidate the whole espn router so EVERY league-scoped query on the
+      // page refetches for the new league — banner/coverage (discoverLeagueHistory),
+      // seasons (allSeasons/cachedSeasons), manifests, sync status, and the
+      // medals/standings tables — leaving no section showing the prior league.
+      void utils.espn.invalidate();
     }
     prevLeagueIdRef.current = leagueId;
   }, [leagueId, utils]);
