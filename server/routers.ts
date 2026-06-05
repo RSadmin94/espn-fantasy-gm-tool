@@ -4119,6 +4119,117 @@ export const appRouter = router({
         returningByPosition[pos].push({ playerName: p.playerName, teamName: p.teamName, round2025: p.round2025 });
       }
 
+      // A1: Owner profile computed for the user's selected (focal) owner.
+      // Previously this returned a single hardcoded owner; it now resolves the
+      // focal owner from the signed-in user's active profile and computes career,
+      // keeper, draft, and GM-activity data from cache via the live opponent
+      // builder. No fallback to any specific owner: if no profile is configured
+      // we return a neutral profile-required state.
+      const ownerProfile = await (async () => {
+        const neutral = {
+          profileRequired: true,
+          ownerName: null as string | null,
+          teamName: null as string | null,
+          teamId: null as number | null,
+          careerSeasons: [] as Array<{ season: number; wins: number; losses: number; pf: number; pa: number; seed: number; teamName: string }>,
+          careerStats: null as Record<string, unknown> | null,
+          keeperHistory: [] as Array<{ season: number; playerName: string; position: string; round: number }>,
+          keeper2026: { eligible: [] as unknown[], ineligible: [] as unknown[], recommendation: "Select your owner profile to see your keeper outlook.", status: "profile_required" },
+          draftTendencies: null as Record<string, unknown> | null,
+          gmActivityProfile: null as Record<string, unknown> | null,
+        };
+
+        const __fp = ctx.user?.id ? await resolveActiveProfile({ id: ctx.user.id }) : null;
+        const focalMemberId = __fp?.isSetupComplete ? memberIdFromOwnerKey(__fp.selectedOwnerKey) : null;
+        if (!focalMemberId) return neutral;
+
+        const { buildLiveOpponentProfiles } = await import("./liveOpponentProfile");
+        const profiles = await buildLiveOpponentProfiles(ctx.user?.id);
+        const live = profiles.get(focalMemberId) ?? null;
+        if (!live) return neutral;
+
+        // Focal team for the latest synced season = intersection of the owner's
+        // team IDs with this season's teams.
+        const focalTeamIds = new Set(live.teamIds);
+        let focalTeamId: number | null = null;
+        for (const t of teams2025) {
+          if (focalTeamIds.has(t.teamId as number)) { focalTeamId = t.teamId as number; break; }
+        }
+        if (focalTeamId == null && live.teamIds.length) focalTeamId = live.teamIds[live.teamIds.length - 1];
+        const focalTeamRow = focalTeamId != null ? teams2025.find(t => (t.teamId as number) === focalTeamId) : undefined;
+        const teamName = (focalTeamRow?.teamName as string) || (focalTeamId != null ? teamNames[focalTeamId] : "") || live.ownerName;
+
+        const careerSeasons = live.seasons.map(s => ({ season: s.season, wins: s.wins, losses: s.losses, pf: s.pf, pa: s.pa, seed: s.seed, teamName }));
+        const totalWins = live.career.wins;
+        const totalLosses = live.career.losses;
+        const totalGames = totalWins + totalLosses;
+        const winPct = totalGames > 0 ? (totalWins / totalGames) * 100 : 0;
+        const avgPF = careerSeasons.length ? live.career.pf / careerSeasons.length : 0;
+        const bestSeason = careerSeasons.length ? careerSeasons.reduce((b, r) => (r.wins > b.wins ? r : b)) : null;
+        const worstSeason = careerSeasons.length ? careerSeasons.reduce((w, r) => (r.wins < w.wins ? r : w)) : null;
+        const recent = careerSeasons.slice(-3);
+        const recentGames = recent.reduce((s, r) => s + r.wins + r.losses, 0);
+        const recentWinPct = recentGames > 0 ? (recent.reduce((s, r) => s + r.wins, 0) / recentGames) * 100 : winPct;
+        const trend = recentWinPct > winPct + 5 ? "improving" : recentWinPct < winPct - 5 ? "declining" : "stable";
+        const careerStats = {
+          totalWins, totalLosses,
+          winPct: Math.round(winPct * 10) / 10,
+          totalPF: Math.round(live.career.pf * 10) / 10,
+          totalPA: Math.round(live.career.pa * 10) / 10,
+          avgPF: Math.round(avgPF * 10) / 10,
+          playoffSeasons: live.career.playoffSeasons,
+          totalSeasons: careerSeasons.length,
+          bestSeason, worstSeason, trend,
+          recentWinPct: Math.round(recentWinPct * 10) / 10,
+        };
+
+        const keeperHistory: Array<{ season: number; playerName: string; position: string; round: number }> = [];
+        for (const tid of live.teamIds) {
+          const byPlayer = keepersByPlayerByTeam[tid];
+          if (!byPlayer) continue;
+          for (const recs of Object.values(byPlayer)) {
+            for (const r of recs) keeperHistory.push({ season: r.season, playerName: r.playerName, position: r.position, round: r.roundId });
+          }
+        }
+        keeperHistory.sort((a, b) => a.season - b.season);
+
+        const focalTeam2026 = focalTeamId != null ? teamResults.find(t => t.teamId === focalTeamId) : undefined;
+        const keeper2026 = {
+          eligible: focalTeam2026?.players.filter(p => !p.isIneligible) ?? [],
+          ineligible: focalTeam2026?.players.filter(p => p.isIneligible) ?? [],
+          recommendation: focalTeam2026 ? "Evaluate your best round-surplus keeper option before the Aug 18 deadline." : "No keeper data found for your team in the latest synced season.",
+          status: focalTeam2026 ? "pending" : "no_data",
+        };
+
+        const draftTendencies = {
+          draftStyleBadge: live.draftStyleBadge,
+          draftStyleDesc: live.draftStyleDesc,
+          earlyQbTendency: live.earlyQbTendency,
+          earlyTeTendency: live.earlyTeTendency,
+          keeperEfficiencyAvg: live.keeperEfficiencyAvg,
+        };
+        const gmActivityProfile = {
+          seasonActivity: live.seasons.map(s => ({ season: s.season, acquisitions: s.acquisitions, drops: s.drops, trades: s.trades, rosterMoves: s.acquisitions + s.drops })),
+          averages: { acquisitions: live.avgAcquisitions, trades: live.avgTrades },
+          gmArchetype: live.gmArchetype,
+          gmArchetypeDesc: live.gmArchetypeDesc,
+          strengthsWeaknesses: live.strengthsWeaknesses,
+        };
+
+        return {
+          profileRequired: false,
+          ownerName: live.ownerName,
+          teamName,
+          teamId: focalTeamId,
+          careerSeasons,
+          careerStats,
+          keeperHistory,
+          keeper2026,
+          draftTendencies,
+          gmActivityProfile,
+        };
+      })();
+
       return {
         season: 2026,
         deadline: "August 18, 2026",
@@ -4140,162 +4251,7 @@ export const appRouter = router({
             ? `${allIneligible.length} elite player${allIneligible.length > 1 ? "s" : ""} returning to the draft pool — ${competitorConstraints.filter(c => c.overallThreat === "critical").length} team${competitorConstraints.filter(c => c.overallThreat === "critical").length !== 1 ? "s" : ""} must burn early picks on replacements`
             : "No ineligible players this season",
         },
-        ownerProfile: (() => {
-          // Rod Sellers — Str8FrmHell / RodZilla — Team ID 11 across all seasons
-          const ROD_TEAM_ID = 11;
-          const ROD_TEAM_NAME = "Str8FrmHell, RodZilla";
-
-          // Career season records (from ESPN cache, 2018–2025)
-          const careerSeasons = [
-            { season: 2018, wins: 5,  losses: 8,  pf: 1583.1, pa: 1788.9, seed: 13, teamName: "Str8FrmHell, Rod's Minions" },
-            { season: 2019, wins: 8,  losses: 5,  pf: 1843.1, pa: 1821.4, seed: 2,  teamName: "Str8FrmHell, RodZilla" },
-            { season: 2020, wins: 6,  losses: 7,  pf: 1781.8, pa: 1706.4, seed: 10, teamName: "Str8FrmHell, RodZilla" },
-            { season: 2021, wins: 7,  losses: 7,  pf: 1699.2, pa: 1782.5, seed: 9,  teamName: "Str8FrmHell, RodZilla" },
-            { season: 2022, wins: 3,  losses: 11, pf: 1447.1, pa: 1857.7, seed: 13, teamName: "Str8FrmHell, RodZilla" },
-            { season: 2023, wins: 7,  losses: 7,  pf: 1893.6, pa: 1885.7, seed: 7,  teamName: "Str8FrmHell, RodZilla" },
-            { season: 2024, wins: 5,  losses: 8,  pf: 1652.3, pa: 1680.8, seed: 10, teamName: "Str8FrmHell, RodZilla" },
-            { season: 2025, wins: 9,  losses: 5,  pf: 1921.3, pa: 1693.3, seed: 3,  teamName: "Str8FrmHell, RodZilla" },
-          ];
-
-          const totalWins   = careerSeasons.reduce((s, r) => s + r.wins, 0);
-          const totalLosses = careerSeasons.reduce((s, r) => s + r.losses, 0);
-          const totalGames  = totalWins + totalLosses;
-          const winPct      = totalGames > 0 ? (totalWins / totalGames) * 100 : 0;
-          const totalPF     = careerSeasons.reduce((s, r) => s + r.pf, 0);
-          const totalPA     = careerSeasons.reduce((s, r) => s + r.pa, 0);
-          const avgPF       = totalPF / careerSeasons.length;
-          const bestSeason  = careerSeasons.reduce((best, r) => r.wins > best.wins ? r : best, careerSeasons[0]);
-          const worstSeason = careerSeasons.reduce((worst, r) => r.wins < worst.wins ? r : worst, careerSeasons[0]);
-          const playoffSeasons = careerSeasons.filter(r => r.seed <= 7).length; // top 7 of 14 make playoffs
-
-          // Keeper history (2022–2025, from ESPN data)
-          const keeperHistory = [
-            { season: 2022, playerName: "Derrick Henry",   position: "RB", round: 1, eligible2026: false },
-            { season: 2023, playerName: "Saquon Barkley",  position: "RB", round: 2, eligible2026: false },
-            { season: 2024, playerName: "Saquon Barkley",  position: "RB", round: 2, eligible2026: false },
-            { season: 2025, playerName: "Breece Hall",     position: "RB", round: 5, eligible2026: true  },
-          ];
-
-          // 2026 keeper situation
-          const myTeam2026 = teamResults.find(t => t.teamId === ROD_TEAM_ID);
-          // Known player name map for IDs that ESPN stores without playerInfo
-          const KNOWN_PLAYER_NAMES: Record<number, { name: string; position: string }> = {
-            4427366: { name: "Breece Hall", position: "RB" },
-            3929630: { name: "Saquon Barkley", position: "RB" },
-            3043078: { name: "Derrick Henry", position: "RB" },
-          };
-          const resolvePlayerName = (p: { playerName: string; position: string; playerId?: number }) => {
-            if (p.playerName && !p.playerName.startsWith("Player#")) return p;
-            const pid = p.playerId as number | undefined;
-            if (pid && KNOWN_PLAYER_NAMES[pid]) {
-              return { ...p, playerName: KNOWN_PLAYER_NAMES[pid].name, position: KNOWN_PLAYER_NAMES[pid].position };
-            }
-            return p;
-          };
-          const my2026KeeperRaw = myTeam2026?.players.find(p => !p.isIneligible) ?? null;
-          const my2026Keeper = my2026KeeperRaw ? resolvePlayerName(my2026KeeperRaw as unknown as { playerName: string; position: string; playerId?: number }) as typeof my2026KeeperRaw : null;
-          const my2026Ineligible = myTeam2026?.players.filter(p => p.isIneligible) ?? [];
-
-          // Trend: last 3 seasons
-          const recentSeasons = careerSeasons.slice(-3);
-          const recentWinPct = recentSeasons.reduce((s, r) => s + r.wins, 0) /
-            (recentSeasons.reduce((s, r) => s + r.wins + r.losses, 0)) * 100;
-          const trend = recentWinPct > winPct + 5 ? "improving" : recentWinPct < winPct - 5 ? "declining" : "stable";
-
-          // ── Draft Tendencies (from 8-season analysis) ──────────────────────
-          const draftTendencies = {
-            totalPicks: 107,
-            positionalBreakdown: [
-              { position: "RB",  picks: 38, pct: 36, avgRound: 4.7, earlyPicks: 14 },
-              { position: "WR",  picks: 26, pct: 24, avgRound: 6.2, earlyPicks: 7  },
-              { position: "QB",  picks: 8,  pct: 7,  avgRound: 5.9, earlyPicks: 1  },
-              { position: "TE",  picks: 5,  pct: 5,  avgRound: 6.8, earlyPicks: 2  },
-              { position: "K",   picks: 4,  pct: 4,  avgRound: 11.5, earlyPicks: 0 },
-              { position: "FLEX",picks: 4,  pct: 4,  avgRound: 10.2, earlyPicks: 0 },
-            ],
-            round1Breakdown: [
-              { position: "RB", count: 7 },
-              { position: "WR", count: 1 },
-            ],
-            earlyRoundSplit: [
-              { position: "RB",  count: 14, pct: 52 },
-              { position: "WR",  count: 7,  pct: 27 },
-              { position: "TE",  count: 2,  pct: 8  },
-              { position: "QB",  count: 1,  pct: 4  },
-            ],
-            draftStyleBadge: "RB-First Builder",
-            draftStyleDesc: "7 of 8 round-1 picks have been RBs. You consistently build around elite backfields before addressing WR depth.",
-            keeperPattern: "Consistent RB keeper — Henry (2022), Barkley x2 (2023-24), Hall (2025). 2026 keeper TBD — pending trade decisions.",
-            notablePicks: [
-              { season: 2020, pick: "Lamar Jackson Rd1 Pk13", note: "Bold QB1 in round 1 — paid off with MVP season" },
-              { season: 2023, pick: "CMC Rd1 + Bijan Rd1", note: "Double RB round 1 — high upside, high variance" },
-              { season: 2025, pick: "McCaffrey Rd1 + McBride Rd2", note: "RB/TE stack — injury risk but elite ceiling" },
-            ],
-          };
-
-          // ── GM Activity Profile (from transaction counter data) ────────────
-          const gmActivityProfile = {
-            seasonActivity: [
-              { season: 2018, acquisitions: 36, drops: 33, trades: 12, rosterMoves: 75 },
-              { season: 2019, acquisitions: 38, drops: 34, trades: 12, rosterMoves: 69 },
-              { season: 2020, acquisitions: 23, drops: 17, trades: 6,  rosterMoves: 46 },
-              { season: 2021, acquisitions: 49, drops: 56, trades: 9,  rosterMoves: 71 },
-              { season: 2022, acquisitions: 16, drops: 17, trades: 4,  rosterMoves: 64 },
-              { season: 2023, acquisitions: 27, drops: 43, trades: 10, rosterMoves: 46 },
-              { season: 2024, acquisitions: 13, drops: 26, trades: 1,  rosterMoves: 40 },
-              { season: 2025, acquisitions: 26, drops: 49, trades: 4,  rosterMoves: 80 },
-            ],
-            averages: { acquisitions: 29, drops: 34, trades: 7.3, rosterMoves: 61 },
-            gmArchetype: "Active Trader",
-            gmArchetypeDesc: "7.3 trades/season is above league average. You're willing to make moves but not a waiver grinder (29 adds/season is moderate).",
-            insights: [
-              { label: "Most Active Season", value: "2021 (49 adds, 56 drops, 9 trades) — finished 7–7, missed playoffs" },
-              { label: "Quietest Season", value: "2024 (13 adds, 1 trade) — finished 5–8" },
-              { label: "Best Trade Season", value: "2018 & 2019 (12 trades each) — both playoff years" },
-              { label: "Best Season Activity", value: "2025 (26 adds, 4 trades) — finished 9–5, #3 seed" },
-            ],
-            strengthsWeaknesses: [
-              { type: "strength", text: "Consistent RB keeper identification — 4 straight years of strong RB keeper value" },
-              { type: "strength", text: "Trade willingness — 7.3 trades/season shows you're not afraid to make deals" },
-              { type: "strength", text: "2025 breakout — best season in 8 years shows growth and adaptation" },
-              { type: "weakness", text: "RB dependency — 36% of all picks are RBs; WR depth has been inconsistent" },
-              { type: "weakness", text: "High-activity seasons correlate with poor results (2021: 49 adds, 7–7)" },
-              { type: "weakness", text: "2024 under-activity — 1 trade all season, missed obvious roster improvements" },
-              { type: "blindspot", text: "Late-round QB value — you've drafted multiple QBs in rounds 4–6 but rarely hit" },
-              { type: "blindspot", text: "TE neglect — only 5 TE picks in 8 seasons; relying on mid-tier TEs hurts PPR floors" },
-            ],
-          };
-
-          return {
-            ownerName: "Rod Sellers",
-            teamName: ROD_TEAM_NAME,
-            teamId: ROD_TEAM_ID,
-            careerSeasons,
-            careerStats: {
-              totalWins,
-              totalLosses,
-              winPct: Math.round(winPct * 10) / 10,
-              totalPF: Math.round(totalPF * 10) / 10,
-              totalPA: Math.round(totalPA * 10) / 10,
-              avgPF: Math.round(avgPF * 10) / 10,
-              playoffSeasons,
-              totalSeasons: careerSeasons.length,
-              bestSeason,
-              worstSeason,
-              trend,
-              recentWinPct: Math.round(recentWinPct * 10) / 10,
-            },
-            keeperHistory,
-            keeper2026: {
-              eligible: my2026Keeper ? [my2026Keeper] : [],
-              ineligible: my2026Ineligible,
-              recommendation: "2026 keeper is TBD — pending trade decisions. Evaluate your best round-surplus option before the Aug 18 deadline.",
-              status: "pending",
-            },
-            draftTendencies,
-            gmActivityProfile,
-          };
-        })(),
+        ownerProfile,
       };
     }),
 
