@@ -1423,15 +1423,25 @@ export async function resolveActiveProfile(
   const db = await getDb();
   if (!db) return emptyActiveProfile(clerkUserId);
 
+  // PRIMARY: use users.activeLeagueId — this is updated by setActiveLeagueForUser
+  // and is the single source of truth for which league is active.
+  // FALLBACK: isActive=true flag (legacy, for accounts without activeLeagueId set).
+  const [userRow] = await db
+    .select({ activeLeagueId: users.activeLeagueId })
+    .from(users)
+    .where(eq(users.id, user.id))
+    .limit(1);
+
+  const activeId = userRow?.activeLeagueId;
+
+  const whereClause = activeId
+    ? and(eq(leagueConnections.userId, user.id), eq(leagueConnections.id, activeId))
+    : and(eq(leagueConnections.userId, user.id), eq(leagueConnections.isActive, true));
+
   const [conn] = await db
     .select()
     .from(leagueConnections)
-    .where(
-      and(
-        eq(leagueConnections.userId, user.id),
-        eq(leagueConnections.isActive, true),
-      ),
-    )
+    .where(whereClause)
     .orderBy(desc(leagueConnections.isDefault), desc(leagueConnections.updatedAt))
     .limit(1);
 
