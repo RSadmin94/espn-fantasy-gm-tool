@@ -351,17 +351,46 @@ export function SyncData() {
   const medalsQ    = trpc.espn.leagueMedals.useQuery(undefined, { staleTime: 0 });
   const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(undefined, { staleTime: 60_000 });
 
-  // Pre-fill form from DB on first load — use useEffect to avoid render-phase state mutation
+  // Pre-fill the editable form from saved DB medals, and RE-SEED whenever the
+  // active league changes so the form never keeps the previous league's values.
   const [medalPrefilled, setMedalPrefilled] = useState(false);
+  // Tracks which league the form currently targets + the medals-data timestamp
+  // captured when we switched into it. On a real switch we only seed once a
+  // *newer* fetch lands (dataUpdatedAt advances past the baseline), so we never
+  // seed from the outgoing league's in-flight data. On first mount the baseline
+  // is 0, so the initial fetch seeds immediately.
+  const medalSeedRef = useRef<{ league: string; base: number } | null>(null);
+  useEffect(() => {
+    if (!leagueId) return;
+    const prev = medalSeedRef.current;
+    if (prev && prev.league === leagueId) return; // already targeting this league
+    const isSwitch = prev !== null;
+    medalSeedRef.current = { league: leagueId, base: isSwitch ? medalsQ.dataUpdatedAt : 0 };
+    if (isSwitch) {
+      // Clear the outgoing league's form immediately so nothing stale lingers
+      // while the new league's medals refetch.
+      setMedalEntries(
+        Object.fromEntries(
+          ALL_MEDAL_SEASONS.map((y) => [y, { champion: "", runnerUp: "", third: "" }]),
+        ) as Record<number, MedalEntry>,
+      );
+      setMedalSaved(new Set());
+      setMedalErr({});
+    }
+    setMedalPrefilled(false);
+  }, [leagueId, medalsQ.dataUpdatedAt]);
   useEffect(() => {
     if (medalPrefilled || !medalsQ.data) return;
+    const ref = medalSeedRef.current;
+    if (!ref || ref.league !== leagueId) return;      // wait until this league is targeted
+    if (medalsQ.dataUpdatedAt <= ref.base) return;    // wait for a fetch newer than the switch
     setMedalPrefilled(true);
     const updates: Record<number, MedalEntry> = {};
     for (const m of medalsQ.data) {
       updates[m.season] = { champion: m.championOwner, runnerUp: m.runnerUpOwner, third: m.thirdPlaceOwner };
     }
     if (Object.keys(updates).length > 0) setMedalEntries((prev) => ({ ...prev, ...updates }));
-  }, [medalsQ.data, medalPrefilled]);
+  }, [leagueId, medalsQ.data, medalsQ.dataUpdatedAt, medalPrefilled]);
 
   // Derive per-season top-3 from imported standings (auto-fill source)
   const perSeasonTopThree = useMemo(() => {
