@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { useUser, useClerk } from "@clerk/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -136,7 +136,14 @@ function committedActiveConnectionId(
   return byFlag;
 }
 
-function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
+function LeagueSwitcher({
+  onAfterSwitch,
+  onOverlayDepth,
+}: {
+  onAfterSwitch?: () => void;
+  /** Increment while this instance is blocking (mutation + post-switch work); AppShell sums depths for a single overlay. */
+  onOverlayDepth?: (delta: 1 | -1) => void;
+}) {
   const queryClient = useQueryClient();
   const utils = trpc.useUtils();
   const leaguesQ = trpc.league.getMyLeagues.useQuery(undefined, { staleTime: 30_000 });
@@ -174,6 +181,16 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
 
   const leagues = leaguesQ.data ?? [];
   const busy = setActive.isPending || switchUi != null;
+
+  useEffect(() => {
+    if (!onOverlayDepth) return;
+    if (busy) {
+      onOverlayDepth(1);
+      return () => {
+        onOverlayDepth(-1);
+      };
+    }
+  }, [busy, onOverlayDepth]);
 
   if (leaguesQ.isLoading || activeQ.isLoading) {
     return (
@@ -435,7 +452,13 @@ function SidebarFooter() {
   );
 }
 
-function Sidebar({ onClose }: { onClose?: () => void }) {
+function Sidebar({
+  onClose,
+  onLeagueSwitchOverlayDepth,
+}: {
+  onClose?: () => void;
+  onLeagueSwitchOverlayDepth?: (delta: 1 | -1) => void;
+}) {
   const location = useLocation();
   const pathname = location.pathname;
   const isMobile = useViewportMobile();
@@ -494,7 +517,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
-      <LeagueSwitcher onAfterSwitch={onClose} />
+      <LeagueSwitcher onAfterSwitch={onClose} onOverlayDepth={onLeagueSwitchOverlayDepth} />
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-3">
@@ -585,11 +608,16 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [leagueSwitchOverlayDepth, setLeagueSwitchOverlayDepth] = useState(0);
+  const bumpLeagueSwitchOverlay = useCallback((delta: 1 | -1) => {
+    setLeagueSwitchOverlayDepth((d) => Math.max(0, d + delta));
+  }, []);
+  const leagueSwitchBlocking = leagueSwitchOverlayDepth > 0;
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#130e16]">
       <aside className="hidden w-64 shrink-0 md:block">
-        <Sidebar />
+        <Sidebar onLeagueSwitchOverlayDepth={bumpLeagueSwitchOverlay} />
       </aside>
 
       {sidebarOpen && (
@@ -604,7 +632,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             onClick={(e) => e.stopPropagation()}
             role="presentation"
           >
-            <Sidebar onClose={() => setSidebarOpen(false)} />
+            <Sidebar
+              onClose={() => setSidebarOpen(false)}
+              onLeagueSwitchOverlayDepth={bumpLeagueSwitchOverlay}
+            />
           </div>
         </div>
       )}
@@ -613,6 +644,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Header onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 overflow-y-auto bg-[#130e16] p-4 md:p-6">{children}</main>
       </div>
+
+      {leagueSwitchBlocking ? (
+        <div
+          className="pointer-events-auto fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-[#0b0810]/88 px-6 text-center backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <Loader2 className="h-8 w-8 shrink-0 animate-spin text-lime-400" aria-hidden />
+          <p className="text-lg font-semibold tracking-tight text-[#f3f8ff]">Switching league…</p>
+          <p className="max-w-sm text-sm leading-snug text-zinc-400">
+            Loading the selected league context.
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
