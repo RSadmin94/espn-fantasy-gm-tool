@@ -32,17 +32,24 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
 // ─── component ───────────────────────────────────────────────────────────────
 
 export function LeagueSettings() {
-  const { leagueContextKey } = useLeagueActiveGate();
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(
+    authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"),
+  );
   const season = new Date().getFullYear();
 
-  const scoringQ  = trpc.leagueScoring.getSettings.useQuery({ season });
+  const scoringQ  = trpc.leagueScoring.getSettings.useQuery(
+    { season },
+    { enabled: leagueKeyReady },
+  );
   const settingsQ = trpc.espn.settings.useQuery(
     withLeagueSalt({ season }, leagueContextKey),
+    { enabled: leagueKeyReady },
   );
 
-  const loading = scoringQ.isLoading || settingsQ.isLoading;
-  const s = scoringQ.data;
-  const meta = settingsQ.data;
+  const loading = !leagueKeyReady || scoringQ.isLoading || settingsQ.isLoading;
+  const s = leagueKeyReady ? scoringQ.data : undefined;
+  const meta = leagueKeyReady ? settingsQ.data : undefined;
 
   function scoringSourceDescription(): string {
     if (!s) return "";

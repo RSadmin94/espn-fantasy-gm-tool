@@ -63,7 +63,10 @@ type Tab = "dynasty" | "seasons" | "rivalries";
 type SortKey = "titles" | "wins" | "winpct";
 
 export function LeagueTimeline() {
-  const { leagueContextKey } = useLeagueActiveGate();
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(
+    authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"),
+  );
   const [tab, setTab]                       = useState<Tab>("dynasty");
   const [sortBy, setSortBy]                 = useState<SortKey>("titles");
   const [expandedOwner, setExpandedOwner]   = useState<string | null>(null);
@@ -72,28 +75,29 @@ export function LeagueTimeline() {
 
   const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(
     withLeagueSalt({}, leagueContextKey),
-    { staleTime: 60_000 },
+    { staleTime: 60_000, enabled: leagueKeyReady },
   );
   const medalsQ    = trpc.espn.leagueMedals.useQuery(
     withLeagueSalt({}, leagueContextKey),
-    { staleTime: 60_000 },
+    { staleTime: 60_000, enabled: leagueKeyReady },
   );
   const h2hQ = trpc.espn.leagueHistoryH2H.useQuery(
     withLeagueSalt({}, leagueContextKey),
     {
       staleTime: 60_000,
-      enabled: tab === "rivalries",
+      enabled: leagueKeyReady && tab === "rivalries",
     },
   );
   const diagQ = trpc.espn.leagueDiagnostics.useQuery(
     withLeagueSalt({}, leagueContextKey),
-    { staleTime: 60_000 },
+    { staleTime: 60_000, enabled: leagueKeyReady },
   );
 
-  const seasonsFromStandings = standingsQ.data?.seasons;
+  const standingsPayload = leagueKeyReady ? standingsQ.data : undefined;
+  const seasonsFromStandings = standingsPayload?.seasons;
   const allSeasons = seasonsFromStandings ?? [];
-  const rawOwners  = standingsQ.data?.owners  ?? [];
-  const medals     = medalsQ.data ?? [];
+  const rawOwners  = standingsPayload?.owners  ?? [];
+  const medals     = (leagueKeyReady ? medalsQ.data : undefined) ?? [];
 
   useEffect(() => {
     const seasons = seasonsFromStandings ?? [];
@@ -176,8 +180,9 @@ export function LeagueTimeline() {
     : null;
 
   // ── Rivalries ─────────────────────────────────────────────────────────────
-  const h2hOwners = h2hQ.data?.owners ?? [];
-  const h2hMatrix = h2hQ.data?.matrix ?? [];
+  const h2hPayload = leagueKeyReady ? h2hQ.data : undefined;
+  const h2hOwners = h2hPayload?.owners ?? [];
+  const h2hMatrix = h2hPayload?.matrix ?? [];
   const activeRival = rivalOwner || h2hOwners[0] || "";
   const rivalRow    = h2hMatrix.find((r) => r.owner === activeRival);
 
@@ -195,7 +200,7 @@ export function LeagueTimeline() {
 
       {/* ── Diagnostics bar ── */}
       {(() => {
-        const d = diagQ.data;
+        const d = leagueKeyReady ? diagQ.data : undefined;
         const medalSeasons = medals.length;
         const allSeasonCount = allSeasons.length;
         const missingMedals = allSeasonCount > 0 ? allSeasonCount - medalSeasons : 0;
@@ -204,7 +209,7 @@ export function LeagueTimeline() {
         const dupMatchupSeasons = (d?.matchups ?? []).filter((m) => m.duplicateMatchups > 0).length;
         const mismatchSeasons = (d?.matchups ?? []).filter((m) => m.winnerScoreMismatches > 0).length;
         const missingScoreSeasons = (d?.matchups ?? []).filter((m) => m.missingScores > 0).length;
-        const h2dDiag = h2hQ.data?.diagnostics;
+        const h2dDiag = h2hPayload?.diagnostics;
         const anyIssue =
           missingMedals + ownerNormalizationMisses +
           dupStandingSeasons + missingRankSeasons +
@@ -263,7 +268,7 @@ export function LeagueTimeline() {
         <ToggleGroupItem value="rivalries">Rivalries</ToggleGroupItem>
       </ToggleGroup>
 
-      {standingsQ.isLoading && (
+      {(!leagueKeyReady || standingsQ.isLoading) && (
         <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" /> Loading…
         </div>
@@ -272,7 +277,7 @@ export function LeagueTimeline() {
       {/* ═══════════════════════════════════════════════════════════════════
           TAB 1 — Dynasty Board
       ════════════════════════════════════════════════════════════════════ */}
-      {tab === "dynasty" && !standingsQ.isLoading && (
+      {tab === "dynasty" && leagueKeyReady && !standingsQ.isLoading && (
         <div className="space-y-4">
 
           {/* Sort bar */}
@@ -415,7 +420,7 @@ export function LeagueTimeline() {
       {/* ═══════════════════════════════════════════════════════════════════
           TAB 2 — Season Explorer
       ════════════════════════════════════════════════════════════════════ */}
-      {tab === "seasons" && !standingsQ.isLoading && (
+      {tab === "seasons" && leagueKeyReady && !standingsQ.isLoading && (
         <div className="space-y-4">
 
           {/* Horizontal season strip */}
@@ -539,19 +544,19 @@ export function LeagueTimeline() {
       {tab === "rivalries" && (
         <div className="space-y-4">
 
-          {h2hQ.isLoading && (
+          {(!leagueKeyReady || h2hQ.isLoading) && (
             <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" /> Loading rivalries…
             </div>
           )}
 
-          {!h2hQ.isLoading && h2hOwners.length === 0 && (
+          {leagueKeyReady && !h2hQ.isLoading && h2hOwners.length === 0 && (
             <div className="rounded-lg border border-dashed border-border px-4 py-14 text-center text-sm text-muted-foreground">
               No H2H data yet. Sync matchup data on the Sync Data page.
             </div>
           )}
 
-          {!h2hQ.isLoading && h2hOwners.length > 0 && (
+          {leagueKeyReady && !h2hQ.isLoading && h2hOwners.length > 0 && (
             <>
               {/* Owner pill selector */}
               <div className="space-y-2">

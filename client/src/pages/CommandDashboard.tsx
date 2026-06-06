@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router";
-import { useAuth } from "@clerk/react-router";
+import { useAuth, useUser } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { Zap, Repeat2, Trophy, Newspaper, Users, Flame, Star, Activity, ChevronRight, RefreshCw } from "lucide-react";
@@ -60,12 +60,15 @@ function archetype(m: any){ const pred=Number(m?.predictabilityScore??0), surp=N
 function sev(c: number){ return c>=60?{t:"High",color:RED}:c>=40?{t:"Med",color:ORANGE}:{t:"Low",color:GREEN}; }
 
 export function CommandDashboard(){
-  const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const { isLoaded: authLoaded, isSignedIn: isSignedInRaw } = useAuth();
+  const isSignedIn = Boolean(isSignedInRaw);
+  const { isLoaded: userLoaded } = useUser();
   const lg = useLeagueContext();
   const season = lg.season ?? new Date().getFullYear();
   const scoring: string = lg.scoringType ?? "";
-  const leagueKeyReady =
-    authLoaded && isSignedIn && !lg.leagueContextKey.startsWith("__");
+  const leagueKeyReady = Boolean(
+    authLoaded && userLoaded && isSignedIn && !lg.leagueContextKey.startsWith("__"),
+  );
   const draftQ = trpc.draftWarRoom.getDraftWarRoomData.useQuery(
     { season, activeLeagueKey: lg.leagueContextKey },
     {
@@ -75,12 +78,12 @@ export function CommandDashboard(){
       enabled: Boolean(season && leagueKeyReady),
     }
   );
-  const d: any = draftQ.data ?? {};
+  const d: any = leagueKeyReady ? (draftQ.data ?? {}) : {};
   const meters: any[] = d.shockMeters ?? [];
   const runs: any[] = d.positionRunAlerts ?? [];
   const scarce: any[] = d.scarcityAlerts ?? [];
   const teamCount: number = d.teamCount ?? lg.teamCount ?? 0;
-  const loading = draftQ.isLoading;
+  const loading = !leagueKeyReady || draftQ.isLoading;
 
   const bySurprise = useMemo(()=>[...meters].sort((a,b)=>(b.surpriseProbability??0)-(a.surpriseProbability??0)),[meters]);
   const byPredict = useMemo(()=>[...meters].sort((a,b)=>(b.predictabilityScore??0)-(a.predictabilityScore??0)),[meters]);

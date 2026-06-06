@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import {
@@ -208,8 +209,12 @@ function AIInsight({ pool, ownerFilter }: { pool: KeeperEntry[]; ownerFilter: st
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function KeeperAdvisor() {
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(
+    authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"),
+  );
   const draftYear    = new Date().getFullYear();
-  const { myOwnerName, teamCount, leagueContextKey } = useLeagueContext();
+  const { myOwnerName, teamCount } = useLeagueContext();
   const [ownerFilter, setOwnerFilter] = useState<string>(() => myOwnerName ?? "all");
   const [posFilter,   setPosFilter]   = useState<string>("all");
   const [maxKeepers,  setMaxKeepers]  = useState<string>("all");
@@ -220,15 +225,18 @@ export function KeeperAdvisor() {
 
   const poolQ = trpc.espn.keeperPool.useQuery(
     withLeagueSalt({ draftYear }, leagueContextKey),
+    { enabled: leagueKeyReady },
   );
 
   const pool = useMemo((): KeeperEntry[] => {
-    const raw = (poolQ.data as { pool?: KeeperEntry[] } | undefined)?.pool;
+    const data = leagueKeyReady ? (poolQ.data as { pool?: KeeperEntry[] } | undefined) : undefined;
+    const raw = data?.pool;
     return Array.isArray(raw) ? (raw as KeeperEntry[]) : [];
-  }, [poolQ.data]);
+  }, [poolQ.data, leagueKeyReady]);
 
-  const errorMsg = (poolQ.data as { error?: string } | undefined)?.error;
-  const hintMsg  = (poolQ.data as { hint?: string }  | undefined)?.hint;
+  const poolPayload = leagueKeyReady ? poolQ.data : undefined;
+  const errorMsg = (poolPayload as { error?: string } | undefined)?.error;
+  const hintMsg  = (poolPayload as { hint?: string }  | undefined)?.hint;
 
   const owners    = useMemo(() => [...new Set(pool.map(p => p.ownerName))].sort(), [pool]);
   const positions = useMemo(() => [...new Set(pool.map(p => p.position).filter(Boolean))].sort(), [pool]);
@@ -256,7 +264,7 @@ export function KeeperAdvisor() {
   }, [sorted, ownerFilter, posFilter, maxKeepers]);
 
   // Loading
-  if (poolQ.isLoading) {
+  if (!leagueKeyReady || poolQ.isLoading) {
     return (
       <div className="flex items-center justify-center py-24 text-zinc-400">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Building keeper pool…

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "@clerk/react-router";
+import { useAuth, useUser } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { setTrpcToken } from "@/lib/trpcAuth";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
@@ -129,16 +129,23 @@ function sortDraftPicks(rows: DraftPickRow[]): DraftPickRow[] {
 }
 
 export function DraftHistory() {
-  const { getToken } = useAuth();
+  const { getToken, isLoaded: authLoaded, isSignedIn: isSignedInRaw } = useAuth();
+  const { isLoaded: userLoaded } = useUser();
+  const isSignedIn = Boolean(isSignedInRaw);
   const { leagueId, leagueContextKey } = useLeagueContext();
+  const leagueKeyReady = Boolean(
+    authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"),
+  );
   const allSeasonsQ = trpc.espn.allSeasons.useQuery(
     withLeagueSalt({}, leagueContextKey),
+    { enabled: leagueKeyReady },
   );
   const cachedQ = trpc.espn.cachedSeasons.useQuery(
     withLeagueSalt({}, leagueContextKey),
+    { enabled: leagueKeyReady },
   );
-  const allSeasons: number[] = allSeasonsQ.data ?? [];
-  const cachedSeasons: number[] = cachedQ.data ?? [];
+  const allSeasons: number[] = leagueKeyReady ? (allSeasonsQ.data ?? []) : [];
+  const cachedSeasons: number[] = leagueKeyReady ? (cachedQ.data ?? []) : [];
   const defaultSeason =
     cachedSeasons.length > 0
       ? Math.max(...cachedSeasons)
@@ -160,27 +167,30 @@ export function DraftHistory() {
   // ── Manus path: combined ESPN cache ──────────────────────────────────────
   const draftQ = trpc.espn.draftPicks.useQuery(
     withLeagueSalt({ season }, leagueContextKey),
+    { enabled: leagueKeyReady },
   );
   const picks = useMemo(
-    () => sortDraftPicks((draftQ.data ?? []) as DraftPickRow[]),
-    [draftQ.data],
+    () =>
+      sortDraftPicks(((leagueKeyReady ? draftQ.data : undefined) ?? []) as DraftPickRow[]),
+    [draftQ.data, leagueKeyReady],
   );
 
   // ── Legacy path: draft_picks rows with source="legacy_draft_recap" ───────
   const legacyQ = trpc.espn.legacyDraftPicks.useQuery(
     withLeagueSalt({ season }, leagueContextKey),
-    { enabled: isLegacySeason },
+    { enabled: leagueKeyReady && isLegacySeason },
   );
   const legacyPicks = useMemo(
     () =>
-      isLegacySeason
+      isLegacySeason && leagueKeyReady
         ? sortDraftPicks((legacyQ.data?.picks ?? []) as DraftPickRow[])
         : [],
-    [legacyQ.data?.picks, isLegacySeason],
+    [legacyQ.data?.picks, isLegacySeason, leagueKeyReady],
   );
 
   // ── Source resolution ─────────────────────────────────────────────────────
-  const isLoading = draftQ.isLoading || (isLegacySeason && legacyQ.isLoading);
+  const isLoading =
+    !leagueKeyReady || draftQ.isLoading || (isLegacySeason && legacyQ.isLoading);
   const useManusPath = !draftQ.isLoading && picks.length > 0;
   const useLegacyPath = !isLoading && !useManusPath && isLegacySeason && legacyPicks.length > 0;
   const effectivePicks = useManusPath ? picks : useLegacyPath ? legacyPicks : [];

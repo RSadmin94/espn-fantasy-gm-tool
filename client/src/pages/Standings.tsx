@@ -198,12 +198,16 @@ function safeOwnerDisplayLabel(owners: unknown): string {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function Standings() {
-  const { leagueContextKey } = useLeagueActiveGate();
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(
+    authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"),
+  );
   const cachedQ = trpc.espn.cachedSeasons.useQuery(
     withLeagueSalt({}, leagueContextKey),
+    { enabled: leagueKeyReady },
   );
 
-  const cachedSeasons: number[] = cachedQ.data ?? [];
+  const cachedSeasons: number[] = leagueKeyReady ? (cachedQ.data ?? []) : [];
 
   const defaultSeason =
     cachedSeasons.length > 0 ? Math.max(...cachedSeasons) : Math.min(CURRENT_YEAR, 2025);
@@ -218,20 +222,25 @@ export function Standings() {
     }
   }, [cachedSeasons, leagueContextKey]);
 
+  const isNotCached = !cachedSeasons.includes(season);
+
   const standingsQ = trpc.espn.standings.useQuery(
     withLeagueSalt({ season }, leagueContextKey),
-    { staleTime: 60_000 },
+    { staleTime: 60_000, enabled: leagueKeyReady && !isNotCached },
   );
   const txsQ = trpc.espn.transactions.useQuery(
     withLeagueSalt({ season, typeFilter: "ALL" }, leagueContextKey),
-    { staleTime: 60_000 }
+    { staleTime: 60_000, enabled: leagueKeyReady && !isNotCached },
   );
 
-  const rawTeams = (standingsQ.data as TeamRow[] | undefined) ?? [];
-  const isNotCached = !cachedSeasons.includes(season);
+  const rawTeams =
+    (leagueKeyReady && !isNotCached
+      ? (standingsQ.data as TeamRow[] | undefined)
+      : undefined) ?? [];
 
   const moveCountByTeam = useMemo(() => {
-    const txs = (txsQ.data as TxRow[] | undefined) ?? [];
+    const txs =
+      (leagueKeyReady && !isNotCached ? (txsQ.data as TxRow[] | undefined) : undefined) ?? [];
     const perTeam = new Map<number, Set<string>>();
     for (const row of txs) {
       const tid = row.teamId != null ? Number(row.teamId) : NaN;
@@ -243,7 +252,7 @@ export function Standings() {
     const counts = new Map<number, number>();
     for (const [tid, set] of perTeam) counts.set(tid, set.size);
     return counts;
-  }, [txsQ.data]);
+  }, [txsQ.data, leagueKeyReady, isNotCached]);
 
   const teams = useMemo(() => {
     const copy = [...rawTeams];

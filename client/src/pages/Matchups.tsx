@@ -117,12 +117,16 @@ function TeamColumn({
 }
 
 export function Matchups() {
-  const { leagueContextKey } = useLeagueActiveGate();
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(
+    authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"),
+  );
   const cachedQ = trpc.espn.cachedSeasons.useQuery(
     withLeagueSalt({}, leagueContextKey),
+    { enabled: leagueKeyReady },
   );
 
-  const cachedSeasons: number[] = cachedQ.data ?? [];
+  const cachedSeasons: number[] = leagueKeyReady ? (cachedQ.data ?? []) : [];
 
   const defaultSeason =
     cachedSeasons.length > 0 ? Math.max(...cachedSeasons) : Math.min(CURRENT_YEAR, 2025);
@@ -137,14 +141,18 @@ export function Matchups() {
     }
   }, [cachedSeasons, leagueContextKey]);
 
+  const isNotCached = !cachedSeasons.includes(season);
+
   const boardQ = trpc.espn.matchupsScoreboard.useQuery(
     withLeagueSalt({ season, week }, leagueContextKey),
-    { staleTime: 30_000 }
+    { staleTime: 30_000, enabled: leagueKeyReady && !isNotCached },
   );
 
-  const maxWeek = boardQ.data?.maxWeek ?? 0;
-  const rows = (boardQ.data?.matchups as ScoreboardRow[] | undefined) ?? [];
-  const boardSource = boardQ.data?.dataSource as string | undefined;
+  const boardPayload =
+    leagueKeyReady && !isNotCached ? boardQ.data : undefined;
+  const maxWeek = boardPayload?.maxWeek ?? 0;
+  const rows = (boardPayload?.matchups as ScoreboardRow[] | undefined) ?? [];
+  const boardSource = boardPayload?.dataSource as string | undefined;
 
   useEffect(() => {
     setWeek(1);
@@ -158,8 +166,6 @@ export function Matchups() {
     const n = maxWeek > 0 ? maxWeek : 18;
     return Array.from({ length: n }, (_, i) => i + 1);
   }, [maxWeek]);
-
-  const isNotCached = !cachedSeasons.includes(season);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-1">
@@ -204,7 +210,7 @@ export function Matchups() {
           <Select
             value={String(week)}
             onValueChange={(v) => setWeek(Number(v))}
-            disabled={boardQ.isLoading || weekOptions.length === 0}
+            disabled={!leagueKeyReady || boardQ.isLoading || weekOptions.length === 0}
           >
             <SelectTrigger className="h-9 text-sm">
               <SelectValue placeholder="Week" />
@@ -236,21 +242,21 @@ export function Matchups() {
         </div>
       )}
 
-      {boardQ.isLoading && (
+      {(!leagueKeyReady || boardQ.isLoading) && (
         <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
           Loading matchups…
         </div>
       )}
 
-      {boardQ.isError && (
+      {leagueKeyReady && boardQ.isError && (
         <div className="flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
           <AlertCircle className="h-4 w-4 shrink-0" />
           {boardQ.error.message}
         </div>
       )}
 
-      {!boardQ.isLoading && !boardQ.isError && maxWeek === 0 && (
+      {leagueKeyReady && !boardQ.isLoading && !boardQ.isError && maxWeek === 0 && (
         <div className="rounded-lg border border-dashed border-border px-4 py-16 text-center text-sm text-muted-foreground">
           <p>No matchup data found for {season} — not in gmMatchups or combined cache.</p>
           <p className="mt-2">
@@ -260,7 +266,7 @@ export function Matchups() {
         </div>
       )}
 
-      {!boardQ.isLoading && !boardQ.isError && maxWeek > 0 && rows.length === 0 && (
+      {leagueKeyReady && !boardQ.isLoading && !boardQ.isError && maxWeek > 0 && rows.length === 0 && (
         <div className="rounded-lg border border-dashed border-border px-4 py-16 text-center text-sm text-muted-foreground">
           No matchups for {season} week {week}.
         </div>

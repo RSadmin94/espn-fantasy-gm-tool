@@ -235,34 +235,51 @@ const LEAGUE_NAME = "ATLANTAS FINEST FF";
 
 export function LeagueWire() {
   const _trpc = trpc as any;
-  const { leagueContextKey } = useLeagueActiveGate();
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(
+    authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"),
+  );
   const [view, setView]               = useState<"feed" | "archive">("feed");
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [openArticle, setOpenArticle] = useState<Article | null>(null);
   const [refreshKey, setRefreshKey]   = useState(0);
 
-  const { data: seasons = [] } = _trpc.leagueNewsroom.getArchiveSeasons.useQuery();
-  const { data: feedArticles = [], isLoading: feedLoading, refetch: refetchFeed } =
-    _trpc.leagueNewsroom.getNewsroomFeed.useQuery({ limit: 30 });
-  const { data: seasonArticles = [], isLoading: seasonLoading } =
-    _trpc.leagueNewsroom.getSeasonArticles.useQuery(
-      { season: selectedSeason! },
-      { enabled: selectedSeason !== null }
-    );
+  const seasonsQ = _trpc.leagueNewsroom.getArchiveSeasons.useQuery(undefined, {
+    enabled: leagueKeyReady,
+  });
+  const seasons = leagueKeyReady ? (seasonsQ.data ?? []) : [];
+
+  const feedQ = _trpc.leagueNewsroom.getNewsroomFeed.useQuery(
+    { limit: 30 },
+    { enabled: leagueKeyReady },
+  );
+  const feedArticles = leagueKeyReady ? (feedQ.data ?? []) : [];
+  const feedLoading = feedQ.isLoading;
+  const refetchFeed = feedQ.refetch;
+
+  const seasonArticlesQ = _trpc.leagueNewsroom.getSeasonArticles.useQuery(
+    { season: selectedSeason! },
+    { enabled: leagueKeyReady && selectedSeason !== null },
+  );
+  const seasonArticles = leagueKeyReady ? (seasonArticlesQ.data ?? []) : [];
+  const seasonLoading = seasonArticlesQ.isLoading;
 
   // Also pull legacy wire reports
-  const { data: availableWeeks = [] } = _trpc.leagueWire.getAvailableWeeks.useQuery(
+  const availableWeeksQ = _trpc.leagueWire.getAvailableWeeks.useQuery(
     withLeagueSalt({}, leagueContextKey),
+    { enabled: leagueKeyReady },
   );
+  const availableWeeks = leagueKeyReady ? (availableWeeksQ.data ?? []) : [];
   const latestWireWeek = useMemo(() => availableWeeks[0] ?? null, [availableWeeks]);
-  const { data: wireReports = [] } = _trpc.leagueWire.getPostgameReports.useQuery(
-    latestWireWeek != null
+  const postgameInput =
+    leagueKeyReady && latestWireWeek != null
       ? withLeagueSalt(
           { season: latestWireWeek.season, week: latestWireWeek.week },
           leagueContextKey,
         )
-      : skipToken,
-  );
+      : skipToken;
+  const wireReportsQ = _trpc.leagueWire.getPostgameReports.useQuery(postgameInput);
+  const wireReports = leagueKeyReady && latestWireWeek != null ? (wireReportsQ.data ?? []) : [];
 
   useEffect(() => {
     setOpenArticle(null);
@@ -276,8 +293,15 @@ export function LeagueWire() {
     });
   }, [leagueContextKey, seasons]);
 
-  const displayArticles = view === "archive" && selectedSeason ? seasonArticles : feedArticles;
-  const isLoading = view === "archive" && selectedSeason ? seasonLoading : feedLoading;
+  const displayArticles =
+    !leagueKeyReady
+      ? []
+      : view === "archive" && selectedSeason
+        ? seasonArticles
+        : feedArticles;
+  const isLoading =
+    !leagueKeyReady ||
+    (view === "archive" && selectedSeason ? seasonLoading : feedLoading);
 
   return (
     <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(60% 80% at 80% -10%, rgba(139,92,246,.10), transparent 42%), #130e16" }}>

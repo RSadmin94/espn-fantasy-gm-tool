@@ -1005,16 +1005,21 @@ function TradeComparisonCard({
 }
 
 export function Transactions() {
-  const { leagueContextKey } = useLeagueActiveGate();
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(
+    authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"),
+  );
   const allSeasonsQ = trpc.espn.allSeasons.useQuery(
     withLeagueSalt({}, leagueContextKey),
+    { enabled: leagueKeyReady },
   );
   const cachedQ = trpc.espn.cachedSeasons.useQuery(
     withLeagueSalt({}, leagueContextKey),
+    { enabled: leagueKeyReady },
   );
 
-  const allSeasons: number[] = allSeasonsQ.data ?? [];
-  const cachedSeasons: number[] = cachedQ.data ?? [];
+  const allSeasons: number[] = leagueKeyReady ? (allSeasonsQ.data ?? []) : [];
+  const cachedSeasons: number[] = leagueKeyReady ? (cachedQ.data ?? []) : [];
 
   const defaultSeason =
     cachedSeasons.length > 0
@@ -1036,7 +1041,7 @@ export function Transactions() {
     }
   }, [cachedSeasons, leagueContextKey]);
 
-  const enabled = cachedSeasons.includes(season);
+  const enabled = leagueKeyReady && cachedSeasons.includes(season);
   const teamIdArg = teamFilter !== "ALL" && Number.isFinite(Number(teamFilter)) ? Number(teamFilter) : undefined;
   const typeFilterArg = typeFilter !== "ALL" ? typeFilter : undefined;
 
@@ -1063,8 +1068,8 @@ export function Transactions() {
     },
   );
 
-  const teams = (teamsQ.data as TeamRow[] | undefined) ?? [];
-  const rawTxns = (txQ.data as TxnRow[] | undefined) ?? [];
+  const teams = (leagueKeyReady && enabled ? (teamsQ.data as TeamRow[] | undefined) : undefined) ?? [];
+  const rawTxns = (leagueKeyReady && enabled ? (txQ.data as TxnRow[] | undefined) : undefined) ?? [];
 
   const teamMap = useMemo(() => {
     const m = new Map<number, string>();
@@ -1083,23 +1088,28 @@ export function Transactions() {
 
   const playerMeta = useMemo(() => {
     const m = new Map<number, PlayerBits>();
-    for (const r of (rostersQ.data ?? []) as RosterRow[]) {
+    const rosterRows = leagueKeyReady && enabled ? (rostersQ.data ?? []) : [];
+    for (const r of rosterRows as RosterRow[]) {
       const pid = r.playerId;
       if (pid == null || pid <= 0) continue;
       if (!m.has(pid)) m.set(pid, { position: (r.position || "?").trim(), proTeam: (r.proTeam || "?").trim() });
     }
     return m;
-  }, [rostersQ.data]);
+  }, [rostersQ.data, leagueKeyReady, enabled]);
 
   const displayList = useMemo(() => {
     const q = search.trim().toLowerCase();
     let rows = rawTxns;
 
     const calendarYear = new Date().getFullYear();
-    const pulseWeek = pulseQ.data?.week;
-    const pulseComplete = !!pulseQ.data?.isSeasonComplete;
-    const seasonStarted = pulseQ.isSuccess && typeof pulseWeek === "number" && pulseWeek >= 1 && !pulseComplete;
-    const isPreseason = enabled && season === calendarYear && pulseQ.isSuccess && !pulseComplete && !seasonStarted;
+    const pulsePayload = leagueKeyReady && enabled ? pulseQ.data : undefined;
+    const pulseWeek = pulsePayload?.week;
+    const pulseComplete = !!pulsePayload?.isSeasonComplete;
+    const seasonStarted =
+      leagueKeyReady && enabled && pulseQ.isSuccess &&
+      typeof pulseWeek === "number" && pulseWeek >= 1 && !pulseComplete;
+    const isPreseason =
+      enabled && season === calendarYear && pulseQ.isSuccess && !pulseComplete && !seasonStarted;
 
     if (isPreseason) rows = rows.filter(r => isTradeType(r.type));
     if (q) rows = rows.filter(r => rowMatchesSearch(r, q));
@@ -1156,7 +1166,7 @@ export function Transactions() {
     });
 
     return filtered;
-  }, [rawTxns, search, tradeStatusFilter, enabled, season, pulseQ.isSuccess, pulseQ.data?.week, pulseQ.data?.isSeasonComplete]);
+  }, [rawTxns, search, tradeStatusFilter, enabled, season, leagueKeyReady, pulseQ.isSuccess, pulseQ.data?.week, pulseQ.data?.isSeasonComplete]);
 
   const isNotCached = !cachedSeasons.includes(season);
 
