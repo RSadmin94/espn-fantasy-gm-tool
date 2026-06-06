@@ -58,6 +58,7 @@ import {
   getChatHistory,
   addChatMessage,
   clearChatHistory,
+  sanitizeAdvisorChatLeagueId,
   getUserMemory,
   upsertUserMemory,
   getActiveLeagueForUser,
@@ -9195,10 +9196,17 @@ Provide:
 
   advisor: router({
     chat: subscribedProcedure
-      .input(z.object({ message: z.string().min(1).max(2000), season: z.number().optional() }))
+      .input(z.object({
+        message: z.string().min(1).max(2000),
+        season: z.number().optional(),
+        activeLeagueKey: z.string().optional(),
+      }))
       .mutation(async ({ input, ctx }) => {
+        void input.activeLeagueKey;
         const userId = ctx.user.id;
         const season = input.season ?? 2025;
+        const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: userId } }, null, undefined);
+        const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
         // Rate limit check
         const rl = checkRateLimit({ userId, callType: "advisor", isAdmin: ctx.user.role === "admin" });
         if (!rl.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: rl.reason ?? "Rate limit exceeded" });
@@ -9217,14 +9225,14 @@ Provide:
           if (memParts.length > 0) gmMemoryBlock = memParts.join("\n");
         }
         const leagueContext = await buildAdvisorSystemPrompt(season, gmMemoryBlock, userId);
-        const history = await getChatHistory(userId, season);
+        const history = await getChatHistory(userId, season, chatLeagueId);
         const messages: Message[] = [
           { role: "system", content: leagueContext },
           ...history.slice(-20).map((h) => ({ role: h.role as "user" | "assistant", content: h.content })),
           { role: "user", content: input.message },
         ];
 
-        await addChatMessage(userId, "user", input.message, season);
+        await addChatMessage(userId, "user", input.message, season, chatLeagueId);
         const response = await invokeLLM({
           messages,
           callType: "advisor",
@@ -9232,20 +9240,30 @@ Provide:
         });
         const rawContent = response.choices?.[0]?.message?.content;
         const assistantMessage = typeof rawContent === "string" ? rawContent : (rawContent ? JSON.stringify(rawContent) : "I couldn't generate a response. Please try again.");
-        await addChatMessage(userId, "assistant", assistantMessage, season);
+        await addChatMessage(userId, "assistant", assistantMessage, season, chatLeagueId);
         // Record usage for rate limiter
         recordUsage({ userId, callType: "advisor", tokensUsed: response.usage?.total_tokens ?? 0 });
         return { message: assistantMessage };
       }),
 
     history: protectedProcedure
-      .input(z.object({ season: z.number().optional() }))
-      .query(async ({ ctx, input }) => getChatHistory(ctx.user.id, input.season)),
+      .input(z.object({ season: z.number().optional(), activeLeagueKey: z.string().optional() }))
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+        const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
+        return getChatHistory(ctx.user.id, input.season, chatLeagueId);
+      }),
 
-    clearHistory: protectedProcedure.mutation(async ({ ctx }) => {
-      await clearChatHistory(ctx.user.id);
-      return { success: true };
-    }),
+    clearHistory: protectedProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .mutation(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+        const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+        const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
+        await clearChatHistory(ctx.user.id, chatLeagueId);
+        return { success: true };
+      }),
     getMemory: protectedProcedure.query(async ({ ctx }) => {
       return getUserMemory(ctx.user.id);
     }),

@@ -18,7 +18,7 @@ import { z } from "zod";
 import { sdk } from "./_core/sdk";
 import { invokeLLMStream } from "./_core/llm";
 import { buildAdvisorMessages } from "./advisorContextBuilder";
-import { addChatMessage, getUserMemory, persistLlmUsage } from "./db";
+import { addChatMessage, getUserMemory, persistLlmUsage, resolveActiveLeagueId, sanitizeAdvisorChatLeagueId } from "./db";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 
 const bodySchema = z.object({
@@ -57,6 +57,9 @@ export function registerAdvisorStreamRoute(app: Express) {
     const { message, season: rawSeason } = parsed.data;
     const season = rawSeason ?? 2025;
 
+    const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: user.id } }, null, undefined);
+    const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
+
     // --- SSE headers ---
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -89,10 +92,11 @@ export function registerAdvisorStreamRoute(app: Express) {
         season,
         userMessage: message,
         gmMemoryBlock,
+        leagueId: chatLeagueId,
       });
 
       // Persist the user message before streaming
-      await addChatMessage(user.id, "user", message, season);
+      await addChatMessage(user.id, "user", message, season, chatLeagueId);
 
       // Stream the response
       let fullResponse = "";
@@ -106,7 +110,7 @@ export function registerAdvisorStreamRoute(app: Express) {
       }
 
       // Persist the complete assistant message
-      await addChatMessage(user.id, "assistant", fullResponse || "No response generated.", season);
+      await addChatMessage(user.id, "assistant", fullResponse || "No response generated.", season, chatLeagueId);
 
       // Record usage for rate limiter (token count not available from stream, use estimate)
       recordUsage({ userId: user.id, callType: "advisor", tokensUsed: Math.ceil(fullResponse.length / 4) });

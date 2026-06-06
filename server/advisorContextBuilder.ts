@@ -426,10 +426,11 @@ export async function buildAdvisorMessages(opts: {
   season: number;
   userMessage: string;
   gmMemoryBlock?: string;
+  leagueId: string;
 }): Promise<Message[]> {
-  const { userId, season, userMessage, gmMemoryBlock } = opts;
+  const { userId, season, userMessage, gmMemoryBlock, leagueId } = opts;
   const systemPrompt = await buildAdvisorSystemPrompt(season, gmMemoryBlock, userId);
-  const history = await getChatHistory(userId, season);
+  const history = await getChatHistory(userId, season, leagueId);
   return [
     { role: "system", content: systemPrompt },
     ...history.slice(-20).map((h) => ({ role: h.role as "user" | "assistant", content: h.content })),

@@ -45,6 +45,7 @@ function createAuthContext(): TrpcContext {
     },
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
+    auth: { userId: "test-user" } as TrpcContext["auth"],
   };
 }
 
@@ -82,6 +83,7 @@ describe("advisor.chat", () => {
       user: null,
       req: { protocol: "https", headers: {} } as TrpcContext["req"],
       res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
+      auth: {} as TrpcContext["auth"],
     };
     const caller = appRouter.createCaller(anonCtx);
     await expect(caller.advisor.chat({ message: "Who should I start?", season: 2025 })).rejects.toThrow();

@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -234,15 +236,35 @@ function BiggestThreatCard({ data, loading }: { data: ThreatData | undefined; lo
 // ── Main page ───────────────────────────────────────────────────────────────
 
 export function Advisor() {
-  const cachedQ = trpc.espn.cachedSeasons.useQuery();
-  const cachedSeasons: number[] = cachedQ.data ?? [];
-  const defaultSeason = cachedSeasons.length > 0 ? Math.max(...cachedSeasons) : 2025;
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady =
+    Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
+
+  const cachedQ = trpc.espn.cachedSeasons.useQuery(withLeagueSalt({}, leagueContextKey), {
+    enabled: leagueKeyReady,
+    staleTime: 60_000,
+  });
+  const cachedSeasons = useMemo(() => cachedQ.data ?? [], [cachedQ.data]);
 
   // League-wide briefing data (no focal-user dependency — safe for all users)
-  const profileQ = (trpc as any).me.activeProfile.useQuery(undefined, { retry: false, staleTime: 600_000 });
-  const summaryQ = (trpc as any).me.leagueSummary.useQuery(undefined, { staleTime: 600_000 });
-  const threatQ = (trpc as any).me.biggestThreat.useQuery(undefined, { staleTime: 600_000, retry: false });
-  const ownersQ = (trpc as any).owners.ownerList.useQuery(undefined, { staleTime: 300_000 });
+  const profileQ = (trpc as any).me.activeProfile.useQuery(withLeagueSalt({}, leagueContextKey), {
+    retry: false,
+    staleTime: 600_000,
+    enabled: leagueKeyReady,
+  });
+  const summaryQ = (trpc as any).me.leagueSummary.useQuery(withLeagueSalt({}, leagueContextKey), {
+    staleTime: 600_000,
+    enabled: leagueKeyReady,
+  });
+  const threatQ = (trpc as any).me.biggestThreat.useQuery(withLeagueSalt({}, leagueContextKey), {
+    staleTime: 600_000,
+    retry: false,
+    enabled: leagueKeyReady,
+  });
+  const ownersQ = (trpc as any).owners.ownerList.useQuery(withLeagueSalt({}, leagueContextKey), {
+    staleTime: 300_000,
+    enabled: leagueKeyReady,
+  });
 
   const ownerName: string | null = profileQ.data?.isSetupComplete ? (profileQ.data.selectedOwnerName ?? null) : null;
   const firstName = ownerName ? String(ownerName).split(/\s+/)[0] : null;
@@ -272,18 +294,26 @@ export function Advisor() {
     ? [...allOwners].sort((a, b) => (b.seasons?.length ?? 0) - (a.seasons?.length ?? 0))[0]
     : null;
 
-  const [season, setSeason] = useState(defaultSeason);
+  const [season, setSeason] = useState(2025);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
+  useEffect(() => {
+    if (cachedSeasons.length > 0) {
+      const maxS = Math.max(...cachedSeasons);
+      setSeason((s) => (cachedSeasons.includes(s) ? s : maxS));
+    }
+  }, [cachedSeasons, leagueContextKey]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const historyQ = trpc.advisor.history.useQuery(
-    { season },
-    { retry: false, refetchOnWindowFocus: false }
-  );
+  const historyQ = trpc.advisor.history.useQuery(withLeagueSalt({ season }, leagueContextKey), {
+    retry: false,
+    refetchOnWindowFocus: false,
+    enabled: leagueKeyReady,
+  });
 
   useEffect(() => {
     if (historyQ.data && !historyLoaded) {
@@ -299,7 +329,7 @@ export function Advisor() {
   useEffect(() => {
     setHistoryLoaded(false);
     setMessages([]);
-  }, [season]);
+  }, [season, leagueContextKey]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -310,7 +340,7 @@ export function Advisor() {
   const clearMutation = trpc.advisor.clearHistory.useMutation({
     onSuccess: () => {
       setMessages([]);
-      void utils.advisor.history.invalidate();
+      void utils.advisor.history.invalidate(withLeagueSalt({ season }, leagueContextKey));
     },
   });
 
@@ -321,6 +351,7 @@ export function Advisor() {
         const withoutPending = prev.filter((m) => !m.pending);
         return [...withoutPending, { role: "assistant", content: resp.message }];
       });
+      void utils.advisor.history.invalidate(withLeagueSalt({ season }, leagueContextKey));
     },
     onError: (err) => {
       setMessages((prev) => {
@@ -351,7 +382,7 @@ export function Advisor() {
       { role: "user", content: msg },
       { role: "assistant", content: "", pending: true },
     ]);
-    chatMutation.mutate({ message: msg, season });
+    chatMutation.mutate(withLeagueSalt({ message: msg, season }, leagueContextKey));
     setTimeout(() => inputRef.current?.focus(), 50);
   }
 
@@ -363,6 +394,15 @@ export function Advisor() {
   }
 
   const isEmpty = messages.length === 0 && !historyQ.isLoading;
+
+  if (!leagueKeyReady) {
+    return (
+      <div className="mx-auto flex w-full max-w-5xl flex-col items-center justify-center gap-2 py-24 text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+        <span className="text-sm">Loading league…</span>
+      </div>
+    );
+  }
 
   const heroLine =
     "I've analyzed " +
@@ -452,7 +492,7 @@ export function Advisor() {
                   size="sm"
                   className="h-8 gap-1.5 text-xs text-muted-foreground"
                   disabled={clearMutation.isPending}
-                  onClick={() => clearMutation.mutate()}
+                  onClick={() => clearMutation.mutate(withLeagueSalt({}, leagueContextKey))}
                 >
                   {clearMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                   Clear

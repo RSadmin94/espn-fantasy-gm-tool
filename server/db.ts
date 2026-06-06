@@ -544,25 +544,38 @@ export async function upsertRefreshManifest(
   return;
 }
 
-export async function getChatHistory(userId: number, season?: number) {
+export function sanitizeAdvisorChatLeagueId(leagueId: string): string {
+  return String(leagueId ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
+}
+
+export async function getChatHistory(userId: number, season: number | undefined, leagueId: string) {
   const db = await getDb();
   if (!db) return [];
-  const conditions = season
-    ? and(eq(chatHistory.userId, userId), eq(chatHistory.season, season))
-    : eq(chatHistory.userId, userId);
+  const lid = sanitizeAdvisorChatLeagueId(leagueId);
+  const conditions = season != null
+    ? and(eq(chatHistory.userId, userId), eq(chatHistory.season, season), eq(chatHistory.leagueId, lid))
+    : and(eq(chatHistory.userId, userId), eq(chatHistory.leagueId, lid));
   return db.select().from(chatHistory).where(conditions).orderBy(chatHistory.createdAt).limit(100);
 }
 
-export async function addChatMessage(userId: number, role: "user" | "assistant", content: string, season?: number) {
+export async function addChatMessage(
+  userId: number,
+  role: "user" | "assistant",
+  content: string,
+  season: number | undefined,
+  leagueId: string,
+) {
   const db = await getDb();
   if (!db) return;
-  await db.insert(chatHistory).values({ userId, role, content, season: season ?? null });
+  const lid = sanitizeAdvisorChatLeagueId(leagueId);
+  await db.insert(chatHistory).values({ userId, leagueId: lid, role, content, season: season ?? null });
 }
 
-export async function clearChatHistory(userId: number) {
+export async function clearChatHistory(userId: number, leagueId: string) {
   const db = await getDb();
   if (!db) return;
-  await db.delete(chatHistory).where(eq(chatHistory.userId, userId));
+  const lid = sanitizeAdvisorChatLeagueId(leagueId);
+  await db.delete(chatHistory).where(and(eq(chatHistory.userId, userId), eq(chatHistory.leagueId, lid)));
 }
 
 // ── Pick Trade helpers ────────────────────────────────────────────────────────

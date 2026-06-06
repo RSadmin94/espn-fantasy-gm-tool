@@ -71,14 +71,20 @@ export const refreshManifest = mysqlTable("refresh_manifest", {
 export type RefreshManifest = typeof refreshManifest.$inferSelect;
 
 // AI GM Advisor chat history
-export const chatHistory = mysqlTable("chat_history", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  season: int("season"),
-  role: mysqlEnum("role", ["user", "assistant"]).notNull(),
-  content: text("content").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+export const chatHistory = mysqlTable(
+  "chat_history",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    /** ESPN league id (sanitized); isolates advisor threads per league. */
+    leagueId: varchar("leagueId", { length: 32 }).notNull().default(""),
+    season: int("season"),
+    role: mysqlEnum("role", ["user", "assistant"]).notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_chat_history_user_league").on(t.userId, t.leagueId)]
+);
 
 export type ChatHistory = typeof chatHistory.$inferSelect;
 
