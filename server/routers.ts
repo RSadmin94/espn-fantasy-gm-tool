@@ -7185,46 +7185,42 @@ Generate a JSON prediction report with these exact fields:
       };
     }),
 
-  // ── Owner Self-Review (AI-generated scouting report for Rod) ────────────────
-  ownerSelfReview: protectedProcedure.query(async () => {
-    const prompt = `You are an expert fantasy football analyst reviewing the career of Rod Sellers, manager of "Str8FrmHell / RodZilla" in the 18-season keeper league "ATLANTAS FINEST FF" (14 teams, PPR, 1 keeper, 7-team playoffs, snake draft).
+  // ── Owner Self-Review (AI scouting report from synced career data) ─────────
+  ownerSelfReview: protectedProcedure.query(async ({ ctx }) => {
+    if (!ctx.user?.id) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "Not signed in" });
+    }
+    const { buildOwnerCareerProfileForFocalUser, formatOwnerCareerProfileFactsBlock } =
+      await import("./ownerCareerProfileService");
+    const { resolveLeaguePromptContext, buildLeaguePromptContext } = await import("./leaguePromptContext");
 
-Here is Rod's complete career data:
+    const career = await buildOwnerCareerProfileForFocalUser(ctx.user.id);
+    if (!career) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Select your franchise in profile and sync league history to generate a self-review.",
+      });
+    }
 
-CAREER RECORD: 50W–56L (47.2% win rate) across 8 seasons (2018–2025)
-PLAYOFF APPEARANCES: 4 of 8 seasons (2019 #2 seed, 2021 #9, 2023 #7, 2025 #3)
-BEST SEASON: 2025 — 9–5, #3 seed, 1921 PF (career high)
-WORST SEASON: 2022 — 3–11, #13 seed, 1447 PF
+    const promptCtx = await resolveLeaguePromptContext(ctx.user.id, career.yearMax);
+    const { leagueDescriptor, historyClause } = buildLeaguePromptContext(promptCtx);
+    const franchiseLine = career.teamNames.length ? ` (${career.teamNames.join(" / ")})` : "";
+    const facts = formatOwnerCareerProfileFactsBlock(career);
 
-DRAFT TENDENCIES (107 picks, 2018–2025):
-- RB: 38 picks (36%), avg round 4.7 — 7 of 8 round-1 picks were RBs
-- WR: 26 picks (24%), avg round 6.2
-- QB: 8 picks (7%), avg round 5.9
-- TE: 5 picks (5%), avg round 6.8
-- Early rounds (1–3): 52% RB, 27% WR, 8% TE, 4% QB
-- Draft style: RB-First Builder
+    const prompt = `You are an expert fantasy football analyst reviewing the career of ${career.ownerName}${franchiseLine} in ${leagueDescriptor}, ${historyClause}.
 
-KEEPER HISTORY: Derrick Henry 2022 (Rd1), Saquon Barkley 2023 (Rd2), Saquon Barkley 2024 (Rd2), Breece Hall 2025 (Rd5)
-2026 KEEPER: TBD -- pending trade decisions before Aug 18 deadline
+Here is the compiled career data for this manager (from synced ESPN cache only — treat as ground truth; do not invent seasons or stats not listed):
 
-GM ACTIVITY (8-season averages): 29 adds/season, 34 drops/season, 7.3 trades/season
-- Most active: 2021 (49 adds, 9 trades) — 7–7, missed playoffs
-- Quietest: 2024 (13 adds, 1 trade) — 5–8
-- Best seasons (2019, 2025) had moderate activity (26–38 adds, 4–12 trades)
+${facts}
 
-NOTABLE MOMENTS:
-- 2020: Drafted Lamar Jackson in Round 1 (bold QB1 call)
-- 2023: Double RB round 1 (CMC + Bijan Robinson)
-- 2025: Career-best season with McCaffrey Rd1 + McBride Rd2
-
-Generate an honest, detailed self-scouting report as if you are Rod's personal analytics coach. Be direct and specific — don't be generic.
+Generate an honest, detailed self-scouting report as if you are this manager's personal analytics coach. Be direct and specific — don't be generic.
 
 Respond with JSON in this exact format:
 {
-  "narrative": "3-4 sentence career narrative describing Rod's arc, style, and trajectory",
+  "narrative": "3-4 sentence career narrative describing this manager's arc, style, and trajectory",
   "focusAreas2026": ["specific focus area 1", "specific focus area 2", "specific focus area 3", "specific focus area 4"],
-  "draftRecommendations": "2-3 sentences of specific 2026 draft advice based on his tendencies and blind spots",
-  "honestVerdict": "1-2 sentences of honest, direct assessment of where Rod stands in the league and what separates him from the top managers"
+  "draftRecommendations": "2-3 sentences of specific upcoming-draft advice based on tendencies and blind spots shown in the data",
+  "honestVerdict": "1-2 sentences of honest, direct assessment of where this manager stands relative to the league data and what separates them from sustained title contention"
 }`;
 
     const response = await invokeLLM({
