@@ -1022,7 +1022,7 @@ export const appRouter = router({
       }),
 
     /**
-     * Get the full draft context for Rod's current pick:
+     * Get the full draft context for the focal manager's current pick:
      * available players, positional needs, owner tendencies, recent picks.
      */
     getDraftContext: publicProcedure
