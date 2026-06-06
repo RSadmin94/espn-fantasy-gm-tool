@@ -18,13 +18,18 @@ import { getDb, resolveActiveLeagueId } from "./db";
 import { sql as drizzleSql }       from "drizzle-orm";
 import { invokeLLM }               from "./_core/llm";
 import { buildChampionshipEvidence } from "./leagueNewsroomEvidence";
+import {
+  resolveLeaguePromptContext,
+  buildLeaguePromptContext,
+  type LeaguePromptContext,
+} from "./leaguePromptContext";
 
-// Phase B6: LEAGUE_ID constant removed — leagueId is resolved per-request.
-const LEAGUE_NAME = "ATLANTAS FINEST FF";
+// Phase B6: leagueId is resolved per-request; prompt framing from leaguePromptContext.
 
-// ── LLM prompt templates ──────────────────────────────────────────────────────
-
-const NEWSROOM_SYSTEM = `You are the official sports journalist and historian for ${LEAGUE_NAME}, a private fantasy football league that has been running since 2010.
+/** System prompt for all League Wire LLM articles — league/history from resolved context only. */
+function buildNewsroomSystemBase(promptCtx: LeaguePromptContext): string {
+  const { leagueDescriptor, historyClause } = buildLeaguePromptContext(promptCtx);
+  return `You are the official sports journalist and historian covering ${leagueDescriptor}, ${historyClause}.
 
 Write in the voice of ESPN The Magazine, The Athletic, or Sports Illustrated — passionate, specific, narrative-driven.
 
@@ -36,6 +41,7 @@ ABSOLUTE RULES — NEVER VIOLATE:
 5. Write as if you have personal knowledge of this league's history and rivalries.
 6. Be specific about names, scores, margins — all from the evidence.
 7. Articles should feel like they were written by someone who watched every game.`;
+}
 
 // ── Article generator ─────────────────────────────────────────────────────────
 
@@ -45,14 +51,18 @@ async function generateArticle(params: {
   systemExtra?: string;
   evidenceJson: Record<string, unknown>;
   maxTokens?: number;
+  promptCtx: LeaguePromptContext;
 }): Promise<{ body: string; headline: string }> {
-  const { articleType, headline, evidenceJson, maxTokens = 1800, systemExtra } = params;
+  const { articleType, headline, evidenceJson, maxTokens = 1800, systemExtra, promptCtx } = params;
 
-  const systemPrompt = NEWSROOM_SYSTEM + (systemExtra ? `\n\n${systemExtra}` : "");
+  const { leagueDescriptor } = buildLeaguePromptContext(promptCtx);
+  const systemPrompt = buildNewsroomSystemBase(promptCtx) + (systemExtra ? `\n\n${systemExtra}` : "");
 
   const evidenceBlock = JSON.stringify(evidenceJson, null, 2);
 
-  const userPrompt = `Generate a ${articleType} article for ${LEAGUE_NAME}.
+  const datelineLeague = promptCtx.leagueName?.trim() ? promptCtx.leagueName.trim().toUpperCase() : "LEAGUE";
+
+  const userPrompt = `Generate a ${articleType} article for ${leagueDescriptor}.
 
 [ARTICLE TYPE]: ${articleType}
 [SUGGESTED HEADLINE]: ${headline}
@@ -63,7 +73,7 @@ ${evidenceBlock}
 Write the full article. Structure:
 1. A punchy, specific headline (you may improve on the suggested one)
 2. Subheadline (1 sentence)
-3. Dateline: "ATLANTA FINEST FF LEAGUE WIRE — [Season] SEASON"
+3. Dateline: "${datelineLeague} LEAGUE WIRE — [Season] SEASON" (use the calendar season from evidence; do not invent a league name not supported by evidence)
 4. Article body (3-5 paragraphs)
 5. Evidence citations at end: "Evidence: [list key data points used]"
 
@@ -226,6 +236,9 @@ export const leagueNewsroomRouter = router({
       const evidence = await buildChampionshipEvidence(db, season, leagueId);
       if (!evidence) return { ok: false, error: `No data found for season ${season}` };
 
+      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id, season);
+      const { leagueDescriptor } = buildLeaguePromptContext(promptCtx);
+
       const llmEvidence = {
         season,
         champion:     evidence.champion,
@@ -247,7 +260,7 @@ export const leagueNewsroomRouter = router({
 
       const suggestedHeadline = `The ${season} Championship Run of ${evidence.champion.name}`;
 
-      const systemExtra = `This is a Championship March article — the definitive account of how one team won the ${season} ${LEAGUE_NAME} championship. Write it like a retrospective feature. Glorify the journey. Acknowledge the competition. Note the key moments that defined the season. If playoff or draft data is missing, note this but do not fabricate it.`;
+      const systemExtra = `This is a Championship March article — the definitive account of how one team won the ${season} championship in ${leagueDescriptor}. Write it like a retrospective feature. Glorify the journey. Acknowledge the competition. Note the key moments that defined the season. If playoff or draft data is missing, note this but do not fabricate it.`;
 
       const { headline, body } = await generateArticle({
         articleType: "championship_march",
@@ -255,6 +268,7 @@ export const leagueNewsroomRouter = router({
         systemExtra,
         evidenceJson: llmEvidence,
         maxTokens: 2000,
+        promptCtx,
       });
 
       await saveArticle(db, leagueId, {
@@ -284,6 +298,8 @@ export const leagueNewsroomRouter = router({
 
       const seasons = (seasonRows as any[]).map(r => Number(r.season));
       const results = [];
+      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id);
+      const { leagueDescriptor } = buildLeaguePromptContext(promptCtx);
 
       for (const season of seasons) {
         const slug = `championship-march-${season}`;
@@ -318,9 +334,10 @@ export const leagueNewsroomRouter = router({
           const { headline, body } = await generateArticle({
             articleType: "championship_march",
             headline: `The ${season} Championship Run of ${evidence.champion.name}`,
-            systemExtra: `Write a Championship March retrospective for the ${season} ${LEAGUE_NAME} season. The champion was ${evidence.champion.name}. This is their story.`,
+            systemExtra: `Write a Championship March retrospective for the ${season} season in ${leagueDescriptor}. The champion was ${evidence.champion.name}. This is their story.`,
             evidenceJson: llmEvidence,
             maxTokens: 2000,
+            promptCtx,
           });
 
           await saveArticle(db, leagueId, {
@@ -371,9 +388,14 @@ export const leagueNewsroomRouter = router({
         byOwner.get(key)!.push(k);
       }
 
+      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id, draftYear);
+      const { leagueDescriptor } = buildLeaguePromptContext(promptCtx);
+      const displayLeague = promptCtx.leagueName?.trim() || "this league";
+
       const evidenceJson = {
         draftYear,
-        leagueName: LEAGUE_NAME,
+        leagueName: displayLeague,
+        leagueDescriptor,
         keeperHistorySeasonsAvailable: [...new Set(keepers.map(k => k.season))].sort(),
         keepersByOwner: Object.fromEntries(
           [...byOwner.entries()].slice(0, 5).map(([owner, ks]) => [
@@ -386,7 +408,7 @@ export const leagueNewsroomRouter = router({
       };
 
       const slug = `keeper-preview-${draftYear}`;
-      const headline = `${LEAGUE_NAME} Keeper Preview: Who Stays and Who Goes in ${draftYear}`;
+      const headline = `${displayLeague} Keeper Preview: Who Stays and Who Goes in ${draftYear}`;
 
       const { body } = await generateArticle({
         articleType: "keeper_preview",
@@ -394,6 +416,7 @@ export const leagueNewsroomRouter = router({
         systemExtra: `IMPORTANT: This is a KEEPER PREDICTION article. Every keeper prediction must be labeled as "PREDICTED — NOT OFFICIAL" throughout. Base predictions only on historical keeper patterns from the evidence. State your confidence level (HIGH/MEDIUM/LOW) for each prediction. Never claim to know official keeper decisions.`,
         evidenceJson,
         maxTokens: 1800,
+        promptCtx,
       });
 
       await saveArticle(db, leagueId, {
@@ -459,9 +482,14 @@ export const leagueNewsroomRouter = router({
 
       const leagueAvg = Math.round(teamAnalyses.reduce((s, t) => s + t.projectedTotal, 0) / (teamAnalyses.length || 1));
 
+      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id, season);
+      const { leagueDescriptor } = buildLeaguePromptContext(promptCtx);
+      const displayLeague = promptCtx.leagueName?.trim() || "this league";
+
       const evidenceJson = {
         season,
-        leagueName: LEAGUE_NAME,
+        leagueName: displayLeague,
+        leagueDescriptor,
         teamCount: teamAnalyses.length,
         leagueAverageProjectedPoints: leagueAvg,
         teams: teamAnalyses,
@@ -474,9 +502,10 @@ export const leagueNewsroomRouter = router({
       const { body } = await generateArticle({
         articleType: "roster_construction",
         headline,
-        systemExtra: `Write a roster construction breakdown for the ${season} ${LEAGUE_NAME} season. Analyze each team's strengths and weaknesses based on their projected roster. Identify who is a title contender, who is rebuilding, and who faces the toughest path. Use only the projected points and position counts provided — do not fabricate specific player analysis not in the evidence.`,
+        systemExtra: `Write a roster construction breakdown for the ${season} season in ${leagueDescriptor}. Analyze each team's strengths and weaknesses based on their projected roster. Identify who is a title contender, who is rebuilding, and who faces the toughest path. Use only the projected points and position counts provided — do not fabricate specific player analysis not in the evidence.`,
         evidenceJson,
         maxTokens: 2000,
+        promptCtx,
       });
 
       await saveArticle(db, leagueId, {

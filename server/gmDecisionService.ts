@@ -1,7 +1,7 @@
 /**
  * GM Decision Memory Service
  *
- * Tracks every decision Rod makes across all tools (Start/Sit, Trade Analyzer,
+ * Tracks every decision the focal manager logs across tools (Start/Sit, Trade Analyzer,
  * Waiver Wire, Trade Offer Generator) with outcomes, patterns, and retrospective
  * LLM analysis.
  */
@@ -14,6 +14,10 @@ import {
   type InsertGmDecision,
 } from "../drizzle/schema";
 import { invokeLLM } from "./_core/llm";
+import {
+  resolveLeaguePromptContext,
+  buildLeaguePromptContext,
+} from "./leaguePromptContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -270,7 +274,7 @@ export function computePatterns(rows: GmDecision[]): DecisionPattern[] {
       pattern: "Followed AI Recommendation",
       frequency: followed.length,
       successRate: Math.round((correct / followed.length) * 100),
-      description: `${followed.length} decisions where Rod followed the AI. ${correct} correct outcomes.`,
+      description: `${followed.length} decisions where the manager followed the AI. ${correct} correct outcomes.`,
     });
   }
 
@@ -282,7 +286,7 @@ export function computePatterns(rows: GmDecision[]): DecisionPattern[] {
       pattern: "Ignored AI Recommendation",
       frequency: ignored.length,
       successRate: Math.round((correct / ignored.length) * 100),
-      description: `${ignored.length} decisions where Rod went against the AI. ${correct} correct outcomes.`,
+      description: `${ignored.length} decisions where the manager went against the AI. ${correct} correct outcomes.`,
     });
   }
 
@@ -339,7 +343,10 @@ export function computePatterns(rows: GmDecision[]): DecisionPattern[] {
 
 // ─── Get Retrospective Analysis (LLM) ────────────────────────────────────────
 
-export async function getRetrospectiveAnalysis(season?: number): Promise<string> {
+export async function getRetrospectiveAnalysis(
+  season?: number,
+  userId?: number,
+): Promise<string> {
   const db = await getDb();
   if (!db) return "Database unavailable.";
 
@@ -364,7 +371,16 @@ export async function getRetrospectiveAnalysis(season?: number): Promise<string>
     .map((r) => `- [${r.outcome.toUpperCase()}] ${r.description} (${r.toolSource}, Week ${r.weekNum ?? "?"})${r.outcomeNotes ? ` → ${r.outcomeNotes}` : ""}`)
     .join("\n");
 
-  const prompt = `You are analyzing the GM decision history for Rod Sellers, owner of "Atlantas Finest" in an ESPN 14-team fantasy football league.
+  const promptCtx = await resolveLeaguePromptContext(userId, season);
+  const { leagueDescriptor, historyClause, focalClause } = buildLeaguePromptContext(promptCtx);
+  let teamLine = focalClause;
+  if (promptCtx.focalTeamName?.trim()) {
+    teamLine = promptCtx.focalOwnerName?.trim()
+      ? `${focalClause} (${promptCtx.focalTeamName.trim()})`
+      : promptCtx.focalTeamName.trim();
+  }
+
+  const prompt = `You are analyzing the GM decision history for ${teamLine} in ${leagueDescriptor}, ${historyClause}.
 
 DECISION STATISTICS:
 - Total decisions logged: ${stats.total}
@@ -381,13 +397,13 @@ ${patterns.map((p) => `- ${p.pattern}: ${p.frequency} decisions, ${p.successRate
 RECENT RESOLVED DECISIONS:
 ${decisionSummary || "No resolved decisions yet."}
 
-Write a 3-4 paragraph retrospective analysis for Rod covering:
-1. His overall decision-making accuracy and whether following the AI recommendations is helping him
-2. His strongest and weakest decision categories (start/sit, trades, waiver wire)
+Write a 3-4 paragraph retrospective analysis addressing the manager in second person ("you"):
+1. Overall decision-making accuracy and whether following the AI recommendations is helping
+2. Strongest and weakest decision categories (start/sit, trades, waiver wire)
 3. Specific behavioral patterns you notice (e.g., tends to ignore AI on trades, strong at waiver wire)
-4. One concrete recommendation for how Rod can improve his decision-making this season
+4. One concrete recommendation for how they can improve decision-making this season
 
-Be direct, specific, and honest. Use actual numbers from the data. Write in second person ("you").`;
+Be direct, specific, and honest. Use actual numbers from the data.`;
 
   const response = await invokeLLM({
     messages: [

@@ -108,8 +108,8 @@ export const gmDecisionRouter = router({
   // ── Get LLM retrospective analysis ─────────────────────────────────────────
   getRetrospective: publicProcedure
     .input(z.object({ season: z.number().int().optional() }).optional())
-    .query(async ({ input }) => {
-      const analysis = await getRetrospectiveAnalysis(input?.season);
+    .query(async ({ ctx, input }) => {
+      const analysis = await getRetrospectiveAnalysis(input?.season, ctx.user?.id);
       return { analysis };
     }),
 
