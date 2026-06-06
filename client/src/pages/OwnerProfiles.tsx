@@ -1238,6 +1238,7 @@ function ProfilePanel({
 
 export function OwnerProfiles() {
   const trpcAny = trpc as any;
+  const utils = trpc.useUtils();
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
 
@@ -1250,13 +1251,34 @@ export function OwnerProfiles() {
     enabled: leagueKeyReady,
   });
 
+  /** Set to `leagueContextKey` only after `ownerList` succeeds for that league (avoids stale rows from cache/server mismatch). */
+  const [ownerListAnchorLeague, setOwnerListAnchorLeague] = useState<string | null>(null);
   const [selectedOwnerKey, setSelectedOwnerKey] = useState<string | null>(null);
   const [showGraveyard, setShowGraveyard] = useState(false);
   const profileRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setSelectedOwnerKey(null);
-  }, [leagueContextKey]);
+    setOwnerListAnchorLeague(null);
+    setShowGraveyard(false);
+    void utils.owners.ownerList.invalidate();
+    void utils.owners.ownerProfile.invalidate();
+  }, [leagueContextKey, utils]);
+
+  useEffect(() => {
+    if (!leagueKeyReady) return;
+    if (listQ.isError) return;
+    if (listQ.isSuccess && !listQ.isFetching) {
+      setOwnerListAnchorLeague(leagueContextKey);
+    }
+  }, [leagueKeyReady, leagueContextKey, listQ.isSuccess, listQ.isFetching, listQ.isError]);
+
+  const ownerListHydrated = Boolean(leagueKeyReady && ownerListAnchorLeague === leagueContextKey);
+
+  const rawActive = (listQ.data?.active ?? []) as any[];
+  const rawGraveyard = (listQ.data?.graveyard ?? []) as any[];
+  const active = ownerListHydrated ? rawActive : [];
+  const graveyard = ownerListHydrated ? rawGraveyard : [];
 
   const dossierActiveSeason = useMemo(() => {
     const c = cachedSeasonsQ.data ?? [];
@@ -1264,7 +1286,7 @@ export function OwnerProfiles() {
   }, [cachedSeasonsQ.data]);
 
   const rivalryEligibleOwnerKeysForDossier = useMemo(() => {
-    const all = listQ.data?.allOwners ?? [];
+    const all = ownerListHydrated ? (listQ.data?.allOwners ?? []) : [];
     return buildDefaultRivalryEligibleOwnerKeys(
       all.map((o: { ownerKey: string; seasons?: number[]; championships?: number }) => ({
         ownerKey: o.ownerKey,
@@ -1273,14 +1295,18 @@ export function OwnerProfiles() {
       })),
       dossierActiveSeason,
     );
-  }, [listQ.data?.allOwners, dossierActiveSeason]);
+  }, [ownerListHydrated, listQ.data?.allOwners, dossierActiveSeason]);
 
-  const active    = useMemo(() => (listQ.data?.active    ?? []) as any[], [listQ.data]);
-  const graveyard = useMemo(() => (listQ.data?.graveyard ?? []) as any[], [listQ.data]);
-  const powerRankings = useMemo(() => (listQ.data?.powerRankings ?? []) as any[], [listQ.data]);
-  const ownerAwards = useMemo(() => (listQ.data?.ownerAwards ?? []) as any[], [listQ.data]);
+  const powerRankings = useMemo(
+    () => (ownerListHydrated ? (listQ.data?.powerRankings ?? []) : []) as any[],
+    [ownerListHydrated, listQ.data],
+  );
+  const ownerAwards = useMemo(
+    () => (ownerListHydrated ? (listQ.data?.ownerAwards ?? []) : []) as any[],
+    [ownerListHydrated, listQ.data],
+  );
 
-  const availableOwnerKeysCount = useMemo(() => {
+  const currentLeagueOwnerKeys = useMemo(() => {
     const s = new Set<string>();
     for (const o of active) {
       const k = listRowLookupKey(o);
@@ -1290,17 +1316,28 @@ export function OwnerProfiles() {
       const k = listRowLookupKey(o);
       if (k) s.add(k);
     }
-    return s.size;
+    return s;
   }, [active, graveyard]);
 
+  const availableOwnerKeysCount = ownerListHydrated ? currentLeagueOwnerKeys.size : 0;
+
   useEffect(() => {
+    if (!ownerListHydrated) return;
+    if (!selectedOwnerKey) return;
+    if (!currentLeagueOwnerKeys.has(selectedOwnerKey)) {
+      setSelectedOwnerKey(null);
+    }
+  }, [ownerListHydrated, selectedOwnerKey, currentLeagueOwnerKeys]);
+
+  useEffect(() => {
+    if (!ownerListHydrated) return;
     if (selectedOwnerKey != null && selectedOwnerKey !== "") return;
     const first =
       listRowLookupKey(active[0]) ||
       listRowLookupKey(graveyard[0]) ||
       "";
     if (first) setSelectedOwnerKey(first);
-  }, [active, graveyard, selectedOwnerKey]);
+  }, [ownerListHydrated, active, graveyard, selectedOwnerKey]);
 
   const headerDisplayName = useMemo(() => {
     if (!selectedOwnerKey) return "";
@@ -1326,11 +1363,26 @@ export function OwnerProfiles() {
     );
   }
 
-  if (listQ.isLoading) return (
-    <div className="flex items-center justify-center py-24 text-muted-foreground">
-      <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading owner profiles…
-    </div>
-  );
+  if (listQ.isError && !listQ.isFetching) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-24 text-destructive">
+        <AlertTriangle className="h-6 w-6" />
+        <p className="text-sm font-medium">Could not load owner list for this league.</p>
+        <p className="text-xs text-muted-foreground">{String((listQ.error as Error)?.message ?? listQ.error)}</p>
+      </div>
+    );
+  }
+
+  if (!ownerListHydrated) {
+    return (
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading owner profiles…
+      </div>
+    );
+  }
+
+  const profileKeyValid =
+    Boolean(selectedOwnerKey) && currentLeagueOwnerKeys.has(selectedOwnerKey!);
 
   return (
     <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 80% -10%,rgba(139,92,246,.16),transparent 42%),linear-gradient(180deg,#130e16,#0f0b11)" }}>
@@ -1394,9 +1446,10 @@ export function OwnerProfiles() {
         </div>
 
         <div ref={profileRef} className="flex-1 min-w-0">
-          {selectedOwnerKey ? (
+          {profileKeyValid ? (
             <ProfilePanel
-              profileLookupKey={selectedOwnerKey}
+              key={`${leagueContextKey}:${selectedOwnerKey}`}
+              profileLookupKey={selectedOwnerKey!}
               headerDisplayName={headerDisplayName}
               powerRankings={powerRankings}
               ownerAwards={ownerAwards}
@@ -1408,8 +1461,9 @@ export function OwnerProfiles() {
               leagueKeyReady={leagueKeyReady}
             />
           ) : (
-            <div className="flex h-64 items-center justify-center rounded-xl border border-white/[0.08] bg-[#18111c]/50 text-sm text-zinc-500">
-              Select an owner to view their profile.
+            <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-[#18111c]/50 text-sm text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span>{selectedOwnerKey ? "Resolving selection…" : "Select an owner to view their profile."}</span>
             </div>
           )}
         </div>
