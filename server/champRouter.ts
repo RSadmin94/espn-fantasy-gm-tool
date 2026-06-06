@@ -19,6 +19,7 @@
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
+import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 import { TRPCError } from "@trpc/server";
 import {
   calcChampionshipEquity,
@@ -227,7 +228,10 @@ export const champRouter = router({
         })),
       }, 1000);
 
-      const systemPrompt = `You are the Championship Equity advisor for Rod Sellers in "ATLANTAS FINEST FF" (14-team PPR keeper league).
+      const __leagueCtx = await resolveLeaguePromptContext(ctx.user?.id, input.season);
+      const { leagueDescriptor, focalClause } = buildLeaguePromptContext(__leagueCtx);
+
+      const systemPrompt = `You are the Championship Equity advisor for ${focalClause} in ${leagueDescriptor}.
 You optimize for championship probability — NOT weekly points. These are two different objectives.
 
 ${simResult.promptBlock}
@@ -236,9 +240,9 @@ KEY PRINCIPLE:
 - If championship probability < 10%: recommend HIGH VARIANCE — only upside moves can close the gap
 - If championship probability 10-20%: balanced, slight lean toward variance
 - If championship probability > 20%: protect the equity, avoid unnecessary risk
-- Unique roster construction matters — if Rod's roster looks like everyone else's, he can't win
+- Unique roster construction matters — if ${focalClause}'s roster looks like everyone else's, they can't win
 
-Answer Rod's question using the championship equity data above as ground truth.`;
+Answer ${focalClause}'s question using the championship equity data above as ground truth.`;
 
       const question = input.specificQuestion
         || "Based on my championship equity, should I be playing it safe or swinging for ceiling moves?";
