@@ -21,7 +21,7 @@
  *   buildRodOpportunityBoard()  — cross-team opportunity ranking for Rod
  */
 
-import { getCachedView, getAllCachedSeasons } from "./db";
+import { getCachedView, getAllCachedSeasons, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
 import {
   normalizeTeams, normalizeRosters, normalizeMatchups,
   normalizeTransactions, normalizeSettings,
@@ -147,16 +147,24 @@ async function getSeasonData(season: number, userId?: number) {
   return cached.payload as Record<string, unknown>;
 }
 
-function detectRodTeamId(teams: ReturnType<typeof normalizeTeams>): number | null {
+/**
+ * Resolve the focal owner's teamId from their active profile (selectedOwnerKey),
+ * matched by memberId — never by display name. Returns null when no profile is
+ * set up or the focal member isn't on a team this season (neutral, no Rod fallback).
+ * Exported for reuse by weeklyAssessmentRouter and champRouter.
+ */
+export async function resolveFocalTeamId(
+  teams: ReturnType<typeof normalizeTeams>,
+  userId?: number
+): Promise<number | null> {
+  if (userId == null) return null;
+  const profile = await resolveActiveProfile({ id: userId });
+  if (!profile.isSetupComplete) return null;
+  const focalMemberId = memberIdFromOwnerKey(profile.selectedOwnerKey);
+  if (!focalMemberId) return null;
   for (const t of teams) {
-    const name = ((t.teamName as string) || "").toLowerCase();
-    const abbrev = ((t.abbrev as string) || "").toLowerCase();
-    const owner = ((t.owners as string) || "").toLowerCase();
-    if (name.includes("str8") || name.includes("rodzilla") ||
-        owner.includes("rod") || owner.includes("sellers") ||
-        abbrev.includes("rod")) {
-      return t.teamId as number;
-    }
+    const mids = (t.memberIds as string[]) || [];
+    if (mids.includes(focalMemberId)) return t.teamId as number;
   }
   return null;
 }
@@ -683,7 +691,7 @@ export async function buildWeeklyAssessment(season: number, userId?: number): Pr
   }
 
   const currentWeek = (settings.currentMatchupPeriod as number) || 1;
-  const rodTeamId = detectRodTeamId(teams);
+  const rodTeamId = await resolveFocalTeamId(teams, userId);
 
   // Build DNA profiles for all managers
   const cachedSeasons = await getAllCachedSeasons(undefined, userId);

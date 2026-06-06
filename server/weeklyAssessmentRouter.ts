@@ -21,6 +21,7 @@ import {
   buildWeeklyAssessment,
   buildTeamAssessment,
   buildRodOpportunityBoard,
+  resolveFocalTeamId,
 } from "./weeklyAssessmentService";
 import {
   normalizeTeams, normalizeRosters, normalizeMatchups,
@@ -132,10 +133,7 @@ export const weeklyAssessmentRouter = router({
       const dna = calcManagerDNA(managerRawData, []);
       const dnaMap = new Map([[input.teamId, dna]]);
 
-      const rodTeamId = teams.find(t => {
-        const name = ((t.teamName as string) || "").toLowerCase();
-        return name.includes("str8") || name.includes("rodzilla");
-      })?.teamId as number ?? null;
+      const rodTeamId = await resolveFocalTeamId(teams, ctx.user?.id);
 
       const allTeamsData = {
         teams,
@@ -386,10 +384,7 @@ export const weeklyAssessmentRouter = router({
         for (const t of teams) {
           teamNameMap[t.teamId as number] = (t.teamName as string) || (t.owners as string) || "Unknown";
         }
-        const rodTeamId = teams.find(t => {
-          const name = ((t.teamName as string) || "").toLowerCase();
-          return name.includes("str8") || name.includes("rodzilla");
-        })?.teamId as number ?? null;
+        const rodTeamId = await resolveFocalTeamId(teams, ctx.user?.id);
         const allTeamsData = {
           teams,
           rosters: [],

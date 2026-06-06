@@ -89,16 +89,6 @@ export interface WeeklyStorylineRow {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function isFocalTeam(name: string, abbrev: string, owners: string): boolean {
-  // Kept for backward compat — now superseded by profile-based focalTeamId resolution.
-  // Returns true if team identifiers match the legacy focal-owner pattern.
-  const n = name.toLowerCase();
-  const o = owners.toLowerCase();
-  return n.includes("str8") || n.includes("rodzilla") ||
-    o.includes("rod") || o.includes("sellers") ||
-    abbrev.toLowerCase().includes("rod");
-}
-
 /**
  * Compute a rough desperation score from win%, transaction activity, and
  * recent matchup results — mirrors the leaguePulse calculation so we don't
@@ -639,17 +629,8 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
           break;
         }
       }
-      // Fallback: try name-based detection if memberIds don't match
-      if (focalTeamId === null) {
-        for (const t of teams) {
-          const tid = t.teamId as number;
-          if (isFocalTeam((t.teamName as string) || "", (t.abbrev as string) || "", (t.owners as string) || "")) {
-            focalTeamId = tid;
-            focalMemberIds = memberIdsMap[tid] ?? [];
-            break;
-          }
-        }
-      }
+      // No name-based fallback: if the profile's memberId isn't on a team this
+      // season, focalTeamId stays null (neutral — focal-only stories don't fire).
     }
   }
 
@@ -744,7 +725,7 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
           const name = `${m.firstName || ''} ${m.lastName || ''}`.trim() || (m.displayName as string) || mid;
           memberNameMap.set(mid, name);
         }
-        const rodName = memberNameMap.get(rodId) || 'Rod Sellers';
+        const rodName = memberNameMap.get(rodId) || 'Your team';
         for (const rp of rivalryPairs) {
           const rivalName = memberNameMap.get(rp.rivalId) || rp.rivalName;
           const h2h = await computeRichH2H(rodId, rp.rivalId, rodName, rivalName, userId);

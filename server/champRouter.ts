@@ -41,6 +41,7 @@ import {
   normalizeMatchups,
   normalizeSettings,
 } from "./espnService";
+import { resolveFocalTeamId } from "./weeklyAssessmentService";
 
 // ─── Shared input schemas ─────────────────────────────────────────────────────
 
@@ -126,17 +127,9 @@ async function buildTeamStandings(season: number, userId?: number): Promise<{
     teamRemainingSchedule.get(awayId)!.push(homeId);
   }
 
-  // Detect Rod's team
-  let focalTeamId: number | null = null;
-  for (const t of rawTeams) {
-    const name = ((t.teamName as string) || "").toLowerCase();
-    const owner = ((t.owners as string) || "").toLowerCase();
-    if (name.includes("str8") || name.includes("rodzilla") ||
-        owner.includes("rod") || owner.includes("sellers")) {
-      focalTeamId = t.teamId as number;
-      break;
-    }
-  }
+  // Resolve the focal owner's team from their active profile (memberId match),
+  // never by display name. Null when no profile is set up (neutral, no Rod fallback).
+  const focalTeamId: number | null = await resolveFocalTeamId(rawTeams, userId);
 
   const teams: TeamStanding[] = rawTeams.map(t => ({
     teamId: t.teamId as number,
