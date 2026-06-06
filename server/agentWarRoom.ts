@@ -9,9 +9,9 @@
  * Agents:
  *   Floor Agent      — safest outcome, minimize bust risk
  *   Upside Agent     — league-winning ceiling, accept volatility
- *   Counter Agent    — blocks your 13 specific opponents' tendencies
- *   Keeper Agent     — future value, 2026/2027 cost vs production
- *   Playoff Agent    — weeks 14-17 schedule, playoff path optimization
+ *   Counter Agent    — blocks opponents' tendencies
+ *   Keeper Agent     — future value, keeper cost vs production
+ *   Playoff Agent    — playoff schedule, path optimization
  *
  * Architecture:
  *   All 5 agents receive the same calculated facts (injury scores,
@@ -19,13 +19,21 @@
  *   Each agent has a different optimization target — the disagreement IS
  *   the signal. 5/5 agree = high confidence. 3/2 split = genuinely close call.
  *
+ * League framing in system prompts comes from `resolveLeaguePromptContext` +
+ * `buildLeaguePromptContext` (no hardcoded league name, team count, or focal owner).
+ *
  * Exports:
  *   runAgentDebate()        — core parallel agent runner
  *   buildAgentContext()     — assembles shared fact block for all agents
- *   parseAgentVerdicts()    — normalizes raw LLM responses to typed verdicts
+ *   buildAgentConfigs()     — league-aware system prompts for each agent role
  */
 
 import { invokeLLM } from "./_core/llm";
+import {
+  resolveLeaguePromptContext,
+  buildLeaguePromptContext,
+  type LeaguePromptContext,
+} from "./leaguePromptContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,16 +76,37 @@ export interface AgentContext {
   optionB: string;
   /** Pre-calculated facts injected as ground truth */
   calculatedFacts: string;
-  /** Current league context (standings, week, Rod's record) */
+  /** Current league context (standings, week, records) — caller-supplied detail */
   leagueContext: string;
 }
 
-// ─── Agent system prompts ─────────────────────────────────────────────────────
+// ─── Agent system prompts (factory) ───────────────────────────────────────────
 
-const AGENT_CONFIGS: Record<AgentRole, { label: string; systemPrompt: string }> = {
-  floor: {
-    label: "Floor Agent",
-    systemPrompt: `You are the Floor Agent in a 5-agent fantasy football war room for "ATLANTAS FINEST FF" (14-team PPR keeper league).
+type AgentConfigRow = { label: string; systemPrompt: string };
+
+/**
+ * Builds per-role system prompts from resolved league + focal context.
+ * Preserves JSON schema instructions, agent names, and optimization targets;
+ * only league/focal/history/count scaffolding is parameterized.
+ */
+export function buildAgentConfigs(promptCtx: LeaguePromptContext): Record<AgentRole, AgentConfigRow> {
+  const { leagueDescriptor, historyClause, focalClause } = buildLeaguePromptContext(promptCtx);
+  const leaguePreamble =
+    `You are one specialist in a 5-agent fantasy football war room for ${leagueDescriptor}, ${historyClause}. ` +
+    `The primary manager you are advising is ${focalClause}. ` +
+    "Use only facts provided in the user message; do not invent league settings.";
+
+  const opponentPool =
+    promptCtx.teamCount > 1
+      ? `the other ${promptCtx.teamCount - 1} managers`
+      : "other managers";
+
+  return {
+    floor: {
+      label: "Floor Agent",
+      systemPrompt: `${leaguePreamble}
+
+You are the Floor Agent.
 
 YOUR OPTIMIZATION TARGET: Minimize weekly bust risk and maximize consistent floor production.
 - Favor players with high workload confidence and predictable usage
@@ -95,11 +124,13 @@ Respond ONLY in this exact JSON format, no markdown:
   "riskOrConcern": "The main risk you see with the recommended option",
   "recommendation": "One decisive sentence starting with START, KEEP, TRADE, or DRAFT"
 }`,
-  },
+    },
 
-  upside: {
-    label: "Upside Agent",
-    systemPrompt: `You are the Upside Agent in a 5-agent fantasy football war room for "ATLANTAS FINEST FF" (14-team PPR keeper league).
+    upside: {
+      label: "Upside Agent",
+      systemPrompt: `${leaguePreamble}
+
+You are the Upside Agent.
 
 YOUR OPTIMIZATION TARGET: Maximize league-winning ceiling production. Championships are won by boom weeks.
 - Accept bust risk in exchange for ceiling — a safe 12 points never wins a championship
@@ -118,18 +149,20 @@ Respond ONLY in this exact JSON format, no markdown:
   "riskOrConcern": "The main downside risk you acknowledge",
   "recommendation": "One decisive sentence starting with START, KEEP, TRADE, or DRAFT"
 }`,
-  },
+    },
 
-  counter: {
-    label: "Opponent Counter Agent",
-    systemPrompt: `You are the Opponent Counter Agent in a 5-agent fantasy football war room for "ATLANTAS FINEST FF" (14-team PPR keeper league).
+    counter: {
+      label: "Opponent Counter Agent",
+      systemPrompt: `${leaguePreamble}
 
-YOUR OPTIMIZATION TARGET: Block and counter the specific behavioral tendencies of the other 13 managers.
+You are the Opponent Counter Agent.
+
+YOUR OPTIMIZATION TARGET: Block and counter the specific behavioral tendencies of ${opponentPool}.
 - Use opponent DNA profiles to anticipate their moves before they happen
 - In drafts: if an opponent historically reaches for a position, let them overpay and take value elsewhere
 - In trades: identify when an opponent is in a desperation window and extract maximum value
 - In waiver decisions: claim players opponents will panic-bid on before they do
-- Consider head-to-head history with Rod — who does he consistently beat or lose to?
+- Consider head-to-head history involving ${focalClause} where relevant
 - Think 1-2 moves ahead: what does this decision set up for future exploitation?
 
 You will receive opponent DNA profiles and calculated facts — treat these as ground truth.
@@ -141,22 +174,23 @@ Respond ONLY in this exact JSON format, no markdown:
   "riskOrConcern": "What opponent behavior could backfire on this recommendation",
   "recommendation": "One decisive sentence starting with START, KEEP, TRADE, or DRAFT"
 }`,
-  },
+    },
 
-  keeper: {
-    label: "Keeper Agent",
-    systemPrompt: `You are the Keeper Agent in a 5-agent fantasy football war room for "ATLANTAS FINEST FF" (14-team PPR keeper league, 1 keeper per team, keeper costs 1 round more than previous draft round).
+    keeper: {
+      label: "Keeper Agent",
+      systemPrompt: `${leaguePreamble}
 
-YOUR OPTIMIZATION TARGET: Maximize multi-year roster value. Think 2026 and 2027, not just this week.
-- Keeper cost vs ADP surplus is the primary valuation metric
-- Age trajectory matters: a 24-year-old WR kept in round 8 is worth far more than a 30-year-old RB
-- Consider the 2-consecutive-year rule — if a player will hit the limit, their value resets
-- In trades: heavily weight keeper eligibility and future draft cost
-- In drafts: players that fall to rounds 8-12 but have elite keeper potential are the biggest prizes
-- RBs age fast — discount anyone over 27 for keeper value
-- TE scarcity makes elite TEs extremely keepable
+You are the Keeper Agent.
 
-You will receive calculated facts including keeper round costs — treat these as ground truth.
+YOUR OPTIMIZATION TARGET: Maximize multi-year roster value beyond the current week alone.
+- Keeper cost vs ADP surplus is a primary valuation metric when those numbers appear in calculated facts
+- Age trajectory matters for multi-year value
+- When keeper eligibility or consecutive-year rules appear in calculated facts, treat them as binding
+- In trades: weight keeper eligibility and future draft cost when facts support it
+- In drafts: players who slide but have strong multi-year profiles can be priorities when facts say so
+- RB aging curves and TE scarcity are general heuristics — always defer to calculated facts when they conflict
+
+You will receive calculated facts including keeper and contract context when available — treat those as ground truth.
 Respond ONLY in this exact JSON format, no markdown:
 {
   "verdict": "A" or "B" or "NEUTRAL",
@@ -165,19 +199,21 @@ Respond ONLY in this exact JSON format, no markdown:
   "riskOrConcern": "The main keeper risk — cost escalation, age, or eligibility concern",
   "recommendation": "One decisive sentence starting with START, KEEP, TRADE, or DRAFT"
 }`,
-  },
+    },
 
-  playoff: {
-    label: "Playoff Agent",
-    systemPrompt: `You are the Playoff Agent in a 5-agent fantasy football war room for "ATLANTAS FINEST FF" (14-team PPR keeper league, playoffs are weeks 15-17).
+    playoff: {
+      label: "Playoff Agent",
+      systemPrompt: `${leaguePreamble}
 
-YOUR OPTIMIZATION TARGET: Maximize championship probability specifically for playoff weeks 14-17.
-- Regular season production is irrelevant if the player has a brutal playoff schedule
-- Prioritize players whose NFL teams have strong playoff matchups (weak defenses in weeks 15-17)
-- Accept lower floor now in exchange for playoff schedule upside
-- Dome players, pass-catching RBs, and high-target WRs in good playoff matchups are gold
-- Consider injury timing: a player who is banged up now but will be healthy for the playoffs is worth holding
-- Bye weeks and playoff matchup strength should heavily influence start/sit and trade decisions
+You are the Playoff Agent.
+
+YOUR OPTIMIZATION TARGET: Maximize championship probability during the league playoff window described in LEAGUE CONTEXT or calculated facts (NFL schedule alignment, weeks, and seeding rules).
+- Regular season production matters less if playoff matchups are unfavorable
+- Prioritize players whose NFL teams draw favorable playoff opponents when such data is provided
+- Accept lower floor now in exchange for playoff schedule upside when facts support it
+- Dome games, pass-catching roles, and high-target shares remain useful heuristics when consistent with facts
+- Consider injury timing: a player banged up early but projected healthy for playoffs can still be valuable when facts support it
+- Bye weeks and playoff strength of schedule should influence start/sit and trade takes when provided
 
 You will receive calculated facts — treat these as ground truth.
 Respond ONLY in this exact JSON format, no markdown:
@@ -188,16 +224,18 @@ Respond ONLY in this exact JSON format, no markdown:
   "riskOrConcern": "The main playoff risk — schedule, injury timing, or usage concern",
   "recommendation": "One decisive sentence starting with START, KEEP, TRADE, or DRAFT"
 }`,
-  },
-};
+    },
+  };
+}
 
 // ─── Run a single agent ───────────────────────────────────────────────────────
 
 async function runAgent(
   role: AgentRole,
-  context: AgentContext
+  context: AgentContext,
+  configs: Record<AgentRole, AgentConfigRow>,
 ): Promise<AgentVerdictRaw> {
-  const config = AGENT_CONFIGS[role];
+  const config = configs[role];
 
   const userMessage = [
     `DECISION: ${context.question}`,
@@ -359,15 +397,27 @@ function aggregateVerdicts(
 
 // ─── Core parallel runner ─────────────────────────────────────────────────────
 
+export type RunAgentDebateOpts = {
+  /** When set, resolves league/focal framing for system prompts (subscribed callers should pass `ctx.user.id`). */
+  userId?: number;
+  season?: number;
+};
+
 /**
  * Runs all 5 agents in parallel and returns the aggregated debate result.
  * Total latency = single agent latency (they run concurrently, not sequentially).
  */
-export async function runAgentDebate(context: AgentContext): Promise<AgentDebateResult> {
+export async function runAgentDebate(
+  context: AgentContext,
+  opts?: RunAgentDebateOpts,
+): Promise<AgentDebateResult> {
+  const promptCtx = await resolveLeaguePromptContext(opts?.userId, opts?.season);
+  const agentConfigs = buildAgentConfigs(promptCtx);
+
   const roles: AgentRole[] = ["floor", "upside", "counter", "keeper", "playoff"];
 
   const verdicts = await Promise.all(
-    roles.map(role => runAgent(role, context))
+    roles.map(role => runAgent(role, context, agentConfigs))
   );
 
   return aggregateVerdicts(verdicts, context.question, context.optionA, context.optionB);
@@ -386,7 +436,7 @@ export function buildAgentContext(params: {
   injuryBlock?: string;       // from Phase 1: buildInjuryPromptBlock()
   simulationBlock?: string;   // from Phase 2: simResult.summaryText
   dnaBlock?: string;          // from Phase 3: buildDNAPromptBlock()
-  leagueContext?: string;     // standings, week, Rod's record
+  leagueContext?: string;     // standings, week, matchup detail (caller-supplied)
   extraFacts?: string;        // any additional calculated facts
 }): AgentContext {
   const factParts: string[] = [];
@@ -403,6 +453,8 @@ export function buildAgentContext(params: {
     calculatedFacts: factParts.length > 0
       ? factParts.join("\n\n")
       : "No pre-calculated facts provided — reason from general knowledge.",
-    leagueContext: params.leagueContext ?? "ATLANTAS FINEST FF, 14-team PPR keeper league, 2025 season.",
+    leagueContext: (params.leagueContext && params.leagueContext.trim())
+      ? params.leagueContext.trim()
+      : "No additional league context provided — rely on system league framing and calculated facts.",
   };
 }
