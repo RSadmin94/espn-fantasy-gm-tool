@@ -11,6 +11,47 @@ const SUB: React.CSSProperties = { background:"rgba(255,255,255,.03)", border:"1
 const PAGEBG: React.CSSProperties = { background:"radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0e0a10,#080609)", color:TEXT };
 
 function firstName(s: any){ return String(s||"").trim().split(" ")[0] || "Owner"; }
+
+const SCAN_DNA_MAX_EVIDENCE_LEN = 120;
+
+/** Action Queue "Scan Owner DNA" — league/evidence-specific copy from existing shock meter fields only. */
+function scanOwnerDnaActionDescription(topSurprise: unknown, teamCount: number): string {
+  const m = topSurprise as Record<string, unknown> | null | undefined;
+  if (!m) return "Review owner tendencies.";
+
+  const first = firstName(m.ownerName);
+  const pct = Math.round(Number(m.surpriseProbability ?? 0));
+  const teamName = String(m.teamName ?? "").trim();
+  const teamTag =
+    teamName.length > 0 ? ` (${teamName.length > 28 ? `${teamName.slice(0, 26)}…` : teamName})` : "";
+
+  const ev = m.evidence;
+  let tail = "";
+  if (Array.isArray(ev) && ev.length > 0) {
+    const raw = ev[0];
+    const s =
+      typeof raw === "string"
+        ? raw
+        : raw != null && typeof raw === "object"
+          ? String((raw as Record<string, unknown>).text ?? (raw as Record<string, unknown>).label ?? "")
+          : "";
+    tail = s.trim();
+  }
+  if (tail.length > SCAN_DNA_MAX_EVIDENCE_LEN) {
+    tail = `${tail.slice(0, SCAN_DNA_MAX_EVIDENCE_LEN - 1)}…`;
+  }
+  if (!tail) {
+    const pos = String(m.mostLikelyPosition ?? "").trim();
+    const posUp = pos.toUpperCase();
+    if (pos && posUp !== "ANY") tail = `watch ${pos} behavior.`;
+  }
+  if (!tail) tail = "based on this league's current roster signals.";
+
+  const leaguePhrase =
+    teamCount > 0 ? ` in this ${teamCount}-team league` : " in this league";
+  return `${first}${teamTag} is ${pct}% surprise risk${leaguePhrase} — ${tail}`;
+}
+
 function archetype(m: any){ const pred=Number(m?.predictabilityScore??0), surp=Number(m?.surpriseProbability??0);
   if(surp>=55) return {label:"Panic Pivot", color:RED};
   if(pred>=72) return {label:"By-the-Book", color:GREEN};
@@ -50,6 +91,11 @@ export function CommandDashboard(){
   const topSurprise = bySurprise[0];
   const topRun = topRuns[0];
 
+  const scanOwnerDnaLine = useMemo(
+    () => scanOwnerDnaActionDescription(topSurprise, teamCount),
+    [topSurprise, teamCount],
+  );
+
   const memo = loading ? "Loading league intelligence…"
     : meters.length===0 ? "Sync your league to generate today's GM briefing."
     : `Draft prep is live. ${topSurprise ? firstName(topSurprise.ownerName)+" is your least predictable rival ("+(topSurprise.mostLikelyPosition||"flex")+" lean). " : ""}${topRun ? topRun.position+" run risk is the strongest board signal. " : ""}Protect leverage where value is thin.`;
@@ -76,7 +122,7 @@ export function CommandDashboard(){
   ];
   const actions = [
     { t:"Open Draft War Room", to:"/draft-war-room", d: topRun?`${topRun.position} run risk building — get owner-risk context.`:"Next pick needs owner-risk context.", cta:"Review" },
-    { t:"Scan Owner DNA", to:"/owner-profiles", d: topSurprise?`${firstName(topSurprise.ownerName)} is trending unpredictable.`:"Review owner tendencies.", cta:"Analyze" },
+    { t:"Scan Owner DNA", to:"/owner-profiles", d: scanOwnerDnaLine, cta:"Analyze" },
     { t:"Check Keeper Lab", to:"/keeper-advisor", d:"Confirm your value holds before the draft.", cta:"Compare" },
   ];
   const rings = [
