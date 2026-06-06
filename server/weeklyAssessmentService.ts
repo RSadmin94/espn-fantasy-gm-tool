@@ -30,6 +30,7 @@ import { calcVORP, calcRosterGaps, calcROSValue, type PlayerRow } from "./analyt
 import { getInjuries, calcInjuryScores, buildInjuryPromptBlock } from "./injuryService";
 import { calcManagerDNA, calcTradeDesperationScore, type ManagerRawData, type DraftPickRecord } from "./leagueDNA";
 import { invokeLLM } from "./_core/llm";
+import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -372,7 +373,8 @@ function generateRodOpportunities(
   team: Partial<TeamWeeklyAssessment>,
   rodRosterGaps: string[],
   desperationScore: number,
-  exploitabilityScore: number
+  exploitabilityScore: number,
+  focalLabel: string
 ): RodOpportunity[] {
   const opps: RodOpportunity[] = [];
   const teamId = team.teamId!;
@@ -420,9 +422,9 @@ function generateRodOpportunities(
         type: "SELL_HIGH",
         targetTeamId: teamId,
         targetOwner: owner,
-        action: `Target ${p.playerName} from ${owner} — fills Rod's ${p.position} gap and ${owner}'s desperation makes them tradeable`,
+        action: `Target ${p.playerName} from ${owner} — fills ${focalLabel}'s ${p.position} gap and ${owner}'s desperation makes them tradeable`,
         urgency: "THIS_WEEK",
-        reasoning: `${p.playerName} fills a positional gap in Rod's roster. ${owner} may be willing to move pieces for win-now help given their record.`,
+        reasoning: `${p.playerName} fills a positional gap in ${focalLabel}'s roster. ${owner} may be willing to move pieces for win-now help given their record.`,
         desperationScore,
       });
     }
@@ -435,7 +437,8 @@ function generateRodOpportunities(
 
 async function generateAIBriefing(
   team: Omit<TeamWeeklyAssessment, "aiGMBriefing">,
-  injuryBlock: string
+  injuryBlock: string,
+  league: { leagueDescriptor: string; focalClause: string }
 ): Promise<string> {
   const lastWeekStr = team.lastWeekResult
     ? `Last week they ${team.lastWeekResult.won ? "WON" : "LOST"} ${team.lastWeekResult.teamScore}-${team.lastWeekResult.opponentScore} vs ${team.lastWeekResult.opponentOwner}.`
@@ -451,7 +454,7 @@ async function generateAIBriefing(
   const isComplete = (team as TeamWeeklyAssessment & { isSeasonComplete?: boolean }).isSeasonComplete ?? false;
 
   const systemPrompt = isComplete
-    ? `You are the GM War Room offseason briefing engine for Rod Sellers in "ATLANTAS FINEST FF" (14-team PPR keeper league, ${team.season} season — COMPLETED).
+    ? `You are the GM War Room offseason briefing engine for ${league.focalClause} in ${league.leagueDescriptor}, ${team.season} season — COMPLETED.
 
 You are writing an END-OF-SEASON offseason summary for ONE team. The numbers below are final season facts — treat them as ground truth.
 
@@ -464,17 +467,17 @@ POSITIONAL GAPS HEADING INTO ${team.season + 1}: ${team.positionalGaps.join(", "
 SEASON TRANSACTION SUMMARY:
 ${txStr}
 
-ROD'S OFFSEASON OPPORTUNITIES VS THIS TEAM:
+${league.focalClause.toUpperCase()}'S OFFSEASON OPPORTUNITIES VS THIS TEAM:
 ${opps || "None identified"}
 
 Write a concise end-of-season GM summary (4-6 sentences) covering:
 1. How their season went and what their final standing means for their rebuild/contention arc
 2. Their biggest roster needs heading into the ${team.season + 1} draft and keeper decisions
-3. Specific offseason trade or keeper opportunities Rod should target with this manager
+3. Specific offseason trade or keeper opportunities ${league.focalClause} should target with this manager
 4. Whether now (offseason) is the right time to approach them for a deal
 
 Be direct and forward-looking. Reference final record, standing, and specific roster gaps.`
-    : `You are the GM War Room weekly briefing engine for Rod Sellers in "ATLANTAS FINEST FF" (14-team PPR keeper league, ${team.season} season, Week ${team.week}).
+    : `You are the GM War Room weekly briefing engine for ${league.focalClause} in ${league.leagueDescriptor}, ${team.season} season, Week ${team.week}.
 
 You are writing a GM briefing for ONE opponent team. The numbers below are pre-calculated facts — treat them as ground truth and do not contradict them.
 
@@ -493,14 +496,14 @@ ${txStr}
 THEIR RECOMMENDED MOVES THIS WEEK:
 ${recs || "None identified"}
 
-ROD'S OPPORTUNITIES AGAINST THIS TEAM:
+${league.focalClause.toUpperCase()}'S OPPORTUNITIES AGAINST THIS TEAM:
 ${opps || "None identified"}
 
 Write a concise GM weekly briefing (4-6 sentences) covering:
 1. Their current situation and trajectory
 2. What moves they should make this week and why
-3. Specific opportunities Rod should exploit against them this week
-4. Timing guidance — is now the right moment to act, or should Rod wait?
+3. Specific opportunities ${league.focalClause} should exploit against them this week
+4. Timing guidance — is now the right moment to act, or should ${league.focalClause} wait?
 
 Be direct and tactical. No generic advice. Reference specific players and scores where available.`;
 
@@ -534,7 +537,8 @@ export async function buildTeamAssessment(
   },
   dnaProfiles: Map<number, ReturnType<typeof calcManagerDNA>>,
   rodRosterGaps: string[],
-  rodTeamId: number | null
+  rodTeamId: number | null,
+  league: { leagueDescriptor: string; focalClause: string }
 ): Promise<TeamWeeklyAssessment> {
   const { teams, rosters, matchups, transactions, settings, ownerMap, teamNameMap } = allTeamsData;
   const currentWeek = (settings.currentMatchupPeriod as number) || 1;
@@ -648,7 +652,7 @@ export async function buildTeamAssessment(
   const theirRecommendations = generateTheirRecommendations(partialAssessment, starters, bench);
 
   const rodOpportunities = teamId !== rodTeamId
-    ? generateRodOpportunities(partialAssessment, rodRosterGaps, desperationScore, exploitabilityScore)
+    ? generateRodOpportunities(partialAssessment, rodRosterGaps, desperationScore, exploitabilityScore, league.focalClause)
     : [];
 
   const assessmentWithoutAI: Omit<TeamWeeklyAssessment, "aiGMBriefing"> & { isSeasonComplete: boolean } = {
@@ -664,7 +668,7 @@ export async function buildTeamAssessment(
     theirRecommendations, rodOpportunities,
   };
 
-  const aiGMBriefing = await generateAIBriefing(assessmentWithoutAI, injuryBlock);
+  const aiGMBriefing = await generateAIBriefing(assessmentWithoutAI, injuryBlock, league);
 
   return { ...assessmentWithoutAI, aiGMBriefing };
 }
@@ -692,6 +696,10 @@ export async function buildWeeklyAssessment(season: number, userId?: number): Pr
 
   const currentWeek = (settings.currentMatchupPeriod as number) || 1;
   const rodTeamId = await resolveFocalTeamId(teams, userId);
+
+  // C5: resolve neutral league context once for all assessment prompts.
+  const __leagueCtx = await resolveLeaguePromptContext(userId, season);
+  const __league = buildLeaguePromptContext(__leagueCtx);
 
   // Build DNA profiles for all managers
   const cachedSeasons = await getAllCachedSeasons(undefined, userId);
@@ -739,7 +747,7 @@ export async function buildWeeklyAssessment(season: number, userId?: number): Pr
   const teamAssessments: TeamWeeklyAssessment[] = [];
   for (const team of teams) {
     const assessment = await buildTeamAssessment(
-      team.teamId as number, season, allTeamsData, dnaProfiles, rodGaps, rodTeamId
+      team.teamId as number, season, allTeamsData, dnaProfiles, rodGaps, rodTeamId, __league
     );
     teamAssessments.push(assessment);
   }
@@ -755,15 +763,15 @@ export async function buildWeeklyAssessment(season: number, userId?: number): Pr
     .slice(0, 10);
 
   // Generate league summary
-  const leagueSummaryPrompt = `You are the GM War Room weekly league summary engine for Rod Sellers in ATLANTAS FINEST FF (Week ${currentWeek}, Season ${season}).
+  const leagueSummaryPrompt = `You are the GM War Room weekly league summary engine for ${__league.focalClause} in ${__league.leagueDescriptor} (Week ${currentWeek}, Season ${season}).
 
 Key facts this week:
 ${teamAssessments.slice(0, 14).map(t => `${t.ownerName}: ${t.wins}-${t.losses} | Desperation: ${t.desperationScore}/100 | ${t.tradeWindowStatus}`).join("\n")}
 
-Rod's team ID: ${rodTeamId}
-Rod's top opportunities: ${allRodOpportunities.slice(0, 3).map(o => o.action).join(" | ")}
+${__league.focalClause}'s team ID: ${rodTeamId}
+${__league.focalClause}'s top opportunities: ${allRodOpportunities.slice(0, 3).map(o => o.action).join(" | ")}
 
-Write a 3-4 sentence executive summary of the league this week. Identify the biggest storylines, who is desperate, who is dominant, and Rod's single best action this week. Be specific and tactical.`;
+Write a 3-4 sentence executive summary of the league this week. Identify the biggest storylines, who is desperate, who is dominant, and ${__league.focalClause}'s single best action this week. Be specific and tactical.`;
 
   let leagueSummary = "";
   try {
@@ -773,7 +781,7 @@ Write a 3-4 sentence executive summary of the league this week. Identify the big
     const rawSummary = resp.choices?.[0]?.message?.content;
     leagueSummary = typeof rawSummary === "string" ? rawSummary : "";
   } catch {
-    leagueSummary = `Week ${currentWeek} league summary: ${teamAssessments.filter(t => t.desperationScore >= 60).length} managers showing high desperation. Rod's top opportunity: ${allRodOpportunities[0]?.action ?? "Monitor the league this week."}`;
+    leagueSummary = `Week ${currentWeek} league summary: ${teamAssessments.filter(t => t.desperationScore >= 60).length} managers showing high desperation. ${__league.focalClause}'s top opportunity: ${allRodOpportunities[0]?.action ?? "Monitor the league this week."}`;
   }
 
   return {

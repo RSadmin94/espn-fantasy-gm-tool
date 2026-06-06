@@ -28,6 +28,7 @@ import {
   normalizeTransactions, normalizeSettings,
 } from "./espnService";
 import { getCachedView } from "./db";
+import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 import { memCache } from "./memCache";
 import { calcManagerDNA, type DraftPickRecord, type ManagerRawData } from "./leagueDNA";
 
@@ -145,7 +146,9 @@ export const weeklyAssessmentRouter = router({
         teamNameMap,
       };
 
-      const raw = await buildTeamAssessment(input.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId);
+      const __leagueCtx = await resolveLeaguePromptContext(ctx.user?.id, input.season);
+      const __league = buildLeaguePromptContext(__leagueCtx);
+      const raw = await buildTeamAssessment(input.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId, __league);
 
       // Map plain-English gmArchetype to ARCHETYPE_COLORS key used by the extension
       const ARCHETYPE_KEY_MAP: Record<string, string> = {
@@ -385,6 +388,8 @@ export const weeklyAssessmentRouter = router({
           teamNameMap[t.teamId as number] = (t.teamName as string) || (t.owners as string) || "Unknown";
         }
         const rodTeamId = await resolveFocalTeamId(teams, ctx.user?.id);
+        const __leagueCtx = await resolveLeaguePromptContext(ctx.user?.id, input.season);
+        const __league = buildLeaguePromptContext(__leagueCtx);
         const allTeamsData = {
           teams,
           rosters: [],
@@ -408,7 +413,7 @@ export const weeklyAssessmentRouter = router({
             };
             const dna = _calcDNA(managerRawData, []);
             const dnaMap = new Map([[entry.teamId, dna]]);
-            await buildTeamAssessment(entry.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId);
+            await buildTeamAssessment(entry.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId, __league);
             entry.status = "done";
             job.successCount++;
           } catch (err) {
