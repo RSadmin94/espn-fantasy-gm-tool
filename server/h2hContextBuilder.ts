@@ -273,26 +273,26 @@ async function _computeRichH2H(
 
 /**
  * Build a compact, information-dense H2H context string for AI prompts.
- * memberAName is always "Rod" (or the primary user).
+ * memberAName is the focal (primary) owner display name, resolved upstream.
  */
-export function buildH2HPromptBlock(stats: RichH2HStats, label = "H2H vs Rod Sellers"): string {
+export function buildH2HPromptBlock(stats: RichH2HStats, label = `H2H vs ${stats.memberAName}`): string {
   const lines: string[] = [];
 
   lines.push(`${label}: ${stats.rsWins}W-${stats.rsLosses}L${stats.rsTies > 0 ? `-${stats.rsTies}T` : ""} (${stats.rsTotalGames} regular-season games)`);
 
   if (stats.avgMemberAPF !== null && stats.avgMemberBPF !== null) {
-    lines.push(`  Avg scoring: Rod ${stats.avgMemberAPF} pts vs ${stats.memberBName} ${stats.avgMemberBPF} pts`);
+    lines.push(`  Avg scoring: ${stats.memberAName} ${stats.avgMemberAPF} pts vs ${stats.memberBName} ${stats.avgMemberBPF} pts`);
   }
 
   if (stats.biggestAWin) {
-    lines.push(`  Biggest Rod win: ${stats.biggestAWin.aScore}–${stats.biggestAWin.bScore} in ${stats.biggestAWin.season} (+${stats.biggestAWin.margin} pts)`);
+    lines.push(`  Biggest ${stats.memberAName} win: ${stats.biggestAWin.aScore}–${stats.biggestAWin.bScore} in ${stats.biggestAWin.season} (+${stats.biggestAWin.margin} pts)`);
   }
   if (stats.biggestALoss) {
-    lines.push(`  Biggest Rod loss: ${stats.biggestALoss.aScore}–${stats.biggestALoss.bScore} in ${stats.biggestALoss.season} (-${stats.biggestALoss.margin} pts)`);
+    lines.push(`  Biggest ${stats.memberAName} loss: ${stats.biggestALoss.aScore}–${stats.biggestALoss.bScore} in ${stats.biggestALoss.season} (-${stats.biggestALoss.margin} pts)`);
   }
 
   if (stats.currentStreakLength >= 2) {
-    lines.push(`  Current streak: Rod ${stats.currentStreakLength}-game ${stats.currentStreakDirection} streak`);
+    lines.push(`  Current streak: ${stats.memberAName} ${stats.currentStreakLength}-game ${stats.currentStreakDirection} streak`);
   }
   const streakParts: string[] = [];
   if (stats.longestWinStreak >= 3) streakParts.push(`longest win streak: ${stats.longestWinStreak}`);
@@ -301,12 +301,12 @@ export function buildH2HPromptBlock(stats: RichH2HStats, label = "H2H vs Rod Sel
 
   const recentBreakdown = stats.seasonBreakdown.slice(-5);
   if (recentBreakdown.length > 0) {
-    const bdStr = recentBreakdown.map(s => `${s.season}: Rod ${s.aWins}-${s.aLosses}`).join(", ");
+    const bdStr = recentBreakdown.map(s => `${s.season}: ${stats.memberAName} ${s.aWins}-${s.aLosses}`).join(", ");
     lines.push(`  Recent seasons: ${bdStr}`);
   }
 
   if (stats.playoffWins + stats.playoffLosses > 0) {
-    lines.push(`  Playoff H2H: Rod ${stats.playoffWins}W-${stats.playoffLosses}L (${stats.playoffEliminations} eliminations by ${stats.memberBName})`);
+    lines.push(`  Playoff H2H: ${stats.memberAName} ${stats.playoffWins}W-${stats.playoffLosses}L (${stats.playoffEliminations} eliminations by ${stats.memberBName})`);
   }
 
   return lines.join("\n");
