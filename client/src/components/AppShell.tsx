@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { useUser, useClerk } from "@clerk/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
@@ -113,23 +114,66 @@ function formatLeagueSeason(season: number | null | undefined): string {
   return "—";
 }
 
+type LeagueRow = {
+  id: number;
+  leagueId: string;
+  leagueName: string | null;
+  season: number | null;
+  isActive?: boolean | null;
+};
+
+function leagueRowLabel(l: { leagueId: string; leagueName: string | null }) {
+  return l.leagueName?.trim() || `League ${l.leagueId}`;
+}
+
+/** Committed shell + menu “current” row: prefer `getActive` only; avoid `getMyLeagues.isActive` when it can race `getActive`. */
+function committedActiveConnectionId(
+  activeData: { id: number } | null | undefined,
+  leagues: LeagueRow[],
+): number | undefined {
+  if (activeData?.id != null) return activeData.id;
+  const byFlag = leagues.find((l) => l.isActive)?.id;
+  return byFlag;
+}
+
 function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
   const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
   const leaguesQ = trpc.league.getMyLeagues.useQuery(undefined, { staleTime: 30_000 });
   const activeQ = trpc.league.getActive.useQuery(undefined, { staleTime: 30_000 });
 
+  /** While set + until post-mutation refetch invalidation finishes: freeze shell to pre-switch league so shell never races page `leagueContextKey`. */
+  const [switchUi, setSwitchUi] = useState<{
+    label: string;
+    year: string;
+    priorConnectionId: number | null;
+  } | null>(null);
+
   const setActive = trpc.league.setActive.useMutation({
-    onSuccess: async () => {
-      // Clear the entire React Query cache so every page reloads fresh data
-      // for the newly active league. invalidateQueries alone only marks stale
-      // but does not force mounted queries to refetch immediately.
-      queryClient.clear();
+    onSuccess: async (_data, variables) => {
+      await utils.league.getActive.invalidate();
+      await utils.league.getActive.refetch();
+      const activeKey = getQueryKey(trpc.league.getActive, undefined, "query");
+      const nextRow = queryClient.getQueryData(activeKey) as { id?: number } | null | undefined;
+      if (nextRow?.id != null && nextRow.id !== variables.leagueConnectionId) {
+        // eslint-disable-next-line no-console -- rare server mismatch; surfaces in QA
+        console.warn("[LeagueSwitcher] getActive id after setActive != selected connection", {
+          expected: variables.leagueConnectionId,
+          got: nextRow.id,
+        });
+      }
+      await utils.league.getMyLeagues.invalidate();
+      await utils.league.getMyLeagues.refetch();
+      await queryClient.invalidateQueries();
       onAfterSwitch?.();
+    },
+    onSettled: () => {
+      setSwitchUi(null);
     },
   });
 
   const leagues = leaguesQ.data ?? [];
-  const busy = setActive.isPending;
+  const busy = setActive.isPending || switchUi != null;
 
   if (leaguesQ.isLoading || activeQ.isLoading) {
     return (
@@ -156,10 +200,25 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
     );
   }
 
-  const activeId = activeQ.data?.id ?? leagues.find((l) => l.isActive)?.id;
-  const current = leagues.find((l) => l.id === activeId) ?? leagues[0]!;
-  const label = current.leagueName?.trim() || `League ${current.leagueId}`;
-  const year = formatLeagueSeason(current.season);
+  const activeConnId = committedActiveConnectionId(activeQ.data, leagues);
+  const currentRow =
+    activeConnId != null ? leagues.find((l) => l.id === activeConnId) ?? null : null;
+  const labelFromGetActive =
+    activeQ.data != null
+      ? currentRow != null
+        ? leagueRowLabel(currentRow)
+        : activeQ.data.leagueName?.trim() || `League ${activeQ.data.leagueId}`
+      : leagueRowLabel(leagues.find((l) => l.isActive) ?? leagues[0]!);
+  const yearFromGetActive =
+    activeQ.data != null
+      ? currentRow != null
+        ? formatLeagueSeason(currentRow.season)
+        : formatLeagueSeason(activeQ.data.season)
+      : formatLeagueSeason((leagues.find((l) => l.isActive) ?? leagues[0]!).season);
+
+  const label = switchUi?.label ?? labelFromGetActive;
+  const year = switchUi?.year ?? yearFromGetActive;
+  const menuCurrentId = switchUi?.priorConnectionId ?? activeConnId;
 
   if (leagues.length === 1) {
     return (
@@ -190,8 +249,10 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
             aria-label="Switch active league"
           >
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="truncate text-sm font-semibold text-[#f3f8ff]">{label}</span>
-              <span className="text-xs text-zinc-500">{year}</span>
+              <span className="truncate text-sm font-semibold text-[#f3f8ff]">
+                {busy && switchUi == null ? "Switching league…" : label}
+              </span>
+              <span className="text-xs text-zinc-500">{busy && switchUi == null ? "—" : year}</span>
             </span>
             {busy ? (
               <Loader2 className="h-4 w-4 shrink-0 animate-spin opacity-70" />
@@ -202,7 +263,7 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56" align="start">
           {leagues.map((l) => {
-            const isCurrent = l.id === activeId;
+            const isCurrent = menuCurrentId != null && l.id === menuCurrentId;
             const itemLabel = l.leagueName?.trim() || `League ${l.leagueId}`;
             return (
               <DropdownMenuItem
@@ -212,6 +273,15 @@ function LeagueSwitcher({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
                 onSelect={(e) => {
                   e.preventDefault();
                   if (isCurrent || busy) return;
+                  const priorConn = committedActiveConnectionId(activeQ.data, leagues) ?? null;
+                  const priorRow =
+                    priorConn != null ? leagues.find((r) => r.id === priorConn) ?? null : null;
+                  const snapRow = priorRow ?? leagues.find((r) => r.isActive) ?? leagues[0]!;
+                  setSwitchUi({
+                    label: leagueRowLabel(snapRow),
+                    year: formatLeagueSeason(snapRow.season),
+                    priorConnectionId: priorConn,
+                  });
                   setActive.mutate({ leagueConnectionId: l.id });
                 }}
               >
