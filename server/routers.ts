@@ -2014,13 +2014,16 @@ export const appRouter = router({
         return { results };
       }),
 
-    manifests: publicProcedure.query(async ({ ctx }) => {
-      const [manifests, hasConn] = await Promise.all([
-        getRefreshManifests(undefined, ctx.user?.id ?? undefined),
-        hasActiveEspnLeagueConnection(ctx.user?.id ?? undefined),
-      ]);
-      return { manifests, leagueConnectionMissing: !hasConn };
-    }),
+    manifests: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+        const [manifests, hasConn] = await Promise.all([
+          getRefreshManifests(undefined, ctx.user?.id ?? undefined),
+          hasActiveEspnLeagueConnection(ctx.user?.id ?? undefined),
+        ]);
+        return { manifests, leagueConnectionMissing: !hasConn };
+      }),
     cachedSeasons: publicProcedure
       .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
       .query(async ({ ctx, input }) => {
@@ -2041,10 +2044,13 @@ export const appRouter = router({
     // Discover the active league's true season range (available vs synced) so the
     // Sync page can prompt the user to backfill missing history. Active league only;
     // reads status.previousSeasons from the cached payload first, no DB writes.
-    discoverLeagueHistory: protectedProcedure.query(async ({ ctx }) => {
-      const { discoverLeagueHistory } = await import("./leagueHistoryDiscovery");
-      return discoverLeagueHistory(undefined, ctx.user.id);
-    }),
+    discoverLeagueHistory: protectedProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+        const { discoverLeagueHistory } = await import("./leagueHistoryDiscovery");
+        return discoverLeagueHistory(undefined, ctx.user.id);
+      }),
 
     settings: publicProcedure
       .input(z.object({
@@ -4740,10 +4746,12 @@ export const appRouter = router({
             leagueId: z.string().min(1).max(32).optional(),
             startSeason: z.number().int().min(1990).max(2100).optional(),
             endSeason: z.number().int().min(1990).max(2100).optional(),
+            activeLeagueKey: z.string().optional(),
           })
           .optional(),
       )
       .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
         const { leagueId } = await resolveActiveLeagueId(
           { user: { id: ctx.user.id } },
           input?.leagueId ?? null,

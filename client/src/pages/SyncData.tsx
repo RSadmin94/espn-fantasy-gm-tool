@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { setTrpcToken } from "@/lib/trpcAuth";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { fetchEspnSeasonBundleBrowserOrExtension } from "@/lib/espnApi";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -303,6 +305,9 @@ export function SyncData() {
   const [searchParams] = useSearchParams();
   const { getToken } = useAuth();
   const { leagueId, isConnected } = useLeagueContext();
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady =
+    Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
   const [forceRefresh, setForceRefresh] = useState(false);
   const [runResults, setRunResults] = useState<Record<number, RefreshResult>>({});
@@ -348,8 +353,14 @@ export function SyncData() {
   const [scrapeLeagueMedalsBusy, setScrapeLeagueMedalsBusy] = useState(false);
   const [scrapeLeagueMedalsNote, setScrapeLeagueMedalsNote] = useState<string | null>(null);
   const [scrapeLeagueMedalsErr, setScrapeLeagueMedalsErr] = useState<string | null>(null);
-  const medalsQ    = trpc.espn.leagueMedals.useQuery(undefined, { staleTime: 0 });
-  const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(undefined, { staleTime: 60_000 });
+  const medalsQ    = trpc.espn.leagueMedals.useQuery(withLeagueSalt({}, leagueContextKey), {
+    staleTime: 0,
+    enabled: leagueKeyReady,
+  });
+  const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(withLeagueSalt({}, leagueContextKey), {
+    staleTime: 60_000,
+    enabled: leagueKeyReady,
+  });
 
   // Pre-fill the editable form from saved DB medals, and RE-SEED whenever the
   // active league changes so the form never keeps the previous league's values.
@@ -409,53 +420,42 @@ export function SyncData() {
     return map;
   }, [standingsQ.data]);
 
-  const allSeasonsQuery = trpc.espn.allSeasons.useQuery();
-  const cachedQuery = trpc.espn.cachedSeasons.useQuery();
-  const manifestsQuery = trpc.espn.manifests.useQuery();
+  const allSeasonsQuery = trpc.espn.allSeasons.useQuery(withLeagueSalt({}, leagueContextKey), {
+    enabled: leagueKeyReady,
+  });
+  const cachedQuery = trpc.espn.cachedSeasons.useQuery(withLeagueSalt({}, leagueContextKey), {
+    enabled: leagueKeyReady,
+  });
+  const manifestsQuery = trpc.espn.manifests.useQuery(withLeagueSalt({}, leagueContextKey), {
+    enabled: leagueKeyReady,
+  });
 
   const utils = trpc.useUtils();
 
-  // Active-league switch refresh: SyncData's espn.* queries take `undefined`
-  // input, so their React Query keys don't change when the server-side active
-  // league changes. Without this, switching leagues while on /sync shows the
-  // prior league's banner/coverage until navigating away. Refetch the
-  // league-scoped queries whenever the active leagueId changes. We track the
-  // last non-empty id and ignore the brief empty value during the swap so the
-  // invalidation reliably fires exactly once per real switch.
-  const prevLeagueIdRef = useRef<string>("");
-  useEffect(() => {
-    if (!leagueId) return;
-    if (prevLeagueIdRef.current && prevLeagueIdRef.current !== leagueId) {
-      // Invalidate the whole espn router so EVERY league-scoped query on the
-      // page refetches for the new league — banner/coverage (discoverLeagueHistory),
-      // seasons (allSeasons/cachedSeasons), manifests, sync status, and the
-      // medals/standings tables — leaving no section showing the prior league.
-      void utils.espn.invalidate();
-    }
-    prevLeagueIdRef.current = leagueId;
-  }, [leagueId, utils]);
-
   const browserSyncStatusQuery = trpc.espn.browserSyncStatus.useQuery(
-    {
-      leagueId: leagueId || undefined,
-      startSeason: ESPN_HISTORICAL_COMPLETED_MIN,
-      endSeason: ESPN_HISTORICAL_COMPLETED_MAX,
-    },
-    { enabled: Boolean(leagueId && isConnected), staleTime: 15_000 },
+    withLeagueSalt(
+      {
+        leagueId: leagueId || undefined,
+        startSeason: ESPN_HISTORICAL_COMPLETED_MIN,
+        endSeason: ESPN_HISTORICAL_COMPLETED_MAX,
+      },
+      leagueContextKey,
+    ),
+    { enabled: leagueKeyReady && Boolean(leagueId && isConnected), staleTime: 15_000 },
   );
 
   // League history discovery: available (ESPN previousSeasons) vs synced (cache).
   // Drives the "sync missing history" banner. Active league only.
-  const discoverHistoryQuery = trpc.espn.discoverLeagueHistory.useQuery(undefined, {
-    enabled: Boolean(isConnected),
+  const discoverHistoryQuery = trpc.espn.discoverLeagueHistory.useQuery(withLeagueSalt({}, leagueContextKey), {
+    enabled: leagueKeyReady && Boolean(isConnected),
     staleTime: 60_000,
   });
   const leagueHistory = discoverHistoryQuery.data;
 
   // Always query draft_picks count for the hardcoded test league on mount — independent of ESPN connection.
   const draftPicks2010GateQuery = trpc.espn.browserSyncStatus.useQuery(
-    { leagueId: leagueId, startSeason: 2010, endSeason: 2010 },
-    { staleTime: 60_000 },
+    withLeagueSalt({ leagueId: leagueId, startSeason: 2010, endSeason: 2010 }, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady && Boolean(leagueId) },
   );
   const dbDraftPicks2010 =
     draftPicks2010GateQuery.data?.seasons?.find((s) => s.season === 2010)?.draftPicks ?? 0;
