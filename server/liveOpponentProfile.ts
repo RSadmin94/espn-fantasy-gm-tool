@@ -32,6 +32,7 @@ export interface LiveOpponentSeason {
   season: number;
   wins: number;
   losses: number;
+  ties?: number;
   pf: number;
   pa: number;
   seed: number;
@@ -50,7 +51,7 @@ export interface LiveOpponentData {
   memberId: string;
   ownerName: string;
   teamIds: number[];
-  career: { wins: number; losses: number; pf: number; pa: number; playoffSeasons: number; playoffWins: number; playoffLosses: number };
+  career: { wins: number; losses: number; ties: number; pf: number; pa: number; playoffSeasons: number; playoffWins: number; playoffLosses: number };
   seasons: LiveOpponentSeason[];
   h2hVsRod: { wins: number; losses: number };
   gmArchetype: string;
@@ -79,6 +80,9 @@ const ROD_MEMBER_IDS = [
 export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<string, LiveOpponentData>> {
   const cachedSeasons = await getAllCachedSeasons(undefined, userId);
   if (cachedSeasons.length === 0) return new Map();
+
+  // Numeric hygiene: coerce any value to a finite number; undefined/null/NaN/Infinity -> 0.
+  const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
   // memberId → accumulated data
   const profileMap = new Map<string, {
@@ -237,10 +241,11 @@ export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<st
 
       profile.seasons.push({
         season,
-        wins: team.wins as number,
-        losses: team.losses as number,
-        pf: Math.round((team.pointsFor as number) || 0),
-        pa: Math.round((team.pointsAgainst as number) || 0),
+        wins: num(team.wins),
+        losses: num(team.losses),
+        ties: num((team as { ties?: unknown }).ties),
+        pf: Math.round(num(team.pointsFor)),
+        pa: Math.round(num(team.pointsAgainst)),
         seed,
         rank,
         acquisitions,
@@ -252,10 +257,10 @@ export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<st
       profile.allTeamRows.push({
         teamId: tid,
         ownerName: displayName,
-        wins: team.wins as number,
-        losses: team.losses as number,
-        pointsFor: team.pointsFor as number,
-        pointsAgainst: team.pointsAgainst as number,
+        wins: num(team.wins),
+        losses: num(team.losses),
+        pointsFor: num(team.pointsFor),
+        pointsAgainst: num(team.pointsAgainst),
       });
 
       for (const tx of teamTxns) {
@@ -289,16 +294,17 @@ export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<st
 
   for (const [memberId, profile] of Array.from(profileMap.entries())) {
     const seasons = profile.seasons.sort((a: LiveOpponentSeason, b: LiveOpponentSeason) => a.season - b.season);
-    const totalWins = seasons.reduce((s: number, r: LiveOpponentSeason) => s + r.wins, 0);
-    const totalLosses = seasons.reduce((s: number, r: LiveOpponentSeason) => s + r.losses, 0);
-    const totalPF = seasons.reduce((s: number, r: LiveOpponentSeason) => s + r.pf, 0);
-    const totalPA = seasons.reduce((s: number, r: LiveOpponentSeason) => s + r.pa, 0);
+    const totalWins = seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.wins), 0);
+    const totalLosses = seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.losses), 0);
+    const totalTies = seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.ties), 0);
+    const totalPF = seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.pf), 0);
+    const totalPA = seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.pa), 0);
     const playoffSeasons = seasons.filter((s: LiveOpponentSeason) => s.seed > 0 && s.seed <= 7).length;
     const avgAcquisitions = seasons.length > 0
-      ? Math.round(seasons.reduce((s: number, r: LiveOpponentSeason) => s + r.acquisitions, 0) / seasons.length)
+      ? Math.round(seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.acquisitions), 0) / seasons.length)
       : 0;
     const avgTrades = seasons.length > 0
-      ? Math.round((seasons.reduce((s: number, r: LiveOpponentSeason) => s + r.trades, 0) / seasons.length) * 10) / 10
+      ? Math.round((seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.trades), 0) / seasons.length) * 10) / 10
       : 0;
 
     // Run analytics for this manager
@@ -318,7 +324,7 @@ export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<st
     if (totalWins > totalLosses) {
       strengthsWeaknesses.push({
         type: "strength",
-        text: `Winning career record: ${totalWins}W-${totalLosses}L (${Math.round(totalWins / (totalWins + totalLosses) * 100)}% win rate)`,
+        text: `Winning career record: ${totalWins}W-${totalLosses}L (${(totalWins + totalLosses + totalTies > 0 ? Math.round(totalWins / (totalWins + totalLosses + totalTies) * 100) : 0)}% win rate)`,
       });
     } else {
       strengthsWeaknesses.push({
@@ -330,9 +336,9 @@ export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<st
       strengthsWeaknesses.push({ type: "strength", text: `Consistent playoff presence: ${playoffSeasons} of ${seasons.length} seasons` });
     }
     if (behavior?.avgWaiverAddsPerSeason > 40) {
-      strengthsWeaknesses.push({ type: "strength", text: `High waiver activity (${behavior.avgWaiverAddsPerSeason.toFixed(0)} adds/season) — patches roster holes quickly` });
+      strengthsWeaknesses.push({ type: "strength", text: `High waiver activity (${num(behavior.avgWaiverAddsPerSeason).toFixed(0)} adds/season) — patches roster holes quickly` });
     } else if (behavior?.avgWaiverAddsPerSeason < 20) {
-      strengthsWeaknesses.push({ type: "weakness", text: `Low waiver activity (${behavior?.avgWaiverAddsPerSeason?.toFixed(0) ?? "?"} adds/season) — may miss breakout pickups` });
+      strengthsWeaknesses.push({ type: "weakness", text: `Low waiver activity (${num(behavior?.avgWaiverAddsPerSeason).toFixed(0)} adds/season) — may miss breakout pickups` });
     }
     if (behavior?.earlyQbTendency) {
       strengthsWeaknesses.push({ type: "blindspot", text: "Drafts QB early (rounds 1-3) — may sacrifice positional value" });
@@ -340,7 +346,7 @@ export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<st
     if (behavior?.keeperEfficiencyAvg < 0) {
       strengthsWeaknesses.push({ type: "weakness", text: "Keeper decisions tend to cost draft capital — overpays for keepers" });
     } else if (behavior?.keeperEfficiencyAvg > 2) {
-      strengthsWeaknesses.push({ type: "strength", text: `Excellent keeper efficiency (+${behavior.keeperEfficiencyAvg.toFixed(1)} rounds avg savings)` });
+      strengthsWeaknesses.push({ type: "strength", text: `Excellent keeper efficiency (+${num(behavior.keeperEfficiencyAvg).toFixed(1)} rounds avg savings)` });
     }
 
     // Draft style badge
@@ -364,7 +370,7 @@ export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<st
       memberId,
       ownerName: profile.displayName,
       teamIds: Array.from(profile.teamIds),
-      career: { wins: totalWins, losses: totalLosses, pf: totalPF, pa: totalPA, playoffSeasons, playoffWins: profile.playoffWins, playoffLosses: profile.playoffLosses },
+      career: { wins: totalWins, losses: totalLosses, ties: totalTies, pf: totalPF, pa: totalPA, playoffSeasons, playoffWins: num(profile.playoffWins), playoffLosses: num(profile.playoffLosses) },
       seasons,
       h2hVsRod: profile.h2hVsRod,
       gmArchetype: behavior?.gmArchetype ?? "Balanced",
@@ -376,10 +382,10 @@ export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<st
       draftStyleDesc,
       earlyQbTendency: behavior?.earlyQbTendency ?? false,
       earlyTeTendency: behavior?.earlyTeTendency ?? false,
-      keeperEfficiencyAvg: behavior?.keeperEfficiencyAvg ?? 0,
-      waiverAggressionScore: behavior?.waiverAggressionScore ?? 0,
-      tradeFrequencyScore: behavior?.tradeFrequencyScore ?? 0,
-      rosterStabilityScore: behavior?.rosterStabilityScore ?? 0,
+      keeperEfficiencyAvg: num(behavior?.keeperEfficiencyAvg),
+      waiverAggressionScore: num(behavior?.waiverAggressionScore),
+      tradeFrequencyScore: num(behavior?.tradeFrequencyScore),
+      rosterStabilityScore: num(behavior?.rosterStabilityScore),
     });
   }
 
