@@ -82,12 +82,13 @@ function RankRow({ rank, name, value, max, suffix, highlight, barClass }: { rank
 }
 
 export function AcquisitionImpact() {
-  const { leagueContextKey } = useLeagueActiveGate();
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
   const q = trpc.leagueIntel.acquisitionImpact.useQuery(
     withLeagueSalt({}, leagueContextKey),
-    { staleTime: 60_000 },
+    { staleTime: 60_000, enabled: leagueKeyReady },
   );
-  const data = q.data as AcqResult | undefined;
+  const data = (leagueKeyReady ? q.data : undefined) as AcqResult | undefined;
   const f = data?.focal;
 
   return (
@@ -113,12 +114,15 @@ export function AcquisitionImpact() {
           )}
         </div>
 
-        {q.isLoading && (
+        {(!leagueKeyReady || (q.isLoading && !data)) && (
           <div className={cn(PANEL, "flex items-center justify-center gap-3 p-16 text-white/50")}>
-            <Loader2 className="h-5 w-5 animate-spin text-lime-400" /> Tracing every non-drafted starter…
+            <Loader2 className="h-5 w-5 animate-spin text-lime-400" />{" "}
+            {!leagueKeyReady ? "Loading league…" : "Tracing every non-drafted starter…"}
           </div>
         )}
-        {q.isError && <div className={cn(PANEL, "p-8 text-center text-red-300")}>Couldn't compute acquisition impact. {String(q.error?.message ?? "")}</div>}
+        {leagueKeyReady && q.isError && (
+          <div className={cn(PANEL, "p-8 text-center text-red-300")}>Couldn't compute acquisition impact. {String(q.error?.message ?? "")}</div>
+        )}
 
         {data && f && (
           <div className="space-y-6">

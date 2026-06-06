@@ -160,12 +160,13 @@ function TimelineRow({ card }: { card: any }) {
 const POS_ORDER = ["QB", "RB", "WR", "TE"];
 
 export function WhyHaventIWon() {
-  const { leagueContextKey } = useLeagueActiveGate();
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
   const q = trpc.leagueIntel.careerReport.useQuery(
     withLeagueSalt({}, leagueContextKey),
-    { staleTime: 60_000 },
+    { staleTime: 60_000, enabled: leagueKeyReady },
   );
-  const data = q.data;
+  const data = leagueKeyReady ? q.data : undefined;
   const snap = data?.snapshot ?? null;
   const arc = data?.careerArc ?? null;
   const arcStyle = (arc && ARC_STYLE[arc]) || null;
@@ -186,12 +187,13 @@ export function WhyHaventIWon() {
     <div className="min-h-screen w-full" style={PAGEBG}>
       <div className="px-6 py-6 max-w-[1400px]">
 
-        {q.isLoading && (
+        {(!leagueKeyReady || (q.isLoading && !data)) && (
           <div className={cn(PANEL, "flex items-center justify-center gap-3 p-16 text-white/50")}>
-            <Loader2 className="h-5 w-5 animate-spin text-lime-400" /> Reading your league history...
+            <Loader2 className="h-5 w-5 animate-spin text-lime-400" />{" "}
+            {!leagueKeyReady ? "Loading league…" : "Reading your league history..."}
           </div>
         )}
-        {q.isError && (
+        {leagueKeyReady && q.isError && (
           <div className={cn(PANEL, "p-8 text-center text-red-300")}>Couldn't build your career report. {String(q.error?.message ?? "")}</div>
         )}
 
