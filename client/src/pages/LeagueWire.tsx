@@ -1,5 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { skipToken } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import {
   Radio, BookOpen, Trophy, Loader2, RefreshCw,
@@ -232,6 +235,7 @@ const LEAGUE_NAME = "ATLANTAS FINEST FF";
 
 export function LeagueWire() {
   const _trpc = trpc as any;
+  const { leagueContextKey } = useLeagueActiveGate();
   const [view, setView]               = useState<"feed" | "archive">("feed");
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [openArticle, setOpenArticle] = useState<Article | null>(null);
@@ -247,12 +251,30 @@ export function LeagueWire() {
     );
 
   // Also pull legacy wire reports
-  const { data: availableWeeks = [] } = _trpc.leagueWire.getAvailableWeeks.useQuery();
+  const { data: availableWeeks = [] } = _trpc.leagueWire.getAvailableWeeks.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+  );
   const latestWireWeek = useMemo(() => availableWeeks[0] ?? null, [availableWeeks]);
   const { data: wireReports = [] } = _trpc.leagueWire.getPostgameReports.useQuery(
-    { season: latestWireWeek?.season, week: latestWireWeek?.week },
-    { enabled: latestWireWeek !== null }
+    latestWireWeek != null
+      ? withLeagueSalt(
+          { season: latestWireWeek.season, week: latestWireWeek.week },
+          leagueContextKey,
+        )
+      : skipToken,
   );
+
+  useEffect(() => {
+    setOpenArticle(null);
+  }, [leagueContextKey]);
+
+  useEffect(() => {
+    const list = seasons as number[];
+    setSelectedSeason((cur) => {
+      if (cur == null) return null;
+      return list.includes(cur) ? cur : null;
+    });
+  }, [leagueContextKey, seasons]);
 
   const displayArticles = view === "archive" && selectedSeason ? seasonArticles : feedArticles;
   const isLoading = view === "archive" && selectedSeason ? seasonLoading : feedLoading;

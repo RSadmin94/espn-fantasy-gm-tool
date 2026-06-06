@@ -1,4 +1,6 @@
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
@@ -30,10 +32,13 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
 // ─── component ───────────────────────────────────────────────────────────────
 
 export function LeagueSettings() {
+  const { leagueContextKey } = useLeagueActiveGate();
   const season = new Date().getFullYear();
 
   const scoringQ  = trpc.leagueScoring.getSettings.useQuery({ season });
-  const settingsQ = trpc.espn.settings.useQuery({ season });
+  const settingsQ = trpc.espn.settings.useQuery(
+    withLeagueSalt({ season }, leagueContextKey),
+  );
 
   const loading = scoringQ.isLoading || settingsQ.isLoading;
   const s = scoringQ.data;

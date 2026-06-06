@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Loader2, ShoppingCart, TrendingUp, Trophy, Layers, Info, Crown, Hammer, BookOpen, Sparkles } from "lucide-react";
 
@@ -80,7 +82,11 @@ function RankRow({ rank, name, value, max, suffix, highlight, barClass }: { rank
 }
 
 export function AcquisitionImpact() {
-  const q = trpc.leagueIntel.acquisitionImpact.useQuery(undefined, { staleTime: 60_000 });
+  const { leagueContextKey } = useLeagueActiveGate();
+  const q = trpc.leagueIntel.acquisitionImpact.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000 },
+  );
   const data = q.data as AcqResult | undefined;
   const f = data?.focal;
 

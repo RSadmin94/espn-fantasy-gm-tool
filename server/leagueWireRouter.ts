@@ -262,7 +262,9 @@ export const leagueWireRouter = router({
 
   /** All available season/week combos that have completed matchups */
   getAvailableWeeks: publicProcedure
-    .query(async () => {
+    .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+    .query(async ({ input }) => {
+      void input?.activeLeagueKey;
       const db = await getDb();
       if (!db) return [];
       const rows = await db.execute(drizzleSql`
@@ -279,8 +281,15 @@ export const leagueWireRouter = router({
 
   /** All postgame reports for a season + week */
   getPostgameReports: publicProcedure
-    .input(z.object({ season: z.number().int(), week: z.number().int() }))
+    .input(
+      z.object({
+        season: z.number().int(),
+        week: z.number().int(),
+        activeLeagueKey: z.string().optional(),
+      }),
+    )
     .query(async ({ input }) => {
+      void input.activeLeagueKey;
       const db = await getDb();
       if (!db) return [];
       const { season, week } = input;

@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -61,23 +63,46 @@ type Tab = "dynasty" | "seasons" | "rivalries";
 type SortKey = "titles" | "wins" | "winpct";
 
 export function LeagueTimeline() {
+  const { leagueContextKey } = useLeagueActiveGate();
   const [tab, setTab]                       = useState<Tab>("dynasty");
   const [sortBy, setSortBy]                 = useState<SortKey>("titles");
   const [expandedOwner, setExpandedOwner]   = useState<string | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [rivalOwner, setRivalOwner]         = useState<string>("");
 
-  const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(undefined, { staleTime: 60_000 });
-  const medalsQ    = trpc.espn.leagueMedals.useQuery(undefined, { staleTime: 60_000 });
-  const h2hQ = trpc.espn.leagueHistoryH2H.useQuery(undefined, {
-    staleTime: 60_000,
-    enabled: tab === "rivalries",
-  });
-  const diagQ = trpc.espn.leagueDiagnostics.useQuery(undefined, { staleTime: 60_000 });
+  const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000 },
+  );
+  const medalsQ    = trpc.espn.leagueMedals.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000 },
+  );
+  const h2hQ = trpc.espn.leagueHistoryH2H.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    {
+      staleTime: 60_000,
+      enabled: tab === "rivalries",
+    },
+  );
+  const diagQ = trpc.espn.leagueDiagnostics.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000 },
+  );
 
-  const allSeasons = standingsQ.data?.seasons ?? [];
+  const seasonsFromStandings = standingsQ.data?.seasons;
+  const allSeasons = seasonsFromStandings ?? [];
   const rawOwners  = standingsQ.data?.owners  ?? [];
   const medals     = medalsQ.data ?? [];
+
+  useEffect(() => {
+    const seasons = seasonsFromStandings ?? [];
+    if (seasons.length === 0) {
+      setSelectedSeason(null);
+      return;
+    }
+    setSelectedSeason((cur) => (cur != null && seasons.includes(cur) ? cur : null));
+  }, [leagueContextKey, seasonsFromStandings]);
 
   // ── Medal title counts + seasons: normalizedChampionOwner → count / season[] ──
   // Source of truth: league_medals.championOwner only. finalStanding is never used for titles.

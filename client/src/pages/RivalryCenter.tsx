@@ -1,6 +1,8 @@
 import { useMemo, useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { displayOwnerName } from "@/lib/ownerName";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import {
   RivalryDossierPanel,
   type RivalryPickerOption,
@@ -142,15 +144,19 @@ function HeatBadge({ label }: { label?: string }) {
 }
 
 export function RivalryCenter() {
-  const scoresQ = (trpc as any).rivalry.getScores.useQuery(undefined, {
-    staleTime: 300_000,
-  });
-  const listQ = (trpc as any).owners.ownerList.useQuery(undefined, {
-    staleTime: 300_000,
-  });
-  const cachedQ = (trpc as any).espn.cachedSeasons.useQuery(undefined, {
-    staleTime: 60_000,
-  });
+  const { leagueContextKey } = useLeagueActiveGate();
+  const scoresQ = (trpc as any).rivalry.getScores.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 300_000 },
+  );
+  const listQ = (trpc as any).owners.ownerList.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 300_000 },
+  );
+  const cachedQ = (trpc as any).espn.cachedSeasons.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000 },
+  );
   const profileQ = (trpc as any).me.activeProfile.useQuery(undefined, { staleTime: 600_000, retry: false });
   const refreshScores = (trpc as any).rivalry.refresh.useMutation({
     onSuccess: () => scoresQ.refetch(),
@@ -217,7 +223,10 @@ export function RivalryCenter() {
   const keyForRival = (p: Pair) => nameToKey[norm(p.rivalName)] ?? undefined;
   // ── league-wide all-pairs rivalries (every owner's dossier) ──────────────
   type LeaguePair = { key: string; aKey: string; aName: string; bKey: string; bName: string; score: number; meetings: number; playoff: number; close: number; aWins: number; aLosses: number; lastSeason: number | null; heat: string };
-  const h2hQ = (trpc as any).rivalry.h2h.useQuery(undefined, { staleTime: 600_000 });
+  const h2hQ = (trpc as any).rivalry.h2h.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 600_000 },
+  );
   const leagueLoading = h2hQ.isLoading;
   const firstName = (s: string) => String(s).trim().split(/\s+/)[0] ?? s;
   const heatOf = (s: number) => (s >= 150 ? "Inferno" : s >= 100 ? "Burning" : s >= 60 ? "Heated" : s >= 30 ? "Simmering" : "Cold");
@@ -301,6 +310,10 @@ export function RivalryCenter() {
   }, [leaguePairs]);
 
   const [open, setOpen] = useState<{ focalKey?: string; focalName?: string; rivalKey?: string; rivalName: string } | null>(null);
+
+  useEffect(() => {
+    setOpen(null);
+  }, [leagueContextKey]);
 
   useEffect(() => {
     if (!open) return;

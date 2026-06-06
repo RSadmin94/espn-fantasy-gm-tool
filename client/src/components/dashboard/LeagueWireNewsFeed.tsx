@@ -3,8 +3,11 @@
  * Shows the most recent completed week's postgame reports.
  */
 import { useMemo } from "react";
+import { skipToken } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Radio, ArrowRight, TrendingUp, Swords } from "lucide-react";
 
@@ -70,15 +73,19 @@ function WireCard({ report }: { report: MatchupReport }) {
 
 export function LeagueWireNewsFeed() {
   const _trpc = trpc as any;
+  const { leagueContextKey } = useLeagueActiveGate();
 
-  const { data: weeks = [] } = _trpc.leagueWire.getAvailableWeeks.useQuery();
+  const { data: weeks = [] } = _trpc.leagueWire.getAvailableWeeks.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+  );
 
   // Pick most recent week
   const latest = useMemo(() => weeks[0] ?? null, [weeks]);
 
   const { data: reports = [], isLoading } = _trpc.leagueWire.getPostgameReports.useQuery(
-    { season: latest?.season, week: latest?.week },
-    { enabled: latest !== null }
+    latest != null
+      ? withLeagueSalt({ season: latest.season, week: latest.week }, leagueContextKey)
+      : skipToken,
   );
 
   if (!latest || (isLoading && reports.length === 0)) return null;

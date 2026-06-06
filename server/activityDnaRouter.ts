@@ -34,8 +34,16 @@ async function resolveLeague(userId?: number): Promise<{ leagueId: string; owner
 export const activityDnaRouter = router({
   /** Single owner's Activity DNA. Uses ?ownerKey, else the active profile's owner, else the most-tenured owner. */
   owner: publicProcedure
-    .input(z.object({ ownerKey: z.string().max(64).optional() }).optional())
+    .input(
+      z
+        .object({
+          ownerKey: z.string().max(64).optional(),
+          activeLeagueKey: z.string().optional(),
+        })
+        .optional(),
+    )
     .query(async ({ ctx, input }) => {
+      void input?.activeLeagueKey;
       if (!ctx.user?.id) return null;
       const { leagueId, ownerKey } = await resolveLeague(ctx.user.id);
       if (!leagueId || leagueId === "default") return null;

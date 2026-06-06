@@ -1,4 +1,6 @@
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { type ReactNode, type CSSProperties } from "react";
 import {
@@ -158,7 +160,11 @@ function TimelineRow({ card }: { card: any }) {
 const POS_ORDER = ["QB", "RB", "WR", "TE"];
 
 export function WhyHaventIWon() {
-  const q = trpc.leagueIntel.careerReport.useQuery(undefined, { staleTime: 60_000 });
+  const { leagueContextKey } = useLeagueActiveGate();
+  const q = trpc.leagueIntel.careerReport.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000 },
+  );
   const data = q.data;
   const snap = data?.snapshot ?? null;
   const arc = data?.careerArc ?? null;

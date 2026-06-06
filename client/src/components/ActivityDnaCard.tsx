@@ -1,4 +1,6 @@
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Activity, Info } from "lucide-react";
 
@@ -34,8 +36,9 @@ function confidenceClasses(c: string): string {
 }
 
 export function ActivityDnaCard({ ownerKey }: { ownerKey?: string }) {
+  const { leagueContextKey } = useLeagueActiveGate();
   const q = trpc.activityDna.owner.useQuery(
-    { ownerKey: ownerKey || undefined },
+    withLeagueSalt({ ownerKey: ownerKey || undefined }, leagueContextKey),
     { staleTime: 60_000, enabled: !!ownerKey },
   );
 

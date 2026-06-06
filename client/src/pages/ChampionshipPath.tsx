@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Loader2, Trophy, Target, ArrowUpCircle, ShieldCheck, Crown, Route, Swords, ListChecks } from "lucide-react";
 
@@ -61,7 +63,11 @@ function MiniCard({ icon, label, children, tone = "neutral" }: { icon: ReactNode
 }
 
 export function ChampionshipPath() {
-  const q = trpc.leagueIntel.championshipPath.useQuery(undefined, { staleTime: 60_000 });
+  const { leagueContextKey } = useLeagueActiveGate();
+  const q = trpc.leagueIntel.championshipPath.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000 },
+  );
   const data = q.data;
 
   return (

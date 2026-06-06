@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import {
   Loader2, AlertTriangle, CheckCircle, XCircle, MinusCircle,
   HelpCircle, Dna, Brain, Sparkles, ChevronDown, Info,
@@ -208,12 +209,18 @@ function AIInsight({ pool, ownerFilter }: { pool: KeeperEntry[]; ownerFilter: st
 
 export function KeeperAdvisor() {
   const draftYear    = new Date().getFullYear();
-  const { myOwnerName, teamCount } = useLeagueContext();
+  const { myOwnerName, teamCount, leagueContextKey } = useLeagueContext();
   const [ownerFilter, setOwnerFilter] = useState<string>(() => myOwnerName ?? "all");
   const [posFilter,   setPosFilter]   = useState<string>("all");
   const [maxKeepers,  setMaxKeepers]  = useState<string>("all");
 
-  const poolQ = trpc.espn.keeperPool.useQuery({ draftYear });
+  useEffect(() => {
+    setOwnerFilter(myOwnerName ?? "all");
+  }, [leagueContextKey, myOwnerName]);
+
+  const poolQ = trpc.espn.keeperPool.useQuery(
+    withLeagueSalt({ draftYear }, leagueContextKey),
+  );
 
   const pool = useMemo((): KeeperEntry[] => {
     const raw = (poolQ.data as { pool?: KeeperEntry[] } | undefined)?.pool;
