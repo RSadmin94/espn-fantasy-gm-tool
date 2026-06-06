@@ -278,11 +278,19 @@ function ProfilePanel({
   const profileArgs = useMemo(() => {
     const base = compareWith ? { compareWith } : {};
     const k = profileLookupKey.trim();
-    return { ownerKey: k, ...base };
-  }, [profileLookupKey, compareWith]);
+    return { ownerKey: k, ...base, expectedLeagueId: leagueContextKey };
+  }, [profileLookupKey, compareWith, leagueContextKey]);
 
   const q = trpcAny.owners.ownerProfile.useQuery(withLeagueSalt({ ...profileArgs }, leagueContextKey), {
     enabled: leagueKeyReady && !!profileLookupKey.trim(),
+    refetchInterval: (query: any) => {
+      const d = query.state.data;
+      if (query.state.status !== "success" || query.state.fetchStatus === "fetching") return false;
+      if (!d || d.ownerProfileLeagueMismatch === true) return 2500;
+      const dl = d.leagueId != null ? String(d.leagueId) : "";
+      if (dl && dl !== leagueContextKey) return 2500;
+      return false;
+    },
   });
   const p = q.data as any;
   const [intelExpanded, setIntelExpanded] = useState<string | null>(null);
@@ -321,6 +329,18 @@ function ProfilePanel({
       <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading profile…
     </div>
   );
+  const profileLeagueId = typeof p?.leagueId === "string" ? p.leagueId : null;
+  const profileLeagueGuardOk =
+    q.isSuccess &&
+    profileLeagueId === leagueContextKey &&
+    p?.ownerProfileLeagueMismatch !== true;
+  if (q.isSuccess && !profileLeagueGuardOk) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Resolving profile for active league…
+      </div>
+    );
+  }
   if (q.isError) {
     return (
       <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-6 text-sm text-destructive">
@@ -1242,38 +1262,41 @@ export function OwnerProfiles() {
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
 
-  const listQ = trpcAny.owners.ownerList.useQuery(withLeagueSalt({}, leagueContextKey), {
+  const listQ = trpcAny.owners.ownerList.useQuery(withLeagueSalt({ expectedLeagueId: leagueContextKey }, leagueContextKey), {
     staleTime: 60_000,
     enabled: leagueKeyReady,
+    refetchInterval: (query: any) => {
+      const d = query.state.data;
+      if (query.state.status !== "success" || query.state.fetchStatus === "fetching") return false;
+      const dl = d?.leagueId != null ? String(d.leagueId) : "";
+      if (dl && dl !== leagueContextKey) return 2500;
+      return false;
+    },
   });
   const cachedSeasonsQ = trpc.espn.cachedSeasons.useQuery(withLeagueSalt({}, leagueContextKey), {
     staleTime: 60_000,
     enabled: leagueKeyReady,
   });
 
-  /** Set to `leagueContextKey` only after `ownerList` succeeds for that league (avoids stale rows from cache/server mismatch). */
-  const [ownerListAnchorLeague, setOwnerListAnchorLeague] = useState<string | null>(null);
   const [selectedOwnerKey, setSelectedOwnerKey] = useState<string | null>(null);
   const [showGraveyard, setShowGraveyard] = useState(false);
   const profileRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setSelectedOwnerKey(null);
-    setOwnerListAnchorLeague(null);
     setShowGraveyard(false);
     void utils.owners.ownerList.invalidate();
     void utils.owners.ownerProfile.invalidate();
   }, [leagueContextKey, utils]);
 
-  useEffect(() => {
-    if (!leagueKeyReady) return;
-    if (listQ.isError) return;
-    if (listQ.isSuccess && !listQ.isFetching) {
-      setOwnerListAnchorLeague(leagueContextKey);
-    }
-  }, [leagueKeyReady, leagueContextKey, listQ.isSuccess, listQ.isFetching, listQ.isError]);
-
-  const ownerListHydrated = Boolean(leagueKeyReady && ownerListAnchorLeague === leagueContextKey);
+  /** List is trustworthy only when the server-stamped `leagueId` matches the client active league (guards session lag vs `getActive`). */
+  const ownerListHydrated = Boolean(
+    leagueKeyReady &&
+      listQ.isSuccess &&
+      !listQ.isFetching &&
+      listQ.data?.leagueId != null &&
+      String(listQ.data.leagueId) === leagueContextKey,
+  );
 
   const rawActive = (listQ.data?.active ?? []) as any[];
   const rawGraveyard = (listQ.data?.graveyard ?? []) as any[];

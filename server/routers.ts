@@ -10491,44 +10491,44 @@ Provide:
   owners: router({
 
     ownerList: publicProcedure
-      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .input(
+        z
+          .object({
+            activeLeagueKey: z.string().optional(),
+            /** Client `getActive` ESPN league id — if set and ≠ server-resolved active league, return empty rows (no cross-league data). */
+            expectedLeagueId: z.string().min(1).max(64).optional(),
+          })
+          .optional(),
+      )
       .query(async ({ ctx, input }) => {
         void input?.activeLeagueKey;
+      const emptyOwnerList = (leagueId: string | null) => ({
+        leagueId,
+        active: [] as OwnerSummaryRow[],
+        graveyard: [] as OwnerSummaryRow[],
+        powerRankings: [] as OwnerPowerRankingRow[],
+        ownerAwards: [] as OwnerAwardRow[],
+        canonicalLeagueDebug: {} as Record<string, never>,
+        allOwners: [] as { ownerKey: string; ownerName: string; seasons: number[]; championships: number }[],
+      });
       const userId = ctx.user?.id ?? 0;
       if (!userId) {
-        return {
-          active: [] as OwnerSummaryRow[],
-          graveyard: [] as OwnerSummaryRow[],
-          powerRankings: [] as OwnerPowerRankingRow[],
-          ownerAwards: [] as OwnerAwardRow[],
-          canonicalLeagueDebug: {} as Record<string, never>,
-          allOwners: [] as { ownerKey: string; ownerName: string; seasons: number[]; championships: number }[],
-        };
+        return emptyOwnerList(null);
       }
       const { leagueId } = await resolveActiveLeagueId(
         { user: { id: userId } }, null, undefined,
       );
       if (!leagueId) {
-        return {
-          active: [] as OwnerSummaryRow[],
-          graveyard: [] as OwnerSummaryRow[],
-          powerRankings: [] as OwnerPowerRankingRow[],
-          ownerAwards: [] as OwnerAwardRow[],
-          canonicalLeagueDebug: {} as Record<string, never>,
-          allOwners: [] as { ownerKey: string; ownerName: string; seasons: number[]; championships: number }[],
-        };
+        return emptyOwnerList("");
       }
-      const lid = leagueId;
+      const lid = String(leagueId).trim().slice(0, 32);
+      const expected = input?.expectedLeagueId?.trim().slice(0, 32) ?? "";
+      if (expected && expected !== lid) {
+        return emptyOwnerList(lid);
+      }
       const db = await getDb();
       if (!db) {
-        return {
-          active: [] as OwnerSummaryRow[],
-          graveyard: [] as OwnerSummaryRow[],
-          powerRankings: [] as OwnerPowerRankingRow[],
-          ownerAwards: [] as OwnerAwardRow[],
-          canonicalLeagueDebug: {} as Record<string, never>,
-          allOwners: [] as { ownerKey: string; ownerName: string; seasons: number[]; championships: number }[],
-        };
+        return emptyOwnerList(lid);
       }
 
       const teamRows = await db
@@ -11150,6 +11150,7 @@ Provide:
       }
 
       return {
+        leagueId: lid,
         active: all.filter((o) => o.seasons.length >= 2).sort((a, b) => b.totalWins - a.totalWins),
         graveyard: all.filter((o) => o.seasons.length === 1).sort((a, b) => b.seasons[0] - a.seasons[0]),
         powerRankings,
@@ -11175,6 +11176,8 @@ Provide:
             ownerName: z.string().min(1).max(255).optional(),
             compareWith: z.string().min(1).max(255).optional(),
             activeLeagueKey: z.string().optional(),
+            /** Client `getActive` ESPN league id — if set and ≠ server-resolved active league, return a mismatch stub (no profile body). */
+            expectedLeagueId: z.string().min(1).max(64).optional(),
           })
           .refine((v) => Boolean((v.ownerKey ?? v.ownerName ?? "").trim()), {
             message: "ownerKey or ownerName is required",
@@ -11189,7 +11192,11 @@ Provide:
           { user: { id: userId } }, null, undefined,
         );
         if (!leagueId) return null;
-        const lid = leagueId;
+        const lid = String(leagueId).trim().slice(0, 32);
+        const expected = input.expectedLeagueId?.trim().slice(0, 32) ?? "";
+        if (expected && expected !== lid) {
+          return { leagueId: lid, ownerProfileLeagueMismatch: true as const };
+        }
         const db = await getDb();
         if (!db) return null;
         const ownerName = (input.ownerKey ?? input.ownerName ?? "").trim();
@@ -11317,6 +11324,7 @@ Provide:
               : null;
 
         return {
+          leagueId: lid,
           ...primary,
           comparisonCandidates,
           comparison,
