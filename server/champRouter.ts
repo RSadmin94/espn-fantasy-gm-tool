@@ -162,10 +162,10 @@ export const champRouter = router({
     .query(async ({ ctx, input }) => {
       const { teams, focalTeamId, playoffWeekStart } = await buildTeamStandings(input.season, ctx.user?.id);
       if (teams.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season." });
-      if (!focalTeamId) throw new TRPCError({ code: "NOT_FOUND", message: "Could not identify Rod's team." });
+      if (!focalTeamId) throw new TRPCError({ code: "NOT_FOUND", message: "Could not identify the selected owner's team. Please select an owner profile for this league." });
 
       const rodTeam = teams.find(t => t.teamId === focalTeamId);
-      if (!rodTeam) throw new TRPCError({ code: "NOT_FOUND", message: "Rod's team not found." });
+      if (!rodTeam) throw new TRPCError({ code: "NOT_FOUND", message: "Selected owner's team not found." });
 
       // Separate starters (top 2 per skill position) and backups
       const starters = rodTeam.projectedLineup.slice(0, 8);
