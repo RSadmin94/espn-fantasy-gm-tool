@@ -1,5 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import {
   Loader2, Search, ArrowLeft, Trophy, ArrowRightLeft,
@@ -111,13 +113,16 @@ function Empty({ msg }: { msg: string }) {
 function SearchView({ onSelect }: { onSelect: (name: string) => void }) {
   const [query, setQuery] = useState("");
   const qDebounced = query.trim().length >= 2 ? query.trim() : null;
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady =
+    Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
 
   const searchQ = trpcA().playerIntelligence.search.useQuery(
-    { query: qDebounced! },
-    { enabled: !!qDebounced, staleTime: 30_000 },
+    withLeagueSalt({ query: qDebounced! }, leagueContextKey),
+    { enabled: !!qDebounced && leagueKeyReady, staleTime: 30_000 },
   );
 
-  const results: any[] = searchQ.data ?? [];
+  const results: any[] = leagueKeyReady ? (searchQ.data ?? []) : [];
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
@@ -149,17 +154,17 @@ function SearchView({ onSelect }: { onSelect: (name: string) => void }) {
       {/* Results */}
       {qDebounced && (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/80 overflow-hidden">
-          {searchQ.isLoading && (
+          {(!leagueKeyReady || searchQ.isLoading) && (
             <div className="flex items-center gap-2 px-4 py-4 text-sm text-zinc-500">
               <Loader2 className="h-4 w-4 animate-spin" /> Searching…
             </div>
           )}
-          {!searchQ.isLoading && results.length === 0 && (
+          {leagueKeyReady && !searchQ.isLoading && results.length === 0 && (
             <div className="px-4 py-4 text-sm text-zinc-500">
               No players found for "{qDebounced}" in this league's draft history.
             </div>
           )}
-          {results.map((r: any) => (
+          {leagueKeyReady && !searchQ.isLoading && results.map((r: any) => (
             <SearchRow key={r.playerName} r={r} onSelect={() => onSelect(r.playerName)} />
           ))}
         </div>
@@ -184,11 +189,22 @@ function SearchView({ onSelect }: { onSelect: (name: string) => void }) {
 
 function ProfileView({ playerName, onBack }: { playerName: string; onBack: () => void }) {
   const [activeTab, setActiveTab] = useState<"timeline" | "draft" | "trades" | "keepers" | "champ" | "owners">("timeline");
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady =
+    Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
 
   const profileQ = trpcA().playerIntelligence.profile.useQuery(
-    { playerName },
-    { staleTime: 60_000 },
+    withLeagueSalt({ playerName }, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady && Boolean(playerName?.trim()) },
   );
+
+  if (!leagueKeyReady) {
+    return (
+      <div className="flex items-center justify-center py-24 text-zinc-400">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading…
+      </div>
+    );
+  }
 
   if (profileQ.isLoading) {
     return (

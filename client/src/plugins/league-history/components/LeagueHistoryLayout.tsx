@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Loader2 } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
 import { useLeagueHistoryModel, type LeagueHistoryTab, type SortKey } from "../hooks/useLeagueHistoryModel";
@@ -60,6 +61,14 @@ export function LeagueHistoryPlugin() {
   );
 
   const standingsLoading = model.standingsLoading;
+
+  if (!model.leagueKeyReady) {
+    return (
+      <div className="mx-auto flex max-w-7xl items-center justify-center px-1 py-24 text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading league…
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-1 pb-12">

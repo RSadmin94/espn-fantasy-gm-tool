@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
+import { useAuth } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
+import { useLeagueContext } from "@/hooks/useLeagueContext";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import {
   Activity,
@@ -227,36 +230,64 @@ function BroadcastCard({
 
 export function CommissionerCommandCenter() {
   const [refreshing, setRefreshing] = useState(false);
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const { leagueContextKey } = useLeagueContext();
+  const leagueKeyReady =
+    Boolean(authLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
 
   // ── All data queries ──────────────────────────────────────────────────────
   const activeLeagueQ = trpc.league.getActive.useQuery(undefined, { staleTime: 30_000 });
-  const allSeasonsQ   = trpc.espn.allSeasons.useQuery(undefined, { staleTime: 60_000 });
-  const cachedQ       = trpc.espn.cachedSeasons.useQuery(undefined, { staleTime: 60_000 });
-  const hofQ          = trpc.espn.hallOfFame.useQuery(undefined, { staleTime: 60_000 });
-  const medalsQ       = trpc.espn.leagueMedals.useQuery(undefined, { staleTime: 60_000 });
-  const standingsQ    = trpc.espn.leagueHistoryStandings.useQuery(undefined, { staleTime: 60_000 });
-  const rivalryQ      = trpc.rivalry.getScores.useQuery(undefined, { staleTime: 60_000 });
-  const dnaQ          = trpc.activityDna.league.useQuery(undefined, { staleTime: 60_000 });
+  const allSeasonsQ   = trpc.espn.allSeasons.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
+  const cachedQ       = trpc.espn.cachedSeasons.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
+  const hofQ          = trpc.espn.hallOfFame.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
+  const medalsQ       = trpc.espn.leagueMedals.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
+  const standingsQ    = trpc.espn.leagueHistoryStandings.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
+  const rivalryQ      = trpc.rivalry.getScores.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
+  const dnaQ          = trpc.activityDna.league.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
 
   const allSeasons  = allSeasonsQ.data ?? [];
   const cachedSeasons = cachedQ.data ?? [];
   const latestSeason = cachedSeasons.length > 0 ? Math.max(...cachedSeasons) : (allSeasons.length > 0 ? Math.max(...allSeasons) : 2025);
 
   const pulseQ      = trpc.weeklyAssessment.leaguePulse.useQuery(
-    { season: latestSeason },
-    { staleTime: 5 * 60_000, enabled: latestSeason > 0 },
+    withLeagueSalt({ season: latestSeason }, leagueContextKey),
+    { staleTime: 5 * 60_000, enabled: leagueKeyReady && latestSeason > 0 },
   );
   const fearQ       = trpc.fearIndex.getLatest.useQuery(
-    { season: latestSeason },
-    { staleTime: 5 * 60_000, enabled: latestSeason > 0 },
+    withLeagueSalt({ season: latestSeason }, leagueContextKey),
+    { staleTime: 5 * 60_000, enabled: leagueKeyReady && latestSeason > 0 },
   );
   const storylinesQ = trpc.weeklyStorylines.getLatest.useQuery(
-    { season: latestSeason },
-    { staleTime: 5 * 60_000, enabled: latestSeason > 0 },
+    withLeagueSalt({ season: latestSeason }, leagueContextKey),
+    { staleTime: 5 * 60_000, enabled: leagueKeyReady && latestSeason > 0 },
   );
   const recentTxQ   = trpc.espn.recentLeagueTransactionEvents.useQuery(
-    { seasons: cachedSeasons.slice(-2).filter(Boolean), limit: 10 },
-    { staleTime: 5 * 60_000, enabled: cachedSeasons.length > 0 },
+    withLeagueSalt(
+      { seasons: cachedSeasons.slice(-2).filter(Boolean), limit: 10 },
+      leagueContextKey,
+    ),
+    { staleTime: 5 * 60_000, enabled: leagueKeyReady && cachedSeasons.length > 0 },
   );
 
   // ── Derived data ──────────────────────────────────────────────────────────

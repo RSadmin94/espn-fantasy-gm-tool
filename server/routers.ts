@@ -702,8 +702,14 @@ export const appRouter = router({
       }),
     /** Get the latest cached storylines for a season (most recent week) */
     getLatest: publicProcedure
-      .input(z.object({ season: z.number().int().optional() }))
+      .input(
+        z.object({
+          season: z.number().int().optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
       .query(async ({ input }) => {
+        void input.activeLeagueKey;
         const { getLatestWeeklyStorylinesFromDb } = await import("./weeklyStorylinesService");
         const season = input.season ?? 2025;
         return getLatestWeeklyStorylinesFromDb(season);
@@ -728,8 +734,14 @@ export const appRouter = router({
       }),
     /** Get the latest fear index for a season (most recent week with data) */
     getLatest: publicProcedure
-      .input(z.object({ season: z.number().int().optional() }))
+      .input(
+        z.object({
+          season: z.number().int().optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
       .query(async ({ input }) => {
+        void input.activeLeagueKey;
         const { getLatestFearIndexFromDb } = await import("./fearIndexService");
         const season = input.season ?? 2025;
         return getLatestFearIndexFromDb(season);
@@ -3474,9 +3486,11 @@ export const appRouter = router({
         z.object({
           seasons: z.array(z.number().int()).min(1).max(8),
           limit: z.number().int().min(1).max(40).optional().default(12),
+          activeLeagueKey: z.string().optional(),
         }),
       )
       .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         const userId = ctx.user?.id ?? 0;
         if (!userId) return [];
         const { leagueId } = await resolveActiveLeagueId(
@@ -5726,7 +5740,10 @@ export const appRouter = router({
     }),
 
     /** All-time owner W-L-T from deduped completed weekly matchups (not standings snapshots). */
-    ownerAllTimeRecords: publicProcedure.query(async ({ ctx }) => {
+    ownerAllTimeRecords: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
       if (!ctx.user?.id) return null;
       // Seasons we expect coverage for. Cache fallback is attempted for any season
       // not present in the normalized gmMatchups table.
@@ -9875,8 +9892,9 @@ Provide:
   playerIntelligence: router({
     // Search: fuzzy player name lookup across gmDraftPicks
     search: publicProcedure
-      .input(z.object({ query: z.string().min(1).max(120) }))
+      .input(z.object({ query: z.string().min(1).max(120), activeLeagueKey: z.string().optional() }))
       .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         const userId = ctx.user?.id ?? 0;
         if (!userId) return [];
         const { leagueId } = await resolveActiveLeagueId(
@@ -9914,8 +9932,9 @@ Provide:
 
     // Full player profile — all league history for one player by name
     profile: publicProcedure
-      .input(z.object({ playerName: z.string().min(1).max(255) }))
+      .input(z.object({ playerName: z.string().min(1).max(255), activeLeagueKey: z.string().optional() }))
       .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         const userId = ctx.user?.id ?? 0;
         if (!userId) return null;
         const { leagueId } = await resolveActiveLeagueId(
@@ -10269,7 +10288,10 @@ Provide:
       };
     }),
 
-    identityScan: publicProcedure.query(async ({ ctx }) => {
+    identityScan: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
       const userId = ctx.user?.id ?? 0;
       if (!userId) return { knownOwners: [], legacyItems: [], savedAliases: [], stats: { known: 0, autoResolved: 0, needsReview: 0, unresolved: 0 } };
       const { leagueId } = await resolveActiveLeagueId(
@@ -10428,8 +10450,10 @@ Provide:
         status:            z.enum(["approved", "rejected", "skipped"]),
         confidence:        z.number().int().min(0).max(100).optional(),
         resolutionMethod:  z.string().max(64).optional(),
+        activeLeagueKey:     z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         const userId = ctx.user?.id ?? 0;
         const { leagueId } = await resolveActiveLeagueId(
           { user: userId ? { id: userId } : undefined }, null, undefined,

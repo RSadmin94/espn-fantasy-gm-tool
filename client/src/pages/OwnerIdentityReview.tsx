@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { Loader2, AlertTriangle, Check, X, SkipForward, Users, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -151,13 +153,27 @@ function AliasRow({ item, knownOwners, onSave }: {
 
 export function OwnerIdentityReview() {
   const [filter, setFilter] = useState<"all" | "auto" | "review" | "unresolved">("all");
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady =
+    Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
 
-  const q = trpcA().dataHealth.identityScan.useQuery(undefined, { staleTime: 30_000 });
+  const q = trpcA().dataHealth.identityScan.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 30_000, enabled: leagueKeyReady },
+  );
   const saveMut = trpcA().dataHealth.saveAlias.useMutation({
     onSuccess: () => q.refetch(),
   });
 
   const d = q.data as any;
+
+  if (!leagueKeyReady) {
+    return (
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading league…
+      </div>
+    );
+  }
 
   if (q.isLoading) {
     return (
@@ -193,7 +209,18 @@ export function OwnerIdentityReview() {
     confidence: number,
     resolutionMethod: string
   ) {
-    saveMut.mutate({ legacyTeamName, resolvedOwnerName, status, confidence, resolutionMethod });
+    saveMut.mutate(
+      withLeagueSalt(
+        {
+          legacyTeamName,
+          resolvedOwnerName,
+          status,
+          confidence,
+          resolutionMethod,
+        },
+        leagueContextKey,
+      ),
+    );
   }
 
   return (

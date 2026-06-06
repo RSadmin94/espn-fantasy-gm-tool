@@ -1,4 +1,6 @@
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { Loader2, AlertTriangle, CheckCircle, Lock, Unlock, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -36,8 +38,22 @@ function GateRow({ name, status, reason }: { name: string; status: string; reaso
 }
 
 export function LeagueDataHealth() {
-  const q = trpcA().dataHealth.leagueOverview.useQuery(undefined, { staleTime: 60_000 });
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady =
+    Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
+  const q = trpcA().dataHealth.leagueOverview.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
   const d = q.data as any;
+
+  if (!leagueKeyReady) {
+    return (
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading league…
+      </div>
+    );
+  }
 
   if (q.isLoading) {
     return (

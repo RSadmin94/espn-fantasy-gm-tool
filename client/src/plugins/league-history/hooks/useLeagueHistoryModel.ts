@@ -1,5 +1,7 @@
 import { useMemo, useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { buildSeasonTabRows, type StandingsOwnerRow } from "../utils/seasonTabChampions";
 
 export type LeagueHistoryTab = "dynasty" | "seasons" | "rivalries" | "profiles";
@@ -150,12 +152,17 @@ function mergeOwnerNamesFromCache(
 async function fetchSeasonTeamsForMapping(
   season: number,
   utils: ReturnType<typeof trpc.useUtils>,
+  leagueContextKey: string,
 ): Promise<SeasonTeamRow[]> {
-  const standingsRows = await utils.espn.standings.fetch({ season });
+  const standingsRows = await utils.espn.standings.fetch(
+    withLeagueSalt({ season }, leagueContextKey),
+  );
   let teams = mapStandingsTeams(standingsRows);
   if (teams.some((t) => ownerLabelFromTeamRow(t) === "")) {
     try {
-      const cacheRows = await utils.espn.teams.fetch({ season });
+      const cacheRows = await utils.espn.teams.fetch(
+        withLeagueSalt({ season }, leagueContextKey),
+      );
       teams = mergeOwnerNamesFromCache(teams, cacheRows);
     } catch {
       // keep standings-only rows
@@ -217,10 +224,26 @@ function spotlightsForSeason(medals: MedalRow[], season: number) {
 
 export function useLeagueHistoryModel() {
   const utils = trpc.useUtils();
-  const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(undefined, { staleTime: 60_000 });
-  const medalsQ = trpc.espn.leagueMedals.useQuery(undefined, { staleTime: 60_000 });
-  const recordsQ = trpc.espn.ownerAllTimeRecords.useQuery(undefined, { staleTime: 60_000 });
-  const h2hQ = trpc.espn.leagueHistoryH2H.useQuery(undefined, { staleTime: 60_000 });
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady =
+    Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
+
+  const standingsQ = trpc.espn.leagueHistoryStandings.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
+  const medalsQ = trpc.espn.leagueMedals.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
+  const recordsQ = trpc.espn.ownerAllTimeRecords.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
+  const h2hQ = trpc.espn.leagueHistoryH2H.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
 
   const historySeasons = standingsQ.data?.seasons ?? [];
   const medalSeasons = (medalsQ.data ?? []).map((m) => m.season);
@@ -236,8 +259,9 @@ export function useLeagueHistoryModel() {
   const [teamsLoading, setTeamsLoading] = useState(false);
 
   useEffect(() => {
-    if (!seasonsToLoad.length) {
+    if (!leagueKeyReady || !seasonsToLoad.length) {
       setTeamsBySeason(new Map());
+      if (!leagueKeyReady) setTeamsLoading(false);
       return;
     }
     let cancelled = false;
@@ -247,7 +271,7 @@ export function useLeagueHistoryModel() {
       await Promise.all(
         seasonsToLoad.map(async (season) => {
           try {
-            const teams = await fetchSeasonTeamsForMapping(season, utils);
+            const teams = await fetchSeasonTeamsForMapping(season, utils, leagueContextKey);
             if (!cancelled) next.set(season, teams);
           } catch {
             if (!cancelled) next.set(season, []);
@@ -262,7 +286,7 @@ export function useLeagueHistoryModel() {
     return () => {
       cancelled = true;
     };
-  }, [seasonsToLoad.join(","), utils]);
+  }, [seasonsToLoad.join(","), utils, leagueContextKey, leagueKeyReady]);
 
   const { titleSeasonsByOwnerKey, unmatched } = useMemo(
     () => creditTitlesFromMedalTeams(medals, teamsBySeason, rawOwners),
@@ -357,6 +381,7 @@ export function useLeagueHistoryModel() {
   }
 
   return {
+    leagueKeyReady,
     standingsQ,
     medalsQ,
     h2hQ,

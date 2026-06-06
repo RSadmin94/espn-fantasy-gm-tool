@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import {
   Loader2,
@@ -79,12 +81,30 @@ function RankDelta({ delta }: { delta: number | null }) {
 
 /* ── main page ─────────────────────────────────────────────────────────── */
 export function DraftRealitySimulator() {
-  const seasonsQ = (trpc as any).draftReality.availableSeasons.useQuery(undefined, { staleTime: 300_000 });
-  const SEASONS: number[] = seasonsQ.data?.seasons ?? [2025, 2024, 2023, 2022, 2021];
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady =
+    Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
+
+  const seasonsQ = (trpc as any).draftReality.availableSeasons.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 300_000, enabled: leagueKeyReady },
+  );
+  const SEASONS: number[] = useMemo(
+    () => seasonsQ.data?.seasons ?? [2025, 2024, 2023, 2022, 2021],
+    [seasonsQ.data?.seasons],
+  );
   const [season, setSeason] = useState<number>(2025);
   // Once seasons load, default to the most recent available
   const activeSeason = SEASONS.includes(season) ? season : (SEASONS[0] ?? 2025);
-  const simQ = trpc.draftReality.simulate.useQuery({ season: activeSeason }, { staleTime: 60_000 });
+
+  useEffect(() => {
+    setSeason((s) => (SEASONS.includes(s) ? s : (SEASONS[0] ?? 2025)));
+  }, [leagueContextKey, SEASONS]);
+
+  const simQ = trpc.draftReality.simulate.useQuery(
+    withLeagueSalt({ season: activeSeason }, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady && SEASONS.length > 0 },
+  );
   const data = simQ.data;
 
   return (

@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { Loader2 } from "lucide-react";
 
 type Props = {
@@ -15,15 +17,29 @@ function formatWhen(ms: number): string {
 }
 
 export function DashboardRecentLeagueEvents({ seasons, enabled = true }: Props) {
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady =
+    Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
   const uniqSeasons = useMemo(() => [...new Set(seasons.filter((s) => Number.isFinite(s) && s > 0))].slice(0, 6), [seasons.join(",")]);
 
   const q = trpc.espn.recentLeagueTransactionEvents.useQuery(
-    { seasons: uniqSeasons.length ? uniqSeasons : [new Date().getFullYear()], limit: 12 },
-    { enabled: enabled && uniqSeasons.length > 0, staleTime: 45_000 },
+    withLeagueSalt(
+      { seasons: uniqSeasons.length ? uniqSeasons : [new Date().getFullYear()], limit: 12 },
+      leagueContextKey,
+    ),
+    { enabled: enabled && leagueKeyReady && uniqSeasons.length > 0, staleTime: 45_000 },
   );
 
   if (!enabled || uniqSeasons.length === 0) {
     return <p className="text-sm text-zinc-500">No recent completed transactions available.</p>;
+  }
+
+  if (!leagueKeyReady) {
+    return (
+      <div className="flex items-center gap-2 px-2 py-4 text-sm text-zinc-500">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+      </div>
+    );
   }
 
   if (q.isLoading || q.isFetching) {
