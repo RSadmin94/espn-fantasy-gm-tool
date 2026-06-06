@@ -232,9 +232,16 @@ export const weeklyAssessmentRouter = router({
    * Use for the Command Center threat assessment board.
    */
   leaguePulse: publicProcedure
-    .input(z.object({ season: z.number().default(2025) }))
+    .input(
+      z.object({
+        season: z.number().default(2025),
+        activeLeagueKey: z.string().optional(),
+      }),
+    )
     .query(({ ctx, input }) => {
-      return memCache(`leaguePulse:${input.season}`, 5 * 60_000, async () => {
+      void input.activeLeagueKey;
+      const salt = input.activeLeagueKey ?? "__none__";
+      return memCache(`leaguePulse:${input.season}:${salt}`, 5 * 60_000, async () => {
       const cached = await getCachedView(input.season, "combined", undefined, { userId: ctx.user?.id });
       if (!cached) throw new TRPCError({ code: "NOT_FOUND", message: "No data." });
 

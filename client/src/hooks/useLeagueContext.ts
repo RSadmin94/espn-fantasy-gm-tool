@@ -1,6 +1,7 @@
 import { useMemo } from "react";
-import { useAuth, useUser } from "@clerk/react-router";
+import { useUser } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 
 export type LeagueContext = {
   leagueId: string;
@@ -82,36 +83,15 @@ function resolveMyTeam(
  * keys change when the active league changes (not only `queryClient.clear()`).
  */
 export function useLeagueContext(): LeagueContext {
-  const { isLoaded: authLoaded, isSignedIn } = useAuth();
-  const { user, isLoaded: userLoaded } = useUser();
+  const { leagueContextKey, activeQ, authLoaded, userLoaded, isSignedIn } =
+    useLeagueActiveGate();
+  const { user } = useUser();
 
-  const activeQ = trpc.league.getActive.useQuery(undefined, {
-    enabled: Boolean(authLoaded && userLoaded && isSignedIn),
-    staleTime: 5 * 60_000,
-    refetchOnMount: false,
-  });
   const leaguesQ = trpc.league.getMyLeagues.useQuery(undefined, {
     enabled: Boolean(authLoaded && userLoaded && isSignedIn),
     staleTime: 5 * 60_000,
     refetchOnMount: false,
   });
-
-  const leagueContextKey = useMemo(() => {
-    if (!authLoaded || !userLoaded) return "__auth_pending__";
-    if (!isSignedIn) return "__signed_out__";
-    const lid = activeQ.data?.leagueId?.trim();
-    if (lid) return lid;
-    if (activeQ.isLoading) return "__active_loading__";
-    if (activeQ.isFetched) return "__no_active_league__";
-    return "__active_unknown__";
-  }, [
-    authLoaded,
-    userLoaded,
-    isSignedIn,
-    activeQ.data?.leagueId,
-    activeQ.isLoading,
-    activeQ.isFetched,
-  ]);
 
   const cachedQ = trpc.espn.cachedSeasons.useQuery(
     { activeLeagueKey: leagueContextKey },

@@ -2051,8 +2051,14 @@ export const appRouter = router({
       }),
 
     standings: publicProcedure
-      .input(z.object({ season: z.number() }))
+      .input(
+        z.object({
+          season: z.number(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
       .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         const resolved = await resolveActiveLeagueId(
           { user: ctx.user ? { id: ctx.user.id } : undefined },
           null,
@@ -2113,8 +2119,15 @@ export const appRouter = router({
       }),
 
     rosters: publicProcedure
-      .input(z.object({ season: z.number(), teamId: z.number().optional() }))
+      .input(
+        z.object({
+          season: z.number(),
+          teamId: z.number().optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
       .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data);
@@ -2501,8 +2514,14 @@ export const appRouter = router({
      * The previous two completed seasons are examined for keeper rules (draftYear-1, draftYear-2).
      */
     keeperPool: publicProcedure
-      .input(z.object({ draftYear: z.number().int().min(2019).max(2030).optional() }))
+      .input(
+        z.object({
+          draftYear: z.number().int().min(2019).max(2030).optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
       .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         const currentYear = new Date().getFullYear();
         const draftYear = input.draftYear ?? currentYear;
         const rosterSeason = draftYear;
@@ -3111,8 +3130,15 @@ export const appRouter = router({
      * Scoreboard: normalized `matchups` + `teams` (DB) for the requested week.
      */
     matchupsScoreboard: publicProcedure
-      .input(z.object({ season: z.number(), week: z.number().int().min(1) }))
+      .input(
+        z.object({
+          season: z.number(),
+          week: z.number().int().min(1),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
       .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         if (!ctx.user?.id) return { matchups: [], teams: [], week: input.week, season: input.season };
         const resolved = await resolveActiveLeagueId(
           { user: { id: ctx.user.id } },
@@ -3397,9 +3423,11 @@ export const appRouter = router({
           teamId: z.number().optional(),
           /** ALL omitted; TRADES = TRADE + TRADE_* ; else exact `type` match */
           typeFilter: z.string().optional(),
+          activeLeagueKey: z.string().optional(),
         })
       )
       .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         let txs = normalizeTransactions(data) as Record<string, unknown>[];
@@ -5648,7 +5676,10 @@ export const appRouter = router({
     }),
 
     /** Hall of Fame — championships via league_medals; records from completed RS gmMatchups only (no gmTeams W/L). */
-    hallOfFame: publicProcedure.query(async ({ ctx }) => {
+    hallOfFame: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
       const userId = ctx.user?.id ?? 0;
       if (!userId) return null;
       const { leagueId } = await resolveActiveLeagueId(
@@ -5893,7 +5924,10 @@ export const appRouter = router({
     }),
 
     /** Per-season matchup coverage diagnostics: how many matchup rows exist per source per season. */
-    ownerMatchupCoverage: publicProcedure.query(async ({ ctx }) => {
+    ownerMatchupCoverage: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
       if (!ctx.user?.id) return null;
       const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
       const { leagueId } = await resolveActiveLeagueId(
@@ -10091,7 +10125,10 @@ Provide:
 
   dataHealth: router({
 
-    leagueOverview: publicProcedure.query(async ({ ctx }) => {
+    leagueOverview: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
       const userId = ctx.user?.id ?? 0;
       if (!userId) return null;
       const { leagueId } = await resolveActiveLeagueId(
@@ -10397,7 +10434,10 @@ Provide:
 
   owners: router({
 
-    ownerList: publicProcedure.query(async ({ ctx }) => {
+    ownerList: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
       const userId = ctx.user?.id ?? 0;
       if (!userId) {
         return {

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -115,7 +117,10 @@ function TeamColumn({
 }
 
 export function Matchups() {
-  const cachedQ = trpc.espn.cachedSeasons.useQuery();
+  const { leagueContextKey } = useLeagueActiveGate();
+  const cachedQ = trpc.espn.cachedSeasons.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+  );
 
   const cachedSeasons: number[] = cachedQ.data ?? [];
 
@@ -125,8 +130,15 @@ export function Matchups() {
   const [season, setSeason] = useState(defaultSeason);
   const [week, setWeek] = useState(1);
 
+  useEffect(() => {
+    if (cachedSeasons.length > 0) {
+      const maxS = Math.max(...cachedSeasons);
+      setSeason((s) => (cachedSeasons.includes(s) ? s : maxS));
+    }
+  }, [cachedSeasons, leagueContextKey]);
+
   const boardQ = trpc.espn.matchupsScoreboard.useQuery(
-    { season, week },
+    withLeagueSalt({ season, week }, leagueContextKey),
     { staleTime: 30_000 }
   );
 

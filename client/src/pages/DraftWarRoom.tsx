@@ -1,5 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useAuth } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { DraftWarRoomDesk } from "./DraftWarRoomDesk";
 import {
@@ -1455,12 +1458,28 @@ function CompressionSection({ compression }: { compression: any[] }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function DraftWarRoom() {
-  const _trpc  = trpc as any;
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const { leagueContextKey } = useLeagueActiveGate();
   const season = new Date().getFullYear();
   const [keeperOverrides, setKeeperOverrides] = useState<any[]>([]);
-  const { data, isLoading, refetch } = _trpc.draftWarRoom.getDraftWarRoomData.useQuery(
-    { season, keeperOverrides: keeperOverrides.length > 0 ? keeperOverrides : undefined },
-    { queryKey: [season, keeperOverrides] }
+  const leagueKeyReady =
+    authLoaded && isSignedIn && !leagueContextKey.startsWith("__");
+
+  const warRoomInput = useMemo(
+    () =>
+      withLeagueSalt(
+        {
+          season,
+          ...(keeperOverrides.length > 0 ? { keeperOverrides } : {}),
+        },
+        leagueContextKey,
+      ),
+    [season, keeperOverrides, leagueContextKey],
+  );
+
+  const { data, isLoading, refetch } = trpc.draftWarRoom.getDraftWarRoomData.useQuery(
+    warRoomInput,
+    { enabled: leagueKeyReady },
   );
 
   if (isLoading) return (

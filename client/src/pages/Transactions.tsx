@@ -1,6 +1,8 @@
 import { useEffect, useRef, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1003,8 +1005,13 @@ function TradeComparisonCard({
 }
 
 export function Transactions() {
-  const allSeasonsQ = trpc.espn.allSeasons.useQuery();
-  const cachedQ = trpc.espn.cachedSeasons.useQuery();
+  const { leagueContextKey } = useLeagueActiveGate();
+  const allSeasonsQ = trpc.espn.allSeasons.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+  );
+  const cachedQ = trpc.espn.cachedSeasons.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+  );
 
   const allSeasons: number[] = allSeasonsQ.data ?? [];
   const cachedSeasons: number[] = cachedQ.data ?? [];
@@ -1022,20 +1029,39 @@ export function Transactions() {
   const [tradeStatusFilter, setTradeStatusFilter] = useState<"ALL" | "EXECUTED" | "PROPOSED" | "CANCELED">("ALL");
   const [search, setSearch] = useState("");
 
+  useEffect(() => {
+    if (cachedSeasons.length > 0) {
+      const maxS = Math.max(...cachedSeasons);
+      setSeason((s) => (cachedSeasons.includes(s) ? s : maxS));
+    }
+  }, [cachedSeasons, leagueContextKey]);
+
   const enabled = cachedSeasons.includes(season);
   const teamIdArg = teamFilter !== "ALL" && Number.isFinite(Number(teamFilter)) ? Number(teamFilter) : undefined;
   const typeFilterArg = typeFilter !== "ALL" ? typeFilter : undefined;
 
-  const txQ = trpc.espn.transactions.useQuery({ season, typeFilter: typeFilterArg, teamId: teamIdArg }, { enabled, staleTime: 0 });
-  const teamsQ = trpc.espn.teams.useQuery({ season }, { enabled, staleTime: 0 });
-  const rostersQ = trpc.espn.rosters.useQuery({ season }, { enabled, staleTime: 0 });
-  const pulseQ = trpc.weeklyAssessment.leaguePulse.useQuery({ season }, {
-    enabled,
-    staleTime: 5 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    gcTime: 10 * 60 * 1000,
-  });
+  const txQ = trpc.espn.transactions.useQuery(
+    withLeagueSalt({ season, typeFilter: typeFilterArg, teamId: teamIdArg }, leagueContextKey),
+    { enabled, staleTime: 0 },
+  );
+  const teamsQ = trpc.espn.teams.useQuery(
+    withLeagueSalt({ season }, leagueContextKey),
+    { enabled, staleTime: 0 },
+  );
+  const rostersQ = trpc.espn.rosters.useQuery(
+    withLeagueSalt({ season }, leagueContextKey),
+    { enabled, staleTime: 0 },
+  );
+  const pulseQ = trpc.weeklyAssessment.leaguePulse.useQuery(
+    withLeagueSalt({ season }, leagueContextKey),
+    {
+      enabled,
+      staleTime: 5 * 60 * 1000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      gcTime: 10 * 60 * 1000,
+    },
+  );
 
   const teams = (teamsQ.data as TeamRow[] | undefined) ?? [];
   const rawTxns = (txQ.data as TxnRow[] | undefined) ?? [];

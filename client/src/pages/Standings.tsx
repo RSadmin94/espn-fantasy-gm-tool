@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -196,7 +198,10 @@ function safeOwnerDisplayLabel(owners: unknown): string {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function Standings() {
-  const cachedQ = trpc.espn.cachedSeasons.useQuery();
+  const { leagueContextKey } = useLeagueActiveGate();
+  const cachedQ = trpc.espn.cachedSeasons.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+  );
 
   const cachedSeasons: number[] = cachedQ.data ?? [];
 
@@ -206,9 +211,19 @@ export function Standings() {
   const [season, setSeason] = useState<number>(defaultSeason);
   const [mode, setMode] = useState<StandingsMode>("regular");
 
-  const standingsQ = trpc.espn.standings.useQuery({ season }, { staleTime: 60_000 });
+  useEffect(() => {
+    if (cachedSeasons.length > 0) {
+      const maxS = Math.max(...cachedSeasons);
+      setSeason((s) => (cachedSeasons.includes(s) ? s : maxS));
+    }
+  }, [cachedSeasons, leagueContextKey]);
+
+  const standingsQ = trpc.espn.standings.useQuery(
+    withLeagueSalt({ season }, leagueContextKey),
+    { staleTime: 60_000 },
+  );
   const txsQ = trpc.espn.transactions.useQuery(
-    { season, typeFilter: "ALL" },
+    withLeagueSalt({ season, typeFilter: "ALL" }, leagueContextKey),
     { staleTime: 60_000 }
   );
 

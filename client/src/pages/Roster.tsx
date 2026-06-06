@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -433,8 +435,13 @@ function RecBadge({ rec, last }: { rec: Recommendation; last: boolean }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function Roster() {
-  const allSeasonsQ = trpc.espn.allSeasons.useQuery();
-  const cachedQ = trpc.espn.cachedSeasons.useQuery();
+  const { leagueContextKey } = useLeagueActiveGate();
+  const allSeasonsQ = trpc.espn.allSeasons.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+  );
+  const cachedQ = trpc.espn.cachedSeasons.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+  );
 
   const allSeasons: number[] = allSeasonsQ.data ?? [];
   const cachedSeasons: number[] = cachedQ.data ?? [];
@@ -446,21 +453,32 @@ export function Roster() {
   const [season, setSeason] = useState(defaultSeason);
   const [teamId, setTeamId] = useState<number | "ALL">("ALL");
 
+  useEffect(() => {
+    if (cachedSeasons.length > 0) {
+      const maxS = Math.max(...cachedSeasons);
+      setSeason((s) => (cachedSeasons.includes(s) ? s : maxS));
+    }
+  }, [cachedSeasons, leagueContextKey]);
+
   const isNotCached = !cachedSeasons.includes(season);
 
   const teamsQ = trpc.espn.teams.useQuery(
-    { season },
+    withLeagueSalt({ season }, leagueContextKey),
     { enabled: !isNotCached }
   );
   const rosterQ = trpc.espn.rosters.useQuery(
-    { season, teamId: teamId === "ALL" ? undefined : teamId },
+    withLeagueSalt(
+      { season, teamId: teamId === "ALL" ? undefined : teamId },
+      leagueContextKey,
+    ),
     { enabled: !isNotCached }
   );
-  const _trpc = trpc as any;
-  const warRoomQ = _trpc.draftWarRoom.getDraftWarRoomData.useQuery(
-    { season },
+  const warRoomQ = trpc.draftWarRoom.getDraftWarRoomData.useQuery(
+    withLeagueSalt({ season }, leagueContextKey),
     {
-      enabled: !isNotCached,
+      enabled:
+        !isNotCached &&
+        !leagueContextKey.startsWith("__"),
       staleTime: 5 * 60 * 1000,
       refetchOnMount: false,
       refetchOnWindowFocus: false,
@@ -478,7 +496,9 @@ export function Roster() {
       (warRoomQ.data as { ok?: boolean }).ok === false);
   const draftYear  = new Date().getFullYear();
   const [kaOpen,   setKaOpen]   = useState(false);
-  const keeperPoolQ = trpc.espn.keeperPool.useQuery({ draftYear });
+  const keeperPoolQ = trpc.espn.keeperPool.useQuery(
+    withLeagueSalt({ draftYear }, leagueContextKey),
+  );
   const keeperPool = useMemo((): KeeperEntry[] => {
     const raw = (keeperPoolQ.data as { pool?: KeeperEntry[] } | undefined)?.pool;
     return Array.isArray(raw) ? (raw as KeeperEntry[]) : [];

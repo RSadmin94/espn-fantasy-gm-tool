@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
+import { useAuth } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -211,9 +213,15 @@ function classifyPlayoff(
 // ── Dashboard ───────────────────────────────────────────────────────────────────
 
 export function Dashboard() {
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const leagueCtx = useLeagueContext();
+  const leagueKeyReady =
+    authLoaded && isSignedIn && !leagueCtx.leagueContextKey.startsWith("__");
   const activeLeagueQ = trpc.league.getActive.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 30_000 });
-  const cachedSeasonsQ = trpc.espn.cachedSeasons.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 60_000 });
+  const cachedSeasonsQ = trpc.espn.cachedSeasons.useQuery(
+    withLeagueSalt({}, leagueCtx.leagueContextKey),
+    { ...DASH_QUERY_OPTS, staleTime: 60_000 },
+  );
   const cachedSeasons = cachedSeasonsQ.data ?? [];
 
   const defaultSeason =
@@ -229,22 +237,34 @@ export function Dashboard() {
       const maxS = Math.max(...cachedSeasons);
       setSeason((s) => (cachedSeasons.includes(s) ? s : maxS));
     }
-  }, [cachedSeasons]);
+  }, [cachedSeasons, leagueCtx.leagueContextKey]);
 
-  const hofQ = trpc.espn.hallOfFame.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 60_000 });
-  const ownerListQ = trpc.owners.ownerList.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 60_000 });
-  const dataHealthQ = trpc.dataHealth.leagueOverview.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 60_000 });
-  const coverageQ = trpc.espn.ownerMatchupCoverage.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 60_000 });
+  const hofQ = trpc.espn.hallOfFame.useQuery(
+    withLeagueSalt({}, leagueCtx.leagueContextKey),
+    { ...DASH_QUERY_OPTS, staleTime: 60_000 },
+  );
+  const ownerListQ = trpc.owners.ownerList.useQuery(
+    withLeagueSalt({}, leagueCtx.leagueContextKey),
+    { ...DASH_QUERY_OPTS, staleTime: 60_000 },
+  );
+  const dataHealthQ = trpc.dataHealth.leagueOverview.useQuery(
+    withLeagueSalt({}, leagueCtx.leagueContextKey),
+    { ...DASH_QUERY_OPTS, staleTime: 60_000 },
+  );
+  const coverageQ = trpc.espn.ownerMatchupCoverage.useQuery(
+    withLeagueSalt({}, leagueCtx.leagueContextKey),
+    { ...DASH_QUERY_OPTS, staleTime: 60_000 },
+  );
 
   const pulseQ = trpc.weeklyAssessment.leaguePulse.useQuery(
-    { season },
+    withLeagueSalt({ season }, leagueCtx.leagueContextKey),
     { ...DASH_QUERY_OPTS, retry: false, staleTime: 30_000 },
   );
 
   const week = pulseQ.data?.week ?? 0;
 
   const scoreboardQ = trpc.espn.matchupsScoreboard.useQuery(
-    { season, week: week >= 1 ? week : 1 },
+    withLeagueSalt({ season, week: week >= 1 ? week : 1 }, leagueCtx.leagueContextKey),
     {
       ...DASH_QUERY_OPTS,
       enabled: week >= 1 && pulseQ.isSuccess && !pulseQ.isFetching,
@@ -253,7 +273,7 @@ export function Dashboard() {
   );
 
   const standingsQ = trpc.espn.standings.useQuery(
-    { season },
+    withLeagueSalt({ season }, leagueCtx.leagueContextKey),
     { ...DASH_QUERY_OPTS, enabled: !leagueCtx.isLoading, staleTime: 60_000 },
   );
 
@@ -406,11 +426,13 @@ export function Dashboard() {
     return Math.round(p.playoffProbability);
   }, [marqueePick, pulseTeams]);
 
-  // -- Draft intelligence for League Pulse
-  const _trpc = trpc as any;
-  const draftIntelQ = _trpc.draftWarRoom.getDraftWarRoomData.useQuery(
-    { season: CURRENT_YEAR },
-    { ...DASH_QUERY_OPTS, staleTime: 5 * 60 * 1000 },
+  const draftIntelQ = trpc.draftWarRoom.getDraftWarRoomData.useQuery(
+    withLeagueSalt({ season: CURRENT_YEAR }, leagueCtx.leagueContextKey),
+    {
+      ...DASH_QUERY_OPTS,
+      staleTime: 5 * 60 * 1000,
+      enabled: leagueKeyReady && CURRENT_YEAR > 0,
+    },
   );
 
   const powerTop = (ownerListQ.data?.powerRankings ?? []).slice(0, 5);

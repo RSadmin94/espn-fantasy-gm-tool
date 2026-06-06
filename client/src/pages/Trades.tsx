@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import React from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -316,6 +318,7 @@ function RosterPicker({
   selectedPlayers,
   picks,
   teamCount,
+  leagueContextKey,
   onTeamChange,
   onTogglePlayer,
   onAddPick,
@@ -329,13 +332,14 @@ function RosterPicker({
   selectedPlayers: TradePlayer[];
   picks: TradePick[];
   teamCount: number;
+  leagueContextKey: string;
   onTeamChange: (id: number) => void;
   onTogglePlayer: (p: TradePlayer) => void;
   onAddPick: (p: TradePick) => void;
   onRemovePick: (key: string) => void;
 }) {
   const rosterQ = trpc.espn.rosters.useQuery(
-    { season, teamId: teamId ?? undefined },
+    withLeagueSalt({ season, teamId: teamId ?? undefined }, leagueContextKey),
     { enabled: teamId != null && cachedSeasons.includes(season) }
   );
 
@@ -615,8 +619,13 @@ function TradeResults({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function Trades() {
-  const allSeasonsQ = trpc.espn.allSeasons.useQuery();
-  const cachedQ = trpc.espn.cachedSeasons.useQuery();
+  const { leagueContextKey } = useLeagueActiveGate();
+  const allSeasonsQ = trpc.espn.allSeasons.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+  );
+  const cachedQ = trpc.espn.cachedSeasons.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+  );
   const allSeasons: number[] = allSeasonsQ.data ?? [];
   const cachedSeasons: number[] = cachedQ.data ?? [];
   const defaultSeason = cachedSeasons.length > 0
@@ -632,8 +641,15 @@ export function Trades() {
   const [picksB, setPicksB] = useState<TradePick[]>([]);
   const [result, setResult] = useState<TradeResult | null>(null);
 
+  useEffect(() => {
+    if (cachedSeasons.length > 0) {
+      const maxS = Math.max(...cachedSeasons);
+      setSeason((s) => (cachedSeasons.includes(s) ? s : maxS));
+    }
+  }, [cachedSeasons, leagueContextKey]);
+
   const teamsQ = trpc.espn.teams.useQuery(
-    { season },
+    withLeagueSalt({ season }, leagueContextKey),
     { enabled: cachedSeasons.includes(season) }
   );
   const teams = (teamsQ.data as TeamRow[] | undefined) ?? [];
@@ -737,6 +753,7 @@ export function Trades() {
           selectedPlayers={sideA}
           picks={picksA}
           teamCount={teams.length}
+          leagueContextKey={leagueContextKey}
           onTeamChange={id => { setTeamAId(id); setSideA([]); setPicksA([]); setResult(null); }}
           onTogglePlayer={p => { setSideA(prev => prev.some(x => x.playerId === p.playerId) ? prev.filter(x => x.playerId !== p.playerId) : [...prev, p]); setResult(null); }}
           onAddPick={pk => { setPicksA(prev => [...prev, pk]); setResult(null); }}
@@ -758,6 +775,7 @@ export function Trades() {
           selectedPlayers={sideB}
           picks={picksB}
           teamCount={teams.length}
+          leagueContextKey={leagueContextKey}
           onTeamChange={id => { setTeamBId(id); setSideB([]); setPicksB([]); setResult(null); }}
           onTogglePlayer={p => { setSideB(prev => prev.some(x => x.playerId === p.playerId) ? prev.filter(x => x.playerId !== p.playerId) : [...prev, p]); setResult(null); }}
           onAddPick={pk => { setPicksB(prev => [...prev, pk]); setResult(null); }}
