@@ -1054,14 +1054,18 @@ export const appRouter = router({
           .filter((p: MergedPlayer) => !draftedNames.has(p.name.toLowerCase()))
           .slice(0, 200);
 
+        const cachedSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a: number, b: number) => a - b);
+        const latestSeason = cachedSeasons[cachedSeasons.length - 1];
+
         // 2. Get owner tendencies from DNA profiles
         const { calcLeagueDNA } = await import("./leagueDNA");
         const { buildManagerRawData } = await import("./dnaRouter");
+        const { resolveLeaguePromptContext } = await import("./leaguePromptContext");
         const managers = await buildManagerRawData(ctx.user?.id);
-        const dnaProfiles = calcLeagueDNA(managers);
+        const draftPromptCtx = await resolveLeaguePromptContext(ctx.user?.id, latestSeason ?? new Date().getFullYear());
+        const focalH2hLabelDraft = draftPromptCtx.focalOwnerName?.trim() || "the focal manager";
+        const dnaProfiles = calcLeagueDNA(managers, focalH2hLabelDraft);
 
-        const cachedSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a: number, b: number) => a - b);
-        const latestSeason = cachedSeasons[cachedSeasons.length - 1];
         const latestData = latestSeason ? await getSeasonData(latestSeason, undefined, ctx.user?.id) : null;
         const pickOrder: Record<string, unknown>[] = latestData ? (normalizeDraftOrder(latestData)?.pickOrder ?? []) : [];
 
@@ -1184,7 +1188,7 @@ export const appRouter = router({
         const { buildPickRecommendationPrompt, parsePickRecommendation } = await import("./draftHelperService");
         const { invokeLLM: llm } = await import("./_core/llm");
 
-        const leagueContext = "14-team PPR snake draft, 15 rounds. Rod Sellers (Str8 Jacket / Rodzilla) is the user. This is the ATLANTAS FINEST FF league running since 2009. Rod has won multiple championships and is a top-tier manager.";
+        const leagueContext = "Mock draft board: use totalTeams, totalRounds, owner tendencies, and structured roster/pick data in this request as the only source of truth for league shape. Do not invent a specific real-world league name or manager identity.";
 
         const prompt = buildPickRecommendationPrompt({
           currentOverall: input.currentOverall,
@@ -7072,7 +7076,11 @@ export const appRouter = router({
       else if (rosterStability >= 70) gmArchetype = 'Patient Builder';
       else if (waiverAggression < 30 && tradeFrequency < 30) gmArchetype = 'Set & Forget';
 
-      const prompt = `You are an expert Fantasy Football analyst for the 18-season keeper league "ATLANTAS FINEST FF" (14 teams, PPR, 1 keeper, 7-team playoffs, snake draft).
+      const { resolveLeaguePromptContext, buildLeaguePromptContext } = await import("./leaguePromptContext");
+      const promptCtx = await resolveLeaguePromptContext(ctx.user.id);
+      const { leagueDescriptor, historyClause } = buildLeaguePromptContext(promptCtx);
+
+      const prompt = `You are an expert Fantasy Football analyst for ${leagueDescriptor}, ${historyClause}.
 
 Analyze the following owner's career history and generate a detailed 2026 behavioral prediction report.
 
@@ -7767,6 +7775,12 @@ Respond with JSON in this exact format:
       const data = await findLiveOpponentProfile(input.memberId, ctx.user?.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Opponent not found — sync ESPN data first" });
 
+      const { resolveLeaguePromptContext, buildLeaguePromptContext } = await import("./leaguePromptContext");
+      const scoutSeason = new Date().getFullYear();
+      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id, scoutSeason);
+      const { leagueDescriptor, historyClause, focalClause } = buildLeaguePromptContext(promptCtx);
+      const focalDisplayName = promptCtx.focalOwnerName?.trim() || focalClause;
+
       const totalW = data.career.wins;
       const totalL = data.career.losses;
       const winPct = totalW + totalL > 0 ? Math.round((totalW / (totalW + totalL)) * 100) : 0;
@@ -7783,19 +7797,19 @@ Respond with JSON in this exact format:
         : 'Playoff Record: No completed playoff matchup data available';
 
       // Build enriched H2H block
-      let enrichedH2HBlock = `H2H vs Rod Sellers: ${h2hW}W-${h2hL}L (career)`;
+      let enrichedH2HBlock = `H2H vs ${focalDisplayName}: ${h2hW}W-${h2hL}L (career)`;
       try {
         const { resolveRodMemberId, computeRichH2H, buildH2HPromptBlock } = await import('./h2hContextBuilder');
-        const rodId = await resolveRodMemberId(ctx.user?.id);
-        if (rodId && input.memberId && rodId !== input.memberId) {
-          const h2h = await computeRichH2H(rodId, input.memberId, 'Rod Sellers', data.ownerName, ctx.user?.id);
+        const focalMemberId = await resolveRodMemberId(ctx.user?.id);
+        if (focalMemberId && input.memberId && focalMemberId !== input.memberId) {
+          const h2h = await computeRichH2H(focalMemberId, input.memberId, focalDisplayName, data.ownerName, ctx.user?.id);
           if (h2h.rsTotalGames > 0) {
-            enrichedH2HBlock = buildH2HPromptBlock(h2h, `H2H vs Rod Sellers`);
+            enrichedH2HBlock = buildH2HPromptBlock(h2h, `H2H vs ${focalDisplayName}`);
           }
         }
       } catch { /* non-fatal */ }
 
-      const prompt = `You are an expert fantasy football analyst scouting ${data.ownerName} for the ATLANTAS FINEST FF league (14-team PPR keeper league, 2026 season).
+      const prompt = `You are an expert fantasy football analyst scouting ${data.ownerName} for ${leagueDescriptor}, ${historyClause} (scouting season context: ${scoutSeason}).
 
 Career Record: ${totalW}W-${totalL}L (${winPct}% win rate) over ${data.seasons.length} seasons
 ${poStr}
@@ -7809,13 +7823,13 @@ Strengths: ${data.strengthsWeaknesses.filter(s => s.type === "strength").map(s =
 Weaknesses: ${data.strengthsWeaknesses.filter(s => s.type === "weakness").map(s => s.text).join("; ")}
 Blind Spots: ${data.strengthsWeaknesses.filter(s => s.type === "blindspot").map(s => s.text).join("; ")}
 
-Write a detailed scouting report for Rod Sellers to use against this opponent in 2026. Include:
+Write a detailed scouting report for ${focalDisplayName} to use against this opponent in ${scoutSeason}. Include:
 1. THREAT LEVEL (Elite/High/Medium/Low) with one-sentence justification
 2. CAREER NARRATIVE (2-3 sentences on their arc and what defines them)
-3. HOW TO BEAT THEM (3 specific tactical recommendations for Rod)
-4. TRADE STRATEGY (should Rod trade with them? What to offer? What to demand?)
+3. HOW TO BEAT THEM (3 specific tactical recommendations for ${focalDisplayName})
+4. TRADE STRATEGY (should ${focalDisplayName} trade with them? What to offer? What to demand?)
 5. DRAFT DAY INTEL (what positions do they prioritize? How does that affect the draft board?)
-6. 2026 PREDICTION (one bold prediction about their season)
+6. ${scoutSeason} PREDICTION (one bold prediction about their season)
 
 Be specific, honest, and tactical. This is a competitive scouting report, not a puff piece.`;
 
@@ -8657,6 +8671,21 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
         valueRatioPct: bo.valueRatioPct,
       }));
 
+      const { resolveLeaguePromptContext, buildLeaguePromptContext } = await import("./leaguePromptContext");
+      const { resolveRodMemberId } = await import("./h2hContextBuilder");
+      const tradePromptCtx = await resolveLeaguePromptContext(ctx.user.id, 2025);
+      const { leagueDescriptor, historyClause, focalClause } = buildLeaguePromptContext(tradePromptCtx);
+      const focalH2hShort = tradePromptCtx.focalOwnerName?.trim() || "the focal manager";
+      const focalMemberIdTrade = await resolveRodMemberId(ctx.user.id);
+      let focalLeagueLine = "";
+      if (focalMemberIdTrade) {
+        const focalTeamInfo = Object.values(teamMap).find(ti => ti.memberId === focalMemberIdTrade);
+        if (focalTeamInfo) {
+          focalLeagueLine = `${focalClause} (${focalTeamInfo.teamName}): ${focalTeamInfo.record.wins}-${focalTeamInfo.record.losses} in 2025 regular season.`;
+        }
+      }
+      if (!focalLeagueLine) focalLeagueLine = `${focalClause}.`;
+
       // ── 8. Pull GM style context for target owner ─────────────────────────
       const { getGmStyleForTradeGenerator } = await import("./liveOpponentProfile");
       const gmStyle = await getGmStyleForTradeGenerator(targetMemberId, ctx.user?.id);
@@ -8667,7 +8696,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
         const { calcLeagueDNA } = await import("./leagueDNA");
         const { buildManagerRawData } = await import("./dnaRouter");
         const allManagers = await buildManagerRawData(ctx.user?.id);
-        const dnaProfiles = calcLeagueDNA(allManagers);
+        const dnaProfiles = calcLeagueDNA(allManagers, focalH2hShort);
         const found = dnaProfiles.find(p => p.memberId === targetMemberId);
         if (found) {
           dnaProfile = found;
@@ -8683,7 +8712,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
   Trade Frequency: ${found.trade.avgTradesPerSeason.toFixed(1)}/season | Loss-trade ratio: ${found.trade.lossTradeRatio.toFixed(2)}x
   Draft Biases (overvalues/undervalues vs league avg): ${bias}
   Top Exploit: ${found.exploitWindows[0] ?? "No specific exploit identified"}
-  H2H vs Rod: ${found.trade.h2hVsRod.wins}W-${found.trade.h2hVsRod.losses}L (Rod wins ${found.trade.h2hVsRod.winPct.toFixed(0)}% of matchups)
+  H2H vs ${focalH2hShort}: ${found.trade.h2hVsRod.wins}W-${found.trade.h2hVsRod.losses}L (${focalH2hShort} wins ${found.trade.h2hVsRod.winPct.toFixed(0)}% of matchups)
   INSTRUCTION: Use these behavioral facts to customize the negotiation strategy, offer framing, and closing message. If they overvalue a position, offer that. If they are tilting, apply urgency. If they are highly exploitable, be aggressive.`;
         }
       } catch {
@@ -8698,17 +8727,17 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
         const gives = o.rodGives.picks.join(" + ");
         const receives = o.rodReceives.picks.join(" + ");
         const ratio = o.valueRatioPct ?? (targetValue > 0 ? Math.round((o.totalValue / targetValue) * 100) : 0);
-        return `Option ${i + 1}: Rod gives [${gives}] (value: ${o.rodGives.totalValue}) in exchange for [${receives}] (value: ${o.rodReceives.totalValue}) — ${ratio}% value match`;
+        return `Option ${i + 1}: You give [${gives}] (value: ${o.rodGives.totalValue}) in exchange for [${receives}] (value: ${o.rodReceives.totalValue}) — ${ratio}% value match`;
       }).join("\n");
 
       const gmContext = gmStyle
-        ? `Target owner GM profile: ${gmStyle.archetype}, averages ${gmStyle.avgTrades} trades/season, H2H vs Rod: ${gmStyle.h2hVsRod.wins}W-${gmStyle.h2hVsRod.losses}L. Draft style: ${gmStyle.draftStyleBadge}.`
+        ? `Target owner GM profile: ${gmStyle.archetype}, averages ${gmStyle.avgTrades} trades/season, H2H vs ${focalH2hShort}: ${gmStyle.h2hVsRod.wins}W-${gmStyle.h2hVsRod.losses}L. Draft style: ${gmStyle.draftStyleBadge}.`
         : "GM profile not available for this owner.";
 
       const llmMessages: Message[] = [
         {
           role: "system",
-          content: `You are an expert fantasy football trade negotiator for a 14-team PPR league (ATLANTAS FINEST FF). 
+          content: `You are an expert fantasy football trade negotiator for ${leagueDescriptor}, ${historyClause}.
 League scoring: ${scoringDesc}.
 You analyze player stats, positional value, and GM behavioral profiles to craft winning trade strategies.
 Always be specific, reference actual stats and values, and give actionable negotiation advice.
@@ -8733,7 +8762,7 @@ ${gmContext}
 My offer options:
 ${offerDesc}
 
-LLeague context: 14-team PPR, keeper league, 2026 season. Rod Sellers (Str8FrmHell/RodZilla) went 9-5 in 2025, finished 3rd seed.${dnaPromptBlock ? "\n" + dnaPromptBlock : ""}
+League context: ${leagueDescriptor}, ${historyClause}. ${focalLeagueLine}${dnaPromptBlock ? "\n" + dnaPromptBlock : ""}
 Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTANT: The DNA intelligence above contains behavioral facts — use them to make the negotiation strategy, timing, and closing message highly specific to this opponent." : ""}`,
         },
       ];
@@ -9001,6 +9030,11 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
         `Positions changing hands: A gives ${Array.from(new Set(input.sideA.map(p => p.position))).join("+")}, B gives ${Array.from(new Set(input.sideB.map(p => p.position))).join("+")}`,
       ].join("\n");
 
+      const { resolveLeaguePromptContext, buildLeaguePromptContext } = await import("./leaguePromptContext");
+      const tradeCtx = await resolveLeaguePromptContext(ctx.user?.id, input.season);
+      const { leagueDescriptor, historyClause } = buildLeaguePromptContext(tradeCtx);
+      const focalH2hLabelTrade = tradeCtx.focalOwnerName?.trim() || "the focal manager";
+
       // Phase 3: Inject DNA profiles for both trade partners
       let dnaContext = "";
       try {
@@ -9008,7 +9042,7 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
         const { buildManagerRawData } = await import("./dnaRouter");
         const managerRawData = await buildManagerRawData(ctx.user?.id);
         if (managerRawData.length > 0) {
-          const dnaProfiles = calcLeagueDNA(managerRawData);
+          const dnaProfiles = calcLeagueDNA(managerRawData, focalH2hLabelTrade);
           const teamsData = normalizeTeams(data);
           const teamAData = teamsData.find(t => (t.teamId as number) === input.teamAId);
           const teamBData = teamsData.find(t => (t.teamId as number) === input.teamBId);
@@ -9029,7 +9063,7 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
 
 ${mathSummary}${dnaContext}
 
-League context: 14-team PPR keeper league (ATLANTAS FINEST FF). Keepers cost 1 round more than previous year's draft round.${dnaContext ? "\nIMPORTANT: The DNA intelligence above contains behavioral facts about both owners — use them to make the negotiation strategy and recommendations highly specific to each owner's tendencies." : ""}
+League context: ${leagueDescriptor}, ${historyClause}. Keeper cost rules follow your league's ESPN settings when known from synced data.${dnaContext ? "\nIMPORTANT: The DNA intelligence above contains behavioral facts about both owners — use them to make the negotiation strategy and recommendations highly specific to each owner's tendencies." : ""}
 
 Provide:
 1. VERDICT: One sentence — who wins this trade (or FAIR if balanced).
@@ -9071,146 +9105,9 @@ Provide:
         // Rate limit check
         const rl = checkRateLimit({ userId, callType: "advisor", isAdmin: ctx.user.role === "admin" });
         if (!rl.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: rl.reason ?? "Rate limit exceeded" });
-        let leagueContext = `You are an expert Fantasy Football GM advisor for the league "ATLANTAS FINEST FF" (League ID: ${LEAGUE_ID}).
-This is an 18-season keeper league running from 2009 to 2026 with 14 teams.
-Format: Head-to-Head Points, PPR (Point Per Reception), Snake Draft, 1 keeper per team.
-Scoring positions: QB, RB, WR, TE, K, D/ST. Playoffs: 7 teams.
-Be concise, data-driven, and specific. Reference actual team names and player names when possible.`;
-
-        const data = await getSeasonData(season, undefined, ctx.user?.id);
-        if (data) {
-          const teams = normalizeTeams(data);
-          const settings = normalizeSettings(data);
-          const teamOwnerMapAdvisor: Record<number, string> = {};
-          for (const t of teams) teamOwnerMapAdvisor[t.teamId as number] = t.owners as string;
-          const allPlayers: PlayerRow[] = (normalizeRosters(data) as unknown[]).map((r: unknown) => {
-            const p = r as Record<string, unknown>;
-            return {
-              playerId: p.playerId as number,
-              playerName: (p.playerName as string) || "Unknown",
-              position: (p.position as string) || "?",
-              teamId: p.teamId as number,
-              ownerName: teamOwnerMapAdvisor[p.teamId as number] || "Unknown",
-              seasonPoints: (p.appliedTotal as number) || 0,
-              avgPoints: (p.appliedAverage as number) || 0,
-              projectedTotal: (p.projectedTotal as number) || null,
-              keeperValue: (p.keeperValue as number) || 0,
-              keeperValueFuture: (p.keeperValueFuture as number) || 0,
-              injuryStatus: (p.injuryStatus as string) || "",
-              appliedStats: (p.appliedStats as Record<string, number>) || {},
-            };
-          });
-          const calYear = new Date().getFullYear();
-          const isSeasonComplete = (settings.currentMatchupPeriod as number || 0) >= 14 || season < calYear;
-          const upcomingSeason = season + 1;
-          if (isSeasonComplete) {
-            leagueContext += `\n\nDATA CONTEXT: The ${season} season is COMPLETE (final standings below). The upcoming season is ${upcomingSeason}. When answering questions about "next season", "heading into ${upcomingSeason}", or future planning, base your analysis on these FINAL ${season} standings and rosters. Do NOT say the season is ongoing.`;
-          } else {
-            leagueContext += `\n\nCurrent Season: ${season} (ACTIVE), Week ${settings.currentMatchupPeriod || "N/A"}`;
-          }
-          leagueContext += `\n\n${isSeasonComplete ? `${season} FINAL Standings` : "Current Standings"}:\n`;
-          const sorted = teams.sort((a, b) => ((a.rankFinal as number) || 99) - ((b.rankFinal as number) || 99));
-          for (const t of sorted) {
-            leagueContext += `  ${t.rankFinal}. ${t.teamName} (${t.owners}) W:${t.wins} L:${t.losses} PF:${Number(t.pointsFor || 0).toFixed(1)}\n`;
-          }
-          // Inject analytics snapshot so AI reasons from calculated facts
-          if (allPlayers.length > 0) {
-            const vorpResults = calcVORP(allPlayers);
-            const scarcityResults = calcPositionalScarcity(allPlayers, []);
-            const rosterGaps = calcRosterGaps(allPlayers);
-            leagueContext += `\n\nCALCULATED ANALYTICS (treat these as ground truth — do not contradict):`;
-            // VORP leaders by position
-            const positions = ["QB", "RB", "WR", "TE"];
-            leagueContext += `\n\nVORP Leaders (Value Over Replacement by position):`;
-            for (const pos of positions) {
-              const top = vorpResults.filter(v => v.position === pos).sort((a, b) => b.vorp - a.vorp).slice(0, 3);
-              if (top.length > 0) {
-                leagueContext += `\n  ${pos}: ${top.map(v => `${v.playerName} (${v.ownerName}, VORP +${v.vorp.toFixed(1)}, ${v.vorpTier}, avg ${v.avgPoints.toFixed(1)} PPG)`).join(" | ")}`;
-              }
-            }
-            // Positional scarcity
-            const scarce = scarcityResults.filter(s => s.scarcityScore >= 50).sort((a, b) => b.scarcityScore - a.scarcityScore);
-            if (scarce.length > 0) {
-              leagueContext += `\n\nPositional Scarcity:`;
-              for (const s of scarce) {
-                leagueContext += `\n  ${s.position}: ${s.scarcityLabel} (score ${s.scarcityScore}/100, ${s.availableStarters} quality starters available, top FA avg ${s.topFreeAgentAvg.toFixed(1)} PPG)`;
-              }
-            }
-            // Roster gaps
-            const topGaps = rosterGaps
-              .filter(g => g.overallGrade === "D" || g.overallGrade === "F" || g.overallGrade === "C")
-              .sort((a, b) => (a.overallGrade > b.overallGrade ? 1 : -1))
-              .slice(0, 4);
-            if (topGaps.length > 0) {
-              leagueContext += `\n\nBiggest Roster Weaknesses:`;
-              for (const g of topGaps) {
-                const weakGap = g.gaps.find(gap => gap.position === g.weakestPosition);
-                const avgStr = weakGap ? ` (avg ${weakGap.topPlayerAvg.toFixed(1)} PPG, ${weakGap.gapSeverity})` : "";
-                leagueContext += `\n  ${g.ownerName}: weakest at ${g.weakestPosition}${avgStr}, overall grade ${g.overallGrade}`;
-              }
-            }
-          }
-        // Phase 1: inject live injury intelligence into advisor context
-          if (allPlayers.length > 0) {
-            try {
-              const injuryContext = await buildAdvisorInjuryContext(
-                allPlayers.map((p: PlayerRow) => ({ playerId: p.playerId, playerName: p.playerName, position: p.position, teamId: p.teamId })),
-                0  // 0 = Rod's teamId placeholder
-              );
-              leagueContext += "\n\n" + injuryContext;
-            } catch {
-              // Injury fetch failed — continue without it
-            }
-          }
-
-          // Phase 3: inject League DNA behavioral intelligence
-          try {
-            const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
-            const { buildManagerRawData } = await import("./dnaRouter");
-            const managerRawData = await buildManagerRawData(ctx.user?.id);
-            if (managerRawData.length > 0) {
-              const dnaProfiles = calcLeagueDNA(managerRawData);
-              const dnaBlock = buildDNAPromptBlock(dnaProfiles);
-              leagueContext += "\n\n" + dnaBlock;
-            }
-          } catch {
-            // DNA unavailable — continue without it
-          }
-          // Phase 4: inject upcoming draft order and keeper data
-          try {
-            // Always fetch the 2026 draft order explicitly — this is the upcoming draft
-            const UPCOMING_DRAFT_YEAR = 2026;
-            const upcomingDraftData = await getSeasonData(UPCOMING_DRAFT_YEAR, undefined, ctx.user.id);
-            const draftData = upcomingDraftData ?? await getSeasonData(season, undefined, ctx.user.id);
-            const draftLabelYear = upcomingDraftData ? UPCOMING_DRAFT_YEAR : season;
-            if (draftData) {
-              const draftOrderData = normalizeDraftOrder(draftData as Record<string, unknown>);
-              const pickOrder = draftOrderData.pickOrder || [];
-if (pickOrder.length > 0) {
-                const draftDateMs = draftOrderData.draftDate as number;
-                const draftDateStr = draftDateMs ? new Date(draftDateMs).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD";
-                leagueContext += `\n\n## GROUND TRUTH — ${draftLabelYear} DRAFT ORDER (this overrides any prior conversation)`;
-                leagueContext += `\nSnake Draft, ${draftOrderData.keeperCount || 1} keeper per team. Use this EXACT order — do NOT contradict it regardless of what was said earlier.`;
-                leagueContext += `\nDraft Date: ${draftDateStr}`;
-                leagueContext += `\nRound 1 Pick Order: ${pickOrder.map(p => `#${p.position} ${p.owners}`).join(", ")}`;
-                leagueContext += `\n(Round 2 reverses: last pick goes first, etc.)`;
-              }
-              // Inject current keeper picks from current season draft
-              const picks2025 = normalizeDraftPicks(draftData as Record<string, unknown>);
-              const keepers = (picks2025 as Array<Record<string, unknown>>).filter(p => p.keeper === true || p.keeper === 1);
-              if (keepers.length > 0) {
-                leagueContext += `\n\n2025 KEEPER PICKS (players kept from prior season):`;
-                for (const k of keepers) {
-                  leagueContext += `\n  Round ${k.roundId}: ${k.playerName} (${k.position}) → kept by ${k.ownerName || k.teamName}`;
-                }
-              }
-            }
-          } catch {
-            // Draft order unavailable — continue without it
-          }
-        }
-        // Inject GM memory into system prompt
+        const { buildAdvisorSystemPrompt } = await import("./advisorContextBuilder");
         const gmMemory = await getUserMemory(userId);
+        let gmMemoryBlock: string | undefined;
         if (gmMemory) {
           const memParts: string[] = [];
           if (gmMemory.riskTolerance) memParts.push(`Risk Tolerance: ${gmMemory.riskTolerance}`);
@@ -9220,10 +9117,9 @@ if (pickOrder.length > 0) {
           if (gmMemory.favoritePlayerTypes) memParts.push(`Favorite Player Types: ${gmMemory.favoritePlayerTypes}`);
           if (gmMemory.rivalManagers) memParts.push(`Rival Managers to Watch: ${gmMemory.rivalManagers}`);
           if (gmMemory.notes) memParts.push(`GM Notes: ${gmMemory.notes}`);
-          if (memParts.length > 0) {
-            leagueContext += `\n\n## GM PROFILE (Rod Sellers)\n${memParts.join("\n")}`;
-          }
+          if (memParts.length > 0) gmMemoryBlock = memParts.join("\n");
         }
+        const leagueContext = await buildAdvisorSystemPrompt(season, gmMemoryBlock, userId);
         const history = await getChatHistory(userId, season);
         const messages: Message[] = [
           { role: "system", content: leagueContext },
@@ -11675,7 +11571,10 @@ if (pickOrder.length > 0) {
       const totalTeams = pickOrder.length || 14;
       // 2. DNA profiles
       const managers = await buildManagerRawData(ctx.user?.id);
-      const dnaProfiles = calcLeagueDNA(managers);
+      const { resolveLeaguePromptContext } = await import("./leaguePromptContext");
+      const mockPromptCtx = await resolveLeaguePromptContext(ctx.user?.id, latestSeason);
+      const focalH2hLabelMock = mockPromptCtx.focalOwnerName?.trim() || "the focal manager";
+      const dnaProfiles = calcLeagueDNA(managers, focalH2hLabelMock);
       // Resolve focal owner for isFocalOwner flag
       const __draftProfile = ctx.user?.id
         ? await resolveActiveProfile({ id: ctx.user.id })

@@ -81,7 +81,7 @@ export function registerAdvisorStreamRoute(app: Express) {
         if (gmMem.favoritePlayerTypes) parts.push(`Favorite Player Types: ${gmMem.favoritePlayerTypes}`);
         if (gmMem.rivalManagers) parts.push(`Rival Managers to Watch: ${gmMem.rivalManagers}`);
         if (gmMem.notes) parts.push(`GM Notes: ${gmMem.notes}`);
-        if (parts.length > 0) gmMemoryBlock = `## GM PROFILE (Rod Sellers)\n${parts.join("\n")}`;
+        if (parts.length > 0) gmMemoryBlock = parts.join("\n");
       }
       // Build messages (same context as tRPC advisor.chat)
       const messages = await buildAdvisorMessages({

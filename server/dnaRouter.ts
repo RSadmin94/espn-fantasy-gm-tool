@@ -33,6 +33,14 @@ const POS_MAP: Record<number, string> = {
   1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST", 17: "D/ST",
 };
 
+/** Display label for H2H stats in DNA summaries (focal manager vs opponents). */
+async function focalH2hLabelForUser(userId?: number): Promise<string> {
+  if (userId == null) return "the focal manager";
+  const p = await resolveActiveProfile({ id: userId });
+  const n = p.selectedOwnerName?.trim();
+  return n || "the focal manager";
+}
+
 export async function buildManagerRawData(userId?: number): Promise<ManagerRawData[]> {
   const cachedSeasons = (await getAllCachedSeasons(undefined, userId)).sort((a, b) => a - b);
   // Use ALL cached seasons for career-level DNA analysis.
@@ -60,12 +68,11 @@ export async function buildManagerRawData(userId?: number): Promise<ManagerRawDa
     return managerMap.get(memberId)!;
   }
 
-  // Identify Rod's memberId (will be used for h2h tracking)
-  let rodMemberId: string | null = null;
-  // Wave 2: prefer the authenticated user's selected owner; the name match below is the fallback.
+  // Focal manager memberId (H2H tracking vs each opponent). Profile selection only — no name heuristics.
+  let focalMemberId: string | null = null;
   if (userId != null) {
     const __profile = await resolveActiveProfile({ id: userId });
-    if (__profile.isSetupComplete) rodMemberId = memberIdFromOwnerKey(__profile.selectedOwnerKey);
+    if (__profile.isSetupComplete) focalMemberId = memberIdFromOwnerKey(__profile.selectedOwnerKey);
   }
 
   for (const season of ANALYSIS_SEASONS) {
@@ -82,18 +89,6 @@ export async function buildManagerRawData(userId?: number): Promise<ManagerRawDa
     for (const team of teams) {
       const primaryOwner = (team.primaryOwner as string) || ((team.owners as string[])?.[0] ?? "");
       if (primaryOwner) teamToMember.set(team.id as number, primaryOwner);
-    }
-
-    // Identify Rod by team name
-    if (!rodMemberId) {
-      for (const team of teams) {
-        const name = ((team.name as string) || "").toLowerCase();
-        const abbrev = ((team.abbrev as string) || "").toLowerCase();
-        if (name.includes("str8") || name.includes("rodzilla") || abbrev.includes("rod")) {
-          rodMemberId = (team.primaryOwner as string) || ((team.owners as string[])?.[0] ?? null);
-          break;
-        }
-      }
     }
 
     // Season records + txn
@@ -151,8 +146,8 @@ export async function buildManagerRawData(userId?: number): Promise<ManagerRawDa
       }
     }
 
-    // H2H vs Rod from regular-season schedule
-    if (rodMemberId) {
+    // H2H vs focal manager from regular-season schedule
+    if (focalMemberId) {
       const regularSeason = schedule.filter(
         (m) => (!m.playoffTierType || m.playoffTierType === "NONE") && m.winner && m.winner !== "UNDECIDED"
       ) as Record<string, unknown>[];
@@ -166,19 +161,19 @@ export async function buildManagerRawData(userId?: number): Promise<ManagerRawDa
         const awayMember = teamToMember.get(awayTeamId);
         if (!homeMember || !awayMember) continue;
 
-        const rodIsHome = homeMember === rodMemberId;
-        const rodIsAway = awayMember === rodMemberId;
-        if (!rodIsHome && !rodIsAway) continue;
+        const focalIsHome = homeMember === focalMemberId;
+        const focalIsAway = awayMember === focalMemberId;
+        if (!focalIsHome && !focalIsAway) continue;
 
-        const opponentMemberId = rodIsHome ? awayMember : homeMember;
+        const opponentMemberId = focalIsHome ? awayMember : homeMember;
         const opponent = managerMap.get(opponentMemberId);
         if (!opponent) continue;
 
-        const rodWon =
-          (rodIsHome && matchup.winner === "HOME") ||
-          (rodIsAway && matchup.winner === "AWAY");
+        const focalWon =
+          (focalIsHome && matchup.winner === "HOME") ||
+          (focalIsAway && matchup.winner === "AWAY");
 
-        if (rodWon) {
+        if (focalWon) {
           opponent.h2hVsRod.losses++;
         } else {
           opponent.h2hVsRod.wins++;
@@ -201,8 +196,9 @@ export const dnaRouter = router({
    * because ESPN data is already cached in DB.
    */
   leagueProfiles: publicProcedure.query(async ({ ctx }) => {
+    const focalLabel = await focalH2hLabelForUser(ctx.user?.id);
     const managers = await buildManagerRawData(ctx.user?.id);
-    const dnaProfiles = calcLeagueDNA(managers);
+    const dnaProfiles = calcLeagueDNA(managers, focalLabel);
     return dnaProfiles;
   }),
 
@@ -212,11 +208,12 @@ export const dnaRouter = router({
   managerProfile: publicProcedure
     .input(z.object({ memberId: z.string() }))
     .query(async ({ ctx, input }) => {
+      const focalLabel = await focalH2hLabelForUser(ctx.user?.id);
       const managers = await buildManagerRawData(ctx.user?.id);
       const allPicks: DraftPickRecord[] = managers.flatMap(m => m.draftPicks);
       const manager = managers.find(m => m.memberId === input.memberId);
       if (!manager) return null;
-      return calcManagerDNA(manager, allPicks);
+      return calcManagerDNA(manager, allPicks, focalLabel);
     }),
 
   /**
@@ -241,11 +238,12 @@ export const dnaRouter = router({
       })).optional().default([]),
     }))
     .query(async ({ ctx, input }) => {
+      const focalLabel = await focalH2hLabelForUser(ctx.user?.id);
       const managers = await buildManagerRawData(ctx.user?.id);
       const allPicks: DraftPickRecord[] = managers.flatMap(m => m.draftPicks);
 
       const results = managers.map(mgr => {
-        const dna = calcManagerDNA(mgr, allPicks);
+        const dna = calcManagerDNA(mgr, allPicks, focalLabel);
         const state = input.managerStates.find(s => s.memberId === mgr.memberId);
 
         const currentSeason = state ? {
@@ -282,12 +280,13 @@ export const dnaRouter = router({
       leagueAvgScore: z.number().default(130),
     }))
     .query(async ({ ctx, input }) => {
+      const focalLabel = await focalH2hLabelForUser(ctx.user?.id);
       const managers = await buildManagerRawData(ctx.user?.id);
       const allPicks: DraftPickRecord[] = managers.flatMap(m => m.draftPicks);
       const manager = managers.find(m => m.memberId === input.memberId);
       if (!manager) return null;
 
-      const dna = calcManagerDNA(manager, allPicks);
+      const dna = calcManagerDNA(manager, allPicks, focalLabel);
       const desperation = calcTradeDesperationScore(dna, {
         season: 2025,
         currentWins: input.currentWins,
@@ -303,8 +302,7 @@ export const dnaRouter = router({
     }),
 
   /**
-   * Exploit opportunity board — ranked list of all 13 opponents
-   * by how much edge Rod has against them right now.
+   * Exploit opportunity board — ranked list of opponents by combined DNA + desperation edge.
    * Combines historical exploitability with live desperation.
    *
    * Use in the Command Center War Room as the "Trade Targets" panel.
@@ -323,11 +321,12 @@ export const dnaRouter = router({
       })).optional().default([]),
     }))
     .query(async ({ ctx, input }) => {
+      const focalLabel = await focalH2hLabelForUser(ctx.user?.id);
       const managers = await buildManagerRawData(ctx.user?.id);
       const allPicks: DraftPickRecord[] = managers.flatMap(m => m.draftPicks);
 
       const board = managers.map(mgr => {
-        const dna = calcManagerDNA(mgr, allPicks);
+        const dna = calcManagerDNA(mgr, allPicks, focalLabel);
         const state = input.managerStates.find(s => s.memberId === mgr.memberId);
 
         const currentSeason = state ? {
@@ -378,8 +377,9 @@ export const dnaRouter = router({
       memberIds: z.array(z.string()).optional(),
     }))
     .query(async ({ ctx, input }) => {
+      const focalLabel = await focalH2hLabelForUser(ctx.user?.id);
       const managers = await buildManagerRawData(ctx.user?.id);
-      const dnaProfiles = calcLeagueDNA(managers);
+      const dnaProfiles = calcLeagueDNA(managers, focalLabel);
       return buildDNAPromptBlock(dnaProfiles, input.memberIds);
     }),
 });

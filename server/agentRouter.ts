@@ -45,9 +45,15 @@ async function getDNABlock(focusMemberIds?: string[], userId?: number): Promise<
     if (cachedSeasons.length === 0) return "";
     const { buildManagerRawData } = await import("./dnaRouter");
     const { calcLeagueDNA, buildDNAPromptBlock: buildBlock } = await import("./leagueDNA");
+    const { resolveActiveProfile } = await import("./db");
     const allManagers = await buildManagerRawData(userId);
     if (allManagers.length === 0) return "";
-    const dnaProfiles = calcLeagueDNA(allManagers);
+    let focalLabel = "the focal manager";
+    if (userId != null) {
+      const p = await resolveActiveProfile({ id: userId });
+      if (p.selectedOwnerName?.trim()) focalLabel = p.selectedOwnerName.trim();
+    }
+    const dnaProfiles = calcLeagueDNA(allManagers, focalLabel);
     const focused = focusMemberIds && focusMemberIds.length > 0
       ? dnaProfiles.filter(p => focusMemberIds.includes(p.memberId))
       : dnaProfiles;

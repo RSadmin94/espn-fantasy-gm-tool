@@ -347,7 +347,9 @@ function buildExploitWindows(
   draft: DraftDNA,
   trade: TradeDNA,
   waiver: WaiverDNA,
-  tilt: TiltProfile
+  tilt: TiltProfile,
+  /** Display name for the profiled user's focal manager (H2H counterparty in raw data). */
+  focalH2hLabel: string,
 ): string[] {
   const windows: string[] = [];
 
@@ -376,7 +378,7 @@ function buildExploitWindows(
 
   // H2H advantage
   if (trade.h2hVsRod.losses > trade.h2hVsRod.wins && trade.h2hVsRod.losses >= 2) {
-    windows.push(`${ownerName} is ${trade.h2hVsRod.losses}-${trade.h2hVsRod.wins} vs Rod head-to-head — psychological edge. They may concede value in trades to avoid conflict.`);
+    windows.push(`${ownerName} is ${trade.h2hVsRod.losses}-${trade.h2hVsRod.wins} vs ${focalH2hLabel} head-to-head — psychological edge. They may concede value in trades to avoid conflict.`);
   }
 
   // Keeper rate exploit
@@ -397,7 +399,8 @@ function buildExploitWindows(
  */
 export function calcManagerDNA(
   manager: ManagerRawData,
-  allLeaguePicks: DraftPickRecord[]
+  allLeaguePicks: DraftPickRecord[],
+  focalH2hLabel = "the focal manager",
 ): ManagerDNA {
   const leagueAvgByPos = calcLeagueAvgRoundByPosition(allLeaguePicks);
 
@@ -431,7 +434,7 @@ export function calcManagerDNA(
     "Shark";
 
   const exploitWindows = buildExploitWindows(
-    manager.ownerName, draft, trade, waiver, tilt
+    manager.ownerName, draft, trade, waiver, tilt, focalH2hLabel
   );
 
   // Plain-English DNA summary for AI prompt injection
@@ -447,7 +450,7 @@ export function calcManagerDNA(
     `Draft: ${draft.draftStyleBadge}${biasLines.length > 0 ? ` (${biasLines.join(", ")})` : ""}`,
     `Trades: ${trade.avgTradesPerSeason}/season | Loss-trade ratio: ${trade.lossTradeRatio.toFixed(2)}x${tilt.tiltLabel !== "Ice Cold" ? ` | Tilt: ${tilt.tiltLabel}` : ""}`,
     `Waiver: ${waiver.avgAcquisitionsPerSeason}/season | Aggression: ${waiver.waiverAggression}/100`,
-    `H2H vs Rod: ${trade.h2hVsRod.wins}W-${trade.h2hVsRod.losses}L`,
+    `H2H vs ${focalH2hLabel}: ${trade.h2hVsRod.wins}W-${trade.h2hVsRod.losses}L`,
     `Exploitability: ${exploitabilityScore}/100 (${exploitabilityLabel})`,
     exploitWindows.length > 0 ? `Top exploit: ${exploitWindows[0]}` : "",
   ].filter(Boolean).join("\n  ");
@@ -577,11 +580,12 @@ export function calcTradeDesperationScore(
 // ─── Batch calculation ────────────────────────────────────────────────────────
 
 export function calcLeagueDNA(
-  managers: ManagerRawData[]
+  managers: ManagerRawData[],
+  focalH2hLabel = "the focal manager",
 ): ManagerDNA[] {
   // Collect all draft picks for league-wide average calculation
   const allLeaguePicks: DraftPickRecord[] = managers.flatMap(m => m.draftPicks);
-  return managers.map(m => calcManagerDNA(m, allLeaguePicks))
+  return managers.map(m => calcManagerDNA(m, allLeaguePicks, focalH2hLabel))
     .sort((a, b) => b.exploitabilityScore - a.exploitabilityScore);
 }
 
