@@ -1,5 +1,4 @@
 import { useState, useMemo, Fragment, useEffect, useRef } from "react";
-import { useSearchParams, useLocation } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -1255,163 +1254,14 @@ function ProfilePanel({
   );
 }
 
-/** Temporary diagnostic UI — only when `?debugLeague=1`. Do not rely on in production. */
-function OwnerProfilesLeagueDebugPanel({
-  approxShellLabel,
-  routePath,
-  routeSearch,
-  leagueContextKey,
-  leagueKeyReady,
-  activeLeagueId,
-  activeLeagueName,
-  activeIsFetching,
-  activeDataUpdatedAt,
-  ownerListExpectedLeagueId,
-  ownerListActiveLeagueKey,
-  ownerListResponseLeagueId,
-  ownerListRawActiveLen,
-  ownerListRawGraveyardLen,
-  ownerListShownActiveLen,
-  ownerListShownGraveyardLen,
-  ownerListIsFetching,
-  ownerListIsSuccess,
-  ownerListDataUpdatedAt,
-  selectedOwnerKey,
-  profileExpectedLeagueId,
-  profileActiveLeagueKey,
-  profileResponseLeagueId,
-  profileOwnerProfileLeagueMismatch,
-  profileOwnerName,
-  profileTeamName,
-  profileIsFetching,
-  profileIsSuccess,
-  profileDataUpdatedAt,
-  ownerListAnchorNote,
-  ownerListHydrated,
-  currentLeagueOwnerKeysSize,
-  profileKeyValid,
-  profileShouldRender,
-}: {
-  approxShellLabel: string;
-  routePath: string;
-  routeSearch: string;
-  leagueContextKey: string;
-  leagueKeyReady: boolean;
-  activeLeagueId: string;
-  activeLeagueName: string;
-  activeIsFetching: boolean;
-  activeDataUpdatedAt: number;
-  ownerListExpectedLeagueId: string;
-  ownerListActiveLeagueKey: string;
-  ownerListResponseLeagueId: string;
-  ownerListRawActiveLen: number;
-  ownerListRawGraveyardLen: number;
-  ownerListShownActiveLen: number;
-  ownerListShownGraveyardLen: number;
-  ownerListIsFetching: boolean;
-  ownerListIsSuccess: boolean;
-  ownerListDataUpdatedAt: number;
-  selectedOwnerKey: string | null;
-  profileExpectedLeagueId: string;
-  profileActiveLeagueKey: string;
-  profileResponseLeagueId: string;
-  profileOwnerProfileLeagueMismatch: string;
-  profileOwnerName: string;
-  profileTeamName: string;
-  profileIsFetching: boolean;
-  profileIsSuccess: boolean;
-  profileDataUpdatedAt: number;
-  ownerListAnchorNote: string;
-  ownerListHydrated: boolean;
-  currentLeagueOwnerKeysSize: number;
-  profileKeyValid: boolean;
-  profileShouldRender: boolean;
-}) {
-  const Row = ({ k, v }: { k: string; v: string }) => (
-    <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-x-2 border-b border-amber-500/15 py-0.5 last:border-b-0">
-      <span className="text-amber-200/90 shrink-0">{k}</span>
-      <span className="min-w-0 break-all text-zinc-100">{v}</span>
-    </div>
-  );
-  const Sec = ({ title, children }: { title: string; children: ReactNode }) => (
-    <div className="mt-2 first:mt-0">
-      <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-300/90">{title}</div>
-      <div className="rounded border border-amber-500/25 bg-black/40 px-2 py-1.5">{children}</div>
-    </div>
-  );
-  return (
-    <div
-      className="mb-4 rounded-lg border border-amber-500/40 bg-amber-950/30 p-3 text-[11px] leading-snug text-zinc-100 shadow-lg"
-      data-testid="owner-profiles-league-debug"
-    >
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 border-b border-amber-500/30 pb-2">
-        <span className="font-bold text-amber-100">OwnerProfiles league diagnostics</span>
-        <span className="text-[10px] text-amber-200/80">Gated: ?debugLeague=1 only</span>
-      </div>
-      <Sec title="Visible shell (approx) + route">
-        <Row k="approxShellLabel (AppShell-style)" v={approxShellLabel} />
-        <Row k="route path" v={routePath} />
-        <Row k="route search" v={routeSearch} />
-      </Sec>
-      <Sec title="Client context (getActive / gate)">
-        <Row k="leagueContextKey" v={leagueContextKey} />
-        <Row k="leagueKeyReady" v={String(leagueKeyReady)} />
-        <Row k="activeQ.data?.leagueId" v={activeLeagueId} />
-        <Row k="activeQ.data?.leagueName (not .name)" v={activeLeagueName} />
-        <Row k="activeQ.isFetching" v={String(activeIsFetching)} />
-        <Row k="activeQ.dataUpdatedAt" v={String(activeDataUpdatedAt)} />
-      </Sec>
-      <Sec title="owners.ownerList">
-        <Row k="input expectedLeagueId" v={ownerListExpectedLeagueId} />
-        <Row k="input activeLeagueKey" v={ownerListActiveLeagueKey} />
-        <Row k="response leagueId" v={ownerListResponseLeagueId} />
-        <Row k="response active.length (raw)" v={String(ownerListRawActiveLen)} />
-        <Row k="response graveyard.length (raw)" v={String(ownerListRawGraveyardLen)} />
-        <Row k="rendered active.length" v={String(ownerListShownActiveLen)} />
-        <Row k="rendered graveyard.length" v={String(ownerListShownGraveyardLen)} />
-        <Row k="isFetching" v={String(ownerListIsFetching)} />
-        <Row k="isSuccess" v={String(ownerListIsSuccess)} />
-        <Row k="dataUpdatedAt" v={String(ownerListDataUpdatedAt)} />
-      </Sec>
-      <Sec title="owners.ownerProfile (mirror query, no compareWith)">
-        <Row k="selectedOwnerKey" v={selectedOwnerKey ?? "—"} />
-        <Row k="input expectedLeagueId" v={profileExpectedLeagueId} />
-        <Row k="input activeLeagueKey" v={profileActiveLeagueKey} />
-        <Row k="response leagueId" v={profileResponseLeagueId} />
-        <Row k="ownerProfileLeagueMismatch" v={profileOwnerProfileLeagueMismatch} />
-        <Row k="ownerName" v={profileOwnerName} />
-        <Row k="teamName" v={profileTeamName} />
-        <Row k="isFetching" v={String(profileIsFetching)} />
-        <Row k="isSuccess" v={String(profileIsSuccess)} />
-        <Row k="dataUpdatedAt" v={String(profileDataUpdatedAt)} />
-      </Sec>
-      <Sec title="Hydration / selection">
-        <Row k="ownerListAnchorLeague" v={ownerListAnchorNote} />
-        <Row k="ownerListHydrated" v={String(ownerListHydrated)} />
-        <Row k="currentLeagueOwnerKeys.size" v={String(currentLeagueOwnerKeysSize)} />
-        <Row k="profileKeyValid" v={String(profileKeyValid)} />
-        <Row k="profileShouldRender" v={String(profileShouldRender)} />
-      </Sec>
-    </div>
-  );
-}
-
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function OwnerProfiles() {
   const trpcAny = trpc as any;
   const utils = trpc.useUtils();
-  const [searchParams] = useSearchParams();
-  const location = useLocation();
-  const showDebugLeaguePanel = searchParams.get("debugLeague") === "1";
 
-  const { leagueContextKey, authLoaded, userLoaded, isSignedIn, activeQ } = useLeagueActiveGate();
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
-
-  const leaguesForShellLabelQ = trpc.league.getMyLeagues.useQuery(undefined, {
-    staleTime: 30_000,
-    enabled: showDebugLeaguePanel,
-  });
 
   const listQ = trpcAny.owners.ownerList.useQuery(withLeagueSalt({ expectedLeagueId: leagueContextKey }, leagueContextKey), {
     staleTime: 60_000,
@@ -1432,20 +1282,6 @@ export function OwnerProfiles() {
   const [selectedOwnerKey, setSelectedOwnerKey] = useState<string | null>(null);
   const [showGraveyard, setShowGraveyard] = useState(false);
   const profileRef = useRef<HTMLDivElement | null>(null);
-
-  const profileDebugArgs = useMemo(
-    () => ({
-      ownerKey: (selectedOwnerKey ?? "").trim(),
-      expectedLeagueId: leagueContextKey,
-    }),
-    [selectedOwnerKey, leagueContextKey],
-  );
-  const profileDebugQ = trpcAny.owners.ownerProfile.useQuery(withLeagueSalt(profileDebugArgs, leagueContextKey), {
-    enabled:
-      showDebugLeaguePanel &&
-      leagueKeyReady &&
-      Boolean((selectedOwnerKey ?? "").trim()),
-  });
 
   useEffect(() => {
     setSelectedOwnerKey(null);
@@ -1512,140 +1348,6 @@ export function OwnerProfiles() {
   );
   const profileShouldRender = profileKeyValid;
 
-  const debugApproxShellLabel = useMemo(() => {
-    if (!showDebugLeaguePanel) return "—";
-    const leagues = leaguesForShellLabelQ.data ?? [];
-    if (leagues.length === 0) return "(getMyLeagues empty or loading)";
-    const activeId = activeQ.data?.id ?? leagues.find((l) => l.isActive)?.id;
-    const current = leagues.find((l) => l.id === activeId) ?? leagues[0]!;
-    return current.leagueName?.trim() || `League ${current.leagueId}`;
-  }, [showDebugLeaguePanel, leaguesForShellLabelQ.data, activeQ.data]);
-
-  const listResponseLeagueIdStr =
-    listQ.data?.leagueId != null ? String(listQ.data.leagueId) : "—";
-  const listRawActiveLen = (listQ.data?.active ?? []).length;
-  const listRawGraveyardLen = (listQ.data?.graveyard ?? []).length;
-
-  const pd = profileDebugQ.data as Record<string, unknown> | null | undefined;
-  const profileDebugLeagueIdStr =
-    pd && typeof pd.leagueId === "string" ? pd.leagueId : pd?.leagueId != null ? String(pd.leagueId) : "—";
-  const profileMismatchStr =
-    pd && "ownerProfileLeagueMismatch" in pd && pd.ownerProfileLeagueMismatch === true ? "true" : "false";
-
-  useEffect(() => {
-    try {
-      if (typeof window === "undefined") return;
-      if (window.localStorage.getItem("DEBUG_OWNER_PROFILES_LEAGUE") !== "1") return;
-    } catch {
-      return;
-    }
-    const pdx = profileDebugQ.data as Record<string, unknown> | null | undefined;
-    const pLeague =
-      pdx && typeof pdx.leagueId === "string" ? pdx.leagueId : pdx?.leagueId != null ? String(pdx.leagueId) : "—";
-    const pMismatch =
-      pdx && "ownerProfileLeagueMismatch" in pdx && pdx.ownerProfileLeagueMismatch === true ? "true" : "false";
-    const snap = {
-      leagueContextKey,
-      leagueKeyReady,
-      "activeQ.data?.leagueId": activeQ.data?.leagueId ?? null,
-      "activeQ.data?.leagueName": activeQ.data?.leagueName ?? null,
-      activeQ_isFetching: activeQ.isFetching,
-      activeQ_dataUpdatedAt: activeQ.dataUpdatedAt,
-      ownerList_expectedLeagueId: leagueContextKey,
-      ownerList_activeLeagueKey: leagueContextKey,
-      ownerList_responseLeagueId: listQ.data?.leagueId ?? null,
-      ownerList_rawActiveLen: listRawActiveLen,
-      ownerList_rawGraveyardLen: listRawGraveyardLen,
-      ownerList_isFetching: listQ.isFetching,
-      ownerList_isSuccess: listQ.isSuccess,
-      ownerList_dataUpdatedAt: listQ.dataUpdatedAt,
-      selectedOwnerKey,
-      profile_responseLeagueId: pLeague,
-      profile_ownerProfileLeagueMismatch: pMismatch,
-      profile_ownerName: pdx && typeof pdx.ownerName === "string" ? pdx.ownerName : "—",
-      profile_teamName: pdx && typeof pdx.teamName === "string" ? pdx.teamName : "—",
-      profile_isFetching: profileDebugQ.isFetching,
-      profile_isSuccess: profileDebugQ.isSuccess,
-      profile_dataUpdatedAt: profileDebugQ.dataUpdatedAt,
-      ownerListHydrated,
-      currentLeagueOwnerKeys_size: currentLeagueOwnerKeys.size,
-      profileKeyValid,
-      profileShouldRender,
-      approxShellLabel: debugApproxShellLabel,
-      path: `${location.pathname}${location.search}`,
-    };
-    // eslint-disable-next-line no-console -- temporary gated diagnostics
-    console.groupCollapsed("[OwnerProfiles league debug]", leagueContextKey);
-    // eslint-disable-next-line no-console -- temporary gated diagnostics
-    console.log(snap);
-    // eslint-disable-next-line no-console -- temporary gated diagnostics
-    console.groupEnd();
-  }, [
-    leagueContextKey,
-    leagueKeyReady,
-    activeQ.data?.leagueId,
-    activeQ.data?.leagueName,
-    activeQ.isFetching,
-    activeQ.dataUpdatedAt,
-    listQ.data?.leagueId,
-    listRawActiveLen,
-    listRawGraveyardLen,
-    listQ.isFetching,
-    listQ.isSuccess,
-    listQ.dataUpdatedAt,
-    selectedOwnerKey,
-    profileDebugQ.data,
-    profileDebugQ.isFetching,
-    profileDebugQ.isSuccess,
-    profileDebugQ.dataUpdatedAt,
-    ownerListHydrated,
-    currentLeagueOwnerKeys,
-    profileKeyValid,
-    profileShouldRender,
-    debugApproxShellLabel,
-    location.pathname,
-    location.search,
-  ]);
-
-  const leagueDebugPanel = showDebugLeaguePanel ? (
-    <OwnerProfilesLeagueDebugPanel
-      approxShellLabel={debugApproxShellLabel}
-      routePath={location.pathname}
-      routeSearch={location.search}
-      leagueContextKey={leagueContextKey}
-      leagueKeyReady={leagueKeyReady}
-      activeLeagueId={activeQ.data?.leagueId != null ? String(activeQ.data.leagueId) : "—"}
-      activeLeagueName={activeQ.data?.leagueName != null ? String(activeQ.data.leagueName) : "—"}
-      activeIsFetching={activeQ.isFetching}
-      activeDataUpdatedAt={activeQ.dataUpdatedAt}
-      ownerListExpectedLeagueId={leagueContextKey}
-      ownerListActiveLeagueKey={leagueContextKey}
-      ownerListResponseLeagueId={listResponseLeagueIdStr}
-      ownerListRawActiveLen={listRawActiveLen}
-      ownerListRawGraveyardLen={listRawGraveyardLen}
-      ownerListShownActiveLen={active.length}
-      ownerListShownGraveyardLen={graveyard.length}
-      ownerListIsFetching={listQ.isFetching}
-      ownerListIsSuccess={listQ.isSuccess}
-      ownerListDataUpdatedAt={listQ.dataUpdatedAt}
-      selectedOwnerKey={selectedOwnerKey}
-      profileExpectedLeagueId={leagueContextKey}
-      profileActiveLeagueKey={leagueContextKey}
-      profileResponseLeagueId={profileDebugLeagueIdStr}
-      profileOwnerProfileLeagueMismatch={profileMismatchStr}
-      profileOwnerName={pd && typeof pd.ownerName === "string" ? pd.ownerName : "—"}
-      profileTeamName={pd && typeof pd.teamName === "string" ? pd.teamName : "—"}
-      profileIsFetching={profileDebugQ.isFetching}
-      profileIsSuccess={profileDebugQ.isSuccess}
-      profileDataUpdatedAt={profileDebugQ.dataUpdatedAt}
-      ownerListAnchorNote="(removed) list hydration = success && !fetching && data.leagueId === leagueContextKey"
-      ownerListHydrated={ownerListHydrated}
-      currentLeagueOwnerKeysSize={currentLeagueOwnerKeys.size}
-      profileKeyValid={profileKeyValid}
-      profileShouldRender={profileShouldRender}
-    />
-  ) : null;
-
   const availableOwnerKeysCount = ownerListHydrated ? currentLeagueOwnerKeys.size : 0;
 
   useEffect(() => {
@@ -1684,42 +1386,32 @@ export function OwnerProfiles() {
 
   if (!leagueKeyReady) {
     return (
-      <>
-        {leagueDebugPanel}
-        <div className="flex items-center justify-center py-24 text-muted-foreground">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading league…
-        </div>
-      </>
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading league…
+      </div>
     );
   }
 
   if (listQ.isError && !listQ.isFetching) {
     return (
-      <>
-        {leagueDebugPanel}
-        <div className="flex flex-col items-center justify-center gap-2 py-24 text-destructive">
-          <AlertTriangle className="h-6 w-6" />
-          <p className="text-sm font-medium">Could not load owner list for this league.</p>
-          <p className="text-xs text-muted-foreground">{String((listQ.error as Error)?.message ?? listQ.error)}</p>
-        </div>
-      </>
+      <div className="flex flex-col items-center justify-center gap-2 py-24 text-destructive">
+        <AlertTriangle className="h-6 w-6" />
+        <p className="text-sm font-medium">Could not load owner list for this league.</p>
+        <p className="text-xs text-muted-foreground">{String((listQ.error as Error)?.message ?? listQ.error)}</p>
+      </div>
     );
   }
 
   if (!ownerListHydrated) {
     return (
-      <>
-        {leagueDebugPanel}
-        <div className="flex items-center justify-center py-24 text-muted-foreground">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading owner profiles…
-        </div>
-      </>
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading owner profiles…
+      </div>
     );
   }
 
   return (
     <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 80% -10%,rgba(139,92,246,.16),transparent 42%),linear-gradient(180deg,#130e16,#0f0b11)" }}>
-      {leagueDebugPanel}
       <div className="mb-5 flex items-center gap-3">
         <div className="grid place-items-center rounded-2xl shrink-0" style={{ width: 46, height: 46, background: "rgba(139,92,246,.10)", border: "1px solid rgba(139,92,246,.30)" }}>
           <Users className="h-6 w-6 text-[#a3e635]" />
