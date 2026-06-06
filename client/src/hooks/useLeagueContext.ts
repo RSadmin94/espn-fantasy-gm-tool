@@ -4,6 +4,8 @@ import { trpc } from "@/lib/trpc";
 
 export type LeagueContext = {
   leagueId: string;
+  /** Client-only React Query cache salt; ESPN league id when `getActive` has loaded. */
+  leagueContextKey: string;
   season: number;
   teamCount: number;
   scoringType: string;
@@ -29,8 +31,8 @@ function msToIsoString(ms: unknown): string | null {
 function buildOwnerMatchClues(
   user: ReturnType<typeof useUser>["user"]
 ): string[] {
-  if (!user) return [];
   const clues: string[] = [];
+  if (!user) return clues;
   const full = user.fullName?.trim();
   if (full) clues.push(full);
   const first = user.firstName?.trim();
@@ -75,14 +77,50 @@ function resolveMyTeam(
 /**
  * League + season context derived from existing tRPC procedures (`league.*`, `espn.*`).
  * Intended as the shared foundation for GM War Room features.
+ *
+ * `leagueContextKey` is included in ESPN / War Room query inputs so React Query
+ * keys change when the active league changes (not only `queryClient.clear()`).
  */
 export function useLeagueContext(): LeagueContext {
   const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const { user, isLoaded: userLoaded } = useUser();
 
-  const activeQ = trpc.league.getActive.useQuery(undefined, { staleTime: 5 * 60_000, refetchOnMount: false });
-  const leaguesQ = trpc.league.getMyLeagues.useQuery(undefined, { staleTime: 5 * 60_000, refetchOnMount: false });
-  const cachedQ = trpc.espn.cachedSeasons.useQuery(undefined, { staleTime: 5 * 60_000, refetchOnMount: false });
+  const activeQ = trpc.league.getActive.useQuery(undefined, {
+    enabled: Boolean(authLoaded && userLoaded && isSignedIn),
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
+  });
+  const leaguesQ = trpc.league.getMyLeagues.useQuery(undefined, {
+    enabled: Boolean(authLoaded && userLoaded && isSignedIn),
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
+  });
+
+  const leagueContextKey = useMemo(() => {
+    if (!authLoaded || !userLoaded) return "__auth_pending__";
+    if (!isSignedIn) return "__signed_out__";
+    const lid = activeQ.data?.leagueId?.trim();
+    if (lid) return lid;
+    if (activeQ.isLoading) return "__active_loading__";
+    if (activeQ.isFetched) return "__no_active_league__";
+    return "__active_unknown__";
+  }, [
+    authLoaded,
+    userLoaded,
+    isSignedIn,
+    activeQ.data?.leagueId,
+    activeQ.isLoading,
+    activeQ.isFetched,
+  ]);
+
+  const cachedQ = trpc.espn.cachedSeasons.useQuery(
+    { activeLeagueKey: leagueContextKey },
+    {
+      enabled: authLoaded && userLoaded,
+      staleTime: 5 * 60_000,
+      refetchOnMount: false,
+    }
+  );
 
   const season = useMemo(() => {
     const arr = cachedQ.data;
@@ -95,15 +133,15 @@ export function useLeagueContext(): LeagueContext {
   const cacheReady = !cachedQ.isLoading;
 
   const settingsQ = trpc.espn.settings.useQuery(
-    { season },
+    { season, activeLeagueKey: leagueContextKey },
     { enabled: cacheReady, staleTime: 10 * 60_000, refetchOnMount: false }
   );
   const teamsQ = trpc.espn.teams.useQuery(
-    { season },
+    { season, activeLeagueKey: leagueContextKey },
     { enabled: cacheReady, staleTime: 10 * 60_000, refetchOnMount: false }
   );
   const draftQ = trpc.espn.draftOrder.useQuery(
-    { season },
+    { season, activeLeagueKey: leagueContextKey },
     { enabled: cacheReady, staleTime: 10 * 60_000, refetchOnMount: false }
   );
 
@@ -176,6 +214,7 @@ export function useLeagueContext(): LeagueContext {
   return useMemo(
     () => ({
       leagueId,
+      leagueContextKey,
       season,
       teamCount: Number(settings?.size ?? 0) || 0,
       scoringType:
@@ -191,6 +230,7 @@ export function useLeagueContext(): LeagueContext {
     }),
     [
       leagueId,
+      leagueContextKey,
       season,
       settings?.size,
       settings?.scoringType,

@@ -926,6 +926,7 @@ export const draftWarRoomRouter = router({
   getDraftWarRoomData: publicProcedure
     .input(z.object({
       season: z.number().int().min(2018).max(2030),
+      activeLeagueKey: z.string().optional(),
       keeperOverrides: z.array(z.object({
         teamId:      z.number().int(),
         playerName:  z.string(),
@@ -938,6 +939,7 @@ export const draftWarRoomRouter = router({
       const db = await getDb();
       if (!db) return { ok: false, error: "DB unavailable" };
       const { season } = input;
+      void input.activeLeagueKey;
 
       // Phase B1: resolve leagueId per-request — no module-level constant.
       if (!ctx.user?.id) return { ok: false, error: "setup_required", requiresSetup: true };

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router";
+import { useAuth } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { Zap, Repeat2, Trophy, Newspaper, Users, Flame, Star, Activity, ChevronRight, RefreshCw } from "lucide-react";
@@ -18,15 +19,26 @@ function archetype(m: any){ const pred=Number(m?.predictabilityScore??0), surp=N
 function sev(c: number){ return c>=60?{t:"High",color:RED}:c>=40?{t:"Med",color:ORANGE}:{t:"Low",color:GREEN}; }
 
 export function CommandDashboard(){
-  const lg: any = useLeagueContext();
-  const season = lg?.season ?? new Date().getFullYear();
-  const scoring: string = lg?.scoringType ?? "";
-  const draftQ = (trpc as any).draftWarRoom.getDraftWarRoomData.useQuery({ season }, { staleTime: 5 * 60_000, refetchOnMount: false, refetchOnWindowFocus:false, enabled: !!season });
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const lg = useLeagueContext();
+  const season = lg.season ?? new Date().getFullYear();
+  const scoring: string = lg.scoringType ?? "";
+  const leagueKeyReady =
+    authLoaded && isSignedIn && !lg.leagueContextKey.startsWith("__");
+  const draftQ = trpc.draftWarRoom.getDraftWarRoomData.useQuery(
+    { season, activeLeagueKey: lg.leagueContextKey },
+    {
+      staleTime: 5 * 60_000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      enabled: Boolean(season && leagueKeyReady),
+    }
+  );
   const d: any = draftQ.data ?? {};
   const meters: any[] = d.shockMeters ?? [];
   const runs: any[] = d.positionRunAlerts ?? [];
   const scarce: any[] = d.scarcityAlerts ?? [];
-  const teamCount: number = d.teamCount ?? lg?.teamCount ?? 0;
+  const teamCount: number = d.teamCount ?? lg.teamCount ?? 0;
   const loading = draftQ.isLoading;
 
   const bySurprise = useMemo(()=>[...meters].sort((a,b)=>(b.surpriseProbability??0)-(a.surpriseProbability??0)),[meters]);

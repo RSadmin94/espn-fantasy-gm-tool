@@ -2001,16 +2001,22 @@ export const appRouter = router({
       ]);
       return { manifests, leagueConnectionMissing: !hasConn };
     }),
-    cachedSeasons: publicProcedure.query(async ({ ctx }) =>
-      getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)
-    ),
+    cachedSeasons: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+        return getAllCachedSeasons(undefined, ctx.user?.id ?? undefined);
+      }),
     // W1: league-aware season discovery. Returns the seasons that actually have
     // data for the active league (newest-first), or [] when none exist. No longer
     // returns the hardcoded ALL_SEASONS range, which leaked one league's window
     // (2009-2026) into every league.
-    allSeasons: publicProcedure.query(async ({ ctx }) =>
-      getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)
-    ),
+    allSeasons: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+        return getAllCachedSeasons(undefined, ctx.user?.id ?? undefined);
+      }),
 
     // Discover the active league's true season range (available vs synced) so the
     // Sync page can prompt the user to backfill missing history. Active league only;
@@ -2021,16 +2027,24 @@ export const appRouter = router({
     }),
 
     settings: publicProcedure
-      .input(z.object({ season: z.number() }))
+      .input(z.object({
+        season: z.number(),
+        activeLeagueKey: z.string().optional(),
+      }))
       .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return null;
         return normalizeSettings(data);
       }),
 
     teams: publicProcedure
-      .input(z.object({ season: z.number() }))
+      .input(z.object({
+        season: z.number(),
+        activeLeagueKey: z.string().optional(),
+      }))
       .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         return normalizeTeams(data);
@@ -3818,8 +3832,12 @@ export const appRouter = router({
     }),
 
     draftOrder: publicProcedure
-      .input(z.object({ season: z.number() }))
+      .input(z.object({
+        season: z.number(),
+        activeLeagueKey: z.string().optional(),
+      }))
       .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return null;
         return normalizeDraftOrder(data);
