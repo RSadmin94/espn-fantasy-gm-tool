@@ -34,6 +34,7 @@ import {
   normalizeSettings,
 } from "./espnService";
 import { invokeLLM } from "./_core/llm";
+import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -489,17 +490,18 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
 // ─── LLM generation ───────────────────────────────────────────────────────────
 
 async function generateStoryContent(
-  trigger: StoryTrigger
+  trigger: StoryTrigger,
+  league: { leagueDescriptor: string; historyClause: string; focalClause: string }
 ): Promise<{ headline: string; bodyText: string }> {
   const tagLabel = trigger.emotionalTag;
-  const prompt = `You are a sharp, emotionally intelligent fantasy football journalist writing for a 14-team league that has played together for 18 seasons. Write a story card for this week's storylines feed.
+  const prompt = `You are a sharp, emotionally intelligent fantasy football journalist writing for ${league.leagueDescriptor} - ${league.historyClause}. Write a story card for this week's storylines feed.
 
 Story type: ${trigger.storyType}
 Emotional tag: ${tagLabel}
 Context: ${trigger.llmContext}
 
 Write:
-1. A bold, punchy headline (max 8 words) in the voice of a sports journalist. No quotes. No punctuation at end. Examples: "Demetri Clark Is Cracking", "The Silent Assassin Strikes Again", "Rod's Revenge Tour Begins Now"
+1. A bold, punchy headline (max 8 words) in the voice of a sports journalist. No quotes. No punctuation at end. Examples: "Demetri Clark Is Cracking", "The Silent Assassin Strikes Again", "${league.focalClause}'s Revenge Tour Begins Now"
 2. A 2-sentence narrative body that explains the story with specific facts and emotional weight. Use the manager's name. Reference the stat. Make it feel like something is at stake.
 
 Respond ONLY with valid JSON: {"headline": "...", "bodyText": "..."}`;
@@ -730,7 +732,7 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
           const rivalName = memberNameMap.get(rp.rivalId) || rp.rivalName;
           const h2h = await computeRichH2H(rodId, rp.rivalId, rodName, rivalName, userId);
           if (h2h.rsTotalGames > 0) {
-            rivalH2HBlocks[rp.rivalId] = buildH2HPromptBlock(h2h, `Rod vs ${rivalName}`);
+            rivalH2HBlocks[rp.rivalId] = buildH2HPromptBlock(h2h, `${rodName} vs ${rivalName}`);
           }
         }
       }
@@ -763,11 +765,15 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
 
   const results: WeeklyStorylineRow[] = [...existingRows];
 
+  // C4: resolve neutral league context once for all story prompts.
+  const __leagueCtx = await resolveLeaguePromptContext(userId, season);
+  const __leaguePrompt = buildLeaguePromptContext(__leagueCtx);
+
   for (const trigger of triggers) {
     const key = `${trigger.storyType}-${trigger.teamId}`;
     if (existingKeys.has(key)) continue; // already cached
 
-    const { headline, bodyText } = await generateStoryContent(trigger);
+    const { headline, bodyText } = await generateStoryContent(trigger, __leaguePrompt);
 
     const row = {
       season,
