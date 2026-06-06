@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -95,9 +97,20 @@ export function RivalryDossierPanel({
   activeSeason,
   initialOpponentKey,
 }: Props) {
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
+
   const [queryKey, setQueryKey] = useState(focalOwnerKey.trim());
   const [includeHistoricalOwners, setIncludeHistoricalOwners] = useState(false);
   const [opponentKey, setOpponentKey] = useState<string>(initialOpponentKey ?? "");
+
+  const prevLeagueContextKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevLeagueContextKeyRef.current != null && prevLeagueContextKeyRef.current !== leagueContextKey) {
+      setOpponentKey("");
+    }
+    prevLeagueContextKeyRef.current = leagueContextKey;
+  }, [leagueContextKey]);
 
   useEffect(() => {
     setQueryKey(focalOwnerKey.trim());
@@ -127,13 +140,16 @@ export function RivalryDossierPanel({
   }, [includeHistoricalOwners, rivalryEligibleOwnerKeys?.join("|")]);
 
   const q = trpc.owners.rivalryDossier.useQuery(
-    {
-      ownerKey: queryKey,
-      includeHistoricalOwners,
-      rivalryEligibleOwnerKeys: eligibleForQuery,
-      opponentOwnerKeyForPair: opponentKey || undefined,
-    },
-    { enabled: queryKey.length > 0, staleTime: 60_000 },
+    withLeagueSalt(
+      {
+        ownerKey: queryKey,
+        includeHistoricalOwners,
+        rivalryEligibleOwnerKeys: eligibleForQuery,
+        opponentOwnerKeyForPair: opponentKey || undefined,
+      },
+      leagueContextKey,
+    ),
+    { enabled: leagueKeyReady && queryKey.length > 0, staleTime: 60_000 },
   );
 
   useEffect(() => {

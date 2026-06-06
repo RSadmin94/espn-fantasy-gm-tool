@@ -144,18 +144,20 @@ function HeatBadge({ label }: { label?: string }) {
 }
 
 export function RivalryCenter() {
-  const { leagueContextKey } = useLeagueActiveGate();
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
+
   const scoresQ = (trpc as any).rivalry.getScores.useQuery(
     withLeagueSalt({}, leagueContextKey),
-    { staleTime: 300_000 },
+    { staleTime: 300_000, enabled: leagueKeyReady },
   );
   const listQ = (trpc as any).owners.ownerList.useQuery(
     withLeagueSalt({}, leagueContextKey),
-    { staleTime: 300_000 },
+    { staleTime: 300_000, enabled: leagueKeyReady },
   );
   const cachedQ = (trpc as any).espn.cachedSeasons.useQuery(
     withLeagueSalt({}, leagueContextKey),
-    { staleTime: 60_000 },
+    { staleTime: 60_000, enabled: leagueKeyReady },
   );
   const profileQ = (trpc as any).me.activeProfile.useQuery(undefined, { staleTime: 600_000, retry: false });
   const refreshScores = (trpc as any).rivalry.refresh.useMutation({
@@ -225,9 +227,9 @@ export function RivalryCenter() {
   type LeaguePair = { key: string; aKey: string; aName: string; bKey: string; bName: string; score: number; meetings: number; playoff: number; close: number; aWins: number; aLosses: number; lastSeason: number | null; heat: string };
   const h2hQ = (trpc as any).rivalry.h2h.useQuery(
     withLeagueSalt({}, leagueContextKey),
-    { staleTime: 600_000 },
+    { staleTime: 600_000, enabled: leagueKeyReady },
   );
-  const leagueLoading = h2hQ.isLoading;
+  const leagueLoading = !leagueKeyReady || h2hQ.isLoading;
   const firstName = (s: string) => String(s).trim().split(/\s+/)[0] ?? s;
   const heatOf = (s: number) => (s >= 150 ? "Inferno" : s >= 100 ? "Burning" : s >= 60 ? "Heated" : s >= 30 ? "Simmering" : "Cold");
   const { recordMap, leaguePairs, gridOwners, nemeses } = useMemo(() => {
@@ -330,7 +332,7 @@ export function RivalryCenter() {
       rivalName: String(p.rivalName ?? "Rival"),
     });
 
-  const loading = scoresQ.isLoading || listQ.isLoading;
+  const loading = !leagueKeyReady || scoresQ.isLoading || listQ.isLoading;
   const allEmpty = !leagueLoading && leaguePairs.length === 0 && pairs.length === 0;
   const hero = pairs[0];
   const ranked = pairs.slice(0, 10);

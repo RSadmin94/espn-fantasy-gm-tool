@@ -1,5 +1,7 @@
 import { useState, useMemo, Fragment, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import {
   Loader2,
   AlertTriangle,
@@ -255,6 +257,8 @@ function ProfilePanel({
   dossierPickerOptions,
   dossierActiveSeason,
   rivalryEligibleOwnerKeysForDossier,
+  leagueContextKey,
+  leagueKeyReady,
 }: {
   /** Canonical `owners.ownerList` row id — sent as `ownerKey` on `owners.ownerProfile`. */
   profileLookupKey: string;
@@ -266,6 +270,8 @@ function ProfilePanel({
   dossierPickerOptions: RivalryPickerOption[];
   dossierActiveSeason: number;
   rivalryEligibleOwnerKeysForDossier: string[];
+  leagueContextKey: string;
+  leagueKeyReady: boolean;
 }) {
   const trpcAny = trpc as any;
   const [compareWith, setCompareWith] = useState("");
@@ -275,7 +281,9 @@ function ProfilePanel({
     return { ownerKey: k, ...base };
   }, [profileLookupKey, compareWith]);
 
-  const q = trpcAny.owners.ownerProfile.useQuery(profileArgs, { enabled: !!profileLookupKey.trim() });
+  const q = trpcAny.owners.ownerProfile.useQuery(withLeagueSalt({ ...profileArgs }, leagueContextKey), {
+    enabled: leagueKeyReady && !!profileLookupKey.trim(),
+  });
   const p = q.data as any;
   const [intelExpanded, setIntelExpanded] = useState<string | null>(null);
   const [showRivalryDossier, setShowRivalryDossier] = useState(false);
@@ -288,10 +296,25 @@ function ProfilePanel({
     setShowRivalryDossier(false);
     setProfileTab("draft");
     setDataSourceOpen(false);
-  }, [profileLookupKey]);
-  const allSeasonsQ2 = trpcAny.espn.allSeasons.useQuery(undefined, { staleTime: 60_000 });
+  }, [profileLookupKey, leagueContextKey]);
+  const allSeasonsQ2 = trpcAny.espn.allSeasons.useQuery(withLeagueSalt({}, leagueContextKey), {
+    staleTime: 60_000,
+    enabled: leagueKeyReady,
+  });
   const draftSeasonList: number[] = Array.isArray(allSeasonsQ2.data) ? (allSeasonsQ2.data as number[]) : [];
-  const draftSeasonQueries = (trpc as any).useQueries((t: any) => draftSeasonList.map((s) => (s >= 2010 && s <= 2017) ? t.espn.legacyDraftPicks({ season: s }, { staleTime: 300_000 }) : t.espn.draftPicks({ season: s }, { staleTime: 300_000 })));
+  const draftSeasonQueries = (trpc as any).useQueries((t: any) =>
+    draftSeasonList.map((s: number) =>
+      s >= 2010 && s <= 2017
+        ? t.espn.legacyDraftPicks(withLeagueSalt({ season: s }, leagueContextKey), {
+            staleTime: 300_000,
+            enabled: leagueKeyReady,
+          })
+        : t.espn.draftPicks(withLeagueSalt({ season: s }, leagueContextKey), {
+            staleTime: 300_000,
+            enabled: leagueKeyReady,
+          }),
+    ),
+  );
 
   if (q.isPending || q.isLoading) return (
     <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -1215,8 +1238,25 @@ function ProfilePanel({
 
 export function OwnerProfiles() {
   const trpcAny = trpc as any;
-  const listQ = trpcAny.owners.ownerList.useQuery();
-  const cachedSeasonsQ = trpc.espn.cachedSeasons.useQuery(undefined, { staleTime: 60_000 });
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
+
+  const listQ = trpcAny.owners.ownerList.useQuery(withLeagueSalt({}, leagueContextKey), {
+    staleTime: 60_000,
+    enabled: leagueKeyReady,
+  });
+  const cachedSeasonsQ = trpc.espn.cachedSeasons.useQuery(withLeagueSalt({}, leagueContextKey), {
+    staleTime: 60_000,
+    enabled: leagueKeyReady,
+  });
+
+  const [selectedOwnerKey, setSelectedOwnerKey] = useState<string | null>(null);
+  const [showGraveyard, setShowGraveyard] = useState(false);
+  const profileRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setSelectedOwnerKey(null);
+  }, [leagueContextKey]);
 
   const dossierActiveSeason = useMemo(() => {
     const c = cachedSeasonsQ.data ?? [];
@@ -1234,9 +1274,6 @@ export function OwnerProfiles() {
       dossierActiveSeason,
     );
   }, [listQ.data?.allOwners, dossierActiveSeason]);
-  const [selectedOwnerKey, setSelectedOwnerKey] = useState<string | null>(null);
-  const [showGraveyard, setShowGraveyard] = useState(false);
-  const profileRef = useRef<HTMLDivElement | null>(null);
 
   const active    = useMemo(() => (listQ.data?.active    ?? []) as any[], [listQ.data]);
   const graveyard = useMemo(() => (listQ.data?.graveyard ?? []) as any[], [listQ.data]);
@@ -1280,6 +1317,14 @@ export function OwnerProfiles() {
     }
     return out;
   }, [active, graveyard]);
+
+  if (!leagueKeyReady) {
+    return (
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading league…
+      </div>
+    );
+  }
 
   if (listQ.isLoading) return (
     <div className="flex items-center justify-center py-24 text-muted-foreground">
@@ -1359,6 +1404,8 @@ export function OwnerProfiles() {
               dossierPickerOptions={dossierPickerOptions}
               dossierActiveSeason={dossierActiveSeason}
               rivalryEligibleOwnerKeysForDossier={rivalryEligibleOwnerKeysForDossier}
+              leagueContextKey={leagueContextKey}
+              leagueKeyReady={leagueKeyReady}
             />
           ) : (
             <div className="flex h-64 items-center justify-center rounded-xl border border-white/[0.08] bg-[#18111c]/50 text-sm text-zinc-500">

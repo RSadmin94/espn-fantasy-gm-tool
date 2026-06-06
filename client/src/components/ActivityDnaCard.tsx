@@ -36,10 +36,11 @@ function confidenceClasses(c: string): string {
 }
 
 export function ActivityDnaCard({ ownerKey }: { ownerKey?: string }) {
-  const { leagueContextKey } = useLeagueActiveGate();
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
   const q = trpc.activityDna.owner.useQuery(
     withLeagueSalt({ ownerKey: ownerKey || undefined }, leagueContextKey),
-    { staleTime: 60_000, enabled: !!ownerKey },
+    { staleTime: 60_000, enabled: leagueKeyReady && !!ownerKey },
   );
 
   if (q.isLoading) {

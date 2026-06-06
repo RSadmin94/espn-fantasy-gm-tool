@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Loader2, Trophy, Medal, Crown, Swords, Landmark, ChevronDown, Skull } from "lucide-react";
 import {
@@ -70,9 +72,12 @@ function RivalryPairWithDossier({
   metricValue: number;
   sub?: string;
 }) {
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
+
   const dossierQ = trpc.owners.rivalryDossier.useQuery(
-    { ownerKey: ownerKeyA },
-    { enabled: Boolean(ownerKeyA && ownerKeyB), staleTime: 60_000 },
+    withLeagueSalt({ ownerKey: ownerKeyA }, leagueContextKey),
+    { enabled: leagueKeyReady && Boolean(ownerKeyA && ownerKeyB), staleTime: 60_000 },
   );
   const row = dossierQ.data?.opponents.find((o) => o.opponentOwnerKey === ownerKeyB);
   const hasH2h = row != null && row.gamesPlayed > 0;
@@ -164,10 +169,21 @@ export function HallOfFame() {
   const [coverageOpen, setCoverageOpen] = useState(false);
   const utils = trpc.useUtils();
 
-  const hofQ = trpc.espn.hallOfFame.useQuery(undefined, { staleTime: 60_000 });
-  const activeLeagueQ = trpc.league.getActive.useQuery(undefined, { staleTime: 30_000 });
-  const coverageQ = trpc.espn.ownerMatchupCoverage.useQuery(undefined, { staleTime: 60_000 });
-  const ownerListQ = (trpc as any).owners.ownerList.useQuery(undefined, { staleTime: 60_000 });
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn, activeQ } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
+
+  const hofQ = trpc.espn.hallOfFame.useQuery(withLeagueSalt({}, leagueContextKey), {
+    staleTime: 60_000,
+    enabled: leagueKeyReady,
+  });
+  const coverageQ = trpc.espn.ownerMatchupCoverage.useQuery(withLeagueSalt({}, leagueContextKey), {
+    staleTime: 60_000,
+    enabled: leagueKeyReady,
+  });
+  const ownerListQ = (trpc as any).owners.ownerList.useQuery(withLeagueSalt({}, leagueContextKey), {
+    staleTime: 60_000,
+    enabled: leagueKeyReady,
+  });
   const backfillMut = trpc.espn.backfillMatchupsFromCache.useMutation({
     onSuccess: (data) => {
       const written = data.results.filter((r) => r.status === "backfilled");
@@ -254,8 +270,16 @@ export function HallOfFame() {
   }, [hofQ.data, runnerUpFinishesByOwner]);
 
   const leagueLabel =
-    activeLeagueQ.data?.leagueName?.trim() ||
-    (activeLeagueQ.data?.leagueId ? `League ${activeLeagueQ.data.leagueId}` : "Your league");
+    activeQ.data?.leagueName?.trim() ||
+    (activeQ.data?.leagueId ? `League ${activeQ.data.leagueId}` : "Your league");
+
+  if (!leagueKeyReady) {
+    return (
+      <div className="flex items-center justify-center gap-2 bg-[#0e0a10] py-20 text-zinc-500">
+        <Loader2 className="h-5 w-5 animate-spin" /> Loading league…
+      </div>
+    );
+  }
 
   if (hofQ.isLoading) {
     return (

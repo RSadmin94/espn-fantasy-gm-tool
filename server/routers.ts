@@ -11174,6 +11174,7 @@ Provide:
             /** Legacy / display fallback — same resolver as `ownerKey` when set. */
             ownerName: z.string().min(1).max(255).optional(),
             compareWith: z.string().min(1).max(255).optional(),
+            activeLeagueKey: z.string().optional(),
           })
           .refine((v) => Boolean((v.ownerKey ?? v.ownerName ?? "").trim()), {
             message: "ownerKey or ownerName is required",
@@ -11181,6 +11182,7 @@ Provide:
           }),
       )
       .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         const userId = ctx.user?.id ?? 0;
         if (!userId) return null;
         const { leagueId } = await resolveActiveLeagueId(
@@ -11332,9 +11334,11 @@ Provide:
           rivalryEligibleOwnerKeys: z.array(z.string().min(1).max(255)).optional(),
           /** When set, `pairDetail` is populated for this opponent only. */
           opponentOwnerKeyForPair: z.string().min(1).max(255).optional(),
+          activeLeagueKey: z.string().optional(),
         }),
       )
       .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
         const userId = ctx.user?.id ?? 0;
         if (!userId) return null;
         const { leagueId } = await resolveActiveLeagueId(

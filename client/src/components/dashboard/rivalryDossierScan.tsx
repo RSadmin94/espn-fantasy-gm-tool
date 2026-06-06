@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { displayOwnerName } from "@/lib/ownerName";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 
 const SLOT = 8;
 
@@ -57,6 +59,9 @@ const dossierInput = (ownerKey: string, eligibleArg: string[] | undefined) => ({
  * and pick the hottest eligible-vs-eligible pairing by heartbreak losses, then games played.
  */
 export function useRivalryDossierScan(rivalryEligibleOwnerKeys: string[]): RivalryHeroResult {
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
+
   const k = useMemo(() => padKeys(rivalryEligibleOwnerKeys), [rivalryEligibleOwnerKeys.join("|")]);
   const activeSet = useMemo(() => new Set(rivalryEligibleOwnerKeys), [rivalryEligibleOwnerKeys.join("|")]);
   const eligibleArg = useMemo(
@@ -64,36 +69,36 @@ export function useRivalryDossierScan(rivalryEligibleOwnerKeys: string[]): Rival
     [rivalryEligibleOwnerKeys.join("|")],
   );
 
-  const q0 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[0]!, eligibleArg), {
-    enabled: Boolean(k[0]),
+  const q0 = trpc.owners.rivalryDossier.useQuery(withLeagueSalt(dossierInput(k[0]!, eligibleArg), leagueContextKey), {
+    enabled: leagueKeyReady && Boolean(k[0]),
     staleTime: 120_000,
   });
-  const q1 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[1]!, eligibleArg), {
-    enabled: Boolean(k[1]),
+  const q1 = trpc.owners.rivalryDossier.useQuery(withLeagueSalt(dossierInput(k[1]!, eligibleArg), leagueContextKey), {
+    enabled: leagueKeyReady && Boolean(k[1]),
     staleTime: 120_000,
   });
-  const q2 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[2]!, eligibleArg), {
-    enabled: Boolean(k[2]),
+  const q2 = trpc.owners.rivalryDossier.useQuery(withLeagueSalt(dossierInput(k[2]!, eligibleArg), leagueContextKey), {
+    enabled: leagueKeyReady && Boolean(k[2]),
     staleTime: 120_000,
   });
-  const q3 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[3]!, eligibleArg), {
-    enabled: Boolean(k[3]),
+  const q3 = trpc.owners.rivalryDossier.useQuery(withLeagueSalt(dossierInput(k[3]!, eligibleArg), leagueContextKey), {
+    enabled: leagueKeyReady && Boolean(k[3]),
     staleTime: 120_000,
   });
-  const q4 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[4]!, eligibleArg), {
-    enabled: Boolean(k[4]),
+  const q4 = trpc.owners.rivalryDossier.useQuery(withLeagueSalt(dossierInput(k[4]!, eligibleArg), leagueContextKey), {
+    enabled: leagueKeyReady && Boolean(k[4]),
     staleTime: 120_000,
   });
-  const q5 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[5]!, eligibleArg), {
-    enabled: Boolean(k[5]),
+  const q5 = trpc.owners.rivalryDossier.useQuery(withLeagueSalt(dossierInput(k[5]!, eligibleArg), leagueContextKey), {
+    enabled: leagueKeyReady && Boolean(k[5]),
     staleTime: 120_000,
   });
-  const q6 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[6]!, eligibleArg), {
-    enabled: Boolean(k[6]),
+  const q6 = trpc.owners.rivalryDossier.useQuery(withLeagueSalt(dossierInput(k[6]!, eligibleArg), leagueContextKey), {
+    enabled: leagueKeyReady && Boolean(k[6]),
     staleTime: 120_000,
   });
-  const q7 = trpc.owners.rivalryDossier.useQuery(dossierInput(k[7]!, eligibleArg), {
-    enabled: Boolean(k[7]),
+  const q7 = trpc.owners.rivalryDossier.useQuery(withLeagueSalt(dossierInput(k[7]!, eligibleArg), leagueContextKey), {
+    enabled: leagueKeyReady && Boolean(k[7]),
     staleTime: 120_000,
   });
 
@@ -101,6 +106,7 @@ export function useRivalryDossierScan(rivalryEligibleOwnerKeys: string[]): Rival
 
   return useMemo(() => {
     if (rivalryEligibleOwnerKeys.length === 0) return { status: "idle" } as const;
+    if (!leagueKeyReady) return { status: "loading" } as const;
     if (queries.some((q) => q.isLoading || q.isFetching)) return { status: "loading" } as const;
 
     type Cand = {
@@ -171,6 +177,8 @@ export function useRivalryDossierScan(rivalryEligibleOwnerKeys: string[]): Rival
       closestMarginLabel: best.closestMarginLabel,
     };
   }, [
+    leagueContextKey,
+    leagueKeyReady,
     rivalryEligibleOwnerKeys.length,
     rivalryEligibleOwnerKeys.join("|"),
     activeSet,
