@@ -27,6 +27,7 @@ import {
   buildInjuryPromptBlock,
   type InjuryScores,
 } from "./injuryService";
+import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 
 // ─── Shared player input schema ───────────────────────────────────────────────
 
@@ -89,7 +90,7 @@ export const injuryRouter = router({
       context: z.string().optional().default(""),
       season: z.number().optional().default(2025),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const injuries = await getInjuries();
 
       // Score both players
@@ -106,7 +107,10 @@ export const injuryRouter = router({
 
       const injuryBlock = buildInjuryPromptBlock(scores);
 
-      const systemPrompt = `You are an expert Fantasy Football analyst for the 14-team PPR keeper league "ATLANTAS FINEST FF".
+      const leagueCtx = await resolveLeaguePromptContext(ctx.user?.id, input.season);
+      const { leagueDescriptor } = buildLeaguePromptContext(leagueCtx);
+
+      const systemPrompt = `You are an expert Fantasy Football analyst for ${leagueDescriptor}.
 The math below is pre-calculated — treat it as ground truth and do not contradict it.
 
 ${injuryBlock}
@@ -159,13 +163,16 @@ Deliver a concise START/SIT verdict. Lead with the verdict. Explain the injury m
       player: PlayerInput,
       context: z.string().optional().default(""),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const injuries = await getInjuries();
       const scores = calcInjuryScores([input.player], injuries);
       const score = scores[0]!;
       const injuryBlock = buildInjuryPromptBlock(scores);
 
-      const systemPrompt = `You are an expert Fantasy Football waiver wire analyst for "ATLANTAS FINEST FF" (14-team PPR keeper league).
+      const leagueCtx = await resolveLeaguePromptContext(ctx.user?.id);
+      const { leagueDescriptor } = buildLeaguePromptContext(leagueCtx);
+
+      const systemPrompt = `You are an expert Fantasy Football waiver wire analyst for ${leagueDescriptor}.
 The injury data below is pre-calculated — treat as ground truth.
 
 ${injuryBlock}

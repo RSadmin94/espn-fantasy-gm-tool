@@ -12,8 +12,9 @@
  *   - Pure computation for the formatter; the resolver reads cache/profile but
  *     performs NO writes.
  *
- * NOTE: As of this commit NOTHING consumes these exports yet. Wiring the
- * C1-C10 prompt builders to this helper is a separate, later phase.
+ * The `season` argument is optional: when omitted, the resolver uses the latest
+ * cached season for the active league (falling back to the current calendar
+ * year), so callers without a season still get accurate league context.
  */
 
 import {
@@ -82,14 +83,14 @@ function scoringTypeFromReceptionPoints(receptionPoints: unknown): string | null
 // -- Resolver -------------------------------------------------------------------
 
 /**
- * Resolve a neutral LeaguePromptContext for the given user + season.
+ * Resolve a neutral LeaguePromptContext for the given user (+ optional season).
  * Reads the user active profile, the active league combined cache, the
  * discovered cached-season range, and league scoring settings. Never throws on
  * missing data - every field degrades to a neutral fallback.
  */
 export async function resolveLeaguePromptContext(
   userId: number | undefined,
-  season: number,
+  season?: number,
 ): Promise<LeaguePromptContext> {
   // Active profile (league id/name + focal owner/team identity).
   const profile = await resolveActiveProfile(userId != null ? { id: userId } : null);
@@ -107,12 +108,39 @@ export async function resolveLeaguePromptContext(
     }
   }
 
-  // -- Combined cache for the requested season (team count, scoring, settings) --
+  // -- Season range from discovered cached seasons (active league) --------------
+  let seasonRange = { start: 0, end: 0, count: 0 };
+  try {
+    const seasons = (await getAllCachedSeasons(undefined, userId))
+      .map((s) => Number(s))
+      .filter((s) => Number.isFinite(s))
+      .sort((a, b) => a - b);
+    if (seasons.length > 0) {
+      seasonRange = {
+        start: seasons[0],
+        end: seasons[seasons.length - 1],
+        count: seasons.length,
+      };
+    }
+  } catch {
+    // Season coverage unavailable - keep neutral zeros.
+  }
+
+  // Effective season for cache/scoring lookups: caller-provided, else the latest
+  // cached season, else the current calendar year. Never hardcoded to a league.
+  const effectiveSeason =
+    season != null && Number.isFinite(season)
+      ? Number(season)
+      : seasonRange.end > 0
+        ? seasonRange.end
+        : new Date().getFullYear();
+
+  // -- Combined cache for the effective season (team count, scoring, settings) --
   let settings: ReturnType<typeof normalizeSettings> | null = null;
   let teams: ReturnType<typeof normalizeTeams> = [];
   let data: Record<string, unknown> | null = null;
   try {
-    const row = await getCachedView(season, "combined", undefined, { userId });
+    const row = await getCachedView(effectiveSeason, "combined", undefined, { userId });
     data = (row?.payload as Record<string, unknown>) || null;
     if (data) {
       settings = normalizeSettings(data);
@@ -133,24 +161,6 @@ export async function resolveLeaguePromptContext(
   if (teamCount <= 0 && teams.length > 0) teamCount = teams.length;
   if (teamCount < 0) teamCount = 0;
 
-  // -- Season range from discovered cached seasons (active league) --------------
-  let seasonRange = { start: 0, end: 0, count: 0 };
-  try {
-    const seasons = (await getAllCachedSeasons(undefined, userId))
-      .map((s) => Number(s))
-      .filter((s) => Number.isFinite(s))
-      .sort((a, b) => a - b);
-    if (seasons.length > 0) {
-      seasonRange = {
-        start: seasons[0],
-        end: seasons[seasons.length - 1],
-        count: seasons.length,
-      };
-    }
-  } catch {
-    // Season coverage unavailable - keep neutral zeros.
-  }
-
   // -- Focal owner + team (only when genuinely selected) -----------------------
   const focalOwnerName =
     profile.isSetupComplete && profile.selectedOwnerName ? profile.selectedOwnerName : null;
@@ -169,7 +179,7 @@ export async function resolveLeaguePromptContext(
   // be mislabeled, so prefer receptionPoints and fall back to the label.
   let scoringType = "custom scoring";
   try {
-    const scoring = await getLeagueScoringSettings(season, userId);
+    const scoring = await getLeagueScoringSettings(effectiveSeason, userId);
     if (scoring && scoring.scoringDataSource !== "fallback_defaults") {
       const fromRec = scoringTypeFromReceptionPoints(scoring.receptionPoints);
       const fromLabel = humanizeScoringType(scoring.scoringType);

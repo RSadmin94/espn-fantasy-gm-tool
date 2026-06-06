@@ -9,6 +9,7 @@ import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { resolveActiveLeagueId } from "./db";
+import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 
 export interface TradeVerdict {
   winner: "TEAM_A" | "TEAM_B" | "FAIR";
@@ -53,8 +54,11 @@ export const transactionAnalysisRouter = router({
       const aReceived = input.assetsToA.length ? input.assetsToA.join(", ") : "nothing";
       const bReceived = input.assetsToB.length ? input.assetsToB.join(", ") : "nothing";
 
+      const leagueCtx = await resolveLeaguePromptContext(userId || undefined, input.season);
+      const { leagueDescriptor } = buildLeaguePromptContext(leagueCtx);
+
       const systemPrompt =
-        "You are a sharp fantasy football analyst for a 14-team PPR keeper league. " +
+        "You are a sharp fantasy football analyst for " + leagueDescriptor + ". " +
         "Analyze the executed trade and return ONLY a JSON object — no markdown, no preamble, no trailing text:\n" +
         '{\n' +
         '  "winner": "TEAM_A" | "TEAM_B" | "FAIR",\n' +
