@@ -1,6 +1,7 @@
 // FILE: server/draftOptimizer.test.ts
 import { describe, it, expect } from "vitest";
 import { calcPickValue, calcROSValue, calcVORP, type PlayerRow } from "./analytics";
+import { isDraftKeeperSlotPick } from "./draftTruth";
 
 type TestPlayerRow = PlayerRow & { scheduleStrength?: string | number };
 
@@ -87,5 +88,22 @@ describe("draft optimizer analytics", () => {
 
     expect(keeperAdjustedPool).toHaveLength(2);
     expect(keeperAdjustedPool.map((player) => player.playerId)).toEqual([1, 3]);
+  });
+
+  it("Phase 3D: retained-only draft rows join strict keepers in optimizer removal set", () => {
+    const draftPicks = [
+      { playerId: 1, keeper: false, reservedForKeeper: false },
+      { playerId: 2, keeper: false, reservedForKeeper: true },
+      { playerId: 3, keeper: true, reservedForKeeper: false },
+    ];
+    const keeperPlayerIds = new Set(
+      draftPicks
+        .filter((p) => isDraftKeeperSlotPick(p))
+        .map((p) => p.playerId as number)
+        .filter((id) => Number.isFinite(id) && id > 0),
+    );
+    expect(keeperPlayerIds.has(1)).toBe(false);
+    expect(keeperPlayerIds.has(2)).toBe(true);
+    expect(keeperPlayerIds.has(3)).toBe(true);
   });
 });

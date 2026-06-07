@@ -71,6 +71,22 @@ export function classifyEspnDraftSlot(keeper: unknown, reservedForKeeper: unknow
   };
 }
 
+/**
+ * True when this row occupies a **keeper or retained** board slot (not an open-draft pick).
+ * Prefer normalized `keeperSlot` from {@link normalizeDraftPicks}; otherwise classify from
+ * strict ESPN `keeper` / `reservedForKeeper` booleans.
+ *
+ * Use for: two-year keeper signals, keeper history, excluding players from the **open** draft pool.
+ * For **round cost** on the full ledger, still iterate all board rows — do not use this to drop
+ * rows needed for slot/round accounting.
+ */
+export function isDraftKeeperSlotPick(p: unknown): boolean {
+  if (p == null || typeof p !== "object" || Array.isArray(p)) return false;
+  const o = p as Record<string, unknown>;
+  if (typeof o.keeperSlot === "boolean") return o.keeperSlot;
+  return classifyEspnDraftSlot(o.keeper, o.reservedForKeeper).keeperSlot;
+}
+
 /** Parse `rawPick` JSON from `draft_picks` / ingest; returns UNKNOWN if not an object. */
 export function classifyDraftPickRawPick(rawPick: unknown): SlotClassification {
   if (rawPick == null || typeof rawPick !== "object" || Array.isArray(rawPick)) {

@@ -179,7 +179,7 @@ import {
   type ManagerBehaviorStats,
   isOpenDraftAnalyticsPick,
 } from "./analytics";
-import { classifyDraftPickRawPick } from "./draftTruth";
+import { classifyDraftPickRawPick, isDraftKeeperSlotPick } from "./draftTruth";
 import type { RequestHandler } from "express";
 
 /** Exact origins allowed for credentialed browser requests (e.g. extension / cross-site tRPC). */
@@ -2645,11 +2645,11 @@ export const appRouter = router({
         const dataPrev2 = await getSeasonData(prev2Season, undefined, ctx.user.id);
         const keptPrev2 = new Set<string>();
         if (dataPrev2) {
+          // Two-year keeper signal: any **keeperSlot** (ESPN keeper or retained) in draftYear-2.
           for (const p of normalizeDraftPicks(dataPrev2) as Array<Record<string, unknown>>) {
-            if (p.keeper || p.reservedForKeeper) {
-              const k = normKeeperName(String(p.playerName ?? ""));
-              if (k) keptPrev2.add(k);
-            }
+            if (!isDraftKeeperSlotPick(p)) continue;
+            const k = normKeeperName(String(p.playerName ?? ""));
+            if (k) keptPrev2.add(k);
           }
         }
 
@@ -2826,7 +2826,8 @@ export const appRouter = router({
             r.teamName;
 
           if (pick) {
-            const isKeptThisYear = Boolean(pick.keeper || pick.reservedForKeeper);
+            // Full-board truth: keeper **slot** (keeper or retained) drives two-year rule + cost labeling.
+            const isKeptThisYear = isDraftKeeperSlotPick(pick);
             if (isKeptThisYear && keptPrev2.has(nkey)) continue;
             const round = Number(pick.roundId) || 0;
             if (round <= 0) {
@@ -3896,7 +3897,8 @@ export const appRouter = router({
         const picks = normalizeDraftPicks(data);
         for (const pick of picks) {
           const p = pick as Record<string, unknown>;
-          if (p.keeper) keepers.push(p);
+          if (!isDraftKeeperSlotPick(p)) continue;
+          keepers.push(p);
         }
       }
       return keepers;
@@ -3926,7 +3928,7 @@ export const appRouter = router({
         const picks = normalizeDraftPicks(data);
         for (const pick of picks) {
           const p = pick as Record<string, unknown>;
-          if (!p.keeper) continue;
+          if (!isDraftKeeperSlotPick(p)) continue;
           const tid = p.teamId as number;
           if (!keepersByTeam[tid]) keepersByTeam[tid] = [];
           keepersByTeam[tid].push({
@@ -4029,7 +4031,7 @@ export const appRouter = router({
         const picks = normalizeDraftPicks(data);
         for (const pick of picks) {
           const p = pick as Record<string, unknown>;
-          if (!p.keeper) continue;
+          if (!isDraftKeeperSlotPick(p)) continue;
           const tid = p.teamId as number;
           const pid = p.playerId as number;
           if (!keepersByPlayerByTeam[tid]) keepersByPlayerByTeam[tid] = {};
@@ -4056,7 +4058,7 @@ export const appRouter = router({
         const picks2024 = normalizeDraftPicks(data2024);
         for (const pick of picks2024) {
           const p = pick as Record<string, unknown>;
-          if (!p.keeper) continue;
+          if (!isDraftKeeperSlotPick(p)) continue;
           const tid = p.teamId as number;
           const pid = p.playerId as number;
           if (!keepers2024[tid]) keepers2024[tid] = {};
@@ -4070,7 +4072,7 @@ export const appRouter = router({
         const picks2025 = normalizeDraftPicks(data2025);
         for (const pick of picks2025) {
           const p = pick as Record<string, unknown>;
-          if (!p.keeper) continue;
+          if (!isDraftKeeperSlotPick(p)) continue;
           const tid = p.teamId as number;
           if (!keepers2025[tid]) keepers2025[tid] = [];
           keepers2025[tid].push({
@@ -11467,7 +11469,13 @@ Provide:
         appliedStats: {},
       }));
       const draftPicks = normalizeDraftPicks(data) as Record<string, unknown>[];
-      const keeperPlayerIds = new Set(draftPicks.filter(p => p.keeper === true).map(p => p.playerId as number));
+      // Open draft pool: exclude anyone occupying a **keeperSlot** (ESPN keeper or retained), not `keeper` alone.
+      const keeperPlayerIds = new Set(
+        draftPicks
+          .filter((p) => isDraftKeeperSlotPick(p))
+          .map((p) => p.playerId as number)
+          .filter((id) => Number.isFinite(id) && id > 0),
+      );
       const availablePlayers = allPlayers.filter(p => !keeperPlayerIds.has(p.playerId));
       const removedKeepers = allPlayers.filter(p => keeperPlayerIds.has(p.playerId)).map(p => ({ playerId: p.playerId, playerName: p.playerName, position: p.position, ownerName: p.ownerName, avgPoints: p.avgPoints }));
       const vorpResults = calcVORP(availablePlayers);
@@ -11771,8 +11779,9 @@ Provide:
       // 3. Keeper eligibility
       const keepers2025: Record<number, Array<{ playerId: number; playerName: string; position: string; roundId: number }>> = {};
       const data2025picks = normalizeDraftPicks(data2025);
-      for (const p of data2025picks) {
-        if (!p.keeper) continue;
+      for (const pick of data2025picks) {
+        const p = pick as Record<string, unknown>;
+        if (!isDraftKeeperSlotPick(p)) continue;
         const tid = p.teamId as number;
         const pid = p.playerId as number;
         if (!keepers2025[tid]) keepers2025[tid] = [];
@@ -11789,8 +11798,9 @@ Provide:
         const data2024 = await getSeasonData(prevSeason, undefined, ctx.user?.id);
         if (data2024) {
           const picks2024 = normalizeDraftPicks(data2024);
-          for (const p of picks2024) {
-            if (!p.keeper) continue;
+          for (const pick of picks2024) {
+            const p = pick as Record<string, unknown>;
+            if (!isDraftKeeperSlotPick(p)) continue;
             const tid = p.teamId as number;
             const pid = p.playerId as number;
             if (!keepers2024[tid]) keepers2024[tid] = {};

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   classifyEspnDraftSlot,
   classifyDraftPickRawPick,
+  isDraftKeeperSlotPick,
   SlotClass,
   CLASSIFICATION_REASON,
 } from "./draftTruth";
@@ -73,5 +74,33 @@ describe("Phase 3A — additional classifier behavior", () => {
     expect(classifyDraftPickRawPick("[]").slotClass).toBe(SlotClass.UNKNOWN);
     expect(classifyDraftPickRawPick([1, 2]).slotClass).toBe(SlotClass.UNKNOWN);
     expect(classifyDraftPickRawPick(null).classificationReason).toBe(CLASSIFICATION_REASON.MALFORMED);
+  });
+});
+
+describe("Phase 3D — isDraftKeeperSlotPick (Keeper Advisor / Optimizer)", () => {
+  it("480452315-style retained-only row: keeper=false, reservedForKeeper=true -> keeper slot", () => {
+    expect(
+      isDraftKeeperSlotPick({
+        keeper: false,
+        reservedForKeeper: true,
+        playerId: 123,
+      }),
+    ).toBe(true);
+  });
+
+  it("prefers normalized keeperSlot when present", () => {
+    expect(isDraftKeeperSlotPick({ keeper: false, reservedForKeeper: false, keeperSlot: true })).toBe(true);
+    expect(isDraftKeeperSlotPick({ keeper: true, reservedForKeeper: false, keeperSlot: false })).toBe(false);
+  });
+
+  it("open-draft normalized row is not a keeper slot", () => {
+    expect(
+      isDraftKeeperSlotPick({
+        keeper: false,
+        reservedForKeeper: false,
+        keeperSlot: false,
+        draftedForAnalytics: true,
+      }),
+    ).toBe(false);
   });
 });
