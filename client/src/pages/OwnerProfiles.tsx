@@ -642,9 +642,9 @@ function ProfilePanel({
                     r: `${num(snapP.championships)} / ${num(snapP.runnerUps) + num(snapP.thirdPlace)}`,
                     w: cmp3(medalScore(snap as Record<string, unknown>), medalScore(snapP as Record<string, unknown>)),
                   },
-                  { label: "Total draft picks", l: num(draft.totalPicks), r: num(draftP.totalPicks), w: cmp3(num(draft.totalPicks), num(draftP.totalPicks)) },
+                  { label: "Open-draft picks", l: num(draft.totalPicks), r: num(draftP.totalPicks), w: cmp3(num(draft.totalPicks), num(draftP.totalPicks)) },
                   { label: "Most drafted (pos)", l: topL.label, r: topR.label, w: cmp3(topL.count, topR.count) },
-                  { label: "Keeper rate", l: pct(num(keeper.keeperRate)), r: pct(num(keeperP.keeperRate)), w: cmp3(num(keeper.keeperRate), num(keeperP.keeperRate)) },
+                  { label: "Keeper slot rate", l: pct(num(keeper.keeperRate)), r: pct(num(keeperP.keeperRate)), w: cmp3(num(keeper.keeperRate), num(keeperP.keeperRate)) },
                   { label: "Acquisitions", l: num(activity.totalAcq), r: num(activityP.totalAcq), w: cmp3(num(activity.totalAcq), num(activityP.totalAcq)) },
                   { label: "Trades", l: num(activity.totalTrades), r: num(activityP.totalTrades), w: cmp3(num(activity.totalTrades), num(activityP.totalTrades)) },
                   { label: "Drops", l: num(activity.totalDrops), r: num(activityP.totalDrops), w: cmp3(num(activity.totalDrops), num(activityP.totalDrops)) },
@@ -1027,7 +1027,10 @@ function ProfilePanel({
           <ProfileShellCard title="Draft summary">
             <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
               <div>
-                <StatRow label="Total Picks"           value={num(draft.totalPicks)} />
+                <StatRow label="Open-draft picks"           value={num(draft.totalPicks)} />
+                <StatRow label="Draft board slots (all)"   value={num((draft as Record<string, unknown>).boardSlotCount)} />
+                <StatRow label="Keeper + retained slots"   value={num((draft as Record<string, unknown>).keeperSlotCount)} />
+                <StatRow label="Retained-only slots"       value={num((draft as Record<string, unknown>).retainedSlotCount)} />
                 <StatRow label="Top Drafted Positions" value={mostDraftedPos.join(" › ") || "—"} />
               </div>
               <div>
@@ -1048,19 +1051,21 @@ function ProfilePanel({
           </h3>
           <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
             <div>
-              <StatRow label="Total Keepers"    value={num(keeper.totalKeepers)} />
-              <StatRow label="Keeper Rate"      value={pct(num(keeper.keeperRate))} />
+              <StatRow label="Keeper / retained slots"    value={num(keeper.totalKeepers)} />
+              <StatRow label="Strict keeper rows (ESPN)"   value={num((keeper as Record<string, unknown>).strictKeeperCount)} />
+              <StatRow label="Retained-only rows"          value={num((keeper as Record<string, unknown>).retainedSlotCount)} />
+              <StatRow label="% of board (keeper + retained)"      value={pct(num(keeper.keeperRate))} />
               <StatRow label="Avg Keeper Round" value={keeper.avgKeeperRound != null ? `Rd ${keeper.avgKeeperRound}` : "—"} />
             </div>
             <div>
               {sortedKPos.map(([pos, cnt]) => (
-                <StatRow key={pos} label={`${pos} keepers`} value={cnt} />
+                <StatRow key={pos} label={`${pos} (keeper+retained)`} value={cnt} />
               ))}
             </div>
           </div>
           {lastYearKeepers.length > 0 && (
             <div className="mt-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Most Recent Keepers</p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Most recent keeper / retained</p>
               <div className="flex flex-wrap gap-2">
                 {lastYearKeepers.map((k: any, i: number) => (
                   <span key={i} className="inline-flex items-center gap-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-xs">

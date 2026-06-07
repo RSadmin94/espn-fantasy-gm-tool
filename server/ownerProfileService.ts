@@ -15,6 +15,7 @@ import {
   type TeamSeasonRow,
 } from "./resolveDraftPickOwner";
 import { activityDnaNarrative, type ActivityDnaResult } from "./activityDnaService";
+import { classifyDraftPickRawPick, SlotClass } from "./draftTruth";
 
 /** Seasons we expect owner timelines / diagnostics to cover (inclusive). */
 export const OWNER_PROFILE_HIST_SEASONS: readonly number[] = Object.freeze(
@@ -140,7 +141,16 @@ export type OwnerProfilePayload = {
     }>;
   };
   draftDNA: {
+    /** Open-draft selections only (Phase 3 DraftTruth: `draftedForAnalytics`). */
     totalPicks: number;
+    /** All board rows attributed to this owner (drafted + keeper + retained + unknown). */
+    boardSlotCount: number;
+    /** Same as `totalPicks` — explicit alias for APIs / UI copy. */
+    draftedPickCount: number;
+    /** Rows with `keeper === true` OR `reservedForKeeper === true` (excludes UNKNOWN). */
+    keeperSlotCount: number;
+    /** `reservedForKeeper` without strict `keeper` (slotClass RETAINED). */
+    retainedSlotCount: number;
     posShare: Record<string, number>;
     earlyPos: Record<string, number>;
     avgRoundByPos: Record<string, number>;
@@ -148,7 +158,12 @@ export type OwnerProfilePayload = {
     byRound: Array<{ round: number; seasons: number; topPosition: string; topCount: number; posCounts: Record<string, number>; picks: Array<{ season: number; position: string; playerName: string; isKeeper: boolean }> }>;
   };
   keeperDNA: {
+    /** Keeper + retained slots (board non–open-draft); see `strictKeeperCount` / `retainedSlotCount`. */
     totalKeepers: number;
+    /** ESPN strict keeper rows only (slotClass KEEPER). */
+    strictKeeperCount: number;
+    /** Retained-only slots (slotClass RETAINED). */
+    retainedSlotCount: number;
     keeperRate: number;
     keeperPosDist: Record<string, number>;
     avgKeeperRound: number | null;
@@ -981,6 +996,11 @@ export async function buildOwnerProfilePayload(args: {
     isKeeper: number;
     season: number;
     teamId: number;
+    /** Phase 3: open-draft rows only (classifier `draftedForAnalytics`). */
+    draftedForAnalytics: boolean;
+    /** Phase 3: keeper or retained slot (non–open-draft when classified). */
+    keeperSlot: boolean;
+    slotClass: (typeof SlotClass)[keyof typeof SlotClass];
   }> = [];
   for (const row of draftRows) {
     const teamNameFromPick = parseDraftPickTeamNameFromRawPick(row.rawPick);
@@ -1007,6 +1027,12 @@ export async function buildOwnerProfilePayload(args: {
       : resolveOwnerKey("", res.ownerName, teamNameFromPick ?? "", nameToOwnerIdFull);
     const pickOwnerKey = keyRemapFull.get(pickOwnerKeyRaw) ?? pickOwnerKeyRaw;
     if (pickOwnerKey === profileOwnerKey) {
+      let truth;
+      try {
+        truth = row.rawPick ? classifyDraftPickRawPick(JSON.parse(row.rawPick)) : classifyDraftPickRawPick(null);
+      } catch {
+        truth = classifyDraftPickRawPick(null);
+      }
       ownedPicks.push({
         playerName: row.playerName,
         position: row.position,
@@ -1014,6 +1040,9 @@ export async function buildOwnerProfilePayload(args: {
         isKeeper: row.isKeeper,
         season: row.season,
         teamId: row.teamId,
+        draftedForAnalytics: truth.draftedForAnalytics,
+        keeperSlot: truth.keeperSlot,
+        slotClass: truth.slotClass,
       });
     }
   }
@@ -1037,12 +1066,19 @@ export async function buildOwnerProfilePayload(args: {
   const seasons = snapR.seasons;
   const currentTeam = teamRows[teamRows.length - 1]?.name ?? ownerName;
 
-  const totalPicks = ownedPicks.length;
+  const boardSlotCount = ownedPicks.length;
+  const draftDnaPicks = ownedPicks.filter((p) => p.draftedForAnalytics);
+  const draftedPickCount = draftDnaPicks.length;
+  const totalPicks = draftedPickCount;
+  const keeperSlotPicks = ownedPicks.filter((p) => p.keeperSlot);
+  const keeperSlotCount = keeperSlotPicks.length;
+  const retainedSlotCount = ownedPicks.filter((p) => p.slotClass === SlotClass.RETAINED).length;
+
   const posDist: Record<string, number> = {};
   const earlyPos: Record<string, number> = {};
   const posRoundSum: Record<string, number> = {};
   const posRoundCount: Record<string, number> = {};
-  for (const p of ownedPicks) {
+  for (const p of draftDnaPicks) {
     const pos = p.position || "UNK";
     posDist[pos] = (posDist[pos] ?? 0) + 1;
     if (p.roundId <= 3) earlyPos[pos] = (earlyPos[pos] ?? 0) + 1;
@@ -1063,11 +1099,16 @@ export async function buildOwnerProfilePayload(args: {
     .map(([pos]) => pos);
 
   const byRoundMap = new Map<number, Array<{ season: number; position: string; playerName: string; isKeeper: boolean }>>();
-  for (const p of ownedPicks) {
+  for (const p of draftDnaPicks) {
     const r = Number(p.roundId) || 0;
     if (r <= 0) continue;
     if (!byRoundMap.has(r)) byRoundMap.set(r, []);
-    byRoundMap.get(r)!.push({ season: p.season, position: p.position || "UNK", playerName: p.playerName || "", isKeeper: !!p.isKeeper });
+    byRoundMap.get(r)!.push({
+      season: p.season,
+      position: p.position || "UNK",
+      playerName: p.playerName || "",
+      isKeeper: false,
+    });
   }
   const byRound = [...byRoundMap.entries()]
     .sort((a, b) => a[0] - b[0])
@@ -1079,12 +1120,13 @@ export async function buildOwnerProfilePayload(args: {
       return { round, seasons: sorted.length, topPosition: top?.[0] ?? "UNK", topCount: top?.[1] ?? 0, posCounts, picks: sorted };
     });
 
-  const keeperPicks = ownedPicks.filter((p) => p.isKeeper === 1);
-  const totalKeepers = keeperPicks.length;
-  const keeperRate = totalPicks > 0 ? Number(((totalKeepers / totalPicks) * 100).toFixed(1)) : 0;
+  const strictKeeperCount = ownedPicks.filter((p) => p.slotClass === SlotClass.KEEPER).length;
+  const totalKeepers = keeperSlotCount;
+  const keeperRate =
+    boardSlotCount > 0 ? Number(((keeperSlotCount / boardSlotCount) * 100).toFixed(1)) : 0;
   const keeperPosDist: Record<string, number> = {};
   let keeperRoundSum = 0;
-  for (const p of keeperPicks) {
+  for (const p of keeperSlotPicks) {
     const pos = p.position || "UNK";
     keeperPosDist[pos] = (keeperPosDist[pos] ?? 0) + 1;
     keeperRoundSum += p.roundId;
@@ -1092,7 +1134,7 @@ export async function buildOwnerProfilePayload(args: {
   const avgKeeperRound = totalKeepers > 0 ? Number((keeperRoundSum / totalKeepers).toFixed(1)) : null;
   const lastYearKeepers =
     seasons.length > 0
-      ? keeperPicks
+      ? keeperSlotPicks
           .filter((p) => p.season === Math.max(...seasons))
           .map((p) => ({
             playerName: p.playerName ?? "",
@@ -1297,6 +1339,10 @@ export async function buildOwnerProfilePayload(args: {
     },
     draftDNA: {
       totalPicks,
+      boardSlotCount,
+      draftedPickCount,
+      keeperSlotCount,
+      retainedSlotCount,
       posShare,
       earlyPos,
       avgRoundByPos,
@@ -1305,6 +1351,8 @@ export async function buildOwnerProfilePayload(args: {
     },
     keeperDNA: {
       totalKeepers,
+      strictKeeperCount,
+      retainedSlotCount,
       keeperRate,
       keeperPosDist,
       avgKeeperRound,
@@ -1329,7 +1377,7 @@ export async function buildOwnerProfilePayload(args: {
     dataSourceDiagnostics: {
       recordSource: "gmMatchupsCompletedRegularSeason",
       medalSource: "league_medals_resolved_by_team_name",
-      serviceVersion: "owner-canon-v4",
+      serviceVersion: "owner-canon-v5-draft-truth",
       ownerKey: profileOwnerKey,
       displayName: cleanOwnerDisplay(ownerName) || ownerName,
       mergedOwnerAliases,
