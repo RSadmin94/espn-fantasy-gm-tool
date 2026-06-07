@@ -38,6 +38,15 @@ import {
   GetWeeklyStatsByOwnerInput,
   GetDraftPickPerformanceInput,
 } from "./playerStatsTypes";
+import { classifyDraftPickRawPick, SlotClass } from "./draftTruth";
+
+/** SQL guard: open-draft selections only (DraftTruth `draftedForAnalytics` or legacy isKeeper=0). */
+function sqlOpenDraftAnalyticsPick(): ReturnType<typeof sql> {
+  return sql`(
+    JSON_UNQUOTE(JSON_EXTRACT(${gmDraftPicks.rawPick}, '$.draftedForAnalytics')) = 'true'
+    OR (JSON_EXTRACT(${gmDraftPicks.rawPick}, '$.draftedForAnalytics') IS NULL AND ${gmDraftPicks.isKeeper} = 0)
+  )`;
+}
 
 // ── ESPN ADP cache (module-level, survives across requests within one deploy) ──
 let _espnAdpCache: Map<string, number> | null = null;
@@ -163,13 +172,18 @@ export const playerStatsRouter = router({
       ));
       const avgPickByPlayerId = new Map<number, number>();
       if (draftPlayerIds.length > 0) {
+        const whereAvg = andDrizzle(
+          inArrayDrizzle(gmDraftPicks.playerId, draftPlayerIds),
+          sqlOpenDraftAnalyticsPick(),
+          ...(input.leagueId ? [eqDrizzle(gmDraftPicks.leagueId, input.leagueId)] : []),
+        );
         const apRows = await db
           .select({
             playerId: gmDraftPicks.playerId,
             avgPick:  sql<number>`AVG(${gmDraftPicks.overallPick})`.mapWith(Number),
           })
           .from(gmDraftPicks)
-          .where(inArrayDrizzle(gmDraftPicks.playerId, draftPlayerIds))
+          .where(whereAvg)
           .groupBy(gmDraftPicks.playerId);
         for (const ap of apRows) {
           if (ap.playerId != null && Number.isFinite(ap.avgPick)) {
@@ -178,11 +192,46 @@ export const playerStatsRouter = router({
         }
       }
 
+      /** Per-player slot counts for the active league (optional). */
+      const slotAgg = new Map<number, { draftBoardSlots: number; openDraftSelections: number; keeperSlots: number; retainedSlots: number }>();
+      if (input.leagueId && draftPlayerIds.length > 0) {
+        const slotRows = await db
+          .select({ playerId: gmDraftPicks.playerId, rawPick: gmDraftPicks.rawPick })
+          .from(gmDraftPicks)
+          .where(andDrizzle(
+            eqDrizzle(gmDraftPicks.leagueId, input.leagueId),
+            inArrayDrizzle(gmDraftPicks.playerId, draftPlayerIds),
+          ));
+        for (const row of slotRows) {
+          const pid = Number(row.playerId);
+          if (!Number.isFinite(pid) || pid <= 0) continue;
+          if (!slotAgg.has(pid)) {
+            slotAgg.set(pid, { draftBoardSlots: 0, openDraftSelections: 0, keeperSlots: 0, retainedSlots: 0 });
+          }
+          const a = slotAgg.get(pid)!;
+          a.draftBoardSlots++;
+          let rp: unknown = row.rawPick;
+          if (typeof rp === "string") {
+            try {
+              rp = JSON.parse(rp);
+            } catch {
+              continue;
+            }
+          }
+          const t = classifyDraftPickRawPick(rp);
+          if (t.draftedForAnalytics) a.openDraftSelections++;
+          if (t.slotClass === SlotClass.KEEPER) a.keeperSlots++;
+          if (t.slotClass === SlotClass.RETAINED) a.retainedSlots++;
+        }
+      }
+
       // Enrich rows: ESPN ADP preferred, falls back to league historical avg
       const enriched = allRows.map((r: any) => {
         const eid = String(r.espnPlayerId ?? "").trim();
         const espnRank = eid ? espnAdpMap.get(eid) : undefined;
         const dbAvg    = r.espnPlayerId ? (avgPickByPlayerId.get(Number(r.espnPlayerId)) ?? null) : null;
+        const pid = r.espnPlayerId ? Number(r.espnPlayerId) : NaN;
+        const slots = Number.isFinite(pid) ? slotAgg.get(pid) : undefined;
         return {
           ...r,
           isActive:        Boolean(r.isActive),
@@ -192,6 +241,10 @@ export const playerStatsRouter = router({
           firstSeasonSeen: r.firstSeasonSeen ?? null,
           lastSeasonSeen:  r.lastSeasonSeen  ?? null,
           avgPick:         espnRank ?? dbAvg,
+          draftBoardSlots: slots?.draftBoardSlots ?? null,
+          openDraftSelections: slots?.openDraftSelections ?? null,
+          keeperSlots:     slots?.keeperSlots ?? null,
+          retainedSlots:   slots?.retainedSlots ?? null,
         };
       });
 
@@ -324,15 +377,12 @@ export const playerStatsRouter = router({
           roundPick:   gmDraftPicks.roundPick,
           overallPick: gmDraftPicks.overallPick,
           teamId:      gmDraftPicks.teamId,
-          isKeeper:    gmDraftPicks.isKeeper,
+          rawPick:     gmDraftPicks.rawPick,
         })
         .from(gmDraftPicks)
         .where(andDrizzle(
           eqDrizzle(gmDraftPicks.leagueId, leagueId),
           eqDrizzle(gmDraftPicks.season,   input.season),
-          ...(input.ownerKey
-            ? [sql`EXISTS (SELECT 1 FROM ${gmPlayerRegistry} pr WHERE pr.normalizedName = ${sql.placeholder("pn")} LIMIT 1)`]
-            : []),
         ))
         .orderBy(ascDrizzle(gmDraftPicks.overallPick))
         .limit(500);
@@ -350,6 +400,16 @@ export const playerStatsRouter = router({
 
       for (const pick of picks) {
         if (!pick.playerName) continue;
+
+        let rawPayload: unknown = pick.rawPick;
+        if (typeof rawPayload === "string") {
+          try {
+            rawPayload = JSON.parse(rawPayload);
+          } catch {
+            continue;
+          }
+        }
+        if (!classifyDraftPickRawPick(rawPayload).draftedForAnalytics) continue;
 
         const normName = pick.playerName
           .toLowerCase()

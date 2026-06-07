@@ -16,7 +16,7 @@
  *   - calcLeagueAnalytics: Full league snapshot (all of the above combined)
  */
 
-import { classifyEspnDraftSlot } from "./draftTruth/classifySlot";
+import { classifyEspnDraftSlot, isDraftKeeperSlotPick } from "./draftTruth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -554,7 +554,8 @@ export function calcManagerBehavior(
     //   efficiency = 11 - 2 = +9 picks of value
     //
     const leagueSize = Math.max(teams.length, 10);
-    const keeperPicks = teamPicks.filter(p => p.keeper);
+    // Keeper / retained **board slots** (not open-draft picks) — cost basis for keeper efficiency vs ADP.
+    const keeperPicks = teamPicks.filter((p) => isDraftKeeperSlotPick(p));
     let keeperEfficiencyAvg = 0;
 
     if (keeperPicks.length > 0 && playerScoreMap && playerScoreMap.size > 0) {

@@ -176,6 +176,8 @@ export const GetCanonicalPlayersInput = z.object({
   query:    z.string().min(1).max(120).optional(),
   position: z.enum(VALID_POSITIONS).optional(),
   isActive: z.boolean().optional(),
+  /** When set, historical avg pick + slot counts are scoped to this league only. */
+  leagueId: z.string().min(1).max(32).optional(),
   page:     z.number().int().min(0).default(0),
   pageSize: z.number().int().min(1).max(100).default(25),
   sortBy:   z.enum(["fullName", "avgPick", "firstSeasonSeen", "lastSeasonSeen"]).optional(),
@@ -195,6 +197,11 @@ export const GetCanonicalPlayersOutput = z.object({
     isActive:        z.boolean(),
     needsReview:     z.boolean(),
     avgPick:         z.number().nullable(),
+    /** Board appearances in `leagueId` (when provided). */
+    draftBoardSlots:       z.number().nullable(),
+    openDraftSelections:   z.number().nullable(),
+    keeperSlots:           z.number().nullable(),
+    retainedSlots:         z.number().nullable(),
   })),
   total:    z.number(),
   page:     z.number(),

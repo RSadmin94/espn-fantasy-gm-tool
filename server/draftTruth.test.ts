@@ -104,3 +104,23 @@ describe("Phase 3D — isDraftKeeperSlotPick (Keeper Advisor / Optimizer)", () =
     ).toBe(false);
   });
 });
+
+describe("Phase 3E — classifyDraftPickRawPick honors persisted draftedForAnalytics", () => {
+  it("forces analytics exclusion when normalized false despite ambiguous booleans", () => {
+    const r = classifyDraftPickRawPick({
+      keeper: false,
+      reservedForKeeper: false,
+      draftedForAnalytics: false,
+    });
+    expect(r.draftedForAnalytics).toBe(false);
+  });
+
+  it("forces analytics inclusion when normalized true", () => {
+    const r = classifyDraftPickRawPick({
+      keeper: false,
+      reservedForKeeper: false,
+      draftedForAnalytics: true,
+    });
+    expect(r.draftedForAnalytics).toBe(true);
+  });
+});

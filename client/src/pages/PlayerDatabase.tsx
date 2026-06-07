@@ -116,6 +116,9 @@ function InsightCard({ type, title, body, tag }: { type: InsightType; title: str
 export function PlayerDatabase() {
   const _trpc = trpc as any;
 
+  const activeLeagueQ = trpc.league.getActive.useQuery(undefined, { staleTime: 60_000 });
+  const activeLeagueId = activeLeagueQ.data?.leagueId ?? undefined;
+
   const [tab, setTab]           = useState(0);
   const [search, setSearch]     = useState("");
   const [debouncedQ, setQ]      = useState("");
@@ -134,6 +137,7 @@ export function PlayerDatabase() {
     query:    debouncedQ.trim() || undefined,
     position: (!isFlex && posFilter !== "ALL") ? posFilter : undefined,
     isActive: undefined,
+    leagueId: activeLeagueId,
     page,
     pageSize: PAGE_SIZE,
     // For avgPick sort: delegate to server (sorts all rows, not just current page)
@@ -144,6 +148,7 @@ export function PlayerDatabase() {
   const raw: any[] = data?.players ?? [];
   const total      = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
+  const showDraftSlotCols = raw.some((p: { draftBoardSlots: unknown }) => p.draftBoardSlots != null);
 
   const handleSearch = useCallback((v: string) => {
     setSearch(v);
@@ -313,7 +318,11 @@ export function PlayerDatabase() {
           {/* Column headers */}
           <div className="sticky top-0 z-10 bg-zinc-900/95 border-b border-zinc-800/80 backdrop-blur">
             <div className="grid px-4 py-3"
-              style={{ gridTemplateColumns: "36px 1fr 80px 100px 130px 80px 72px 76px" }}>
+              style={{
+                gridTemplateColumns: showDraftSlotCols
+                  ? "36px 1fr 80px 100px 130px 80px 72px 76px 100px"
+                  : "36px 1fr 80px 100px 130px 80px 72px 76px",
+              }}>
               <div className="text-[10px] font-semibold text-zinc-600 uppercase">#</div>
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">Player</div>
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">Pos</div>
@@ -322,6 +331,11 @@ export function PlayerDatabase() {
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">Status</div>
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">First Yr</div>
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">AVG Pick</div>
+              {showDraftSlotCols && (
+                <div className="text-[10px] font-semibold text-zinc-500 uppercase leading-tight text-right pr-1">
+                  Open / Board<br /><span className="text-zinc-600 font-normal">(active league)</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -353,7 +367,11 @@ export function PlayerDatabase() {
                     i % 2 === 0 ? "bg-zinc-900/10" : "bg-transparent",
                     isHigh ? "border-l-lime-500/60" : "border-l-zinc-800"
                   )}
-                  style={{ gridTemplateColumns: "36px 1fr 80px 100px 130px 80px 72px 76px" }}
+                  style={{
+                    gridTemplateColumns: showDraftSlotCols
+                      ? "36px 1fr 80px 100px 130px 80px 72px 76px 100px"
+                      : "36px 1fr 80px 100px 130px 80px 72px 76px",
+                  }}
                 >
                   {/* # */}
                   <div className="text-zinc-600 text-xs tabular-nums font-mono">{page * PAGE_SIZE + i + 1}</div>
@@ -400,6 +418,24 @@ export function PlayerDatabase() {
                   <div className="text-xs tabular-nums text-zinc-500 font-medium">{p.firstSeasonSeen ?? "—"}</div>
                   {/* AVG Pick */}
                   <div className="text-xs tabular-nums font-semibold text-zinc-300">{p.avgPick != null ? Number(p.avgPick).toFixed(1) : <span className="text-zinc-600">{"\u2014"}</span>}</div>
+                  {showDraftSlotCols && (
+                    <div className="text-[10px] tabular-nums text-zinc-400 text-right leading-tight pr-1">
+                      {p.openDraftSelections != null && p.draftBoardSlots != null ? (
+                        <>
+                          <span className="text-lime-400/90 font-semibold">{p.openDraftSelections}</span>
+                          <span className="text-zinc-600"> / </span>
+                          <span>{p.draftBoardSlots}</span>
+                          {(p.keeperSlots > 0 || p.retainedSlots > 0) && (
+                            <div className="text-[9px] text-zinc-600 mt-0.5">
+                              K{p.keeperSlots ?? 0} · R{p.retainedSlots ?? 0}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-zinc-600">{"\u2014"}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

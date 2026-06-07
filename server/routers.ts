@@ -179,7 +179,7 @@ import {
   type ManagerBehaviorStats,
   isOpenDraftAnalyticsPick,
 } from "./analytics";
-import { classifyDraftPickRawPick, isDraftKeeperSlotPick } from "./draftTruth";
+import { classifyDraftPickRawPick, isDraftKeeperSlotPick, SlotClass } from "./draftTruth";
 import type { RequestHandler } from "express";
 
 /** Exact origins allowed for credentialed browser requests (e.g. extension / cross-site tRPC). */
@@ -6461,7 +6461,10 @@ export const appRouter = router({
     const seenPickKeys = new Set<string>();
     const allUniquePicks: Array<{
       season: number; round: number; pick: number; overallPick: number;
-      playerId: number; teamId: number; isKeeper: boolean;
+      playerId: number; teamId: number;
+      draftedForAnalytics: boolean;
+      slotClass: (typeof SlotClass)[keyof typeof SlotClass];
+      keeperSlot: boolean;
     }> = [];
 
     // Collect all transactions
@@ -6515,6 +6518,7 @@ export const appRouter = router({
         const key = `${season}:${pick.overallPickNumber}`;
         if (seenPickKeys.has(key)) continue;
         seenPickKeys.add(key);
+        const truth = classifyDraftPickRawPick(pick);
         allUniquePicks.push({
           season,
           round: pick.roundId as number,
@@ -6522,7 +6526,9 @@ export const appRouter = router({
           overallPick: pick.overallPickNumber as number,
           playerId: pick.playerId as number,
           teamId: pick.teamId as number,
-          isKeeper: pick.keeper === true || pick.reservedForKeeper === true,
+          draftedForAnalytics: truth.draftedForAnalytics,
+          slotClass: truth.slotClass,
+          keeperSlot: truth.keeperSlot,
         });
       }
 
@@ -6549,11 +6555,25 @@ export const appRouter = router({
       playerId: number;
       playerName: string;
       position: string;
-      draftHistory: Array<{ season: number; round: number; pick: number; overallPick: number; teamId: number; teamName: string; ownerName: string; isKeeper: boolean }>;
+      draftHistory: Array<{
+        season: number; round: number; pick: number; overallPick: number; teamId: number; teamName: string; ownerName: string;
+        draftedForAnalytics: boolean;
+        slotClass: string;
+        keeperSlot: boolean;
+        /** @deprecated use keeperSlot / slotClass */
+        isKeeper: boolean;
+      }>;
       keeperSeasons: number[];
       teamsBySeason: Record<number, { teamId: number; teamName: string; ownerName: string }>;
       firstSeen: number;
       lastSeen: number;
+      /** Open-draft selections only (actual draft decisions). */
+      openDraftSelections: number;
+      /** All board appearances including keeper/retained/unknown rows. */
+      draftBoardSlots: number;
+      keeperSlots: number;
+      retainedSlots: number;
+      /** @deprecated use openDraftSelections — kept for older clients (same value). */
       totalDrafts: number;
       totalKeeperYears: number;
     }>();
@@ -6573,6 +6593,10 @@ export const appRouter = router({
           teamsBySeason: {},
           firstSeen: pick.season,
           lastSeen: pick.season,
+          openDraftSelections: 0,
+          draftBoardSlots: 0,
+          keeperSlots: 0,
+          retainedSlots: 0,
           totalDrafts: 0,
           totalKeeperYears: 0,
         });
@@ -6580,6 +6604,11 @@ export const appRouter = router({
 
       const p = playerMap.get(pid)!;
       if (info?.name) { p.playerName = info.name; p.position = info.position; }
+
+      p.draftBoardSlots++;
+      if (pick.draftedForAnalytics) p.openDraftSelections++;
+      if (pick.slotClass === SlotClass.KEEPER) p.keeperSlots++;
+      if (pick.slotClass === SlotClass.RETAINED) p.retainedSlots++;
 
       p.draftHistory.push({
         season: pick.season,
@@ -6589,24 +6618,31 @@ export const appRouter = router({
         teamId: pick.teamId,
         teamName: teamInfo.name,
         ownerName: teamInfo.ownerName,
-        isKeeper: pick.isKeeper,
+        draftedForAnalytics: pick.draftedForAnalytics,
+        slotClass: pick.slotClass,
+        keeperSlot: pick.keeperSlot,
+        isKeeper: pick.keeperSlot,
       });
 
-      if (pick.isKeeper) p.keeperSeasons.push(pick.season);
+      if (pick.keeperSlot) p.keeperSeasons.push(pick.season);
       p.teamsBySeason[pick.season] = { teamId: pick.teamId, teamName: teamInfo.name, ownerName: teamInfo.ownerName };
       p.firstSeen = Math.min(p.firstSeen, pick.season);
       p.lastSeen = Math.max(p.lastSeen, pick.season);
-      p.totalDrafts++;
-      if (pick.isKeeper) p.totalKeeperYears++;
+      if (pick.draftedForAnalytics) p.totalDrafts++;
+      if (pick.keeperSlot) p.totalKeeperYears++;
     }
 
     // Build final profiles array with computed fields
     const profiles = Array.from(playerMap.values()).map((p) => {
-      const rounds = p.draftHistory.map((d) => d.round);
+      const openRounds = p.draftHistory.filter((d) => d.draftedForAnalytics).map((d) => d.round);
+      const rounds = openRounds.length > 0 ? openRounds : p.draftHistory.map((d) => d.round);
       const avgRound = rounds.length > 0 ? Math.round((rounds.reduce((s, r) => s + r, 0) / rounds.length) * 10) / 10 : null;
-      const roundTrend = p.draftHistory.length >= 2
-        ? p.draftHistory[p.draftHistory.length - 1].round - p.draftHistory[0].round
-        : 0;
+      const openHistory = p.draftHistory.filter((d) => d.draftedForAnalytics);
+      const roundTrend = openHistory.length >= 2
+        ? openHistory[openHistory.length - 1].round - openHistory[0].round
+        : p.draftHistory.length >= 2
+          ? p.draftHistory[p.draftHistory.length - 1].round - p.draftHistory[0].round
+          : 0;
       const uniqueTeams = Array.from(new Set(Object.values(p.teamsBySeason).map((t) => t.teamName)));
       const uniqueOwners = Array.from(new Set(Object.values(p.teamsBySeason).map((t) => t.ownerName).filter(Boolean)));
       const transactionCount = allTxns.filter((tx) => tx.playerId === p.playerId).length;
@@ -6622,8 +6658,8 @@ export const appRouter = router({
         uniqueOwners,
         seasonsActive: p.lastSeen - p.firstSeen + 1,
         transactionCount,
-        // League-wide prominence score: keeper years * 3 + total drafts + seasons active
-        prominenceScore: p.totalKeeperYears * 3 + p.totalDrafts + (p.lastSeen - p.firstSeen),
+        // League-wide prominence: open-draft seasons + keeper-slot seasons weighted
+        prominenceScore: p.totalKeeperYears * 3 + p.openDraftSelections + (p.lastSeen - p.firstSeen),
       };
     });
 
@@ -6634,7 +6670,7 @@ export const appRouter = router({
       profiles,
       totalPlayers: profiles.length,
       totalKeptPlayers: profiles.filter((p) => p.totalKeeperYears > 0).length,
-      leagueStaples: profiles.filter((p) => p.totalDrafts >= 3).length,
+      leagueStaples: profiles.filter((p) => p.openDraftSelections >= 3).length,
       seasons: cachedSeasons,
     };
   }),
@@ -8037,7 +8073,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
 
       for (const pick of picks) {
         const p = pick as Record<string, unknown>;
-        if (!p.keeper) continue;
+        if (!isDraftKeeperSlotPick(p)) continue;
 
         const teamId = p.teamId as number;
         const playerId = p.playerId as number;
@@ -9796,7 +9832,8 @@ Provide:
         const draftPicks = normalizeDraftPicks(data) as Record<string, unknown>[];
         const keeperRoundMap: Record<number, number> = {};
         for (const p of draftPicks) {
-          if (p.keeper === true) keeperRoundMap[p.playerId as number] = p.roundId as number;
+          if (!isDraftKeeperSlotPick(p)) continue;
+          keeperRoundMap[p.playerId as number] = p.roundId as number;
         }
         const players: PlayerRow[] = rosters
           .filter(r => !input.teamId || r.teamId === input.teamId)

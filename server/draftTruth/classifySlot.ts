@@ -102,7 +102,13 @@ export function classifyDraftPickRawPick(rawPick: unknown): SlotClassification {
     };
   }
   const o = rawPick as Record<string, unknown>;
-  return classifyEspnDraftSlot(o.keeper, o.reservedForKeeper);
+  const c = classifyEspnDraftSlot(o.keeper, o.reservedForKeeper);
+  // Normalized ESPN payloads (e.g. `normalizeDraftPicks`) may persist `draftedForAnalytics`
+  // ahead of strict booleans — trust it for analytics vs full-board cost rows.
+  if (typeof o.draftedForAnalytics === "boolean") {
+    return { ...c, draftedForAnalytics: o.draftedForAnalytics };
+  }
+  return c;
 }
 
 /** Merge classification into a partial DraftTruthRow-shaped object (for builders in later phases). */
