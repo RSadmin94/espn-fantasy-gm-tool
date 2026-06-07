@@ -116,6 +116,14 @@ import {
   resolveEspnCreds,
 } from "./espnService";
 import {
+  resolveKeeperDraftGeometryForSeason,
+  defaultMidPickInRound,
+  keeperDecayRoundValue,
+  expPickValueFromSnakeRound,
+  snakeRoundAndPickFromOverall,
+  snakeOverallPick,
+} from "./keeperDraftGeometry";
+import {
   backfillNormalizedTablesFromPayload,
   syncEspnCombinedFullPipeline,
   normalizeEspnPayload,
@@ -171,7 +179,6 @@ import {
   calcKeeperEfficiency,
   calcManagerBehavior,
   calcROSValue,
-  calcPickValue,
   type PlayerRow,
   type TeamRow,
   type TransactionRow,
@@ -236,6 +243,20 @@ async function getSeasonData(season: number, leagueId?: string, userId?: number)
     const cached = await getCachedView(season, "combined", lid);
     return cached ? (cached.payload as Record<string, unknown>) : null;
   });
+}
+
+/** Active league draft geometry for pick-value / keeper charts (settings + draft payload). */
+async function resolvePickValueGeometryForUser(ctx: { user?: { id: number } | null }) {
+  const uid = ctx.user?.id ?? undefined;
+  const cachedSeasons = (await getAllCachedSeasons(undefined, uid)).sort((a, b) => a - b);
+  const anchorSeason = cachedSeasons.length ? cachedSeasons[cachedSeasons.length - 1]! : new Date().getFullYear();
+  const { leagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, anchorSeason);
+  if (!leagueId) {
+    return { leagueId: "", teamCount: 0, roundCount: 0, draftSlotCount: 0, anchorSeason };
+  }
+  const payload = await getSeasonData(anchorSeason, undefined, uid);
+  const geo = await resolveKeeperDraftGeometryForSeason(leagueId, anchorSeason, uid, payload);
+  return { leagueId, anchorSeason, ...geo };
 }
 
 /**
@@ -3609,6 +3630,13 @@ export const appRouter = router({
           const ownerMap = new Map<number, string>();
           for (const t of teams) ownerMap.set(t.teamId as number, (t.owners as string) || `Team ${t.teamId}`);
 
+          const { leagueId: agingLeagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, season);
+          const agingGeo = agingLeagueId
+            ? await resolveKeeperDraftGeometryForSeason(agingLeagueId, season, ctx.user?.id, data as Record<string, unknown>)
+            : null;
+          const pickTeamCountTradeAging =
+            agingGeo && agingGeo.teamCount > 0 ? agingGeo.teamCount : teams.length;
+
           // Collect completed trade item rows.
           // Legacy path: type === "TRADE" && status === "EXECUTED" (or empty)
           // 2026 path: TRADE_UPHOLD/TRADE_ACCEPT rows link to TRADE_PROPOSAL via relatedTransactionId
@@ -3746,11 +3774,18 @@ export const appRouter = router({
                 if ((r.toTeamId as number) === receivingTeamId) {
                   const round = (r.round as number) || 1;
                   const pickInRound = (r.pickInRound as number) || 7;
-                  const overall = (r.overallPickNumber as number);
-                  // Derive round/pickInRound from overallPickNumber if available
-                  const derivedRound = overall ? Math.ceil(overall / 14) : round;
-                  const derivedPick = overall ? ((overall - 1) % 14) + 1 : pickInRound;
-                  const value = calcPickValue(derivedRound, derivedPick);
+                  const overall = Number(r.overallPickNumber ?? 0);
+                  let derivedRound = round;
+                  let derivedPick = pickInRound;
+                  if (overall > 0 && pickTeamCountTradeAging > 0) {
+                    const d = snakeRoundAndPickFromOverall(overall, pickTeamCountTradeAging);
+                    derivedRound = d.round;
+                    derivedPick = d.pickInRound;
+                  }
+                  const value =
+                    pickTeamCountTradeAging > 0
+                      ? calcPickValue(derivedRound, derivedPick, pickTeamCountTradeAging)
+                      : 0;
                   picks.push({
                     label: `${derivedRound}.${String(derivedPick).padStart(2, "0")}`,
                     round: derivedRound,
@@ -3804,12 +3839,26 @@ export const appRouter = router({
         // scraped_trades table (populated by the Chrome extension when the user
         // visits the ESPN transactions page).
         if (allTrades.length === 0) {
+          const pickTeamCountBySeason = new Map<number, number>();
+          const resolvePickTeamCountForSeason = async (seas: number) => {
+            if (pickTeamCountBySeason.has(seas)) return pickTeamCountBySeason.get(seas)!;
+            const { leagueId: scrapLeagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, seas);
+            const sd = await getSeasonData(seas, undefined, ctx.user?.id);
+            const g =
+              scrapLeagueId && sd
+                ? await resolveKeeperDraftGeometryForSeason(scrapLeagueId, seas, ctx.user?.id, sd as Record<string, unknown>)
+                : null;
+            const n = g && g.teamCount > 0 ? g.teamCount : 0;
+            pickTeamCountBySeason.set(seas, n);
+            return n;
+          };
           const scrapedRows = await getScrapedTrades(input.season);
           for (const row of scrapedRows) {
             try {
+              const tcScraped = await resolvePickTeamCountForSeason(row.season);
               const sideA = JSON.parse(row.sideAJson) as { teamId: number; ownerName: string; players: { playerId: number; playerName: string; position: string; avgPoints?: number }[]; picks: { label: string; round: number; pickInRound: number }[] };
               const sideB = JSON.parse(row.sideBJson) as typeof sideA;
-              const buildScrapedSide = (side: typeof sideA) => {
+              const buildScrapedSide = (side: typeof sideA, tc: number) => {
                 const players = side.players.map(p => {
                   const pInfo = undefined; // no season data available for scraped trades
                   const avgPts = p.avgPoints ?? 0;
@@ -3821,13 +3870,13 @@ export const appRouter = router({
                   label: pk.label,
                   round: pk.round,
                   pickInRound: pk.pickInRound,
-                  value: calcPickValue(pk.round, pk.pickInRound),
+                  value: tc > 0 ? calcPickValue(pk.round, pk.pickInRound, tc) : 0,
                 }));
                 const totalValue = players.reduce((s, p) => s + p.compositeValue, 0) + picks.reduce((s, p) => s + p.value, 0);
                 return { teamId: side.teamId, ownerName: side.ownerName, players, picks, totalValue };
               };
-              const builtA = buildScrapedSide(sideA);
-              const builtB = buildScrapedSide(sideB);
+              const builtA = buildScrapedSide(sideA, tcScraped);
+              const builtB = buildScrapedSide(sideB, tcScraped);
               const margin = builtA.totalValue - builtB.totalValue;
               const verdict: "sideA" | "sideB" | "even" = Math.abs(margin) < 50 ? "even" : margin > 0 ? "sideA" : "sideB";
               allTrades.push({
@@ -5597,12 +5646,10 @@ export const appRouter = router({
     }),
 
     /**
-     * Ring of Honor: resolve league_medals champion/runner-up/third team names → owner names
-     * via gmTeams lookup (same season). Championships are credited to the OWNER of the team,
-     * not to the team name itself.
+     * Ring of Honor: `league_medals` champion / runner-up / third, resolved with the same
+     * `resolveMedalTeamToOwnerKey` + canonical owner-key pipeline as Hall of Fame.
      */
     ringOfHonor: publicProcedure.query(async ({ ctx }) => {
-      if (!ctx.user?.id) return [];
       type ResolvedMedal = {
         season: number;
         championTeam: string | null;
@@ -5635,101 +5682,44 @@ export const appRouter = router({
         } as Diagnostics,
       };
 
+      if (!ctx.user?.id) return empty;
+
       const { leagueId } = await resolveActiveLeagueId(
         { user: ctx.user ? { id: ctx.user.id } : undefined },
         null,
         undefined,
       );
       const db = await getDb();
-      if (!db) return empty;
+      if (!db || !leagueId) return empty;
 
-      const [medalRows, teamRows] = await Promise.all([
-        db.select({
-          season: leagueMedals.season,
-          championOwner: leagueMedals.championOwner,
-          runnerUpOwner: leagueMedals.runnerUpOwner,
-          thirdPlaceOwner: leagueMedals.thirdPlaceOwner,
-        })
-        .from(leagueMedals)
-        .where(eqDrizzle(leagueMedals.leagueId, leagueId))
-        .orderBy(ascDrizzle(leagueMedals.season)),
+      const hof = await buildHallOfFamePayload({ db, leagueId, userId: ctx.user.id });
+      const diag = hof.championships.medalDiagnostics;
 
-        db.select({
-          season: gmTeams.season,
-          name: gmTeams.name,
-          ownerName: gmTeams.ownerName,
-        })
-        .from(gmTeams)
-        .where(eqDrizzle(gmTeams.leagueId, leagueId)),
-      ]);
+      const resolvedMedals: ResolvedMedal[] = hof.championships.history.map((h) => ({
+        season: h.season,
+        championTeam: h.championTeam,
+        runnerUpTeam: h.runnerUpTeam,
+        thirdTeam: h.thirdTeam,
+        resolvedChampionOwner: h.resolvedChampionDisplay,
+        resolvedRunnerUpOwner: h.resolvedRunnerUpDisplay,
+        resolvedThirdOwner: h.resolvedThirdDisplay,
+      }));
 
-      // Build lookup: season → [{ normName, rawOwner }]
-      const teamsBySeason = new Map<number, { normName: string; rawOwner: string }[]>();
-      for (const t of teamRows) {
-        const normName = normalizeOwnerStr(t.name || "");
-        if (!normName) continue;
-        const rawOwner = cleanOwnerDisplay(t.ownerName || t.name || "") || t.name || "";
-        const arr = teamsBySeason.get(t.season) ?? [];
-        arr.push({ normName, rawOwner });
-        teamsBySeason.set(t.season, arr);
-      }
-
-      function resolveTeamToOwner(season: number, teamName: string | null): string | null {
-        if (!teamName?.trim()) return null;
-        const norm = normalizeOwnerStr(teamName);
-        const match = (teamsBySeason.get(season) ?? []).find((t) => t.normName === norm);
-        return match?.rawOwner ?? null;
-      }
-
-      const unmatchedChampionTeams: { season: number; teamName: string }[] = [];
-      const unmatchedRunnerUpTeams: { season: number; teamName: string }[] = [];
-      const unmatchedThirdTeams:    { season: number; teamName: string }[] = [];
-
-      const resolvedMedals: ResolvedMedal[] = medalRows.map((m) => {
-        const resolvedChampionOwner = resolveTeamToOwner(m.season, m.championOwner);
-        const resolvedRunnerUpOwner = resolveTeamToOwner(m.season, m.runnerUpOwner);
-        const resolvedThirdOwner    = resolveTeamToOwner(m.season, m.thirdPlaceOwner);
-
-        if (m.championOwner?.trim() && !resolvedChampionOwner)
-          unmatchedChampionTeams.push({ season: m.season, teamName: m.championOwner });
-        if (m.runnerUpOwner?.trim() && !resolvedRunnerUpOwner)
-          unmatchedRunnerUpTeams.push({ season: m.season, teamName: m.runnerUpOwner });
-        if (m.thirdPlaceOwner?.trim() && !resolvedThirdOwner)
-          unmatchedThirdTeams.push({ season: m.season, teamName: m.thirdPlaceOwner });
-
-        return {
-          season: m.season,
-          championTeam: m.championOwner || null,
-          runnerUpTeam: m.runnerUpOwner || null,
-          thirdTeam:    m.thirdPlaceOwner || null,
-          resolvedChampionOwner,
-          resolvedRunnerUpOwner,
-          resolvedThirdOwner,
-        };
-      });
-
-      // Leaderboard: credit resolved owner (person) with each championship
-      const ownerMap = new Map<string, { ownerName: string; ownerKey: string; titles: number; seasons: number[] }>();
-      for (const m of resolvedMedals) {
-        if (!m.resolvedChampionOwner) continue;
-        const key = normalizeOwnerStr(m.resolvedChampionOwner);
-        const entry = ownerMap.get(key) ?? { ownerName: m.resolvedChampionOwner, ownerKey: key, titles: 0, seasons: [] };
-        entry.titles++;
-        entry.seasons.push(m.season);
-        ownerMap.set(key, entry);
-      }
-      const leaderboard: LeaderboardEntry[] = [...ownerMap.values()]
-        .map((e) => ({ ...e, seasons: e.seasons.slice().sort((a, b) => b - a) }))
-        .sort((a, b) => b.titles - a.titles || a.ownerName.localeCompare(b.ownerName));
+      const leaderboard: LeaderboardEntry[] = hof.championships.leaderboard.map((e) => ({
+        ownerName: e.displayName,
+        ownerKey: e.ownerKey,
+        titles: e.titles,
+        seasons: e.titleSeasons,
+      }));
 
       return {
         medals: resolvedMedals,
         leaderboard,
         diagnostics: {
-          totalMedals: resolvedMedals.length,
-          unmatchedChampionTeams,
-          unmatchedRunnerUpTeams,
-          unmatchedThirdTeams,
+          totalMedals: diag.totalMedals,
+          unmatchedChampionTeams: diag.unmatchedChampionTeams,
+          unmatchedRunnerUpTeams: diag.unmatchedRunnerUpTeams,
+          unmatchedThirdTeams: diag.unmatchedThirdTeams,
         },
       };
     }),
@@ -7673,23 +7663,29 @@ Respond with JSON in this exact format:
     }); // end memCache
   }),
   // ── Pick Value Calculator ─────────────────────────────────────────────────
-  // 14-team PPR calibrated pick value chart (210 picks, 15 rounds × 14 teams)
-  // Formula: value(overall) = 3000 * e^(-0.028 * (overall - 1))
-  // Calibrated so: 1.01=3000, 1.14≈2085, 2.01≈1409, 3.14≈952, 5.14≈435
-  pickValueChart: publicProcedure.query(() => {
-    const TEAMS = 14;
-    const ROUNDS = 15;
+  // Snake pick value chart from active league team/round count (same exp decay as pickTradeEval).
+  pickValueChart: publicProcedure.query(async ({ ctx }) => {
+    const g = await resolvePickValueGeometryForUser(ctx);
+    const TEAMS = g.teamCount;
+    const ROUNDS = g.roundCount;
     const BASE = 3000;
     const K = 0.028;
     const picks: Array<{ overall: number; round: number; pickInRound: number; label: string; value: number }> = [];
-    for (let overall = 1; overall <= TEAMS * ROUNDS; overall++) {
-      const round = Math.ceil(overall / TEAMS);
-      const positionInRound = overall - (round - 1) * TEAMS;
-      const pickInRound = round % 2 === 1 ? positionInRound : TEAMS + 1 - positionInRound;
-      const value = Math.round(BASE * Math.exp(-K * (overall - 1)));
-      picks.push({ overall, round, pickInRound, label: `${round}.${String(pickInRound).padStart(2, '0')}`, value });
+    if (TEAMS > 0 && ROUNDS > 0) {
+      for (let overall = 1; overall <= TEAMS * ROUNDS; overall++) {
+        const round = Math.ceil(overall / TEAMS);
+        const positionInRound = overall - (round - 1) * TEAMS;
+        const pickInRound = round % 2 === 1 ? positionInRound : TEAMS + 1 - positionInRound;
+        const value = Math.round(BASE * Math.exp(-K * (overall - 1)));
+        picks.push({ overall, round, pickInRound, label: `${round}.${String(pickInRound).padStart(2, "0")}`, value });
+      }
     }
-    return picks;
+    return {
+      picks,
+      teamCount: g.teamCount,
+      roundCount: g.roundCount,
+      draftSlotCount: g.draftSlotCount,
+    };
   }),
 
   pickTradeEval: publicProcedure
@@ -7699,12 +7695,13 @@ Respond with JSON in this exact format:
       counterpartyMemberId: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const TEAMS = 14;
+      const g = await resolvePickValueGeometryForUser(ctx);
+      const TEAMS = g.teamCount;
       const BASE = 3000;
       const K = 0.028;
       function pickValue(round: number, pickInRound: number): number {
-        const overall = (round - 1) * TEAMS + (round % 2 === 1 ? pickInRound : TEAMS + 1 - pickInRound);
-        return Math.round(BASE * Math.exp(-K * (overall - 1)));
+        if (TEAMS <= 0) return 0;
+        return expPickValueFromSnakeRound(round, pickInRound, TEAMS, BASE, K);
       }
       const valueA = input.sideA.reduce((s, p) => s + pickValue(p.round, p.pickInRound), 0);
       const valueB = input.sideB.reduce((s, p) => s + pickValue(p.round, p.pickInRound), 0);
@@ -7820,7 +7817,19 @@ Respond with JSON in this exact format:
         : champEquityDelta < 0 ? `${champEquityDelta}% title odds reduction`
         : 'Neutral championship equity impact';
 
-      return { valueA, valueB, diff, pct, verdict, dnaAnalysis, champEquityDelta, champEquityLabel };
+      return {
+        valueA,
+        valueB,
+        diff,
+        pct,
+        verdict,
+        dnaAnalysis,
+        champEquityDelta,
+        champEquityLabel,
+        teamCount: g.teamCount,
+        roundCount: g.roundCount,
+        draftSlotCount: g.draftSlotCount,
+      };
     }),
 
   // ── Draft Pick Trade Tracker ──────────────────────────────────────────────
@@ -7829,13 +7838,8 @@ Respond with JSON in this exact format:
     .input(z.object({ draftYear: z.number().default(2026) }))
     .query(async ({ input }) => {
       const trades = await getPickTrades(input.draftYear);
-      const BASE = 3000; const K = 0.028; const TEAMS = 14;
-      function pv(round: number, pir: number) {
-        const overall = (round - 1) * TEAMS + (round % 2 === 1 ? pir : TEAMS + 1 - pir);
-        return Math.round(BASE * Math.exp(-K * (overall - 1)));
-      }
-      const acquired = trades.filter((t) => t.type === 'acquired');
-      const tradedAway = trades.filter((t) => t.type === 'traded_away');
+      const acquired = trades.filter((t) => t.type === "acquired");
+      const tradedAway = trades.filter((t) => t.type === "traded_away");
       const acquiredValue = acquired.reduce((s, t) => s + t.pickValue, 0);
       const tradedValue = tradedAway.reduce((s, t) => s + t.pickValue, 0);
       return { trades, acquiredValue, tradedValue, netValue: acquiredValue - tradedValue };
@@ -7844,17 +7848,34 @@ Respond with JSON in this exact format:
   addPickTrade: protectedProcedure
     .input(z.object({
       draftYear: z.number().default(2026),
-      type: z.enum(['acquired', 'traded_away']),
-      round: z.number().min(1).max(15),
-      pickInRound: z.number().min(1).max(14),
+      type: z.enum(["acquired", "traded_away"]),
+      round: z.number().min(1).max(32),
+      pickInRound: z.number().min(1).max(32),
       counterparty: z.string().min(1).max(128),
       notes: z.string().max(500).optional(),
     }))
-    .mutation(async ({ input }) => {
-      const TEAMS = 14; const BASE = 3000; const K = 0.028;
+    .mutation(async ({ ctx, input }) => {
+      const { leagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, input.draftYear);
+      if (!leagueId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Active league not configured" });
+      }
+      const seasonPayload = await getSeasonData(input.draftYear, undefined, ctx.user.id);
+      const geo = await resolveKeeperDraftGeometryForSeason(leagueId, input.draftYear, ctx.user.id, seasonPayload);
+      if (geo.teamCount <= 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "League team count unavailable — sync league data first" });
+      }
+      if (input.pickInRound > geo.teamCount) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `pickInRound must be 1..${geo.teamCount} for this league`,
+        });
+      }
+      const TEAMS = geo.teamCount;
+      const BASE = 3000;
+      const K = 0.028;
       const overall = (input.round - 1) * TEAMS + (input.round % 2 === 1 ? input.pickInRound : TEAMS + 1 - input.pickInRound);
       const pickValue = Math.round(BASE * Math.exp(-K * (overall - 1)));
-      const label = `${input.round}.${String(input.pickInRound).padStart(2, '0')}`;
+      const label = `${input.round}.${String(input.pickInRound).padStart(2, "0")}`;
       await addPickTrade({ ...input, label, pickValue, notes: input.notes ?? null });
       return { success: true };
     }),
@@ -7866,27 +7887,27 @@ Respond with JSON in this exact format:
       return { success: true };
     }),
 
-  // Returns the 2026 draft order from ESPN
+  // Returns the draft-year draft order from ESPN cache (snake geometry from league settings + payload).
   draftPickPortfolio: publicProcedure.query(async ({ ctx }) => {
-    const TEAMS = 14;
-    const BASE = 3000;
-    const K = 0.028;
-    function pickValue(round: number, pickInRound: number): number {
-      const overall = (round - 1) * TEAMS + (round % 2 === 1 ? pickInRound : TEAMS + 1 - pickInRound);
-      return Math.round(BASE * Math.exp(-K * (overall - 1)));
+    const DRAFT_YEAR = 2026;
+    const { leagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, DRAFT_YEAR);
+    let TEAMS = 0;
+    let ROUNDS = 0;
+    if (leagueId) {
+      const cached = await getCachedView(DRAFT_YEAR, "combined", undefined, { userId: ctx.user?.id });
+      const raw = cached?.payload ? (cached.payload as Record<string, unknown>) : null;
+      const geo = await resolveKeeperDraftGeometryForSeason(leagueId, DRAFT_YEAR, ctx.user?.id, raw);
+      TEAMS = geo.teamCount;
+      ROUNDS = geo.roundCount;
     }
-
-    // Load 2026 draft order from ESPN cache
     let draftOrder: Array<{ teamId: number; teamName: string; round: number; pickInRound: number; overall: number }> = [];
     try {
-      const cached = await getCachedView(2026, "combined", undefined, { userId: ctx.user?.id });
-      if (cached?.payload) {
+      const cached = await getCachedView(DRAFT_YEAR, "combined", undefined, { userId: ctx.user?.id });
+      if (cached?.payload && TEAMS > 0 && ROUNDS > 0) {
         const raw = cached.payload as Record<string, unknown>;
         const normalized = normalizeDraftOrder(raw);
-        // normalizeDraftOrder returns { pickOrder: [{position, teamId, name, abbrev, owners}], draftDate, ... }
-        // pickOrder is the snake order for round 1 only; we expand to all 15 rounds
         const pickOrder = normalized.pickOrder as Array<{ position: number; teamId: number; name?: string; abbrev?: string; owners?: string }>;
-        for (let round = 1; round <= 15; round++) {
+        for (let round = 1; round <= ROUNDS; round++) {
           const roundOrder = round % 2 === 1 ? pickOrder : [...pickOrder].reverse();
           roundOrder.forEach((slot, idx) => {
             const pickInRound = idx + 1;
@@ -7901,11 +7922,11 @@ Respond with JSON in this exact format:
           });
         }
       }
-    } catch { /* no 2026 cache yet */ }
+    } catch { /* no draft-year cache yet */ }
 
-    // If no 2026 data, generate a placeholder 14-team snake order
-    if (draftOrder.length === 0) {
-      for (let round = 1; round <= 15; round++) {
+    // If no cache data, generate a placeholder snake using resolved geometry (still no fixed 14).
+    if (draftOrder.length === 0 && TEAMS > 0 && ROUNDS > 0) {
+      for (let round = 1; round <= ROUNDS; round++) {
         for (let pos = 1; pos <= TEAMS; pos++) {
           const pickInRound = round % 2 === 1 ? pos : TEAMS + 1 - pos;
           const overall = (round - 1) * TEAMS + pos;
@@ -7920,7 +7941,13 @@ Respond with JSON in this exact format:
       }
     }
 
-    return { draftOrder, totalPicks: draftOrder.length };
+    return {
+      draftOrder,
+      totalPicks: draftOrder.length,
+      teamCount: TEAMS,
+      roundCount: ROUNDS,
+      draftSlotCount: TEAMS > 0 && ROUNDS > 0 ? TEAMS * ROUNDS : 0,
+    };
   }),
 
     opponentProfile: protectedProcedure
@@ -8014,7 +8041,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
     }),
 
   keeperROI: publicProcedure.query(async ({ ctx }) => {
-    // Aggregate all keeper picks across 2022-2025 with ROI analysis
+    // Aggregate all keeper picks across cached seasons with ROI analysis
     // ROI = round saved vs. what you'd have to spend in a normal draft
     // A keeper kept in round N costs round N-1 in the next draft
     // "Round surplus" = (market round - keeper cost round)
@@ -8023,26 +8050,15 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
     // Better approximation: use pick value chart to compute value ratio
 
     const cachedSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a, b) => a - b);
+    const anchorSeason = cachedSeasons.length ? cachedSeasons[cachedSeasons.length - 1]! : new Date().getFullYear();
+    const { leagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, anchorSeason);
+    const anchorPayload = leagueId ? await getSeasonData(anchorSeason, undefined, ctx.user?.id) : null;
+    const anchorGeo = leagueId
+      ? await resolveKeeperDraftGeometryForSeason(leagueId, anchorSeason, ctx.user?.id, anchorPayload)
+      : { teamCount: 0, roundCount: 0, draftSlotCount: 0 };
 
-    // Pick value chart (14-team PPR, same as pickValueChart endpoint)
-    const TOTAL_TEAMS = 14;
-    const TOTAL_ROUNDS = 15;
     const BASE_VALUE = 3000;
     const DECAY = 0.93;
-    const pickValues: Record<string, number> = {};
-    for (let round = 1; round <= TOTAL_ROUNDS; round++) {
-      for (let pick = 1; pick <= TOTAL_TEAMS; pick++) {
-        const overall = (round - 1) * TOTAL_TEAMS + pick;
-        const value = Math.round(BASE_VALUE * Math.pow(DECAY, overall - 1));
-        pickValues[`${round}.${pick}`] = value;
-        pickValues[`${round}`] = pickValues[`${round}`] ?? value; // first pick of round as round value
-      }
-    }
-    // Round-level values (use mid-round pick, pick 7 of 14)
-    const roundValue = (round: number) => {
-      const overall = (round - 1) * TOTAL_TEAMS + 7;
-      return Math.round(BASE_VALUE * Math.pow(DECAY, overall - 1));
-    };
 
     // Collect all keeper picks
     type KeeperROIEntry = {
@@ -8069,6 +8085,12 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
     for (const season of cachedSeasons) {
       const data = await getSeasonData(season, undefined, ctx.user?.id);
       if (!data) continue;
+      const { leagueId: seasonLeagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, season);
+      if (!seasonLeagueId) continue;
+      const geo = await resolveKeeperDraftGeometryForSeason(seasonLeagueId, season, ctx.user?.id, data);
+      const midPick = defaultMidPickInRound(geo.teamCount);
+      const roundValue = (r: number) => keeperDecayRoundValue(r, geo.teamCount, midPick, BASE_VALUE, DECAY);
+
       const picks = normalizeDraftPicks(data);
 
       for (const pick of picks) {
@@ -8184,6 +8206,9 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       bestValueKeepers,
       worstValueKeepers,
       seasons: cachedSeasons,
+      teamCount: anchorGeo.teamCount,
+      roundCount: anchorGeo.roundCount,
+      draftSlotCount: anchorGeo.draftSlotCount,
     };
   }),
 
@@ -8197,6 +8222,13 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       // ── 1. Load latest season data (2025) ──────────────────────────────────
       const seasonData = await getSeasonData(2025, undefined, ctx.user.id) as any;
       if (!seasonData) throw new TRPCError({ code: "NOT_FOUND", message: "Season data not available" });
+
+      const { leagueId: tradeGenLeagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, 2025);
+      const pickGeo =
+        tradeGenLeagueId != null
+          ? await resolveKeeperDraftGeometryForSeason(tradeGenLeagueId, 2025, ctx.user.id, seasonData as Record<string, unknown>)
+          : { teamCount: 0, roundCount: 0, draftSlotCount: 0 };
+      const pickValTeams = pickGeo.teamCount;
 
       const teams: any[] = seasonData.teams || [];
       const members: any[] = seasonData.members || [];
@@ -8288,14 +8320,10 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       let targetPickValue = 0;
       let targetPickOwnerName = "Unknown";
 
-      // Canonical pick value formula: 14-team PPR snake draft, exponential decay
-      // Matches the pickValueChart / pickTradeEval endpoints exactly
+      // Canonical pick value: same exp decay as pickValueChart, league-sized snake.
       function pickValueCanonical(round: number, pickInRound: number): number {
-        const TEAMS = 14;
-        const BASE = 3000;
-        const K = 0.028;
-        const overall = (round - 1) * TEAMS + (round % 2 === 1 ? pickInRound : TEAMS + 1 - pickInRound);
-        return Math.round(BASE * Math.exp(-K * (overall - 1)));
+        if (pickValTeams <= 0) return 0;
+        return expPickValueFromSnakeRound(round, pickInRound, pickValTeams);
       }
 
       if (input.targetType === "pick") {
@@ -8311,7 +8339,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
           // Step 1: Get the 2026 draft order from ESPN (uses 2025 season data which has 2026 draft settings)
           const draftOrderData = normalizeDraftOrder(seasonData as Record<string, unknown>);
           const pickOrder = draftOrderData.pickOrder || [];
-          // Snake draft: odd rounds go 1→14, even rounds go 14→1
+          // Snake draft: odd rounds ascend by slot, even rounds reverse (league-sized).
           // The team at position `pick` in round `round` is the original owner
           let originalOwnerTeamId: number | null = null;
           let originalOwnerName = "Unknown";
@@ -9109,6 +9137,15 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       const data = await getSeasonData(input.season, undefined, ctx.user?.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season. Sync ESPN first." });
 
+      const { leagueId: taLeagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, input.season);
+      const taGeo =
+        taLeagueId != null
+          ? await resolveKeeperDraftGeometryForSeason(taLeagueId, input.season, ctx.user?.id, data as Record<string, unknown>)
+          : null;
+      const teamsNormTa = normalizeTeams(data) as Record<string, unknown>[];
+      const pickTeamCountAnalyze =
+        taGeo && taGeo.teamCount > 0 ? taGeo.teamCount : teamsNormTa.length;
+
       // Build full roster player list for context
       const rosters = normalizeRosters(data) as Record<string, unknown>[];
       const allPlayers: import("./analytics").PlayerRow[] = rosters.map(r => ({
@@ -9161,8 +9198,14 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       const sideBValues = input.sideB.map(scorePlayer);
 
       // Score picks
-      const pickValueA = (input.picksA || []).reduce((sum, p) => sum + calcPickValue(p.round, p.pick), 0);
-      const pickValueB = (input.picksB || []).reduce((sum, p) => sum + calcPickValue(p.round, p.pick), 0);
+      const pickValueA = (input.picksA || []).reduce(
+        (sum, p) => sum + (pickTeamCountAnalyze > 0 ? calcPickValue(p.round, p.pick, pickTeamCountAnalyze) : 0),
+        0,
+      );
+      const pickValueB = (input.picksB || []).reduce(
+        (sum, p) => sum + (pickTeamCountAnalyze > 0 ? calcPickValue(p.round, p.pick, pickTeamCountAnalyze) : 0),
+        0,
+      );
 
       const totalA = sideAValues.reduce((s, v) => s + v.compositeValue, 0) + pickValueA;
       const totalB = sideBValues.reduce((s, v) => s + v.compositeValue, 0) + pickValueB;
@@ -9823,8 +9866,12 @@ Provide:
       .input(z.object({ season: z.number(), teamId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const { calcKeeperFutureValue } = await import("./analytics_additions");
+        const { leagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, input.season);
+        if (!leagueId) return [];
         const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
+        const geo = await resolveKeeperDraftGeometryForSeason(leagueId, input.season, ctx.user?.id, data);
+        if (geo.teamCount <= 0 || geo.roundCount <= 0) return [];
         const rosters = normalizeRosters(data) as Record<string, unknown>[];
         const teams = normalizeTeams(data);
         const teamOwnerMap: Record<number, string> = {};
@@ -9852,7 +9899,7 @@ Provide:
             appliedStats: {},
           }))
           .filter(p => p.keeperValue > 0);
-        return calcKeeperFutureValue(players);
+        return calcKeeperFutureValue(players, undefined, geo);
       }),
 
     // ── STRENGTH OF SCHEDULE ────────────────────────────────────────────────────
@@ -11546,12 +11593,23 @@ Provide:
         tieredBoard[pos] = tiers;
       }
       const scarcePositions = scarcityResults.filter(s => s.scarcityScore >= 60).map(s => ({ position: s.position, scarcityScore: s.scarcityScore, scarcityLabel: s.scarcityLabel, topFreeAgentAvg: s.topFreeAgentAvg, alert: s.scarcityScore >= 80 ? `Only ${s.availableStarters} ${s.position} starter slots remain unclaimed` : `${s.position} depth is thinning — ${s.availableStarters} quality starters available` }));
-      const TEAMS = 14;
+      const { calcPickValue } = await import("./analytics");
+      const { leagueId: optLeagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, input.season);
+      const optGeo =
+        optLeagueId != null
+          ? await resolveKeeperDraftGeometryForSeason(optLeagueId, input.season, ctx.user?.id, data as Record<string, unknown>)
+          : null;
+      const TEAMS = optGeo && optGeo.teamCount > 0 ? optGeo.teamCount : teams.length;
+      if (TEAMS > 0 && input.draftSlot > TEAMS) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `draftSlot must be 1..${TEAMS} for this league` });
+      }
+      const totalRounds =
+        optGeo && optGeo.roundCount > 0 ? optGeo.roundCount : TEAMS > 0 ? Math.max(1, Math.ceil(draftPicks.length / TEAMS)) : 1;
       const rodRecommendations: { round: number; pickInRound: number; overallPick: number; pickValue: number; recommendation: string; topAvailable: { playerName: string; position: string; compositeScore: number; }[]; }[] = [];
-      for (let round = 1; round <= 14; round++) {
+      for (let round = 1; round <= totalRounds; round++) {
         const pickInRound = round % 2 === 1 ? input.draftSlot : (TEAMS + 1 - input.draftSlot);
-        const overallPick = (round - 1) * TEAMS + pickInRound;
-        const pickValue = calcPickValue(round, pickInRound);
+        const overallPick = snakeOverallPick(TEAMS, round, pickInRound);
+        const pickValue = TEAMS > 0 ? calcPickValue(round, pickInRound, TEAMS) : 0;
         const targetPos = round <= 3 ? ["RB", "WR"] : round <= 5 ? ["WR", "RB", "TE"] : round <= 8 ? ["QB", "WR", "RB"] : ["RB", "WR", "TE", "QB"];
         const stillAvailable = enriched.filter(p => targetPos.includes(p.position)).slice(overallPick - 1, overallPick + 4);
         const rec = round === 1 ? "Priority: elite RB or WR — do not reach for QB or TE" : round === 2 ? "Fill the opposite of Round 1 — RB/WR balance is critical" : round <= 4 ? "Target TE if elite option fell, otherwise best RB/WR on board" : round <= 7 ? "QB window opens here — mid-tier QBs score similarly in PPR" : round <= 10 ? "Handcuffs, upside sleepers, depth RBs" : "K and DEF in rounds 13-14 only — never earlier";
@@ -11559,7 +11617,13 @@ Provide:
       }
       const positionCounts: Record<string, number> = {};
       for (const p of availablePlayers) positionCounts[p.position] = (positionCounts[p.position] || 0) + 1;
-      return { season: input.season, draftSlot: input.draftSlot, computedAt: new Date().toISOString(), totalAvailable: availablePlayers.length, removedKeepers, keeperCount: removedKeepers.length, tieredBoard, scarcePositions, rodRecommendations, scarcityResults, positionCounts };
+      return {
+        season: input.season,
+        draftSlot: input.draftSlot,
+        teamCount: TEAMS,
+        roundCount: totalRounds,
+        draftSlotCount: TEAMS > 0 ? TEAMS * totalRounds : 0,
+        computedAt: new Date().toISOString(), totalAvailable: availablePlayers.length, removedKeepers, keeperCount: removedKeepers.length, tieredBoard, scarcePositions, rodRecommendations, scarcityResults, positionCounts };
     }),
   // ── WEEKLY STATS ─────────────────────────────────────────────────────────────
   weeklyStats: router({

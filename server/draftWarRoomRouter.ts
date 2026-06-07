@@ -12,12 +12,14 @@
 
 import { z }                       from "zod";
 import { router, publicProcedure } from "./_core/trpc";
-import { getDb, resolveActiveLeagueId } from "./db";
+import { getDb, resolveActiveLeagueId, getCachedView } from "./db";
 import { sql as drizzleSql }       from "drizzle-orm";
 import {
   calcKeeperCompression, calcScarcityAlerts, calcPositionRunAlerts,
   calcDraftBoardPressure, buildDraftEnvironmentDashboard,
 } from "./draftWarRoomPhase175";
+import { resolveKeeperDraftGeometryForSeason } from "./keeperDraftGeometry";
+import { enrichDraftPickDbRow, summarizeDraftBoardCounts } from "./draftWarRoomPickClassification";
 
 // Phase B1: LEAGUE_ID constant removed — leagueId is resolved per-request via resolveActiveLeagueId.
 
@@ -144,10 +146,10 @@ export interface TradedPickInfo {
 
 function detectTradedPicks(
   picks: Array<{ roundId: number; roundPick: number; overallPick: number; teamId: number }>,
-  teams: any[]
+  teams: any[],
 ): TradedPickInfo[] {
   const teamIds = teams.map(t => Number(t.teamId));
-  const totalRounds = Math.max(...picks.map(p => p.roundId), 14);
+  const totalRounds = picks.length > 0 ? Math.max(...picks.map(p => p.roundId), 1) : 1;
   const result: TradedPickInfo[] = [];
 
   // Team map for lookup
@@ -413,19 +415,15 @@ async function loadRoster(db: any, season: number, leagueId: string) {
     WHERE leagueId = ${leagueId} AND season = ${season} ORDER BY teamId
   `) as unknown as [any[]];
 
-  const [keeperRows] = await db.execute(drizzleSql`
-    SELECT teamId, roundId, roundPick, overallPick, playerName, position, isKeeper
-    FROM draft_picks
-    WHERE leagueId = ${leagueId} AND season = ${season} AND isKeeper = 1
-    ORDER BY teamId, roundId
-  `) as unknown as [any[]];
-
-  const [allPickRows] = await db.execute(drizzleSql`
-    SELECT teamId, roundId, roundPick, overallPick, playerName, position, isKeeper
+  const [seasonPickRows] = await db.execute(drizzleSql`
+    SELECT teamId, roundId, roundPick, overallPick, playerName, position, isKeeper, rawPick
     FROM draft_picks
     WHERE leagueId = ${leagueId} AND season = ${season}
     ORDER BY overallPick
-  `) as unknown as [any[]];
+  `) as unknown as [Record<string, unknown>[]];
+
+  const allPickRows = (seasonPickRows as Record<string, unknown>[]).map((r) => enrichDraftPickDbRow(r));
+  const keeperRows = allPickRows.filter((r) => r.keeperSlot);
 
   // Prior year roster for keeper repeat detection
   const [prevRosterRows] = await db.execute(drizzleSql`
@@ -441,30 +439,32 @@ async function loadRoster(db: any, season: number, leagueId: string) {
     prevByTeam.get(tid)!.add(String(p.playerName).toLowerCase().trim());
   }
 
-  // Draft round history: newest season first; first row per player wins (actual draft round, not keeper slot)
+  // Draft round history: open-draft (analytics) rows only — not keeper/retained board slots
   const [histPicks] = await db.execute(drizzleSql`
-    SELECT playerName, roundId, season
+    SELECT playerName, roundId, season, rawPick, isKeeper
     FROM draft_picks
     WHERE leagueId = ${leagueId}
       AND playerName IS NOT NULL AND playerName != ''
-      AND isKeeper = 0
     ORDER BY season DESC
-  `) as unknown as [any[]];
+  `) as unknown as [Record<string, unknown>[]];
   const playerDraftRoundMap = new Map<string, number>();
-  for (const p of histPicks as any[]) {
+  for (const p of histPicks as Record<string, unknown>[]) {
+    const t = enrichDraftPickDbRow(p);
+    if (!t.draftedForAnalytics) continue;
     const key = String(p.playerName).toLowerCase().trim();
     if (!key || playerDraftRoundMap.has(key)) continue;
     playerDraftRoundMap.set(key, Number(p.roundId));
   }
 
-  // Consecutive keeper check: players kept in BOTH (season-1) AND (season-2) are ineligible
-  // League rule: max 2 consecutive keeper years
+  // Consecutive keeper check: keeper-slot rows (keeper + retained) in recent seasons
   const [keeperHistRows] = await db.execute(drizzleSql`
-    SELECT playerName, season FROM draft_picks
-    WHERE leagueId = ${leagueId} AND isKeeper = 1 AND season >= ${season - 2}
-  `) as unknown as [any[]];
+    SELECT playerName, season, rawPick, isKeeper FROM draft_picks
+    WHERE leagueId = ${leagueId} AND season >= ${season - 2}
+  `) as unknown as [Record<string, unknown>[]];
   const keptByYear = new Map<number, Set<string>>();
-  for (const row of keeperHistRows as any[]) {
+  for (const row of keeperHistRows as Record<string, unknown>[]) {
+    const t = enrichDraftPickDbRow(row);
+    if (!t.keeperSlot) continue;
     const yr = Number((row as any).season);
     if (!keptByYear.has(yr)) keptByYear.set(yr, new Set());
     keptByYear.get(yr)!.add(String((row as any).playerName).toLowerCase().trim());
@@ -505,7 +505,7 @@ function predictKeepers(
   prevByTeam: Map<number, Set<string>>,
   consecutiveKeptPlayers: Set<string> = new Set(),
   adpByName: Map<string, number> = new Map(),
-  teamCount: number = 14,
+  teamCount: number,
 ) {
   const predictions: any[] = [];
   const slotsByTeam = new Map<number, any[]>();
@@ -535,7 +535,7 @@ function predictKeepers(
     const inferAdpRound = (name: string): number | null => {
       const adp = adpByName.get(name.toLowerCase().trim());
       if (!adp || adp <= 0) return null;
-      return Math.min(14, Math.max(1, Math.ceil(adp / teamCount)));
+      return Math.min(teamCount, Math.max(1, Math.ceil(adp / teamCount)));
     };
 
     const scoreCandidates = (excludeNames: Set<string>) =>
@@ -955,7 +955,11 @@ export const draftWarRoomRouter = router({
       const { byTeam, teams, keepers, allPicks, prevByTeam, playerDraftRoundMap, consecutiveKeptPlayers } = await loadRoster(db, season, leagueId);
       if (teams.length === 0) return { ok: false, error: `No roster data for ${season}` };
 
-      // Player pool
+      const cached = await getCachedView(season, "combined", leagueId, { userId: ctx.user.id });
+      const payload = cached?.payload ? (cached.payload as Record<string, unknown>) : null;
+      const geo = await resolveKeeperDraftGeometryForSeason(leagueId, season, ctx.user.id, payload);
+      const totalRounds = Math.max(1, geo.roundCount || 1);
+      const draftBoardSummary = summarizeDraftBoardCounts(allPicks);
       const [regRows] = await db.execute(drizzleSql`
         SELECT fullName, position, espnPlayerId, adp, percentOwned, auctionValue
         FROM gm_player_registry WHERE position IN ('QB','RB','WR','TE','K','DEF','DL','LB','DB')
@@ -1030,16 +1034,19 @@ export const draftWarRoomRouter = router({
         );
         effectiveKeepers = [
           ...keepers.filter(k => !overrideKeys.has(`${Number(k.teamId)}_${Number(k.roundId)}`)),
-          ...input.keeperOverrides.map(o => ({
-            teamId:       o.teamId,
-            roundId:      o.keeperRound,
-            roundPick:    o.keeperRoundPick ?? 1,
-            overallPick:  0,
-            playerName:   o.playerName,
-            position:     o.position,
-            isKeeper:     1,
-            isManualOverride: true,
-          })),
+          ...input.keeperOverrides.map(o =>
+            enrichDraftPickDbRow({
+              teamId: o.teamId,
+              roundId: o.keeperRound,
+              roundPick: o.keeperRoundPick ?? 1,
+              overallPick: 0,
+              playerName: o.playerName,
+              position: o.position,
+              isKeeper: 1,
+              rawPick: JSON.stringify({ keeper: true, reservedForKeeper: false }),
+              isManualOverride: true,
+            }),
+          ),
         ];
       }
 
@@ -1047,11 +1054,12 @@ export const draftWarRoomRouter = router({
       const keeperPredictions = predictKeepers(teams, byTeam, effectiveKeepers, playerDraftRoundMap, prevByTeam, consecutiveKeptPlayers, adpByName, teams.length);
       const rosterNeeds       = buildRosterNeeds(teams, byTeam, keeperPredictions);
 
-      // Phase 1.5: Traded picks + Shock Meters
-      const tradedPicks = detectTradedPicks(allPicks, teams);
+      // Traded picks: count only open-draft selections (keeper/retained slots are not tradable snake picks)
+      const openDraftPicksForTrades = allPicks.filter((p: { draftedForAnalytics?: boolean }) => p.draftedForAnalytics);
+      const tradedPicks = detectTradedPicks(openDraftPicksForTrades, teams);
 
-      // Build draft slot map (position in round 1 snake)
-      const round1 = allPicks.filter(p => p.roundId === 1).sort((a, b) => a.roundPick - b.roundPick);
+      // Build draft slot map (position in round 1 snake) from open-draft round-1 order only
+      const round1 = openDraftPicksForTrades.filter((p: { roundId: number }) => p.roundId === 1).sort((a: { roundPick: number }, b: { roundPick: number }) => a.roundPick - b.roundPick);
       const draftSlotMap = new Map<number, number>();
       round1.forEach((p, i) => draftSlotMap.set(Number(p.teamId), i + 1));
 
@@ -1076,9 +1084,9 @@ export const draftWarRoomRouter = router({
 
       // Phase 1.75 — Pressure Engine
       const keeperCompression = calcKeeperCompression(keeperPredictions, playerPool);
-      const scarcityAlerts    = calcScarcityAlerts({ rosterNeeds, playerPool, keeperPredictions, totalTeams: teams.length, totalRounds: 14 });
+      const scarcityAlerts    = calcScarcityAlerts({ rosterNeeds, playerPool, keeperPredictions, totalTeams: teams.length, totalRounds });
       const positionRunAlerts = calcPositionRunAlerts({ rosterNeeds, scarcityAlerts, keeperPredictions, mockDraft, totalTeams: teams.length });
-      const pressureByRound   = calcDraftBoardPressure({ rosterNeeds, scarcityAlerts, keeperPredictions, totalTeams: teams.length, totalRounds: 14 });
+      const pressureByRound   = calcDraftBoardPressure({ rosterNeeds, scarcityAlerts, keeperPredictions, totalTeams: teams.length, totalRounds });
       const draftEnvironment  = buildDraftEnvironmentDashboard({ scarcityAlerts, runAlerts: positionRunAlerts, compression: keeperCompression, pressureByRound, playerPool });
 
       // Return available players (real ADP + stable id) for the live draft + board.
@@ -1102,6 +1110,7 @@ export const draftWarRoomRouter = router({
       return {
         ok: true, season,
         teamCount: teams.length,
+        draftBoardSummary,
         keeperPredictions,
         availablePool,
         rosterNeeds,

@@ -17,6 +17,7 @@
  */
 
 import { classifyEspnDraftSlot, isDraftKeeperSlotPick } from "./draftTruth";
+import { expPickValueFromSnakeRound } from "./keeperDraftGeometry";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -786,15 +787,16 @@ export function calcTradeValue(
   };
 }
 
-// ─── Pick Value (canonical 14-team snake formula) ─────────────────────────────
+// ─── Pick Value (league-sized snake; same curve as pickTradeEval / keeperDraftGeometry) ──
 
-const PICK_BASE = 3000;
-const PICK_K = 0.028;
-const PICK_TEAMS = 14;
-
-export function calcPickValue(round: number, pickInRound: number): number {
-  const overallPick = (round - 1) * PICK_TEAMS + pickInRound;
-  return Math.round(PICK_BASE * Math.exp(-PICK_K * (overallPick - 1)));
+/**
+ * Exponential pick value for a snake slot.
+ * @param teamCount league team count (>0). No implicit 14-team default — callers must pass geometry.
+ */
+export function calcPickValue(round: number, pickInRound: number, teamCount: number): number {
+  if (!Number.isFinite(teamCount) || teamCount <= 0) return 0;
+  if (round < 1 || pickInRound < 1 || pickInRound > teamCount) return 0;
+  return expPickValueFromSnakeRound(round, pickInRound, teamCount);
 }
 
 // ─── Full League Analytics Snapshot ──────────────────────────────────────────

@@ -23,9 +23,10 @@ const makePlayer = (overrides: Partial<TestPlayerRow>): TestPlayerRow => ({
 
 describe("draft optimizer analytics", () => {
   it("calculates pick value with earlier picks worth more", () => {
-    const firstOverall = calcPickValue(1, 1);
-    const latePick = calcPickValue(14, 14);
-    const roundTwoPick = calcPickValue(2, 1);
+    const tc = 14;
+    const firstOverall = calcPickValue(1, 1, tc);
+    const latePick = calcPickValue(14, 14, tc);
+    const roundTwoPick = calcPickValue(2, 1, tc);
 
     expect(firstOverall).toBeGreaterThanOrEqual(2700);
     expect(firstOverall).toBeLessThanOrEqual(3000);
