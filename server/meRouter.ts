@@ -29,20 +29,42 @@ export const meRouter = router({
     .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       void input?.activeLeagueKey;
-      if (!ctx.user?.id) return { leagueId: "", seasons: 0, matchups: 0, draftPicks: 0 };
+      const empty = {
+        leagueId: "",
+        seasons: 0,
+        matchups: 0,
+        /** Every persisted draft row (board slots: open picks + keeper/retained slots). */
+        draftBoardSlots: 0,
+        /** Rows where `draftedForAnalytics` is true in normalized `rawPick`, else legacy `isKeeper = 0`. */
+        openDraftPicks: 0,
+      };
+      if (!ctx.user?.id) return empty;
       const { leagueId } = await resolveActiveLeagueId(
         { user: { id: ctx.user.id } },
         null,
         undefined,
       );
-      if (!leagueId) return { leagueId: "", seasons: 0, matchups: 0, draftPicks: 0 };
+      if (!leagueId) return empty;
       const lid = String(leagueId).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
       const db = await getDb();
-      if (!db) return { leagueId: lid, seasons: 0, matchups: 0, draftPicks: 0 };
+      if (!db) return { ...empty, leagueId: lid };
       const matchups = countOf(await db.execute("SELECT COUNT(*) AS c FROM matchups WHERE leagueId = '" + lid + "'"));
-      const draftPicks = countOf(await db.execute("SELECT COUNT(*) AS c FROM draft_picks WHERE leagueId = '" + lid + "'"));
       const seasons = countOf(await db.execute("SELECT COUNT(DISTINCT season) AS c FROM matchups WHERE leagueId = '" + lid + "'"));
-      return { leagueId: lid, seasons, matchups, draftPicks };
+      const slotRow = rowsOf(
+        await db.execute(
+          "SELECT COUNT(*) AS boardSlots, " +
+            "COALESCE(SUM(CASE " +
+            "WHEN JSON_UNQUOTE(JSON_EXTRACT(rawPick, '$.draftedForAnalytics')) = 'true' THEN 1 " +
+            "WHEN JSON_EXTRACT(rawPick, '$.draftedForAnalytics') IS NULL AND isKeeper = 0 THEN 1 " +
+            "ELSE 0 END), 0) AS openDraft " +
+            "FROM draft_picks WHERE leagueId = '" +
+            lid +
+            "'",
+        ),
+      )[0] as { boardSlots?: unknown; openDraft?: unknown } | undefined;
+      const draftBoardSlots = Number(slotRow?.boardSlots ?? 0);
+      const openDraftPicks = Number(slotRow?.openDraft ?? 0);
+      return { leagueId: lid, seasons, matchups, draftBoardSlots, openDraftPicks };
     }),
 
   /**

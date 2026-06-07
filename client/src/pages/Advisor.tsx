@@ -273,7 +273,10 @@ export function Advisor() {
   const seasonsCount: number = summaryQ.data?.seasons ?? cachedSeasons.length;
   const ownersCount = allOwners.length;
   const matchupsCount: number | null = summaryQ.data?.matchups ?? null;
-  const picksCount: number | null = summaryQ.data?.draftPicks ?? null;
+  /** Full draft ledger rows (board slots); see `me.leagueSummary`. */
+  const draftBoardSlots: number | null = summaryQ.data?.draftBoardSlots ?? null;
+  /** Open-draft analytics picks (`draftedForAnalytics` in stored `rawPick`). */
+  const openDraftPicks: number | null = summaryQ.data?.openDraftPicks ?? null;
 
   const totalTitles = allOwners.reduce((s, o) => s + (o.championships ?? 0), 0);
   const championCount = allOwners.filter((o) => (o.championships ?? 0) > 0).length;
@@ -404,12 +407,23 @@ export function Advisor() {
     );
   }
 
+  const heroDraftSegment =
+    draftBoardSlots != null && openDraftPicks != null
+      ? ", and " +
+        draftBoardSlots.toLocaleString() +
+        " draft board slots · " +
+        openDraftPicks.toLocaleString() +
+        " open-draft picks"
+      : draftBoardSlots != null
+        ? ", and " + draftBoardSlots.toLocaleString() + " draft board slots"
+        : ", and your draft history";
+
   const heroLine =
     "I've analyzed " +
     (seasonsCount ? seasonsCount + " seasons" : "your league") +
     (matchupsCount != null ? ", " + matchupsCount.toLocaleString() + " matchups" : "") +
     (ownersCount ? ", " + ownersCount + " owners" : "") +
-    (picksCount != null ? ", and " + picksCount.toLocaleString() + " draft picks" : ", and your draft history") +
+    heroDraftSegment +
     ". Here are today's insights.";
 
   return (
