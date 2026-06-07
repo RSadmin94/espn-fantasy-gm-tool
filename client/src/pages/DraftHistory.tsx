@@ -194,11 +194,31 @@ export function DraftHistory() {
   const useManusPath = !draftQ.isLoading && picks.length > 0;
   const useLegacyPath = !isLoading && !useManusPath && isLegacySeason && legacyPicks.length > 0;
   const effectivePicks = useManusPath ? picks : useLegacyPath ? legacyPicks : [];
-  const sourceLabel = useManusPath
-    ? "ESPN mDraftDetail"
+  /** Combined ESPN API board (not scraped recap) — honest label for dynasty keeper slots. */
+  const isApiCombinedLedger = useManusPath;
+  const sourceLabel = isApiCombinedLedger
+    ? "ESPN API Dynasty Ledger"
     : useLegacyPath
       ? "Legacy Draft Recap Capture"
       : null;
+
+  type LedgerFilter = "all" | "drafted" | "keepers";
+  const [ledgerFilter, setLedgerFilter] = useState<LedgerFilter>("all");
+
+  useEffect(() => {
+    setLedgerFilter("all");
+  }, [season, leagueContextKey]);
+
+  const keeperCount = useMemo(
+    () => effectivePicks.filter((p) => p.isKeeper === true).length,
+    [effectivePicks],
+  );
+  const draftedCount = effectivePicks.length - keeperCount;
+  const filteredPicks = useMemo(() => {
+    if (ledgerFilter === "keepers") return effectivePicks.filter((p) => p.isKeeper === true);
+    if (ledgerFilter === "drafted") return effectivePicks.filter((p) => p.isKeeper !== true);
+    return effectivePicks;
+  }, [effectivePicks, ledgerFilter]);
 
   // ── Legacy import state ───────────────────────────────────────────────────
   const [pasteText, setPasteText] = useState("");
@@ -330,22 +350,58 @@ export function DraftHistory() {
           </div>
           {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           {!isLoading && (
-            <span className="text-xs text-muted-foreground">{effectivePicks.length} picks</span>
+            <span className="text-xs text-muted-foreground">
+              {ledgerFilter === "all"
+                ? `${effectivePicks.length} picks`
+                : `${filteredPicks.length} shown · ${effectivePicks.length} total`}
+            </span>
           )}
         </CardContent>
       </Card>
 
-      {/* Source banner */}
+      {/* Source banner + dynasty ledger filters */}
       {sourceLabel !== null && effectivePicks.length > 0 && (
         <div
           className={cn(
-            "rounded-lg border px-3 py-2 text-xs font-medium",
-            sourceLabel === "ESPN mDraftDetail"
+            "rounded-lg border px-3 py-3 text-xs",
+            isApiCombinedLedger
               ? "border-lime-500/20 bg-lime-500/10 text-lime-400"
               : "border-amber-500/20 bg-amber-500/10 text-amber-400",
           )}
         >
-          Source: {sourceLabel}
+          <div className="font-semibold">Source: {sourceLabel}</div>
+          {isApiCombinedLedger && (
+            <p className="mt-1.5 font-normal text-lime-200/90">
+              Includes ESPN keeper/retained slots when available.
+            </p>
+          )}
+          {isApiCombinedLedger && keeperCount > 0 && (
+            <p className="mt-2 font-medium text-lime-50">
+              Dynasty ledger: {effectivePicks.length} slots · {keeperCount} keeper/retained ·{" "}
+              {draftedCount} drafted.
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(
+              [
+                { id: "all" as const, label: "All", count: effectivePicks.length },
+                { id: "drafted" as const, label: "Drafted", count: draftedCount },
+                { id: "keepers" as const, label: "Keepers", count: keeperCount },
+              ] satisfies { id: LedgerFilter; label: string; count: number }[]
+            ).map((tab) => (
+              <Button
+                key={tab.id}
+                type="button"
+                size="sm"
+                variant={ledgerFilter === tab.id ? "default" : "outline"}
+                className="h-8 gap-1.5 text-xs"
+                onClick={() => setLedgerFilter(tab.id)}
+              >
+                {tab.label}
+                <span className="tabular-nums opacity-80">({tab.count})</span>
+              </Button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -541,7 +597,7 @@ export function DraftHistory() {
                 </tr>
               </thead>
               <tbody>
-                {effectivePicks.map((p) => (
+                {filteredPicks.map((p) => (
                   <tr
                     key={`${p.overallPick}-${p.teamId}-${p.playerName ?? ""}`}
                     className={cn(
