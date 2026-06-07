@@ -16,6 +16,8 @@
  *   - calcLeagueAnalytics: Full league snapshot (all of the above combined)
  */
 
+import { classifyEspnDraftSlot } from "./draftTruth/classifySlot";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface PlayerRow {
@@ -66,8 +68,20 @@ export interface DraftPickRow {
   overallPickNumber: number;
   position: string;
   keeper: boolean;
+  /** ESPN `reservedForKeeper` when present — used with `keeper` for DraftTruth classification. */
+  reservedForKeeper?: boolean;
+  /** Open-draft selections only (Phase 3C — same as owner profile / DraftTruth). */
+  draftedForAnalytics?: boolean;
+  keeperSlot?: boolean;
+  retained?: boolean;
   playerId?: number;   // ESPN player ID — used for keeper efficiency cross-reference
   playerName?: string;
+}
+
+/** True when this row counts toward draft-tendency / positional DNA (not keeper or retained slot). */
+export function isOpenDraftAnalyticsPick(p: DraftPickRow): boolean {
+  if (typeof p.draftedForAnalytics === "boolean") return p.draftedForAnalytics;
+  return classifyEspnDraftSlot(p.keeper, p.reservedForKeeper).draftedForAnalytics;
 }
 
 // ─── Replacement level baselines (PPR, 14-team, 1 QB, 2 RB, 2 WR, 1 TE, 1 FLEX) ──
@@ -428,7 +442,7 @@ export function calcManagerBehavior(
     const avgDraftRoundByPosition: Record<string, number> = {};
     const positions = ["QB", "RB", "WR", "TE", "K", "D/ST"];
     for (const pos of positions) {
-      const posPicks = teamPicks.filter(p => p.position === pos && !p.keeper);
+      const posPicks = teamPicks.filter(p => p.position === pos && isOpenDraftAnalyticsPick(p));
       if (posPicks.length > 0) {
         avgDraftRoundByPosition[pos] = Math.round(
           (posPicks.reduce((s, p) => s + p.roundId, 0) / posPicks.length) * 10
@@ -439,9 +453,9 @@ export function calcManagerBehavior(
     const earlyQbTendency = (avgDraftRoundByPosition["QB"] ?? 10) <= 3;
     const earlyTeTendency = (avgDraftRoundByPosition["TE"] ?? 10) <= 4;
 
-    const nonKeeperPicks = teamPicks.filter(p => !p.keeper);
+    const openDraftPicks = teamPicks.filter(p => isOpenDraftAnalyticsPick(p));
     const byRoundPos: Record<number, Record<string, number>> = {};
-    for (const p of nonKeeperPicks) {
+    for (const p of openDraftPicks) {
       if (!byRoundPos[p.roundId]) byRoundPos[p.roundId] = {};
       byRoundPos[p.roundId][p.position] = (byRoundPos[p.roundId][p.position] || 0) + 1;
     }
@@ -458,7 +472,7 @@ export function calcManagerBehavior(
     roundTendencies.sort((a, b) => a.round - b.round);
 
     const playerSeasons = new Map<string, Set<number>>();
-    for (const p of nonKeeperPicks) {
+    for (const p of openDraftPicks) {
       const name = (p.playerName || `Player ${p.playerId || "?"}`).trim();
       if (!name || name.startsWith("Player ")) continue;
       if (!playerSeasons.has(name)) playerSeasons.set(name, new Set());
@@ -474,13 +488,13 @@ export function calcManagerBehavior(
       .sort((a, b) => b.draftCount - a.draftCount)
       .slice(0, 8);
 
-    const seasonsWithPicks = Array.from(new Set(nonKeeperPicks.map(p => p.season))).sort((a, b) => a - b);
+    const seasonsWithPicks = Array.from(new Set(openDraftPicks.map(p => p.season))).sort((a, b) => a - b);
     let draftStyleEvolution = "Insufficient draft history for evolution analysis.";
     if (seasonsWithPicks.length >= 2) {
       const earlySeason = seasonsWithPicks[0];
       const lateSeason = seasonsWithPicks[seasonsWithPicks.length - 1];
-      const earlyRounds = nonKeeperPicks.filter(p => p.season === earlySeason).map(p => p.roundId);
-      const lateRounds = nonKeeperPicks.filter(p => p.season === lateSeason).map(p => p.roundId);
+      const earlyRounds = openDraftPicks.filter(p => p.season === earlySeason).map(p => p.roundId);
+      const lateRounds = openDraftPicks.filter(p => p.season === lateSeason).map(p => p.roundId);
       const earlyAvg = earlyRounds.length
         ? earlyRounds.reduce((s, r) => s + r, 0) / earlyRounds.length
         : 0;

@@ -10,6 +10,8 @@
  * - View health tracking: persists per-view status to espn_view_health table
  */
 
+import { classifyEspnDraftSlot } from "./draftTruth/classifySlot";
+
 const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
 const SWID = process.env.ESPN_SWID || "";
 const ESPN_S2 = process.env.ESPN_S2 || "";
@@ -899,6 +901,8 @@ export function normalizeDraftPicks(data: Record<string, unknown>) {
       if (chron >= 1 && chron <= teamCount) roundPickNumber = chron;
     }
 
+    const slot = classifyEspnDraftSlot(pick.keeper, pick.reservedForKeeper);
+
     return {
       season,
       roundId,
@@ -911,8 +915,11 @@ export function normalizeDraftPicks(data: Record<string, unknown>) {
       positionId: pinfo.positionId,
       position: pinfo.position,
       proTeam: pinfo.proTeam,
-      keeper: pick.keeper,
-      reservedForKeeper: pick.reservedForKeeper,
+      keeper: slot.espnKeeper,
+      reservedForKeeper: pick.reservedForKeeper === true,
+      draftedForAnalytics: slot.draftedForAnalytics,
+      keeperSlot: slot.keeperSlot,
+      retained: slot.retained,
       autoDrafted: (pick.autoDraftTypeId as number) > 0,
       bidAmount,
     };

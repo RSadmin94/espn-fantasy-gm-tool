@@ -283,7 +283,11 @@ export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<st
           roundPickNumber: pick.roundPickNumber as number,
           overallPickNumber: pick.overallPickNumber as number,
           position: pick.position as string,
-          keeper: pick.keeper as boolean,
+          keeper: !!(pick.keeper as boolean),
+          reservedForKeeper: pick.reservedForKeeper === true,
+          draftedForAnalytics: pick.draftedForAnalytics as boolean | undefined,
+          keeperSlot: pick.keeperSlot as boolean | undefined,
+          retained: pick.retained as boolean | undefined,
         });
       }
     }

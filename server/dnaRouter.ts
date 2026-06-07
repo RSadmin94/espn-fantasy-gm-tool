@@ -26,6 +26,7 @@ import {
   type ManagerRawData,
   type DraftPickRecord,
 } from "./leagueDNA";
+import { classifyDraftPickRawPick } from "./draftTruth";
 
 // ─── ESPN data extraction helpers ────────────────────────────────────────────
 
@@ -129,22 +130,31 @@ export async function buildManagerRawData(userId?: number): Promise<ManagerRawDa
 
     // Draft picks
     const draftDetail = data.draftDetail as Record<string, unknown> | undefined;
-    const picks = (draftDetail?.picks as Record<string, unknown>[]) ?? [];
-    for (const pick of picks) {
-      const teamId = (pick.teamId as number);
-      const memberId = teamToMember.get(teamId);
-      if (!memberId) continue;
-      const mgr = managerMap.get(memberId);
-      if (!mgr) continue;
+      const picks = (draftDetail?.picks as Record<string, unknown>[]) ?? [];
+      for (const pick of picks) {
+        const teamId = (pick.teamId as number);
+        const memberId = teamToMember.get(teamId);
+        if (!memberId) continue;
+        const mgr = managerMap.get(memberId);
+        if (!mgr) continue;
 
-      const posId = (pick.playerInfo as Record<string, unknown>)?.defaultPositionId as number;
-      const position = POS_MAP[posId] ?? "?";
-      const round = (pick.roundId as number) ?? 0;
-      const keeper = !!(pick.keeper as boolean);
-      if (round > 0 && position !== "?") {
-        mgr.draftPicks.push({ season, roundId: round, position, keeper });
+        const posId = (pick.playerInfo as Record<string, unknown>)?.defaultPositionId as number;
+        const position = POS_MAP[posId] ?? "?";
+        const round = (pick.roundId as number) ?? 0;
+        const truth = classifyDraftPickRawPick(pick);
+        if (round > 0 && position !== "?") {
+          mgr.draftPicks.push({
+            season,
+            roundId: round,
+            position,
+            keeper: truth.espnKeeper,
+            draftedForAnalytics: truth.draftedForAnalytics,
+            keeperSlot: truth.keeperSlot,
+            retained: truth.retained,
+            reservedForKeeper: truth.espnReservedForKeeper,
+          });
+        }
       }
-    }
 
     // H2H vs focal manager from regular-season schedule
     if (focalMemberId) {

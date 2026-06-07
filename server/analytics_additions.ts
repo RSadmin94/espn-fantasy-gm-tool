@@ -18,7 +18,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import type { PlayerRow, TeamRow, DraftPickRow, TransactionRow, ManagerBehaviorStats } from "./analytics";
+import { isOpenDraftAnalyticsPick, type PlayerRow, type TeamRow, type DraftPickRow, type TransactionRow, type ManagerBehaviorStats } from "./analytics";
 
 // ─── 1. 3D PROJECTIONS ────────────────────────────────────────────────────────
 // Requires: weekly scoring history per player (array of weekly point totals)
@@ -437,10 +437,10 @@ export function calcOpponentOvervaluation(
   const positions = ["QB", "RB", "WR", "TE"];
   const results: OpponentOvervaluation[] = [];
 
-  // Calculate league average draft round per position (excluding keepers)
+  // Calculate league average draft round per position (open-draft picks only — Phase 3C)
   const leagueAvgByPos: Record<string, number> = {};
   for (const pos of positions) {
-    const posPicks = draftPicks.filter(p => p.position === pos && !p.keeper);
+    const posPicks = draftPicks.filter(p => p.position === pos && isOpenDraftAnalyticsPick(p));
     leagueAvgByPos[pos] = posPicks.length > 0
       ? Math.round((posPicks.reduce((s, p) => s + p.roundId, 0) / posPicks.length) * 10) / 10
       : 7;

@@ -177,7 +177,9 @@ import {
   type TransactionRow,
   type DraftPickRow,
   type ManagerBehaviorStats,
+  isOpenDraftAnalyticsPick,
 } from "./analytics";
+import { classifyDraftPickRawPick } from "./draftTruth";
 import type { RequestHandler } from "express";
 
 /** Exact origins allowed for credentialed browser requests (e.g. extension / cross-site tRPC). */
@@ -7388,10 +7390,13 @@ Respond with JSON in this exact format:
       memberId: string; name: string; seasons: Set<number>;
       byRound: Record<number, Record<string, number>>;
       byPosition: Record<string, number>;
-      round1Picks: Array<{ season: number; playerName: string; position: string; isKeeper: boolean }>;
-      round2Picks: Array<{ season: number; playerName: string; position: string; isKeeper: boolean }>;
-      round3Picks: Array<{ season: number; playerName: string; position: string; isKeeper: boolean }>;
-      totalPicks: number;
+      round1Picks: Array<{ season: number; playerName: string; position: string; keeperSlot: boolean; draftedForAnalytics: boolean; isKeeper: boolean }>;
+      round2Picks: Array<{ season: number; playerName: string; position: string; keeperSlot: boolean; draftedForAnalytics: boolean; isKeeper: boolean }>;
+      round3Picks: Array<{ season: number; playerName: string; position: string; keeperSlot: boolean; draftedForAnalytics: boolean; isKeeper: boolean }>;
+      boardSlotCount: number;
+      openDraftPickCount: number;
+      keeperSlotCount: number;
+      retainedSlotCount: number;
     }>();
 
     const seenPickKeys = new Set<string>();
@@ -7444,7 +7449,7 @@ Respond with JSON in this exact format:
         const ownerId = teamOwnerMap[teamId] || `team_${teamId}`;
         const ownerName = memberNameMap[ownerId] || `Team${teamId}`;
         const round = (pick.roundId as number) || Math.ceil(overall / 14) || 1;
-        const isKeeper = pick.keeper === true || pick.reservedForKeeper === true;
+        const truth = classifyDraftPickRawPick(pick);
 
         // Get player name and position
         const pEntry = (pick.playerPoolEntry as Record<string, unknown>) || {};
@@ -7458,16 +7463,31 @@ Respond with JSON in this exact format:
         if (!ownerMap.has(ownerId)) {
           ownerMap.set(ownerId, {
             memberId: ownerId, name: ownerName, seasons: new Set(),
-            byRound: {}, byPosition: {}, round1Picks: [], round2Picks: [], round3Picks: [], totalPicks: 0,
+            byRound: {}, byPosition: {}, round1Picks: [], round2Picks: [], round3Picks: [],
+            boardSlotCount: 0, openDraftPickCount: 0, keeperSlotCount: 0, retainedSlotCount: 0,
           });
         }
         const o = ownerMap.get(ownerId)!;
         o.seasons.add(season);
-        o.totalPicks++;
-        if (!o.byRound[round]) o.byRound[round] = {};
-        o.byRound[round][position] = (o.byRound[round][position] || 0) + 1;
-        o.byPosition[position] = (o.byPosition[position] || 0) + 1;
-        const pickDetail = { season, playerName, position, isKeeper };
+        o.boardSlotCount++;
+        if (truth.draftedForAnalytics) o.openDraftPickCount++;
+        if (truth.keeperSlot) o.keeperSlotCount++;
+        if (truth.retained) o.retainedSlotCount++;
+
+        if (truth.draftedForAnalytics) {
+          if (!o.byRound[round]) o.byRound[round] = {};
+          o.byRound[round][position] = (o.byRound[round][position] || 0) + 1;
+          o.byPosition[position] = (o.byPosition[position] || 0) + 1;
+        }
+        const pickDetail = {
+          season,
+          playerName,
+          position,
+          keeperSlot: truth.keeperSlot,
+          draftedForAnalytics: truth.draftedForAnalytics,
+          /** @deprecated use keeperSlot — kept for older clients */
+          isKeeper: truth.keeperSlot,
+        };
         if (round === 1) o.round1Picks.push(pickDetail);
         if (round === 2) o.round2Picks.push(pickDetail);
         if (round === 3) o.round3Picks.push(pickDetail);
@@ -7476,8 +7496,8 @@ Respond with JSON in this exact format:
 
     // Serialize and compute derived fields
     const owners = Array.from(ownerMap.values())
-      .filter(o => o.totalPicks > 0)
-      .sort((a, b) => b.seasons.size - a.seasons.size || b.totalPicks - a.totalPicks)
+      .filter(o => o.boardSlotCount > 0)
+      .sort((a, b) => b.seasons.size - a.seasons.size || b.openDraftPickCount - a.openDraftPickCount)
       .map(o => {
         const posTotal = Object.values(o.byPosition).reduce((s, v) => s + v, 0);
         const topPositions = Object.entries(o.byPosition)
@@ -7576,7 +7596,11 @@ Respond with JSON in this exact format:
           memberId: o.memberId,
           name: o.name,
           seasons: o.seasons.size,
-          totalPicks: o.totalPicks,
+          totalPicks: o.openDraftPickCount,
+          boardSlotCount: o.boardSlotCount,
+          openDraftPickCount: o.openDraftPickCount,
+          keeperSlotCount: o.keeperSlotCount,
+          retainedSlotCount: o.retainedSlotCount,
           topPositions,
           byRound: o.byRound,
           round1Picks: [...o.round1Picks].sort((a, b) => b.season - a.season),
@@ -7699,11 +7723,12 @@ Respond with JSON in this exact format:
             for (const pick of draftPicks) {
               const memberId = pick.memberId as string;
               if (memberId !== input.counterpartyMemberId) continue;
+              const truth = classifyDraftPickRawPick(pick);
               const round = pick.roundId as number;
               const pos = playerInfoMap.get(pick.playerId as number)?.position || 'UNK';
-              const isKeeper = !!(pick.keeper as boolean);
               totalPicks++;
-              if (isKeeper) keeperPicks++;
+              if (truth.keeperSlot) keeperPicks++;
+              if (!truth.draftedForAnalytics) continue;
               if (round === 1) { r1Total++; if (pos === 'RB') rb1++; if (pos === 'WR') wr1++; }
               if (round <= 4) { earlyTotal++; if (pos === 'RB') earlyRb++; }
               if (pos === 'QB') qbRounds.push(round);
@@ -9850,8 +9875,21 @@ Provide:
           if (!data) continue;
           const picks = normalizeDraftPicks(data) as Record<string, unknown>[];
           for (const p of picks) {
-            allDraftPicks.push({ season, teamId: p.teamId as number, roundId: p.roundId as number, roundPickNumber: p.roundPickNumber as number, overallPickNumber: p.overallPickNumber as number, position: (p.position as string) || "?", keeper: (p.keeper as boolean) || false });
-            allDraftPickRows.push({ season, teamId: p.teamId as number, roundId: p.roundId as number, roundPickNumber: p.roundPickNumber as number, overallPickNumber: p.overallPickNumber as number, position: (p.position as string) || "?", keeper: (p.keeper as boolean) || false });
+            const row: DraftPickRow = {
+              season,
+              teamId: p.teamId as number,
+              roundId: p.roundId as number,
+              roundPickNumber: p.roundPickNumber as number,
+              overallPickNumber: p.overallPickNumber as number,
+              position: (p.position as string) || "?",
+              keeper: !!(p.keeper as boolean),
+              reservedForKeeper: p.reservedForKeeper === true,
+              draftedForAnalytics: p.draftedForAnalytics as boolean | undefined,
+              keeperSlot: p.keeperSlot as boolean | undefined,
+              retained: p.retained as boolean | undefined,
+            };
+            allDraftPicks.push(row);
+            allDraftPickRows.push(row);
           }
           const teams = normalizeTeams(data);
           for (const t of teams) {
