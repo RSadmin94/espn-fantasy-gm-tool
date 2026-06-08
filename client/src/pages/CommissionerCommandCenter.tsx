@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { pickMostAndLeastHighActivity } from "@/lib/activityDnaExtremes";
 import {
   Activity,
   AlertTriangle,
@@ -296,29 +297,18 @@ export function CommissionerCommandCenter() {
   const leagueSize = pulseQ.data?.teams.length ?? standingsQ.data?.owners.length ?? 0;
   const totalSeasons = allSeasons.length;
 
-  // Activity DNA — most/least active
   const dnaList = useMemo(() => {
     const all = dnaQ.data ?? [];
-    return all.filter((o) => (o.archetypes as Record<string, { score: number | null; status: string }>).highActivity?.status === "ok");
+    return all.filter(
+      (o) => (o.archetypes as Record<string, { score: number | null; status: string }>).highActivity?.status === "ok",
+    );
   }, [dnaQ.data]);
 
-  const mostActive = useMemo(() => {
-    if (!dnaList.length) return null;
-    return [...dnaList].sort((a, b) => {
-      const sa = (a.archetypes as Record<string, { score: number | null }>).highActivity?.score ?? 0;
-      const sb = (b.archetypes as Record<string, { score: number | null }>).highActivity?.score ?? 0;
-      return (sb ?? 0) - (sa ?? 0);
-    })[0] ?? null;
-  }, [dnaList]);
-
-  const leastActive = useMemo(() => {
-    if (!dnaList.length) return null;
-    return [...dnaList].sort((a, b) => {
-      const sa = (a.archetypes as Record<string, { score: number | null }>).highActivity?.score ?? 0;
-      const sb = (b.archetypes as Record<string, { score: number | null }>).highActivity?.score ?? 0;
-      return (sa ?? 0) - (sb ?? 0);
-    })[0] ?? null;
-  }, [dnaList]);
+  // Activity DNA — most/least active (distinct owners whenever ≥2 eligible scores)
+  const { most: mostActive, least: leastActive } = useMemo(
+    () => pickMostAndLeastHighActivity(dnaQ.data ?? []),
+    [dnaQ.data],
+  );
 
   // Current champion — latest medal
   const medals = medalsQ.data ?? [];
@@ -567,6 +557,15 @@ export function CommissionerCommandCenter() {
                   <SmallBadge>{leastActive.confidence}</SmallBadge>
                 </div>
                 <p className="mt-2 text-[12px] text-white/30 leading-snug">{leastActive.evidence[0]}</p>
+              </div>
+            ) : mostActive ? (
+              <div className={CARD}>
+                <div className="mb-3 flex items-center gap-2">
+                  <TrendingDown className="h-4 w-4 text-zinc-500" />
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Least Active Owner</span>
+                </div>
+                <p className="text-lg font-bold text-white/95">Insufficient Activity Data</p>
+                <p className="mt-1 text-sm text-white/55">Only one owner has sufficient activity data available for comparison.</p>
               </div>
             ) : <LoadingCard />}
 
