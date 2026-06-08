@@ -1,6 +1,7 @@
 /**
  * GM War Room extension — background service worker.
- * Reads ESPN cookies + gmwarroom session cookies, discovers 2026 leagues via ESPN profile API,
+ * Reads ESPN cookies + gmwarroom session cookies, discovers 2026 leagues via ESPN profile API
+ * (union with the leagueId from the active ESPN fantasy tab when ESPN omits a league from the payload),
  * POSTs espn.saveCredentials per selected league. War Room cookies are injected via DNR
  * (fetch cannot set a Cookie header from a SW). ESPN historical JSON is fetched from the
  * service worker with `credentials: "include"` plus session-rule DNR (Cookie + Kona headers).
@@ -261,7 +262,8 @@ async function removeEspnProfileDiscoverCookieRule() {
 }
 
 /**
- * GET profile (proTeam) for 2026; on empty/failed parse, fall back to leagueId from active ESPN tab URL.
+ * GET profile (proTeam) for 2026; always unions in leagueId from the active ESPN fantasy tab URL
+ * (deduped) so leagues missing from the profile payload still appear in Discover.
  */
 async function discoverLeaguesWithEspnCookie(espnCookieHeader) {
   const tabLeagueId = await getLeagueIdFromActiveEspnTab();
@@ -295,15 +297,23 @@ async function discoverLeaguesWithEspnCookie(espnCookieHeader) {
       leagues = extractLeaguesFromProTeamPayload(parsed);
     }
 
+    // Union: ESPN profile may omit a league the user is viewing; active-tab leagueId is always merged (deduped).
+    if (tabLeagueId) {
+      const tabId = String(tabLeagueId).trim();
+      if (tabId && /^\d+$/.test(tabId)) {
+        const seen = new Set(leagues.map((L) => String(L?.id ?? "").trim()));
+        if (!seen.has(tabId)) {
+          leagues.push({ id: tabId, name: `League ${tabId}` });
+        }
+      }
+    }
+    leagues = dedupeLeaguesById(leagues);
+
     console.info("[GMWR] ESPN profile discovery", {
       httpStatus,
       leagueCount: leagues.length,
       tabLeagueIdPresent: Boolean(tabLeagueId),
     });
-
-    if (leagues.length === 0 && tabLeagueId) {
-      leagues = [{ id: tabLeagueId, name: `League ${tabLeagueId}` }];
-    }
 
     if (leagues.length === 0 && !tabLeagueId) {
       return {
