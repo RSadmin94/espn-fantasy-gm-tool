@@ -11,6 +11,8 @@
 
 This is a plain-English-plus-technical map of the whole system: what exists, how the pieces fit, what's solid, what's fragile, and what's next. It's written so you (non-coder/owner) can hand any section to a developer or AI and they'll immediately know where things live. Section 18 is the "operating manual" of hard-won quirks — that section alone saves hours.
 
+**Active engineering handoff:** the RC1 / v4.0 trust-fix execution plan lives in [`RC1_V4_CLAUDE_DEV_HANDOFF.md`](./RC1_V4_CLAUDE_DEV_HANDOFF.md) (PR0 `isPlayoff` fix complete & validated for 158918; see that doc for PR1–PR5).
+
 ---
 
 ## 1. Executive summary
