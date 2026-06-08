@@ -28,6 +28,7 @@ import {
   personMergeKey,
 } from "./ownerProfileService";
 import { computeChampionshipPath } from "./championshipPath";
+import { buildChampionshipAuthority } from "./championshipAuthority";
 import { computeAcquisitionImpact } from "./acquisitionImpact";
 import { computeDraftReality } from "./draftRealitySimulator";
 
@@ -155,6 +156,8 @@ export async function computeCareerReport(
   const resolved = resolveOwnerTeamsForProfile(allGmRows, why.ownerName);
   if (!resolved) return minimal("Owner identity could not be resolved across seasons.");
 
+  const champAuth = await buildChampionshipAuthority({ db, leagueId });
+
   const shared = await loadOwnerProfileSharedData({ db, leagueId });
   const flatRS = await loadFlatRegularSeasonMatchups({ db, leagueId, userId: userId ?? 0 });
   const bundle = computeOwnerProfileRecordBundle({
@@ -170,7 +173,6 @@ export async function computeCareerReport(
   const primary = dna?.primaryDNA ?? null;
   const secondary = dna?.secondaryDNA ?? null;
 
-  const championNameBySeason = new Map<number, string>();
   const minFsBySeason = new Map<number, number>();
   let latestCompletedSeason: number | null = null;
   for (const t of allGmRows) {
@@ -181,12 +183,10 @@ export async function computeCareerReport(
       if (latestCompletedSeason == null || s > latestCompletedSeason) latestCompletedSeason = s;
     }
   }
-  for (const ct of allGmRows) {
-    const cs = Number(ct.season);
-    const cfs = Number(ct.finalStanding);
-    if (cfs > 0 && cfs === minFsBySeason.get(cs)) {
-      championNameBySeason.set(cs, cleanOwnerDisplay(String(ct.ownerName ?? "")) || "Unknown");
-    }
+  // Per-season champion NAME from the championship authority (medals primary; standings fallback).
+  const championNameBySeason = new Map<number, string>();
+  for (const [cs, nm] of champAuth.championNameBySeason) {
+    if (nm) championNameBySeason.set(cs, cleanOwnerDisplay(nm) || "Unknown");
   }
   const rankOf = (season: number, fs: number | null | undefined): number | null => {
     const f = Number(fs);
@@ -273,7 +273,9 @@ export async function computeCareerReport(
   };
 
   // Mode-aware: champions get positive drivers; failure mode gets historic failure analysis.
-  const failurePatterns = buildPatterns({ cp, flatRS, resolved, allGmRows, playoffTrips, seasonsPlayed });
+  const champTeamBySeasonAuth = new Map<number, number>();
+  for (const [cs, tid] of champAuth.championTeamIdBySeason) if (tid != null) champTeamBySeasonAuth.set(cs, tid);
+  const failurePatterns = buildPatterns({ cp, flatRS, resolved, champTeamBySeason: champTeamBySeasonAuth, playoffTrips, seasonsPlayed });
   const isWinner = mode !== "why-havent-won";
   const titleSeason = championSeasons.length ? Math.max(...championSeasons) : null;
   let finalPatterns: PatternStat[];
@@ -411,7 +413,7 @@ function buildReadiness(a: {
 }
 function buildPatterns(a: {
   cp: Awaited<ReturnType<typeof computeChampionshipPath>> | null;
-  flatRS: any[]; resolved: any; allGmRows: any[]; playoffTrips: number; seasonsPlayed: number;
+  flatRS: any[]; resolved: any; champTeamBySeason: Map<number, number>; playoffTrips: number; seasonsPlayed: number;
 }): PatternStat[] {
   const out: PatternStat[] = [];
   const missed = Math.max(0, a.seasonsPlayed - a.playoffTrips);
@@ -423,18 +425,16 @@ function buildPatterns(a: {
   for (const g of gaps) {
     out.push({ id: "pos-" + g.position, label: "Below champion " + g.position, value: "-" + g.gap.toFixed(1) + " PPG", detail: "your " + g.position + "s average " + g.ownerAvg.toFixed(1) + " vs champion " + g.championAvg.toFixed(1), severity: g.gapPct >= 20 ? "high" : "medium" });
   }
-  const gp = countGamePatterns(a.flatRS, a.resolved, a.allGmRows);
+  const gp = countGamePatterns(a.flatRS, a.resolved, a.champTeamBySeason);
   if (gp.realLosses > 0) {
     out.push({ id: "close", label: "Close losses (within 10 pts)", value: String(gp.closeLosses), detail: "games that could have flipped a playoff push", severity: gp.closeLosses >= 10 ? "high" : "medium" });
     out.push({ id: "lostchamp", label: "Lost to the eventual champion", value: String(gp.lostToChamp), detail: "head-to-head losses to that season's champion (full-scoring era)", severity: gp.lostToChamp >= 6 ? "high" : "medium" });
   }
   return out;
 }
-function countGamePatterns(flatRS: any[], resolved: any, allGmRows: any[]): { closeLosses: number; lostToChamp: number; realLosses: number } {
+function countGamePatterns(flatRS: any[], resolved: any, champTeamBySeason: Map<number, number>): { closeLosses: number; lostToChamp: number; realLosses: number } {
   const focalTeamBySeason = new Map<number, number>();
   for (const t of (resolved && resolved.ownerTeamRows ? resolved.ownerTeamRows : [])) focalTeamBySeason.set(Number(t.season), Number(t.teamId));
-  const champTeamBySeason = new Map<number, number>();
-  for (const t of allGmRows) if (Number(t.finalStanding) === 1) champTeamBySeason.set(Number(t.season), Number(t.teamId));
   const realSeasons = new Set<number>();
   for (const m of flatRS) if (Number(m.homeScore) > 50 || Number(m.awayScore) > 50) realSeasons.add(Number(m.season));
   let closeLosses = 0, lostToChamp = 0, realLosses = 0;

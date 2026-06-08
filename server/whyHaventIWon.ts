@@ -13,15 +13,16 @@
  * Data sources (all existing, no scraping):
  *  - teams                    (records, finalStanding, champion identity, owner GUID)
  *  - matchups                 (regular + playoff games, scores, winners)
- *  - gm_weekly_player_stats    (per-player weekly points, starter flag) 2021+
+ *  - gm_weekly_player_stats    (per-player weekly points, starter flag; league-scoped seasons)
  *  - gm_player_registry        (playerId <-> espnPlayerId, position)
  *  - espn_raw_cache 'combined' (draftDetail.picks -> drafted player sets per owner)
  */
 import { sql } from "drizzle-orm";
 import { getDb, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
+import { getWeeklyStatsSeasonsForLeague } from "./weeklyStatsLeagueCoverage";
+import { buildChampionshipAuthority } from "./championshipAuthority";
 
 // Phase B3: DEFAULT_LEAGUE_ID constant removed — setup required if no active league.
-const WEEKLY_SEASONS = [2021, 2022, 2023, 2024, 2025]; // seasons with per-player weekly data
 
 function rowsOf(res: any): any[] {
   if (Array.isArray(res)) return Array.isArray(res[0]) ? res[0] : res;
@@ -79,6 +80,15 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
   }
   const isSetupComplete = !!profile?.isSetupComplete;
 
+  const weeklyStatsSeasons = await getWeeklyStatsSeasonsForLeague(leagueId);
+  const weeklySeasonSql =
+    weeklyStatsSeasons.length > 0
+      ? sql`AND w.season IN (${sql.join(
+          weeklyStatsSeasons.map((s) => sql`${s}`),
+          sql`, `,
+        )})`
+      : sql`AND FALSE`;
+
   // ── Load core tables (all seasons available) ──────────────────────────
   const teams: TeamRow[] = rowsOf(await db.execute(sql`
     SELECT season, teamId, ownerId, ownerName, wins, losses, ties, pointsFor AS pf, finalStanding
@@ -115,20 +125,23 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
     return { leagueId, ownerKey: null, ownerName, isSetupComplete, hasWon: false, titles: 0, seasonsPlayed: 0, bestFinish: null, playoffAppearances: 0, findings: [], narrative: "No league history available yet.", confidence: "Limited", championSeasons: [], isReigningChampion: false, pageMode: "why-havent-won", note: "No owner data." };
   }
 
+  // ── Championship authority (medals primary; standings fallback) ───────
+  const champAuth = await buildChampionshipAuthority({ db, leagueId });
+  const focalCanon = champAuth.canonicalKeyForOwnerId(focal);
+
   // ── Focal summary stats ───────────────────────────────────────────────
   const focalTeams = teams.filter((t) => t.ownerId === focal && (t.wins + t.losses + t.ties) > 0);
-  const titles = focalTeams.filter((t) => t.finalStanding === 1).length;
+  const championSeasons = (champAuth.championSeasonsByKey.get(focalCanon) ?? []).slice().sort((a, b) => a - b);
+  const titles = championSeasons.length;
   const bestFinish = focalTeams.length ? Math.min(...focalTeams.map((t) => t.finalStanding ?? 99).filter((x) => x < 99)) : null;
   const seasonsPlayed = focalTeams.length;
 
-  // champion GUID per season
-  const champBySeason = new Map<number, string>();
-  for (const t of teams) if (t.finalStanding === 1) champBySeason.set(t.season, t.ownerId);
+  // champion GUID per season (medals primary; standings fallback)
+  const champBySeason = champAuth.championOwnerIdBySeason;
 
-  // Championship status for the focal owner (deterministic; no hardcoding).
-  const championSeasons = focalTeams.filter((t) => t.finalStanding === 1).map((t) => t.season).sort((a, b) => a - b);
-  const latestCompletedSeason = champBySeason.size ? Math.max(...champBySeason.keys()) : null;
-  const isReigningChampion = latestCompletedSeason != null && champBySeason.get(latestCompletedSeason) === focal;
+  // Championship status for the focal owner (medal-authoritative).
+  const latestCompletedSeason = champAuth.latestCompletedSeason;
+  const isReigningChampion = champAuth.reigningKey != null && champAuth.reigningKey === focalCanon;
 
   // playoff cutoff per season (finalStanding <= cutoff = made the playoff bracket).
   // ESPN flags consolation games isPlayoff=1 too, so finalStanding is the accurate gate.
@@ -203,13 +216,15 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
   const weekly = rowsOf(await db.execute(sql`
     SELECT w.season AS season, w.week AS week, w.ownerKey AS ownerKey, w.isStarter AS isStarter,
            w.pointsScored AS pts, r.espnPlayerId AS espnId, r.position AS position
-    FROM gm_weekly_player_stats w JOIN gm_player_registry r ON r.id = w.playerId
-    WHERE w.season IN (2021,2022,2023,2024,2025)`))
+    FROM gm_weekly_player_stats w
+    JOIN gm_player_registry r ON r.id = w.playerId
+    INNER JOIN teams t ON w.teamId IS NOT NULL AND w.teamId = t.teamId AND w.season = t.season AND t.leagueId = ${leagueId}
+    WHERE 1=1 ${weeklySeasonSql}`))
     .map((r: any) => ({ season: Number(r.season), week: Number(r.week), ownerKey: String(r.ownerKey), isStarter: Number(r.isStarter) === 1, pts: Number(r.pts ?? 0), espnId: Number(r.espnId), position: String(r.position ?? "") }));
 
   // drafted sets per owner GUID per season (from combined cache)
   const draftedByOwnerSeason = new Map<string, Set<number>>(); // `${guid}:${season}` -> espnIds
-  for (const season of WEEKLY_SEASONS) {
+  for (const season of weeklyStatsSeasons) {
     const cache = rowsOf(await db.execute(sql`SELECT payload FROM espn_raw_cache WHERE leagueId=${leagueId} AND season=${season} AND viewName='combined' LIMIT 1`));
     if (!cache[0]?.payload) continue;
     const combined = typeof cache[0].payload === "string" ? JSON.parse(cache[0].payload) : cache[0].payload;
@@ -310,7 +325,7 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
 
   // ── Reason F: season scoring vs champion average ──────────────────────
   const focalSeasonPF = focalTeams.map((t) => t.pf).filter((x) => x > 0);
-  const champPFs = teams.filter((t) => t.finalStanding === 1 && t.pf > 0).map((t) => t.pf);
+  const champPFs = teams.filter((t) => champAuth.championTeamIdBySeason.get(t.season) === t.teamId && t.pf > 0).map((t) => t.pf);
   if (focalSeasonPF.length && champPFs.length) {
     const focalAvgPF = focalSeasonPF.reduce((a, b) => a + b, 0) / focalSeasonPF.length;
     const champAvgPF = champPFs.reduce((a, b) => a + b, 0) / champPFs.length;

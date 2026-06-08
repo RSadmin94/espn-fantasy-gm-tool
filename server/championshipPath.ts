@@ -12,12 +12,11 @@
  * (positional scoring), espn_raw_cache 'combined' (playoff cutoff/settings).
  */
 import { sql } from "drizzle-orm";
-import { getDb, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
+import { getDb, resolveActiveProfile, memberIdFromOwnerKey, getAllCachedSeasons } from "./db";
 import { computeWhyHaventIWon } from "./whyHaventIWon";
 import { computeDraftReality } from "./draftRealitySimulator";
-
-// Phase B5: DEFAULT_LEAGUE_ID constant removed — setup required if no active league.
-const WEEKLY_SEASONS = [2021, 2022, 2023, 2024, 2025];
+import { getWeeklyStatsSeasonsForLeague } from "./weeklyStatsLeagueCoverage";
+import { buildChampionshipAuthority } from "./championshipAuthority";
 const POSITIONS = ["QB", "RB", "WR", "TE"] as const;
 type Pos = (typeof POSITIONS)[number];
 
@@ -80,6 +79,10 @@ export type ChampionshipPathResult = {
   narrative: string;
   confidence: "High" | "Medium" | "Limited";
   note?: string;
+  /** Distinct seasons with a `teams` row for this league (historical footprint). */
+  historicalSeasonCount: number;
+  /** Seasons where this league has weekly player stats joined to `teams`. */
+  weeklyStatsSeasons: number[];
 };
 
 // A "WR1/RB1/etc." tier threshold: a top starter at a position roughly equals the
@@ -104,6 +107,18 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
     FROM teams WHERE leagueId=${leagueId} AND ownerId IS NOT NULL AND ownerId<>'' `))
     .map((r: any) => ({ season: Number(r.season), teamId: Number(r.teamId), ownerId: String(r.ownerId), ownerName: String(r.ownerName ?? ""), wins: Number(r.wins ?? 0), pf: Number(r.pf ?? 0), finalStanding: r.finalStanding != null ? Number(r.finalStanding) : null }));
 
+  const historicalSeasonCount = new Set(teams.map((t) => t.season)).size;
+  const weeklyStatsSeasons = await getWeeklyStatsSeasonsForLeague(leagueId);
+  const weeklySeasonSql =
+    weeklyStatsSeasons.length > 0
+      ? sql`w.season IN (${sql.join(
+          weeklyStatsSeasons.map((s) => sql`${s}`),
+          sql`, `,
+        )})`
+      : sql`FALSE`;
+
+  const weeklySet = new Set(weeklyStatsSeasons);
+
   const nameByOwner = new Map<string, string>();
   const seasonsByOwner = new Map<string, number>();
   for (const t of teams) {
@@ -120,27 +135,36 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
   const ownerName = (focal && nameByOwner.get(focal)) || profile?.selectedOwnerName || "This owner";
 
   if (!focal) {
-    return emptyResult(leagueId, ownerName, isSetupComplete, "No owner data available.");
+    return emptyResult(leagueId, ownerName, isSetupComplete, "No owner data available.", {
+      historicalSeasonCount,
+      weeklyStatsSeasons,
+    });
   }
 
-  // ── champion identity per season (teamId for joins) ───────────────────
-  const champions = teams.filter((t) => t.finalStanding === 1);
+  // ── champion identity per season (medals primary; standings fallback) ──
+  const champAuthority = await buildChampionshipAuthority({ db, leagueId });
   const champTeamBySeason = new Map<number, number>();
-  for (const c of champions) champTeamBySeason.set(c.season, c.teamId);
-  const hasWon = champions.some((c) => c.ownerId === focal);
+  for (const [s, tid] of champAuthority.championTeamIdBySeason) {
+    if (tid != null) champTeamBySeason.set(s, tid);
+  }
+  const champions = teams.filter((t) => champTeamBySeason.get(t.season) === t.teamId);
+  const focalCanon = champAuthority.canonicalKeyForOwnerId(focal);
+  const hasWon = (champAuthority.championSeasonsByKey.get(focalCanon)?.length ?? 0) > 0;
 
-  // ── positional starter scoring (weekly seasons only) ──────────────────
+  // ── positional starter scoring (weekly stats, league-scoped seasons only) ──
   const weekly = rowsOf(await db.execute(sql`
     SELECT w.season AS season, w.teamId AS teamId, w.ownerKey AS ownerKey, w.isStarter AS isStarter,
            w.pointsScored AS pts, r.position AS position
-    FROM gm_weekly_player_stats w JOIN gm_player_registry r ON r.id = w.playerId
-    WHERE w.season IN (2021,2022,2023,2024,2025) AND w.isStarter=1 AND r.position IN ('QB','RB','WR','TE')`))
+    FROM gm_weekly_player_stats w
+    JOIN gm_player_registry r ON r.id = w.playerId
+    INNER JOIN teams t ON w.teamId IS NOT NULL AND w.teamId = t.teamId AND w.season = t.season AND t.leagueId = ${leagueId}
+    WHERE w.isStarter=1 AND r.position IN ('QB','RB','WR','TE') AND ${weeklySeasonSql}`))
     .map((r: any) => ({ season: Number(r.season), teamId: Number(r.teamId), ownerKey: String(r.ownerKey), pts: Number(r.pts ?? 0), position: String(r.position) as Pos }));
 
   // champion profile: average across champions of each champion's per-position pts/game
   const champPerPos: Record<Pos, number[]> = { QB: [], RB: [], WR: [], TE: [] };
   for (const [season, teamId] of champTeamBySeason) {
-    if (!WEEKLY_SEASONS.includes(season)) continue;
+    if (!weeklySet.has(season)) continue;
     const sums: Record<Pos, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
     const cnts: Record<Pos, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
     for (const w of weekly) {
@@ -182,7 +206,7 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
   let closestChampion: ChampionComparison | null = null;
   let bestSim = -1;
   for (const [season, teamId] of champTeamBySeason) {
-    if (!WEEKLY_SEASONS.includes(season)) continue;
+    if (!weeklySet.has(season)) continue;
     const champ = champions.find((c) => c.season === season);
     if (champ && champ.ownerId === focal) continue;
     const sums: Record<Pos, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
@@ -259,11 +283,22 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
     if (why.findings.length) pastReasonContext = why.findings[0].headline;
   } catch { /* non-fatal */ }
   try {
-    // Phase B5: pass leagueId to computeDraftReality — no implicit 457622 fallback.
-    const dr = await computeDraftReality(2025, leagueId);
-    const impact = dr.ownerImpacts.find((o) => o.ownerKey === focal);
-    if (impact) {
-      draftContext = `In 2025 your draft graded ${impact.draftGrade}/100 and your in-season management ${impact.rosterMgmtGrade}/100 (overall ${impact.overallGrade}).`;
+    const maxRow = rowsOf(
+      await db.execute(
+        sql`SELECT MAX(season) AS s FROM espn_raw_cache WHERE leagueId=${leagueId} AND viewName='combined'`,
+      ),
+    )[0] as { s?: unknown; S?: unknown } | undefined;
+    let draftYear = Number(maxRow?.s ?? maxRow?.S ?? 0);
+    if (!Number.isFinite(draftYear) || draftYear < 2000) {
+      const cached = await getAllCachedSeasons(leagueId, userId);
+      draftYear = cached[0] ?? 0;
+    }
+    if (draftYear >= 2000) {
+      const dr = await computeDraftReality(draftYear, leagueId);
+      const impact = dr.ownerImpacts.find((o) => o.ownerKey === focal);
+      if (impact) {
+        draftContext = `In ${draftYear} your draft graded ${impact.draftGrade}/100 and your in-season management ${impact.rosterMgmtGrade}/100 (overall ${impact.overallGrade}).`;
+      }
     }
   } catch { /* non-fatal */ }
 
@@ -324,10 +359,20 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
     positionGaps, biggestWeakness, pointsForGap, closestChampion,
     biggestThreat, biggestRival, topImprovements: topImprovements.slice(0, 3), draftContext, pastReasonContext,
     recommendedActions, headline, narrative, confidence,
+    historicalSeasonCount,
+    weeklyStatsSeasons,
   };
 }
 
-function emptyResult(leagueId: string, ownerName: string, isSetupComplete: boolean, note: string): ChampionshipPathResult {
+function emptyResult(
+  leagueId: string,
+  ownerName: string,
+  isSetupComplete: boolean,
+  note: string,
+  hist?: { historicalSeasonCount: number; weeklyStatsSeasons: number[] },
+): ChampionshipPathResult {
+  const historicalSeasonCount = hist?.historicalSeasonCount ?? 0;
+  const weeklyStatsSeasons = hist?.weeklyStatsSeasons ?? [];
   const zero: Record<Pos, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
   return {
     leagueId, ownerKey: null, ownerName, isSetupComplete, hasWon: false,
@@ -336,5 +381,7 @@ function emptyResult(leagueId: string, ownerName: string, isSetupComplete: boole
     positionGaps: [], biggestWeakness: null, pointsForGap: 0, closestChampion: null,
     biggestThreat: null, biggestRival: null, topImprovements: [], draftContext: null, pastReasonContext: null,
     recommendedActions: [], headline: "Not enough data yet.", narrative: note, confidence: "Limited", note,
+    historicalSeasonCount,
+    weeklyStatsSeasons,
   };
 }
