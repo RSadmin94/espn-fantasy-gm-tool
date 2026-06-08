@@ -124,6 +124,15 @@ export function DraftRealitySimulator() {
               players, and replay the real schedule. The result separates <span className="text-white/80">draft skill</span> from{" "}
               <span className="text-white/80">in-season roster management</span>.
             </p>
+            <p className="mt-3 max-w-2xl text-[13px] leading-relaxed text-white/40">
+              <span className="font-semibold text-white/55">Why records can differ:</span>{" "}
+              <span className="text-violet-200/90">Actual</span> uses ESPN&apos;s official per-team record from the
+              league API (full season as ESPN reports it).{" "}
+              <span className="text-lime-200/90">Draft-only</span> replays only schedule weeks that have weekly player
+              scores in our database for that season — if some weeks or playoffs were not ingested into{" "}
+              <code className="rounded bg-white/[0.06] px-1 text-[11px]">gm_weekly_player_stats</code>, draft-only wins
+              and losses can reflect fewer games than the ESPN record (see simulation confidence).
+            </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 pt-1">
             <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">14-Team League</span>
@@ -183,13 +192,13 @@ export function DraftRealitySimulator() {
             <div className="grid gap-6 lg:grid-cols-2">
               <StandingsTable
                 title="Actual Standings"
-                subtitle="How the season really finished"
+                subtitle={`How the season really finished (ESPN official record)`}
                 accent="violet"
                 rows={data.actualStandings.map((r) => ({ rank: r.rank, name: r.ownerName, record: `${r.wins}-${r.losses}${r.ties ? "-" + r.ties : ""}`, pf: r.pointsFor }))}
               />
               <StandingsTable
                 title="Draft-Only Standings"
-                subtitle="Best-ball from draft picks · no moves"
+                subtitle={`Best-ball from draft picks · replayed ${data.weeksSimulated} week${data.weeksSimulated === 1 ? "" : "s"} with player scores in DB`}
                 accent="lime"
                 rows={data.draftOnlyStandings.map((r) => ({ rank: r.rank, name: r.ownerName, record: `${r.wins}-${r.losses}${r.ties ? "-" + r.ties : ""}`, pf: r.pointsFor }))}
               />

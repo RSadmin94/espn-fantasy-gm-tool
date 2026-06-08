@@ -1194,22 +1194,15 @@ export function SyncData() {
                 <span>{leagueHistory.warnings[0]}</span>
               </div>
             )}
+            <p className="text-xs text-muted-foreground">
+              To sync every missing year at once, use{" "}
+              <span className="font-medium text-foreground">Sync All Missing Seasons</span> in{" "}
+              <a href="#league-history-coverage" className="text-violet-300 underline underline-offset-2">
+                League History Coverage
+              </a>{" "}
+              below (same <code className="rounded bg-muted px-1">espn.refresh</code> action — avoids duplicate buttons).
+            </p>
             <div className="flex flex-wrap gap-2">
-              <Button
-                onClick={() => {
-                  setRunResults({});
-                  refreshMutation.mutate({ seasons: leagueHistory.missingSeasons, forceRefresh });
-                }}
-                disabled={refreshMutation.isPending || leagueHistory.missingSeasons.length === 0}
-                className="gap-2"
-              >
-                {refreshMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                Sync Missing Seasons
-              </Button>
               <Button
                 variant="outline"
                 onClick={() => {
@@ -1988,7 +1981,7 @@ export function SyncData() {
           : 0;
 
         return (
-          <div className="space-y-3">
+          <div id="league-history-coverage" className="space-y-3 scroll-mt-20">
             <div className="flex items-center gap-2">
               <Layers className="h-4 w-4 text-muted-foreground" />
               <h2 className="text-sm font-semibold text-foreground">League History Coverage</h2>

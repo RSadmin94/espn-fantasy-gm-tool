@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -338,6 +339,34 @@ export function HallOfFame() {
   return (
     <div style={PAGEBG} className="-m-4 md:-m-6 px-4 pt-6 pb-20 sm:px-6 min-h-full">
       <div className="mx-auto max-w-6xl space-y-8">
+      {diag && diag.totalMedals === 0 && (
+        <div className="rounded-xl border border-amber-500/35 bg-amber-500/[0.08] px-4 py-3 text-sm text-amber-100/95">
+          <p className="font-semibold text-amber-50">No championship medals imported yet</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-amber-100/80">
+            The Ring of Honor reads dynasty titles from <code className="rounded bg-black/30 px-1 text-[11px]">league_medals</code>{" "}
+            (scraped from ESPN&apos;s League History page). Until those rows exist for this league, the champions tab
+            stays empty — this is expected, not a sync bug. Use{" "}
+            <Link to="/sync" className="font-medium text-amber-50 underline underline-offset-2 hover:text-white">
+              Sync Data → League History Medals
+            </Link>{" "}
+            to capture medals, then refresh this page.
+          </p>
+        </div>
+      )}
+      {diag && diag.totalMedals > 0 && lb.length === 0 && (
+        <div className="rounded-xl border border-violet-500/30 bg-violet-500/[0.07] px-4 py-3 text-sm text-violet-100/95">
+          <p className="font-semibold text-violet-50">Medals on file but no resolved champions</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-violet-100/80">
+            Team labels in <code className="rounded bg-black/30 px-1 text-[11px]">league_medals</code> could not be
+            matched to owners in <code className="rounded bg-black/30 px-1 text-[11px]">gm_teams</code>. Check medal
+            diagnostics below or re-scrape medals after team names stabilize on{" "}
+            <Link to="/sync" className="font-medium text-violet-50 underline underline-offset-2 hover:text-white">
+              Sync Data
+            </Link>
+            .
+          </p>
+        </div>
+      )}
       {/* HERO */}
       <section className="space-y-4">
         <div className="text-center">
