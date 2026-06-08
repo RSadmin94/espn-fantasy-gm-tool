@@ -15,6 +15,7 @@
  */
 import { getAllCachedSeasons, getCachedView, resolveActiveLeagueId } from "./db";
 import { resolveEspnCreds, fetchEspnViews } from "./espnService";
+import { getLeagueHistoricalCoverageSignals } from "./weeklyStatsLeagueCoverage";
 
 export type DiscoveryConfidence = "high" | "medium" | "low";
 
@@ -25,6 +26,12 @@ export interface LeagueHistoryDiscovery {
   availableSeasons: number[]; // newest-first
   syncedSeasons: number[]; // newest-first
   missingSeasons: number[]; // newest-first
+  /** Normalized `teams` rows present for this league (newest-first). */
+  teamsSeasons: number[];
+  /** Seasons with league-scoped weekly player stats (newest-first). */
+  weeklyStatsSeasons: number[];
+  /** Seasons with `league_medals` rows (newest-first). */
+  medalSeasons: number[];
   confidence: DiscoveryConfidence;
   warnings: string[];
 }
@@ -88,6 +95,9 @@ export async function discoverLeagueHistory(
       availableSeasons: [],
       syncedSeasons: [],
       missingSeasons: [],
+      teamsSeasons: [],
+      weeklyStatsSeasons: [],
+      medalSeasons: [],
       confidence: "low",
       warnings,
     };
@@ -154,6 +164,18 @@ export async function discoverLeagueHistory(
   const syncedSet = new Set(syncedSeasons);
   const missingSeasons = availableSeasons.filter((s) => !syncedSet.has(s));
 
+  let teamsSeasons: number[] = [];
+  let weeklyStatsSeasons: number[] = [];
+  let medalSeasons: number[] = [];
+  try {
+    const cov = await getLeagueHistoricalCoverageSignals(lid);
+    teamsSeasons = cov.teamsSeasons;
+    weeklyStatsSeasons = cov.weeklyStatsSeasons;
+    medalSeasons = cov.medalSeasons;
+  } catch (e) {
+    warnings.push(`DB coverage lookup failed: ${(e as Error).message}`);
+  }
+
   return {
     leagueId: lid,
     leagueName,
@@ -161,6 +183,9 @@ export async function discoverLeagueHistory(
     availableSeasons,
     syncedSeasons,
     missingSeasons,
+    teamsSeasons,
+    weeklyStatsSeasons,
+    medalSeasons,
     confidence,
     warnings,
   };

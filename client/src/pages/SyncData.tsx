@@ -2369,6 +2369,74 @@ export function SyncData() {
                   </CardContent>
                 </Card>
 
+                {lh && (
+                  <Card>
+                    <CardHeader className="py-3">
+                      <CardTitle className="text-base">Season coverage matrix</CardTitle>
+                      <CardDescription className="text-xs">
+                        ESPN-detected seasons vs raw cache import, normalized teams, weekly player stats, and Hall of
+                        Fame medals.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="overflow-x-auto px-2 pb-3 sm:px-4">
+                      {(() => {
+                        const availSet = new Set(lh.availableSeasons ?? []);
+                        const teamsS = new Set(lh.teamsSeasons ?? []);
+                        const weeklyS = new Set(lh.weeklyStatsSeasons ?? []);
+                        const medalS = new Set(lh.medalSeasons ?? []);
+                        const matrixSeasons = [
+                          ...new Set([
+                            ...available,
+                            ...lh.syncedSeasons,
+                            ...lh.teamsSeasons,
+                            ...lh.weeklyStatsSeasons,
+                            ...lh.medalSeasons,
+                          ]),
+                        ].sort((a, b) => b - a);
+                        const cell = (ok: boolean) => (
+                          <span className={ok ? "text-emerald-400" : "text-muted-foreground"}>{ok ? "✓" : "—"}</span>
+                        );
+                        return (
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b border-border text-left text-muted-foreground">
+                                <th className="py-2 pr-2 font-medium">Season</th>
+                                <th className="py-2 px-1 text-center font-medium" title="ESPN previousSeasons / discovery">
+                                  ESPN
+                                </th>
+                                <th className="py-2 px-1 text-center font-medium" title="espn_raw_cache / synced">
+                                  Synced
+                                </th>
+                                <th className="py-2 px-1 text-center font-medium" title="teams table">
+                                  Teams
+                                </th>
+                                <th className="py-2 px-1 text-center font-medium" title="gm_weekly_player_stats ∩ teams">
+                                  Weekly
+                                </th>
+                                <th className="py-2 pl-1 text-center font-medium" title="league_medals">
+                                  Medals
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {matrixSeasons.map((s) => (
+                                <tr key={s} className="border-b border-border/60">
+                                  <td className="py-1.5 pr-2 font-mono tabular-nums text-foreground">{s}</td>
+                                  <td className="py-1.5 px-1 text-center">{cell(availSet.has(s))}</td>
+                                  <td className="py-1.5 px-1 text-center">{cell(syncedSet.has(s))}</td>
+                                  <td className="py-1.5 px-1 text-center">{cell(teamsS.has(s))}</td>
+                                  <td className="py-1.5 px-1 text-center">{cell(weeklyS.has(s))}</td>
+                                  <td className="py-1.5 pl-1 text-center">{cell(medalS.has(s))}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+                )}
+
                 <div className="space-y-2">
                   {available.map((s) => {
                     const isSynced = syncedSet.has(s);
