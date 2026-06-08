@@ -1500,8 +1500,12 @@ export function DraftWarRoom() {
 
   const { keeperPredictions, rosterNeeds, tradedPicks, shockMeters, confidenceDashboard,
           keeperCompression, scarcityAlerts, positionRunAlerts, pressureByRound, draftEnvironment,
-          mockDraft, availablePool, teamCount, totalPicks } = data;
+          mockDraft, availablePool, teamCount, totalPicks, draftBoardSummary } = data;
   const maxRound = Math.max(...(mockDraft ?? []).map((p: any) => p.round), 0);
+  const keeperRetainedSlots =
+    draftBoardSummary != null
+      ? Math.max(0, draftBoardSummary.boardSlotCount - draftBoardSummary.openDraftPickCount)
+      : null;
 
   return (
     <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 85% -10%,rgba(245,197,24,.06),transparent 45%),linear-gradient(180deg,#140e17,#0f0b11)" }}>
@@ -1520,12 +1524,20 @@ export function DraftWarRoom() {
             <p className="text-xs text-zinc-500 ml-10">
               League-specific behavioral prediction · {teamCount} teams · {totalPicks} picks · {maxRound} rounds
             </p>
+            {draftBoardSummary != null && keeperRetainedSlots != null && (
+              <p className="text-xs text-zinc-500 ml-10 mt-1">
+                <span className="font-semibold text-zinc-400">Draft Truth</span>{" "}
+                (synced board — same season as Draft History):{" "}
+                {draftBoardSummary.boardSlotCount} slots · {keeperRetainedSlots} keeper/retained ·{" "}
+                {draftBoardSummary.openDraftPickCount} open-draft.
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {[
               { l: "TEAMS", v: teamCount },
-              { l: "KEEPERS", v: keeperPredictions?.length ?? 0 },
-              { l: "TRADED PICKS", v: tradedPicks?.length ?? 0 },
+              { l: "KEEPER PRED", v: keeperPredictions?.length ?? 0 },
+              { l: "TRADE ROWS", v: tradedPicks?.length ?? 0 },
               { l: "ROUNDS", v: maxRound },
             ].map(s => (
               <div key={s.l} className="text-center px-3.5 py-2.5 rounded-xl bg-[#1b131f] border border-white/[0.07]">
@@ -1557,9 +1569,13 @@ export function DraftWarRoom() {
         {/* Disclaimer */}
         <div className="flex items-center gap-2 p-3 rounded-lg bg-zinc-900/60 border border-white/[0.06] text-[11px] text-zinc-500">
           <Info className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
-          Keeper predictions are <span className="font-bold text-amber-400 mx-1">PREDICTED — NOT OFFICIAL</span> unless confirmed.
-          KVS = Keeper Value Score (100 = break-even, &gt;100 = value, &lt;100 = overpay).
-          Traded picks detected by counting picks-per-team-per-round vs expected 1. All signals are evidence-backed.
+          <span className="font-semibold text-zinc-400">KEEPER PRED</span> rows are model projections —{" "}
+          <span className="font-bold text-amber-400 mx-0.5">NOT OFFICIAL</span> keeper slots unless you confirm them.
+          KVS = Keeper Value Score (100 = break-even, &gt;100 = value, &lt;100 = overpay).{" "}
+          <span className="font-semibold text-zinc-400">TRADE ROWS</span> counts extra/missing{" "}
+          <em>open-draft</em> slots per team×round vs “exactly one” (heuristic — not ESPN’s trade log or Draft History).{" "}
+          <span className="font-semibold text-zinc-400">Mock Draft Board</span> badge = full board rows (keepers + open-draft).
+          All signals are evidence-backed.
         </div>
 
         {/* 1. Confidence Dashboard */}
@@ -1569,7 +1585,7 @@ export function DraftWarRoom() {
         </Section>
 
         {/* 2. Keeper Predictions */}
-        <Section title="Keeper Strategy" icon={Trophy} badge={keeperPredictions?.length}>
+        <Section title="Keeper predictions" icon={Trophy} badge={keeperPredictions?.length}>
           <KeeperSection predictions={keeperPredictions ?? []} />
         </Section>
 
@@ -1601,8 +1617,8 @@ export function DraftWarRoom() {
           <CompressionSection compression={keeperCompression ?? []} />
         </Section>
 
-        {/* 9. Draft Capital (Traded Picks) */}
-        <Section title="Pick Capital" icon={TrendingUp} badge={tradedPicks?.length ?? 0} defaultOpen={false}>
+        {/* 9. Trade pick signals (open-slot heuristic rows) */}
+        <Section title="Trade pick signals" icon={TrendingUp} badge={tradedPicks?.length ?? 0} defaultOpen={false}>
           <TradedPicksBadge tradedPicks={tradedPicks ?? []} />
         </Section>
 
