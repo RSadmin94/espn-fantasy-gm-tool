@@ -38,7 +38,7 @@ function GateRow({ name, status, reason }: { name: string; status: string; reaso
 }
 
 export function LeagueDataHealth() {
-  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn, activeQ } = useLeagueActiveGate();
   const leagueKeyReady =
     Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
   const q = trpcA().dataHealth.leagueOverview.useQuery(
@@ -88,7 +88,8 @@ export function LeagueDataHealth() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">League Data Health</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Atlantas Finest FF · League {d.leagueId}
+          {activeQ.data?.leagueName?.trim() || "League name pending sync"}
+          {d.leagueId ? ` · League ${d.leagueId}` : ""}
         </p>
       </div>
 

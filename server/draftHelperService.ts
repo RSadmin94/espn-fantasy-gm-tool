@@ -364,7 +364,11 @@ export function buildPickRecommendationPrompt(params: {
     `#${p.overall} ${p.ownerName}: ${p.playerName} (${p.position})`
   ).join("\n");
 
-  return `You are an elite fantasy football draft advisor for a 14-team PPR league (15 rounds, snake draft).
+  const leagueSizeLabel = totalTeams > 0
+    ? `a ${totalTeams}-team league${totalRounds > 0 ? ` (${totalRounds} rounds)` : ""}`
+    : "a fantasy football league";
+
+  return `You are an elite fantasy football draft advisor for ${leagueSizeLabel}.
 
 LEAGUE CONTEXT:
 ${leagueContext}
