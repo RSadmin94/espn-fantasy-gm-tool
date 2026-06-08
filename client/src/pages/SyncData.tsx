@@ -27,12 +27,21 @@ import {
   ChevronUp,
   Clock,
   Database,
+  History,
   Layers,
   Loader2,
   RefreshCw,
+  Shield,
   SkipForward,
+  Sparkles,
+  Wrench,
   XCircle,
 } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 type RefreshResult = {
   status: string;
@@ -353,6 +362,10 @@ export function SyncData() {
   const [scrapeLeagueMedalsBusy, setScrapeLeagueMedalsBusy] = useState(false);
   const [scrapeLeagueMedalsNote, setScrapeLeagueMedalsNote] = useState<string | null>(null);
   const [scrapeLeagueMedalsErr, setScrapeLeagueMedalsErr] = useState<string | null>(null);
+  /** League Synchronization Center — primary CTA orchestration */
+  const [syncHubBusy, setSyncHubBusy] = useState<"idle" | "sync" | "import" | "repair" | "fix">("idle");
+  const [syncHubNote, setSyncHubNote] = useState("");
+  const [adminToolsOpen, setAdminToolsOpen] = useState(false);
   const medalsQ    = trpc.espn.leagueMedals.useQuery(withLeagueSalt({}, leagueContextKey), {
     staleTime: 0,
     enabled: leagueKeyReady,
@@ -552,6 +565,27 @@ export function SyncData() {
   // newest-first (descending), so use Math.max — not the last array element,
   // which would pick the OLDEST season (e.g. 2009).
   const latestSeason = allSeasons.length > 0 ? Math.max(...allSeasons) : null;
+
+  const leagueHealth = useMemo(() => {
+    const lh = discoverHistoryQuery.data;
+    const synced = lh?.syncedSeasons ?? [];
+    const missing = lh?.missingSeasons ?? [];
+    const latest = latestSeason;
+    const curSynced = latest != null && synced.includes(latest);
+    const medalRows = medalsQ.data?.length ?? 0;
+    const draftOk = manifests.some((m) => (Number(m.draftPickCount) || 0) > 0);
+    const teamsOk = manifests.some((m) => (Number(m.teamCount) || 0) > 1);
+    const items: { ok: boolean; label: string }[] = [
+      { ok: curSynced, label: latest ? `Current season (${latest}) in cache` : "Current season — connect ESPN to assess" },
+      { ok: draftOk, label: draftOk ? "Draft picks present in sync manifests" : "Draft history thin or missing in manifests" },
+      { ok: teamsOk, label: teamsOk ? "Team snapshots present" : "Team snapshots missing" },
+      { ok: missing.length === 0, label: missing.length === 0 ? "No missing historical seasons (per discovery)" : `${missing.length} season(s) still missing vs ESPN history` },
+      { ok: medalRows > 0, label: medalRows > 0 ? "Championship medals on file (Hall of Fame source)" : "Championship medals missing — Hall of Fame needs League History Medals" },
+    ];
+    const okCount = items.filter((i) => i.ok).length;
+    const score = items.length ? Math.round((okCount / items.length) * 100) : 0;
+    return { items, score };
+  }, [discoverHistoryQuery.data, latestSeason, medalsQ.data, manifests]);
 
   const toggleSeason = (s: number) => {
     setSelectedSeasons(prev =>
@@ -907,7 +941,7 @@ export function SyncData() {
     }
   };
 
-  const isLoading = refreshMutation.isPending;
+  const isLoading = refreshMutation.isPending || syncHubBusy !== "idle";
   const isBackfillLoading = backfillNormalizedMutation.isPending;
   const isRawCacheBackfillLoading = backfillFromRawCacheMutation.isPending;
   const isHistoricalEnrichmentLoading = enrichHistoricalSeasonMutation.isPending;
@@ -1106,18 +1140,292 @@ export function SyncData() {
     }
   };
 
+  const runSyncMyLeagueCore = async (): Promise<boolean> => {
+    const { data: lh } = await discoverHistoryQuery.refetch();
+    const newestFromEspn =
+      lh?.availableSeasons && lh.availableSeasons.length > 0
+        ? Math.max(...lh.availableSeasons)
+        : null;
+    const latest = latestSeason ?? newestFromEspn;
+    const missing = lh?.missingSeasons ?? [];
+    const seasons = [...new Set([...(typeof latest === "number" ? [latest] : []), ...missing])];
+    if (seasons.length === 0) return false;
+    setRunResults({});
+    await refreshMutation.mutateAsync({ seasons, forceRefresh: false });
+    const backfillSeasons = seasonsForNormalizedBackfill.filter((s) => seasons.includes(s));
+    if (backfillSeasons.length > 0) {
+      await backfillNormalizedMutation.mutateAsync({
+        seasons: [...backfillSeasons].sort((a, b) => a - b),
+        force: false,
+      });
+    }
+    await Promise.all([
+      utils.espn.manifests.invalidate(),
+      utils.espn.cachedSeasons.invalidate(),
+      utils.espn.discoverLeagueHistory.invalidate(),
+      utils.espn.allSeasons.invalidate(),
+    ]);
+    return true;
+  };
+
+  const runImportLeagueHistoryCore = async (): Promise<{ min: number; max: number; count: number } | null> => {
+    const { data: lh } = await discoverHistoryQuery.refetch();
+    const avail = lh?.availableSeasons ?? [];
+    if (avail.length === 0) return null;
+    setRunResults({});
+    await refreshMutation.mutateAsync({ seasons: avail, forceRefresh: true });
+    const cr = await cachedQuery.refetch();
+    const cachedAfter = cr.data ?? [];
+    const seasonsBf = HISTORICAL_COMPLETED_SEASONS.filter((s) => cachedAfter.includes(s));
+    if (seasonsBf.length > 0) {
+      await backfillNormalizedMutation.mutateAsync({
+        seasons: [...seasonsBf].sort((a, b) => a - b),
+        force: false,
+      });
+    }
+    await Promise.all([
+      utils.espn.manifests.invalidate(),
+      utils.espn.cachedSeasons.invalidate(),
+      utils.espn.discoverLeagueHistory.invalidate(),
+      utils.espn.allSeasons.invalidate(),
+      utils.espn.leagueMedals.invalidate(),
+    ]);
+    return { min: Math.min(...avail), max: Math.max(...avail), count: avail.length };
+  };
+
+  const runRepairLeagueCore = async () => {
+    if (sortedReprocessSeasons.length > 0) {
+      await handleBackfillHistoricalSeasons();
+    }
+    if (seasonsForNormalizedBackfill.length > 0) {
+      await backfillNormalizedMutation.mutateAsync({
+        seasons: [...seasonsForNormalizedBackfill].sort((a, b) => a - b),
+        force: forceHistoricalBackfill,
+      });
+    }
+    const rawSeasons = HISTORICAL_COMPLETED_SEASONS.filter(
+      (s) =>
+        cachedSeasons.includes(s) && s >= RAW_CACHE_BACKFILL_MIN && s <= RAW_CACHE_BACKFILL_MAX,
+    );
+    if (rawSeasons.length > 0) {
+      await backfillFromRawCacheMutation.mutateAsync({
+        seasons: rawSeasons.sort((a, b) => a - b),
+        force: forceRawCacheBackfill,
+      });
+    }
+    await Promise.all([utils.espn.manifests.invalidate(), utils.espn.cachedSeasons.invalidate()]);
+  };
+
+  const handleSyncMyLeague = async () => {
+    if (syncHubBusy !== "idle") return;
+    setSyncHubBusy("sync");
+    setSyncHubNote("Discovering seasons and syncing from ESPN…");
+    try {
+      const ok = await runSyncMyLeagueCore();
+      if (ok) toast.success("League synchronized successfully.");
+      else toast.message("Nothing to refresh right now — try Import League History if you need older seasons.");
+    } catch (e) {
+      toast.error(trpcLikeErrorMessage(e as Error));
+    } finally {
+      setSyncHubBusy("idle");
+      setSyncHubNote("");
+    }
+  };
+
+  const handleImportLeagueHistory = async () => {
+    if (syncHubBusy !== "idle") return;
+    setSyncHubBusy("import");
+    setSyncHubNote("Discovering every available season…");
+    try {
+      const range = await runImportLeagueHistoryCore();
+      if (!range) {
+        toast.warning("No historical window detected yet. Sync My League first, then try again.");
+        return;
+      }
+      setSyncHubNote("Importing championship medals via browser (extension)…");
+      await handleScrapeLeagueHistoryMedals();
+      toast.success(
+        `Historical import complete. Seasons ${range.min}–${range.max} (${range.count} in ESPN discovery window).`,
+      );
+    } catch (e) {
+      toast.error(trpcLikeErrorMessage(e as Error));
+    } finally {
+      setSyncHubBusy("idle");
+      setSyncHubNote("");
+    }
+  };
+
+  const handleRepairLeagueData = async () => {
+    if (syncHubBusy !== "idle") return;
+    setSyncHubBusy("repair");
+    setSyncHubNote("Repairing from stored caches (no new ESPN fetch unless needed)…");
+    try {
+      await runRepairLeagueCore();
+      toast.success("League repair completed.");
+    } catch (e) {
+      toast.error(trpcLikeErrorMessage(e as Error));
+    } finally {
+      setSyncHubBusy("idle");
+      setSyncHubNote("");
+    }
+  };
+
+  const handleFixEverything = async () => {
+    if (syncHubBusy !== "idle") return;
+    setSyncHubBusy("fix");
+    try {
+      setSyncHubNote("Step 1 — Sync essentials from ESPN…");
+      await runSyncMyLeagueCore();
+      setSyncHubNote("Step 2 — Repair from caches…");
+      await runRepairLeagueCore();
+      setSyncHubNote("Step 3 — Championship medals (browser extension)…");
+      await handleScrapeLeagueHistoryMedals();
+      toast.success("Fix pass completed. Review League Health above and Hall of Fame.");
+    } catch (e) {
+      toast.error(trpcLikeErrorMessage(e as Error));
+    } finally {
+      setSyncHubBusy("idle");
+      setSyncHubNote("");
+    }
+  };
+
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      {/* Header */}
+    <div className="mx-auto max-w-3xl space-y-6">
+      {/* Header — League Synchronization Center */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Sync Data</h1>
+        <h1 className="text-3xl font-bold text-foreground">League Synchronization Center</h1>
         <p className="mt-1 text-muted-foreground">
-          Pull fresh data from ESPN. Seasons {ESPN_HISTORICAL_COMPLETED_MIN}–{ESPN_HISTORICAL_COMPLETED_MAX} stay static
-          once fully normalized unless you force a refresh. Current season {ESPN_HISTORICAL_COMPLETED_MAX + 1} always
-          updates normally.
+          Keep your league accurate and complete. Use the three primary actions below — engineering tools stay in{" "}
+          <span className="font-medium text-foreground">Advanced Admin Tools</span> (collapsed by default).
         </p>
       </div>
 
+      {/* League health + primary CTAs */}
+      <Card className="border-primary/25 bg-gradient-to-b from-primary/[0.06] to-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Shield className="h-5 w-5 text-primary" />
+            League health
+          </CardTitle>
+          <CardDescription>
+            Quick read on cache, history, and Hall of Fame inputs.{" "}
+            <span className="font-semibold text-foreground">{leagueHealth.score}%</span> checks passing.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${leagueHealth.score}%` }}
+            />
+          </div>
+          <ul className="space-y-1.5 text-sm">
+            {leagueHealth.items.map((row) => (
+              <li key={row.label} className="flex items-start gap-2">
+                {row.ok ? (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-lime-500" />
+                ) : (
+                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500/90" />
+                )}
+                <span className={row.ok ? "text-muted-foreground" : "text-foreground"}>{row.label}</span>
+              </li>
+            ))}
+          </ul>
+          {!leagueHealth.items.some((i) => i.ok && i.label.includes("Championship medals on file")) && (
+            <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+              Hall of Fame requires championship history.{" "}
+              <Button
+                variant="link"
+                className="h-auto p-0 text-amber-50 underline"
+                disabled={syncHubBusy !== "idle"}
+                onClick={() => void handleImportLeagueHistory()}
+              >
+                Import League History
+              </Button>{" "}
+              (runs ESPN refresh + medals capture).
+            </div>
+          )}
+          {syncHubNote ? (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {syncHubNote}
+            </p>
+          ) : null}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button
+              size="lg"
+              className="h-auto min-h-[3.5rem] flex-col gap-1 py-3 text-base font-semibold"
+              disabled={syncHubBusy !== "idle" || !isConnected}
+              onClick={() => void handleSyncMyLeague()}
+            >
+              <span className="flex items-center gap-2">
+                <RefreshCw className="h-5 w-5" />
+                Sync my league
+              </span>
+              <span className="text-xs font-normal text-primary-foreground/80">
+                Current + missing ESPN seasons, normalize manifests
+              </span>
+            </Button>
+            <Button
+              id="sync-import-history"
+              size="lg"
+              variant="secondary"
+              className="h-auto min-h-[3.5rem] flex-col gap-1 border border-border py-3 text-base font-semibold"
+              disabled={syncHubBusy !== "idle" || !isConnected}
+              onClick={() => void handleImportLeagueHistory()}
+            >
+              <span className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Import league history
+              </span>
+              <span className="text-xs font-normal opacity-90">
+                Full ESPN history window + medals (extension)
+              </span>
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-auto min-h-[3.5rem] flex-col gap-1 py-3 text-base font-semibold sm:col-span-2"
+              disabled={syncHubBusy !== "idle"}
+              onClick={() => void handleRepairLeagueData()}
+            >
+              <span className="flex items-center gap-2">
+                <Wrench className="h-5 w-5" />
+                Repair league data
+              </span>
+              <span className="text-xs font-normal text-muted-foreground">
+                Reprocess caches, backfill tables, rebuild from raw slices
+              </span>
+            </Button>
+            <Button
+              size="lg"
+              variant="default"
+              className="h-auto min-h-[3rem] gap-2 bg-violet-600 text-white hover:bg-violet-500 sm:col-span-2"
+              disabled={syncHubBusy !== "idle" || !isConnected}
+              onClick={() => void handleFixEverything()}
+            >
+              <Sparkles className="h-5 w-5" />
+              Fix everything (recommended)
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Collapsible open={adminToolsOpen} onOpenChange={setAdminToolsOpen}>
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex w-full items-center justify-between gap-2 border-dashed px-4 py-3 text-sm font-semibold"
+          >
+            <span className="flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              Advanced admin tools
+            </span>
+            {adminToolsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-6 pt-2">
       {autoSync2026 && refreshMutation.isPending && (
         <div className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-foreground">
           Syncing 2026 ESPN data...
@@ -2260,7 +2568,10 @@ export function SyncData() {
             </CardContent>
           </Card>
         );
-      })()}
+        })()}
+
+        </CollapsibleContent>
+      </Collapsible>
 
     </div>
   );
