@@ -115,6 +115,7 @@ import {
   hasCookies,
   resolveEspnCreds,
 } from "./espnService";
+import { matchupIsPlayoffFromEspnTier } from "./matchupPlayoffTier";
 import {
   resolveKeeperDraftGeometryForSeason,
   defaultMidPickInRound,
@@ -638,7 +639,7 @@ export const appRouter = router({
           let p = pairMap.get(key);
           if (!p) { p = { a: A, b: B, aWins: 0, aLosses: 0, ties: 0, meetings: 0, playoff: 0, close10: 0, close5: 0, firstSeason: season, lastSeason: season }; pairMap.set(key, p); }
           p.meetings += 1;
-          if (String(m.playoffTierType ?? "").length > 0) p.playoff += 1;
+          if (matchupIsPlayoffFromEspnTier(m.playoffTierType)) p.playoff += 1;
           const margin = Math.abs(hs - as);
           if (margin < 10) p.close10 += 1;
           if (margin < 5) p.close5 += 1;
@@ -3470,7 +3471,7 @@ export const appRouter = router({
             awayProjected: m.awayProjectedPoints != null ? Number(m.awayProjectedPoints) : null,
             winnerTeamId,
             isCompleted: winnerTeamId != null ? 1 : 0,
-            isPlayoff: String(m.playoffTierType ?? "").length > 0 ? 1 : 0,
+            isPlayoff: matchupIsPlayoffFromEspnTier(m.playoffTierType) ? 1 : 0,
           };
         });
 

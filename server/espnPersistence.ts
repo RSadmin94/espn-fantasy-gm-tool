@@ -21,6 +21,7 @@ import {
   hasCookies,
   type EspnCreds,
 } from "./espnService";
+import { matchupIsPlayoffFromEspnTier } from "./matchupPlayoffTier";
 import { TRPCError } from "@trpc/server";
 
 export type AppDb = MySql2Database<typeof schema>;
@@ -351,7 +352,7 @@ export async function upsertMatchups(
       else if (ws === "AWAY") winner = aid;
       else { const n = Number(m.winner); if (Number.isFinite(n) && n > 0) winner = n; }
     }
-    const isPlayoff = String(m.playoffTierType || "").length > 0 ? 1 : 0;
+    const isPlayoff = matchupIsPlayoffFromEspnTier(m.playoffTierType) ? 1 : 0;
     const isCompleted = winner != null ? 1 : 0;
     await db
       .insert(schema.gmMatchups)

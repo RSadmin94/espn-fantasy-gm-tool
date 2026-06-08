@@ -22,6 +22,7 @@ import {
   fetchEspnViews,
   ALL_VIEWS,
 } from "../espnService";
+import { matchupIsPlayoffFromEspnTier } from "../matchupPlayoffTier";
 import { getCachedView } from "../db";
 import type {
   ProviderAdapter,
@@ -171,7 +172,7 @@ function buildUniversalLeague(
     homeProjectedScore: m.homeProjectedPoints as number | undefined,
     awayProjectedScore: m.awayProjectedPoints as number | undefined,
     winner: mapMatchupWinner(m.winner, m.homeTeamId, m.awayTeamId),
-    isPlayoff: (m.playoffTierType as string) !== "NONE" && Boolean(m.playoffTierType),
+    isPlayoff: matchupIsPlayoffFromEspnTier(m.playoffTierType),
   }));
 
   // ── Transactions ──
