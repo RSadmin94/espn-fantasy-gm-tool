@@ -229,8 +229,11 @@ export function LeagueSettings() {
         <Row label="Max Keeper Duration" value="2 consecutive years" />
         <Row label="Keeper Cost Method"  value="Drafted round — 1 (min Round 1)" />
         <Row label="Keeper Tracking"     value="ESPN Draft History (isKeeper flag)" />
-        {meta?.keeperCount != null && (
-          <Row label="Keepers Per Team" value={String(meta.keeperCount)} />
+        {(meta?.keeperSlotsPerTeam != null || meta?.keeperCount != null) && (
+          <Row
+            label="Keepers Per Team (ESPN)"
+            value={String(meta?.keeperSlotsPerTeam ?? meta?.keeperCount)}
+          />
         )}
         {meta?.draftType != null && (
           <Row label="Draft Type" value={String(meta.draftType)} />
@@ -241,6 +244,12 @@ export function LeagueSettings() {
       {meta && (
         <SectionCard title="League Info">
           {meta.size       != null && <Row label="Teams"           value={String(meta.size)} />}
+          {typeof (meta as { keepers?: boolean }).keepers === "boolean" && (
+            <Row
+              label="Keeper league"
+              value={(meta as { keepers?: boolean }).keepers ? "Yes" : "No (redraft)"}
+            />
+          )}
           {meta.playoffTeamCount != null && <Row label="Playoff Teams"  value={String(meta.playoffTeamCount)} />}
           {meta.matchupPeriodCount != null && <Row label="Regular Season Weeks" value={String(meta.matchupPeriodCount)} />}
         </SectionCard>

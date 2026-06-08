@@ -237,6 +237,12 @@ export function KeeperAdvisor() {
   const poolPayload = leagueKeyReady ? poolQ.data : undefined;
   const errorMsg = (poolPayload as { error?: string } | undefined)?.error;
   const hintMsg  = (poolPayload as { hint?: string }  | undefined)?.hint;
+  const isRedraftDisabled = Boolean(
+    poolPayload &&
+      typeof poolPayload === "object" &&
+      "disabled" in poolPayload &&
+      (poolPayload as { disabled?: boolean }).disabled === true,
+  );
 
   const owners    = useMemo(() => [...new Set(pool.map(p => p.ownerName))].sort(), [pool]);
   const positions = useMemo(() => [...new Set(pool.map(p => p.position).filter(Boolean))].sort(), [pool]);
@@ -262,6 +268,26 @@ export function KeeperAdvisor() {
     }
     return rows;
   }, [sorted, ownerFilter, posFilter, maxKeepers]);
+
+  // Redraft league — server gate (no spinner, no empty tables)
+  if (isRedraftDisabled && poolPayload && typeof poolPayload === "object") {
+    const slots = (poolPayload as { keeperSlotsPerTeam?: number | null }).keeperSlotsPerTeam;
+    const slotsTxt =
+      typeof slots === "number" && Number.isFinite(slots)
+        ? String(slots)
+        : "0";
+    return (
+      <div className="mx-auto max-w-lg px-6 py-16 text-center">
+        <Info className="mx-auto mb-4 h-10 w-10 text-zinc-500" />
+        <h1 className="text-xl font-bold text-zinc-100">Keeper tools unavailable</h1>
+        <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+          This league is configured as a redraft league.
+          ESPN reports {slotsTxt} keeper slot{slotsTxt === "1" ? "" : "s"} per team.
+          Keeper tools are unavailable.
+        </p>
+      </div>
+    );
+  }
 
   // Loading
   if (!leagueKeyReady || poolQ.isLoading) {

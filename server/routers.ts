@@ -115,6 +115,7 @@ import {
   hasCookies,
   resolveEspnCreds,
 } from "./espnService";
+import { buildLeagueCapabilities } from "./leagueCapabilities";
 import { matchupIsPlayoffFromEspnTier } from "./matchupPlayoffTier";
 import {
   resolveKeeperDraftGeometryForSeason,
@@ -2624,6 +2625,28 @@ export const appRouter = router({
         }
         const lid = leagueId;
         const db = await getDb();
+
+        // Redraft gate (single source of truth = LeagueCapabilities). Only disables when a
+        // season payload is present AND reports no keeper slots; a missing payload falls through
+        // to the normal no-cache handling below, so a real keeper league is never mis-gated.
+        const capSeasonData = await getSeasonData(rosterSeason, undefined, ctx.user.id);
+        if (capSeasonData) {
+          const capabilities = buildLeagueCapabilities(lid, rosterSeason, capSeasonData as Record<string, unknown>);
+          if (!capabilities.keepers) {
+            return {
+              pool: [] as KeeperPoolEntry[],
+              draftYear,
+              rosterSeason,
+              leagueId: lid,
+              prevSeason,
+              prev2Season,
+              disabled: true as const,
+              reason: `Redraft league — ESPN reports ${capabilities.keeperSlotsPerTeam ?? 0} keeper slot(s) per team. Keeper tools are unavailable.`,
+              keeperSlotsPerTeam: capabilities.keeperSlotsPerTeam,
+              rosterProvenance: null as null,
+            };
+          }
+        }
 
         const draftData = await getSeasonData(prevSeason, undefined, ctx.user.id);
         if (!draftData) {

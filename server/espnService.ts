@@ -11,6 +11,7 @@
  */
 
 import { classifyEspnDraftSlot } from "./draftTruth/classifySlot";
+import { readKeeperSlotsPerTeamFromPayload, keepersEnabledFromSlots } from "./leagueCapabilities";
 
 const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
 const SWID = process.env.ESPN_SWID || "";
@@ -543,6 +544,10 @@ export function normalizeSettings(data: Record<string, unknown>) {
   const tradeSettings = (settings.tradeSettings as Record<string, unknown>) || {};
   const draftSettings = (settings.draftSettings as Record<string, unknown>) || {};
 
+  // Keeper detection delegated to LeagueCapabilities (single source of truth).
+  const keeperSlotsNum = readKeeperSlotsPerTeamFromPayload(data);
+  const keepers = keepersEnabledFromSlots(keeperSlotsNum);
+
   return {
     leagueId: data.id,
     seasonId: data.seasonId,
@@ -556,7 +561,12 @@ export function normalizeSettings(data: Record<string, unknown>) {
     isActive: status.isActive,
     tradeDeadline: tradeSettings.deadlineDate,
     draftType: draftSettings.type,
-    keeperCount: settings.keeperCount,
+    /** @deprecated Use keeperSlotsPerTeam — kept for older clients */
+    keeperCount: keeperSlotsNum ?? (settings.keeperCount as number | undefined) ?? null,
+    /** ESPN: draftSettings.keeperCount ?? settings.keeperCount (via LeagueCapabilities) */
+    keeperSlotsPerTeam: keeperSlotsNum,
+    /** True when ESPN reports > 0 keeper slots per team (LeagueCapabilities) */
+    keepers,
     rosterPositions: rosterSettings.lineupSlotCounts,
     scoringItems: scoringSettings.scoringItems,
   };
