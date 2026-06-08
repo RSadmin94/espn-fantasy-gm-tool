@@ -95,10 +95,10 @@ function KvsBadge({ kvs, label }: { kvs: number; label?: string }) {
 
 // ── Confidence Dashboard ──────────────────────────────────────────────────────
 
-function ConfidenceDashboard({ data }: { data: any }) {
+function ConfidenceDashboard({ data, showKeeperInsights = true }: { data: any; showKeeperInsights?: boolean }) {
   if (!data) return null;
 
-  const cards = [
+  const cardsAll = [
     {
       icon: ShieldCheck, label: "Most Predictable",
       title: data.mostPredictable?.teamName,
@@ -155,8 +155,17 @@ function ConfidenceDashboard({ data }: { data: any }) {
     },
   ];
 
+  const cards = showKeeperInsights
+    ? cardsAll
+    : cardsAll.filter((c) => c.label !== "Best Keeper Value");
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 p-4">
+    <div
+      className={cn(
+        "grid grid-cols-2 md:grid-cols-3 gap-2 p-4",
+        cards.length >= 6 ? "lg:grid-cols-6" : "lg:grid-cols-5",
+      )}
+    >
       {cards.map((c, i) => {
         const Icon = c.icon;
         return (
@@ -737,7 +746,7 @@ function LiveDraftEngine({
 
 function MockDraftBoard({
   picks, teams, availablePool, keeperPredictions, rosterNeeds,
-  onKeeperOverride, keeperOverrides,
+  onKeeperOverride, keeperOverrides, keepersEnabled = true,
 }: {
   picks: any[]; teams: any[];
   availablePool: any[];
@@ -745,6 +754,7 @@ function MockDraftBoard({
   rosterNeeds: any[];
   onKeeperOverride: (overrides: KeeperOverride[]) => void;
   keeperOverrides: KeeperOverride[];
+  keepersEnabled?: boolean;
 }) {
   const [view, setView]           = useState<"board" | "team" | "live">("board");
   const [selTeam, setSelTeam]     = useState<number | null>(null);
@@ -845,12 +855,13 @@ function MockDraftBoard({
           </button>
         ))}
 
-        {/* Keeper setup toggle */}
+        {keepersEnabled && (
         <button onClick={() => setShowKeeperSetup(s => !s)}
           className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold border transition-colors",
             showKeeperSetup ? "bg-amber-500/15 border-amber-500/40 text-amber-300" : "border-zinc-700 text-zinc-500 hover:text-zinc-300")}>
           🔑 Keeper Setup {keeperOverrides.length > 0 && <span className="bg-amber-500/30 px-1 rounded">{keeperOverrides.length}</span>}
         </button>
+        )}
 
         {/* Your team selector */}
         <div className="flex items-center gap-1.5 ml-auto">
@@ -886,7 +897,7 @@ function MockDraftBoard({
       </div>
 
       {/* Keeper Setup Panel */}
-      {showKeeperSetup && (
+      {keepersEnabled && showKeeperSetup && (
         <div className="border-b border-white/[0.06] bg-white/[0.02]/40 px-5 py-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-black text-amber-400 uppercase tracking-wider">🔑 Manual Keeper Assignment</p>
@@ -1217,21 +1228,24 @@ const GRADE_COLOR: Record<string, string> = {
   F: "text-red-400 bg-red-500/10 border-red-500/40",
 };
 
-function DraftEnvironmentSection({ env }: { env: any }) {
+function DraftEnvironmentSection({ env, showKeeperDistortion = true }: { env: any; showKeeperDistortion?: boolean }) {
   if (!env) return <div className="px-5 py-6 text-zinc-600 text-sm">No environment data.</div>;
 
-  const envCards = [
+  const envCardsAll = [
     { icon: TrendingUp,    label: "Strongest Position", val: env.strongestPosition?.position ?? "—", sub: env.strongestPosition?.reason, color: "text-violet-400", border: "border-violet-500/25 bg-violet-500/5" },
     { icon: Wind,          label: "Weakest Position",   val: env.weakestPosition?.position ?? "—",   sub: env.weakestPosition?.reason,   color: "text-violet-400",     border: "border-violet-500/25 bg-violet-500/5" },
     { icon: Flame,         label: "Biggest Run Risk",   val: env.biggestRunRisk?.position ?? "—",     sub: env.biggestRunRisk?.reason,    color: "text-amber-400",   border: "border-amber-500/25 bg-amber-500/5" },
     { icon: Target,        label: "Best Value Pocket",  val: env.biggestValuePocket?.position ?? "—", sub: env.biggestValuePocket?.reason, color: "text-violet-400",    border: "border-violet-500/25 bg-violet-500/5" },
     { icon: Lock,          label: "Keeper Distortion",  val: env.mostDistortedByKeepers?.position ?? "—", sub: env.mostDistortedByKeepers?.reason, color: "text-violet-400", border: "border-violet-500/25 bg-violet-500/5" },
   ];
+  const envCards = showKeeperDistortion
+    ? envCardsAll
+    : envCardsAll.filter((c) => c.label !== "Keeper Distortion");
 
   return (
     <div className="p-4 space-y-4">
       {/* Stat cards row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+      <div className={cn("grid grid-cols-2 sm:grid-cols-3 gap-2", envCards.length >= 5 ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
         {envCards.map((c, i) => {
           const Icon = c.icon;
           return (
@@ -1500,12 +1514,24 @@ export function DraftWarRoom() {
 
   const { keeperPredictions, rosterNeeds, tradedPicks, shockMeters, confidenceDashboard,
           keeperCompression, scarcityAlerts, positionRunAlerts, pressureByRound, draftEnvironment,
-          mockDraft, availablePool, teamCount, totalPicks, draftBoardSummary } = data;
+          mockDraft, availablePool, teamCount, totalPicks, draftBoardSummary, leagueCapabilities } = data;
+  const keepersOn = leagueCapabilities?.keepers !== false;
+  const keeperSlotsReported =
+    typeof leagueCapabilities?.keeperSlotsPerTeam === "number" && Number.isFinite(leagueCapabilities.keeperSlotsPerTeam)
+      ? leagueCapabilities.keeperSlotsPerTeam
+      : 0;
   const maxRound = Math.max(...(mockDraft ?? []).map((p: any) => p.round), 0);
   const keeperRetainedSlots =
     draftBoardSummary != null
       ? Math.max(0, draftBoardSummary.boardSlotCount - draftBoardSummary.openDraftPickCount)
       : null;
+
+  const headerChips = [
+    { l: "TEAMS", v: teamCount },
+    ...(keepersOn ? [{ l: "KEEPER PRED", v: keeperPredictions?.length ?? 0 }] as const : []),
+    { l: "TRADE ROWS", v: tradedPicks?.length ?? 0 },
+    { l: "ROUNDS", v: maxRound },
+  ];
 
   return (
     <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 85% -10%,rgba(245,197,24,.06),transparent 45%),linear-gradient(180deg,#140e17,#0f0b11)" }}>
@@ -1528,18 +1554,20 @@ export function DraftWarRoom() {
               <p className="text-xs text-zinc-500 ml-10 mt-1">
                 <span className="font-semibold text-zinc-400">Draft Truth</span>{" "}
                 (synced board — same season as Draft History):{" "}
-                {draftBoardSummary.boardSlotCount} slots · {keeperRetainedSlots} keeper/retained ·{" "}
+                {draftBoardSummary.boardSlotCount} slots
+                {keepersOn ? (
+                  <>
+                    {" "}· {keeperRetainedSlots} keeper/retained ·{" "}
+                  </>
+                ) : (
+                  " · "
+                )}
                 {draftBoardSummary.openDraftPickCount} open-draft.
               </p>
             )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {[
-              { l: "TEAMS", v: teamCount },
-              { l: "KEEPER PRED", v: keeperPredictions?.length ?? 0 },
-              { l: "TRADE ROWS", v: tradedPicks?.length ?? 0 },
-              { l: "ROUNDS", v: maxRound },
-            ].map(s => (
+            {headerChips.map((s) => (
               <div key={s.l} className="text-center px-3.5 py-2.5 rounded-xl bg-[#1b131f] border border-white/[0.07]">
                 <div className="text-xl font-black text-white">{s.v}</div>
                 <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{s.l}</div>
@@ -1553,6 +1581,13 @@ export function DraftWarRoom() {
       </div>
 
       <div className="space-y-5">
+        {!keepersOn && (
+          <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-sm text-amber-100/90">
+            <span className="font-semibold text-amber-200">Redraft league.</span>{" "}
+            ESPN reports {keeperSlotsReported} keeper slot{keeperSlotsReported === 1 ? "" : "s"} per team.
+            Keeper predictions, compression, and KVS are hidden — they do not apply to this format.
+          </div>
+        )}
 
         {/* Editorial intelligence desk — mockup layout, real data */}
         <DraftWarRoomDesk data={data} />
@@ -1569,25 +1604,38 @@ export function DraftWarRoom() {
         {/* Disclaimer */}
         <div className="flex items-center gap-2 p-3 rounded-lg bg-zinc-900/60 border border-white/[0.06] text-[11px] text-zinc-500">
           <Info className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
-          <span className="font-semibold text-zinc-400">KEEPER PRED</span> rows are model projections —{" "}
-          <span className="font-bold text-amber-400 mx-0.5">NOT OFFICIAL</span> keeper slots unless you confirm them.
-          KVS = Keeper Value Score (100 = break-even, &gt;100 = value, &lt;100 = overpay).{" "}
-          <span className="font-semibold text-zinc-400">TRADE ROWS</span> counts extra/missing{" "}
-          <em>open-draft</em> slots per team×round vs “exactly one” (heuristic — not ESPN’s trade log or Draft History).{" "}
-          <span className="font-semibold text-zinc-400">Mock Draft Board</span> badge = full board rows (keepers + open-draft).
-          All signals are evidence-backed.
+          {keepersOn ? (
+            <span>
+              <span className="font-semibold text-zinc-400">KEEPER PRED</span> rows are model projections —{" "}
+              <span className="font-bold text-amber-400 mx-0.5">NOT OFFICIAL</span> keeper slots unless you confirm them.
+              KVS = Keeper Value Score (100 = break-even, &gt;100 = value, &lt;100 = overpay).{" "}
+              <span className="font-semibold text-zinc-400">TRADE ROWS</span> counts extra/missing{" "}
+              <em>open-draft</em> slots per team×round vs “exactly one” (heuristic — not ESPN’s trade log or Draft History).{" "}
+              <span className="font-semibold text-zinc-400">Mock Draft Board</span> badge = full board rows (keepers + open-draft).
+              All signals are evidence-backed.
+            </span>
+          ) : (
+            <span>
+              <span className="font-semibold text-zinc-400">Redraft:</span> no hypothetical keepers or KVS.
+              <span className="font-semibold text-zinc-400 ml-1">TRADE ROWS</span> counts extra/missing{" "}
+              <em>open-draft</em> slots (heuristic).{" "}
+              <span className="font-semibold text-zinc-400">Mock Draft Board</span> shows synced draft slots only.
+            </span>
+          )}
         </div>
 
         {/* 1. Confidence Dashboard */}
         <Section title="Draft Briefing" icon={ShieldCheck}
           accent="border-amber-500/20 bg-white/[0.03]" defaultOpen={true}>
-          <ConfidenceDashboard data={confidenceDashboard} />
+          <ConfidenceDashboard data={confidenceDashboard} showKeeperInsights={keepersOn} />
         </Section>
 
         {/* 2. Keeper Predictions */}
+        {keepersOn && (
         <Section title="Keeper predictions" icon={Trophy} badge={keeperPredictions?.length}>
           <KeeperSection predictions={keeperPredictions ?? []} />
         </Section>
+        )}
 
         {/* 3. Roster Construction */}
         <Section title="Build Targets" icon={BarChart2} badge={rosterNeeds?.length}>
@@ -1613,9 +1661,11 @@ export function DraftWarRoom() {
         </Section>
 
         {/* 8. Keeper Compression — PHASE 1.75 */}
+        {keepersOn && (
         <Section title="Capital Compression" icon={Lock} badge={keeperCompression?.length ?? 0} defaultOpen={false}>
           <CompressionSection compression={keeperCompression ?? []} />
         </Section>
+        )}
 
         {/* 9. Trade pick signals (open-slot heuristic rows) */}
         <Section title="Trade pick signals" icon={TrendingUp} badge={tradedPicks?.length ?? 0} defaultOpen={false}>
@@ -1631,6 +1681,7 @@ export function DraftWarRoom() {
             keeperPredictions={keeperPredictions ?? []}
             rosterNeeds={rosterNeeds ?? []}
             keeperOverrides={keeperOverrides}
+            keepersEnabled={keepersOn}
             onKeeperOverride={(overrides) => {
               setKeeperOverrides(overrides);
             }}

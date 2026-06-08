@@ -13,6 +13,7 @@ import {
   normalizeDraftPicks,
   normalizeDraftOrder,
 } from "./espnService";
+import { readKeeperSlotsPerTeamFromPayload, keepersEnabledFromSlots } from "./leagueCapabilities";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -391,16 +392,23 @@ Rules: Always reference actual team names, owner names, and player names when pr
       if (draftData) {
         const draftOrderData = normalizeDraftOrder(draftData as Record<string, unknown>);
         const pickOrder = draftOrderData.pickOrder || [];
+        const draftKeeperSlots = readKeeperSlotsPerTeamFromPayload(draftData as Record<string, unknown>);
+        const isKeeperLeagueDraft = keepersEnabledFromSlots(draftKeeperSlots);
         if (pickOrder.length > 0) {
           const draftDateMs = draftOrderData.draftDate as number;
           const draftDateStr = draftDateMs ? new Date(draftDateMs).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD";
           leagueContext += `\n\n## GROUND TRUTH — ${draftLabelYear} DRAFT ORDER (this overrides any prior conversation)`;
-          leagueContext += `\nSnake Draft, ${draftOrderData.keeperCount || 1} keeper per team. Use this EXACT order — do NOT contradict it.`;
+          if (isKeeperLeagueDraft) {
+            leagueContext += `\nSnake Draft, ${draftKeeperSlots} keeper slot(s) per team (ESPN). Use this EXACT order — do NOT contradict it.`;
+          } else {
+            leagueContext += `\nRedraft league — ESPN reports ${draftKeeperSlots ?? 0} keeper slot(s) per team. Use this EXACT draft order — do NOT contradict it.`;
+          }
           leagueContext += `\nDraft Date: ${draftDateStr}`;
           leagueContext += `\nRound 1 Pick Order: ${pickOrder.map((p: Record<string, unknown>) => `#${p.position} ${p.owners}`).join(", ")}`;
           const nTeams = promptCtx.teamCount > 0 ? promptCtx.teamCount : pickOrder.length;
           leagueContext += `\n(Round 2 reverses snake order${nTeams > 0 ? ` in this ${nTeams}-team league` : ""} — last slot in round 1 picks first in round 2.)`;
         }
+        if (isKeeperLeagueDraft) {
         const picks2025 = normalizeDraftPicks(draftData as Record<string, unknown>);
         const keepers = (picks2025 as Array<Record<string, unknown>>).filter(p => p.keeper === true || p.keeper === 1);
         if (keepers.length > 0) {
@@ -408,6 +416,7 @@ Rules: Always reference actual team names, owner names, and player names when pr
           for (const k of keepers) {
             leagueContext += `\n  Round ${k.roundId}: ${k.playerName} (${k.position}) → kept by ${k.ownerName || k.teamName}`;
           }
+        }
         }
       }
     } catch {

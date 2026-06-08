@@ -435,6 +435,10 @@ export function Dashboard() {
     },
   );
 
+  const showKeeperDashboardUi =
+    (draftIntelQ.data as { leagueCapabilities?: { keepers?: boolean } } | undefined)?.leagueCapabilities
+      ?.keepers !== false;
+
   const powerTop = (ownerListQ.data?.powerRankings ?? []).slice(0, 5);
 
   const timelineRows = useMemo(() => {
@@ -532,15 +536,24 @@ export function Dashboard() {
           <Zap className="h-3.5 w-3.5 text-lime-400 shrink-0" />
           <span className="font-black text-lime-400 uppercase tracking-widest text-[9px] shrink-0">League Pulse</span>
           <span className="text-zinc-700 mx-1 shrink-0">|</span>
-          <span className="text-zinc-600 shrink-0">Keepers:</span>
-          <span className="text-zinc-300 font-semibold shrink-0 mr-2">{(draftIntelQ as any).data.keeperPredictions?.length ?? 0} predicted</span>
-          <span className="text-zinc-700 shrink-0">·</span>
-          <span className="text-zinc-600 mx-1 shrink-0">Top KVS:</span>
-          <span className="text-amber-300 font-semibold shrink-0 mr-2">
-            {((draftIntelQ as any).data.keeperPredictions ?? []).sort((a: any, b: any) => (b.kvs ?? 0) - (a.kvs ?? 0))[0]?.predictedPlayer ?? "—"}
-            {" "}KVS {((draftIntelQ as any).data.keeperPredictions ?? []).sort((a: any, b: any) => (b.kvs ?? 0) - (a.kvs ?? 0))[0]?.kvs ?? ""}
-          </span>
-          <span className="text-zinc-700 shrink-0">·</span>
+          {showKeeperDashboardUi ? (
+            <>
+              <span className="text-zinc-600 shrink-0">Keepers:</span>
+              <span className="text-zinc-300 font-semibold shrink-0 mr-2">{(draftIntelQ as any).data.keeperPredictions?.length ?? 0} predicted</span>
+              <span className="text-zinc-700 shrink-0">·</span>
+              <span className="text-zinc-600 mx-1 shrink-0">Top KVS:</span>
+              <span className="text-amber-300 font-semibold shrink-0 mr-2">
+                {((draftIntelQ as any).data.keeperPredictions ?? []).sort((a: any, b: any) => (b.kvs ?? 0) - (a.kvs ?? 0))[0]?.predictedPlayer ?? "—"}
+                {" "}KVS {((draftIntelQ as any).data.keeperPredictions ?? []).sort((a: any, b: any) => (b.kvs ?? 0) - (a.kvs ?? 0))[0]?.kvs ?? ""}
+              </span>
+              <span className="text-zinc-700 shrink-0">·</span>
+            </>
+          ) : (
+            <>
+              <span className="text-zinc-500 shrink-0 mr-2">Redraft league — keeper signals off</span>
+              <span className="text-zinc-700 shrink-0">·</span>
+            </>
+          )}
           <span className="text-zinc-600 mx-1 shrink-0">Scarcity:</span>
           <span className="text-red-400 font-semibold shrink-0 mr-2">
             {((draftIntelQ as any).data.scarcityAlerts ?? []).find((a: any) => a.urgency === "CRITICAL" || a.urgency === "HIGH")
@@ -574,12 +587,12 @@ export function Dashboard() {
           ? "Protect " + critScarcity.position + " depth — scarcity window is open"
           : topRun
           ? topRun.position + " run expected " + topRun.roundWindow + " — move early"
-          : topKeeper
+          : showKeeperDashboardUi && topKeeper
           ? topKeeper.predictedPlayer + " is the best keeper value in the league"
           : "Draft intelligence ready — " + CURRENT_YEAR + " season";
-        const conf = topKeeper?.confidence ?? 0;
+        const conf = showKeeperDashboardUi && topKeeper?.confidence ? topKeeper.confidence : 0;
         const evidence: string[] = [
-          topKeeper ? topKeeper.teamName + ": " + topKeeper.predictedPlayer + " KVS " + topKeeper.kvs + " — " + (topKeeper.surplusLabel ?? "value") + " at cost Round " + topKeeper.keeperRound : "",
+          showKeeperDashboardUi && topKeeper ? topKeeper.teamName + ": " + topKeeper.predictedPlayer + " KVS " + topKeeper.kvs + " — " + (topKeeper.surplusLabel ?? "value") + " at cost Round " + topKeeper.keeperRound : "",
           urgentScarcity ? urgentScarcity.position + " scarcity: " + urgentScarcity.eliteSupply + " elite available, demand " + (urgentScarcity.demandScore?.toFixed(2) ?? "0") : "",
           topRun ? topRun.teamCount + " owners project " + topRun.position + " as top need — " + topRun.roundWindow : "",
           tradedPick ? tradedPick.ownerName + " holds extra Round " + tradedPick.round + " pick — capital advantage" : "",
@@ -598,7 +611,7 @@ export function Dashboard() {
                     <p className="text-[10px] text-zinc-500">{CURRENT_YEAR} Draft Intelligence</p>
                   </div>
                 </div>
-                {conf > 0 && (
+                {showKeeperDashboardUi && conf > 0 && (
                   <div className="text-right shrink-0">
                     <div className="text-2xl font-black text-lime-400 tabular-nums">{conf}%</div>
                     <div className="text-[9px] text-zinc-600 uppercase tracking-wider">Confidence</div>
@@ -634,7 +647,7 @@ export function Dashboard() {
 
             {/* Signal cards */}
             <div className="lg:col-span-4 flex flex-col gap-3">
-              {/* Keeper value */}
+              {showKeeperDashboardUi && (
               <div className="flex-1 rounded-xl border border-amber-500/20 bg-zinc-900/50 p-4 flex items-start gap-3">
                 <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center shrink-0">
                   <LockIcon className="h-3.5 w-3.5 text-amber-400" />
@@ -653,6 +666,7 @@ export function Dashboard() {
                   )}
                 </div>
               </div>
+              )}
 
               {/* Scarcity */}
               <div className="flex-1 rounded-xl border border-red-500/20 bg-zinc-900/50 p-4 flex items-start gap-3">
@@ -756,6 +770,7 @@ export function Dashboard() {
           ) : (() => {
             const di = (draftIntelQ as any)?.data;
             if (!di?.ok) return <p className="text-xs text-zinc-600">Sync draft data to generate memo.</p>;
+            const keepMemo = di.leagueCapabilities?.keepers !== false;
             const kps: any[] = di.keeperPredictions ?? [];
             const top = kps.slice().sort((a: any, b: any) => (b.kvs ?? 0) - (a.kvs ?? 0))[0];
             const sas: any[] = di.scarcityAlerts ?? [];
@@ -763,7 +778,19 @@ export function Dashboard() {
             const runs: any[] = di.positionRunAlerts ?? [];
             const topRun = runs[0];
             const memo = [
-              { label: "Primary",     color: "text-lime-400", text: top ? `Lock ${top.predictedPlayer} as keeper — KVS ${top.kvs} at Round ${top.keeperRound}` : "Review keeper eligibility before draft" },
+              {
+                label: "Primary",
+                color: "text-lime-400",
+                text: keepMemo && top
+                  ? `Lock ${top.predictedPlayer} as keeper — KVS ${top.kvs} at Round ${top.keeperRound}`
+                  : keepMemo
+                    ? "Review keeper eligibility before draft"
+                    : crit
+                      ? `Secure ${crit.position} depth early — scarcity window active`
+                      : topRun
+                        ? `Watch the ${topRun.position} window (${topRun.roundWindow ?? "mid-draft"})`
+                        : "Best player available early — build positional leverage",
+              },
               { label: "Contingency", color: "text-amber-400",   text: crit ? `Secure ${crit.position} depth early — scarcity window active` : "Monitor waiver wire for positional value" },
               { label: "Avoid",       color: "text-red-400",     text: topRun ? `Reaching for ${topRun.position} before ${topRun.roundWindow} — run expected` : "Panic drafting in rounds 1–3" },
             ];

@@ -25,6 +25,7 @@ import {
 } from "./db";
 import { normalizeSettings, normalizeTeams } from "./espnService";
 import { getLeagueScoringSettings } from "./leagueScoringService";
+import { readKeeperSlotsPerTeamFromPayload, keepersEnabledFromSlots } from "./leagueCapabilities";
 
 // -- Types ----------------------------------------------------------------------
 
@@ -191,14 +192,9 @@ export async function resolveLeaguePromptContext(
   }
 
   // -- League type + optional counts -------------------------------------------
-  // ESPN stores keeper config under settings.draftSettings.keeperCount (the
-  // top-level settings.keeperCount is usually absent), so read that first.
-  const rawSettings = (data?.settings as Record<string, unknown>) || {};
-  const rawDraft = (rawSettings.draftSettings as Record<string, unknown>) || {};
-  const keeperCount = toFiniteNumber(rawDraft.keeperCount) ?? toFiniteNumber(settings?.keeperCount);
+  const keeperCount = readKeeperSlotsPerTeamFromPayload(data);
   const playoffTeams = toFiniteNumber(settings?.playoffTeamCount);
-  const leagueType =
-    keeperCount != null && keeperCount > 0 ? "keeper league" : "fantasy football league";
+  const leagueType = keepersEnabledFromSlots(keeperCount) ? "keeper league" : "fantasy football league";
 
   const ctx: LeaguePromptContext = {
     leagueName,

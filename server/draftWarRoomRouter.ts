@@ -20,6 +20,7 @@ import {
 } from "./draftWarRoomPhase175";
 import { resolveKeeperDraftGeometryForSeason } from "./keeperDraftGeometry";
 import { enrichDraftPickDbRow, summarizeDraftBoardCounts } from "./draftWarRoomPickClassification";
+import { buildLeagueCapabilities } from "./leagueCapabilities";
 
 // Phase B1: LEAGUE_ID constant removed — leagueId is resolved per-request via resolveActiveLeagueId.
 
@@ -957,6 +958,7 @@ export const draftWarRoomRouter = router({
 
       const cached = await getCachedView(season, "combined", leagueId, { userId: ctx.user.id });
       const payload = cached?.payload ? (cached.payload as Record<string, unknown>) : null;
+      const leagueCapabilities = buildLeagueCapabilities(leagueId, season, payload);
       const geo = await resolveKeeperDraftGeometryForSeason(leagueId, season, ctx.user.id, payload);
       const totalRounds = Math.max(1, geo.roundCount || 1);
       const draftBoardSummary = summarizeDraftBoardCounts(allPicks);
@@ -1050,8 +1052,10 @@ export const draftWarRoomRouter = router({
         ];
       }
 
-      // Phase 1: Keeper + Roster
-      const keeperPredictions = predictKeepers(teams, byTeam, effectiveKeepers, playerDraftRoundMap, prevByTeam, consecutiveKeptPlayers, adpByName, teams.length);
+      // Phase 1: Keeper + Roster (no hypothetical keepers when ESPN reports 0 keeper slots)
+      const keeperPredictions = leagueCapabilities.keepers
+        ? predictKeepers(teams, byTeam, effectiveKeepers, playerDraftRoundMap, prevByTeam, consecutiveKeptPlayers, adpByName, teams.length)
+        : [];
       const rosterNeeds       = buildRosterNeeds(teams, byTeam, keeperPredictions);
 
       // Traded picks: count only open-draft selections (keeper/retained slots are not tradable snake picks)
@@ -1082,8 +1086,10 @@ export const draftWarRoomRouter = router({
       // Phase 1.5 Mock draft with traded pick awareness
       const mockDraft = buildMockDraft({ allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool });
 
-      // Phase 1.75 — Pressure Engine
-      const keeperCompression = calcKeeperCompression(keeperPredictions, playerPool);
+      // Phase 1.75 — Pressure Engine (keeper compression only when league supports keepers)
+      const keeperCompression = leagueCapabilities.keepers
+        ? calcKeeperCompression(keeperPredictions, playerPool)
+        : [];
       const scarcityAlerts    = calcScarcityAlerts({ rosterNeeds, playerPool, keeperPredictions, totalTeams: teams.length, totalRounds });
       const positionRunAlerts = calcPositionRunAlerts({ rosterNeeds, scarcityAlerts, keeperPredictions, mockDraft, totalTeams: teams.length });
       const pressureByRound   = calcDraftBoardPressure({ rosterNeeds, scarcityAlerts, keeperPredictions, totalTeams: teams.length, totalRounds });
@@ -1109,6 +1115,7 @@ export const draftWarRoomRouter = router({
 
       return {
         ok: true, season,
+        leagueCapabilities,
         teamCount: teams.length,
         draftBoardSummary,
         keeperPredictions,

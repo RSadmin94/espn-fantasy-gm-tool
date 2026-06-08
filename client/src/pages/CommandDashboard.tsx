@@ -83,6 +83,7 @@ export function CommandDashboard(){
   const runs: any[] = d.positionRunAlerts ?? [];
   const scarce: any[] = d.scarcityAlerts ?? [];
   const teamCount: number = d.teamCount ?? lg.teamCount ?? 0;
+  const keepersCap = d.leagueCapabilities?.keepers !== false;
   const loading = !leagueKeyReady || draftQ.isLoading;
 
   const bySurprise = useMemo(()=>[...meters].sort((a,b)=>(b.surpriseProbability??0)-(a.surpriseProbability??0)),[meters]);
@@ -126,7 +127,7 @@ export function CommandDashboard(){
   const actions = [
     { t:"Open Draft War Room", to:"/draft-war-room", d: topRun?`${topRun.position} run risk building — get owner-risk context.`:"Next pick needs owner-risk context.", cta:"Review" },
     { t:"Scan Owner DNA", to:"/owner-profiles", d: scanOwnerDnaLine, cta:"Analyze" },
-    { t:"Check Keeper Lab", to:"/keeper-advisor", d:"Confirm your value holds before the draft.", cta:"Compare" },
+    ...(keepersCap ? [{ t:"Check Keeper Lab", to:"/keeper-advisor", d:"Confirm your value holds before the draft.", cta:"Compare" }] as const : []),
   ];
   const rings = [
     { v: ownerCoverage, label:"Owner Read", sub:`${meters.length}/${teamCount||"?"} profiled`, color:TEAL },
