@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
-import { resolveActiveProfile, resolveActiveLeagueId } from "./db";
+import { resolveActiveLeagueId } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import { computeActivityDna, getActivityDnaForOwner } from "./activityDnaService";
 
 /**
  * Activity DNA™ tRPC surface.
- * Profile-aware (ctx.user -> resolveActiveProfile) and multi-league ready (keyed by resolved leagueId).
+ * Profile-aware (ctx.user → resolveCurrentOwner) and multi-league ready (keyed by resolved leagueId).
  * Deterministic only; the heavy lifting lives in activityDnaService.ts. No DB writes, no LLM.
  *
  * League resolution: active profile connection first, then the same `resolveActiveLeagueId` chain as
@@ -14,8 +15,8 @@ import { computeActivityDna, getActivityDnaForOwner } from "./activityDnaService
  * without DB/env.
  */
 async function resolveLeague(userId?: number): Promise<{ leagueId: string; ownerKey: string | null }> {
-  const profile = await resolveActiveProfile(userId != null ? { id: userId } : null);
-  let leagueId = (profile?.leagueId ?? "").trim();
+  const co = await resolveCurrentOwner(userId != null ? { id: userId } : null);
+  let leagueId = (co.leagueId ?? "").trim();
   if (!leagueId || leagueId === "default") {
     const { leagueId: alt } = await resolveActiveLeagueId(
       { user: userId ? { id: userId } : undefined },
@@ -27,7 +28,7 @@ async function resolveLeague(userId?: number): Promise<{ leagueId: string; owner
   }
   return {
     leagueId,
-    ownerKey: profile?.isSetupComplete ? profile?.selectedOwnerKey ?? null : null,
+    ownerKey: co.isSetupComplete ? co.ownerKey : null,
   };
 }
 

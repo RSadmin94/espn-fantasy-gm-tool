@@ -618,10 +618,10 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
   let focalTeamId: number | null = null;
   let focalMemberIds: string[] = [];
   if (userId != null) {
-    const { resolveActiveProfile, memberIdFromOwnerKey } = await import("./db");
-    const __profile = await resolveActiveProfile({ id: userId });
-    if (__profile.isSetupComplete) {
-      const focalMemberId = memberIdFromOwnerKey(__profile.selectedOwnerKey) ?? "";
+    const { resolveCurrentOwner } = await import("./currentOwnerService");
+    const co = await resolveCurrentOwner({ id: userId });
+    if (co.isSetupComplete) {
+      const focalMemberId = co.ownerId ?? "";
       for (const t of teams) {
         const tid = t.teamId as number;
         const mids = memberIdsMap[tid] ?? [];

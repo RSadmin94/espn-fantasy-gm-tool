@@ -12,7 +12,8 @@
  * opponentData.ts so existing callers require minimal changes.
  */
 
-import { getAllCachedSeasons, getCachedView, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
+import { getAllCachedSeasons, getCachedView } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import {
   normalizeTeams,
   normalizeMatchups,
@@ -102,8 +103,8 @@ export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<st
   let rodMemberId: string | null = null;
   // Wave 2: prefer the authenticated user's selected owner; the name match below is the fallback.
   if (userId != null) {
-    const __profile = await resolveActiveProfile({ id: userId });
-    if (__profile.isSetupComplete) rodMemberId = memberIdFromOwnerKey(__profile.selectedOwnerKey);
+    const co = await resolveCurrentOwner({ id: userId });
+    if (co.isSetupComplete) rodMemberId = co.ownerId;
   }
   // focalMemberId resolved from profile above — no name-based fallback.
 

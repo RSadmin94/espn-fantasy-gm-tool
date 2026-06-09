@@ -2,7 +2,7 @@
  * "Why Haven't I Won?™" — deterministic diagnosis of why a focal owner has not won
  * (or what held them back before they won) a championship.
  *
- * Profile-aware: focal owner comes from resolveActiveProfile(); falls back to the
+ * Profile-aware: focal owner comes from resolveCurrentOwner(); falls back to the
  * franchise that has played the most seasons in the league (stable, multi-league safe).
  * Multi-league: everything is keyed by the resolved leagueId.
  *
@@ -18,7 +18,8 @@
  *  - espn_raw_cache 'combined' (draftDetail.picks -> drafted player sets per owner)
  */
 import { sql } from "drizzle-orm";
-import { getDb, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
+import { getDb, memberIdFromOwnerKey } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import { getWeeklyStatsSeasonsForLeague } from "./weeklyStatsLeagueCoverage";
 import { buildChampionshipAuthority } from "./championshipAuthority";
 
@@ -74,13 +75,13 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
 
-  const profile = await resolveActiveProfile(userId != null ? { id: userId } : null);
+  const co = await resolveCurrentOwner(userId != null ? { id: userId } : null);
   // Phase B3: no fallback to hardcoded league — throw if no active league.
-  const leagueId = profile?.leagueId ?? "";
+  const leagueId = co.leagueId ?? "";
   if (!leagueId || leagueId === "default") {
     throw new Error("SETUP_REQUIRED: No active league — connect a league in Settings.");
   }
-  const isSetupComplete = !!profile?.isSetupComplete;
+  const isSetupComplete = co.isSetupComplete;
 
   const weeklyStatsSeasons = await getWeeklyStatsSeasonsForLeague(leagueId);
   const weeklySeasonSql =
@@ -114,7 +115,7 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
     teamIdByOwnerSeason.set(`${t.ownerId}:${t.season}`, t.teamId);
   }
 
-  let focal = normGuid(ownerKeyOverride) || (isSetupComplete ? normGuid(profile.selectedOwnerKey) : null);
+  let focal = normGuid(ownerKeyOverride) || (isSetupComplete ? co.ownerId : null);
   // Hardening: never silently fall back to the most-seasons owner (that shows another
   // member's career as the user's). Infer the user's own owner GUID from another league
   // connection where that same GUID exists in THIS league's teams; otherwise stay null.
@@ -131,7 +132,7 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
       }
     } catch { /* best-effort inference; fall through to setup-required */ }
   }
-  const ownerName = (focal && nameByOwner.get(focal)) || profile?.selectedOwnerName || "This owner";
+  const ownerName = (focal && nameByOwner.get(focal)) || co.displayName || "This owner";
 
   if (!focal) {
     return { leagueId, ownerKey: null, ownerName, isSetupComplete, hasWon: false, titles: 0, seasonsPlayed: 0, bestFinish: null, playoffAppearances: 0, findings: [], narrative: "No league history available yet.", confidence: "Limited", championSeasons: [], isReigningChampion: false, pageMode: "why-havent-won", needsOwnerSelection: true, note: "Select your team for this league." };

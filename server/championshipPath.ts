@@ -12,7 +12,8 @@
  * (positional scoring), espn_raw_cache 'combined' (playoff cutoff/settings).
  */
 import { sql } from "drizzle-orm";
-import { getDb, resolveActiveProfile, memberIdFromOwnerKey, getAllCachedSeasons } from "./db";
+import { getDb, memberIdFromOwnerKey, getAllCachedSeasons } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import { computeWhyHaventIWon } from "./whyHaventIWon";
 import { computeDraftReality } from "./draftRealitySimulator";
 import { getWeeklyStatsSeasonsForLeague } from "./weeklyStatsLeagueCoverage";
@@ -95,13 +96,13 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
 
-  const profile = await resolveActiveProfile(userId != null ? { id: userId } : null);
+  const co = await resolveCurrentOwner(userId != null ? { id: userId } : null);
   // Phase B5: no fallback to hardcoded league — throw if no active league.
-  const leagueId = profile?.leagueId ?? "";
+  const leagueId = co.leagueId ?? "";
   if (!leagueId || leagueId === "default") {
     throw new Error("SETUP_REQUIRED: No active league — connect a league in Settings.");
   }
-  const isSetupComplete = !!profile?.isSetupComplete;
+  const isSetupComplete = co.isSetupComplete;
 
   // ── teams: champions + focal identity ─────────────────────────────────
   const teams = rowsOf(await db.execute(sql`
@@ -133,13 +134,13 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
     if (t.wins > 0 || t.pf > 0) seasonsByOwner.set(t.ownerId, (seasonsByOwner.get(t.ownerId) ?? 0) + 1);
   }
 
-  let focal = normGuid(ownerKeyOverride) || (isSetupComplete ? normGuid(profile.selectedOwnerKey) : null);
+  let focal = normGuid(ownerKeyOverride) || (isSetupComplete ? normGuid(co.ownerKey) : null);
   if (!focal) {
     let best: string | null = null, bestN = -1;
     for (const [g, n] of seasonsByOwner) if (n > bestN) { bestN = n; best = g; }
     focal = best;
   }
-  const ownerName = (focal && nameByOwner.get(focal)) || profile?.selectedOwnerName || "This owner";
+  const ownerName = (focal && nameByOwner.get(focal)) || co.displayName || "This owner";
 
   if (!focal) {
     return emptyResult(leagueId, ownerName, isSetupComplete, "No owner data available.", {

@@ -10,9 +10,8 @@ import {
   getAllCachedSeasons,
   getCachedView,
   resolveActiveLeagueId,
-  resolveActiveProfile,
-  memberIdFromOwnerKey,
 } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import { normalizeDraftPicks, normalizeSettings } from "./espnService";
 
 /** Championship matchup resolution — same logic as routers.findChampionshipMatchup (inlined to avoid coupling). */
@@ -121,9 +120,9 @@ function classifyDraftStyle(round1ByPosition: Record<string, number>, round1Seas
  * Returns null if profile is incomplete or no cached seasons exist for that member in the active league.
  */
 export async function buildOwnerCareerProfileForFocalUser(userId: number): Promise<OwnerCareerProfile | null> {
-  const profile = await resolveActiveProfile({ id: userId });
-  if (!profile.isSetupComplete || !profile.selectedOwnerKey) return null;
-  const memberId = memberIdFromOwnerKey(profile.selectedOwnerKey);
+  const co = await resolveCurrentOwner({ id: userId });
+  if (!co.isSetupComplete || !co.ownerKey) return null;
+  const memberId = co.ownerId;
   if (!memberId) return null;
 
   const { leagueId } = await resolveActiveLeagueId({ user: { id: userId } }, null, undefined);

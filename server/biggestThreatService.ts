@@ -9,7 +9,7 @@
  *   - Rivalry / H2H  → computeRivalryScores()        (rivalryService.ts)
  *   - League DNA     → buildManagerRawData()+calcLeagueDNA() (dnaRouter/leagueDNA)
  *   - Championship   → computeAllTrophyHistory()      (ChampionshipAuthority single champion source)
- *   - Active profile → resolveActiveProfile()         (db.ts)
+ *   - Active profile → resolveCurrentOwner()         (currentOwnerService.ts)
  *
  * Threat score (0–100) is a transparent weighted composite:
  *   Head-to-head dominance over you   0–35
@@ -22,7 +22,7 @@
  * numbers, so the output is fully reproducible.
  */
 
-import { resolveActiveProfile, memberIdFromOwnerKey } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import { computeRivalryScores, type RivalryPair } from "./rivalryService";
 import { buildManagerRawData } from "./dnaRouter";
 import { calcLeagueDNA, type ManagerDNA } from "./leagueDNA";
@@ -238,9 +238,9 @@ function scoreThreat(
  *               consistent with the rest of the app's anonymous behavior.
  */
 export async function computeBiggestThreat(userId?: number): Promise<BiggestThreatResult> {
-  const profile = await resolveActiveProfile(userId != null ? { id: userId } : null);
-  const isSetupComplete = !!profile?.isSetupComplete;
-  const focalMemberId = isSetupComplete ? memberIdFromOwnerKey(profile.selectedOwnerKey) : null;
+  const co = await resolveCurrentOwner(userId != null ? { id: userId } : null);
+  const isSetupComplete = co.isSetupComplete;
+  const focalMemberId = isSetupComplete ? co.ownerId : null;
 
   // Pull all three datasets (each read-only over the cached ESPN seasons).
   const [rivals, managers, trophyMap] = await Promise.all([

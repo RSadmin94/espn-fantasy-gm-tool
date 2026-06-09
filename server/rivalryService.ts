@@ -18,7 +18,8 @@
  *   150+   → "Inferno"
  */
 
-import { getAllCachedSeasons, getCachedView, getDb, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
+import { getAllCachedSeasons, getCachedView, getDb } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import {
   normalizeTeams,
   normalizeMatchups,
@@ -113,8 +114,8 @@ export async function computeRivalryScores(userId?: number): Promise<RivalryPair
   let focalMemberId: string | null = null;
   // Wave 2: prefer the authenticated user's selected owner; the name match below is the fallback.
   if (userId != null) {
-    const __profile = await resolveActiveProfile({ id: userId });
-    if (__profile.isSetupComplete) focalMemberId = memberIdFromOwnerKey(__profile.selectedOwnerKey);
+    const co = await resolveCurrentOwner({ id: userId });
+    if (co.isSetupComplete) focalMemberId = co.ownerId;
   }
 
   // Per-opponent accumulators

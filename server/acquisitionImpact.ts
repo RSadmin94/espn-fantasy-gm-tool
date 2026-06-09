@@ -17,7 +17,8 @@
  *       Draft Reality Simulator (relative draft vs roster-management grades).
  */
 import { sql } from "drizzle-orm";
-import { getDb, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
+import { getDb, memberIdFromOwnerKey } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import { computeDraftReality } from "./draftRealitySimulator";
 
 // Phase B4: DEFAULT_LEAGUE_ID constant removed — setup required if no active league.
@@ -81,13 +82,13 @@ export async function computeAcquisitionImpact(userId?: number, ownerKeyOverride
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
 
-  const profile = await resolveActiveProfile(userId != null ? { id: userId } : null);
+  const co = await resolveCurrentOwner(userId != null ? { id: userId } : null);
   // Phase B4: no fallback to hardcoded league — throw if no active league.
-  const leagueId = profile?.leagueId ?? "";
+  const leagueId = co.leagueId ?? "";
   if (!leagueId || leagueId === "default") {
     throw new Error("SETUP_REQUIRED: No active league — connect a league in Settings.");
   }
-  const isSetupComplete = !!profile?.isSetupComplete;
+  const isSetupComplete = co.isSetupComplete;
 
   const limitationNote =
     "Historical transaction type coverage is limited, so this measures total non-drafted player impact rather than separating waivers, trades, and free agents.";
@@ -104,7 +105,7 @@ export async function computeAcquisitionImpact(userId?: number, ownerKeyOverride
   }
 
   // ── focal owner ───────────────────────────────────────────────────────
-  let focalKey = normGuid(ownerKeyOverride) || (isSetupComplete ? normGuid(profile.selectedOwnerKey) : null);
+  let focalKey = normGuid(ownerKeyOverride) || (isSetupComplete ? normGuid(co.ownerKey) : null);
 
   // ── drafted sets per owner-season (combined cache) ────────────────────
   const drafted = new Map<string, Set<number>>(); // `${guid}:${season}`
@@ -251,7 +252,7 @@ export async function computeAcquisitionImpact(userId?: number, ownerKeyOverride
     focalKey = owners.sort((a, b) => b.seasonsPlayed - a.seasonsPlayed)[0]?.ownerKey ?? null;
   }
   const focal = owners.find((o) => o.ownerKey === focalKey) ?? null;
-  const ownerName = focal?.ownerName || (focalKey && nameByOwner.get(focalKey)) || profile?.selectedOwnerName || "This owner";
+  const ownerName = focal?.ownerName || (focalKey && nameByOwner.get(focalKey)) || co.displayName || "This owner";
   const focalRankImpact = focal && focal.qualified ? bestAcquisitionManagers.findIndex((o) => o.ownerKey === focalKey) + 1 : null;
 
   // ── deterministic insights ────────────────────────────────────────────

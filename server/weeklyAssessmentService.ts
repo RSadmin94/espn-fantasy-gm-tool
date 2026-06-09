@@ -21,7 +21,8 @@
  *   buildRodOpportunityBoard()  — cross-team opportunity ranking for Rod
  */
 
-import { getCachedView, getAllCachedSeasons, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
+import { getCachedView, getAllCachedSeasons } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import {
   normalizeTeams, normalizeRosters, normalizeMatchups,
   normalizeTransactions, normalizeSettings,
@@ -159,9 +160,9 @@ export async function resolveFocalTeamId(
   userId?: number
 ): Promise<number | null> {
   if (userId == null) return null;
-  const profile = await resolveActiveProfile({ id: userId });
-  if (!profile.isSetupComplete) return null;
-  const focalMemberId = memberIdFromOwnerKey(profile.selectedOwnerKey);
+  const co = await resolveCurrentOwner({ id: userId });
+  if (!co.isSetupComplete) return null;
+  const focalMemberId = co.ownerId;
   if (!focalMemberId) return null;
   for (const t of teams) {
     const mids = (t.memberIds as string[]) || [];

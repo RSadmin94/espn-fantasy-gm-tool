@@ -14,7 +14,8 @@
  * Cached in memCache for 10 min to avoid redundant season scans.
  */
 
-import { getCachedView, resolveActiveProfile } from "./db";
+import { getCachedView } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import {
   getSeasonMatchups,
   getSeasonTeams,
@@ -315,13 +316,6 @@ export function buildH2HPromptBlock(stats: RichH2HStats, label = `H2H vs ${stats
 // Resolve the focal user ESPN member ID from their active profile.
 
 export async function resolveRodMemberId(userId?: number): Promise<string | null> {
-  return memCache(`focalMemberId:${userId ?? "anon"}`, 60 * 60_000, async () => {
-    if (userId != null) {
-      const profile = await resolveActiveProfile({ id: userId });
-      if (profile.isSetupComplete && profile.selectedOwnerKey) {
-        return profile.selectedOwnerKey.replace(/^id:/, "");
-      }
-    }
-    return null;
-  });
+  const co = await resolveCurrentOwner(userId != null ? { id: userId } : null);
+  return co.isSetupComplete ? co.ownerId : null;
 }

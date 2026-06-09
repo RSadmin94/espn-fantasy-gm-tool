@@ -17,7 +17,8 @@
 
 import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
-import { getCachedView, getAllCachedSeasons, resolveActiveProfile, memberIdFromOwnerKey } from "./db";
+import { getCachedView, getAllCachedSeasons } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import {
   calcLeagueDNA,
   calcManagerDNA,
@@ -37,8 +38,8 @@ const POS_MAP: Record<number, string> = {
 /** Display label for H2H stats in DNA summaries (focal manager vs opponents). */
 async function focalH2hLabelForUser(userId?: number): Promise<string> {
   if (userId == null) return "the focal manager";
-  const p = await resolveActiveProfile({ id: userId });
-  const n = p.selectedOwnerName?.trim();
+  const co = await resolveCurrentOwner({ id: userId });
+  const n = co.displayName?.trim();
   return n || "the focal manager";
 }
 
@@ -72,8 +73,8 @@ export async function buildManagerRawData(userId?: number): Promise<ManagerRawDa
   // Focal manager memberId (H2H tracking vs each opponent). Profile selection only — no name heuristics.
   let focalMemberId: string | null = null;
   if (userId != null) {
-    const __profile = await resolveActiveProfile({ id: userId });
-    if (__profile.isSetupComplete) focalMemberId = memberIdFromOwnerKey(__profile.selectedOwnerKey);
+    const co = await resolveCurrentOwner({ id: userId });
+    if (co.isSetupComplete) focalMemberId = co.ownerId;
   }
 
   for (const season of ANALYSIS_SEASONS) {

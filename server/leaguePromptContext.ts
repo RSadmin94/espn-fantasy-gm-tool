@@ -19,10 +19,10 @@
 
 import {
   resolveActiveLeagueId,
-  resolveActiveProfile,
   getAllCachedSeasons,
   getCachedView,
 } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import { normalizeSettings, normalizeTeams } from "./espnService";
 import { getLeagueScoringSettings } from "./leagueScoringService";
 import { readKeeperSlotsPerTeamFromPayload, keepersEnabledFromSlots } from "./leagueCapabilities";
@@ -94,12 +94,12 @@ export async function resolveLeaguePromptContext(
   season?: number,
 ): Promise<LeaguePromptContext> {
   // Active profile (league id/name + focal owner/team identity).
-  const profile = await resolveActiveProfile(userId != null ? { id: userId } : null);
+  const co = await resolveCurrentOwner(userId != null ? { id: userId } : null);
 
   // -- Active league id ---------------------------------------------------------
   // Prefer the profile resolved league id; only fall back to the canonical
   // resolver for an authenticated user. Never hardcode an id.
-  let leagueId = profile.leagueId ?? "";
+  let leagueId = co.leagueId ?? "";
   if (!leagueId && userId != null) {
     try {
       const resolved = await resolveActiveLeagueId({ user: { id: userId } }, null, season);
@@ -152,7 +152,7 @@ export async function resolveLeaguePromptContext(
   }
 
   // -- League name --------------------------------------------------------------
-  let leagueName = (profile.leagueName ?? "").trim();
+  let leagueName = (co.leagueName ?? "").trim();
   if (!leagueName && settings && settings.leagueName != null) {
     leagueName = String(settings.leagueName).trim();
   }
@@ -164,14 +164,14 @@ export async function resolveLeaguePromptContext(
 
   // -- Focal owner + team (only when genuinely selected) -----------------------
   const focalOwnerName =
-    profile.isSetupComplete && profile.selectedOwnerName ? profile.selectedOwnerName : null;
+    co.isSetupComplete && co.displayName ? co.displayName : null;
 
   let focalTeamName: string | null =
-    profile.isSetupComplete && profile.selectedFranchiseName
-      ? profile.selectedFranchiseName
+    co.isSetupComplete && co.franchiseName
+      ? co.franchiseName
       : null;
-  if (!focalTeamName && profile.selectedTeamId != null && teams.length > 0) {
-    const match = teams.find((t) => toFiniteNumber(t.teamId) === Number(profile.selectedTeamId));
+  if (!focalTeamName && co.teamId != null && teams.length > 0) {
+    const match = teams.find((t) => toFiniteNumber(t.teamId) === Number(co.teamId));
     if (match && match.teamName) focalTeamName = String(match.teamName);
   }
 

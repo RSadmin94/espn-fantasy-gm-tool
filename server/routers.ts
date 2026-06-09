@@ -66,9 +66,8 @@ import {
   resolveActiveLeagueId,
   persistLlmUsage,
   getLlmUsageSummary,
-  resolveActiveProfile,
-  memberIdFromOwnerKey,
 } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import {
   buildCombinedPayloadFromNormalized,
   buildHistoricalReadAudit,
@@ -541,10 +540,8 @@ export const appRouter = router({
       const data = row.payload as Record<string, unknown>;
       const members = (data.members as Record<string, unknown>[]) || [];
       // Resolve focal member ID from the authenticated user's active profile.
-      const __profile = await resolveActiveProfile(ctx.user ? { id: ctx.user.id } : null);
-      const focalMemberId: string | null = __profile.isSetupComplete
-        ? memberIdFromOwnerKey(__profile.selectedOwnerKey)
-        : null;
+      const co = await resolveCurrentOwner(ctx.user ? { id: ctx.user.id } : null);
+      const focalMemberId: string | null = co.isSetupComplete ? co.ownerId : null;
       if (!focalMemberId) return [];
       const focalName = members.find(m => m.id === focalMemberId)
         ? (() => {
@@ -4307,8 +4304,8 @@ export const appRouter = router({
           gmActivityProfile: null as Record<string, unknown> | null,
         };
 
-        const __fp = ctx.user?.id ? await resolveActiveProfile({ id: ctx.user.id }) : null;
-        const focalMemberId = __fp?.isSetupComplete ? memberIdFromOwnerKey(__fp.selectedOwnerKey) : null;
+        const co = ctx.user?.id ? await resolveCurrentOwner({ id: ctx.user.id }) : null;
+        const focalMemberId = co?.isSetupComplete ? co.ownerId : null;
         if (!focalMemberId) return neutral;
 
         const { buildLiveOpponentProfiles } = await import("./liveOpponentProfile");
@@ -11895,12 +11892,8 @@ Provide:
       const focalH2hLabelMock = mockPromptCtx.focalOwnerName?.trim() || "the focal manager";
       const dnaProfiles = calcLeagueDNA(managers, focalH2hLabelMock);
       // Resolve focal owner for isFocalOwner flag
-      const __draftProfile = ctx.user?.id
-        ? await resolveActiveProfile({ id: ctx.user.id })
-        : null;
-      const focalMemberId = __draftProfile?.isSetupComplete
-        ? memberIdFromOwnerKey(__draftProfile.selectedOwnerKey)
-        : null;
+      const coDraft = ctx.user?.id ? await resolveCurrentOwner({ id: ctx.user.id }) : null;
+      const focalMemberId = coDraft?.isSetupComplete ? coDraft.ownerId : null;
       // 3. Keeper eligibility
       const keepers2025: Record<number, Array<{ playerId: number; playerName: string; position: string; roundId: number }>> = {};
       const data2025picks = normalizeDraftPicks(data2025);
