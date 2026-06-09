@@ -78,6 +78,8 @@ export interface BiggestThreatResult {
     threatScore: number;
     threatLevel: ThreatLevel;
   }>;
+  /** Highest raw `rivalryScore` opponent (`computeRivalryScores` order). Distinct from `threat` when composite scoring ranks differently. */
+  topRivalryPair: RivalryPair | null;
   note?: string;
 }
 
@@ -255,6 +257,7 @@ export async function computeBiggestThreat(userId?: number): Promise<BiggestThre
       isSetupComplete,
       threat: null,
       ranked: [],
+      topRivalryPair: null,
       note: "No rivalry history available yet — sync league seasons to populate threats.",
     };
   }
@@ -276,5 +279,6 @@ export async function computeBiggestThreat(userId?: number): Promise<BiggestThre
       threatScore: t.threatScore,
       threatLevel: t.threatLevel,
     })),
+    topRivalryPair: rivals[0] ?? null,
   };
 }

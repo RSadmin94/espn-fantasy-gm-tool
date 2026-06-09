@@ -2,6 +2,8 @@ import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
 import { resolveActiveProfile, resolveActiveLeagueId, getDb } from "./db";
 import { computeBiggestThreat } from "./biggestThreatService";
+import { resolveCurrentOwner } from "./currentOwnerService";
+import { buildOwnerCareerProfileForFocalUser } from "./ownerCareerProfileService";
 
 const rowsOf = (r: any) => (r?.[0] ?? r) ?? [];
 const countOf = (r: any) => Number(rowsOf(r)[0]?.c ?? 0);
@@ -77,5 +79,76 @@ export const meRouter = router({
     .query(async ({ ctx, input }) => {
       void input?.activeLeagueKey;
       return computeBiggestThreat(ctx.user?.id);
+    }),
+
+  /**
+   * X.30B — Owner-first home payload: focal identity, titles, top rivalry row,
+   * composite threat block, and career W/L snapshot. One round-trip for dashboards.
+   */
+  ownerHome: publicProcedure
+    .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      void input?.activeLeagueKey;
+      const empty = {
+        owner: null,
+        championships: null as {
+          count: number;
+          seasons: number[];
+        } | null,
+        rival: null,
+        threat: null as {
+          focalMemberId: string | null;
+          isSetupComplete: boolean;
+          primary: Awaited<ReturnType<typeof computeBiggestThreat>>["threat"];
+          ranked: Awaited<ReturnType<typeof computeBiggestThreat>>["ranked"];
+          note?: string;
+        } | null,
+        careerRecord: null as {
+          wins: number;
+          losses: number;
+          winPct: number;
+          seasonsActive: number;
+          playoffAppearances: number;
+        } | null,
+      };
+      if (!ctx.user?.id) return empty;
+
+      const uid = ctx.user.id;
+      const [owner, career, threatBundle] = await Promise.all([
+        resolveCurrentOwner({ id: uid }),
+        buildOwnerCareerProfileForFocalUser(uid),
+        computeBiggestThreat(uid),
+      ]);
+
+      const championships = career
+        ? {
+            count: career.championships,
+            seasons: career.seasons.filter((s) => s.isChampion).map((s) => s.season),
+          }
+        : null;
+
+      const careerRecord = career
+        ? {
+            wins: career.totalWins,
+            losses: career.totalLosses,
+            winPct: career.winPct,
+            seasonsActive: career.seasonsActive,
+            playoffAppearances: career.playoffAppearances,
+          }
+        : null;
+
+      return {
+        owner,
+        championships,
+        rival: threatBundle.topRivalryPair,
+        threat: {
+          focalMemberId: threatBundle.focalMemberId,
+          isSetupComplete: threatBundle.isSetupComplete,
+          primary: threatBundle.threat,
+          ranked: threatBundle.ranked,
+          note: threatBundle.note,
+        },
+        careerRecord,
+      };
     }),
 });
