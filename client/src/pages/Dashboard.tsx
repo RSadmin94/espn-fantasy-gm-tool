@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Flame, Loader2, RefreshCw, Trophy, Zap, AlertTriangle, Target, ChevronRight, Lock as LockIcon, Activity, Swords, FileText, Star, TrendingUp, ShieldAlert, Medal, Binoculars } from "lucide-react";
+import { Flame, Loader2, RefreshCw, Trophy, Zap, AlertTriangle, Target, ChevronRight, Lock as LockIcon, Activity, Swords, FileText, Star, TrendingUp, ShieldAlert, Medal, Binoculars, Users } from "lucide-react";
 import { DevBuildDiagnostics } from "@/components/DevBuildDiagnostics";
 import { DashboardLeagueHealthCard } from "@/components/dashboard/DashboardLeagueHealthCard";
 import { DashboardMatchupMarquee, type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
@@ -828,6 +828,105 @@ export function Dashboard() {
         </section>
       ) : null}
 
+      {/* GM Command Center - richer CommandDashboard aesthetic; data sourced from draftIntelQ */}
+      {(() => {
+        const di: any = draftIntelQ as any;
+        if (!di?.data?.ok) return null;
+        const d: any = di.data ?? {};
+        const meters: any[] = d.shockMeters ?? [];
+        const runs: any[] = d.positionRunAlerts ?? [];
+        const scarce: any[] = d.scarcityAlerts ?? [];
+        const teamCount: number = d.teamCount ?? leagueCtx.teamCount ?? 0;
+        const keepersCap = d.leagueCapabilities?.keepers !== false;
+        const GOLD = "#f5c518", TEAL = "#a3e635", MUTED = "#8b97a8", RED = "#ef4444", ORANGE = "#f7902f", BLUE = "#8b5cf6", TXT = "#f3f8ff", ACCENT = "#a3e635";
+        const PANEL = { background: "linear-gradient(180deg,#1b131f,#140e17)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 15 } as const;
+        const SUB = { background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 10 } as const;
+        const fn = (x: any) => String(x || "").trim().split(" ")[0] || "Owner";
+        const sev = (c: number) => (c >= 60 ? { t: "High", color: RED } : c >= 40 ? { t: "Med", color: ORANGE } : { t: "Low", color: TEAL });
+        const arch = (m: any) => { const p = Number(m?.predictabilityScore ?? 0), su = Number(m?.surpriseProbability ?? 0); if (su >= 55) return { label: "Panic Pivot", color: RED }; if (p >= 72) return { label: "By-the-Book", color: TEAL }; if (p >= 55) return { label: "Steady Hand", color: BLUE }; return { label: "Wildcard", color: ORANGE }; };
+        const bySurprise = [...meters].sort((a, b) => (b.surpriseProbability ?? 0) - (a.surpriseProbability ?? 0));
+        const byPredict = [...meters].sort((a, b) => (b.predictabilityScore ?? 0) - (a.predictabilityScore ?? 0));
+        const topRuns = [...runs].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+        const dnaOwners = byPredict.slice(0, 4);
+        const avgPredict = meters.length ? Math.round(meters.reduce((s, m) => s + (m.predictabilityScore ?? 0), 0) / meters.length) : 0;
+        const ownerCoverage = teamCount ? Math.min(100, Math.round((meters.length / teamCount) * 100)) : 0;
+        const topSurprise = bySurprise[0];
+        const topRun = topRuns[0];
+        const pulse: any[] = [
+          ...topRuns.slice(0, 2).map((r: any) => ({ icon: "\u2316", text: `${r.position} scarcity run forming`, s: sev(r.confidence ?? 0) })),
+          ...(scarce[0] ? [{ icon: "\u25CC", text: `${scarce[0].position || "Value"} value window open`, s: sev(45) }] : []),
+          ...(topSurprise ? [{ icon: "\u273A", text: `${fn(topSurprise.ownerName)} surprise risk ${Math.round(topSurprise.surpriseProbability ?? 0)}%`, s: sev(topSurprise.surpriseProbability ?? 0) }] : []),
+        ];
+        const memo = meters.length === 0 ? "Sync your league to generate today's GM briefing." : `Draft prep is live. ${topSurprise ? fn(topSurprise.ownerName) + " is your least predictable rival (" + (topSurprise.mostLikelyPosition || "flex") + " lean). " : ""}${topRun ? topRun.position + " run risk is the strongest board signal. " : ""}Protect leverage where value is thin.`;
+        const metrics = [
+          topSurprise && { b: `${Math.round(topSurprise.surpriseProbability ?? 0)}%`, s: `${fn(topSurprise.ownerName)} surprise` },
+          bySurprise[1] && { b: `${Math.round(bySurprise[1].surpriseProbability ?? 0)}%`, s: `${fn(bySurprise[1].ownerName)} surprise` },
+          topRun && { b: `${Math.round(topRun.confidence ?? 0)}%`, s: `${topRun.position} run risk` },
+          { b: `${pulse.length}`, s: "Live signals" },
+        ].filter(Boolean) as any[];
+        const actions = [
+          { t: "Open Draft War Room", to: "/draft-war-room", d: topRun ? `${topRun.position} run risk building - get owner-risk context.` : "Next pick needs owner-risk context.", cta: "Review" },
+          { t: "Scan Owner DNA", to: "/owner-profiles", d: topSurprise ? `${fn(topSurprise.ownerName)} is ${Math.round(topSurprise.surpriseProbability ?? 0)}% surprise risk${teamCount ? ` in this ${teamCount}-team league` : ""}.` : "Review owner tendencies.", cta: "Analyze" },
+          ...(keepersCap ? [{ t: "Check Keeper Lab", to: "/keeper-advisor", d: "Confirm your value holds before the draft.", cta: "Compare" }] : []),
+        ];
+        const rings = [
+          { v: ownerCoverage, label: "Owner Read", sub: `${meters.length}/${teamCount || "?"} profiled`, color: TEAL },
+          { v: avgPredict, label: "Predictability", sub: "League avg", color: GOLD },
+          { v: topRun ? Math.round(topRun.confidence ?? 0) : 0, label: "Top Signal", sub: topRun ? `${topRun.position} run` : "-", color: BLUE },
+        ];
+        const readinessTable = [
+          { k: "Owners profiled", v: `${meters.length}/${teamCount || "?"}` },
+          { k: "Position run windows", v: `${runs.length}` },
+          { k: "Value windows", v: `${scarce.length}` },
+        ];
+        return (
+          <div className="mb-4 space-y-3" style={{ color: TXT }}>
+            <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3">
+              <div style={PANEL} className="overflow-hidden"><div className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Star className="h-5 w-5" style={{ color: ACCENT }} /> Today's GM Briefing</h3>
+                  <span className="px-2 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap" style={{ background: "rgba(163,230,53,.10)", border: "1px solid rgba(163,230,53,.33)", color: TEAL }}>{pulse.length} signals</span>
+                </div>
+                <div className="mt-3 text-[17px] leading-snug font-black" style={{ color: GOLD }}>{memo}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4">
+                  {metrics.map((m: any, i: number) => (<div key={i} style={SUB} className="p-2.5"><b className="block text-xl">{m.b}</b><span className="text-xs" style={{ color: MUTED }}>{m.s}</span></div>))}
+                </div>
+              </div></div>
+              <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
+                <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Activity className="h-5 w-5" style={{ color: ACCENT }} /> League Intelligence Pulse</h3>
+                <div className="mt-3">
+                  {pulse.length === 0 && <div className="text-sm py-6 text-center" style={{ color: MUTED }}>No live signals yet.</div>}
+                  {pulse.map((p: any, i: number) => (<div key={i} className="grid items-center gap-2 h-9 text-sm" style={{ gridTemplateColumns: "26px 1fr 58px", borderTop: "1px solid rgba(255,255,255,.06)" }}><span style={{ color: MUTED }}>{p.icon}</span><span>{p.text}</span><b className="text-right font-black" style={{ color: p.s.color }}>{p.s.t}</b></div>))}
+                </div>
+              </div></div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
+                <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2" style={{ color: TXT }}><span style={{ color: ACCENT }}>&rarr;</span> Action Queue</h3>
+                <div className="mt-3 space-y-2.5">
+                  {actions.map((a: any, i: number) => (<Link key={i} to={a.to} className="grid items-center gap-2.5 no-underline" style={{ gridTemplateColumns: "34px 1fr 78px", ...SUB, padding: "8px 10px", minHeight: 60, color: TXT }}><span className="w-[30px] h-[30px] rounded-full flex items-center justify-center font-black" style={{ background: "rgba(139,92,246,.14)", border: "1px solid rgba(139,92,246,.45)", color: ACCENT }}>{i + 1}</span><span><b className="block text-sm">{a.t}</b><span className="text-xs" style={{ color: MUTED }}>{a.d}</span></span><span className="text-center text-xs font-extrabold rounded-md px-2 py-1.5" style={{ border: "1px solid rgba(163,230,53,.35)", background: "rgba(163,230,53,.08)", color: TEAL }}>{a.cta}</span></Link>))}
+                </div>
+              </div></div>
+              <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
+                <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Users className="h-5 w-5" style={{ color: ACCENT }} /> Owner DNA Snapshot</h3>
+                <div className="mt-2">
+                  {dnaOwners.length === 0 && <div className="text-sm py-6 text-center" style={{ color: MUTED }}>No owner reads yet.</div>}
+                  {dnaOwners.map((m: any, i: number) => { const a = arch(m); return (<div key={i} className="grid items-center gap-2.5 h-[50px]" style={{ gridTemplateColumns: "36px 1fr 70px", borderTop: "1px solid rgba(255,255,255,.06)" }}><span className="w-8 h-8 rounded-full flex items-center justify-center font-black text-white" style={{ background: a.color }}>{fn(m.ownerName).charAt(0).toUpperCase()}</span><span><b className="block text-sm">{fn(m.ownerName)}</b><span className="text-xs" style={{ color: MUTED }}>{a.label}</span></span><span className="text-right font-black" style={{ color: TEAL }}>{Math.round(m.predictabilityScore ?? 0)}%</span></div>); })}
+                </div>
+              </div></div>
+            </div>
+            <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
+              <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Trophy className="h-5 w-5" style={{ color: ACCENT }} /> GM Readiness</h3>
+              <div className="grid grid-cols-3 gap-2.5 mt-3">
+                {rings.map((r: any, i: number) => (<div key={i} style={SUB} className="flex flex-col items-center justify-center py-4"><div className="w-[62px] h-[62px] rounded-full flex items-center justify-center text-xl font-black mb-2" style={{ border: `5px solid ${r.color}` }}>{r.v}</div><b className="text-sm">{r.label}</b><span className="text-xs" style={{ color: MUTED }}>{r.sub}</span></div>))}
+              </div>
+              <div className="mt-3">
+                {readinessTable.map((t: any, i: number) => (<div key={i} className="grid items-center h-7 text-sm" style={{ gridTemplateColumns: "1fr 80px", borderTop: "1px solid rgba(255,255,255,.06)" }}><span style={{ color: MUTED }}>{t.k}</span><b className="text-right" style={{ color: TEAL }}>{t.v}</b></div>))}
+              </div>
+            </div></div>
+          </div>
+        );
+      })()}
       {/* League Pulse Strip */}
       {(draftIntelQ as any)?.data?.ok && (
         <div className="flex items-center gap-3 overflow-x-auto rounded-xl border border-lime-500/20 bg-lime-500/5 px-4 py-2.5 text-xs mb-4 scrollbar-none">
