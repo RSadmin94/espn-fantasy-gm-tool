@@ -724,7 +724,7 @@ export function Dashboard() {
                 Championships
               </div>
               <p className="text-lg font-bold text-zinc-100 leading-snug break-words">{champsFmt}</p>
-              {!focalOwner?.isSetupComplete ? (
+              {isSignedIn && focalOwner && !focalOwner.isSetupComplete ? (
                 <p className="text-[11px] text-zinc-500">Select your team in Settings to personalize.</p>
               ) : null}
             </div>
