@@ -93,6 +93,8 @@ export type CareerReport = {
   note?: string;
   /** Champion modes only: the failure-mode patterns/findings reframed as obstacles overcome. */
   obstaclesOvercome?: { patterns: PatternStat[]; findings: WhyFinding[] };
+  /** True when the active league has no owner selected -> UI prompts team selection. */
+  needsOwnerSelection: boolean;
 };
 
 function titleFor(mode: WhyHaventIWonResult["pageMode"]): { title: string; subtitle: string } {
@@ -146,8 +148,11 @@ export async function computeCareerReport(
       leagueId, ownerKey: why.ownerKey, ownerName: why.ownerName, isSetupComplete: why.isSetupComplete,
       mode: why.pageMode, title, subtitle, careerArc: null, careerStory: "", snapshot: null,
       timeline: [], readiness: null, patterns: [], topReasons: why.findings, confidence: why.confidence, dataCoverage, note: note ?? why.note,
+      needsOwnerSelection: why.needsOwnerSelection,
     };
   };
+  // Setup-required: no owner selected for this league - surface the CTA, never a fallback owner.
+  if (why.needsOwnerSelection) return minimal(why.note ?? "Select your team for this league.");
   if (!db || !why.ownerName) return minimal();
 
   const allGmRows = await db
@@ -292,6 +297,7 @@ export async function computeCareerReport(
   }
   return {
     leagueId, ownerKey: resolved.profileOwnerKey, ownerName: why.ownerName, isSetupComplete: why.isSetupComplete,
+    needsOwnerSelection: why.needsOwnerSelection,
     mode, title, subtitle, careerArc, careerStory, snapshot, timeline, readiness,
     patterns: finalPatterns, topReasons: finalTopReasons, obstaclesOvercome,
     confidence: why.confidence, dataCoverage, note: why.note,

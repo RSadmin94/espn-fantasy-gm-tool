@@ -197,7 +197,18 @@ export function WhyHaventIWon() {
           <div className={cn(PANEL, "p-8 text-center text-red-300")}>Couldn't build your career report. {String(q.error?.message ?? "")}</div>
         )}
 
-        {data && (
+        {data && data.needsOwnerSelection && (
+          <div className={cn(PANEL, "p-10 text-center")}>
+            <h2 className="text-[22px] font-black text-white/90">Select your team for this league</h2>
+            <p className="mx-auto mt-3 max-w-md text-[14px] leading-relaxed text-white/55">
+              We could not tell which team is yours in this league, so we will not guess. Choose your team to see your career, titles, and season timeline.
+            </p>
+            <a href="/settings" className="mt-5 inline-flex items-center gap-2 rounded-lg border border-lime-400/30 bg-lime-500/10 px-4 py-2 text-[14px] font-bold text-lime-300 hover:bg-lime-500/20">
+              Select your team
+            </a>
+          </div>
+        )}
+        {data && !data.needsOwnerSelection && (
           <div className="space-y-6">
 
             {/* SECTION 0 - Career Story Header */}

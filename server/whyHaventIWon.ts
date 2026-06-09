@@ -62,6 +62,8 @@ export type WhyHaventIWonResult = {
   championSeasons: number[];
   isReigningChampion: boolean;
   pageMode: "why-havent-won" | "why-you-won" | "why-you-broke-through";
+  /** True when no owner could be resolved for the active league -> UI prompts team selection. */
+  needsOwnerSelection: boolean;
   note?: string;
 };
 
@@ -113,16 +115,26 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
   }
 
   let focal = normGuid(ownerKeyOverride) || (isSetupComplete ? normGuid(profile.selectedOwnerKey) : null);
-  if (!focal) {
-    // fallback: franchise with the most seasons (the league "core" owner)
-    let best: string | null = null, bestN = -1;
-    for (const [g, set] of seasonsByOwner) { if (set.size > bestN) { bestN = set.size; best = g; } }
-    focal = best;
+  // Hardening: never silently fall back to the most-seasons owner (that shows another
+  // member's career as the user's). Infer the user's own owner GUID from another league
+  // connection where that same GUID exists in THIS league's teams; otherwise stay null.
+  if (!focal && userId != null) {
+    try {
+      const connRows = rowsOf(
+        await db.execute(
+          sql`SELECT selectedOwnerKey FROM league_connections WHERE userId=${userId} AND selectedOwnerKey IS NOT NULL`,
+        ),
+      );
+      for (const row of connRows) {
+        const g = normGuid((row as { selectedOwnerKey?: string | null }).selectedOwnerKey ?? null);
+        if (g && seasonsByOwner.has(g)) { focal = g; break; }
+      }
+    } catch { /* best-effort inference; fall through to setup-required */ }
   }
   const ownerName = (focal && nameByOwner.get(focal)) || profile?.selectedOwnerName || "This owner";
 
   if (!focal) {
-    return { leagueId, ownerKey: null, ownerName, isSetupComplete, hasWon: false, titles: 0, seasonsPlayed: 0, bestFinish: null, playoffAppearances: 0, findings: [], narrative: "No league history available yet.", confidence: "Limited", championSeasons: [], isReigningChampion: false, pageMode: "why-havent-won", note: "No owner data." };
+    return { leagueId, ownerKey: null, ownerName, isSetupComplete, hasWon: false, titles: 0, seasonsPlayed: 0, bestFinish: null, playoffAppearances: 0, findings: [], narrative: "No league history available yet.", confidence: "Limited", championSeasons: [], isReigningChampion: false, pageMode: "why-havent-won", needsOwnerSelection: true, note: "Select your team for this league." };
   }
 
   // ── Championship authority (medals primary; standings fallback) ───────
@@ -397,5 +409,6 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
     hasWon, titles, seasonsPlayed, bestFinish, playoffAppearances,
     findings: top, narrative, confidence,
     championSeasons, isReigningChampion, pageMode,
+    needsOwnerSelection: false,
   };
 }
