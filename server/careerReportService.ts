@@ -78,6 +78,7 @@ export type CareerReport = {
   ownerKey: string | null;
   ownerName: string;
   isSetupComplete: boolean;
+  teamCount: number;
   mode: WhyHaventIWonResult["pageMode"];
   title: string;
   subtitle: string;
@@ -149,6 +150,7 @@ export async function computeCareerReport(
       mode: why.pageMode, title, subtitle, careerArc: null, careerStory: "", snapshot: null,
       timeline: [], readiness: null, patterns: [], topReasons: why.findings, confidence: why.confidence, dataCoverage, note: note ?? why.note,
       needsOwnerSelection: why.needsOwnerSelection,
+      teamCount: 0,
     };
   };
   // Setup-required: no owner selected for this league - surface the CTA, never a fallback owner.
@@ -158,6 +160,10 @@ export async function computeCareerReport(
   const allGmRows = await db
     .select().from(gmTeams).where(eq(gmTeams.leagueId, leagueId))
     .orderBy(asc(gmTeams.season), asc(gmTeams.teamId));
+  const latestGmSeason = allGmRows.length ? Math.max(...allGmRows.map((t) => Number(t.season))) : null;
+  const teamCount = latestGmSeason != null
+    ? new Set(allGmRows.filter((t) => Number(t.season) === latestGmSeason).map((t) => Number(t.teamId))).size
+    : 0;
   const resolved = resolveOwnerTeamsForProfile(allGmRows, why.ownerName);
   if (!resolved) return minimal("Owner identity could not be resolved across seasons.");
 
@@ -298,6 +304,7 @@ export async function computeCareerReport(
   return {
     leagueId, ownerKey: resolved.profileOwnerKey, ownerName: why.ownerName, isSetupComplete: why.isSetupComplete,
     needsOwnerSelection: why.needsOwnerSelection,
+    teamCount,
     mode, title, subtitle, careerArc, careerStory, snapshot, timeline, readiness,
     patterns: finalPatterns, topReasons: finalTopReasons, obstaclesOvercome,
     confidence: why.confidence, dataCoverage, note: why.note,
