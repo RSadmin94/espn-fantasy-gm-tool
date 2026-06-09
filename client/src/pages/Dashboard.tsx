@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Flame, Loader2, RefreshCw, Trophy, Zap, AlertTriangle, Target, ChevronRight, Lock as LockIcon, Activity, Swords, FileText, Star, TrendingUp, ShieldAlert } from "lucide-react";
+import { Flame, Loader2, RefreshCw, Trophy, Zap, AlertTriangle, Target, ChevronRight, Lock as LockIcon, Activity, Swords, FileText, Star, TrendingUp, ShieldAlert, Medal, Binoculars } from "lucide-react";
 import { DevBuildDiagnostics } from "@/components/DevBuildDiagnostics";
 import { DashboardLeagueHealthCard } from "@/components/dashboard/DashboardLeagueHealthCard";
 import { DashboardMatchupMarquee, type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
@@ -158,6 +158,76 @@ function formatRecord(t: Pick<NormalizedStanding, "wins" | "losses" | "ties">): 
     : `${num(t.wins)}-${num(t.losses)}`;
 }
 
+function normalizeOwnerKeyForMatch(key: string | null | undefined): string {
+  if (!key) return "";
+  return String(key).replace(/^id:/i, "").trim();
+}
+
+function firstNameFromDisplay(displayName: string | null | undefined): string {
+  const s = displayName?.trim();
+  if (!s) return "";
+  return s.split(/\s+/)[0] ?? "";
+}
+
+/** Plain labels for Matchup Intelligence (DNA + draft war room). */
+function matchupIntelWeakness(dna: Record<string, unknown> | null | undefined): string {
+  const draft = dna?.draft as Record<string, unknown> | undefined;
+  if (!draft) return "—";
+  const value = (draft.valuePositions as string[] | undefined) ?? [];
+  const biases = (draft.biasVsLeague as Record<string, number> | undefined) ?? {};
+  if (value.length > 0) {
+    let bestPos = value[0];
+    let bestBias = biases[bestPos] ?? 0;
+    for (const p of value) {
+      const b = biases[p] ?? 0;
+      if (b < bestBias) {
+        bestPos = p;
+        bestBias = b;
+      }
+    }
+    return `${bestPos} depth`;
+  }
+  const reach = (draft.reachPositions as string[] | undefined)?.[0];
+  if (reach) return `${reach}-heavy builds`;
+  const wins = (dna?.exploitWindows as string[] | undefined) ?? [];
+  const w0 = wins[0];
+  if (w0 && typeof w0 === "string") return w0.length > 52 ? `${w0.slice(0, 49)}…` : w0;
+  return "—";
+}
+
+function matchupIntelDraftTendency(dna: Record<string, unknown> | null | undefined): string {
+  const draft = dna?.draft as Record<string, unknown> | undefined;
+  if (!draft) return "—";
+  const badge = String(draft.draftStyleBadge ?? "").trim();
+  const r1 = (draft.round1Distribution as Record<string, number> | undefined) ?? {};
+  const entries = Object.entries(r1).filter(([, n]) => Number(n) > 0);
+  entries.sort((a, b) => Number(b[1]) - Number(a[1]));
+  if (entries.length > 0 && Number(entries[0][1]) >= 3) {
+    return `${entries[0][0]} early`;
+  }
+  return badge || "—";
+}
+
+function matchupIntelTradeTendency(dna: Record<string, unknown> | null | undefined): string {
+  const trade = dna?.trade as Record<string, unknown> | undefined;
+  if (!trade) return "—";
+  const freq = Number(trade.tradeFrequency ?? 0);
+  const avg = Number(trade.avgTradesPerSeason ?? 0);
+  if (freq < 28 && avg < 1.3) return "Rarely accepts 2-for-1 deals";
+  if (freq < 38) return "Selective — prefers one-for-one upgrades";
+  if (freq >= 62) return "Active dealmaker — open to multi-player swaps";
+  return `~${avg.toFixed(1)} trades/season`;
+}
+
+function opponentKeeperPick(teamId: number, predictions: unknown[] | undefined): string {
+  if (!predictions?.length) return "—";
+  const row = (predictions as Array<Record<string, unknown>>).find(
+    (p) => Number(p.teamId) === teamId,
+  );
+  const name = row?.predictedPlayer;
+  return typeof name === "string" && name.trim() ? name.trim() : "—";
+}
+
 // ── Matchup scoreboard ─────────────────────────────────────────────────────────
 
 type ScoreboardRow = {
@@ -217,6 +287,11 @@ export function Dashboard() {
   const leagueCtx = useLeagueContext();
   const leagueKeyReady =
     authLoaded && isSignedIn && !leagueCtx.leagueContextKey.startsWith("__");
+  /** X.30C — focal owner snapshot (no league picker required; resolves from active profile). */
+  const ownerHomeQ = trpc.me.ownerHome.useQuery(
+    withLeagueSalt({}, leagueCtx.leagueContextKey),
+    { ...DASH_QUERY_OPTS, enabled: authLoaded && !!isSignedIn },
+  );
   const activeLeagueQ = trpc.league.getActive.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 30_000 });
   const cachedSeasonsQ = trpc.espn.cachedSeasons.useQuery(
     withLeagueSalt({}, leagueCtx.leagueContextKey),
@@ -288,7 +363,44 @@ export function Dashboard() {
     currentOpponentTeamId: number | null;
     playoffProbability: number;
     standingRank: number;
+    memberIds?: string[];
   }>;
+
+  const thisWeekOpponent = useMemo(() => {
+    const my = leagueCtx.myTeamId;
+    if (!my || !pulseTeams.length) return null;
+    const mine = pulseTeams.find((t) => t.teamId === my);
+    const oid = mine?.currentOpponentTeamId ?? null;
+    if (oid == null) return null;
+    const opp = pulseTeams.find((t) => t.teamId === oid);
+    if (!opp) return null;
+    return {
+      teamId: oid,
+      ownerName: opp.ownerName?.trim() || opp.teamName || "Opponent",
+      teamName: opp.teamName?.trim() || "",
+    };
+  }, [leagueCtx.myTeamId, pulseTeams]);
+
+  const opponentMemberId = useMemo(() => {
+    if (!thisWeekOpponent) return null;
+    const row = pulseTeams.find((t) => t.teamId === thisWeekOpponent.teamId);
+    const mids = row?.memberIds;
+    return mids && mids[0] ? String(mids[0]) : null;
+  }, [thisWeekOpponent, pulseTeams]);
+
+  const matchupIntelEnabled =
+    leagueKeyReady &&
+    !!opponentMemberId &&
+    (pulseQ.data?.week ?? 0) >= 1 &&
+    !pulseQ.data?.isSeasonComplete;
+
+  const opponentDnaQ = trpc.dna.managerProfile.useQuery(
+    withLeagueSalt({ memberId: opponentMemberId ?? "__none__" }, leagueCtx.leagueContextKey),
+    {
+      ...DASH_QUERY_OPTS,
+      enabled: matchupIntelEnabled && !!opponentMemberId,
+    },
+  );
 
   // teamId → ownerName from pulse (has real display names, not GUIDs)
   const pulseOwnerMap = useMemo(() => {
@@ -312,6 +424,27 @@ export function Dashboard() {
       ownerName: pulseOwnerMap.get(t.teamId) || t.ownerName || t.teamName,
     }));
   }, [standingsQ.data, pulseOwnerMap]);
+
+  const legacyRankDisplay = useMemo(() => {
+    const focalKey = ownerHomeQ.data?.owner?.ownerKey;
+    const pr = (ownerListQ.data?.powerRankings ?? []) as Array<{ rank: number; ownerKey: string }>;
+    if (focalKey && pr.length > 0) {
+      const target = normalizeOwnerKeyForMatch(focalKey);
+      const row = pr.find((r) => normalizeOwnerKeyForMatch(r.ownerKey) === target);
+      if (row) return { primary: `#${row.rank}`, secondary: `of ${pr.length} managers` };
+    }
+    if (leagueCtx.myTeamId && ranked.length > 0) {
+      const t = ranked.find((x) => x.teamId === leagueCtx.myTeamId);
+      if (t) return { primary: `#${t.displayRank}`, secondary: `${season} standings` };
+    }
+    return { primary: "—", secondary: "Sync data or finish setup" };
+  }, [
+    ownerHomeQ.data?.owner?.ownerKey,
+    ownerListQ.data?.powerRankings,
+    leagueCtx.myTeamId,
+    ranked,
+    season,
+  ]);
 
   const leagueName =
     activeLeagueQ.data?.leagueName?.trim() ||
@@ -492,45 +625,210 @@ export function Dashboard() {
 
   const playoffSpots = leagueCtx.playoffTeams > 0 ? leagueCtx.playoffTeams : 6;
 
+  const oh = ownerHomeQ.data;
+  const focalOwner = oh?.owner;
+  const welcomeName =
+    firstNameFromDisplay(focalOwner?.displayName) ||
+    focalOwner?.franchiseName?.trim() ||
+    focalOwner?.leagueName?.trim() ||
+    "Manager";
+  const careerFmt = oh?.careerRecord
+    ? `${oh.careerRecord.wins}-${oh.careerRecord.losses} (${Number(oh.careerRecord.winPct).toFixed(1)}% win)`
+    : "—";
+  const champsFmt =
+    oh?.championships != null
+      ? oh.championships.count > 0
+        ? `${oh.championships.count}${
+            oh.championships.seasons.length > 0
+              ? ` · ${oh.championships.seasons.slice(-4).join(", ")}${oh.championships.seasons.length > 4 ? "…" : ""}`
+              : ""
+          }`
+        : "0 titles"
+      : "—";
+  const rivalFmt = oh?.rival?.rivalName?.trim() || "—";
+  const threatFmt = oh?.threat?.primary
+    ? `${oh.threat.primary.ownerName} · ${oh.threat.primary.threatLevel}`
+    : "—";
+
+  const opponentDna = opponentDnaQ.data as Record<string, unknown> | null | undefined;
+  const matchupWeakLabel = matchupIntelWeakness(opponentDna);
+  const matchupDraftLabel = matchupIntelDraftTendency(opponentDna);
+  const matchupTradeLabel = matchupIntelTradeTendency(opponentDna);
+  const matchupKeeperLabel = thisWeekOpponent
+    ? opponentKeeperPick(thisWeekOpponent.teamId, (draftIntelQ as any)?.data?.keeperPredictions as unknown[] | undefined)
+    : "—";
+  const showMatchupIntelPanel =
+    !!leagueCtx.myTeamId && !!thisWeekOpponent && (pulseQ.data?.week ?? 0) >= 1 && !pulseQ.data?.isSeasonComplete;
+
   return (
     <div className="mx-auto max-w-[1400px] space-y-10 bg-[#0c090e] px-4 pb-16 pt-6 sm:px-6">
-      <header className="flex flex-col gap-4 border-b border-white/[0.06] pb-6 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 space-y-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-lime-500/90">Fantasy Football Rivals</p>
-          <h1 className="truncate text-3xl font-bold tracking-tight text-zinc-50 md:text-4xl">{leagueName}</h1>
-          <p className="text-sm text-zinc-400">{subtitle}</p>
-        </div>
-        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-          <div className="w-full min-w-[160px] sm:w-48">
-            <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
-              <SelectTrigger className="border-white/[0.08] bg-[#18111c] text-zinc-100">
-                <SelectValue placeholder="Season" />
-              </SelectTrigger>
-              <SelectContent>
-                {SEASONS_DESC.map((s) => (
-                  <SelectItem key={s} value={String(s)} disabled={!cachedSeasons.includes(s)}>
-                    Season {s}
-                    {!cachedSeasons.includes(s) ? " (not cached)" : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <header className="border-b border-white/[0.06] pb-6 space-y-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-lime-500/90">Welcome back</p>
+            <h1 className="truncate text-3xl font-bold tracking-tight text-zinc-50 md:text-4xl">{welcomeName}</h1>
+            <p className="text-sm text-zinc-400">
+              <span className="font-medium text-zinc-300">{leagueName}</span>
+              {subtitle ? <span className="text-zinc-500"> · {subtitle}</span> : null}
+            </p>
           </div>
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="shrink-0 border-red-500/25 bg-red-500/[0.06] text-red-200 hover:bg-red-500/15"
-          >
-            <Link to="/sync" className="gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Sync
-            </Link>
-          </Button>
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+            <div className="w-full min-w-[160px] sm:w-48">
+              <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
+                <SelectTrigger className="border-white/[0.08] bg-[#18111c] text-zinc-100">
+                  <SelectValue placeholder="Season" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SEASONS_DESC.map((s) => (
+                    <SelectItem key={s} value={String(s)} disabled={!cachedSeasons.includes(s)}>
+                      Season {s}
+                      {!cachedSeasons.includes(s) ? " (not cached)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="shrink-0 border-red-500/25 bg-red-500/[0.06] text-red-200 hover:bg-red-500/15"
+            >
+              <Link to="/sync" className="gap-2">
+                <RefreshCw className="h-4 w-4" />
+                Sync
+              </Link>
+            </Button>
+          </div>
         </div>
+
+        {ownerHomeQ.isLoading ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-24 rounded-xl" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" aria-label="Your owner snapshot">
+            <div className="rounded-xl border border-amber-500/20 bg-zinc-900/40 p-4 flex flex-col gap-1">
+              <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-amber-400/90">
+                <Medal className="h-3.5 w-3.5 shrink-0" />
+                Your legacy rank
+              </div>
+              <p className="text-xl font-black tabular-nums text-zinc-50">{legacyRankDisplay.primary}</p>
+              <p className="text-[11px] text-zinc-500 leading-snug">{legacyRankDisplay.secondary}</p>
+            </div>
+            <div className="rounded-xl border border-yellow-500/20 bg-zinc-900/40 p-4 flex flex-col gap-1">
+              <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-yellow-400/90">
+                <Trophy className="h-3.5 w-3.5 shrink-0" />
+                Championships
+              </div>
+              <p className="text-lg font-bold text-zinc-100 leading-snug break-words">{champsFmt}</p>
+              {!focalOwner?.isSetupComplete ? (
+                <p className="text-[11px] text-zinc-500">Select your team in Settings to personalize.</p>
+              ) : null}
+            </div>
+            <div className="rounded-xl border border-orange-500/20 bg-zinc-900/40 p-4 flex flex-col gap-1">
+              <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-orange-400/90">
+                <Swords className="h-3.5 w-3.5 shrink-0" />
+                Biggest rival
+              </div>
+              <p className="text-lg font-bold text-zinc-100 truncate" title={rivalFmt}>
+                {rivalFmt}
+              </p>
+              {oh?.rival?.heatLabel ? (
+                <p className="text-[11px] text-zinc-500">{oh.rival.heatLabel} · score {oh.rival.rivalryScore}</p>
+              ) : null}
+            </div>
+            <div className="rounded-xl border border-red-500/20 bg-zinc-900/40 p-4 flex flex-col gap-1">
+              <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-red-400/90">
+                <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+                Biggest threat
+              </div>
+              <p className="text-lg font-bold text-zinc-100 leading-snug break-words">{threatFmt}</p>
+              {oh?.threat?.primary?.reason ? (
+                <p className="text-[11px] text-zinc-500 line-clamp-2">{oh.threat.primary.reason}</p>
+              ) : oh?.threat?.note ? (
+                <p className="text-[11px] text-zinc-500">{oh.threat.note}</p>
+              ) : null}
+            </div>
+            <div className="rounded-xl border border-emerald-500/20 bg-zinc-900/40 p-4 flex flex-col gap-1 sm:col-span-2 lg:col-span-1">
+              <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-emerald-400/90">
+                <TrendingUp className="h-3.5 w-3.5 shrink-0" />
+                Career record
+              </div>
+              <p className="text-xl font-black tabular-nums text-zinc-50">{careerFmt}</p>
+              {oh?.careerRecord ? (
+                <p className="text-[11px] text-zinc-500">
+                  {oh.careerRecord.seasonsActive} season{oh.careerRecord.seasonsActive === 1 ? "" : "s"} ·{" "}
+                  {oh.careerRecord.playoffAppearances} playoff run{oh.careerRecord.playoffAppearances === 1 ? "" : "s"}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        )}
       </header>
 
-{/* League Pulse Strip */}
+      {/* Matchup Intelligence: this-week opponent (linked team + in-season week) */}
+      {showMatchupIntelPanel && thisWeekOpponent ? (
+        <section
+          className="rounded-2xl border border-sky-500/25 bg-gradient-to-br from-[#0d1218] via-[#0f1016] to-[#0c090e] p-6 shadow-[0_0_50px_-22px_rgba(56,189,248,0.25)] mb-2"
+          aria-label="Matchup intelligence"
+        >
+          <div className="flex items-start gap-3 mb-5">
+            <div className="w-9 h-9 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center shrink-0">
+              <Binoculars className="h-4 w-4 text-sky-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-widest text-sky-400/90">Matchup intelligence</p>
+              <p className="text-lg md:text-xl font-bold text-zinc-50 mt-1">
+                You play{" "}
+                <span className="text-sky-200">{thisWeekOpponent.ownerName}</span>
+                {thisWeekOpponent.teamName ? (
+                  <span className="text-zinc-500 font-medium"> · {thisWeekOpponent.teamName}</span>
+                ) : null}{" "}
+                this week.
+              </p>
+              <p className="text-[11px] text-zinc-500 mt-1">{weekLabel}</p>
+            </div>
+          </div>
+          {opponentMemberId && opponentDnaQ.isLoading ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 rounded-xl" />
+              ))}
+            </div>
+          ) : !opponentMemberId ? (
+            <p className="text-sm text-zinc-500">
+              Opponent DNA loads when member IDs are on this week&apos;s schedule. Run a league sync if this stays blank.
+            </p>
+          ) : (
+            <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/40 px-4 py-3">
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Biggest weakness</dt>
+                <dd className="mt-1 text-sm font-semibold text-zinc-100">{matchupWeakLabel}</dd>
+              </div>
+              <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/40 px-4 py-3">
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Draft tendency</dt>
+                <dd className="mt-1 text-sm font-semibold text-zinc-100">{matchupDraftLabel}</dd>
+              </div>
+              <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/40 px-4 py-3">
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Trade tendency</dt>
+                <dd className="mt-1 text-sm font-semibold text-zinc-100">{matchupTradeLabel}</dd>
+              </div>
+              <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/40 px-4 py-3">
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Most likely keeper</dt>
+                <dd className="mt-1 text-sm font-semibold text-zinc-100">{matchupKeeperLabel}</dd>
+                {!(draftIntelQ as any)?.data?.ok ? (
+                  <p className="text-[10px] text-zinc-600 mt-1">Sync draft data for keeper model.</p>
+                ) : null}
+              </div>
+            </dl>
+          )}
+        </section>
+      ) : null}
+
+      {/* League Pulse Strip */}
       {(draftIntelQ as any)?.data?.ok && (
         <div className="flex items-center gap-3 overflow-x-auto rounded-xl border border-lime-500/20 bg-lime-500/5 px-4 py-2.5 text-xs mb-4 scrollbar-none">
           <Zap className="h-3.5 w-3.5 text-lime-400 shrink-0" />
