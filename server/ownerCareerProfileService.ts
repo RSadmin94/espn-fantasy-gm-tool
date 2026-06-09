@@ -1,16 +1,20 @@
 /**
  * ownerCareerProfileService.ts
  *
- * Computes focal-owner career facts from synced ESPN combined cache only.
- * Used by ownerSelfReview (and optionally other LLM prompts) — no hardcoded
- * league, owner, or career numbers.
+ * Computes focal-owner career facts from synced ESPN combined cache.
+ * **Championship seasons / title count:** `buildChampionshipAuthority` (medals-first,
+ * same source as Hall of Fame), keyed by champion team id per season — not
+ * `rankCalculatedFinal` or raw schedule alone.
+ * Used by ownerSelfReview, `me.ownerHome`, and related prompts.
  */
 
 import {
   getAllCachedSeasons,
   getCachedView,
+  getDb,
   resolveActiveLeagueId,
 } from "./db";
+import { buildChampionshipAuthority, type ChampionshipAuthority } from "./championshipAuthority";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import { normalizeDraftPicks, normalizeSettings } from "./espnService";
 
@@ -129,6 +133,16 @@ export async function buildOwnerCareerProfileForFocalUser(userId: number): Promi
   const cachedSeasons = await getAllCachedSeasons(leagueId);
   if (cachedSeasons.length === 0) return null;
 
+  let authority: ChampionshipAuthority | null = null;
+  const db = await getDb();
+  if (db && leagueId) {
+    try {
+      authority = await buildChampionshipAuthority({ db, leagueId });
+    } catch {
+      authority = null;
+    }
+  }
+
   let ownerName = "";
   const teamNames: string[] = [];
   const seasonRows: OwnerCareerSeasonRow[] = [];
@@ -199,7 +213,12 @@ export async function buildOwnerCareerProfileForFocalUser(userId: number): Promi
       0;
 
     let isChamp = false;
-    {
+    if (authority) {
+      const champTid = authority.championTeamIdBySeason.get(season);
+      if (champTid != null && Number(champTid) === Number(team.id)) {
+        isChamp = true;
+      }
+    } else {
       const champByRankP = teams.find((t) => Number(t.rankCalculatedFinal) === 1);
       if (champByRankP) {
         isChamp = Number(champByRankP.id) === Number(team.id);
