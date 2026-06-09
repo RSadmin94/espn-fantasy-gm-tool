@@ -71,6 +71,8 @@ export type DraftRealityResult = {
   leagueId: string;
   teamCount: number;
   weeksSimulated: number;
+  /** Distinct matchup periods present on the ESPN schedule payload for this season. */
+  scheduleMatchupWeeks: number;
   confidence: "High" | "Medium" | "Limited";
   confidenceReason: string;
   actualStandings: StandingRow[];
@@ -142,6 +144,7 @@ export async function computeDraftReality(season: number, leagueId: string): Pro
            r.espnPlayerId AS espnId, r.position AS position
     FROM gm_weekly_player_stats w
     JOIN gm_player_registry r ON r.id = w.playerId
+    INNER JOIN teams t ON w.teamId IS NOT NULL AND w.teamId = t.teamId AND w.season = t.season AND t.leagueId = ${leagueId}
     WHERE w.season = ${season}
   `));
 
@@ -231,6 +234,12 @@ export async function computeDraftReality(season: number, leagueId: string): Pro
   const ensure = (g: string) => { if (!draftRec.has(g)) draftRec.set(g, { wins: 0, losses: 0, ties: 0, pf: 0 }); return draftRec.get(g)!; };
 
   const schedule: any[] = combined.schedule ?? [];
+  const scheduleWeekNums = new Set<number>();
+  for (const m of schedule) {
+    const wk = Number(m.matchupPeriodId);
+    if (Number.isFinite(wk) && wk > 0) scheduleWeekNums.add(wk);
+  }
+  const scheduleMatchupWeeks = scheduleWeekNums.size;
   for (const m of schedule) {
     const week = Number(m.matchupPeriodId);
     if (!allWeeks.includes(week)) continue; // only simulate weeks we have player data for (regular weeks)
@@ -353,6 +362,11 @@ export async function computeDraftReality(season: number, leagueId: string): Pro
 
   // 10) Deterministic insights
   const insights: string[] = [];
+  if (scheduleMatchupWeeks > 0 && weeksSimulated > 0 && scheduleMatchupWeeks > weeksSimulated) {
+    insights.push(
+      `ESPN's schedule lists ${scheduleMatchupWeeks} matchup period${scheduleMatchupWeeks === 1 ? "" : "s"}; draft-only replay used ${weeksSimulated} where per-player points exist for this league in the database. Actual wins and losses still reflect the full ESPN team record.`,
+    );
+  }
   const champ = actualStandings[0];
   if (champ) {
     const ci = ownerImpacts.find(o => o.ownerKey === champ.ownerKey);
@@ -375,7 +389,10 @@ export async function computeDraftReality(season: number, leagueId: string): Pro
   return {
     season, leagueId,
     teamCount: actualStandings.length,
-    weeksSimulated, confidence, confidenceReason,
+    weeksSimulated,
+    scheduleMatchupWeeks,
+    confidence,
+    confidenceReason,
     actualStandings, draftOnlyStandings, ownerImpacts, superlatives, insights,
   };
 }

@@ -198,7 +198,7 @@ export function DraftRealitySimulator() {
               />
               <StandingsTable
                 title="Draft-Only Standings"
-                subtitle={`Best-ball from draft picks · replayed ${data.weeksSimulated} week${data.weeksSimulated === 1 ? "" : "s"} with player scores in DB`}
+                subtitle={`Best-ball from draft picks · ESPN schedule ${data.scheduleMatchupWeeks} matchup period${data.scheduleMatchupWeeks === 1 ? "" : "s"}, replayed ${data.weeksSimulated} with per-player scores for this league`}
                 accent="lime"
                 rows={data.draftOnlyStandings.map((r) => ({ rank: r.rank, name: r.ownerName, record: `${r.wins}-${r.losses}${r.ties ? "-" + r.ties : ""}`, pf: r.pointsFor }))}
               />
