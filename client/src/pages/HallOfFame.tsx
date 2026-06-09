@@ -784,6 +784,16 @@ export function HallOfFame() {
                 <span className="font-semibold text-zinc-300">Medals → owners</span> · rows: {diag.totalMedals} · champion
                 unmatched: {diag.unmatchedChampionTeams.length} · runner-up: {diag.unmatchedRunnerUpTeams.length} · third:{" "}
                 {diag.unmatchedThirdTeams.length}
+                {diag.unmatchedChampionTeams.length > 0 && (
+                  <div className="mt-2 space-y-0.5 text-[10px] leading-snug text-amber-200/90">
+                    <span className="text-zinc-500">Sample champion labels not matched:</span>
+                    {diag.unmatchedChampionTeams.slice(0, 4).map((u) => (
+                      <div key={`${u.season}-${u.teamName}`}>
+                        {u.season}: <span className="text-zinc-300">{u.teamName}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

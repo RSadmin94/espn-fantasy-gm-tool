@@ -87,8 +87,12 @@ export function ChampionshipPath() {
           </div>
           {data && (
             <div className="flex shrink-0 flex-wrap items-center gap-2 pt-1">
-              <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">17 Seasons</span>
-              <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">14-Team League</span>
+              <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">
+                {data.historicalSeasonCount} season{data.historicalSeasonCount === 1 ? "" : "s"} in DB
+              </span>
+              <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">
+                {data.teamCount > 0 ? `${data.teamCount}-Team League` : "League size pending sync"}
+              </span>
               <span className={cn("rounded-full border px-3 py-1 text-[11px] font-semibold", data.confidence === "High" ? "border-lime-400/30 bg-lime-500/10 text-lime-300" : "border-amber-400/30 bg-amber-500/10 text-amber-300")}>Confidence: {data.confidence}</span>
             </div>
           )}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -51,12 +51,6 @@ function chipStyle(place: number | null | undefined): string {
   return "bg-muted/20 text-muted-foreground/50 border-transparent";
 }
 
-// Mirrors server normalizeOwnerStr — used to match medal names to ownerKeys.
-function normalizeOwnerForMatch(raw: string): string {
-  if (!raw) return "";
-  return raw.trim().replace(/^\(+|\)+$/g, "").trim().toLowerCase().replace(/\s+/g, " ");
-}
-
 // ── component ─────────────────────────────────────────────────────────────────
 
 type Tab = "dynasty" | "seasons" | "rivalries";
@@ -77,10 +71,10 @@ export function LeagueTimeline() {
     withLeagueSalt({}, leagueContextKey),
     { staleTime: 60_000, enabled: leagueKeyReady },
   );
-  const medalsQ    = trpc.espn.leagueMedals.useQuery(
-    withLeagueSalt({}, leagueContextKey),
-    { staleTime: 60_000, enabled: leagueKeyReady },
-  );
+  const hofQ = trpc.espn.hallOfFame.useQuery(withLeagueSalt({}, leagueContextKey), {
+    staleTime: 60_000,
+    enabled: leagueKeyReady,
+  });
   const h2hQ = trpc.espn.leagueHistoryH2H.useQuery(
     withLeagueSalt({}, leagueContextKey),
     {
@@ -97,7 +91,7 @@ export function LeagueTimeline() {
   const seasonsFromStandings = standingsPayload?.seasons;
   const allSeasons = seasonsFromStandings ?? [];
   const rawOwners  = standingsPayload?.owners  ?? [];
-  const medals     = (leagueKeyReady ? medalsQ.data : undefined) ?? [];
+  const hofPayload   = leagueKeyReady ? hofQ.data : undefined;
 
   useEffect(() => {
     const seasons = seasonsFromStandings ?? [];
@@ -108,42 +102,34 @@ export function LeagueTimeline() {
     setSelectedSeason((cur) => (cur != null && seasons.includes(cur) ? cur : null));
   }, [leagueContextKey, seasonsFromStandings]);
 
-  // ── Medal title counts + seasons: normalizedChampionOwner → count / season[] ──
-  // Source of truth: league_medals.championOwner only. finalStanding is never used for titles.
-  const medalTitleCounts  = new Map<string, number>();
-  const medalTitleSeasons = new Map<string, number[]>();
-  for (const m of medals) {
-    if (!m.championOwner) continue;
-    const k = normalizeOwnerForMatch(m.championOwner);
-    medalTitleCounts.set(k, (medalTitleCounts.get(k) ?? 0) + 1);
-    const existing = medalTitleSeasons.get(k) ?? [];
-    existing.push(m.season);
-    medalTitleSeasons.set(k, existing);
-  }
-
-  // Try ownerKey (server-normalized) first, then normalized displayName as fallback.
-  const getMedalTitles = (owner: { ownerKey: string; displayName: string }): number =>
-    medalTitleCounts.get(owner.ownerKey) ??
-    medalTitleCounts.get(normalizeOwnerForMatch(owner.displayName)) ??
-    0;
-
-  const getMedalTitleSeasons = (owner: { ownerKey: string; displayName: string }): number[] =>
-    (medalTitleSeasons.get(owner.ownerKey) ??
-     medalTitleSeasons.get(normalizeOwnerForMatch(owner.displayName)) ??
-     []).slice().sort((a, b) => b - a);
-
-  // ── Medal match diagnostics: champion names that don't resolve to any owner ──
-  const ownerKeySet        = new Set<string>(rawOwners.map((o) => o.ownerKey));
-  const ownerDisplayNormSet = new Set<string>(rawOwners.map((o) => normalizeOwnerForMatch(o.displayName)));
-  const unmatchedChampionNames: string[] = [];
-  for (const m of medals) {
-    if (!m.championOwner) continue;
-    const k = normalizeOwnerForMatch(m.championOwner);
-    if (!ownerKeySet.has(k) && !ownerDisplayNormSet.has(k)) {
-      unmatchedChampionNames.push(m.championOwner);
+  // ── Title counts: same canonical ownerKey + league_medals resolution as Hall of Fame ──
+  const hofTitleByOwnerKey = useMemo(() => {
+    const m = new Map<string, { titles: number; seasons: number[] }>();
+    for (const r of hofPayload?.ownerRecords ?? []) {
+      m.set(r.ownerKey, {
+        titles: r.titles,
+        seasons: [...(r.titleSeasons ?? [])].sort((a, b) => b - a),
+      });
     }
-  }
-  const ownerNormalizationMisses = unmatchedChampionNames.length;
+    return m;
+  }, [hofPayload]);
+
+  const getMedalTitles = (owner: { ownerKey: string }): number =>
+    hofTitleByOwnerKey.get(owner.ownerKey)?.titles ?? 0;
+
+  const getMedalTitleSeasons = (owner: { ownerKey: string }): number[] =>
+    hofTitleByOwnerKey.get(owner.ownerKey)?.seasons ?? [];
+
+  const medalDiag = hofPayload?.championships?.medalDiagnostics;
+  const unmatchedChampionNames: string[] = [
+    ...(medalDiag?.unmatchedChampionTeams?.map((x) => `Champ ${x.season}: ${x.teamName}`) ?? []),
+    ...(medalDiag?.unmatchedRunnerUpTeams?.map((x) => `RU ${x.season}: ${x.teamName}`) ?? []),
+    ...(medalDiag?.unmatchedThirdTeams?.map((x) => `3rd ${x.season}: ${x.teamName}`) ?? []),
+  ];
+  const ownerNormalizationMisses =
+    (medalDiag?.unmatchedChampionTeams?.length ?? 0) +
+    (medalDiag?.unmatchedRunnerUpTeams?.length ?? 0) +
+    (medalDiag?.unmatchedThirdTeams?.length ?? 0);
 
   // ── Dynasty Board sort (client-side display sort only) ────────────────────
   const owners = [...rawOwners].filter(o => o.seasons.length > 1).sort((a, b) => {
@@ -179,6 +165,23 @@ export function LeagueTimeline() {
     ? [...seasonRows].sort((a, b) => b.pointsFor - a.pointsFor)[0]!
     : null;
 
+  const seasonMedalRow =
+    activeSeason != null
+      ? hofPayload?.championships?.history?.find((h) => h.season === activeSeason)
+      : undefined;
+  const medalChampionLabel =
+    seasonMedalRow?.resolvedChampionDisplay ?? seasonMedalRow?.championTeam ?? null;
+  const medalRunnerLabel =
+    seasonMedalRow?.resolvedRunnerUpDisplay ?? seasonMedalRow?.runnerUpTeam ?? null;
+  const medalThirdLabel =
+    seasonMedalRow?.resolvedThirdDisplay ?? seasonMedalRow?.thirdTeam ?? null;
+
+  function standingsSubtitleForMedalName(label: string | null | undefined): string {
+    if (!label?.trim()) return "—";
+    const row = seasonRows.find((r) => r.owner === label.trim());
+    return row ? formatStandingsSubtitle(row) : "Not in RS standings snapshot — see list below";
+  }
+
   // ── Rivalries ─────────────────────────────────────────────────────────────
   const h2hPayload = leagueKeyReady ? h2hQ.data : undefined;
   const h2hOwners = h2hPayload?.owners ?? [];
@@ -201,7 +204,7 @@ export function LeagueTimeline() {
       {/* ── Diagnostics bar ── */}
       {(() => {
         const d = leagueKeyReady ? diagQ.data : undefined;
-        const medalSeasons = medals.length;
+        const medalSeasons = hofPayload?.championships?.history?.length ?? 0;
         const allSeasonCount = allSeasons.length;
         const missingMedals = allSeasonCount > 0 ? allSeasonCount - medalSeasons : 0;
         const dupStandingSeasons = (d?.standings ?? []).filter((s) => s.duplicateFinalStandingRanks.length > 0 || s.duplicateOwnerRows > 0).length;
@@ -226,8 +229,8 @@ export function LeagueTimeline() {
               {medalSeasons}/{allSeasonCount}{missingMedals > 0 ? ` (${missingMedals} missing)` : " ok"}
             </span>
             {" · "}medal-match: <span className={cn(ownerNormalizationMisses > 0 ? "text-amber-400 font-bold" : medalSeasons > 0 ? "text-lime-400" : "text-muted-foreground")}
-              title={ownerNormalizationMisses > 0 ? unmatchedChampionNames.join(", ") : undefined}>
-              {ownerNormalizationMisses > 0 ? `${ownerNormalizationMisses} unmatched` : medalSeasons > 0 ? "ok" : "…"}
+              title={ownerNormalizationMisses > 0 ? unmatchedChampionNames.join("; ") : undefined}>
+              {ownerNormalizationMisses > 0 ? `${ownerNormalizationMisses} unresolved medal slot(s)` : medalSeasons > 0 ? "ok" : "…"}
             </span>
             {" · "}standings: <span className={cn(dupStandingSeasons + missingRankSeasons > 0 ? "text-amber-400" : d ? "text-lime-400" : "text-muted-foreground")}>
               {dupStandingSeasons > 0 ? `${dupStandingSeasons} dup-ranks` : missingRankSeasons > 0 ? `${missingRankSeasons} missing-ranks` : d ? "ok" : "…"}
@@ -268,7 +271,7 @@ export function LeagueTimeline() {
         <ToggleGroupItem value="rivalries">Rivalries</ToggleGroupItem>
       </ToggleGroup>
 
-      {(!leagueKeyReady || standingsQ.isLoading) && (
+      {(!leagueKeyReady || standingsQ.isLoading || hofQ.isLoading) && (
         <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" /> Loading…
         </div>
@@ -277,7 +280,7 @@ export function LeagueTimeline() {
       {/* ═══════════════════════════════════════════════════════════════════
           TAB 1 — Dynasty Board
       ════════════════════════════════════════════════════════════════════ */}
-      {tab === "dynasty" && leagueKeyReady && !standingsQ.isLoading && (
+      {tab === "dynasty" && leagueKeyReady && !standingsQ.isLoading && !hofQ.isLoading && (
         <div className="space-y-4">
 
           {/* Sort bar */}
@@ -420,7 +423,7 @@ export function LeagueTimeline() {
       {/* ═══════════════════════════════════════════════════════════════════
           TAB 2 — Season Explorer
       ════════════════════════════════════════════════════════════════════ */}
-      {tab === "seasons" && leagueKeyReady && !standingsQ.isLoading && (
+      {tab === "seasons" && leagueKeyReady && !standingsQ.isLoading && !hofQ.isLoading && (
         <div className="space-y-4">
 
           {/* Horizontal season strip */}
@@ -456,28 +459,52 @@ export function LeagueTimeline() {
                 {/* Season heading */}
                 <div className="text-xl font-bold text-foreground">{activeSeason} Season</div>
 
-                {/* Champion + runner-up */}
-                <div className="flex gap-3">
-                  {seasonRows[0] && (
-                    <div className="flex-1 rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-3 text-center">
+                <div className="text-[10px] text-muted-foreground mb-1">
+                  Podium from <span className="font-mono text-foreground/80">league_medals</span> (same owner resolution as Hall of Fame).
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  {medalChampionLabel ? (
+                    <div className="flex-1 min-w-[140px] rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-3 text-center">
                       <div className="text-[10px] uppercase tracking-widest font-semibold text-yellow-400 mb-1">Champion</div>
-                      <div className="font-bold text-yellow-300">{seasonRows[0].owner}</div>
+                      <div className="font-bold text-yellow-300">{medalChampionLabel}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        {formatStandingsSubtitle(seasonRows[0])}
+                        {standingsSubtitleForMedalName(medalChampionLabel)}
                       </div>
                     </div>
+                  ) : (
+                    <div className="flex-1 min-w-[140px] rounded-lg border border-dashed border-border/60 p-3 text-center text-xs text-muted-foreground">
+                      No champion medal for {activeSeason} in <span className="font-mono">league_medals</span>.
+                    </div>
                   )}
-                  {seasonRows[1] && (
-                    <div className="flex-1 rounded-lg bg-slate-400/10 border border-slate-400/15 p-3 text-center">
+                  {medalRunnerLabel ? (
+                    <div className="flex-1 min-w-[140px] rounded-lg bg-slate-400/10 border border-slate-400/15 p-3 text-center">
                       <div className="text-[10px] uppercase tracking-widest font-semibold text-slate-400 mb-1">Runner-Up</div>
-                      <div className="font-semibold text-slate-300">{seasonRows[1].owner}</div>
+                      <div className="font-semibold text-slate-300">{medalRunnerLabel}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        {formatStandingsSubtitle(seasonRows[1])}
+                        {standingsSubtitleForMedalName(medalRunnerLabel)}
                       </div>
                     </div>
+                  ) : (
+                    <div className="flex-1 min-w-[140px] rounded-lg border border-dashed border-border/60 p-3 text-center text-xs text-muted-foreground">
+                      No runner-up medal for {activeSeason}.
+                    </div>
                   )}
-                  {topScorer && topScorer.owner !== seasonRows[0]?.owner && (
-                    <div className="flex-1 rounded-lg bg-violet-500/10 border border-violet-500/15 p-3 text-center">
+                  {medalThirdLabel ? (
+                    <div className="flex-1 min-w-[140px] rounded-lg bg-amber-700/10 border border-amber-600/25 p-3 text-center">
+                      <div className="text-[10px] uppercase tracking-widest font-semibold text-amber-500 mb-1">Third Place</div>
+                      <div className="font-semibold text-amber-400">{medalThirdLabel}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {standingsSubtitleForMedalName(medalThirdLabel)}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex-1 min-w-[140px] rounded-lg border border-dashed border-border/60 p-3 text-center text-xs text-muted-foreground">
+                      No third-place medal for {activeSeason}.
+                    </div>
+                  )}
+                  {topScorer && topScorer.owner !== medalChampionLabel && (
+                    <div className="flex-1 min-w-[140px] rounded-lg bg-violet-500/10 border border-violet-500/15 p-3 text-center">
                       <div className="text-[10px] uppercase tracking-widest font-semibold text-violet-400 mb-1">Top Scorer</div>
                       <div className="font-semibold text-violet-300">{topScorer.owner}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
@@ -500,22 +527,27 @@ export function LeagueTimeline() {
                     )}
                   </div>
                   <div className="space-y-1">
-                    {seasonRows.map((row, idx) => (
+                    {seasonRows.map((row, idx) => {
+                      const isMedalChamp = Boolean(medalChampionLabel && row.owner === medalChampionLabel);
+                      const isMedalRu = Boolean(medalRunnerLabel && row.owner === medalRunnerLabel);
+                      const isMedalThird = Boolean(medalThirdLabel && row.owner === medalThirdLabel);
+                      return (
                       <div
                         key={row.owner}
                         className={cn(
                           "flex items-center justify-between rounded-md px-3 py-2 text-sm",
-                          idx === 0 && "bg-yellow-500/8",
-                          idx === 1 && "bg-slate-400/6",
+                          isMedalChamp && "bg-yellow-500/8",
+                          !isMedalChamp && isMedalRu && "bg-slate-400/6",
+                          !isMedalChamp && !isMedalRu && isMedalThird && "bg-amber-700/8",
                         )}
                       >
                         <div className="flex items-center gap-3">
                           <span className={cn(
                             "w-5 text-center text-xs font-semibold tabular-nums",
-                            idx === 0 && "text-yellow-400",
-                            idx === 1 && "text-slate-400",
-                            idx === 2 && "text-amber-500",
-                            idx >= 3 && "text-muted-foreground",
+                            isMedalChamp && "text-yellow-400",
+                            isMedalRu && "text-slate-400",
+                            isMedalThird && "text-amber-500",
+                            !isMedalChamp && !isMedalRu && !isMedalThird && "text-muted-foreground",
                           )}>
                             {row.finalStanding ?? idx + 1}
                           </span>
@@ -528,7 +560,7 @@ export function LeagueTimeline() {
                           ) : null}
                         </div>
                       </div>
-                    ))}
+                    );})}
                   </div>
                 </div>
 

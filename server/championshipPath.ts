@@ -81,6 +81,8 @@ export type ChampionshipPathResult = {
   note?: string;
   /** Distinct seasons with a `teams` row for this league (historical footprint). */
   historicalSeasonCount: number;
+  /** Teams in the league's most recent season (current league size; 0 if unknown). */
+  teamCount: number;
   /** Seasons where this league has weekly player stats joined to `teams`. */
   weeklyStatsSeasons: number[];
 };
@@ -108,6 +110,11 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
     .map((r: any) => ({ season: Number(r.season), teamId: Number(r.teamId), ownerId: String(r.ownerId), ownerName: String(r.ownerName ?? ""), wins: Number(r.wins ?? 0), pf: Number(r.pf ?? 0), finalStanding: r.finalStanding != null ? Number(r.finalStanding) : null }));
 
   const historicalSeasonCount = new Set(teams.map((t) => t.season)).size;
+  // Current league size = distinct teamIds in the most recent season (same league-scoped
+  // teams data already loaded above; does not affect any championship calculation).
+  const latestSeason = teams.length ? Math.max(...teams.map((t) => t.season)) : null;
+  const teamCount =
+    latestSeason != null ? new Set(teams.filter((t) => t.season === latestSeason).map((t) => t.teamId)).size : 0;
   const weeklyStatsSeasons = await getWeeklyStatsSeasonsForLeague(leagueId);
   const weeklySeasonSql =
     weeklyStatsSeasons.length > 0
@@ -137,6 +144,7 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
   if (!focal) {
     return emptyResult(leagueId, ownerName, isSetupComplete, "No owner data available.", {
       historicalSeasonCount,
+      teamCount,
       weeklyStatsSeasons,
     });
   }
@@ -360,6 +368,7 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
     biggestThreat, biggestRival, topImprovements: topImprovements.slice(0, 3), draftContext, pastReasonContext,
     recommendedActions, headline, narrative, confidence,
     historicalSeasonCount,
+    teamCount,
     weeklyStatsSeasons,
   };
 }
@@ -369,9 +378,10 @@ function emptyResult(
   ownerName: string,
   isSetupComplete: boolean,
   note: string,
-  hist?: { historicalSeasonCount: number; weeklyStatsSeasons: number[] },
+  hist?: { historicalSeasonCount: number; teamCount?: number; weeklyStatsSeasons: number[] },
 ): ChampionshipPathResult {
   const historicalSeasonCount = hist?.historicalSeasonCount ?? 0;
+  const teamCount = hist?.teamCount ?? 0;
   const weeklyStatsSeasons = hist?.weeklyStatsSeasons ?? [];
   const zero: Record<Pos, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
   return {
@@ -382,6 +392,7 @@ function emptyResult(
     biggestThreat: null, biggestRival: null, topImprovements: [], draftContext: null, pastReasonContext: null,
     recommendedActions: [], headline: "Not enough data yet.", narrative: note, confidence: "Limited", note,
     historicalSeasonCount,
+    teamCount,
     weeklyStatsSeasons,
   };
 }
