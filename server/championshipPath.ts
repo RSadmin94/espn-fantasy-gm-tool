@@ -52,6 +52,19 @@ export type PathThreat = {
   detail: string;
 };
 
+export type ChampionSeasonProfile = {
+  season: number;
+  champion: string | null;
+  source: string | null;
+  byPosition: Record<Pos, number | null>;
+};
+export type ChampionshipProfile = {
+  available: boolean;
+  reason: string | null;
+  positions: Pos[];
+  seasons: ChampionSeasonProfile[];
+  combined: Record<Pos, number>;
+};
 export type ChampionshipPathResult = {
   leagueId: string;
   ownerKey: string | null;
@@ -86,6 +99,8 @@ export type ChampionshipPathResult = {
   teamCount: number;
   /** Seasons where this league has weekly player stats joined to `teams`. */
   weeklyStatsSeasons: number[];
+  /** Per-season champion positional profile + combined (Championship Profile view). */
+  championshipProfile: ChampionshipProfile;
 };
 
 // A "WR1/RB1/etc." tier threshold: a top starter at a position roughly equals the
@@ -172,6 +187,7 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
 
   // champion profile: average across champions of each champion's per-position pts/game
   const champPerPos: Record<Pos, number[]> = { QB: [], RB: [], WR: [], TE: [] };
+  const championSeasonProfiles: ChampionSeasonProfile[] = [];
   for (const [season, teamId] of champTeamBySeason) {
     if (!weeklySet.has(season)) continue;
     const sums: Record<Pos, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
@@ -180,8 +196,21 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
       if (w.season !== season || w.teamId !== teamId) continue;
       sums[w.position] += w.pts; cnts[w.position]++;
     }
-    for (const p of POSITIONS) if (cnts[p] > 0) champPerPos[p].push(sums[p] / cnts[p]);
+    const byPosition: Record<Pos, number | null> = { QB: null, RB: null, WR: null, TE: null };
+    let anyPos = false;
+    for (const p of POSITIONS) {
+      if (cnts[p] > 0) { champPerPos[p].push(sums[p] / cnts[p]); byPosition[p] = r1(sums[p] / cnts[p]); anyPos = true; }
+    }
+    if (anyPos) {
+      championSeasonProfiles.push({
+        season,
+        champion: champAuthority.championNameBySeason.get(season) ?? null,
+        source: champAuthority.sourceBySeason.get(season) ?? null,
+        byPosition,
+      });
+    }
   }
+  championSeasonProfiles.sort((a, b) => b.season - a.season);
   const championProfile: Record<Pos, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
   for (const p of POSITIONS) championProfile[p] = champPerPos[p].length ? r1(champPerPos[p].reduce((a, b) => a + b, 0) / champPerPos[p].length) : 0;
 
@@ -361,6 +390,18 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
     topImprovements.push(recommendedActions[topImprovements.length]);
   }
 
+  const championshipProfile: ChampionshipProfile = {
+    available: championSeasonProfiles.length > 0,
+    reason:
+      championSeasonProfiles.length > 0
+        ? null
+        : weeklyStatsSeasons.length === 0
+          ? "No weekly player stats have been ingested for this league yet."
+          : "No resolved champion seasons overlap the seasons with player stats.",
+    positions: [...POSITIONS],
+    seasons: championSeasonProfiles,
+    combined: championProfile,
+  };
   return {
     leagueId, ownerKey: focal, ownerName, isSetupComplete, hasWon,
     championProfile, championAvgPointsFor, championAvgWins,
@@ -368,6 +409,7 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
     positionGaps, biggestWeakness, pointsForGap, closestChampion,
     biggestThreat, biggestRival, topImprovements: topImprovements.slice(0, 3), draftContext, pastReasonContext,
     recommendedActions, headline, narrative, confidence,
+    championshipProfile,
     historicalSeasonCount,
     teamCount,
     weeklyStatsSeasons,
@@ -392,6 +434,7 @@ function emptyResult(
     positionGaps: [], biggestWeakness: null, pointsForGap: 0, closestChampion: null,
     biggestThreat: null, biggestRival: null, topImprovements: [], draftContext: null, pastReasonContext: null,
     recommendedActions: [], headline: "Not enough data yet.", narrative: note, confidence: "Limited", note,
+    championshipProfile: { available: false, reason: note, positions: [...POSITIONS], seasons: [], combined: zero },
     historicalSeasonCount,
     teamCount,
     weeklyStatsSeasons,

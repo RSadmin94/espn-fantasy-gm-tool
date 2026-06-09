@@ -136,6 +136,51 @@ export function ChampionshipPath() {
               </div>
             </Section>
 
+            {/* Championship Profile: avg starter pts/game by position, per champion + all-champions combined */}
+            <Section icon={<Crown className="h-5 w-5" />} title="Championship Profile" subtitle="Avg starter points/game by position - each season's champion, plus all champions combined">
+              {data.championshipProfile.available ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-[13px]">
+                    <thead>
+                      <tr className="text-white/45">
+                        <th className="px-3 py-2 text-left font-semibold">Season &middot; Champion</th>
+                        {data.championshipProfile.positions.map((p) => (
+                          <th key={p} className="px-3 py-2 text-right font-semibold tabular-nums">{p}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.championshipProfile.seasons.map((row) => (
+                        <tr key={row.season} className="border-t border-white/[0.06]">
+                          <td className="px-3 py-2 text-left">
+                            <span className="font-bold tabular-nums text-white/90">{row.season}</span>
+                            <span className="ml-2 text-white/55">{row.champion ?? "-"}</span>
+                            {row.source && row.source !== "medal" && (
+                              <span className="ml-2 rounded border border-amber-400/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300/90">est.</span>
+                            )}
+                          </td>
+                          {data.championshipProfile.positions.map((p) => (
+                            <td key={p} className="px-3 py-2 text-right tabular-nums text-white/85">{row.byPosition[p] ?? "-"}</td>
+                          ))}
+                        </tr>
+                      ))}
+                      <tr className="border-t-2 border-lime-400/30 bg-lime-500/[0.04]">
+                        <td className="px-3 py-2 text-left font-bold text-lime-300">All champions &middot; avg</td>
+                        {data.championshipProfile.positions.map((p) => (
+                          <td key={p} className="px-3 py-2 text-right font-bold tabular-nums text-lime-300">{data.championshipProfile.combined[p] || "-"}</td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p className="mt-3 text-[12px] text-white/35">Positions cover QB/RB/WR/TE starters. "est." marks a season whose champion came from final-standing fallback rather than a recorded title.</p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 text-center text-[14px] text-white/55">
+                  {data.championshipProfile.reason ?? "Player-level data isn't available for this league yet."}
+                  <p className="mt-1 text-[12px] text-white/35">Position scoring populates once this league's weekly player stats are synced.</p>
+                </div>
+              )}
+            </Section>
             {/* 3 mini cards: weakness | closest champ | biggest threat */}
             <div className="grid gap-3 md:grid-cols-3">
               <MiniCard icon={<ArrowUpCircle className="h-4 w-4" />} label="Biggest Gap" tone="warn">
