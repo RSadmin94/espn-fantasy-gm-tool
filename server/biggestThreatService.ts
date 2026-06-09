@@ -8,7 +8,7 @@
  *
  *   - Rivalry / H2H  → computeRivalryScores()        (rivalryService.ts)
  *   - League DNA     → buildManagerRawData()+calcLeagueDNA() (dnaRouter/leagueDNA)
- *   - Championship   → computeAllTrophyHistory()      (championshipHistoryBuilder.ts)
+ *   - Championship   → computeAllTrophyHistory()      (ChampionshipAuthority single champion source)
  *   - Active profile → resolveActiveProfile()         (db.ts)
  *
  * Threat score (0–100) is a transparent weighted composite:

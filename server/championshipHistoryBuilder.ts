@@ -1,16 +1,20 @@
 /**
  * championshipHistoryBuilder.ts
  *
- * Shared helper that computes per-owner championship and trophy history
- * from cached ESPN season data. Uses rankCalculatedFinal (the authoritative
- * ESPN field) to determine champion (#1) and runner-up (#2) for each season.
+ * Shared helper that computes per-owner championship and trophy history.
+ * **Titles / champion seasons:** `ChampionshipAuthority` only (`buildChampionshipAuthority` —
+ * medals primary, `finalStanding` fallback). This module does **not** read `rankCalculatedFinal`
+ * or `finalStanding` directly for champions.
+ * **Runner-up / third:** `buildHallOfFamePayload` history rows (unchanged).
+ * Map keys: ESPN member id (bare UUID) when `ownerKey` is `id:{uuid}`; else canonical `ownerKey`.
+ * Consumers: `biggestThreatService`, `advisorContextBuilder`, `weeklyStorylinesService`.
  *
  * Produces structured trophy blocks suitable for injection into any AI prompt.
  */
 
-import { getAllCachedSeasons, getCachedView } from "./db";
-import { normalizeTeams } from "./espnService";
-import { memCache } from "./memCache";
+import { getDb, memberIdFromOwnerKey, resolveActiveLeagueId } from "./db";
+import { buildHallOfFamePayload, type HallOfFamePayload } from "./hallOfFameService";
+import { buildChampionshipAuthority, type ChampionshipAuthority } from "./championshipAuthority";
 
 export interface OwnerTrophyRecord {
   memberId: string;
@@ -29,127 +33,129 @@ export interface OwnerTrophyRecord {
   prestige: "dynasty" | "contender" | "finalist" | "veteran" | "hungry"; // computed label
 }
 
+function mapKeyFromOwnerKey(ownerKey: string): string {
+  const mid = memberIdFromOwnerKey(ownerKey);
+  return mid && mid.length > 0 ? mid : ownerKey;
+}
+
+/** Sum of `championships` across all owners in the trophy map (league-wide title seasons). */
+export function sumChampionshipsInTrophyMap(trophyMap: Map<string, OwnerTrophyRecord>): number {
+  let n = 0;
+  for (const r of trophyMap.values()) n += r.championships;
+  return n;
+}
+
 /**
- * Compute trophy history for all owners across all cached seasons.
- * Returns a map of memberId → OwnerTrophyRecord.
+ * Pure merge: ChampionshipAuthority (titles) + HoF payload (RU / 3rd + display names).
+ * Does not touch DB. Used by `computeAllTrophyHistory` and by unit tests (PR-G / golden parity).
  */
-export async function computeAllTrophyHistory(
-  seasons?: number[],
-  userId?: number
-): Promise<Map<string, OwnerTrophyRecord>> {
+export function mergeTrophyHistoryFromAuthorityAndHoF(args: {
+  authority: ChampionshipAuthority;
+  payload: HallOfFamePayload;
+  seasons?: number[] | null;
+  leagueId: string;
+}): Map<string, OwnerTrophyRecord> {
+  const { authority, payload, seasons, leagueId } = args;
   const trophyMap = new Map<string, OwnerTrophyRecord>();
 
-  // Determine which seasons to scan
-  const currentYear = new Date().getFullYear();
-  const yearsToScan = seasons ?? Array.from({ length: currentYear - 2009 }, (_, i) => 2010 + i);
+  const seasonFilter =
+    seasons != null && seasons.length > 0 ? new Set(seasons.map((y) => Math.floor(Number(y)))) : null;
 
-  // Determine available seasons from DB if not specified
-  const availableSeasons = seasons ?? (await getAllCachedSeasons(undefined, userId));
-  const yearsToProcess = yearsToScan.filter(y => availableSeasons.includes(y));
+  const keepSeason = (y: number) => !seasonFilter || seasonFilter.has(y);
 
-  for (const year of yearsToProcess) {
-    let combined: Record<string, unknown> | null = null;
-    try {
-      const row = await getCachedView(year, "combined", undefined, { userId });
-      if (!row) continue;
-      const payload = (row as Record<string, unknown>).payload;
-      combined = typeof payload === "string" ? JSON.parse(payload) : (payload as Record<string, unknown>);
-    } catch {
-      continue;
+  /** memberId-or-key → aggregate */
+  function bump(
+    ownerKey: string | null,
+    year: number,
+    slot: "champ" | "ru" | "third",
+    displayName: string | null,
+  ) {
+    if (!ownerKey) return;
+    const mapKey = mapKeyFromOwnerKey(ownerKey);
+    if (!trophyMap.has(mapKey)) {
+      trophyMap.set(mapKey, {
+        memberId: mapKey,
+        name: displayName?.trim() || mapKey,
+        championships: 0,
+        championshipYears: [],
+        runnerUps: 0,
+        runnerUpYears: [],
+        thirdPlaceFinishes: 0,
+        thirdPlaceYears: [],
+        finalsAppearances: 0,
+        totalTrophies: 0,
+        lastTitle: null,
+        yearsSinceTitle: null,
+        longestDrought: 0,
+        prestige: "hungry",
+      });
     }
-    if (!combined) continue;
+    const rec = trophyMap.get(mapKey)!;
+    if (displayName?.trim()) rec.name = displayName.trim();
 
-    const teamsRaw = (combined.teams as Record<string, unknown>[]) ?? [];
-    const teams = normalizeTeams(combined) as Record<string, unknown>[];
-    const members = (combined.members as Record<string, unknown>[]) ?? [];
-
-    if (teams.length === 0) continue;
-
-    // Build memberId → display name map
-    const memberNameMap = new Map<string, string>();
-    for (const m of members) {
-      const mid = m.id as string;
-      const first = (m.firstName as string) ?? "";
-      const last = (m.lastName as string) ?? "";
-      const display = (m.displayName as string) ?? "";
-      memberNameMap.set(mid, `${first} ${last}`.trim() || display || mid);
-    }
-
-    // Build teamId → memberId map
-    const teamToMember = new Map<number, string>();
-    for (const t of teams) {
-      const tid = t.id as number;
-      const owner = (t.primaryOwner as string) || ((t.owners as string[])?.[0] ?? "");
-      if (owner) teamToMember.set(tid, owner);
-    }
-
-    // Find champion (rank 1), runner-up (rank 2), third place (rank 3)
-    const ranked: Array<{ rank: number; memberId: string }> = [];
-    for (const t of teams) {
-      const rank = t.rankCalculatedFinal as number;
-      if (!rank || rank < 1 || rank > 3) continue;
-      const tid = t.id as number;
-      const memberId = teamToMember.get(tid);
-      if (!memberId) continue;
-      ranked.push({ rank, memberId });
-    }
-
-    for (const { rank, memberId } of ranked) {
-      if (!trophyMap.has(memberId)) {
-        trophyMap.set(memberId, {
-          memberId,
-          name: memberNameMap.get(memberId) ?? "Unknown Owner",
-          championships: 0,
-          championshipYears: [],
-          runnerUps: 0,
-          runnerUpYears: [],
-          thirdPlaceFinishes: 0,
-          thirdPlaceYears: [],
-          finalsAppearances: 0,
-          totalTrophies: 0,
-          lastTitle: null,
-          yearsSinceTitle: null,
-          longestDrought: 0,
-          prestige: "hungry",
-        });
-      }
-      const rec = trophyMap.get(memberId)!;
-      // Update name in case it changed
-      if (memberNameMap.has(memberId)) rec.name = memberNameMap.get(memberId)!;
-
-      if (rank === 1) {
-        rec.championships++;
-        rec.championshipYears.push(year);
-        rec.finalsAppearances++;
-        rec.totalTrophies++;
-        rec.lastTitle = year;
-      } else if (rank === 2) {
-        rec.runnerUps++;
-        rec.runnerUpYears.push(year);
-        rec.finalsAppearances++;
-        rec.totalTrophies++;
-      } else if (rank === 3) {
-        rec.thirdPlaceFinishes++;
-        rec.thirdPlaceYears.push(year);
-        rec.totalTrophies++;
-      }
+    if (slot === "champ") {
+      rec.championships++;
+      rec.championshipYears.push(year);
+      rec.finalsAppearances++;
+      rec.totalTrophies++;
+    } else if (slot === "ru") {
+      rec.runnerUps++;
+      rec.runnerUpYears.push(year);
+      rec.finalsAppearances++;
+      rec.totalTrophies++;
+    } else {
+      rec.thirdPlaceFinishes++;
+      rec.thirdPlaceYears.push(year);
+      rec.totalTrophies++;
     }
   }
 
-  // Post-process: compute derived fields
+  // ===== CHAMPIONS + TITLES: single source of truth = ChampionshipAuthority =====
+  for (const [authOwnerKey, authSeasons] of authority.championSeasonsByKey) {
+    for (const season of authSeasons) {
+      if (!keepSeason(season)) continue;
+      bump(authOwnerKey, season, "champ", authority.championNameBySeason.get(season) ?? null);
+    }
+  }
+  const fallbackFlagged = authority.fallbackSeasons.filter(keepSeason);
+  if (fallbackFlagged.length > 0) {
+    console.log(
+      `[trophyHistory] league ${leagueId}: ${fallbackFlagged.length} champion season(s) via ${authority.fallbackLabel} (finalStanding fallback, NOT league_medals): [${fallbackFlagged.sort((a, b) => a - b).join(", ")}]`,
+    );
+  }
+
+  for (const h of payload.championships.history) {
+    if (!keepSeason(h.season)) continue;
+
+    if (h.resolvedRunnerUpOwnerKey) {
+      bump(h.resolvedRunnerUpOwnerKey, h.season, "ru", h.resolvedRunnerUpDisplay);
+    }
+    if (h.resolvedThirdOwnerKey) {
+      bump(h.resolvedThirdOwnerKey, h.season, "third", h.resolvedThirdDisplay);
+    }
+  }
+
+  for (const r of payload.ownerRecords) {
+    const k = mapKeyFromOwnerKey(r.ownerKey);
+    const rec = trophyMap.get(k);
+    if (rec) rec.name = r.displayName;
+  }
+
   const currentYear2 = new Date().getFullYear();
   for (const rec of Array.from(trophyMap.values())) {
-    // Sort years
     rec.championshipYears.sort((a: number, b: number) => a - b);
     rec.runnerUpYears.sort((a: number, b: number) => a - b);
     rec.thirdPlaceYears.sort((a: number, b: number) => a - b);
 
-    // Years since last title
+    rec.lastTitle =
+      rec.championshipYears.length > 0
+        ? rec.championshipYears[rec.championshipYears.length - 1]!
+        : null;
+
     if (rec.lastTitle) {
       rec.yearsSinceTitle = currentYear2 - rec.lastTitle;
     }
 
-    // Longest drought between consecutive championships
     if (rec.championshipYears.length >= 2) {
       let maxGap = 0;
       for (let i = 1; i < rec.championshipYears.length; i++) {
@@ -158,7 +164,6 @@ export async function computeAllTrophyHistory(
       rec.longestDrought = maxGap;
     }
 
-    // Prestige label
     if (rec.championships >= 3) {
       rec.prestige = "dynasty";
     } else if (rec.championships >= 2) {
@@ -173,6 +178,44 @@ export async function computeAllTrophyHistory(
   }
 
   return trophyMap;
+}
+
+/**
+ * Compute trophy history for all owners: **champions** via `buildChampionshipAuthority`,
+ * **runner-up / third** via `buildHallOfFamePayload` history rows.
+ * Map keys are ESPN member ids (bare UUID) when `ownerKey` is `id:{uuid}`; otherwise
+ * the canonical `ownerKey` string (rare `name:` identities).
+ *
+ * @param leagueIdOverride optional explicit league (golden certification / scripts) — passed to `resolveActiveLeagueId` as input override.
+ */
+export async function computeAllTrophyHistory(
+  seasons?: number[],
+  userId?: number,
+  leagueIdOverride?: string | null,
+): Promise<Map<string, OwnerTrophyRecord>> {
+  const db = await getDb();
+  if (!db) return new Map();
+
+  const { leagueId } = await resolveActiveLeagueId(
+    { user: userId != null ? { id: userId } : undefined },
+    leagueIdOverride ?? null,
+    undefined,
+  );
+  if (!leagueId) return new Map();
+
+  const payload = await buildHallOfFamePayload({
+    db,
+    leagueId,
+    userId: userId ?? 0,
+  });
+
+  const authority = await buildChampionshipAuthority({ db, leagueId });
+  return mergeTrophyHistoryFromAuthorityAndHoF({
+    authority,
+    payload,
+    seasons,
+    leagueId,
+  });
 }
 
 /**
