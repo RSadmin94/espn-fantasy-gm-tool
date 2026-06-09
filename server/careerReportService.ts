@@ -8,8 +8,11 @@
  * FULL-HISTORY facts come from the SAME identity-merged pipeline that powers Owner
  * Profiles (resolveOwnerTeamsForProfile + computeOwnerProfileRecordBundle over gm_teams
  * + gm_matchups). This correctly stitches an owner across season-to-season identity/GUID
- * changes (2010-2026), unlike a raw single-GUID match. Findings + confidence are reused
- * from computeWhyHaventIWon. Owner is bridged GUID -> display name -> canonical profile.
+ * changes (2010-2026), unlike a raw single-GUID match. **Championship title seasons and
+ * snapshot/timeline champion rows** use `buildChampionshipAuthority` (same as Why
+ * Haven't I Won / trophy history), not medal-only counts from the profile bundle.
+ * Findings + confidence are reused from computeWhyHaventIWon. Owner is bridged GUID ->
+ * display name -> canonical profile.
  *
  * Deterministic + template-driven. NO LLM. Profile-aware (no hardcoded Rod).
  * See WHY_HAVENT_I_WON_REDESIGN_SPEC.md.
@@ -24,6 +27,7 @@ import {
   loadOwnerProfileSharedData,
   loadFlatRegularSeasonMatchups,
   computeOwnerProfileRecordBundle,
+  championSeasonsFromAuthority,
   cleanOwnerDisplay,
   personMergeKey,
 } from "./ownerProfileService";
@@ -206,8 +210,12 @@ export async function computeCareerReport(
   };
 
   const seasonsPlayed = snap.seasons.length;
-  const titles = snap.championships;
-  const championSeasons = snap.champSeasons.slice().sort((a, b) => a - b);
+  const seedOwnerId = String(resolved.ownerTeamRows[0]?.ownerId ?? "").trim();
+  const championSeasons = championSeasonsFromAuthority(champAuth, {
+    ownerId: seedOwnerId,
+    profileOwnerKey: resolved.profileOwnerKey,
+  });
+  const titles = championSeasons.length;
   const runnerUps = snap.runnerUps;
   const correctedRanks = snap.seasonRecords
     .map((r) => rankOf(r.season, r.finalStanding))
@@ -228,18 +236,25 @@ export async function computeCareerReport(
   const debut = snap.seasons.length ? Math.min(...snap.seasons) : null;
   const latestTitle = championSeasons.length ? Math.max(...championSeasons) : null;
 
+  const authChampSeasonSet = new Set(championSeasons);
   const timeline: SeasonCard[] = snap.seasonRecords
     .slice()
     .sort((a, b) => b.season - a.season)
     .map((r) => {
       const fs = r.finalStanding;
       const place = rankOf(r.season, fs);
-      const resultLabel = r.isChampion ? "Champion"
-        : r.isRunnerUp ? "Runner-Up"
-        : r.isThirdPlace ? "3rd Place"
-        : place == null ? "In Progress"
-        : place <= 6 ? `${ordinal(place)} Place`
-        : "Missed Playoffs";
+      const isAuthChampion = authChampSeasonSet.has(r.season);
+      const resultLabel = isAuthChampion
+        ? "Champion"
+        : r.isRunnerUp
+          ? "Runner-Up"
+          : r.isThirdPlace
+            ? "3rd Place"
+            : place == null
+              ? "In Progress"
+              : place <= 6
+                ? `${ordinal(place)} Place`
+                : "Missed Playoffs";
       const ties = Number(r.ties ?? 0);
       const record = `${r.wins}-${r.losses}${ties > 0 ? `-${ties}` : ""}`;
       const hasMatchupPF = Number(r.pointsFor ?? 0) >= 100;
@@ -249,9 +264,9 @@ export async function computeCareerReport(
         record,
         pointsFor: hasMatchupPF ? Math.round(Number(r.pointsFor ?? 0) * 10) / 10 : null,
         resultLabel,
-        isChampion: !!r.isChampion,
+        isChampion: isAuthChampion,
         isRunnerUp: !!r.isRunnerUp,
-        championName: championNameBySeason.get(r.season) ?? (r.isChampion ? (cleanOwnerDisplay(why.ownerName) || why.ownerName) : null),
+        championName: championNameBySeason.get(r.season) ?? (isAuthChampion ? (cleanOwnerDisplay(why.ownerName) || why.ownerName) : null),
         playerLevelAvailable: r.season >= 2021,
       };
     });

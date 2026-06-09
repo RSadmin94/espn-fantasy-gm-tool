@@ -719,6 +719,40 @@ export function aggregateMatchupWLByOwnerSeason(
   return byKey;
 }
 
+/**
+ * Minimal slice of `buildChampionshipAuthority` output for title-season lookup
+ * without importing `championshipAuthority` here (avoids circular imports).
+ */
+export type ChampionshipTitleLookup = {
+  championSeasonsByKey: Map<string, number[]>;
+  canonicalKeyForOwnerId: (ownerId: string | null | undefined) => string;
+};
+
+/**
+ * Sorted unique seasons where the authority credits this franchise as champion
+ * (medals primary, `finalStanding` fallback — same as Hall of Fame / Why Haven't I Won).
+ */
+export function championSeasonsFromAuthority(
+  lookup: ChampionshipTitleLookup,
+  args: { ownerId: string | null | undefined; profileOwnerKey: string | null | undefined },
+): number[] {
+  const id = String(args.ownerId ?? "").trim();
+  const pk = String(args.profileOwnerKey ?? "").trim();
+  const keys: string[] = [];
+  if (id) {
+    keys.push(lookup.canonicalKeyForOwnerId(id), id);
+  }
+  if (pk) {
+    keys.push(pk, lookup.canonicalKeyForOwnerId(pk));
+  }
+  for (const k of keys) {
+    if (!k) continue;
+    const s = lookup.championSeasonsByKey.get(k);
+    if (s && s.length > 0) return [...new Set(s)].sort((a, b) => a - b);
+  }
+  return [];
+}
+
 function seasonRowForOwner(
   season: number,
   profileOwnerKey: string,
