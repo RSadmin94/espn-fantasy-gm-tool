@@ -4,6 +4,10 @@
  * Shared helper that builds the GM Advisor system-prompt context string.
  * Used by both the tRPC advisor.chat mutation and the streaming SSE endpoint
  * so the context logic lives in exactly one place.
+ *
+ * Career history **🏆** counts use `computeAllTrophyHistory` (ChampionshipAuthority),
+ * not ESPN playoff-bracket winners alone. Runner-up **🥈** in that block still comes
+ * from the winners-bracket final in each season's combined cache where available.
  */
 
 import {
@@ -177,8 +181,8 @@ Rules: Always reference actual team names, owner names, and player names when pr
         const teams = (d.teams as Record<string, unknown>[]) ?? [];
         const schedule = (d.schedule as Record<string, unknown>[]) ?? [];
 
-        // Determine champion from completed winners bracket
-        let championTeamId: number | null = null;
+        // Runner-up for this season (winners-bracket final loser) — still from ESPN schedule;
+        // championship counts are applied from ChampionshipAuthority via `computeAllTrophyHistory` below.
         let runnerUpTeamId: number | null = null;
         const completedPlayoffs = (schedule as Record<string, unknown>[]).filter(
           (m) => m.playoffTierType === 'WINNERS_BRACKET' && m.winner && m.winner !== 'UNDECIDED'
@@ -188,10 +192,8 @@ Rules: Always reference actual team names, owner names, and player names when pr
             (a.matchupPeriodId as number) >= (b.matchupPeriodId as number) ? a : b
           );
           if (champMatchup.winner === 'HOME') {
-            championTeamId = (champMatchup.home as Record<string, unknown>)?.teamId as number ?? null;
             runnerUpTeamId = (champMatchup.away as Record<string, unknown>)?.teamId as number ?? null;
           } else if (champMatchup.winner === 'AWAY') {
-            championTeamId = (champMatchup.away as Record<string, unknown>)?.teamId as number ?? null;
             runnerUpTeamId = (champMatchup.home as Record<string, unknown>)?.teamId as number ?? null;
           }
         }
@@ -209,7 +211,6 @@ Rules: Always reference actual team names, owner names, and player names when pr
           const rankFinal = (t.rankFinal as number) ?? 0;
           const playoffSeed = (t.playoffSeed as number) ?? 0;
           const madePlayoffs = playoffSeed > 0;
-          const isChamp = t.id === championTeamId;
           const isRunnerUp = t.id === runnerUpTeamId;
 
           if (!careerMap.has(primaryOwner)) {
@@ -220,7 +221,6 @@ Rules: Always reference actual team names, owner names, and player names when pr
           c.losses += losses;
           c.seasons++;
           if (madePlayoffs) c.playoffAppearances++;
-          if (isChamp) c.championships++;
           if (isRunnerUp) c.runnerUps++;
           if (rankFinal > 0 && rankFinal < c.bestFinish) c.bestFinish = rankFinal;
           if (rankFinal > c.worstFinish) c.worstFinish = rankFinal;
@@ -254,12 +254,29 @@ Rules: Always reference actual team names, owner names, and player names when pr
         }
       }
 
+      let advisorTrophyMap: Map<string, import("./championshipHistoryBuilder").OwnerTrophyRecord> | null = null;
+      try {
+        const { computeAllTrophyHistory } = await import("./championshipHistoryBuilder");
+        advisorTrophyMap = await computeAllTrophyHistory(undefined, userId);
+        const trophyRecForMember = (memberId: string) => {
+          const s0 = memberId.trim();
+          const bare = s0.replace(/^\{|\}$/g, "");
+          const braced = bare.startsWith("{") ? s0 : `{${bare}}`;
+          return advisorTrophyMap!.get(s0) ?? advisorTrophyMap!.get(bare) ?? advisorTrophyMap!.get(braced);
+        };
+        for (const [memberId, c] of careerMap) {
+          c.championships = trophyRecForMember(memberId)?.championships ?? 0;
+        }
+      } catch {
+        advisorTrophyMap = null;
+      }
+
       if (careerMap.size > 0) {
         const entries = Array.from(careerMap.values())
           .filter(c => c.seasons >= 1)
           .sort((a, b) => b.championships - a.championships || b.wins - a.wins);
 
-        leagueContext += `\n\n## CAREER HISTORY (${allSeasons[0]}–${allSeasons[allSeasons.length - 1]}, ${allSeasons.length} seasons — treat as ground truth):`;
+        leagueContext += `\n\n## CAREER HISTORY (${allSeasons[0]}–${allSeasons[allSeasons.length - 1]}, ${allSeasons.length} seasons — treat as ground truth). 🏆× = ChampionshipAuthority (same as trophy block below); 🥈× = ESPN winners-bracket runner-up when available.`;
         for (const c of entries) {
           const winPct = (c.wins + c.losses) > 0 ? ((c.wins / (c.wins + c.losses)) * 100).toFixed(0) : '0';
           const champStr = c.championships > 0 ? ` 🏆×${c.championships}` : '';
@@ -284,13 +301,14 @@ Rules: Always reference actual team names, owner names, and player names when pr
           leagueContext += `\nPLAYOFF MACHINES: ${dominantPlayoff.map(p => `${p.name} (${p.playoffAppearances}/${p.seasons} seasons)`).join(', ')} — consistently dangerous.`;
         }
 
-        // ── Detailed trophy history with exact years ──────────────────────────
+        // ── Detailed trophy history (same `computeAllTrophyHistory` map as career 🏆) ──
         try {
-          const { computeAllTrophyHistory, buildLeagueTrophyLeaderboard } = await import('./championshipHistoryBuilder');
-          const trophyMap = await computeAllTrophyHistory(undefined, userId);
-          const trophyBlock = buildLeagueTrophyLeaderboard(trophyMap);
-          if (trophyBlock) {
-            leagueContext += `\n\n${trophyBlock}`;
+          const { buildLeagueTrophyLeaderboard } = await import('./championshipHistoryBuilder');
+          if (advisorTrophyMap && advisorTrophyMap.size > 0) {
+            const trophyBlock = buildLeagueTrophyLeaderboard(advisorTrophyMap);
+            if (trophyBlock) {
+              leagueContext += `\n\n${trophyBlock}`;
+            }
           }
         } catch {
           // Trophy history unavailable — counts already shown above
