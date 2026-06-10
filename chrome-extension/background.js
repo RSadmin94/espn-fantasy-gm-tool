@@ -10,6 +10,7 @@
 
 const WAR_ROOM_ORIGIN = "https://gmwarroom.online";
 const TRPC_SAVE_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.saveCredentials`;
+const TRPC_ME_URL = `${WAR_ROOM_ORIGIN}/api/trpc/auth.me`;
 const SYNC_AUTOSYNC_URL = `${WAR_ROOM_ORIGIN}/sync?autoSync=2026`;
 /**
  * ESPN Fantasy web draft recap (same query shape the server uses as Referer for historical mDraftDetail).
@@ -24,12 +25,16 @@ function buildEspnDraftRecapUrl(seasonId, leagueId) {
 /** User profile / teams for 2026 — more reliable than the leagues list endpoint for some accounts. */
 const ESPN_PROFILE_DISCOVER_URL =
   "https://fantasy.espn.com/apis/v3/games/ffl/seasons/2026?view=proTeam";
+// Fan API: lists ALL fantasy leagues for the signed-in SWID (used to auto-detect leagues).
+const ESPN_FAN_API_BASE = "https://fan.api.espn.com/apis/v2/fans/";
 
 const MSG_DISCOVER_LEAGUES = "GMWR_DISCOVER_LEAGUES_2026";
 const MSG_SYNC_SELECTED_LEAGUES = "GMWR_SYNC_SELECTED_LEAGUES";
+const MSG_IS_ADMIN = "GMWR_IS_ADMIN";
 
 /** Session rules: inject Cookie only for matching requests, then removed. */
 const DNR_SAVE_COOKIE_RULE_ID = 8844201;
+const DNR_ME_COOKIE_RULE_ID = 8844230;
 const DNR_ESPN_PROFILE_RULE_ID = 8844202;
 
 const ESPN_COOKIE_BASE_URLS = [
@@ -147,6 +152,42 @@ function extractLeaguesFromDiscoverJson(data) {
 }
 
 /** Pull league ids from proTeam-style payload (teams map, member teams, etc.). */
+function extractLeaguesFromFanApi(data) {
+  const out = [];
+  const prefs = Array.isArray(data && data.preferences) ? data.preferences : [];
+  for (const pref of prefs) {
+    const entry = pref && pref.metaData && pref.metaData.entry;
+    if (!entry || typeof entry !== "object") continue;
+    const abbrev = String(entry.abbrev || "").toUpperCase();
+    const isFootball = abbrev.includes("FFL") || entry.gameId === 1;
+    if (!isFootball) continue;
+    const groups = Array.isArray(entry.groups) ? entry.groups : [];
+    for (const g of groups) {
+      const rawId = g && (g.groupId != null ? g.groupId : g.id != null ? g.id : g.leagueId);
+      if (rawId == null) continue;
+      const id = String(rawId).trim();
+      if (!/^\d+$/.test(id)) continue;
+      const name = String((g && (g.groupName || g.name)) || ("League " + id)).trim();
+      out.push({ id, name });
+    }
+  }
+  if (out.length === 0 && data && typeof data === "object") {
+    const stack = [data];
+    let guard = 0;
+    while (stack.length && guard < 5000) {
+      guard++;
+      const node = stack.pop();
+      if (!node || typeof node !== "object") continue;
+      const gid = node.groupId;
+      if (gid != null && /^\d+$/.test(String(gid))) {
+        out.push({ id: String(gid), name: String(node.groupName || node.name || ("League " + gid)).trim() });
+      }
+      for (const v of Object.values(node)) if (v && typeof v === "object") stack.push(v);
+    }
+  }
+  return dedupeLeaguesById(out);
+}
+
 function extractLeaguesFromProTeamPayload(data) {
   const fromGeneric = extractLeaguesFromDiscoverJson(data);
   if (fromGeneric.length > 0) return fromGeneric;
@@ -243,7 +284,7 @@ async function applyEspnProfileDiscoverCookieRule(cookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: cookieHeader }],
         },
         condition: {
-          urlFilter: "https://fantasy.espn.com/apis/v3/games/ffl/seasons/2026*",
+          urlFilter: "https://fan.api.espn.com/apis/v2/fans/*",
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -265,14 +306,15 @@ async function removeEspnProfileDiscoverCookieRule() {
  * GET profile (proTeam) for 2026; always unions in leagueId from the active ESPN fantasy tab URL
  * (deduped) so leagues missing from the profile payload still appear in Discover.
  */
-async function discoverLeaguesWithEspnCookie(espnCookieHeader) {
+async function discoverLeaguesWithEspnCookie(espnCookieHeader, swid) {
   const tabLeagueId = await getLeagueIdFromActiveEspnTab();
 
   await applyEspnProfileDiscoverCookieRule(espnCookieHeader);
   let httpStatus = 0;
   let parsed = null;
   try {
-    const res = await fetch(ESPN_PROFILE_DISCOVER_URL, {
+    const fanUrl = ESPN_FAN_API_BASE + encodeURIComponent(swid) + "?displayHiddenPrefs=true&context=fantasy&source=ESPN.com";
+    const res = await fetch(fanUrl, {
       method: "GET",
       credentials: "omit",
       headers: {
@@ -294,8 +336,9 @@ async function discoverLeaguesWithEspnCookie(espnCookieHeader) {
 
     let leagues = [];
     if (res.ok && parsed) {
-      leagues = extractLeaguesFromProTeamPayload(parsed);
+      leagues = extractLeaguesFromFanApi(parsed);
     }
+    console.info("[GMWR] Fan API discovery", { httpStatus, leagueCount: leagues.length, sample: leagues.slice(0, 15) });
 
     // Union: ESPN profile may omit a league the user is viewing; active-tab leagueId is always merged (deduped).
     if (tabLeagueId) {
@@ -360,6 +403,41 @@ async function removeSaveCredentialsCookieRule() {
     });
   } catch {
     /* ignore */
+  }
+}
+
+async function applyMeCookieRule(cookieHeader) {
+  await chrome.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [DNR_ME_COOKIE_RULE_ID],
+    addRules: [
+      {
+        id: DNR_ME_COOKIE_RULE_ID,
+        priority: 1,
+        action: { type: "modifyHeaders", requestHeaders: [{ header: "Cookie", operation: "set", value: cookieHeader }] },
+        condition: { urlFilter: `${TRPC_ME_URL}*`, resourceTypes: ["xmlhttprequest", "other"] },
+      },
+    ],
+  });
+}
+
+async function removeMeCookieRule() {
+  try { await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [DNR_ME_COOKIE_RULE_ID] }); } catch { /* ignore */ }
+}
+
+async function fetchIsAdmin(warRoomCookieHeader) {
+  if (!warRoomCookieHeader) return { ok: false, isAdmin: false, error: "no_session" };
+  await applyMeCookieRule(warRoomCookieHeader);
+  try {
+    const res = await fetch(TRPC_ME_URL, { method: "GET", headers: { Accept: "application/json" }, credentials: "include" });
+    let parsed = null;
+    try { parsed = await res.json(); } catch { /* ignore */ }
+    let user = parsed && parsed.result ? parsed.result.data : null;
+    if (user && typeof user === "object" && "json" in user) user = user.json;
+    const isAdmin = Boolean(user && user.role === "admin");
+    console.info("[GMWR] auth.me", { httpStatus: res.status, role: user && user.role, isAdmin });
+    return { ok: true, isAdmin };
+  } finally {
+    await removeMeCookieRule();
   }
 }
 
@@ -2218,8 +2296,9 @@ async function openOrFocusSyncTab() {
 /**
  * POST saveCredentials. Cookie header is applied via DNR (SW fetch forbids Cookie).
  */
-async function postSaveCredentials({ swid, espnS2, leagueId, warRoomCookieHeader }) {
+async function postSaveCredentials({ swid, espnS2, leagueId, leagueName, warRoomCookieHeader }) {
   const json = { swid, espnS2, leagueId: String(leagueId).trim() };
+  if (leagueName && String(leagueName).trim()) json.leagueName = String(leagueName).trim();
   const body = JSON.stringify({ json });
 
   await applySaveCredentialsCookieRule(warRoomCookieHeader);
@@ -2403,6 +2482,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (t === MSG_IS_ADMIN) {
+    (async () => {
+      const warRoomCookieHeader = await getWarRoomCookieHeaderString();
+      const r = await fetchIsAdmin(warRoomCookieHeader);
+      sendResponse(r);
+    })().catch((err) => {
+      sendResponse({ ok: false, isAdmin: false, error: err instanceof Error ? err.message : String(err) });
+    });
+    return true;
+  }
+
   if (t === MSG_DISCOVER_LEAGUES) {
     (async () => {
       const { swid, espnS2 } = await getEspnCookieValues();
@@ -2419,7 +2509,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return;
       }
       const espnCookieHeader = buildEspnCookieHeader(swid, espnS2);
-      const result = await discoverLeaguesWithEspnCookie(espnCookieHeader);
+      const result = await discoverLeaguesWithEspnCookie(espnCookieHeader, swid);
       sendResponse(result);
     })().catch((err) => {
       const msg = err instanceof Error ? err.message : String(err);
@@ -2459,11 +2549,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return;
       }
 
+      const nameById = new Map(
+        (Array.isArray(message?.leagues) ? message.leagues : [])
+          .map((L) => [String(L && L.id != null ? L.id : "").trim(), String((L && L.name) || "").trim()]),
+      );
       for (const leagueId of leagueIds) {
         const result = await postSaveCredentials({
           swid,
           espnS2,
           leagueId,
+          leagueName: nameById.get(String(leagueId).trim()) || "",
           warRoomCookieHeader,
         });
         if (!result.ok) {
@@ -2869,10 +2964,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       // MV3 keepalive: prevent service worker termination during long import
       const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
 
-      // 2010–2017: ESPN API has no draft data for these seasons — scrape Draft Recap HTML directly.
+      // 2009–2017: ESPN API has no draft data for these seasons — scrape Draft Recap HTML directly.
       // Uses ingestLegacyDraftRecap so rows land with source='legacy_draft_recap',
       // which is the only value legacyDraftPicks (DraftHistory) will return.
-      const LEGACY_SCRAPE_MIN = 2010;
+      // Seasons the league did not exist for return no DOM and are skipped gracefully.
+      const LEGACY_SCRAPE_MIN = 2009;
       const LEGACY_SCRAPE_MAX = 2017;
       for (let season = LEGACY_SCRAPE_MIN; season <= LEGACY_SCRAPE_MAX; season++) {
         await sleep(800);

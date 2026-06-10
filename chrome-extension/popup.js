@@ -4,6 +4,7 @@
 
 const MSG_DISCOVER_LEAGUES = "GMWR_DISCOVER_LEAGUES_2026";
 const MSG_SYNC_SELECTED_LEAGUES = "GMWR_SYNC_SELECTED_LEAGUES";
+const MSG_IS_ADMIN = "GMWR_IS_ADMIN";
 const MSG_HIST_DISCOVER = "GMWR_HIST_DISCOVER";
 const MSG_HIST_TEST = "GMWR_HIST_TEST";
 const MSG_SYNC_TRENDS = "GMWR_SYNC_TRENDS";
@@ -13,6 +14,38 @@ const MSG_ROSTER_MATRIX_TEST = "GMWR_ROSTER_MATRIX_TEST";
 const MSG_ROSTER_2017_POC = "GMWR_ROSTER_2017_POC";
 const MSG_ROSTER_FULL = "GMWR_ROSTER_FULL";
 const MSG_CAPTURE_WEEKLY_STATS = "GMWR_CAPTURE_WEEKLY_STATS";
+
+const KNOWN_LEAGUES_KEY = "gmwr_known_leagues";
+
+function mergeLeagues(a, b) {
+  const seen = new Set();
+  const out = [];
+  for (const L of [...(a || []), ...(b || [])]) {
+    const id = String(L && L.id != null ? L.id : "").trim();
+    if (!/^\d+$/.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name: String((L && L.name) || `League ${id}`).trim() });
+  }
+  return out;
+}
+
+async function loadStoredLeagues() {
+  try {
+    const obj = await chrome.storage.local.get(KNOWN_LEAGUES_KEY);
+    const arr = obj && Array.isArray(obj[KNOWN_LEAGUES_KEY]) ? obj[KNOWN_LEAGUES_KEY] : [];
+    return mergeLeagues(arr, []);
+  } catch {
+    return [];
+  }
+}
+
+async function saveStoredLeagues(leagues) {
+  try {
+    await chrome.storage.local.set({ [KNOWN_LEAGUES_KEY]: mergeLeagues(leagues, []) });
+  } catch {
+    /* ignore */
+  }
+}
 
 let discoveredSeasons = /** @type {number[]} */ ([]);
 
@@ -99,6 +132,10 @@ function render(root) {
   } else {
     html += `<p>2026 leagues from ESPN profile (or your open league tab). Stay signed in at <strong>gmwarroom.online</strong> so sync can use your War Room session.</p>`;
     html += `<button type="button" class="secondary" id="refresh" ${busy ? "disabled" : ""}>Refresh leagues</button>`;
+    html += `<div style="display:flex;gap:6px;margin:0 0 10px;">`;
+    html += `<input id="addLid" type="text" inputmode="numeric" placeholder="Add a league by ID (e.g. 457622)" style="flex:1;padding:6px;border-radius:6px;border:1px solid #444;background:#1e1e1e;color:#eee;box-sizing:border-box;" ${busy ? "disabled" : ""} />`;
+    html += `<button type="button" class="secondary" id="addBtn" style="width:auto;margin:0;padding:8px 12px;" ${busy ? "disabled" : ""}>Add</button>`;
+    html += `</div>`;
 
     if (discoverBusy) {
       html += `<p>Loading leagues…</p>`;
@@ -114,6 +151,9 @@ function render(root) {
         html += `<div class="league-row">`;
         html += `<input type="checkbox" id="cb-${escapeHtml(row.id)}" data-lid="${escapeHtml(row.id)}"${checked} />`;
         html += `<label for="cb-${escapeHtml(row.id)}">${label}</label>`;
+        if (!row.currentTab) {
+          html += `<button type="button" class="rm" data-rm="${escapeHtml(row.id)}" title="Remove from list" style="width:auto;margin:0;padding:0 7px;background:#3f3f46;border-radius:6px;font-size:12px;line-height:1.6;">&times;</button>`;
+        }
         html += `</div>`;
       }
       html += `</div>`;
@@ -134,6 +174,11 @@ function render(root) {
 
   root.querySelector("#refresh")?.addEventListener("click", onRefreshClick);
   root.querySelector("#sync")?.addEventListener("click", onSyncClick);
+  root.querySelector("#addBtn")?.addEventListener("click", onAddLeague);
+  root.querySelector("#addLid")?.addEventListener("keydown", (e) => { if (e.key === "Enter") onAddLeague(); });
+  root.querySelectorAll("button.rm").forEach((b) =>
+    b.addEventListener("click", () => onRemoveLeague(b.getAttribute("data-rm"))),
+  );
 }
 
 function onRootChange(ev) {
@@ -150,12 +195,7 @@ function onRootChange(ev) {
 
 async function runDiscover() {
   const root = document.getElementById("root");
-  state = {
-    ...state,
-    discoverBusy: true,
-    discoverError: "",
-    syncError: "",
-  };
+  state = { ...state, discoverBusy: true, discoverError: "", syncError: "" };
   render(root);
   try {
     const reply = await chrome.runtime.sendMessage({ type: MSG_DISCOVER_LEAGUES });
@@ -163,44 +203,53 @@ async function runDiscover() {
       reply?.tabLeagueId != null && String(reply.tabLeagueId).trim() !== ""
         ? String(reply.tabLeagueId).trim()
         : null;
-
-    if (!reply?.ok || !Array.isArray(reply.leagues)) {
-      const initial = new Set();
-      if (tabId) initial.add(tabId);
-      state = {
-        ...state,
-        discoverBusy: false,
-        leagues: [],
-        tabLeagueId: tabId,
-        selectedIds: initial,
-        discoverError: reply?.error || "Could not load leagues.",
-      };
-    } else {
-      const leagues = reply.leagues.map((L) => ({
-        id: String(L.id),
-        name: String(L.name || `League ${L.id}`),
-      }));
-      const initial = new Set();
-      if (tabId) initial.add(tabId);
-      state = {
-        ...state,
-        discoverBusy: false,
-        leagues,
-        tabLeagueId: tabId,
-        selectedIds: initial,
-        discoverError: "",
-      };
-    }
-  } catch (e) {
+    const tabL = tabId ? [{ id: tabId, name: `League ${tabId}` }] : [];
+    const discovered =
+      reply?.ok && Array.isArray(reply.leagues)
+        ? reply.leagues.map((L) => ({ id: String(L.id), name: String(L.name || `League ${L.id}`) }))
+        : [];
+    const merged = mergeLeagues(state.leagues, mergeLeagues(discovered, tabL));
+    await saveStoredLeagues(merged);
+    const sel = new Set(state.selectedIds);
+    if (tabId) sel.add(tabId);
     state = {
       ...state,
       discoverBusy: false,
-      leagues: [],
-      tabLeagueId: null,
-      selectedIds: new Set(),
-      discoverError: e instanceof Error ? e.message : String(e),
+      leagues: merged,
+      tabLeagueId: tabId,
+      selectedIds: sel,
+      discoverError: reply?.ok ? "" : reply?.error || "",
     };
+  } catch (e) {
+    state = { ...state, discoverBusy: false, discoverError: e instanceof Error ? e.message : String(e) };
   }
+  render(root);
+}
+
+async function onAddLeague() {
+  const root = document.getElementById("root");
+  const input = root.querySelector("#addLid");
+  const id = ((input && input.value) || "").replace(/[^0-9]/g, "").trim();
+  if (!/^\d+$/.test(id)) {
+    state = { ...state, discoverError: "Enter a numeric league ID (the number in your ESPN league URL)." };
+    render(root);
+    return;
+  }
+  const merged = mergeLeagues(state.leagues, [{ id, name: `League ${id}` }]);
+  await saveStoredLeagues(merged);
+  const sel = new Set(state.selectedIds);
+  sel.add(id);
+  state = { ...state, leagues: merged, selectedIds: sel, discoverError: "" };
+  render(root);
+}
+
+async function onRemoveLeague(id) {
+  const root = document.getElementById("root");
+  const next = (state.leagues || []).filter((L) => L.id !== id);
+  await saveStoredLeagues(next);
+  const sel = new Set(state.selectedIds);
+  sel.delete(id);
+  state = { ...state, leagues: next, selectedIds: sel };
   render(root);
 }
 
@@ -217,6 +266,7 @@ async function onSyncClick() {
     const reply = await chrome.runtime.sendMessage({
       type: MSG_SYNC_SELECTED_LEAGUES,
       leagueIds: ids,
+      leagues: ids.map((id) => ({ id, name: (state.leagues.find((L) => L.id === id) || {}).name || "" })),
     });
     if (!reply?.ok) {
       const extra =
@@ -245,10 +295,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   const root = document.getElementById("root");
   root.addEventListener("change", onRootChange);
   const { hasSwid, hasS2 } = await getCookiePresence();
-  state = { ...state, hasSwid, hasS2 };
+  const stored = await loadStoredLeagues();
+  state = { ...state, hasSwid, hasS2, leagues: stored };
   render(root);
   if (hasSwid && hasS2) {
     await runDiscover();
+  }
+
+  // Power tools (historical import, roster scrape, weekly stats) are gated to the GM War Room owner account.
+  try {
+    const adminEl = document.getElementById("adminTools");
+    if (adminEl) {
+      const who = await chrome.runtime.sendMessage({ type: MSG_IS_ADMIN });
+      if (who && who.ok && who.isAdmin) adminEl.hidden = false;
+      else adminEl.remove();
+    }
+  } catch {
+    document.getElementById("adminTools")?.remove();
   }
 
   document.getElementById("histDiscover")?.addEventListener("click", async () => {
