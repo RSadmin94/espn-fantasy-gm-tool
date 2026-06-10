@@ -144,6 +144,27 @@ like Championship Profile / Career Report / Acquisition Impact go stale on leagu
 Client pages resolve the viewer's focal owner from their active profile
 (`selectedOwnerKey`), falling back to name-match then first owner — never hardcode "Rod".
 
+### 9.1 Analytics owner names — key off `teams.ownerId`, NOT `weekly.ownerKey`
+
+`gm_weekly_player_stats.ownerKey` is **not** an authoritative owner identity. During
+ingestion it can carry stale member GUIDs or synthetic `team:N` fallbacks (when the real
+owner couldn't be determined) that have **no matching `teams.ownerId`** in any season. Any
+analytics that aggregates per owner directly off `w.ownerKey` will therefore render raw
+GUIDs / `team:N` for those rows **and** mis-score them (the `drafted` set is keyed by the
+braced member GUID, so a `team:N` key never matches → everything counts as "acquired").
+
+**Rule:** join weekly stats to `teams` on `(leagueId, season, teamId)` and aggregate off
+**`t.ownerId`** (the authoritative owner for that team-season). `teams.ownerId` /
+`teams.ownerName` are the source of truth for "who owned this team this season" and
+`teams.ownerName` is fully populated for the API era (2018+). This both resolves the name
+(via the existing `nameByOwner` map keyed by `teams.ownerId`) and merges orphan keys into
+the real owner so scores compute correctly. Example: `server/acquisitionImpact.ts` selects
+`t.ownerId AS ownerKey`.
+
+Note: the canonical union-find engine in `ownerProfileService.ts` is for **cross-season
+person merging** (same human across GUID changes / name variants), not for raw owner-key →
+display-name lookup. For "what is this team-season's owner name," go straight to `teams`.
+
 ## 10. Known boundaries & gotchas
 
 - **2009:** legacy draft scrape now attempts it (`LEGACY_SCRAPE_MIN = 2009`), but ESPN may

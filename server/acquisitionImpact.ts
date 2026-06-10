@@ -123,9 +123,15 @@ export async function computeAcquisitionImpact(userId?: number, ownerKeyOverride
   }
 
   // ── weekly starters joined to registry espnId ─────────────────────────
+  // Owner key comes from the JOINED teams row (t.ownerId) — the authoritative
+  // owner for each team-season — not w.ownerKey, which can be a stale GUID or a
+  // synthetic `team:N` fallback that has no matching teams row (would render as
+  // a raw GUID and mis-score as 100% acquired).
   const weekly = rowsOf(await db.execute(sql`
-    SELECT w.season AS season, w.week AS week, w.ownerKey AS ownerKey, w.pointsScored AS pts, r.espnPlayerId AS espnId
-    FROM gm_weekly_player_stats w JOIN gm_player_registry r ON r.id = w.playerId
+    SELECT w.season AS season, w.week AS week, t.ownerId AS ownerKey, w.pointsScored AS pts, r.espnPlayerId AS espnId
+    FROM gm_weekly_player_stats w
+    JOIN gm_player_registry r ON r.id = w.playerId
+    JOIN teams t ON t.teamId = w.teamId AND t.season = w.season AND t.leagueId = ${leagueId}
     WHERE w.season IN (2021,2022,2023,2024,2025) AND w.isStarter=1`))
     .map((r: any) => ({ season: Number(r.season), week: Number(r.week), ownerKey: String(r.ownerKey), pts: Number(r.pts ?? 0), espnId: Number(r.espnId) }));
 
