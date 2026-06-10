@@ -363,7 +363,7 @@ export function SyncData() {
   const [scrapeLeagueMedalsNote, setScrapeLeagueMedalsNote] = useState<string | null>(null);
   const [scrapeLeagueMedalsErr, setScrapeLeagueMedalsErr] = useState<string | null>(null);
   /** League Synchronization Center — primary CTA orchestration */
-  const [syncHubBusy, setSyncHubBusy] = useState<"idle" | "sync" | "import" | "repair" | "fix">("idle");
+  const [syncHubBusy, setSyncHubBusy] = useState<"idle" | "sync" | "import" | "repair" | "fix" | "boxscores">("idle");
   const [syncHubNote, setSyncHubNote] = useState("");
   const [adminToolsOpen, setAdminToolsOpen] = useState(false);
   const medalsQ    = trpc.espn.leagueMedals.useQuery(withLeagueSalt({}, leagueContextKey), {
@@ -1244,6 +1244,8 @@ export function SyncData() {
       }
       setSyncHubNote("Importing championship medals via browser (extension)…");
       await handleScrapeLeagueHistoryMedals();
+      setSyncHubNote("Capturing weekly box scores for every season (longest step)…");
+      await runCaptureWeeklyBoxScoresCore();
       toast.success(
         `Historical import complete. Seasons ${range.min}–${range.max} (${range.count} in ESPN discovery window).`,
       );
@@ -1280,7 +1282,94 @@ export function SyncData() {
       await runRepairLeagueCore();
       setSyncHubNote("Step 3 — Championship medals (browser extension)…");
       await handleScrapeLeagueHistoryMedals();
+      setSyncHubNote("Step 4 — Weekly box scores for every season (the long one)…");
+      await runCaptureWeeklyBoxScoresCore();
       toast.success("Fix pass completed. Review League Health above and Hall of Fame.");
+    } catch (e) {
+      toast.error(trpcLikeErrorMessage(e as Error));
+    } finally {
+      setSyncHubBusy("idle");
+      setSyncHubNote("");
+    }
+  };
+
+  /**
+   * Full-coverage weekly box-score capture. For every available season, asks the
+   * extension to fetch the complete ESPN box score (all teams, starters + bench,
+   * lineup slots, actual + projected points) for weeks 1–18 (regular + playoffs)
+   * and post the raw payload to the war room. The server caches the raw payload
+   * permanently and extracts player-week stats — so this never needs re-running.
+   * Returns null if no historical window is known yet.
+   */
+  const runCaptureWeeklyBoxScoresCore = async (): Promise<{
+    seasons: number;
+    totalStats: number;
+    failures: number;
+  } | null> => {
+    const { data: lh } = await discoverHistoryQuery.refetch();
+    const seasons = [...(lh?.availableSeasons ?? [])].sort((a, b) => a - b);
+    if (seasons.length === 0) return null;
+
+    const clerkToken = (await getToken()) ?? "";
+    let totalStats = 0;
+    let failures = 0;
+
+    for (let idx = 0; idx < seasons.length; idx++) {
+      const season = seasons[idx];
+      setSyncHubNote(
+        `Capturing weekly box scores — ${season} (${idx + 1} of ${seasons.length})…`,
+      );
+      const extResult = await new Promise<Record<string, unknown>>((resolve) => {
+        const id = `capture-weekly-stats-${season}-${Date.now()}`;
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener("message", onMsg);
+          resolve({ ok: false, error: "Extension timed out" });
+        }, 780_000);
+        function onMsg(ev: MessageEvent) {
+          if (ev.source !== window) return;
+          const d = ev.data as Record<string, unknown> | null;
+          if (!d || d.type !== "GMWR_CAPTURE_WEEKLY_STATS_REPLY" || d.id !== id) return;
+          window.clearTimeout(timeout);
+          window.removeEventListener("message", onMsg);
+          resolve(d);
+        }
+        window.addEventListener("message", onMsg);
+        window.postMessage(
+          { type: "GMWR_CAPTURE_WEEKLY_STATS", id, leagueId, season, fromWeek: 1, toWeek: 18, clerkToken },
+          "*",
+        );
+      });
+
+      if (extResult.ok) {
+        totalStats += Number(extResult.totalStats ?? 0) || 0;
+      } else {
+        failures++;
+        console.warn("[GMWR] weekly box-score capture failed", { season, error: extResult.error });
+      }
+    }
+
+    return { seasons: seasons.length, totalStats, failures };
+  };
+
+  const handleImportWeeklyBoxScores = async () => {
+    if (syncHubBusy !== "idle") return;
+    setSyncHubBusy("boxscores");
+    setSyncHubNote("Discovering seasons for weekly box-score capture…");
+    try {
+      const summary = await runCaptureWeeklyBoxScoresCore();
+      if (!summary) {
+        toast.warning("No historical seasons detected yet. Sync My League first, then try again.");
+        return;
+      }
+      if (summary.failures > 0) {
+        toast.warning(
+          `Box scores captured for ${summary.seasons - summary.failures}/${summary.seasons} seasons (${summary.totalStats} player-weeks stored). ${summary.failures} season(s) failed — retry to fill gaps.`,
+        );
+      } else {
+        toast.success(
+          `Weekly box scores captured for all ${summary.seasons} seasons — ${summary.totalStats} player-weeks stored.`,
+        );
+      }
     } catch (e) {
       toast.error(trpcLikeErrorMessage(e as Error));
     } finally {
@@ -1379,7 +1468,23 @@ export function SyncData() {
                 Import league history
               </span>
               <span className="text-xs font-normal opacity-90">
-                Full ESPN history window + medals (extension)
+                Full ESPN history + medals + weekly box scores
+              </span>
+            </Button>
+            <Button
+              id="sync-import-boxscores"
+              size="lg"
+              variant="secondary"
+              className="h-auto min-h-[3.5rem] flex-col gap-1 border border-border py-3 text-base font-semibold"
+              disabled={syncHubBusy !== "idle" || !isConnected}
+              onClick={() => void handleImportWeeklyBoxScores()}
+            >
+              <span className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Import weekly box scores
+              </span>
+              <span className="text-xs font-normal opacity-90">
+                Every season's player-level scorecards (extension)
               </span>
             </Button>
             <Button

@@ -188,4 +188,48 @@
     },
     false,
   );
+
+  // Relay: full-coverage weekly box-score / player-stats capture for one season.
+  // Forwards to background.js (MSG_CAPTURE_WEEKLY_STATS), which fetches the full
+  // ESPN box score (mBoxscore+mScoreboard+mMatchupScore) per week and posts the
+  // raw payload to the war room (cached + extracted server-side).
+  window.addEventListener(
+    "message",
+    (ev) => {
+      if (ev.source !== window) return;
+      const d = ev.data;
+      if (!d || d.type !== "GMWR_CAPTURE_WEEKLY_STATS") return;
+      const id = d.id;
+      const leagueId = String(d.leagueId || "457622").trim();
+      const season = d.season ? Number(d.season) : 2025;
+      const fromWeek = d.fromWeek ? Number(d.fromWeek) : 1;
+      const toWeek = d.toWeek ? Number(d.toWeek) : 18;
+      const clerkToken = typeof d.clerkToken === "string" ? d.clerkToken : "";
+      chrome.runtime.sendMessage(
+        { type: "GMWR_CAPTURE_WEEKLY_STATS", leagueId, season, fromWeek, toWeek, clerkToken },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            window.postMessage(
+              { type: "GMWR_CAPTURE_WEEKLY_STATS_REPLY", id, ok: false, error: chrome.runtime.lastError.message, totalStats: 0, weeks: [] },
+              "*",
+            );
+            return;
+          }
+          const r = response || {};
+          window.postMessage(
+            {
+              ...r,
+              type: "GMWR_CAPTURE_WEEKLY_STATS_REPLY",
+              id,
+              ok: Boolean(r.ok),
+              totalStats: Number(r.totalStats || 0),
+              weeks: Array.isArray(r.weeks) ? r.weeks : [],
+            },
+            "*",
+          );
+        },
+      );
+    },
+    false,
+  );
 })();
