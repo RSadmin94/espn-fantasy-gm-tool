@@ -1,4 +1,5 @@
 import { eq, desc, and, gt, or, like, sql } from "drizzle-orm";
+import { memCache } from "./memCache";
 import { drizzle } from "drizzle-orm/mysql2";
 import type { MySql2Database } from "drizzle-orm/mysql2";
 import * as schema from "../drizzle/schema";
@@ -1230,6 +1231,12 @@ export async function setActiveLeagueForUser(userId: number, leagueConnectionId:
     .update(users)
     .set({ activeLeagueId: leagueConnectionId, updatedAt: new Date() })
     .where(eq(users.id, userId));
+  // Bust the per-user currentOwner cache so a league switch takes effect
+  // immediately. currentOwnerService.ts caches resolveActiveProfile under
+  // `currentOwner:${userId}` with a long TTL; without this, resolveCurrentOwner
+  // consumers (Championship Path, Career Report, Acquisition Impact) keep
+  // serving the previously-active league until the TTL expires.
+  memCache.invalidate(`currentOwner:${userId}`);
   return true;
 }
 
