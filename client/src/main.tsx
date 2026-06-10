@@ -22,7 +22,6 @@ import { Advisor } from "./pages/Advisor";
 import { Settings } from "./pages/Settings";
 import { Matchups } from "./pages/Matchups";
 import { LeagueHistory } from "./pages/LeagueHistory";
-import { LeagueTimeline } from "./pages/LeagueTimeline";
 import { DraftHistory } from "./pages/DraftHistory";
 import { KeeperAdvisor } from "./pages/KeeperAdvisor";
 import { LeagueSettings } from "./pages/LeagueSettings";
@@ -34,7 +33,6 @@ import { ChampionshipPath } from "./pages/ChampionshipPath";
 import { AcquisitionImpact } from "./pages/AcquisitionImpact";
 import { LeagueDataHealth } from "./pages/LeagueDataHealth";
 import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
-import { PlayerIntelligence } from "./pages/PlayerIntelligence";
 import { PlayerDatabase }    from "./pages/PlayerDatabase";
 import { LeagueWire }         from "./pages/LeagueWire";
 import { DraftWarRoom }      from "./pages/DraftWarRoom";
@@ -147,7 +145,7 @@ const router = createBrowserRouter([
           { path: "/matchups", element: <Matchups /> },
           { path: "/rivalry-center", element: <RivalryCenter /> },
           { path: "/history", element: <LeagueHistory /> },
-          { path: "/league-timeline", element: <LeagueTimeline /> },
+          { path: "/league-timeline", element: <Navigate to="/history" replace /> },
           { path: "/draft-history", element: <DraftHistory /> },
           { path: "/keeper-advisor", element: <KeeperAdvisor /> },
           { path: "/hall-of-fame", element: <HallOfFame /> },

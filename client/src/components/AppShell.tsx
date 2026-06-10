@@ -66,45 +66,64 @@ type NavGroup = { id: string; title: string; items: NavEntry[] };
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    id: "war-rooms",
-    title: "WAR ROOMS",
+    id: "home",
+    title: "HOME",
     items: [
-      { kind: "link", label: "Dashboard",      href: "/dashboard",      icon: LayoutDashboard },
+      { kind: "link", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
+    id: "my-team",
+    title: "MY TEAM",
+    items: [
+      { kind: "link", label: "Rosters", href: "/roster", icon: Users },
+      { kind: "link", label: "Trade Analyzer", href: "/trades", icon: Repeat2 },
+      { kind: "link", label: "LeagueDNA Advisor", href: "/advisor", icon: Dna },
+      { kind: "link", label: "League Wire", href: "/league-wire", icon: Newspaper },
+    ],
+  },
+  {
+    id: "league-intel",
+    title: "LEAGUE INTEL",
+    items: [
+      { kind: "link", label: "Owner Profiles", href: "/owner-profiles", icon: Users },
+      { kind: "link", label: "Why Haven't I Won?", href: "/why-havent-i-won", icon: HelpCircle },
+      { kind: "link", label: "Acquisition Impact", href: "/acquisition-impact", icon: ShoppingCart },
+      { kind: "link", label: "Rivalry Center", href: "/rivalry-center", icon: Swords },
       { kind: "link", label: "Commissioner Hub", href: "/commissioner-command-center", icon: Crown },
+    ],
+  },
+  {
+    id: "history-records",
+    title: "HISTORY & RECORDS",
+    items: [
+      { kind: "link", label: "Hall of Fame", href: "/hall-of-fame", icon: Award },
+      { kind: "link", label: "Championship Path", href: "/championship-path", icon: Route },
+      { kind: "link", label: "League History", href: "/history", icon: Building2 },
+      { kind: "link", label: "Standings", href: "/standings", icon: Trophy },
+      { kind: "link", label: "Matchups", href: "/matchups", icon: Swords },
+      { kind: "link", label: "Transactions", href: "/transactions", icon: ArrowLeftRight },
+      { kind: "link", label: "Draft History", href: "/draft-history", icon: Calendar },
+    ],
+  },
+  {
+    id: "draft",
+    title: "DRAFT",
+    items: [
       { kind: "link", label: "Draft War Room", href: "/draft-war-room", icon: Zap },
       { kind: "link", label: "Draft Reality Sim", href: "/draft-reality", icon: FlaskConical },
-      { kind: "link", label: "Why Haven't I Won?", href: "/why-havent-i-won", icon: HelpCircle },
-      { kind: "link", label: "Championship Path", href: "/championship-path", icon: Route },
-      { kind: "link", label: "Acquisition Impact", href: "/acquisition-impact", icon: ShoppingCart },
-      { kind: "link", label: "LeagueDNA Advisor", href: "/advisor",        icon: Dna },
-      { kind: "link", label: "Trade Analyzer", href: "/trades",         icon: Repeat2 },
-      { kind: "link", label: "League Wire",    href: "/league-wire",    icon: Newspaper },
+      { kind: "link", label: "Keeper Advisor", href: "/keeper-advisor", icon: Calculator },
     ],
   },
   {
-    id: "action-tools",
-    title: "ACTION TOOLS",
+    id: "data-admin",
+    title: "DATA & ADMIN",
     items: [
-      { kind: "link", label: "Owner Profiles",     href: "/owner-profiles",       icon: Users },
-      { kind: "link", label: "Rivalry Center",     href: "/rivalry-center",       icon: Swords },
-
-      { kind: "link", label: "Player Database",    href: "/player-database",      icon: Database },
-      { kind: "link", label: "Standings",          href: "/standings",            icon: Trophy },
-      { kind: "link", label: "Rosters",            href: "/roster",               icon: Users },
-      { kind: "link", label: "Transactions",       href: "/transactions",         icon: ArrowLeftRight },
-      { kind: "link", label: "Hall of Fame",       href: "/hall-of-fame",         icon: Award },
-      { kind: "link", label: "Draft History",      href: "/draft-history",        icon: Calendar },
-      { kind: "link", label: "Keeper Advisor",     href: "/keeper-advisor",       icon: Calculator },
-    ],
-  },
-  {
-    id: "settings-admin",
-    title: "SETTINGS & ADMIN",
-    items: [
-      { kind: "link", label: "League Settings", href: "/league-settings",        icon: Settings },
-      { kind: "link", label: "Sync Data",       href: "/sync",                   icon: RefreshCw },
-      { kind: "link", label: "Data Health",     href: "/league-data-health",     icon: ShieldCheck },
-      { kind: "link", label: "Identity Review", href: "/owner-identity-review",  icon: UserSearch },
+      { kind: "link", label: "Sync Data", href: "/sync", icon: RefreshCw },
+      { kind: "link", label: "Data Health", href: "/league-data-health", icon: ShieldCheck },
+      { kind: "link", label: "Identity Review", href: "/owner-identity-review", icon: UserSearch },
+      { kind: "link", label: "League Settings", href: "/league-settings", icon: Settings },
+      { kind: "link", label: "Player Database", href: "/player-database", icon: Database },
     ],
   },
 ];
