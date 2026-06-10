@@ -372,6 +372,61 @@ export function buildTeamToCanonicalProfileKey(allRows: GmTeamRow[]): Map<string
   return m;
 }
 
+export interface TeamNameResolver {
+  /** Canonical owner display name for a (season, teamId); falls back to the
+   *  latest-season name for that teamId, then `Team {teamId}`. */
+  resolve(season: number, teamId: number): string;
+  /** teamId → canonical owner name for a given season (every teamId ever seen). */
+  nameMapForSeason(season: number): Record<number, string>;
+}
+
+/**
+ * Thin (season, teamId) → canonical owner display-name resolver, built on the
+ * existing canonical union-find engine ({@link buildTeamToCanonicalProfileKey}).
+ * GUID-first: each team maps to its canonical person, whose display name is the
+ * most recent season's ownerName. Replaces scattered `Team {id}` fallbacks so a
+ * teamId not present in the viewed season still resolves to the right owner.
+ */
+export function buildTeamNameResolver(allRows: GmTeamRow[]): TeamNameResolver {
+  const teamToCanon = buildTeamToCanonicalProfileKey(allRows); // `season:teamId` → canonical key
+  const canonToName = new Map<string, { name: string; season: number }>();
+  const seasonTeamName = new Map<string, string>(); // `season:teamId` → ownerName
+  const teamIdLatest = new Map<number, { name: string; season: number }>();
+  const teamIds = new Set<number>();
+
+  for (const t of allRows) {
+    if (t.teamId <= 0) continue;
+    teamIds.add(t.teamId);
+    const key = `${t.season}:${t.teamId}`;
+    const disp = cleanOwnerDisplay((t.ownerName || "").trim());
+    if (!disp) continue;
+    seasonTeamName.set(key, disp);
+    const canon = teamToCanon.get(key);
+    if (canon) {
+      const prev = canonToName.get(canon);
+      if (!prev || t.season > prev.season) canonToName.set(canon, { name: disp, season: t.season });
+    }
+    const prevT = teamIdLatest.get(t.teamId);
+    if (!prevT || t.season > prevT.season) teamIdLatest.set(t.teamId, { name: disp, season: t.season });
+  }
+
+  const resolve = (season: number, teamId: number): string => {
+    const key = `${season}:${teamId}`;
+    const canon = teamToCanon.get(key);
+    const viaCanon = canon ? canonToName.get(canon)?.name : undefined;
+    return viaCanon || seasonTeamName.get(key) || teamIdLatest.get(teamId)?.name || `Team ${teamId}`;
+  };
+
+  return {
+    resolve,
+    nameMapForSeason(season: number): Record<number, string> {
+      const out: Record<number, string> = {};
+      for (const tid of teamIds) out[tid] = resolve(season, tid);
+      return out;
+    },
+  };
+}
+
 export function cleanOwnerDisplay(raw: string): string {
   if (!raw) return "";
   return raw.trim().replace(/^\(+|\)+$/g, "").trim();

@@ -1058,6 +1058,10 @@ export function Transactions() {
     withLeagueSalt({ season }, leagueContextKey),
     { enabled, staleTime: 0 },
   );
+  const teamNamesQ = trpc.espn.transactionTeamNames.useQuery(
+    withLeagueSalt({ season }, leagueContextKey),
+    { enabled, staleTime: 0 },
+  );
   const pulseQ = trpc.weeklyAssessment.leaguePulse.useQuery(
     withLeagueSalt({ season }, leagueContextKey),
     {
@@ -1071,12 +1075,24 @@ export function Transactions() {
 
   const teams = (leagueKeyReady && enabled ? (teamsQ.data as TeamRow[] | undefined) : undefined) ?? [];
   const rawTxns = (leagueKeyReady && enabled ? (txQ.data as TxnRow[] | undefined) : undefined) ?? [];
+  // Canonical owner names resolved across ALL seasons (kills "Team {id}" for teamIds
+  // not present in this season's roster). Source: espn.transactionTeamNames.
+  const canonicalNames =
+    (leagueKeyReady && enabled ? (teamNamesQ.data as Record<number, string> | undefined) : undefined) ?? {};
 
   const teamMap = useMemo(() => {
     const m = new Map<number, string>();
-    for (const t of teams) m.set(t.teamId, t.teamName || t.owners || `Team ${t.teamId}`);
+    for (const t of teams) {
+      const nm = t.teamName || t.owners || canonicalNames[t.teamId];
+      if (nm) m.set(t.teamId, nm);
+    }
+    // Fill in teamIds referenced by transactions but missing from this season's team list.
+    for (const [tid, nm] of Object.entries(canonicalNames)) {
+      const id = Number(tid);
+      if (nm && !m.has(id)) m.set(id, nm);
+    }
     return m;
-  }, [teams]);
+  }, [teams, canonicalNames]);
 
   const teamLogoById = useMemo(() => {
     const m = new Map<number, string>();

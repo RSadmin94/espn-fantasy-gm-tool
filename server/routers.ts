@@ -162,6 +162,7 @@ import {
   buildNameToOwnerId,
   buildTeamToCanonicalProfileKey,
   buildRawKeyToCanonicalProfileKey,
+  buildTeamNameResolver,
   resolveMedalTeamToOwnerKey,
   aggregateMatchupWLByOwnerSeason,
   type GmTeamRow,
@@ -3561,6 +3562,29 @@ export const appRouter = router({
           );
         }
         return txs;
+      }),
+
+    /**
+     * teamId → canonical owner name for a season, resolved across ALL seasons via
+     * the canonical identity engine (ownerProfileService). Lets Transactions show
+     * real owner names instead of "Team {id}" for teamIds missing from the viewed
+     * season's roster. Additive — does not change the `transactions` payload.
+     */
+    transactionTeamNames: publicProcedure
+      .input(z.object({ season: z.number(), activeLeagueKey: z.string().optional() }))
+      .query(async ({ ctx, input }): Promise<Record<number, string>> => {
+        void input.activeLeagueKey;
+        if (!ctx.user?.id) return {};
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } }, null, undefined,
+        );
+        if (!leagueId) return {};
+        const db = await getDb();
+        const allGmRows = db
+          ? ((await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, leagueId))) as GmTeamRow[])
+          : [];
+        if (allGmRows.length === 0) return {};
+        return buildTeamNameResolver(allGmRows).nameMapForSeason(input.season);
       }),
 
     /** Recent completed-style transactions from persisted `gmTransactions` (newest first). */
