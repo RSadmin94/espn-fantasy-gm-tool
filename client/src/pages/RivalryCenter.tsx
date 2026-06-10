@@ -215,6 +215,12 @@ export function RivalryCenter() {
     return pickerOptions[0]?.ownerKey ?? "";
   }, [allOwners, pickerOptions, profileQ.data]);
 
+  const rodName = useMemo(() => {
+    const o = allOwners.find((x) => x.ownerKey === rodKey);
+    const nm = String(o?.ownerName ?? "").trim();
+    return nm ? (nm.split(/\s+/)[0] ?? nm) : "You";
+  }, [allOwners, rodKey]);
+
   const pairs = useMemo<Pair[]>(() => {
     const arr: Pair[] = Array.isArray(scoresQ.data) ? scoresQ.data : [];
     return [...arr]
@@ -327,7 +333,7 @@ export function RivalryCenter() {
   const openDossier = (p: Pair) =>
     setOpen({
       focalKey: p.focalKey ?? rodKey,
-      focalName: "Rod",
+      focalName: rodName,
       rivalKey: p.rivalKey ?? keyForRival(p),
       rivalName: String(p.rivalName ?? "Rival"),
     });
@@ -390,7 +396,7 @@ export function RivalryCenter() {
                 <div className="mt-4 flex flex-col gap-5 md:flex-row md:items-center">
                   <div className="flex-1">
                     <h3 className="text-3xl md:text-4xl font-black leading-tight">
-                      Rod <span style={{ color: MUTED }}>vs</span>{" "}
+                      {rodName} <span style={{ color: MUTED }}>vs</span>{" "}
                       <span style={{ color: ACCENT }}>{String(hero.rivalName ?? "Rival")}</span>
                     </h3>
                     {hero.revengeAchieved === false && n(hero.playoffEliminations) > 0 && (
@@ -632,7 +638,7 @@ export function RivalryCenter() {
                   if (n(p.playoffEliminations) > 0) {
                     out.push({
                       season: p.lastMatchupSeason ?? null,
-                      evidence: `${name} eliminated Rod from the playoffs ${n(p.playoffEliminations) > 1 ? `${n(p.playoffEliminations)} times` : "once"}.`,
+                      evidence: `${name} eliminated ${rodName} from the playoffs ${n(p.playoffEliminations) > 1 ? `${n(p.playoffEliminations)} times` : "once"}.`,
                       impact: "Season ended by rival",
                       tone: "bad",
                     });
@@ -648,7 +654,7 @@ export function RivalryCenter() {
                   if (p.revengeAchieved && n(p.playoffEliminations) > 0) {
                     out.push({
                       season: p.lastMatchupSeason ?? null,
-                      evidence: `Revenge served — Rod struck back against ${name}.`,
+                      evidence: `Revenge served — ${rodName} struck back against ${name}.`,
                       impact: "Receipt collected",
                       tone: "good",
                     });
@@ -687,7 +693,7 @@ export function RivalryCenter() {
                         <button key={i} onClick={() => openDossier(p)} style={SUB} className="flex w-full items-center justify-between p-3 text-left transition-colors hover:brightness-125">
                           <div>
                             <div className="font-bold">{String(p.rivalName)}</div>
-                            <div className="text-xs" style={{ color: MUTED }}>Eliminated Rod {n(p.playoffEliminations)}× · revenge pending</div>
+                            <div className="text-xs" style={{ color: MUTED }}>Eliminated {rodName} {n(p.playoffEliminations)}× · revenge pending</div>
                           </div>
                           <Skull className="h-5 w-5" style={{ color: RED }} />
                         </button>
@@ -708,7 +714,7 @@ export function RivalryCenter() {
                   const king = by((p) => n(p.h2hWins) - n(p.h2hLosses));
                   const items = [
                     { icon: <Skull className="h-4 w-4" />, t: "The Nemesis", who: nemesis?.rivalName, d: `Highest rivalry score (${n(nemesis?.rivalryScore)})` },
-                    { icon: <HeartCrack className="h-4 w-4" />, t: "Heartbreak Dealer", who: dealer?.rivalName, d: `${n(dealer?.playoffEliminations)} playoff eliminations of Rod` },
+                    { icon: <HeartCrack className="h-4 w-4" />, t: "Heartbreak Dealer", who: dealer?.rivalName, d: `${n(dealer?.playoffEliminations)} playoff eliminations of ${rodName}` },
                     { icon: <Flame className="h-4 w-4" />, t: "House of Pain", who: pain?.rivalName, d: `${n(pain?.closeLossCount)} heartbreak losses` },
                     { icon: <Crown className="h-4 w-4" />, t: "Rod Owns Them", who: king?.rivalName, d: `Best series margin (${n(king?.h2hWins)}–${n(king?.h2hLosses)})` },
                   ].filter((x) => x.who);
@@ -749,7 +755,7 @@ export function RivalryCenter() {
               <div className="flex items-center gap-2" style={{ color: ACCENT }}>
                 <Swords className="h-4 w-4" />
                 <span className="text-[11px] font-bold uppercase tracking-[0.35em]">Rivalry Dossier</span>
-                <span className="text-sm font-bold" style={{ color: TEXT }}>· {open.focalName ?? "Rod"} vs {open.rivalName}</span>
+                <span className="text-sm font-bold" style={{ color: TEXT }}>· {open.focalName ?? rodName} vs {open.rivalName}</span>
               </div>
               <button onClick={() => setOpen(null)} className="flex h-8 w-8 items-center justify-center rounded-full border" style={{ borderColor: LINE, color: TEXT }} aria-label="Close">
                 <X className="h-4 w-4" />
