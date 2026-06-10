@@ -68,6 +68,7 @@ import {
   getLlmUsageSummary,
 } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
+import { resolveLeagueDisplayName } from "./leagueDisplayName";
 import {
   buildCombinedPayloadFromNormalized,
   buildHistoricalReadAudit,
@@ -763,11 +764,36 @@ export const appRouter = router({
           activeLeagueKey: z.string().optional(),
         }),
       )
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         void input.activeLeagueKey;
-        const { getLatestFearIndexFromDb } = await import("./fearIndexService");
-        const season = input.season ?? 2025;
-        return getLatestFearIndexFromDb(season);
+        const {
+          getLatestFearIndexFromDb,
+          getLatestFearIndexAnySeason,
+          refreshFearIndex,
+        } = await import("./fearIndexService");
+
+        // 1. Requested/active season, if it already has data.
+        if (input.season) {
+          const rows = await getLatestFearIndexFromDb(input.season);
+          if (rows.length) return rows;
+        }
+
+        // 2. Fall back to the latest season that has any data (e.g. the last
+        //    in-season week), so the page isn't blank in the offseason.
+        const anyRows = await getLatestFearIndexAnySeason();
+        if (anyRows.length) return anyRows;
+
+        // 3. Table empty → compute on demand (deterministic, no LLM) for the
+        //    most recent cached season that yields entries.
+        const { getAllCachedSeasons } = await import("./db");
+        const cached = (await getAllCachedSeasons(undefined, ctx.user?.id))
+          .filter((s) => s > 2000)
+          .sort((a, b) => b - a);
+        for (const s of cached) {
+          const computed = await refreshFearIndex(s, undefined, ctx.user?.id);
+          if (computed.length) return computed;
+        }
+        return [];
       }),
     /** Manually trigger fear index refresh (no new ESPN calls) */
     refresh: publicProcedure
@@ -1274,7 +1300,7 @@ export const appRouter = router({
         id: row.id,
         provider: row.provider,
         leagueId: row.leagueId,
-        leagueName: row.leagueName,
+        leagueName: await resolveLeagueDisplayName(row, ctx.user.id),
         season: row.season,
         syncStatus: row.syncStatus,
         lastSyncedAt: row.lastSyncedAt,
@@ -1305,7 +1331,12 @@ export const appRouter = router({
         .from(lcTable)
         .where(eqDrizzle(lcTable.userId, ctx.user.id))
         .orderBy(lcTable.updatedAt);
-      return rows;
+      return Promise.all(
+        rows.map(async (r) => ({
+          ...r,
+          leagueName: await resolveLeagueDisplayName(r, ctx.user.id),
+        })),
+      );
     }),
     // Remove a league connection (hard delete — user owns the row)
     removeLeague: protectedProcedure

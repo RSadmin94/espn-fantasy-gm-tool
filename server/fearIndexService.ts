@@ -328,6 +328,24 @@ export async function getLatestFearIndexFromDb(season: number): Promise<FearInde
   return getFearIndexFromDb(season, latestWeek);
 }
 
+/**
+ * Get the most recent fear index across ALL seasons (latest season + week that
+ * has any rows). Used as a fallback when the requested/active season has no data
+ * yet — e.g. the offseason, when the in-season weekly refresh hasn't run for the
+ * current year.
+ */
+export async function getLatestFearIndexAnySeason(): Promise<FearIndexEntry[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const latest = await db
+    .select({ season: fearIndex.season, week: fearIndex.week })
+    .from(fearIndex)
+    .orderBy(desc(fearIndex.season), desc(fearIndex.week))
+    .limit(1);
+  if (latest.length === 0) return [];
+  return getFearIndexFromDb(latest[0].season, latest[0].week);
+}
+
 // ─── Refresh (compute + persist) ─────────────────────────────────────────────
 
 /**
