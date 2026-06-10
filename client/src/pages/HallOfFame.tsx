@@ -300,6 +300,7 @@ export function HallOfFame() {
 
   const lb = data.championships.leaderboard;
   const leader = lb[0];
+  const coLeaders = lb.filter((r) => r.titles === (leader?.titles ?? -1));
   const leaderStats = leader ? data.ownerRecords.find((r) => r.ownerKey === leader.ownerKey) : undefined;
 
   const totalSeasonsTouched = data.coverage.seasonsTouched.length;
@@ -395,13 +396,13 @@ export function HallOfFame() {
             <div className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full bg-amber-500/10 blur-3xl" />
             <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400/90">Top leader</p>
-                <p className="mt-1 text-2xl font-bold text-zinc-50 sm:text-3xl">{leader.displayName}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400/90">{coLeaders.length > 1 ? "Co-leaders" : "Top leader"}</p>
+                <p className="mt-1 text-2xl font-bold text-zinc-50 sm:text-3xl">{coLeaders.map((c) => c.displayName).join(" & ")}</p>
                 <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-400">
                   <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-200">
-                    {leader.titles} title{leader.titles === 1 ? "" : "s"}
+                    {leader.titles} title{leader.titles === 1 ? "" : "s"}{coLeaders.length > 1 ? " each" : ""}
                   </span>
-                  {leaderStats ? (
+                  {coLeaders.length > 1 ? null : leaderStats ? (
                     <>
                       <span className="text-zinc-600">·</span>
                       <span className="tabular-nums">{leaderStats.winPct.toFixed(1)}% wins</span>

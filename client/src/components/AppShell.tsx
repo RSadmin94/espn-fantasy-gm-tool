@@ -142,7 +142,10 @@ type LeagueRow = {
 };
 
 function leagueRowLabel(l: { leagueId: string; leagueName: string | null }) {
-  return l.leagueName?.trim() || `League ${l.leagueId}`;
+  const last4 = l.leagueId.slice(-4);
+  const name = l.leagueName?.trim();
+  if (name && !name.includes(l.leagueId)) return `${name} · ${last4}`;
+  return name || `ESPN League ${l.leagueId}`;
 }
 
 /** Committed shell + menu “current” row: prefer `getActive` only; avoid `getMyLeagues.isActive` when it can race `getActive`. */
@@ -243,7 +246,7 @@ function LeagueSwitcher({
     activeQ.data != null
       ? currentRow != null
         ? leagueRowLabel(currentRow)
-        : activeQ.data.leagueName?.trim() || `League ${activeQ.data.leagueId}`
+        : leagueRowLabel({ leagueId: activeQ.data.leagueId, leagueName: activeQ.data.leagueName })
       : leagueRowLabel(leagues.find((l) => l.isActive) ?? leagues[0]!);
   const yearFromGetActive =
     activeQ.data != null
@@ -300,7 +303,7 @@ function LeagueSwitcher({
         <DropdownMenuContent className="w-56" align="start">
           {leagues.map((l) => {
             const isCurrent = menuCurrentId != null && l.id === menuCurrentId;
-            const itemLabel = l.leagueName?.trim() || `League ${l.leagueId}`;
+            const itemLabel = leagueRowLabel(l);
             return (
               <DropdownMenuItem
                 key={l.id}

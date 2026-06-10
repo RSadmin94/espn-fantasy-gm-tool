@@ -789,7 +789,7 @@ function buildMockDraft(params: {
     }
   }
 
-  const pool = [...playerPool].sort((a, b) => b.projectedPoints - a.projectedPoints);
+  const pool = [...playerPool]; // preserve upstream ADP-composite (80% ADP + 20% VORP) order; do not re-sort by baseline projectedPoints
   const needMap = new Map(rosterNeeds.map(n => [n.teamId, n]));
   const teamPosCounts = new Map<number, Record<string, number>>();
   for (const p of allPicks) teamPosCounts.set(Number(p.teamId), {});
