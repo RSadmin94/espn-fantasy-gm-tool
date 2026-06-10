@@ -510,7 +510,7 @@ export function RivalryCenter() {
                       <div className="h-10 w-1 shrink-0 rounded-full" style={{ background: h.c }} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="truncate text-lg font-bold">Rod <span style={{ color: MUTED }}>vs</span> {String(p.rivalName ?? "Rival")}</span>
+                          <span className="truncate text-lg font-bold">{rodName} <span style={{ color: MUTED }}>vs</span> {String(p.rivalName ?? "Rival")}</span>
                           <HeatBadge label={p.heatLabel} />
                         </div>
                         <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs" style={{ color: MUTED }}>
@@ -716,7 +716,7 @@ export function RivalryCenter() {
                     { icon: <Skull className="h-4 w-4" />, t: "The Nemesis", who: nemesis?.rivalName, d: `Highest rivalry score (${n(nemesis?.rivalryScore)})` },
                     { icon: <HeartCrack className="h-4 w-4" />, t: "Heartbreak Dealer", who: dealer?.rivalName, d: `${n(dealer?.playoffEliminations)} playoff eliminations of ${rodName}` },
                     { icon: <Flame className="h-4 w-4" />, t: "House of Pain", who: pain?.rivalName, d: `${n(pain?.closeLossCount)} heartbreak losses` },
-                    { icon: <Crown className="h-4 w-4" />, t: "Rod Owns Them", who: king?.rivalName, d: `Best series margin (${n(king?.h2hWins)}–${n(king?.h2hLosses)})` },
+                    { icon: <Crown className="h-4 w-4" />, t: `${rodName} Owns Them`, who: king?.rivalName, d: `Best series margin (${n(king?.h2hWins)}–${n(king?.h2hLosses)})` },
                   ].filter((x) => x.who);
                   return (
                     <div className="mt-4 grid gap-2">
