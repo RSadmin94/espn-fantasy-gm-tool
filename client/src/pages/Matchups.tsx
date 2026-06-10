@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -170,10 +171,10 @@ export function Matchups() {
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-1">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Matchups</h1>
-        <p className="mt-1 text-muted-foreground">
-          Head-to-head scores by week (from synced league data).
-        </p>
+        <PageHeader
+          title="Matchups"
+          subtitle="Head-to-head scores by week (from synced league data)."
+        />
         {boardSource === "verified_manual" && (
           <p className="mt-2 rounded-md border border-lime-500/35 bg-lime-500/10 px-3 py-2 text-xs font-medium text-lime-200">
             Source: verified_manual

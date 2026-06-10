@@ -1,4 +1,5 @@
 import { useEffect, useRef, useMemo, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { Link } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
@@ -1173,12 +1174,10 @@ export function Transactions() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Transactions</h1>
-          <p className="mt-1 text-muted-foreground">
-            Recent activity — adds, drops, waivers, and trades (grouped like ESPN).
-          </p>
-        </div>
+        <PageHeader
+          title="Transactions"
+          subtitle="Recent activity — adds, drops, waivers, and trades (grouped like ESPN)."
+        />
         <Button variant="outline" size="sm" className="gap-2" disabled={txQ.isFetching || isNotCached} onClick={() => void txQ.refetch()}>
           {txQ.isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           Refresh

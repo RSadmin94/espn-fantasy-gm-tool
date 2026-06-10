@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -264,12 +265,10 @@ export function Standings() {
     <div style={PAGEBG} className="-m-4 md:-m-6 p-5 md:p-7 min-h-full">
       {/* ── Header (dashboard style) ─────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
-        <div>
-          <h2 className="text-3xl md:text-4xl font-black tracking-tight leading-none">Standings</h2>
-          <p className="mt-2 text-sm" style={{ color: MUTED }}>
-            League standings in ESPN layout &mdash; switch between regular-season order and final ranks.
-          </p>
-        </div>
+        <PageHeader
+          title="Standings"
+          subtitle="League standings in ESPN layout â€” switch between regular-season order and final ranks."
+        />
         <div className="flex flex-wrap items-center gap-2.5">
           <Pill gold>{season} Season</Pill>
           {teams.length > 0 && <Pill>{teams.length} Teams</Pill>}
