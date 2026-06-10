@@ -4451,6 +4451,7 @@ export const appRouter = router({
           if (v === undefined || v === null || v === '' || v === 0) return undefined;
           return String(v);
         }),
+        leagueName: z.string().optional(),
         season: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -4464,10 +4465,11 @@ export const appRouter = router({
           : [currentYear, currentYear - 1, 2026, 2025];
 
         // Always guarantee a non-empty leagueName
-        let leagueName = testLeagueId ? `ESPN League ${testLeagueId}` : "ESPN League";
+        const passedName = (input.leagueName ?? "").trim();
+        let leagueName = passedName || (testLeagueId ? `ESPN League ${testLeagueId}` : "ESPN League");
 
         // Try to fetch league name from ESPN (non-blocking — failure just uses fallback)
-        if (testLeagueId) {
+        if (testLeagueId && !passedName) {
           for (const season of seasonsToTry) {
             try {
               const settingsUrl = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${testLeagueId}?view=mSettings`;
