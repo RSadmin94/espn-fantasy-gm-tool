@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { useAuth } from "@clerk/react-router";
+import { useAuth, useUser } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -284,6 +284,7 @@ function classifyPlayoff(
 
 export function Dashboard() {
   const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
   const leagueCtx = useLeagueContext();
   const leagueKeyReady =
     authLoaded && isSignedIn && !leagueCtx.leagueContextKey.startsWith("__");
@@ -625,6 +626,8 @@ export function Dashboard() {
   const oh = ownerHomeQ.data;
   const focalOwner = oh?.owner;
   const welcomeName =
+    user?.firstName?.trim() ||
+    firstNameFromDisplay(user?.fullName) ||
     firstNameFromDisplay(focalOwner?.displayName) ||
     focalOwner?.franchiseName?.trim() ||
     focalOwner?.leagueName?.trim() ||
