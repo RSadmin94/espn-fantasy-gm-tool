@@ -113,6 +113,7 @@ const NAV_GROUPS: NavGroup[] = [
       { kind: "link", label: "Draft War Room", href: "/draft-war-room", icon: Zap },
       { kind: "link", label: "Draft Reality Sim", href: "/draft-reality", icon: FlaskConical },
       { kind: "link", label: "Keeper Advisor", href: "/keeper-advisor", icon: Calculator },
+      { kind: "link", label: "Player Database", href: "/player-database", icon: Database },
     ],
   },
   {
@@ -123,7 +124,6 @@ const NAV_GROUPS: NavGroup[] = [
       { kind: "link", label: "Data Health", href: "/league-data-health", icon: ShieldCheck },
       { kind: "link", label: "Identity Review", href: "/owner-identity-review", icon: UserSearch },
       { kind: "link", label: "League Settings", href: "/league-settings", icon: Settings },
-      { kind: "link", label: "Player Database", href: "/player-database", icon: Database },
     ],
   },
 ];
