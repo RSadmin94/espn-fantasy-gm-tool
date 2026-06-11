@@ -1220,7 +1220,7 @@ export const appRouter = router({
       }),
 
     /**
-     * LLM-powered pick recommendation for Rod's current draft position.
+     * LLM-powered pick recommendation for the user's current draft position.
      */
     getPickRecommendation: protectedProcedure
       .input(z.object({
@@ -1253,11 +1253,15 @@ export const appRouter = router({
         })),
         positionRun: z.object({ position: z.string(), count: z.number(), alert: z.string() }).nullable(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const { buildPickRecommendationPrompt, parsePickRecommendation } = await import("./draftHelperService");
         const { invokeLLM: llm } = await import("./_core/llm");
+        const { resolveLeaguePromptContext, buildLeaguePromptContext } = await import("./leaguePromptContext");
 
-        const leagueContext = "Mock draft board: use totalTeams, totalRounds, owner tendencies, and structured roster/pick data in this request as the only source of truth for league shape. Do not invent a specific real-world league name or manager identity.";
+        // Resolved, non-hardcoded league + focal-owner context (same helper used by other prompts).
+        const lpc = await resolveLeaguePromptContext(ctx.user?.id);
+        const fmt = buildLeaguePromptContext(lpc);
+        const leagueContext = `${fmt.leagueDescriptor}. ${fmt.historyClause}. Use the structured roster, pick, and owner-tendency data in this request as the source of truth for draft order and league shape.`;
 
         const prompt = buildPickRecommendationPrompt({
           currentOverall: input.currentOverall,
@@ -1272,6 +1276,7 @@ export const appRouter = router({
           recentPicks: input.recentPicks,
           positionRun: input.positionRun,
           leagueContext,
+          focalOwnerName: lpc.focalOwnerName,
         });
 
         const response = await llm({
