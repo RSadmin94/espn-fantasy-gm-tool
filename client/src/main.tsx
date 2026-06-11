@@ -12,6 +12,7 @@ import {
 import { AppShell } from "./components/AppShell";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ConnectESPN } from "./pages/ConnectESPN";
+import { LandingPage } from "./pages/LandingPage";
 import { SyncData } from "./pages/SyncData";
 import { Dashboard } from "./pages/Dashboard";
 import { Transactions } from "./pages/Transactions";
@@ -82,7 +83,7 @@ function LoadingSpinner() {
 function SignInPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
-      <SignIn routing="path" path="/sign-in" signUpUrl={undefined} />
+      <SignIn routing="path" path="/sign-in" signUpUrl={undefined} fallbackRedirectUrl="/connect" signUpFallbackRedirectUrl="/connect" />
     </div>
   );
 }
@@ -120,6 +121,7 @@ const router = createBrowserRouter([
       </ClerkProvider>
     ),
     children: [
+      { path: "/", element: <LandingPage /> },
       { path: "/sign-in", element: <SignInPage /> },
       { path: "/sign-in/*", element: <SignInPage /> },
       { path: "/sso-callback", element: <SSOCallbackPage /> },
@@ -127,7 +129,6 @@ const router = createBrowserRouter([
         element: <ProtectedLayout />,
         children: [
           // ── Active routes ─────────────────────────────────────────────
-          { path: "/", element: <Navigate to="/dashboard" replace /> },
           { path: "/dashboard", element: <Dashboard /> },
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/sync", element: <SyncData /> },
