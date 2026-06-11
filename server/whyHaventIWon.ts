@@ -22,6 +22,7 @@ import { getDb, memberIdFromOwnerKey } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import { getWeeklyStatsSeasonsForLeague } from "./weeklyStatsLeagueCoverage";
 import { buildChampionshipAuthority } from "./championshipAuthority";
+import { computeActivityDna } from "./activityDnaService";
 
 // Phase B3: DEFAULT_LEAGUE_ID constant removed — setup required if no active league.
 
@@ -372,6 +373,81 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
       detail: `Dropped ${closeLosses} games by fewer than 10 points (of ${totalLosses} total losses) — small margins added up.`,
       metricValue: closeLosses, leagueBenchmark: totalLosses,
     });
+  }
+
+  // ── Reason G: Activity DNA — draft reliance & in-season adaptation vs champions ──
+  // Pulls the Phase-2 Activity DNA signals (Draft Reliant, Streamer) and benchmarks the
+  // focal owner against this league's CHAMPIONS (not the league average) to surface
+  // actionable, comparative findings. Supporting-only and wrapped: a DNA failure must
+  // never block the core verdict.
+  try {
+    const keyOf = (g: string | null | undefined): string => normGuid(g) ?? String(g ?? "");
+    const dnaAll = await computeActivityDna(leagueId);
+    const dnaByOwner = new Map(dnaAll.map((d) => [keyOf(d.ownerId), d] as const));
+    const focalDna = dnaByOwner.get(keyOf(focal));
+
+    const champKeys = new Set<string>();
+    for (const champOwner of champBySeason.values()) {
+      const k = keyOf(champOwner);
+      if (k && k !== keyOf(focal)) champKeys.add(k);
+    }
+
+    const okScore = (d: any, key: string): number | null => {
+      const a = d?.archetypes?.[key];
+      return a && a.status === "ok" && typeof a.score === "number" ? a.score : null;
+    };
+    const champAvg = (key: string): number | null => {
+      const xs: number[] = [];
+      for (const ck of champKeys) { const s = okScore(dnaByOwner.get(ck), key); if (s != null) xs.push(s); }
+      return xs.length ? xs.reduce((p, c) => p + c, 0) / xs.length : null;
+    };
+
+    if (focalDna && champKeys.size > 0) {
+      const focalDR = okScore(focalDna, "draftReliant");
+      const focalStream = okScore(focalDna, "streamer");
+      const focalWaiver = okScore(focalDna, "waiverAggressive");
+      const champDR = champAvg("draftReliant");
+      const champStream = champAvg("streamer");
+      const champWaiver = champAvg("waiverAggressive");
+
+      const streamDeficit = focalStream != null && champStream != null ? champStream - focalStream : null;
+      const waiverDeficit = focalWaiver != null && champWaiver != null ? champWaiver - focalWaiver : null;
+      const lagsInSeason = (streamDeficit != null && streamDeficit > 5) || (waiverDeficit != null && waiverDeficit > 5);
+
+      // Finding 1 — leans on the draft more than this league's winners.
+      if (focalDR != null && champDR != null && focalDR > champDR + 3) {
+        const tail = lagsInSeason ? " — and you gain less from streaming and the waiver wire than they do" : "";
+        findings.push({
+          id: "dna_draft_reliance", category: "draft",
+          severity: clamp((focalDR - champDR) * 1.4 + (lagsInSeason ? 18 : 8)),
+          headline: "Rely on drafted players more than league winners",
+          detail: `${Math.round(focalDR)}% of your starting-lineup points came from self-drafted players vs ${Math.round(champDR)}% for this league's champions${tail}.`,
+          metricValue: r1(focalDR), leagueBenchmark: r1(champDR),
+        });
+      }
+
+      // Finding 2 — in-season adaptation below championship pace.
+      if (lagsInSeason) {
+        const strongConstruction =
+          (focalDR != null && focalDR >= 55) ||
+          ["Roster Builder", "Draft-and-Hold", "Draft Reliant"].includes(focalDna.primaryDNA);
+        const bits: string[] = [];
+        if (streamDeficit != null && streamDeficit > 5) bits.push("cycle fewer QB/TE/K/DEF starters");
+        if (waiverDeficit != null && waiverDeficit > 5) bits.push("work the waiver wire less");
+        findings.push({
+          id: "dna_inseason_adaptation", category: "acquisitions",
+          severity: clamp(Math.max(streamDeficit ?? 0, waiverDeficit ?? 0) * 0.7 + 22),
+          headline: strongConstruction
+            ? "Roster construction is strong, but in-season adaptation is below championship pace"
+            : "In-season adaptation below championship pace",
+          detail: `You ${bits.join(" and ")} than this league's champions, who adapt to matchups and injuries more aggressively in-season.`,
+          metricValue: focalStream != null ? r1(focalStream) : r1(focalWaiver ?? 0),
+          leagueBenchmark: champStream != null ? r1(champStream) : r1(champWaiver ?? 0),
+        });
+      }
+    }
+  } catch {
+    /* Activity DNA is a supporting signal; never block the core verdict. */
   }
 
   // ── Rank + take top 5 ─────────────────────────────────────────────────
