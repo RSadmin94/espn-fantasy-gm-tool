@@ -174,7 +174,12 @@ display-name lookup. For "what is this team-season's owner name," go straight to
   matchups/standings.
 - **Two active leagues:** `457622` (ATLANTAS FINEST FF, 14-team, 2009–2026, full cache) and
   `480452315` (12-team, 2026 only). Always test multi-league assumptions against the 2026-only one.
-- **`weekly_storylines` table** has historically been absent → 500 on storylines refresh; provision via migration before relying on it.
+- **Intelligence tables — provisioned 2026-06-10.** `weekly_storylines`, `rivalry_scores`,
+  `trade_narratives`, `fear_index`, and `reputation_events` were defined in `schema.ts` but had
+  never been `db:push`ed to the live DB, so their features (storylines refresh, rivalry, trade
+  narratives, fear index, reputation) returned 500s. All five are now created directly in the
+  live DB with columns + indexes verified against `schema.ts`; a future `db:push` treats them as
+  in-sync. If a new feature table 500s, check it exists in the live DB before anything else.
 
 ## 11. Edit & tooling conventions
 
