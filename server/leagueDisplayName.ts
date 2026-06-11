@@ -46,9 +46,9 @@ export async function resolveLeagueDisplayName(
       .filter((s) => s > 2000)
       .sort((a, b) => b - a);
     for (const s of seasons) {
-      const payload = (await getCachedView(s, "combined", row.leagueId, { userId })) as
-        | Record<string, unknown>
-        | null;
+      const cached = await getCachedView(s, "combined", row.leagueId, { userId });
+      // getCachedView returns a wrapper row; the ESPN JSON is under `.payload`.
+      const payload = (cached?.payload ?? null) as Record<string, unknown> | null;
       const settings = payload?.settings as Record<string, unknown> | undefined;
       const nm = settings?.name;
       if (typeof nm === "string" && nm.trim()) {
