@@ -10521,14 +10521,14 @@ Provide:
       .query(async ({ ctx, input }) => {
         void input?.activeLeagueKey;
       const userId = ctx.user?.id ?? 0;
-      if (!userId) return { knownOwners: [], legacyItems: [], savedAliases: [], stats: { known: 0, autoResolved: 0, needsReview: 0, unresolved: 0 } };
+      if (!userId) return { autoMatchedOwners: [], ambiguousOwners: [], unresolvedTeams: [], identityStats: { autoMatched: 0, autoMatchedWithLegacyBridge: 0, ambiguous: 0, unresolved: 0 } };
       const { leagueId } = await resolveActiveLeagueId(
         { user: { id: userId } }, null, undefined,
       );
-      if (!leagueId) return { knownOwners: [], legacyItems: [], savedAliases: [], stats: { known: 0, autoResolved: 0, needsReview: 0, unresolved: 0 } };
+      if (!leagueId) return { autoMatchedOwners: [], ambiguousOwners: [], unresolvedTeams: [], identityStats: { autoMatched: 0, autoMatchedWithLegacyBridge: 0, ambiguous: 0, unresolved: 0 } };
       const lid = leagueId;
       const db = await getDb();
-      if (!db) return { knownOwners: [], legacyItems: [], savedAliases: [], stats: { known: 0, autoResolved: 0, needsReview: 0, unresolved: 0 } };
+      if (!db) return { autoMatchedOwners: [], ambiguousOwners: [], unresolvedTeams: [], identityStats: { autoMatched: 0, autoMatchedWithLegacyBridge: 0, ambiguous: 0, unresolved: 0 } };
 
       // Inline Levenshtein for server-side fuzzy match
       function lev(a: string, b: string): number {
@@ -10548,116 +10548,10 @@ Provide:
         return maxLen === 0 ? 100 : Math.round((1 - lev(na, nb) / maxLen) * 100);
       }
 
-      // Known owners (2018+)
-      const teamRows = await db.select({ ownerName: gmTeams.ownerName, name: gmTeams.name, season: gmTeams.season })
-        .from(gmTeams).where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), sql`${gmTeams.season} >= 2018`))
-        .orderBy(ascDrizzle(gmTeams.ownerName), ascDrizzle(gmTeams.season));
-      const ownerSeasons = new Map<string, number[]>();
-      const ownerTeams   = new Map<string, string[]>();
-      for (const r of teamRows) {
-        if (!r.ownerName) continue;
-        if (!ownerSeasons.has(r.ownerName)) ownerSeasons.set(r.ownerName, []);
-        ownerSeasons.get(r.ownerName)!.push(r.season);
-        if (!ownerTeams.has(r.ownerName)) ownerTeams.set(r.ownerName, []);
-        if (r.name && !ownerTeams.get(r.ownerName)!.includes(r.name)) ownerTeams.get(r.ownerName)!.push(r.name);
-      }
-      const knownOwners = Array.from(ownerSeasons.entries()).map(([ownerName, seasons]) => ({
-        ownerName, seasons: seasons.sort((a,b)=>a-b), teamNames: ownerTeams.get(ownerName) ?? [],
-      }));
-
-      // Legacy picks (pre-2018) — extract unique team names from rawPick JSON
-      const legacyPicks = await db.select({ season: gmDraftPicks.season, rawPick: gmDraftPicks.rawPick })
-        .from(gmDraftPicks)
-        .where(andDrizzle(eqDrizzle(gmDraftPicks.leagueId, lid), sql`${gmDraftPicks.season} < 2018`));
-
-      // Group by unique teamName
-      const legacyMap = new Map<string, { seasons: Set<number>; pickCount: number }>();
-      for (const p of legacyPicks) {
-        try {
-          const raw = JSON.parse(p.rawPick ?? "{}") as Record<string, unknown>;
-          const tn  = String(raw.teamName ?? "").trim();
-          if (!tn) continue;
-          if (!legacyMap.has(tn)) legacyMap.set(tn, { seasons: new Set(), pickCount: 0 });
-          legacyMap.get(tn)!.seasons.add(p.season);
-          legacyMap.get(tn)!.pickCount++;
-        } catch { /* skip bad JSON */ }
-      }
-
-      // Build L2 map: season+normName → ownerName (same as ownerProfile)
-      const l2 = new Map<string, string>();
-      for (const r of teamRows) {
-        if (!r.ownerName) continue;
-        const nn = normStr(r.name);
-        if (nn) l2.set(`${r.season}:${nn}`, r.ownerName);
-      }
-      // L3: normName → most common ownerName
-      const l3v = new Map<string, Map<string, number>>();
-      for (const r of teamRows) {
-        if (!r.ownerName) continue;
-        const nn = normStr(r.name);
-        if (!nn) continue;
-        if (!l3v.has(nn)) l3v.set(nn, new Map());
-        const v = l3v.get(nn)!; v.set(r.ownerName, (v.get(r.ownerName) ?? 0) + 1);
-      }
-      const l3 = new Map<string, string>();
-      for (const [nn, votes] of l3v) {
-        const best = [...votes.entries()].sort((a,b) => b[1]-a[1])[0];
-        if (best) l3.set(nn, best[0]);
-      }
-
-      // Saved aliases from DB
+      // Saved aliases (manual confirms/rejections from prior review) — consumed by the canonical layer below
       const savedRows = await db.select().from(ownerAliases).where(eqDrizzle(ownerAliases.leagueId, lid));
-      const savedMap  = new Map(savedRows.map(r => [r.legacyTeamName, r]));
 
-      // Score each legacy team name
-      const knownOwnerNames = Array.from(ownerSeasons.keys());
-      const legacyItems = Array.from(legacyMap.entries()).map(([tn, info]) => {
-        const nn          = normStr(tn);
-        const seasons     = [...info.seasons].sort((a,b)=>a-b);
-        const saved       = savedMap.get(tn);
-
-        // Try L2 / L3 first (high confidence structural matches)
-        let resolvedOwner:  string | null = null;
-        let confidence      = 0;
-        let method: string  = "unresolved";
-
-        for (const s of seasons) {
-          const l2match = l2.get(`${s}:${nn}`);
-          if (l2match) { resolvedOwner = l2match; confidence = 88; method = "season_name"; break; }
-        }
-        if (!resolvedOwner) {
-          const l3match = l3.get(nn);
-          if (l3match) { resolvedOwner = l3match; confidence = 74; method = "cross_season"; }
-        }
-        // Fuzzy fallback
-        if (!resolvedOwner) {
-          let best: { owner: string; score: number } | null = null;
-          for (const o of knownOwnerNames) {
-            const sc = fuzzyScore(tn, o);
-            if (!best || sc > best.score) best = { owner: o, score: sc };
-          }
-          if (best && best.score >= 60) {
-            resolvedOwner = best.owner; confidence = best.score; method = "fuzzy";
-          }
-        }
-
-        return {
-          legacyTeamName: tn,
-          seasons,
-          pickCount: info.pickCount,
-          resolvedOwner,
-          confidence,
-          method,
-          savedStatus: saved?.status ?? null,
-          savedOwner:  saved?.resolvedOwnerName ?? null,
-        };
-      }).sort((a,b) => b.confidence - a.confidence);
-
-      const autoResolved  = legacyItems.filter(i => i.confidence >= 88);
-      const needsReview   = legacyItems.filter(i => i.confidence >= 50 && i.confidence < 88);
-      const unresolved    = legacyItems.filter(i => i.confidence < 50);
-
-      // ── Canonical identity layer (Slice 2) — GUID-first, name-bridge fallback ──
+      // ── Canonical identity layer — GUID-first, name-bridge fallback ──
       // Authoritative identity per ARCHITECTURE.md §9.1: teams.ownerId GUID is primary;
       // the canonical union-find engine merges legacy (GUID-less, name-only) team-seasons
       // into their modern GUID identity by EXACT owner-name bridge. A canonical key of
@@ -10761,16 +10655,6 @@ Provide:
       };
 
       return {
-        knownOwners,
-        legacyItems,
-        savedAliases: savedRows,
-        stats: {
-          known:        knownOwners.length,
-          autoResolved: autoResolved.length,
-          needsReview:  needsReview.length,
-          unresolved:   unresolved.length,
-        },
-        // ── new canonical identity layer (Slice 2; UI consumes in Slice 3) ──
         autoMatchedOwners,
         ambiguousOwners,
         unresolvedTeams,
