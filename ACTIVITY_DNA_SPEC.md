@@ -12,11 +12,11 @@ Activity DNA classifies each owner's **management style** from historical behavi
 Roster Builder · Waiver Aggressive · Trade Opportunist · Draft-and-Hold · Low Activity · High Activity.
 These are computed from `transactionCounter` (acquisitions / drops / trades / IR per team-season, 2018–2026) and `draft_picks` (keepers). Validated below.
 
-**What is Phase 2 (blocked on a data fix): 2 archetypes**
+**What is Phase 2 (NOW LIVE as of 2026-06-11): 2 archetypes**
 Draft Reliant · Streamer.
-Both require linking **weekly scoring to player identity/position**. The blocker is concrete: `gm_weekly_player_stats.playerId` stores a **non-global ID** (small integers like 28, 83) that does not join to `players` or `draft_picks` (real ESPN IDs like 2577417), and its `rosterSlotId` does not map to position there. Until a **playerId crosswalk** is built, any "% of points from drafted players" or "streams QB/DEF" number would be fabricated. We will NOT ship fabricated numbers. The formulas are fully specified here and switch on automatically once the crosswalk lands.
+Both link **weekly scoring to player identity/position**. The original blocker — that `gm_weekly_player_stats.playerId` is a non-global id — was a false alarm: the crosswalk already exists as a JOIN. `weekly.playerId = gm_player_registry.id`, and the registry row carries the global `espnPlayerId` and `position`. 100% coverage, validated against live data. See **docs/playerid-crosswalk-decision.md**. The resolver (`server/weeklyStatsResolver.ts`) exposes the resolved rows; both archetypes now return real scores with `status: "ok"`.
 
-This honesty is the point: a foundational intelligence engine must be auditable, so unverifiable dimensions are returned as `null` with `status: "pending-data"`, never as guesses.
+This honesty remains the point: scores stay auditable. An owner with no weekly data still returns `null` with `status: "pending-data"` for these two dimensions, never a guess.
 
 ---
 
@@ -62,7 +62,7 @@ rosterBuilder    = round( 0.5*waiverAggressive + 0.5*tradeOpportunist )
 draftAndHold     = round( 0.55*lowActivity + 0.45*pct(keeperRate) )
 ```
 
-### Phase 2 (specified; activates when the playerId crosswalk exists)
+### Phase 2 (live — via the `gm_player_registry.id` crosswalk; see docs/playerid-crosswalk-decision.md)
 ```
 # Draft Reliant — needs weekly starter points linked to draft origin
 draftedStarterPts = Σ pointsScored where isStarter=1 AND playerId ∈ player's draft set that season
@@ -251,7 +251,7 @@ Sanity checks pass: the most-active owners (Demetri 376 acquisitions) score top 
 ### 8.3 Data dependencies
 - **Hard:** `espn_raw_cache` (transactionCounter), `teams` (owner mapping). Without these, no Phase 1.
 - **Soft:** `draft_picks.isKeeper` (Draft-and-Hold loses its keeper term but still works on low-activity).
-- **Phase 2:** weekly-stats playerId crosswalk (blocker, section 4.3).
+- **Phase 2:** weekly-stats playerId crosswalk — RESOLVED. JOIN via `gm_player_registry.id` → `espnPlayerId` + `position`; tuple-scoped per league. See docs/playerid-crosswalk-decision.md.
 
 ### 8.4 Performance & caching
 - One league pass = ~18 owners × 9 seasons; all source rows already pulled by existing queries. Sub-second.
@@ -271,9 +271,9 @@ Sanity checks pass: the most-active owners (Demetri 376 acquisitions) score top 
 5. Mount on **Owner Profiles** (replaces the currently-empty Activity DNA tab — this is item #8 from the QA audit).
 6. Validate live for Rod/Demetri/Mark/Jan; commit; push on approval.
 
-**Phase 2 — unblock the data-dependent archetypes**
-7. Build the `weeklyPlayerId → espnPlayerId` crosswalk (own work item; uses `gm_player_registry.normalizedName`).
-8. Activate Draft Reliant + Streamer (formulas already in §2); flip `status` from `pending-data` to `ok`.
+**Phase 2 — DONE (2026-06-11): data-dependent archetypes live**
+7. ✅ Crosswalk is a JOIN via `gm_player_registry.id` (not name-based). Resolver: `server/weeklyStatsResolver.ts`. See docs/playerid-crosswalk-decision.md.
+8. ✅ Draft Reliant + Streamer compute in `computeActivityDna`; `status` is `ok` for owners with weekly data.
 
 **Phase 3 — wire into features (one PR each, additive)**
 9. LeagueDNA Advisor → identity line. 10. Why Haven't I Won? → style finding. 11. Championship Path → champion-archetype correlation. 12. Acquisition Impact → ranking line. 13. Rival Profile, 14. Owner Evolution (per-season recompute).

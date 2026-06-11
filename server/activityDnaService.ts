@@ -1,12 +1,14 @@
 import { getDb } from "./db";
 import { sql } from "drizzle-orm";
+import { resolveWeeklyPlayerStats, resolveLeagueDraftSet } from "./weeklyStatsResolver";
 
 /**
  * Activity DNA - deterministic owner management-style classification.
  *
  * Phase 1 archetypes (computable today from transactionCounter + draft keepers):
  *   Roster Builder, Waiver Aggressive, Trade Opportunist, Draft-and-Hold, Low Activity, High Activity.
- * Phase 2 archetypes (pending weekly-stats playerId crosswalk): Draft Reliant, Streamer.
+ * Phase 2 archetypes (live via gm_player_registry id crosswalk): Draft Reliant, Streamer.
+ *   See docs/playerid-crosswalk-decision.md.
  *
  * No LLMs. Every score is league-relative (percentile rank) or an absolute rate,
  * and is always paired with at least one evidence string. See ACTIVITY_DNA_SPEC.md.
@@ -200,6 +202,68 @@ export async function computeActivityDna(leagueId: string): Promise<ActivityDnaR
   }
   if (!owners.length) return [];
 
+  // ---- Phase 2 (live): weekly-stats-derived archetypes (Draft Reliant, Streamer) ----
+  // The crosswalk to global ids is a JOIN (docs/playerid-crosswalk-decision.md). Weekly
+  // stats are multi-league + leagueId-less, so the resolver tuple-scopes by
+  // (ownerGUID, season, teamId) against this league's roster.
+  const weekly = await resolveWeeklyPlayerStats(leagueId, { startersOnly: true });
+  const draftSet = await resolveLeagueDraftSet(leagueId);
+
+  // global ids each owner drafted, per season
+  const draftedKey = new Set<string>();
+  for (const d of draftSet) {
+    const ok = normGuid(d.ownerId);
+    if (ok && d.espnPlayerId) draftedKey.add(`${ok}:${d.season}:${d.espnPlayerId}`);
+  }
+
+  // Draft Reliant: starter points total vs from self-drafted players.
+  const drAcc = new Map<string, { drafted: number; total: number }>();
+  // Streamer: per owner, per `${season}:${pos}` -> distinct starters / weeks played.
+  const STREAM_POS = new Set(["QB", "TE", "K", "DEF"]);
+  const streamCells = new Map<string, Map<string, { ids: Set<number>; weeks: Set<number> }>>();
+
+  for (const w of weekly) {
+    const ok = normGuid(w.ownerId);
+    if (!ok) continue;
+    const acc = drAcc.get(ok) ?? { drafted: 0, total: 0 };
+    acc.total += w.points;
+    if (draftedKey.has(`${ok}:${w.season}:${w.espnPlayerId}`)) acc.drafted += w.points;
+    drAcc.set(ok, acc);
+    if (STREAM_POS.has(w.position)) {
+      let m = streamCells.get(ok);
+      if (!m) streamCells.set(ok, (m = new Map()));
+      const key = `${w.season}:${w.position}`;
+      let cell = m.get(key);
+      if (!cell) m.set(key, (cell = { ids: new Set<number>(), weeks: new Set<number>() }));
+      cell.ids.add(w.espnPlayerId);
+      cell.weeks.add(w.week);
+    }
+  }
+
+  // Draft Reliant = absolute % of starter points from self-drafted players (spec §2).
+  const draftReliantByOwner = new Map<string, number>();
+  for (const [ok, a] of drAcc) {
+    if (a.total > 0) draftReliantByOwner.set(ok, Math.round((100 * a.drafted) / a.total));
+  }
+  const drScoreVals = [...draftReliantByOwner.values()];
+
+  // Stream index = mean over (season,pos) of distinctStarters/weeks; streamer = league percentile.
+  const streamIndexByOwner = new Map<string, number>();
+  const streamDistinctByOwner = new Map<string, number>();
+  for (const [ok, m] of streamCells) {
+    const ratios: number[] = [];
+    const distinct = new Set<number>();
+    for (const cell of m.values()) {
+      if (cell.weeks.size > 0) ratios.push(cell.ids.size / cell.weeks.size);
+      for (const id of cell.ids) distinct.add(id);
+    }
+    if (ratios.length) {
+      streamIndexByOwner.set(ok, ratios.reduce((s, v) => s + v, 0) / ratios.length);
+      streamDistinctByOwner.set(ok, distinct.size);
+    }
+  }
+  const streamVals = [...streamIndexByOwner.values()];
+
   // league distributions for percentile ranking
   const acqA = owners.map((o) => o.acqPS);
   const trA = owners.map((o) => o.tradesPS);
@@ -219,6 +283,12 @@ export async function computeActivityDna(leagueId: string): Promise<ActivityDnaR
     const keeperPct = Math.round(pctRank(kpA, o.keeperRate));
     const draftAndHold = Math.round((1 - keeperWeight) * lowActivity + keeperWeight * keeperPct);
 
+    // Phase 2 (live): Draft Reliant = absolute %, Streamer = league percentile of stream index.
+    const drScore = draftReliantByOwner.has(o.ok) ? draftReliantByOwner.get(o.ok)! : null;
+    const siOwn = streamIndexByOwner.get(o.ok);
+    const streamerScore =
+      siOwn != null && streamVals.length ? Math.round(pctRank(streamVals, siOwn)) : null;
+
     const archetypes: Record<ArchetypeKey, ArchetypeScore> = {
       rosterBuilder: { score: rosterBuilder, status: "ok" },
       waiverAggressive: { score: waiverAggressive, status: "ok" },
@@ -226,9 +296,12 @@ export async function computeActivityDna(leagueId: string): Promise<ActivityDnaR
       draftAndHold: { score: draftAndHold, status: "ok" },
       lowActivity: { score: lowActivity, status: "ok" },
       highActivity: { score: highActivity, status: "ok" },
-      // Phase 2 - pending playerId crosswalk
-      draftReliant: { score: null, status: "pending-data" },
-      streamer: { score: null, status: "pending-data" },
+      draftReliant:
+        drScore != null ? { score: drScore, status: "ok" } : { score: null, status: "pending-data" },
+      streamer:
+        streamerScore != null
+          ? { score: streamerScore, status: "ok" }
+          : { score: null, status: "pending-data" },
     };
 
     const scored = (keys: ArchetypeKey[]) =>
@@ -256,7 +329,25 @@ export async function computeActivityDna(leagueId: string): Promise<ActivityDnaR
     if (o.keeperTot > 0 && o.keeperK > 0) {
       evidence.push(`Kept ${o.keeperK} of ${o.keeperTot} tracked draft picks.`);
     }
-    evidence.push("Draft Reliant & Streamer pending deeper player-linking data (Phase 2).");
+    if (drScore != null) {
+      const a = drAcc.get(o.ok)!;
+      const pc = Math.round(pctRank(drScoreVals, drScore));
+      evidence.push(
+        `${drScore}% of starting-lineup points came from self-drafted players ` +
+          `(${Math.round(a.drafted)} of ${Math.round(a.total)} pts) - ${ordinalPct(pc)} percentile in draft dependence.`,
+      );
+    }
+    if (streamerScore != null) {
+      const si = streamIndexByOwner.get(o.ok) ?? 0;
+      const distinct = streamDistinctByOwner.get(o.ok) ?? 0;
+      evidence.push(
+        `Started ${distinct} different players at QB/TE/K/DEF (stream index ${si.toFixed(2)}) - ` +
+          `${ordinalPct(streamerScore)} percentile streaming.`,
+      );
+    }
+    if (drScore == null && streamerScore == null) {
+      evidence.push("Draft Reliant & Streamer pending weekly-stats data for this owner.");
+    }
 
     return {
       leagueId,
