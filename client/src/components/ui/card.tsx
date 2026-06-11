@@ -2,14 +2,44 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * Canonical affordance for clickable card/card-like surfaces. Compose this onto
+ * any element that has an onClick/navigation so it reads as interactive:
+ * pointer cursor, hover lift, active press, and a keyboard focus-visible ring.
+ * Purely additive — safe to merge via `cn()` alongside existing styling.
+ */
+export const interactiveCardClasses =
+  "cursor-pointer transition-all duration-150 hover:border-ring/60 hover:shadow-md active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
+function Card({
+  className,
+  interactive,
+  onClick,
+  onKeyDown,
+  role,
+  tabIndex,
+  ...props
+}: React.ComponentProps<"div"> & { interactive?: boolean }) {
+  // A card is keyboard-activatable only when it is interactive AND has a click handler.
+  const clickable = Boolean(interactive) && typeof onClick === "function";
   return (
     <div
       data-slot="card"
       className={cn(
         "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+        interactive && interactiveCardClasses,
         className
       )}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (clickable && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          e.currentTarget.click();
+        }
+        onKeyDown?.(e);
+      }}
+      role={role ?? (clickable ? "button" : undefined)}
+      tabIndex={tabIndex ?? (clickable ? 0 : undefined)}
       {...props}
     />
   );
