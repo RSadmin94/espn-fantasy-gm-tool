@@ -136,7 +136,7 @@ export function PlayerDatabase() {
   const { data, isLoading, isFetching, refetch } = _trpc.playerStats.getCanonicalPlayers.useQuery({
     query:    debouncedQ.trim() || undefined,
     position: (!isFlex && posFilter !== "ALL") ? posFilter : undefined,
-    isActive: undefined,
+    isActive: true,
     leagueId: activeLeagueId,
     page,
     pageSize: PAGE_SIZE,

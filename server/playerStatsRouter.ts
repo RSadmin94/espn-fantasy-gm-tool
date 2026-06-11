@@ -29,6 +29,7 @@ import {
   desc  as descDrizzle,
   like  as likeDrizzle,
   gte   as gteDrizzle,
+  lt    as ltDrizzle,
   inArray as inArrayDrizzle,
   sql,
 } from "drizzle-orm";
@@ -120,8 +121,24 @@ export const playerStatsRouter = router({
       if (input.position) {
         conditions.push(eqDrizzle(gmPlayerRegistry.position, input.position) as any);
       }
+      // "Active" is recency-based, NOT the gm_player_registry.isActive column.
+      // That column defaults true and is never flipped during ingestion, so retired
+      // players (Tom Brady last seen 2022, Greg Olsen 2020) all carry isActive=1.
+      // The reliable signal is lastSeasonSeen: a player is "active" when seen within
+      // the last two seasons the registry knows about (latest season + the prior one,
+      // to bridge the offseason). The threshold tracks the data, so it self-updates
+      // each year with no calendar coupling.
       if (input.isActive !== undefined) {
-        conditions.push(eqDrizzle(gmPlayerRegistry.isActive, input.isActive) as any);
+        const maxRow = await db
+          .select({ maxS: sql<number>`MAX(${gmPlayerRegistry.lastSeasonSeen})`.mapWith(Number) })
+          .from(gmPlayerRegistry);
+        const maxSeason = Number(maxRow[0]?.maxS) || new Date().getFullYear();
+        const activeFloor = maxSeason - 1;
+        conditions.push(
+          (input.isActive
+            ? gteDrizzle(gmPlayerRegistry.lastSeasonSeen, activeFloor)
+            : ltDrizzle(gmPlayerRegistry.lastSeasonSeen, activeFloor)) as any,
+        );
       }
 
       const where = conditions.length > 0 ? andDrizzle(...conditions as [any, ...any[]]) : undefined;
