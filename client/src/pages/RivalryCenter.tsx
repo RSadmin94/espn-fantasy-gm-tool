@@ -452,7 +452,7 @@ export function RivalryCenter() {
                         key={lp.key}
                         onClick={() => openLeague(lp)}
                         style={SUB}
-                        className="group flex w-full items-center gap-4 p-4 text-left transition-colors hover:brightness-125"
+                        className="group flex w-full items-center gap-4 p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-white/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#140e17]"
                       >
                         <div className="w-9 shrink-0 text-center text-2xl font-black" style={{ color: i === 0 ? GOLD : MUTED }}>{i + 1}</div>
                         <div className="h-10 w-1 shrink-0 rounded-full" style={{ background: h.c }} />
@@ -504,7 +504,7 @@ export function RivalryCenter() {
                       key={`${p.rivalId ?? p.rivalName ?? i}`}
                       onClick={() => openDossier(p)}
                       style={SUB}
-                      className="group flex w-full items-center gap-4 p-4 text-left transition-colors hover:brightness-125"
+                      className="group flex w-full items-center gap-4 p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-white/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#140e17]"
                     >
                       <div className="w-9 shrink-0 text-center text-2xl font-black" style={{ color: i === 0 ? GOLD : MUTED }}>{i + 1}</div>
                       <div className="h-10 w-1 shrink-0 rounded-full" style={{ background: h.c }} />
@@ -542,7 +542,7 @@ export function RivalryCenter() {
                       key={i}
                       onClick={() => setOpen({ focalKey: m.aKey, focalName: m.a, rivalKey: m.bKey, rivalName: m.b })}
                       style={SUB}
-                      className="p-4 text-left transition-colors hover:brightness-125"
+                      className="p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-white/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#140e17]"
                     >
                       <div className="text-[11px] font-bold uppercase tracking-[0.25em]" style={{ color: GOLD }}>{m.title}</div>
                       <div className="mt-1 text-lg font-black leading-tight">{m.a} <span style={{ color: MUTED }}>vs</span> {m.b}</div>
@@ -614,7 +614,7 @@ export function RivalryCenter() {
                       key={nm.key}
                       onClick={() => setOpen({ focalKey: nm.key, focalName: nm.name, rivalKey: nm.rivalKey, rivalName: nm.rivalName })}
                       style={SUB}
-                      className="flex items-center justify-between p-3 text-left transition-colors hover:brightness-125"
+                      className="flex items-center justify-between p-3 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-white/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#140e17]"
                     >
                       <div className="min-w-0">
                         <div className="truncate font-bold">{nm.name}</div>
@@ -690,7 +690,7 @@ export function RivalryCenter() {
                   return (
                     <div className="mt-4 space-y-2">
                       {rev.map((p, i) => (
-                        <button key={i} onClick={() => openDossier(p)} style={SUB} className="flex w-full items-center justify-between p-3 text-left transition-colors hover:brightness-125">
+                        <button key={i} onClick={() => openDossier(p)} style={SUB} className="flex w-full items-center justify-between p-3 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-white/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#140e17]">
                           <div>
                             <div className="font-bold">{String(p.rivalName)}</div>
                             <div className="text-xs" style={{ color: MUTED }}>Eliminated {rodName} {n(p.playoffEliminations)}× · revenge pending</div>
