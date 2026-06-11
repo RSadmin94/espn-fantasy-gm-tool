@@ -297,21 +297,62 @@ export function WhyHaventIWon() {
               </div>
             )}
 
-            {/* SECTION 2 - Season Timeline (centerpiece) */}
-            {data.timeline.length > 0 && (
-              <div className={cn(PANEL, "p-5 sm:p-6")}>
-                <div className="mb-5 flex items-center gap-3">
-                  <span className="text-lime-400"><Calendar className="h-5 w-5" /></span>
-                  <div>
-                    <h2 className="text-[20px] font-extrabold leading-tight">Season Timeline</h2>
-                    <p className="text-[13px] text-white/45">Every season of your career, newest first</p>
-                  </div>
-                </div>
-                <div className="pl-1">
-                  {data.timeline.map((c: any) => <TimelineRow key={c.season} card={c} />)}
+            {/* Top Reasons (moved to top) */}
+            <div className={cn(PANEL, "p-5 sm:p-6")}>
+              <div className="mb-4 flex items-center gap-3">
+                <span className={isWin ? "text-amber-300" : "text-lime-400"}>
+                  {isWin ? <Crown className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
+                </span>
+                <div>
+                  <h2 className="text-[20px] font-extrabold leading-tight">{reasonsHeading}</h2>
+                  <p className="text-[13px] text-white/45">
+                    {isWin
+                      ? "Ranked by contribution strength from real league data"
+                      : "Ranked by deterministic severity from real league data"}
+                  </p>
                 </div>
               </div>
-            )}
+              <div className="space-y-3">
+                {data.topReasons.map((f: any, i: number) => {
+                  const colorFn = isWin ? strengthColor : severityColor;
+                  const barFn = isWin ? strengthBar : severityBar;
+                  const iconMap = isWin ? CHAMPION_ICON : CATEGORY_ICON;
+                  return (
+                    <div key={f.id} className={cn(
+                      "rounded-xl border p-4",
+                      isWin ? "border-amber-400/15 bg-amber-400/[0.02]" : "border-white/[0.06] bg-white/[0.02]",
+                    )}>
+                      <div className="flex items-start gap-3">
+                        <span className={cn("mt-0.5 shrink-0", colorFn(f.severity))}>
+                          {iconMap[f.category] ?? <Target className="h-5 w-5" />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-bold text-white/90">
+                              <span className="mr-2 text-white/35">{i + 1}.</span>{f.headline}
+                            </div>
+                            <span className={cn("shrink-0 text-[13px] font-bold tabular-nums", colorFn(f.severity))}>
+                              {Math.round(f.severity)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[14px] text-white/55">{f.detail}</p>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                            <div className={cn("h-full rounded-full", barFn(f.severity))} style={{ width: `${Math.round(f.severity)}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {data.topReasons.length === 0 && (
+                  <p className="text-[14px] text-white/50">
+                    {isWin
+                      ? "Championship data is still computing."
+                      : "No standout weaknesses found in the data - a balanced resume."}
+                  </p>
+                )}
+              </div>
+            </div>
 
             {/* SECTION 3 - Pattern Detection / Championship Signals */}
             {patterns.length > 0 && (
@@ -468,62 +509,21 @@ export function WhyHaventIWon() {
               </div>
             )}
 
-            {/* SECTION 5 - Top Reasons (diagnostic) */}
-            <div className={cn(PANEL, "p-5 sm:p-6")}>
-              <div className="mb-4 flex items-center gap-3">
-                <span className={isWin ? "text-amber-300" : "text-lime-400"}>
-                  {isWin ? <Crown className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
-                </span>
-                <div>
-                  <h2 className="text-[20px] font-extrabold leading-tight">{reasonsHeading}</h2>
-                  <p className="text-[13px] text-white/45">
-                    {isWin
-                      ? "Ranked by contribution strength from real league data"
-                      : "Ranked by deterministic severity from real league data"}
-                  </p>
+            {/* Season Timeline (moved to bottom) */}
+            {data.timeline.length > 0 && (
+              <div className={cn(PANEL, "p-5 sm:p-6")}>
+                <div className="mb-5 flex items-center gap-3">
+                  <span className="text-lime-400"><Calendar className="h-5 w-5" /></span>
+                  <div>
+                    <h2 className="text-[20px] font-extrabold leading-tight">Season Timeline</h2>
+                    <p className="text-[13px] text-white/45">Every season of your career, newest first</p>
+                  </div>
+                </div>
+                <div className="pl-1">
+                  {data.timeline.map((c: any) => <TimelineRow key={c.season} card={c} />)}
                 </div>
               </div>
-              <div className="space-y-3">
-                {data.topReasons.map((f: any, i: number) => {
-                  const colorFn = isWin ? strengthColor : severityColor;
-                  const barFn = isWin ? strengthBar : severityBar;
-                  const iconMap = isWin ? CHAMPION_ICON : CATEGORY_ICON;
-                  return (
-                    <div key={f.id} className={cn(
-                      "rounded-xl border p-4",
-                      isWin ? "border-amber-400/15 bg-amber-400/[0.02]" : "border-white/[0.06] bg-white/[0.02]",
-                    )}>
-                      <div className="flex items-start gap-3">
-                        <span className={cn("mt-0.5 shrink-0", colorFn(f.severity))}>
-                          {iconMap[f.category] ?? <Target className="h-5 w-5" />}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="font-bold text-white/90">
-                              <span className="mr-2 text-white/35">{i + 1}.</span>{f.headline}
-                            </div>
-                            <span className={cn("shrink-0 text-[13px] font-bold tabular-nums", colorFn(f.severity))}>
-                              {Math.round(f.severity)}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-[14px] text-white/55">{f.detail}</p>
-                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                            <div className={cn("h-full rounded-full", barFn(f.severity))} style={{ width: `${Math.round(f.severity)}%` }} />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {data.topReasons.length === 0 && (
-                  <p className="text-[14px] text-white/50">
-                    {isWin
-                      ? "Championship data is still computing."
-                      : "No standout weaknesses found in the data - a balanced resume."}
-                  </p>
-                )}
-              </div>
-            </div>
+            )}
 
             <p className="px-1 text-[12px] text-white/30">
               Every number is computed deterministically from real league history (matchups, standings, drafts, championships). No estimates, no AI-generated facts.
