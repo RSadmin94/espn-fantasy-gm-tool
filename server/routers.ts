@@ -10657,6 +10657,109 @@ Provide:
       const needsReview   = legacyItems.filter(i => i.confidence >= 50 && i.confidence < 88);
       const unresolved    = legacyItems.filter(i => i.confidence < 50);
 
+      // ── Canonical identity layer (Slice 2) — GUID-first, name-bridge fallback ──
+      // Authoritative identity per ARCHITECTURE.md §9.1: teams.ownerId GUID is primary;
+      // the canonical union-find engine merges legacy (GUID-less, name-only) team-seasons
+      // into their modern GUID identity by EXACT owner-name bridge. A canonical key of
+      // "id:<GUID>" => resolved to a GUID person (auto-matched, read-only); "name:<pk>" =>
+      // never had/bridged to a GUID => genuinely GUID-less legacy owner (manual review).
+      const allOwnerRows = (await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))) as any[];
+      const nameToOwnerId = buildNameToOwnerId(allOwnerRows);
+      const teamToCanon   = buildTeamToCanonicalProfileKey(allOwnerRows);
+
+      type IdCluster = {
+        canonicalKey: string; isGuid: boolean; memberId: string | null;
+        display: string; displaySeason: number;
+        seasons: Set<number>; guidSeasons: Set<number>; legacySeasons: Set<number>;
+        teamNames: Set<string>;
+      };
+      const clusters = new Map<string, IdCluster>();
+      for (const t of allOwnerRows) {
+        if (!t || t.teamId <= 0) continue;
+        const key = teamToCanon.get(`${t.season}:${t.teamId}`)
+          ?? resolveOwnerKey(String(t.ownerId || "").trim(), t.ownerName || "", t.name || "", nameToOwnerId);
+        let c = clusters.get(key);
+        if (!c) {
+          c = { canonicalKey: key, isGuid: key.startsWith("id:"),
+                memberId: key.startsWith("id:") ? key.slice(3) : null,
+                display: "", displaySeason: -1,
+                seasons: new Set(), guidSeasons: new Set(), legacySeasons: new Set(), teamNames: new Set() };
+          clusters.set(key, c);
+        }
+        c.seasons.add(t.season);
+        if (String(t.ownerId || "").trim()) c.guidSeasons.add(t.season); else c.legacySeasons.add(t.season);
+        const disp = cleanOwnerDisplay((t.ownerName || "").trim());
+        if (disp && t.season > c.displaySeason) { c.display = disp; c.displaySeason = t.season; }
+        if (t.name) c.teamNames.add(String(t.name));
+      }
+
+      // best-effort saved-alias lookup: by any of the cluster's team names, else owner name
+      const aliasByName = new Map<string, any>();
+      for (const a of savedRows) aliasByName.set(normStr(a.legacyTeamName), a);
+      const lookupAlias = (c: IdCluster) => {
+        for (const tn of c.teamNames) { const a = aliasByName.get(normStr(tn)); if (a) return a; }
+        return aliasByName.get(normStr(c.display)) ?? null;
+      };
+
+      const autoMatchedOwners: any[] = [];
+      const ambiguousOwners:   any[] = [];
+      const unresolvedTeams:   any[] = [];
+      const guidNames: { key: string; name: string }[] = [];
+      const nameClusters: IdCluster[] = [];
+      for (const c of clusters.values()) {
+        if (c.isGuid) {
+          guidNames.push({ key: c.canonicalKey, name: c.display });
+          autoMatchedOwners.push({
+            canonicalKey:    c.canonicalKey,
+            memberId:        c.memberId,
+            ownerName:       c.display || "(unknown)",
+            seasons:         [...c.seasons].sort((a,b)=>a-b),
+            guidSeasons:     [...c.guidSeasons].sort((a,b)=>a-b),
+            legacySeasons:   [...c.legacySeasons].sort((a,b)=>a-b),
+            teamNames:       [...c.teamNames],
+            hasLegacyBridge: c.legacySeasons.size > 0,
+            confidence:      100,
+            reason:          c.legacySeasons.size > 0 ? "guid+exact-name-bridge" : "guid",
+          });
+        } else {
+          nameClusters.push(c);
+        }
+      }
+
+      // name: clusters never bridged to a GUID — fuzzy-suggest a modern owner, else unresolved
+      for (const c of nameClusters) {
+        const saved = lookupAlias(c);
+        let best: { key: string; name: string; score: number } | null = null;
+        for (const g of guidNames) {
+          const sc = fuzzyScore(c.display, g.name);
+          if (!best || sc > best.score) best = { key: g.key, name: g.name, score: sc };
+        }
+        const base = {
+          canonicalKey:    c.canonicalKey,
+          legacyOwnerName: c.display || "(unknown)",
+          seasons:         [...c.seasons].sort((a,b)=>a-b),
+          teamNames:       [...c.teamNames],
+          savedStatus:     saved?.status ?? null,
+          savedOwner:      saved?.resolvedOwnerName ?? null,
+        };
+        if (best && best.score >= 70) {
+          ambiguousOwners.push({ ...base, suggestedOwner: best.name, suggestedCanonicalKey: best.key, confidence: best.score, reason: "fuzzy-name" });
+        } else {
+          unresolvedTeams.push({ ...base, suggestedOwner: null, suggestedCanonicalKey: null, confidence: 0, reason: "no-guid-match" });
+        }
+      }
+
+      autoMatchedOwners.sort((a,b)=> String(a.ownerName).localeCompare(String(b.ownerName)));
+      ambiguousOwners.sort((a,b)=> b.confidence - a.confidence);
+      unresolvedTeams.sort((a,b)=> String(a.legacyOwnerName).localeCompare(String(b.legacyOwnerName)));
+
+      const identityStats = {
+        autoMatched:                 autoMatchedOwners.length,
+        autoMatchedWithLegacyBridge: autoMatchedOwners.filter(o => o.hasLegacyBridge).length,
+        ambiguous:                   ambiguousOwners.length,
+        unresolved:                  unresolvedTeams.length,
+      };
+
       return {
         knownOwners,
         legacyItems,
@@ -10667,6 +10770,11 @@ Provide:
           needsReview:  needsReview.length,
           unresolved:   unresolved.length,
         },
+        // ── new canonical identity layer (Slice 2; UI consumes in Slice 3) ──
+        autoMatchedOwners,
+        ambiguousOwners,
+        unresolvedTeams,
+        identityStats,
       };
     }),
 

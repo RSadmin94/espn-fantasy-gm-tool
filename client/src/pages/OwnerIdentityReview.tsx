@@ -2,32 +2,39 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
-import { Loader2, AlertTriangle, Check, X, SkipForward, Users, ChevronDown, ChevronRight } from "lucide-react";
+import { Loader2, AlertTriangle, Check, X, SkipForward, ChevronDown, ChevronRight, ShieldCheck, Link2, CircleHelp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const trpcA = () => (trpc as any);
 
-type LegacyItem = {
-  legacyTeamName:  string;
+type AutoOwner = {
+  canonicalKey:    string;
+  memberId:        string | null;
+  ownerName:       string;
   seasons:         number[];
-  pickCount:       number;
-  resolvedOwner:   string | null;
+  guidSeasons:     number[];
+  legacySeasons:   number[];
+  teamNames:       string[];
+  hasLegacyBridge: boolean;
   confidence:      number;
-  method:          string;
-  savedStatus:     string | null;
-  savedOwner:      string | null;
+  reason:          string;
 };
 
-const METHOD_LABELS: Record<string, string> = {
-  season_name:   "Season name match",
-  cross_season:  "Cross-season match",
-  fuzzy:         "Fuzzy match",
-  manual:        "Commissioner approved",
-  unresolved:    "No match found",
+type ReviewItem = {
+  canonicalKey:          string;
+  legacyOwnerName:       string;
+  seasons:               number[];
+  teamNames:             string[];
+  suggestedOwner:        string | null;
+  suggestedCanonicalKey: string | null;
+  confidence:            number;
+  reason:                string;
+  savedStatus:           string | null;
+  savedOwner:            string | null;
 };
 
-const CONF_COLOR = (c: number) =>
-  c >= 88 ? "text-lime-400" : c >= 60 ? "text-amber-400" : "text-red-400";
+const seasonSpan = (xs: number[]) =>
+  !xs || xs.length === 0 ? "—" : xs.length === 1 ? `${xs[0]}` : `${xs[0]}–${xs[xs.length - 1]}`;
 
 const CONF_BG = (c: number) =>
   c >= 88
@@ -36,87 +43,102 @@ const CONF_BG = (c: number) =>
     ? "border-amber-700 bg-amber-900/20 text-amber-300"
     : "border-red-700 bg-red-900/20 text-red-300";
 
-function ConfBadge({ confidence, method }: { confidence: number; method: string }) {
+// ── Auto-matched owners (read-only / confirmed by GUID) ─────────────────────
+function AutoMatchedRow({ owner }: { owner: AutoOwner }) {
+  const [expanded, setExpanded] = useState(false);
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold", CONF_BG(confidence))}>
-      {confidence}% · {METHOD_LABELS[method] ?? method}
-    </span>
+    <div className="border-b border-border/40 last:border-0">
+      <div className="flex items-center gap-3 py-2.5 text-sm">
+        <button type="button" onClick={() => setExpanded(v => !v)} className="text-muted-foreground hover:text-foreground">
+          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </button>
+        <ShieldCheck className="h-4 w-4 text-lime-400 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <span className="font-medium text-foreground truncate">{owner.ownerName}</span>
+          <span className="ml-2 text-xs text-muted-foreground">
+            {seasonSpan(owner.seasons)} · {owner.seasons.length} season{owner.seasons.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+        {owner.hasLegacyBridge && (
+          <span className="inline-flex items-center gap-1 rounded border border-teal-700 bg-teal-900/20 text-teal-300 px-1.5 py-0.5 text-[10px] font-semibold">
+            <Link2 className="h-3 w-3" /> legacy {seasonSpan(owner.legacySeasons)}
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1 rounded border border-lime-700 bg-lime-900/20 text-lime-300 px-1.5 py-0.5 text-[10px] font-semibold">
+          <Check className="h-3 w-3" /> GUID
+        </span>
+      </div>
+      {expanded && (
+        <div className="pb-3 pl-7 pr-4">
+          <div className="rounded border border-border bg-muted/10 px-3 py-2 text-xs space-y-1">
+            <div className="flex gap-4"><span className="text-muted-foreground w-32 flex-shrink-0">Member GUID:</span><span className="font-mono text-[11px] text-foreground break-all">{owner.memberId ?? "—"}</span></div>
+            <div className="flex gap-4"><span className="text-muted-foreground w-32 flex-shrink-0">GUID seasons:</span><span className="text-foreground">{owner.guidSeasons.join(", ") || "—"}</span></div>
+            {owner.legacySeasons.length > 0 && (
+              <div className="flex gap-4"><span className="text-muted-foreground w-32 flex-shrink-0">Bridged legacy:</span><span className="text-teal-300">{owner.legacySeasons.join(", ")}</span></div>
+            )}
+            <div className="flex gap-4"><span className="text-muted-foreground w-32 flex-shrink-0">Team names:</span><span className="text-foreground">{owner.teamNames.join(", ") || "—"}</span></div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
-function AliasRow({ item, knownOwners, onSave }: {
-  item: LegacyItem;
+// ── Needs-review row (ambiguous suggestion OR unresolved) ───────────────────
+function ReviewRow({ item, knownOwners, onResolve }: {
+  item: ReviewItem;
   knownOwners: string[];
-  onSave: (teamName: string, owner: string | null, status: "approved" | "rejected" | "skipped", confidence: number, method: string) => void;
+  onResolve: (item: ReviewItem, owner: string | null, status: "approved" | "rejected" | "skipped", confidence: number, method: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [selectedOwner, setSelectedOwner] = useState(item.savedOwner ?? item.resolvedOwner ?? "");
+  const [selected, setSelected] = useState(item.savedOwner ?? item.suggestedOwner ?? "");
   const saved = item.savedStatus;
   const isDone = saved === "approved" || saved === "rejected";
 
   return (
     <div className={cn("border-b border-border/40 last:border-0", isDone && "opacity-60")}>
       <div className="flex items-center gap-3 py-2.5 text-sm">
-        <button
-          type="button"
-          onClick={() => setExpanded(v => !v)}
-          className="text-muted-foreground hover:text-foreground"
-        >
+        <button type="button" onClick={() => setExpanded(v => !v)} className="text-muted-foreground hover:text-foreground">
           {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </button>
-
         <div className="flex-1 min-w-0">
-          <span className="font-medium text-foreground truncate">{item.legacyTeamName}</span>
+          <span className="font-medium text-foreground truncate">{item.legacyOwnerName}</span>
           <span className="ml-2 text-xs text-muted-foreground">
-            {item.seasons.join(", ")} · {item.pickCount} pick{item.pickCount !== 1 ? "s" : ""}
+            {seasonSpan(item.seasons)} · {item.teamNames.length} team{item.teamNames.length !== 1 ? "s" : ""}
           </span>
         </div>
 
         {saved === "approved" ? (
-          <div className="flex items-center gap-1.5 text-xs text-lime-400">
-            <Check className="h-3.5 w-3.5" />
-            <span>{item.savedOwner}</span>
-          </div>
+          <div className="flex items-center gap-1.5 text-xs text-lime-400"><Check className="h-3.5 w-3.5" /><span>{item.savedOwner}</span></div>
         ) : saved === "rejected" ? (
-          <div className="flex items-center gap-1.5 text-xs text-red-400">
-            <X className="h-3.5 w-3.5" />
-            <span>Rejected</span>
-          </div>
+          <div className="flex items-center gap-1.5 text-xs text-red-400"><X className="h-3.5 w-3.5" /><span>Distinct owner</span></div>
+        ) : item.suggestedOwner ? (
+          <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold", CONF_BG(item.confidence))}>
+            <CircleHelp className="h-3 w-3" /> {item.suggestedOwner} · {item.confidence}%
+          </span>
         ) : (
-          <ConfBadge confidence={item.confidence} method={item.method} />
+          <span className="inline-flex items-center gap-1 rounded border border-red-700 bg-red-900/20 text-red-300 px-1.5 py-0.5 text-[10px] font-semibold">
+            <AlertTriangle className="h-3 w-3" /> no match
+          </span>
         )}
 
         {!isDone && (
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <select
-              value={selectedOwner}
-              onChange={e => setSelectedOwner(e.target.value)}
-              className="text-xs py-1 px-2 rounded border border-border bg-background text-foreground"
-              style={{ maxWidth: "160px" }}
-            >
+            <select value={selected} onChange={e => setSelected(e.target.value)} className="text-xs py-1 px-2 rounded border border-border bg-background text-foreground" style={{ maxWidth: "160px" }}>
               <option value="">— assign owner —</option>
-              {knownOwners.map(o => (
-                <option key={o} value={o}>{o}</option>
-              ))}
-              <option value="__unknown__">Mark as unknown</option>
+              {knownOwners.map(o => (<option key={o} value={o}>{o}</option>))}
+              <option value="__distinct__">Mark as distinct owner</option>
             </select>
-            <button
-              type="button"
-              onClick={() => selectedOwner && selectedOwner !== "__unknown__"
-                ? onSave(item.legacyTeamName, selectedOwner, "approved", item.confidence, item.method)
-                : onSave(item.legacyTeamName, null, "rejected", 0, "manual")}
-              disabled={!selectedOwner}
+            <button type="button"
+              onClick={() => selected && selected !== "__distinct__"
+                ? onResolve(item, selected, "approved", item.suggestedOwner === selected ? item.confidence : 100, item.suggestedOwner === selected ? "fuzzy" : "manual")
+                : onResolve(item, null, "rejected", 0, "manual")}
+              disabled={!selected}
               className="p-1.5 rounded border border-lime-700 bg-lime-900/20 text-lime-400 hover:bg-lime-900/40 disabled:opacity-40 disabled:cursor-not-allowed"
-              title="Approve"
-            >
+              title="Confirm">
               <Check className="h-3.5 w-3.5" />
             </button>
-            <button
-              type="button"
-              onClick={() => onSave(item.legacyTeamName, null, "skipped", 0, "manual")}
-              className="p-1.5 rounded border border-border text-muted-foreground hover:bg-muted/40"
-              title="Skip for now"
-            >
+            <button type="button" onClick={() => onResolve(item, null, "skipped", 0, "manual")} className="p-1.5 rounded border border-border text-muted-foreground hover:bg-muted/40" title="Skip for now">
               <SkipForward className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -126,22 +148,10 @@ function AliasRow({ item, knownOwners, onSave }: {
       {expanded && (
         <div className="pb-3 pl-7 pr-4">
           <div className="rounded border border-border bg-muted/10 px-3 py-2 text-xs space-y-1">
-            <div className="flex gap-4">
-              <span className="text-muted-foreground">Suggested match:</span>
-              <span className="font-medium text-foreground">{item.resolvedOwner ?? "None"}</span>
-            </div>
-            <div className="flex gap-4">
-              <span className="text-muted-foreground">Method:</span>
-              <span className="text-foreground">{METHOD_LABELS[item.method] ?? item.method}</span>
-            </div>
-            <div className="flex gap-4">
-              <span className="text-muted-foreground">Confidence:</span>
-              <span className={cn("font-medium", CONF_COLOR(item.confidence))}>{item.confidence}%</span>
-            </div>
-            <div className="flex gap-4">
-              <span className="text-muted-foreground">Seasons with this name:</span>
-              <span className="text-foreground">{item.seasons.join(", ")}</span>
-            </div>
+            <div className="flex gap-4"><span className="text-muted-foreground w-32 flex-shrink-0">Suggested match:</span><span className="font-medium text-foreground">{item.suggestedOwner ?? "None"}</span></div>
+            <div className="flex gap-4"><span className="text-muted-foreground w-32 flex-shrink-0">Confidence:</span><span className="text-foreground">{item.confidence}%</span></div>
+            <div className="flex gap-4"><span className="text-muted-foreground w-32 flex-shrink-0">Seasons:</span><span className="text-foreground">{item.seasons.join(", ")}</span></div>
+            <div className="flex gap-4"><span className="text-muted-foreground w-32 flex-shrink-0">Team names:</span><span className="text-foreground">{item.teamNames.join(", ") || "—"}</span></div>
           </div>
         </div>
       )}
@@ -149,10 +159,8 @@ function AliasRow({ item, knownOwners, onSave }: {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
-
+// ── Main page ───────────────────────────────────────────────────────────────
 export function OwnerIdentityReview() {
-  const [filter, setFilter] = useState<"all" | "auto" | "review" | "unresolved">("all");
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady =
     Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
@@ -161,66 +169,43 @@ export function OwnerIdentityReview() {
     withLeagueSalt({}, leagueContextKey),
     { staleTime: 30_000, enabled: leagueKeyReady },
   );
-  const saveMut = trpcA().dataHealth.saveAlias.useMutation({
-    onSuccess: () => q.refetch(),
-  });
-
+  const saveMut = trpcA().dataHealth.saveAlias.useMutation();
   const d = q.data as any;
 
   if (!leagueKeyReady) {
-    return (
-      <div className="flex items-center justify-center py-24 text-muted-foreground">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading league…
-      </div>
-    );
+    return (<div className="flex items-center justify-center py-24 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading league…</div>);
   }
-
   if (q.isLoading) {
-    return (
-      <div className="flex items-center justify-center py-24 text-muted-foreground">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Scanning owner identity…
-      </div>
-    );
+    return (<div className="flex items-center justify-center py-24 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Scanning owner identity…</div>);
   }
   if (!d) {
-    return (
-      <div className="flex items-center justify-center py-24 text-muted-foreground">
-        <AlertTriangle className="mr-2 h-5 w-5" /> No data found. Run a Full Import first.
-      </div>
-    );
+    return (<div className="flex items-center justify-center py-24 text-muted-foreground"><AlertTriangle className="mr-2 h-5 w-5" /> No data found. Run a Full Import first.</div>);
   }
 
-  const knownOwners: any[]   = d.knownOwners ?? [];
-  const legacyItems: LegacyItem[] = d.legacyItems ?? [];
-  const stats: any           = d.stats ?? {};
-  const knownOwnerNames      = knownOwners.map((o: any) => o.ownerName);
+  const autoMatched: AutoOwner[]  = d.autoMatchedOwners ?? [];
+  const ambiguous:   ReviewItem[] = d.ambiguousOwners ?? [];
+  const unresolved:  ReviewItem[] = d.unresolvedTeams ?? [];
+  const idStats = d.identityStats ?? {
+    autoMatched: autoMatched.length, autoMatchedWithLegacyBridge: 0,
+    ambiguous: ambiguous.length, unresolved: unresolved.length,
+  };
+  const knownOwnerNames = autoMatched.map(o => o.ownerName);
 
-  const filtered = legacyItems.filter((item: LegacyItem) => {
-    if (filter === "auto")       return item.confidence >= 88;
-    if (filter === "review")     return item.confidence >= 50 && item.confidence < 88;
-    if (filter === "unresolved") return item.confidence < 50;
-    return true;
-  });
-
-  function handleSave(
-    legacyTeamName: string,
-    resolvedOwnerName: string | null,
-    status: "approved" | "rejected" | "skipped",
-    confidence: number,
-    resolutionMethod: string
+  // Owner-level resolution: fan out to saveAlias for each of the cluster's team
+  // names so legacy draft attribution (keyed by team name) maps to the owner.
+  async function resolveLegacyOwner(
+    item: ReviewItem, ownerName: string | null,
+    status: "approved" | "rejected" | "skipped", confidence: number, method: string,
   ) {
-    saveMut.mutate(
-      withLeagueSalt(
-        {
-          legacyTeamName,
-          resolvedOwnerName,
-          status,
-          confidence,
-          resolutionMethod,
-        },
-        leagueContextKey,
-      ),
-    );
+    const names = item.teamNames.length ? item.teamNames : [item.legacyOwnerName];
+    for (const tn of names) {
+      await saveMut.mutateAsync(withLeagueSalt({
+        legacyTeamName: tn,
+        resolvedOwnerName: ownerName,
+        status, confidence, resolutionMethod: method,
+      }, leagueContextKey));
+    }
+    q.refetch();
   }
 
   return (
@@ -228,17 +213,17 @@ export function OwnerIdentityReview() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Owner Identity Review</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Resolve legacy team names from 2010–2017 to current owner records.
+          GUID-matched owners are confirmed automatically. Only genuinely GUID-less legacy owners (pre-2018) need review.
         </p>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Known owners (2018+)",  value: stats.known        ?? 0, color: "text-foreground" },
-          { label: "Auto-resolved (≥88%)",  value: stats.autoResolved ?? 0, color: "text-lime-400" },
-          { label: "Needs review (50–87%)", value: stats.needsReview  ?? 0, color: "text-amber-400" },
-          { label: "Unresolved (<50%)",     value: stats.unresolved   ?? 0, color: "text-red-400" },
+          { label: "Auto-matched (GUID)",  value: idStats.autoMatched ?? 0,                 color: "text-lime-400" },
+          { label: "Incl. legacy bridge",  value: idStats.autoMatchedWithLegacyBridge ?? 0, color: "text-teal-300" },
+          { label: "Ambiguous (review)",   value: idStats.ambiguous ?? 0,                   color: "text-amber-400" },
+          { label: "Unresolved (action)",  value: idStats.unresolved ?? 0,                  color: "text-red-400" },
         ].map(s => (
           <div key={s.label} className="rounded-lg border border-border bg-card px-4 py-3">
             <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{s.label}</div>
@@ -247,81 +232,58 @@ export function OwnerIdentityReview() {
         ))}
       </div>
 
-      {/* Known owners quick list */}
+      {/* Auto-matched owners (read-only) */}
       <div className="rounded-lg border border-border bg-card">
-        <button
-          type="button"
-          className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold text-muted-foreground hover:bg-muted/20 transition-colors"
-          onClick={e => {
-            const el = (e.currentTarget.nextSibling as HTMLElement);
-            if (el) el.style.display = el.style.display === "none" ? "block" : "none";
-          }}
-        >
-          <Users className="h-4 w-4" />
-          Known owners — {knownOwners.length} active owners (2018–2025)
-        </button>
-        <div style={{ display: "none" }}>
-          <div className="px-4 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-            {knownOwners.map((o: any) => (
-              <div key={o.ownerName} className="flex items-center justify-between py-1.5 border-b border-border/30 last:border-0 text-sm">
-                <span className="font-medium text-foreground">{o.ownerName}</span>
-                <span className="text-xs text-muted-foreground">
-                  {o.seasons[0]}–{o.seasons[o.seasons.length - 1]} · {o.teamNames.slice(0, 2).join(", ")}
-                  {o.teamNames.length > 2 && "…"}
-                </span>
-              </div>
-            ))}
-          </div>
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/20">
+          <ShieldCheck className="h-4 w-4 text-lime-400" />
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex-1">
+            Auto-matched owners — {autoMatched.length} confirmed by GUID
+          </h2>
+        </div>
+        {autoMatched.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">No owners found. Run a Full Import first.</div>
+        ) : (
+          <div className="px-4">{autoMatched.map(o => (<AutoMatchedRow key={o.canonicalKey} owner={o} />))}</div>
+        )}
+        <div className="px-4 py-2.5 border-t border-border bg-muted/10">
+          <p className="text-xs text-muted-foreground">
+            Confirmed via ESPN member GUID — the authoritative identity. Owners tagged <span className="text-teal-300">legacy</span> also absorb their pre-2018 seasons by exact name match. Read-only; no action needed.
+          </p>
         </div>
       </div>
 
-      {/* Legacy alias list */}
-      <div className="rounded-lg border border-border bg-card">
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/20 flex-wrap">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex-1">
-            Legacy Team Names — {legacyItems.length} unique names from 2010–2017
-          </h2>
-          <div className="flex gap-1">
-            {(["all", "auto", "review", "unresolved"] as const).map(f => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                className={cn(
-                  "px-2 py-1 rounded text-xs border transition-colors",
-                  filter === f
-                    ? "border-primary bg-primary/10 text-foreground font-medium"
-                    : "border-border text-muted-foreground hover:bg-muted/30"
-                )}
-              >
-                {f === "all" ? "All" : f === "auto" ? "Auto (≥88%)" : f === "review" ? "Review" : "Unresolved"}
-              </button>
-            ))}
+      {/* Ambiguous — likely match, needs confirm */}
+      {ambiguous.length > 0 && (
+        <div className="rounded-lg border border-border bg-card">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/20">
+            <CircleHelp className="h-4 w-4 text-amber-400" />
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex-1">
+              Ambiguous — {ambiguous.length} likely match{ambiguous.length !== 1 ? "es" : ""}, confirm or reject
+            </h2>
+          </div>
+          <div className="px-4">{ambiguous.map(it => (<ReviewRow key={it.canonicalKey} item={it} knownOwners={knownOwnerNames} onResolve={resolveLegacyOwner} />))}</div>
+          <div className="px-4 py-2.5 border-t border-border bg-muted/10">
+            <p className="text-xs text-muted-foreground">A close name match to a current owner (e.g. a typo or shortened name). Confirm to merge, or mark as a distinct owner.</p>
           </div>
         </div>
+      )}
 
-        {filtered.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-            {legacyItems.length === 0
-              ? "No legacy draft picks found. Import 2010–2017 draft data via the extension popup."
-              : "No items match this filter."}
-          </div>
+      {/* Unresolved — GUID-less legacy owners */}
+      <div className="rounded-lg border border-border bg-card">
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/20">
+          <AlertTriangle className="h-4 w-4 text-red-400" />
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex-1">
+            Unresolved — {unresolved.length} GUID-less legacy owner{unresolved.length !== 1 ? "s" : ""}
+          </h2>
+        </div>
+        {unresolved.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">Nothing unresolved — every legacy owner is matched.</div>
         ) : (
-          <div className="px-4">
-            {filtered.map((item: LegacyItem) => (
-              <AliasRow
-                key={item.legacyTeamName}
-                item={item}
-                knownOwners={knownOwnerNames}
-                onSave={handleSave}
-              />
-            ))}
-          </div>
+          <div className="px-4">{unresolved.map(it => (<ReviewRow key={it.canonicalKey} item={it} knownOwners={knownOwnerNames} onResolve={resolveLegacyOwner} />))}</div>
         )}
-
         <div className="px-4 py-2.5 border-t border-border bg-muted/10">
           <p className="text-xs text-muted-foreground">
-            Approved mappings are saved to <span className="font-medium text-foreground">owner_aliases</span> and used to attribute legacy draft picks to known owners in all analytics. Confidence ≥ 88% = structural name match · 50–87% = fuzzy match · &lt;50% = no match found.
+            These legacy owners (pre-2018) never appear in a GUID season. Assign one to a current owner if they're the same person, or mark as distinct. Saved to <span className="font-medium text-foreground">owner_aliases</span> and applied to legacy draft attribution.
           </p>
         </div>
       </div>
