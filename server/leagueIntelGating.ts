@@ -173,3 +173,30 @@ export function gateHallOfFame<
     gated: true,
   } as T & { gated: boolean };
 }
+
+// --- League DNA gating -------------------------------------------------------
+// Free = the screenshotable card: archetype, primary trait, blind spot, League
+// Twin, and the A-F scorecard. Paid = the full dossier (draft/trade/roster DNA,
+// champion comparison, every blind spot). The free fields are identity; the
+// dossier is the transformation layer, nulled server-side for free users.
+export function gateLeagueDna<
+  T extends {
+    draftDna: unknown;
+    tradeDna: unknown;
+    rosterDna: unknown;
+    championComparison: unknown;
+    blindSpots: unknown;
+  },
+>(profile: T, entitled: boolean): T & { gated: boolean; entitled: boolean } {
+  if (entitled) return { ...profile, gated: false, entitled: true };
+  return {
+    ...profile,
+    draftDna: null,
+    tradeDna: null,
+    rosterDna: null,
+    championComparison: null,
+    blindSpots: null,
+    gated: true,
+    entitled: false,
+  } as T & { gated: boolean; entitled: boolean };
+}

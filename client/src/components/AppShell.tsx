@@ -86,6 +86,7 @@ const NAV_GROUPS: NavGroup[] = [
     id: "league-intel",
     title: "LEAGUE INTEL",
     items: [
+      { kind: "link", label: "League DNA", href: "/league-dna", icon: Dna },
       { kind: "link", label: "Owner Profiles", href: "/owner-profiles", icon: Users },
       { kind: "link", label: "Why Haven't I Won?", href: "/why-havent-i-won", icon: HelpCircle },
       { kind: "link", label: "Acquisition Impact", href: "/acquisition-impact", icon: ShoppingCart },

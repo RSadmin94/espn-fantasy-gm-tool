@@ -16,7 +16,7 @@
  */
 
 import { z } from "zod";
-import { router, publicProcedure } from "./_core/trpc";
+import { router, publicProcedure, isUserEntitled } from "./_core/trpc";
 import { getCachedView, getAllCachedSeasons } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import {
@@ -28,6 +28,8 @@ import {
   type DraftPickRecord,
 } from "./leagueDNA";
 import { classifyDraftPickRawPick } from "./draftTruth";
+import { buildLeagueDnaProfile } from "./leagueDnaProfile";
+import { gateLeagueDna } from "./leagueIntelGating";
 
 // ─── ESPN data extraction helpers ────────────────────────────────────────────
 
@@ -211,6 +213,24 @@ export const dnaRouter = router({
     const managers = await buildManagerRawData(ctx.user?.id);
     const dnaProfiles = calcLeagueDNA(managers, focalLabel);
     return dnaProfiles;
+  }),
+
+  /**
+   * Focal owner's "Your League DNA" profile: a screenshotable card (archetype,
+   * primary trait, blind spot, League Twin, A-F scorecard) plus the full dossier.
+   * Free users get the card only; the dossier is gated server-side. Returns null
+   * until the owner profile is set up.
+   */
+  myProfile: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.user?.id) return null;
+    const co = await resolveCurrentOwner({ id: ctx.user.id });
+    if (!co.isSetupComplete || !co.ownerId) return null;
+    const focalLabel = await focalH2hLabelForUser(ctx.user.id);
+    const managers = await buildManagerRawData(ctx.user.id);
+    const allDna = calcLeagueDNA(managers, focalLabel);
+    const profile = buildLeagueDnaProfile({ allDna, focalMemberId: co.ownerId, managers });
+    if (!profile) return null;
+    return gateLeagueDna(profile, isUserEntitled(ctx.user));
   }),
 
   /**

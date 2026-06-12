@@ -20,6 +20,7 @@ import { Standings } from "./pages/Standings";
 import { Roster } from "./pages/Roster";
 import { Trades } from "./pages/Trades";
 import { Advisor } from "./pages/Advisor";
+import { LeagueDna } from "./pages/LeagueDna";
 import { Settings } from "./pages/Settings";
 import { Matchups } from "./pages/Matchups";
 import { LeagueHistory } from "./pages/LeagueHistory";
@@ -152,6 +153,7 @@ const router = createBrowserRouter([
           { path: "/hall-of-fame", element: <HallOfFame /> },
           { path: "/draft-reality", element: <DraftRealitySimulator /> },
           { path: "/why-havent-i-won", element: <WhyHaventIWon /> },
+      { path: "/league-dna", element: <LeagueDna /> },
           { path: "/championship-path", element: <ChampionshipPath /> },
           { path: "/acquisition-impact", element: <AcquisitionImpact /> },
           { path: "/ring-of-honor", element: <Navigate to="/hall-of-fame" replace /> },
