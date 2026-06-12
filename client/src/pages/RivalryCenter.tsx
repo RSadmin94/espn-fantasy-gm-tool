@@ -373,6 +373,14 @@ export function RivalryCenter() {
   const loading = !leagueKeyReady || scoresQ.isLoading || listQ.isLoading;
   const allEmpty = !leagueLoading && leaguePairs.length === 0 && pairs.length === 0;
   const hero = pairs[0];
+  const heroYearsActive: number = (() => {
+    if (!hero) return 0;
+    const focal = allOwners.find((o) => o.ownerKey === rodKey);
+    const rk = nameToKey[norm(String(hero.rivalName ?? ""))];
+    const rival = allOwners.find((o) => o.ownerKey === rk);
+    const fs = new Set((focal?.seasons ?? []).map(Number));
+    return (rival?.seasons ?? []).map(Number).filter((y) => fs.has(y)).length;
+  })();
   const ranked = pairs.slice(0, 10);
 
   return (
@@ -492,7 +500,7 @@ export function RivalryCenter() {
                     <div className="text-6xl font-black" style={{ color: GOLD }}>{n(hero.rivalryScore)}</div>
                   </div>
                 </div>
-                <div className="mt-4"><HeroStrip p={hero} /></div>
+                <div className="mt-4"><HeroStrip p={hero} gated={rivalryGated} yearsActive={heroYearsActive} /></div>
               </Panel>
             )}
 
@@ -503,7 +511,7 @@ export function RivalryCenter() {
               {leagueLoading ? (
                 <div className="py-8 text-center text-sm" style={{ color: MUTED }}>Reading every head-to-head in league history…</div>
               ) : leaguePairs.length === 0 ? (
-                <p className="py-6 text-sm" style={{ color: MUTED }}>Not enough cross-league matchup history yet.</p>
+                <p className="py-6 text-sm" style={{ color: MUTED }}>{rivalryGated ? "The league-wide rivalry grid unlocks with Rivals Pro." : "Not enough cross-league matchup history yet."}</p>
               ) : (
                 <div className="mt-4 space-y-2">
                   {leaguePairs.slice(0, 10).map((lp, i) => {
@@ -575,9 +583,19 @@ export function RivalryCenter() {
                           <HeatBadge label={p.heatLabel} />
                         </div>
                         <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs" style={{ color: MUTED }}>
-                          <span>Series <b style={{ color: TEXT }}>{n(p.h2hWins)}–{n(p.h2hLosses)}{n(p.h2hTies) ? `–${n(p.h2hTies)}` : ""}</b></span>
-                          <span>Playoff elims <b style={{ color: TEXT }}>{n(p.playoffEliminations)}</b></span>
-                          <span>Heartbreak losses <b style={{ color: TEXT }}>{n(p.closeLossCount)}</b></span>
+                          {rivalryGated ? (
+                            <>
+                              <span>Playoff elims <b style={{ color: TEXT }}>{n(p.playoffEliminations)}</b></span>
+                              <span>Severity <b style={{ color: TEXT }}>{String(p.heatLabel ?? "-")}</b></span>
+                              {p.lastMatchupSeason != null && <span>Last <b style={{ color: TEXT }}>{p.lastMatchupSeason}</b></span>}
+                            </>
+                          ) : (
+                            <>
+                              <span>Series <b style={{ color: TEXT }}>{n(p.h2hWins)}–{n(p.h2hLosses)}{n(p.h2hTies) ? `–${n(p.h2hTies)}` : ""}</b></span>
+                              <span>Playoff elims <b style={{ color: TEXT }}>{n(p.playoffEliminations)}</b></span>
+                              <span>Heartbreak losses <b style={{ color: TEXT }}>{n(p.closeLossCount)}</b></span>
+                            </>
+                          )}
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
@@ -840,7 +858,25 @@ export function RivalryCenter() {
 }
 
 // ── Hero stat strip ─────────────────────────────────────────────────────────
-function HeroStrip({ p }: { p: Pair }) {
+function HeroStrip({ p, gated, yearsActive }: { p: Pair; gated?: boolean; yearsActive?: number | null }) {
+  if (gated) {
+    const cellsFree: Array<[string, string]> = [
+      ["Years Active", yearsActive && yearsActive > 0 ? `${yearsActive} seasons` : "-"],
+      ["Playoff Eliminations", String(n(p.playoffEliminations))],
+      ["Last Meeting", p.lastMatchupSeason != null ? String(p.lastMatchupSeason) : "-"],
+      ["Severity", String(p.heatLabel ?? "-")],
+    ];
+    return (
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {cellsFree.map(([k, v], i) => (
+          <div key={i} style={SUB} className="px-3 py-3">
+            <div className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: MUTED }}>{k}</div>
+            <div className="mt-1 text-xl font-black" style={{ color: TEXT }}>{v}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
   const series = `${n(p.h2hWins)}–${n(p.h2hLosses)}${n(p.h2hTies) ? `–${n(p.h2hTies)}` : ""}`;
   const playoff =
     p.rivalPlayoffWins != null || p.rivalPlayoffLosses != null

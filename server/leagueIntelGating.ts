@@ -80,8 +80,8 @@ export type GatedRivalries = {
 
 /** Whitelist the free "headline" for a single rivalry - no record fields cross the wire. */
 function rivalryHeadline(p: Record<string, unknown>): Record<string, unknown> {
-  const meetings =
-    (Number(p.h2hWins) || 0) + (Number(p.h2hLosses) || 0) + (Number(p.h2hTies) || 0);
+  // Free identity headline: name, severity, playoff eliminations, last meeting,
+  // and ONE storyline (loreSentence). No W-L / heartbreaks / points / timeline.
   return {
     rivalId: p.rivalId,
     rivalName: p.rivalName,
@@ -89,7 +89,7 @@ function rivalryHeadline(p: Record<string, unknown>): Record<string, unknown> {
     heatLabel: p.heatLabel,
     playoffEliminations: p.playoffEliminations,
     lastMatchupSeason: p.lastMatchupSeason ?? null,
-    meetings,
+    loreSentence: p.loreSentence ?? null,
     focalKey: p.focalKey,
     rivalKey: p.rivalKey,
     locked: true,
