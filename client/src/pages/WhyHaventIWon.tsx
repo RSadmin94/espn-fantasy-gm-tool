@@ -2,7 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
-import { type ReactNode, type CSSProperties } from "react";
+import { useEffect, useRef, type ReactNode, type CSSProperties } from "react";
 import {
   Loader2, HelpCircle, Trophy, Target, TrendingDown, TrendingUp, Swords, Crown, Calendar, ShoppingCart,
   Medal, Activity, Shield, Sparkles, Flame, Gauge, AlertTriangle, CheckCircle2, ArrowDown, ArrowUp, Star,
@@ -177,6 +177,23 @@ export function WhyHaventIWon() {
   const readiness = data?.readiness ?? null;
   const patterns = data?.patterns ?? [];
   const isWin = data?.mode === "why-you-won" || data?.mode === "why-you-broke-through";
+
+  // Conversion funnel instrumentation (fire-and-forget; see docs/FREEMIUM_GATING_SPEC.md)
+  const logEvent = trpc.usageMonitor.logUIEvent.useMutation();
+  const firedSnapshot = useRef(false);
+  const firedPaywall = useRef(false);
+  useEffect(() => {
+    if (data && !data.needsOwnerSelection && !firedSnapshot.current) {
+      firedSnapshot.current = true;
+      logEvent.mutate({ eventType: "feature_open", featureName: "whyhavent_snapshot_viewed", page: "why-havent-i-won" });
+    }
+  }, [data]);
+  useEffect(() => {
+    if (data?.gated && !firedPaywall.current) {
+      firedPaywall.current = true;
+      logEvent.mutate({ eventType: "feature_open", featureName: "whyhavent_paywall_viewed", page: "why-havent-i-won" });
+    }
+  }, [data]);
 
   const reasonsHeading =
     data?.mode === "why-you-won" ? "Top Reasons You Won"
@@ -381,7 +398,10 @@ export function WhyHaventIWon() {
                   <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> Your championship readiness plan</li>
                 </ul>
                 <button
-                  onClick={() => checkoutMutation.mutate({ origin: window.location.origin })}
+                  onClick={() => {
+                    logEvent.mutate({ eventType: "cta_click", featureName: "whyhavent_unlock_clicked", page: "why-havent-i-won" });
+                    checkoutMutation.mutate({ origin: window.location.origin });
+                  }}
                   disabled={checkoutMutation.isPending}
                   className="mt-5 inline-flex items-center gap-2 rounded-xl bg-lime-400 px-5 py-2.5 text-[15px] font-bold text-black transition hover:bg-lime-300 disabled:opacity-60"
                 >

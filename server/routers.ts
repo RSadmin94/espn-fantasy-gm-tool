@@ -941,6 +941,14 @@ export const appRouter = router({
         return getOnboardingFunnel();
       }),
 
+    /** Why-Haven't-I-Won freemium conversion funnel: snapshot -> paywall -> unlock -> checkout -> subscribe */
+    getConversionFunnel: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getConversionFunnel } = await import("./usageTracker");
+        return getConversionFunnel();
+      }),
+
     // ── Behavioral analytics (6-question dashboard) ──────────────────────────
 
     /** Active leagues: ranked by unique users + session count in last N days */
