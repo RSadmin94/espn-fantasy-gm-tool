@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { router, publicProcedure } from "./_core/trpc";
+import { router, publicProcedure, isUserEntitled } from "./_core/trpc";
+import { gateCareerReport } from "./leagueIntelGating";
 import { computeWhyHaventIWon } from "./whyHaventIWon";
 import { computeChampionshipPath } from "./championshipPath";
 import { computeAcquisitionImpact } from "./acquisitionImpact";
@@ -27,12 +28,15 @@ export const leagueIntelRouter = router({
       return computeWhyHaventIWon(ctx.user?.id, input?.ownerKey ?? null);
     }),
 
-  /** Career Report - redesigned Why Haven't I Won (Section 0 + snapshot + modes; Phase 0) */
+  /** Career Report - redesigned Why Haven't I Won. Freemium-gated: free users get an
+   *  identity teaser (one reason + snapshot); paid users get the full transformation
+   *  report. Redaction is server-side - see docs/FREEMIUM_GATING_SPEC.md s.11.3. */
   careerReport: publicProcedure
     .input(optionalOwnerSalt)
     .query(async ({ ctx, input }) => {
       void input?.activeLeagueKey;
-      return computeCareerReport(ctx.user?.id, input?.ownerKey ?? null);
+      const report = await computeCareerReport(ctx.user?.id, input?.ownerKey ?? null);
+      return gateCareerReport(report, isUserEntitled(ctx.user));
     }),
 
   /** Feature 2 — Championship Path™ */

@@ -6,6 +6,7 @@ import { type ReactNode, type CSSProperties } from "react";
 import {
   Loader2, HelpCircle, Trophy, Target, TrendingDown, TrendingUp, Swords, Crown, Calendar, ShoppingCart,
   Medal, Activity, Shield, Sparkles, Flame, Gauge, AlertTriangle, CheckCircle2, ArrowDown, ArrowUp, Star,
+  Lock, ChevronRight,
 } from "lucide-react";
 
 const PAGEBG: CSSProperties = {
@@ -166,6 +167,9 @@ export function WhyHaventIWon() {
     withLeagueSalt({}, leagueContextKey),
     { staleTime: 60_000, enabled: leagueKeyReady },
   );
+  const checkoutMutation = trpc.billing.createCheckoutSession.useMutation({
+    onSuccess: (res) => { window.open(res.url, "_blank", "noopener,noreferrer"); },
+  });
   const data = leagueKeyReady ? q.data : undefined;
   const snap = data?.snapshot ?? null;
   const arc = data?.careerArc ?? null;
@@ -353,6 +357,39 @@ export function WhyHaventIWon() {
                 )}
               </div>
             </div>
+
+            {data.gated && (
+              <div className={cn(PANEL, "relative overflow-hidden p-6 sm:p-7 ring-1 ring-lime-400/30")}>
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-lime-400/50 to-transparent" />
+                <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-lime-300">
+                  <Lock className="h-4 w-4" /> Locked - Full Championship Report
+                </div>
+                <h3 className="mt-3 text-[22px] font-black leading-tight sm:text-[26px]">
+                  {data.lockedReasons > 0 ? (
+                    <>You're seeing 1 of {data.totalReasons} reasons. <span className="text-lime-400">{data.lockedReasons} more are locked.</span></>
+                  ) : (
+                    <>Your full Championship Report is <span className="text-lime-400">locked.</span></>
+                  )}
+                </h3>
+                <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-white/60">
+                  Unlock every factor behind why you haven't won, your Championship Readiness score, your positional gaps versus league champions, and your championship readiness plan.
+                </p>
+                <ul className="mt-4 grid gap-1.5 text-[14px] text-white/75 sm:grid-cols-2">
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> All {data.totalReasons} championship blockers, ranked</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> Championship Readiness score and tier</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> Positional gaps vs league champions</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> Your championship readiness plan</li>
+                </ul>
+                <button
+                  onClick={() => checkoutMutation.mutate({ origin: window.location.origin })}
+                  disabled={checkoutMutation.isPending}
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-lime-400 px-5 py-2.5 text-[15px] font-bold text-black transition hover:bg-lime-300 disabled:opacity-60"
+                >
+                  {checkoutMutation.isPending ? "Opening checkout..." : "Unlock Full Championship Report"}
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
 
             {/* SECTION 3 - Pattern Detection / Championship Signals */}
             {patterns.length > 0 && (

@@ -2,6 +2,7 @@ import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
+import type { User } from "../../drizzle/schema";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -32,6 +33,24 @@ export const protectedProcedure = t.procedure.use(requireUser);
 
 const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+/**
+ * Single source of truth for "is this user entitled to paid features?":
+ * an active subscription, or a trial started within the last 7 days.
+ * Used by BOTH subscribedProcedure (hard gate) and per-feature freemium
+ * gating (teaser redaction) so the two definitions never drift apart.
+ */
+export function isUserEntitled(
+  user: Pick<User, "subscriptionStatus" | "trialStartedAt"> | null | undefined,
+): boolean {
+  if (!user) return false;
+  if (user.subscriptionStatus === 'active') return true;
+  if (user.subscriptionStatus === 'trialing' && user.trialStartedAt) {
+    const elapsed = Date.now() - new Date(user.trialStartedAt).getTime();
+    if (elapsed <= TRIAL_DURATION_MS) return true;
+  }
+  return false;
+}
+
 /** Requires an active subscription or a non-expired trial. */
 export const subscribedProcedure = t.procedure.use(
   t.middleware(async opts => {
@@ -42,20 +61,13 @@ export const subscribedProcedure = t.procedure.use(
     if (!ctx.user) {
       throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
     }
-    const { subscriptionStatus, trialStartedAt } = ctx.user;
-    if (subscriptionStatus === 'active') {
-      return next({ ctx: { ...ctx, user: ctx.user } });
+    if (!isUserEntitled(ctx.user)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Your free trial has ended. Upgrade to continue.",
+      });
     }
-    if (subscriptionStatus === 'trialing' && trialStartedAt) {
-      const elapsed = Date.now() - new Date(trialStartedAt).getTime();
-      if (elapsed <= TRIAL_DURATION_MS) {
-        return next({ ctx: { ...ctx, user: ctx.user } });
-      }
-    }
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Your free trial has ended. Upgrade to continue.",
-    });
+    return next({ ctx: { ...ctx, user: ctx.user } });
   }),
 );
 
