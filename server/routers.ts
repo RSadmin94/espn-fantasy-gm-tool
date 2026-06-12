@@ -5,7 +5,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, subscribedProcedure, router, isUserEntitled } from "./_core/trpc";
-import { gateRivalryScores, gateH2H, gateRivalryDossier } from "./leagueIntelGating";
+import { gateRivalryScores, gateH2H, gateRivalryDossier, gateHallOfFame } from "./leagueIntelGating";
 import { invokeLLM, type Message } from "./_core/llm";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 import { injuryRouter } from "./injuryRouter";
@@ -5833,7 +5833,9 @@ export const appRouter = router({
       if (!leagueId) return null;
       const db = await getDb();
       if (!db) return null;
-      return buildHallOfFamePayload({ db, leagueId, userId });
+      const hof = await buildHallOfFamePayload({ db, leagueId, userId });
+      if (!hof) return hof;
+      return gateHallOfFame(hof, isUserEntitled(ctx.user));
     }),
 
     /** All-time owner W-L-T from deduped completed weekly matchups (not standings snapshots). */

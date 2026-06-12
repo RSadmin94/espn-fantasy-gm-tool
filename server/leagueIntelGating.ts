@@ -133,3 +133,43 @@ export function gateRivalryDossier<T extends { opponents: unknown[]; pairDetail:
   if (entitled) return { ...dossier, gated: false };
   return { ...dossier, opponents: [], pairDetail: null, gated: true } as T & { gated: boolean };
 }
+
+// --- Hall of Fame gating -----------------------------------------------------
+// Free = the viral leaderboard: coverage, championships (titles + history) and
+// ownerRecords (rank, W-L, win %, titles). Paid = the deep record book:
+// single-game records, rivalry/head-to-head legacy, and season records. Each of
+// those sections is a flat map of MaybeAvailable<T> ({available:true,value} |
+// {available:false,reason}); for free users we flip every entry to the
+// unavailable form so no record value crosses the wire, and the existing client
+// renders the locked state. Shape is preserved exactly.
+
+function lockHofSection<T extends Record<string, unknown>>(section: T): T {
+  if (!section || typeof section !== "object") return section;
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(section)) {
+    const v = section[k] as unknown;
+    if (v && typeof v === "object" && "available" in (v as Record<string, unknown>)) {
+      out[k] = { available: false, reason: "Unlock with Rivals Pro" };
+    } else {
+      out[k] = v;
+    }
+  }
+  return out as T;
+}
+
+export function gateHallOfFame<
+  T extends {
+    singleGameRecords: Record<string, unknown>;
+    rivalryRecords: Record<string, unknown>;
+    seasonRecords: Record<string, unknown>;
+  },
+>(hof: T, entitled: boolean): T & { gated: boolean } {
+  if (entitled) return { ...hof, gated: false };
+  return {
+    ...hof,
+    singleGameRecords: lockHofSection(hof.singleGameRecords),
+    rivalryRecords: lockHofSection(hof.rivalryRecords),
+    seasonRecords: lockHofSection(hof.seasonRecords),
+    gated: true,
+  } as T & { gated: boolean };
+}

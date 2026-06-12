@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/lib/trpc";
@@ -27,6 +27,26 @@ type MaybeAvail<T> = { available: true; value: T } | { available: false; reason:
 function unwrapMaybe<T>(m: MaybeAvail<T> | undefined | null): T | null {
   if (m && m.available) return m.value;
   return null;
+}
+
+function HofPaywall({ heading, onUnlock, pending }: { heading: string; onUnlock: () => void; pending: boolean }) {
+  return (
+    <div className={cn(PROFILE_SURFACE, "p-8 text-center")}>
+      <Trophy className="mx-auto mb-3 h-8 w-8 text-amber-300/80" />
+      <p className="text-xl font-black text-zinc-100">{heading}</p>
+      <p className="mx-auto mt-2 max-w-md text-sm text-zinc-400">
+        The leaderboard, titles, tenure and win % stay free. The deep record book - single-game marks,
+        season bests, and head-to-head legacy - unlocks with Rivals Pro.
+      </p>
+      <button
+        onClick={onUnlock}
+        disabled={pending}
+        className="mt-5 inline-flex items-center gap-2 rounded-[10px] bg-amber-300 px-6 py-3 text-sm font-extrabold text-[#1e1623] transition hover:brightness-110 disabled:opacity-60"
+      >
+        {pending ? "Opening..." : "Unlock the Record Book"}
+      </button>
+    </div>
+  );
 }
 
 function UnavailableBlock({ title }: { title: string }) {
@@ -274,6 +294,31 @@ export function HallOfFame() {
     activeQ.data?.leagueName?.trim() ||
     (activeQ.data?.leagueId ? `League ${activeQ.data.leagueId}` : "Your league");
 
+  // -- Freemium gate (deep record book) --------------------------------------
+  const hofGated = Boolean((hofQ.data as any)?.gated);
+  const hofCheckout = (trpc as any).billing.createCheckoutSession.useMutation({
+    onSuccess: (res: any) => { if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer"); },
+  });
+  const hofLog = (trpc as any).usageMonitor.logUIEvent.useMutation();
+  const hofSnapLogged = useRef(false);
+  const hofPaywallLogged = useRef(false);
+  useEffect(() => {
+    if (!hofSnapLogged.current && hofQ.data) {
+      hofSnapLogged.current = true;
+      hofLog.mutate({ eventType: "feature_open", featureName: "hof_snapshot_viewed" });
+    }
+  }, [hofQ.data]);
+  useEffect(() => {
+    if (hofGated && (hofTab === "records" || hofTab === "rivalries") && !hofPaywallLogged.current) {
+      hofPaywallLogged.current = true;
+      hofLog.mutate({ eventType: "feature_open", featureName: "hof_paywall_viewed" });
+    }
+  }, [hofGated, hofTab]);
+  const startHofCheckout = () => {
+    hofLog.mutate({ eventType: "cta_click", featureName: "hof_unlock_clicked" });
+    hofCheckout.mutate({});
+  };
+
   if (!leagueKeyReady) {
     return (
       <div className="flex items-center justify-center gap-2 bg-[#0e0a10] py-20 text-zinc-500">
@@ -487,7 +532,10 @@ export function HallOfFame() {
             </div>
           )}
 
-          {hofTab === "records" && (
+          {hofTab === "records" && hofGated && (
+            <HofPaywall heading="Single-game & season records" onUnlock={startHofCheckout} pending={hofCheckout.isPending} />
+          )}
+          {hofTab === "records" && !hofGated && (
             <div className="grid gap-3 md:grid-cols-2">
               {hiWeek ? (
                 <GoldGlowCard className="p-5">
@@ -586,7 +634,10 @@ export function HallOfFame() {
             </div>
           )}
 
-          {hofTab === "rivalries" && (
+          {hofTab === "rivalries" && hofGated && (
+            <HofPaywall heading="Head-to-head record book" onUnlock={startHofCheckout} pending={hofCheckout.isPending} />
+          )}
+          {hofTab === "rivalries" && !hofGated && (
             <div className="grid gap-4 md:grid-cols-2">
               {mostGames ? (
                 <RivalryPairWithDossier
