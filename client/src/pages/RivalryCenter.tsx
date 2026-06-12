@@ -48,11 +48,11 @@ const SUB: React.CSSProperties = { background: "rgba(255,255,255,.03)", border: 
 const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell", "rod s"];
 
 const HEAT: Record<string, { c: string; label: string }> = {
-  Cold: { c: "#6b7280", label: "Cold" },
-  Simmering: { c: "#d8a23a", label: "Simmering" },
-  Heated: { c: "#f0883e", label: "Heated" },
-  Burning: { c: "#e8552e", label: "Burning" },
-  Inferno: { c: "#d62828", label: "Inferno" },
+  Cold: { c: "#6b7280", label: "Acquaintance" },
+  Simmering: { c: "#d8a23a", label: "Rival" },
+  Heated: { c: "#f0883e", label: "Heated Rival" },
+  Burning: { c: "#e8552e", label: "Nemesis" },
+  Inferno: { c: "#d62828", label: "Blood Feud" },
 };
 
 const norm = (s: unknown) => String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -586,7 +586,7 @@ export function RivalryCenter() {
                           {rivalryGated ? (
                             <>
                               <span>Playoff elims <b style={{ color: TEXT }}>{n(p.playoffEliminations)}</b></span>
-                              <span>Severity <b style={{ color: TEXT }}>{String(p.heatLabel ?? "-")}</b></span>
+                              <span>Severity <b style={{ color: TEXT }}>{String(HEAT[String(p.heatLabel ?? "")]?.label ?? p.heatLabel ?? "-")}</b></span>
                               {p.lastMatchupSeason != null && <span>Last <b style={{ color: TEXT }}>{p.lastMatchupSeason}</b></span>}
                             </>
                           ) : (
@@ -864,7 +864,7 @@ function HeroStrip({ p, gated, yearsActive }: { p: Pair; gated?: boolean; yearsA
       ["Years Active", yearsActive && yearsActive > 0 ? `${yearsActive} seasons` : "-"],
       ["Playoff Eliminations", String(n(p.playoffEliminations))],
       ["Last Meeting", p.lastMatchupSeason != null ? String(p.lastMatchupSeason) : "-"],
-      ["Severity", String(p.heatLabel ?? "-")],
+      ["Severity", String(HEAT[String(p.heatLabel ?? "")]?.label ?? p.heatLabel ?? "-")],
     ];
     return (
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
