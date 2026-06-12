@@ -42,6 +42,7 @@ export function gateCareerReport(report: CareerReport, entitled: boolean): Gated
     topReasons: primary,
     patterns: [],
     readiness: null,
+    titlePath: { ...report.titlePath, currentScore: 0, moves: [] },
     careerStory: buildTeaserStory(report, lockedReasons),
     entitled: false,
     gated: true,

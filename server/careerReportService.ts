@@ -35,6 +35,7 @@ import { computeChampionshipPath } from "./championshipPath";
 import { buildChampionshipAuthority } from "./championshipAuthority";
 import { computeAcquisitionImpact } from "./acquisitionImpact";
 import { computeDraftReality } from "./draftRealitySimulator";
+import { computeTitlePath, type TitlePath } from "./titlePath";
 
 export type CareerArc =
   | "The Dynasty" | "The Breakthrough" | "The Contender"
@@ -91,6 +92,7 @@ export type CareerReport = {
   snapshot: CareerSnapshot | null;
   timeline: SeasonCard[];
   readiness: ChampionshipReadiness | null;
+  titlePath: TitlePath;
   patterns: PatternStat[];
   topReasons: WhyFinding[];
   confidence: WhyHaventIWonResult["confidence"];
@@ -155,6 +157,7 @@ export async function computeCareerReport(
       timeline: [], readiness: null, patterns: [], topReasons: why.findings, confidence: why.confidence, dataCoverage, note: note ?? why.note,
       needsOwnerSelection: why.needsOwnerSelection,
       teamCount: 0,
+      titlePath: computeTitlePath(null),
     };
   };
   // Setup-required: no owner selected for this league - surface the CTA, never a fallback owner.
@@ -323,6 +326,7 @@ export async function computeCareerReport(
     mode, title, subtitle, careerArc, careerStory, snapshot, timeline, readiness,
     patterns: finalPatterns, topReasons: finalTopReasons, obstaclesOvercome,
     confidence: why.confidence, dataCoverage, note: why.note,
+    titlePath: computeTitlePath(readiness),
   };
 }
 

@@ -6,7 +6,7 @@ import { useEffect, useRef, type ReactNode, type CSSProperties } from "react";
 import {
   Loader2, HelpCircle, Trophy, Target, TrendingDown, TrendingUp, Swords, Crown, Calendar, ShoppingCart,
   Medal, Activity, Shield, Sparkles, Flame, Gauge, AlertTriangle, CheckCircle2, ArrowDown, ArrowUp, Star,
-  Lock, ChevronRight,
+  Lock, ChevronRight, Route,
 } from "lucide-react";
 
 const PAGEBG: CSSProperties = {
@@ -375,6 +375,29 @@ export function WhyHaventIWon() {
               </div>
             </div>
 
+            {!data.gated && data.titlePath?.available && data.titlePath.moves.length > 0 && (
+              <div className={cn(PANEL, "p-5 sm:p-6")}>
+                <div className="mb-1 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wide text-lime-400">
+                  <Route className="h-4 w-4" /> Your Title Path
+                </div>
+                <p className="mb-4 text-[14px] text-white/55">{data.titlePath.moveCount} move{data.titlePath.moveCount === 1 ? "" : "s"} to {data.titlePath.targetTier} (currently {data.titlePath.currentTier}, readiness {data.titlePath.currentScore})</p>
+                <div className="space-y-3">
+                  {data.titlePath.moves.map((m) => (
+                    <div key={m.rank} className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lime-400/15 text-[13px] font-bold text-lime-300">{m.rank}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-bold text-white/90">{m.title}</div>
+                          <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", m.impact === "high" ? "bg-red-500/15 text-red-300" : m.impact === "medium" ? "bg-amber-500/15 text-amber-300" : "bg-white/10 text-white/60")}>{m.impact}</span>
+                        </div>
+                        <p className="mt-1 text-[14px] text-white/55">{m.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {data.gated && (
               <div className={cn(PANEL, "relative overflow-hidden p-6 sm:p-7 ring-1 ring-lime-400/30")}>
                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-lime-400/50 to-transparent" />
@@ -389,13 +412,18 @@ export function WhyHaventIWon() {
                   )}
                 </h3>
                 <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-white/60">
-                  Unlock every factor behind why you haven't won, your Championship Readiness score, your positional gaps versus league champions, and your championship readiness plan.
+                  Unlock every factor behind why you haven't won, your Championship Readiness score, your positional gaps versus league champions, and your Title Path.
                 </p>
+                {data.titlePath?.available && (
+                  <div className="mt-3 rounded-lg border border-lime-400/20 bg-lime-500/[0.05] p-3 text-[14px] leading-relaxed text-white/80">
+                    <span className="font-bold text-lime-300">Your Title Path: </span>{data.titlePath.summary}
+                  </div>
+                )}
                 <ul className="mt-4 grid gap-1.5 text-[14px] text-white/75 sm:grid-cols-2">
                   <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> All {data.totalReasons} championship blockers, ranked</li>
                   <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> Championship Readiness score and tier</li>
                   <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> Positional gaps vs league champions</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> Your championship readiness plan</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> Your Title Path - the exact moves to contention</li>
                 </ul>
                 <button
                   onClick={() => {
