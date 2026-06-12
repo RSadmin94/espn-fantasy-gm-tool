@@ -286,8 +286,8 @@ export function LandingPage() {
           <div className={cn(PANEL, "relative overflow-hidden p-9 text-center sm:p-14")}>
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-lime-400/40 to-transparent" />
             <span className={MONO}>Your league is waiting</span>
-            <h2 className="mx-auto mt-4 max-w-[20ch] text-[30px] font-black leading-tight tracking-tight sm:text-[42px]">
-              Eleven seasons of receipts. Time to read them.
+            <h2 className="mx-auto mt-4 max-w-[26ch] text-[30px] font-black leading-tight tracking-tight sm:text-[42px]">
+              Your league has a story. Go find out what it says about you.
             </h2>
             <p className="mx-auto mt-3 max-w-[46ch] text-[15px] text-white/55">
               Connect your ESPN league in under a minute. Free to start.
