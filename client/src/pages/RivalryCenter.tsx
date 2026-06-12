@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { displayOwnerName } from "@/lib/ownerName";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
@@ -222,11 +222,43 @@ export function RivalryCenter() {
   }, [allOwners, rodKey]);
 
   const pairs = useMemo<Pair[]>(() => {
-    const arr: Pair[] = Array.isArray(scoresQ.data) ? scoresQ.data : [];
+    const raw: any = scoresQ.data;
+    const arr: Pair[] = Array.isArray(raw?.rivalries) ? raw.rivalries : (Array.isArray(raw) ? raw : []);
     return [...arr]
       .filter((p) => !graveNames.has(String(p.rivalName ?? "").trim().toLowerCase()))
       .sort((a, b) => n(b.rivalryScore) - n(a.rivalryScore));
   }, [scoresQ.data, listQ.data]);
+
+  // -- Freemium gate (records + rivalries) ----------------------------------
+  const rivalryGated: boolean = Boolean((scoresQ.data as any)?.gated);
+  const lockedRivalries: number = Number((scoresQ.data as any)?.lockedRivalries ?? 0);
+  const totalRivalries: number = Number((scoresQ.data as any)?.totalRivalries ?? 0);
+  const checkoutMutation = (trpc as any).billing.createCheckoutSession.useMutation({
+    onSuccess: (res: any) => {
+      if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer");
+    },
+  });
+
+  // -- Conversion funnel events --------------------------------------------
+  const logEvent = (trpc as any).usageMonitor.logUIEvent.useMutation();
+  const snapshotLogged = useRef(false);
+  const paywallLogged = useRef(false);
+  useEffect(() => {
+    if (!snapshotLogged.current && pairs.length > 0) {
+      snapshotLogged.current = true;
+      logEvent.mutate({ eventType: "feature_open", featureName: "rivalry_snapshot_viewed" });
+    }
+  }, [pairs.length]);
+  useEffect(() => {
+    if (rivalryGated && !paywallLogged.current) {
+      paywallLogged.current = true;
+      logEvent.mutate({ eventType: "feature_open", featureName: "rivalry_paywall_viewed" });
+    }
+  }, [rivalryGated]);
+  const startCheckout = () => {
+    logEvent.mutate({ eventType: "cta_click", featureName: "rivalry_unlock_clicked" });
+    checkoutMutation.mutate({});
+  };
 
   const keyForRival = (p: Pair) => nameToKey[norm(p.rivalName)] ?? undefined;
   // ── league-wide all-pairs rivalries (every owner's dossier) ──────────────
@@ -368,6 +400,35 @@ export function RivalryCenter() {
       </div>
 
       <main className="space-y-3">
+        {rivalryGated && !loading && (
+          <Panel>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: ACCENT }}>
+                  <Swords className="h-4 w-4" /> Records Locked
+                </div>
+                <h3 className="mt-2 text-2xl font-black leading-tight">
+                  {totalRivalries > 1 ? `${totalRivalries} rivalries on your ledger.` : "Your full rivalry ledger."}{" "}
+                  The records are locked.
+                </h3>
+                <p className="mt-2 max-w-xl text-sm" style={{ color: MUTED }}>
+                  You can see your hottest rival above. Unlock the head-to-head records, heartbreak
+                  losses, playoff scars, every other rivalry
+                  {lockedRivalries > 0 ? ` (${lockedRivalries} more)` : ""}, and the league-wide rivalry grid.
+                </p>
+              </div>
+              <button
+                onClick={startCheckout}
+                disabled={checkoutMutation.isPending}
+                className="shrink-0 inline-flex items-center gap-2 rounded-[10px] px-5 py-3 text-sm font-extrabold"
+                style={{ background: ACCENT, color: "#1e1623" }}
+              >
+                {checkoutMutation.isPending ? "Opening..." : "Unlock Rivalry Records"}
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </Panel>
+        )}
         {loading ? (
           <Panel>
             <div className="py-16 text-center text-sm" style={{ color: MUTED }}>Loading league rivalries…</div>

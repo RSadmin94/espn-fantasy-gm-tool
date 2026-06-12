@@ -4,7 +4,8 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
-import { publicProcedure, protectedProcedure, subscribedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, subscribedProcedure, router, isUserEntitled } from "./_core/trpc";
+import { gateRivalryScores, gateH2H, gateRivalryDossier } from "./leagueIntelGating";
 import { invokeLLM, type Message } from "./_core/llm";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 import { injuryRouter } from "./injuryRouter";
@@ -572,11 +573,12 @@ export const appRouter = router({
         return remap.get(raw) ?? raw;
       };
       const focalKey = canonicalForMember(focalMemberId, focalName);
-      return scores.map((p) => ({
+      const mappedScores = scores.map((p) => ({
         ...p,
         focalKey,
         rivalKey: canonicalForMember(String(p.rivalId), String(p.rivalName ?? "")),
       }));
+      return gateRivalryScores(mappedScores, isUserEntitled(ctx.user));
     }),
     /** Compute and persist rivalry scores (manual trigger) */
     /** All-time head-to-head by owner identity, computed from the ESPN combined cache (same source the Matchups tab falls back to). */
@@ -593,7 +595,7 @@ export const appRouter = router({
       const lid = h2hLid;
       const salt = input?.activeLeagueKey ?? "__none__";
       // Cache the whole all-pairs scan (≈18 sequential cache reads) for 10 min, per league/user.
-      return memCache(`rivalryH2H:${lid}:${userId ?? "anon"}:${salt}`, 10 * 60_000, async () => {
+      const h2hResult = await memCache(`rivalryH2H:${lid}:${userId ?? "anon"}:${salt}`, 10 * 60_000, async () => {
       const seasons = await getAllCachedSeasons(undefined, userId);
       if (!seasons.length) return { owners: [] as Array<{ name: string; seasons: number; ownerKey: string }>, pairs: [] as Array<Record<string, unknown>> };
       const memberName = new Map<string, string>();
@@ -679,6 +681,7 @@ export const appRouter = router({
       }));
       return { owners, pairs };
       });
+      return gateH2H(h2hResult, isUserEntitled(ctx.user));
     }),
 
     refresh: protectedProcedure.mutation(async ({ ctx }) => {
@@ -11594,7 +11597,7 @@ Provide:
           includeHistoricalOwners || !input.rivalryEligibleOwnerKeys?.length
             ? null
             : new Set(input.rivalryEligibleOwnerKeys.map((k) => k.trim()).filter(Boolean));
-        return loadRivalryDossier({
+        const dossier = await loadRivalryDossier({
           db,
           leagueId: lid,
           ownerKey: input.ownerKey.trim(),
@@ -11602,6 +11605,8 @@ Provide:
           activeOwnerKeysInSeason: activeFilter,
           opponentOwnerKeyForPair: input.opponentOwnerKeyForPair?.trim() || null,
         });
+        if (!dossier) return dossier;
+        return gateRivalryDossier(dossier, isUserEntitled(ctx.user));
       }),
 
   }),

@@ -335,7 +335,9 @@ export function CommissionerCommandCenter() {
   }, [standingsQ.data, hofQ.data]);
 
   // Rivalry — biggest active
-  const rivalries = rivalryQ.data ?? [];
+  const rivalries: any[] = Array.isArray((rivalryQ.data as any)?.rivalries)
+    ? (rivalryQ.data as any).rivalries
+    : (Array.isArray(rivalryQ.data) ? rivalryQ.data : []);
   const biggestRivalry = rivalries.length > 0 ? rivalries[0] : null;
 
   // Storylines — hottest

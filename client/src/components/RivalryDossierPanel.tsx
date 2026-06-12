@@ -152,6 +152,11 @@ export function RivalryDossierPanel({
     { enabled: leagueKeyReady && queryKey.length > 0, staleTime: 60_000 },
   );
 
+  const dossierCheckout = (trpc as any).billing.createCheckoutSession.useMutation({
+    onSuccess: (res: any) => { if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer"); },
+  });
+  const dossierLog = (trpc as any).usageMonitor.logUIEvent.useMutation();
+
   useEffect(() => {
     const opps = q.data?.opponents;
     // React #185 fix: opponentKey is part of the query key, so changing it makes
@@ -188,6 +193,32 @@ export function RivalryDossierPanel({
       <p className="text-sm" style={{ color: MUTED }}>
         No dossier for this owner — they may not resolve against gmTeams / gmMatchups yet.
       </p>
+    );
+  }
+
+  if ((data as any).gated) {
+    return (
+      <div className="space-y-4 p-4" style={{ ...PANEL, boxShadow: "0 0 40px rgba(0,0,0,0.45)" }}>
+        <div className="flex items-center gap-2" style={{ color: ACCENT }}>
+          <Swords className="h-4 w-4" />
+          <h3 className="text-sm font-extrabold uppercase tracking-[0.18em]">Rivalry Records Locked</h3>
+        </div>
+        <p className="text-sm" style={{ color: MUTED }}>
+          The full head-to-head record, heartbreak losses, playoff scars, points for and against, and
+          the meeting-by-meeting timeline are part of the paid Rivalry Center.
+        </p>
+        <button
+          onClick={() => {
+            dossierLog.mutate({ eventType: "cta_click", featureName: "rivalry_dossier_unlock_clicked" });
+            dossierCheckout.mutate({});
+          }}
+          disabled={dossierCheckout.isPending}
+          className="inline-flex items-center gap-2 rounded-[10px] px-5 py-3 text-sm font-extrabold"
+          style={{ background: ACCENT, color: "#1e1623" }}
+        >
+          {dossierCheckout.isPending ? "Opening..." : "Unlock Rivalry Records"}
+        </button>
+      </div>
     );
   }
 
