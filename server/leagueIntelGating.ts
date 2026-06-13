@@ -200,3 +200,35 @@ export function gateLeagueDna<
     entitled: false,
   } as T & { gated: boolean; entitled: boolean };
 }
+
+// --- Owner Profiles gating ---------------------------------------------------
+// Free = the Owner Card: identity + public record (snapshot: career record, win %,
+// titles, best/worst season, season-by-season). Paid = the Scouting Report: how an
+// owner drafts, keeps, and trades, the matchup-intel exploit data, the scouting
+// writeup, and the head-to-head Compare tool. Scouting OTHER owners is the competitive
+// weapon, so the deep fields are redacted server-side for free users (not just hidden).
+export function gateOwnerProfile<
+  T extends {
+    draftDNA: unknown;
+    keeperDNA: unknown;
+    activityDNA: unknown;
+    scoutingSummary: unknown;
+    matchupIntel: unknown;
+    comparison: unknown;
+    headToHead: unknown;
+  },
+>(payload: T, entitled: boolean): T & { gated: boolean; entitled: boolean } {
+  if (entitled) return { ...payload, gated: false, entitled: true };
+  return {
+    ...payload,
+    draftDNA: null,
+    keeperDNA: null,
+    activityDNA: null,
+    scoutingSummary: null,
+    matchupIntel: [],
+    comparison: null,
+    headToHead: null,
+    gated: true,
+    entitled: false,
+  } as T & { gated: boolean; entitled: boolean };
+}

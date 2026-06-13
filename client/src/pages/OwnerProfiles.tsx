@@ -159,6 +159,23 @@ function MatchupTag({ tag }: { tag: string }) {
 
 // ─── Owner card ───────────────────────────────────────────────────────────────
 
+function ScoutingLock({ title, blurb, onUnlock, pending }: { title: string; blurb: string; onUnlock: () => void; pending: boolean }) {
+  return (
+    <div className="rounded-2xl border border-[#a3e635]/30 bg-[#a3e635]/[0.05] p-6 text-center sm:p-8">
+      <Crosshair className="mx-auto mb-3 h-8 w-8 text-[#a3e635]" aria-hidden />
+      <h3 className="text-xl font-black tracking-tight text-zinc-50 sm:text-2xl">{title}</h3>
+      <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-zinc-400">{blurb}</p>
+      <p className="mx-auto mt-3 max-w-md text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+        Draft tendencies - Keeper strategy - Activity DNA - Matchup intel - Scouting report - Owner comparison
+      </p>
+      <button type="button" onClick={onUnlock} disabled={pending}
+        className="mt-5 inline-flex items-center gap-2 rounded-[10px] bg-[#a3e635] px-6 py-3 text-sm font-extrabold text-[#1e1623] transition-opacity disabled:opacity-60">
+        {pending ? "Opening..." : "Unlock the Scouting Report"} <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 function OwnerCard({ o, selected, onClick }: { o: any; selected: boolean; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
@@ -297,6 +314,17 @@ function ProfilePanel({
   const [showRivalryDossier, setShowRivalryDossier] = useState(false);
   const [profileTab, setProfileTab] = useState<"snapshot" | "draft" | "keeper" | "activity">("draft");
   const [dataSourceOpen, setDataSourceOpen] = useState(false);
+
+  const gated = Boolean(p?.gated);
+  const scoutCheckout = (trpc as any).billing.createCheckoutSession.useMutation({
+    onSuccess: (r: any) => { if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer"); },
+  });
+  const scoutLog = (trpc as any).usageMonitor.logUIEvent.useMutation();
+  const scoutSnapSeen = useRef(false);
+  const scoutPaySeen = useRef(false);
+  useEffect(() => { if (!scoutSnapSeen.current && p) { scoutSnapSeen.current = true; scoutLog.mutate({ eventType: "feature_open", featureName: "owner_profile_snapshot_viewed" }); } }, [p]);
+  useEffect(() => { if (gated && !scoutPaySeen.current) { scoutPaySeen.current = true; scoutLog.mutate({ eventType: "feature_open", featureName: "owner_profile_paywall_viewed" }); } }, [gated]);
+  const startScoutCheckout = () => { scoutLog.mutate({ eventType: "cta_click", featureName: "owner_profile_unlock_clicked" }); scoutCheckout.mutate({}); };
 
   useEffect(() => {
     setIntelExpanded(null);
@@ -559,6 +587,7 @@ function ProfilePanel({
       </div>
 
       {/* Compare owners */}
+      {!gated && (
       <div className={cn(PROFILE_SURFACE, "overflow-hidden")}>
         <div className="flex flex-col gap-3 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2">
@@ -695,6 +724,7 @@ function ProfilePanel({
           </p>
         )}
       </div>
+      )}
 
       {/* Tab panels — layout matches Draft DNA mockup (dark cards, position colors, gold insights) */}
       {profileTab === "snapshot" && (
@@ -836,7 +866,10 @@ function ProfilePanel({
         </div>
       )}
 
-      {profileTab === "draft" && (
+      {profileTab === "draft" && gated && (
+        <ScoutingLock title="Draft DNA" blurb="See exactly how this manager drafts - round-by-round tendencies, position bias, reaches and value - so you can predict and counter their board." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
+      )}
+      {profileTab === "draft" && !gated && (
         <div className="space-y-4">
           <ProfileShellCard title="Draft tendencies by round">
             {draftSeasonsCovered.length > 0 && (
@@ -1043,7 +1076,10 @@ function ProfilePanel({
         </div>
       )}
 
-      {profileTab === "keeper" && (
+      {profileTab === "keeper" && gated && (
+        <ScoutingLock title="Keeper DNA" blurb="Know who they keep and when - keeper rate, average keeper round, and the positions they protect year after year." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
+      )}
+      {profileTab === "keeper" && !gated && (
         <div className={cn(PROFILE_SURFACE, "overflow-hidden p-4 sm:p-5")}>
           <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-zinc-100">
             <Trophy className="h-4 w-4 text-amber-500/80" aria-hidden />
@@ -1079,11 +1115,15 @@ function ProfilePanel({
         </div>
       )}
 
-      {profileTab === "activity" && (
+      {profileTab === "activity" && gated && (
+        <ScoutingLock title="Activity DNA" blurb="Track their in-season moves - waiver aggression, trade and add/drop volume, and the weeks they tend to panic." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
+      )}
+      {profileTab === "activity" && !gated && (
         <ActivityDnaCard ownerKey={profileLookupKey} />
       )}
 
       {/* 5. Matchup Intel */}
+      {!gated && (
       <Section title="Matchup Intel" icon={<Swords className="h-4 w-4" />} defaultOpen={false}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-[11px] text-zinc-500">
@@ -1249,11 +1289,14 @@ function ProfilePanel({
           </>
         )}
       </Section>
+      )}
 
       {/* 6. Scouting Summary */}
+      {!gated && (
       <Section title="Scouting Summary" icon={<FileText className="h-4 w-4" />} defaultOpen={false}>
         <p className="text-sm text-foreground leading-relaxed">{str(p.scoutingSummary)}</p>
       </Section>
+      )}
 
     </div>
   );

@@ -5,7 +5,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, subscribedProcedure, router, isUserEntitled } from "./_core/trpc";
-import { gateRivalryScores, gateH2H, gateRivalryDossier, gateHallOfFame } from "./leagueIntelGating";
+import { gateRivalryScores, gateH2H, gateRivalryDossier, gateHallOfFame, gateOwnerProfile } from "./leagueIntelGating";
 import { invokeLLM, type Message } from "./_core/llm";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 import { injuryRouter } from "./injuryRouter";
@@ -11561,13 +11561,16 @@ Provide:
                 }
               : null;
 
-        return {
-          leagueId: lid,
-          ...primary,
-          comparisonCandidates,
-          comparison,
-          headToHead,
-        };
+        return gateOwnerProfile(
+          {
+            leagueId: lid,
+            ...primary,
+            comparisonCandidates,
+            comparison,
+            headToHead,
+          },
+          isUserEntitled(ctx.user),
+        );
       }),
 
     /** Rivalry Dossier: focal owner vs opponents from completed `gmMatchups` (RS + playoffs), canonical ownerKey. */
