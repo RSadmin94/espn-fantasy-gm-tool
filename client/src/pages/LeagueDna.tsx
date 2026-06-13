@@ -156,11 +156,12 @@ export function LeagueDna() {
                 ] as Array<[string, any]>).map(([label, r]) => (
                   <div key={label} style={SUB} className="flex flex-col items-center px-3 py-5">
                     {r.method === "sim" && r.current ? (
-                      <div className="flex items-end gap-4">
+                      <div className="flex items-end gap-2.5">
                         <div className="flex flex-col items-center">
                           <div className="text-4xl font-black tabular-nums" style={{ color: gradeColor(r.current.grade) }}>{r.current.grade}</div>
                           <div className="mt-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>{"'" + String(r.current.season).slice(2)}</div>
                         </div>
+                        <div className="text-3xl font-black leading-[1.15]" style={{ color: MUTED }}>/</div>
                         <div className="flex flex-col items-center">
                           <div className="text-4xl font-black tabular-nums" style={{ color: gradeColor(r.overall.grade) }}>{r.overall.grade}</div>
                           <div className="mt-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Career</div>

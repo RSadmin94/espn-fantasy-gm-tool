@@ -47,15 +47,24 @@ function SectionTitle({ children, color }: { children: ReactNode; color: string 
 }
 
 function Headliner({ m }: { m: CastMember }) {
-  const badge = [...m.badges].sort((a, b) => (BADGE_RANK[a.tier] ?? 9) - (BADGE_RANK[b.tier] ?? 9))[0];
-  const extra = m.badges.length - 1;
+  const champ = m.badges.find((b) => b.tier === "champion");
+  const others = m.badges.filter((b) => b.tier !== "champion");
+  const fallback = !champ && others.length ? others[0] : null;
   return (
     <div className="relative overflow-hidden rounded-2xl p-5" style={{ background: "linear-gradient(160deg,rgba(245,197,24,.12),rgba(245,197,24,.03))", border: `1px solid ${GOLD}55` }}>
       <Crown className="absolute right-3 top-3 h-7 w-7 opacity-30" style={{ color: GOLD }} />
-      <div className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: GOLD }}>{badge?.label}{extra > 0 ? ` +${extra}` : ""}</div>
+      {others.length > 0 && (
+        <div className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: GOLD }}>{others.map((b) => b.label).join(" · ")}</div>
+      )}
       <div className="mt-1 text-2xl font-black leading-tight">{m.ownerName}{m.isYou && <YouTag />}</div>
-      <div className="mt-1 text-sm font-semibold" style={{ color: "#cfd2d8" }}>{m.archetype}{m.identityRank ? ` · #${m.identityRank.rank}/${m.identityRank.of}` : ""}</div>
-      <div className="mt-2 text-xs leading-snug" style={{ color: MUTED }}>{badge?.receipt}</div>
+      {champ && (
+        <>
+          <div className="mt-1 text-lg font-black" style={{ color: GOLD }}>{champ.label}</div>
+          <div className="text-xs leading-snug" style={{ color: MUTED }}>{champ.receipt}</div>
+        </>
+      )}
+      {fallback && <div className="mt-1 text-xs leading-snug" style={{ color: MUTED }}>{fallback.receipt}</div>}
+      <div className="mt-2 text-sm font-semibold" style={{ color: "#cfd2d8" }}>{m.archetype}{m.identityRank ? ` · #${m.identityRank.rank}/${m.identityRank.of}` : ""}</div>
     </div>
   );
 }
