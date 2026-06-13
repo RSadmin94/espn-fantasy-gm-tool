@@ -25,7 +25,7 @@ export type LeagueDnaProfile = {
   archetypeDesc: string;
   archetypeReceipt: string;
   identityRank: { rank: number; of: number } | null;
-  badges: Array<{ label: string; receipt: string; tier: "champion" | "dynasty" | "villain" | "gatekeeper" }>;
+  badges: Array<{ label: string; receipt: string; tier: "champion" | "dynasty" | "villain" | "gatekeeper" | "playoff_fixture" }>;
   primaryTrait: string;
   blindSpot: string;
   leagueTwin: { ownerName: string; similarityPct: number } | null;
@@ -241,7 +241,7 @@ function badgeStats(managers: ManagerRawData[], medals: MedalRow[]): Map<string,
   return out;
 }
 
-type EarnedBadge = { label: string; receipt: string; tier: "champion" | "dynasty" | "villain" | "gatekeeper" };
+type EarnedBadge = { label: string; receipt: string; tier: "champion" | "dynasty" | "villain" | "gatekeeper" | "playoff_fixture" };
 
 function computeEarnedBadges(focalId: string, stats: Map<string, BadgeStat>): EarnedBadge[] {
   const me = stats.get(focalId);
@@ -267,8 +267,13 @@ function computeEarnedBadges(focalId: string, stats: Map<string, BadgeStat>): Ea
     out.push({ tier: "villain", label: "League Villain", receipt: `More rings than anyone in the league (${me.titles}) - the one they are all chasing.` });
   if (me.titles === 0 && me.seasons >= 3 && me.winPct >= cutoff)
     out.push({ tier: "gatekeeper", label: "The Gatekeeper", receipt: `A top-tier record over ${me.seasons} seasons - ${Math.round(me.winPct)}% wins, still chasing the ring.` });
+  // Playoff Fixture: the perennial-contender-no-ring reputation. Solves the "no badge"
+  // ambiguity - a manager who makes the playoffs nearly every year reads very differently
+  // from one who never does, yet both were badgeless before this.
+  if (me.titles === 0 && me.seasons >= 4 && me.playoffRate >= 60)
+    out.push({ tier: "playoff_fixture", label: "Playoff Fixture", receipt: `Made the playoffs ${Math.round(me.playoffRate)}% of ${me.seasons} seasons - always in the hunt, still chasing the ring.` });
 
-  const order: Record<EarnedBadge["tier"], number> = { villain: 0, dynasty: 1, champion: 2, gatekeeper: 3 };
+  const order: Record<EarnedBadge["tier"], number> = { villain: 0, dynasty: 1, champion: 2, gatekeeper: 3, playoff_fixture: 4 };
   return out.sort((a, b) => order[a.tier] - order[b.tier]);
 }
 
