@@ -20,9 +20,15 @@ export type LeagueDnaProfile = {
   blindSpot: string;
   leagueTwin: { ownerName: string; similarityPct: number } | null;
   scorecard: { trading: DnaGrade; drafting: DnaGrade; roster: DnaGrade };
-  /** How the Drafting grade was derived: the draft-only "no moves" simulation when
-   *  coverage exists, else null (style-based fallback). seasonsUsed = covered seasons. */
-  draftBasis: { method: "draft-only" | "style"; seasonsUsed: number; seasons: number[] };
+  /** Two Drafting ratings from the draft-only ("no moves") simulation: `current`
+   *  (the last covered season) and `overall` (career average). method="style" when no
+   *  weekly coverage exists - then current is null and overall mirrors the scorecard. */
+  draftRating: {
+    method: "draft-only" | "style";
+    current: { grade: DnaGrade; season: number } | null;
+    overall: { grade: DnaGrade; seasonsUsed: number };
+    perSeason: Array<{ season: number; grade: DnaGrade }>;
+  };
   // ---- PAID dossier ----
   draftDna: ManagerDNA["draft"] | null;
   tradeDna: ManagerDNA["trade"] | null;
@@ -308,6 +314,17 @@ export function buildLeagueDnaProfile(args: {
   const focal = allDna.find((d) => d.memberId === focalMemberId);
   if (!focal) return null;
   const { archetype, desc } = classifyArchetype(focal);
+  const scorecard = computeScorecard(focal, allDna, managers, draftOnly?.overall.grade100 ?? null);
+  const draftRating: LeagueDnaProfile["draftRating"] = {
+    method: draftOnly ? "draft-only" : "style",
+    current: draftOnly?.current
+      ? { grade: gradeFromScore(draftOnly.current.grade100), season: draftOnly.current.season }
+      : null,
+    overall: { grade: scorecard.drafting, seasonsUsed: draftOnly?.overall.seasonsUsed ?? 0 },
+    perSeason: draftOnly
+      ? draftOnly.perSeason.map((x) => ({ season: x.season, grade: gradeFromScore(x.grade100) }))
+      : [],
+  };
   return {
     ownerName: focal.ownerName,
     seasonsAnalyzed: focal.seasonsAnalyzed,
@@ -316,10 +333,8 @@ export function buildLeagueDnaProfile(args: {
     primaryTrait: computePrimaryTrait(focal, allDna),
     blindSpot: computeBlindSpot(focal, allDna, managers),
     leagueTwin: computeLeagueTwin(focal, allDna),
-    scorecard: computeScorecard(focal, allDna, managers, draftOnly?.grade100 ?? null),
-    draftBasis: draftOnly
-      ? { method: "draft-only", seasonsUsed: draftOnly.seasonsUsed, seasons: draftOnly.seasons }
-      : { method: "style", seasonsUsed: 0, seasons: [] },
+    scorecard,
+    draftRating,
     draftDna: focal.draft,
     tradeDna: focal.trade,
     rosterDna: { waiver: focal.waiver, tilt: focal.tilt },

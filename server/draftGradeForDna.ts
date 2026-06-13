@@ -15,9 +15,12 @@ import { sql } from "drizzle-orm";
 import { computeDraftReality } from "./draftRealitySimulator";
 
 export type DraftOnlyGrade = {
-  grade100: number;      // 0-100, league-rank based, averaged across covered seasons
-  seasonsUsed: number;   // how many seasons fed the average
-  seasons: number[];     // which seasons (descending)
+  // CAREER rating: average draft-only grade across all covered seasons.
+  overall: { grade100: number; seasonsUsed: number; seasons: number[] };
+  // CURRENT status: the most recent covered season's draft-only grade.
+  current: { grade100: number; season: number } | null;
+  // Full per-season series (descending), for display + future DNA Evolution.
+  perSeason: Array<{ season: number; grade100: number }>;
 } | null;
 
 type SeasonCache = {
@@ -91,22 +94,23 @@ export async function careerDraftOnlyGrade(
   if (seasons.length === 0) return null;
 
   const nk = norm(focalName);
-  const grades: number[] = [];
-  const used: number[] = [];
+  const pairs: Array<{ season: number; grade100: number }> = [];
 
   for (const season of seasons) {
+    // `seasons` is DESC, so pairs[0] ends up the most recent covered season.
     const sc = await getSeason(leagueId, season);
     // Skip seasons that lack a real draft+weekly picture (Limited) or too few weeks
     // (e.g. an in-progress season whose draft IDs aren't captured yet).
     if (sc.confidence === "Limited" || sc.weeksSimulated < MIN_WEEKS) continue;
     const g = sc.byKey[focalKey] ?? sc.byName[nk];
-    if (g != null) {
-      grades.push(g);
-      used.push(season);
-    }
+    if (g != null) pairs.push({ season, grade100: g });
   }
 
-  if (grades.length === 0) return null;
-  const grade100 = grades.reduce((a, b) => a + b, 0) / grades.length;
-  return { grade100, seasonsUsed: grades.length, seasons: used };
+  if (pairs.length === 0) return null;
+  const overallAvg = pairs.reduce((a, p) => a + p.grade100, 0) / pairs.length;
+  return {
+    overall: { grade100: overallAvg, seasonsUsed: pairs.length, seasons: pairs.map((p) => p.season) },
+    current: { grade100: pairs[0].grade100, season: pairs[0].season },
+    perSeason: pairs,
+  };
 }

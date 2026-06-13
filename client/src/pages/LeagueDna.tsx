@@ -120,16 +120,37 @@ export function LeagueDna() {
             <div style={PANEL} className="p-5">
               <Eyebrow>DNA Scorecard</Eyebrow>
               <div className="mt-4 grid grid-cols-3 gap-3">
-                {([["Trading", data.scorecard.trading], ["Drafting", data.scorecard.drafting], ["Roster Construction", data.scorecard.roster]] as Array<[string, string]>).map(([label, grade]) => (
-                  <div key={label} style={SUB} className="flex flex-col items-center px-3 py-5">
-                    <div className="text-5xl font-black tabular-nums" style={{ color: gradeColor(grade) }}>{grade}</div>
-                    <div className="mt-2 text-center text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>{label}</div>
-                  </div>
-                ))}
+                <div style={SUB} className="flex flex-col items-center px-3 py-5">
+                  <div className="text-5xl font-black tabular-nums" style={{ color: gradeColor(data.scorecard.trading) }}>{data.scorecard.trading}</div>
+                  <div className="mt-2 text-center text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Trading</div>
+                </div>
+
+                <div style={SUB} className="flex flex-col items-center px-3 py-5">
+                  {data.draftRating?.method === "draft-only" && data.draftRating.current ? (
+                    <div className="flex items-end gap-5">
+                      <div className="flex flex-col items-center">
+                        <div className="text-4xl font-black tabular-nums" style={{ color: gradeColor(data.draftRating.current.grade) }}>{data.draftRating.current.grade}</div>
+                        <div className="mt-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>{"'" + String(data.draftRating.current.season).slice(2)}</div>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <div className="text-4xl font-black tabular-nums" style={{ color: gradeColor(data.draftRating.overall.grade) }}>{data.draftRating.overall.grade}</div>
+                        <div className="mt-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Career</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-5xl font-black tabular-nums" style={{ color: gradeColor(data.scorecard.drafting) }}>{data.scorecard.drafting}</div>
+                  )}
+                  <div className="mt-2 text-center text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Drafting</div>
+                </div>
+
+                <div style={SUB} className="flex flex-col items-center px-3 py-5">
+                  <div className="text-5xl font-black tabular-nums" style={{ color: gradeColor(data.scorecard.roster) }}>{data.scorecard.roster}</div>
+                  <div className="mt-2 text-center text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Roster Construction</div>
+                </div>
               </div>
-              {data.draftBasis?.method === "draft-only" ? (
+              {data.draftRating?.method === "draft-only" ? (
                 <p className="mt-3 text-[11px] leading-relaxed" style={{ color: MUTED }}>
-                  Drafting is your <b style={{ color: TEXT }}>draft-only record</b> - what your drafted roster would have done with zero moves after draft day - across {data.draftBasis.seasonsUsed} season{data.draftBasis.seasonsUsed === 1 ? "" : "s"} with full weekly data.
+                  Drafting shows two ratings from your <b style={{ color: TEXT }}>draft-only record</b> - what your drafted roster would have done with zero moves after draft day: <b style={{ color: TEXT }}>{data.draftRating.current?.season}</b> as your current status, and your <b style={{ color: TEXT }}>career</b> average over {data.draftRating.overall.seasonsUsed} season{data.draftRating.overall.seasonsUsed === 1 ? "" : "s"} with full weekly data.
                 </p>
               ) : (
                 <p className="mt-3 text-[11px] leading-relaxed" style={{ color: MUTED }}>
