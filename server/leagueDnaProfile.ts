@@ -5,6 +5,7 @@
 // scorecard) and the full paid dossier. Pure functions; no DB access.
 
 import type { ManagerDNA, ManagerRawData } from "./leagueDNA";
+import type { DraftOnlyGrade } from "./draftGradeForDna";
 
 export type DnaGrade =
   | "A+" | "A" | "A-" | "B+" | "B" | "B-" | "C+" | "C" | "C-" | "D+" | "D" | "D-";
@@ -19,6 +20,9 @@ export type LeagueDnaProfile = {
   blindSpot: string;
   leagueTwin: { ownerName: string; similarityPct: number } | null;
   scorecard: { trading: DnaGrade; drafting: DnaGrade; roster: DnaGrade };
+  /** How the Drafting grade was derived: the draft-only "no moves" simulation when
+   *  coverage exists, else null (style-based fallback). seasonsUsed = covered seasons. */
+  draftBasis: { method: "draft-only" | "style"; seasonsUsed: number; seasons: number[] };
   // ---- PAID dossier ----
   draftDna: ManagerDNA["draft"] | null;
   tradeDna: ManagerDNA["trade"] | null;
@@ -239,7 +243,7 @@ function ownerOutcomes(managers: ManagerRawData[]): Map<string, { successScore: 
  *  (win %, playoff rate, titles, points), with managing style as a secondary tilt.
  *  That is why a champion can never land a failing grade - process alone is never
  *  enough to sink a winner or inflate a loser. */
-function computeScorecard(focal: ManagerDNA, all: ManagerDNA[], managers: ManagerRawData[]): { trading: DnaGrade; drafting: DnaGrade; roster: DnaGrade } {
+function computeScorecard(focal: ManagerDNA, all: ManagerDNA[], managers: ManagerRawData[], draftOnlyGrade100: number | null = null): { trading: DnaGrade; drafting: DnaGrade; roster: DnaGrade } {
   const outc = ownerOutcomes(managers);
   const success = (d: ManagerDNA) => outc.get(d.memberId)?.successScore ?? 50;
   const pf = (d: ManagerDNA) => outc.get(d.memberId)?.pfPerGame ?? 0;
@@ -256,9 +260,16 @@ function computeScorecard(focal: ManagerDNA, all: ManagerDNA[], managers: Manage
   const taP = leaguePercentile(tradingComposite(focal), tradeActVals);
   const stP = leaguePercentile(rosterComposite(focal), steadyVals);
 
+  // Drafting: when we have the draft-only ("no moves after draft day") simulation,
+  // that IS the grade - it isolates draft skill from trades/waivers/lineup-setting.
+  // Fall back to the style+results blend only where weekly coverage is missing.
+  const draftingGrade = draftOnlyGrade100 != null
+    ? gradeFromScore(draftOnlyGrade100)
+    : gradeFromScore(0.6 * sP + 0.4 * dpP);
+
   return {
     trading: gradeFromScore(0.55 * sP + 0.45 * taP),
-    drafting: gradeFromScore(0.6 * sP + 0.4 * dpP),
+    drafting: draftingGrade,
     roster: gradeFromScore(0.55 * pfP + 0.25 * sP + 0.2 * stP),
   };
 }
@@ -291,8 +302,9 @@ export function buildLeagueDnaProfile(args: {
   allDna: ManagerDNA[];
   focalMemberId: string;
   managers: ManagerRawData[];
+  draftOnly?: DraftOnlyGrade;
 }): LeagueDnaProfile | null {
-  const { allDna, focalMemberId, managers } = args;
+  const { allDna, focalMemberId, managers, draftOnly } = args;
   const focal = allDna.find((d) => d.memberId === focalMemberId);
   if (!focal) return null;
   const { archetype, desc } = classifyArchetype(focal);
@@ -304,7 +316,10 @@ export function buildLeagueDnaProfile(args: {
     primaryTrait: computePrimaryTrait(focal, allDna),
     blindSpot: computeBlindSpot(focal, allDna, managers),
     leagueTwin: computeLeagueTwin(focal, allDna),
-    scorecard: computeScorecard(focal, allDna, managers),
+    scorecard: computeScorecard(focal, allDna, managers, draftOnly?.grade100 ?? null),
+    draftBasis: draftOnly
+      ? { method: "draft-only", seasonsUsed: draftOnly.seasonsUsed, seasons: draftOnly.seasons }
+      : { method: "style", seasonsUsed: 0, seasons: [] },
     draftDna: focal.draft,
     tradeDna: focal.trade,
     rosterDna: { waiver: focal.waiver, tilt: focal.tilt },

@@ -127,6 +127,15 @@ export function LeagueDna() {
                   </div>
                 ))}
               </div>
+              {data.draftBasis?.method === "draft-only" ? (
+                <p className="mt-3 text-[11px] leading-relaxed" style={{ color: MUTED }}>
+                  Drafting is your <b style={{ color: TEXT }}>draft-only record</b> - what your drafted roster would have done with zero moves after draft day - across {data.draftBasis.seasonsUsed} season{data.draftBasis.seasonsUsed === 1 ? "" : "s"} with full weekly data.
+                </p>
+              ) : (
+                <p className="mt-3 text-[11px] leading-relaxed" style={{ color: MUTED }}>
+                  Drafting is style-based for now - this league has no seasons with full weekly player data to run the no-move simulation.
+                </p>
+              )}
             </div>
 
             {/* ----- Paid dossier OR paywall ----- */}

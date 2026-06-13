@@ -17,7 +17,7 @@
 
 import { z } from "zod";
 import { router, publicProcedure, isUserEntitled } from "./_core/trpc";
-import { getCachedView, getAllCachedSeasons } from "./db";
+import { getCachedView, getAllCachedSeasons, resolveActiveLeagueId } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import {
   calcLeagueDNA,
@@ -30,6 +30,7 @@ import {
 import { classifyDraftPickRawPick } from "./draftTruth";
 import { buildLeagueDnaProfile } from "./leagueDnaProfile";
 import { gateLeagueDna } from "./leagueIntelGating";
+import { careerDraftOnlyGrade } from "./draftGradeForDna";
 
 // ─── ESPN data extraction helpers ────────────────────────────────────────────
 
@@ -228,7 +229,23 @@ export const dnaRouter = router({
     const focalLabel = await focalH2hLabelForUser(ctx.user.id);
     const managers = await buildManagerRawData(ctx.user.id);
     const allDna = calcLeagueDNA(managers, focalLabel);
-    const profile = buildLeagueDnaProfile({ allDna, focalMemberId: co.ownerId, managers });
+    const focalName = allDna.find((d) => d.memberId === co.ownerId)?.ownerName ?? "";
+
+    // Draft-only ("no moves after draft day") grade from the existing Draft Reality
+    // engine, aggregated across seasons that have weekly coverage. Null where the
+    // league has no covered seasons (e.g. deep pre-2018 history) - then Drafting
+    // falls back to the style-based grade inside buildLeagueDnaProfile.
+    let draftOnly = null;
+    try {
+      const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null);
+      if (leagueId && leagueId !== "default") {
+        draftOnly = await careerDraftOnlyGrade(leagueId, co.ownerId, focalName);
+      }
+    } catch {
+      // leave draftOnly null - style-based fallback
+    }
+
+    const profile = buildLeagueDnaProfile({ allDna, focalMemberId: co.ownerId, managers, draftOnly });
     if (!profile) return null;
     return gateLeagueDna(profile, isUserEntitled(ctx.user));
   }),
