@@ -5,10 +5,17 @@
 // scorecard) and the full paid dossier. Pure functions; no DB access.
 
 import type { ManagerDNA, ManagerRawData } from "./leagueDNA";
-import type { DraftOnlyGrade } from "./draftGradeForDna";
+import type { SimGrades, DimRating } from "./draftGradeForDna";
 
 export type DnaGrade =
   | "A+" | "A" | "A-" | "B+" | "B" | "B-" | "C+" | "C" | "C-" | "D+" | "D" | "D-";
+
+export type DnaDimRating = {
+  method: "sim" | "style";
+  current: { grade: DnaGrade; season: number } | null;
+  overall: { grade: DnaGrade; seasonsUsed: number };
+  perSeason: Array<{ season: number; grade: DnaGrade }>;
+};
 
 export type LeagueDnaProfile = {
   ownerName: string;
@@ -20,15 +27,11 @@ export type LeagueDnaProfile = {
   blindSpot: string;
   leagueTwin: { ownerName: string; similarityPct: number } | null;
   scorecard: { trading: DnaGrade; drafting: DnaGrade; roster: DnaGrade };
-  /** Two Drafting ratings from the draft-only ("no moves") simulation: `current`
-   *  (the last covered season) and `overall` (career average). method="style" when no
-   *  weekly coverage exists - then current is null and overall mirrors the scorecard. */
-  draftRating: {
-    method: "draft-only" | "style";
-    current: { grade: DnaGrade; season: number } | null;
-    overall: { grade: DnaGrade; seasonsUsed: number };
-    perSeason: Array<{ season: number; grade: DnaGrade }>;
-  };
+  /** Per-dimension ratings, each with `current` (most recent covered season) + `overall`
+   *  (career average). method="sim" = from the draft-only / roster-management simulation
+   *  (drafting, roster) or per-season trade-activity percentile (trading); "style" = the
+   *  career heuristic fallback when no weekly coverage exists (current is null). */
+  ratings: { trading: DnaDimRating; drafting: DnaDimRating; roster: DnaDimRating };
   // ---- PAID dossier ----
   draftDna: ManagerDNA["draft"] | null;
   tradeDna: ManagerDNA["trade"] | null;
@@ -304,27 +307,79 @@ function championComparison(
   ];
 }
 
+function dimToRating(dim: DimRating, method: "sim" | "style"): DnaDimRating {
+  return {
+    method,
+    current: dim.current ? { grade: gradeFromScore(dim.current.grade100), season: dim.current.season } : null,
+    overall: { grade: gradeFromScore(dim.overall.grade100), seasonsUsed: dim.overall.seasonsUsed },
+    perSeason: dim.perSeason.map((x) => ({ season: x.season, grade: gradeFromScore(x.grade100) })),
+  };
+}
+
+function buildDimLocal(pairs: Array<{ season: number; grade100: number }>): DimRating {
+  if (pairs.length === 0) return { current: null, overall: { grade100: 50, seasonsUsed: 0, seasons: [] }, perSeason: [] };
+  const avg = pairs.reduce((a, x) => a + x.grade100, 0) / pairs.length;
+  return {
+    current: { grade100: pairs[0].grade100, season: pairs[0].season },
+    overall: { grade100: avg, seasonsUsed: pairs.length, seasons: pairs.map((x) => x.season) },
+    perSeason: pairs,
+  };
+}
+
+/** Per-season Trading rating = focal's trade-count percentile within the league each
+ *  season (league-relative activity). Seasons where nobody traded are skipped. */
+function tradingDim(focal: ManagerDNA, managers: ManagerRawData[], seasons: number[]): DimRating {
+  const focalMgr = managers.find((m) => m.memberId === focal.memberId);
+  const pairs: Array<{ season: number; grade100: number }> = [];
+  for (const s of seasons) {
+    const tradesByOwner = managers.map((m) => m.txnSeasons.find((t) => t.season === s)?.trades ?? 0);
+    if (Math.max(0, ...tradesByOwner) === 0) continue;
+    const focalTxn = focalMgr?.txnSeasons.find((t) => t.season === s);
+    if (!focalTxn) continue;
+    pairs.push({ season: s, grade100: leaguePercentile(focalTxn.trades, tradesByOwner) });
+  }
+  return buildDimLocal(pairs);
+}
+
 export function buildLeagueDnaProfile(args: {
   allDna: ManagerDNA[];
   focalMemberId: string;
   managers: ManagerRawData[];
-  draftOnly?: DraftOnlyGrade;
+  sim?: SimGrades;
 }): LeagueDnaProfile | null {
-  const { allDna, focalMemberId, managers, draftOnly } = args;
+  const { allDna, focalMemberId, managers, sim } = args;
   const focal = allDna.find((d) => d.memberId === focalMemberId);
   if (!focal) return null;
   const { archetype, desc } = classifyArchetype(focal);
-  const scorecard = computeScorecard(focal, allDna, managers, draftOnly?.overall.grade100 ?? null);
-  const draftRating: LeagueDnaProfile["draftRating"] = {
-    method: draftOnly ? "draft-only" : "style",
-    current: draftOnly?.current
-      ? { grade: gradeFromScore(draftOnly.current.grade100), season: draftOnly.current.season }
-      : null,
-    overall: { grade: scorecard.drafting, seasonsUsed: draftOnly?.overall.seasonsUsed ?? 0 },
-    perSeason: draftOnly
-      ? draftOnly.perSeason.map((x) => ({ season: x.season, grade: gradeFromScore(x.grade100) }))
-      : [],
+
+  // Style-based career grades (heuristic): used directly when there's no sim coverage,
+  // and as the Trading fallback when a covered league has no tradeable signal.
+  const styleCard = computeScorecard(focal, allDna, managers, null);
+  const styleDim = (g: DnaGrade): DnaDimRating => ({
+    method: "style", current: null, overall: { grade: g, seasonsUsed: 0 }, perSeason: [],
+  });
+
+  let ratings: LeagueDnaProfile["ratings"];
+  if (sim) {
+    const tdim = tradingDim(focal, managers, sim.seasons);
+    ratings = {
+      trading: tdim.current ? dimToRating(tdim, "sim") : styleDim(styleCard.trading),
+      drafting: dimToRating(sim.drafting, "sim"),
+      roster: dimToRating(sim.roster, "sim"),
+    };
+  } else {
+    ratings = {
+      trading: styleDim(styleCard.trading),
+      drafting: styleDim(styleCard.drafting),
+      roster: styleDim(styleCard.roster),
+    };
+  }
+  const scorecard = {
+    trading: ratings.trading.overall.grade,
+    drafting: ratings.drafting.overall.grade,
+    roster: ratings.roster.overall.grade,
   };
+
   return {
     ownerName: focal.ownerName,
     seasonsAnalyzed: focal.seasonsAnalyzed,
@@ -334,7 +389,7 @@ export function buildLeagueDnaProfile(args: {
     blindSpot: computeBlindSpot(focal, allDna, managers),
     leagueTwin: computeLeagueTwin(focal, allDna),
     scorecard,
-    draftRating,
+    ratings,
     draftDna: focal.draft,
     tradeDna: focal.trade,
     rosterDna: { waiver: focal.waiver, tilt: focal.tilt },

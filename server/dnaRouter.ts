@@ -30,7 +30,7 @@ import {
 import { classifyDraftPickRawPick } from "./draftTruth";
 import { buildLeagueDnaProfile } from "./leagueDnaProfile";
 import { gateLeagueDna } from "./leagueIntelGating";
-import { careerDraftOnlyGrade } from "./draftGradeForDna";
+import { careerSimGrades } from "./draftGradeForDna";
 
 // ─── ESPN data extraction helpers ────────────────────────────────────────────
 
@@ -235,17 +235,17 @@ export const dnaRouter = router({
     // engine, aggregated across seasons that have weekly coverage. Null where the
     // league has no covered seasons (e.g. deep pre-2018 history) - then Drafting
     // falls back to the style-based grade inside buildLeagueDnaProfile.
-    let draftOnly = null;
+    let sim = null;
     try {
       const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null);
       if (leagueId && leagueId !== "default") {
-        draftOnly = await careerDraftOnlyGrade(leagueId, co.ownerId, focalName);
+        sim = await careerSimGrades(leagueId, co.ownerId, focalName);
       }
     } catch {
-      // leave draftOnly null - style-based fallback
+      // leave sim null - style-based fallback
     }
 
-    const profile = buildLeagueDnaProfile({ allDna, focalMemberId: co.ownerId, managers, draftOnly });
+    const profile = buildLeagueDnaProfile({ allDna, focalMemberId: co.ownerId, managers, sim });
     if (!profile) return null;
     return gateLeagueDna(profile, isUserEntitled(ctx.user));
   }),

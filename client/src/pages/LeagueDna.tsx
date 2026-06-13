@@ -120,41 +120,37 @@ export function LeagueDna() {
             <div style={PANEL} className="p-5">
               <Eyebrow>DNA Scorecard</Eyebrow>
               <div className="mt-4 grid grid-cols-3 gap-3">
-                <div style={SUB} className="flex flex-col items-center px-3 py-5">
-                  <div className="text-5xl font-black tabular-nums" style={{ color: gradeColor(data.scorecard.trading) }}>{data.scorecard.trading}</div>
-                  <div className="mt-2 text-center text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Trading</div>
-                </div>
-
-                <div style={SUB} className="flex flex-col items-center px-3 py-5">
-                  {data.draftRating?.method === "draft-only" && data.draftRating.current ? (
-                    <div className="flex items-end gap-5">
-                      <div className="flex flex-col items-center">
-                        <div className="text-4xl font-black tabular-nums" style={{ color: gradeColor(data.draftRating.current.grade) }}>{data.draftRating.current.grade}</div>
-                        <div className="mt-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>{"'" + String(data.draftRating.current.season).slice(2)}</div>
+                {([
+                  ["Trading", data.ratings.trading],
+                  ["Drafting", data.ratings.drafting],
+                  ["Roster Construction", data.ratings.roster],
+                ] as Array<[string, any]>).map(([label, r]) => (
+                  <div key={label} style={SUB} className="flex flex-col items-center px-3 py-5">
+                    {r.method === "sim" && r.current ? (
+                      <div className="flex items-end gap-4">
+                        <div className="flex flex-col items-center">
+                          <div className="text-4xl font-black tabular-nums" style={{ color: gradeColor(r.current.grade) }}>{r.current.grade}</div>
+                          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>{"'" + String(r.current.season).slice(2)}</div>
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <div className="text-4xl font-black tabular-nums" style={{ color: gradeColor(r.overall.grade) }}>{r.overall.grade}</div>
+                          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Career</div>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-center">
-                        <div className="text-4xl font-black tabular-nums" style={{ color: gradeColor(data.draftRating.overall.grade) }}>{data.draftRating.overall.grade}</div>
-                        <div className="mt-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Career</div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-5xl font-black tabular-nums" style={{ color: gradeColor(data.scorecard.drafting) }}>{data.scorecard.drafting}</div>
-                  )}
-                  <div className="mt-2 text-center text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Drafting</div>
-                </div>
-
-                <div style={SUB} className="flex flex-col items-center px-3 py-5">
-                  <div className="text-5xl font-black tabular-nums" style={{ color: gradeColor(data.scorecard.roster) }}>{data.scorecard.roster}</div>
-                  <div className="mt-2 text-center text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Roster Construction</div>
-                </div>
+                    ) : (
+                      <div className="text-5xl font-black tabular-nums" style={{ color: gradeColor(r.overall.grade) }}>{r.overall.grade}</div>
+                    )}
+                    <div className="mt-2 text-center text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>{label}</div>
+                  </div>
+                ))}
               </div>
-              {data.draftRating?.method === "draft-only" ? (
+              {data.ratings?.drafting?.method === "sim" ? (
                 <p className="mt-3 text-[11px] leading-relaxed" style={{ color: MUTED }}>
-                  Drafting shows two ratings from your <b style={{ color: TEXT }}>draft-only record</b> - what your drafted roster would have done with zero moves after draft day: <b style={{ color: TEXT }}>{data.draftRating.current?.season}</b> as your current status, and your <b style={{ color: TEXT }}>career</b> average over {data.draftRating.overall.seasonsUsed} season{data.draftRating.overall.seasonsUsed === 1 ? "" : "s"} with full weekly data.
+                  Each grade shows your <b style={{ color: TEXT }}>most recent season</b> and your <b style={{ color: TEXT }}>career</b> average over {data.ratings.drafting.overall.seasonsUsed} season{data.ratings.drafting.overall.seasonsUsed === 1 ? "" : "s"} with full weekly data. Drafting and Roster come from the no-move simulation - what your drafted roster would have done untouched, and how much your in-season moves improved it. Trading is your trade-activity rank in the league.
                 </p>
               ) : (
                 <p className="mt-3 text-[11px] leading-relaxed" style={{ color: MUTED }}>
-                  Drafting is style-based for now - this league has no seasons with full weekly player data to run the no-move simulation.
+                  Grades are style-based for now - this league has no seasons with full weekly player data to run the no-move simulation.
                 </p>
               )}
             </div>
