@@ -316,6 +316,8 @@ function ProfilePanel({
   const [dataSourceOpen, setDataSourceOpen] = useState(false);
 
   const gated = Boolean(p?.gated);
+  const ownProfile = Boolean(p?.ownProfile);
+  const draftUnlocked = !gated || ownProfile;
   const scoutCheckout = (trpc as any).billing.createCheckoutSession.useMutation({
     onSuccess: (r: any) => { if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer"); },
   });
@@ -866,11 +868,16 @@ function ProfilePanel({
         </div>
       )}
 
-      {profileTab === "draft" && gated && (
+      {profileTab === "draft" && !draftUnlocked && (
         <ScoutingLock title="Draft DNA" blurb="See exactly how this manager drafts - round-by-round tendencies, position bias, reaches and value - so you can predict and counter their board." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
       )}
-      {profileTab === "draft" && !gated && (
+      {profileTab === "draft" && draftUnlocked && (
         <div className="space-y-4">
+          {gated && ownProfile && (
+            <div className="rounded-xl border border-[#a3e635]/25 bg-[#a3e635]/[0.05] px-4 py-2.5 text-[12px] leading-relaxed text-zinc-300">
+              <span className="font-semibold text-[#a3e635]">Your Draft DNA is free.</span> Keeper, Activity, Matchup Intel and the Scouting Summary unlock with Rivals Pro.
+            </div>
+          )}
           <ProfileShellCard title="Draft tendencies by round">
             {draftSeasonsCovered.length > 0 && (
               <p className="mb-3 text-[11px] text-zinc-500">Drafts analyzed: <span className="font-semibold text-zinc-300">{draftSeasonsCovered[0]}{draftSeasonsCovered.length > 1 ? `-${draftSeasonsCovered[draftSeasonsCovered.length - 1]}` : ""}</span> ({draftSeasonsCovered.length} season{draftSeasonsCovered.length === 1 ? "" : "s"})</p>

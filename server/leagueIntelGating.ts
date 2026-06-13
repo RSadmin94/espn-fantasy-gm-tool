@@ -207,6 +207,9 @@ export function gateLeagueDna<
 // owner drafts, keeps, and trades, the matchup-intel exploit data, the scouting
 // writeup, and the head-to-head Compare tool. Scouting OTHER owners is the competitive
 // weapon, so the deep fields are redacted server-side for free users (not just hidden).
+// Exception: on the viewer's OWN profile, Draft DNA is free (their own Proof, like the
+// League DNA archetype); the rest of the Scouting Report stays paid. `isOwnProfile` is
+// resolved server-side by matching the viewer's focal owner to the requested profile.
 export function gateOwnerProfile<
   T extends {
     draftDNA: unknown;
@@ -217,8 +220,28 @@ export function gateOwnerProfile<
     comparison: unknown;
     headToHead: unknown;
   },
->(payload: T, entitled: boolean): T & { gated: boolean; entitled: boolean } {
-  if (entitled) return { ...payload, gated: false, entitled: true };
+>(
+  payload: T,
+  entitled: boolean,
+  isOwnProfile = false,
+): T & { gated: boolean; entitled: boolean; ownProfile: boolean } {
+  if (entitled) return { ...payload, gated: false, entitled: true, ownProfile: isOwnProfile };
+  if (isOwnProfile) {
+    // Own profile: keep Draft DNA, redact the rest of the Scouting Report.
+    return {
+      ...payload,
+      keeperDNA: null,
+      activityDNA: null,
+      scoutingSummary: null,
+      matchupIntel: [],
+      comparison: null,
+      headToHead: null,
+      gated: true,
+      entitled: false,
+      ownProfile: true,
+    } as T & { gated: boolean; entitled: boolean; ownProfile: boolean };
+  }
+  // Another owner: redact the entire Scouting Report (Draft DNA included).
   return {
     ...payload,
     draftDNA: null,
@@ -230,5 +253,6 @@ export function gateOwnerProfile<
     headToHead: null,
     gated: true,
     entitled: false,
-  } as T & { gated: boolean; entitled: boolean };
+    ownProfile: false,
+  } as T & { gated: boolean; entitled: boolean; ownProfile: boolean };
 }

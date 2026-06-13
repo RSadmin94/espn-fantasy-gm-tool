@@ -11561,6 +11561,13 @@ Provide:
                 }
               : null;
 
+        // Own-profile carve-out: Draft DNA is free on the viewer's own profile. Match the
+        // viewer's focal owner (resolveCurrentOwner) to the requested profile's canonical key.
+        const focalOwner = await resolveCurrentOwner(ctx.user);
+        const viewerSeed = (focalOwner.ownerKey || focalOwner.displayName || "").trim();
+        const viewerResolved = viewerSeed ? resolveOwnerTeamsForProfile(allGmRows, viewerSeed) : null;
+        const isOwnProfile = !!viewerResolved && viewerResolved.profileOwnerKey === profileOwnerKey;
+
         return gateOwnerProfile(
           {
             leagueId: lid,
@@ -11570,6 +11577,7 @@ Provide:
             headToHead,
           },
           isUserEntitled(ctx.user),
+          isOwnProfile,
         );
       }),
 
