@@ -27,6 +27,8 @@ type CastMember = {
   isYou: boolean;
 };
 
+type PastChampion = { memberId: string; ownerName: string; championships: number; championshipYears: number[] };
+
 const PERSONALITY = new Set(["The Trade Shark", "The Chaos Agent", "The Hothead"]);
 const BADGE_RANK: Record<string, number> = { villain: 0, dynasty: 1, champion: 2, gatekeeper: 3, playoff_fixture: 4 };
 const topBadge = (m: CastMember) => Math.min(99, ...m.badges.map((b) => BADGE_RANK[b.tier] ?? 98));
@@ -81,7 +83,7 @@ export function TheCast() {
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const ready = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
   const q = (trpc as any).dna.leagueCast.useQuery(withLeagueSalt({}, leagueContextKey), { staleTime: 60_000, enabled: ready });
-  const data = q.data as { leagueName: string; season: number; cast: CastMember[] } | null | undefined;
+  const data = q.data as { leagueName: string; season: number; cast: CastMember[]; pastChampions?: PastChampion[] } | null | undefined;
 
   if (!ready || q.isLoading) {
     return (
@@ -106,6 +108,7 @@ export function TheCast() {
   const rest = cast.filter((m) => m.badges.length === 0);
   const personalities = rest.filter((m) => PERSONALITY.has(m.archetype));
   const wildcards = rest.filter((m) => !PERSONALITY.has(m.archetype));
+  const pastChampions = data.pastChampions ?? [];
   const now = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   return (
@@ -134,6 +137,25 @@ export function TheCast() {
           <div className="mt-10">
             <SectionTitle color={VIOLET}>Wildcards</SectionTitle>
             <div className="grid gap-2.5 sm:grid-cols-2 md:grid-cols-3">{wildcards.map((m) => <WildCard key={m.memberId} m={m} />)}</div>
+          </div>
+        )}
+
+        {pastChampions.length > 0 && (
+          <div className="mt-10">
+            <SectionTitle color={GOLD}>Past Champions</SectionTitle>
+            <div className="grid gap-2.5 sm:grid-cols-2 md:grid-cols-3">
+              {pastChampions.map((m) => (
+                <div key={m.memberId} className="rounded-lg p-3" style={{ background: "rgba(245,197,24,.05)", border: `1px solid ${GOLD}33` }}>
+                  <div className="flex items-center gap-1.5">
+                    <Crown className="h-3.5 w-3.5 shrink-0" style={{ color: GOLD }} />
+                    <span className="text-sm font-black leading-tight">{m.ownerName}</span>
+                  </div>
+                  <div className="mt-0.5 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: GOLD }}>{m.championships > 1 ? `${m.championships}x Champion` : "Champion"}</div>
+                  <div className="text-[11px]" style={{ color: MUTED }}>{m.championshipYears.join(", ")}</div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px]" style={{ color: MUTED }}>No longer in the league - their banners stay up.</p>
           </div>
         )}
 

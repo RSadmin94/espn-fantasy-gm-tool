@@ -268,10 +268,12 @@ export const dnaRouter = router({
     const latestSeason = Math.max(0, ...managers.flatMap((m) => m.seasonRecords.map((r) => r.season)));
 
     let trophyByMember = new Map<string, { championships: number; championshipYears: number[]; runnerUps: number; thirdPlaceFinishes: number }>();
+    let trophyRaw = new Map<string, { name: string; championships: number; championshipYears: number[] }>();
     let leagueName = "Your League";
     try {
       const trophy = await computeAllTrophyHistory(undefined, ctx.user.id);
       trophyByMember = new Map(Array.from(trophy, ([k, v]) => [k, { championships: v.championships, championshipYears: v.championshipYears, runnerUps: v.runnerUps, thirdPlaceFinishes: v.thirdPlaceFinishes }]));
+      trophyRaw = new Map(Array.from(trophy, ([k, v]) => [k, { name: v.name, championships: v.championships, championshipYears: v.championshipYears }]));
       const row = latestSeason ? await getCachedView(latestSeason, "combined", undefined, { userId: ctx.user.id }) : null;
       const nm = (row?.payload as Record<string, unknown> | undefined)?.settings as Record<string, unknown> | undefined;
       if (nm?.name) leagueName = String(nm.name);
@@ -300,7 +302,14 @@ export const dnaRouter = router({
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
-    return { leagueName, season: latestSeason, cast };
+    // Champions who are no longer in the current league - so The Cast never erases a
+    // title-holder. Sourced from the same authority (person-merged), keyed off currentIds.
+    const pastChampions = [...trophyRaw.entries()]
+      .filter(([memberId, t]) => t.championships >= 1 && !currentIds.has(memberId))
+      .map(([memberId, t]) => ({ memberId, ownerName: t.name, championships: t.championships, championshipYears: [...t.championshipYears].sort((a, b) => a - b) }))
+      .sort((a, b) => b.championships - a.championships || a.ownerName.localeCompare(b.ownerName));
+
+    return { leagueName, season: latestSeason, cast, pastChampions };
   }),
 
   /**
