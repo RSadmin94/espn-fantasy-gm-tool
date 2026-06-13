@@ -253,7 +253,7 @@ function computeEarnedBadges(focalId: string, stats: Map<string, BadgeStat>): Ea
   const cutoff = winPctsEligible.length >= 3 ? winPctsEligible[Math.max(0, Math.floor(winPctsEligible.length / 3) - 1)] : Infinity;
 
   const out: EarnedBadge[] = [];
-  if (me.titles >= 2)
+  if (me.titles >= 3)
     out.push({ tier: "dynasty", label: "Dynasty Architect", receipt: `${me.titles} titles (${me.titleSeasons.join(", ")}) - the closest thing this league has to a dynasty.` });
   if (me.titles >= 1)
     out.push({ tier: "champion", label: me.titles > 1 ? `${me.titles}x Champion` : "Champion", receipt: `Won it all in ${me.titleSeasons.join(", ")}.` });
