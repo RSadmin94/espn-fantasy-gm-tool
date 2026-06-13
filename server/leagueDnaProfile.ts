@@ -109,36 +109,65 @@ function computePrimaryTrait(focal: ManagerDNA, all: ManagerDNA[]): string {
 }
 
 /** Champion-relative blind spot: where you behave least like the owners who win. */
-function computeBlindSpot(
-  focal: ManagerDNA,
-  all: ManagerDNA[],
-  managers: ManagerRawData[],
-): string {
+function champsOf(focal: ManagerDNA, all: ManagerDNA[], managers: ManagerRawData[]): ManagerDNA[] {
   const champIds = new Set(
-    managers.filter((m) => m.seasonRecords.some((s) => s.isChampion)).map((m) => m.memberId),
+    managers.filter((m) => m.seasonRecords.some((sr) => sr.isChampion)).map((m) => m.memberId),
   );
-  const champs = all.filter((d) => champIds.has(d.memberId) && d.memberId !== focal.memberId);
+  return all.filter((d) => champIds.has(d.memberId) && d.memberId !== focal.memberId);
+}
 
-  if (champs.length > 0) {
-    // Biggest position where focal reaches earlier than champions do.
-    const positions = new Set<string>();
-    for (const d of [focal, ...champs])
-      Object.keys(d.draft.biasVsLeague || {}).forEach((p) => positions.add(p));
-    let worst: { pos: string; gap: number } | null = null;
-    for (const pos of positions) {
-      const champBias = champs.reduce((s, d) => s + (d.draft.biasVsLeague[pos] || 0), 0) / champs.length;
-      const gap = (focal.draft.biasVsLeague[pos] || 0) - champBias; // positive = focal reaches earlier
-      if (gap >= 0.6 && (!worst || gap > worst.gap)) worst = { pos, gap };
-    }
-    if (worst) return `You draft ${worst.pos} earlier than league champions do.`;
-
-    const avgChampTrades = champs.reduce((s, d) => s + d.trade.avgTradesPerSeason, 0) / champs.length;
-    if (focal.trade.avgTradesPerSeason < avgChampTrades - 0.5)
-      return "You trade less than your league's champions - they're more active in the market.";
-    if (focal.tilt.tiltScore >= 55)
-      return "You make more reactive moves after losses than champions, who stay steadier.";
+/** Position where the focal owner reaches earliest relative to champions. */
+function championDraftGap(focal: ManagerDNA, champs: ManagerDNA[]): string | null {
+  if (champs.length === 0) return null;
+  const positions = new Set<string>();
+  for (const d of [focal, ...champs])
+    Object.keys(d.draft.biasVsLeague || {}).forEach((pp) => positions.add(pp));
+  let worst: { pos: string; gap: number } | null = null;
+  for (const pos of positions) {
+    const champBias = champs.reduce((acc, d) => acc + (d.draft.biasVsLeague[pos] || 0), 0) / champs.length;
+    const gap = (focal.draft.biasVsLeague[pos] || 0) - champBias; // positive = focal reaches earlier
+    if (gap >= 0.6 && (!worst || gap > worst.gap)) worst = { pos, gap };
   }
-  return focal.exploitWindows[0] ?? "Your roster turns over faster than your league's contenders.";
+  return worst ? `You draft ${worst.pos} earlier than league champions do.` : null;
+}
+
+/** Single headline blind spot for the free card. Always second person - never the
+ *  opponent-scouting exploit text (which names the owner in third person). */
+function computeBlindSpot(focal: ManagerDNA, all: ManagerDNA[], managers: ManagerRawData[]): string {
+  const champs = champsOf(focal, all, managers);
+  const gap = championDraftGap(focal, champs);
+  if (gap) return gap;
+  if (champs.length > 0) {
+    const avgChampTrades = champs.reduce((acc, d) => acc + d.trade.avgTradesPerSeason, 0) / champs.length;
+    if (focal.trade.avgTradesPerSeason < avgChampTrades - 0.5)
+      return "You trade less than your league's champions - they work the market harder than you do.";
+  }
+  if (focal.tilt.tiltScore >= 50)
+    return "You make more reactive moves after losing streaks - tilt shows up in your trades and waivers.";
+  if (focal.draft.reachPositions.length > 0)
+    return `You reach on ${focal.draft.reachPositions.join(" and ")} earlier than the rest of your league.`;
+  if (focal.trade.lossTradeRatio > 1.2)
+    return "You trade more when you're losing - deals made from a weak spot tend to favor the other side.";
+  return "Your roster turns over faster than your league's contenders.";
+}
+
+/** Full self-facing blind-spot list for the paid dossier. */
+function computeBlindSpotsList(focal: ManagerDNA, all: ManagerDNA[], managers: ManagerRawData[]): string[] {
+  const champs = champsOf(focal, all, managers);
+  const out: string[] = [];
+  const gap = championDraftGap(focal, champs);
+  if (gap) out.push(gap);
+  if (focal.tilt.tiltScore >= 50)
+    out.push(`Tilt risk: you over-trade and over-churn after losses (${focal.tilt.tiltLabel}).`);
+  if (focal.draft.reachPositions.length > 0)
+    out.push(`Draft reaches: you take ${focal.draft.reachPositions.join(", ")} earlier than your league, often leaving value at other spots.`);
+  if (focal.trade.lossTradeRatio > 1.2)
+    out.push("Loss-chasing trades: your deal volume spikes when you're behind, when leverage works against you.");
+  if (focal.waiver.injuryOverreactionCount > 0)
+    out.push(`Waiver overreaction: you've spiked adds after injuries ${focal.waiver.injuryOverreactionCount} time(s), usually at a premium.`);
+  if (out.length === 0)
+    out.push("No glaring behavioral leaks - your weak spots are subtle and situational.");
+  return out;
 }
 
 /** Nearest behavioural neighbour - the screenshotable "League Twin". */
@@ -168,14 +197,29 @@ function computeLeagueTwin(focal: ManagerDNA, all: ManagerDNA[]): { ownerName: s
   return { ownerName: best.ownerName, similarityPct: Math.round(clamp(100 - (best.dist / maxDist) * 100)) };
 }
 
-function computeScorecard(d: ManagerDNA): { trading: DnaGrade; drafting: DnaGrade; roster: DnaGrade } {
-  // Trading: activity rewarded, chasing losses (lossTradeRatio) penalised.
-  const trading = clamp(d.trade.tradeFrequency * 0.75 + (100 - clamp((d.trade.lossTradeRatio - 1) * 50)) * 0.25);
-  // Drafting: value finds reward, reaches penalise; market awareness (low exploitability) helps.
-  const drafting = clamp(55 + d.draft.valuePositions.length * 11 - d.draft.reachPositions.length * 11 + (100 - d.exploitabilityScore) * 0.15);
-  // Roster construction: steadiness rewarded (low tilt + low churn), some waiver work helps.
-  const roster = clamp(70 - d.tilt.tiltScore * 0.4 - d.waiver.rosterChurnRate * 0.3 + Math.min(20, d.waiver.waiverAggression * 0.2));
-  return { trading: gradeFromScore(trading), drafting: gradeFromScore(drafting), roster: gradeFromScore(roster) };
+// Raw per-owner category composites (higher = more of that identity / stronger).
+const tradingComposite = (d: ManagerDNA) => d.trade.avgTradesPerSeason;
+const draftingComposite = (d: ManagerDNA) =>
+  (d.draft.valuePositions.length - d.draft.reachPositions.length) * 10 + (100 - d.exploitabilityScore) * 0.3;
+const rosterComposite = (d: ManagerDNA) =>
+  (100 - d.tilt.tiltScore) * 0.5 + (100 - d.waiver.rosterChurnRate) * 0.3 + d.waiver.waiverAggression * 0.2;
+
+/** Focal owner's percentile (0-100) within the league on one composite. */
+function leaguePercentile(focalVal: number, allVals: number[]): number {
+  const valid = allVals.filter((v) => Number.isFinite(v));
+  if (valid.length <= 1) return 50;
+  const less = valid.filter((v) => v < focalVal).length;
+  return (less / (valid.length - 1)) * 100;
+}
+
+/** Scorecard grades are RELATIVE to the league, so a grade can never disagree with
+ *  the league-relative primary trait - both are league-percentile based. */
+function computeScorecard(focal: ManagerDNA, all: ManagerDNA[]): { trading: DnaGrade; drafting: DnaGrade; roster: DnaGrade } {
+  return {
+    trading: gradeFromScore(leaguePercentile(tradingComposite(focal), all.map(tradingComposite))),
+    drafting: gradeFromScore(leaguePercentile(draftingComposite(focal), all.map(draftingComposite))),
+    roster: gradeFromScore(leaguePercentile(rosterComposite(focal), all.map(rosterComposite))),
+  };
 }
 
 function championComparison(
@@ -219,11 +263,11 @@ export function buildLeagueDnaProfile(args: {
     primaryTrait: computePrimaryTrait(focal, allDna),
     blindSpot: computeBlindSpot(focal, allDna, managers),
     leagueTwin: computeLeagueTwin(focal, allDna),
-    scorecard: computeScorecard(focal),
+    scorecard: computeScorecard(focal, allDna),
     draftDna: focal.draft,
     tradeDna: focal.trade,
     rosterDna: { waiver: focal.waiver, tilt: focal.tilt },
     championComparison: championComparison(focal, allDna, managers),
-    blindSpots: focal.exploitWindows.length ? focal.exploitWindows : [computeBlindSpot(focal, allDna, managers)],
+    blindSpots: computeBlindSpotsList(focal, allDna, managers),
   };
 }
