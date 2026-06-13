@@ -176,13 +176,20 @@ function axisStats(all: ManagerDNA[], oriented: (d: ManagerDNA) => number): { me
   return { mean, std: Math.sqrt(variance) };
 }
 
-/** League-relative archetype: the axis on which the focal manager is most extreme
- *  (z-score) among axes whose honesty floor they clear. There is no "Builder"
- *  default; The Rock is always eligible so quiet managers still get a true label. */
-function classifyRelativeArchetype(
+// Thin-margin guard: a manager must be at least this many std-devs above the league
+// mean on an axis before they earn its strong archetype. Below this they read as
+// balanced ("The All-Rounder"). This fixes thin-lead mislabels (e.g. "Chaos Agent"
+// at only 1.1x league churn) and de-clusters the cast (no more 4 false Trade Sharks).
+const MIN_CLAIM_Z = 1.0;
+const ALLROUNDER_LABEL = "The All-Rounder";
+const ALLROUNDER_DESC =
+  "No single lean - you mix trades, the waiver wire and the draft without living on any one of them.";
+
+/** Best axis (by z-score) among the axes whose honesty floor the focal manager clears. */
+function bestQualifyingClaim(
   focal: ManagerDNA,
   all: ManagerDNA[],
-): { archetype: string; desc: string; receipt: string; identityRank: { rank: number; of: number } | null } {
+): { axis: ArchetypeAxis; claim: number } | null {
   let best: { axis: ArchetypeAxis; claim: number } | null = null;
   for (const axis of ARCHETYPE_AXES) {
     if (!axis.qualifies(focal)) continue;
@@ -190,7 +197,27 @@ function classifyRelativeArchetype(
     const claim = std > 0 ? (axis.oriented(focal) - mean) / std : 0;
     if (!best || claim > best.claim) best = { axis, claim };
   }
-  const axis = best?.axis ?? ARCHETYPE_AXES.find((a) => a.key === "the_rock")!;
+  return best;
+}
+
+function allRounderReceipt(_focal: ManagerDNA, _all: ManagerDNA[]): string {
+  return "You sit near your league's middle on trades, the waiver wire and roster churn - no single move defines your game.";
+}
+
+/** League-relative archetype: the axis on which the focal manager is most extreme
+ *  (z-score) among axes whose honesty floor they clear - but ONLY when that lead is
+ *  real (>= MIN_CLAIM_Z). Managers without genuine separation get The All-Rounder so
+ *  a thin lead never reads as a strong identity. The Rock still catches the genuinely
+ *  steady (high z on negative churn). */
+function classifyRelativeArchetype(
+  focal: ManagerDNA,
+  all: ManagerDNA[],
+): { archetype: string; desc: string; receipt: string; identityRank: { rank: number; of: number } | null } {
+  const best = bestQualifyingClaim(focal, all);
+  if (!best || best.claim < MIN_CLAIM_Z) {
+    return { archetype: ALLROUNDER_LABEL, desc: ALLROUNDER_DESC, receipt: allRounderReceipt(focal, all), identityRank: null };
+  }
+  const axis = best.axis;
   const fv = axis.oriented(focal);
   const higher = all.filter((d) => axis.oriented(d) > fv).length;
   const identityRank = all.length > 1 ? { rank: higher + 1, of: all.length } : null;
