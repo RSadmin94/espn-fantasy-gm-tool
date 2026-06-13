@@ -59,6 +59,33 @@ function buildDim(pairs: Array<{ season: number; grade100: number }>): DimRating
   };
 }
 
+/**
+ * Headroom-aware Roster grade. The engine's rosterMgmtGrade is pure rank improvement
+ * (standing pat = 50, a strong draft with no upward room can't score well). We instead
+ * weight it so that FINISHING well counts - including the smart decision to stand pat on
+ * a strong roster - while climbing from a weak draft is still rewarded and squandering a
+ * good draft is still punished.
+ *
+ *   55% actual-finish percentile (where you ended up - rewards holding a strong position)
+ *   45% improvement vs the no-move baseline (rewards climbing, neutral for standing pat)
+ *
+ * So: strong draft held near the top -> high (standing pat was smart, finish is great);
+ * weak draft managed upward -> high; weak draft left weak -> low (headroom wasted);
+ * strong draft mismanaged downward -> low.
+ */
+function headroomRosterGrade(
+  draftRank: number | null,
+  actualRank: number | null,
+  n: number,
+  fallback: number,
+): number {
+  if (draftRank == null || actualRank == null || n <= 1) return fallback;
+  const span = n - 1;
+  const actualFinishPctile = ((n - actualRank) / span) * 100;
+  const improvement = Math.max(0, Math.min(100, 50 + (draftRank - actualRank) * (50 / span)));
+  return Math.max(0, Math.min(100, 0.55 * actualFinishPctile + 0.45 * improvement));
+}
+
 async function getSeason(leagueId: string, season: number): Promise<SeasonCache> {
   const key = `${leagueId}:${season}`;
   const hit = seasonCache.get(key);
@@ -69,11 +96,13 @@ async function getSeason(leagueId: string, season: number): Promise<SeasonCache>
     const draftByName: Record<string, number> = {};
     const rosterByKey: Record<string, number> = {};
     const rosterByName: Record<string, number> = {};
+    const n = res.ownerImpacts.length;
     for (const o of res.ownerImpacts) {
       draftByKey[o.ownerKey] = o.draftGrade;
       draftByName[norm(o.ownerName)] = o.draftGrade;
-      rosterByKey[o.ownerKey] = o.rosterMgmtGrade;
-      rosterByName[norm(o.ownerName)] = o.rosterMgmtGrade;
+      const rg = headroomRosterGrade(o.draftRank, o.actualRank, n, o.rosterMgmtGrade);
+      rosterByKey[o.ownerKey] = rg;
+      rosterByName[norm(o.ownerName)] = rg;
     }
     const entry: SeasonCache = {
       at: Date.now(), confidence: res.confidence, weeksSimulated: res.weeksSimulated,
