@@ -29,6 +29,7 @@ import { classifyEspnDraftSlot } from "./draftTruth/classifySlot";
 
 export interface SeasonRecord {
   season: number;
+  teamName?: string;
   wins: number;
   losses: number;
   ties: number;

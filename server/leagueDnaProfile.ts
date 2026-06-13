@@ -23,6 +23,9 @@ export type LeagueDnaProfile = {
   // ---- FREE card ----
   archetype: string;
   archetypeDesc: string;
+  archetypeReceipt: string;
+  identityRank: { rank: number; of: number } | null;
+  badges: Array<{ label: string; receipt: string; tier: "champion" | "dynasty" | "villain" | "gatekeeper" }>;
   primaryTrait: string;
   blindSpot: string;
   leagueTwin: { ownerName: string; similarityPct: number } | null;
@@ -59,30 +62,214 @@ function gradeFromScore(score: number): DnaGrade {
   return "D-";
 }
 
-/** Map raw DNA traits to one of the eight signature archetypes. */
-function classifyArchetype(d: ManagerDNA): { archetype: string; desc: string } {
-  const tf = d.trade.tradeFrequency;
-  const wa = d.waiver.waiverAggression;
-  const reach = d.draft.reachPositions.length;
-  const value = d.draft.valuePositions.length;
-  const kr = d.draft.keeperRate;
-  const shark = d.exploitabilityLabel === "Shark" || d.exploitabilityScore <= 28;
+// === Relative-role archetype (Pass 1) =======================================
+// Identity is league-RELATIVE: a manager is classified by the trait on which they
+// deviate most from their OWN league (z-score), so every league yields a varied
+// cast instead of everyone defaulting to one bucket. No neutral fallback. Honesty
+// floors block hollow claims (no "Trade Shark" who never trades). "The Rock" is the
+// always-eligible identity for genuinely low-activity managers.
 
-  if (kr >= 50)
-    return { archetype: "The Dynasty Architect", desc: "You build for the long haul - keepers and continuity over quick fixes." };
-  if (tf >= 60)
-    return { archetype: "The Aggressive Trader", desc: "You work the phones. The roster you start the season with is never the one you finish with." };
-  if (wa >= 70 && tf < 40)
-    return { archetype: "The Hoarder", desc: "You churn the wire relentlessly but rarely deal - you'd rather stream than trade." };
-  if (reach >= 2)
-    return { archetype: "The Draft Gambler", desc: "You trust your board over consensus and reach for the players you believe in." };
-  if (value >= 2)
-    return { archetype: "The Talent Scout", desc: "You let value fall to you - your best picks come rounds after the league expects them." };
-  if ((tf >= 45 || wa >= 55) && kr < 25)
-    return { archetype: "The Win-Now GM", desc: "You spend aggressively for this season - future assets are someone else's problem." };
-  if (shark)
-    return { archetype: "The Opportunist", desc: "You read the market better than your leaguemates and strike when they're desperate." };
-  return { archetype: "The Builder", desc: "You move methodically - steady drafting, measured deals, no panic." };
+type MedalRow = { season: number; championOwner: string | null; runnerUpOwner: string | null; thirdPlaceOwner: string | null };
+
+const r2 = (n: number) => Math.round(n * 10) / 10;
+const capR = (n: number) => Math.min(Math.max(n, 0), 9.9);
+
+type ArchetypeAxis = {
+  key: string;
+  label: string;
+  desc: string;
+  /** oriented so HIGHER = more of this identity (inverse traits are negated) */
+  oriented: (d: ManagerDNA) => number;
+  /** honesty floor: may the focal manager legitimately claim this role at all? */
+  qualifies: (focal: ManagerDNA) => boolean;
+  /** quantified, league-relative proof line shown under the role */
+  receipt: (focal: ManagerDNA, all: ManagerDNA[]) => string;
+};
+
+const ARCHETYPE_AXES: ArchetypeAxis[] = [
+  {
+    key: "trade_shark", label: "The Trade Shark",
+    desc: "You work the phones. The roster you start the year with is never the one you finish with.",
+    oriented: (d) => d.trade.avgTradesPerSeason,
+    qualifies: (f) => f.trade.avgTradesPerSeason >= 0.5,
+    receipt: (f, all) => {
+      const avg = leagueAvg(all, (d) => d.trade.avgTradesPerSeason) || 0.01;
+      const ratio = f.trade.avgTradesPerSeason / avg;
+      return ratio >= 1.05
+        ? `You make ${r2(capR(ratio))}x more trades than your league - the phone is always ringing.`
+        : `You trade the most in your league - ${r2(f.trade.avgTradesPerSeason)} a season.`;
+    },
+  },
+  {
+    key: "waiver_predator", label: "The Waiver Predator",
+    desc: "You live on the wire - first to every breakout, quickest to cut bait.",
+    oriented: (d) => d.waiver.avgAcquisitionsPerSeason,
+    qualifies: (f) => f.waiver.avgAcquisitionsPerSeason >= 3,
+    receipt: (f, all) => {
+      const avg = leagueAvg(all, (d) => d.waiver.avgAcquisitionsPerSeason) || 0.01;
+      const ratio = f.waiver.avgAcquisitionsPerSeason / avg;
+      return ratio >= 1.05
+        ? `You hit the waiver wire ${r2(capR(ratio))}x harder than your league average.`
+        : `You add the most off waivers in your league - ${Math.round(f.waiver.avgAcquisitionsPerSeason)} a season.`;
+    },
+  },
+  {
+    key: "draft_gambler", label: "The Draft Gambler",
+    desc: "You trust your board over consensus and reach for the players you believe in.",
+    oriented: (d) => d.draft.reachPositions.length,
+    qualifies: (f) => f.draft.reachPositions.length >= 1,
+    receipt: (f) => `You reach on ${f.draft.reachPositions.join(" and ")} earlier than the rest of your league.`,
+  },
+  {
+    key: "talent_scout", label: "The Talent Scout",
+    desc: "You let value fall to you - your best picks come rounds after the league expects them.",
+    oriented: (d) => d.draft.valuePositions.length,
+    qualifies: (f) => f.draft.valuePositions.length >= 1,
+    receipt: (f) => `You find your value at ${f.draft.valuePositions.join(" and ")} - you let them fall further than your league does.`,
+  },
+  {
+    key: "chaos_agent", label: "The Chaos Agent",
+    desc: "Your roster never sits still - constant motion, for better or worse.",
+    oriented: (d) => d.waiver.rosterChurnRate,
+    qualifies: (f) => f.waiver.rosterChurnRate >= 20,
+    receipt: (f, all) => {
+      const avg = leagueAvg(all, (d) => d.waiver.rosterChurnRate) || 0.01;
+      const ratio = f.waiver.rosterChurnRate / avg;
+      return ratio >= 1.05
+        ? `Your roster turns over ${r2(capR(ratio))}x faster than your league - never the same week to week.`
+        : `You churn your roster more than anyone in your league.`;
+    },
+  },
+  {
+    key: "the_rock", label: "The Rock",
+    desc: "You build on draft day and trust it - the steadiest hand in the league.",
+    oriented: (d) => -d.waiver.rosterChurnRate,
+    qualifies: (f) => f.seasonsAnalyzed >= 2,
+    receipt: (f, all) => {
+      if (f.waiver.rosterChurnRate < 1)
+        return `You barely touch your roster after draft day - the steadiest hand in your league.`;
+      const avg = leagueAvg(all, (d) => d.waiver.rosterChurnRate) || 0.01;
+      const ratio = capR(avg / Math.max(f.waiver.rosterChurnRate, 0.01));
+      return ratio >= 1.05
+        ? `You churn your roster ${r2(ratio)}x less than your league - draft it and trust it.`
+        : `You touch your roster less than anyone in your league.`;
+    },
+  },
+  {
+    key: "hothead", label: "The Hothead",
+    desc: "You manage on emotion - a loss lights a fire that shows up in your moves.",
+    oriented: (d) => d.tilt.tiltScore,
+    qualifies: (f) => f.tilt.tiltScore >= 40,
+    receipt: () => `You make the most reactive moves after a loss of anyone in your league.`,
+  },
+  {
+    key: "opportunist", label: "The Opportunist",
+    desc: "You read the market better than your leaguemates and strike when they're desperate.",
+    oriented: (d) => -d.exploitabilityScore,
+    qualifies: (f) => f.exploitabilityScore <= 35 || f.exploitabilityLabel === "Shark",
+    receipt: () => `You buy low better than your leaguemates - you strike when they are desperate.`,
+  },
+];
+
+function axisStats(all: ManagerDNA[], oriented: (d: ManagerDNA) => number): { mean: number; std: number } {
+  const vals = all.map(oriented).filter((v) => Number.isFinite(v));
+  const mean = vals.reduce((sum, v) => sum + v, 0) / (vals.length || 1);
+  const variance = vals.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (vals.length || 1);
+  return { mean, std: Math.sqrt(variance) };
+}
+
+/** League-relative archetype: the axis on which the focal manager is most extreme
+ *  (z-score) among axes whose honesty floor they clear. There is no "Builder"
+ *  default; The Rock is always eligible so quiet managers still get a true label. */
+function classifyRelativeArchetype(
+  focal: ManagerDNA,
+  all: ManagerDNA[],
+): { archetype: string; desc: string; receipt: string; identityRank: { rank: number; of: number } | null } {
+  let best: { axis: ArchetypeAxis; claim: number } | null = null;
+  for (const axis of ARCHETYPE_AXES) {
+    if (!axis.qualifies(focal)) continue;
+    const { mean, std } = axisStats(all, axis.oriented);
+    const claim = std > 0 ? (axis.oriented(focal) - mean) / std : 0;
+    if (!best || claim > best.claim) best = { axis, claim };
+  }
+  const axis = best?.axis ?? ARCHETYPE_AXES.find((a) => a.key === "the_rock")!;
+  const fv = axis.oriented(focal);
+  const higher = all.filter((d) => axis.oriented(d) > fv).length;
+  const identityRank = all.length > 1 ? { rank: higher + 1, of: all.length } : null;
+  return { archetype: axis.label, desc: axis.desc, receipt: axis.receipt(focal, all), identityRank };
+}
+
+// === Earned badges (Pass 1) =================================================
+// Rare, absolute, prestige. Titles/finals are resolved from the authoritative
+// medals table by matching each season's medal team-name to the manager's team
+// that season (within-season match). Under-matching only MISSES a badge - it can
+// never fabricate one. Many managers earn none; that scarcity is the point.
+
+function normName(s: string): string {
+  return (s || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g, "");
+}
+
+type BadgeStat = { titles: number; titleSeasons: number[]; runnerUps: number; thirds: number; seasons: number; winPct: number; playoffRate: number };
+
+function badgeStats(managers: ManagerRawData[], medals: MedalRow[]): Map<string, BadgeStat> {
+  const bySeason = new Map<number, MedalRow>();
+  for (const m of medals) bySeason.set(m.season, m);
+  const out = new Map<string, BadgeStat>();
+  for (const mgr of managers) {
+    let titles = 0, runnerUps = 0, thirds = 0, w = 0, l = 0, t = 0, po = 0;
+    const titleSeasons: number[] = [];
+    for (const sr of mgr.seasonRecords) {
+      w += sr.wins; l += sr.losses; t += sr.ties;
+      if (sr.madePlayoffs) po++;
+      const med = bySeason.get(sr.season);
+      const tn = normName(sr.teamName ?? "");
+      if (med && tn) {
+        if (normName(med.championOwner ?? "") === tn) { titles++; titleSeasons.push(sr.season); }
+        else if (normName(med.runnerUpOwner ?? "") === tn) runnerUps++;
+        else if (normName(med.thirdPlaceOwner ?? "") === tn) thirds++;
+      }
+    }
+    const games = w + l + t || 1;
+    const seasons = mgr.seasonRecords.length || 1;
+    out.set(mgr.memberId, {
+      titles, titleSeasons: titleSeasons.sort((a, b) => a - b), runnerUps, thirds,
+      seasons: mgr.seasonRecords.length,
+      winPct: ((w + t * 0.5) / games) * 100,
+      playoffRate: (po / seasons) * 100,
+    });
+  }
+  return out;
+}
+
+type EarnedBadge = { label: string; receipt: string; tier: "champion" | "dynasty" | "villain" | "gatekeeper" };
+
+function computeEarnedBadges(focalId: string, stats: Map<string, BadgeStat>): EarnedBadge[] {
+  const me = stats.get(focalId);
+  if (!me) return [];
+  const all = [...stats.entries()];
+  let villainId: string | null = null;
+  let bestTitles = 0, bestWin = -1;
+  for (const [id, st] of all) {
+    if (st.titles > bestTitles || (st.titles === bestTitles && st.winPct > bestWin)) {
+      bestTitles = st.titles; bestWin = st.winPct; villainId = id;
+    }
+  }
+  if (bestTitles < 1) villainId = null;
+  const winPctsEligible = all.map(([, st]) => st).filter((st) => st.seasons >= 3).map((st) => st.winPct).sort((a, b) => b - a);
+  const cutoff = winPctsEligible.length >= 3 ? winPctsEligible[Math.max(0, Math.floor(winPctsEligible.length / 3) - 1)] : Infinity;
+
+  const out: EarnedBadge[] = [];
+  if (me.titles >= 2)
+    out.push({ tier: "dynasty", label: "Dynasty Architect", receipt: `${me.titles} titles (${me.titleSeasons.join(", ")}) - the closest thing this league has to a dynasty.` });
+  if (me.titles >= 1)
+    out.push({ tier: "champion", label: me.titles > 1 ? `${me.titles}x Champion` : "Champion", receipt: `Won it all in ${me.titleSeasons.join(", ")}.` });
+  if (villainId === focalId)
+    out.push({ tier: "villain", label: "League Villain", receipt: `More rings than anyone in the league (${me.titles}) - the one they are all chasing.` });
+  if (me.titles === 0 && me.seasons >= 3 && me.winPct >= cutoff)
+    out.push({ tier: "gatekeeper", label: "The Gatekeeper", receipt: `A top-tier record over ${me.seasons} seasons - ${Math.round(me.winPct)}% wins, still chasing the ring.` });
+
+  const order: Record<EarnedBadge["tier"], number> = { villain: 0, dynasty: 1, champion: 2, gatekeeper: 3 };
+  return out.sort((a, b) => order[a.tier] - order[b.tier]);
 }
 
 function leagueAvg(all: ManagerDNA[], pick: (d: ManagerDNA) => number): number {
@@ -346,11 +533,23 @@ export function buildLeagueDnaProfile(args: {
   focalMemberId: string;
   managers: ManagerRawData[];
   sim?: SimGrades;
+  medals?: MedalRow[];
 }): LeagueDnaProfile | null {
-  const { allDna, focalMemberId, managers, sim } = args;
+  const { allDna, focalMemberId, managers, sim, medals } = args;
   const focal = allDna.find((d) => d.memberId === focalMemberId);
   if (!focal) return null;
-  const { archetype, desc } = classifyArchetype(focal);
+  // League-relative comparisons use the CURRENT league (members present in the latest
+  // season), not 18 years of departed/ghost member GUIDs - otherwise the baseline and
+  // identity rank are diluted by people who aren't in the league anymore.
+  const latestSeason = Math.max(0, ...managers.flatMap((m) => m.seasonRecords.map((r) => r.season)));
+  const currentIds = new Set(
+    managers.filter((m) => m.seasonRecords.some((r) => r.season === latestSeason)).map((m) => m.memberId),
+  );
+  let peers = allDna.filter((d) => currentIds.has(d.memberId));
+  if (peers.length < 6) peers = allDna; // safety: never rank against too small a set
+  if (!peers.some((d) => d.memberId === focal.memberId)) peers = [...peers, focal];
+  const { archetype, desc, receipt: archetypeReceipt, identityRank } = classifyRelativeArchetype(focal, peers);
+  const badges = computeEarnedBadges(focal.memberId, badgeStats(managers, medals ?? []));
 
   // Style-based career grades (heuristic): used directly when there's no sim coverage,
   // and as the Trading fallback when a covered league has no tradeable signal.
@@ -385,6 +584,9 @@ export function buildLeagueDnaProfile(args: {
     seasonsAnalyzed: focal.seasonsAnalyzed,
     archetype,
     archetypeDesc: desc,
+    archetypeReceipt,
+    identityRank,
+    badges,
     primaryTrait: computePrimaryTrait(focal, allDna),
     blindSpot: computeBlindSpot(focal, allDna, managers),
     leagueTwin: computeLeagueTwin(focal, allDna),

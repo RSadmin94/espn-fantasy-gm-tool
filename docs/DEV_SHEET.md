@@ -260,6 +260,8 @@ The codebase is large and layered: a React 19 front end, a tRPC/Express back end
 | **Bundle size** | Client is a single ~1.9 MB chunk | Slower first load; code-splitting would help |
 | **tsc baseline** | 2 known pre-existing errors: `DraftWarRoom.tsx(968,60)` & `(968,83)` `'myPick' possibly null` | Baseline only — any *other* tsc error = regression signal |
 | **ESPN auth** | Private-league JSON needs auth; cookie injection failed; relies on extension MAIN-world injection / recap scrape | Fragile dependency on ESPN internals |
+| **League DNA archetype (thin-margin guard)** | The Pass 1 league-relative classifier always picks the most-deviant axis even when the focal's lead over the league is tiny - e.g. Rod = "The Chaos Agent" at only 1.1x league churn (#3/14). No minimum-separation / lead-margin threshold. | Credibility - a confident label can overstate a thin statistical lead. Candidate Pass 1.5: require a min z-score / ratio before assigning a strong archetype, else fall to a steadier label. |
+| **League DNA champions (isChampion dead path)** | `buildManagerRawData` (`server/dnaRouter.ts`) hardcodes `isChampion: false` on every `SeasonRecord`, so the champion-comparison and champion-relative blind-spot logic in `leagueDnaProfile.ts` never resolves any champions (dead code path). Pass 1 badges sidestep it via local `league_medals` team-name resolution. | Correctness - champion-relative features silently produce empty comparisons. **Fix separately** (resolve champions from `league_medals` by team name into `isChampion`); do NOT mix into the archetype commit. |
 
 ---
 

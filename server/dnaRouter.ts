@@ -17,7 +17,8 @@
 
 import { z } from "zod";
 import { router, publicProcedure, isUserEntitled } from "./_core/trpc";
-import { getCachedView, getAllCachedSeasons, resolveActiveLeagueId } from "./db";
+import { getCachedView, getAllCachedSeasons, resolveActiveLeagueId, getDb } from "./db";
+import { sql } from "drizzle-orm";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import {
   calcLeagueDNA,
@@ -119,7 +120,7 @@ export async function buildManagerRawData(userId?: number): Promise<ManagerRawDa
       const tc = (team.transactionCounter as Record<string, unknown>) ?? {};
 
       mgr.seasonRecords.push({
-        season, wins, losses, ties, pf, pa,
+        season, teamName: (team.name as string) ?? "", wins, losses, ties, pf, pa,
         rank: (team.rankCalculatedFinal as number) ?? (team.rankFinal as number) ?? 0,
         madePlayoffs,
         isChampion: false, // simplified — set below if needed
@@ -236,16 +237,23 @@ export const dnaRouter = router({
     // league has no covered seasons (e.g. deep pre-2018 history) - then Drafting
     // falls back to the style-based grade inside buildLeagueDnaProfile.
     let sim = null;
+    let medals: Array<{ season: number; championOwner: string | null; runnerUpOwner: string | null; thirdPlaceOwner: string | null }> = [];
     try {
       const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null);
       if (leagueId && leagueId !== "default") {
         sim = await careerSimGrades(leagueId, co.ownerId, focalName);
+        const db = await getDb();
+        if (db) {
+          const r: any = await db.execute(sql`SELECT season, championOwner, runnerUpOwner, thirdPlaceOwner FROM league_medals WHERE leagueId = ${leagueId}`);
+          const rws = Array.isArray(r) ? (Array.isArray(r[0]) ? r[0] : r) : (r?.rows ?? []);
+          medals = rws.map((x: any) => ({ season: Number(x.season), championOwner: x.championOwner ?? null, runnerUpOwner: x.runnerUpOwner ?? null, thirdPlaceOwner: x.thirdPlaceOwner ?? null }));
+        }
       }
     } catch {
-      // leave sim null - style-based fallback
+      // leave sim/medals empty - style-based fallback
     }
 
-    const profile = buildLeagueDnaProfile({ allDna, focalMemberId: co.ownerId, managers, sim });
+    const profile = buildLeagueDnaProfile({ allDna, focalMemberId: co.ownerId, managers, sim, medals });
     if (!profile) return null;
     return gateLeagueDna(profile, isUserEntitled(ctx.user));
   }),

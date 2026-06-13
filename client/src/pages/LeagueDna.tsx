@@ -89,7 +89,36 @@ export function LeagueDna() {
                 <Eyebrow color={ACCENT}>Your Manager Archetype</Eyebrow>
                 <h1 className="mt-3 text-4xl md:text-6xl font-black leading-[0.95]">{data.archetype}</h1>
                 <p className="mt-3 max-w-2xl text-[15px] leading-relaxed" style={{ color: "#cfd2d8" }}>{data.archetypeDesc}</p>
-                <p className="mt-3 text-xs" style={{ color: MUTED }}>{data.seasonsAnalyzed} seasons analyzed</p>
+                {data.archetypeReceipt && (
+                  <div className="mt-4 flex items-start gap-2 max-w-2xl">
+                    <span className="mt-[5px] inline-block h-3.5 w-1 shrink-0 rounded-full" style={{ background: ACCENT }} />
+                    <p className="text-[15px] font-semibold leading-snug" style={{ color: ACCENT }}>{data.archetypeReceipt}</p>
+                  </div>
+                )}
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  {data.identityRank && (
+                    <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: "rgba(163,230,53,.12)", color: ACCENT, border: `1px solid ${ACCENT}40` }}>
+                      #{data.identityRank.rank} of {data.identityRank.of} in your league
+                    </span>
+                  )}
+                  <span className="text-xs" style={{ color: MUTED }}>{data.seasonsAnalyzed} seasons analyzed</span>
+                </div>
+                {data.badges && data.badges.length > 0 && (
+                  <div className="mt-5">
+                    <Eyebrow color={GOLD}>Earned Badges</Eyebrow>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {data.badges.map((b: { label: string; receipt: string; tier: string }, i: number) => (
+                        <div key={i} className="rounded-lg px-3 py-2 max-w-xs" style={{ background: "rgba(245,197,24,.08)", border: `1px solid ${GOLD}55` }}>
+                          <div className="flex items-center gap-1.5">
+                            <Crown className="h-3.5 w-3.5 shrink-0" style={{ color: GOLD }} />
+                            <span className="text-sm font-black" style={{ color: GOLD }}>{b.label}</span>
+                          </div>
+                          <p className="mt-0.5 text-xs leading-snug" style={{ color: "#cfd2d8" }}>{b.receipt}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
