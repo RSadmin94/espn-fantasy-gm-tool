@@ -1,4 +1,6 @@
 import type { CareerReport } from "./careerReportService";
+import type { ChampionshipPathResult } from "./championshipPath";
+import type { AcquisitionImpactResult } from "./acquisitionImpact";
 
 /**
  * Freemium gating for the Why Haven't I Won / Career Report.
@@ -255,4 +257,84 @@ export function gateOwnerProfile<
     entitled: false,
     ownProfile: false,
   } as T & { gated: boolean; entitled: boolean; ownProfile: boolean };
+}
+
+
+// --- Championship Path gating ------------------------------------------------
+// Free = the hook: the single "one thing" headline + identity (seasons in DB,
+// league size, confidence). Paid = the plan: positional gaps vs champions, the
+// Championship Profile table, closest-champion archetype, the rival blocking the
+// path, the ranked improvements and the action plan. Redaction is server-side.
+export type GatedChampionshipPath = ChampionshipPathResult & {
+  gated: boolean;
+  entitled: boolean;
+  lockedMoves: number;
+};
+
+export function gateChampionshipPath(
+  result: ChampionshipPathResult,
+  entitled: boolean,
+): GatedChampionshipPath {
+  const lockedMoves = result.recommendedActions.length + result.topImprovements.length;
+  if (entitled) {
+    return { ...result, gated: false, entitled: true, lockedMoves: 0 };
+  }
+  // FREE TEASER: keep the headline hook + identity; redact the whole plan.
+  return {
+    ...result,
+    championProfile: { QB: 0, RB: 0, WR: 0, TE: 0 },
+    championAvgPointsFor: 0,
+    championAvgWins: 0,
+    ownerProfile: { QB: 0, RB: 0, WR: 0, TE: 0 },
+    ownerAvgPointsFor: 0,
+    positionGaps: [],
+    biggestWeakness: null,
+    pointsForGap: 0,
+    closestChampion: null,
+    biggestThreat: null,
+    biggestRival: null,
+    topImprovements: [],
+    draftContext: null,
+    pastReasonContext: null,
+    recommendedActions: [],
+    narrative: "",
+    championshipProfile: { available: false, reason: null, positions: [], seasons: [], combined: { QB: 0, RB: 0, WR: 0, TE: 0 } },
+    weeklyStatsSeasons: [],
+    gated: true,
+    entitled: false,
+    lockedMoves,
+  };
+}
+
+// --- Acquisition Impact gating -----------------------------------------------
+// Free = your OWN dashboard (impact score, dependency, points/wins added, your
+// rank) + the insights about you. Paid = scouting the field: the league-wide
+// acquisition leaderboard, most-draft-reliant and top-roster-builder rankings,
+// and the all-time biggest-pickup seasons. Own data is free; ranking everyone
+// else is the weapon. Redaction is server-side.
+export type GatedAcquisitionImpact = AcquisitionImpactResult & {
+  gated: boolean;
+  entitled: boolean;
+  lockedManagers: number;
+};
+
+export function gateAcquisitionImpact(
+  result: AcquisitionImpactResult,
+  entitled: boolean,
+): GatedAcquisitionImpact {
+  if (entitled) {
+    return { ...result, gated: false, entitled: true, lockedManagers: 0 };
+  }
+  // FREE: own dashboard + insights stay; the league leaderboards are redacted.
+  return {
+    ...result,
+    bestAcquisitionManagers: [],
+    draftRelianceRanking: [],
+    rosterBuilderRanking: [],
+    topAcquisitionSeasons: [],
+    biggestAcquisitionSeason: null,
+    gated: true,
+    entitled: false,
+    lockedManagers: result.qualifiedCount,
+  };
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { router, publicProcedure, isUserEntitled } from "./_core/trpc";
-import { gateCareerReport } from "./leagueIntelGating";
+import { gateCareerReport, gateChampionshipPath, gateAcquisitionImpact } from "./leagueIntelGating";
 import { computeWhyHaventIWon } from "./whyHaventIWon";
 import { computeChampionshipPath } from "./championshipPath";
 import { computeAcquisitionImpact } from "./acquisitionImpact";
@@ -44,7 +44,8 @@ export const leagueIntelRouter = router({
     .input(optionalOwnerSalt)
     .query(async ({ ctx, input }) => {
       void input?.activeLeagueKey;
-      return computeChampionshipPath(ctx.user?.id, input?.ownerKey ?? null);
+      const result = await computeChampionshipPath(ctx.user?.id, input?.ownerKey ?? null);
+      return gateChampionshipPath(result, isUserEntitled(ctx.user));
     }),
 
   /** Feature 3 — Acquisition Impact™ */
@@ -52,6 +53,7 @@ export const leagueIntelRouter = router({
     .input(optionalOwnerSalt)
     .query(async ({ ctx, input }) => {
       void input?.activeLeagueKey;
-      return computeAcquisitionImpact(ctx.user?.id, input?.ownerKey ?? null);
+      const result = await computeAcquisitionImpact(ctx.user?.id, input?.ownerKey ?? null);
+      return gateAcquisitionImpact(result, isUserEntitled(ctx.user));
     }),
 });

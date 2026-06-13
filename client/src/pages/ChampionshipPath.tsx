@@ -62,6 +62,27 @@ function MiniCard({ icon, label, children, tone = "neutral" }: { icon: ReactNode
   );
 }
 
+function PathPaywall({ onUnlock, pending }: { onUnlock: () => void; pending: boolean }) {
+  return (
+    <div className={cn(PANEL, "p-8 text-center")}>
+      <Route className="mx-auto mb-3 h-8 w-8 text-lime-400" />
+      <p className="text-xl font-black text-white/95">Unlock your full Championship Path</p>
+      <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
+        The one-line verdict above is free. The plan that gets you there - your position-by-position
+        gaps vs the average champion, the champion you most resemble, the rival blocking your path,
+        and your ranked action plan - unlocks with Rivals Pro.
+      </p>
+      <button
+        onClick={onUnlock}
+        disabled={pending}
+        className="mt-5 inline-flex items-center gap-2 rounded-[10px] bg-lime-400 px-6 py-3 text-sm font-extrabold text-[#0e0a10] transition hover:brightness-110 disabled:opacity-60"
+      >
+        {pending ? "Opening..." : "Unlock the Path"}
+      </button>
+    </div>
+  );
+}
+
 export function ChampionshipPath() {
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
@@ -70,6 +91,10 @@ export function ChampionshipPath() {
     { staleTime: 60_000, enabled: leagueKeyReady },
   );
   const data = leagueKeyReady ? q.data : undefined;
+  const checkout = (trpc as any).billing.createCheckoutSession.useMutation({
+    onSuccess: (r: any) => { if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer"); },
+  });
+  const startCheckout = () => checkout.mutate({});
 
   return (
     <div className="min-h-screen w-full" style={PAGEBG}>
@@ -118,6 +143,10 @@ export function ChampionshipPath() {
               <p className="text-[22px] font-black leading-snug text-white/95 sm:text-[26px]">{data.headline}</p>
             </div>
 
+            {data.gated && (
+              <PathPaywall onUnlock={startCheckout} pending={checkout.isPending} />
+            )}
+            {!data.gated && (<>
             {/* Positional comparison */}
             <Section icon={<Trophy className="h-5 w-5" />} title="You vs the Champion Profile" subtitle="Starter points/game by position · amber line = champion benchmark">
               <div className="space-y-1">
@@ -255,6 +284,7 @@ export function ChampionshipPath() {
             <p className="px-1 text-[12px] text-white/30">
               Champion benchmark = average of league champions' starter scoring by position (real weekly data). Threat = worst head-to-head record, weighted by playoff losses. No projections.
             </p>
+            </>)}
           </div>
         )}
       </div>

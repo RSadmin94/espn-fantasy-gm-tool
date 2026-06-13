@@ -81,6 +81,27 @@ function RankRow({ rank, name, value, max, suffix, highlight, barClass }: { rank
   );
 }
 
+function AcqPaywall({ onUnlock, pending }: { onUnlock: () => void; pending: boolean }) {
+  return (
+    <div className={cn(PANEL, "p-8 text-center")}>
+      <ShoppingCart className="mx-auto mb-3 h-8 w-8 text-lime-400" />
+      <p className="text-xl font-black text-white/95">Scout the whole league</p>
+      <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
+        Your own acquisition dashboard above is free. The league leaderboards - who adds the most
+        value off waivers, who leans hardest on the draft, the top roster builders, and the biggest
+        in-season pickups in league history - unlock with Rivals Pro.
+      </p>
+      <button
+        onClick={onUnlock}
+        disabled={pending}
+        className="mt-5 inline-flex items-center gap-2 rounded-[10px] bg-lime-400 px-6 py-3 text-sm font-extrabold text-[#0e0a10] transition hover:brightness-110 disabled:opacity-60"
+      >
+        {pending ? "Opening..." : "Unlock the Leaderboards"}
+      </button>
+    </div>
+  );
+}
+
 export function AcquisitionImpact() {
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
@@ -90,6 +111,11 @@ export function AcquisitionImpact() {
   );
   const data = (leagueKeyReady ? q.data : undefined) as AcqResult | undefined;
   const f = data?.focal;
+  const gated = Boolean((data as any)?.gated);
+  const checkout = (trpc as any).billing.createCheckoutSession.useMutation({
+    onSuccess: (r: any) => { if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer"); },
+  });
+  const startCheckout = () => checkout.mutate({});
 
   return (
     <div className="min-h-screen w-full" style={PAGEBG}>
@@ -171,6 +197,10 @@ export function AcquisitionImpact() {
               </ul>
             </Section>
 
+            {gated && (
+              <AcqPaywall onUnlock={startCheckout} pending={checkout.isPending} />
+            )}
+            {!gated && (<>
             {/* Best Acquisition Managers */}
             <Section icon={<ShoppingCart className="h-5 w-5" />} title="Best Acquisition Managers" subtitle="League-relative acquisition impact (0–100)">
               <div className="space-y-1">
@@ -221,6 +251,7 @@ export function AcquisitionImpact() {
             <p className="px-1 text-[12px] text-white/30">
               Deterministic: a "non-drafted player" is any starter not on that owner's draft board that season. Wins Added counts games won where acquired starters exceeded the margin of victory. Confidence: {data.confidence}.
             </p>
+            </>)}
           </div>
         )}
       </div>
