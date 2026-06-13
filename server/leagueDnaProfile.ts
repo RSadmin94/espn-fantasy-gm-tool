@@ -212,13 +212,54 @@ function leaguePercentile(focalVal: number, allVals: number[]): number {
   return (less / (valid.length - 1)) * 100;
 }
 
-/** Scorecard grades are RELATIVE to the league, so a grade can never disagree with
- *  the league-relative primary trait - both are league-percentile based. */
-function computeScorecard(focal: ManagerDNA, all: ManagerDNA[]): { trading: DnaGrade; drafting: DnaGrade; roster: DnaGrade } {
+/** Per-owner career outcomes from season records - the results grades must respect. */
+function ownerOutcomes(managers: ManagerRawData[]): Map<string, { successScore: number; pfPerGame: number }> {
+  const out = new Map<string, { successScore: number; pfPerGame: number }>();
+  for (const m of managers) {
+    let w = 0, l = 0, t = 0, pf = 0, po = 0, titles = 0;
+    for (const r of m.seasonRecords) {
+      w += r.wins; l += r.losses; t += r.ties; pf += r.pf;
+      if (r.madePlayoffs) po++;
+      if (r.isChampion) titles++;
+    }
+    const games = w + l + t || 1;
+    const seasons = m.seasonRecords.length || 1;
+    const winPct = ((w + t * 0.5) / games) * 100;
+    const playoffRate = (po / seasons) * 100;
+    const titleNorm = (Math.min(titles, 3) / 3) * 100;
+    out.set(m.memberId, {
+      successScore: winPct * 0.55 + playoffRate * 0.25 + titleNorm * 0.2,
+      pfPerGame: pf / games,
+    });
+  }
+  return out;
+}
+
+/** Grades are RESULTS-anchored: dominated by how well the owner actually does
+ *  (win %, playoff rate, titles, points), with managing style as a secondary tilt.
+ *  That is why a champion can never land a failing grade - process alone is never
+ *  enough to sink a winner or inflate a loser. */
+function computeScorecard(focal: ManagerDNA, all: ManagerDNA[], managers: ManagerRawData[]): { trading: DnaGrade; drafting: DnaGrade; roster: DnaGrade } {
+  const outc = ownerOutcomes(managers);
+  const success = (d: ManagerDNA) => outc.get(d.memberId)?.successScore ?? 50;
+  const pf = (d: ManagerDNA) => outc.get(d.memberId)?.pfPerGame ?? 0;
+
+  const successVals = all.map(success);
+  const pfVals = all.map(pf);
+  const draftProcVals = all.map(draftingComposite);
+  const tradeActVals = all.map(tradingComposite);
+  const steadyVals = all.map(rosterComposite);
+
+  const sP = leaguePercentile(success(focal), successVals);
+  const pfP = leaguePercentile(pf(focal), pfVals);
+  const dpP = leaguePercentile(draftingComposite(focal), draftProcVals);
+  const taP = leaguePercentile(tradingComposite(focal), tradeActVals);
+  const stP = leaguePercentile(rosterComposite(focal), steadyVals);
+
   return {
-    trading: gradeFromScore(leaguePercentile(tradingComposite(focal), all.map(tradingComposite))),
-    drafting: gradeFromScore(leaguePercentile(draftingComposite(focal), all.map(draftingComposite))),
-    roster: gradeFromScore(leaguePercentile(rosterComposite(focal), all.map(rosterComposite))),
+    trading: gradeFromScore(0.55 * sP + 0.45 * taP),
+    drafting: gradeFromScore(0.6 * sP + 0.4 * dpP),
+    roster: gradeFromScore(0.55 * pfP + 0.25 * sP + 0.2 * stP),
   };
 }
 
@@ -263,7 +304,7 @@ export function buildLeagueDnaProfile(args: {
     primaryTrait: computePrimaryTrait(focal, allDna),
     blindSpot: computeBlindSpot(focal, allDna, managers),
     leagueTwin: computeLeagueTwin(focal, allDna),
-    scorecard: computeScorecard(focal, allDna),
+    scorecard: computeScorecard(focal, allDna, managers),
     draftDna: focal.draft,
     tradeDna: focal.trade,
     rosterDna: { waiver: focal.waiver, tilt: focal.tilt },
