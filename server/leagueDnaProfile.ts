@@ -69,8 +69,6 @@ function gradeFromScore(score: number): DnaGrade {
 // floors block hollow claims (no "Trade Shark" who never trades). "The Rock" is the
 // always-eligible identity for genuinely low-activity managers.
 
-type MedalRow = { season: number; championOwner: string | null; runnerUpOwner: string | null; thirdPlaceOwner: string | null };
-
 const r2 = (n: number) => Math.round(n * 10) / 10;
 const capR = (n: number) => Math.min(Math.max(n, 0), 9.9);
 
@@ -205,34 +203,30 @@ function classifyRelativeArchetype(
 // that season (within-season match). Under-matching only MISSES a badge - it can
 // never fabricate one. Many managers earn none; that scarcity is the point.
 
-function normName(s: string): string {
-  return (s || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g, "");
-}
+/** Authoritative per-owner trophy counts (person-merged across GUID / team-name changes),
+ *  sourced from the same ChampionshipAuthority that powers the Hall of Fame. Titles are
+ *  NEVER derived from raw medal/team-name matching here - that undercounts managers whose
+ *  championships were won under an earlier team identity (see ARCHITECTURE 8 / 9.1). */
+export type TrophyLite = { championships: number; championshipYears: number[]; runnerUps: number; thirdPlaceFinishes: number };
 
 type BadgeStat = { titles: number; titleSeasons: number[]; runnerUps: number; thirds: number; seasons: number; winPct: number; playoffRate: number };
 
-function badgeStats(managers: ManagerRawData[], medals: MedalRow[]): Map<string, BadgeStat> {
-  const bySeason = new Map<number, MedalRow>();
-  for (const m of medals) bySeason.set(m.season, m);
+function badgeStats(managers: ManagerRawData[], trophy: Map<string, TrophyLite>): Map<string, BadgeStat> {
   const out = new Map<string, BadgeStat>();
   for (const mgr of managers) {
-    let titles = 0, runnerUps = 0, thirds = 0, w = 0, l = 0, t = 0, po = 0;
-    const titleSeasons: number[] = [];
+    let w = 0, l = 0, t = 0, po = 0;
     for (const sr of mgr.seasonRecords) {
       w += sr.wins; l += sr.losses; t += sr.ties;
       if (sr.madePlayoffs) po++;
-      const med = bySeason.get(sr.season);
-      const tn = normName(sr.teamName ?? "");
-      if (med && tn) {
-        if (normName(med.championOwner ?? "") === tn) { titles++; titleSeasons.push(sr.season); }
-        else if (normName(med.runnerUpOwner ?? "") === tn) runnerUps++;
-        else if (normName(med.thirdPlaceOwner ?? "") === tn) thirds++;
-      }
     }
     const games = w + l + t || 1;
     const seasons = mgr.seasonRecords.length || 1;
+    const tr = trophy.get(mgr.memberId);
     out.set(mgr.memberId, {
-      titles, titleSeasons: titleSeasons.sort((a, b) => a - b), runnerUps, thirds,
+      titles: tr?.championships ?? 0,
+      titleSeasons: (tr?.championshipYears ?? []).slice().sort((a, b) => a - b),
+      runnerUps: tr?.runnerUps ?? 0,
+      thirds: tr?.thirdPlaceFinishes ?? 0,
       seasons: mgr.seasonRecords.length,
       winPct: ((w + t * 0.5) / games) * 100,
       playoffRate: (po / seasons) * 100,
@@ -538,9 +532,9 @@ export function buildLeagueDnaProfile(args: {
   focalMemberId: string;
   managers: ManagerRawData[];
   sim?: SimGrades;
-  medals?: MedalRow[];
+  trophyByMember?: Map<string, TrophyLite>;
 }): LeagueDnaProfile | null {
-  const { allDna, focalMemberId, managers, sim, medals } = args;
+  const { allDna, focalMemberId, managers, sim, trophyByMember } = args;
   const focal = allDna.find((d) => d.memberId === focalMemberId);
   if (!focal) return null;
   // League-relative comparisons use the CURRENT league (members present in the latest
@@ -554,7 +548,7 @@ export function buildLeagueDnaProfile(args: {
   if (peers.length < 6) peers = allDna; // safety: never rank against too small a set
   if (!peers.some((d) => d.memberId === focal.memberId)) peers = [...peers, focal];
   const { archetype, desc, receipt: archetypeReceipt, identityRank } = classifyRelativeArchetype(focal, peers);
-  const badges = computeEarnedBadges(focal.memberId, badgeStats(managers, medals ?? []));
+  const badges = computeEarnedBadges(focal.memberId, badgeStats(managers, trophyByMember ?? new Map()));
 
   // Style-based career grades (heuristic): used directly when there's no sim coverage,
   // and as the Trading fallback when a covered league has no tradeable signal.

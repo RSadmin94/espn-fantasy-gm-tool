@@ -17,8 +17,7 @@
 
 import { z } from "zod";
 import { router, publicProcedure, isUserEntitled } from "./_core/trpc";
-import { getCachedView, getAllCachedSeasons, resolveActiveLeagueId, getDb } from "./db";
-import { sql } from "drizzle-orm";
+import { getCachedView, getAllCachedSeasons, resolveActiveLeagueId } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import {
   calcLeagueDNA,
@@ -31,6 +30,7 @@ import {
 import { classifyDraftPickRawPick } from "./draftTruth";
 import { buildLeagueDnaProfile } from "./leagueDnaProfile";
 import { gateLeagueDna } from "./leagueIntelGating";
+import { computeAllTrophyHistory } from "./championshipHistoryBuilder";
 import { careerSimGrades } from "./draftGradeForDna";
 
 // ─── ESPN data extraction helpers ────────────────────────────────────────────
@@ -237,23 +237,19 @@ export const dnaRouter = router({
     // league has no covered seasons (e.g. deep pre-2018 history) - then Drafting
     // falls back to the style-based grade inside buildLeagueDnaProfile.
     let sim = null;
-    let medals: Array<{ season: number; championOwner: string | null; runnerUpOwner: string | null; thirdPlaceOwner: string | null }> = [];
+    let trophyByMember = new Map<string, { championships: number; championshipYears: number[]; runnerUps: number; thirdPlaceFinishes: number }>();
     try {
       const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null);
       if (leagueId && leagueId !== "default") {
         sim = await careerSimGrades(leagueId, co.ownerId, focalName);
-        const db = await getDb();
-        if (db) {
-          const r: any = await db.execute(sql`SELECT season, championOwner, runnerUpOwner, thirdPlaceOwner FROM league_medals WHERE leagueId = ${leagueId}`);
-          const rws = Array.isArray(r) ? (Array.isArray(r[0]) ? r[0] : r) : (r?.rows ?? []);
-          medals = rws.map((x: any) => ({ season: Number(x.season), championOwner: x.championOwner ?? null, runnerUpOwner: x.runnerUpOwner ?? null, thirdPlaceOwner: x.thirdPlaceOwner ?? null }));
-        }
       }
+      const trophy = await computeAllTrophyHistory(undefined, ctx.user.id);
+      trophyByMember = new Map(Array.from(trophy, ([k, v]) => [k, { championships: v.championships, championshipYears: v.championshipYears, runnerUps: v.runnerUps, thirdPlaceFinishes: v.thirdPlaceFinishes }]));
     } catch {
-      // leave sim/medals empty - style-based fallback
+      // leave sim/trophy empty - style-based fallback
     }
 
-    const profile = buildLeagueDnaProfile({ allDna, focalMemberId: co.ownerId, managers, sim, medals });
+    const profile = buildLeagueDnaProfile({ allDna, focalMemberId: co.ownerId, managers, sim, trophyByMember });
     if (!profile) return null;
     return gateLeagueDna(profile, isUserEntitled(ctx.user));
   }),
@@ -271,22 +267,15 @@ export const dnaRouter = router({
     const allDna = calcLeagueDNA(managers, focalLabel);
     const latestSeason = Math.max(0, ...managers.flatMap((m) => m.seasonRecords.map((r) => r.season)));
 
-    let medals: Array<{ season: number; championOwner: string | null; runnerUpOwner: string | null; thirdPlaceOwner: string | null }> = [];
+    let trophyByMember = new Map<string, { championships: number; championshipYears: number[]; runnerUps: number; thirdPlaceFinishes: number }>();
     let leagueName = "Your League";
     try {
-      const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null);
-      if (leagueId && leagueId !== "default") {
-        const db = await getDb();
-        if (db) {
-          const r: any = await db.execute(sql`SELECT season, championOwner, runnerUpOwner, thirdPlaceOwner FROM league_medals WHERE leagueId = ${leagueId}`);
-          const rws = Array.isArray(r) ? (Array.isArray(r[0]) ? r[0] : r) : (r?.rows ?? []);
-          medals = rws.map((x: any) => ({ season: Number(x.season), championOwner: x.championOwner ?? null, runnerUpOwner: x.runnerUpOwner ?? null, thirdPlaceOwner: x.thirdPlaceOwner ?? null }));
-        }
-      }
+      const trophy = await computeAllTrophyHistory(undefined, ctx.user.id);
+      trophyByMember = new Map(Array.from(trophy, ([k, v]) => [k, { championships: v.championships, championshipYears: v.championshipYears, runnerUps: v.runnerUps, thirdPlaceFinishes: v.thirdPlaceFinishes }]));
       const row = latestSeason ? await getCachedView(latestSeason, "combined", undefined, { userId: ctx.user.id }) : null;
       const nm = (row?.payload as Record<string, unknown> | undefined)?.settings as Record<string, unknown> | undefined;
       if (nm?.name) leagueName = String(nm.name);
-    } catch { /* best-effort name + medals */ }
+    } catch { /* best-effort name + trophies */ }
 
     const co = await resolveCurrentOwner({ id: ctx.user.id });
     const focalId = co.isSetupComplete ? co.ownerId : null;
@@ -297,7 +286,7 @@ export const dnaRouter = router({
     const cast = allDna
       .filter((d) => currentIds.has(d.memberId))
       .map((d) => {
-        const prof = buildLeagueDnaProfile({ allDna, focalMemberId: d.memberId, managers, medals });
+        const prof = buildLeagueDnaProfile({ allDna, focalMemberId: d.memberId, managers, trophyByMember });
         if (!prof) return null;
         return {
           memberId: d.memberId,
