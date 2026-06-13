@@ -259,6 +259,62 @@ export const dnaRouter = router({
   }),
 
   /**
+   * The Cast - the whole current league's identity layer (archetype, receipt,
+   * identity rank, badges) for the shareable "movie poster" surface. Free/identity
+   * only: no paid dossier fields are returned. Reuses the myProfile pipeline.
+   */
+  leagueCast: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.user?.id) return null;
+    const focalLabel = await focalH2hLabelForUser(ctx.user.id);
+    const managers = await buildManagerRawData(ctx.user.id);
+    if (managers.length === 0) return null;
+    const allDna = calcLeagueDNA(managers, focalLabel);
+    const latestSeason = Math.max(0, ...managers.flatMap((m) => m.seasonRecords.map((r) => r.season)));
+
+    let medals: Array<{ season: number; championOwner: string | null; runnerUpOwner: string | null; thirdPlaceOwner: string | null }> = [];
+    let leagueName = "Your League";
+    try {
+      const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null);
+      if (leagueId && leagueId !== "default") {
+        const db = await getDb();
+        if (db) {
+          const r: any = await db.execute(sql`SELECT season, championOwner, runnerUpOwner, thirdPlaceOwner FROM league_medals WHERE leagueId = ${leagueId}`);
+          const rws = Array.isArray(r) ? (Array.isArray(r[0]) ? r[0] : r) : (r?.rows ?? []);
+          medals = rws.map((x: any) => ({ season: Number(x.season), championOwner: x.championOwner ?? null, runnerUpOwner: x.runnerUpOwner ?? null, thirdPlaceOwner: x.thirdPlaceOwner ?? null }));
+        }
+      }
+      const row = latestSeason ? await getCachedView(latestSeason, "combined", undefined, { userId: ctx.user.id }) : null;
+      const nm = (row?.payload as Record<string, unknown> | undefined)?.settings as Record<string, unknown> | undefined;
+      if (nm?.name) leagueName = String(nm.name);
+    } catch { /* best-effort name + medals */ }
+
+    const co = await resolveCurrentOwner({ id: ctx.user.id });
+    const focalId = co.isSetupComplete ? co.ownerId : null;
+    const currentIds = new Set(
+      managers.filter((m) => m.seasonRecords.some((r) => r.season === latestSeason)).map((m) => m.memberId),
+    );
+
+    const cast = allDna
+      .filter((d) => currentIds.has(d.memberId))
+      .map((d) => {
+        const prof = buildLeagueDnaProfile({ allDna, focalMemberId: d.memberId, managers, medals });
+        if (!prof) return null;
+        return {
+          memberId: d.memberId,
+          ownerName: prof.ownerName,
+          archetype: prof.archetype,
+          archetypeReceipt: prof.archetypeReceipt,
+          identityRank: prof.identityRank,
+          badges: prof.badges,
+          isYou: d.memberId === focalId,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+
+    return { leagueName, season: latestSeason, cast };
+  }),
+
+  /**
    * Single manager DNA profile by memberId.
    */
   managerProfile: publicProcedure
