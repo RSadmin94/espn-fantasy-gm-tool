@@ -165,6 +165,19 @@ Note: the canonical union-find engine in `ownerProfileService.ts` is for **cross
 person merging** (same human across GUID changes / name variants), not for raw owner-key →
 display-name lookup. For "what is this team-season's owner name," go straight to `teams`.
 
+### 9.2 Titles / trophies per owner — use `ChampionshipAuthority` ONLY, never raw medals
+
+Any feature that reports **how many championships / finals / trophies an owner has** MUST read
+from `computeAllTrophyHistory` (`championshipHistoryBuilder.ts`) / `buildChampionshipAuthority`
+(`championshipAuthority.ts`) — the same person-merged source the Hall of Fame uses. Do **NOT**
+count titles by matching `league_medals.championOwner` to a team name on per-season records:
+team names and member GUIDs drift across seasons, so a manager who won under an earlier identity
+(different team name / GUID) gets undercounted. The trophy map is keyed by ESPN member id
+(braced GUID), which reconciles directly with `teams.ownerId` / DNA `memberId`. This exact trap
+bit the first League DNA badge pass (Christian showed 1 title instead of 3) — fixed by sourcing
+titles from the authority. Same rule as 9.1: per-owner history is authoritative only after the
+person-merge, never from raw season rows or name matching.
+
 ## 10. Known boundaries & gotchas
 
 - **2009:** legacy draft scrape now attempts it (`LEGACY_SCRAPE_MIN = 2009`), but ESPN may
