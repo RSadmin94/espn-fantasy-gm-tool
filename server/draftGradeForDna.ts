@@ -2,8 +2,13 @@
 // Thin orchestration over the existing Draft Reality Simulator (draftRealitySimulator.ts).
 // Produces a focal owner's CAREER draft-only grade by aggregating that engine's
 // per-season `draftGrade` (the "no moves after draft day" finish, 0-100 = league rank)
-// across every season that actually has weekly coverage. Past seasons never change,
-// so their results are cached for the life of the process; we do NOT recompute them.
+// across every season that actually has weekly coverage.
+//
+// Verified against the live DB (league 457622): player-level data (weekly scores AND
+// draft pick player-IDs) begins at 2018, so that is the real floor - not an arbitrary
+// cap. Pre-2018 seasons exist as team scores + draft NAMES only, which the lineup
+// rebuild cannot use. Each covered season is cached (all owners), so we compute a
+// league-season once and share it across users; completed seasons never expire.
 
 import { getDb } from "./db";
 import { sql } from "drizzle-orm";
@@ -15,23 +20,55 @@ export type DraftOnlyGrade = {
   seasons: number[];     // which seasons (descending)
 } | null;
 
-type Cached = { at: number; focalGrade: number | null; confidence: string };
-const seasonCache = new Map<string, Cached>(); // key `${leagueId}:${season}`
-const FRESH_MS = 30 * 60 * 1000; // current/in-progress seasons re-check every 30 min
-const MAX_SEASONS = 6;           // cap live cost; recent draft skill is what matters
+type SeasonCache = {
+  at: number;
+  confidence: string;
+  weeksSimulated: number;
+  byKey: Record<string, number>;   // ownerKey (GUID) -> draftGrade
+  byName: Record<string, number>;  // normalized ownerName -> draftGrade
+};
+
+const seasonCache = new Map<string, SeasonCache>(); // key `${leagueId}:${season}`
+const FRESH_MS = 30 * 60 * 1000; // re-check in-progress (non-High) seasons every 30 min
+const FLOOR_SEASON = 2018;       // verified: player-level data begins here
+const MIN_WEEKS = 10;            // a season needs a meaningful chunk of weeks to count
 
 const norm = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
 function rowsOf(res: any): any[] {
-  if (Array.isArray(res)) return res;
+  if (Array.isArray(res)) return Array.isArray(res[0]) ? res[0] : res;
   if (res && Array.isArray(res.rows)) return res.rows;
   return [];
 }
 
+/** Run (or reuse cached) Draft Reality for one league-season; caches ALL owners. */
+async function getSeason(leagueId: string, season: number): Promise<SeasonCache> {
+  const key = `${leagueId}:${season}`;
+  const hit = seasonCache.get(key);
+  // Completed ("High") seasons are immutable - trust the cache forever.
+  if (hit && (hit.confidence === "High" || Date.now() - hit.at < FRESH_MS)) return hit;
+  try {
+    const res = await computeDraftReality(season, leagueId);
+    const byKey: Record<string, number> = {};
+    const byName: Record<string, number> = {};
+    for (const o of res.ownerImpacts) {
+      byKey[o.ownerKey] = o.draftGrade;
+      byName[norm(o.ownerName)] = o.draftGrade;
+    }
+    const entry: SeasonCache = { at: Date.now(), confidence: res.confidence, weeksSimulated: res.weeksSimulated, byKey, byName };
+    seasonCache.set(key, entry);
+    return entry;
+  } catch {
+    const entry: SeasonCache = { at: Date.now(), confidence: "Limited", weeksSimulated: 0, byKey: {}, byName: {} };
+    seasonCache.set(key, entry);
+    return entry;
+  }
+}
+
 /**
  * Aggregate the focal owner's draft-only ("no moves") grade across covered seasons.
- * Returns null when no season has usable weekly data (e.g. deep pre-2018 history),
- * so callers can fall back to a style-based drafting grade.
+ * Returns null when no season has usable weekly data, so callers can fall back to a
+ * style-based drafting grade.
  */
 export async function careerDraftOnlyGrade(
   leagueId: string,
@@ -44,46 +81,27 @@ export async function careerDraftOnlyGrade(
   const seasonRows = rowsOf(
     await db.execute(
       sql`SELECT DISTINCT season FROM espn_raw_cache
-          WHERE leagueId=${leagueId} AND viewName='combined' AND season>=2018
+          WHERE leagueId=${leagueId} AND viewName='combined' AND season>=${FLOOR_SEASON}
           ORDER BY season DESC`,
     ),
   );
   const seasons = seasonRows
     .map((r) => Number(r.season ?? r.SEASON ?? 0))
-    .filter((s) => s >= 2018)
-    .slice(0, MAX_SEASONS);
+    .filter((s) => s >= FLOOR_SEASON);
   if (seasons.length === 0) return null;
 
+  const nk = norm(focalName);
   const grades: number[] = [];
   const used: number[] = [];
 
   for (const season of seasons) {
-    const key = `${leagueId}:${season}`;
-    const hit = seasonCache.get(key);
-    let focalGrade: number | null;
-    let confidence: string;
-
-    // Cache hit: trust completed seasons forever; refresh only stale in-progress ones.
-    if (hit && (hit.confidence === "High" || Date.now() - hit.at < FRESH_MS)) {
-      focalGrade = hit.focalGrade;
-      confidence = hit.confidence;
-    } else {
-      try {
-        const res = await computeDraftReality(season, leagueId);
-        confidence = res.confidence;
-        const impact =
-          res.ownerImpacts.find((o) => o.ownerKey === focalKey) ??
-          res.ownerImpacts.find((o) => norm(o.ownerName) === norm(focalName));
-        focalGrade = impact ? impact.draftGrade : null;
-      } catch {
-        focalGrade = null;
-        confidence = "Limited";
-      }
-      seasonCache.set(key, { at: Date.now(), focalGrade, confidence });
-    }
-
-    if (focalGrade != null && confidence !== "Limited") {
-      grades.push(focalGrade);
+    const sc = await getSeason(leagueId, season);
+    // Skip seasons that lack a real draft+weekly picture (Limited) or too few weeks
+    // (e.g. an in-progress season whose draft IDs aren't captured yet).
+    if (sc.confidence === "Limited" || sc.weeksSimulated < MIN_WEEKS) continue;
+    const g = sc.byKey[focalKey] ?? sc.byName[nk];
+    if (g != null) {
+      grades.push(g);
       used.push(season);
     }
   }
