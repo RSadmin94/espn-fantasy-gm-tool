@@ -130,7 +130,12 @@ export async function computeDraftReality(season: number, leagueId: string): Pro
   const picks: any[] = combined.draftDetail?.picks ?? [];
   const draftedByOwner = new Map<string, Set<number>>();
   for (const p of picks) {
-    const guid: string | null = p.memberId ?? null;
+    // ESPN sometimes returns picks with a blank/missing memberId (owner GUID). When that
+    // happens, resolve the owner from the pick's teamId via the combined-cache team map,
+    // so the owner's drafted roster is still attributed instead of silently dropping that
+    // owner from the simulation for the whole season.
+    const rawGuid = typeof p.memberId === "string" ? p.memberId.trim() : "";
+    const guid: string | null = rawGuid || ownerByTeamId.get(Number(p.teamId)) || null;
     const espnId = Number(p.playerId);
     if (!guid || !Number.isFinite(espnId) || espnId <= 0) continue;
     if (!draftedByOwner.has(guid)) draftedByOwner.set(guid, new Set());
