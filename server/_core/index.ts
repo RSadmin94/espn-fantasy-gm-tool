@@ -13,6 +13,7 @@ import { weeklyIntelHandler } from "../weeklyIntelHandler";
 import { registerAdvisorStreamRoute } from "../advisorStreamHandler";
 import { registerStripeWebhook } from "../stripeWebhook";
 import { registerHealthRoute } from "./healthRoute";
+import { registerReceiptOg } from "../receiptOg";
 
 async function startServer() {
   const { runMigrations } = await import("../runMigrations");
@@ -49,6 +50,9 @@ async function startServer() {
   // Scheduled job handlers — must be before Vite/static fallthrough
   app.post("/api/scheduled/espn-refresh", espnRefreshHandler);
   app.post("/api/scheduled/weekly-intel", weeklyIntelHandler);
+
+  // Receipt OG image route + /p/:token meta injection (before the SPA fallthrough)
+  registerReceiptOg(app);
 
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
