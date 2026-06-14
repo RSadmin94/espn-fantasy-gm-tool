@@ -80,6 +80,7 @@ import {
 } from "./historicalDataService";
 import { upsertMatchups } from "./espnPersistence";
 import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmSeasonRosters, gmLeagueSettings, gmMatchups, syncRuns, leagueMedals, ownerAliases, gmTransactions, gmRosterEntries, gmPlayers } from "../drizzle/schema";
+import { resolveShareMeta } from "./receiptShare";
 import {
   eq as eqDrizzle,
   and as andDrizzle,
@@ -1416,6 +1417,119 @@ export const appRouter = router({
         const nr = await db.select({ id: lcTable.id }).from(lcTable)
           .where(andDrizzle(eqDrizzle(lcTable.userId, ctx.user.id), eqDrizzle(lcTable.leagueId, lid))).limit(1);
         return { ok: true as const, leagueConnectionId: nr[0]?.id ?? 0, leagueName: nm, alreadyExisted: false };
+      }),
+
+    // Preview the owner grid for an already-synced league (identity only, no auth).
+    // With a receipt `code`, preselects the league + owner the founder published.
+    previewClaim: publicProcedure
+      .input(z.object({ code: z.string().max(16).optional(), leagueId: z.string().max(32).optional() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return null;
+        let leagueId = input.leagueId?.trim() || null;
+        let suggestedMemberId: string | null = null;
+        if (input.code) {
+          const meta = await resolveShareMeta(input.code);
+          if (meta) {
+            suggestedMemberId = meta.memberId;
+            if (!leagueId) leagueId = meta.leagueId;
+            // Legacy shares stored no leagueId: infer from synced data if unambiguous.
+            if (!leagueId && suggestedMemberId) {
+              const rows = await db.select({ leagueId: gmTeams.leagueId }).from(gmTeams)
+                .where(eqDrizzle(gmTeams.ownerId, suggestedMemberId));
+              const distinct = [...new Set(rows.map((r) => r.leagueId))];
+              if (distinct.length === 1) leagueId = distinct[0]!;
+            }
+          }
+        }
+        if (!leagueId) return null;
+        const seasonRows = await db.select({ season: gmTeams.season }).from(gmTeams)
+          .where(eqDrizzle(gmTeams.leagueId, leagueId)).orderBy(descDrizzle(gmTeams.season)).limit(1);
+        const season = seasonRows[0]?.season ?? null;
+        if (season == null) return null;
+        const teams = await db.select({ teamId: gmTeams.teamId, name: gmTeams.name, ownerName: gmTeams.ownerName, ownerId: gmTeams.ownerId })
+          .from(gmTeams).where(andDrizzle(eqDrizzle(gmTeams.leagueId, leagueId), eqDrizzle(gmTeams.season, season)));
+        const owners = teams.filter((t) => t.ownerId).map((t) => ({
+          teamId: t.teamId, ownerKey: `id:${t.ownerId}`, ownerName: t.ownerName || "Unknown", franchiseName: t.name || "",
+        }));
+        const lc = await db.select({ leagueName: lcTable.leagueName }).from(lcTable)
+          .where(eqDrizzle(lcTable.leagueId, leagueId)).limit(1);
+        const leagueName = lc[0]?.leagueName || `League ${leagueId}`;
+        const suggestedOwnerKey = suggestedMemberId && owners.some((o) => o.ownerKey === `id:${suggestedMemberId}`)
+          ? `id:${suggestedMemberId}` : null;
+        return { leagueId, leagueName, season, owners, suggestedOwnerKey };
+      }),
+
+    // Claim an owner profile in an already-synced league WITHOUT ESPN credentials.
+    // Sets selectedTeamId (=> isSetupComplete) and activates the league. Identity tier only;
+    // credentials stay null (claimed, not verified). Refuses if another user holds the slot.
+    claimOwner: protectedProcedure
+      .input(z.object({
+        leagueId: z.string().min(1).max(32),
+        ownerKey: z.string().min(1).max(64),
+        teamId: z.number().int(),
+        season: z.number().int(),
+        code: z.string().max(16).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { success: false as const, error: "no_db" };
+        const leagueId = input.leagueId.trim();
+        const ownerKey = input.ownerKey.trim();
+        const memberId = ownerKey.replace(/^id:/, "");
+
+        // 1) Validate the owner+team exists in synced data for this league/season.
+        const match = await db.select({ teamId: gmTeams.teamId, name: gmTeams.name, ownerName: gmTeams.ownerName })
+          .from(gmTeams)
+          .where(andDrizzle(eqDrizzle(gmTeams.leagueId, leagueId), eqDrizzle(gmTeams.season, input.season), eqDrizzle(gmTeams.ownerId, memberId)))
+          .limit(1);
+        const team = match[0];
+        if (!team || team.teamId !== input.teamId) return { success: false as const, error: "owner_not_found" };
+
+        // 2) Slot guard: refuse if another user already holds this owner slot (claimed or verified).
+        const holders = await db.select({ userId: lcTable.userId }).from(lcTable)
+          .where(andDrizzle(eqDrizzle(lcTable.leagueId, leagueId), eqDrizzle(lcTable.selectedOwnerKey, ownerKey)))
+          .limit(5);
+        if (holders.some((h) => h.userId !== ctx.user.id)) return { success: false as const, error: "already_claimed" };
+
+        // 3) Find-or-create the user's credential-free connection for this league+season.
+        const existing = await db.select({ id: lcTable.id }).from(lcTable)
+          .where(andDrizzle(eqDrizzle(lcTable.userId, ctx.user.id), eqDrizzle(lcTable.provider, "espn"), eqDrizzle(lcTable.leagueId, leagueId), eqDrizzle(lcTable.season, input.season)))
+          .limit(1);
+        let connId: number;
+        if (existing[0]) {
+          connId = existing[0].id;
+          await db.update(lcTable).set({
+            selectedTeamId: input.teamId, selectedOwnerKey: ownerKey, selectedOwnerName: team.ownerName || null,
+            selectedFranchiseName: team.name || null, selectedSeason: input.season, updatedAt: new Date(),
+          }).where(eqDrizzle(lcTable.id, connId));
+        } else {
+          let nm = `League ${leagueId}`;
+          const ln = await db.select({ leagueName: lcTable.leagueName }).from(lcTable).where(eqDrizzle(lcTable.leagueId, leagueId)).limit(1);
+          if (ln[0]?.leagueName) nm = ln[0].leagueName;
+          await db.insert(lcTable).values({
+            userId: ctx.user.id, provider: "espn", leagueId, leagueName: nm, season: input.season,
+            isActive: true, syncStatus: "pending",
+            selectedTeamId: input.teamId, selectedOwnerKey: ownerKey, selectedOwnerName: team.ownerName || null,
+            selectedFranchiseName: team.name || null, selectedSeason: input.season,
+          } as any);
+          const nr = await db.select({ id: lcTable.id }).from(lcTable)
+            .where(andDrizzle(eqDrizzle(lcTable.userId, ctx.user.id), eqDrizzle(lcTable.provider, "espn"), eqDrizzle(lcTable.leagueId, leagueId), eqDrizzle(lcTable.season, input.season)))
+            .limit(1);
+          connId = nr[0]?.id ?? 0;
+        }
+        if (!connId) return { success: false as const, error: "create_failed" };
+
+        // 4) Activate the claimed league.
+        await setActiveLeagueForUser(ctx.user.id, connId);
+
+        // 5) Confidence: high when a receipt code points at this exact owner.
+        let confidence: "high" | "low" = "low";
+        if (input.code) {
+          const meta = await resolveShareMeta(input.code);
+          if (meta?.memberId === memberId && (!meta.leagueId || meta.leagueId === leagueId)) confidence = "high";
+        }
+        return { success: true as const, leagueConnectionId: connId, confidence, isSetupComplete: true };
       }),
   }),
   offseason: offseasonRouter,

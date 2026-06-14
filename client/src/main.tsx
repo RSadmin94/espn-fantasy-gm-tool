@@ -14,6 +14,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { ConnectESPN } from "./pages/ConnectESPN";
 import { LandingPage } from "./pages/LandingPage";
 import { ReceiptShare } from "./pages/ReceiptShare";
+import { Claim } from "./pages/Claim";
 import { SyncData } from "./pages/SyncData";
 import { Dashboard } from "./pages/Dashboard";
 import { Transactions } from "./pages/Transactions";
@@ -130,6 +131,7 @@ const router = createBrowserRouter([
       { path: "/sso-callback", element: <SSOCallbackPage /> },
       { path: "/p/:token", element: <ReceiptShare /> },
       { path: "/r/:code", element: <ReceiptShare /> },
+      { path: "/claim", element: <Claim /> },
       {
         element: <ProtectedLayout />,
         children: [

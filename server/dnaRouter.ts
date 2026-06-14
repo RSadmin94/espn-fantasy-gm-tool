@@ -397,9 +397,17 @@ export const dnaRouter = router({
         pt: prof.primaryTrait ?? null,
         rv,
       });
+      // Capture the active leagueId so a shared /r/:code can preselect league + owner
+      // in the claim path. Best-effort: leave null if unresolved.
+      let claimLeagueId: string | null = null;
+      try {
+        const rl = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null);
+        claimLeagueId = rl.leagueId && rl.leagueId !== "default" ? rl.leagueId : null;
+      } catch { /* leave null */ }
       const code = await mintShareCode({
         token,
         memberId: targetId,
+        leagueId: claimLeagueId,
         createdByUserId: ctx.user.id,
       });
       return { token, code };

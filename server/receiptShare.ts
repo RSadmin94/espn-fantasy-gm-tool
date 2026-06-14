@@ -74,3 +74,28 @@ export async function resolveShareToken(code: string): Promise<string | null> {
     return null;
   }
 }
+
+/**
+ * Read the share row metadata (suggested owner + league) without bumping views.
+ * Used by the claim path to preselect the owner/league from a /r/:code link.
+ */
+export async function resolveShareMeta(
+  code: string,
+): Promise<{ token: string; memberId: string | null; leagueId: string | null } | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const clean = (code || "").trim();
+  if (!clean || clean.length > 16) return null;
+  try {
+    const rows = await db
+      .select({ token: receiptShares.token, memberId: receiptShares.memberId, leagueId: receiptShares.leagueId })
+      .from(receiptShares)
+      .where(eq(receiptShares.code, clean))
+      .limit(1);
+    const r = rows[0];
+    return r ? { token: r.token, memberId: r.memberId ?? null, leagueId: r.leagueId ?? null } : null;
+  } catch (e) {
+    console.error("[receiptShare] meta resolve failed:", e);
+    return null;
+  }
+}

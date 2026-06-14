@@ -109,15 +109,15 @@ export function ReceiptShare() {
 
       {/* Warm/cold CTA */}
       {isSignedIn ? (
-        <Link to="/the-cast" className="mt-5 flex items-center justify-center gap-2 rounded-[12px] px-5 py-3.5 text-sm font-extrabold" style={{ background: LIME, color: "#0b0809" }}>
-          Open your War Room <ArrowRight className="h-4 w-4" />
+        <Link to={code ? `/claim?code=${encodeURIComponent(code)}` : "/the-cast"} className="mt-5 flex items-center justify-center gap-2 rounded-[12px] px-5 py-3.5 text-sm font-extrabold" style={{ background: LIME, color: "#0b0809" }}>
+          {code ? "This is me \u2014 reveal my card" : "Open your War Room"} <ArrowRight className="h-4 w-4" />
         </Link>
       ) : (
         <div className="mt-5 rounded-2xl p-5 text-center" style={{ border: `1px solid ${LINE}`, background: "rgba(255,255,255,0.02)" }}>
           <p className="text-base font-black">Every manager in your league has a DNA like this.</p>
           <p className="mt-1 text-sm" style={{ color: MUTED }}>Find out yours - your archetype, your badges, your rank in the league.</p>
-          <Link to="/" className="mt-4 inline-flex items-center justify-center gap-2 rounded-[12px] px-6 py-3 text-sm font-extrabold" style={{ background: LIME, color: "#0b0809" }}>
-            Reveal your League DNA <ArrowRight className="h-4 w-4" />
+          <Link to={code ? `/claim?code=${encodeURIComponent(code)}` : "/"} className="mt-4 inline-flex items-center justify-center gap-2 rounded-[12px] px-6 py-3 text-sm font-extrabold" style={{ background: LIME, color: "#0b0809" }}>
+            {code ? "Reveal my card" : "Reveal your League DNA"} <ArrowRight className="h-4 w-4" />
           </Link>
           <p className="mt-2 text-[11px]" style={{ color: MUTED }}>Know your league. Own your rivals.</p>
         </div>
