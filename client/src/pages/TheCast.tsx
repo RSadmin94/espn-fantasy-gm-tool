@@ -2,7 +2,8 @@ import { type CSSProperties, type ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
-import { Crown, Loader2, Clapperboard } from "lucide-react";
+import { useState } from "react";
+import { Crown, Loader2, Clapperboard, Share2 } from "lucide-react";
 
 const GOLD = "#f5c518";
 const LIME = "#a3e635";
@@ -93,6 +94,16 @@ export function TheCast() {
   const ready = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
   const q = (trpc as any).dna.leagueCast.useQuery(withLeagueSalt({}, leagueContextKey), { staleTime: 60_000, enabled: ready });
   const data = q.data as { leagueName: string; season: number; cast: CastMember[]; pastChampions?: PastChampion[] } | null | undefined;
+  const createReceipt = (trpc as any).dna.createReceipt.useMutation();
+  const [copied, setCopied] = useState(false);
+  const shareMyReceipt = async () => {
+    try {
+      const res = await createReceipt.mutateAsync({});
+      await navigator.clipboard.writeText(`${window.location.origin}/p/${res.token}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch { /* error surfaced via createReceipt.isError */ }
+  };
 
   if (!ready || q.isLoading) {
     return (
@@ -128,6 +139,10 @@ export function TheCast() {
           <h2 className="mt-3 text-xl font-bold tracking-wide" style={{ color: "#cfd2d8" }}>{data.leagueName}</h2>
           <h1 className="mt-1 text-6xl font-black tracking-tight md:text-8xl" style={{ textShadow: "0 2px 30px rgba(245,197,24,.25)" }}>THE CAST</h1>
           <div className="mt-3 text-xs uppercase tracking-[0.3em]" style={{ color: MUTED }}>{data.season} Season &middot; {data.cast.length} Managers</div>
+          <button onClick={shareMyReceipt} disabled={createReceipt.isPending} className="mt-5 inline-flex items-center gap-2 rounded-[10px] px-5 py-2.5 text-sm font-extrabold transition hover:brightness-110 disabled:opacity-60" style={{ background: GOLD, color: "#0b0809" }}>
+            <Share2 className="h-4 w-4" /> {createReceipt.isPending ? "Creating..." : copied ? "Link copied!" : "Share my Receipt"}
+          </button>
+          {createReceipt.isError && <div className="mt-2 text-[11px]" style={{ color: "#f87171" }}>{String(createReceipt.error?.message ?? "Couldn't create link")}</div>}
         </div>
 
         {headliners.length > 0 && (

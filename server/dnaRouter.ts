@@ -32,6 +32,7 @@ import { buildLeagueDnaProfile } from "./leagueDnaProfile";
 import { gateLeagueDna } from "./leagueIntelGating";
 import { computeAllTrophyHistory } from "./championshipHistoryBuilder";
 import { careerSimGrades } from "./draftGradeForDna";
+import { signReceipt, verifyReceipt } from "./receiptToken";
 
 // ─── ESPN data extraction helpers ────────────────────────────────────────────
 
@@ -311,6 +312,78 @@ export const dnaRouter = router({
 
     return { leagueName, season: latestSeason, cast, pastChampions };
   }),
+
+  /**
+   * Create a shareable, frozen DNA Receipt token for a current-league member
+   * (defaults to the signed-in user's own card). Stateless + HMAC-signed - no DB.
+   */
+  createReceipt: publicProcedure
+    .input(z.object({ memberId: z.string().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.user?.id) throw new Error("Sign in to create a Receipt.");
+      const managers = await buildManagerRawData(ctx.user.id);
+      if (managers.length === 0) throw new Error("No league data to build a Receipt yet.");
+      const allDna = calcLeagueDNA(managers);
+      const latestSeason = Math.max(0, ...managers.flatMap((m) => m.seasonRecords.map((r) => r.season)));
+      const co = await resolveCurrentOwner({ id: ctx.user.id });
+      const targetId = input?.memberId || (co.isSetupComplete ? co.ownerId : null);
+      if (!targetId) throw new Error("Finish setup to create your Receipt.");
+
+      let trophyByMember = new Map<string, { championships: number; championshipYears: number[]; runnerUps: number; thirdPlaceFinishes: number }>();
+      let trophyRaw = new Map<string, { name: string; championships: number; championshipYears: number[] }>();
+      let leagueName = "Your League";
+      try {
+        const trophy = await computeAllTrophyHistory(undefined, ctx.user.id);
+        trophyByMember = new Map(Array.from(trophy, ([k, v]) => [k, { championships: v.championships, championshipYears: v.championshipYears, runnerUps: v.runnerUps, thirdPlaceFinishes: v.thirdPlaceFinishes }]));
+        trophyRaw = new Map(Array.from(trophy, ([k, v]) => [k, { name: v.name, championships: v.championships, championshipYears: v.championshipYears }]));
+        const row = latestSeason ? await getCachedView(latestSeason, "combined", undefined, { userId: ctx.user.id }) : null;
+        const nm = (row?.payload as Record<string, unknown> | undefined)?.settings as Record<string, unknown> | undefined;
+        if (nm?.name) leagueName = String(nm.name);
+      } catch { /* best-effort league name + trophies */ }
+
+      const prof = buildLeagueDnaProfile({ allDna, focalMemberId: targetId, managers, trophyByMember });
+      if (!prof) throw new Error("Couldn't build a Receipt for that manager.");
+      const tr = trophyRaw.get(targetId);
+      const token = signReceipt({
+        v: 1,
+        mid: targetId,
+        nm: prof.ownerName,
+        lg: leagueName,
+        ar: prof.archetype,
+        rc: prof.archetypeReceipt,
+        rk: prof.identityRank ? [prof.identityRank.rank, prof.identityRank.of] : null,
+        bd: prof.badges.map((b) => ({ l: b.label, t: b.tier })),
+        ch: tr?.championships ?? 0,
+        cy: (tr?.championshipYears ?? []).slice().sort((a, b) => a - b),
+        ts: Math.floor(Date.now() / 1000),
+      });
+      return { token };
+    }),
+
+  /**
+   * Public (no-auth) read of a frozen DNA Receipt token. Powers /p/:token.
+   */
+  getReceipt: publicProcedure
+    .input(z.object({ token: z.string().max(4096) }))
+    .query(({ input }) => {
+      const p = verifyReceipt(input.token);
+      if (!p) return { valid: false as const };
+      return {
+        valid: true as const,
+        receipt: {
+          memberId: p.mid,
+          ownerName: p.nm,
+          leagueName: p.lg,
+          archetype: p.ar,
+          archetypeReceipt: p.rc,
+          identityRank: p.rk ? { rank: p.rk[0], of: p.rk[1] } : null,
+          badges: p.bd.map((b) => ({ label: b.l, tier: b.t })),
+          championships: p.ch,
+          championshipYears: p.cy,
+          dateISO: new Date(p.ts * 1000).toISOString(),
+        },
+      };
+    }),
 
   /**
    * Single manager DNA profile by memberId.

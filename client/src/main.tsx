@@ -13,6 +13,7 @@ import { AppShell } from "./components/AppShell";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ConnectESPN } from "./pages/ConnectESPN";
 import { LandingPage } from "./pages/LandingPage";
+import { ReceiptShare } from "./pages/ReceiptShare";
 import { SyncData } from "./pages/SyncData";
 import { Dashboard } from "./pages/Dashboard";
 import { Transactions } from "./pages/Transactions";
@@ -127,6 +128,7 @@ const router = createBrowserRouter([
       { path: "/sign-in", element: <SignInPage /> },
       { path: "/sign-in/*", element: <SignInPage /> },
       { path: "/sso-callback", element: <SSOCallbackPage /> },
+      { path: "/p/:token", element: <ReceiptShare /> },
       {
         element: <ProtectedLayout />,
         children: [
