@@ -29,9 +29,11 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 export function ReceiptShare() {
-  const { token } = useParams();
+  const { token, code } = useParams();
   const { isSignedIn } = useAuth();
-  const q = trpc.dna.getReceipt.useQuery({ token: token ?? "" }, { enabled: !!token, staleTime: Infinity, retry: false });
+  const byToken = trpc.dna.getReceipt.useQuery({ token: token ?? "" }, { enabled: !!token, staleTime: Infinity, retry: false });
+  const byCode = trpc.dna.getReceiptByCode.useQuery({ code: code ?? "" }, { enabled: !!code, staleTime: Infinity, retry: false });
+  const q = code ? byCode : byToken;
 
   const r = q.data?.valid ? q.data.receipt : null;
   useEffect(() => {

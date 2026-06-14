@@ -129,6 +129,7 @@ const router = createBrowserRouter([
       { path: "/sign-in/*", element: <SignInPage /> },
       { path: "/sso-callback", element: <SSOCallbackPage /> },
       { path: "/p/:token", element: <ReceiptShare /> },
+      { path: "/r/:code", element: <ReceiptShare /> },
       {
         element: <ProtectedLayout />,
         children: [

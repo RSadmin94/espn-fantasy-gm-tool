@@ -944,6 +944,29 @@ export const funnelEvents = mysqlTable(
 export type FunnelEvent = typeof funnelEvents.$inferSelect;
 export type InsertFunnelEvent = typeof funnelEvents.$inferInsert;
 
+// Receipt Shares - short links for DNA Receipts.
+// Maps a short code -> the full signed Receipt token, so shared URLs are
+// /r/<code> (~30 chars) instead of /p/<~400-char token>. Also enables
+// per-share view tracking for the funnel.
+export const receiptShares = mysqlTable(
+  "receipt_shares",
+  {
+    code: varchar("code", { length: 16 }).primaryKey(),
+    token: text("token").notNull(),
+    memberId: varchar("memberId", { length: 64 }),
+    leagueId: varchar("leagueId", { length: 32 }),
+    createdByUserId: int("createdByUserId"),
+    views: int("views").notNull().default(0),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_rs_createdByUserId").on(t.createdByUserId),
+    index("idx_rs_createdAt").on(t.createdAt),
+  ],
+);
+export type ReceiptShare = typeof receiptShares.$inferSelect;
+export type InsertReceiptShare = typeof receiptShares.$inferInsert;
+
 // ─── Onboarding State ──────────────────────────────────────────────────────────
 // Tracks which profile the user is on in the sequential reveal (0=self, 1=champion, 2=rival)
 export const onboardingState = mysqlTable(

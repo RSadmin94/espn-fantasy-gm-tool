@@ -10,6 +10,7 @@ import fs from "fs";
 import path from "path";
 import type { Express, Request, Response, NextFunction } from "express";
 import { verifyReceipt, type ReceiptPayload } from "./receiptToken";
+import { resolveShareToken } from "./receiptShare";
 
 // Fonts: Poppins, shipped in client/public/fonts -> dist/public/fonts on build.
 // resvg loads fonts from directories (no buffer API in 2.6.x), so we resolve the dir.
@@ -183,6 +184,26 @@ export function registerReceiptOg(app: Express) {
       res.status(200).type("html").send(injectReceiptMeta(html, token, p, origin));
     } catch (e) {
       console.error("[receipt-og] /p meta inject failed:", e);
+      next();
+    }
+  });
+
+  // 3) /r/:code -> short-link landing. Resolves the code to its stored token, then
+  // does the same meta injection. User-facing URL stays short; the long token only
+  // appears (invisibly) inside the og:image meta tag.
+  app.get("/r/:code", async (req: Request, res: Response, next: NextFunction) => {
+    if (process.env.NODE_ENV === "development") return next();
+    try {
+      const token = await resolveShareToken(String(req.params.code || ""));
+      if (!token) return next(); // unknown code -> let the SPA render its not-found state
+      const p = verifyReceipt(token);
+      const indexPath = path.resolve(process.cwd(), "dist", "public", "index.html");
+      const html = await fs.promises.readFile(indexPath, "utf-8");
+      const proto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0] || req.protocol || "https";
+      const origin = `${proto}://${req.get("host")}`;
+      res.status(200).type("html").send(injectReceiptMeta(html, token, p, origin));
+    } catch (e) {
+      console.error("[receipt-og] /r meta inject failed:", e);
       next();
     }
   });

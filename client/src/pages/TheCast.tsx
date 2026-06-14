@@ -99,7 +99,10 @@ export function TheCast() {
   const shareMyReceipt = async () => {
     try {
       const res = await createReceipt.mutateAsync({});
-      await navigator.clipboard.writeText(`${window.location.origin}/p/${res.token}`);
+      const link = res.code
+        ? `${window.location.origin}/r/${res.code}`
+        : `${window.location.origin}/p/${res.token}`;
+      await navigator.clipboard.writeText(link);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch { /* error surfaced via createReceipt.isError */ }

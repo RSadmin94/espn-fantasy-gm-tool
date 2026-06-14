@@ -33,6 +33,7 @@ import { gateLeagueDna } from "./leagueIntelGating";
 import { computeAllTrophyHistory } from "./championshipHistoryBuilder";
 import { careerSimGrades } from "./draftGradeForDna";
 import { signReceipt, verifyReceipt } from "./receiptToken";
+import { mintShareCode, resolveShareToken } from "./receiptShare";
 
 // ─── ESPN data extraction helpers ────────────────────────────────────────────
 
@@ -357,7 +358,12 @@ export const dnaRouter = router({
         cy: (tr?.championshipYears ?? []).slice().sort((a, b) => a - b),
         ts: Math.floor(Date.now() / 1000),
       });
-      return { token };
+      const code = await mintShareCode({
+        token,
+        memberId: targetId,
+        createdByUserId: ctx.user.id,
+      });
+      return { token, code };
     }),
 
   /**
@@ -367,6 +373,34 @@ export const dnaRouter = router({
     .input(z.object({ token: z.string().max(4096) }))
     .query(({ input }) => {
       const p = verifyReceipt(input.token);
+      if (!p) return { valid: false as const };
+      return {
+        valid: true as const,
+        receipt: {
+          memberId: p.mid,
+          ownerName: p.nm,
+          leagueName: p.lg,
+          archetype: p.ar,
+          archetypeReceipt: p.rc,
+          identityRank: p.rk ? { rank: p.rk[0], of: p.rk[1] } : null,
+          badges: p.bd.map((b) => ({ label: b.l, tier: b.t })),
+          championships: p.ch,
+          championshipYears: p.cy,
+          dateISO: new Date(p.ts * 1000).toISOString(),
+        },
+      };
+    }),
+
+  /**
+   * Public read of a Receipt by its short share code (powers /r/:code).
+   * Resolves the code to its stored token, then decodes it like getReceipt.
+   */
+  getReceiptByCode: publicProcedure
+    .input(z.object({ code: z.string().min(1).max(16) }))
+    .query(async ({ input }) => {
+      const token = await resolveShareToken(input.code);
+      if (!token) return { valid: false as const };
+      const p = verifyReceipt(token);
       if (!p) return { valid: false as const };
       return {
         valid: true as const,
