@@ -24,6 +24,12 @@ export type ReceiptPayload = {
   ch: number; // championships
   cy: number[]; // championship years
   ts: number; // unix seconds - frozen date
+
+  // --- Dossier free-enrichment (all OPTIONAL; absence = legacy token; keeps v:1) ---
+  tw?: { n: string; m: number } | null; // league twin: name, similarity %
+  bs?: string | null; // blind spot (one line)
+  pt?: string | null; // primary trait (one line)
+  rv?: { n: string; s: number; y?: number; pe?: number } | null; // top rival
 };
 
 function secret(): string {

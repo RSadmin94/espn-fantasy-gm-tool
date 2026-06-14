@@ -32,8 +32,9 @@ import { buildLeagueDnaProfile } from "./leagueDnaProfile";
 import { gateLeagueDna } from "./leagueIntelGating";
 import { computeAllTrophyHistory } from "./championshipHistoryBuilder";
 import { careerSimGrades } from "./draftGradeForDna";
-import { signReceipt, verifyReceipt } from "./receiptToken";
+import { signReceipt, verifyReceipt, type ReceiptPayload } from "./receiptToken";
 import { mintShareCode, resolveShareToken } from "./receiptShare";
+import { getRivalryScoresFromDb } from "./rivalryService";
 
 // ─── ESPN data extraction helpers ────────────────────────────────────────────
 
@@ -204,6 +205,28 @@ export async function buildManagerRawData(userId?: number): Promise<ManagerRawDa
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
+/** Shared decode -> public receipt shape, so getReceipt and getReceiptByCode cannot drift. */
+function payloadToReceipt(p: ReceiptPayload) {
+  return {
+    memberId: p.mid,
+    ownerName: p.nm,
+    leagueName: p.lg,
+    archetype: p.ar,
+    archetypeReceipt: p.rc,
+    identityRank: p.rk ? { rank: p.rk[0], of: p.rk[1] } : null,
+    badges: p.bd.map((b) => ({ label: b.l, tier: b.t })),
+    championships: p.ch,
+    championshipYears: p.cy,
+    dateISO: new Date(p.ts * 1000).toISOString(),
+    leagueTwin: p.tw ? { ownerName: p.tw.n, similarityPct: p.tw.m } : null,
+    blindSpot: p.bs ?? null,
+    primaryTrait: p.pt ?? null,
+    topRival: p.rv
+      ? { name: p.rv.n, severity: p.rv.s, yearsActive: p.rv.y ?? null, playoffEliminations: p.rv.pe ?? null }
+      : null,
+  };
+}
+
 export const dnaRouter = router({
 
   /**
@@ -345,6 +368,18 @@ export const dnaRouter = router({
       const prof = buildLeagueDnaProfile({ allDna, focalMemberId: targetId, managers, trophyByMember });
       if (!prof) throw new Error("Couldn't build a Receipt for that manager.");
       const tr = trophyRaw.get(targetId);
+
+      // Top rival snapshot (free hook). Best-effort: if rivalry data is unavailable,
+      // omit rv and still create the Receipt.
+      let rv: { n: string; s: number; pe: number } | null = null;
+      try {
+        const rivals = await getRivalryScoresFromDb(targetId);
+        const top = rivals.slice().sort((a, b) => b.rivalryScore - a.rivalryScore)[0];
+        if (top?.rivalName) {
+          rv = { n: top.rivalName, s: Math.round(top.rivalryScore), pe: top.playoffEliminations };
+        }
+      } catch { /* omit rv on any failure */ }
+
       const token = signReceipt({
         v: 1,
         mid: targetId,
@@ -357,6 +392,10 @@ export const dnaRouter = router({
         ch: tr?.championships ?? 0,
         cy: (tr?.championshipYears ?? []).slice().sort((a, b) => a - b),
         ts: Math.floor(Date.now() / 1000),
+        tw: prof.leagueTwin ? { n: prof.leagueTwin.ownerName, m: Math.round(prof.leagueTwin.similarityPct) } : null,
+        bs: prof.blindSpot ?? null,
+        pt: prof.primaryTrait ?? null,
+        rv,
       });
       const code = await mintShareCode({
         token,
@@ -374,21 +413,7 @@ export const dnaRouter = router({
     .query(({ input }) => {
       const p = verifyReceipt(input.token);
       if (!p) return { valid: false as const };
-      return {
-        valid: true as const,
-        receipt: {
-          memberId: p.mid,
-          ownerName: p.nm,
-          leagueName: p.lg,
-          archetype: p.ar,
-          archetypeReceipt: p.rc,
-          identityRank: p.rk ? { rank: p.rk[0], of: p.rk[1] } : null,
-          badges: p.bd.map((b) => ({ label: b.l, tier: b.t })),
-          championships: p.ch,
-          championshipYears: p.cy,
-          dateISO: new Date(p.ts * 1000).toISOString(),
-        },
-      };
+      return { valid: true as const, receipt: payloadToReceipt(p) };
     }),
 
   /**
@@ -402,21 +427,7 @@ export const dnaRouter = router({
       if (!token) return { valid: false as const };
       const p = verifyReceipt(token);
       if (!p) return { valid: false as const };
-      return {
-        valid: true as const,
-        receipt: {
-          memberId: p.mid,
-          ownerName: p.nm,
-          leagueName: p.lg,
-          archetype: p.ar,
-          archetypeReceipt: p.rc,
-          identityRank: p.rk ? { rank: p.rk[0], of: p.rk[1] } : null,
-          badges: p.bd.map((b) => ({ label: b.l, tier: b.t })),
-          championships: p.ch,
-          championshipYears: p.cy,
-          dateISO: new Date(p.ts * 1000).toISOString(),
-        },
-      };
+      return { valid: true as const, receipt: payloadToReceipt(p) };
     }),
 
   /**
