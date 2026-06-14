@@ -1422,25 +1422,23 @@ export const appRouter = router({
     // Preview the owner grid for an already-synced league (identity only, no auth).
     // With a receipt `code`, preselects the league + owner the founder published.
     previewClaim: publicProcedure
-      .input(z.object({ code: z.string().max(16).optional(), leagueId: z.string().max(32).optional() }))
+      .input(z.object({ code: z.string().min(1).max(16) }))
       .query(async ({ input }) => {
         const db = await getDb();
         if (!db) return null;
-        let leagueId = input.leagueId?.trim() || null;
-        let suggestedMemberId: string | null = null;
-        if (input.code) {
-          const meta = await resolveShareMeta(input.code);
-          if (meta) {
-            suggestedMemberId = meta.memberId;
-            if (!leagueId) leagueId = meta.leagueId;
-            // Legacy shares stored no leagueId: infer from synced data if unambiguous.
-            if (!leagueId && suggestedMemberId) {
-              const rows = await db.select({ leagueId: gmTeams.leagueId }).from(gmTeams)
-                .where(eqDrizzle(gmTeams.ownerId, suggestedMemberId));
-              const distinct = [...new Set(rows.map((r) => r.leagueId))];
-              if (distinct.length === 1) leagueId = distinct[0]!;
-            }
-          }
+        // A claim must be backed by a valid source. Today that is a receipt /r/:code;
+        // Cast/League invite resolvers slot in here in Phase 2. No valid source => no grid,
+        // so there is no free-form "enter a league id and list its owners" path.
+        const meta = await resolveShareMeta(input.code);
+        if (!meta) return null;
+        const suggestedMemberId: string | null = meta.memberId;
+        let leagueId: string | null = meta.leagueId;
+        // Legacy shares stored no leagueId: infer from synced data if unambiguous.
+        if (!leagueId && suggestedMemberId) {
+          const rows = await db.select({ leagueId: gmTeams.leagueId }).from(gmTeams)
+            .where(eqDrizzle(gmTeams.ownerId, suggestedMemberId));
+          const distinct = [...new Set(rows.map((r) => r.leagueId))];
+          if (distinct.length === 1) leagueId = distinct[0]!;
         }
         if (!leagueId) return null;
         const seasonRows = await db.select({ season: gmTeams.season }).from(gmTeams)
@@ -1469,7 +1467,7 @@ export const appRouter = router({
         ownerKey: z.string().min(1).max(64),
         teamId: z.number().int(),
         season: z.number().int(),
-        code: z.string().max(16).optional(),
+        code: z.string().min(1).max(16),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
@@ -1477,6 +1475,21 @@ export const appRouter = router({
         const leagueId = input.leagueId.trim();
         const ownerKey = input.ownerKey.trim();
         const memberId = ownerKey.replace(/^id:/, "");
+
+        // 0) Source gate: the claim must be authorized by a valid source that resolves to
+        // THIS league. Today that is a receipt /r/:code; Cast/League invites slot in here later.
+        // No valid source, or a source for a different league => reject. This is the security
+        // boundary that prevents free-form league lookup + claiming any owner.
+        const source = await resolveShareMeta(input.code);
+        let sourceLeagueId = source?.leagueId ?? null;
+        if (source && !sourceLeagueId && source.memberId) {
+          const rows = await db.select({ leagueId: gmTeams.leagueId }).from(gmTeams)
+            .where(eqDrizzle(gmTeams.ownerId, source.memberId));
+          const distinct = [...new Set(rows.map((r) => r.leagueId))];
+          if (distinct.length === 1) sourceLeagueId = distinct[0]!;
+        }
+        if (!source || !sourceLeagueId) return { success: false as const, error: "invalid_source" };
+        if (sourceLeagueId !== leagueId) return { success: false as const, error: "source_league_mismatch" };
 
         // 1) Validate the owner+team exists in synced data for this league/season.
         const match = await db.select({ teamId: gmTeams.teamId, name: gmTeams.name, ownerName: gmTeams.ownerName })
@@ -1523,12 +1536,9 @@ export const appRouter = router({
         // 4) Activate the claimed league.
         await setActiveLeagueForUser(ctx.user.id, connId);
 
-        // 5) Confidence: high when a receipt code points at this exact owner.
-        let confidence: "high" | "low" = "low";
-        if (input.code) {
-          const meta = await resolveShareMeta(input.code);
-          if (meta?.memberId === memberId && (!meta.leagueId || meta.leagueId === leagueId)) confidence = "high";
-        }
+        // 5) Confidence: high when the source points at this exact owner; low for a
+        // same-league grid pick (still authorized, just self-selected).
+        const confidence: "high" | "low" = source.memberId === memberId ? "high" : "low";
         return { success: true as const, leagueConnectionId: connId, confidence, isSetupComplete: true };
       }),
   }),

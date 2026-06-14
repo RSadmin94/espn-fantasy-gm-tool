@@ -36,7 +36,6 @@ type Owner = { teamId: number; ownerKey: string; ownerName: string; franchiseNam
 export function Claim() {
   const [params] = useSearchParams();
   const code = params.get("code") ?? "";
-  const leagueIdParam = params.get("leagueId") ?? "";
   const { isLoaded, isSignedIn } = useAuth();
   const navigate = useNavigate();
   const [showGrid, setShowGrid] = useState(false);
@@ -44,8 +43,8 @@ export function Claim() {
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
   const preview = trpc.league.previewClaim.useQuery(
-    { code: code || undefined, leagueId: leagueIdParam || undefined },
-    { enabled: !!isSignedIn && (!!code || !!leagueIdParam), staleTime: Infinity, retry: false },
+    { code },
+    { enabled: !!isSignedIn && !!code, staleTime: Infinity, retry: false },
   );
 
   const claim = trpc.league.claimOwner.useMutation({
@@ -69,7 +68,7 @@ export function Claim() {
 
   // Not signed in: bounce to sign-in, preserving the code so we return here after auth.
   if (!isSignedIn) {
-    const back = "/claim" + (code ? `?code=${encodeURIComponent(code)}` : leagueIdParam ? `?leagueId=${encodeURIComponent(leagueIdParam)}` : "");
+    const back = "/claim" + (code ? `?code=${encodeURIComponent(code)}` : "");
     return <Navigate to={`/sign-in?redirect_url=${encodeURIComponent(back)}`} replace />;
   }
 
@@ -95,7 +94,7 @@ export function Claim() {
   const doClaim = (o: Owner) => {
     setErrMsg(null);
     setPendingKey(o.ownerKey);
-    claim.mutate({ leagueId: data.leagueId, ownerKey: o.ownerKey, teamId: o.teamId, season: data.season, code: code || undefined });
+    claim.mutate({ leagueId: data.leagueId, ownerKey: o.ownerKey, teamId: o.teamId, season: data.season, code });
   };
 
   const suggested = data.suggestedOwnerKey ? data.owners.find((o) => o.ownerKey === data.suggestedOwnerKey) ?? null : null;
