@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/react-router";
 import { Crown, Loader2, ArrowRight } from "lucide-react";
 import type { CSSProperties } from "react";
 import { trpc } from "@/lib/trpc";
+import { PublicDossier } from "./PublicDossier";
 
 const GOLD = "#f5c518";
 const LIME = "#a3e635";
@@ -106,6 +107,9 @@ export function ReceiptShare() {
         <div className="my-4 h-px" style={{ background: LINE }} />
         <div className="text-[11px]" style={{ color: MUTED }}>Frozen {frozen} &middot; gmwarroom.online</div>
       </div>
+
+      {/* The Dossier - identity-tier depth beneath the hero card (token-safe fields only) */}
+      <PublicDossier r={r} />
 
       {/* Warm/cold CTA */}
       {isSignedIn ? (
