@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Link, useParams } from "react-router";
 import { useAuth } from "@clerk/react-router";
 import { Crown, Loader2, ArrowRight } from "lucide-react";
 import type { CSSProperties } from "react";
 import { trpc } from "@/lib/trpc";
 import { PublicDossier } from "./PublicDossier";
+import { useFunnel } from "@/lib/funnel";
 
 const GOLD = "#f5c518";
 const LIME = "#a3e635";
@@ -40,6 +41,18 @@ export function ReceiptShare() {
   useEffect(() => {
     document.title = r ? `${r.ownerName} - ${r.archetype} | Fantasy Football Rivals` : "DNA Receipt | Fantasy Football Rivals";
   }, [r]);
+
+  // Funnel: anonymous receipt + public Dossier views (durable visitorId stitch key in metadata).
+  const track = useFunnel();
+  const firedView = useRef(false);
+  useEffect(() => {
+    if (r && !firedView.current) {
+      firedView.current = true;
+      const page = code ? "/r/:code" : "/p/:token";
+      track("receipt_viewed", { eventType: "page_view", page, extra: { code: code ?? null, hasToken: !!token, member: r.memberId } });
+      track("public_dossier_viewed", { eventType: "feature_open", page, extra: { code: code ?? null } });
+    }
+  }, [r, track, code, token]);
 
   if (q.isLoading) {
     return <Shell><div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" style={{ color: GOLD }} /></div></Shell>;

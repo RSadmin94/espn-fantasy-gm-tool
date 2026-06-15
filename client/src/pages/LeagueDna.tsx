@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
+import { useFunnel } from "@/lib/funnel";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import {
@@ -44,12 +45,31 @@ export function LeagueDna() {
   const checkout = (trpc as any).billing.createCheckoutSession.useMutation({
     onSuccess: (r: any) => { if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer"); },
   });
-  const log = (trpc as any).usageMonitor.logUIEvent.useMutation();
+  // Funnel events (visitorId stitch via metadata; userId added server-side). Canonical funnel
+  // names plus the legacy dna_* names kept for existing UsageMonitor dashboards.
+  const track = useFunnel();
   const snap = useRef(false);
   const pay = useRef(false);
-  useEffect(() => { if (!snap.current && data) { snap.current = true; log.mutate({ eventType: "feature_open", featureName: "dna_snapshot_viewed" }); } }, [data]);
-  useEffect(() => { if (gated && !pay.current) { pay.current = true; log.mutate({ eventType: "feature_open", featureName: "dna_paywall_viewed" }); } }, [gated]);
-  const startCheckout = () => { log.mutate({ eventType: "cta_click", featureName: "dna_unlock_clicked" }); checkout.mutate({}); };
+  useEffect(() => {
+    if (!snap.current && data) {
+      snap.current = true;
+      track("league_dna_viewed", { eventType: "page_view", page: "league-dna" });
+      track("dna_snapshot_viewed", { eventType: "feature_open", page: "league-dna" });
+    }
+  }, [data, track]);
+  useEffect(() => {
+    if (gated && !pay.current) {
+      pay.current = true;
+      track("dossier_paid_section_viewed", { eventType: "feature_open", page: "league-dna", extra: { section: "league_dna" } });
+      track("dna_paywall_viewed", { eventType: "feature_open", page: "league-dna" });
+    }
+  }, [gated, track]);
+  const startCheckout = () => {
+    track("upgrade_clicked", { eventType: "cta_click", page: "league-dna", extra: { section: "league_dna" } });
+    track("dna_unlock_clicked", { eventType: "cta_click", page: "league-dna" });
+    track("checkout_started", { eventType: "cta_click", page: "league-dna" });
+    checkout.mutate({});
+  };
 
   const loading = !ready || q.isLoading;
 

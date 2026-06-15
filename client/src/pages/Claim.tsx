@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "@clerk/react-router";
 import { Crown, Loader2, ArrowRight, Check } from "lucide-react";
 import type { CSSProperties } from "react";
 import { trpc } from "@/lib/trpc";
+import { useFunnel } from "@/lib/funnel";
 
 const GOLD = "#f5c518";
 const LIME = "#a3e635";
@@ -38,6 +39,7 @@ export function Claim() {
   const code = params.get("code") ?? "";
   const { isLoaded, isSignedIn } = useAuth();
   const navigate = useNavigate();
+  const track = useFunnel();
   const [showGrid, setShowGrid] = useState(false);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [errMsg, setErrMsg] = useState<string | null>(null);
@@ -50,6 +52,8 @@ export function Claim() {
   const claim = trpc.league.claimOwner.useMutation({
     onSuccess: (res) => {
       if (res?.success) {
+        // Bridge event: carries visitorId (metadata) + userId (server ctx) — stitches anon -> user.
+        track("claim_completed", { eventType: "feature_open", page: "/claim", extra: { code: code || null, confidence: res.confidence ?? null, leagueConnectionId: res.leagueConnectionId ?? null } });
         navigate("/league-dna");
       } else {
         setErrMsg(claimErrorText(res?.error));
@@ -61,6 +65,15 @@ export function Claim() {
       setPendingKey(null);
     },
   });
+
+  // Funnel: claim screen reached with intent. Fires once when the preview is ready.
+  const firedStart = useRef(false);
+  useEffect(() => {
+    if (preview.data && !firedStart.current) {
+      firedStart.current = true;
+      track("claim_started", { eventType: "feature_open", page: "/claim", extra: { code: code || null, leagueId: preview.data.leagueId, suggested: !!preview.data.suggestedOwnerKey } });
+    }
+  }, [preview.data, track, code]);
 
   if (!isLoaded) {
     return <Shell><div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" style={{ color: GOLD }} /></div></Shell>;
