@@ -9431,13 +9431,19 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       const totalB = sideBValues.reduce((s, v) => s + v.compositeValue, 0) + pickValueB;
 
       const ratio = totalB > 0 ? totalA / totalB : 1;
+      // Symmetric verdict ladder (LABELING ONLY — totals/ratio math is unchanged).
+      // ratio = totalA / totalB; > 1 means side A ("You") receives more value. The prior
+      // chain left "SLIGHT EDGE A"/"A WINS" unreachable and collapsed every ratio > 1.05 to
+      // "SLIGHT EDGE B", so trades that favored You were displayed as favoring Them. The
+      // B-side thresholds (0.95 / 0.85 / 0.75) are preserved exactly; the A side now mirrors
+      // them with reciprocal boundaries (1/0.85 ≈ 1.18, 1/0.75 ≈ 1.34) so every label is reachable.
       const fairnessGrade =
         ratio >= 0.95 && ratio <= 1.05 ? "FAIR"
+        : ratio > 1.05 && ratio <= 1.18 ? "SLIGHT EDGE A"
+        : ratio > 1.18 && ratio <= 1.34 ? "A WINS"
+        : ratio > 1.34 ? "LOPSIDED"
         : ratio >= 0.85 ? "SLIGHT EDGE B"
         : ratio >= 0.75 ? "B WINS"
-        : ratio <= 1.05 && ratio >= 1.0 ? "FAIR"
-        : ratio > 1.05 && ratio <= 1.15 ? "SLIGHT EDGE A"
-        : ratio > 1.15 ? "A WINS"
         : "LOPSIDED";
 
       // Positional needs analysis
@@ -9512,6 +9518,28 @@ Provide:
       });
       const aiVerdict = response.choices?.[0]?.message?.content ?? "Analysis unavailable.";
 
+      // Slice 2: League-format awareness (TRUST/TRANSPARENCY ONLY — does not affect valuation).
+      // Format/declaration come from the League Context Foundation; the message is selected by
+      // `format`. requiresFormatDisclaimer is returned for the client to surface as it sees fit.
+      const { resolveLeagueContext } = await import("./leagueContext");
+      const leagueCtx = await resolveLeagueContext(ctx.user?.id, input.season);
+      const disclaimers: string[] = [];
+      if (leagueCtx.format === "dynasty") {
+        disclaimers.push(
+          "⚠ Dynasty League Detected. Current valuations are redraft-oriented and may undervalue youth, rookie picks, and long-term assets.",
+        );
+      }
+      if (leagueCtx.format === "keeper") {
+        disclaimers.push(
+          "⚠ Keeper League Detected. Current valuations do not yet fully account for keeper economics.",
+        );
+      }
+      if (leagueCtx.format === "unknown") {
+        disclaimers.push(
+          "⚠ League format confidence is limited. Trade valuations may be less accurate until format is confirmed.",
+        );
+      }
+
       return {
         sideAValues,
         sideBValues,
@@ -9525,6 +9553,11 @@ Provide:
         mathSummary,
         teamANeeds: needsA,
         teamBNeeds: needsB,
+        // Slice 2 (trust/transparency — does NOT affect valuation):
+        leagueFormat: leagueCtx.format,
+        formatSource: leagueCtx.formatSource,
+        requiresFormatDisclaimer: leagueCtx.requiresFormatDisclaimer,
+        disclaimers,
       };
     }),
 
