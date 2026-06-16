@@ -10,8 +10,9 @@
  * This module ADDS NOTHING to the pipeline: no DB writes, no ESPN fetch, and it does
  * not change any existing resolver or consumer. It reads the same cached payload those
  * resolvers already read and merges their outputs, plus one new read-only extraction
- * (roster starter slots) with a documented fallback. NOT wired into the Trade Analyzer.
- * Format is detected/inferred only — a user declaration override is a later step.
+ * (roster starter slots) with a documented fallback.
+ * Format is detected from ESPN, then overridden by a league-level declaration when
+ * present (Step 2A). NOT wired into the Trade Analyzer.
  *
  * Architecture compliance: season ranges come from the existing prompt resolver's
  * discovery (never hardcoded here, §5); owner identity comes from that resolver
@@ -22,9 +23,10 @@ import { resolveLeaguePromptContext } from "./leaguePromptContext";
 import { buildLeagueCapabilities, type LeagueCapabilities } from "./leagueCapabilities";
 import { resolveKeeperDraftGeometryForSeason } from "./keeperDraftGeometry";
 import { getCachedView } from "./db";
+import { getDeclaredLeagueFormat } from "./leagueFormatStore";
 
 export type FieldSource =
-  | "declared" // set by a user/commissioner declaration (NOT in Step 1)
+  | "declared" // set by a league-level declaration (Step 2A) — authoritative
   | "espn_reliable" // read directly from a dependable ESPN settings field
   | "inferred" // best-effort inference (dynasty by name match; keepers absent -> redraft)
   | "inferred_default" // a standard default used because the source field was missing
@@ -225,21 +227,33 @@ export async function resolveLeagueContext(
   // 4) Roster slots (new read-only extraction) with standard-default fallback (edge case 1).
   const rosterSlotsResult = extractRosterSlots(payload, prompt.teamCount);
 
-  // 5) Format derivation (no declaration in Step 1) + confidence.
-  const { format, formatSource } = deriveFormat(caps, hasPayload);
+  // 5) Format: ESPN detection (Step 1), then overridden by a league-level declaration (Step 2A).
+  const detected = deriveFormat(caps, hasPayload);
+  const declaredFormat = leagueId ? await getDeclaredLeagueFormat(leagueId) : null;
+  const format: LeagueFormat = declaredFormat ?? detected.format;
+  const formatSource: FieldSource = declaredFormat ? "declared" : detected.formatSource;
   const confidence: LeagueContext["confidence"] = hasPayload ? caps.confidence : "low";
 
-  // Edge case 2: format disclaimer trigger (dynasty, or low-confidence keeper).
+  // Edge case 2: format disclaimer. A declaration makes the format authoritative, so it
+  // clears the keeper "uncertainty" trigger; dynasty always disclaims (valuations are not
+  // dynasty-aware) however the format was determined.
+  const formatIsCertain = formatSource === "declared" || confidence === "high";
   const requiresFormatDisclaimer =
-    format === "dynasty" || (format === "keeper" && confidence !== "high");
+    format === "dynasty" || (format === "keeper" && !formatIsCertain);
 
   const reasons: string[] = [...caps.confidenceReasons];
+  if (declaredFormat)
+    reasons.push(
+      detected.format !== declaredFormat
+        ? `Format declared as "${declaredFormat}" — overrides detected "${detected.format}".`
+        : `Format declared as "${declaredFormat}".`,
+    );
   if (rosterSlotsResult.reason) reasons.push(rosterSlotsResult.reason);
   if (!hasPayload)
     reasons.push(
       "No combined ESPN cache payload for active league/season — context degraded (format unknown, low confidence).",
     );
-  if (format === "dynasty")
+  if (format === "dynasty" && formatSource !== "declared")
     reasons.push(
       "Dynasty inferred from ESPN name/type (best-effort, not authoritative) — a format declaration would raise confidence.",
     );

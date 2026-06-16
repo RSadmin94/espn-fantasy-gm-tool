@@ -250,6 +250,16 @@ export const gmLeagueSettings = mysqlTable(
   (t) => [uniqueIndex("uq_league_settings").on(t.leagueId, t.season)]
 );
 
+// League-level declared format override (redraft | keeper | dynasty). League-keyed and
+// sticky across seasons — the authoritative source of league format when present, taking
+// precedence over best-effort ESPN detection (see server/leagueContext.ts precedence).
+export const gmLeagueFormatDeclarations = mysqlTable("league_format_declarations", {
+  leagueId: varchar("leagueId", { length: 32 }).notNull().primaryKey(),
+  declaredFormat: varchar("declaredFormat", { length: 16 }).notNull(),
+  declaredByUserId: int("declaredByUserId"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const gmTeams = mysqlTable(
   "teams",
   {

@@ -12,12 +12,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./leaguePromptContext", () => ({ resolveLeaguePromptContext: vi.fn() }));
 vi.mock("./keeperDraftGeometry", () => ({ resolveKeeperDraftGeometryForSeason: vi.fn() }));
 vi.mock("./db", () => ({ getCachedView: vi.fn(), resolveActiveLeagueId: vi.fn() }));
+vi.mock("./leagueFormatStore", () => ({ getDeclaredLeagueFormat: vi.fn() }));
 
 import { resolveLeagueContext } from "./leagueContext";
 import { buildLeagueCapabilities } from "./leagueCapabilities";
 import { resolveLeaguePromptContext } from "./leaguePromptContext";
 import { resolveKeeperDraftGeometryForSeason } from "./keeperDraftGeometry";
 import { getCachedView } from "./db";
+import { getDeclaredLeagueFormat } from "./leagueFormatStore";
 
 const STANDARD_DEFAULT = { QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 1, SUPERFLEX: 0, DST: 1, K: 1, BENCH: 7, IR: 1 };
 
@@ -65,6 +67,7 @@ beforeEach(() => {
     roundCount: 16,
     draftSlotCount: 224,
   } as never);
+  vi.mocked(getDeclaredLeagueFormat).mockResolvedValue(null); // default: no declaration -> detection wins
 });
 
 describe("resolveLeagueContext (Step 1 composition)", () => {
@@ -171,5 +174,53 @@ describe("resolveLeagueContext (Step 1 composition)", () => {
     expect(ctx.playoff.teamCount).toBe(6);
     expect(ctx.playoff.teamCount).not.toBe(ctx.teamCount);
     expect(ctx.rosterSlots).not.toHaveProperty("teamCount");
+  });
+});
+
+describe("resolveLeagueContext (Step 2A declared-format precedence)", () => {
+  it("declared format overrides detected (keeper declared on a redraft-detected league)", async () => {
+    vi.mocked(resolveLeaguePromptContext).mockResolvedValue(basePrompt() as never);
+    vi.mocked(getCachedView).mockResolvedValue({ payload: combinedPayload({ keeperCount: 0 }) } as never);
+    vi.mocked(getDeclaredLeagueFormat).mockResolvedValue("keeper");
+
+    const ctx = await resolveLeagueContext(1, 2026);
+    expect(ctx.format).toBe("keeper");
+    expect(ctx.formatSource).toBe("declared");
+    expect(ctx.fieldSources.format).toBe("declared");
+    expect(ctx.reasons.some((r) => /declared as "keeper".*overrides detected "redraft"/i.test(r))).toBe(true);
+  });
+
+  it("declared dynasty still triggers the disclaimer and drops the 'inferred' reason", async () => {
+    vi.mocked(resolveLeaguePromptContext).mockResolvedValue(basePrompt() as never);
+    vi.mocked(getCachedView).mockResolvedValue({ payload: combinedPayload() } as never);
+    vi.mocked(getDeclaredLeagueFormat).mockResolvedValue("dynasty");
+
+    const ctx = await resolveLeagueContext(1, 2026);
+    expect(ctx.format).toBe("dynasty");
+    expect(ctx.formatSource).toBe("declared");
+    expect(ctx.requiresFormatDisclaimer).toBe(true);
+    expect(ctx.reasons.some((r) => /Dynasty inferred from ESPN/i.test(r))).toBe(false);
+  });
+
+  it("declared keeper clears the uncertainty disclaimer even at medium confidence", async () => {
+    vi.mocked(resolveLeaguePromptContext).mockResolvedValue(basePrompt() as never);
+    vi.mocked(getCachedView).mockResolvedValue({ payload: combinedPayload({ withTradeSettings: false }) } as never);
+    vi.mocked(getDeclaredLeagueFormat).mockResolvedValue("keeper");
+
+    const ctx = await resolveLeagueContext(1, 2026);
+    expect(ctx.format).toBe("keeper");
+    expect(ctx.formatSource).toBe("declared");
+    expect(ctx.confidence).not.toBe("high");
+    expect(ctx.requiresFormatDisclaimer).toBe(false);
+  });
+
+  it("no declaration leaves detection untouched (Step 1 behavior preserved)", async () => {
+    vi.mocked(resolveLeaguePromptContext).mockResolvedValue(basePrompt() as never);
+    vi.mocked(getCachedView).mockResolvedValue({ payload: combinedPayload({ keeperCount: 0 }) } as never);
+    // beforeEach defaults getDeclaredLeagueFormat -> null
+    const ctx = await resolveLeagueContext(1, 2026);
+    expect(ctx.format).toBe("redraft");
+    expect(ctx.formatSource).toBe("espn_reliable");
+    expect(ctx.fieldSources.format).not.toBe("declared");
   });
 });
