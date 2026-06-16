@@ -15,6 +15,7 @@ import {
   resolveActiveLeagueId,
 } from "./db";
 import { buildChampionshipAuthority, type ChampionshipAuthority } from "./championshipAuthority";
+import { computeAllTrophyHistory } from "./championshipHistoryBuilder";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import { normalizeDraftPicks, normalizeSettings } from "./espnService";
 
@@ -276,6 +277,21 @@ export async function buildOwnerCareerProfileForFocalUser(userId: number): Promi
 
   if (seasonRows.length === 0) return null;
   if (!ownerName) ownerName = memberId;
+
+  // §9.2 — championship COUNT is authoritative ONLY from the Hall of Fame trophy source
+  // (computeAllTrophyHistory), which person-merges an owner across GUID/name drift. The
+  // per-season loop above only matches the focal GUID's team-seasons, so it silently drops
+  // titles won under an earlier identity (e.g. pre-2018 scraped seasons that have no member
+  // GUID). Sourcing the count here keeps the dashboard and Hall of Fame in exact agreement.
+  try {
+    const trophyMap = await computeAllTrophyHistory(undefined, userId, leagueId);
+    const mine = trophyMap.get(memberId);
+    if (mine) {
+      championships = mine.championships;
+      const champYears = new Set<number>(mine.championshipYears ?? []);
+      for (const row of seasonRows) row.isChampion = champYears.has(row.season);
+    }
+  } catch { /* keep per-season fallback count if the authority is unavailable */ }
 
   const totalGames = totalWins + totalLosses;
   const winPct = totalGames > 0 ? Math.round((totalWins / totalGames) * 1000) / 10 : 0;
