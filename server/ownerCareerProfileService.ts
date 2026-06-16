@@ -16,6 +16,9 @@ import {
 } from "./db";
 import { buildChampionshipAuthority, type ChampionshipAuthority } from "./championshipAuthority";
 import { computeAllTrophyHistory } from "./championshipHistoryBuilder";
+import { loadFlatRegularSeasonMatchups, buildTeamToCanonicalProfileKey } from "./ownerProfileService";
+import { gmTeams } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import { normalizeDraftPicks, normalizeSettings } from "./espnService";
 
@@ -283,19 +286,82 @@ export async function buildOwnerCareerProfileForFocalUser(userId: number): Promi
   // per-season loop above only matches the focal GUID's team-seasons, so it silently drops
   // titles won under an earlier identity (e.g. pre-2018 scraped seasons that have no member
   // GUID). Sourcing the count here keeps the dashboard and Hall of Fame in exact agreement.
+  let focalChampYears = new Set<number>();
   try {
     const trophyMap = await computeAllTrophyHistory(undefined, userId, leagueId);
     const mine = trophyMap.get(memberId);
     if (mine) {
       championships = mine.championships;
-      const champYears = new Set<number>(mine.championshipYears ?? []);
-      for (const row of seasonRows) row.isChampion = champYears.has(row.season);
+      focalChampYears = new Set<number>(mine.championshipYears ?? []);
+      for (const row of seasonRows) row.isChampion = focalChampYears.has(row.season);
     }
   } catch { /* keep per-season fallback count if the authority is unavailable */ }
 
+  // Career regular-season W/L is sourced from `matchups` (full-career regular-season W/L is sourced
+  // from clean per-week results back to 2010) via the SAME shared loader + person-merge the
+  // all-time records / Ring of Honor use. teams.wins/losses is corrupt for pre-2018 scraped
+  // seasons, and the cache loop above only sees the focal GUID's 2018+ team-seasons, so it both
+  // undercounts the career record and omits the early years. Matchups is the source of truth.
+  if (db && authority && leagueId) {
+    try {
+      const focalCanon = authority.canonicalKeyForOwnerId(memberId);
+      const teamRows = await db.select().from(gmTeams).where(eq(gmTeams.leagueId, leagueId));
+      const teamToCanon = buildTeamToCanonicalProfileKey(teamRows);
+      const focalTeamBySeason = new Map<number, number>();
+      for (const [k, v] of teamToCanon.entries()) {
+        if (v !== focalCanon) continue;
+        const [s, t] = k.split(":").map(Number);
+        focalTeamBySeason.set(s, t);
+      }
+      const teamNameBySeason = new Map<number, string>();
+      for (const tr of teamRows) {
+        if (focalTeamBySeason.get(tr.season) === tr.teamId) {
+          teamNameBySeason.set(tr.season, tr.name || `Team ${tr.teamId}`);
+        }
+      }
+      if (focalTeamBySeason.size > 0) {
+        const flat = await loadFlatRegularSeasonMatchups({ db, leagueId, userId });
+        const recBySeason = new Map<number, { wins: number; losses: number }>();
+        for (const m of flat) {
+          const t = focalTeamBySeason.get(m.season);
+          if (t == null) continue;
+          if (m.homeTeamId !== t && m.awayTeamId !== t) continue;
+          let winner: number | null = m.winnerTeamId;
+          if (winner == null) {
+            if (m.homeScore > m.awayScore) winner = m.homeTeamId;
+            else if (m.awayScore > m.homeScore) winner = m.awayTeamId;
+            else continue;
+          }
+          const rec = recBySeason.get(m.season) ?? { wins: 0, losses: 0 };
+          if (winner === t) rec.wins++; else rec.losses++;
+          recBySeason.set(m.season, rec);
+        }
+        if (recBySeason.size > 0) {
+          let mW = 0, mL = 0;
+          for (const [season, rec] of recBySeason.entries()) {
+            mW += rec.wins; mL += rec.losses;
+            const existing = seasonRows.find((sr) => sr.season === season);
+            if (existing) { existing.wins = rec.wins; existing.losses = rec.losses; }
+            else {
+              seasonRows.push({
+                season,
+                teamName: teamNameBySeason.get(season) || `Team ${focalTeamBySeason.get(season)}`,
+                wins: rec.wins, losses: rec.losses, pf: 0, playoffSeed: 0, madePlayoffs: false,
+                isChampion: focalChampYears.has(season), acquisitions: 0, drops: 0, trades: 0,
+              });
+            }
+          }
+          seasonRows.sort((a, b) => a.season - b.season);
+          totalWins = mW;
+          totalLosses = mL;
+        }
+      }
+    } catch { /* fall back to cache-derived W/L if matchups are unavailable */ }
+  }
+
   const totalGames = totalWins + totalLosses;
   const winPct = totalGames > 0 ? Math.round((totalWins / totalGames) * 1000) / 10 : 0;
-  const seasonsActive = seasonRows.length;
+  const seasonsActive = seasonRows.filter((s) => s.wins + s.losses > 0).length;
   const years = seasonRows.map((s) => s.season).sort((a, b) => a - b);
   const yearMin = years[0];
   const yearMax = years[years.length - 1];
