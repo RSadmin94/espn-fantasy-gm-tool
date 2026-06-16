@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useFunnel } from "@/lib/funnel";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
@@ -38,12 +39,20 @@ function Eyebrow({ children, color = MUTED }: { children: React.ReactNode; color
 export function LeagueDna() {
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const ready = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
+  // Procedure has void input at the wire; `activeLeagueKey` is cache-participation only (see leagueQuerySalt).
   const q = (trpc as any).dna.myProfile.useQuery(withLeagueSalt({}, leagueContextKey), { staleTime: 60_000, enabled: ready });
-  const data: any = q.data;
-  const gated = Boolean(data?.gated);
+  const data = q.data;
+  /** Server: `gateLeagueDna(..., hasPremiumAccess(ctx.user))` — founders + subscribers get full dossier. */
+  const showPaywall = Boolean(data?.gated === true && data?.entitled !== true);
 
-  const checkout = (trpc as any).billing.createCheckoutSession.useMutation({
-    onSuccess: (r: any) => { if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer"); },
+  const checkout = trpc.billing.createCheckoutSession.useMutation({
+    onSuccess: (r) => {
+      if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
+      else toast.error("Checkout did not return a link. Try again or contact support.");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Could not start checkout. Please try again.");
+    },
   });
   // Funnel events (visitorId stitch via metadata; userId added server-side). Canonical funnel
   // names plus the legacy dna_* names kept for existing UsageMonitor dashboards.
@@ -58,17 +67,18 @@ export function LeagueDna() {
     }
   }, [data, track]);
   useEffect(() => {
-    if (gated && !pay.current) {
+    if (showPaywall && !pay.current) {
       pay.current = true;
       track("dossier_paid_section_viewed", { eventType: "feature_open", page: "league-dna", extra: { section: "league_dna" } });
       track("dna_paywall_viewed", { eventType: "feature_open", page: "league-dna" });
     }
-  }, [gated, track]);
+  }, [showPaywall, track]);
   const startCheckout = () => {
+    if (typeof window === "undefined") return;
     track("upgrade_clicked", { eventType: "cta_click", page: "league-dna", extra: { section: "league_dna" } });
     track("dna_unlock_clicked", { eventType: "cta_click", page: "league-dna" });
     track("checkout_started", { eventType: "cta_click", page: "league-dna" });
-    checkout.mutate({});
+    checkout.mutate({ origin: window.location.origin });
   };
 
   const loading = !ready || q.isLoading;
@@ -202,8 +212,8 @@ export function LeagueDna() {
               )}
             </div>
 
-            {/* ----- Paid dossier OR paywall ----- */}
-            {gated ? (
+            {/* ----- Paid dossier OR paywall (server uses hasPremiumAccess; gated+entitled from gateLeagueDna) ----- */}
+            {showPaywall ? (
               <div style={PANEL} className="p-6 md:p-8 text-center">
                 <Dna className="mx-auto mb-3 h-8 w-8" style={{ color: ACCENT }} />
                 <h3 className="text-2xl font-black">Unlock your full DNA dossier</h3>
