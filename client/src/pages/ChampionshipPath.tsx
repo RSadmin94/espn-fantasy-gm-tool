@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -91,10 +92,19 @@ export function ChampionshipPath() {
     { staleTime: 60_000, enabled: leagueKeyReady },
   );
   const data = leagueKeyReady ? q.data : undefined;
-  const checkout = (trpc as any).billing.createCheckoutSession.useMutation({
-    onSuccess: (r: any) => { if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer"); },
+  const checkout = trpc.billing.createCheckoutSession.useMutation({
+    onSuccess: (r) => {
+      if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
+      else toast.error("Checkout did not return a link. Try again or contact support.");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Could not start checkout. Please try again.");
+    },
   });
-  const startCheckout = () => checkout.mutate({});
+  const startCheckout = () => {
+    if (typeof window === "undefined") return;
+    checkout.mutate({ origin: window.location.origin });
+  };
 
   return (
     <div className="min-h-screen w-full" style={PAGEBG}>

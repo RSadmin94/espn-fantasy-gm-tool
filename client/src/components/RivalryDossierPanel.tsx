@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -152,8 +153,14 @@ export function RivalryDossierPanel({
     { enabled: leagueKeyReady && queryKey.length > 0, staleTime: 60_000 },
   );
 
-  const dossierCheckout = (trpc as any).billing.createCheckoutSession.useMutation({
-    onSuccess: (res: any) => { if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer"); },
+  const dossierCheckout = trpc.billing.createCheckoutSession.useMutation({
+    onSuccess: (res) => {
+      if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer");
+      else toast.error("Checkout did not return a link. Try again or contact support.");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Could not start checkout. Please try again.");
+    },
   });
   const dossierLog = (trpc as any).usageMonitor.logUIEvent.useMutation();
 
@@ -209,8 +216,9 @@ export function RivalryDossierPanel({
         </p>
         <button
           onClick={() => {
+            if (typeof window === "undefined") return;
             dossierLog.mutate({ eventType: "cta_click", featureName: "rivalry_dossier_unlock_clicked" });
-            dossierCheckout.mutate({});
+            dossierCheckout.mutate({ origin: window.location.origin });
           }}
           disabled={dossierCheckout.isPending}
           className="inline-flex items-center gap-2 rounded-[10px] px-5 py-3 text-sm font-extrabold"

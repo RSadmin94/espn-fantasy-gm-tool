@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { displayOwnerName } from "@/lib/ownerName";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
@@ -233,9 +234,13 @@ export function RivalryCenter() {
   const rivalryGated: boolean = Boolean((scoresQ.data as any)?.gated);
   const lockedRivalries: number = Number((scoresQ.data as any)?.lockedRivalries ?? 0);
   const totalRivalries: number = Number((scoresQ.data as any)?.totalRivalries ?? 0);
-  const checkoutMutation = (trpc as any).billing.createCheckoutSession.useMutation({
-    onSuccess: (res: any) => {
+  const checkoutMutation = trpc.billing.createCheckoutSession.useMutation({
+    onSuccess: (res) => {
       if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer");
+      else toast.error("Checkout did not return a link. Try again or contact support.");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Could not start checkout. Please try again.");
     },
   });
 
@@ -256,8 +261,9 @@ export function RivalryCenter() {
     }
   }, [rivalryGated]);
   const startCheckout = () => {
+    if (typeof window === "undefined") return;
     logEvent.mutate({ eventType: "cta_click", featureName: "rivalry_unlock_clicked" });
-    checkoutMutation.mutate({});
+    checkoutMutation.mutate({ origin: window.location.origin });
   };
 
   const keyForRival = (p: Pair) => nameToKey[norm(p.rivalName)] ?? undefined;

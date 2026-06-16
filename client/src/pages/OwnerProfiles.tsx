@@ -1,4 +1,5 @@
 import { useState, useMemo, Fragment, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -318,15 +319,25 @@ function ProfilePanel({
   const gated = Boolean(p?.gated);
   const ownProfile = Boolean(p?.ownProfile);
   const draftUnlocked = !gated || ownProfile;
-  const scoutCheckout = (trpc as any).billing.createCheckoutSession.useMutation({
-    onSuccess: (r: any) => { if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer"); },
+  const scoutCheckout = trpc.billing.createCheckoutSession.useMutation({
+    onSuccess: (r) => {
+      if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
+      else toast.error("Checkout did not return a link. Try again or contact support.");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Could not start checkout. Please try again.");
+    },
   });
   const scoutLog = (trpc as any).usageMonitor.logUIEvent.useMutation();
   const scoutSnapSeen = useRef(false);
   const scoutPaySeen = useRef(false);
   useEffect(() => { if (!scoutSnapSeen.current && p) { scoutSnapSeen.current = true; scoutLog.mutate({ eventType: "feature_open", featureName: "owner_profile_snapshot_viewed" }); } }, [p]);
   useEffect(() => { if (gated && !scoutPaySeen.current) { scoutPaySeen.current = true; scoutLog.mutate({ eventType: "feature_open", featureName: "owner_profile_paywall_viewed" }); } }, [gated]);
-  const startScoutCheckout = () => { scoutLog.mutate({ eventType: "cta_click", featureName: "owner_profile_unlock_clicked" }); scoutCheckout.mutate({}); };
+  const startScoutCheckout = () => {
+    if (typeof window === "undefined") return;
+    scoutLog.mutate({ eventType: "cta_click", featureName: "owner_profile_unlock_clicked" });
+    scoutCheckout.mutate({ origin: window.location.origin });
+  };
 
   useEffect(() => {
     setIntelExpanded(null);

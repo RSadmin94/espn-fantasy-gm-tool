@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -296,8 +297,14 @@ export function HallOfFame() {
 
   // -- Freemium gate (deep record book) --------------------------------------
   const hofGated = Boolean((hofQ.data as any)?.gated);
-  const hofCheckout = (trpc as any).billing.createCheckoutSession.useMutation({
-    onSuccess: (res: any) => { if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer"); },
+  const hofCheckout = trpc.billing.createCheckoutSession.useMutation({
+    onSuccess: (res) => {
+      if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer");
+      else toast.error("Checkout did not return a link. Try again or contact support.");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Could not start checkout. Please try again.");
+    },
   });
   const hofLog = (trpc as any).usageMonitor.logUIEvent.useMutation();
   const hofSnapLogged = useRef(false);
@@ -315,8 +322,9 @@ export function HallOfFame() {
     }
   }, [hofGated, hofTab]);
   const startHofCheckout = () => {
+    if (typeof window === "undefined") return;
     hofLog.mutate({ eventType: "cta_click", featureName: "hof_unlock_clicked" });
-    hofCheckout.mutate({});
+    hofCheckout.mutate({ origin: window.location.origin });
   };
 
   if (!leagueKeyReady) {
