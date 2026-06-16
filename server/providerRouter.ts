@@ -13,7 +13,7 @@ import { getSleeperLeague } from "./providers/sleeperAdapter";
 import { YahooAdapter, getYahooLeaguesForUser } from "./providers/yahooAdapter";
 import { isYahooConfigured } from "./providers/yahooOAuth";
 import { invokeLLM } from "./_core/llm";
-import { getDb } from "./db";
+import { getDb, reconcileActiveLeague } from "./db";
 import { leagueConnections, users } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { fetchEspnViewsHardened, normalizeTeams, normalizeSettings, type EspnCreds } from "./espnService";
@@ -531,6 +531,7 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
             lastSyncedAt: new Date(),
           },
         });
+      await reconcileActiveLeague(ctx.user.id);
       return {
         success: true,
         steps,
@@ -664,6 +665,10 @@ Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
       }
 
       steps.push("ESPN league connected successfully.");
+
+      // Active-league safety (ARCHITECTURE.md S9): do not let this freshly-connected
+      // (owner-not-yet-selected) league stay active over one the user has already set up.
+      await reconcileActiveLeague(ctx.user.id);
 
       // Activate 7-day trial if user is still on 'free' plan
       if (db) {

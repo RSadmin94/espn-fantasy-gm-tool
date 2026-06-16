@@ -1240,6 +1240,44 @@ export async function setActiveLeagueForUser(userId: number, leagueConnectionId:
   return true;
 }
 
+/**
+ * Active-league safety net (ARCHITECTURE.md S9). If the user's currently-active connection is NOT
+ * setup-complete (no selected team) but they DO have at least one setup-complete connection, switch
+ * the active league to the most-recently-updated setup-complete one. Prevents a freshly connected /
+ * credentialed league (owner not yet selected) from stealing active status from a league the user
+ * has already set up. Preserves multi-league: only flips isActive, never deletes. No-op when the
+ * active connection is already setup-complete, or when none are. Reuses setActiveLeagueForUser, so
+ * the currentOwner cache is invalidated. Returns the connId now active, or null when unchanged.
+ */
+export async function reconcileActiveLeague(userId: number): Promise<number | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select({
+      id: leagueConnections.id,
+      isActive: leagueConnections.isActive,
+      selectedTeamId: leagueConnections.selectedTeamId,
+      updatedAt: leagueConnections.updatedAt,
+    })
+    .from(leagueConnections)
+    .where(eq(leagueConnections.userId, userId));
+  if (rows.length === 0) return null;
+  // "setup-complete" mirrors resolveActiveProfile: a team has been selected.
+  const setupComplete = rows.filter((r) => r.selectedTeamId != null);
+  if (setupComplete.length === 0) return null; // nothing set up yet -> leave connect's choice
+  const active = rows.find((r) => r.isActive);
+  if (active && active.selectedTeamId != null) return null; // already on a set-up league
+  setupComplete.sort((a, b) => {
+    const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+    const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+    return tb - ta;
+  });
+  const target = setupComplete[0]!;
+  if (active && active.id === target.id) return null;
+  await setActiveLeagueForUser(userId, target.id);
+  return target.id;
+}
+
 // ─── LLM Usage Metering ────────────────────────────────────────────────────
 
 /**

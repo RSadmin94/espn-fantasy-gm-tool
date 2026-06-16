@@ -64,6 +64,7 @@ import {
   upsertUserMemory,
   getActiveLeagueForUser,
   setActiveLeagueForUser,
+  reconcileActiveLeague,
   resolveActiveLeagueId,
   persistLlmUsage,
   getLlmUsageSummary,
@@ -1343,6 +1344,8 @@ export const appRouter = router({
           leagueName: lcTable.leagueName,
           season: lcTable.season,
           isActive: lcTable.isActive,
+          selectedTeamId: lcTable.selectedTeamId,
+          selectedOwnerName: lcTable.selectedOwnerName,
           syncStatus: lcTable.syncStatus,
           lastSyncedAt: lcTable.lastSyncedAt,
         })
@@ -1352,6 +1355,7 @@ export const appRouter = router({
       return Promise.all(
         rows.map(async (r) => ({
           ...r,
+          isSetupComplete: r.selectedTeamId != null,
           leagueName: await resolveLeagueDisplayName(r, ctx.user.id),
         })),
       );
@@ -4744,6 +4748,10 @@ export const appRouter = router({
               }
             }
           }
+
+          // Active-league safety (ARCHITECTURE.md S9): keep a set-up league active rather
+          // than this freshly-connected (owner-not-yet-selected) one.
+          await reconcileActiveLeague(ctx.user.id);
 
           const refreshSeason =
             input.season ?? new Date().getFullYear();

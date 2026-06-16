@@ -105,6 +105,9 @@ export function TheCast() {
   const data = q.data as { leagueName: string; season: number; cast: CastMember[]; pastChampions?: PastChampion[] } | null | undefined;
   const profileQ = (trpc as any).me.activeProfile.useQuery(withLeagueSalt({}, leagueContextKey), { staleTime: 600_000, retry: false, enabled: ready });
   const needsOwnerSelection = ready && !!profileQ.data && profileQ.data.isSetupComplete === false;
+  const utils = (trpc as any).useUtils();
+  const myLeaguesQ = (trpc as any).league.getMyLeagues.useQuery(undefined, { enabled: ready && needsOwnerSelection, staleTime: 30_000 });
+  const switchLeague = (trpc as any).league.setActive.useMutation({ onSuccess: async () => { await utils.invalidate(); } });
   const createReceipt = (trpc as any).dna.createReceipt.useMutation();
   const [copied, setCopied] = useState(false);
   const shareMyReceipt = async () => {
@@ -126,6 +129,39 @@ export function TheCast() {
       </div>
     );
   }
+  if (needsOwnerSelection) {
+    const setupLeagues = (((myLeaguesQ.data as any[]) ?? []).filter((l: any) => l.isSetupComplete && !l.isActive));
+    const activeName = (data?.leagueName) || "your active league";
+    return (
+      <div style={PAGEBG} className="min-h-screen">
+        <div className="mx-auto max-w-xl px-5 py-12">
+          <div className="text-center">
+            <div className="text-[11px] font-bold uppercase tracking-[0.4em]" style={{ color: GOLD }}>Fantasy Football Rivals</div>
+            <h2 className="mt-3 text-lg font-bold tracking-wide" style={{ color: "#cfd2d8" }}>{activeName}</h2>
+            <h1 className="mt-1 text-5xl font-black tracking-tight md:text-7xl" style={{ textShadow: "0 2px 30px rgba(245,197,24,.25)" }}>THE CAST</h1>
+            <div className="mt-3 text-xs uppercase tracking-[0.3em]" style={{ color: MUTED }}>Active league</div>
+          </div>
+          <div className="mt-8"><ChooseTeamCTA /></div>
+          {setupLeagues.length > 0 && (
+            <div className="mt-6 rounded-2xl p-5" style={{ background: "rgba(255,255,255,.03)", border: `1px solid ${LINE}` }}>
+              <p className="text-sm font-black" style={{ color: "#f3f8ff" }}>Or jump to a league you've already set up</p>
+              <div className="mt-3 space-y-2">
+                {setupLeagues.map((l: any) => (
+                  <button key={l.id} onClick={() => switchLeague.mutate({ leagueConnectionId: l.id })} disabled={switchLeague.isPending}
+                    className="flex w-full items-center justify-between rounded-[10px] px-4 py-2.5 text-left text-sm font-bold transition hover:brightness-110 disabled:opacity-60"
+                    style={{ background: "rgba(163,230,53,.08)", border: `1px solid ${LIME}44`, color: "#f3f8ff" }}>
+                    <span>{l.leagueName}{l.selectedOwnerName ? ` - ${l.selectedOwnerName}` : ""}</span>
+                    <span style={{ color: LIME }}>{switchLeague.isPending ? "Switching..." : "Switch >"}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (!data || !data.cast?.length) {
     return (
       <div style={PAGEBG} className="flex min-h-screen items-center justify-center p-8 text-center">
@@ -161,7 +197,6 @@ export function TheCast() {
           {createReceipt.isError && <div className="mt-2 text-[11px]" style={{ color: "#f87171" }}>{String(createReceipt.error?.message ?? "Couldn't create link")}</div>}
         </div>
 
-        {needsOwnerSelection && <div className="mx-auto mt-6 max-w-md"><ChooseTeamCTA /></div>}
 
         {headliners.length > 0 && (
           <div className="mt-10">
