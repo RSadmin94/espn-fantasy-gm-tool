@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, publicProcedure, isUserEntitled } from "./_core/trpc";
+import { router, publicProcedure, hasPremiumAccess } from "./_core/trpc";
 import { gateCareerReport, gateChampionshipPath, gateAcquisitionImpact } from "./leagueIntelGating";
 import { computeWhyHaventIWon } from "./whyHaventIWon";
 import { computeChampionshipPath } from "./championshipPath";
@@ -36,7 +36,7 @@ export const leagueIntelRouter = router({
     .query(async ({ ctx, input }) => {
       void input?.activeLeagueKey;
       const report = await computeCareerReport(ctx.user?.id, input?.ownerKey ?? null);
-      return gateCareerReport(report, isUserEntitled(ctx.user));
+      return gateCareerReport(report, hasPremiumAccess(ctx.user));
     }),
 
   /** Feature 2 — Championship Path™ */
@@ -45,7 +45,7 @@ export const leagueIntelRouter = router({
     .query(async ({ ctx, input }) => {
       void input?.activeLeagueKey;
       const result = await computeChampionshipPath(ctx.user?.id, input?.ownerKey ?? null);
-      return gateChampionshipPath(result, isUserEntitled(ctx.user));
+      return gateChampionshipPath(result, hasPremiumAccess(ctx.user));
     }),
 
   /** Feature 3 — Acquisition Impact™ */
@@ -54,6 +54,6 @@ export const leagueIntelRouter = router({
     .query(async ({ ctx, input }) => {
       void input?.activeLeagueKey;
       const result = await computeAcquisitionImpact(ctx.user?.id, input?.ownerKey ?? null);
-      return gateAcquisitionImpact(result, isUserEntitled(ctx.user));
+      return gateAcquisitionImpact(result, hasPremiumAccess(ctx.user));
     }),
 });

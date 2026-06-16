@@ -3,6 +3,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import type { User } from "../../drizzle/schema";
+import { isFounderAccount } from "./founders";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -51,6 +52,18 @@ export function isUserEntitled(
   return false;
 }
 
+/**
+ * THE single premium-access predicate. Every paywall / teaser gate calls this so Founder /
+ * Beta accounts bypass uniformly. Premium access = on the Founder whitelist, OR an active
+ * subscription / live trial (isUserEntitled). The founder path never touches billing state.
+ */
+export function hasPremiumAccess(
+  user: Pick<User, "openId" | "email" | "subscriptionStatus" | "trialStartedAt"> | null | undefined,
+): boolean {
+  if (isFounderAccount(user)) return true;
+  return isUserEntitled(user);
+}
+
 /** Requires an active subscription or a non-expired trial. */
 export const subscribedProcedure = t.procedure.use(
   t.middleware(async opts => {
@@ -61,7 +74,7 @@ export const subscribedProcedure = t.procedure.use(
     if (!ctx.user) {
       throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
     }
-    if (!isUserEntitled(ctx.user)) {
+    if (!hasPremiumAccess(ctx.user)) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "Your free trial has ended. Upgrade to continue.",

@@ -16,7 +16,7 @@
  */
 
 import { z } from "zod";
-import { router, publicProcedure, isUserEntitled } from "./_core/trpc";
+import { router, publicProcedure, hasPremiumAccess } from "./_core/trpc";
 import { getCachedView, getAllCachedSeasons, resolveActiveLeagueId } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import {
@@ -276,7 +276,7 @@ export const dnaRouter = router({
 
     const profile = buildLeagueDnaProfile({ allDna, focalMemberId: co.ownerId, managers, sim, trophyByMember });
     if (!profile) return null;
-    return gateLeagueDna(profile, isUserEntitled(ctx.user));
+    return gateLeagueDna(profile, hasPremiumAccess(ctx.user));
   }),
 
   /**
