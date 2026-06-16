@@ -16,6 +16,7 @@ import type { User } from "../../drizzle/schema";
 
 // Clerk user ids (`User.openId`, e.g. "user_3E8K7..."). Preferred: stable and unspoofable.
 export const FOUNDER_CLERK_IDS: ReadonlySet<string> = new Set<string>([
+  "user_3E8K7ihI9tYXU06UJ5BfeCsg1bo", // Rod Sellers (account #1, founder/owner)
   "user_3EZzDAQ6LKumtOff17svR32NYYe", // Mark Deroux (account #175, focal owner in league 457622)
   // TODO(founder-list): add Demetri Clark Clerk id (their `User.openId`).
 ]);
