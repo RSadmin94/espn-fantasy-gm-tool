@@ -416,6 +416,29 @@ async function loadRoster(db: any, season: number, leagueId: string) {
     WHERE leagueId = ${leagueId} AND season = ${season} ORDER BY teamId
   `) as unknown as [any[]];
 
+  // §9.1 off-season owner-name carry-forward: in the off-season the draft season's `teams`
+  // rows have blank ownerName/ownerId (rosters not yet assigned). Resolve each team's name
+  // from the most recent season that HAS a populated ownerName for the same teamId — the
+  // authoritative `teams.ownerName` (API era, 2018+) — so downstream consumers (shock meters /
+  // Owner DNA Snapshot) never render the literal "Owner". Only blanks are filled; in-season
+  // names are left untouched.
+  const [ownerNameHistory] = await db.execute(drizzleSql`
+    SELECT teamId, ownerName FROM teams
+    WHERE leagueId = ${leagueId} AND ownerName IS NOT NULL AND ownerName != ''
+    ORDER BY season DESC
+  `) as unknown as [any[]];
+  const latestOwnerByTeam = new Map<number, string>();
+  for (const r of (ownerNameHistory as any[])) {
+    const tid = Number(r.teamId);
+    if (!latestOwnerByTeam.has(tid)) latestOwnerByTeam.set(tid, String(r.ownerName));
+  }
+  const fillOwnerName = (teamId: unknown, current: unknown): string => {
+    const cur = String(current ?? "").trim();
+    return cur || latestOwnerByTeam.get(Number(teamId)) || "";
+  };
+  for (const t of (teamRows as any[])) { t.ownerName = fillOwnerName(t.teamId, t.ownerName); }
+  for (const r of (rosterRows as any[])) { r.ownerName = fillOwnerName(r.teamId, r.ownerName); }
+
   const [seasonPickRows] = await db.execute(drizzleSql`
     SELECT teamId, roundId, roundPick, overallPick, playerName, position, isKeeper, rawPick
     FROM draft_picks
