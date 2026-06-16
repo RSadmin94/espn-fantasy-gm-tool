@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import {
   Crosshair, Flame, Shield, Activity, Clock, Target,
-  AlertTriangle, ChevronRight, Radio, Quote, RefreshCw,
+  AlertTriangle, ChevronRight, Radio, Quote,
 } from "lucide-react";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 
@@ -23,6 +23,66 @@ const initials = (s: string) =>
   (s || "?").trim().split(/\s+/).slice(0, 2).map((w) => (w[0] || "").toUpperCase()).join("") || "?";
 const clamp = (n: number, a = 0, b = 100) => Math.max(a, Math.min(b, Math.round(n || 0)));
 const riskColor = (p: number) => (p >= 60 ? RISK : p >= 40 ? WARN : TEAL);
+
+/** Tapered roster-need boost for Command Board (avoids one CRITICAL position flooding top 6). */
+function taperedNeedBoost(urgency: string | undefined): number {
+  if (urgency === "CRITICAL") return 120;
+  if (urgency === "HIGH") return 75;
+  if (urgency === "MEDIUM") return 40;
+  return 0;
+}
+
+/** Prefer real ADP; fall back to server pool rank / synthetic ADP (lower = better). */
+function adpRankScore(p: { adp?: number | null; rank?: number | null; syntheticADP?: number | null }): number {
+  const adp = p.adp != null && Number.isFinite(Number(p.adp)) ? Number(p.adp) : null;
+  if (adp != null && adp > 0) {
+    return Math.max(0, 180 - Math.min(180, adp * 0.55));
+  }
+  const rk = p.rank != null && Number.isFinite(Number(p.rank)) ? Number(p.rank) : null;
+  if (rk != null && rk > 0) {
+    return Math.max(0, 140 - Math.min(140, rk * 0.45));
+  }
+  const syn = p.syntheticADP != null && Number.isFinite(Number(p.syntheticADP)) ? Number(p.syntheticADP) : null;
+  if (syn != null && syn > 0) {
+    return Math.max(0, 100 - Math.min(100, syn * 0.35));
+  }
+  return 0;
+}
+
+/** Greedy top-N with max per position, then backfill if the pool is thin at some positions. */
+function diversifyTopPlayers<T extends { position?: string; id?: string; name?: string }>(
+  sorted: T[],
+  take: number,
+  maxPerPosition: number,
+): T[] {
+  const out: T[] = [];
+  const seen = new Set<string>();
+  const counts: Record<string, number> = {};
+  const rowKey = (row: T) =>
+    String(row.id ?? "").trim() ||
+    `${String(row.position ?? "?")}:${String(row.name ?? "")
+      .toLowerCase()
+      .trim()}`;
+
+  for (const p of sorted) {
+    const pos = String(p.position ?? "?");
+    if ((counts[pos] ?? 0) >= maxPerPosition) continue;
+    const k = rowKey(p);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(p);
+    counts[pos] = (counts[pos] ?? 0) + 1;
+    if (out.length >= take) return out;
+  }
+  for (let i = 0; i < sorted.length && out.length < take; i++) {
+    const p = sorted[i]!;
+    const k = rowKey(p);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(p);
+  }
+  return out;
+}
 
 function archetype(pred: number, surp: number) {
   if (surp >= 72) return { label: "Panic Pivot", color: WARN };
@@ -103,7 +163,6 @@ function Empty({ children }: any) {
 /* ── main editorial desk ── */
 export function DraftWarRoomDesk({ data }: { data: any }) {
   const lg: any = useLeagueContext();
-  const myTeamId: number | null = lg?.myTeamId ?? null;
   const scoring: string = lg?.scoringType || "PPR";
   const teamCount: number = data?.teamCount ?? lg?.teamCount ?? 0;
 
@@ -115,25 +174,49 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
   const mockDraft: any[] = data?.mockDraft ?? [];
   const conf: any = data?.confidenceDashboard ?? {};
 
+  const myTeamId: number | null =
+    lg?.myTeamId != null && Number.isFinite(Number(lg.myTeamId)) && Number(lg.myTeamId) > 0
+      ? Number(lg.myTeamId)
+      : null;
+
+  const minePicks = useMemo(
+    () => (myTeamId == null ? [] : mockDraft.filter((p) => Number(p.teamId) === myTeamId && !p.isKeeperSlot)),
+    [mockDraft, myTeamId],
+  );
+  const personalNextPick = useMemo(() => {
+    if (!minePicks.length) return null;
+    return [...minePicks].sort((a, b) => a.pickNumber - b.pickNumber)[0];
+  }, [minePicks]);
+
+  const leagueAnchorPick = useMemo(
+    () => mockDraft.find((p) => !p.isKeeperSlot) || mockDraft[0] || null,
+    [mockDraft],
+  );
+
+  /** Personal roster needs apply to Command Board scoring only when we know the user's team and they have a mock slot. */
+  const usePersonalNeeds = Boolean(myTeamId) && minePicks.length > 0;
+  const anchorPick = personalNextPick ?? leagueAnchorPick;
+
   const myNeedsRow = useMemo(
-    () => rosterNeeds.find((n) => n.teamId === myTeamId) || null,
-    [rosterNeeds, myTeamId]
+    () => (myTeamId == null ? null : rosterNeeds.find((n) => Number(n.teamId) === myTeamId) || null),
+    [rosterNeeds, myTeamId],
   );
   const myNeeds: any[] = myNeedsRow?.needs ?? [];
   const needByPos = useMemo(() => {
     const m: Record<string, string> = {};
+    if (!usePersonalNeeds) return m;
     for (const n of myNeeds) m[n.position] = n.urgency;
     return m;
-  }, [myNeeds]);
+  }, [myNeeds, usePersonalNeeds]);
 
-  const myNextPick = useMemo(() => {
-    const mine = mockDraft.filter((p) => p.teamId === myTeamId && !p.isKeeperSlot);
-    if (mine.length) return [...mine].sort((a, b) => a.pickNumber - b.pickNumber)[0];
-    return mockDraft.find((p) => !p.isKeeperSlot) || mockDraft[0] || null;
-  }, [mockDraft, myTeamId]);
+  const round = anchorPick?.round ?? 1;
+  const roundPick = anchorPick?.roundPick ?? 1;
 
-  const round = myNextPick?.round ?? 1;
-  const roundPick = myNextPick?.roundPick ?? 1;
+  const commandBoardKicker = usePersonalNeeds
+    ? `Your next slot · Pick ${round}.${pad2(roundPick)} · best available`
+    : `League draft board · Pick ${round}.${pad2(roundPick)} · best available`;
+
+  const headerPickLabel = usePersonalNeeds ? `Pick ${round}.${pad2(roundPick)}` : `Next slot ${round}.${pad2(roundPick)}`;
 
   const threats = useMemo(
     () => [...shockMeters].sort((a, b) => (b.surpriseProbability || 0) - (a.surpriseProbability || 0)).slice(0, 3),
@@ -147,14 +230,17 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
       posSeen[p.position] = (posSeen[p.position] || 0) + 1;
       const posRank = posSeen[p.position];
       const urg = needByPos[p.position];
-      const needBoost = urg === "CRITICAL" ? 520 : urg === "HIGH" ? 320 : urg === "MEDIUM" ? 160 : 0;
-      const score = (p.vorp || 0) + needBoost + (p.projectedPoints || 0) * 0.15;
+      const needBoost = taperedNeedBoost(urg);
+      const adpPart = adpRankScore(p);
+      const projPart = (p.projectedPoints || 0) * 0.08;
+      const score = (p.vorp || 0) + needBoost + adpPart + projPart;
       const rival = [...shockMeters]
         .filter((s) => s.mostLikelyPosition === p.position)
         .sort((a, b) => (b.surpriseProbability || 0) - (a.surpriseProbability || 0))[0] || null;
       return { ...p, posRank, urg, score, rival };
     });
-    return scored.sort((a, b) => b.score - a.score).slice(0, 6);
+    const sorted = scored.sort((a, b) => b.score - a.score);
+    return diversifyTopPlayers(sorted, 6, 2);
   }, [availablePool, needByPos, shockMeters]);
 
   const dna = useMemo(
@@ -177,12 +263,12 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
   );
 
   const timeline = useMemo(() => {
-    const start = myNextPick?.pickNumber ?? 0;
+    const start = anchorPick?.pickNumber ?? 0;
     return mockDraft
       .filter((p) => p.pickNumber > start && !p.isKeeperSlot)
       .sort((a, b) => a.pickNumber - b.pickNumber)
       .slice(0, 8);
-  }, [mockDraft, myNextPick]);
+  }, [mockDraft, anchorPick]);
   const timelineConf = timeline.length
     ? clamp(timeline.reduce((s, p) => s + (p.confidence || 0), 0) / timeline.length)
     : 0;
@@ -191,9 +277,17 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
 
   const memo = useMemo(() => {
     const out: { text: string; color: string }[] = [];
-    const crit = myNeeds.find((n) => n.urgency === "CRITICAL") || myNeeds.find((n) => n.urgency === "HIGH");
-    if (crit) out.push({ text: `Lock ${crit.position} early — ${String(crit.urgency).toLowerCase()} hole on your roster.`, color: GOLD });
-    else out.push({ text: `Roster is balanced — take best player available and bank value.`, color: TEAL });
+    if (usePersonalNeeds) {
+      const crit = myNeeds.find((n) => n.urgency === "CRITICAL") || myNeeds.find((n) => n.urgency === "HIGH");
+      if (crit) out.push({ text: `Lock ${crit.position} early — ${String(crit.urgency).toLowerCase()} hole on your roster.`, color: GOLD });
+      else out.push({ text: `Roster is balanced — take best player available and bank value.`, color: TEAL });
+    } else {
+      out.push({
+        text:
+          "League-wide view — set your team in Settings to tie this memo to your roster holes.",
+        color: TEAL,
+      });
+    }
     const run = positionRunAlerts[0];
     if (run) {
       const who = (run.affectedOwners || []).slice(0, 2).join(" & ");
@@ -202,9 +296,11 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
     const sc = scarcityAlerts[0];
     if (sc) out.push({ text: `Value window on ${sc.position} thinning — don't wait a full round.`, color: CYAN });
     const second = myNeeds[1];
-    if (out.length < 3 && second) out.push({ text: `Secondary target: ${second.position} (${String(second.urgency || "").toLowerCase()}).`, color: MUTED });
+    if (out.length < 3 && usePersonalNeeds && second) {
+      out.push({ text: `Secondary target: ${second.position} (${String(second.urgency || "").toLowerCase()}).`, color: MUTED });
+    }
     return out.slice(0, 3);
-  }, [myNeeds, positionRunAlerts, scarcityAlerts]);
+  }, [myNeeds, positionRunAlerts, scarcityAlerts, usePersonalNeeds]);
 
   const memoConfidence = clamp(conf?.mostPredictable?.score ?? timelineConf ?? 60);
 
@@ -222,10 +318,11 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
-          <Pill color={GOLD} strong>Pick {round}.{pad2(roundPick)}</Pill>
+          <Pill color={GOLD} strong>{headerPickLabel}</Pill>
           <Pill color={TEXT}>Round {round}</Pill>
           <Pill color={TEXT}>{teamCount}-Team {scoring}</Pill>
           <Pill color={TEAL} dot>Synced</Pill>
+          <Pill color={TEXT}>{usePersonalNeeds ? "Your team linked" : "League-wide board"}</Pill>
         </div>
       </div>
 
@@ -279,7 +376,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
         </Panel>
 
         <Panel>
-          <SectionTitle icon={Shield} kicker="Your Move" title="Decision Memo" color={TEAL} />
+          <SectionTitle icon={Shield} kicker={usePersonalNeeds ? "Your Move" : "League lens"} title="Decision Memo" color={TEAL} />
           <div className="space-y-3 mt-4">
             {memo.map((m, i) => (
               <div key={i} className="flex items-start gap-2.5">
@@ -300,7 +397,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
         <div className="lg:col-span-2">
           <Panel>
             <div className="flex items-center justify-between gap-3">
-              <SectionTitle icon={Target} kicker={`Pick ${round}.${pad2(roundPick)} · best available`} title="Next-Pick Command Board" color={GOLD} />
+              <SectionTitle icon={Target} kicker={commandBoardKicker} title="Next-Pick Command Board" color={GOLD} />
               <span className="text-[12px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-full shrink-0" style={{ color: GOLD, background: GOLD + "14" }}>Top {board.length}</span>
             </div>
             <div className="space-y-2.5 mt-4">
@@ -325,7 +422,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
                         <span className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ color: fit.c, background: fit.c + "18" }}>{fit.t}</span>
                         {p.rival && (
                           <span className="text-[12px] px-2 py-0.5 rounded" style={{ color: riskColor(p.rival.surpriseProbability || 0), background: riskColor(p.rival.surpriseProbability || 0) + "14" }}>
-                            {p.rival.ownerName} may target ({clamp(p.rival.surpriseProbability || 0)}%)
+                            Also on {p.position} radar: {p.rival.ownerName} ({clamp(p.rival.surpriseProbability || 0)}%)
                           </span>
                         )}
                       </div>
@@ -370,7 +467,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel>
           <div className="flex items-center justify-between gap-3">
-            <SectionTitle icon={Clock} kicker="Projected" title="Mock Against Your League" color={TEAL} />
+            <SectionTitle icon={Clock} kicker={usePersonalNeeds ? "Projected" : "Projected · league order"} title="Mock Against Your League" color={TEAL} />
             <span className="text-[12px] font-bold px-2.5 py-1.5 rounded-full shrink-0" style={{ color: TEAL, background: TEAL + "14" }}>{timelineConf}% conf</span>
           </div>
           <div className="space-y-3 mt-4">
