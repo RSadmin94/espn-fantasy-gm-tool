@@ -76,8 +76,10 @@ export async function resolveShareToken(code: string): Promise<string | null> {
 }
 
 /**
- * Read the share row metadata (suggested owner + league) without bumping views.
- * Used by the claim path to preselect the owner/league from a /r/:code link.
+ * Read the share row metadata (receipt subject member + league) without bumping views.
+ * Used by the claim path to resolve the LEAGUE (and validate the source) from a /r/:code link.
+ * The subject member is for league resolution only — it is never used to suggest the viewer's
+ * identity; the viewer picks their own team on the claim grid.
  */
 export async function resolveShareMeta(
   code: string,

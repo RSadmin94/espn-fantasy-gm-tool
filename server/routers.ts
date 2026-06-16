@@ -1431,12 +1431,15 @@ export const appRouter = router({
         // so there is no free-form "enter a league id and list its owners" path.
         const meta = await resolveShareMeta(input.code);
         if (!meta) return null;
-        const suggestedMemberId: string | null = meta.memberId;
+        // The receipt's subject member is used to RESOLVE THE LEAGUE only (for legacy shares
+        // that stored no leagueId). It is intentionally NOT surfaced as a suggested identity:
+        // a share identifies the league; the viewer picks their own team on the claim grid.
+        const subjectMemberId: string | null = meta.memberId;
         let leagueId: string | null = meta.leagueId;
         // Legacy shares stored no leagueId: infer from synced data if unambiguous.
-        if (!leagueId && suggestedMemberId) {
+        if (!leagueId && subjectMemberId) {
           const rows = await db.select({ leagueId: gmTeams.leagueId }).from(gmTeams)
-            .where(eqDrizzle(gmTeams.ownerId, suggestedMemberId));
+            .where(eqDrizzle(gmTeams.ownerId, subjectMemberId));
           const distinct = [...new Set(rows.map((r) => r.leagueId))];
           if (distinct.length === 1) leagueId = distinct[0]!;
         }
@@ -1447,15 +1450,22 @@ export const appRouter = router({
         if (season == null) return null;
         const teams = await db.select({ teamId: gmTeams.teamId, name: gmTeams.name, ownerName: gmTeams.ownerName, ownerId: gmTeams.ownerId })
           .from(gmTeams).where(andDrizzle(eqDrizzle(gmTeams.leagueId, leagueId), eqDrizzle(gmTeams.season, season)));
+        // Per-owner claimed status mirrors the claimOwner slot guard (a slot is taken when a
+        // league_connection in this league holds it via selectedOwnerKey). Display-only — the
+        // authoritative guard still runs in claimOwner on submit; this never gates security.
+        const claimedRows = await db.select({ ownerKey: lcTable.selectedOwnerKey }).from(lcTable)
+          .where(eqDrizzle(lcTable.leagueId, leagueId));
+        const claimedKeys = new Set(claimedRows.map((r) => r.ownerKey).filter((k): k is string => !!k));
         const owners = teams.filter((t) => t.ownerId).map((t) => ({
           teamId: t.teamId, ownerKey: `id:${t.ownerId}`, ownerName: t.ownerName || "Unknown", franchiseName: t.name || "",
+          claimed: claimedKeys.has(`id:${t.ownerId}`),
         }));
         const lc = await db.select({ leagueName: lcTable.leagueName }).from(lcTable)
           .where(eqDrizzle(lcTable.leagueId, leagueId)).limit(1);
         const leagueName = lc[0]?.leagueName || `League ${leagueId}`;
-        const suggestedOwnerKey = suggestedMemberId && owners.some((o) => o.ownerKey === `id:${suggestedMemberId}`)
-          ? `id:${suggestedMemberId}` : null;
-        return { leagueId, leagueName, season, owners, suggestedOwnerKey };
+        // Identify the league + owner grid only. No suggested identity: the viewer selects
+        // their own team, and claimOwner enforces source + slot guards on that selection.
+        return { leagueId, leagueName, season, owners };
       }),
 
     // Claim an owner profile in an already-synced league WITHOUT ESPN credentials.

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "@clerk/react-router";
-import { Crown, Loader2, ArrowRight, Check } from "lucide-react";
+import { Loader2, ArrowRight } from "lucide-react";
 import type { CSSProperties } from "react";
 import { trpc } from "@/lib/trpc";
 import { useFunnel } from "@/lib/funnel";
@@ -32,7 +32,7 @@ function claimErrorText(error?: string): string {
   return "Something went wrong. Please try again.";
 }
 
-type Owner = { teamId: number; ownerKey: string; ownerName: string; franchiseName: string };
+type Owner = { teamId: number; ownerKey: string; ownerName: string; franchiseName: string; claimed: boolean };
 
 export function Claim() {
   const [params] = useSearchParams();
@@ -40,7 +40,6 @@ export function Claim() {
   const { isLoaded, isSignedIn } = useAuth();
   const navigate = useNavigate();
   const track = useFunnel();
-  const [showGrid, setShowGrid] = useState(false);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
@@ -71,7 +70,7 @@ export function Claim() {
   useEffect(() => {
     if (preview.data && !firedStart.current) {
       firedStart.current = true;
-      track("claim_started", { eventType: "feature_open", page: "/claim", extra: { code: code || null, leagueId: preview.data.leagueId, suggested: !!preview.data.suggestedOwnerKey } });
+      track("claim_started", { eventType: "feature_open", page: "/claim", extra: { code: code || null, leagueId: preview.data.leagueId } });
     }
   }, [preview.data, track, code]);
 
@@ -110,8 +109,6 @@ export function Claim() {
     claim.mutate({ leagueId: data.leagueId, ownerKey: o.ownerKey, teamId: o.teamId, season: data.season, code });
   };
 
-  const suggested = data.suggestedOwnerKey ? data.owners.find((o) => o.ownerKey === data.suggestedOwnerKey) ?? null : null;
-
   const header = (
     <div className="text-center">
       <div className="text-[11px] font-bold uppercase tracking-[0.4em]" style={{ color: GOLD }}>Fantasy Football Rivals</div>
@@ -119,41 +116,8 @@ export function Claim() {
     </div>
   );
 
-  // Confirm view: a receipt code pointed us at a specific owner.
-  if (suggested && !showGrid) {
-    return (
-      <Shell>
-        {header}
-        <div className="mt-5 rounded-2xl p-7 text-center" style={{ background: "linear-gradient(160deg,rgba(245,197,24,.10),rgba(245,197,24,.02))", border: `1px solid ${GOLD}55` }}>
-          <Crown className="mx-auto h-7 w-7 opacity-40" style={{ color: GOLD }} />
-          <p className="mt-3 text-sm" style={{ color: MUTED }}>We think you're</p>
-          <p className="mt-1 text-3xl font-black leading-tight">{suggested.ownerName}</p>
-          {suggested.franchiseName && <p className="mt-1 text-base font-bold" style={{ color: LIME }}>{suggested.franchiseName}</p>}
-          <p className="mt-1 text-sm" style={{ color: MUTED }}>in {data.leagueName}</p>
-
-          <button
-            onClick={() => doClaim(suggested)}
-            disabled={busy}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-[12px] px-5 py-3.5 text-sm font-extrabold disabled:opacity-60"
-            style={{ background: LIME, color: "#0b0809" }}
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="h-4 w-4" /> Confirm &mdash; that's me</>}
-          </button>
-          <button
-            onClick={() => { setErrMsg(null); setShowGrid(true); }}
-            disabled={busy}
-            className="mt-3 text-sm font-semibold underline disabled:opacity-60"
-            style={{ color: MUTED }}
-          >
-            Not you? Choose another team
-          </button>
-          {errMsg && <p className="mt-3 text-xs" style={{ color: "#f87171" }}>{errMsg}</p>}
-        </div>
-      </Shell>
-    );
-  }
-
-  // Grid view: manual owner pick.
+  // Owner-selection grid: the viewer picks their own team. A receipt identifies the LEAGUE
+  // only — it never preselects the receipt's subject as the viewer's identity.
   return (
     <Shell>
       {header}
@@ -163,19 +127,23 @@ export function Claim() {
         <div className="mt-4 space-y-2">
           {data.owners.map((o) => {
             const isPending = busy && pendingKey === o.ownerKey;
+            const claimed = o.claimed;
             return (
               <button
                 key={o.ownerKey}
-                onClick={() => doClaim(o)}
-                disabled={busy}
+                onClick={() => { if (!claimed) doClaim(o); }}
+                disabled={busy || claimed}
+                aria-disabled={claimed}
                 className="flex w-full items-center justify-between rounded-[10px] px-4 py-3 text-left disabled:opacity-50"
-                style={{ border: `1px solid ${LINE}`, background: "rgba(255,255,255,0.02)" }}
+                style={{ border: `1px solid ${LINE}`, background: "rgba(255,255,255,0.02)", cursor: claimed ? "not-allowed" : undefined }}
               >
                 <span>
                   <span className="block text-sm font-black">{o.ownerName}</span>
                   {o.franchiseName && <span className="block text-xs" style={{ color: MUTED }}>{o.franchiseName}</span>}
                 </span>
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" style={{ color: GOLD }} /> : <ArrowRight className="h-4 w-4" style={{ color: MUTED }} />}
+                {claimed
+                  ? <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Already claimed</span>
+                  : isPending ? <Loader2 className="h-4 w-4 animate-spin" style={{ color: GOLD }} /> : <ArrowRight className="h-4 w-4" style={{ color: MUTED }} />}
               </button>
             );
           })}
