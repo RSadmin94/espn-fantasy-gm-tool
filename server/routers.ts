@@ -4,7 +4,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
-import { publicProcedure, protectedProcedure, subscribedProcedure, router, hasPremiumAccess } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, subscribedProcedure, router, resolvePremiumAccess } from "./_core/trpc";
 import { gateRivalryScores, gateH2H, gateRivalryDossier, gateHallOfFame, gateOwnerProfile } from "./leagueIntelGating";
 import { invokeLLM, type Message } from "./_core/llm";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
@@ -579,7 +579,7 @@ export const appRouter = router({
         focalKey,
         rivalKey: canonicalForMember(String(p.rivalId), String(p.rivalName ?? "")),
       }));
-      return gateRivalryScores(mappedScores, hasPremiumAccess(ctx.user));
+      return gateRivalryScores(mappedScores, await resolvePremiumAccess(ctx.user));
     }),
     /** Compute and persist rivalry scores (manual trigger) */
     /** All-time head-to-head by owner identity, computed from the ESPN combined cache (same source the Matchups tab falls back to). */
@@ -682,7 +682,7 @@ export const appRouter = router({
       }));
       return { owners, pairs };
       });
-      return gateH2H(h2hResult, hasPremiumAccess(ctx.user));
+      return gateH2H(h2hResult, await resolvePremiumAccess(ctx.user));
     }),
 
     refresh: protectedProcedure.mutation(async ({ ctx }) => {
@@ -5969,7 +5969,7 @@ export const appRouter = router({
       if (!db) return null;
       const hof = await buildHallOfFamePayload({ db, leagueId, userId });
       if (!hof) return hof;
-      return gateHallOfFame(hof, hasPremiumAccess(ctx.user));
+      return gateHallOfFame(hof, await resolvePremiumAccess(ctx.user));
     }),
 
     /** All-time owner W-L-T from deduped completed weekly matchups (not standings snapshots). */
@@ -11743,7 +11743,7 @@ Provide:
             comparison,
             headToHead,
           },
-          hasPremiumAccess(ctx.user),
+          await resolvePremiumAccess(ctx.user),
           isOwnProfile,
         );
       }),
@@ -11786,7 +11786,7 @@ Provide:
           opponentOwnerKeyForPair: input.opponentOwnerKeyForPair?.trim() || null,
         });
         if (!dossier) return dossier;
-        return gateRivalryDossier(dossier, hasPremiumAccess(ctx.user));
+        return gateRivalryDossier(dossier, await resolvePremiumAccess(ctx.user));
       }),
 
   }),

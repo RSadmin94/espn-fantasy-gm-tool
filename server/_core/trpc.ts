@@ -3,7 +3,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import type { User } from "../../drizzle/schema";
-import { isFounderAccount } from "./founders";
+import { isFounderAccount, hasFounderOwnerIdentity } from "./founders";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -64,6 +64,25 @@ export function hasPremiumAccess(
   return isUserEntitled(user);
 }
 
+/**
+ * Async superset of hasPremiumAccess for request handlers. Premium access is granted by EITHER the
+ * sync predicate (Founder Clerk-id / email whitelist + billing entitlement) OR a claimed founder
+ * owner-identity (hasFounderOwnerIdentity, which reads the user's resolved owner). The cheap sync
+ * path is checked first and short-circuits, so whitelisted / paying users never trigger the owner
+ * lookup. Gates call THIS so founder access can come from the static whitelist OR a claimed owner.
+ */
+export async function resolvePremiumAccess(
+  user:
+    | (Pick<User, "openId" | "email" | "subscriptionStatus" | "trialStartedAt"> & { id?: number | null })
+    | null
+    | undefined,
+): Promise<boolean> {
+  if (!user) return false;
+  if (hasPremiumAccess(user)) return true;
+  if (typeof user.id === "number") return hasFounderOwnerIdentity({ id: user.id });
+  return false;
+}
+
 /** Requires an active subscription or a non-expired trial. */
 export const subscribedProcedure = t.procedure.use(
   t.middleware(async opts => {
@@ -74,7 +93,7 @@ export const subscribedProcedure = t.procedure.use(
     if (!ctx.user) {
       throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
     }
-    if (!hasPremiumAccess(ctx.user)) {
+    if (!(await resolvePremiumAccess(ctx.user))) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "Your free trial has ended. Upgrade to continue.",
