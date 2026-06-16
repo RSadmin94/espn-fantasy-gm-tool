@@ -37,6 +37,15 @@ const topBadge = (m: CastMember) => Math.min(99, ...m.badges.map((b) => BADGE_RA
 function YouTag() {
   return <span className="ml-2 align-middle rounded px-1.5 py-0.5 text-[10px] font-black" style={{ background: LIME, color: "#0b0809" }}>YOU</span>;
 }
+function ChooseTeamCTA() {
+  return (
+    <div className="rounded-2xl p-5 text-center" style={{ background: "rgba(163,230,53,.06)", border: `1px solid ${LIME}44` }}>
+      <p className="text-sm font-black" style={{ color: "#f3f8ff" }}>Choose your team to pull your Cast card</p>
+      <p className="mx-auto mt-1 max-w-sm text-xs" style={{ color: MUTED }}>We don't know which team is yours in this league yet - pick it to unlock your own card and Receipt.</p>
+      <a href="/settings" className="mt-4 inline-flex items-center justify-center gap-2 rounded-[12px] px-5 py-2.5 text-sm font-extrabold" style={{ background: LIME, color: "#0b0809" }}>Select your team</a>
+    </div>
+  );
+}
 function SectionTitle({ children, color }: { children: ReactNode; color: string }) {
   return (
     <div className="mb-3 flex items-center gap-3">
@@ -94,6 +103,8 @@ export function TheCast() {
   const ready = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
   const q = (trpc as any).dna.leagueCast.useQuery(withLeagueSalt({}, leagueContextKey), { staleTime: 60_000, enabled: ready });
   const data = q.data as { leagueName: string; season: number; cast: CastMember[]; pastChampions?: PastChampion[] } | null | undefined;
+  const profileQ = (trpc as any).me.activeProfile.useQuery(withLeagueSalt({}, leagueContextKey), { staleTime: 600_000, retry: false, enabled: ready });
+  const needsOwnerSelection = ready && !!profileQ.data && profileQ.data.isSetupComplete === false;
   const createReceipt = (trpc as any).dna.createReceipt.useMutation();
   const [copied, setCopied] = useState(false);
   const shareMyReceipt = async () => {
@@ -118,9 +129,11 @@ export function TheCast() {
   if (!data || !data.cast?.length) {
     return (
       <div style={PAGEBG} className="flex min-h-screen items-center justify-center p-8 text-center">
-        <div>
+        <div className="max-w-sm">
+          {needsOwnerSelection ? <ChooseTeamCTA /> : <>
           <Clapperboard className="mx-auto h-10 w-10" style={{ color: MUTED }} />
-          <p className="mt-3 max-w-sm text-sm" style={{ color: MUTED }}>The Cast isn't ready yet - finish your league profile setup and sync your history.</p>
+          <p className="mt-3 text-sm" style={{ color: MUTED }}>The Cast isn't ready yet - finish your league profile setup and sync your history.</p>
+          </>}
         </div>
       </div>
     );
@@ -147,6 +160,8 @@ export function TheCast() {
           </button>
           {createReceipt.isError && <div className="mt-2 text-[11px]" style={{ color: "#f87171" }}>{String(createReceipt.error?.message ?? "Couldn't create link")}</div>}
         </div>
+
+        {needsOwnerSelection && <div className="mx-auto mt-6 max-w-md"><ChooseTeamCTA /></div>}
 
         {headliners.length > 0 && (
           <div className="mt-10">
