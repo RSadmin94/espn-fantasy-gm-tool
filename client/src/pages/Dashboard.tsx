@@ -16,7 +16,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Flame, Loader2, RefreshCw, Trophy, ChevronRight, Activity, Swords, FileText, Star, TrendingUp, ShieldAlert, Medal, Binoculars, Users } from "lucide-react";
-import { DevBuildDiagnostics } from "@/components/DevBuildDiagnostics";
 import { DashboardLeagueHealthCard } from "@/components/dashboard/DashboardLeagueHealthCard";
 import { DashboardMatchupMarquee, type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
 import { DashboardTimelineStrip, type TimelineChamp } from "@/components/dashboard/DashboardTimelineStrip";
@@ -1387,7 +1386,6 @@ export function Dashboard() {
 
 
       <LeagueWireNewsFeed />
-      <DevBuildDiagnostics compact />
       <div className="mt-6 border-t border-white/5 pt-4 pb-6 text-center text-[11px] tracking-wide text-white/25">
         Build: {__APP_GIT_HASH__ && __APP_GIT_HASH__ !== "unknown" ? __APP_GIT_HASH__.slice(0, 7) : "Unknown"}
       </div>
