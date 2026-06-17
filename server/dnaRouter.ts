@@ -17,7 +17,7 @@
 
 import { z } from "zod";
 import { router, publicProcedure, resolvePremiumAccess } from "./_core/trpc";
-import { getCachedView, getAllCachedSeasons, resolveActiveLeagueId } from "./db";
+import { getCachedView, getAllCachedSeasons, resolveActiveLeagueId, reconcileActiveLeague } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import {
   calcLeagueDNA,
@@ -250,6 +250,9 @@ export const dnaRouter = router({
    */
   myProfile: publicProcedure.query(async ({ ctx }) => {
     if (!ctx.user?.id) return null;
+    // Active-league self-heal (ARCHITECTURE.md S9): if the active connection is unclaimed but a
+    // set-up league exists, prefer it, so owner-dependent views resolve the right owner. No-op otherwise.
+    await reconcileActiveLeague(ctx.user.id);
     const co = await resolveCurrentOwner({ id: ctx.user.id });
     if (!co.isSetupComplete || !co.ownerId) return null;
     const focalLabel = await focalH2hLabelForUser(ctx.user.id);
@@ -286,6 +289,8 @@ export const dnaRouter = router({
    */
   leagueCast: publicProcedure.query(async ({ ctx }) => {
     if (!ctx.user?.id) return null;
+    // Active-league self-heal (see myProfile): keep The Cast on the set-up league.
+    await reconcileActiveLeague(ctx.user.id);
     const focalLabel = await focalH2hLabelForUser(ctx.user.id);
     const managers = await buildManagerRawData(ctx.user.id);
     if (managers.length === 0) return null;
