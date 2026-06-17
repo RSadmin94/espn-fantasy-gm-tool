@@ -1530,15 +1530,47 @@ export async function resolveActiveProfile(
 
   if (!conn) return emptyActiveProfile(clerkUserId);
 
+  // SWID fallback: a credential-connected league whose owner was never explicitly selected
+  // can still be resolved from the stored ESPN SWID (the user's own identity) when it maps to
+  // exactly one team in synced data. Read-only - nothing is persisted; falls through on any miss.
+  let swidPick:
+    | { selectedTeamId: number; selectedOwnerKey: string; selectedOwnerName: string | null; selectedFranchiseName: string | null; selectedSeason: number | null }
+    | null = null;
+  if (conn.selectedTeamId == null && conn.credentials && conn.leagueId) {
+    try {
+      const creds = decryptCredentialsFromDb(conn.credentials) as Record<string, string> | null;
+      const swid = typeof creds?.swid === "string" ? creds.swid.trim() : "";
+      if (swid.startsWith("{")) {
+        const rows = await db
+          .select({ teamId: gmTeams.teamId, season: gmTeams.season, ownerName: gmTeams.ownerName, name: gmTeams.name })
+          .from(gmTeams)
+          .where(and(eq(gmTeams.leagueId, conn.leagueId), eq(gmTeams.ownerId, swid)));
+        const distinctTeams = new Set(rows.map((r) => r.teamId));
+        if (rows.length > 0 && distinctTeams.size === 1) {
+          const latest = [...rows].sort((a, b) => (b.season ?? 0) - (a.season ?? 0))[0]!;
+          swidPick = {
+            selectedTeamId: latest.teamId,
+            selectedOwnerKey: `id:${swid}`,
+            selectedOwnerName: latest.ownerName ?? null,
+            selectedFranchiseName: latest.name ?? null,
+            selectedSeason: latest.season ?? null,
+          };
+        }
+      }
+    } catch {
+      // decrypt/lookup failure -> leave swidPick null (no regression)
+    }
+  }
+
   return {
     clerkUserId,
     leagueId: conn.leagueId ?? null,
     leagueName: conn.leagueName ?? null,
-    selectedTeamId: conn.selectedTeamId ?? null,
-    selectedOwnerKey: conn.selectedOwnerKey ?? null,
-    selectedOwnerName: conn.selectedOwnerName ?? null,
-    selectedFranchiseName: conn.selectedFranchiseName ?? null,
-    selectedSeason: conn.selectedSeason ?? null,
-    isSetupComplete: conn.selectedTeamId != null,
+    selectedTeamId: swidPick?.selectedTeamId ?? conn.selectedTeamId ?? null,
+    selectedOwnerKey: swidPick?.selectedOwnerKey ?? conn.selectedOwnerKey ?? null,
+    selectedOwnerName: swidPick?.selectedOwnerName ?? conn.selectedOwnerName ?? null,
+    selectedFranchiseName: swidPick?.selectedFranchiseName ?? conn.selectedFranchiseName ?? null,
+    selectedSeason: swidPick?.selectedSeason ?? conn.selectedSeason ?? null,
+    isSetupComplete: (swidPick?.selectedTeamId ?? conn.selectedTeamId) != null,
   };
 }
