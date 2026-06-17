@@ -1388,6 +1388,9 @@ export function Dashboard() {
 
       <LeagueWireNewsFeed />
       <DevBuildDiagnostics compact />
+      <div className="mt-6 border-t border-white/5 pt-4 pb-6 text-center text-[11px] tracking-wide text-white/25">
+        Build: {__APP_GIT_HASH__ && __APP_GIT_HASH__ !== "unknown" ? __APP_GIT_HASH__.slice(0, 7) : "Unknown"}
+      </div>
     </div>
   );
 }

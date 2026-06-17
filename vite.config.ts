@@ -26,7 +26,11 @@ function safeGitShort(): string {
   }
 }
 
-const APP_GIT_HASH = (process.env.VITE_APP_GIT_HASH ?? safeGitShort()).trim() || "unknown";
+const APP_GIT_HASH = (
+  process.env.VITE_APP_GIT_HASH ??
+  process.env.RAILWAY_GIT_COMMIT_SHA ??
+  safeGitShort()
+).trim().slice(0, 7) || "unknown";
 const APP_BUILD_TIME_ISO = process.env.VITE_APP_BUILD_TIME ?? new Date().toISOString();
 const LOG_DIR = path.join(PROJECT_ROOT, ".manus-logs");
 const MAX_LOG_SIZE_BYTES = 1 * 1024 * 1024; // 1MB per log file
