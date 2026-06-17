@@ -18,7 +18,7 @@
  *   150+   → "Inferno"
  */
 
-import { getAllCachedSeasons, getCachedView, getDb } from "./db";
+import { getAllCachedSeasons, getCachedView, getDb, resolveActiveLeagueId } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import {
   normalizeTeams,
@@ -101,8 +101,8 @@ function heatLabel(score: number): RivalryPair["heatLabel"] {
  * Compute rivalry scores for all opponents vs the primary user (Rod).
  * Reads from the ESPN season cache — no live API calls.
  */
-export async function computeRivalryScores(userId?: number): Promise<RivalryPair[]> {
-  const cachedSeasons = await getAllCachedSeasons(undefined, userId);
+export async function computeRivalryScores(userId?: number, leagueId?: string): Promise<RivalryPair[]> {
+  const cachedSeasons = await getAllCachedSeasons(leagueId, userId);
   if (cachedSeasons.length === 0) return [];
 
   // memberId → display name
@@ -177,7 +177,7 @@ export async function computeRivalryScores(userId?: number): Promise<RivalryPair
 
   // ── Pass 1: Matchup H2H ──────────────────────────────────────────────────
   for (const season of sortedSeasons) {
-    const row = await getCachedView(season, "combined", undefined, { userId });
+    const row = await getCachedView(season, "combined", leagueId, { userId });
     if (!row) continue;
     const data = row.payload as Record<string, unknown>;
 
@@ -311,7 +311,7 @@ export async function computeRivalryScores(userId?: number): Promise<RivalryPair
   // We re-run the simplified trade verdict logic from tradeAging
   // (only need winner/loser per trade, not full value breakdown)
   for (const season of sortedSeasons) {
-    const row = await getCachedView(season, "combined", undefined, { userId });
+    const row = await getCachedView(season, "combined", leagueId, { userId });
     if (!row) continue;
     const data = row.payload as Record<string, unknown>;
     const teamToMember = seasonTeamToMember.get(season);
@@ -522,7 +522,7 @@ Output: One sentence only. No quotes. No explanation.`;
  * Upsert rivalry scores into the DB.
  * Generates lore sentences for new/materially changed pairs.
  */
-export async function persistRivalryScores(pairs: RivalryPair[]): Promise<void> {
+export async function persistRivalryScores(pairs: RivalryPair[], leagueId: string): Promise<void> {
   const db = await getDb();
   if (!db || pairs.length === 0) return;
 
@@ -533,7 +533,7 @@ export async function persistRivalryScores(pairs: RivalryPair[]): Promise<void> 
       [existing] = await db
         .select({ rivalryScore: rivalryScores.rivalryScore, loreSentence: rivalryScores.loreSentence })
         .from(rivalryScores)
-        .where(and(eq(rivalryScores.memberId, pair.memberId), eq(rivalryScores.rivalId, pair.rivalId)))
+        .where(and(eq(rivalryScores.memberId, pair.memberId), eq(rivalryScores.rivalId, pair.rivalId), eq(rivalryScores.leagueId, leagueId)))
         .limit(1);
     } catch (e) {
       if (isMissingTableError(e)) {
@@ -558,6 +558,7 @@ export async function persistRivalryScores(pairs: RivalryPair[]): Promise<void> 
       .insert(rivalryScores)
       .values({
         memberId: pair.memberId,
+        leagueId,
         rivalId: pair.rivalId,
         rivalName: pair.rivalName,
         rivalryScore: pair.rivalryScore,
@@ -605,7 +606,7 @@ export async function persistRivalryScores(pairs: RivalryPair[]): Promise<void> 
 /**
  * Read cached rivalry scores from the DB for a given memberId.
  */
-export async function getRivalryScoresFromDb(memberId: string): Promise<RivalryPair[]> {
+export async function getRivalryScoresFromDb(memberId: string, leagueId: string): Promise<RivalryPair[]> {
   const db = await getDb();
   if (!db) return [];
 
@@ -614,7 +615,7 @@ export async function getRivalryScoresFromDb(memberId: string): Promise<RivalryP
     rows = await db
       .select()
       .from(rivalryScores)
-      .where(eq(rivalryScores.memberId, memberId))
+      .where(and(eq(rivalryScores.memberId, memberId), eq(rivalryScores.leagueId, leagueId)))
       .orderBy(rivalryScores.rivalryScore);
   } catch (e) {
     if (isMissingTableError(e)) {
@@ -656,8 +657,9 @@ export async function getRivalryScoresFromDb(memberId: string): Promise<RivalryP
  * Full pipeline: compute → persist → return.
  * Called from the scheduled refresh and manual refresh procedures.
  */
-export async function refreshRivalryScores(userId?: number): Promise<RivalryPair[]> {
-  const pairs = await computeRivalryScores(userId);
-  await persistRivalryScores(pairs);
+export async function refreshRivalryScores(userId?: number, leagueIdInput?: string): Promise<RivalryPair[]> {
+  const { leagueId } = await resolveActiveLeagueId({ user: userId != null ? { id: userId } : undefined }, leagueIdInput ?? null, undefined);
+  const pairs = await computeRivalryScores(userId, leagueId);
+  await persistRivalryScores(pairs, leagueId);
   return pairs;
 }

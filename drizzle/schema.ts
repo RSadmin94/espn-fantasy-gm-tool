@@ -1014,6 +1014,7 @@ export const rivalryScores = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     memberId: varchar("memberId", { length: 64 }).notNull(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull().default(""),
     rivalId: varchar("rivalId", { length: 64 }).notNull(),
     rivalName: varchar("rivalName", { length: 128 }).notNull(),
     rivalryScore: int("rivalryScore").notNull().default(0),
@@ -1039,7 +1040,7 @@ export const rivalryScores = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (t) => [
-    uniqueIndex("uq_rivalry_pair").on(t.memberId, t.rivalId),
+    uniqueIndex("uq_rivalry_pair").on(t.leagueId, t.memberId, t.rivalId),
     index("idx_rivalry_member").on(t.memberId),
     index("idx_rivalry_score").on(t.rivalryScore),
   ]

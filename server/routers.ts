@@ -554,14 +554,15 @@ export const appRouter = router({
             return `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || "";
           })()
         : "";
-      const scores = await getRivalryScoresFromDb(focalMemberId);
-      // Attach canonical owner-keys so the dossier popup resolves (gmTeams.ownerId === ESPN memberId).
+      // Resolve the active league FIRST so rivalry scores are league-scoped (not member-global).
       if (!ctx.user?.id) return [];
       const { leagueId: scoreLid } = await resolveActiveLeagueId(
         { user: { id: ctx.user.id } }, null, undefined,
       );
       if (!scoreLid) return [];
       const lid = scoreLid;
+      const scores = await getRivalryScoresFromDb(focalMemberId, lid);
+      // Attach canonical owner-keys so the dossier popup resolves (gmTeams.ownerId === ESPN memberId).
       const db = await getDb();
       const allGmRows = db
         ? ((await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))) as GmTeamRow[])

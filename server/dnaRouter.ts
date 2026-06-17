@@ -378,7 +378,8 @@ export const dnaRouter = router({
       // omit rv and still create the Receipt.
       let rv: { n: string; s: number; pe: number } | null = null;
       try {
-        const rivals = await getRivalryScoresFromDb(targetId);
+        const { leagueId: rvLid } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+        const rivals = await getRivalryScoresFromDb(targetId, rvLid);
         const top = rivals.slice().sort((a, b) => b.rivalryScore - a.rivalryScore)[0];
         if (top?.rivalName) {
           rv = { n: top.rivalName, s: Math.round(top.rivalryScore), pe: top.playoffEliminations };
