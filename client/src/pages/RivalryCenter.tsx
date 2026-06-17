@@ -493,9 +493,9 @@ export function RivalryCenter() {
                       const l = n(hero.h2hLosses);
                       const cl = n(hero.closeLossCount);
                       if (pe > 0) why.push(`Knocked you out of the playoffs${pe > 1 ? ` ${pe} times` : ""}`);
-                      if (l > w) why.push(`${String(hero.rivalName ?? "They")} lead your series ${l}-${w}`);
-                      else if (w > l) why.push(`You lead the series ${w}-${l}`);
-                      else why.push(`Series dead even at ${w}-${l}`);
+                      if (l > w) why.push(`${String(hero.rivalName ?? "They")} lead the regular-season series ${l}-${w}`);
+                      else if (w > l) why.push(`You lead the regular-season series ${w}-${l}`);
+                      else why.push(`Regular-season series dead even at ${w}-${l}`);
                       if (cl > 0) why.push(`${cl} game${cl === 1 ? "" : "s"} decided by under 5 points`);
                       if (hero.lastMatchupSeason) why.push(`Most recent meeting: ${hero.lastMatchupSeason}`);
                       return (
@@ -660,7 +660,7 @@ export function RivalryCenter() {
                             </>
                           ) : (
                             <>
-                              <span>Series <b style={{ color: TEXT }}>{n(p.h2hWins)}–{n(p.h2hLosses)}{n(p.h2hTies) ? `–${n(p.h2hTies)}` : ""}</b></span>
+                              <span>Reg. season H2H <b style={{ color: TEXT }}>{n(p.h2hWins)}–{n(p.h2hLosses)}{n(p.h2hTies) ? `–${n(p.h2hTies)}` : ""}</b></span>
                               <span>Playoff elims <b style={{ color: TEXT }}>{n(p.playoffEliminations)}</b></span>
                               <span>Heartbreak losses <b style={{ color: TEXT }}>{n(p.closeLossCount)}</b></span>
                             </>
@@ -954,7 +954,7 @@ function HeroStrip({ p, gated, yearsActive }: { p: Pair; gated?: boolean; yearsA
   const heartbreak = p.painfulLossMargin != null ? `${Number(p.painfulLossMargin).toFixed(1)} pts` : "—";
   const last = p.lastMatchupSeason != null ? String(p.lastMatchupSeason) : "—";
   const cells: Array<[string, string]> = [
-    ["Series Record", series],
+    ["Reg. Season Record", series],
     ["Playoff Record", playoff],
     ["Closest Loss", heartbreak],
     ["Last Meeting", last],
