@@ -2,7 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
-import { useEffect, useRef, type ReactNode, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import {
   Loader2, HelpCircle, Trophy, Target, TrendingDown, TrendingUp, Swords, Crown, Calendar, ShoppingCart,
   Medal, Activity, Shield, Sparkles, Flame, Gauge, AlertTriangle, CheckCircle2, ArrowDown, ArrowUp, Star,
@@ -170,12 +170,27 @@ export function WhyHaventIWon() {
   const checkoutMutation = trpc.billing.createCheckoutSession.useMutation({
     onSuccess: (res) => { window.open(res.url, "_blank", "noopener,noreferrer"); },
   });
+  const [openReason, setOpenReason] = useState<string | null>(null);
+  const [showThreat, setShowThreat] = useState(false);
   const data = leagueKeyReady ? q.data : undefined;
   const snap = data?.snapshot ?? null;
   const arc = data?.careerArc ?? null;
   const arcStyle = (arc && ARC_STYLE[arc]) || null;
   const readiness = data?.readiness ?? null;
   const patterns = data?.patterns ?? [];
+  // Map a reason's category to the already-computed PatternStat(s) that measure it.
+  // (Explicit + safe — no fuzzy matching, no mis-attribution.)
+  const patternsForCategory = (cat: string) => {
+    const pred: Record<string, (id: string) => boolean> = {
+      playoffs: (id) => id === "missed",
+      scoring: (id) => id === "pfgap",
+      position: (id) => id.startsWith("pos-"),
+      close_games: (id) => id === "close",
+      rivals: (id) => id === "lostchamp",
+    };
+    const fn = pred[cat];
+    return fn ? patterns.filter((p: { id?: string }) => fn(String(p.id ?? ""))) : [];
+  };
   const isWin = data?.mode === "why-you-won" || data?.mode === "why-you-broke-through";
 
   // Conversion funnel instrumentation (fire-and-forget; see docs/FREEMIUM_GATING_SPEC.md)
@@ -305,9 +320,13 @@ export function WhyHaventIWon() {
                     </span>
                   )}
                   {snap.biggestThreat && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-400/25 bg-orange-500/10 px-3 py-1 text-orange-200">
-                      <Flame className="h-3.5 w-3.5 text-orange-300" /> Biggest Threat: <span className="font-semibold text-white/85">{snap.biggestThreat}</span>
-                    </span>
+                    <button
+                      onClick={() => setShowThreat((v) => !v)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-orange-400/25 bg-orange-500/10 px-3 py-1 text-orange-200 underline-offset-2 hover:underline"
+                    >
+                      <Flame className="h-3.5 w-3.5 text-orange-300" /> Biggest Threat: <span className="font-semibold text-white/85">{snap.biggestThreat.ownerName}</span>
+                      <span className="text-[10px] text-orange-300/70">{showThreat ? "▲" : "▼"}</span>
+                    </button>
                   )}
                   {snap.titles > 0 && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-amber-300">
@@ -315,6 +334,24 @@ export function WhyHaventIWon() {
                     </span>
                   )}
                 </div>
+                {showThreat && snap.biggestThreat && (
+                  <div className="mt-3 rounded-xl border border-orange-400/20 bg-orange-500/[0.06] p-3">
+                    <div className="text-[11px] font-bold uppercase tracking-widest text-orange-200/80">Why this is your biggest threat</div>
+                    <div className="mt-2 grid gap-1.5 text-[13px]">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-white/55">Record vs you</span>
+                        <span className="tabular-nums font-semibold text-white/90">{snap.biggestThreat.record}</span>
+                      </div>
+                      {snap.biggestThreat.playoffLosses > 0 && (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-white/55">Playoff losses to them</span>
+                          <span className="tabular-nums font-semibold text-white/90">{snap.biggestThreat.playoffLosses}</span>
+                        </div>
+                      )}
+                    </div>
+                    {snap.biggestThreat.detail && <p className="mt-2 text-[13px] text-white/60">{snap.biggestThreat.detail}</p>}
+                  </div>
+                )}
               </div>
             )}
 
@@ -338,6 +375,7 @@ export function WhyHaventIWon() {
                   const colorFn = isWin ? strengthColor : severityColor;
                   const barFn = isWin ? strengthBar : severityBar;
                   const iconMap = isWin ? CHAMPION_ICON : CATEGORY_ICON;
+                  const evid = patternsForCategory(String(f.category));
                   return (
                     <div key={f.id} className={cn(
                       "rounded-xl border p-4",
@@ -360,6 +398,29 @@ export function WhyHaventIWon() {
                           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
                             <div className={cn("h-full rounded-full", barFn(f.severity))} style={{ width: `${Math.round(f.severity)}%` }} />
                           </div>
+                          {evid.length > 0 && (
+                            <>
+                              <button
+                                onClick={() => setOpenReason((cur) => (cur === f.id ? null : f.id))}
+                                className="mt-2 text-[11px] font-bold uppercase tracking-widest text-white/45 underline-offset-2 hover:underline"
+                              >
+                                {openReason === f.id ? "Hide evidence" : "Evidence"}
+                              </button>
+                              {openReason === f.id && (
+                                <div className="mt-2 space-y-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+                                  {evid.map((p: any) => (
+                                    <div key={p.id}>
+                                      <div className="flex items-start justify-between gap-3 text-[13px]">
+                                        <span className="text-white/70">{p.label}</span>
+                                        <span className="shrink-0 tabular-nums font-semibold text-white/90">{p.value}</span>
+                                      </div>
+                                      {p.detail && <p className="mt-0.5 text-[12px] text-white/45">{p.detail}</p>}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

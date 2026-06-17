@@ -53,7 +53,7 @@ export type CareerSnapshot = {
   activityDna: { primary: string | null; secondary: string | null };
   leagueDnaRank: number | null;
   biggestRival: string | null;
-  biggestThreat: string | null;
+  biggestThreat: { ownerName: string; record: string; netLosses: number; playoffLosses: number; detail: string } | null;
 };
 
 export type SeasonCard = {
@@ -298,7 +298,7 @@ export async function computeCareerReport(
     activityDna: { primary, secondary },
     leagueDnaRank: null,
     biggestRival: cp?.biggestRival?.ownerName ?? null,
-    biggestThreat: cp?.biggestThreat?.ownerName ?? null,
+    biggestThreat: cp?.biggestThreat ?? null,
   };
 
   // Mode-aware: champions get positive drivers; failure mode gets historic failure analysis.

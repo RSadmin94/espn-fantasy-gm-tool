@@ -68,6 +68,7 @@ type Pair = {
   h2hTies?: number;
   playoffEliminations?: number;
   closeLossCount?: number;
+  tradeVerdictLosses?: number;
   recentLosses?: number;
   heatLabel?: string;
   painfulLossSeason?: number | null;
@@ -356,6 +357,7 @@ export function RivalryCenter() {
   }, [leaguePairs]);
 
   const [open, setOpen] = useState<{ focalKey?: string; focalName?: string; rivalKey?: string; rivalName: string } | null>(null);
+  const [showScoreMath, setShowScoreMath] = useState(false);
 
   useEffect(() => {
     setOpen(null);
@@ -484,6 +486,32 @@ export function RivalryCenter() {
                         {hero.loreSentence}
                       </p>
                     )}
+                    {!rivalryGated && (() => {
+                      const why: string[] = [];
+                      const pe = n(hero.playoffEliminations);
+                      const w = n(hero.h2hWins);
+                      const l = n(hero.h2hLosses);
+                      const cl = n(hero.closeLossCount);
+                      if (pe > 0) why.push(`Knocked you out of the playoffs${pe > 1 ? ` ${pe} times` : ""}`);
+                      if (l > w) why.push(`${String(hero.rivalName ?? "They")} lead your series ${l}-${w}`);
+                      else if (w > l) why.push(`You lead the series ${w}-${l}`);
+                      else why.push(`Series dead even at ${w}-${l}`);
+                      if (cl > 0) why.push(`${cl} game${cl === 1 ? "" : "s"} decided by under 5 points`);
+                      if (hero.lastMatchupSeason) why.push(`Most recent meeting: ${hero.lastMatchupSeason}`);
+                      return (
+                        <div className="mt-4">
+                          <div className="text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>Why this is your hottest rivalry</div>
+                          <ul className="mt-2 space-y-1">
+                            {why.map((line) => (
+                              <li key={line} className="flex items-start gap-2 text-[14px]" style={{ color: "#cfd2d8" }}>
+                                <span className="mt-[7px] inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: ACCENT }} />
+                                <span>{line}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })()}
                     <div className="mt-5 flex flex-wrap gap-3">
                       <button
                         onClick={() => openDossier(hero)}
@@ -504,8 +532,43 @@ export function RivalryCenter() {
                   <div style={SUB} className="flex shrink-0 flex-col items-center justify-center px-8 py-6">
                     <div className="text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>Rivalry Score</div>
                     <div className="text-6xl font-black" style={{ color: GOLD }}>{n(hero.rivalryScore)}</div>
+                    {!rivalryGated && (
+                      <button
+                        onClick={() => setShowScoreMath((v) => !v)}
+                        className="mt-1 text-[11px] font-bold uppercase tracking-widest underline-offset-2 hover:underline focus-visible:outline-none focus-visible:underline"
+                        style={{ color: MUTED }}
+                      >
+                        {showScoreMath ? "Hide" : "Why?"}
+                      </button>
+                    )}
                   </div>
                 </div>
+                {showScoreMath && !rivalryGated && (
+                  <div style={SUB} className="mt-4 p-4">
+                    <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>Why this score?</div>
+                    <div className="space-y-1.5 text-sm">
+                      {([
+                        ["Head-to-head losses", n(hero.h2hLosses), 8],
+                        ["Playoff eliminations", n(hero.playoffEliminations), 30],
+                        ["Close losses (under 5 pts)", n(hero.closeLossCount), 6],
+                        ["Trade-verdict losses", n(hero.tradeVerdictLosses), 10],
+                        ["Recent-loss seasons", n(hero.recentLosses), 5],
+                      ] as Array<[string, number, number]>).map(([label, count, weight]) => (
+                        <div key={label} className="flex items-center justify-between gap-3">
+                          <span style={{ color: MUTED }}>{label}</span>
+                          <span className="tabular-nums" style={{ color: TEXT }}>{count} × {weight} = <span className="font-bold">{count * weight}</span></span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between border-t pt-2" style={{ borderColor: LINE }}>
+                      <span className="text-xs font-bold uppercase tracking-widest" style={{ color: MUTED }}>Total</span>
+                      <span className="text-lg font-black" style={{ color: GOLD }}>{n(hero.rivalryScore)}</span>
+                    </div>
+                    <div className="mt-2 text-[11px]" style={{ color: MUTED }}>
+                      Heat thresholds: Cold &lt;30 · Simmering 30 · Heated 60 · Burning 100 · Inferno 150 — you're <span style={{ color: GOLD }}>{String(hero.heatLabel)}</span>
+                    </div>
+                  </div>
+                )}
                 <div className="mt-4"><HeroStrip p={hero} gated={rivalryGated} yearsActive={heroYearsActive} /></div>
               </Panel>
             )}
