@@ -1752,6 +1752,12 @@ export const appRouter = router({
           throw new Error("No ESPN credentials found. Please connect your ESPN account first.");
         }
 
+        // Fetch identity MUST equal storage identity: every ESPN fetch below uses the SAME
+        // league we persist under (activeLeagueId). Never let the trade-proposal or activity-
+        // feed fetches fall back to the module default LEAGUE_ID — that is the cross-league leak
+        // that wrote 457622's transactions into other leagues' caches.
+        const fetchCreds = { ...activeCreds, leagueId: activeLeagueId };
+
         // ─── DIAGNOSTIC LOGGING ───
         console.log('[ESPN Refresh] Credential resolution:', JSON.stringify({
           credSource: activeCreds ? 'db' : 'env',
@@ -1800,11 +1806,11 @@ export const appRouter = router({
             //    as messageTypeId 246 topics, which we reconstruct into synthetic TRADE_PROPOSAL rows)
             let enrichedData = data;
             try {
-              const proposals = await fetchTradeProposals(season);
+              const proposals = await fetchTradeProposals(season, fetchCreds);
               enrichedData = mergeTradeProposalsIntoTransactions(data, proposals);
             } catch (_e) { /* non-fatal — fall back to unmerged data */ }
             try {
-              const activityTrades = await fetchRecentActivityTrades(season, enrichedData);
+              const activityTrades = await fetchRecentActivityTrades(season, enrichedData, fetchCreds);
               if (activityTrades.length > 0) {
                 enrichedData = mergeTradeProposalsIntoTransactions(enrichedData, activityTrades);
               }

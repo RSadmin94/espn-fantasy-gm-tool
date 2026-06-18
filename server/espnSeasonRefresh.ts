@@ -33,8 +33,23 @@ export async function refreshSingleSeason(opts: {
 }): Promise<{ status: "success" | "partial" | "failed"; error?: string }> {
   const { season, leagueId, creds, userId } = opts;
 
+  // ── League-scoping guard (fix the pipe before cleaning the water) ──
+  // A sync MUST fetch from the same league it stores under. Previously the fetch
+  // helpers resolved their league from creds (falling back to the module default
+  // LEAGUE_ID=457622) while the result was persisted under `leagueId` — so a refresh
+  // with a missing/incorrect creds.leagueId silently pulled the default league's data
+  // and stored it under the wrong key. Force fetch identity == storage identity here,
+  // and never let a sync silently fall back to the default league.
+  const lid = String(leagueId).slice(0, 32);
+  if (!lid) {
+    return { status: "failed", error: "refreshSingleSeason called without a leagueId" };
+  }
+  const fetchCreds: EspnCreds = creds
+    ? { ...creds, leagueId: lid }
+    : { swid: process.env.ESPN_SWID || "", espnS2: process.env.ESPN_S2 || "", leagueId: lid };
+
   try {
-    const pipelineResult = await fetchEspnViewsHardened(season, undefined, creds);
+    const pipelineResult = await fetchEspnViewsHardened(season, undefined, fetchCreds);
     const data = pipelineResult.merged;
 
     for (const vr of pipelineResult.viewResults) {
@@ -51,13 +66,13 @@ export async function refreshSingleSeason(opts: {
 
     let enrichedData = data;
     try {
-      const proposals = await fetchTradeProposals(season, creds);
+      const proposals = await fetchTradeProposals(season, fetchCreds);
       enrichedData = mergeTradeProposalsIntoTransactions(data, proposals);
     } catch {
       /* non-fatal */
     }
     try {
-      const activityTrades = await fetchRecentActivityTrades(season, enrichedData, creds);
+      const activityTrades = await fetchRecentActivityTrades(season, enrichedData, fetchCreds);
       if (activityTrades.length > 0) {
         enrichedData = mergeTradeProposalsIntoTransactions(enrichedData, activityTrades);
       }
@@ -65,7 +80,6 @@ export async function refreshSingleSeason(opts: {
       /* non-fatal */
     }
 
-    const lid = String(leagueId).slice(0, 32);
     const quality = validateDataQuality(season, data);
     try {
       await syncEspnCombinedFullPipeline(lid, season, enrichedData as Record<string, unknown>, {
