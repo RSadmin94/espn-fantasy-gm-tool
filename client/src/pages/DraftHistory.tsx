@@ -204,6 +204,9 @@ export function DraftHistory() {
 
   type LedgerFilter = "all" | "drafted" | "keepers";
   const [ledgerFilter, setLedgerFilter] = useState<LedgerFilter>("all");
+  // Draft History view: "board" = existing pick-by-pick table (default, unchanged);
+  // "team" = picks grouped into one card per owner (their full draft class).
+  const [viewMode, setViewMode] = useState<"board" | "team">("board");
 
   useEffect(() => {
     setLedgerFilter("all");
@@ -219,6 +222,60 @@ export function DraftHistory() {
     if (ledgerFilter === "drafted") return effectivePicks.filter((p) => p.isKeeper !== true);
     return effectivePicks;
   }, [effectivePicks, ledgerFilter]);
+
+  // Team View grouping: one entry per owner/team, holding their full draft class.
+  // Reuses existing pick data only (no new draft metrics). Label prefers the clean
+  // ownerName and falls back to teamName; a key/GUID is never used as a label.
+  const teamGroups = useMemo(() => {
+    if (viewMode !== "team") return [];
+    const isKeyLike = (s: string) =>
+      /^id:/.test(s) || /^\{?[0-9a-f]{8}-[0-9a-f]{4}-/i.test(s);
+    // Group key: a real positive teamId when present (modern seasons). Legacy Draft
+    // Recap picks all carry teamId 0, so fall back to owner/team name there — keying
+    // on teamId alone would collapse every legacy owner into a single card.
+    const groupKeyOf = (p: DraftPickRow) =>
+      p.teamId && p.teamId > 0
+        ? `t:${p.teamId}`
+        : `n:${((p.ownerName ?? p.teamName) ?? "").trim().toLowerCase()}`;
+    const byKey = new Map<
+      string,
+      { key: string; teamId: number; ownerName: string | null; teamName: string; picks: DraftPickRow[] }
+    >();
+    for (const p of effectivePicks) {
+      const k = groupKeyOf(p);
+      let g = byKey.get(k);
+      if (!g) {
+        g = { key: k, teamId: p.teamId, ownerName: null, teamName: "", picks: [] };
+        byKey.set(k, g);
+      }
+      g.picks.push(p);
+      const on = (p.ownerName ?? "").trim();
+      if (!g.ownerName && on && !isKeyLike(on)) g.ownerName = on;
+      const tn = (p.teamName ?? "").trim();
+      if (!g.teamName && tn && !isKeyLike(tn)) g.teamName = tn;
+    }
+    const groups = [...byKey.values()].map((g) => {
+      const sorted = sortDraftPicks(g.picks);
+      const r1 = sorted.find((p) => p.roundId === 1);
+      return {
+        key: g.key,
+        teamId: g.teamId,
+        ownerName: g.ownerName,
+        teamName: g.teamName || (g.teamId > 0 ? `Team ${g.teamId}` : "Unknown Team"),
+        picks: sorted,
+        totalPicks: sorted.length,
+        keeperCount: sorted.filter((p) => p.isKeeper).length,
+        draftSlot: r1 && r1.roundPick > 0 ? r1.roundPick : null,
+        earliest: sorted.reduce(
+          (m, p) => (p.overallPick > 0 ? Math.min(m, p.overallPick) : m),
+          Number.POSITIVE_INFINITY,
+        ),
+      };
+    });
+    // Across owners: order by earliest overall pick (existing draft order, not a new ranking).
+    groups.sort((a, b) => a.earliest - b.earliest);
+    return groups;
+  }, [viewMode, effectivePicks]);
 
   // ── Legacy import state ───────────────────────────────────────────────────
   const [pasteText, setPasteText] = useState("");
@@ -355,6 +412,27 @@ export function DraftHistory() {
                 ? `${effectivePicks.length} picks`
                 : `${filteredPicks.length} shown · ${effectivePicks.length} total`}
             </span>
+          )}
+          {effectivePicks.length > 0 && (
+            <div className="ml-auto flex items-center gap-1.5">
+              {(
+                [
+                  { id: "board" as const, label: "Draft Board" },
+                  { id: "team" as const, label: "Team View" },
+                ] satisfies { id: "board" | "team"; label: string }[]
+              ).map((v) => (
+                <Button
+                  key={v.id}
+                  type="button"
+                  size="sm"
+                  variant={viewMode === v.id ? "default" : "outline"}
+                  className="h-8 text-xs"
+                  onClick={() => setViewMode(v.id)}
+                >
+                  {v.label}
+                </Button>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -579,7 +657,7 @@ export function DraftHistory() {
       )}
 
       {/* Picks table */}
-      {effectivePicks.length > 0 && (
+      {effectivePicks.length > 0 && viewMode === "board" && (
         <Card>
           <CardContent className="overflow-x-auto p-0">
             <table className="w-full text-sm">
@@ -642,6 +720,65 @@ export function DraftHistory() {
             </table>
           </CardContent>
         </Card>
+      )}
+
+      {/* Team View — one card per owner showing their full draft class */}
+      {effectivePicks.length > 0 && viewMode === "team" && (
+        <div className="space-y-3">
+          {teamGroups.map((g) => (
+            <Card key={g.key}>
+              <CardHeader className="pb-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <CardTitle className="text-base">
+                    {g.ownerName ? (
+                      <>
+                        <span className="text-foreground">{g.ownerName}</span>
+                        <span className="text-muted-foreground"> — {g.teamName}</span>
+                      </>
+                    ) : (
+                      <span className="text-foreground">{g.teamName}</span>
+                    )}
+                  </CardTitle>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {g.draftSlot ? `Slot ${g.draftSlot} · ` : ""}
+                    {g.totalPicks} pick{g.totalPicks === 1 ? "" : "s"}
+                    {g.keeperCount > 0
+                      ? ` · ${g.keeperCount} keeper${g.keeperCount === 1 ? "" : "s"}`
+                      : ""}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <ul className="divide-y divide-border/40">
+                  {g.picks.map((p) => (
+                    <li
+                      key={`${p.overallPick}-${p.teamId}-${p.playerName ?? ""}`}
+                      className={cn(
+                        "flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 text-sm",
+                        p.isKeeper && "rounded bg-amber-500/5 px-1",
+                      )}
+                    >
+                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                        R{p.roundId || "—"}
+                      </span>
+                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                        · Pick {p.overallPick > 0 ? p.overallPick : "—"}
+                      </span>
+                      <span className="font-medium text-foreground">{p.playerName ?? "—"}</span>
+                      <PosBadge pos={p.position} />
+                      {(p.nflTeam || "").trim() && (
+                        <span className="text-xs text-muted-foreground">{p.nflTeam}</span>
+                      )}
+                      {p.isKeeper && (
+                        <span className="ml-auto text-xs font-semibold text-amber-400">K</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   );

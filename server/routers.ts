@@ -2405,6 +2405,34 @@ export const appRouter = router({
             return pick;
           });
         }
+        // Resolve clean owner display names per team for this league+season so the
+        // Draft History "Team View" can show "Owner Name — Team Name" on modern
+        // seasons. Source of truth is teams.ownerName (ARCHITECTURE §9.1) — a real
+        // name, never a raw owner key/GUID. Best-effort: on any miss the field is
+        // null and the client falls back to teamName.
+        const ownerByTeamId = new Map<number, string>();
+        if (ctx.user?.id) {
+          try {
+            const { leagueId: ownerLid } = await resolveActiveLeagueId(
+              { user: { id: ctx.user.id } },
+              null,
+              input.season,
+            );
+            const ownerDb = await getDb();
+            if (ownerLid && ownerDb) {
+              const ownerTeamRows = await ownerDb
+                .select({ teamId: gmTeams.teamId, ownerName: gmTeams.ownerName })
+                .from(gmTeams)
+                .where(andDrizzle(eqDrizzle(gmTeams.leagueId, ownerLid), eqDrizzle(gmTeams.season, input.season)));
+              for (const t of ownerTeamRows) {
+                const nm = String(t.ownerName ?? "").trim();
+                if (nm) ownerByTeamId.set(Number(t.teamId), nm);
+              }
+            }
+          } catch {
+            /* best-effort; client falls back to teamName when ownerName is absent */
+          }
+        }
         const picks = enriched.map((p) => ({
           overallPick: p.overallPickNumber,
           roundId: p.roundId,
@@ -2413,6 +2441,7 @@ export const appRouter = router({
           position: p.position,
           nflTeam: p.proTeam ?? "",
           teamName: p.teamName,
+          ownerName: ownerByTeamId.get(p.teamId) ?? null,
           teamId: p.teamId,
           isKeeper: Boolean(p.keeper || p.reservedForKeeper),
         }));
