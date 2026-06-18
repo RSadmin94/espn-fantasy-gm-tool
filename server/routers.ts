@@ -9529,6 +9529,8 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
 
       // Phase 3: Inject DNA profiles for both trade partners
       let dnaContext = "";
+      let dnaLiteA: { avgTradesPerSeason?: number; tradeFrequency?: number; gmArchetype?: string; tiltLabel?: string } | undefined;
+      let dnaLiteB: typeof dnaLiteA;
       try {
         const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
         const { buildManagerRawData } = await import("./dnaRouter");
@@ -9543,6 +9545,16 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
           const focusedProfiles = dnaProfiles.filter(p =>
             teamAMemberIds.includes(p.memberId) || teamBMemberIds.includes(p.memberId)
           );
+          const toLite = (p: (typeof dnaProfiles)[number]) => ({
+            avgTradesPerSeason: p.trade?.avgTradesPerSeason,
+            tradeFrequency: p.trade?.tradeFrequency,
+            gmArchetype: p.gmArchetype,
+            tiltLabel: p.tilt?.tiltLabel,
+          });
+          for (const p of focusedProfiles) {
+            if (teamAMemberIds.includes(p.memberId)) dnaLiteA = toLite(p);
+            if (teamBMemberIds.includes(p.memberId)) dnaLiteB = toLite(p);
+          }
           if (focusedProfiles.length > 0) {
             dnaContext = "\n\n" + buildDNAPromptBlock(focusedProfiles);
           }
@@ -9594,6 +9606,57 @@ Provide:
         );
       }
 
+      // ── Phase 1: Trade Intelligence Report (deterministic, completed-trade data only) ──
+      const tradeIntelligence = await (async () => {
+        try {
+          const { buildTradeIntelligence } = await import("./tradeIntelligence");
+          const { listSeasonsForLeagueHistorical } = await import("./historicalDataService");
+          const tiSeasons = await listSeasonsForLeagueHistorical(undefined, ctx.user?.id);
+          const teamValueMap = new Map<number, number>();
+          for (const v of vorpResults) {
+            const pr = allPlayers.find((pp) => pp.playerId === v.playerId);
+            if (pr) teamValueMap.set(pr.teamId, (teamValueMap.get(pr.teamId) ?? 0) + Math.max(0, v.vorp));
+          }
+          const sortedTeamVals = [...teamValueMap.values()].sort((a, b) => a - b);
+          const rankPct = (teamId: number) => {
+            const val = teamValueMap.get(teamId) ?? 0;
+            if (sortedTeamVals.length <= 1) return 0.5;
+            return sortedTeamVals.filter((x) => x < val).length / (sortedTeamVals.length - 1);
+          };
+          const teamMeta = (teamId: number) => {
+            const t = teamsNormTa.find((tt) => (tt.teamId as number) === teamId) as Record<string, unknown> | undefined;
+            const wins = Number(t?.wins ?? 0), losses = Number(t?.losses ?? 0), ties = Number(t?.ties ?? 0);
+            return {
+              ownerName: (t?.owners as string) || `Team ${teamId}`,
+              record: { wins, losses, ties, hasRecord: wins + losses + ties > 0, rosterValueRankPct: rankPct(teamId), pointsForGap: null as number | null },
+            };
+          };
+          const metaA = teamMeta(input.teamAId);
+          const metaB = teamMeta(input.teamBId);
+          return await buildTradeIntelligence({
+            seasons: tiSeasons,
+            loadSeasonData: (s) => getSeasonData(s, undefined, ctx.user?.id),
+            teamAId: input.teamAId,
+            teamBId: input.teamBId,
+            ownerNameA: metaA.ownerName,
+            ownerNameB: metaB.ownerName,
+            dnaA: dnaLiteA,
+            dnaB: dnaLiteB,
+            needsA,
+            needsB,
+            receivedByA: input.sideA.map((p) => p.position),
+            gaveByA: input.sideB.map((p) => p.position),
+            receivedByB: input.sideB.map((p) => p.position),
+            gaveByB: input.sideA.map((p) => p.position),
+            ratio,
+            recordA: metaA.record,
+            recordB: metaB.record,
+          });
+        } catch {
+          return null; // intelligence is additive — never breaks the value engine
+        }
+      })();
+
       return {
         sideAValues,
         sideBValues,
@@ -9612,6 +9675,8 @@ Provide:
         formatSource: leagueCtx.formatSource,
         requiresFormatDisclaimer: leagueCtx.requiresFormatDisclaimer,
         disclaimers,
+        // Phase 1 Trade Intelligence Report (deterministic; null if unavailable). Does NOT alter value fields above.
+        tradeIntelligence,
       };
     }),
 

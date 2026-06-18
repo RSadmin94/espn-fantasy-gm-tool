@@ -1,0 +1,433 @@
+/**
+ * tradeIntelligence.ts — Phase 1 of the Trade Intelligence Report.
+ *
+ * Pure deterministic, data-backed logic for the Trade Analyzer scouting report.
+ * NO probabilities, NO trust scores, NO rejected-offer rates — completed trade
+ * data only. The LLM (in routers.ts) only writes a one-line summary FROM these
+ * findings; verdict, fit grade, and every evidence bullet are computed here.
+ *
+ * Trade reconstruction reuses the exported ESPN helpers (same source the existing
+ * tradeAging / tradeNarrative path uses) — it does not touch those endpoints.
+ */
+import {
+  normalizeTransactions,
+  normalizeTeams,
+  normalizeRosters,
+  buildCompletedProposalIds,
+  isCompletedTradeProposal,
+} from "./espnService";
+
+type SeasonData = Record<string, unknown>;
+type Row = Record<string, unknown>;
+
+export interface CompletedTrade {
+  season: number;
+  date: number;
+  teamA: number;
+  teamB: number;
+  /** positions of players each team RECEIVED in this trade */
+  receivedByTeam: Record<number, string[]>;
+  /** count of draft picks each team RECEIVED */
+  picksByTeam: Record<number, number>;
+}
+
+const otherTeam = (t: CompletedTrade, teamId: number) => (t.teamA === teamId ? t.teamB : t.teamA);
+const mode = (arr: string[]): string | null => {
+  if (arr.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const x of arr) counts.set(x, (counts.get(x) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+};
+
+export interface ReconstructResult {
+  trades: CompletedTrade[];
+  /** teamId -> set of seasons that team existed in the league */
+  seasonsByTeam: Map<number, Set<number>>;
+}
+
+/** Reconstruct completed trades across all given seasons (positions only — no value math). */
+export async function reconstructCompletedTrades(
+  seasons: number[],
+  loadSeasonData: (season: number) => Promise<SeasonData | null>,
+): Promise<ReconstructResult> {
+  const trades: CompletedTrade[] = [];
+  const seasonsByTeam = new Map<number, Set<number>>();
+
+  for (const season of seasons) {
+    const data = await loadSeasonData(season);
+    if (!data) continue;
+
+    const posByPid = new Map<number, string>();
+    for (const r of normalizeRosters(data) as Row[]) {
+      const pid = r.playerId as number;
+      if (pid && !posByPid.has(pid)) posByPid.set(pid, (r.position as string) || "?");
+    }
+    for (const t of normalizeTeams(data) as Row[]) {
+      const tid = t.teamId as number;
+      if (!seasonsByTeam.has(tid)) seasonsByTeam.set(tid, new Set());
+      seasonsByTeam.get(tid)!.add(season);
+    }
+
+    const txRows = normalizeTransactions(data) as Row[];
+    const { completedProposalIds } = buildCompletedProposalIds(txRows);
+    const isCompleted = (r: Row): boolean => {
+      const type = r.type as string;
+      const status = String(r.status || "").toUpperCase();
+      if (type === "TRADE") return status === "" || status === "EXECUTED";
+      if (type === "TRADE_PROPOSAL") return isCompletedTradeProposal(r, completedProposalIds);
+      return false;
+    };
+
+    const playerGroups = new Map<string, Row[]>();
+    const pickGroups = new Map<string, Row[]>();
+    for (const r of txRows) {
+      if (!isCompleted(r)) continue;
+      const tid = r.transactionId as string;
+      if (r.itemType === "DRAFT_TRADE") {
+        (pickGroups.get(tid) ?? pickGroups.set(tid, []).get(tid)!).push(r);
+      } else if (r.playerId) {
+        (playerGroups.get(tid) ?? playerGroups.set(tid, []).get(tid)!).push(r);
+      }
+    }
+
+    for (const [tid, rows] of playerGroups) {
+      const teamSet = new Set<number>();
+      for (const r of rows) {
+        if ((r.fromTeamId as number) > 0) teamSet.add(r.fromTeamId as number);
+        if ((r.toTeamId as number) > 0) teamSet.add(r.toTeamId as number);
+      }
+      if (teamSet.size < 2) continue;
+      const [a, b] = Array.from(teamSet);
+      const receivedByTeam: Record<number, string[]> = { [a]: [], [b]: [] };
+      for (const r of rows) {
+        const to = r.toTeamId as number;
+        if (to !== a && to !== b) continue;
+        const pid = r.playerId as number;
+        receivedByTeam[to].push((r.position as string) || posByPid.get(pid) || "?");
+      }
+      const picksByTeam: Record<number, number> = { [a]: 0, [b]: 0 };
+      for (const r of pickGroups.get(tid) ?? []) {
+        const to = r.toTeamId as number;
+        if (to === a || to === b) picksByTeam[to]++;
+      }
+      const date = Number(rows[0]?.proposedDate ?? rows[0]?.processedDate ?? 0);
+      trades.push({ season, date, teamA: a, teamB: b, receivedByTeam, picksByTeam });
+    }
+
+    // Pick-only trades: transactions that moved only draft picks (no players).
+    // Player-bearing trades (including pick-inclusive ones) are already handled above.
+    // Stricter completion gate than the player path: count ONLY genuinely EXECUTED pick
+    // trades. This excludes pending pick *proposals* (status PENDING / executionType
+    // EXECUTE) that would otherwise inflate counts with offers that never completed.
+    for (const [tid, rows] of pickGroups) {
+      if (playerGroups.has(tid)) continue;
+      if (!rows.some((r) => String(r.status || "").toUpperCase() === "EXECUTED")) continue;
+      const teamSet = new Set<number>();
+      for (const r of rows) {
+        if ((r.fromTeamId as number) > 0) teamSet.add(r.fromTeamId as number);
+        if ((r.toTeamId as number) > 0) teamSet.add(r.toTeamId as number);
+      }
+      if (teamSet.size < 2) continue;
+      const [a, b] = Array.from(teamSet);
+      const picksByTeam: Record<number, number> = { [a]: 0, [b]: 0 };
+      for (const r of rows) {
+        const to = r.toTeamId as number;
+        if (to === a || to === b) picksByTeam[to]++;
+      }
+      const receivedByTeam: Record<number, string[]> = { [a]: [], [b]: [] };
+      const date = Number(rows[0]?.proposedDate ?? rows[0]?.processedDate ?? 0);
+      trades.push({ season, date, teamA: a, teamB: b, receivedByTeam, picksByTeam });
+    }
+  }
+  return { trades, seasonsByTeam };
+}
+
+export interface DnaLite {
+  avgTradesPerSeason?: number;
+  tradeFrequency?: number; // 0-100
+  gmArchetype?: string;
+  tiltLabel?: string;
+}
+
+export interface OwnerIntelligence {
+  ownerName: string;
+  completedTrades: number;
+  avgTradesPerSeason: number;
+  mostAcquiredPos: string | null;
+  mostTradedAwayPos: string | null;
+  tradeStyle: string;
+  riskProfile: string;
+  tradeAggression: "Low" | "Moderate" | "High" | "Unknown";
+  inferredNote: string;
+}
+
+export function computeOwnerIntelligence(
+  trades: CompletedTrade[],
+  teamId: number,
+  ownerName: string,
+  dna?: DnaLite,
+): OwnerIntelligence {
+  const relevant = trades.filter((t) => t.teamA === teamId || t.teamB === teamId);
+  const acquired = relevant.flatMap((t) => t.receivedByTeam[teamId] ?? []);
+  const given = relevant.flatMap((t) => t.receivedByTeam[otherTeam(t, teamId)] ?? []);
+  const distinctSeasons = new Set(relevant.map((t) => t.season)).size;
+  const avg = dna?.avgTradesPerSeason ?? (distinctSeasons > 0 ? relevant.length / distinctSeasons : 0);
+
+  let aggression: OwnerIntelligence["tradeAggression"] = "Unknown";
+  const freq = dna?.tradeFrequency;
+  if (freq != null) aggression = freq >= 66 ? "High" : freq >= 33 ? "Moderate" : "Low";
+  else if (relevant.length > 0) aggression = avg >= 2 ? "High" : avg >= 1 ? "Moderate" : "Low";
+
+  return {
+    ownerName,
+    completedTrades: relevant.length,
+    avgTradesPerSeason: Math.round(avg * 10) / 10,
+    mostAcquiredPos: mode(acquired),
+    mostTradedAwayPos: mode(given),
+    tradeStyle: dna?.gmArchetype?.trim() || (relevant.length === 0 ? "No completed-trade history" : "Active trader"),
+    riskProfile: dna?.tiltLabel?.trim() || "Not enough data",
+    tradeAggression: aggression,
+    inferredNote: "Inferred from league history",
+  };
+}
+
+export interface RivalryReport {
+  completedTrades: number;
+  mostRecent: { season: number; summary: string } | null;
+  commonAssets: string[];
+  yearsActiveTogether: number;
+  relationship: string;
+}
+
+export function computeRivalry(
+  trades: CompletedTrade[],
+  teamAId: number,
+  teamBId: number,
+  seasonsByTeam: Map<number, Set<number>>,
+): RivalryReport {
+  const pair = trades
+    .filter((t) => (t.teamA === teamAId && t.teamB === teamBId) || (t.teamA === teamBId && t.teamB === teamAId))
+    .sort((x, y) => y.season - x.season || y.date - x.date);
+
+  const posCounts = new Map<string, number>();
+  for (const t of pair) {
+    for (const pos of [...(t.receivedByTeam[teamAId] ?? []), ...(t.receivedByTeam[teamBId] ?? [])]) {
+      posCounts.set(pos, (posCounts.get(pos) ?? 0) + 1);
+    }
+    const picks = (t.picksByTeam[teamAId] ?? 0) + (t.picksByTeam[teamBId] ?? 0);
+    if (picks > 0) posCounts.set("Picks", (posCounts.get("Picks") ?? 0) + picks);
+  }
+  const commonAssets = [...posCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map((e) => e[0]);
+
+  const aSeasons = seasonsByTeam.get(teamAId) ?? new Set<number>();
+  const bSeasons = seasonsByTeam.get(teamBId) ?? new Set<number>();
+  let yearsActiveTogether = 0;
+  for (const s of aSeasons) if (bSeasons.has(s)) yearsActiveTogether++;
+
+  const n = pair.length;
+  const relationship =
+    n === 0 ? "Have never completed a trade with each other"
+    : n <= 2 ? "Rare trade partners"
+    : n <= 5 ? "Occasional trade partners"
+    : "Frequent trade partners";
+
+  const mostRecent = pair[0]
+    ? { season: pair[0].season, summary: commonAssets.length ? `exchanged ${commonAssets.join(", ")}` : "completed a trade" }
+    : null;
+
+  return { completedTrades: n, mostRecent, commonAssets, yearsActiveTogether, relationship };
+}
+
+const pctLabel = (p: number) => (p >= 0.66 ? "top third" : p >= 0.33 ? "middle third" : "bottom third");
+
+export interface ChampionshipWindow {
+  classification: "Contender" | "Playoff Team" | "Bubble Team" | "Retooling" | "Rebuilding";
+  reasons: string[];
+  basis: string;
+}
+
+const WINDOW_BASIS = "Estimated from current record and roster-value percentile.";
+
+export function computeChampionshipWindow(args: {
+  wins: number;
+  losses: number;
+  ties: number;
+  rosterValueRankPct: number; // 0..1 (1 = best roster value in league)
+  pointsForGap: number | null; // champ PF - owner PF; <=0 means at/above champ benchmark
+  hasCurrentRecord: boolean;
+}): ChampionshipWindow {
+  const { wins, losses, ties, rosterValueRankPct, pointsForGap, hasCurrentRecord } = args;
+  const reasons: string[] = [];
+  const topRoster = rosterValueRankPct >= 0.66;
+  const bottomRoster = rosterValueRankPct <= 0.33;
+
+  if (!hasCurrentRecord) {
+    reasons.push("Preseason — no games played yet; classification leans on roster value.");
+    reasons.push(`Roster value is in the ${pctLabel(rosterValueRankPct)} of the league.`);
+    const cls: ChampionshipWindow["classification"] = topRoster ? "Contender" : rosterValueRankPct >= 0.4 ? "Playoff Team" : "Retooling";
+    return { classification: cls, reasons, basis: WINDOW_BASIS };
+  }
+
+  const games = wins + losses + ties;
+  const winPct = games > 0 ? (wins + ties * 0.5) / games : 0;
+  reasons.push(`Record ${wins}-${losses}${ties ? `-${ties}` : ""} (${Math.round(winPct * 100)}% win rate).`);
+  reasons.push(`Roster value is in the ${pctLabel(rosterValueRankPct)} of the league.`);
+  if (pointsForGap != null) {
+    reasons.push(pointsForGap <= 0 ? "Scoring at or above the champion-profile benchmark." : `About ${Math.round(pointsForGap)} points/season below the champion benchmark.`);
+  }
+  const closeToChamp = pointsForGap == null || pointsForGap <= 0;
+  let cls: ChampionshipWindow["classification"];
+  if (winPct >= 0.6 && topRoster && closeToChamp) cls = "Contender";
+  else if (winPct >= 0.5) cls = "Playoff Team";
+  else if (winPct >= 0.4) cls = "Bubble Team";
+  else if (!bottomRoster) cls = "Retooling";
+  else cls = "Rebuilding";
+  return { classification: cls, reasons, basis: WINDOW_BASIS };
+}
+
+export type FitGrade = "A+" | "A" | "A-" | "B+" | "B" | "B-" | "C" | "D" | "F";
+export interface TradeFitScore {
+  grade: FitGrade;
+  evidence: { ok: boolean; text: string }[];
+}
+
+const scoreToGrade = (net: number): FitGrade =>
+  net >= 3 ? "A+" : net === 2 ? "A" : net === 1 ? "A-" : net === 0 ? "B" : net === -1 ? "C" : net === -2 ? "D" : "F";
+
+export function computeTradeFitScore(args: {
+  receivedPositions: string[];
+  gavePositions: string[];
+  teamNeeds: Record<string, number>;
+  ownerMostAcquiredPos: string | null;
+  ownerMostTradedAwayPos: string | null;
+  window: ChampionshipWindow["classification"];
+  valueRatioForThisSide: number; // >1 means this side gains value
+}): TradeFitScore {
+  const ev: { ok: boolean; text: string }[] = [];
+  const weakest = Object.entries(args.teamNeeds).sort((a, b) => a[1] - b[1])[0]?.[0];
+  if (weakest && args.receivedPositions.includes(weakest)) ev.push({ ok: true, text: `Addresses ${weakest} weakness (thinnest position).` });
+  if (args.ownerMostAcquiredPos && args.receivedPositions.includes(args.ownerMostAcquiredPos)) ev.push({ ok: true, text: `Aligns with owner's trade behavior (most-acquired: ${args.ownerMostAcquiredPos}).` });
+  if (args.window === "Contender" || args.window === "Playoff Team") ev.push({ ok: true, text: `Fits a ${args.window.toLowerCase()} timeline.` });
+  else if (args.window === "Rebuilding" || args.window === "Retooling") ev.push({ ok: false, text: `Team is ${args.window.toLowerCase()}; win-now pieces may not fit the timeline.` });
+  if (args.valueRatioForThisSide >= 1.05) ev.push({ ok: true, text: `Value favors this side (${Math.round((args.valueRatioForThisSide - 1) * 100)}% edge).` });
+  else if (args.valueRatioForThisSide <= 0.95) ev.push({ ok: false, text: `Gives up more value than it gets (${Math.round((1 - args.valueRatioForThisSide) * 100)}% deficit).` });
+  if (args.ownerMostTradedAwayPos) {
+    const rare = args.gavePositions.find((p) => p !== args.ownerMostTradedAwayPos);
+    if (rare) ev.push({ ok: false, text: `Moves a ${rare}, a position this owner rarely trades away.` });
+  }
+  const net = ev.filter((e) => e.ok).length - ev.filter((e) => !e.ok).length;
+  return { grade: scoreToGrade(net), evidence: ev };
+}
+
+export function computeVerdict(args: { ratio: number; fitGradeA: FitGrade }): {
+  verdict: "ACCEPT" | "COUNTER" | "FAIR" | "RISKY" | "AVOID";
+  confidence: "High" | "Moderate" | "Low";
+} {
+  const { ratio, fitGradeA } = args;
+  const fitGood = ["A+", "A", "A-", "B+", "B"].includes(fitGradeA);
+  let verdict: "ACCEPT" | "COUNTER" | "FAIR" | "RISKY" | "AVOID";
+  if (ratio < 0.85) verdict = "AVOID";
+  else if (ratio < 0.95) verdict = "COUNTER";
+  else if (ratio <= 1.05) verdict = fitGood ? "FAIR" : "RISKY";
+  else verdict = fitGood ? "ACCEPT" : "RISKY";
+  const decisive = ratio < 0.85 || ratio > 1.18;
+  const confidence = decisive && fitGood ? "High" : verdict === "RISKY" ? "Low" : "Moderate";
+  return { verdict, confidence };
+}
+
+export function buildNegotiationAdvice(args: {
+  ratio: number;
+  teamANeeds: Record<string, number>;
+  receivedByA: string[];
+  windowA: ChampionshipWindow["classification"];
+  ownerBMostAcquiredPos: string | null;
+  gaveByA: string[];
+}): string[] {
+  const out: string[] = [];
+  if (args.ratio <= 0.92) out.push("Value currently favors the other side — ask them to add a pick or depth piece before accepting.");
+  const weakest = Object.entries(args.teamANeeds).sort((a, b) => a[1] - b[1])[0];
+  if (weakest && !args.receivedByA.includes(weakest[0])) out.push(`You'd still be thin at ${weakest[0]} — consider targeting ${weakest[0]} depth instead or in addition.`);
+  if (args.windowA === "Rebuilding" || args.windowA === "Retooling") out.push("If you're not contending this year, prefer younger players or picks over win-now veterans.");
+  if (args.ownerBMostAcquiredPos && args.gaveByA.includes(args.ownerBMostAcquiredPos)) out.push(`The other owner historically targets ${args.ownerBMostAcquiredPos} — you may have leverage to ask for more.`);
+  if (out.length === 0) out.push("Terms look reasonable as-is based on value, roster needs, and both owners' history.");
+  return out;
+}
+
+export interface TradeIntelligenceReport {
+  ownerIntelligence: { teamA: OwnerIntelligence; teamB: OwnerIntelligence };
+  rivalry: RivalryReport;
+  championshipWindow: { teamA: ChampionshipWindow; teamB: ChampionshipWindow };
+  tradeFitScore: { teamA: TradeFitScore; teamB: TradeFitScore };
+  verdict: { verdict: "ACCEPT" | "COUNTER" | "FAIR" | "RISKY" | "AVOID"; confidence: "High" | "Moderate" | "Low" };
+  negotiationAdvice: string[];
+}
+
+export interface TeamRecordLite {
+  wins: number;
+  losses: number;
+  ties: number;
+  hasRecord: boolean;
+  rosterValueRankPct: number;
+  pointsForGap: number | null;
+}
+
+export async function buildTradeIntelligence(args: {
+  seasons: number[];
+  loadSeasonData: (season: number) => Promise<SeasonData | null>;
+  teamAId: number;
+  teamBId: number;
+  ownerNameA: string;
+  ownerNameB: string;
+  dnaA?: DnaLite;
+  dnaB?: DnaLite;
+  needsA: Record<string, number>;
+  needsB: Record<string, number>;
+  receivedByA: string[];
+  gaveByA: string[];
+  receivedByB: string[];
+  gaveByB: string[];
+  ratio: number; // totalA / totalB
+  recordA: TeamRecordLite;
+  recordB: TeamRecordLite;
+}): Promise<TradeIntelligenceReport> {
+  const { trades, seasonsByTeam } = await reconstructCompletedTrades(args.seasons, args.loadSeasonData);
+
+  const oiA = computeOwnerIntelligence(trades, args.teamAId, args.ownerNameA, args.dnaA);
+  const oiB = computeOwnerIntelligence(trades, args.teamBId, args.ownerNameB, args.dnaB);
+  const rivalry = computeRivalry(trades, args.teamAId, args.teamBId, seasonsByTeam);
+
+  const winA = computeChampionshipWindow({
+    wins: args.recordA.wins, losses: args.recordA.losses, ties: args.recordA.ties,
+    rosterValueRankPct: args.recordA.rosterValueRankPct, pointsForGap: args.recordA.pointsForGap, hasCurrentRecord: args.recordA.hasRecord,
+  });
+  const winB = computeChampionshipWindow({
+    wins: args.recordB.wins, losses: args.recordB.losses, ties: args.recordB.ties,
+    rosterValueRankPct: args.recordB.rosterValueRankPct, pointsForGap: args.recordB.pointsForGap, hasCurrentRecord: args.recordB.hasRecord,
+  });
+
+  const fitA = computeTradeFitScore({
+    receivedPositions: args.receivedByA, gavePositions: args.gaveByA, teamNeeds: args.needsA,
+    ownerMostAcquiredPos: oiA.mostAcquiredPos, ownerMostTradedAwayPos: oiA.mostTradedAwayPos,
+    window: winA.classification, valueRatioForThisSide: args.ratio,
+  });
+  const fitB = computeTradeFitScore({
+    receivedPositions: args.receivedByB, gavePositions: args.gaveByB, teamNeeds: args.needsB,
+    ownerMostAcquiredPos: oiB.mostAcquiredPos, ownerMostTradedAwayPos: oiB.mostTradedAwayPos,
+    window: winB.classification, valueRatioForThisSide: args.ratio > 0 ? 1 / args.ratio : 1,
+  });
+
+  const verdict = computeVerdict({ ratio: args.ratio, fitGradeA: fitA.grade });
+  const negotiationAdvice = buildNegotiationAdvice({
+    ratio: args.ratio, teamANeeds: args.needsA, receivedByA: args.receivedByA,
+    windowA: winA.classification, ownerBMostAcquiredPos: oiB.mostAcquiredPos, gaveByA: args.gaveByA,
+  });
+
+  return {
+    ownerIntelligence: { teamA: oiA, teamB: oiB },
+    rivalry,
+    championshipWindow: { teamA: winA, teamB: winB },
+    tradeFitScore: { teamA: fitA, teamB: fitB },
+    verdict,
+    negotiationAdvice,
+  };
+}

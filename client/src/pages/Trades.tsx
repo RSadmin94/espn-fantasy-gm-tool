@@ -16,15 +16,21 @@ import {
 import {
   AlertCircle,
   ArrowLeftRight,
+  ArrowRight,
   CalendarDays,
+  Lightbulb,
   Loader2,
   Minus,
   Plus,
   RefreshCw,
   Scale,
   Sparkles,
+  Swords,
+  Target,
   TrendingDown,
   TrendingUp,
+  Trophy,
+  Users,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -72,6 +78,42 @@ interface PlayerValue {
   valueBreakdown: string;
 }
 
+interface OwnerIntel {
+  ownerName: string;
+  completedTrades: number;
+  avgTradesPerSeason: number;
+  mostAcquiredPos: string | null;
+  mostTradedAwayPos: string | null;
+  tradeStyle: string;
+  riskProfile: string;
+  tradeAggression: "Low" | "Moderate" | "High" | "Unknown";
+  inferredNote: string;
+}
+interface RivalryReport {
+  completedTrades: number;
+  mostRecent: { season: number; summary: string } | null;
+  commonAssets: string[];
+  yearsActiveTogether: number;
+  relationship: string;
+}
+interface ChampWindow {
+  classification: string;
+  reasons: string[];
+  basis: string;
+}
+interface FitScore {
+  grade: string;
+  evidence: { ok: boolean; text: string }[];
+}
+interface TradeIntelligence {
+  ownerIntelligence: { teamA: OwnerIntel; teamB: OwnerIntel };
+  rivalry: RivalryReport;
+  championshipWindow: { teamA: ChampWindow; teamB: ChampWindow };
+  tradeFitScore: { teamA: FitScore; teamB: FitScore };
+  verdict: { verdict: string; confidence: string };
+  negotiationAdvice: string[];
+}
+
 interface TradeResult {
   sideAValues: PlayerValue[];
   sideBValues: PlayerValue[];
@@ -84,6 +126,7 @@ interface TradeResult {
   aiVerdict: string;
   teamANeeds: Record<string, number>;
   teamBNeeds: Record<string, number>;
+  tradeIntelligence?: TradeIntelligence | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -106,6 +149,168 @@ const GRADE_CONFIG: Record<string, { label: string; className: string; icon: Rea
   "B WINS":        { label: "They Win",           className: "border-red-500/30 bg-red-500/10 text-red-400",            icon: <TrendingDown className="h-4 w-4" /> },
   "LOPSIDED":      { label: "Lopsided",           className: "border-red-500/30 bg-red-500/10 text-red-400",            icon: <AlertCircle className="h-4 w-4" /> },
 };
+
+// ── Trade Intelligence presentation helpers ───────────────────────────────────
+const VERDICT_CONFIG: Record<string, { className: string; icon: React.ReactNode }> = {
+  ACCEPT:  { className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400", icon: <TrendingUp className="h-5 w-5" /> },
+  FAIR:    { className: "border-lime-500/40 bg-lime-500/10 text-lime-400",          icon: <Scale className="h-5 w-5" /> },
+  COUNTER: { className: "border-yellow-500/40 bg-yellow-500/10 text-yellow-400",    icon: <AlertCircle className="h-5 w-5" /> },
+  RISKY:   { className: "border-orange-500/40 bg-orange-500/10 text-orange-400",    icon: <AlertCircle className="h-5 w-5" /> },
+  AVOID:   { className: "border-red-500/40 bg-red-500/10 text-red-400",             icon: <TrendingDown className="h-5 w-5" /> },
+};
+function fitGradeClass(grade: string): string {
+  if (grade.startsWith("A")) return "border-emerald-500/40 bg-emerald-500/10 text-emerald-400";
+  if (grade.startsWith("B")) return "border-lime-500/40 bg-lime-500/10 text-lime-400";
+  if (grade === "C") return "border-yellow-500/40 bg-yellow-500/10 text-yellow-400";
+  return "border-red-500/40 bg-red-500/10 text-red-400";
+}
+const WINDOW_CLASS: Record<string, string> = {
+  "Contender":    "text-emerald-400",
+  "Playoff Team": "text-lime-400",
+  "Bubble Team":  "text-yellow-400",
+  "Retooling":    "text-orange-400",
+  "Rebuilding":   "text-red-400",
+};
+
+function SectionLabel({ icon, children, note }: { icon: React.ReactNode; children: React.ReactNode; note?: string }) {
+  return (
+    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+      {icon} {children}
+      {note && <span className="font-normal normal-case text-muted-foreground/70">— {note}</span>}
+    </p>
+  );
+}
+
+function OwnerIntelCard({ intel, teamName }: { intel: OwnerIntel; teamName: string }) {
+  const rows: [string, React.ReactNode][] = [
+    ["Completed trades", intel.completedTrades],
+    ["Avg / season", intel.avgTradesPerSeason],
+    ["Most acquired", intel.mostAcquiredPos ?? "—"],
+    ["Most traded away", intel.mostTradedAwayPos ?? "—"],
+    ["Trade aggression", intel.tradeAggression],
+  ];
+  return (
+    <Card className="border-border/60">
+      <CardContent className="py-3 px-4 space-y-2">
+        <p className="text-sm font-semibold text-foreground truncate">{teamName}</p>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+          {rows.map(([k, v]) => (
+            <React.Fragment key={k}>
+              <span className="text-muted-foreground">{k}</span>
+              <span className="text-foreground font-medium text-right">{v}</span>
+            </React.Fragment>
+          ))}
+        </div>
+        <div className="space-y-1 pt-1 border-t border-border/40">
+          <p className="text-xs"><span className="text-muted-foreground">Style: </span><span className="text-foreground">{intel.tradeStyle}</span></p>
+          <p className="text-xs"><span className="text-muted-foreground">Risk: </span><span className="text-foreground">{intel.riskProfile}</span></p>
+          <p className="text-[10px] italic text-muted-foreground/70">{intel.inferredNote}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TradeIntelSections({ ti, teamAName, teamBName }: { ti: TradeIntelligence; teamAName: string; teamBName: string }) {
+  const win = ti.championshipWindow;
+  const fit = ti.tradeFitScore;
+  return (
+    <div className="space-y-4">
+      {/* 3. Owner Intelligence */}
+      <div>
+        <SectionLabel icon={<Users className="h-3.5 w-3.5" />}>Owner Intelligence</SectionLabel>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <OwnerIntelCard intel={ti.ownerIntelligence.teamA} teamName={teamAName} />
+          <OwnerIntelCard intel={ti.ownerIntelligence.teamB} teamName={teamBName} />
+        </div>
+      </div>
+
+      {/* 4. Rivalry & Trade History */}
+      <div>
+        <SectionLabel icon={<Swords className="h-3.5 w-3.5" />}>Rivalry &amp; Trade History</SectionLabel>
+        <Card className="border-border/60">
+          <CardContent className="py-3 px-4 space-y-1.5 text-xs">
+            <p className="text-sm text-foreground font-medium">{ti.rivalry.relationship}</p>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+              <span className="text-muted-foreground">Completed trades together</span>
+              <span className="text-foreground font-medium text-right">{ti.rivalry.completedTrades}</span>
+              <span className="text-muted-foreground">Years active together</span>
+              <span className="text-foreground font-medium text-right">{ti.rivalry.yearsActiveTogether}</span>
+            </div>
+            {ti.rivalry.mostRecent && (
+              <p><span className="text-muted-foreground">Most recent: </span><span className="text-foreground">{ti.rivalry.mostRecent.season} — {ti.rivalry.mostRecent.summary}</span></p>
+            )}
+            {ti.rivalry.commonAssets.length > 0 && (
+              <p><span className="text-muted-foreground">Common assets: </span><span className="text-foreground">{ti.rivalry.commonAssets.join(", ")}</span></p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 5. Championship Window */}
+      <div>
+        <SectionLabel icon={<Trophy className="h-3.5 w-3.5" />}>Championship Window</SectionLabel>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {([{ w: win.teamA, name: teamAName }, { w: win.teamB, name: teamBName }] as const).map(({ w, name }) => (
+            <Card key={name} className="border-border/60">
+              <CardContent className="py-3 px-4 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground truncate">{name}</span>
+                  <span className={cn("text-sm font-bold", WINDOW_CLASS[w.classification] ?? "text-foreground")}>{w.classification}</span>
+                </div>
+                <ul className="space-y-0.5">
+                  {w.reasons.map((r, i) => <li key={i} className="text-xs text-muted-foreground">• {r}</li>)}
+                </ul>
+                <p className="text-[10px] italic text-muted-foreground/70 pt-1 border-t border-border/40">{w.basis}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* 6. Trade Fit Score */}
+      <div>
+        <SectionLabel icon={<Target className="h-3.5 w-3.5" />} note="alignment grade, not a probability">Trade Fit Score</SectionLabel>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {([{ f: fit.teamA, name: teamAName }, { f: fit.teamB, name: teamBName }] as const).map(({ f, name }) => (
+            <Card key={name} className="border-border/60">
+              <CardContent className="py-3 px-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground truncate">{name}</span>
+                  <span className={cn("inline-flex items-center justify-center rounded-md border px-2.5 py-0.5 text-base font-bold", fitGradeClass(f.grade))}>{f.grade}</span>
+                </div>
+                <ul className="space-y-1">
+                  {f.evidence.length === 0 && <li className="text-xs text-muted-foreground">No strong signals either way.</li>}
+                  {f.evidence.map((e, i) => (
+                    <li key={i} className={cn("text-xs flex gap-1.5", e.ok ? "text-foreground" : "text-orange-300")}>
+                      <span className="shrink-0">{e.ok ? "✓" : "⚠"}</span><span>{e.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* 7. Negotiation Advice */}
+      <div>
+        <SectionLabel icon={<Lightbulb className="h-3.5 w-3.5" />}>Negotiation Advice</SectionLabel>
+        <Card className="border-border/60">
+          <CardContent className="py-3 px-4">
+            <ul className="space-y-1.5">
+              {ti.negotiationAdvice.map((a, i) => (
+                <li key={i} className="text-xs text-foreground flex gap-1.5">
+                  <ArrowRight className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" /><span>{a}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
 
 function PosBadge({ pos }: { pos: string | undefined }) {
   const colors: Record<string, string> = {
@@ -518,9 +723,27 @@ function TradeResults({
   const maxVal = Math.max(result.totalA, result.totalB, 1);
   const barA = Math.round((result.totalA / maxVal) * 100);
   const barB = Math.round((result.totalB / maxVal) * 100);
+  const ti = result.tradeIntelligence ?? null;
+  const verdictCfg = ti ? VERDICT_CONFIG[ti.verdict.verdict] : undefined;
 
   return (
     <div className="space-y-4">
+      {/* 1. Executive Summary — deterministic verdict */}
+      {ti && (
+        <div className={cn("rounded-lg border px-4 py-3", verdictCfg?.className ?? "border-border bg-muted/30 text-foreground")}>
+          <div className="flex items-center gap-2">
+            {verdictCfg?.icon}
+            <span className="text-xl font-extrabold tracking-tight">{ti.verdict.verdict}</span>
+            <span className="ml-auto text-xs font-medium opacity-80">Confidence: {ti.verdict.confidence}</span>
+          </div>
+          {result.aiVerdict && (
+            <p className="mt-1.5 text-sm font-normal opacity-90">{result.aiVerdict.split("\n")[0]}</p>
+          )}
+        </div>
+      )}
+
+      {/* 2. Trade Value */}
+      {ti && <SectionLabel icon={<Scale className="h-3.5 w-3.5" />}>Trade Value</SectionLabel>}
       {/* Grade badge */}
       <div className={cn(
         "flex items-center gap-2 rounded-lg border px-4 py-3 font-semibold",
