@@ -2,18 +2,13 @@
  * LandingPage.tsx - public marketing route (intelligence-dossier design).
  *
  * "/" public. Signed-in users -> /dashboard. CTA -> /sign-in (post-auth /connect).
- * Canned data only (lib/demoLeague.ts). No tRPC / backend calls. All ASCII.
+ * Real in-app screenshots (client/public/screenshots). No tRPC / backend calls. All ASCII.
  */
-import { type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { useAuth } from "@clerk/react-router";
 import { cn } from "@/lib/utils";
-import { DEMO_LEAGUE, type DemoProofCard, type DemoShowcase } from "@/lib/demoLeague";
-import {
-  Swords, HeartCrack, ArrowLeftRight, Crown, Fingerprint, Target,
-  History, Route, Newspaper, Lock, Check, ChevronRight, ChevronDown,
-  ScanLine, X, TrendingUp,
-} from "lucide-react";
+import { ScanLine, ChevronRight, ChevronDown, Check, X, Maximize2 } from "lucide-react";
 
 const PAGEBG: CSSProperties = {
   background:
@@ -23,35 +18,6 @@ const PAGEBG: CSSProperties = {
 const PANEL =
   "rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#19121d,#120d15)] shadow-[0_0_30px_-16px_rgba(0,0,0,0.7)]";
 const MONO = "font-mono text-[11px] uppercase tracking-[0.2em] text-white/40";
-
-const PROOF_ICON: Record<DemoProofCard["tone"], ReactNode> = {
-  rival: <Swords className="h-4 w-4" />,
-  heartbreak: <HeartCrack className="h-4 w-4" />,
-  trades: <ArrowLeftRight className="h-4 w-4" />,
-  dynasty: <Crown className="h-4 w-4" />,
-};
-const PROOF_GLOW: Record<DemoProofCard["tone"], string> = {
-  rival: "text-red-300",
-  heartbreak: "text-amber-300",
-  trades: "text-violet-300",
-  dynasty: "text-lime-300",
-};
-const SHOWCASE_ICON: Record<DemoShowcase["id"], ReactNode> = {
-  rivalry: <Swords className="h-5 w-5" />,
-  dna: <Fingerprint className="h-5 w-5" />,
-  draft: <Target className="h-5 w-5" />,
-  legacy: <Crown className="h-5 w-5" />,
-};
-
-const FINDS: { icon: ReactNode; label: string }[] = [
-  { icon: <History className="h-4 w-4" />, label: "Full league history" },
-  { icon: <Swords className="h-4 w-4" />, label: "Rivalries and grudges" },
-  { icon: <Fingerprint className="h-4 w-4" />, label: "Owner DNA profiles" },
-  { icon: <Target className="h-4 w-4" />, label: "Draft tendencies" },
-  { icon: <ArrowLeftRight className="h-4 w-4" />, label: "Trade behavior" },
-  { icon: <Route className="h-4 w-4" />, label: "Championship paths" },
-  { icon: <Newspaper className="h-4 w-4" />, label: "League stories ESPN never shows" },
-];
 
 function CTA({ label, onClick, className }: { label: string; onClick: () => void; className?: string }) {
   return (
@@ -67,14 +33,56 @@ function CTA({ label, onClick, className }: { label: string; onClick: () => void
   );
 }
 
+function EvidenceShot({ src, alt, onZoom }: { src: string; alt: string; onZoom: (s: string) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onZoom(src)}
+      className="group relative block w-full overflow-hidden rounded-2xl border border-white/[0.08] shadow-[0_24px_70px_-24px_rgba(0,0,0,0.85)] transition hover:border-white/20"
+    >
+      <img src={src} alt={alt} loading="lazy" className="block w-full" />
+      <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-3 py-1.5 text-[11px] font-semibold text-white/90 backdrop-blur-sm transition group-hover:bg-black/75">
+        <Maximize2 className="h-3.5 w-3.5" /> Tap to expand
+      </span>
+    </button>
+  );
+}
+
+type EvidenceProps = {
+  title: string;
+  insight: string;
+  src: string;
+  alt: string;
+  cta: string;
+  onCta: () => void;
+  onZoom: (s: string) => void;
+  reverse?: boolean;
+};
+
+function EvidenceSection(props: EvidenceProps) {
+  return (
+    <section className="border-t border-white/[0.08] py-14">
+      <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-12 lg:gap-12">
+        <div className={cn("lg:col-span-5", props.reverse && "lg:order-2")}>
+          <h3 className="text-[26px] font-extrabold leading-tight tracking-tight sm:text-[34px]">{props.title}</h3>
+          <p className="mt-4 max-w-[42ch] text-[16px] leading-relaxed text-white/65 sm:text-[18px]">{props.insight}</p>
+          <div className="mt-6"><CTA label={props.cta} onClick={props.onCta} /></div>
+        </div>
+        <div className={cn("lg:col-span-7", props.reverse && "lg:order-1")}>
+          <EvidenceShot src={props.src} alt={props.alt} onZoom={props.onZoom} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function LandingPage() {
   const { isLoaded, isSignedIn } = useAuth();
   const navigate = useNavigate();
   const go = () => navigate("/sign-in");
+  const [zoom, setZoom] = useState<string | null>(null);
 
   if (isLoaded && isSignedIn) return <Navigate to="/dashboard" replace />;
-
-  const d = DEMO_LEAGUE;
 
   return (
     <div className="min-h-screen w-full" style={PAGEBG}>
@@ -90,157 +98,139 @@ export function LandingPage() {
 
         {/* Hero - outcome-first */}
         <section className="pb-10 pt-8 sm:pt-14">
-          <div className="flex items-center gap-2 text-lime-300/80">
-            <ScanLine className="h-4 w-4" />
-            <span className={MONO}>League Intelligence // ESPN-connected</span>
-          </div>
-          <h1 className="mt-5 max-w-[15ch] text-[46px] font-black leading-[0.95] tracking-tight sm:text-[68px] lg:text-[80px]">
-            Know Your League.{" "}
-            <span className="text-lime-400">Own Your Rivals.</span>
-          </h1>
-          <p className="mt-6 max-w-[60ch] text-[17px] leading-relaxed text-white/65 sm:text-[20px]">
-            Fantasy Football Rivals reads every season of your ESPN league history and hands you the
-            rivalries, owner tendencies, and championship patterns hiding in plain sight -
-            the intelligence ESPN never shows you.
-          </p>
-          <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-            <CTA label="Analyze My League" onClick={go} className="w-full sm:w-auto" />
-            <a href="#finds" className="inline-flex items-center gap-1 text-[14px] font-semibold text-white/55 transition hover:text-white">
-              See what it finds <ChevronDown className="h-3.5 w-3.5" />
-            </a>
-          </div>
-          <p className="mt-3 text-[13px] text-white/40">
-            Free to start / 7-day trial when you connect a league / no card required
-          </p>
-        </section>
-
-        {/* Above-the-fold proof: intel readout strip */}
-        <section className="pb-14">
-          <div className="mb-3 flex items-center justify-between">
-            <span className={MONO}>Live read // {d.leagueName}</span>
-            <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/30">{d.seasons} seasons</span>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {d.cards.map((c) => (
-              <button
-                key={c.id}
-                onClick={go}
-                className={cn(PANEL, "group relative overflow-hidden p-4 text-left transition hover:border-white/15")}
-              >
-                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
-                <div className="mb-2 flex items-center gap-2">
-                  <span className={PROOF_GLOW[c.tone]}>{PROOF_ICON[c.tone]}</span>
-                  <span className={MONO}>{c.kicker}</span>
-                </div>
-                <p className="text-[16px] font-extrabold leading-snug">{c.headline}</p>
-                <p className="mt-1.5 font-mono text-[12px] leading-relaxed text-white/55">{c.proof}</p>
-                <span className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-white/70 group-hover:text-lime-300">
-                  <Lock className="h-3 w-3" /> {c.unlock}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* Gets smarter every season - moat narrative */}
-        <section className="border-t border-white/[0.08] py-14">
-          <span className={MONO}>The compounding edge</span>
-          <h2 className="mt-3 max-w-[18ch] text-[32px] font-black leading-[1.02] tracking-tight sm:text-[46px]">
-            Rivals doesn't reset.{" "}
-            <span className="text-lime-400">It remembers.</span>
-          </h2>
-          <p className="mt-4 max-w-[62ch] text-[16px] leading-relaxed text-white/60 sm:text-[18px]">
-            The only fantasy platform that gets smarter every season. Every trade, every draft,
-            every rivalry, every championship adds another layer to your league's intelligence.
-          </p>
-          <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className={cn(PANEL, "p-6")}>
-              <span className={MONO}>Most fantasy tools forget</span>
-              <p className="mt-3 text-[15px] text-white/55">When the season ends, it all disappears:</p>
-              <ul className="mt-4 space-y-2">
-                {["Rankings disappear","Draft boards disappear","Waiver recommendations disappear"].map((x) => (
-                  <li key={x} className="flex items-center gap-2 text-[15px] text-white/35 line-through decoration-red-400/50">
-                    <X className="h-4 w-4 shrink-0 text-red-400/60" /> {x}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-4 text-[13px] text-white/40">The history is lost.</p>
-            </div>
-            <div className={cn(PANEL, "relative overflow-hidden p-6 ring-1 ring-lime-400/30")}>
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-lime-400/40 to-transparent" />
-              <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-lime-300">Fantasy Football Rivals remembers everything</span>
-              <div className="mt-4 space-y-2">
-                {[
-                  { n: "01", t: "Every season makes your league intelligence deeper." },
-                  { n: "02", t: "Every season makes your rivalries sharper." },
-                  { n: "03", t: "Every season makes the receipts harder to argue with." },
-                ].map((r, i) => (
-                  <div key={r.n} className="flex items-center gap-3 rounded-lg border border-lime-400/15 bg-lime-500/[0.04] p-3" style={{ marginLeft: i * 14 + "px" }}>
-                    <span className="font-mono text-[11px] text-lime-300/70">{r.n}</span>
-                    <span className="text-[14px] font-semibold text-white/85">{r.t}</span>
-                    <TrendingUp className="ml-auto h-4 w-4 shrink-0 text-lime-300/60" />
-                  </div>
-                ))}
+          <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-12">
+            <div>
+              <div className="flex items-center gap-2 text-lime-300/80">
+                <ScanLine className="h-4 w-4" />
+                <span className={MONO}>League Intelligence // ESPN-connected</span>
               </div>
+              <h1 className="mt-5 max-w-[15ch] text-[44px] font-black leading-[0.95] tracking-tight sm:text-[60px] lg:text-[66px]">
+                Know Your League.{" "}
+                <span className="text-lime-400">Own Your Rivals.</span>
+              </h1>
+              <p className="mt-6 max-w-[58ch] text-[17px] leading-relaxed text-white/65 sm:text-[19px]">
+                Analyze years of league history to uncover rivalries, owner tendencies, championship paths, draft behavior, and the hidden stories that define your league.
+              </p>
+              <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                <CTA label="Analyze My League" onClick={go} className="w-full sm:w-auto" />
+                <a href="#finds" className="inline-flex items-center gap-1 text-[14px] font-semibold text-white/55 transition hover:text-white">
+                  See what it finds <ChevronDown className="h-3.5 w-3.5" />
+                </a>
+              </div>
+              <p className="mt-5 max-w-[52ch] text-[13px] leading-relaxed text-white/55">
+                Read-only ESPN connection. We never modify league settings, rosters, transactions, or scoring.
+              </p>
+              <p className="mt-1.5 text-[13px] text-white/40">
+                See your league snapshot before unlocking the full experience.
+              </p>
+            </div>
+            <div className="lg:pl-2">
+              <EvidenceShot src="/screenshots/rivalry-center.png" alt="Rivalry Center" onZoom={setZoom} />
             </div>
           </div>
         </section>
 
-        {/* What Fantasy Football Rivals finds - the briefing */}
+        {/* Section 1 - flagship: Why Haven't You Won? */}
         <section id="finds" className="border-t border-white/[0.08] py-14">
-          <span className={MONO}>The briefing</span>
-          <h2 className="mt-3 max-w-[20ch] text-[30px] font-extrabold leading-tight tracking-tight sm:text-[40px]">
-            Every other tool studies players.{" "}
-            <span className="text-lime-400">Fantasy Football Rivals studies your league.</span>
+          <h2 className="max-w-[18ch] text-[34px] font-black leading-[1.02] tracking-tight sm:text-[52px]">
+            Why Haven't <span className="text-lime-400">You</span> Won?
           </h2>
-          <p className="mt-3 max-w-[64ch] text-[15px] leading-relaxed text-white/55">
-            Connect once and it pulls your entire ESPN history, then turns it into a dossier
-            on the only opponents that matter: the people in your league.
+          <p className="mt-3 max-w-[48ch] text-[16px] leading-relaxed text-white/55 sm:text-[18px]">
+            Real answers from your actual league history.
           </p>
-          <div className="mt-8 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.06] sm:grid-cols-2 lg:grid-cols-3">
-            {FINDS.map((f, i) => (
-              <div key={f.label} className="flex items-center gap-3 bg-[#0e0a12] p-4">
-                <span className="font-mono text-[11px] text-white/30">{String(i + 1).padStart(2, "0")}</span>
-                <span className="text-lime-300">{f.icon}</span>
-                <span className="text-[14px] font-semibold text-white/85">{f.label}</span>
-              </div>
-            ))}
+          <div className="mt-7">
+            <EvidenceShot src="/screenshots/why-havent-i-won.png" alt="Why Haven't I Won analysis" onZoom={setZoom} />
           </div>
+          <p className="mt-6 max-w-[52ch] text-[16px] leading-relaxed text-white/75 sm:text-[18px]">
+            Discover the patterns that have kept you from a championship.
+          </p>
+          <div className="mt-6"><CTA label="Find Out Why" onClick={go} /></div>
         </section>
 
-        {/* Showcase - alternating emotional feature rows */}
-        <section>
-          {d.showcase.map((s, i) => (
-            <div key={s.id} className="grid grid-cols-1 items-center gap-6 border-t border-white/[0.08] py-12 lg:grid-cols-2 lg:gap-12">
-              <div className={cn(i % 2 === 1 && "lg:order-2")}>
-                <div className="flex items-center gap-2 text-lime-300">
-                  {SHOWCASE_ICON[s.id]}
-                  <span className={MONO}>{s.eyebrow}</span>
-                </div>
-                <h3 className="mt-3 text-[26px] font-extrabold leading-tight tracking-tight sm:text-[34px]">{s.title}</h3>
-                <p className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-white/60">{s.line}</p>
-              </div>
-              <div className={cn(i % 2 === 1 && "lg:order-1")}>
-                <div className={cn(PANEL, "p-5")}>
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className={MONO}>Sample readout</span>
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-lime-400" />
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {s.chips.map((ch) => (
-                      <div key={ch.k} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-center">
-                        <div className="text-[22px] font-black tracking-tight">{ch.v}</div>
-                        <div className="mt-1 font-mono text-[10px] uppercase tracking-wider text-white/40">{ch.k}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 flex items-center gap-2 rounded-lg border border-lime-400/15 bg-lime-500/[0.05] p-3 text-[12px] text-white/70">
-                    <Lock className="h-3.5 w-3.5 shrink-0 text-lime-300" /> Full breakdown unlocks when you connect your league
-                  </div>
-                </div>
-              </div>
+        {/* Section 2 - Rivalry Center */}
+        <EvidenceSection
+          reverse
+          onCta={go}
+          onZoom={setZoom}
+          title="Every League Has One Rival"
+          insight="Find the owner who always seems to stand in your way."
+          cta="View Rivalries"
+          alt="Rivalry Center"
+          src="/screenshots/rivalry-center.png"
+        />
+
+        {/* Section 3 - Rivalry Receipts */}
+        <EvidenceSection
+          onCta={go}
+          onZoom={setZoom}
+          title="Rivalry Receipts"
+          insight="Shareable proof of heartbreak, dominance, and league history."
+          cta="Generate Receipts"
+          alt="Rivalry receipts"
+          src="/screenshots/rivalry-receipts.png"
+        />
+
+        {/* Section 4 - League DNA */}
+        <EvidenceSection
+          reverse
+          onCta={go}
+          onZoom={setZoom}
+          title="Discover Your League DNA"
+          insight="Learn what kind of manager you really are."
+          cta="View DNA"
+          alt="League DNA"
+          src="/screenshots/league-dna.png"
+        />
+
+        {/* Section 5 - Owner Profiles */}
+        <EvidenceSection
+          onCta={go}
+          onZoom={setZoom}
+          title="Decode Every Owner"
+          insight="Draft habits, roster behavior, keeper tendencies, and more."
+          cta="View Profiles"
+          alt="Owner Profiles"
+          src="/screenshots/owner-profiles.png"
+        />
+
+        {/* Section 6 - Every League Has Characters (The Cast) */}
+        <section className="border-t border-white/[0.08] py-14">
+          <h2 className="max-w-[22ch] text-[30px] font-black leading-[1.04] tracking-tight sm:text-[44px]">
+            Every League Has Characters
+          </h2>
+          <p className="mt-4 max-w-[64ch] text-[16px] leading-relaxed text-white/60 sm:text-[18px]">
+            Your league isn't just teams. It's personalities, reputations, villains, champions, and legends built over years of competition.
+          </p>
+          <div className="mt-7">
+            <EvidenceShot src="/screenshots/the-cast.png" alt="The Cast" onZoom={setZoom} />
+          </div>
+          <div className="mt-6 flex flex-wrap gap-2">
+            {["Dynasty Architect", "League Villain", "Champion", "Trade Shark", "Waiver Predator", "All-Rounder"].map((t) => (
+              <span key={t} className="rounded-full border border-white/12 bg-white/[0.03] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.15em] text-white/70">{t}</span>
+            ))}
+          </div>
+          <div className="mt-7"><CTA label="Meet Your Cast" onClick={go} /></div>
+        </section>
+
+        {/* Section 7 - Preserve Your League's Legacy (depth proof) */}
+        <section className="border-t border-white/[0.08] py-14">
+          <h2 className="max-w-[22ch] text-[30px] font-black leading-[1.04] tracking-tight sm:text-[44px]">
+            Preserve Your League's Legacy
+          </h2>
+          <p className="mt-4 max-w-[64ch] text-[16px] leading-relaxed text-white/60 sm:text-[18px]">
+            Sixteen seasons of champions, records, and the exact blueprint it takes to win it all - kept and tracked across the full life of your league.
+          </p>
+          <div className="mt-7 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div>
+              <span className={MONO}>Hall of Fame</span>
+              <div className="mt-2"><EvidenceShot src="/screenshots/hall-of-fame.png" alt="Hall of Fame" onZoom={setZoom} /></div>
             </div>
-          ))}
+            <div>
+              <span className={MONO}>Championship Path</span>
+              <div className="mt-2"><EvidenceShot src="/screenshots/championship-path.png" alt="Championship Path" onZoom={setZoom} /></div>
+            </div>
+          </div>
+          <div className="mt-7"><CTA label="Explore the Record Books" onClick={go} /></div>
         </section>
 
         {/* Pricing */}
@@ -308,6 +298,22 @@ export function LandingPage() {
         </footer>
 
       </div>
+
+      {zoom && (
+        <div
+          onClick={() => setZoom(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+        >
+          <img src={zoom} alt="Fantasy Football Rivals screenshot" className="max-h-[92vh] max-w-[96vw] rounded-xl border border-white/15 shadow-2xl" />
+          <button
+            onClick={() => setZoom(null)}
+            className="absolute right-5 top-5 rounded-full border border-white/20 bg-black/50 p-2 text-white/80 transition hover:text-white"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
