@@ -720,9 +720,11 @@ function TradeResults({
     icon: <Scale className="h-4 w-4" />,
   };
 
-  const maxVal = Math.max(result.totalA, result.totalB, 1);
-  const barA = Math.round((result.totalA / maxVal) * 100);
-  const barB = Math.round((result.totalB / maxVal) * 100);
+  const ftA = Number.isFinite(result.totalA) ? result.totalA : 0;
+  const ftB = Number.isFinite(result.totalB) ? result.totalB : 0;
+  const maxVal = Math.max(ftA, ftB, 1);
+  const barA = Math.round((ftA / maxVal) * 100);
+  const barB = Math.round((ftB / maxVal) * 100);
   const ti = result.tradeIntelligence ?? null;
   const verdictCfg = ti ? VERDICT_CONFIG[ti.verdict.verdict] : undefined;
 
@@ -767,7 +769,7 @@ function TradeResults({
           <div key={label}>
             <div className="flex items-center justify-between mb-1.5 text-sm">
               <span className="font-medium text-foreground truncate">{label}</span>
-              <span className="font-mono text-foreground ml-2 shrink-0">{Math.round(value)}</span>
+              <span className="font-mono text-foreground ml-2 shrink-0">{Number.isFinite(value) ? Math.round(value) : "—"}</span>
             </div>
             <div className="h-2 rounded-full bg-muted/40 overflow-hidden">
               <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${bar}%` }} />
@@ -776,7 +778,7 @@ function TradeResults({
               {players.map(pv => (
                 <span key={pv.playerId} className="text-xs text-muted-foreground">
                   {pv.name}:{" "}
-                  <span className="text-foreground font-medium">{Math.round(pv.compositeValue)}</span>
+                  <span className="text-foreground font-medium">{Number.isFinite(pv.compositeValue) ? Math.round(pv.compositeValue) : "Not available yet"}</span>
                 </span>
               ))}
               {picks.map((pk, i) => (
@@ -798,12 +800,15 @@ function TradeResults({
         ))}
       </div>
 
-      {/* AI verdict */}
+      {/* Phase 1 Trade Intelligence — structured deterministic report */}
+      {ti && <TradeIntelSections ti={ti} teamAName={teamAName} teamBName={teamBName} />}
+
+      {/* Narrative analysis (LLM one-line summary — secondary to the structured report above) */}
       {result.aiVerdict && (
         <Card className="border-primary/20 bg-primary/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-primary">
-              <Sparkles className="h-4 w-4" /> AI Analysis
+              <Sparkles className="h-4 w-4" /> Narrative Analysis
             </CardTitle>
           </CardHeader>
           <CardContent>
