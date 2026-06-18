@@ -11626,6 +11626,18 @@ Provide:
         if (!resolvedPrimary) return null;
         const { profileOwnerKey, ownerTeamRows, identityMerge } = resolvedPrimary;
 
+        // Resolve a human display name for the PRIMARY owner from their most-recent
+        // team-season (teams.ownerName = source of truth, ARCHITECTURE §9.1). The client
+        // sends the canonical ownerKey (`id:{GUID}`) as `ownerName`, so passing it through
+        // unresolved leaks a raw `id:{...}` into the profile summary / displayName. Mirror the
+        // comparison-owner path below, which already resolves a real name before building.
+        const looksLikeOwnerKey = (s: string): boolean =>
+          /^id:/.test(s) ||
+          /^\{?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}?$/i.test(s);
+        const primaryDisplayName =
+          ownerTeamRows[ownerTeamRows.length - 1]?.ownerName?.trim() ||
+          (looksLikeOwnerKey(ownerName) ? "Unknown Owner" : ownerName);
+
         const { allLeagueTeams, teamsBySeason, draftRows, medalRows } = await loadOwnerProfileSharedData({
           db,
           leagueId: lid,
@@ -11683,7 +11695,7 @@ Provide:
         const primaryActivityDna = await getActivityDnaForOwner(lid, profileOwnerKey).catch(() => null);
         const primary = await buildOwnerProfilePayload({
           db,
-          ownerName,
+          ownerName: primaryDisplayName,
           profileOwnerKey,
           allLeagueGmRows: allGmRows,
           teamRows: ownerTeamRows,
