@@ -9491,19 +9491,17 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       const totalB = sideBValues.reduce((s, v) => s + v.compositeValue, 0) + pickValueB;
 
       const ratio = totalB > 0 ? totalA / totalB : 1;
-      // Symmetric verdict ladder (LABELING ONLY — totals/ratio math is unchanged).
-      // ratio = totalA / totalB; > 1 means side A ("You") receives more value. The prior
-      // chain left "SLIGHT EDGE A"/"A WINS" unreachable and collapsed every ratio > 1.05 to
-      // "SLIGHT EDGE B", so trades that favored You were displayed as favoring Them. The
-      // B-side thresholds (0.95 / 0.85 / 0.75) are preserved exactly; the A side now mirrors
-      // them with reciprocal boundaries (1/0.85 ≈ 1.18, 1/0.75 ≈ 1.34) so every label is reachable.
+      // `ratio = totalA / totalB` is given ÷ received (how much A GIVES per unit received), so
+      // ratio < 1 means A comes out ahead. The fairness ladder is phrased from A's gain, so it
+      // grades off gainRatioA = received ÷ given; > 1 then correctly means side A (You) wins.
+      const gainRatioA = ratio > 0 ? 1 / ratio : 1;
       const fairnessGrade =
-        ratio >= 0.95 && ratio <= 1.05 ? "FAIR"
-        : ratio > 1.05 && ratio <= 1.18 ? "SLIGHT EDGE A"
-        : ratio > 1.18 && ratio <= 1.34 ? "A WINS"
-        : ratio > 1.34 ? "LOPSIDED"
-        : ratio >= 0.85 ? "SLIGHT EDGE B"
-        : ratio >= 0.75 ? "B WINS"
+        gainRatioA >= 0.95 && gainRatioA <= 1.05 ? "FAIR"
+        : gainRatioA > 1.05 && gainRatioA <= 1.18 ? "SLIGHT EDGE A"
+        : gainRatioA > 1.18 && gainRatioA <= 1.34 ? "A WINS"
+        : gainRatioA > 1.34 ? "LOPSIDED"
+        : gainRatioA >= 0.85 ? "SLIGHT EDGE B"
+        : gainRatioA >= 0.75 ? "B WINS"
         : "LOPSIDED";
 
       // Positional needs analysis

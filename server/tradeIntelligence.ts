@@ -420,20 +420,27 @@ export async function buildTradeIntelligence(args: {
     seasonHasGames: args.seasonHasGames,
   });
 
+  // Interpretation layer. The engine's `ratio = totalA / totalB` answers "how much am I
+  // GIVING relative to what I RECEIVE" (given ÷ received), so ratio < 1 means a side comes out
+  // ahead. The fit/verdict/negotiation paths all reason in terms of value GAINED (received ÷
+  // given), so each side is fed its own gain ratio rather than the raw engine ratio.
+  const gainRatioA = args.ratio > 0 ? 1 / args.ratio : 1;
+  const gainRatioB = args.ratio;
+
   const fitA = computeTradeFitScore({
     receivedPositions: args.receivedByA, gavePositions: args.gaveByA, teamNeeds: args.needsA,
     ownerMostAcquiredPos: oiA.mostAcquiredPos, ownerMostTradedAwayPos: oiA.mostTradedAwayPos,
-    window: winA.classification, valueRatioForThisSide: args.ratio,
+    window: winA.classification, valueRatioForThisSide: gainRatioA,
   });
   const fitB = computeTradeFitScore({
     receivedPositions: args.receivedByB, gavePositions: args.gaveByB, teamNeeds: args.needsB,
     ownerMostAcquiredPos: oiB.mostAcquiredPos, ownerMostTradedAwayPos: oiB.mostTradedAwayPos,
-    window: winB.classification, valueRatioForThisSide: args.ratio > 0 ? 1 / args.ratio : 1,
+    window: winB.classification, valueRatioForThisSide: gainRatioB,
   });
 
-  const verdict = computeVerdict({ ratio: args.ratio, fitGradeA: fitA.grade });
+  const verdict = computeVerdict({ ratio: gainRatioA, fitGradeA: fitA.grade });
   const negotiationAdvice = buildNegotiationAdvice({
-    ratio: args.ratio, teamANeeds: args.needsA, receivedByA: args.receivedByA,
+    ratio: gainRatioA, teamANeeds: args.needsA, receivedByA: args.receivedByA,
     windowA: winA.classification, ownerBMostAcquiredPos: oiB.mostAcquiredPos, gaveByA: args.gaveByA,
   });
 
