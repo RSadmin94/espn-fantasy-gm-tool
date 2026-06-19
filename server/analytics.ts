@@ -747,7 +747,13 @@ export function calcTradeValue(
   vorpResult: VORPResult | undefined,
   rosResult: ROSValueResult | undefined,
   scarcity: PositionalScarcityResult | undefined,
-  keeperEfficiency: KeeperEfficiencyResult | undefined
+  keeperEfficiency: KeeperEfficiencyResult | undefined,
+  // V2: when the Market Value Engine has produced a value for this player, the
+  // composite delegates to it. The legacy avgPoints-based terms below are still
+  // computed and returned for display continuity (breakdown panels), but they no
+  // longer drive `compositeValue`. When absent (legacy callers / tests), the old
+  // behavior is preserved exactly.
+  marketValue?: import("./marketValue").MarketValueResult
 ): TradeValueResult {
   const avgPoints = Number.isFinite(player.avgPoints) ? player.avgPoints : 0;
   const vorpRaw = vorpResult?.vorp;
@@ -765,8 +771,10 @@ export function calcTradeValue(
     ? Math.round(scarcity.scarcityScore * 0.3)
     : 0;
 
-  // Composite: ROS value + VORP premium + keeper bonus + scarcity bonus
-  const compositeValue = Math.round(rosValue + (vorp * 5) + keeperBonus + scarcityBonus);
+  // Composite: V2 delegates to the Market Value Engine when a value is present;
+  // otherwise the legacy avgPoints-based composite is preserved exactly.
+  const legacyComposite = Math.round(rosValue + (vorp * 5) + keeperBonus + scarcityBonus);
+  const compositeValue = marketValue ? marketValue.compositeValue : legacyComposite;
 
   const parts: string[] = [
     `ROS: ${rosValue.toFixed(0)}pts`,
@@ -774,6 +782,12 @@ export function calcTradeValue(
   ];
   if (keeperBonus > 0) parts.push(`Keeper bonus: +${keeperBonus}`);
   if (scarcityBonus > 0) parts.push(`Scarcity: +${scarcityBonus}`);
+
+  // When delegating, lead the breakdown with the market-value explanation so the
+  // report reflects what actually drove the number.
+  const valueBreakdown = marketValue
+    ? `MV ${marketValue.value} · ${marketValue.breakdown}`
+    : parts.join(" | ");
 
   return {
     playerId: player.playerId,
@@ -785,7 +799,7 @@ export function calcTradeValue(
     keeperBonus,
     positionalScarcityBonus: scarcityBonus,
     compositeValue,
-    valueBreakdown: parts.join(" | "),
+    valueBreakdown,
   };
 }
 

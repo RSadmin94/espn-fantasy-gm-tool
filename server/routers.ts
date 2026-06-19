@@ -9408,6 +9408,7 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
     }))
     .mutation(async ({ ctx, input }) => {
       const { calcVORP, calcPositionalScarcity, calcKeeperEfficiency, calcROSValue, calcTradeValue, calcPickValue } = await import("./analytics");
+      const { computeMarketValues } = await import("./marketValue");
       const data = await getSeasonData(input.season, undefined, ctx.user?.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season. Sync ESPN first." });
 
@@ -9442,6 +9443,111 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       const scarcityResults = calcPositionalScarcity(allPlayers, []); // no free agents in cache
       const keeperResults = calcKeeperEfficiency(allPlayers, vorpResults);
 
+      // ── Market Value Engine V2 ────────────────────────────────────────────
+      // Resolve reliable inputs (ADP, ESPN projection, percent-started, keeper
+      // savings, weekly points history via the gm_player_registry crosswalk) and
+      // compute a phase-aware market value for every rostered player. This is
+      // what makes preseason values non-zero (the old engine used avgPoints,
+      // which is 0 before any games are played). Failure here degrades to no
+      // market value (legacy composite), never breaks trade analysis.
+      const marketValues = await (async () => {
+        try {
+          // 1) Enrich from the combined ESPN payload: id -> ADP / projection / %started
+          type Enrich = { adp: number | null; projection: number | null; pctStarted: number | null };
+          const enrichById = new Map<number, Enrich>();
+          const teamsRaw = (data as { teams?: unknown[] }).teams ?? [];
+          for (const t of teamsRaw as Array<{ roster?: { entries?: unknown[] } }>) {
+            for (const e of (t.roster?.entries ?? []) as Array<{ playerPoolEntry?: { player?: Record<string, unknown> } }>) {
+              const p = e.playerPoolEntry?.player as Record<string, unknown> | undefined;
+              const id = p?.id as number | undefined;
+              if (id == null) continue;
+              const ranks = p?.draftRanksByRankType as Record<string, { rank?: number }> | undefined;
+              const adp = ranks?.PPR?.rank ?? ranks?.STANDARD?.rank ?? null;
+              const stats = (p?.stats as Array<Record<string, unknown>> | undefined) ?? [];
+              const projBlock =
+                stats.find((s) => s.statSourceId === 1 && s.seasonId === input.season && s.statSplitTypeId === 0) ??
+                stats.find((s) => s.statSourceId === 1 && s.seasonId === input.season) ??
+                stats.find((s) => s.statSourceId === 1);
+              const projection = typeof projBlock?.appliedTotal === "number" ? (projBlock.appliedTotal as number) : null;
+              const ownership = p?.ownership as { percentStarted?: number; percentOwned?: number } | undefined;
+              const pctStarted = ownership?.percentStarted ?? ownership?.percentOwned ?? null;
+              enrichById.set(id, { adp, projection, pctStarted });
+            }
+          }
+
+          // 2) Weekly points history via crosswalk (current + 3 prior seasons),
+          //    deduped to one value per (player, season, week).
+          const ids = allPlayers.map((p) => p.playerId).filter((n) => Number.isFinite(n));
+          const weeklyById = new Map<number, Map<number, Map<number, number>>>(); // id -> season -> week -> pts
+          if (ids.length > 0) {
+            const mvDb = await getDb();
+            const inList = ids.join(",");
+            const minSeason = input.season - 3;
+            const rows = mvDb
+              ? ((await mvDb.execute(sql`
+                  SELECT r.espnPlayerId AS espnId, w.season AS season, w.week AS week, MAX(w.pointsScored) AS pts
+                  FROM gm_weekly_player_stats w
+                  JOIN gm_player_registry r ON r.id = w.playerId
+                  WHERE r.espnPlayerId IN (${sql.raw(inList)})
+                    AND w.season <= ${input.season} AND w.season >= ${minSeason}
+                  GROUP BY r.espnPlayerId, w.season, w.week
+                `)) as unknown as [Array<{ espnId: string | number; season: number; week: number; pts: number }>])[0]
+              : [];
+            for (const row of rows ?? []) {
+              const id = Number(row.espnId);
+              const season = Number(row.season);
+              const week = Number(row.week);
+              const pts = Number(row.pts);
+              if (!Number.isFinite(id) || !Number.isFinite(season) || !Number.isFinite(week)) continue;
+              if (!weeklyById.has(id)) weeklyById.set(id, new Map());
+              const bySeason = weeklyById.get(id)!;
+              if (!bySeason.has(season)) bySeason.set(season, new Map());
+              bySeason.get(season)!.set(week, pts);
+            }
+          }
+
+          // 3) Build engine inputs for the full cohort
+          const keeperSavingsById = new Map<number, number>();
+          for (const k of keeperResults) keeperSavingsById.set(k.playerId, k.roundSavings);
+
+          const inputs = allPlayers.map((p) => {
+            const en = enrichById.get(p.playerId);
+            const bySeason = weeklyById.get(p.playerId);
+            const currentWeekMap = bySeason?.get(input.season);
+            const currentSeasonWeekly = currentWeekMap
+              ? [...currentWeekMap.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v)
+              : [];
+            const history = bySeason
+              ? [...bySeason.entries()]
+                  .filter(([s]) => s < input.season)
+                  .map(([season, weeks]) => {
+                    const vals = [...weeks.values()];
+                    const avg = vals.length ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : 0;
+                    const m = avg;
+                    const variance = vals.length > 1 ? vals.reduce((s2, v) => s2 + (v - m) * (v - m), 0) / (vals.length - 1) : 0;
+                    return { season, avg, stdev: vals.length > 1 ? Math.sqrt(variance) : null, weeks: vals.length };
+                  })
+              : [];
+            return {
+              playerId: p.playerId,
+              position: p.position,
+              adpRank: en?.adp ?? null,
+              projection: en?.projection ?? null,
+              keeperRoundSavings: keeperSavingsById.get(p.playerId) ?? null,
+              percentStarted: en?.pctStarted ?? null,
+              currentSeasonWeekly,
+              history,
+              currentSeason: input.season,
+            };
+          });
+
+          return computeMarketValues(inputs);
+        } catch (err) {
+          console.warn("[tradeAnalyze] market value engine degraded:", (err as Error).message);
+          return new Map<number, import("./marketValue").MarketValueResult>();
+        }
+      })();
+
       // Weeks remaining (approximate — 14 regular season weeks, playoffs weeks 15-17)
       const weeksRemaining = 10;
 
@@ -9471,7 +9577,7 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
         const ros = calcROSValue([playerRow], weeksRemaining)[0];
         const scarcity = scarcityResults.find(s => s.position === p.position);
         const keeper = keeperResults.find(k => k.playerId === p.playerId);
-        return calcTradeValue(playerRow, vorp, ros, scarcity, keeper);
+        return calcTradeValue(playerRow, vorp, ros, scarcity, keeper, marketValues.get(p.playerId));
       };
 
       const sideAValues = input.sideA.map(scorePlayer);
