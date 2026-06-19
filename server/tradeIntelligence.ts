@@ -171,7 +171,10 @@ export function computeOwnerIntelligence(
   const acquired = relevant.flatMap((t) => t.receivedByTeam[teamId] ?? []);
   const given = relevant.flatMap((t) => t.receivedByTeam[otherTeam(t, teamId)] ?? []);
   const distinctSeasons = new Set(relevant.map((t) => t.season)).size;
-  const avg = dna?.avgTradesPerSeason ?? (distinctSeasons > 0 ? relevant.length / distinctSeasons : 0);
+  // Derive avg/season from the SAME completed-trade set shown as "Completed trades", so the
+  // two numbers can never contradict (the DNA activity metric counts all roster moves and
+  // produced impossible pairings like "6 completed trades / 0.8 per season").
+  const avg = distinctSeasons > 0 ? relevant.length / distinctSeasons : 0;
 
   let aggression: OwnerIntelligence["tradeAggression"] = "Unknown";
   const freq = dna?.tradeFrequency;
@@ -255,14 +258,23 @@ export function computeChampionshipWindow(args: {
   rosterValueRankPct: number; // 0..1 (1 = best roster value in league)
   pointsForGap: number | null; // champ PF - owner PF; <=0 means at/above champ benchmark
   hasCurrentRecord: boolean;
+  seasonHasGames?: boolean; // true if ANY team in the analyzed season has a record
 }): ChampionshipWindow {
   const { wins, losses, ties, rosterValueRankPct, pointsForGap, hasCurrentRecord } = args;
+  const seasonHasGames = args.seasonHasGames ?? false;
   const reasons: string[] = [];
   const topRoster = rosterValueRankPct >= 0.66;
   const bottomRoster = rosterValueRankPct <= 0.33;
 
   if (!hasCurrentRecord) {
-    reasons.push("Preseason — no games played yet; classification leans on roster value.");
+    // Distinguish a genuine preseason (no team has played) from a completed/in-progress
+    // season where THIS team's record simply didn't resolve — otherwise two teams in the
+    // same finished season can disagree ("5-9" vs "Preseason — no games played yet").
+    reasons.push(
+      seasonHasGames
+        ? "Record unavailable for this team; classification leans on roster value."
+        : "Preseason — no games played yet; classification leans on roster value."
+    );
     reasons.push(`Roster value is in the ${pctLabel(rosterValueRankPct)} of the league.`);
     const cls: ChampionshipWindow["classification"] = topRoster ? "Contender" : rosterValueRankPct >= 0.4 ? "Playoff Team" : "Retooling";
     return { classification: cls, reasons, basis: WINDOW_BASIS };
@@ -389,6 +401,7 @@ export async function buildTradeIntelligence(args: {
   ratio: number; // totalA / totalB
   recordA: TeamRecordLite;
   recordB: TeamRecordLite;
+  seasonHasGames?: boolean; // true if any team in the analyzed season has a record
 }): Promise<TradeIntelligenceReport> {
   const { trades, seasonsByTeam } = await reconstructCompletedTrades(args.seasons, args.loadSeasonData);
 
@@ -399,10 +412,12 @@ export async function buildTradeIntelligence(args: {
   const winA = computeChampionshipWindow({
     wins: args.recordA.wins, losses: args.recordA.losses, ties: args.recordA.ties,
     rosterValueRankPct: args.recordA.rosterValueRankPct, pointsForGap: args.recordA.pointsForGap, hasCurrentRecord: args.recordA.hasRecord,
+    seasonHasGames: args.seasonHasGames,
   });
   const winB = computeChampionshipWindow({
     wins: args.recordB.wins, losses: args.recordB.losses, ties: args.recordB.ties,
     rosterValueRankPct: args.recordB.rosterValueRankPct, pointsForGap: args.recordB.pointsForGap, hasCurrentRecord: args.recordB.hasRecord,
+    seasonHasGames: args.seasonHasGames,
   });
 
   const fitA = computeTradeFitScore({

@@ -203,7 +203,7 @@ function OwnerIntelCard({ intel, teamName }: { intel: OwnerIntel; teamName: stri
         </div>
         <div className="space-y-1 pt-1 border-t border-border/40">
           <p className="text-xs"><span className="text-muted-foreground">Style: </span><span className="text-foreground">{intel.tradeStyle}</span></p>
-          <p className="text-xs"><span className="text-muted-foreground">Risk: </span><span className="text-foreground">{intel.riskProfile}</span></p>
+          <p className="text-xs"><span className="text-muted-foreground">Tilt: </span><span className="text-foreground">{intel.riskProfile}</span></p>
           <p className="text-[10px] italic text-muted-foreground/70">{intel.inferredNote}</p>
         </div>
       </CardContent>
@@ -738,9 +738,6 @@ function TradeResults({
             <span className="text-xl font-extrabold tracking-tight">{ti.verdict.verdict}</span>
             <span className="ml-auto text-xs font-medium opacity-80">Confidence: {ti.verdict.confidence}</span>
           </div>
-          {result.aiVerdict && (
-            <p className="mt-1.5 text-sm font-normal opacity-90">{result.aiVerdict.split("\n")[0]}</p>
-          )}
         </div>
       )}
 
@@ -802,22 +799,6 @@ function TradeResults({
 
       {/* Phase 1 Trade Intelligence — structured deterministic report */}
       {ti && <TradeIntelSections ti={ti} teamAName={teamAName} teamBName={teamBName} />}
-
-      {/* Narrative analysis (LLM one-line summary — secondary to the structured report above) */}
-      {result.aiVerdict && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-primary">
-              <Sparkles className="h-4 w-4" /> Narrative Analysis
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="whitespace-pre-wrap text-sm text-foreground leading-relaxed">
-              {result.aiVerdict}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Positional depth */}
       <div className="grid grid-cols-2 gap-3">

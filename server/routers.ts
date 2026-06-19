@@ -9447,12 +9447,18 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
 
       // Score each player in the trade
       const scorePlayer = (p: { playerId: number; playerName: string; position: string; avgPoints: number; teamId: number }) => {
+        // Source of truth for player value is the server's cached roster (the same data the
+        // picker shows), not the client payload — payload avgPoints can arrive as NaN and
+        // poison the composite. Fall back to a sanitized client value only if uncached.
+        const cachedAvg = allPlayers.find(ap => ap.playerId === p.playerId)?.avgPoints;
+        const clientAvg = Number.isFinite(p.avgPoints) ? p.avgPoints : 0;
+        const avgPoints = Number.isFinite(cachedAvg) ? (cachedAvg as number) : clientAvg;
         const playerRow: import("./analytics").PlayerRow = {
           playerId: p.playerId,
           playerName: p.playerName,
           position: p.position,
-          avgPoints: p.avgPoints,
-          seasonPoints: p.avgPoints * 14,
+          avgPoints,
+          seasonPoints: avgPoints * 14,
           teamId: p.teamId,
           ownerName: "",
           projectedTotal: null,
@@ -9633,6 +9639,12 @@ Provide:
           };
           const metaA = teamMeta(input.teamAId);
           const metaB = teamMeta(input.teamBId);
+          // True when ANY team in the analyzed season has a record, so a team whose own
+          // record didn't resolve is labeled "record unavailable" rather than "preseason".
+          const seasonHasGames = teamsNormTa.some((tt) => {
+            const r = tt as Record<string, unknown>;
+            return Number(r.wins ?? 0) + Number(r.losses ?? 0) + Number(r.ties ?? 0) > 0;
+          });
           return await buildTradeIntelligence({
             seasons: tiSeasons,
             loadSeasonData: (s) => getSeasonData(s, undefined, ctx.user?.id),
@@ -9644,13 +9656,14 @@ Provide:
             dnaB: dnaLiteB,
             needsA,
             needsB,
-            receivedByA: input.sideA.map((p) => p.position),
-            gaveByA: input.sideB.map((p) => p.position),
-            receivedByB: input.sideB.map((p) => p.position),
-            gaveByB: input.sideA.map((p) => p.position),
+            receivedByA: input.sideB.map((p) => p.position),
+            gaveByA: input.sideA.map((p) => p.position),
+            receivedByB: input.sideA.map((p) => p.position),
+            gaveByB: input.sideB.map((p) => p.position),
             ratio,
             recordA: metaA.record,
             recordB: metaB.record,
+            seasonHasGames,
           });
         } catch {
           return null; // intelligence is additive — never breaks the value engine

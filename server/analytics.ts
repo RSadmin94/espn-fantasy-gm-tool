@@ -749,9 +749,11 @@ export function calcTradeValue(
   scarcity: PositionalScarcityResult | undefined,
   keeperEfficiency: KeeperEfficiencyResult | undefined
 ): TradeValueResult {
-  const avgPoints = player.avgPoints;
-  const vorp = vorpResult?.vorp ?? 0;
-  const rosValue = rosResult?.rosAdjusted ?? (avgPoints * 10);
+  const avgPoints = Number.isFinite(player.avgPoints) ? player.avgPoints : 0;
+  const vorpRaw = vorpResult?.vorp;
+  const vorp = Number.isFinite(vorpRaw) ? (vorpRaw as number) : 0;
+  const rosRaw = rosResult?.rosAdjusted;
+  const rosValue = Number.isFinite(rosRaw) ? (rosRaw as number) : (avgPoints * 10);
 
   // Keeper bonus: if player is a good keeper deal, add value
   const keeperBonus = keeperEfficiency
