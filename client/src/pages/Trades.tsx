@@ -855,9 +855,23 @@ export function Trades() {
   const [picksB, setPicksB] = useState<TradePick[]>([]);
   const [result, setResult] = useState<TradeResult | null>(null);
 
+  // Tracks the league we've already auto-selected a season for, so we force the
+  // default exactly once per league (and re-default on league switch) without
+  // fighting a manual season change the user makes afterward.
+  const initedLeagueRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (cachedSeasons.length > 0) {
-      const maxS = Math.max(...cachedSeasons);
+    if (cachedSeasons.length === 0) return;
+    const maxS = Math.max(...cachedSeasons);
+    if (initedLeagueRef.current !== leagueContextKey) {
+      // First time we have real, data-bearing seasons for this league: default to
+      // the latest season that actually has roster/draft data, not the placeholder
+      // value the selector was initialized with before data loaded.
+      initedLeagueRef.current = leagueContextKey;
+      setSeason(maxS);
+    } else {
+      // Already defaulted for this league — keep the user's chosen season unless it
+      // is no longer synced (e.g. after a data change), then snap to the latest.
       setSeason((s) => (cachedSeasons.includes(s) ? s : maxS));
     }
   }, [cachedSeasons, leagueContextKey]);
