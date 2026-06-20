@@ -337,12 +337,18 @@ export function computeVerdict(args: { ratio: number; fitGradeA: FitGrade }): {
 } {
   const { ratio, fitGradeA } = args;
   const fitGood = ["A+", "A", "A-", "B+", "B"].includes(fitGradeA);
+  // Verdict bands read from THIS side's gain ratio (value received / value given).
+  // Calibrated to fantasy negotiation reality: a normal 10-30% value gap is a
+  // NEGOTIATION problem (COUNTER — add a depth piece or late pick), not a
+  // deal-breaker. AVOID is reserved for genuinely lopsided "you're being fleeced"
+  // trades (>30% behind). The near-parity band still defers to Trade Fit.
   let verdict: "ACCEPT" | "COUNTER" | "FAIR" | "RISKY" | "AVOID";
-  if (ratio < 0.85) verdict = "AVOID";
-  else if (ratio < 0.95) verdict = "COUNTER";
-  else if (ratio <= 1.05) verdict = fitGood ? "FAIR" : "RISKY";
-  else verdict = fitGood ? "ACCEPT" : "RISKY";
-  const decisive = ratio < 0.85 || ratio > 1.18;
+  if (ratio < 0.70) verdict = "AVOID";                  // >30% behind — walk away
+  else if (ratio < 0.90) verdict = "COUNTER";           // 10-30% behind — fixable, ask for more
+  else if (ratio <= 1.10) verdict = fitGood ? "FAIR" : "RISKY";  // within ~10% — fit decides
+  else verdict = fitGood ? "ACCEPT" : "RISKY";          // >10% ahead — take it unless fit is poor
+  // "Decisive" drives High confidence; track the new lopsided thresholds, not the old 0.85/1.18.
+  const decisive = ratio < 0.70 || ratio > 1.30;
   const confidence = decisive && fitGood ? "High" : verdict === "RISKY" ? "Low" : "Moderate";
   return { verdict, confidence };
 }
