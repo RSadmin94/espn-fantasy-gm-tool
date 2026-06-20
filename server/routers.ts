@@ -9408,7 +9408,7 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
     }))
     .mutation(async ({ ctx, input }) => {
       const { calcVORP, calcPositionalScarcity, calcKeeperEfficiency, calcROSValue, calcTradeValue, calcPickValue } = await import("./analytics");
-      const { computeMarketValues } = await import("./marketValue");
+      const { computeMarketValues, MARKET_VALUE_COMPOSITE_SCALE } = await import("./marketValue");
       const data = await getSeasonData(input.season, undefined, ctx.user?.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season. Sync ESPN first." });
 
@@ -9483,16 +9483,24 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
             const mvDb = await getDb();
             const inList = ids.join(",");
             const minSeason = input.season - 3;
-            const rows = mvDb
-              ? ((await mvDb.execute(sql`
+            const execRes = mvDb
+              ? await mvDb.execute(sql`
                   SELECT r.espnPlayerId AS espnId, w.season AS season, w.week AS week, MAX(w.pointsScored) AS pts
                   FROM gm_weekly_player_stats w
                   JOIN gm_player_registry r ON r.id = w.playerId
                   WHERE r.espnPlayerId IN (${sql.raw(inList)})
                     AND w.season <= ${input.season} AND w.season >= ${minSeason}
                   GROUP BY r.espnPlayerId, w.season, w.week
-                `)) as unknown as [Array<{ espnId: string | number; season: number; week: number; pts: number }>])[0]
-              : [];
+                `)
+              : null;
+            // drizzle's db.execute return shape varies ([rows,fields] | rows | {rows});
+            // normalize exactly like the rest of the codebase's rowsOf() helper so a
+            // shape mismatch can't make the loop throw and silently empty the value map.
+            const rows = (Array.isArray(execRes)
+              ? (Array.isArray(execRes[0]) ? execRes[0] : execRes)
+              : (execRes && Array.isArray((execRes as { rows?: unknown[] }).rows)
+                  ? (execRes as { rows: unknown[] }).rows
+                  : [])) as Array<{ espnId: string | number; season: number; week: number; pts: number }>;
             for (const row of rows ?? []) {
               const id = Number(row.espnId);
               const season = Number(row.season);
@@ -9583,15 +9591,20 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       const sideAValues = input.sideA.map(scorePlayer);
       const sideBValues = input.sideB.map(scorePlayer);
 
-      // Score picks
-      const pickValueA = (input.picksA || []).reduce(
+      // Score picks. calcPickValue runs on the legacy base-3000 curve (a 1.01 ≈ 3000),
+      // but players are now on the 0–(100*MARKET_VALUE_COMPOSITE_SCALE) market scale.
+      // Rescale picks onto that same scale so a pick is valued like the player you'd
+      // expect at that slot (a 1.01 ≈ a top player), not ~10× one. We rescale only
+      // here at the trade totals — calcPickValue stays untouched for every other caller.
+      const PICK_TO_MARKET_SCALE = (100 * MARKET_VALUE_COMPOSITE_SCALE) / 3000; // = 0.1
+      const pickValueA = Math.round((input.picksA || []).reduce(
         (sum, p) => sum + (pickTeamCountAnalyze > 0 ? calcPickValue(p.round, p.pick, pickTeamCountAnalyze) : 0),
         0,
-      );
-      const pickValueB = (input.picksB || []).reduce(
+      ) * PICK_TO_MARKET_SCALE);
+      const pickValueB = Math.round((input.picksB || []).reduce(
         (sum, p) => sum + (pickTeamCountAnalyze > 0 ? calcPickValue(p.round, p.pick, pickTeamCountAnalyze) : 0),
         0,
-      );
+      ) * PICK_TO_MARKET_SCALE);
 
       const totalA = sideAValues.reduce((s, v) => s + v.compositeValue, 0) + pickValueA;
       const totalB = sideBValues.reduce((s, v) => s + v.compositeValue, 0) + pickValueB;
