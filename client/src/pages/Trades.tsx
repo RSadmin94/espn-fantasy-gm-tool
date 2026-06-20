@@ -105,12 +105,20 @@ interface FitScore {
   grade: string;
   evidence: { ok: boolean; text: string }[];
 }
+interface SplitSide {
+  valueGrade: string;
+  rosterFit: string;
+  championshipContext: string;
+  overallVerdict: string;
+  confidence: string;
+}
 interface TradeIntelligence {
   ownerIntelligence: { teamA: OwnerIntel; teamB: OwnerIntel };
   rivalry: RivalryReport;
   championshipWindow: { teamA: ChampWindow; teamB: ChampWindow };
   tradeFitScore: { teamA: FitScore; teamB: FitScore };
   verdict: { verdict: string; confidence: string };
+  splitVerdict: { teamA: SplitSide; teamB: SplitSide };
   negotiationAdvice: string[];
 }
 
@@ -737,6 +745,39 @@ function TradeResults({
             {verdictCfg?.icon}
             <span className="text-xl font-extrabold tracking-tight">{ti.verdict.verdict}</span>
             <span className="ml-auto text-xs font-medium opacity-80">Confidence: {ti.verdict.confidence}</span>
+          </div>
+        </div>
+      )}
+
+      {/* 1b. Split Verdict (Tier 1) — value / fit / context / overall; headline = your (YOU GIVE) side */}
+      {ti?.splitVerdict && (
+        <div className="space-y-1 rounded-lg border border-border bg-muted/20 px-4 py-3">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Verdict Breakdown — Your Side
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">Value Grade</span>
+            <span className="text-sm font-semibold">{ti.splitVerdict.teamA.valueGrade}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">Roster Fit</span>
+            <span className={cn("rounded border px-1.5 text-sm font-semibold", fitGradeClass(ti.splitVerdict.teamA.rosterFit))}>
+              {ti.splitVerdict.teamA.rosterFit}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">Championship Context</span>
+            <span className="text-sm font-semibold">{ti.splitVerdict.teamA.championshipContext}</span>
+          </div>
+          <div className="mt-1 flex items-center justify-between border-t border-border/60 pt-2">
+            <span className="text-xs font-semibold uppercase tracking-wide">Overall Verdict</span>
+            <span className={cn("rounded border px-2 py-0.5 text-sm font-extrabold", VERDICT_CONFIG[ti.splitVerdict.teamA.overallVerdict]?.className)}>
+              {ti.splitVerdict.teamA.overallVerdict}
+            </span>
+          </div>
+          <div className="pt-1 text-[11px] text-muted-foreground">
+            Other side overall <span className="font-semibold">{ti.splitVerdict.teamB.overallVerdict}</span>
+            {" "}({ti.splitVerdict.teamB.valueGrade.toLowerCase()} value · {ti.splitVerdict.teamB.championshipContext.toLowerCase()} · fit {ti.splitVerdict.teamB.rosterFit})
           </div>
         </div>
       )}

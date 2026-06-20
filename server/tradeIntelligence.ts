@@ -353,6 +353,86 @@ export function computeVerdict(args: { ratio: number; fitGradeA: FitGrade }): {
   return { verdict, confidence };
 }
 
+export type VerdictLabel = "ACCEPT" | "COUNTER" | "FAIR" | "RISKY" | "AVOID";
+export type ContextBucket = "Contender" | "Bubble" | "Retooling" | "Rebuilding" | "Neutral";
+
+/**
+ * Map the EXISTING Championship Window classification into the Tier-1 context bucket.
+ * LOCKED mapping (docs/SPLIT_VERDICT_SPEC.md §2): "Playoff Team" folds into Contender;
+ * anything unknown/absent is Neutral. We map only labels that already exist — no new classifier.
+ */
+export function mapChampionshipContext(
+  classification: ChampionshipWindow["classification"] | null | undefined,
+): ContextBucket {
+  switch (classification) {
+    case "Contender":
+    case "Playoff Team":
+      return "Contender";
+    case "Bubble Team":
+      return "Bubble";
+    case "Retooling":
+      return "Retooling";
+    case "Rebuilding":
+      return "Rebuilding";
+    default:
+      return "Neutral";
+  }
+}
+
+/**
+ * Tier-1 Overall Verdict combiner (docs/SPLIT_VERDICT_SPEC.md §3.2).
+ * PURE label logic over signals that already exist — no valuation, no new scoring, no I/O.
+ *   - Championship Context is the only ordinal mover (±1 tier, bounded).
+ *   - Roster Fit is a RISKY overlay only: poor fit downgrades FAIR/ACCEPT → RISKY.
+ *     It can never upgrade value, and can never manufacture an AVOID.
+ *   - A true value AVOID is capped at COUNTER; context can never produce an AVOID otherwise.
+ */
+export function computeOverallVerdict(args: {
+  valueGrade: VerdictLabel;
+  rosterFit: FitGrade;
+  context: ContextBucket;
+}): { overall: VerdictLabel } {
+  const { valueGrade, rosterFit, context } = args;
+  // Recommendation ladder: AVOID(0) -> COUNTER(1) -> FAIR(2) -> ACCEPT(3). RISKY is an overlay.
+  const baseRung =
+    valueGrade === "AVOID" ? 0 :
+    valueGrade === "COUNTER" ? 1 :
+    valueGrade === "ACCEPT" ? 3 : 2; // FAIR or RISKY share rung 2
+  const cautionFromValue = valueGrade === "RISKY";
+  const valueBehind = baseRung <= 1; // AVOID or COUNTER
+
+  // Championship Context: the ONLY ordinal mover, bounded to one tier.
+  let shift = 0;
+  if (valueBehind && context === "Contender") shift = 1;        // contenders rationally overpay for win-now
+  else if (valueBehind && context === "Rebuilding") shift = -1; // don't pay up when not contending
+  shift = Math.max(-1, Math.min(1, shift));
+
+  let rung = Math.max(0, Math.min(3, baseRung + shift));
+  // AVOID guardrail: a true value AVOID rises to COUNTER at most, never FAIR/ACCEPT.
+  // For everything else, context can never *manufacture* an AVOID (floor at COUNTER).
+  if (valueGrade === "AVOID") rung = Math.min(rung, 1);
+  else rung = Math.max(rung, 1);
+
+  let overall: VerdictLabel =
+    rung === 0 ? "AVOID" : rung === 1 ? "COUNTER" : rung === 2 ? "FAIR" : "ACCEPT";
+
+  // Roster Fit: RISKY overlay only. Poor fit (D/F) or a near-parity value RISKY surfaces as
+  // RISKY on a FAIR/ACCEPT outcome. COUNTER already signals "renegotiate"; good fit never overlays.
+  const fitPoor = rosterFit === "D" || rosterFit === "F";
+  if ((overall === "FAIR" || overall === "ACCEPT") && (fitPoor || cautionFromValue)) {
+    overall = "RISKY";
+  }
+  return { overall };
+}
+
+export interface SplitVerdictSide {
+  valueGrade: VerdictLabel;
+  rosterFit: FitGrade;
+  championshipContext: ContextBucket;
+  overallVerdict: VerdictLabel;
+  confidence: "High" | "Moderate" | "Low";
+}
+
 export function buildNegotiationAdvice(args: {
   ratio: number;
   teamANeeds: Record<string, number>;
@@ -377,6 +457,7 @@ export interface TradeIntelligenceReport {
   championshipWindow: { teamA: ChampionshipWindow; teamB: ChampionshipWindow };
   tradeFitScore: { teamA: TradeFitScore; teamB: TradeFitScore };
   verdict: { verdict: "ACCEPT" | "COUNTER" | "FAIR" | "RISKY" | "AVOID"; confidence: "High" | "Moderate" | "Low" };
+  splitVerdict: { teamA: SplitVerdictSide; teamB: SplitVerdictSide };
   negotiationAdvice: string[];
 }
 
@@ -445,6 +526,24 @@ export async function buildTradeIntelligence(args: {
   });
 
   const verdict = computeVerdict({ ratio: gainRatioA, fitGradeA: fitA.grade });
+  // Split Verdict (Tier 1): per-side value / fit / context / overall. Headline = team A
+  // (the user's "YOU GIVE" side); team B is supporting context. Pure combiner over the
+  // signals already computed above — no valuation, threshold, or fit-scoring changes.
+  const verdictB = computeVerdict({ ratio: gainRatioB, fitGradeA: fitB.grade });
+  const contextA = mapChampionshipContext(winA.classification);
+  const contextB = mapChampionshipContext(winB.classification);
+  const splitVerdict = {
+    teamA: {
+      valueGrade: verdict.verdict, rosterFit: fitA.grade, championshipContext: contextA,
+      overallVerdict: computeOverallVerdict({ valueGrade: verdict.verdict, rosterFit: fitA.grade, context: contextA }).overall,
+      confidence: verdict.confidence,
+    },
+    teamB: {
+      valueGrade: verdictB.verdict, rosterFit: fitB.grade, championshipContext: contextB,
+      overallVerdict: computeOverallVerdict({ valueGrade: verdictB.verdict, rosterFit: fitB.grade, context: contextB }).overall,
+      confidence: verdictB.confidence,
+    },
+  };
   const negotiationAdvice = buildNegotiationAdvice({
     ratio: gainRatioA, teamANeeds: args.needsA, receivedByA: args.receivedByA,
     windowA: winA.classification, ownerBMostAcquiredPos: oiB.mostAcquiredPos, gaveByA: args.gaveByA,
@@ -456,6 +555,7 @@ export async function buildTradeIntelligence(args: {
     championshipWindow: { teamA: winA, teamB: winB },
     tradeFitScore: { teamA: fitA, teamB: fitB },
     verdict,
+    splitVerdict,
     negotiationAdvice,
   };
 }
