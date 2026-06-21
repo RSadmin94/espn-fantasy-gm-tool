@@ -219,7 +219,7 @@ function LeagueSwitcher({
 
   if (leaguesQ.isLoading || activeQ.isLoading) {
     return (
-      <div className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-3 text-zinc-500">
+      <div className="flex items-center gap-2 border-b border-border px-3 py-3 text-muted-foreground">
         <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
         <span className="text-xs">Loading leagues…</span>
       </div>
@@ -228,8 +228,8 @@ function LeagueSwitcher({
 
   if (leagues.length === 0) {
     return (
-      <div className="border-b border-white/[0.06] px-3 py-3">
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b97a8]">
+      <div className="border-b border-border px-3 py-3">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
           League
         </p>
         <Button asChild variant="outline" size="sm" className="h-auto w-full justify-center gap-2 py-2">
@@ -264,21 +264,21 @@ function LeagueSwitcher({
 
   if (leagues.length === 1) {
     return (
-      <div className="border-b border-white/[0.06] px-3 py-3">
-        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b97a8]">
+      <div className="border-b border-border px-3 py-3">
+        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
           Active league
         </p>
-        <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
-          <p className="truncate text-sm font-semibold text-[#f3f8ff]">{label}</p>
-          <p className="text-xs text-zinc-500">{year}</p>
+        <div className="rounded-lg border border-border bg-muted px-3 py-2">
+          <p className="truncate text-sm font-semibold text-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground">{year}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="border-b border-white/[0.06] px-3 py-3">
-      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b97a8]">
+    <div className="border-b border-border px-3 py-3">
+      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
         Active league
       </p>
       <DropdownMenu>
@@ -291,10 +291,10 @@ function LeagueSwitcher({
             aria-label="Switch active league"
           >
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="truncate text-sm font-semibold text-[#f3f8ff]">
+              <span className="truncate text-sm font-semibold text-foreground">
                 {busy && switchUi == null ? "Switching league…" : label}
               </span>
-              <span className="text-xs text-zinc-500">{busy && switchUi == null ? "—" : year}</span>
+              <span className="text-xs text-muted-foreground">{busy && switchUi == null ? "—" : year}</span>
             </span>
             {busy ? (
               <Loader2 className="h-4 w-4 shrink-0 animate-spin opacity-70" />
@@ -328,7 +328,7 @@ function LeagueSwitcher({
                 }}
               >
                 <span className="font-medium leading-tight">{itemLabel}</span>
-                <span className="text-xs text-zinc-500">{formatLeagueSeason(l.season)}</span>
+                <span className="text-xs text-muted-foreground">{formatLeagueSeason(l.season)}</span>
               </DropdownMenuItem>
             );
           })}
@@ -360,7 +360,7 @@ function SidebarGroupTitle({ title, isFirst }: { title: string; isFirst?: boolea
   return (
     <div
       className={cn(
-        "px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b97a8]",
+        "px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground",
         isFirst ? "pt-0" : "pt-4"
       )}
     >
@@ -383,10 +383,10 @@ function NavItemRow({
     return (
       <li>
         <div
-          className="flex cursor-not-allowed items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-xs font-medium text-zinc-700"
+          className="flex cursor-not-allowed items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-xs font-medium text-muted-foreground"
           aria-disabled
         >
-          <Icon className="h-4 w-4 shrink-0 text-zinc-600" />
+          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate">{entry.label}</span>
           <Badge
             variant="outline"
@@ -412,11 +412,11 @@ function NavItemRow({
         className={cn(
           "group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all",
           isActive
-            ? "border border-lime-500/30 border-l-2 border-l-lime-400 bg-lime-500/10 text-[#f3f8ff]"
-            : "border border-transparent text-[#aab4c2] hover:border-white/[0.08] hover:bg-white/[0.04] hover:text-[#f3f8ff]"
+            ? "border border-lime-500/30 border-l-2 border-l-lime-400 bg-lime-500/10 text-foreground"
+            : "border border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground"
         )}
       >
-        <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-lime-300" : "text-[#8b97a8] group-hover:text-[#dbe4f0]")} />
+        <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-lime-300" : "text-muted-foreground group-hover:text-foreground")} />
         <span className="min-w-0 flex-1 truncate">{entry.label}</span>
         {isActive && <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-lime-400/80" />}
       </Link>
@@ -450,27 +450,27 @@ function NavGroupList({
 function SidebarFooter() {
   const { user, isLoaded } = useUser();
   return (
-    <div className="space-y-2 border-t border-zinc-800/60 p-3">
+    <div className="space-y-2 border-t border-border/60 p-3">
       {isLoaded && user ? (
-        <div className="flex items-center gap-2.5 rounded-lg border border-zinc-800/60 bg-zinc-900/40 px-2.5 py-2">
+        <div className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-2">
           <img
             src={user.imageUrl}
             alt=""
             className="h-9 w-9 shrink-0 rounded-full ring-1 ring-white/10"
           />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold text-zinc-100">
+            <p className="truncate text-xs font-semibold text-foreground">
               {user.fullName || user.username || "GM"}
             </p>
             {user.primaryEmailAddress?.emailAddress ? (
-              <p className="truncate text-[10px] text-zinc-500">
+              <p className="truncate text-[10px] text-muted-foreground">
                 {user.primaryEmailAddress.emailAddress}
               </p>
             ) : null}
           </div>
         </div>
       ) : null}
-      <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-2 text-[10px] leading-snug text-zinc-600">
+      <div className="rounded-lg border border-border/80 bg-muted/40 px-3 py-2 text-[10px] leading-snug text-muted-foreground">
         <span className="font-semibold text-lime-500/80">ESPN Fantasy</span> · Fantasy Football Rivals
       </div>
     </div>
@@ -515,16 +515,16 @@ function Sidebar({
   }, [isMobile]);
 
   return (
-    <div className="flex h-full flex-col border-r border-white/[0.06] bg-[linear-gradient(180deg,#1b131f,#0e0a10)]">
+    <div className="flex h-full flex-col border-r border-border bg-card">
       {/* Logo */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-4">
+      <div className="flex items-center justify-between border-b border-border px-4 py-4">
         <img src="/logo.png" alt="Fantasy Football Rivals - Own Your Rivals" className="max-h-[132px] w-auto object-contain" />
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={toggle}
             title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.07] hover:text-foreground"
+            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Toggle colour scheme"
           >
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -550,7 +550,7 @@ function Sidebar({
           {NAV_GROUPS.map((group, idx) => {
             if (!isMobile) {
               return (
-                <div key={group.id} className={cn(idx > 0 && "mt-2 border-t border-zinc-800/40 pt-2")}>
+                <div key={group.id} className={cn(idx > 0 && "mt-2 border-t border-border/40 pt-2")}>
                   <SidebarGroupTitle title={group.title} isFirst={idx === 0} />
                   <NavGroupList group={group} pathname={pathname} onNavigate={onClose} />
                 </div>
@@ -565,11 +565,11 @@ function Sidebar({
                 onOpenChange={(next) =>
                   setOpenGroups((s) => ({ ...s, [group.id]: next }))
                 }
-                className={cn(idx > 0 && "mt-1 border-t border-white/[0.06] pt-1")}
+                className={cn(idx > 0 && "mt-1 border-t border-border pt-1")}
               >
                 <CollapsibleTrigger
                   type="button"
-                  className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b97a8] transition-colors hover:bg-white/[0.04] hover:text-zinc-200"
+                  className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <span>{group.title}</span>
                   <ChevronDown
@@ -596,7 +596,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { signOut } = useClerk();
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-white/[0.06] bg-[#0e0a10]/95 px-4 backdrop-blur-md md:px-6">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-md md:px-6">
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -640,7 +640,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const leagueSwitchBlocking = leagueSwitchOverlayDepth > 0;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#130e16]">
+    <div className="flex h-screen overflow-hidden bg-background">
       <aside className="hidden w-64 shrink-0 md:block">
         <Sidebar onLeagueSwitchOverlayDepth={bumpLeagueSwitchOverlay} />
       </aside>
@@ -667,19 +667,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto bg-[#130e16] p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6">{children}</main>
       </div>
 
       {leagueSwitchBlocking ? (
         <div
-          className="pointer-events-auto fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-[#0b0810]/88 px-6 text-center backdrop-blur-sm"
+          className="pointer-events-auto fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-background/88 px-6 text-center backdrop-blur-sm"
           role="status"
           aria-live="polite"
           aria-busy="true"
         >
           <Loader2 className="h-8 w-8 shrink-0 animate-spin text-lime-400" aria-hidden />
-          <p className="text-lg font-semibold tracking-tight text-[#f3f8ff]">Switching league…</p>
-          <p className="max-w-sm text-sm leading-snug text-zinc-400">
+          <p className="text-lg font-semibold tracking-tight text-foreground">Switching league…</p>
+          <p className="max-w-sm text-sm leading-snug text-muted-foreground">
             Loading the selected league context.
           </p>
         </div>
