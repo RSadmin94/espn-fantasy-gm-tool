@@ -9671,11 +9671,22 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
           const focusedProfiles = dnaProfiles.filter(p =>
             teamAMemberIds.includes(p.memberId) || teamBMemberIds.includes(p.memberId)
           );
-          // NOTE: championships intentionally NOT sourced here. buildManagerRawData hardcodes
-          // seasonRecords.isChampion = false, so counting it returns 0 for everyone and renders
-          // a FALSE "No titles yet" for known champions. Pedigree stays suppressed (championships
-          // omitted → undefined → empty line, hidden by the client) until the proper fix re-points
-          // it to computeAllTrophyHistory, the trusted source the Owner Profiles page uses.
+          // Pedigree from the TRUSTED championship source (computeAllTrophyHistory) — the same
+          // source Owner Profiles / Cast / Dashboard use. NOT seasonRecords.isChampion, which
+          // buildManagerRawData hardcodes to false (that rendered a false "No titles yet" for
+          // known champions). Keyed by memberId, matching the DNA profile's memberId.
+          const champByMember = new Map<string, number>();
+          let trophyOk = false;
+          try {
+            const { computeAllTrophyHistory } = await import("./championshipHistoryBuilder");
+            const trophyMap = await computeAllTrophyHistory(undefined, ctx.user?.id);
+            if (trophyMap.size > 0) {
+              trophyOk = true;
+              for (const [mid, rec] of trophyMap) champByMember.set(mid, rec.championships ?? 0);
+            }
+          } catch {
+            // trophy history unavailable — pedigree stays hidden (championships left undefined)
+          }
           const toProfile = (p: (typeof dnaProfiles)[number]) => ({
             avgTradesPerSeason: p.trade?.avgTradesPerSeason,
             tradeFrequency: p.trade?.tradeFrequency,
@@ -9684,7 +9695,9 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
             waiverAggression: p.waiver?.waiverAggression,
             draftStyleBadge: p.draft?.draftStyleBadge,
             round1Distribution: p.draft?.round1Distribution,
-            // championships omitted on purpose — see note above
+            // Trusted source only: present champions get their count, others "No titles yet";
+            // if trophy history failed to load, undefined → client hides the line.
+            championships: trophyOk ? (champByMember.get(p.memberId) ?? 0) : undefined,
           });
           for (const p of focusedProfiles) {
             if (teamAMemberIds.includes(p.memberId)) dnaLiteA = toProfile(p);
