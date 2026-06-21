@@ -1031,66 +1031,35 @@ export function computeOwnerProfileRecordBundle(args: {
   };
 }
 
-export async function buildOwnerProfilePayload(args: {
-  db: import("./db").AppDb;
-  ownerName: string;
-  profileOwnerKey: string;
-  /** Full league gmTeams rows — required for draft pick → ownerKey bridging (ownerId / name map). */
-  allLeagueGmRows?: GmTeamRow[];
-  teamRows: GmTeamRow[];
-  teamsBySeason: ReturnType<typeof buildTeamsBySeason>;
+/** A draft pick attributed to a specific owner, with DraftTruth classification. */
+export type OwnedDraftPick = {
+  playerName: string | null;
+  position: string | null;
+  roundId: number;
+  isKeeper: number;
+  season: number;
+  teamId: number;
+  draftedForAnalytics: boolean;
+  keeperSlot: boolean;
+  slotClass: (typeof SlotClass)[keyof typeof SlotClass];
+};
+
+/**
+ * Attribute league draft rows to a single owner (canonical-key bridged across seasons).
+ * Shared source of truth: used by both buildOwnerProfilePayload and the Trade Analyzer so
+ * neither maintains a parallel draft-attribution model.
+ */
+export function attributeOwnedPicks(args: {
   draftRows: DraftRowIn[];
-  medalRows: (typeof leagueMedals.$inferSelect)[];
-  allMatchupRows: MatchupRowIn[] | null;
-  recordBundle: OwnerProfileRecordBundle;
-  identityMerge?: OwnerIdentityMergeDiagnostics;
-  /** Pre-computed Activity DNA for this owner (snapshot narrative); null when unavailable. */
-  activityDna?: ActivityDnaResult | null;
-}): Promise<OwnerProfilePayload> {
-  const {
-    ownerName,
-    profileOwnerKey,
-    allLeagueGmRows,
-    teamRows,
-    teamsBySeason,
-    draftRows,
-    allMatchupRows,
-    recordBundle,
-    identityMerge: identityMergeIn,
-    activityDna,
-  } = args;
-  const snapR = recordBundle.snapshotFromRecords;
-
-  const leagueCanonRows = allLeagueGmRows?.length ? allLeagueGmRows : teamRows;
-  const nameToOwnerIdFull = buildNameToOwnerId(leagueCanonRows);
-  const keyRemapFull = buildRawKeyToCanonicalProfileKey(leagueCanonRows);
-
-  const ownerTeamIds = teamRows.map((t) => t.teamId).filter((id): id is number => id > 0);
-  const l1 = recordBundle.l1TeamOwnerDisplay;
-  const profilePersonKey = personMergeKey(cleanOwnerDisplay(ownerName) || ownerName);
-
-  const mergedOwnerAliases = [
-    ...new Set(teamRows.map((t) => (t.ownerName || "").trim()).filter(Boolean)),
-  ].sort((a, b) => a.localeCompare(b));
-  const mergedTeamNames = [...new Set(teamRows.map((t) => (t.name || "").trim()).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b),
-  );
-  const totalResolvedMatchups = snapR.seasonRecords.reduce((s, r) => s + (r.matchupGames || 0), 0);
-
+  teamsBySeason: ReturnType<typeof buildTeamsBySeason>;
+  profileOwnerKey: string;
+  allLeagueGmRows: GmTeamRow[];
+}): { ownedPicks: OwnedDraftPick[]; unresolvedTeamNames: string[] } {
+  const { draftRows, teamsBySeason, profileOwnerKey, allLeagueGmRows } = args;
+  const nameToOwnerIdFull = buildNameToOwnerId(allLeagueGmRows);
+  const keyRemapFull = buildRawKeyToCanonicalProfileKey(allLeagueGmRows);
   const unresolvedDiag = new Set<string>();
-  const ownedPicks: Array<{
-    playerName: string | null;
-    position: string | null;
-    roundId: number;
-    isKeeper: number;
-    season: number;
-    teamId: number;
-    /** Phase 3: open-draft rows only (classifier `draftedForAnalytics`). */
-    draftedForAnalytics: boolean;
-    /** Phase 3: keeper or retained slot (non–open-draft when classified). */
-    keeperSlot: boolean;
-    slotClass: (typeof SlotClass)[keyof typeof SlotClass];
-  }> = [];
+  const ownedPicks: OwnedDraftPick[] = [];
   for (const row of draftRows) {
     const teamNameFromPick = parseDraftPickTeamNameFromRawPick(row.rawPick);
     const res = resolveDraftPickOwner(
@@ -1135,6 +1104,128 @@ export async function buildOwnerProfilePayload(args: {
       });
     }
   }
+  return { ownedPicks, unresolvedTeamNames: [...unresolvedDiag] };
+}
+
+/**
+ * Compute draft-DNA aggregates (position share, early-round lean, by-round history, style badge)
+ * from an owner's attributed picks. Shared source of truth for Owner Profiles and Trade Analyzer.
+ */
+export function computeDraftDnaFromOwnedPicks(ownedPicks: OwnedDraftPick[]): {
+  totalPicks: number;
+  posShare: Record<string, number>;
+  earlyPos: Record<string, number>;
+  avgRoundByPos: Record<string, number>;
+  mostDraftedPos: string[];
+  byRound: Array<{ round: number; seasons: number; topPosition: string; topCount: number; posCounts: Record<string, number>; picks: Array<{ season: number; position: string; playerName: string; isKeeper: boolean }> }>;
+  draftStyleBadge: string;
+} {
+  const draftDnaPicks = ownedPicks.filter((p) => p.draftedForAnalytics);
+  const totalPicks = draftDnaPicks.length;
+  const posDist: Record<string, number> = {};
+  const earlyPos: Record<string, number> = {};
+  const posRoundSum: Record<string, number> = {};
+  const posRoundCount: Record<string, number> = {};
+  for (const p of draftDnaPicks) {
+    const pos = p.position || "UNK";
+    posDist[pos] = (posDist[pos] ?? 0) + 1;
+    if (p.roundId <= 3) earlyPos[pos] = (earlyPos[pos] ?? 0) + 1;
+    posRoundSum[pos] = (posRoundSum[pos] ?? 0) + p.roundId;
+    posRoundCount[pos] = (posRoundCount[pos] ?? 0) + 1;
+  }
+  const posShare: Record<string, number> = {};
+  for (const [pos, cnt] of Object.entries(posDist)) {
+    posShare[pos] = totalPicks > 0 ? Number(((cnt / totalPicks) * 100).toFixed(1)) : 0;
+  }
+  const avgRoundByPos: Record<string, number> = {};
+  for (const [pos, sum] of Object.entries(posRoundSum)) {
+    avgRoundByPos[pos] = Number((sum / posRoundCount[pos]!).toFixed(1));
+  }
+  const mostDraftedPos = Object.entries(posDist)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([pos]) => pos);
+  const byRoundMap = new Map<number, Array<{ season: number; position: string; playerName: string; isKeeper: boolean }>>();
+  for (const p of draftDnaPicks) {
+    const r = Number(p.roundId) || 0;
+    if (r <= 0) continue;
+    if (!byRoundMap.has(r)) byRoundMap.set(r, []);
+    byRoundMap.get(r)!.push({
+      season: p.season,
+      position: p.position || "UNK",
+      playerName: p.playerName || "",
+      isKeeper: false,
+    });
+  }
+  const byRound = [...byRoundMap.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([round, picks]) => {
+      const sorted = [...picks].sort((a, b) => b.season - a.season);
+      const posCounts: Record<string, number> = {};
+      for (const pk of sorted) posCounts[pk.position] = (posCounts[pk.position] ?? 0) + 1;
+      const top = Object.entries(posCounts).sort((a, b) => b[1] - a[1])[0];
+      return { round, seasons: sorted.length, topPosition: top?.[0] ?? "UNK", topCount: top?.[1] ?? 0, posCounts, picks: sorted };
+    });
+  const draftStyleBadge =
+    (earlyPos["RB"] ?? 0) > (earlyPos["WR"] ?? 0)
+      ? "RB-heavy early drafter"
+      : (earlyPos["WR"] ?? 0) > (earlyPos["RB"] ?? 0)
+        ? "WR-heavy early drafter"
+        : "balanced early-round approach";
+  return { totalPicks, posShare, earlyPos, avgRoundByPos, mostDraftedPos, byRound, draftStyleBadge };
+}
+
+export async function buildOwnerProfilePayload(args: {
+  db: import("./db").AppDb;
+  ownerName: string;
+  profileOwnerKey: string;
+  /** Full league gmTeams rows — required for draft pick → ownerKey bridging (ownerId / name map). */
+  allLeagueGmRows?: GmTeamRow[];
+  teamRows: GmTeamRow[];
+  teamsBySeason: ReturnType<typeof buildTeamsBySeason>;
+  draftRows: DraftRowIn[];
+  medalRows: (typeof leagueMedals.$inferSelect)[];
+  allMatchupRows: MatchupRowIn[] | null;
+  recordBundle: OwnerProfileRecordBundle;
+  identityMerge?: OwnerIdentityMergeDiagnostics;
+  /** Pre-computed Activity DNA for this owner (snapshot narrative); null when unavailable. */
+  activityDna?: ActivityDnaResult | null;
+}): Promise<OwnerProfilePayload> {
+  const {
+    ownerName,
+    profileOwnerKey,
+    allLeagueGmRows,
+    teamRows,
+    teamsBySeason,
+    draftRows,
+    allMatchupRows,
+    recordBundle,
+    identityMerge: identityMergeIn,
+    activityDna,
+  } = args;
+  const snapR = recordBundle.snapshotFromRecords;
+
+  const leagueCanonRows = allLeagueGmRows?.length ? allLeagueGmRows : teamRows;
+
+  const ownerTeamIds = teamRows.map((t) => t.teamId).filter((id): id is number => id > 0);
+  const l1 = recordBundle.l1TeamOwnerDisplay;
+  const profilePersonKey = personMergeKey(cleanOwnerDisplay(ownerName) || ownerName);
+
+  const mergedOwnerAliases = [
+    ...new Set(teamRows.map((t) => (t.ownerName || "").trim()).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b));
+  const mergedTeamNames = [...new Set(teamRows.map((t) => (t.name || "").trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+  const totalResolvedMatchups = snapR.seasonRecords.reduce((s, r) => s + (r.matchupGames || 0), 0);
+
+  const { ownedPicks, unresolvedTeamNames } = attributeOwnedPicks({
+    draftRows,
+    teamsBySeason,
+    profileOwnerKey,
+    allLeagueGmRows: leagueCanonRows,
+  });
+  const unresolvedDiag = new Set<string>(unresolvedTeamNames);
 
   const unresolvedTeamNamesSorted = [...unresolvedDiag].sort((a, b) => a.localeCompare(b));
   const unresolvedRecordCount =
@@ -1163,51 +1254,8 @@ export async function buildOwnerProfilePayload(args: {
   const keeperSlotCount = keeperSlotPicks.length;
   const retainedSlotCount = ownedPicks.filter((p) => p.slotClass === SlotClass.RETAINED).length;
 
-  const posDist: Record<string, number> = {};
-  const earlyPos: Record<string, number> = {};
-  const posRoundSum: Record<string, number> = {};
-  const posRoundCount: Record<string, number> = {};
-  for (const p of draftDnaPicks) {
-    const pos = p.position || "UNK";
-    posDist[pos] = (posDist[pos] ?? 0) + 1;
-    if (p.roundId <= 3) earlyPos[pos] = (earlyPos[pos] ?? 0) + 1;
-    posRoundSum[pos] = (posRoundSum[pos] ?? 0) + p.roundId;
-    posRoundCount[pos] = (posRoundCount[pos] ?? 0) + 1;
-  }
-  const posShare: Record<string, number> = {};
-  for (const [pos, cnt] of Object.entries(posDist)) {
-    posShare[pos] = totalPicks > 0 ? Number(((cnt / totalPicks) * 100).toFixed(1)) : 0;
-  }
-  const avgRoundByPos: Record<string, number> = {};
-  for (const [pos, sum] of Object.entries(posRoundSum)) {
-    avgRoundByPos[pos] = Number((sum / posRoundCount[pos]!).toFixed(1));
-  }
-  const mostDraftedPos = Object.entries(posDist)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([pos]) => pos);
-
-  const byRoundMap = new Map<number, Array<{ season: number; position: string; playerName: string; isKeeper: boolean }>>();
-  for (const p of draftDnaPicks) {
-    const r = Number(p.roundId) || 0;
-    if (r <= 0) continue;
-    if (!byRoundMap.has(r)) byRoundMap.set(r, []);
-    byRoundMap.get(r)!.push({
-      season: p.season,
-      position: p.position || "UNK",
-      playerName: p.playerName || "",
-      isKeeper: false,
-    });
-  }
-  const byRound = [...byRoundMap.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([round, picks]) => {
-      const sorted = [...picks].sort((a, b) => b.season - a.season);
-      const posCounts: Record<string, number> = {};
-      for (const pk of sorted) posCounts[pk.position] = (posCounts[pk.position] ?? 0) + 1;
-      const top = Object.entries(posCounts).sort((a, b) => b[1] - a[1])[0];
-      return { round, seasons: sorted.length, topPosition: top?.[0] ?? "UNK", topCount: top?.[1] ?? 0, posCounts, picks: sorted };
-    });
+  const draftDnaComputed = computeDraftDnaFromOwnedPicks(ownedPicks);
+  const { posShare, earlyPos, avgRoundByPos, mostDraftedPos, byRound } = draftDnaComputed;
 
   const strictKeeperCount = ownedPicks.filter((p) => p.slotClass === SlotClass.KEEPER).length;
   const totalKeepers = keeperSlotCount;
@@ -1303,12 +1351,7 @@ export async function buildOwnerProfilePayload(args: {
         : avgTxnPerSeason > 0
           ? "low transaction volume — set-and-forget style"
           : "transaction data not available";
-  const draftStyle =
-    (earlyPos["RB"] ?? 0) > (earlyPos["WR"] ?? 0)
-      ? "RB-heavy early drafter"
-      : (earlyPos["WR"] ?? 0) > (earlyPos["RB"] ?? 0)
-        ? "WR-heavy early drafter"
-        : "balanced early-round approach";
+  const draftStyle = draftDnaComputed.draftStyleBadge;
 
   const tw = snapR.totalWins;
   const tl = snapR.totalLosses;
