@@ -103,6 +103,7 @@ interface ChampWindow {
   classification: string;
   reasons: string[];
   basis: string;
+  preseason: boolean;
 }
 interface FitScore {
   grade: string;
@@ -193,13 +194,16 @@ function SectionLabel({ icon, children, note }: { icon: React.ReactNode; childre
 }
 
 function OwnerIntelCard({ intel, teamName }: { intel: OwnerIntel; teamName: string }) {
-  const rows: [string, React.ReactNode][] = [
-    ["Completed trades", intel.completedTrades],
-    ["Avg / season", intel.avgTradesPerSeason],
-    ["Most acquired", intel.mostAcquiredPos ?? "—"],
-    ["Most traded away", intel.mostTradedAwayPos ?? "—"],
-    ["Trade aggression", intel.tradeAggression],
-  ];
+  // Only surface header stats that carry signal. With no completed trades, "Avg / season" is a
+  // redundant 0 and "Most acquired / traded away" are empty em-dashes — drop them rather than
+  // print dead rows. Completed trades and Trade aggression always render.
+  const rows: [string, React.ReactNode][] = [["Completed trades", intel.completedTrades]];
+  if (intel.completedTrades > 0) {
+    rows.push(["Avg / season", intel.avgTradesPerSeason]);
+    if (intel.mostAcquiredPos) rows.push(["Most acquired", intel.mostAcquiredPos]);
+    if (intel.mostTradedAwayPos) rows.push(["Most traded away", intel.mostTradedAwayPos]);
+  }
+  rows.push(["Trade aggression", intel.tradeAggression]);
   return (
     <Card className="border-border/60">
       <CardContent className="py-3 px-4 space-y-2">
@@ -239,7 +243,8 @@ function TradeIntelSections({ ti, teamAName, teamBName }: { ti: TradeIntelligenc
         </div>
       </div>
 
-      {/* 4. Rivalry & Trade History */}
+      {/* 4. Rivalry & Trade History — hidden when the pair has never traded (was an empty "never traded" stub). */}
+      {ti.rivalry.completedTrades > 0 && (
       <div>
         <SectionLabel icon={<Swords className="h-3.5 w-3.5" />}>Rivalry &amp; Trade History</SectionLabel>
         <Card className="border-border/60">
@@ -260,8 +265,10 @@ function TradeIntelSections({ ti, teamAName, teamBName }: { ti: TradeIntelligenc
           </CardContent>
         </Card>
       </div>
+      )}
 
-      {/* 5. Championship Window */}
+      {/* 5. Championship Window — hidden in preseason, when every team defaults to the same roster-value bucket. */}
+      {!(win.teamA.preseason && win.teamB.preseason) && (
       <div>
         <SectionLabel icon={<Trophy className="h-3.5 w-3.5" />}>Championship Window</SectionLabel>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -281,6 +288,7 @@ function TradeIntelSections({ ti, teamAName, teamBName }: { ti: TradeIntelligenc
           ))}
         </div>
       </div>
+      )}
 
       {/* 6. Trade Fit Score */}
       <div>

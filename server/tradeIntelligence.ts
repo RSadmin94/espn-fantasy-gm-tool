@@ -215,12 +215,24 @@ export function computeOwnerIntelligence(
 
   let draftTendency = dna?.draftStyleBadge?.trim() || "Draft history not available";
   if (dna?.round1Distribution) {
-    const entries = Object.entries(dna.round1Distribution).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]);
+    const dist = dna.round1Distribution;
+    const entries = Object.entries(dist).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]);
     const total = entries.reduce((s, [, c]) => s + c, 0);
+    const badge = dna?.draftStyleBadge?.trim();
     if (entries.length > 0 && total > 0) {
-      const [pos, cnt] = entries[0];
-      const badge = dna?.draftStyleBadge?.trim();
-      draftTendency = `${badge ? `${badge} — ` : ""}${pos} in ${cnt}/${total} R1s (${Math.round((cnt / total) * 100)}%)`;
+      // Anchor the R1 figure to the position the badge names, so the badge and the detail can
+      // never contradict. The badge is a rounds-1–3 lean; the figure was previously the single
+      // most-common R1 position, which could differ (e.g. "WR-heavy early drafter — RB in 9/17
+      // R1s"). Now a WR-heavy badge shows WR's R1 share, an RB-heavy badge shows RB's.
+      const badgePos = badge?.startsWith("RB") ? "RB" : badge?.startsWith("WR") ? "WR" : null;
+      if (badgePos && (dist[badgePos] ?? 0) > 0) {
+        const cnt = dist[badgePos]!;
+        draftTendency = `${badge} — ${badgePos} in ${cnt}/${total} R1s (${Math.round((cnt / total) * 100)}%)`;
+      } else if (!badgePos) {
+        const [pos, cnt] = entries[0];
+        draftTendency = `${badge ? `${badge} — ` : ""}${pos} in ${cnt}/${total} R1s (${Math.round((cnt / total) * 100)}%)`;
+      }
+      // else: badge names a position with no R1 picks → keep the badge alone, no contradicting figure.
     }
   }
 
@@ -300,6 +312,9 @@ export interface ChampionshipWindow {
   classification: "Contender" | "Playoff Team" | "Bubble Team" | "Retooling" | "Rebuilding";
   reasons: string[];
   basis: string;
+  /** True only in a genuine preseason (no team in the season has played). The Trade Analyzer
+   *  hides this section when preseason, since every team defaults to a roster-value classification. */
+  preseason: boolean;
 }
 
 const WINDOW_BASIS = "Estimated from current record and roster-value percentile.";
@@ -330,7 +345,7 @@ export function computeChampionshipWindow(args: {
     );
     reasons.push(`Roster value is in the ${pctLabel(rosterValueRankPct)} of the league.`);
     const cls: ChampionshipWindow["classification"] = topRoster ? "Contender" : rosterValueRankPct >= 0.4 ? "Playoff Team" : "Retooling";
-    return { classification: cls, reasons, basis: WINDOW_BASIS };
+    return { classification: cls, reasons, basis: WINDOW_BASIS, preseason: !seasonHasGames };
   }
 
   const games = wins + losses + ties;
@@ -347,7 +362,7 @@ export function computeChampionshipWindow(args: {
   else if (winPct >= 0.4) cls = "Bubble Team";
   else if (!bottomRoster) cls = "Retooling";
   else cls = "Rebuilding";
-  return { classification: cls, reasons, basis: WINDOW_BASIS };
+  return { classification: cls, reasons, basis: WINDOW_BASIS, preseason: false };
 }
 
 export type FitGrade = "A+" | "A" | "A-" | "B+" | "B" | "B-" | "C" | "D" | "F";
@@ -493,12 +508,13 @@ export function buildNegotiationAdvice(args: {
   windowA: ChampionshipWindow["classification"];
   ownerBMostAcquiredPos: string | null;
   gaveByA: string[];
+  preseasonA: boolean;
 }): string[] {
   const out: string[] = [];
   if (args.ratio <= 0.92) out.push("Value currently favors the other side — ask them to add a pick or depth piece before accepting.");
   const weakest = Object.entries(args.teamANeeds).sort((a, b) => a[1] - b[1])[0];
   if (weakest && !args.receivedByA.includes(weakest[0])) out.push(`You'd still be thin at ${weakest[0]} — consider targeting ${weakest[0]} depth instead or in addition.`);
-  if (args.windowA === "Rebuilding" || args.windowA === "Retooling") out.push("If you're not contending this year, prefer younger players or picks over win-now veterans.");
+  if (!args.preseasonA && (args.windowA === "Rebuilding" || args.windowA === "Retooling")) out.push("If you're not contending this year, prefer younger players or picks over win-now veterans.");
   if (args.ownerBMostAcquiredPos && args.gaveByA.includes(args.ownerBMostAcquiredPos)) out.push(`The other owner historically targets ${args.ownerBMostAcquiredPos} — you may have leverage to ask for more.`);
   if (out.length === 0) out.push("Terms look reasonable as-is based on value, roster needs, and both owners' history.");
   return out;
@@ -600,6 +616,7 @@ export async function buildTradeIntelligence(args: {
   const negotiationAdvice = buildNegotiationAdvice({
     ratio: gainRatioA, teamANeeds: args.needsA, receivedByA: args.receivedByA,
     windowA: winA.classification, ownerBMostAcquiredPos: oiB.mostAcquiredPos, gaveByA: args.gaveByA,
+    preseasonA: winA.preseason,
   });
 
   return {
