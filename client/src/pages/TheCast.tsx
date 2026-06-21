@@ -8,13 +8,13 @@ import { Crown, Loader2, Clapperboard, Share2 } from "lucide-react";
 const GOLD = "#f5c518";
 const LIME = "#a3e635";
 const VIOLET = "#c4b5fd";
-const MUTED = "#8b97a8";
-const LINE = "rgba(255,255,255,0.08)";
+const MUTED = "var(--color-muted-foreground)";
+const LINE = "color-mix(in oklch, var(--color-foreground) 8%, transparent)";
 
 const PAGEBG: CSSProperties = {
   background:
-    "radial-gradient(circle at 50% -8%,rgba(245,197,24,.10),transparent 45%),radial-gradient(circle at 85% 18%,rgba(139,92,246,.16),transparent 42%),linear-gradient(180deg,#0b0809,#060405)",
-  color: "#f3f8ff",
+    "radial-gradient(circle at 50% -8%,rgba(245,197,24,.10),transparent 45%),radial-gradient(circle at 85% 18%,rgba(139,92,246,.16),transparent 42%),var(--color-background)",
+  color: "var(--color-foreground)",
 };
 
 type Badge = { label: string; receipt: string; tier: string };
@@ -40,7 +40,7 @@ function YouTag() {
 function ChooseTeamCTA() {
   return (
     <div className="rounded-2xl p-5 text-center" style={{ background: "rgba(163,230,53,.06)", border: `1px solid ${LIME}44` }}>
-      <p className="text-sm font-black" style={{ color: "#f3f8ff" }}>Choose your team to pull your Cast card</p>
+      <p className="text-sm font-black" style={{ color: "var(--color-foreground)" }}>Choose your team to pull your Cast card</p>
       <p className="mx-auto mt-1 max-w-sm text-xs" style={{ color: MUTED }}>We don't know which team is yours in this league yet - pick it to unlock your own card and Receipt.</p>
       <a href="/settings" className="mt-4 inline-flex items-center justify-center gap-2 rounded-[12px] px-5 py-2.5 text-sm font-extrabold" style={{ background: LIME, color: "#0b0809" }}>Select your team</a>
     </div>
@@ -74,7 +74,7 @@ function Headliner({ m }: { m: CastMember }) {
         </>
       )}
       {fallback && <div className="mt-1 text-xs leading-snug" style={{ color: MUTED }}>{fallback.receipt}</div>}
-      <div className="mt-2 text-sm font-semibold" style={{ color: "#cfd2d8" }}>{m.archetype}{m.identityRank ? ` · #${m.identityRank.rank}/${m.identityRank.of}` : ""}</div>
+      <div className="mt-2 text-sm font-semibold" style={{ color: "color-mix(in oklch, var(--color-foreground) 80%, transparent)" }}>{m.archetype}{m.identityRank ? ` · #${m.identityRank.rank}/${m.identityRank.of}` : ""}</div>
     </div>
   );
 }
@@ -137,19 +137,19 @@ export function TheCast() {
         <div className="mx-auto max-w-xl px-5 py-12">
           <div className="text-center">
             <div className="text-[11px] font-bold uppercase tracking-[0.4em]" style={{ color: GOLD }}>Fantasy Football Rivals</div>
-            <h2 className="mt-3 text-lg font-bold tracking-wide" style={{ color: "#cfd2d8" }}>{activeName}</h2>
+            <h2 className="mt-3 text-lg font-bold tracking-wide" style={{ color: "color-mix(in oklch, var(--color-foreground) 80%, transparent)" }}>{activeName}</h2>
             <h1 className="mt-1 text-5xl font-black tracking-tight md:text-7xl" style={{ textShadow: "0 2px 30px rgba(245,197,24,.25)" }}>THE CAST</h1>
             <div className="mt-3 text-xs uppercase tracking-[0.3em]" style={{ color: MUTED }}>Active league</div>
           </div>
           <div className="mt-8"><ChooseTeamCTA /></div>
           {setupLeagues.length > 0 && (
-            <div className="mt-6 rounded-2xl p-5" style={{ background: "rgba(255,255,255,.03)", border: `1px solid ${LINE}` }}>
-              <p className="text-sm font-black" style={{ color: "#f3f8ff" }}>Or jump to a league you've already set up</p>
+            <div className="mt-6 rounded-2xl p-5" style={{ background: "color-mix(in oklch, var(--color-foreground) 3%, transparent)", border: `1px solid ${LINE}` }}>
+              <p className="text-sm font-black" style={{ color: "var(--color-foreground)" }}>Or jump to a league you've already set up</p>
               <div className="mt-3 space-y-2">
                 {setupLeagues.map((l: any) => (
                   <button key={l.id} onClick={() => switchLeague.mutate({ leagueConnectionId: l.id })} disabled={switchLeague.isPending}
                     className="flex w-full items-center justify-between rounded-[10px] px-4 py-2.5 text-left text-sm font-bold transition hover:brightness-110 disabled:opacity-60"
-                    style={{ background: "rgba(163,230,53,.08)", border: `1px solid ${LIME}44`, color: "#f3f8ff" }}>
+                    style={{ background: "rgba(163,230,53,.08)", border: `1px solid ${LIME}44`, color: "var(--color-foreground)" }}>
                     <span>{l.leagueName}{l.selectedOwnerName ? ` - ${l.selectedOwnerName}` : ""}</span>
                     <span style={{ color: LIME }}>{switchLeague.isPending ? "Switching..." : "Switch >"}</span>
                   </button>
@@ -188,7 +188,7 @@ export function TheCast() {
       <div className="mx-auto max-w-4xl px-5 py-10">
         <div className="text-center">
           <div className="text-[11px] font-bold uppercase tracking-[0.4em]" style={{ color: GOLD }}>Fantasy Football Rivals</div>
-          <h2 className="mt-3 text-xl font-bold tracking-wide" style={{ color: "#cfd2d8" }}>{data.leagueName}</h2>
+          <h2 className="mt-3 text-xl font-bold tracking-wide" style={{ color: "color-mix(in oklch, var(--color-foreground) 80%, transparent)" }}>{data.leagueName}</h2>
           <h1 className="mt-1 text-6xl font-black tracking-tight md:text-8xl" style={{ textShadow: "0 2px 30px rgba(245,197,24,.25)" }}>THE CAST</h1>
           <div className="mt-3 text-xs uppercase tracking-[0.3em]" style={{ color: MUTED }}>{data.season} Season &middot; {data.cast.length} Managers</div>
           <button onClick={shareMyReceipt} disabled={createReceipt.isPending} className="mt-5 inline-flex items-center gap-2 rounded-[10px] px-5 py-2.5 text-sm font-extrabold transition hover:brightness-110 disabled:opacity-60" style={{ background: GOLD, color: "#0b0809" }}>

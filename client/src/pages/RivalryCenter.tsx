@@ -25,17 +25,17 @@ import {
 } from "lucide-react";
 
 // ── theme (matches Command Dashboard: dark slate panels, teal accent) ────────
-const INK = "#140e17";
+const INK = "var(--color-card)";
 const PAGEBG: React.CSSProperties = {
   background:
-    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0e0a10,#080609)",
-  color: "#f3f8ff",
+    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),var(--color-background)",
+  color: "var(--color-foreground)",
 };
-const PAPER = "linear-gradient(180deg,#1b131f,#140e17)";
-const PAPER2 = "#1b131f";
-const LINE = "rgba(255,255,255,0.07)";
-const TEXT = "#f3f8ff";
-const MUTED = "#8b97a8";
+const PAPER = "var(--color-card)";
+const PAPER2 = "var(--color-card)";
+const LINE = "color-mix(in oklch, var(--color-foreground) 7%, transparent)";
+const TEXT = "var(--color-foreground)";
+const MUTED = "var(--color-muted-foreground)";
 const GOLD = "#f5c518";
 const ACCENT = "#a3e635";
 const GREEN = "#a3e635";
@@ -44,7 +44,7 @@ const ORANGE = "#f7902f";
 const BLUE = "#8b5cf6";
 const CRIMSON = "#e23b3b";
 const PANEL: React.CSSProperties = { background: PAPER, border: `1px solid ${LINE}`, borderRadius: 15 };
-const SUB: React.CSSProperties = { background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 10 };
+const SUB: React.CSSProperties = { background: "color-mix(in oklch, var(--color-foreground) 3%, transparent)", border: "1px solid color-mix(in oklch, var(--color-foreground) 6%, transparent)", borderRadius: 10 };
 
 const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell", "rod s"];
 
@@ -91,7 +91,7 @@ function Pill({ children, gold }: { children: React.ReactNode; gold?: boolean })
       style={
         gold
           ? { color: GOLD, border: "1px solid rgba(245,198,90,.46)", background: "rgba(245,198,90,.10)" }
-          : { border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: TEXT }
+          : { border: `1px solid ${LINE}`, background: "color-mix(in oklch, var(--color-foreground) 4%, transparent)", color: TEXT }
       }
     >
       {children}
@@ -408,7 +408,7 @@ export function RivalryCenter() {
             onClick={() => refreshScores.mutate()}
             disabled={refreshScores.isPending}
             className="px-3 py-2.5 rounded-[10px] text-[13px] font-extrabold inline-flex items-center gap-2"
-            style={{ border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: MUTED }}
+            style={{ border: `1px solid ${LINE}`, background: "color-mix(in oklch, var(--color-foreground) 4%, transparent)", color: MUTED }}
           >
             <RefreshCw className="h-3.5 w-3.5" /> {refreshScores.isPending ? "Generating…" : "Refresh"}
           </button>
@@ -482,7 +482,7 @@ export function RivalryCenter() {
                       </span>
                     )}
                     {hero.loreSentence && (
-                      <p className="mt-3 max-w-xl text-[15px] leading-relaxed" style={{ color: "#cfd2d8" }}>
+                      <p className="mt-3 max-w-xl text-[15px] leading-relaxed" style={{ color: "color-mix(in oklch, var(--color-foreground) 80%, transparent)" }}>
                         {hero.loreSentence}
                       </p>
                     )}
@@ -503,7 +503,7 @@ export function RivalryCenter() {
                           <div className="text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>Why this is your hottest rivalry</div>
                           <ul className="mt-2 space-y-1">
                             {why.map((line) => (
-                              <li key={line} className="flex items-start gap-2 text-[14px]" style={{ color: "#cfd2d8" }}>
+                              <li key={line} className="flex items-start gap-2 text-[14px]" style={{ color: "color-mix(in oklch, var(--color-foreground) 80%, transparent)" }}>
                                 <span className="mt-[7px] inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: ACCENT }} />
                                 <span>{line}</span>
                               </li>
@@ -523,7 +523,7 @@ export function RivalryCenter() {
                       <a
                         href="#receipts"
                         className="inline-flex items-center gap-2 rounded-[10px] px-4 py-2.5 text-sm font-extrabold"
-                        style={{ border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: TEXT }}
+                        style={{ border: `1px solid ${LINE}`, background: "color-mix(in oklch, var(--color-foreground) 4%, transparent)", color: TEXT }}
                       >
                         View Receipts
                       </a>
@@ -590,7 +590,7 @@ export function RivalryCenter() {
                         key={lp.key}
                         onClick={() => openLeague(lp)}
                         style={SUB}
-                        className="group flex w-full items-center gap-4 p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-white/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#140e17]"
+                        className="group flex w-full items-center gap-4 p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       >
                         <div className="w-9 shrink-0 text-center text-2xl font-black" style={{ color: i === 0 ? GOLD : MUTED }}>{i + 1}</div>
                         <div className="h-10 w-1 shrink-0 rounded-full" style={{ background: h.c }} />
@@ -642,7 +642,7 @@ export function RivalryCenter() {
                       key={`${p.rivalId ?? p.rivalName ?? i}`}
                       onClick={() => openDossier(p)}
                       style={SUB}
-                      className="group flex w-full items-center gap-4 p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-white/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#140e17]"
+                      className="group flex w-full items-center gap-4 p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     >
                       <div className="w-9 shrink-0 text-center text-2xl font-black" style={{ color: i === 0 ? GOLD : MUTED }}>{i + 1}</div>
                       <div className="h-10 w-1 shrink-0 rounded-full" style={{ background: h.c }} />
@@ -690,7 +690,7 @@ export function RivalryCenter() {
                       key={i}
                       onClick={() => setOpen({ focalKey: m.aKey, focalName: m.a, rivalKey: m.bKey, rivalName: m.b })}
                       style={SUB}
-                      className="p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-white/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#140e17]"
+                      className="p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     >
                       <div className="text-[11px] font-bold uppercase tracking-[0.25em]" style={{ color: GOLD }}>{m.title}</div>
                       <div className="mt-1 text-lg font-black leading-tight">{m.a} <span style={{ color: MUTED }}>vs</span> {m.b}</div>
@@ -724,10 +724,10 @@ export function RivalryCenter() {
                             <td className="sticky left-0 z-10 whitespace-nowrap px-2 py-1.5 text-left font-bold" style={{ background: PAPER2, color: TEXT }}>{rw.name}</td>
                             {gridOwners.map((c) => {
                               if (c.key === rw.key)
-                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "#3a3d44" }}>—</td>;
+                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "var(--color-muted-foreground)" }}>—</td>;
                               const rec = recordMap[rw.key]?.[c.key];
                               if (!rec || rec.w + rec.l + rec.t === 0)
-                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "#3a3d44" }}>·</td>;
+                                return <td key={c.key} className="px-2 py-1.5" style={{ color: "var(--color-muted-foreground)" }}>·</td>;
                               const win = rec.w > rec.l;
                               const lose = rec.l > rec.w;
                               return (
@@ -762,7 +762,7 @@ export function RivalryCenter() {
                       key={nm.key}
                       onClick={() => setOpen({ focalKey: nm.key, focalName: nm.name, rivalKey: nm.rivalKey, rivalName: nm.rivalName })}
                       style={SUB}
-                      className="flex items-center justify-between p-3 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-white/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#140e17]"
+                      className="flex items-center justify-between p-3 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     >
                       <div className="min-w-0">
                         <div className="truncate font-bold">{nm.name}</div>
@@ -838,7 +838,7 @@ export function RivalryCenter() {
                   return (
                     <div className="mt-4 space-y-2">
                       {rev.map((p, i) => (
-                        <button key={i} onClick={() => openDossier(p)} style={SUB} className="flex w-full items-center justify-between p-3 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-white/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#140e17]">
+                        <button key={i} onClick={() => openDossier(p)} style={SUB} className="flex w-full items-center justify-between p-3 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                           <div>
                             <div className="font-bold">{String(p.rivalName)}</div>
                             <div className="text-xs" style={{ color: MUTED }}>Eliminated {rodName} {n(p.playoffEliminations)}× · revenge pending</div>

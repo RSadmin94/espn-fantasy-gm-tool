@@ -15,26 +15,26 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { AlertCircle, Loader2, RefreshCw, Trophy } from "lucide-react";
 
 // ── theme (matches Command Dashboard) ───────────────────────────────────────
-const TEXT = "#f3f8ff",
-  MUTED = "#8b97a8",
+const TEXT = "var(--color-foreground)",
+  MUTED = "var(--color-muted-foreground)",
   GOLD = "#f5c518",
   ACCENT = "#a3e635",
   RED = "#ef4444",
-  LINE = "rgba(255,255,255,.07)";
-const HEAD = "#160f1a";
+  LINE = "color-mix(in oklch, var(--color-foreground) 7%, transparent)";
+const HEAD = "var(--color-card)";
 const PAGEBG: React.CSSProperties = {
   background:
-    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0e0a10,#080609)",
+    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),var(--color-background)",
   color: TEXT,
 };
 const PANEL: React.CSSProperties = {
-  background: "linear-gradient(180deg,#1b131f,#140e17)",
+  background: "var(--color-card)",
   border: `1px solid ${LINE}`,
   borderRadius: 15,
 };
 const SUB: React.CSSProperties = {
-  background: "rgba(255,255,255,.03)",
-  border: "1px solid rgba(255,255,255,.06)",
+  background: "color-mix(in oklch, var(--color-foreground) 3%, transparent)",
+  border: "1px solid color-mix(in oklch, var(--color-foreground) 6%, transparent)",
   borderRadius: 10,
 };
 
@@ -45,7 +45,7 @@ function Pill({ children, gold }: { children: React.ReactNode; gold?: boolean })
       style={
         gold
           ? { color: GOLD, border: "1px solid rgba(245,198,90,.46)", background: "rgba(245,198,90,.10)" }
-          : { border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: TEXT }
+          : { border: `1px solid ${LINE}`, background: "color-mix(in oklch, var(--color-foreground) 4%, transparent)", color: TEXT }
       }
     >
       {children}
@@ -279,7 +279,7 @@ export function Standings() {
               void txsQ.refetch();
             }}
             className="px-3 py-2.5 rounded-[10px] text-[13px] font-extrabold inline-flex items-center gap-2 disabled:opacity-60"
-            style={{ border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: MUTED }}
+            style={{ border: `1px solid ${LINE}`, background: "color-mix(in oklch, var(--color-foreground) 4%, transparent)", color: MUTED }}
           >
             {standingsQ.isFetching || txsQ.isFetching ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -376,7 +376,7 @@ export function Standings() {
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[860px] border-collapse text-sm">
               <thead>
-                <tr style={{ borderBottom: "1px solid rgba(255,255,255,.08)" }}>
+                <tr style={{ borderBottom: "1px solid color-mix(in oklch, var(--color-foreground) 8%, transparent)" }}>
                   <th className="sticky left-0 z-10 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ background: HEAD, color: MUTED }}>
                     RK
                   </th>
@@ -430,8 +430,8 @@ export function Standings() {
                   return (
                     <tr
                       key={team.teamId}
-                      className="transition-colors hover:bg-white/[0.03]"
-                      style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}
+                      className="transition-colors hover:bg-foreground/[0.03]"
+                      style={{ borderTop: "1px solid color-mix(in oklch, var(--color-foreground) 6%, transparent)" }}
                     >
                       <td
                         className="sticky left-0 z-10 px-2 py-2.5 text-sm font-black tabular-nums"
@@ -443,7 +443,7 @@ export function Standings() {
                         <div className="flex items-center gap-2.5">
                           <div
                             className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md"
-                            style={{ border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.04)" }}
+                            style={{ border: "1px solid color-mix(in oklch, var(--color-foreground) 10%, transparent)", background: "color-mix(in oklch, var(--color-foreground) 4%, transparent)" }}
                           >
                             {logo ? (
                               <img src={logo} alt="" className="h-full w-full object-cover" loading="lazy" />

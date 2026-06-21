@@ -26,26 +26,32 @@ import {
   Info,
 } from "lucide-react";
 
-// ── theme (matches Command Dashboard) ───────────────────────────────────────
-const TEXT = "#f3f8ff",
-  MUTED = "#8b97a8",
+// ── theme tokens ─────────────────────────────────────────────────────────────
+// Colors route through the design-system CSS variables (index.css @theme +
+// [data-theme="light"] overrides) so every surface and text color flips with
+// light/dark mode. Faint dividers/overlays use a foreground color-mix —
+// ~white-on-dark, ~black-on-light — preserving the dark look while staying
+// readable in light mode. Brand/status hues (GOLD/ACCENT/RED, badges) are
+// intentional emphasis and handled per-component, not here.
+const TEXT = "var(--color-foreground)",
+  MUTED = "var(--color-muted-foreground)",
   GOLD = "#f5c518",
   ACCENT = "#a3e635",
   RED = "#ef4444",
-  LINE = "rgba(255,255,255,.07)";
+  LINE = "color-mix(in oklch, var(--color-foreground) 7%, transparent)";
 const PAGEBG: React.CSSProperties = {
   background:
-    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0e0a10,#080609)",
-  color: TEXT,
+    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),var(--color-background)",
+  color: "var(--color-foreground)",
 };
 const PANEL: React.CSSProperties = {
-  background: "linear-gradient(180deg,#1b131f,#140e17)",
+  background: "var(--color-card)",
   border: `1px solid ${LINE}`,
   borderRadius: 15,
 };
 const SUB: React.CSSProperties = {
-  background: "rgba(255,255,255,.03)",
-  border: "1px solid rgba(255,255,255,.06)",
+  background: "color-mix(in oklch, var(--color-foreground) 3%, transparent)",
+  border: "1px solid color-mix(in oklch, var(--color-foreground) 6%, transparent)",
   borderRadius: 10,
 };
 
@@ -56,7 +62,7 @@ function Pill({ children, gold }: { children: React.ReactNode; gold?: boolean })
       style={
         gold
           ? { color: GOLD, border: "1px solid rgba(245,198,90,.46)", background: "rgba(245,198,90,.10)" }
-          : { border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: TEXT }
+          : { border: `1px solid ${LINE}`, background: "color-mix(in oklch, var(--color-foreground) 4%, transparent)", color: TEXT }
       }
     >
       {children}
@@ -276,7 +282,7 @@ function RosterTable({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr style={{ borderBottom: "1px solid rgba(255,255,255,.08)" }}>
+          <tr style={{ borderBottom: "1px solid color-mix(in oklch, var(--color-foreground) 8%, transparent)" }}>
             <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide w-20" style={{ color: MUTED }}>Slot</th>
             <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide" style={{ color: MUTED }}>Player</th>
             <th className="px-4 py-2.5 text-center text-[11px] font-medium uppercase tracking-wide w-12" style={{ color: MUTED }}>Pos</th>
@@ -308,8 +314,8 @@ function RosterTable({
               return (
                 <tr
                   key={`${slot}-${p.playerId}-${i}`}
-                  className="hover:bg-white/[0.03] transition-colors"
-                  style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}
+                  className="hover:bg-foreground/[0.03] transition-colors"
+                  style={{ borderTop: "1px solid color-mix(in oklch, var(--color-foreground) 6%, transparent)" }}
                 >
                   <td className="px-4 py-2.5">
                     {i === 0 ? <SlotBadge slot={slot} /> : null}
@@ -650,7 +656,7 @@ export function Roster() {
             disabled={rosterQ.isFetching || isNotCached}
             onClick={() => void rosterQ.refetch()}
             className="px-3 py-2.5 rounded-[10px] text-[13px] font-extrabold inline-flex items-center gap-2 disabled:opacity-60"
-            style={{ border: `1px solid ${LINE}`, background: "rgba(255,255,255,.04)", color: MUTED }}
+            style={{ border: `1px solid ${LINE}`, background: "color-mix(in oklch, var(--color-foreground) 4%, transparent)", color: MUTED }}
           >
             {rosterQ.isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             Refresh
@@ -811,7 +817,7 @@ export function Roster() {
         <section style={PANEL} className="overflow-hidden">
           <button
             onClick={() => setKaOpen(o => !o)}
-            className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.03] transition-colors"
+            className="w-full flex items-center justify-between px-5 py-4 hover:bg-foreground/[0.03] transition-colors"
           >
             <div className="flex items-center gap-2.5">
               <Key className="h-4 w-4" style={{ color: RED }} />
@@ -831,7 +837,7 @@ export function Roster() {
           </button>
 
           {kaOpen && (
-            <div style={{ borderTop: "1px solid rgba(255,255,255,.07)" }}>
+            <div style={{ borderTop: "1px solid color-mix(in oklch, var(--color-foreground) 7%, transparent)" }}>
               {keeperPoolQ.isLoading ? (
                 <div className="flex items-center justify-center gap-2 py-12 text-sm" style={{ color: MUTED }}>
                   <Loader2 className="h-4 w-4 animate-spin" /> Building keeper pool&hellip;
@@ -847,7 +853,7 @@ export function Roster() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="text-[10px] uppercase tracking-wider" style={{ background: "rgba(255,255,255,.03)", color: MUTED }}>
+                        <tr className="text-[10px] uppercase tracking-wider" style={{ background: "color-mix(in oklch, var(--color-foreground) 3%, transparent)", color: MUTED }}>
                           <th className="px-4 py-2.5 text-left">Player</th>
                           <th className="px-3 py-2.5 text-center">Pos</th>
                           <th className="px-3 py-2.5 text-center">Team</th>
@@ -861,7 +867,7 @@ export function Roster() {
                           const kvs  = calcKVS(k);
                           const rec  = kvsRec(kvs, k.isLastKeeperYear);
                           return (
-                            <tr key={i} className="transition-colors hover:bg-white/[0.03]" style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}>
+                            <tr key={i} className="transition-colors hover:bg-foreground/[0.03]" style={{ borderTop: "1px solid color-mix(in oklch, var(--color-foreground) 6%, transparent)" }}>
                               <td className="px-4 py-2.5">
                                 <div className="font-semibold text-xs leading-tight" style={{ color: TEXT }}>{k.playerName}</div>
                                 <div className="text-[10px]" style={{ color: MUTED }}>{k.ownerName}</div>
@@ -870,7 +876,7 @@ export function Roster() {
                                 <span className={cn("text-xs font-bold", KA_POS[k.position] ?? "text-zinc-400")}>{k.position}</span>
                               </td>
                               <td className="px-3 py-2.5 text-center">
-                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ color: MUTED, background: "rgba(255,255,255,.06)" }}>{k.nflTeam || "—"}</span>
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ color: MUTED, background: "color-mix(in oklch, var(--color-foreground) 6%, transparent)" }}>{k.nflTeam || "—"}</span>
                               </td>
                               <td className="px-3 py-2.5 text-center">
                                 <span className={cn("text-xs font-bold tabular-nums",
@@ -890,7 +896,7 @@ export function Roster() {
                       </tbody>
                     </table>
                   </div>
-                  <div className="px-4 py-2 flex items-center gap-1.5" style={{ background: "rgba(255,255,255,.02)", borderTop: "1px solid rgba(255,255,255,.06)" }}>
+                  <div className="px-4 py-2 flex items-center gap-1.5" style={{ background: "color-mix(in oklch, var(--color-foreground) 2%, transparent)", borderTop: "1px solid color-mix(in oklch, var(--color-foreground) 6%, transparent)" }}>
                     <Info className="h-3 w-3" style={{ color: MUTED }} />
                     <span className="text-[10px]" style={{ color: MUTED }}>KVS = Keeper Value Score &middot; * = Last eligible year for this player</span>
                   </div>
@@ -918,8 +924,8 @@ export function Roster() {
                 const kvs = calcKVS(k);
                 return (
                   <div key={i} className="flex items-center gap-3 p-3 rounded-lg" style={SUB}>
-                    <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 border border-white/10",
-                      KA_POS[k.position] ?? "text-zinc-400")} style={{ background: "rgba(255,255,255,.05)" }}>
+                    <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 border border-foreground/10",
+                      KA_POS[k.position] ?? "text-zinc-400")} style={{ background: "color-mix(in oklch, var(--color-foreground) 5%, transparent)" }}>
                       {k.playerName.split(" ").map((w: string) => w[0]).slice(0,2).join("")}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -931,7 +937,7 @@ export function Roster() {
                 );
               })}
             </div>
-            <div className="px-5 py-2.5 border-t border-amber-500/10 text-[10px] text-amber-600/90" style={{ background: "rgba(255,255,255,.02)" }}>
+            <div className="px-5 py-2.5 border-t border-amber-500/10 text-[10px] text-amber-600/90" style={{ background: "color-mix(in oklch, var(--color-foreground) 2%, transparent)" }}>
               These players cannot be kept in the {draftYear + 1} draft. Make your decision before the {draftYear} draft.
             </div>
           </div>
