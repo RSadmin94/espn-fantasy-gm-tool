@@ -87,6 +87,9 @@ interface OwnerIntel {
   tradeStyle: string;
   riskProfile: string;
   tradeAggression: "Low" | "Moderate" | "High" | "Unknown";
+  behavioralDna: string;
+  draftTendency: string;
+  pedigree: string;
   inferredNote: string;
 }
 interface RivalryReport {
@@ -210,8 +213,9 @@ function OwnerIntelCard({ intel, teamName }: { intel: OwnerIntel; teamName: stri
           ))}
         </div>
         <div className="space-y-1 pt-1 border-t border-border/40">
-          <p className="text-xs"><span className="text-muted-foreground">Style: </span><span className="text-foreground">{intel.tradeStyle}</span></p>
-          <p className="text-xs"><span className="text-muted-foreground">Tilt: </span><span className="text-foreground">{intel.riskProfile}</span></p>
+          <p className="text-xs"><span className="text-muted-foreground">Behavioral DNA: </span><span className="text-foreground">{intel.behavioralDna}</span></p>
+          <p className="text-xs"><span className="text-muted-foreground">Draft tendency: </span><span className="text-foreground">{intel.draftTendency}</span></p>
+          <p className="text-xs"><span className="text-muted-foreground">Pedigree: </span><span className="text-foreground">{intel.pedigree}</span></p>
           <p className="text-[10px] italic text-muted-foreground/70">{intel.inferredNote}</p>
         </div>
       </CardContent>

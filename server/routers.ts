@@ -9652,7 +9652,10 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
 
       // Phase 3: Inject DNA profiles for both trade partners
       let dnaContext = "";
-      let dnaLiteA: { avgTradesPerSeason?: number; tradeFrequency?: number; gmArchetype?: string; tiltLabel?: string } | undefined;
+      let dnaLiteA: {
+        avgTradesPerSeason?: number; tradeFrequency?: number; gmArchetype?: string; tiltLabel?: string;
+        waiverAggression?: number; draftStyleBadge?: string; round1Distribution?: Record<string, number>; championships?: number;
+      } | undefined;
       let dnaLiteB: typeof dnaLiteA;
       try {
         const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
@@ -9668,15 +9671,26 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
           const focusedProfiles = dnaProfiles.filter(p =>
             teamAMemberIds.includes(p.memberId) || teamBMemberIds.includes(p.memberId)
           );
-          const toLite = (p: (typeof dnaProfiles)[number]) => ({
+          // Championships per owner, counted off the existing season records (no new model).
+          const champByMember = new Map<string, number>();
+          for (const m of managerRawData) {
+            champByMember.set(m.memberId, (m.seasonRecords ?? []).filter(s => s.isChampion).length);
+          }
+          // Surface the profile-grade DNA the Owner Profiles page already computes — not the
+          // thin label subset. Same calcLeagueDNA source, just more of it.
+          const toProfile = (p: (typeof dnaProfiles)[number]) => ({
             avgTradesPerSeason: p.trade?.avgTradesPerSeason,
             tradeFrequency: p.trade?.tradeFrequency,
             gmArchetype: p.gmArchetype,
             tiltLabel: p.tilt?.tiltLabel,
+            waiverAggression: p.waiver?.waiverAggression,
+            draftStyleBadge: p.draft?.draftStyleBadge,
+            round1Distribution: p.draft?.round1Distribution,
+            championships: champByMember.get(p.memberId),
           });
           for (const p of focusedProfiles) {
-            if (teamAMemberIds.includes(p.memberId)) dnaLiteA = toLite(p);
-            if (teamBMemberIds.includes(p.memberId)) dnaLiteB = toLite(p);
+            if (teamAMemberIds.includes(p.memberId)) dnaLiteA = toProfile(p);
+            if (teamBMemberIds.includes(p.memberId)) dnaLiteB = toProfile(p);
           }
           if (focusedProfiles.length > 0) {
             dnaContext = "\n\n" + buildDNAPromptBlock(focusedProfiles);

@@ -147,6 +147,12 @@ export interface DnaLite {
   tradeFrequency?: number; // 0-100
   gmArchetype?: string;
   tiltLabel?: string;
+  // Profile-grade fields (reused from calcLeagueDNA — the same data behind Owner Profiles).
+  // No new scoring: these are read straight off the existing ManagerDNA / season records.
+  waiverAggression?: number;            // 0-100
+  draftStyleBadge?: string;             // e.g. "RB-First Builder", "WR-Heavy Drafter"
+  round1Distribution?: Record<string, number>; // R1 picks by position, historical
+  championships?: number;               // count of title seasons
 }
 
 export interface OwnerIntelligence {
@@ -158,6 +164,10 @@ export interface OwnerIntelligence {
   tradeStyle: string;
   riskProfile: string;
   tradeAggression: "Low" | "Moderate" | "High" | "Unknown";
+  // Profile-grade behavioral lines (replace the old thin Style/Tilt labels in the UI).
+  behavioralDna: string;   // archetype + standout activity scores
+  draftTendency: string;   // draft style + R1 positional lean
+  pedigree: string;        // championships / titles
   inferredNote: string;
 }
 
@@ -181,15 +191,42 @@ export function computeOwnerIntelligence(
   if (freq != null) aggression = freq >= 66 ? "High" : freq >= 33 ? "Moderate" : "Low";
   else if (relevant.length > 0) aggression = avg >= 2 ? "High" : avg >= 1 ? "Moderate" : "Low";
 
+  // Profile-grade lines, reused from the existing DNA profile (no new scoring/model).
+  const archetype = dna?.gmArchetype?.trim();
+  const scoreBits: string[] = [];
+  if (dna?.tradeFrequency != null) scoreBits.push(`trades ${Math.round(dna.tradeFrequency)}/100`);
+  if (dna?.waiverAggression != null) scoreBits.push(`waiver ${Math.round(dna.waiverAggression)}/100`);
+  const behavioralDna = archetype
+    ? `${archetype}${scoreBits.length ? ` · ${scoreBits.join(", ")}` : ""}`
+    : (relevant.length === 0 ? "No completed-trade history" : "Active trader");
+
+  let draftTendency = dna?.draftStyleBadge?.trim() || "Draft history not available";
+  if (dna?.round1Distribution) {
+    const entries = Object.entries(dna.round1Distribution).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]);
+    const total = entries.reduce((s, [, c]) => s + c, 0);
+    if (entries.length > 0 && total > 0) {
+      const [pos, cnt] = entries[0];
+      const badge = dna?.draftStyleBadge?.trim();
+      draftTendency = `${badge ? `${badge} — ` : ""}${pos} in ${cnt}/${total} R1s (${Math.round((cnt / total) * 100)}%)`;
+    }
+  }
+
+  const pedigree = dna?.championships != null
+    ? (dna.championships > 0 ? `${dna.championships}× champion` : "No titles yet")
+    : "Pedigree not available";
+
   return {
     ownerName,
     completedTrades: relevant.length,
     avgTradesPerSeason: Math.round(avg * 10) / 10,
     mostAcquiredPos: mode(acquired),
     mostTradedAwayPos: mode(given),
-    tradeStyle: dna?.gmArchetype?.trim() || (relevant.length === 0 ? "No completed-trade history" : "Active trader"),
+    tradeStyle: archetype || (relevant.length === 0 ? "No completed-trade history" : "Active trader"),
     riskProfile: dna?.tiltLabel?.trim() || "Not enough data",
     tradeAggression: aggression,
+    behavioralDna,
+    draftTendency,
+    pedigree,
     inferredNote: "Inferred from league history",
   };
 }
