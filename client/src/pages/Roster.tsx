@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -99,6 +99,7 @@ interface TeamRow {
   teamId: number;
   teamName: string;
   owners?: string;
+  memberIds?: string[];
 }
 
 interface RosterEntry {
@@ -139,6 +140,20 @@ const INJURY_COLORS: Record<string, string> = {
 function fmt(n: number | null | undefined, decimals = 1) {
   if (n == null) return "—";
   return Number(n).toFixed(decimals);
+}
+
+// Projected points per game = projected season total ÷ projected games.
+// Returns null (renders as "—") whenever inputs are missing or non-finite,
+// which guards against NaN / Infinity.
+function projPerGame(
+  projectedTotal: number | null | undefined,
+  games: number | null | undefined,
+): number | null {
+  const total = Number(projectedTotal);
+  const g = Number(games);
+  if (projectedTotal == null || !Number.isFinite(total)) return null;
+  if (games == null || !Number.isFinite(g) || g <= 0) return null;
+  return total / g;
 }
 
 function warRoomKvsForPlayer(keeperPredictions: any[] | undefined, teamId: number, playerName: string | undefined) {
@@ -230,6 +245,7 @@ function RosterTable({
   warRoomColumns,
   warRoomLoading,
   warRoomFailed,
+  regularSeasonGames,
 }: {
   players: RosterEntry[];
   keeperPredictions?: any[];
@@ -237,6 +253,8 @@ function RosterTable({
   warRoomColumns: boolean;
   warRoomLoading?: boolean;
   warRoomFailed?: boolean;
+  /** League regular-season game count, used as the per-game projection divisor. */
+  regularSeasonGames?: number | null;
 }) {
   // Group by lineup slot, sorted by slot order
   const groups = useMemo(() => {
@@ -264,7 +282,8 @@ function RosterTable({
             <th className="px-4 py-2.5 text-center text-[11px] font-medium uppercase tracking-wide w-12" style={{ color: MUTED }}>Pos</th>
             <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide w-16" style={{ color: MUTED }}>Avg</th>
             <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide w-16" style={{ color: MUTED }}>Total</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide w-16 hidden md:table-cell" style={{ color: MUTED }}>Proj</th>
+            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide w-16 hidden md:table-cell" style={{ color: MUTED }}>Proj Total</th>
+            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide w-16 hidden md:table-cell" style={{ color: MUTED }}>Proj/G</th>
             {warRoomColumns && (
               <>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide w-24" style={{ color: MUTED }}>
@@ -316,6 +335,9 @@ function RosterTable({
                   </td>
                   <td className="hidden px-4 py-2.5 text-right font-mono md:table-cell" style={{ color: MUTED }}>
                     {fmt(p.projectedTotal, 0)}
+                  </td>
+                  <td className="hidden px-4 py-2.5 text-right font-mono md:table-cell" style={{ color: MUTED }}>
+                    {fmt(projPerGame(p.projectedTotal, regularSeasonGames), 1)}
                   </td>
                   {warRoomColumns && (
                     <>
@@ -447,6 +469,11 @@ export function Roster() {
     withLeagueSalt({}, leagueContextKey),
     { enabled: leagueKeyReady },
   );
+  // Signed-in user's active profile — used to default the team picker to their team.
+  const profileQ = (trpc as any).me.activeProfile.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 600_000, retry: false, enabled: leagueKeyReady },
+  );
 
   const allSeasons: number[] = leagueKeyReady ? (allSeasonsQ.data ?? []) : [];
   const cachedSeasons: number[] = leagueKeyReady ? (cachedQ.data ?? []) : [];
@@ -468,6 +495,11 @@ export function Roster() {
   const isNotCached = !cachedSeasons.includes(season);
 
   const teamsQ = trpc.espn.teams.useQuery(
+    withLeagueSalt({ season }, leagueContextKey),
+    { enabled: leagueKeyReady && !isNotCached }
+  );
+  // League settings → regular-season matchup count (per-game projection divisor).
+  const settingsQ = trpc.espn.settings.useQuery(
     withLeagueSalt({ season }, leagueContextKey),
     { enabled: leagueKeyReady && !isNotCached }
   );
@@ -521,6 +553,69 @@ export function Roster() {
 
   const teams = (leagueKeyReady && !isNotCached ? (teamsQ.data as TeamRow[] | undefined) : undefined) ?? [];
   const allPlayers = (leagueKeyReady && !isNotCached ? (rosterQ.data as RosterEntry[] | undefined) : undefined) ?? [];
+
+  // League regular-season game count (fallback divisor for per-game projection).
+  const regularSeasonGames = useMemo<number | null>(() => {
+    const n = Number(
+      (settingsQ.data as { matchupPeriodCount?: unknown } | null | undefined)?.matchupPeriodCount,
+    );
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [settingsQ.data]);
+
+  // Resolve the signed-in user's team for the active league.
+  const myTeamId = useMemo<number | null>(() => {
+    const prof = profileQ.data as
+      | { isSetupComplete?: boolean; selectedTeamId?: number | null; selectedOwnerKey?: string | null }
+      | undefined;
+    if (!prof?.isSetupComplete) return null;
+    // Primary: the team id stored on the user's active profile.
+    const direct = Number(prof.selectedTeamId);
+    if (Number.isFinite(direct) && teams.some((t) => t.teamId === direct)) return direct;
+    // Fallback: match the profile's owner GUID to this season's team memberIds.
+    const guid = String(prof.selectedOwnerKey ?? "")
+      .replace(/^id:/, "")
+      .replace(/[{}]/g, "")
+      .trim()
+      .toLowerCase();
+    if (guid) {
+      for (const t of teams) {
+        const ids = Array.isArray(t.memberIds) ? t.memberIds : [];
+        if (ids.some((id) => String(id).replace(/[{}]/g, "").trim().toLowerCase() === guid)) {
+          return t.teamId;
+        }
+      }
+    }
+    return null;
+  }, [profileQ.data, teams]);
+
+  // On active-league change, clear any prior selection so the default re-resolves
+  // cleanly (prevents a stale cross-league team id from sticking).
+  const autoTeamLeagueRef = useRef<string | null>(null);
+  useEffect(() => {
+    autoTeamLeagueRef.current = null;
+    setTeamId("ALL");
+  }, [leagueContextKey]);
+
+  // Auto-select the user's team once per league, after teams + profile resolve.
+  // Manual changes afterward are preserved (the ref is already set for this league);
+  // if the team can't be resolved, selection stays on the default ("All teams").
+  useEffect(() => {
+    if (!leagueKeyReady || isNotCached) return;
+    const teamsReady = teamsQ.isSuccess && teams.length > 0;
+    const profileSettled = !profileQ.isLoading;
+    if (!teamsReady || !profileSettled) return;
+    if (autoTeamLeagueRef.current === leagueContextKey) return;
+    autoTeamLeagueRef.current = leagueContextKey;
+    if (myTeamId != null) setTeamId(myTeamId);
+  }, [
+    leagueKeyReady,
+    isNotCached,
+    leagueContextKey,
+    teamsQ.isSuccess,
+    teams.length,
+    profileQ.isLoading,
+    myTeamId,
+  ]);
 
   // Group by team when showing ALL
   const playersByTeam = useMemo(() => {
@@ -665,6 +760,7 @@ export function Roster() {
                 warRoomColumns={!isNotCached}
                 warRoomLoading={warRoomQ.isFetching}
                 warRoomFailed={warRoomFailed}
+                regularSeasonGames={regularSeasonGames}
               />
             </div>
           </Panel>
@@ -702,6 +798,7 @@ export function Roster() {
                         warRoomColumns={!isNotCached}
                         warRoomLoading={warRoomQ.isFetching}
                         warRoomFailed={warRoomFailed}
+                        regularSeasonGames={regularSeasonGames}
                       />
                     </div>
                   </Panel>
