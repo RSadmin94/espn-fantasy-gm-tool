@@ -6,6 +6,7 @@
 > window applies to every league). Check the relevant section here first, then suggest.
 >
 > Last verified: 2026-06-10 against league 457622 (full pass, readiness 100).
+> Trade Analyzer Owner Intelligence re-point + dogfood cleanup: 2026-06-21 (see §12).
 
 ## 1. Stack & deploy
 
@@ -186,7 +187,20 @@ person-merge, never from raw season rows or name matching.
   `gm_weekly_player_stats`), populated by the long "Fix Everything" step — independent of
   matchups/standings.
 - **Two active leagues:** `457622` (ATLANTAS FINEST FF, 14-team, 2009–2026, full cache) and
-  `480452315` (12-team, 2026 only). Always test multi-league assumptions against the 2026-only one.
+  `480452315` (12-team). Always test multi-league assumptions against the smaller one. As of
+  2026-06-21 a 12-team **dynasty** league ("Atlants Finest Dynasty", 2023–2026) is also in play.
+- **Live shared session — the browser agent drives Rod's REAL app, not a private instance.**
+  When Claude validates via Claude-in-Chrome, it is operating Rod's live gmwarroom.online
+  session. The **active league is server-side per-user state** (`setActiveLeagueForUser`, §9):
+  if Rod switches the active league in the app (or re-syncs a different league) mid-task, every
+  page Claude loads — including the Trade Analyzer — silently resolves against the NEW league.
+  Observed 2026-06-21: a dogfood re-run produced "impossible" data (R1 counts collapsed to 1/1,
+  championships vanished, player values jumped) purely because the active league had been
+  switched from 457622 to the dynasty league between runs; nothing was broken. **Before trusting
+  any live-validation numbers, confirm the active-league selector (top-left) shows the expected
+  league.** A second gotcha rides along: after an active-league switch, the Trade Analyzer keeps
+  the PRIOR league's team dropdown/selection until a page reload, so it can present a cross-league
+  mismatch (old team names, new-league data). Reload `/trades` after any league change.
 - **Intelligence tables — provisioned 2026-06-10.** `weekly_storylines`, `rivalry_scores`,
   `trade_narratives`, `fear_index`, and `reputation_events` were defined in `schema.ts` but had
   never been `db:push`ed to the live DB, so their features (storylines refresh, rivalry, trade
@@ -204,3 +218,84 @@ person-merge, never from raw season rows or name matching.
   `pnpm check` before committing web changes, keep changes scoped, and state plainly what changed.
 - Conventional commits; push to `cursor/frontend-rebuild-stage1-9b20`. Extension changes need
   a `manifest.json` version bump + Chrome reload (not a Railway deploy).
+
+## 12. Trade Analyzer — Owner Intelligence (trusted-source re-point) & dogfood cleanup
+
+**Principle (locked):** the Trade Analyzer must NOT run a weaker parallel owner model. Every
+Owner Intelligence line consumes the SAME trusted source as the Owner Profiles page. No new
+scoring, no new archetypes, no score-embellishment displays.
+
+### 12.1 The three Owner Intelligence lines and their sources
+| Line | Trusted source | Keyed by |
+|---|---|---|
+| **Pedigree** | `computeAllTrophyHistory` (§9.2) → `champByMember` map | member GUID |
+| **Behavioral DNA** | `computeActivityDna` (`activityDnaService.ts`) → `primaryDNA · secondaryDNA` | `normGuid(ownerId)` |
+| **Draft tendency** | shared draft-DNA helpers (12.2) → `draftStyleBadge` + R1 lean | `normGuid(memberId)` + resolved team GUIDs |
+
+Retired/weaker source: `calcLeagueDNA` (`leagueDNA.ts`) gave generic "Balanced Manager / Balanced
+Drafter" and its `round1Distribution` came through EMPTY in the trade path (combined cached views
+lack `draftDetail`; trusted draft data lives in the `draft_picks` table). calcLeagueDNA is now only
+a FALLBACK when a trusted source is unavailable.
+
+### 12.2 Shared draft-DNA helpers (single source of truth) — `server/ownerProfileService.ts`
+- `attributeOwnedPicks({ draftRows, teamsBySeason, profileOwnerKey, allLeagueGmRows })` →
+  `{ ownedPicks, unresolvedTeamNames }`. The pick→owner attribution loop (builds `nameToOwnerId` +
+  `rawKeyToCanonicalProfileKey` internally; classifies each pick with DraftTruth).
+- `computeDraftDnaFromOwnedPicks(ownedPicks)` → `{ totalPicks, posShare, earlyPos, avgRoundByPos,
+  mostDraftedPos, byRound, draftStyleBadge }`. The aggregation, incl. the "RB-heavy / WR-heavy /
+  balanced early-round" badge (from rounds-1–3 RB vs WR counts).
+- `buildOwnerProfilePayload` was refactored to CALL both (byte-identical output, gate-verified by
+  the owner/draft vitest suites). `tradeAnalyze` (`routers.ts`) calls the same two — that IS the
+  single-source guarantee.
+- **DraftTruth filter:** draft tendency counts only `draftedForAnalytics` picks (open-draft;
+  excludes keeper/retained slots that occupied an R1 spot). So "RB in 10/14 R1s" excludes
+  keeper-held R1 slots and matches the Owner Profiles Draft DNA tab exactly.
+
+### 12.3 Trade Analyzer data flow (`server/routers.ts` `tradeAnalyze`, inside the DNA try/block)
+1. `resolveActiveLeagueId` → `leagueId`.
+2. `computeActivityDna(leagueId)` → `activityByGuid` (Map by `normGuid(ownerId)`).
+3. `computeAllTrophyHistory(undefined, ctx.user?.id)` → `champByMember` (+ `trophyOk`; pedigree is
+   hidden when the trophy load fails — never a false "No titles yet" for a real champion).
+4. `loadOwnerProfileSharedData({db, leagueId})` (→ `teamsBySeason`, `draftRows`) + a full `gmTeams`
+   query (`allGmRows`); per trade owner `resolveOwnerTeamsForProfile(allGmRows, "id:"+memberId)` →
+   `profileOwnerKey` → `attributeOwnedPicks` + `computeDraftDnaFromOwnedPicks` → `draftDnaByGuid`.
+5. `toProfile(p)` merges all into the inline `DnaLite` (trusted values OVERRIDE calcLeagueDNA, fall
+   back if unavailable). → `buildTradeIntelligence` → `computeOwnerIntelligence`
+   (`tradeIntelligence.ts`) builds the display strings. Client renders in
+   `client/src/pages/Trades.tsx` (`OwnerIntelCard` + `TradeIntelSections`).
+
+### 12.4 Dogfood cleanup (commit `c5e800a`, 2026-06-21)
+- **Draft-tendency contradiction fixed:** the R1 figure is anchored to the position the badge names
+  (RB-heavy → RB's R1 count, WR-heavy → WR's), so badge and detail can never disagree (was
+  "WR-heavy early drafter — RB in 9/17 R1s"). In `computeOwnerIntelligence`.
+- **`ChampionshipWindow.preseason` flag** (`computeChampionshipWindow`): true only in genuine
+  preseason (no team in the season has played). Client HIDES the whole Championship Window section
+  when both teams are preseason — it was identical "Retooling / bottom-third" boilerplate.
+- **Empty Rivalry gated:** `Trades.tsx` renders Rivalry only when `rivalry.completedTrades > 0`.
+- **Owner Intel header trimmed:** drops em-dash "Most acquired / traded away" rows and the redundant
+  "Avg / season 0" when an owner has no completed trades.
+- **Negotiation boilerplate gated:** the "prefer younger players if not contending" line now fires
+  only off-preseason (`buildNegotiationAdvice` takes `preseasonA`).
+
+### 12.5 Dogfood verdict — value hierarchy (evidence, not yet acted on)
+Across ~7 trades the usefulness ranking is **Trade Value → Owner Intelligence → Split Verdict →
+Trade Fit → everything else.** The on-screen order does not match this. Reordering is a redesign
+decision deliberately deferred — re-run the dogfood on a clean/known league first, then decide.
+
+### 12.6 Commit arc (this work, all on `cursor/frontend-rebuild-stage1-9b20`)
+`081c91b` surface owner-intel → `3dd3aa0` suppress false pedigree → `da5e267` Pedigree from
+`computeAllTrophyHistory` → `08e3f62` Behavioral DNA from Activity DNA → `acfcaad` extract shared
+draft-DNA helpers → `0113d8f` Trade Analyzer draft tendency from shared helpers → `c5e800a` dogfood
+cleanup. Live on gmwarroom.online.
+
+**Files touched:** `server/tradeIntelligence.ts` (computeOwnerIntelligence, computeChampionshipWindow,
+buildNegotiationAdvice, computeRivalry, `DnaLite`), `server/ownerProfileService.ts` (shared helpers +
+buildOwnerProfilePayload), `server/routers.ts` (`tradeAnalyze`), `server/activityDnaService.ts`,
+`server/championshipHistoryBuilder.ts`, `client/src/pages/Trades.tsx`.
+
+**Standing rules for this area:** read this doc first; no new owner model / no score-embellishment;
+do NOT touch valuation / Split Verdict / Championship Context math; run `pnpm check` + relevant
+vitest suites before commit (ignore the pre-existing `mockDraftIntelligence.test.ts` failure —
+missing `client/src/lib/mockDraftUtils`, unrelated); verify deploy by polling
+`https://gmwarroom.online/api/health` for `gitSha` (~2–4 min). Do NOT start Mock Draft Intelligence
+or Trade Reality Simulator.
