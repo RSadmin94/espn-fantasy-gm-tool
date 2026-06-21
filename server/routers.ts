@@ -9655,6 +9655,7 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       let dnaLiteA: {
         avgTradesPerSeason?: number; tradeFrequency?: number; gmArchetype?: string; tiltLabel?: string;
         waiverAggression?: number; draftStyleBadge?: string; round1Distribution?: Record<string, number>; championships?: number;
+        activityPrimary?: string; activitySecondary?: string;
       } | undefined;
       let dnaLiteB: typeof dnaLiteA;
       try {
@@ -9687,18 +9688,44 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
           } catch {
             // trophy history unavailable — pedigree stays hidden (championships left undefined)
           }
-          const toProfile = (p: (typeof dnaProfiles)[number]) => ({
-            avgTradesPerSeason: p.trade?.avgTradesPerSeason,
-            tradeFrequency: p.trade?.tradeFrequency,
-            gmArchetype: p.gmArchetype,
-            tiltLabel: p.tilt?.tiltLabel,
-            waiverAggression: p.waiver?.waiverAggression,
-            draftStyleBadge: p.draft?.draftStyleBadge,
-            round1Distribution: p.draft?.round1Distribution,
-            // Trusted source only: present champions get their count, others "No titles yet";
-            // if trophy history failed to load, undefined → client hides the line.
-            championships: trophyOk ? (champByMember.get(p.memberId) ?? 0) : undefined,
-          });
+          // Behavioral DNA from the TRUSTED Activity DNA service (computeActivityDna) — the same
+          // primary/secondary archetypes the Owner Profiles page shows (Roster Builder, Waiver
+          // Aggressive, Trade Opportunist). Replaces calcLeagueDNA's weaker gmArchetype label.
+          const normGuid = (g: unknown) =>
+            String(g ?? "").replace(/^id:/i, "").toUpperCase().replace(/[^0-9A-F]/g, "");
+          const activityByGuid = new Map<string, { primaryDNA: string; secondaryDNA: string }>();
+          try {
+            const { resolveActiveLeagueId } = await import("./db");
+            const { computeActivityDna } = await import("./activityDnaService");
+            const { leagueId } = await resolveActiveLeagueId(
+              { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined }, null, undefined,
+            );
+            if (leagueId) {
+              const activity = await computeActivityDna(leagueId);
+              for (const a of activity) {
+                activityByGuid.set(normGuid(a.ownerId), { primaryDNA: a.primaryDNA, secondaryDNA: a.secondaryDNA });
+              }
+            }
+          } catch {
+            // Activity DNA unavailable — behavioral line falls back to the calcLeagueDNA archetype.
+          }
+          const toProfile = (p: (typeof dnaProfiles)[number]) => {
+            const act = activityByGuid.get(normGuid(p.memberId));
+            return {
+              avgTradesPerSeason: p.trade?.avgTradesPerSeason,
+              tradeFrequency: p.trade?.tradeFrequency,
+              gmArchetype: p.gmArchetype,
+              tiltLabel: p.tilt?.tiltLabel,
+              waiverAggression: p.waiver?.waiverAggression,
+              draftStyleBadge: p.draft?.draftStyleBadge,
+              round1Distribution: p.draft?.round1Distribution,
+              // Trusted source only: present champions get their count, others "No titles yet";
+              // if trophy history failed to load, undefined → client hides the line.
+              championships: trophyOk ? (champByMember.get(p.memberId) ?? 0) : undefined,
+              activityPrimary: act?.primaryDNA,
+              activitySecondary: act?.secondaryDNA,
+            };
+          };
           for (const p of focusedProfiles) {
             if (teamAMemberIds.includes(p.memberId)) dnaLiteA = toProfile(p);
             if (teamBMemberIds.includes(p.memberId)) dnaLiteB = toProfile(p);

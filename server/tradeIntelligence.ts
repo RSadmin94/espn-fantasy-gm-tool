@@ -153,6 +153,10 @@ export interface DnaLite {
   draftStyleBadge?: string;             // e.g. "RB-First Builder", "WR-Heavy Drafter"
   round1Distribution?: Record<string, number>; // R1 picks by position, historical
   championships?: number;               // count of title seasons
+  // Behavioral archetypes from the TRUSTED Activity DNA service (same as Owner Profiles).
+  // When present these take precedence over the calcLeagueDNA gmArchetype label.
+  activityPrimary?: string;             // e.g. "Roster Builder"
+  activitySecondary?: string;           // e.g. "Waiver Aggressive"
 }
 
 export interface OwnerIntelligence {
@@ -191,14 +195,23 @@ export function computeOwnerIntelligence(
   if (freq != null) aggression = freq >= 66 ? "High" : freq >= 33 ? "Moderate" : "Low";
   else if (relevant.length > 0) aggression = avg >= 2 ? "High" : avg >= 1 ? "Moderate" : "Low";
 
-  // Profile-grade lines, reused from the existing DNA profile (no new scoring/model).
+  // Behavioral DNA: prefer the TRUSTED Activity DNA archetypes (same source as Owner Profiles —
+  // Roster Builder / Waiver Aggressive / Trade Opportunist). Fall back to the calcLeagueDNA
+  // gmArchetype only when Activity DNA isn't available, so the line is never blank.
   const archetype = dna?.gmArchetype?.trim();
-  const scoreBits: string[] = [];
-  if (dna?.tradeFrequency != null) scoreBits.push(`trades ${Math.round(dna.tradeFrequency)}/100`);
-  if (dna?.waiverAggression != null) scoreBits.push(`waiver ${Math.round(dna.waiverAggression)}/100`);
-  const behavioralDna = archetype
-    ? `${archetype}${scoreBits.length ? ` · ${scoreBits.join(", ")}` : ""}`
-    : (relevant.length === 0 ? "No completed-trade history" : "Active trader");
+  const ap = dna?.activityPrimary?.trim();
+  const asec = dna?.activitySecondary?.trim();
+  let behavioralDna: string;
+  if (ap) {
+    behavioralDna = asec && asec !== ap ? `${ap} · ${asec}` : ap;
+  } else if (archetype) {
+    const scoreBits: string[] = [];
+    if (dna?.tradeFrequency != null) scoreBits.push(`trades ${Math.round(dna.tradeFrequency)}/100`);
+    if (dna?.waiverAggression != null) scoreBits.push(`waiver ${Math.round(dna.waiverAggression)}/100`);
+    behavioralDna = `${archetype}${scoreBits.length ? ` · ${scoreBits.join(", ")}` : ""}`;
+  } else {
+    behavioralDna = relevant.length === 0 ? "No completed-trade history" : "Active trader";
+  }
 
   let draftTendency = dna?.draftStyleBadge?.trim() || "Draft history not available";
   if (dna?.round1Distribution) {
