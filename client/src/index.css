@@ -8,7 +8,7 @@
  * Near-black background (faint purple), lime-green primary, purple accent.
  * "Know your league. Own your rivals."
  */
-@theme inline {
+@theme {
   --color-background: oklch(0.12 0.015 300);
   --color-foreground: oklch(0.96 0.006 300);
   --color-card: oklch(0.16 0.020 300);
