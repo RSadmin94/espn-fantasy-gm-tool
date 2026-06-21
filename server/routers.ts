@@ -158,6 +158,8 @@ import {
   computeOwnerProfileRecordBundle,
   flatMatchupsToIntelRows,
   resolveOwnerTeamsForProfile,
+  attributeOwnedPicks,
+  computeDraftDnaFromOwnedPicks,
   normalizeOwnerStr,
   personMergeKey,
   cleanOwnerDisplay,
@@ -9709,16 +9711,59 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
           } catch {
             // Activity DNA unavailable — behavioral line falls back to the calcLeagueDNA archetype.
           }
+          // Draft tendency from the TRUSTED shared draft-DNA helper (attributeOwnedPicks +
+          // computeDraftDnaFromOwnedPicks) — the same computation behind the Owner Profiles page.
+          // Overrides calcLeagueDNA's generic draft badge when the trusted data resolves.
+          const draftDnaByGuid = new Map<string, { draftStyleBadge: string; round1: Record<string, number> }>();
+          try {
+            const { resolveActiveLeagueId, getDb } = await import("./db");
+            const { leagueId: ddLeague } = await resolveActiveLeagueId(
+              { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined }, null, undefined,
+            );
+            const db = await getDb();
+            if (db && ddLeague) {
+              const lid = String(ddLeague).trim().slice(0, 32);
+              const allGmRows = await db
+                .select().from(gmTeams)
+                .where(eqDrizzle(gmTeams.leagueId, lid))
+                .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.teamId));
+              const { teamsBySeason: ddTeamsBySeason, draftRows: ddDraftRows } = await loadOwnerProfileSharedData({ db, leagueId: lid });
+              const tradeMemberIds = [...new Set([...teamAMemberIds, ...teamBMemberIds])];
+              for (const memberId of tradeMemberIds) {
+                const resolved =
+                  resolveOwnerTeamsForProfile(allGmRows, `id:${memberId}`) ??
+                  resolveOwnerTeamsForProfile(allGmRows, memberId);
+                if (!resolved) continue;
+                const { ownedPicks } = attributeOwnedPicks({
+                  draftRows: ddDraftRows,
+                  teamsBySeason: ddTeamsBySeason,
+                  profileOwnerKey: resolved.profileOwnerKey,
+                  allLeagueGmRows: allGmRows,
+                });
+                const ddna = computeDraftDnaFromOwnedPicks(ownedPicks);
+                const r1 = ddna.byRound.find((r) => r.round === 1);
+                const entry = { draftStyleBadge: ddna.draftStyleBadge, round1: r1 ? r1.posCounts : {} };
+                draftDnaByGuid.set(normGuid(memberId), entry);
+                for (const tr of resolved.ownerTeamRows) {
+                  const g = normGuid(tr.ownerId);
+                  if (g) draftDnaByGuid.set(g, entry);
+                }
+              }
+            }
+          } catch {
+            // Trusted draft DNA unavailable — draft tendency falls back to the calcLeagueDNA badge.
+          }
           const toProfile = (p: (typeof dnaProfiles)[number]) => {
             const act = activityByGuid.get(normGuid(p.memberId));
+            const dd = draftDnaByGuid.get(normGuid(p.memberId));
             return {
               avgTradesPerSeason: p.trade?.avgTradesPerSeason,
               tradeFrequency: p.trade?.tradeFrequency,
               gmArchetype: p.gmArchetype,
               tiltLabel: p.tilt?.tiltLabel,
               waiverAggression: p.waiver?.waiverAggression,
-              draftStyleBadge: p.draft?.draftStyleBadge,
-              round1Distribution: p.draft?.round1Distribution,
+              draftStyleBadge: dd?.draftStyleBadge ?? p.draft?.draftStyleBadge,
+              round1Distribution: dd?.round1 ?? p.draft?.round1Distribution,
               // Trusted source only: present champions get their count, others "No titles yet";
               // if trophy history failed to load, undefined → client hides the line.
               championships: trophyOk ? (champByMember.get(p.memberId) ?? 0) : undefined,
