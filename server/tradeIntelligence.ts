@@ -211,9 +211,12 @@ export function computeOwnerIntelligence(
     }
   }
 
+  // Only render pedigree when championships come from a trusted source (computeAllTrophyHistory).
+  // When unavailable, emit "" so the client hides the line — never show a false "No titles yet"
+  // for a known champion.
   const pedigree = dna?.championships != null
     ? (dna.championships > 0 ? `${dna.championships}× champion` : "No titles yet")
-    : "Pedigree not available";
+    : "";
 
   return {
     ownerName,

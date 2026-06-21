@@ -215,7 +215,9 @@ function OwnerIntelCard({ intel, teamName }: { intel: OwnerIntel; teamName: stri
         <div className="space-y-1 pt-1 border-t border-border/40">
           <p className="text-xs"><span className="text-muted-foreground">Behavioral DNA: </span><span className="text-foreground">{intel.behavioralDna}</span></p>
           <p className="text-xs"><span className="text-muted-foreground">Draft tendency: </span><span className="text-foreground">{intel.draftTendency}</span></p>
-          <p className="text-xs"><span className="text-muted-foreground">Pedigree: </span><span className="text-foreground">{intel.pedigree}</span></p>
+          {intel.pedigree ? (
+            <p className="text-xs"><span className="text-muted-foreground">Pedigree: </span><span className="text-foreground">{intel.pedigree}</span></p>
+          ) : null}
           <p className="text-[10px] italic text-muted-foreground/70">{intel.inferredNote}</p>
         </div>
       </CardContent>

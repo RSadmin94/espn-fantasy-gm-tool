@@ -9671,13 +9671,11 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
           const focusedProfiles = dnaProfiles.filter(p =>
             teamAMemberIds.includes(p.memberId) || teamBMemberIds.includes(p.memberId)
           );
-          // Championships per owner, counted off the existing season records (no new model).
-          const champByMember = new Map<string, number>();
-          for (const m of managerRawData) {
-            champByMember.set(m.memberId, (m.seasonRecords ?? []).filter(s => s.isChampion).length);
-          }
-          // Surface the profile-grade DNA the Owner Profiles page already computes — not the
-          // thin label subset. Same calcLeagueDNA source, just more of it.
+          // NOTE: championships intentionally NOT sourced here. buildManagerRawData hardcodes
+          // seasonRecords.isChampion = false, so counting it returns 0 for everyone and renders
+          // a FALSE "No titles yet" for known champions. Pedigree stays suppressed (championships
+          // omitted → undefined → empty line, hidden by the client) until the proper fix re-points
+          // it to computeAllTrophyHistory, the trusted source the Owner Profiles page uses.
           const toProfile = (p: (typeof dnaProfiles)[number]) => ({
             avgTradesPerSeason: p.trade?.avgTradesPerSeason,
             tradeFrequency: p.trade?.tradeFrequency,
@@ -9686,7 +9684,7 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
             waiverAggression: p.waiver?.waiverAggression,
             draftStyleBadge: p.draft?.draftStyleBadge,
             round1Distribution: p.draft?.round1Distribution,
-            championships: champByMember.get(p.memberId),
+            // championships omitted on purpose — see note above
           });
           for (const p of focusedProfiles) {
             if (teamAMemberIds.includes(p.memberId)) dnaLiteA = toProfile(p);
