@@ -41,6 +41,7 @@ import {
   Route,
   ShoppingCart,
   Clapperboard,
+  Gem,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -90,6 +91,7 @@ const NAV_GROUPS: NavGroup[] = [
       { kind: "link", label: "League DNA", href: "/league-dna", icon: Dna },
       { kind: "link", label: "The Cast", href: "/the-cast", icon: Clapperboard },
       { kind: "link", label: "Owner Profiles", href: "/owner-profiles", icon: Users },
+      { kind: "link", label: "Dynasty Power Rankings", href: "/dynasty-power-rankings", icon: Gem },
       { kind: "link", label: "Why Haven't I Won?", href: "/why-havent-i-won", icon: HelpCircle },
       { kind: "link", label: "Acquisition Impact", href: "/acquisition-impact", icon: ShoppingCart },
       { kind: "link", label: "Rivalry Center", href: "/rivalry-center", icon: Swords },

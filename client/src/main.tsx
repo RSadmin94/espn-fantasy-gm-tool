@@ -19,6 +19,7 @@ import { SyncData } from "./pages/SyncData";
 import { Dashboard } from "./pages/Dashboard";
 import { Transactions } from "./pages/Transactions";
 import { Standings } from "./pages/Standings";
+import DynastyPowerRankings from "./pages/DynastyPowerRankings";
 import { Roster } from "./pages/Roster";
 import { Trades } from "./pages/Trades";
 import { Advisor } from "./pages/Advisor";
@@ -150,6 +151,7 @@ const router = createBrowserRouter([
           { path: "/draft-war-room",           element: <DraftWarRoom /> },
           { path: "/transactions", element: <Transactions /> },
           { path: "/standings", element: <Standings /> },
+          { path: "/dynasty-power-rankings", element: <DynastyPowerRankings /> },
           { path: "/matchups", element: <Matchups /> },
           { path: "/rivalry-center", element: <RivalryCenter /> },
           { path: "/history", element: <LeagueHistory /> },

@@ -12,8 +12,11 @@ export const dynastyRouter = router({
     .input(z.object({
       season: z.number().int().default(2026),
       leagueId: z.string().optional(),
+      // cache-participation salt from the client (withLeagueSalt); not authorization
+      activeLeagueKey: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
+      void input.activeLeagueKey;
       const result = await computeDynastyPowerRankings({
         season: input.season,
         leagueId: input.leagueId,
