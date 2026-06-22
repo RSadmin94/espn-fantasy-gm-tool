@@ -175,6 +175,7 @@ import {
 } from "./ownerProfileService";
 import { loadRivalryDossier } from "./rivalryDossierService";
 import { loadRecentLeagueTransactionEvents } from "./recentLeagueEventsService";
+import { computeKeeperValuations, type KeeperValuation } from "./keeperValuationService";
 import { buildHallOfFamePayload } from "./hallOfFameService";
 import { playerStatsCacheRouter } from "./playerStatsCacheRouter";
 import { playerStatsRouter } from "./playerStatsRouter";
@@ -507,6 +508,24 @@ function buildPlayerStory(args: {
   }
   return parts.length > 0 ? parts.join(" ") : `${playerName} has a presence in league records spanning ${seasons || "multiple seasons"}.`;
 }
+
+/** Explicit return type for espn.keeperValuation — breaks the appRouter self-reference
+ * inference cycle created by calling the sibling keeperPool procedure via createCaller. */
+type KeeperValuationResponse = {
+  valuations: KeeperValuation[];
+  pool?: KeeperPoolEntry[];
+  draftYear?: number;
+  rosterSeason?: number;
+  leagueId?: string;
+  prevSeason?: number;
+  prev2Season?: number;
+  error?: string;
+  hint?: string;
+  disabled?: boolean;
+  reason?: string;
+  keeperSlotsPerTeam?: number | null;
+  rosterProvenance?: unknown;
+};
 
 export const appRouter = router({
   system: systemRouter,
@@ -3226,6 +3245,41 @@ export const appRouter = router({
           prev2Season,
           rosterProvenance,
         };
+      }),
+    /**
+     * Keeper Advisor's single authoritative recommendation surface. Consumes the
+     * enhanced `keeperPool` output (identity / cost / eligibility) and joins real
+     * ADP + computeMarketValues BY playerId via keeperValuationService. ALL keeper
+     * value/recommendation logic lives in that service — never here, never on the
+     * client. Pass-through of keeperPool's gate/error/provenance fields is preserved.
+     */
+    keeperValuation: publicProcedure
+      .input(
+        z.object({
+          draftYear: z.number().int().min(2019).max(2030).optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }): Promise<KeeperValuationResponse> => {
+        const caller = appRouter.createCaller(ctx);
+        const kp = await caller.espn.keeperPool({
+          draftYear: input.draftYear,
+          activeLeagueKey: input.activeLeagueKey,
+        });
+        const base = kp as Record<string, unknown>;
+        const pool = Array.isArray((kp as { pool?: KeeperPoolEntry[] }).pool)
+          ? (kp as { pool: KeeperPoolEntry[] }).pool
+          : [];
+        if (pool.length === 0) {
+          return { ...base, valuations: [] as KeeperValuation[] } as KeeperValuationResponse;
+        }
+        const valuations = await computeKeeperValuations({
+          pool,
+          season: (kp as { rosterSeason: number }).rosterSeason,
+          leagueId: (kp as { leagueId: string }).leagueId,
+          userId: ctx.user?.id ?? undefined,
+        });
+        return { ...base, valuations } as KeeperValuationResponse;
       }),
     keeperPoolByOwner: publicProcedure
       .input(z.object({

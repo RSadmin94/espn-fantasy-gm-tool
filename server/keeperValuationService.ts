@@ -30,12 +30,15 @@ export interface KeeperPoolRowLite {
   ownerKey: string;
   ownerName: string;
   position: string;
+  nflTeam: string;
   keeperRoundCost: number;
 }
 
 export interface KeeperValuation {
   playerId: number;
   playerName: string;
+  position: string;
+  nflTeam: string;
   ownerKey: string;
   ownerName: string;
   keeperRoundCost: number;
@@ -171,6 +174,8 @@ export async function computeKeeperValuations(args: {
     return {
       playerId: pid,
       playerName: row.playerName,
+      position: row.position,
+      nflTeam: row.nflTeam,
       ownerKey: row.ownerKey,
       ownerName: row.ownerName,
       keeperRoundCost: row.keeperRoundCost,
