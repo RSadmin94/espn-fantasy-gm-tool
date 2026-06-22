@@ -12,9 +12,12 @@
  * fed the same reduced inputs the badge model was validated on (projection +
  * percent-started; no ADP/history) so production badges reproduce the validated run.
  */
-import { getCachedView } from "./db";
+import { eq } from "drizzle-orm";
+import { getCachedView, getDb } from "./db";
+import { gmTeams } from "../drizzle/schema";
 import { normalizeTeams, normalizeRosters, normalizeSettings } from "./espnService";
 import { computeMarketValues, type MarketValueInput } from "./marketValue";
+import { buildRawKeyToCanonicalProfileKey, buildNameToOwnerId, resolveOwnerKey, type GmTeamRow } from "./ownerProfileService";
 
 // Tercile boundaries on percentile rank across the league (locked, per stability probe).
 export const DYNASTY_BADGE_HI = 66.67;
@@ -33,6 +36,7 @@ export interface DynastyBadge {
 export interface DynastyPowerRow {
   teamId: number;
   ownerName: string;
+  ownerKey: string;        // canonical, merge-aware owner key (id:{GUID} / name:...); joins to ownerList
   rosterSize: number;
   nowScore: number;        // raw Starter Strength
   laterScore: number;      // raw future-weighted dynasty value
@@ -127,7 +131,37 @@ export async function computeDynastyPowerRankings(args: {
   const kvfOf = (p: any) => Number(p.keeperValueFuture) || 0;
 
   const ownerMap: Record<number, string> = {};
-  for (const t of rawTeams) ownerMap[Number(t.teamId)] = String(t.owners || t.ownerName || `Team ${t.teamId}`);
+  const memberIdMap: Record<number, string> = {};
+  for (const t of rawTeams) {
+    const tid = Number(t.teamId);
+    ownerMap[tid] = String(t.owners || t.ownerName || `Team ${t.teamId}`);
+    memberIdMap[tid] = String((t.memberIds as string[] | undefined)?.[0] ?? "");
+  }
+
+  // Canonical, merge-aware owner key per team — the SAME resolution owners.ownerList
+  // uses, so Owner Profiles can join dynasty rows by ownerKey instead of by name.
+  // gmTeams.ownerId === ESPN memberId; remap.get(`id:${memberId}`) yields the canonical key.
+  const resolvedLeagueId = String(cached.leagueId ?? leagueId ?? "");
+  const ownerKeyMap: Record<number, string> = {};
+  {
+    const db = await getDb();
+    const gmRows: GmTeamRow[] = db && resolvedLeagueId
+      ? ((await db.select().from(gmTeams).where(eq(gmTeams.leagueId, resolvedLeagueId))) as GmTeamRow[])
+      : [];
+    const remap = buildRawKeyToCanonicalProfileKey(gmRows);
+    const nameToOwnerId = buildNameToOwnerId(gmRows);
+    const canonicalForMember = (mid: string, nm: string): string => {
+      const direct = mid ? remap.get(`id:${mid}`) : undefined;
+      if (direct) return direct;
+      const raw = resolveOwnerKey("", nm, nm, nameToOwnerId);
+      return remap.get(raw) ?? raw;
+    };
+    for (const t of rawTeams) {
+      const tid = Number(t.teamId);
+      ownerKeyMap[tid] = canonicalForMember(memberIdMap[tid], ownerMap[tid]);
+    }
+  }
+
   const byTeam = new Map<number, any[]>();
   for (const p of rosters) {
     const tid = Number(p.teamId);
@@ -160,7 +194,7 @@ export async function computeDynastyPowerRankings(args: {
     const now = starterStrength(r);
     // Later Score: 50% current dynasty value + 50% future (keeperValueFuture)
     const later = r.reduce((s, p) => s + (0.5 * val(p) + 0.5 * keeperScore(kvfOf(p), val(p))), 0);
-    return { teamId: tid, ownerName: ownerMap[tid], rosterSize: r.length, nowScore: now, laterScore: later };
+    return { teamId: tid, ownerName: ownerMap[tid], ownerKey: ownerKeyMap[tid] || "", rosterSize: r.length, nowScore: now, laterScore: later };
   });
 
   const nowP = pctRank(raw.map((x) => x.nowScore));
