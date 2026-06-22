@@ -56,7 +56,7 @@ const ESPN_ADP_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 /** Fetch ESPN live PPR ADP from actual draft activity \u2014 same data as ESPN Live Draft Trends page.
  * Uses leaguedefaults/3 endpoint with player.ownership.averageDraftPosition.
  * Single request returns ~1025 ranked players. Cached for 4h. */
-async function getEspnAdpMap(): Promise<Map<string, number>> {
+export async function getEspnAdpMap(): Promise<Map<string, number>> {
   const now = Date.now();
   if (_espnAdpCache && (now - _espnAdpCacheTime) < ESPN_ADP_TTL_MS) return _espnAdpCache;
 
