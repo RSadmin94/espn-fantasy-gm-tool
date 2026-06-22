@@ -568,6 +568,15 @@ export function Dashboard() {
     },
   );
 
+  // Stage 4 — Dynasty Landscape story card. Pure consumer of the existing
+  // dynasty.powerRankings engine (same payload as the Dynasty Power Rankings page
+  // and the Owner Profile badge). No new engine/router/service; only the badge
+  // counts + grouped owner names are read from the rows below.
+  const dynastyLandscapeQ = trpc.dynasty.powerRankings.useQuery(
+    withLeagueSalt({ season: 2026 }, leagueCtx.leagueContextKey),
+    { ...DASH_QUERY_OPTS, staleTime: 60_000, enabled: leagueKeyReady },
+  );
+
 
   const powerTop = (ownerListQ.data?.powerRankings ?? []).slice(0, 5);
 
@@ -826,6 +835,95 @@ export function Dashboard() {
           )}
         </section>
       ) : null}
+
+      {/* Dynasty Landscape — Stage 4 story card; pure consumer of dynasty.powerRankings (counts + grouped names only) */}
+      {(() => {
+        const teams: any[] = Array.isArray(dynastyLandscapeQ.data?.teams) ? (dynastyLandscapeQ.data!.teams as any[]) : [];
+        if (teams.length === 0) return null;
+
+        // Group owner names by badge key (grouping only — no recompute of badges).
+        const groupOf = (key: string) =>
+          teams.filter((t) => t?.badge?.key === key).map((t) => String(t.ownerName || "")).filter(Boolean);
+        const builtToLast = groupOf("built_to_last");
+        const winNow = groupOf("win_now_window");
+        const risingEmpire = groupOf("rising_empire");
+        const crossroads = groupOf("crossroads");
+        const groundFloor = groupOf("ground_floor");
+
+        const builtToLastCount = builtToLast.length;
+        const winNowCount = winNow.length;
+        const risingEmpireCount = risingEmpire.length;
+        const crossroadsCount = crossroads.length;
+        const groundFloorCount = groundFloor.length;
+
+        // "A", "A and B", "A, B and C"
+        const joinNames = (arr: string[]) =>
+          arr.length <= 1 ? (arr[0] ?? "") : arr.length === 2 ? `${arr[0]} and ${arr[1]}` : `${arr.slice(0, -1).join(", ")} and ${arr[arr.length - 1]}`;
+        const isAre = (n: number) => (n === 1 ? "is" : "are");
+        const teamWord = (n: number) => (n === 1 ? "team" : "teams");
+        const franchiseWord = (n: number) => (n === 1 ? "franchise" : "franchises");
+
+        const lines: string[] = [];
+        if (builtToLastCount) {
+          lines.push(`${builtToLastCount <= 2 ? "Only " : ""}${builtToLastCount} ${teamWord(builtToLastCount)} ${isAre(builtToLastCount)} Built to Last. ${joinNames(builtToLast)} ${isAre(builtToLastCount)} positioned to compete now while maintaining long-term dynasty value.`);
+        }
+        if (winNowCount) {
+          lines.push(`${joinNames(winNow)} ${isAre(winNowCount)} operating in a Win-Now Window.`);
+        }
+        if (risingEmpireCount) {
+          lines.push(`The league currently has ${risingEmpireCount} Rising Empire ${franchiseWord(risingEmpireCount)}. ${joinNames(risingEmpire)} ${isAre(risingEmpireCount)} building future value faster than current production — watch ${risingEmpireCount === 1 ? "this team" : "these teams"} over the next two seasons.`);
+        }
+        if (groundFloorCount) {
+          lines.push(`${groundFloorCount} ${franchiseWord(groundFloorCount)} ${groundFloorCount === 1 ? "remains" : "remain"} in Ground Floor status. The biggest long-term rebuilds belong to ${joinNames(groundFloor)}.`);
+        }
+        if (crossroadsCount && lines.length === 0) {
+          lines.push(`${crossroadsCount} ${teamWord(crossroadsCount)} ${isAre(crossroadsCount)} at a Crossroads — balanced between competing now and building for later.`);
+        }
+        if (lines.length === 0) return null;
+
+        const chips = [
+          { label: "Built to Last", n: builtToLastCount, color: "#34d399" },
+          { label: "Win-Now", n: winNowCount, color: "#f5c518" },
+          { label: "Rising", n: risingEmpireCount, color: "#8b5cf6" },
+          { label: "Crossroads", n: crossroadsCount, color: "#94a3b8" },
+          { label: "Ground Floor", n: groundFloorCount, color: "#f7902f" },
+        ].filter((c) => c.n > 0);
+
+        return (
+          <section
+            className="rounded-2xl border border-emerald-500/25 bg-card p-6 shadow-[0_0_50px_-22px_rgba(52,211,153,0.25)] mb-2"
+            aria-label="Dynasty Landscape"
+          >
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0 text-lg" aria-hidden>
+                🏛
+              </div>
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400/90">Dynasty Landscape</p>
+                <p className="text-lg md:text-xl font-bold text-foreground mt-1">Where every franchise stands — now vs. the future.</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {lines.map((ln, i) => (
+                <p key={i} className="text-sm leading-relaxed text-muted-foreground">{ln}</p>
+              ))}
+            </div>
+            {chips.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {chips.map((c) => (
+                  <span
+                    key={c.label}
+                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                    style={{ background: `color-mix(in oklch, ${c.color} 14%, transparent)`, border: `1px solid color-mix(in oklch, ${c.color} 40%, transparent)`, color: c.color }}
+                  >
+                    {c.n} {c.label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        );
+      })()}
 
       {/* GM Command Center - richer CommandDashboard aesthetic; data sourced from draftIntelQ */}
       {(() => {
