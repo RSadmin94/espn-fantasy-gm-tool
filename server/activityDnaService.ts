@@ -1,6 +1,7 @@
 import { getDb } from "./db";
 import { sql } from "drizzle-orm";
 import { resolveWeeklyPlayerStats, resolveLeagueDraftSet } from "./weeklyStatsResolver";
+import { memCache } from "./memCache";
 
 /**
  * Activity DNA - deterministic owner management-style classification.
@@ -101,7 +102,22 @@ interface RawOwner {
  * Compute Activity DNA for every owner in a league. Percentile scores are league-relative,
  * so the whole league is the unit of computation.
  */
+/**
+ * Cached entry point. Activity DNA is a whole-league computation — even a
+ * single-owner caller (getActivityDnaForOwner) triggers the full league pass,
+ * including a LONGTEXT scan of espn_raw_cache. Memoize per league so an Owner
+ * Profile view doesn't recompute it 2–3x. The cache is busted by
+ * memCache.invalidateAll() on every ESPN data refresh/sync, so results stay
+ * correct after a re-sync; the TTL is only a backstop.
+ */
+const ACTIVITY_DNA_CACHE_TTL_MS = 10 * 60_000;
 export async function computeActivityDna(leagueId: string): Promise<ActivityDnaResult[]> {
+  return memCache(`activityDna:${leagueId}`, ACTIVITY_DNA_CACHE_TTL_MS, () =>
+    computeActivityDnaUncached(leagueId),
+  );
+}
+
+async function computeActivityDnaUncached(leagueId: string): Promise<ActivityDnaResult[]> {
   const db = await getDb();
   if (!db) return [];
 
