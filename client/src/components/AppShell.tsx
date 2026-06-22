@@ -57,7 +57,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { useTheme } from "@/context/ThemeContext";
+import { useTheme, LOCK_DARK } from "@/context/ThemeContext";
 
 type NavEntry =
   | { kind: "link"; label: string; href: string; icon: LucideIcon }
@@ -520,15 +520,17 @@ function Sidebar({
       <div className="flex items-center justify-between border-b border-border px-4 py-4">
         <img src="/logo.png" alt="Fantasy Football Rivals - Own Your Rivals" className="max-h-[132px] w-auto object-contain" />
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={toggle}
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Toggle colour scheme"
-          >
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
+          {!LOCK_DARK && (
+            <button
+              type="button"
+              onClick={toggle}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Toggle colour scheme"
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          )}
           {onClose && (
             <button
               type="button"
