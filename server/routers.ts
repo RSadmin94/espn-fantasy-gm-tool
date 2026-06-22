@@ -14,6 +14,7 @@ import { simulationRouter } from "./simulationRouter";
 import { dnaRouter } from "./dnaRouter";
 import { agentRouter } from "./agentRouter";
 import { champRouter } from "./champRouter";
+import { dynastyRouter } from "./dynastyRouter";
 import { backtestingRouter } from "./backtestingRouter";
 import { vegasRouter } from "./vegasRouter";
 import { beatReporterRouter } from "./beatReporterRouter";
@@ -524,6 +525,7 @@ export const appRouter = router({
   dna: dnaRouter,
   agents: agentRouter,
   champ: champRouter,
+  dynasty: dynastyRouter,
   backtest: backtestingRouter,
   vegas: vegasRouter,
   beatReporter: beatReporterRouter,
