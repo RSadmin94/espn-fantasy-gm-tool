@@ -24,7 +24,7 @@ function Avatar({ label, url }: { label: string; url?: string }) {
       <img
         src={url}
         alt=""
-        className="h-14 w-14 shrink-0 rounded-full border border-white/[0.1] object-cover sm:h-[72px] sm:w-[72px]"
+        className="h-14 w-14 shrink-0 rounded-full border border-border object-cover sm:h-[72px] sm:w-[72px]"
       />
     );
   }
@@ -35,7 +35,7 @@ function Avatar({ label, url }: { label: string; url?: string }) {
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("") || "?";
   return (
-    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-white/[0.12] bg-gradient-to-br from-zinc-700 to-zinc-900 text-sm font-bold text-zinc-200 sm:h-[72px] sm:w-[72px] sm:text-base">
+    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-sm font-bold text-foreground sm:h-[72px] sm:w-[72px] sm:text-base">
       {initials}
     </div>
   );
@@ -62,14 +62,14 @@ export function DashboardMatchupMarquee({
   const aPct = winProbPct != null ? Math.round(Math.min(100, Math.max(0, winProbPct))) : null;
 
   return (
-    <div className="relative flex min-h-[320px] flex-col overflow-hidden rounded-2xl border border-red-500/15 bg-gradient-to-b from-[#1d1522] via-[#18111c] to-[#110c14] p-5 shadow-[0_0_48px_-16px_rgba(239,68,68,0.35)] sm:p-7">
+    <div className="relative flex min-h-[320px] flex-col overflow-hidden rounded-2xl border border-red-500/15 bg-card p-5 shadow-[0_0_48px_-16px_rgba(239,68,68,0.35)] sm:p-7">
       <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-red-500/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-violet-500/5 blur-3xl" />
 
       <div className="relative flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-400/90">This week&apos;s matchup</p>
-          <p className="mt-1 text-xs text-zinc-500">{weekLabel}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{weekLabel}</p>
         </div>
         <Link to="/matchups" className="text-xs font-medium text-red-400/90 hover:text-red-300">
           All matchups →
@@ -77,13 +77,13 @@ export function DashboardMatchupMarquee({
       </div>
 
       {isLoading ? (
-        <div className="relative mt-10 flex flex-1 items-center justify-center gap-2 text-zinc-500">
+        <div className="relative mt-10 flex flex-1 items-center justify-center gap-2 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" /> Loading matchup…
         </div>
       ) : !teamA || !teamB ? (
         <div className="relative mt-10 flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
-          <p className="text-sm font-medium text-zinc-300">Not Yet Available</p>
-          <p className="max-w-sm text-xs leading-relaxed text-zinc-600">
+          <p className="text-sm font-medium text-foreground">Not Yet Available</p>
+          <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
             Connect ESPN sync and ensure league pulse can resolve a featured matchup for this week.
           </p>
         </div>
@@ -96,8 +96,8 @@ export function DashboardMatchupMarquee({
                 <p className="text-[10px] font-bold uppercase tracking-widest text-red-400/80">
                   #{teamA.displayRank} {teamA.ownerName || teamA.teamName}
                 </p>
-                <p className="mt-0.5 truncate text-lg font-bold text-zinc-50">{teamA.teamName}</p>
-                <p className="text-xs text-zinc-500">
+                <p className="mt-0.5 truncate text-lg font-bold text-foreground">{teamA.teamName}</p>
+                <p className="text-xs text-muted-foreground">
                   {teamA.wins}–{teamA.losses}
                 </p>
               </div>
@@ -112,45 +112,45 @@ export function DashboardMatchupMarquee({
             <div className="flex flex-1 flex-col items-center gap-3 text-center sm:items-end sm:text-right">
               <Avatar label={teamB.ownerName || teamB.teamName} url={teamB.logoUrl} />
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                   #{teamB.displayRank} {teamB.ownerName || teamB.teamName}
                 </p>
-                <p className="mt-0.5 truncate text-lg font-bold text-zinc-50">{teamB.teamName}</p>
-                <p className="text-xs text-zinc-500">
+                <p className="mt-0.5 truncate text-lg font-bold text-foreground">{teamB.teamName}</p>
+                <p className="text-xs text-muted-foreground">
                   {teamB.wins}–{teamB.losses}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="space-y-3 rounded-xl border border-white/[0.06] bg-black/25 px-4 py-4">
+          <div className="space-y-3 rounded-xl border border-border bg-black/25 px-4 py-4">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Projected</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Projected</p>
                 {board?.homeProjected != null && board?.awayProjected != null ? (
-                  <p className="mt-1 font-mono text-2xl font-bold tabular-nums tracking-tight text-zinc-100 sm:text-3xl">
+                  <p className="mt-1 font-mono text-2xl font-bold tabular-nums tracking-tight text-foreground sm:text-3xl">
                     {teamA.teamId === board.homeTeamId
                       ? `${board.homeProjected.toFixed(1)} – ${board.awayProjected.toFixed(1)}`
                       : `${board.awayProjected.toFixed(1)} – ${board.homeProjected.toFixed(1)}`}
                   </p>
                 ) : (
-                  <p className="mt-1 text-sm text-zinc-500">Not Yet Available</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Not Yet Available</p>
                 )}
               </div>
             </div>
 
             <div>
-              <div className="mb-1 flex justify-between text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+              <div className="mb-1 flex justify-between text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 <span>Team outlook (pulse)</span>
-                {aPct != null ? <span className="tabular-nums text-zinc-300">{aPct}%</span> : <span>—</span>}
+                {aPct != null ? <span className="tabular-nums text-foreground">{aPct}%</span> : <span>—</span>}
               </div>
               {aPct != null ? (
-                <div className="flex h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
+                <div className="flex h-2.5 overflow-hidden rounded-full bg-foreground/[0.06]">
                   <div className="bg-gradient-to-r from-red-500 to-red-400" style={{ width: `${aPct}%` }} />
                   <div className="flex-1 bg-violet-500/25" />
                 </div>
               ) : (
-                <div className="rounded-md border border-white/[0.05] bg-white/[0.02] px-3 py-2 text-center text-[11px] text-zinc-500">
+                <div className="rounded-md border border-border bg-foreground/[0.02] px-3 py-2 text-center text-[11px] text-muted-foreground">
                   Not Yet Available — no outlook score for this featured pairing in the current pulse payload.
                   {winProbCaption ? ` ${winProbCaption}` : ""}
                 </div>

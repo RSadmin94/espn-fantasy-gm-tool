@@ -598,7 +598,7 @@ export function Dashboard() {
 
   if (pageLoading) {
     return (
-      <div className="mx-auto max-w-[1400px] space-y-4 bg-[#0c090e] px-4 py-6" aria-busy="true">
+      <div className="mx-auto max-w-[1400px] space-y-4 bg-background px-4 py-6" aria-busy="true">
         <Skeleton className="h-10 w-72 max-w-full" />
         <Skeleton className="h-4 w-96 max-w-full" />
         <div className="grid gap-3 md:grid-cols-3">
@@ -660,21 +660,21 @@ export function Dashboard() {
     !!leagueCtx.myTeamId && !!thisWeekOpponent && (pulseQ.data?.week ?? 0) >= 1 && !pulseQ.data?.isSeasonComplete;
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-10 bg-[#0c090e] px-4 pb-16 pt-6 sm:px-6">
-      <header className="border-b border-white/[0.06] pb-6 space-y-5">
+    <div className="mx-auto max-w-[1400px] space-y-10 bg-background px-4 pb-16 pt-6 sm:px-6">
+      <header className="border-b border-border pb-6 space-y-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 space-y-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-lime-500/90">Welcome back</p>
-            <h1 className="truncate text-3xl font-bold tracking-tight text-zinc-50 md:text-4xl">{welcomeName}</h1>
-            <p className="text-sm text-zinc-400">
-              <span className="font-medium text-zinc-300">{leagueName}</span>
-              {subtitle ? <span className="text-zinc-500"> · {subtitle}</span> : null}
+            <h1 className="truncate text-3xl font-bold tracking-tight text-foreground md:text-4xl">{welcomeName}</h1>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{leagueName}</span>
+              {subtitle ? <span className="text-muted-foreground"> · {subtitle}</span> : null}
             </p>
           </div>
           <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
             <div className="w-full min-w-[160px] sm:w-48">
               <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
-                <SelectTrigger className="border-white/[0.08] bg-[#18111c] text-zinc-100">
+                <SelectTrigger className="border-border bg-card">
                   <SelectValue placeholder="Season" />
                 </SelectTrigger>
                 <SelectContent>
@@ -709,56 +709,56 @@ export function Dashboard() {
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" aria-label="Your owner snapshot">
-            <div className="rounded-xl border border-amber-500/20 bg-zinc-900/40 p-4 flex flex-col gap-1">
+            <div className="rounded-xl border border-amber-500/20 bg-muted/40 p-4 flex flex-col gap-1">
               <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-amber-400/90">
                 <Medal className="h-3.5 w-3.5 shrink-0" />
                 Your legacy rank
               </div>
-              <p className="text-xl font-black tabular-nums text-zinc-50">{legacyRankDisplay.primary}</p>
-              <p className="text-[11px] text-zinc-500 leading-snug">{legacyRankDisplay.secondary}</p>
+              <p className="text-xl font-black tabular-nums text-foreground">{legacyRankDisplay.primary}</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">{legacyRankDisplay.secondary}</p>
             </div>
-            <div className="rounded-xl border border-yellow-500/20 bg-zinc-900/40 p-4 flex flex-col gap-1">
+            <div className="rounded-xl border border-yellow-500/20 bg-muted/40 p-4 flex flex-col gap-1">
               <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-yellow-400/90">
                 <Trophy className="h-3.5 w-3.5 shrink-0" />
                 Championships
               </div>
-              <p className="text-lg font-bold text-zinc-100 leading-snug break-words">{champsFmt}</p>
+              <p className="text-lg font-bold text-foreground leading-snug break-words">{champsFmt}</p>
               {isSignedIn && focalOwner && !focalOwner.isSetupComplete ? (
-                <p className="text-[11px] text-zinc-500">Select your team in Settings to personalize.</p>
+                <p className="text-[11px] text-muted-foreground">Select your team in Settings to personalize.</p>
               ) : null}
             </div>
-            <div className="rounded-xl border border-orange-500/20 bg-zinc-900/40 p-4 flex flex-col gap-1">
+            <div className="rounded-xl border border-orange-500/20 bg-muted/40 p-4 flex flex-col gap-1">
               <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-orange-400/90">
                 <Swords className="h-3.5 w-3.5 shrink-0" />
                 Biggest rival
               </div>
-              <p className="text-lg font-bold text-zinc-100 truncate" title={rivalFmt}>
+              <p className="text-lg font-bold text-foreground truncate" title={rivalFmt}>
                 {rivalFmt}
               </p>
               {oh?.rival?.heatLabel ? (
-                <p className="text-[11px] text-zinc-500">{oh.rival.heatLabel} · score {oh.rival.rivalryScore}</p>
+                <p className="text-[11px] text-muted-foreground">{oh.rival.heatLabel} · score {oh.rival.rivalryScore}</p>
               ) : null}
             </div>
-            <div className="rounded-xl border border-red-500/20 bg-zinc-900/40 p-4 flex flex-col gap-1">
+            <div className="rounded-xl border border-red-500/20 bg-muted/40 p-4 flex flex-col gap-1">
               <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-red-400/90">
                 <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
                 Biggest threat
               </div>
-              <p className="text-lg font-bold text-zinc-100 leading-snug break-words">{threatFmt}</p>
+              <p className="text-lg font-bold text-foreground leading-snug break-words">{threatFmt}</p>
               {oh?.threat?.primary?.reason ? (
-                <p className="text-[11px] text-zinc-500 line-clamp-2">{oh.threat.primary.reason}</p>
+                <p className="text-[11px] text-muted-foreground line-clamp-2">{oh.threat.primary.reason}</p>
               ) : oh?.threat?.note ? (
-                <p className="text-[11px] text-zinc-500">{oh.threat.note}</p>
+                <p className="text-[11px] text-muted-foreground">{oh.threat.note}</p>
               ) : null}
             </div>
-            <div className="rounded-xl border border-emerald-500/20 bg-zinc-900/40 p-4 flex flex-col gap-1 sm:col-span-2 lg:col-span-1">
+            <div className="rounded-xl border border-emerald-500/20 bg-muted/40 p-4 flex flex-col gap-1 sm:col-span-2 lg:col-span-1">
               <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-emerald-400/90">
                 <TrendingUp className="h-3.5 w-3.5 shrink-0" />
                 Career record
               </div>
-              <p className="text-xl font-black tabular-nums text-zinc-50">{careerFmt}</p>
+              <p className="text-xl font-black tabular-nums text-foreground">{careerFmt}</p>
               {oh?.careerRecord ? (
-                <p className="text-[11px] text-zinc-500">
+                <p className="text-[11px] text-muted-foreground">
                   {oh.careerRecord.seasonsActive} season{oh.careerRecord.seasonsActive === 1 ? "" : "s"} ·{" "}
                   {oh.careerRecord.playoffAppearances} playoff run{oh.careerRecord.playoffAppearances === 1 ? "" : "s"}
                 </p>
@@ -771,7 +771,7 @@ export function Dashboard() {
       {/* Matchup Intelligence: this-week opponent (linked team + in-season week) */}
       {showMatchupIntelPanel && thisWeekOpponent ? (
         <section
-          className="rounded-2xl border border-sky-500/25 bg-gradient-to-br from-[#0d1218] via-[#0f1016] to-[#0c090e] p-6 shadow-[0_0_50px_-22px_rgba(56,189,248,0.25)] mb-2"
+          className="rounded-2xl border border-sky-500/25 bg-card p-6 shadow-[0_0_50px_-22px_rgba(56,189,248,0.25)] mb-2"
           aria-label="Matchup intelligence"
         >
           <div className="flex items-start gap-3 mb-5">
@@ -780,15 +780,15 @@ export function Dashboard() {
             </div>
             <div className="min-w-0">
               <p className="text-[9px] font-black uppercase tracking-widest text-sky-400/90">Matchup intelligence</p>
-              <p className="text-lg md:text-xl font-bold text-zinc-50 mt-1">
+              <p className="text-lg md:text-xl font-bold text-foreground mt-1">
                 You play{" "}
                 <span className="text-sky-200">{thisWeekOpponent.ownerName}</span>
                 {thisWeekOpponent.teamName ? (
-                  <span className="text-zinc-500 font-medium"> · {thisWeekOpponent.teamName}</span>
+                  <span className="text-muted-foreground font-medium"> · {thisWeekOpponent.teamName}</span>
                 ) : null}{" "}
                 this week.
               </p>
-              <p className="text-[11px] text-zinc-500 mt-1">{weekLabel}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">{weekLabel}</p>
             </div>
           </div>
           {opponentMemberId && opponentDnaQ.isLoading ? (
@@ -798,28 +798,28 @@ export function Dashboard() {
               ))}
             </div>
           ) : !opponentMemberId ? (
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted-foreground">
               Opponent DNA loads when member IDs are on this week&apos;s schedule. Run a league sync if this stays blank.
             </p>
           ) : (
             <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/40 px-4 py-3">
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Biggest weakness</dt>
-                <dd className="mt-1 text-sm font-semibold text-zinc-100">{matchupWeakLabel}</dd>
+              <div className="rounded-xl border border-border/60 bg-background/40 px-4 py-3">
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Biggest weakness</dt>
+                <dd className="mt-1 text-sm font-semibold text-foreground">{matchupWeakLabel}</dd>
               </div>
-              <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/40 px-4 py-3">
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Draft tendency</dt>
-                <dd className="mt-1 text-sm font-semibold text-zinc-100">{matchupDraftLabel}</dd>
+              <div className="rounded-xl border border-border/60 bg-background/40 px-4 py-3">
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Draft tendency</dt>
+                <dd className="mt-1 text-sm font-semibold text-foreground">{matchupDraftLabel}</dd>
               </div>
-              <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/40 px-4 py-3">
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Trade tendency</dt>
-                <dd className="mt-1 text-sm font-semibold text-zinc-100">{matchupTradeLabel}</dd>
+              <div className="rounded-xl border border-border/60 bg-background/40 px-4 py-3">
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Trade tendency</dt>
+                <dd className="mt-1 text-sm font-semibold text-foreground">{matchupTradeLabel}</dd>
               </div>
-              <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/40 px-4 py-3">
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Most likely keeper</dt>
-                <dd className="mt-1 text-sm font-semibold text-zinc-100">{matchupKeeperLabel}</dd>
+              <div className="rounded-xl border border-border/60 bg-background/40 px-4 py-3">
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Most likely keeper</dt>
+                <dd className="mt-1 text-sm font-semibold text-foreground">{matchupKeeperLabel}</dd>
                 {!(draftIntelQ as any)?.data?.ok ? (
-                  <p className="text-[10px] text-zinc-600 mt-1">Sync draft data for keeper model.</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Sync draft data for keeper model.</p>
                 ) : null}
               </div>
             </dl>
@@ -837,9 +837,9 @@ export function Dashboard() {
         const scarce: any[] = d.scarcityAlerts ?? [];
         const teamCount: number = d.teamCount ?? leagueCtx.teamCount ?? 0;
         const keepersCap = d.leagueCapabilities?.keepers !== false;
-        const GOLD = "#f5c518", TEAL = "#a3e635", MUTED = "#8b97a8", RED = "#ef4444", ORANGE = "#f7902f", BLUE = "#8b5cf6", TXT = "#f3f8ff", ACCENT = "#a3e635";
-        const PANEL = { background: "linear-gradient(180deg,#1b131f,#140e17)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 15 } as const;
-        const SUB = { background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 10 } as const;
+        const GOLD = "#f5c518", TEAL = "#a3e635", MUTED = "var(--color-muted-foreground)", RED = "#ef4444", ORANGE = "#f7902f", BLUE = "#8b5cf6", TXT = "var(--color-foreground)", ACCENT = "#a3e635";
+        const PANEL = { background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 15 } as const;
+        const SUB = { background: "var(--color-muted)", border: "1px solid var(--color-border)", borderRadius: 10 } as const;
         const fn = (x: any) => String(x || "").trim().split(" ")[0] || "Owner";
         const sev = (c: number) => (c >= 60 ? { t: "High", color: RED } : c >= 40 ? { t: "Med", color: ORANGE } : { t: "Low", color: TEAL });
         const arch = (m: any) => { const p = Number(m?.predictabilityScore ?? 0), su = Number(m?.surpriseProbability ?? 0); if (su >= 55) return { label: "Panic Pivot", color: RED }; if (p >= 72) return { label: "By-the-Book", color: TEAL }; if (p >= 55) return { label: "Steady Hand", color: BLUE }; return { label: "Wildcard", color: ORANGE }; };
@@ -895,7 +895,7 @@ export function Dashboard() {
                 <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Activity className="h-5 w-5" style={{ color: ACCENT }} /> League Intelligence Pulse</h3>
                 <div className="mt-3">
                   {pulse.length === 0 && <div className="text-sm py-6 text-center" style={{ color: MUTED }}>No live signals yet.</div>}
-                  {pulse.map((p: any, i: number) => (<div key={i} className="grid items-center gap-2 h-9 text-sm" style={{ gridTemplateColumns: "26px 1fr 58px", borderTop: "1px solid rgba(255,255,255,.06)" }}><span style={{ color: MUTED }}>{p.icon}</span><span>{p.text}</span><b className="text-right font-black" style={{ color: p.s.color }}>{p.s.t}</b></div>))}
+                  {pulse.map((p: any, i: number) => (<div key={i} className="grid items-center gap-2 h-9 text-sm" style={{ gridTemplateColumns: "26px 1fr 58px", borderTop: "1px solid var(--color-border)" }}><span style={{ color: MUTED }}>{p.icon}</span><span>{p.text}</span><b className="text-right font-black" style={{ color: p.s.color }}>{p.s.t}</b></div>))}
                 </div>
               </div></div>
             </div>
@@ -910,7 +910,7 @@ export function Dashboard() {
                 <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Users className="h-5 w-5" style={{ color: ACCENT }} /> Owner DNA Snapshot</h3>
                 <div className="mt-2">
                   {dnaOwners.length === 0 && <div className="text-sm py-6 text-center" style={{ color: MUTED }}>No owner reads yet.</div>}
-                  {dnaOwners.map((m: any, i: number) => { const a = arch(m); return (<div key={i} className="grid items-center gap-2.5 h-[50px]" style={{ gridTemplateColumns: "36px 1fr 70px", borderTop: "1px solid rgba(255,255,255,.06)" }}><span className="w-8 h-8 rounded-full flex items-center justify-center font-black text-white" style={{ background: a.color }}>{fn(m.ownerName).charAt(0).toUpperCase()}</span><span><b className="block text-sm">{fn(m.ownerName)}</b><span className="text-xs" style={{ color: MUTED }}>{a.label}</span></span><span className="text-right font-black" style={{ color: TEAL }}>{Math.round(m.predictabilityScore ?? 0)}%</span></div>); })}
+                  {dnaOwners.map((m: any, i: number) => { const a = arch(m); return (<div key={i} className="grid items-center gap-2.5 h-[50px]" style={{ gridTemplateColumns: "36px 1fr 70px", borderTop: "1px solid var(--color-border)" }}><span className="w-8 h-8 rounded-full flex items-center justify-center font-black text-white" style={{ background: a.color }}>{fn(m.ownerName).charAt(0).toUpperCase()}</span><span><b className="block text-sm">{fn(m.ownerName)}</b><span className="text-xs" style={{ color: MUTED }}>{a.label}</span></span><span className="text-right font-black" style={{ color: TEAL }}>{Math.round(m.predictabilityScore ?? 0)}%</span></div>); })}
                 </div>
               </div></div>
             </div>
@@ -920,7 +920,7 @@ export function Dashboard() {
                 {rings.map((r: any, i: number) => (<div key={i} style={SUB} className="flex flex-col items-center justify-center py-4"><div className="w-[62px] h-[62px] rounded-full flex items-center justify-center text-xl font-black mb-2" style={{ border: `5px solid ${r.color}` }}>{r.v}</div><b className="text-sm">{r.label}</b><span className="text-xs" style={{ color: MUTED }}>{r.sub}</span></div>))}
               </div>
               <div className="mt-3">
-                {readinessTable.map((t: any, i: number) => (<div key={i} className="grid items-center h-7 text-sm" style={{ gridTemplateColumns: "1fr 80px", borderTop: "1px solid rgba(255,255,255,.06)" }}><span style={{ color: MUTED }}>{t.k}</span><b className="text-right" style={{ color: TEAL }}>{t.v}</b></div>))}
+                {readinessTable.map((t: any, i: number) => (<div key={i} className="grid items-center h-7 text-sm" style={{ gridTemplateColumns: "1fr 80px", borderTop: "1px solid var(--color-border)" }}><span style={{ color: MUTED }}>{t.k}</span><b className="text-right" style={{ color: TEAL }}>{t.v}</b></div>))}
               </div>
             </div></div>
           </div>
@@ -931,33 +931,33 @@ export function Dashboard() {
       <section aria-label="Intelligence briefing" className="grid gap-4 lg:grid-cols-3 mb-2">
 
         {/* 1. Rival Threat Window */}
-        <div className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-[#130d0d] via-[#110c14] to-[#0c090e] p-5">
+        <div className="rounded-2xl border border-red-500/20 bg-card p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-7 h-7 rounded-lg bg-red-500/10 border border-red-500/25 flex items-center justify-center shrink-0">
               <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
             </div>
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-red-400/80">Rival Threat Window</p>
-              <p className="text-[10px] text-zinc-600">Highest-scoring opponents</p>
+              <p className="text-[10px] text-muted-foreground">Highest-scoring opponents</p>
             </div>
           </div>
           {standingsQ.isLoading ? (
-            <div className="space-y-2">{[0,1,2].map(i => <div key={i} className="h-8 rounded-lg bg-zinc-800/60 animate-pulse" />)}</div>
+            <div className="space-y-2">{[0,1,2].map(i => <div key={i} className="h-8 rounded-lg bg-muted/60 animate-pulse" />)}</div>
           ) : (() => {
             const threats = (ranked ?? [])
               .slice().sort((a: any, b: any) => (b.pointsFor ?? 0) - (a.pointsFor ?? 0))
               .slice(0, 4);
-            if (!threats.length) return <p className="text-xs text-zinc-600">Sync league data to see threats.</p>;
+            if (!threats.length) return <p className="text-xs text-muted-foreground">Sync league data to see threats.</p>;
             return (
               <ul className="space-y-2">
                 {threats.map((t: any, i: number) => (
-                  <li key={t.teamId ?? i} className="flex items-center gap-3 rounded-lg bg-zinc-900/50 border border-zinc-800/40 px-3 py-2">
-                    <span className={cn("text-[10px] font-black w-5 text-center tabular-nums", i === 0 ? "text-red-400" : i === 1 ? "text-orange-400/80" : "text-zinc-600")}>#{i + 1}</span>
+                  <li key={t.teamId ?? i} className="flex items-center gap-3 rounded-lg bg-muted/50 border border-border/40 px-3 py-2">
+                    <span className={cn("text-[10px] font-black w-5 text-center tabular-nums", i === 0 ? "text-red-400" : i === 1 ? "text-orange-400/80" : "text-muted-foreground")}>#{i + 1}</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-zinc-200 truncate">{t.ownerName ?? t.teamName ?? "—"}</p>
-                      <p className="text-[10px] text-zinc-600">{t.wins ?? 0}W–{t.losses ?? 0}L</p>
+                      <p className="text-xs font-semibold text-foreground truncate">{t.ownerName ?? t.teamName ?? "—"}</p>
+                      <p className="text-[10px] text-muted-foreground">{t.wins ?? 0}W–{t.losses ?? 0}L</p>
                     </div>
-                    <span className="text-xs font-black tabular-nums text-zinc-300">{typeof t.pointsFor === "number" ? t.pointsFor.toFixed(0) : "—"}</span>
+                    <span className="text-xs font-black tabular-nums text-foreground">{typeof t.pointsFor === "number" ? t.pointsFor.toFixed(0) : "—"}</span>
                   </li>
                 ))}
               </ul>
@@ -969,21 +969,21 @@ export function Dashboard() {
         </div>
 
         {/* 2. Decision Memo */}
-        <div className="rounded-2xl border border-lime-500/20 bg-gradient-to-br from-[#0f0b12] via-[#110c14] to-[#0c090e] p-5">
+        <div className="rounded-2xl border border-lime-500/20 bg-card p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-7 h-7 rounded-lg bg-lime-500/10 border border-lime-500/25 flex items-center justify-center shrink-0">
               <FileText className="h-3.5 w-3.5 text-lime-400" />
             </div>
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-lime-400/80">Decision Memo</p>
-              <p className="text-[10px] text-zinc-600">Your draft action plan</p>
+              <p className="text-[10px] text-muted-foreground">Your draft action plan</p>
             </div>
           </div>
           {(draftIntelQ as any)?.isLoading ? (
-            <div className="space-y-2">{[0,1,2].map(i => <div key={i} className="h-8 rounded-lg bg-zinc-800/60 animate-pulse" />)}</div>
+            <div className="space-y-2">{[0,1,2].map(i => <div key={i} className="h-8 rounded-lg bg-muted/60 animate-pulse" />)}</div>
           ) : (() => {
             const di = (draftIntelQ as any)?.data;
-            if (!di?.ok) return <p className="text-xs text-zinc-600">Sync draft data to generate memo.</p>;
+            if (!di?.ok) return <p className="text-xs text-muted-foreground">Sync draft data to generate memo.</p>;
             const keepMemo = di.leagueCapabilities?.keepers !== false;
             const kps: any[] = di.keeperPredictions ?? [];
             const top = kps.slice().sort((a: any, b: any) => (b.kvs ?? 0) - (a.kvs ?? 0))[0];
@@ -1013,7 +1013,7 @@ export function Dashboard() {
                 {memo.map((m, i) => (
                   <li key={i} className="flex gap-2.5 text-xs">
                     <span className={cn("shrink-0 font-black w-18 text-right", m.color)} style={{minWidth:"68px"}}>{m.label}:</span>
-                    <span className="text-zinc-400 leading-snug">{m.text}</span>
+                    <span className="text-muted-foreground leading-snug">{m.text}</span>
                   </li>
                 ))}
               </ul>
@@ -1025,34 +1025,34 @@ export function Dashboard() {
         </div>
 
         {/* 3. Historical Receipts */}
-        <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-[#13100a] via-[#110c14] to-[#0c090e] p-5">
+        <div className="rounded-2xl border border-amber-500/20 bg-card p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center shrink-0">
               <Star className="h-3.5 w-3.5 text-amber-400" />
             </div>
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-amber-400/80">Historical Receipts</p>
-              <p className="text-[10px] text-zinc-600">League decisions on record</p>
+              <p className="text-[10px] text-muted-foreground">League decisions on record</p>
             </div>
           </div>
           {hofQ.isLoading ? (
-            <div className="space-y-2">{[0,1,2].map(i => <div key={i} className="h-8 rounded-lg bg-zinc-800/60 animate-pulse" />)}</div>
+            <div className="space-y-2">{[0,1,2].map(i => <div key={i} className="h-8 rounded-lg bg-muted/60 animate-pulse" />)}</div>
           ) : (() => {
             const champions: any[] = hofQ.data?.championships?.history ?? [];
             if (!champions.length) return (
               <div className="space-y-2">
-                <p className="text-xs text-zinc-600">No championship records found.</p>
-                <p className="text-[10px] text-zinc-700">Import historical data to unlock receipts.</p>
+                <p className="text-xs text-muted-foreground">No championship records found.</p>
+                <p className="text-[10px] text-muted-foreground">Import historical data to unlock receipts.</p>
               </div>
             );
             return (
               <ul className="space-y-2">
                 {champions.slice().reverse().slice(0, 4).map((c: any, i: number) => (
-                  <li key={i} className="flex items-center gap-3 rounded-lg bg-zinc-900/50 border border-zinc-800/40 px-3 py-2">
+                  <li key={i} className="flex items-center gap-3 rounded-lg bg-muted/50 border border-border/40 px-3 py-2">
                     <span className="text-[10px] font-black text-amber-400 tabular-nums w-10 shrink-0">{c.season ?? "—"}</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-zinc-200 truncate">{c.displayName ?? c.ownerName ?? "—"}</p>
-                      <p className="text-[10px] text-zinc-600">Champion{c.playoffSeed ? ` · Seed ${c.playoffSeed}` : ""}</p>
+                      <p className="text-xs font-semibold text-foreground truncate">{c.displayName ?? c.ownerName ?? "—"}</p>
+                      <p className="text-[10px] text-muted-foreground">Champion{c.playoffSeed ? ` · Seed ${c.playoffSeed}` : ""}</p>
                     </div>
                     <Trophy className="h-3 w-3 text-amber-500/60 shrink-0" />
                   </li>
@@ -1064,8 +1064,8 @@ export function Dashboard() {
             <Link to="/draft-history" className="flex items-center gap-1 text-[10px] font-bold text-amber-400/80 hover:text-amber-300 transition-colors">
               Draft History <ChevronRight className="h-3 w-3" />
             </Link>
-            <span className="text-zinc-700">·</span>
-            <Link to="/hall-of-fame" className="flex items-center gap-1 text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors">
+            <span className="text-muted-foreground">·</span>
+            <Link to="/hall-of-fame" className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-muted-foreground transition-colors">
               Hall of Fame <ChevronRight className="h-3 w-3" />
             </Link>
           </div>
@@ -1074,44 +1074,44 @@ export function Dashboard() {
       </section>
       {/* Hero — three prestige cards */}
       <section aria-label="League highlights" className="grid gap-4 md:grid-cols-3">
-        <div className="flex min-h-[240px] flex-col rounded-2xl border border-amber-500/25 bg-gradient-to-br from-[#1c1420] to-[#110c14] p-5 shadow-[0_0_40px_-12px_rgba(245,158,11,0.35)]">
+        <div className="flex min-h-[240px] flex-col rounded-2xl border border-amber-500/25 bg-card p-5 shadow-[0_0_40px_-12px_rgba(245,158,11,0.35)]">
           <div className="flex items-start justify-between gap-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-400/90">Hall of Fame leader</p>
             <Trophy className="h-4 w-4 shrink-0 text-amber-400/80" aria-hidden />
           </div>
           {hofQ.isLoading ? (
-            <div className="mt-8 flex flex-1 items-center gap-2 text-sm text-zinc-500">
+            <div className="mt-8 flex flex-1 items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading…
             </div>
           ) : hofLeader ? (
             <div className="mt-4 flex flex-1 flex-col">
-              <p className="text-2xl font-bold tracking-tight text-zinc-50">{hofLeader.displayName}</p>
+              <p className="text-2xl font-bold tracking-tight text-foreground">{hofLeader.displayName}</p>
               <p className="mt-1 text-sm text-amber-200/90">
                 {hofLeader.titles} championship{hofLeader.titles === 1 ? "" : "s"}
               </p>
-              <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-zinc-400">
-                <div className="rounded-lg border border-white/[0.06] bg-black/20 px-2 py-2">
-                  <p className="text-[10px] font-semibold uppercase text-zinc-500">Win %</p>
-                  <p className="mt-0.5 font-semibold tabular-nums text-zinc-100">
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                <div className="rounded-lg border border-border bg-black/20 px-2 py-2">
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Win %</p>
+                  <p className="mt-0.5 font-semibold tabular-nums text-foreground">
                     {leaderStats ? `${leaderStats.winPct.toFixed(1)}%` : "—"}
                   </p>
                 </div>
-                <div className="rounded-lg border border-white/[0.06] bg-black/20 px-2 py-2">
-                  <p className="text-[10px] font-semibold uppercase text-zinc-500">Seasons active</p>
-                  <p className="mt-0.5 font-semibold tabular-nums text-zinc-100">
+                <div className="rounded-lg border border-border bg-black/20 px-2 py-2">
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Seasons active</p>
+                  <p className="mt-0.5 font-semibold tabular-nums text-foreground">
                     {leaderStats?.seasonsActive ?? "—"}
                   </p>
                 </div>
               </div>
               <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Hall of Fame score</p>
-                <p className="mt-1 text-sm font-medium text-zinc-300">Coming Soon</p>
+                <p className="mt-1 text-sm font-medium text-foreground">Coming Soon</p>
               </div>
             </div>
           ) : (
-            <div className="mt-6 flex flex-1 flex-col justify-center text-sm text-zinc-500">
-              <p className="font-medium text-zinc-400">Not Yet Available</p>
-              <p className="mt-1 text-xs text-zinc-600">Import medals to crown a league leader.</p>
+            <div className="mt-6 flex flex-1 flex-col justify-center text-sm text-muted-foreground">
+              <p className="font-medium text-muted-foreground">Not Yet Available</p>
+              <p className="mt-1 text-xs text-muted-foreground">Import medals to crown a league leader.</p>
             </div>
           )}
           <Link to="/hall-of-fame" className="mt-4 text-xs font-medium text-amber-400/90 hover:text-amber-300">
@@ -1119,53 +1119,53 @@ export function Dashboard() {
           </Link>
         </div>
 
-        <div className="flex min-h-[240px] flex-col rounded-2xl border border-red-500/25 bg-gradient-to-br from-[#16101a] to-[#110c14] p-5 shadow-[0_0_36px_-12px_rgba(239,68,68,0.3)]">
+        <div className="flex min-h-[240px] flex-col rounded-2xl border border-red-500/25 bg-card p-5 shadow-[0_0_36px_-12px_rgba(239,68,68,0.3)]">
           <div className="flex items-start justify-between gap-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-400/90">Hottest rivalry</p>
             <Flame className="h-4 w-4 shrink-0 text-red-400/80" aria-hidden />
           </div>
-          <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-black/20 px-2 py-1.5">
-            <span className="text-[10px] font-medium text-zinc-500">Active owners only</span>
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-border bg-black/20 px-2 py-1.5">
+            <span className="text-[10px] font-medium text-muted-foreground">Active owners only</span>
             <div className="flex items-center gap-2">
-              <span className="text-[9px] text-zinc-600">Historical</span>
+              <span className="text-[9px] text-muted-foreground">Historical</span>
               <Switch disabled checked={false} className="scale-90 opacity-50" aria-label="Include historical owners — coming soon" />
             </div>
           </div>
           {rivalryHero.status === "loading" || ownerListQ.isLoading ? (
-            <div className="mt-8 flex flex-1 items-center gap-2 text-sm text-zinc-500">
+            <div className="mt-8 flex flex-1 items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Scanning dossiers…
             </div>
           ) : rivalryHero.status === "ready" ? (
             <div className="mt-4 flex flex-1 flex-col">
               <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-                <p className="text-lg font-bold text-zinc-100">{rivalryHero.focalDisplay}</p>
+                <p className="text-lg font-bold text-foreground">{rivalryHero.focalDisplay}</p>
                 <span className="rounded-full border border-red-500/35 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-red-300">
                   vs
                 </span>
-                <p className="text-lg font-bold text-zinc-100">{rivalryHero.opponentDisplay}</p>
+                <p className="text-lg font-bold text-foreground">{rivalryHero.opponentDisplay}</p>
               </div>
               <p className="mt-3 text-center font-mono text-3xl font-black tabular-nums text-red-400/95">
                 {rivalryHero.wins}-{rivalryHero.losses}
                 {rivalryHero.ties > 0 ? `-${rivalryHero.ties}` : ""}
               </p>
-              <p className="text-center text-[10px] text-zinc-500">Head-to-head (focal: {rivalryHero.focalDisplay})</p>
+              <p className="text-center text-[10px] text-muted-foreground">Head-to-head (focal: {rivalryHero.focalDisplay})</p>
               <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-2 py-2 text-center">
-                  <p className="text-[10px] font-semibold uppercase text-zinc-500">Heartbreak losses</p>
+                <div className="rounded-lg border border-border bg-black/25 px-2 py-2 text-center">
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Heartbreak losses</p>
                   <p className="mt-0.5 text-lg font-bold text-red-300/90">{rivalryHero.heartbreakLosses}</p>
                 </div>
-                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-2 py-2 text-center">
-                  <p className="text-[10px] font-semibold uppercase text-zinc-500">Closest game</p>
-                  <p className="mt-0.5 text-sm font-semibold text-zinc-200">
+                <div className="rounded-lg border border-border bg-black/25 px-2 py-2 text-center">
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Closest game</p>
+                  <p className="mt-0.5 text-sm font-semibold text-foreground">
                     {rivalryHero.closestMarginLabel ?? "—"}
                   </p>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="mt-6 flex flex-1 flex-col justify-center text-center text-sm text-zinc-500">
-              <p className="font-medium text-zinc-400">Not Yet Available</p>
-              <p className="mt-1 px-2 text-xs text-zinc-600">
+            <div className="mt-6 flex flex-1 flex-col justify-center text-center text-sm text-muted-foreground">
+              <p className="font-medium text-muted-foreground">Not Yet Available</p>
+              <p className="mt-1 px-2 text-xs text-muted-foreground">
                 {rivalryHero.status === "idle"
                   ? "No active owner list yet."
                   : "Need at least two active owners with regular-season head-to-head rows in gmMatchups."}
@@ -1176,7 +1176,7 @@ export function Dashboard() {
             Rivalry center →
           </Link>
           {rivalryEligibilityDiagnostics.totalOwners > 0 && (
-            <p className="mt-1 text-[9px] text-zinc-600">
+            <p className="mt-1 text-[9px] text-muted-foreground">
               Eligible: {rivalryEligibilityDiagnostics.eligibleOwners} · Filtered: {rivalryEligibilityDiagnostics.filteredOwners} (inactive/unrecognized)
             </p>
           )}
@@ -1188,10 +1188,10 @@ export function Dashboard() {
       {/* Row 2 — standings | marquee matchup | records */}
       <section className="grid gap-4 xl:grid-cols-12" aria-label="League board">
         <div className="space-y-3 xl:col-span-3">
-          <div className="flex min-h-[280px] flex-col rounded-2xl border border-white/[0.08] bg-[#18111c]/95 shadow-lg shadow-black/40">
-            <div className="border-b border-white/[0.06] px-4 py-3">
-              <h3 className="text-sm font-semibold text-zinc-50">Current standings</h3>
-              <p className="text-xs text-zinc-500">Top 6 · Season {season}</p>
+          <div className="flex min-h-[280px] flex-col rounded-2xl border border-border bg-card/95 shadow-lg shadow-black/40">
+            <div className="border-b border-border px-4 py-3">
+              <h3 className="text-sm font-semibold text-foreground">Current standings</h3>
+              <p className="text-xs text-muted-foreground">Top 6 · Season {season}</p>
             </div>
             <div className="flex-1 px-3 py-3">
               {standingsQ.isError ? (
@@ -1202,7 +1202,7 @@ export function Dashboard() {
                   </Button>
                 </div>
               ) : ranked.length === 0 ? (
-                <p className="text-sm text-zinc-500">Not Yet Available for this season.</p>
+                <p className="text-sm text-muted-foreground">Not Yet Available for this season.</p>
               ) : (
                 <MiniTable
                   dense
@@ -1210,14 +1210,14 @@ export function Dashboard() {
                   rows={ranked.slice(0, 6).map((t) => {
                     const mine = leagueCtx.myTeamId != null && t.teamId === leagueCtx.myTeamId;
                     return [
-                      <span key="r" className="tabular-nums text-zinc-400">
+                      <span key="r" className="tabular-nums text-muted-foreground">
                         {t.displayRank}
                       </span>,
                       <div key="o" className={cn("min-w-0 font-medium", mine && "text-red-400")}>
                         <div className="truncate">{t.ownerName || t.teamName}</div>
                       </div>,
                       formatRecord(t),
-                      <span key="pf" className="tabular-nums text-zinc-200">
+                      <span key="pf" className="tabular-nums text-foreground">
                         {num(t.pointsFor).toFixed(1)}
                       </span>,
                     ];
@@ -1225,7 +1225,7 @@ export function Dashboard() {
                 />
               )}
             </div>
-            <div className="border-t border-white/[0.06] px-4 py-2">
+            <div className="border-t border-border px-4 py-2">
               <Link to="/standings" className="text-xs font-medium text-violet-400 hover:text-violet-300">
                 View full standings →
               </Link>
@@ -1246,41 +1246,41 @@ export function Dashboard() {
         </div>
 
         <div className="space-y-3 xl:col-span-3">
-          <div className="flex min-h-[280px] flex-col rounded-2xl border border-amber-500/20 bg-[#18111c]/95 shadow-[0_0_28px_-12px_rgba(245,158,11,0.22)]">
-            <div className="border-b border-white/[0.06] px-4 py-3">
-              <h3 className="text-sm font-semibold text-zinc-50">League records</h3>
-              <p className="text-xs text-zinc-500">All-time marks</p>
+          <div className="flex min-h-[280px] flex-col rounded-2xl border border-amber-500/20 bg-card/95 shadow-[0_0_28px_-12px_rgba(245,158,11,0.22)]">
+            <div className="border-b border-border px-4 py-3">
+              <h3 className="text-sm font-semibold text-foreground">League records</h3>
+              <p className="text-xs text-muted-foreground">All-time marks</p>
             </div>
             <div className="flex flex-1 flex-col gap-3 px-4 py-3 text-sm">
               {hofQ.isLoading ? (
-                <div className="flex items-center gap-2 text-zinc-500">
+                <div className="flex items-center gap-2 text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading…
                 </div>
               ) : (
                 <>
-                  <div className="flex flex-col gap-0.5 border-b border-white/[0.05] pb-2">
-                    <span className="text-[10px] font-semibold uppercase text-zinc-500">Highest single game</span>
-                    <span className="text-zinc-100">
+                  <div className="flex flex-col gap-0.5 border-b border-border pb-2">
+                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Highest single game</span>
+                    <span className="text-foreground">
                       {highest ? `${highest.score.toFixed(1)} pts · ${highest.label}` : "Not Yet Calculated"}
                     </span>
                   </div>
-                  <div className="flex flex-col gap-0.5 border-b border-white/[0.05] pb-2">
-                    <span className="text-[10px] font-semibold uppercase text-zinc-500">Lowest single game</span>
-                    <span className="text-zinc-100">
+                  <div className="flex flex-col gap-0.5 border-b border-border pb-2">
+                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Lowest single game</span>
+                    <span className="text-foreground">
                       {lowest ? `${lowest.score.toFixed(1)} pts · ${lowest.label}` : "Not Yet Calculated"}
                     </span>
                   </div>
-                  <div className="flex flex-col gap-0.5 border-b border-white/[0.05] pb-2">
-                    <span className="text-[10px] font-semibold uppercase text-zinc-500">Most points (season)</span>
-                    <span className="text-zinc-100">
+                  <div className="flex flex-col gap-0.5 border-b border-border pb-2">
+                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Most points (season)</span>
+                    <span className="text-foreground">
                       {hiSeasonPf
                         ? `${hiSeasonPf.pointsFor.toFixed(1)} PF · ${hiSeasonPf.displayName} (${hiSeasonPf.season})`
                         : "Not Yet Calculated"}
                     </span>
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[10px] font-semibold uppercase text-zinc-500">Closest championship</span>
-                    <span className="text-xs leading-snug text-zinc-400">
+                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Closest championship</span>
+                    <span className="text-xs leading-snug text-muted-foreground">
                       {hasPlayoffGmMatchups
                         ? "Playoff rows exist in gmMatchups; smallest championship margin is not included in the Hall of Fame payload for this view."
                         : "Not included in Hall of Fame payload."}
@@ -1289,7 +1289,7 @@ export function Dashboard() {
                 </>
               )}
             </div>
-            <div className="border-t border-white/[0.06] px-4 py-2">
+            <div className="border-t border-border px-4 py-2">
               <Link to="/hall-of-fame" className="text-xs font-medium text-amber-400/90 hover:text-amber-300">
                 Full records →
               </Link>
@@ -1300,34 +1300,34 @@ export function Dashboard() {
 
       {/* Row 3 — events | power | playoff */}
       <section className="grid gap-4 lg:grid-cols-3" aria-label="League insights">
-        <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#18111c]/95">
-          <div className="border-b border-white/[0.06] px-4 py-3">
-            <h3 className="text-sm font-semibold text-zinc-50">Recent League Events</h3>
-            <p className="text-xs text-zinc-500">Latest completed transactions (stored league data)</p>
+        <div className="flex min-h-[220px] flex-col rounded-2xl border border-border bg-card/95">
+          <div className="border-b border-border px-4 py-3">
+            <h3 className="text-sm font-semibold text-foreground">Recent League Events</h3>
+            <p className="text-xs text-muted-foreground">Latest completed transactions (stored league data)</p>
           </div>
           <DashboardRecentLeagueEvents seasons={eventSeasons} enabled={eventSeasons.length > 0} />
         </div>
 
-        <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#18111c]/95">
-          <div className="border-b border-white/[0.06] px-4 py-3">
-            <h3 className="text-sm font-semibold text-zinc-50">Dynasty power rankings</h3>
-            <p className="text-xs text-zinc-500">Top 5 · owners.ownerList</p>
+        <div className="flex min-h-[220px] flex-col rounded-2xl border border-border bg-card/95">
+          <div className="border-b border-border px-4 py-3">
+            <h3 className="text-sm font-semibold text-foreground">Dynasty power rankings</h3>
+            <p className="text-xs text-muted-foreground">Top 5 · owners.ownerList</p>
           </div>
           <div className="flex-1 px-3 py-3">
             {ownerListQ.isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-zinc-500">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading…
               </div>
             ) : powerTop.length === 0 ? (
-              <p className="text-sm text-zinc-500">Not Yet Available</p>
+              <p className="text-sm text-muted-foreground">Not Yet Available</p>
             ) : (
               <MiniTable
                 dense
                 columns={["Owner", "Power Score"]}
                 rows={powerTop.map((o) => [
                   <div key="n" className="min-w-0">
-                    <div className="truncate font-medium text-zinc-100">{o.ownerName}</div>
-                    <div className="truncate text-[10px] text-zinc-600">{o.currentTeam}</div>
+                    <div className="truncate font-medium text-foreground">{o.ownerName}</div>
+                    <div className="truncate text-[10px] text-muted-foreground">{o.currentTeam}</div>
                   </div>,
                   <span key="s" className="tabular-nums font-semibold text-lime-300/90">
                     {o.score}
@@ -1336,21 +1336,21 @@ export function Dashboard() {
               />
             )}
           </div>
-          <div className="border-t border-white/[0.06] px-4 py-2">
+          <div className="border-t border-border px-4 py-2">
             <Link to="/owner-profiles" className="text-xs font-medium text-violet-400 hover:text-violet-300">
               Owner profiles →
             </Link>
           </div>
         </div>
 
-        <div className="flex min-h-[220px] flex-col rounded-2xl border border-white/[0.08] bg-[#18111c]/95">
-          <div className="border-b border-white/[0.06] px-4 py-3">
-            <h3 className="text-sm font-semibold text-zinc-50">Playoff picture</h3>
-            <p className="text-xs text-zinc-500">Seed-based · top 6 · no fabricated odds</p>
+        <div className="flex min-h-[220px] flex-col rounded-2xl border border-border bg-card/95">
+          <div className="border-b border-border px-4 py-3">
+            <h3 className="text-sm font-semibold text-foreground">Playoff picture</h3>
+            <p className="text-xs text-muted-foreground">Seed-based · top 6 · no fabricated odds</p>
           </div>
           <div className="flex-1 space-y-2 px-3 py-3">
             {ranked.length === 0 ? (
-              <p className="text-sm text-zinc-500">Not Yet Available</p>
+              <p className="text-sm text-muted-foreground">Not Yet Available</p>
             ) : (
               <ul className="space-y-2">
                 {ranked.slice(0, 6).map((t) => {
@@ -1359,11 +1359,11 @@ export function Dashboard() {
                   return (
                     <li
                       key={t.teamId}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.05] bg-white/[0.02] px-2 py-2"
+                      className="flex items-center justify-between gap-2 rounded-lg border border-border bg-foreground/[0.02] px-2 py-2"
                     >
                       <div className={cn("min-w-0", mine && "text-red-400")}>
-                        <p className="truncate text-sm font-medium text-zinc-100">{t.ownerName || t.teamName}</p>
-                        <p className="text-[11px] text-zinc-500">
+                        <p className="truncate text-sm font-medium text-foreground">{t.ownerName || t.teamName}</p>
+                        <p className="text-[11px] text-muted-foreground">
                           #{t.displayRank} · {formatRecord(t)}
                           {t.playoffSeed != null ? ` · Seed ${t.playoffSeed}` : ""}
                         </p>
@@ -1386,7 +1386,7 @@ export function Dashboard() {
 
 
       <LeagueWireNewsFeed />
-      <div className="mt-6 border-t border-white/5 pt-4 pb-6 text-center text-[11px] tracking-wide text-white/25">
+      <div className="mt-6 border-t border-border pt-4 pb-6 text-center text-[11px] tracking-wide text-muted-foreground/60">
         Build: {__APP_GIT_HASH__ && __APP_GIT_HASH__ !== "unknown" ? __APP_GIT_HASH__.slice(0, 7) : "Unknown"}
       </div>
     </div>

@@ -33,16 +33,16 @@ function WireCard({ report }: { report: MatchupReport }) {
   const badge = report.gameType ? GAME_BADGE[report.gameType] : null;
 
   return (
-    <div className="rounded-lg border border-zinc-800/60 bg-zinc-900/40 p-3 space-y-2 hover:border-zinc-700/60 transition-colors">
+    <div className="rounded-lg border border-border/60 bg-muted/40 p-3 space-y-2 hover:border-border/60 transition-colors">
       {/* Scores */}
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0">
-          <div className="font-bold text-zinc-100 text-xs truncate">{report.winner.name}</div>
-          <div className="text-zinc-500 text-xs truncate">{report.loser.name}</div>
+          <div className="font-bold text-foreground text-xs truncate">{report.winner.name}</div>
+          <div className="text-muted-foreground text-xs truncate">{report.loser.name}</div>
         </div>
         <div className="text-right shrink-0">
           <div className="font-black text-lime-400 text-sm tabular-nums">{report.winner.score.toFixed(2)}</div>
-          <div className="text-zinc-600 text-xs tabular-nums">{report.loser.score.toFixed(2)}</div>
+          <div className="text-muted-foreground text-xs tabular-nums">{report.loser.score.toFixed(2)}</div>
         </div>
         {badge && (
           <span className={cn("text-[9px] font-black uppercase border px-1.5 py-0.5 rounded ml-1 shrink-0", badge.cls)}>
@@ -52,7 +52,7 @@ function WireCard({ report }: { report: MatchupReport }) {
       </div>
 
       {/* Icons row */}
-      <div className="flex items-center gap-3 text-[10px] text-zinc-600">
+      <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
         {report.rivalryNote && (
           <span className="flex items-center gap-1 text-violet-500">
             <Swords className="h-2.5 w-2.5" />
@@ -65,7 +65,7 @@ function WireCard({ report }: { report: MatchupReport }) {
             {report.playoffImpact.winnerRecord}
           </span>
         )}
-        <span className="ml-auto text-zinc-700">+{report.margin?.toFixed(2)}</span>
+        <span className="ml-auto text-muted-foreground">+{report.margin?.toFixed(2)}</span>
       </div>
     </div>
   );
@@ -92,19 +92,19 @@ export function LeagueWireNewsFeed() {
   if (!Array.isArray(reports) || reports.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/20 overflow-hidden">
+    <div className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/40">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
         <div className="flex items-center gap-2">
           <Radio className="h-3.5 w-3.5 text-lime-400" />
-          <span className="text-sm font-black text-zinc-200 tracking-tight">League Wire</span>
-          <span className="text-[10px] text-zinc-600 font-medium">
+          <span className="text-sm font-black text-foreground tracking-tight">League Wire</span>
+          <span className="text-[10px] text-muted-foreground font-medium">
             S{latest.season} · Wk{latest.week}
           </span>
         </div>
         <Link
           to="/league-wire"
-          className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
         >
           All reports <ArrowRight className="h-3 w-3" />
         </Link>
