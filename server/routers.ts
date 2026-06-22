@@ -351,7 +351,9 @@ function normKeeperName(name: string): string {
 
 type KeeperPoolEntry = {
   ownerName:           string;
+  ownerKey:            string;   // canonical merge-aware owner key (id:{GUID}/name:...); identity join
   teamName:            string;
+  playerId:            number;   // ESPN player id (0 = unresolved); identity join to ADP / market value
   playerName:          string;
   nflTeam:             string;
   position:            string;
@@ -3075,6 +3077,27 @@ export const appRouter = router({
           for (const t of teamRowsCur) ownerByTeamId.set(t.teamId, t.ownerName ?? "");
         }
 
+        // Canonical, merge-aware ownerKey per team — the SAME resolver owners.ownerList and
+        // dynasty.powerRankings use (buildRawKeyToCanonicalProfileKey + resolveOwnerKey over
+        // gmTeams, where gmTeams.ownerId === ESPN memberId). Identity ONLY: this does not
+        // change keeper cost, eligibility, or the candidate set.
+        const allGmRowsForKey: GmTeamRow[] = db
+          ? ((await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))) as GmTeamRow[])
+          : [];
+        const keeperRemap = buildRawKeyToCanonicalProfileKey(allGmRowsForKey);
+        const keeperNameToOwnerId = buildNameToOwnerId(allGmRowsForKey);
+        const memberIdByTeamIdCur = new Map<number, string>();
+        for (const t of allGmRowsForKey) {
+          if (t.season === rosterSeason) memberIdByTeamIdCur.set(t.teamId, String(t.ownerId ?? ""));
+        }
+        const resolveKeeperOwnerKey = (teamId: number, nm: string): string => {
+          const mid = teamId > 0 ? memberIdByTeamIdCur.get(teamId) : "";
+          const direct = mid ? keeperRemap.get(`id:${mid}`) : undefined;
+          if (direct) return direct;
+          const raw = resolveOwnerKey("", nm, nm, keeperNameToOwnerId);
+          return keeperRemap.get(raw) ?? raw;
+        };
+
         const rosterPartLabel =
           rosterProvenance.rosterLayer === "season_rosters_db"
             ? "Current roster (DB)"
@@ -3093,6 +3116,17 @@ export const appRouter = router({
             (r.ownerHint ?? "").trim() ||
             r.teamName;
 
+          // Identity fields (additive — do NOT affect keeper cost, eligibility, or candidacy).
+          // playerId: real ESPN id from the current roster row, else from the matched draft
+          // pick; 0 only when neither upstream source carries one (no name→id lookup added).
+          const resolvedPlayerId =
+            r.playerId && r.playerId > 0
+              ? r.playerId
+              : pick && Number(pick.playerId) > 0
+                ? Number(pick.playerId)
+                : 0;
+          const ownerKey = resolveKeeperOwnerKey(r.teamId, ownerName);
+
           if (pick) {
             // Full-board truth: keeper **slot** (keeper or retained) drives two-year rule + cost labeling.
             const isKeptThisYear = isDraftKeeperSlotPick(pick);
@@ -3103,6 +3137,8 @@ export const appRouter = router({
               const costPart = "Keeper cost · cache (FA default Rd 7)";
               pool.push({
                 ownerName,
+                ownerKey,
+                playerId: resolvedPlayerId,
                 teamName: r.teamName,
                 playerName,
                 nflTeam: r.nflTeam,
@@ -3133,6 +3169,8 @@ export const appRouter = router({
               : "Draft · prior season draft recap";
             pool.push({
               ownerName,
+              ownerKey,
+              playerId: resolvedPlayerId,
               teamName: r.teamName,
               playerName,
               nflTeam: r.nflTeam,
@@ -3152,6 +3190,8 @@ export const appRouter = router({
           } else {
             pool.push({
               ownerName,
+              ownerKey,
+              playerId: resolvedPlayerId,
               teamName: r.teamName,
               playerName,
               nflTeam: r.nflTeam,
