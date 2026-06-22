@@ -266,6 +266,66 @@ function listRowLookupKey(o: { ownerKey?: string; ownerName?: string } | null | 
   return String(o?.ownerName ?? "").trim();
 }
 
+// ─── Dynasty Identity badge ───────────────────────────────────────────────────
+// Presentational only. The badge identity (key/label/icon/explanation) and the
+// Now/Later percentiles are consumed verbatim from the dynasty.powerRankings
+// payload — NO recompute, NO classification logic here. The maps below are pure
+// cosmetics (accent + axis colors), matched to the Dynasty Power Rankings page.
+const DYN_BADGE_ACCENT: Record<string, string> = {
+  built_to_last: "#34d399",
+  win_now_window: "#f5c518",
+  rising_empire: "#8b5cf6",
+  crossroads: "#94a3b8",
+  ground_floor: "#f7902f",
+};
+const DYN_NOW_COLOR = "#a3e635"; // lime — win-now axis
+const DYN_LATER_COLOR = "#38bdf8"; // sky — long-term axis
+
+type DynastyIdentityRow = {
+  ownerKey: string;
+  badge: { key: string; label: string; icon: string; explanation: string };
+  nowPct: number;
+  laterPct: number;
+};
+
+function DynastyIdentityStrip({ row }: { row: DynastyIdentityRow | null | undefined }) {
+  if (!row || !row.badge) return null; // no matching ownerKey → render nothing
+  const accent = DYN_BADGE_ACCENT[row.badge.key] ?? "#94a3b8";
+  const bar = (label: string, value: number, color: string) => (
+    <div className="flex items-center gap-2">
+      <span className="w-9 shrink-0 text-[10px] font-bold uppercase tracking-wider text-zinc-500">{label}</span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+        <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, num(value)))}%`, background: color }} />
+      </div>
+      <span className="w-8 shrink-0 text-right text-[11px] font-semibold tabular-nums text-zinc-400">{Math.round(num(value))}</span>
+    </div>
+  );
+  return (
+    <div className="border-t border-white/[0.06] px-5 py-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+        <div className="flex items-start gap-3 sm:flex-1">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xl"
+            style={{ background: `color-mix(in oklch, ${accent} 16%, transparent)`, border: `1px solid color-mix(in oklch, ${accent} 45%, transparent)` }}
+            aria-hidden
+          >
+            {row.badge.icon}
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Dynasty Identity</div>
+            <div className="text-sm font-bold tracking-tight" style={{ color: accent }}>{row.badge.label}</div>
+            <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">{row.badge.explanation}</p>
+          </div>
+        </div>
+        <div className="w-full space-y-1.5 sm:w-64 sm:shrink-0">
+          {bar("Now", row.nowPct, DYN_NOW_COLOR)}
+          {bar("Later", row.laterPct, DYN_LATER_COLOR)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProfilePanel({
   profileLookupKey,
   headerDisplayName,
@@ -350,6 +410,12 @@ function ProfilePanel({
     staleTime: 60_000,
     enabled: leagueKeyReady,
   });
+  // Dynasty Identity badge — consume the existing dynasty.powerRankings payload for the
+  // active league (same query the Dynasty Power Rankings page uses). No recompute.
+  const dynastyPowerQ = trpcAny.dynasty.powerRankings.useQuery(
+    withLeagueSalt({ season: 2026 }, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
   const draftSeasonList: number[] = Array.isArray(allSeasonsQ2.data) ? (allSeasonsQ2.data as number[]) : [];
   const draftSeasonQueries = (trpc as any).useQueries((t: any) =>
     draftSeasonList.map((s: number) =>
@@ -411,6 +477,11 @@ function ProfilePanel({
 
   // Destructure using the ACTUAL server field names
   const snap     = p.snapshot     ?? {};
+  // Dynasty Identity — match the selected owner to its dynasty.powerRankings row by
+  // ownerKey ONLY (the canonical key both sides share). No ownerName fallback.
+  const dynastyIdentityRow: DynastyIdentityRow | null =
+    (Array.isArray(dynastyPowerQ.data?.teams) ? (dynastyPowerQ.data.teams as any[]) : [])
+      .find((r: any) => typeof r?.ownerKey === "string" && r.ownerKey === profileLookupKey) ?? null;
   const draft    = p.draftDNA     ?? {};
   const keeper   = p.keeperDNA    ?? {};
   const activity = p.activityDNA  ?? {};
@@ -569,6 +640,7 @@ function ProfilePanel({
             )}
           </div>
         </div>
+        <DynastyIdentityStrip row={dynastyIdentityRow} />
         <div className="flex gap-0 border-t border-white/[0.06] px-2">
           {(
             [
