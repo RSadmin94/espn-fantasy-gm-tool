@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   Crosshair, Flame, Shield, Activity, Clock, Target,
   AlertTriangle, ChevronRight, Radio, Quote,
+  TrendingDown, Gauge, Eye,
 } from "lucide-react";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 
@@ -165,6 +166,214 @@ function Empty({ children }: any) {
   return <div className="text-[13px] py-5 text-center" style={{ color: MUTED }}>{children}</div>;
 }
 
+/* ── Draft Reality Mode — presentation layer over existing DWR outputs (no new math) ── */
+function realityRisk(score: number): { label: string; color: string; meaning: string } {
+  if (score >= 70) return { label: "High", color: RISK, meaning: "Target pool becomes thin after this point — act decisively." };
+  if (score >= 40) return { label: "Medium", color: WARN, meaning: "Most preferred targets are likely available." };
+  return { label: "Low", color: TEAL, meaning: "Plenty of your targets should be available." };
+}
+
+function DraftRealityMode({
+  myPickWindow, mockDraft, availablePool, myNeeds, usePersonalNeeds,
+  scarcityAlerts, pressureByRound, draftEnvironment, draftAfterKeepers,
+}: any) {
+  const picks = (myPickWindow ?? []).slice(0, 5);
+  const firstPick = picks[0]?.pickNumber ?? null;
+  const noTeam = picks.length === 0;
+
+  // Team-need positions (FLEX → RB/WR/TE), reused from existing rosterNeeds — no scoring.
+  const needPositions = useMemo(() => {
+    const s = new Set<string>();
+    if (usePersonalNeeds) for (const n of (myNeeds ?? [])) {
+      const p = String(n.position || "").toUpperCase();
+      if (p === "FLEX") { s.add("RB"); s.add("WR"); s.add("TE"); }
+      else if (["QB", "RB", "WR", "TE"].includes(p)) s.add(p);
+    }
+    return s;
+  }, [myNeeds, usePersonalNeeds]);
+
+  // 2 — probably gone before your first pick (existing mock + ADP only)
+  const probablyGone = useMemo(() => {
+    if (firstPick == null) return [] as any[];
+    return mockDraft
+      .filter((p: any) => !p.isKeeperSlot && p.player && Number(p.pickNumber) < firstPick)
+      .sort((a: any, b: any) => a.pickNumber - b.pickNumber)
+      .slice(0, 12)
+      .map((p: any) => ({ name: p.player, position: p.position }));
+  }, [mockDraft, firstPick]);
+
+  // 3 — targets per pick: Tier A = need-matched by board rank, Tier B = best available beyond needs
+  const targets = useMemo(() => picks.map((w: any) => {
+    const proj = w.projected ?? [];
+    const tierA = needPositions.size
+      ? proj.filter((p: any) => needPositions.has(String(p.position).toUpperCase())).slice(0, 3)
+      : [];
+    const aIds = new Set(tierA.map((p: any) => p.id));
+    const tierB = proj.filter((p: any) => !aIds.has(p.id)).slice(0, 3);
+    return { round: w.round, roundPick: w.roundPick, tierA, tierB };
+  }), [picks, needPositions]);
+
+  // 4 — pick risk: existing pressureByRound.hottestScore, banded for display only
+  const pressureMap = useMemo(() => {
+    const m = new Map<number, any>();
+    for (const r of (pressureByRound ?? [])) m.set(Number(r.round), r);
+    return m;
+  }, [pressureByRound]);
+  const risks = picks.map((w: any) => {
+    const score = Number(pressureMap.get(Number(w.round))?.hottestScore ?? 0);
+    return { round: w.round, roundPick: w.roundPick, ...realityRisk(score) };
+  });
+
+  // 5 — reality snapshot (existing scarcity + environment outputs)
+  const scOf = (pos: string) => (scarcityAlerts ?? []).find((s: any) => s.position === pos) ?? null;
+  const rbElite = scOf("RB")?.eliteSupply ?? null;
+  const wrElite = scOf("WR")?.eliteSupply ?? null;
+  const qbUrg = scOf("QB")?.urgency ?? null;
+  const qbSupply = qbUrg === "LOW" ? "healthy" : qbUrg === "MEDIUM" ? "adequate" : qbUrg ? "tight" : "—";
+  const vp = draftEnvironment?.biggestValuePocket ?? null;
+  const remain = (availablePool ?? []).length;
+  const removed = draftAfterKeepers?.totalRemoved ?? 0;
+
+  const chip = (name: string, pos: string, bg: string, key: any) => (
+    <span key={key} className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ color: TEXT, background: bg }}>
+      {name} <span style={{ color: MUTED, fontWeight: 400 }}>{pos}</span>
+    </span>
+  );
+
+  return (
+    <Panel>
+      <SectionTitle icon={Crosshair} kicker="Draft preparation" title="Draft Reality Mode" color={GOLD} />
+      <div className="text-[12px] mt-2 mb-5" style={{ color: MUTED }}>
+        Given the current keeper landscape, who'll actually be there when you pick — built from the keeper-aware mock, ADP, and market value already on this board.
+      </div>
+
+      {/* 1 — Likely available at my pick (the pick window, folded in) */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Target className="h-4 w-4" style={{ color: TEAL }} />
+          <span className="text-[13px] font-bold uppercase tracking-wider" style={{ color: TEXT }}>Likely available at my pick</span>
+        </div>
+        {noTeam ? (
+          <Empty>Link your team in Settings to project who'll be available at your picks.</Empty>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {picks.map((w: any) => (
+              <div key={w.pickNumber} className="p-3" style={SUB}>
+                <div className="text-[14px] font-black mb-1.5" style={{ color: GOLD }}>Pick {w.round}.{pad2(w.roundPick)}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(w.projected ?? []).slice(0, 5).map((p: any, i: number) => chip(p.name, p.position, "rgba(46,212,191,.10)", p.id || i))}
+                  {(w.projected ?? []).length === 0 && <span className="text-[12px]" style={{ color: MUTED }}>Board exhausted</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 2 — probably gone before your pick */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <TrendingDown className="h-4 w-4" style={{ color: RISK }} />
+          <span className="text-[13px] font-bold uppercase tracking-wider" style={{ color: TEXT }}>Probably gone before your pick</span>
+        </div>
+        {noTeam ? (
+          <Empty>Link your team to see who'll be gone before your first pick.</Empty>
+        ) : probablyGone.length === 0 ? (
+          <Empty>You pick early — nobody projects to go before you.</Empty>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {probablyGone.map((p: any, i: number) => chip(p.name, p.position, "rgba(248,113,113,.10)", i))}
+            </div>
+            <div className="text-[11px]" style={{ color: MUTED }}>Current ADP projects these selected before your slot.</div>
+          </>
+        )}
+      </div>
+
+      {/* 3 — draft targets */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Crosshair className="h-4 w-4" style={{ color: GOLD }} />
+          <span className="text-[13px] font-bold uppercase tracking-wider" style={{ color: TEXT }}>Draft targets</span>
+        </div>
+        {noTeam ? (
+          <Empty>Link your team to get per-pick targets.</Empty>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {targets.map((t: any) => (
+              <div key={`${t.round}.${t.roundPick}`} className="p-3" style={SUB}>
+                <div className="text-[14px] font-black mb-2" style={{ color: GOLD }}>Pick {t.round}.{pad2(t.roundPick)} targets</div>
+                <div className="mb-2">
+                  <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: TEAL }}>Tier A · fits your need</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {t.tierA.length === 0 && <span className="text-[12px]" style={{ color: MUTED }}>No need-fit available</span>}
+                    {t.tierA.map((p: any, i: number) => chip(p.name, p.position, "rgba(46,212,191,.12)", p.id || i))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: MUTED }}>Tier B · best available</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {t.tierB.map((p: any, i: number) => (
+                      <span key={p.id || i} className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ color: MUTED, background: "rgba(255,255,255,.04)" }}>
+                        {p.name} <span style={{ fontWeight: 400 }}>{p.position}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 4 — pick risk meter */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Gauge className="h-4 w-4" style={{ color: WARN }} />
+          <span className="text-[13px] font-bold uppercase tracking-wider" style={{ color: TEXT }}>Pick risk meter</span>
+        </div>
+        {noTeam ? (
+          <Empty>Link your team to gauge per-pick risk.</Empty>
+        ) : (
+          <div className="space-y-2">
+            {risks.map((r: any) => (
+              <div key={`${r.round}.${r.roundPick}`} className="flex items-center gap-3 p-2.5" style={SUB}>
+                <span className="text-[13px] font-black shrink-0" style={{ color: GOLD, width: 70 }}>Pick {r.round}.{pad2(r.roundPick)}</span>
+                <span className="text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded shrink-0" style={{ color: r.color, background: r.color + "1f", minWidth: 64, textAlign: "center" }}>{r.label}</span>
+                <span className="text-[12px]" style={{ color: MUTED }}>{r.meaning}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 5 — reality snapshot */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Eye className="h-4 w-4" style={{ color: CYAN }} />
+          <span className="text-[13px] font-bold uppercase tracking-wider" style={{ color: TEXT }}>Reality snapshot</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
+          {[
+            { label: "Keepers removed", val: removed, c: GOLD },
+            { label: "Players remain", val: remain, c: TEXT },
+            { label: "Elite RBs available", val: rbElite ?? "—", c: TEAL },
+            { label: "Elite WRs available", val: wrElite ?? "—", c: TEAL },
+            { label: "QB supply", val: qbSupply, c: CYAN },
+            { label: "Best value window", val: vp ? `Rd ${vp.round} · ${vp.position}` : "—", c: GOLD },
+          ].map((s) => (
+            <div key={s.label} className="p-3" style={SUB}>
+              <div className="text-[20px] font-black leading-none" style={{ color: s.c }}>{s.val}</div>
+              <div className="text-[10px] uppercase tracking-wider mt-1.5" style={{ color: MUTED }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+        {vp?.reason && <div className="text-[11px] mt-2.5" style={{ color: MUTED }}>{vp.reason}</div>}
+      </div>
+    </Panel>
+  );
+}
+
 /* ── main editorial desk ── */
 export function DraftWarRoomDesk({ data }: { data: any }) {
   const lg: any = useLeagueContext();
@@ -178,6 +387,8 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
   const availablePool: any[] = data?.availablePool ?? [];
   const mockDraft: any[] = data?.mockDraft ?? [];
   const draftAfterKeepers: any = data?.draftAfterKeepers ?? null;
+  const pressureByRound: any[] = data?.pressureByRound ?? [];
+  const draftEnvironment: any = data?.draftEnvironment ?? null;
   const conf: any = data?.confidenceDashboard ?? {};
 
   const myTeamId: number | null =
@@ -551,8 +762,8 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
         </Panel>
       </div>
 
-      {/* draft after keepers + my pick window */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* draft after keepers (full width — pick window now lives in Draft Reality Mode) */}
+      <div className="grid grid-cols-1 gap-4">
         <Panel>
           <SectionTitle icon={Shield} kicker="Board reality" title="Draft After Keepers" color={GOLD} />
           {draftAfterKeepers && draftAfterKeepers.totalRemoved > 0 ? (
@@ -591,31 +802,20 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
           )}
         </Panel>
 
-        <Panel>
-          <SectionTitle icon={Target} kicker={usePersonalNeeds ? "Projected availability" : "Link your team for this"} title="My Pick Window" color={TEAL} />
-          <div className="space-y-3 mt-4 max-h-[440px] overflow-y-auto pr-1">
-            {myPickWindow.length === 0 && (
-              <Empty>{usePersonalNeeds ? "No upcoming picks projected." : "Link your team in Settings to project who'll be there at your picks."}</Empty>
-            )}
-            {myPickWindow.map((w) => (
-              <div key={w.pickNumber} className="p-3.5" style={SUB}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[15px] font-black" style={{ color: GOLD }}>Pick {w.round}.{pad2(w.roundPick)}</span>
-                  <span className="text-[11px] uppercase tracking-wider" style={{ color: MUTED }}>projected available</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {w.projected.length === 0 && <span className="text-[12px]" style={{ color: MUTED }}>Board exhausted</span>}
-                  {w.projected.slice(0, 8).map((p: any, i: number) => (
-                    <span key={p.id || i} className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ color: i < 3 ? TEXT : MUTED, background: i < 3 ? "rgba(46,212,191,.10)" : "rgba(255,255,255,.04)" }}>
-                      {p.name} <span style={{ color: MUTED, fontWeight: 400 }}>{p.position}</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Panel>
       </div>
+
+      {/* draft reality mode — folds in the pick window (placement B: replaces standalone card) */}
+      <DraftRealityMode
+        myPickWindow={myPickWindow}
+        mockDraft={mockDraft}
+        availablePool={availablePool}
+        myNeeds={myNeeds}
+        usePersonalNeeds={usePersonalNeeds}
+        scarcityAlerts={scarcityAlerts}
+        pressureByRound={pressureByRound}
+        draftEnvironment={draftEnvironment}
+        draftAfterKeepers={draftAfterKeepers}
+      />
     </div>
   );
 }
