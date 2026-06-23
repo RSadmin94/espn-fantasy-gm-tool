@@ -120,6 +120,10 @@ import {
   resolveEspnCreds,
 } from "./espnService";
 import { buildLeagueCapabilities } from "./leagueCapabilities";
+import {
+  getManualKeeperSelections as svcGetManualKeepers,
+  setManualKeeperSelection as svcSetManualKeeper,
+} from "./manualKeeperSelections";
 import { matchupIsPlayoffFromEspnTier } from "./matchupPlayoffTier";
 import {
   resolveKeeperDraftGeometryForSeason,
@@ -3280,6 +3284,61 @@ export const appRouter = router({
           userId: ctx.user?.id ?? undefined,
         });
         return { ...base, valuations } as KeeperValuationResponse;
+      }),
+
+    // ── Manual keeper selections (user override of predicted keepers) ──────────
+    // Recommendations remain 100% server-generated (keeperValuation above). These
+    // procedures only record/clear a user's manual KEEP overrides. Persisted by
+    // (userId, leagueId, season, ownerKey, playerId). Degrade safely if the table
+    // is not yet provisioned (return empty / soft error).
+    getManualKeeperSelections: protectedProcedure
+      .input(z.object({ season: z.number().int().min(2019).max(2030) }))
+      .query(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const { leagueId } = await resolveActiveLeagueId({ user: { id: userId } }, null, input.season);
+        if (!leagueId) {
+          return { leagueId: "", season: input.season, keeperLimit: null as number | null, selections: [] as Awaited<ReturnType<typeof svcGetManualKeepers>> };
+        }
+        let keeperLimit: number | null = null;
+        try {
+          const capSeasonData = await getSeasonData(input.season, undefined, userId);
+          const caps = buildLeagueCapabilities(leagueId, input.season, capSeasonData as Record<string, unknown>);
+          keeperLimit = caps.keeperSlotsPerTeam ?? null;
+        } catch { /* limit unknown — UI falls back to no cap */ }
+        const selections = await svcGetManualKeepers({ userId, leagueId, season: input.season });
+        return { leagueId, season: input.season, keeperLimit, selections };
+      }),
+
+    setManualKeeperSelection: protectedProcedure
+      .input(z.object({
+        season: z.number().int().min(2019).max(2030),
+        ownerKey: z.string().min(1).max(64),
+        playerId: z.number().int(),
+        playerName: z.string().max(128).optional(),
+        position: z.string().max(8).optional(),
+        keep: z.boolean(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const { leagueId } = await resolveActiveLeagueId({ user: { id: userId } }, null, input.season);
+        if (!leagueId) return { ok: false as const, error: "no_league" as const };
+        let keeperLimit: number | null = null;
+        try {
+          const capSeasonData = await getSeasonData(input.season, undefined, userId);
+          const caps = buildLeagueCapabilities(leagueId, input.season, capSeasonData as Record<string, unknown>);
+          keeperLimit = caps.keeperSlotsPerTeam ?? null;
+        } catch { /* limit unknown — do not block selection */ }
+        return svcSetManualKeeper({
+          userId,
+          leagueId,
+          season: input.season,
+          ownerKey: input.ownerKey,
+          playerId: input.playerId,
+          playerName: input.playerName ?? "",
+          position: input.position ?? "",
+          keep: input.keep,
+          keeperLimit,
+        });
       }),
     keeperPoolByOwner: publicProcedure
       .input(z.object({

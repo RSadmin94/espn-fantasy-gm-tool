@@ -1422,3 +1422,33 @@ export const gmWeeklyPlayerStats = mysqlTable(
 
 export type GmWeeklyPlayerStats       = typeof gmWeeklyPlayerStats.$inferSelect;
 export type InsertGmWeeklyPlayerStats  = typeof gmWeeklyPlayerStats.$inferInsert;
+
+
+// ─── Manual keeper selections (user override of predicted keepers) ──────────────
+// Phase 1: lets a user mark which players a team will keep, overriding the Draft
+// War Room's predicted keepers. Persisted per (userId, leagueId, season, ownerKey,
+// playerId). ownerKey is the Keeper Advisor's canonical merge-aware owner key; the
+// Draft War Room reconciles selections to teams by playerId, not ownerKey. Additive
+// table — features degrade safely when it is absent (see server/manualKeeperSelections.ts).
+export const gmManualKeeperSelections = mysqlTable(
+  "gm_manual_keeper_selections",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    ownerKey: varchar("ownerKey", { length: 64 }).notNull(),
+    playerId: int("playerId").notNull(),
+    playerName: varchar("playerName", { length: 128 }).notNull().default(""),
+    position: varchar("position", { length: 8 }).notNull().default(""),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_manual_keeper").on(t.userId, t.leagueId, t.season, t.ownerKey, t.playerId),
+    index("idx_manual_keeper_lookup").on(t.userId, t.leagueId, t.season),
+  ],
+);
+
+export type GmManualKeeperSelection      = typeof gmManualKeeperSelections.$inferSelect;
+export type InsertGmManualKeeperSelection = typeof gmManualKeeperSelections.$inferInsert;

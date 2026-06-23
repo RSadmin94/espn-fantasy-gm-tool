@@ -25,6 +25,7 @@ import { buildLeagueCapabilities } from "./leagueCapabilities";
 import { getEspnPlayerInfoMap } from "./playerStatsRouter";          // real ADP + projection + percentStarted (single ESPN source)
 import { computeMarketValues, type MarketValueInput } from "./marketValue"; // sole player-value engine (0–100)
 import { computeKeeperValuations, type KeeperPoolRowLite } from "./keeperValuationService"; // sole keeper engine
+import { loadManualKeeperPlayerIds } from "./manualKeeperSelections"; // user keeper overrides (degrades safely)
 
 // Phase B1: LEAGUE_ID constant removed — leagueId is resolved per-request via resolveActiveLeagueId.
 
@@ -565,11 +566,50 @@ async function predictKeepers(
     return { player: c.playerName, position: c.position, projectedPoints: c.projectedPoints, recommendation: vf.recommendation, valueTier: vf.valueTier, roundSavings: vf.roundSavings, keeperRound: c.cost, reason: vf.explanation };
   };
 
+  // ── Manual keeper override ──────────────────────────────────────────────────
+  // If the user has manually marked keepers, those WIN over predicted keepers for
+  // that team — matched by playerId via the eligible pool (never by ownerKey, whose
+  // convention differs between Keeper Advisor and the War Room). Teams with no manual
+  // selection fall through to the predicted logic below, unchanged.
+  const manualPids = await loadManualKeeperPlayerIds(userId, leagueId, season);
+  const poolByPid = new Map(poolRows.map((r) => [r.playerId, r]));
+  const manualByTid = new Map<number, number[]>();
+  for (const pid of manualPids) {
+    const row = poolByPid.get(pid);
+    if (!row) continue;
+    const mtid = Number(String(row.ownerKey).replace("team:", ""));
+    if (!Number.isFinite(mtid)) continue;
+    if (!manualByTid.has(mtid)) manualByTid.set(mtid, []);
+    manualByTid.get(mtid)!.push(pid);
+  }
+
   const predictions: any[] = [];
   for (const team of teams) {
     const tid = Number(team.teamId);
     const slots = slotsByTeam.get(tid);
     const cands = candsByTeam.get(tid) ?? [];
+
+    // Manual selections fully replace predicted keepers for this team (override).
+    const manualForTeam = manualByTid.get(tid);
+    if (manualForTeam && manualForTeam.length > 0) {
+      for (const pid of manualForTeam) {
+        const row = poolByPid.get(pid);
+        if (!row) continue;
+        const vf = valFields(pid);
+        predictions.push({
+          teamId: tid, teamName: team.name, ownerName: team.ownerName,
+          keeperRound: row.keeperRoundCost, keeperSlotRound: null, keeperRoundPick: 0,
+          predictedPlayer: row.playerName, position: row.position,
+          projectedPoints: 0, ...vf,
+          wasKeptLastYear: false, draftRoundSource: "manual", confidence: 100,
+          evidence: ["Manual keeper selection (your override)", vf.explanation].filter(Boolean),
+          status: "MANUAL" as const,
+          alternatives: [],
+          hasOfficialSlot: false,
+        });
+      }
+      continue;
+    }
 
     if (slots?.length) {
       const used = new Set<string>();

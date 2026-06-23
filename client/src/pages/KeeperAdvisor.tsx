@@ -210,6 +210,56 @@ export function KeeperAdvisor() {
     return Array.isArray(raw) ? raw : [];
   }, [payload]);
 
+  // ── Manual keeper selections (user override) ─────────────────────────────────
+  const [manualError, setManualError] = useState<string | null>(null);
+  const manualQ = trpc.espn.getManualKeeperSelections.useQuery(
+    { season: draftYear },
+    { enabled: leagueKeyReady },
+  );
+  const setManual = trpc.espn.setManualKeeperSelection.useMutation({
+    onSuccess: (res) => {
+      const r = res as { ok?: boolean; error?: string; limit?: number | null } | undefined;
+      if (r && r.ok === false) {
+        setManualError(
+          r.error === "limit_reached"
+            ? `Keeper limit reached — max ${r.limit ?? "?"} per team. Deselect one first.`
+            : r.error === "table_missing"
+              ? "Manual keepers aren't available yet (storage not provisioned)."
+              : "Could not save that selection.",
+        );
+      } else {
+        setManualError(null);
+      }
+      void manualQ.refetch();
+    },
+    onError: () => setManualError("Could not save that selection."),
+  });
+
+  const manualLimit = (manualQ.data as { keeperLimit?: number | null } | undefined)?.keeperLimit ?? null;
+  const manualSelections = useMemo(
+    () => ((manualQ.data as { selections?: Array<{ ownerKey: string; playerId: number }> } | undefined)?.selections ?? []),
+    [manualQ.data],
+  );
+  const selectedPlayerIds = useMemo(() => new Set(manualSelections.map((s) => s.playerId)), [manualSelections]);
+  const selectedCountByOwnerKey = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of manualSelections) m.set(s.ownerKey, (m.get(s.ownerKey) ?? 0) + 1);
+    return m;
+  }, [manualSelections]);
+
+  const toggleKeep = (v: KeeperValuation) => {
+    const isSel = selectedPlayerIds.has(v.playerId);
+    setManualError(null);
+    setManual.mutate({
+      season: draftYear,
+      ownerKey: v.ownerKey,
+      playerId: v.playerId,
+      playerName: v.playerName,
+      position: v.position,
+      keep: !isSel,
+    });
+  };
+
   const errorMsg = (payload as { error?: string } | undefined)?.error;
   const hintMsg  = (payload as { hint?: string }  | undefined)?.hint;
   const isRedraftDisabled = Boolean(
@@ -299,6 +349,17 @@ export function KeeperAdvisor() {
             <p className="mt-0.5 text-xs text-zinc-600">
               {valuations.length} eligible players across {owners.length} teams{teamCount > 0 && owners.length < teamCount ? ` · ${teamCount - owners.length} team(s) need roster sync` : ""} · {draftYear - 1} season draft history
             </p>
+            {manualLimit != null && (
+              <p className="mt-0.5 text-xs text-zinc-500">
+                Manual keepers: up to <span className="font-semibold text-zinc-300">{manualLimit}</span> per team
+                {ownerFilter !== "all" && (() => {
+                  const ok = valuations.find((v) => v.ownerName === ownerFilter)?.ownerKey;
+                  const c = ok ? (selectedCountByOwnerKey.get(ok) ?? 0) : 0;
+                  return <> · {ownerFilter}: <span className="font-semibold text-lime-400">{c}/{manualLimit} kept</span></>;
+                })()}
+              </p>
+            )}
+            {manualError && <p className="mt-0.5 text-xs text-red-400">{manualError}</p>}
           </div>
         </div>
 
@@ -372,6 +433,7 @@ export function KeeperAdvisor() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-zinc-800 bg-zinc-900/60">
+                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Keep</th>
                       <th className="px-4 py-3 text-left  text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Player</th>
                       <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Keeper Cost</th>
                       <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">ADP</th>
@@ -392,6 +454,34 @@ export function KeeperAdvisor() {
                             i % 2 === 0 ? "" : "bg-zinc-900/20",
                           )}
                         >
+                          {/* Keep toggle (manual override) */}
+                          <td className="px-3 py-3 text-center">
+                            {(() => {
+                              const isSel = selectedPlayerIds.has(v.playerId);
+                              const ownerCount = selectedCountByOwnerKey.get(v.ownerKey) ?? 0;
+                              const atLimit = manualLimit != null && manualLimit > 0 && ownerCount >= manualLimit;
+                              const disabled = setManual.isPending || (!isSel && atLimit);
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleKeep(v)}
+                                  disabled={disabled}
+                                  title={!isSel && atLimit ? `Keeper limit reached (${manualLimit} per team)` : isSel ? "Remove keeper" : "Mark as keeper"}
+                                  className={cn(
+                                    "inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-colors",
+                                    isSel
+                                      ? "border-lime-600 bg-lime-600/20 text-lime-300 hover:bg-lime-600/30"
+                                      : disabled
+                                        ? "cursor-not-allowed border-zinc-800 bg-zinc-900/40 text-zinc-600"
+                                        : "border-zinc-700 bg-zinc-800/40 text-zinc-300 hover:bg-zinc-700/50",
+                                  )}
+                                >
+                                  {isSel ? "✓ Keeper" : "Keep"}
+                                </button>
+                              );
+                            })()}
+                          </td>
+
                           {/* Player + owner + pos/nfl */}
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
