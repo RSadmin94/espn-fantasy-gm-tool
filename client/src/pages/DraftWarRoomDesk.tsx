@@ -177,6 +177,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
   const scarcityAlerts: any[] = data?.scarcityAlerts ?? [];
   const availablePool: any[] = data?.availablePool ?? [];
   const mockDraft: any[] = data?.mockDraft ?? [];
+  const draftAfterKeepers: any = data?.draftAfterKeepers ?? null;
   const conf: any = data?.confidenceDashboard ?? {};
 
   const myTeamId: number | null =
@@ -192,6 +193,27 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
     if (!minePicks.length) return null;
     return [...minePicks].sort((a, b) => a.pickNumber - b.pickNumber)[0];
   }, [minePicks]);
+
+  // My Pick Window — for each of my upcoming slots, who's projected available (keeper-aware
+  // board minus everyone the mock takes before that pick). Matched by playerId, then name.
+  const myPickWindow = useMemo(() => {
+    if (!minePicks.length) return [] as Array<{ pickNumber: number; round: number; roundPick: number; projected: any[] }>;
+    const sortedMine = [...minePicks].sort((a, b) => a.pickNumber - b.pickNumber).slice(0, 6);
+    const allPicks = mockDraft.filter((p) => !p.isKeeperSlot).sort((a, b) => a.pickNumber - b.pickNumber);
+    return sortedMine.map((mp) => {
+      const beforeIds = new Set<number>();
+      const beforeNames = new Set<string>();
+      for (const pk of allPicks) {
+        if (pk.pickNumber >= mp.pickNumber) break;
+        if (pk.espnId != null) beforeIds.add(Number(pk.espnId));
+        if (pk.player) beforeNames.add(String(pk.player).toLowerCase());
+      }
+      const projected = availablePool
+        .filter((p) => !beforeIds.has(Number(p.espnId)) && !beforeNames.has(String(p.name).toLowerCase()))
+        .slice(0, 10);
+      return { pickNumber: mp.pickNumber, round: mp.round, roundPick: mp.roundPick, projected };
+    });
+  }, [minePicks, mockDraft, availablePool]);
 
   const leagueAnchorPick = useMemo(
     () => mockDraft.find((p) => !p.isKeeperSlot) || mockDraft[0] || null,
@@ -525,6 +547,72 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
           <div className="mt-4 flex items-center gap-2">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" style={{ color: MUTED }} />
             <span className="text-[10px]" style={{ color: MUTED }}>Triggers are projected from current rosters &amp; tendencies, not past-season logs.</span>
+          </div>
+        </Panel>
+      </div>
+
+      {/* draft after keepers + my pick window */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Panel>
+          <SectionTitle icon={Shield} kicker="Board reality" title="Draft After Keepers" color={GOLD} />
+          {draftAfterKeepers && draftAfterKeepers.totalRemoved > 0 ? (
+            <div className="mt-4">
+              <div className="flex items-end gap-3 mb-4">
+                <span className="text-[44px] font-black leading-none" style={{ color: GOLD }}>{draftAfterKeepers.totalRemoved}</span>
+                <span className="text-[14px] font-bold uppercase tracking-wider mb-1.5" style={{ color: MUTED }}>players removed</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2.5 mb-4">
+                {[
+                  { label: "Manual", val: draftAfterKeepers.manual, c: TEAL },
+                  { label: "Confirmed", val: draftAfterKeepers.confirmed, c: CYAN },
+                  { label: "Predicted", val: draftAfterKeepers.predicted, c: GOLD },
+                ].map((s) => (
+                  <div key={s.label} className="p-3 text-center" style={SUB}>
+                    <div className="text-[24px] font-black leading-none" style={{ color: s.c }}>{s.val}</div>
+                    <div className="text-[10px] uppercase tracking-wider mt-1.5" style={{ color: MUTED }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: MUTED }}>Top removed</div>
+              <div className="flex flex-wrap gap-2">
+                {(draftAfterKeepers.topRemoved ?? []).map((r: any) => (
+                  <span key={r.playerId} className="text-[12px] font-bold px-2.5 py-1 rounded" style={{ color: TEXT, background: "rgba(255,255,255,.05)" }}>
+                    {r.playerName} <span style={{ color: MUTED }}>· {r.position}</span>
+                  </span>
+                ))}
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <Shield className="h-3.5 w-3.5 shrink-0" style={{ color: MUTED }} />
+                <span className="text-[10px]" style={{ color: MUTED }}>Keepers removed by player ID before the board, mock &amp; scarcity are built.</span>
+              </div>
+            </div>
+          ) : (
+            <Empty>No keepers removed — the board shows the full pool.</Empty>
+          )}
+        </Panel>
+
+        <Panel>
+          <SectionTitle icon={Target} kicker={usePersonalNeeds ? "Projected availability" : "Link your team for this"} title="My Pick Window" color={TEAL} />
+          <div className="space-y-3 mt-4 max-h-[440px] overflow-y-auto pr-1">
+            {myPickWindow.length === 0 && (
+              <Empty>{usePersonalNeeds ? "No upcoming picks projected." : "Link your team in Settings to project who'll be there at your picks."}</Empty>
+            )}
+            {myPickWindow.map((w) => (
+              <div key={w.pickNumber} className="p-3.5" style={SUB}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[15px] font-black" style={{ color: GOLD }}>Pick {w.round}.{pad2(w.roundPick)}</span>
+                  <span className="text-[11px] uppercase tracking-wider" style={{ color: MUTED }}>projected available</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {w.projected.length === 0 && <span className="text-[12px]" style={{ color: MUTED }}>Board exhausted</span>}
+                  {w.projected.slice(0, 8).map((p: any, i: number) => (
+                    <span key={p.id || i} className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ color: i < 3 ? TEXT : MUTED, background: i < 3 ? "rgba(46,212,191,.10)" : "rgba(255,255,255,.04)" }}>
+                      {p.name} <span style={{ color: MUTED, fontWeight: 400 }}>{p.position}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </Panel>
       </div>

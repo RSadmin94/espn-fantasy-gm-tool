@@ -597,7 +597,7 @@ async function predictKeepers(
         if (!row) continue;
         const vf = valFields(pid);
         predictions.push({
-          teamId: tid, teamName: team.name, ownerName: team.ownerName,
+          teamId: tid, teamName: team.name, ownerName: team.ownerName, playerId: pid,
           keeperRound: row.keeperRoundCost, keeperSlotRound: null, keeperRoundPick: 0,
           predictedPlayer: row.playerName, position: row.position,
           projectedPoints: 0, ...vf,
@@ -622,7 +622,7 @@ async function predictKeepers(
           const actualRound = playerDraftRoundMap.get(nameKey(slot.playerName)) ?? DEFAULT_KEEPER_ROUND;
           const hist = playerDraftRoundMap.has(nameKey(slot.playerName));
           predictions.push({
-            teamId: tid, teamName: team.name, ownerName: team.ownerName,
+            teamId: tid, teamName: team.name, ownerName: team.ownerName, playerId: pid,
             keeperRound: actualRound, keeperSlotRound, keeperRoundPick: Number(slot.roundPick),
             predictedPlayer: slot.playerName, position: slot.position,
             projectedPoints: 0, confidence: 100, ...vf,
@@ -638,7 +638,7 @@ async function predictKeepers(
         const best = ranked[0];
         if (!best) {
           predictions.push({
-            teamId: tid, teamName: team.name, ownerName: team.ownerName,
+            teamId: tid, teamName: team.name, ownerName: team.ownerName, playerId: null,
             keeperRound: DEFAULT_KEEPER_ROUND, keeperSlotRound, keeperRoundPick: Number(slot.roundPick),
             predictedPlayer: "Unknown", position: "?", projectedPoints: 0, confidence: 20,
             recommendation: "Unrated", valueTier: "borderline", roundSavings: null, marketValue: null, adp: null, adpRound: null,
@@ -651,7 +651,7 @@ async function predictKeepers(
         const vf = valFields(best.playerId);
         const confidence = Math.round(Math.min(95, Math.max(35, ((tierConf(vf.valueTier) + (best.slotId < 20 ? 0.85 : 0.55) + (best.wasKeptLastYear ? 0.9 : 0.65)) / 3) * 100)));
         predictions.push({
-          teamId: tid, teamName: team.name, ownerName: team.ownerName,
+          teamId: tid, teamName: team.name, ownerName: team.ownerName, playerId: best.playerId,
           keeperRound: best.cost, keeperSlotRound, keeperRoundPick: Number(slot.roundPick),
           predictedPlayer: best.playerName, position: best.position,
           projectedPoints: best.projectedPoints, ...vf,
@@ -674,7 +674,7 @@ async function predictKeepers(
       const vf = valFields(best.playerId);
       const confidence = Math.round(Math.min(85, Math.max(25, ((tierConf(vf.valueTier) + (best.wasKeptLastYear ? 0.8 : 0.5) + 0.55) / 3) * 100)));
       predictions.push({
-        teamId: tid, teamName: team.name, ownerName: team.ownerName,
+        teamId: tid, teamName: team.name, ownerName: team.ownerName, playerId: best.playerId,
         keeperRound: best.cost, keeperSlotRound: null, keeperRoundPick: 0,
         predictedPlayer: best.playerName, position: best.position,
         projectedPoints: best.projectedPoints, ...vf,
@@ -782,11 +782,12 @@ function buildMockDraft(params: {
   const picks: any[] = [];
   const drafted = new Set<string>();
 
-  // Pre-mark keeper players as drafted
+  // Pre-mark keeper players — removed from the draftable pool by playerId (never by name).
+  const keeperPlayerIds = new Set<number>();
   const keeperByTeamRound = new Map<string, string>();
   for (const kp of keeperPredictions) {
     if (kp.predictedPlayer && kp.predictedPlayer !== "Unknown") {
-      drafted.add(kp.predictedPlayer);
+      if (kp.playerId != null) keeperPlayerIds.add(Number(kp.playerId));
       const slotR = kp.keeperSlotRound != null && Number.isFinite(Number(kp.keeperSlotRound))
         ? Number(kp.keeperSlotRound)
         : Number(kp.keeperRound);
@@ -858,7 +859,7 @@ function buildMockDraft(params: {
     // reach window. No hardcoded position-by-round weights, no VORP — ordering is ESPN ADP.
     const POS_CAP: Record<string, number> = { QB: 2, RB: 5, WR: 6, TE: 3, K: 2, DEF: 2 };
     const cap = (pos: string) => POS_CAP[pos] ?? 3;
-    const undrafted = pool.filter(p => !drafted.has(p.name));
+    const undrafted = pool.filter(p => !drafted.has(p.name) && !keeperPlayerIds.has(Number(p.espnId)));
     if (undrafted.length === 0) { continue; }
     const bpa = undrafted[0];
 
@@ -1105,21 +1106,61 @@ export const draftWarRoomRouter = router({
       const pressureByRound   = calcDraftBoardPressure({ rosterNeeds, scarcityAlerts, keeperPredictions, totalTeams: teams.length, totalRounds });
       const draftEnvironment  = buildDraftEnvironmentDashboard({ scarcityAlerts, runAlerts: positionRunAlerts, compression: keeperCompression, pressureByRound, playerPool });
 
-      // Return available players (real ADP + stable id) for the live draft + board.
-      const keptNames = new Set(keeperPredictions.filter(k => k.predictedPlayer && k.predictedPlayer !== "Unknown").map(k => k.predictedPlayer.toLowerCase()));
+      // ── Draft After Keepers — authoritative removed-player list (Deliverable A) ──
+      // Source priority is already encoded in keeperPredictions (manual override runs
+      // first per team, then ESPN slots → CONFIRMED, then PREDICTED/HYPOTHETICAL). All
+      // joins are by playerId — never by name.
+      const sourceOf = (status: string): "MANUAL" | "CONFIRMED" | "PREDICTED" =>
+        status === "MANUAL" ? "MANUAL" : status === "CONFIRMED" ? "CONFIRMED" : "PREDICTED";
+      const removedKeepers: Array<{ playerId: number; playerName: string; position: string; source: "MANUAL" | "CONFIRMED" | "PREDICTED"; ownerName: string; ownerKey: string; keeperRound?: number }> = [];
+      const removedKeeperIds = new Set<number>();
+      for (const kp of keeperPredictions) {
+        const pid = kp.playerId != null ? Number(kp.playerId) : null;
+        if (pid == null || !Number.isFinite(pid)) continue;
+        if (!kp.predictedPlayer || kp.predictedPlayer === "Unknown") continue;
+        if (removedKeeperIds.has(pid)) continue; // dedupe by playerId (no duplicate removals)
+        removedKeeperIds.add(pid);
+        removedKeepers.push({
+          playerId: pid,
+          playerName: kp.predictedPlayer,
+          position: kp.position,
+          source: sourceOf(kp.status),
+          ownerName: kp.ownerName,
+          ownerKey: `team:${kp.teamId}`,
+          keeperRound: kp.keeperRound ?? undefined,
+        });
+      }
+
+      // Draft After Keepers summary (Deliverable D) — top removed by real ADP (most valuable first)
+      const draftAfterKeepers = {
+        totalRemoved: removedKeepers.length,
+        manual: removedKeepers.filter((r) => r.source === "MANUAL").length,
+        confirmed: removedKeepers.filter((r) => r.source === "CONFIRMED").length,
+        predicted: removedKeepers.filter((r) => r.source === "PREDICTED").length,
+        topRemoved: [...removedKeepers]
+          .sort((a, b) => (espnAdpByPlayerId.get(a.playerId) ?? 9999) - (espnAdpByPlayerId.get(b.playerId) ?? 9999))
+          .slice(0, 6)
+          .map((r) => ({ playerId: r.playerId, playerName: r.playerName, position: r.position, source: r.source })),
+      };
+
+      // Board-reality pool — keepers removed by playerId (Deliverable B). Replaces the
+      // previous name-based removal. availablePool and availablePoolAfterKeepers are the
+      // SAME single board (Rule 4: no duplicate boards), named explicitly for clarity.
       const DRAFT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
-      const availablePool = playerPool
-        .filter(p => !keptNames.has(p.name.toLowerCase()) && DRAFT_POSITIONS.has(p.position))
+      const availablePoolAfterKeepers = playerPool
+        .filter((p) => !removedKeeperIds.has(Number(p.espnId)) && DRAFT_POSITIONS.has(p.position))
         .slice(0, 320)
         .map((p, idx) => ({
           id: p.espnId ? `espn:${p.espnId}` : `name:${p.name.toLowerCase().trim()}`,
           espnId: p.espnId ?? null,
+          playerId: p.espnId ? Number(p.espnId) : null,
           name: p.name, position: p.position,
           projectedPoints: p.projectedPoints,
           adp: p.adp ?? null,
           marketValue: p.marketValue ?? null,
           rank: idx + 1,
         }));
+      const availablePool = availablePoolAfterKeepers;
 
       return {
         ok: true, season,
@@ -1128,6 +1169,9 @@ export const draftWarRoomRouter = router({
         draftBoardSummary,
         keeperPredictions,
         availablePool,
+        availablePoolAfterKeepers,
+        removedKeepers,
+        draftAfterKeepers,
         rosterNeeds,
         tradedPicks,
         shockMeters,

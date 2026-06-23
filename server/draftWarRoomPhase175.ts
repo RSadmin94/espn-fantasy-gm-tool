@@ -63,7 +63,7 @@ export interface DraftEnvironmentDashboard {
 const QUALITY_MV_CUTOFF = 70;
 
 /** Pool player shape consumed by the pressure engine â€” now carries real ADP + Market Value. */
-type PoolPlayer = { name: string; position: string; projectedPoints: number; adp?: number | null; marketValue?: number | null };
+type PoolPlayer = { name: string; position: string; projectedPoints: number; adp?: number | null; marketValue?: number | null; espnId?: string | number | null };
 
 /** Real-ADP draft round for a player given league size (replaces POS_PICKS_PER_ROUND assumptions). */
 function adpRoundOf(adp: number | null | undefined, teamCount: number): number | null {
@@ -74,13 +74,13 @@ function adpRoundOf(adp: number | null | undefined, teamCount: number): number |
 /** Starter-grade (quality) availability per position, derived from real Market Value + ADP. */
 function qualityByPosition(
   playerPool: PoolPlayer[],
-  keptNames: Set<string>,
+  keptIds: Set<number>,
   positions: string[],
 ): Record<string, PoolPlayer[]> {
   const out: Record<string, PoolPlayer[]> = {};
   for (const pos of positions) {
     out[pos] = playerPool
-      .filter(p => p.position === pos && !keptNames.has(p.name.toLowerCase()) && (p.marketValue ?? 0) >= QUALITY_MV_CUTOFF)
+      .filter(p => p.position === pos && !keptIds.has(Number(p.espnId)) && (p.marketValue ?? 0) >= QUALITY_MV_CUTOFF)
       .sort((a, b) => {
         const aa = a.adp ?? Infinity, ba = b.adp ?? Infinity;
         if (aa !== ba) return aa - ba;
@@ -110,10 +110,11 @@ export function calcKeeperCompression(
 
   // Unknown-position keepers â€” distribute proportional to each position's share of starter-grade supply.
   const unknownCount = keeperPredictions.filter(k => k.position === "?" || !k.position).length;
-  const keptNames = new Set(
-    keeperPredictions.filter(k => k.predictedPlayer && k.predictedPlayer !== "Unknown").map(k => k.predictedPlayer.toLowerCase()),
+  // Keeper removal is by playerId only (never by name).
+  const keptIds = new Set<number>(
+    keeperPredictions.filter(k => k.playerId != null).map(k => Number(k.playerId)),
   );
-  const quality = qualityByPosition(playerPool, keptNames, positions);
+  const quality = qualityByPosition(playerPool, keptIds, positions);
   const qualityCount: Record<string, number> = {};
   let totalQuality = 0;
   for (const pos of positions) { qualityCount[pos] = quality[pos].length; totalQuality += quality[pos].length; }
@@ -173,16 +174,14 @@ export function calcScarcityAlerts(params: {
   const positions = ["QB", "RB", "WR", "TE", "K"]; // DEF excluded: league uses DL/LB/DB individuals
   const alerts: ScarcityAlert[] = [];
 
-  // Players already locked by keepers
-  const keptNames = new Set(
-    keeperPredictions
-      .filter(k => k.predictedPlayer && k.predictedPlayer !== "Unknown")
-      .map(k => k.predictedPlayer.toLowerCase())
+  // Players already locked by keepers — matched by playerId only (never by name).
+  const keptIds = new Set<number>(
+    keeperPredictions.filter(k => k.playerId != null).map(k => Number(k.playerId))
   );
 
   for (const pos of positions) {
     const allAtPos = playerPool.filter(p => p.position === pos);
-    const available = allAtPos.filter(p => !keptNames.has(p.name.toLowerCase()))
+    const available = allAtPos.filter(p => !keptIds.has(Number(p.espnId)))
                                .sort((a, b) => (a.adp ?? Infinity) - (b.adp ?? Infinity));
 
     // Starter-grade supply = available players clearing the within-position Market Value bar.
