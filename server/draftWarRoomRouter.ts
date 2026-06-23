@@ -439,7 +439,8 @@ async function loadRoster(db: any, season: number, leagueId: string) {
 // keeperRound = keeper *cost* (draft round from history or default R7), never the 2026 draft board slot.
 // Positions eligible to be kept. K and DEF/D/ST are NEVER keeper candidates.
 const KEEPER_ELIGIBLE_POSITIONS = new Set(["QB", "RB", "WR", "TE"]);
-// keeperSlotRound = round on the current-season draft board (for mock draft + manual overrides).
+// keeperSlotRound = ESPN's current-season keeper-slot round (informational only). The mock
+// draft slots keepers by keeperRound (the round drafted previously), NOT by keeperSlotRound.
 
 async function predictKeepers(
   teams: any[],
@@ -788,9 +789,9 @@ function buildMockDraft(params: {
   for (const kp of keeperPredictions) {
     if (kp.predictedPlayer && kp.predictedPlayer !== "Unknown") {
       if (kp.playerId != null) keeperPlayerIds.add(Number(kp.playerId));
-      const slotR = kp.keeperSlotRound != null && Number.isFinite(Number(kp.keeperSlotRound))
-        ? Number(kp.keeperSlotRound)
-        : Number(kp.keeperRound);
+      // Slot the keeper by the round he was DRAFTED in previously (history-derived
+      // keeper cost). Never ESPN's current-season keeper-slot round.
+      const slotR = Number(kp.keeperRound);
       keeperByTeamRound.set(`${kp.teamId}_${slotR}`, kp.predictedPlayer);
     }
   }
@@ -826,9 +827,7 @@ function buildMockDraft(params: {
     if (keeperPlayer && keeperPlayer !== "Unknown") {
       const slotR = Number(draftPick.roundId);
       const kp = keeperPredictions.find(k =>
-        k.teamId === tid &&
-        (k.keeperSlotRound != null && Number(k.keeperSlotRound) === slotR
-          || k.keeperSlotRound == null && Number(k.keeperRound) === slotR),
+        k.teamId === tid && Number(k.keeperRound) === slotR,
       );
       const tradeCtx = tradedPickMap.get(`${round}_${tid}`);
       picks.push({
