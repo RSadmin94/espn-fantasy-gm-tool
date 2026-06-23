@@ -24,25 +24,34 @@ const initials = (s: string) =>
 const clamp = (n: number, a = 0, b = 100) => Math.max(a, Math.min(b, Math.round(n || 0)));
 const riskColor = (p: number) => (p >= 60 ? RISK : p >= 40 ? WARN : TEAL);
 
-/** Tapered roster-need boost for Command Board (avoids one CRITICAL position flooding top 6). */
-function taperedNeedBoost(urgency: string | undefined): number {
-  if (urgency === "CRITICAL") return 120;
-  if (urgency === "HIGH") return 75;
-  if (urgency === "MEDIUM") return 40;
-  return 0;
+/**
+ * Bounded, position-aware roster-need adjustment for the Command Board. Mirrors the server
+ * mock-draft principle: real ADP leads and need only nudges within a position-capped window,
+ * so a roster hole can never override draft capital. Shallow positions (you start one QB / one
+ * K) get little or no boost — a K hole adds nothing, so kickers can never be lifted up the board.
+ */
+const POS_MAX_NEED_BOOST: Record<string, number> = { QB: 8, RB: 20, WR: 20, TE: 16, K: 0, DEF: 0 };
+const NEED_URGENCY_FRACTION: Record<string, number> = { CRITICAL: 1, HIGH: 0.6, MEDIUM: 0.3 };
+function needAdjustment(position: string, urgency: string | undefined): number {
+  const max = POS_MAX_NEED_BOOST[position] ?? 10;
+  const frac = urgency ? (NEED_URGENCY_FRACTION[urgency] ?? 0) : 0;
+  return max * frac;
 }
 
-/** Prefer real ADP; fall back to server pool rank (lower = better). */
-function adpRankScore(p: { adp?: number | null; rank?: number | null }): number {
+/**
+ * Draft-capital priority straight from real ESPN ADP (lower ADP = more value available now):
+ * adpPriority = 1000 − ADP. Players without an ADP fall back to server pool rank, ranked
+ * strictly below every player who has a real ADP.
+ */
+function adpPriority(p: { adp?: number | null; rank?: number | null }): number {
   const adp = p.adp != null && Number.isFinite(Number(p.adp)) ? Number(p.adp) : null;
-  if (adp != null && adp > 0) {
-    return Math.max(0, 180 - Math.min(180, adp * 0.55));
-  }
-  const rk = p.rank != null && Number.isFinite(Number(p.rank)) ? Number(p.rank) : null;
-  if (rk != null && rk > 0) {
-    return Math.max(0, 140 - Math.min(140, rk * 0.45));
-  }
-  return 0;
+  const effective =
+    adp != null && adp > 0
+      ? adp
+      : p.rank != null && Number.isFinite(Number(p.rank)) && Number(p.rank) > 0
+        ? 300 + Number(p.rank)
+        : 9999;
+  return 1000 - effective;
 }
 
 /** Greedy top-N with max per position, then backfill if the pool is thin at some positions. */
@@ -226,18 +235,25 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
       posSeen[p.position] = (posSeen[p.position] || 0) + 1;
       const posRank = posSeen[p.position];
       const urg = needByPos[p.position];
-      const needBoost = taperedNeedBoost(urg);
-      const adpPart = adpRankScore(p);
-      const projPart = (p.projectedPoints || 0) * 0.08;
-      const valuePart = (p.marketValue || 0) * 1.2; // within-position Market Value (0–100 → 0–120)
-      const score = valuePart + needBoost + adpPart + projPart;
+      // Draft-capital opportunity cost (mirrors the server mock engine): real ADP leads, roster
+      // need only nudges within a position-capped window, Market Value and projection are tiny
+      // tie-breakers — never cross-position drivers. No within-position value inflation, no
+      // unbounded CRITICAL boost, no raw projection dominance.
+      const adpPart = adpPriority(p); // 1000 − real ADP
+      const needPart = needAdjustment(p.position, urg); // bounded per position (K/DEF = 0)
+      const marketTieBreaker = (p.marketValue || 0) * 0.05; // 0–5, tie-breaker only
+      const projTieBreaker = (p.projectedPoints || 0) * 0.005; // ~0–2, tie-breaker only
+      const score = adpPart + needPart + marketTieBreaker + projTieBreaker;
       const rival = [...shockMeters]
         .filter((s) => s.mostLikelyPosition === p.position)
         .sort((a, b) => (b.surpriseProbability || 0) - (a.surpriseProbability || 0))[0] || null;
       return { ...p, posRank, urg, score, rival };
     });
     const sorted = scored.sort((a, b) => b.score - a.score);
-    return diversifyTopPlayers(sorted, 6, 2);
+    // Cap 3 per position (was 2): with ADP-led scoring the natural top is elite RB/WR, and a
+    // cap of 2 would evict the third elite skill player to force in a QB/TE. Cap 3 keeps the
+    // board on the best available draft capital.
+    return diversifyTopPlayers(sorted, 6, 3);
   }, [availablePool, needByPos, shockMeters]);
 
   const dna = useMemo(
