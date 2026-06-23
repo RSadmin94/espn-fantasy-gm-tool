@@ -30,6 +30,7 @@ import { Matchups } from "./pages/Matchups";
 import { LeagueHistory } from "./pages/LeagueHistory";
 import { DraftHistory } from "./pages/DraftHistory";
 import { KeeperAdvisor } from "./pages/KeeperAdvisor";
+import { LeagueKeeperForecast } from "./pages/LeagueKeeperForecast";
 import { LeagueSettings } from "./pages/LeagueSettings";
 import { OwnerProfiles } from "./pages/OwnerProfiles";
 import { HallOfFame } from "./pages/HallOfFame";
@@ -158,6 +159,7 @@ const router = createBrowserRouter([
           { path: "/league-timeline", element: <Navigate to="/history" replace /> },
           { path: "/draft-history", element: <DraftHistory /> },
           { path: "/keeper-advisor", element: <KeeperAdvisor /> },
+      { path: "/keeper-forecast", element: <LeagueKeeperForecast /> },
           { path: "/hall-of-fame", element: <HallOfFame /> },
           { path: "/draft-reality", element: <DraftRealitySimulator /> },
           { path: "/why-havent-i-won", element: <WhyHaventIWon /> },

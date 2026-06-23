@@ -180,6 +180,7 @@ import {
 import { loadRivalryDossier } from "./rivalryDossierService";
 import { loadRecentLeagueTransactionEvents } from "./recentLeagueEventsService";
 import { computeKeeperValuations, type KeeperValuation } from "./keeperValuationService";
+import { computeLeagueKeeperForecast, type KeeperForecastRow } from "./keeperForecastService";
 import { buildHallOfFamePayload } from "./hallOfFameService";
 import { playerStatsCacheRouter } from "./playerStatsCacheRouter";
 import { playerStatsRouter } from "./playerStatsRouter";
@@ -3284,6 +3285,46 @@ export const appRouter = router({
           userId: ctx.user?.id ?? undefined,
         });
         return { ...base, valuations } as KeeperValuationResponse;
+      }),
+
+    // ── League Keeper Forecast (visibility-only convenience view) ──────────────
+    // One likely keeper per owner: MANUAL → CONFIRMED (ESPN) → highest computeKeeper-
+    // Valuations(). No new model. Resolution lives entirely in keeperForecastService.
+    leagueKeeperForecast: publicProcedure
+      .input(
+        z.object({
+          draftYear: z.number().int().min(2019).max(2030).optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        const caller = appRouter.createCaller(ctx);
+        const kp = await caller.espn.keeperPool({
+          draftYear: input.draftYear,
+          activeLeagueKey: input.activeLeagueKey,
+        });
+        const base = kp as Record<string, unknown>;
+        const pool = Array.isArray((kp as { pool?: KeeperPoolEntry[] }).pool)
+          ? (kp as { pool: KeeperPoolEntry[] }).pool
+          : [];
+        if (pool.length === 0) {
+          return { ...base, forecast: [] as KeeperForecastRow[] };
+        }
+        const forecast = await computeLeagueKeeperForecast({
+          pool: pool.map((p) => ({
+            ownerKey: p.ownerKey,
+            ownerName: p.ownerName,
+            playerId: p.playerId,
+            playerName: p.playerName,
+            position: p.position,
+            keeperRoundCost: p.keeperRoundCost,
+            costSource: p.costSource,
+          })),
+          season: (kp as { rosterSeason: number }).rosterSeason,
+          leagueId: (kp as { leagueId: string }).leagueId,
+          userId: ctx.user?.id ?? undefined,
+        });
+        return { ...base, forecast };
       }),
 
     // ── Manual keeper selections (user override of predicted keepers) ──────────

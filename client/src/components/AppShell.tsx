@@ -42,6 +42,7 @@ import {
   ShoppingCart,
   Clapperboard,
   Gem,
+  ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -118,6 +119,7 @@ const NAV_GROUPS: NavGroup[] = [
       { kind: "link", label: "Draft War Room", href: "/draft-war-room", icon: Zap },
       { kind: "link", label: "Draft Reality Sim", href: "/draft-reality", icon: FlaskConical },
       { kind: "link", label: "Keeper Advisor", href: "/keeper-advisor", icon: Calculator },
+      { kind: "link", label: "League Keeper Forecast", href: "/keeper-forecast", icon: ListChecks },
       { kind: "link", label: "Player Database", href: "/player-database", icon: Database },
     ],
   },
