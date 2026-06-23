@@ -1,9 +1,9 @@
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// PHASE 1.75 — DRAFT BOARD PRESSURE ENGINE
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// PHASE 1.75 â€” DRAFT BOARD PRESSURE ENGINE
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface PositionRunAlert {
   position:        string;
@@ -33,7 +33,7 @@ export interface KeeperCompressionResult {
   totalPoolSize:     number;
   keepersAtPosition: number;
   compressionPct:    number;         // % of pool locked by keepers
-  draftInflation:   number;         // rounds earlier you need to draft (0.0–2.0)
+  draftInflation:   number;         // rounds earlier you need to draft (0.0â€“2.0)
   effectiveTier:    string;         // "HEAVY" / "MODERATE" / "LIGHT" / "NONE"
   evidence:         string[];
 }
@@ -55,27 +55,46 @@ export interface DraftEnvironmentDashboard {
   leagueDepthGrade:  Record<string, "A" | "B" | "C" | "D" | "F">;
 }
 
-// ── Starter threshold by position ─────────────────────────────────────────────
-// A player is "elite supply" if projected above this threshold
-const STARTER_THRESHOLD: Record<string, number> = {
-  QB: 350, RB: 180, WR: 160, TE: 100, K: 90, DEF: 80,
-};
+// â”€â”€ Real-data inputs (no hardcoded points thresholds, no per-round pick tables) â”€
+// A player counts as "starter-grade" supply at his position when his within-position
+// Market Value (computeMarketValues, 0â€“100) clears this single normalized bar. This
+// replaces the old per-position points table (STARTER_THRESHOLD): one position-relative
+// cutoff instead of six magic point totals.
+const QUALITY_MV_CUTOFF = 70;
 
-// Expected round-by-round pick rate (how many picks of this pos per round of 14)
-const POS_PICKS_PER_ROUND: Record<string, number[]> = {
-  QB:  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
-  RB:  [5, 4, 4, 3, 2, 2, 2, 1, 1, 1, 1, 1, 0, 0],
-  WR:  [5, 5, 4, 4, 3, 2, 2, 2, 1, 1, 1, 1, 0, 0],
-  TE:  [1, 1, 2, 2, 2, 1, 1, 1, 1, 0, 0, 0, 0, 0],
-  K:   [0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 1, 0, 0],
-  DEF: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 1, 1, 0],
-};
+/** Pool player shape consumed by the pressure engine â€” now carries real ADP + Market Value. */
+type PoolPlayer = { name: string; position: string; projectedPoints: number; adp?: number | null; marketValue?: number | null };
 
-// ── Keeper Compression ────────────────────────────────────────────────────────
+/** Real-ADP draft round for a player given league size (replaces POS_PICKS_PER_ROUND assumptions). */
+function adpRoundOf(adp: number | null | undefined, teamCount: number): number | null {
+  if (adp == null || !(adp > 0) || teamCount < 1) return null;
+  return Math.max(1, Math.ceil(adp / teamCount));
+}
+
+/** Starter-grade (quality) availability per position, derived from real Market Value + ADP. */
+function qualityByPosition(
+  playerPool: PoolPlayer[],
+  keptNames: Set<string>,
+  positions: string[],
+): Record<string, PoolPlayer[]> {
+  const out: Record<string, PoolPlayer[]> = {};
+  for (const pos of positions) {
+    out[pos] = playerPool
+      .filter(p => p.position === pos && !keptNames.has(p.name.toLowerCase()) && (p.marketValue ?? 0) >= QUALITY_MV_CUTOFF)
+      .sort((a, b) => {
+        const aa = a.adp ?? Infinity, ba = b.adp ?? Infinity;
+        if (aa !== ba) return aa - ba;
+        return (b.marketValue ?? 0) - (a.marketValue ?? 0);
+      });
+  }
+  return out;
+}
+
+// â”€â”€ Keeper Compression â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function calcKeeperCompression(
   keeperPredictions: any[],
-  playerPool: Array<{ name: string; position: string; projectedPoints: number }>,
+  playerPool: PoolPlayer[],
 ): KeeperCompressionResult[] {
   const positions = ["QB", "RB", "WR", "TE", "K"]; // DEF excluded: league uses DL/LB/DB individuals
   const results: KeeperCompressionResult[] = [];
@@ -89,15 +108,21 @@ export function calcKeeperCompression(
     keptByPos[pos].push(kp.predictedPlayer);
   }
 
-  // Unknown-position keepers — estimate by distributing to most likely positions
+  // Unknown-position keepers â€” distribute proportional to each position's share of starter-grade supply.
   const unknownCount = keeperPredictions.filter(k => k.position === "?" || !k.position).length;
+  const keptNames = new Set(
+    keeperPredictions.filter(k => k.predictedPlayer && k.predictedPlayer !== "Unknown").map(k => k.predictedPlayer.toLowerCase()),
+  );
+  const quality = qualityByPosition(playerPool, keptNames, positions);
+  const qualityCount: Record<string, number> = {};
+  let totalQuality = 0;
+  for (const pos of positions) { qualityCount[pos] = quality[pos].length; totalQuality += quality[pos].length; }
 
   for (const pos of positions) {
     const poolSize = playerPool.filter(p => p.position === pos).length;
     const kept     = (keptByPos[pos] ?? []).length;
-    // Allocate unknown keepers proportionally (rough estimate)
-    const unknownShare = unknownCount > 0
-      ? Math.round((unknownCount * (POS_PICKS_PER_ROUND[pos]?.[0] ?? 0) / 14))
+    const unknownShare = (unknownCount > 0 && totalQuality > 0)
+      ? Math.round(unknownCount * (qualityCount[pos] / totalQuality))
       : 0;
     const totalKept = kept + unknownShare;
 
@@ -125,7 +150,7 @@ export function calcKeeperCompression(
       evidence: [
         `${totalKept} known/estimated ${pos} keeper(s) out of ${poolSize} in player pool`,
         compressionPct > 0
-          ? `${compressionPct}% of ${pos} pool locked by keepers → draft ${inflation} round(s) earlier`
+          ? `${compressionPct}% of ${pos} pool locked by keepers â†’ draft ${inflation} round(s) earlier`
           : `No keeper compression for ${pos}`,
         unknownShare > 0 ? `${unknownShare} unknown-position keeper(s) estimated as ${pos}` : `No unknown-position allocation`,
       ],
@@ -135,11 +160,11 @@ export function calcKeeperCompression(
   return results.sort((a, b) => b.compressionPct - a.compressionPct);
 }
 
-// ── Scarcity Detection ────────────────────────────────────────────────────────
+// â”€â”€ Scarcity Detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function calcScarcityAlerts(params: {
   rosterNeeds:       any[];
-  playerPool:        Array<{ name: string; position: string; projectedPoints: number }>;
+  playerPool:        PoolPlayer[];
   keeperPredictions: any[];
   totalTeams:        number;
   totalRounds:       number;
@@ -158,10 +183,11 @@ export function calcScarcityAlerts(params: {
   for (const pos of positions) {
     const allAtPos = playerPool.filter(p => p.position === pos);
     const available = allAtPos.filter(p => !keptNames.has(p.name.toLowerCase()))
-                               .sort((a, b) => b.projectedPoints - a.projectedPoints);
+                               .sort((a, b) => (a.adp ?? Infinity) - (b.adp ?? Infinity));
 
-    const threshold   = STARTER_THRESHOLD[pos] ?? 100;
-    const eliteSupply = available.filter(p => p.projectedPoints >= threshold).length;
+    // Starter-grade supply = available players clearing the within-position Market Value bar.
+    const quality     = available.filter(p => (p.marketValue ?? 0) >= QUALITY_MV_CUTOFF);
+    const eliteSupply = quality.length;
     const totalPool   = available.length;
 
     // League-wide demand
@@ -173,7 +199,7 @@ export function calcScarcityAlerts(params: {
       n.needs?.some((nd: any) => nd.position === pos && (nd.urgency === "CRITICAL" || nd.urgency === "HIGH"))
     ).length;
 
-    // Demand score: proportion of elite supply consumed by needy teams
+    // Demand score: needy teams per unit of starter-grade supply
     const demandScore = eliteSupply > 0 ? Math.round((criticalDemand / eliteSupply) * 100) / 100 : 9.9;
 
     const urgency: ScarcityAlert["urgency"] =
@@ -181,12 +207,13 @@ export function calcScarcityAlerts(params: {
       demandScore >= 1.0  ? "HIGH"     :
       demandScore >= 0.5  ? "MEDIUM"   : "LOW";
 
-    // Projected remaining supply by round (using expected pick rate)
+    // Remaining starter-grade supply by round â€” straight from real ADP (no per-round pick table).
     const remainingAfterRound: Record<number, number> = {};
-    let remaining = eliteSupply;
-    for (let r = 1; r <= Math.min(totalRounds, 14); r++) {
-      remaining = Math.max(0, remaining - (POS_PICKS_PER_ROUND[pos]?.[r - 1] ?? 0));
-      remainingAfterRound[r] = remaining;
+    for (let r = 1; r <= Math.min(totalRounds, 18); r++) {
+      remainingAfterRound[r] = quality.filter(p => {
+        const ar = adpRoundOf(p.adp, totalTeams);
+        return ar == null || ar > r;
+      }).length;
     }
 
     alerts.push({
@@ -198,9 +225,9 @@ export function calcScarcityAlerts(params: {
       startersNeeded,
       remainingAfterRound,
       evidence: [
-        `${eliteSupply} elite ${pos}s available (≥${threshold} pts projected)`,
+        `${eliteSupply} starter-grade ${pos}s available (Market Value â‰¥ ${QUALITY_MV_CUTOFF}/100)`,
         `${criticalDemand} teams have HIGH+ need for ${pos}`,
-        `Demand score: ${demandScore.toFixed(2)} (${demandScore >= 1 ? "demand exceeds elite supply" : "supply adequate"})`,
+        `Demand score: ${demandScore.toFixed(2)} (${demandScore >= 1 ? "demand exceeds starter-grade supply" : "supply adequate"})`,
         `Starters needed league-wide: ${startersNeeded}`,
       ],
     });
@@ -209,7 +236,7 @@ export function calcScarcityAlerts(params: {
   return alerts.sort((a, b) => b.demandScore - a.demandScore);
 }
 
-// ── Position Run Alerts ───────────────────────────────────────────────────────
+// â”€â”€ Position Run Alerts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function calcPositionRunAlerts(params: {
   rosterNeeds:       any[];
@@ -257,7 +284,7 @@ export function calcPositionRunAlerts(params: {
 
     // Trigger picks from mock (evidence)
     const triggerPicks = mockPicksAtPos.slice(0, 5).map(
-      (p: any) => `Rd ${p.round} Pick ${p.pickNumber}: ${p.ownerName?.split(" ")[0] ?? "?"} → ${p.player}`
+      (p: any) => `Rd ${p.round} Pick ${p.pickNumber}: ${p.ownerName?.split(" ")[0] ?? "?"} â†’ ${p.player}`
     );
 
     // Scarcity context
@@ -279,7 +306,7 @@ export function calcPositionRunAlerts(params: {
     alerts.push({
       position: pos,
       expectedRound: avgRound,
-      roundWindow: `Rounds ${bestWindowStart}–${windowEnd}`,
+      roundWindow: `Rounds ${bestWindowStart}â€“${windowEnd}`,
       affectedOwners: needyTeams.map(n => n.ownerName),
       teamCount: needCount,
       confidence,
@@ -287,7 +314,7 @@ export function calcPositionRunAlerts(params: {
       urgencyCount: needCount,
       evidence: [
         `${needCount} teams have ${pos} as their #1 draft priority`,
-        `Mock draft projects ${bestWindowCount} ${pos}s selected in Rounds ${bestWindowStart}–${windowEnd}`,
+        `Mock draft projects ${bestWindowCount} ${pos}s selected in Rounds ${bestWindowStart}â€“${windowEnd}`,
         scarcity ? `${scarcity.eliteSupply} elite ${pos}s available vs ${needCount} teams in high need` : "",
         `Demand score: ${demandScore.toFixed(2)}`,
       ].filter(Boolean),
@@ -297,7 +324,7 @@ export function calcPositionRunAlerts(params: {
   return alerts.sort((a, b) => b.confidence - a.confidence);
 }
 
-// ── Draft Board Pressure by Round ─────────────────────────────────────────────
+// â”€â”€ Draft Board Pressure by Round â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function calcDraftBoardPressure(params: {
   rosterNeeds:       any[];
@@ -310,11 +337,8 @@ export function calcDraftBoardPressure(params: {
   const positions = ["QB", "RB", "WR", "TE", "K"]; // DEF excluded: league uses DL/LB/DB individuals
   const rounds: PressureByRound[] = [];
 
-  // Running remaining supply (start from elite supply)
-  const remainingSupply: Record<string, number> = {};
-  for (const sc of scarcityAlerts) {
-    remainingSupply[sc.position] = sc.eliteSupply;
-  }
+  // Starter-grade supply per round comes straight from the scarcity engine's real-ADP curve.
+  const scByPos = new Map(scarcityAlerts.map(s => [s.position, s]));
 
   // Running demand (teams that still need position)
   const remainingDemand: Record<string, number> = {};
@@ -324,12 +348,16 @@ export function calcDraftBoardPressure(params: {
     ).length;
   }
 
-  for (let round = 1; round <= Math.min(totalRounds, 14); round++) {
+  for (let round = 1; round <= Math.min(totalRounds, 18); round++) {
     const positionPressure: Record<string, number> = {};
     const evidence: string[] = [];
 
     for (const pos of positions) {
-      const supply = Math.max(0, (remainingSupply[pos] ?? 0) - (POS_PICKS_PER_ROUND[pos]?.[round - 1] ?? 0));
+      const sc = scByPos.get(pos);
+      // Starter-grade supply still on the board after this round, and how many left it (real ADP).
+      const supply = sc?.remainingAfterRound[round] ?? 0;
+      const prevSupply = round === 1 ? (sc?.eliteSupply ?? 0) : (sc?.remainingAfterRound[round - 1] ?? 0);
+      const consumed = Math.max(0, prevSupply - supply);
       const demand = remainingDemand[pos] ?? 0;
 
       // Pressure = how much demand vs remaining supply heading into this round
@@ -338,11 +366,10 @@ export function calcDraftBoardPressure(params: {
         : demand > 0 ? 100 : 0;
 
       positionPressure[pos] = pressure;
-      remainingSupply[pos]  = supply;
       if (demand > 0 && supply <= demand) {
-        evidence.push(`${pos}: ${demand} teams need, ${supply} elite left (round ${round})`);
-        // Reduce demand as picks fill needs
-        remainingDemand[pos] = Math.max(0, demand - (POS_PICKS_PER_ROUND[pos]?.[round - 1] ?? 0));
+        evidence.push(`${pos}: ${demand} teams need, ${supply} starter-grade left (round ${round})`);
+        // Reduce demand as starter-grade players come off the board
+        remainingDemand[pos] = Math.max(0, demand - consumed);
       }
     }
 
@@ -352,7 +379,7 @@ export function calcDraftBoardPressure(params: {
     rounds.push({
       round,
       positionPressure,
-      hottestPosition: hottestPos?.[0] ?? "—",
+      hottestPosition: hottestPos?.[0] ?? "â€”",
       hottestScore,
       evidence: evidence.length > 0
         ? evidence
@@ -363,14 +390,14 @@ export function calcDraftBoardPressure(params: {
   return rounds;
 }
 
-// ── Draft Environment Dashboard ───────────────────────────────────────────────
+// â”€â”€ Draft Environment Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function buildDraftEnvironmentDashboard(params: {
   scarcityAlerts:   ScarcityAlert[];
   runAlerts:        PositionRunAlert[];
   compression:      KeeperCompressionResult[];
   pressureByRound:  PressureByRound[];
-  playerPool:       Array<{ name: string; position: string; projectedPoints: number }>;
+  playerPool:        PoolPlayer[];
 }): DraftEnvironmentDashboard {
   const { scarcityAlerts, runAlerts, compression, pressureByRound, playerPool } = params;
 
@@ -419,13 +446,13 @@ export function buildDraftEnvironmentDashboard(params: {
 
   return {
     strongestPosition: {
-      position: strongest?.position ?? "—",
+      position: strongest?.position ?? "â€”",
       reason: `${strongest?.eliteSupply ?? 0} elite players, only ${strongest?.demandScore?.toFixed(2) ?? 0} demand score`,
       supplyScore: strongest?.eliteSupply ?? 0,
     },
     weakestPosition: {
-      position: weakest?.position ?? "—",
-      reason: `Demand score ${weakest?.demandScore.toFixed(2) ?? 0} — demand exceeds elite supply`,
+      position: weakest?.position ?? "â€”",
+      reason: `Demand score ${weakest?.demandScore.toFixed(2) ?? 0} â€” demand exceeds elite supply`,
       scarcityScore: Math.round((weakest?.demandScore ?? 0) * 100),
     },
     biggestRunRisk: biggestRun ? {
@@ -433,15 +460,15 @@ export function buildDraftEnvironmentDashboard(params: {
       expectedRound: biggestRun.expectedRound,
       teamCount: biggestRun.teamCount,
       reason: `${biggestRun.teamCount} teams projected to target ${biggestRun.position} in ${biggestRun.roundWindow}`,
-    } : { position: "—", expectedRound: 0, teamCount: 0, reason: "No run risk detected" },
+    } : { position: "â€”", expectedRound: 0, teamCount: 0, reason: "No run risk detected" },
     biggestValuePocket: valuePocket ? {
       position: valuePocket.position,
       round: valuePocketRound,
       reason: `${valuePocketPlayersAtRound} elite ${valuePocket.position}s still available through Round ${valuePocketRound}`,
       playersAvailable: valuePocketPlayersAtRound,
-    } : { position: "—", round: 0, reason: "No clear value pocket", playersAvailable: 0 },
+    } : { position: "â€”", round: 0, reason: "No clear value pocket", playersAvailable: 0 },
     mostDistortedByKeepers: {
-      position: mostDistorted?.position ?? "—",
+      position: mostDistorted?.position ?? "â€”",
       compressionPct: mostDistorted?.compressionPct ?? 0,
       reason: mostDistorted?.compressionPct > 0
         ? `${mostDistorted.compressionPct}% of ${mostDistorted.position} pool locked by keepers`

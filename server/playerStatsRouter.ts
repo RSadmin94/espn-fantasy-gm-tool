@@ -49,16 +49,27 @@ function sqlOpenDraftAnalyticsPick(): ReturnType<typeof sql> {
   )`;
 }
 
-// ── ESPN ADP cache (module-level, survives across requests within one deploy) ──
-let _espnAdpCache: Map<string, number> | null = null;
-let _espnAdpCacheTime = 0;
-const ESPN_ADP_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
-/** Fetch ESPN live PPR ADP from actual draft activity \u2014 same data as ESPN Live Draft Trends page.
- * Uses leaguedefaults/3 endpoint with player.ownership.averageDraftPosition.
- * Single request returns ~1025 ranked players. Cached for 4h. */
-export async function getEspnAdpMap(): Promise<Map<string, number>> {
+// ── ESPN player-info cache (module-level, survives across requests within one deploy) ──
+// ONE fetch of the leaguedefaults/3 kona_player_info payload powers ADP, season projection,
+// and percentStarted. getEspnAdpMap() (Keeper Intelligence / Dynasty) and getEspnPlayerInfoMap()
+// (Draft War Room → computeMarketValues + real ADP) both derive from this single cached source.
+// No second ADP source. No second fetch. No estimated/synthetic values — null when absent.
+export interface EspnPlayerInfo {
+  adp:            number | null; // ownership.averageDraftPosition (real live PPR ADP)
+  projection:     number | null; // season projected fantasy points (statSourceId 1, scoringPeriodId 0)
+  percentStarted: number | null; // ownership.percentStarted
+}
+
+let _espnInfoCache: Map<string, EspnPlayerInfo> | null = null;
+let _espnInfoCacheTime = 0;
+const ESPN_INFO_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+/** Fetch ESPN live draft inputs (ADP + season projection + percentStarted) from the
+ * leaguedefaults/3 kona_player_info endpoint — same data as ESPN Live Draft Trends.
+ * Single request returns ~1025 ranked players. Cached for 4h. The sole ESPN draft-data source. */
+async function loadEspnPlayerInfo(): Promise<Map<string, EspnPlayerInfo>> {
   const now = Date.now();
-  if (_espnAdpCache && (now - _espnAdpCacheTime) < ESPN_ADP_TTL_MS) return _espnAdpCache;
+  if (_espnInfoCache && (now - _espnInfoCacheTime) < ESPN_INFO_TTL_MS) return _espnInfoCache;
 
   const year = new Date().getFullYear();
   const filter = JSON.stringify({
@@ -83,18 +94,54 @@ export async function getEspnAdpMap(): Promise<Map<string, number>> {
     }
   } catch { /* network error - fall through to empty cache */ }
 
-  const cache = new Map<string, number>();
+  const cache = new Map<string, EspnPlayerInfo>();
   for (const entry of players) {
-    // Real live ADP lives at entry.player.ownership.averageDraftPosition
-    const adp: number | undefined = entry?.player?.ownership?.averageDraftPosition;
     const id = String(entry?.id ?? "").trim();
-    if (adp && adp > 0 && adp < 500 && id) cache.set(id, Math.round(adp * 100) / 100);
+    if (!id) continue;
+    const own = entry?.player?.ownership ?? {};
+
+    const adpRaw = own.averageDraftPosition;
+    const adp = (typeof adpRaw === "number" && adpRaw > 0 && adpRaw < 500)
+      ? Math.round(adpRaw * 100) / 100
+      : null;
+
+    const psRaw = own.percentStarted;
+    const percentStarted = (typeof psRaw === "number" && psRaw >= 0)
+      ? Math.round(psRaw * 10) / 10
+      : null;
+
+    // Season projection: projected source (1), full-season split (scoringPeriodId 0), current year.
+    let projection: number | null = null;
+    const stats = Array.isArray(entry?.player?.stats) ? entry.player.stats : [];
+    for (const s of stats) {
+      if (s?.statSourceId === 1 && Number(s?.scoringPeriodId) === 0 && Number(s?.seasonId) === year) {
+        const at = Number(s?.appliedTotal);
+        if (Number.isFinite(at)) { projection = Math.round(at * 10) / 10; break; }
+      }
+    }
+
+    cache.set(id, { adp, projection, percentStarted });
   }
 
-  _espnAdpCache = cache;
-  _espnAdpCacheTime = now;
-  console.log(`[ESPN ADP] Cached ${cache.size} ranked players from ${players.length} fetched`);
+  _espnInfoCache = cache;
+  _espnInfoCacheTime = now;
+  console.log(`[ESPN INFO] Cached ${cache.size} players (adp/proj/pStart) from ${players.length} fetched`);
   return cache;
+}
+
+/** Rich per-player ESPN draft inputs (adp / projection / percentStarted), keyed by ESPN playerId
+ * string. Draft War Room consumes this to feed computeMarketValues and order by real ADP. */
+export async function getEspnPlayerInfoMap(): Promise<Map<string, EspnPlayerInfo>> {
+  return loadEspnPlayerInfo();
+}
+
+/** ESPN live PPR ADP keyed by ESPN playerId string (Keeper Intelligence / Dynasty consumer).
+ * Derives from the shared player-info cache — same single fetch, same 4h TTL, adp-only view. */
+export async function getEspnAdpMap(): Promise<Map<string, number>> {
+  const info = await loadEspnPlayerInfo();
+  const m = new Map<string, number>();
+  for (const [id, v] of info) if (v.adp != null) m.set(id, v.adp);
+  return m;
 }
 
 

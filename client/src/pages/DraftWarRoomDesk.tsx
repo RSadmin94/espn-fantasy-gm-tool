@@ -32,8 +32,8 @@ function taperedNeedBoost(urgency: string | undefined): number {
   return 0;
 }
 
-/** Prefer real ADP; fall back to server pool rank / synthetic ADP (lower = better). */
-function adpRankScore(p: { adp?: number | null; rank?: number | null; syntheticADP?: number | null }): number {
+/** Prefer real ADP; fall back to server pool rank (lower = better). */
+function adpRankScore(p: { adp?: number | null; rank?: number | null }): number {
   const adp = p.adp != null && Number.isFinite(Number(p.adp)) ? Number(p.adp) : null;
   if (adp != null && adp > 0) {
     return Math.max(0, 180 - Math.min(180, adp * 0.55));
@@ -41,10 +41,6 @@ function adpRankScore(p: { adp?: number | null; rank?: number | null; syntheticA
   const rk = p.rank != null && Number.isFinite(Number(p.rank)) ? Number(p.rank) : null;
   if (rk != null && rk > 0) {
     return Math.max(0, 140 - Math.min(140, rk * 0.45));
-  }
-  const syn = p.syntheticADP != null && Number.isFinite(Number(p.syntheticADP)) ? Number(p.syntheticADP) : null;
-  if (syn != null && syn > 0) {
-    return Math.max(0, 100 - Math.min(100, syn * 0.35));
   }
   return 0;
 }
@@ -233,7 +229,8 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
       const needBoost = taperedNeedBoost(urg);
       const adpPart = adpRankScore(p);
       const projPart = (p.projectedPoints || 0) * 0.08;
-      const score = (p.vorp || 0) + needBoost + adpPart + projPart;
+      const valuePart = (p.marketValue || 0) * 1.2; // within-position Market Value (0–100 → 0–120)
+      const score = valuePart + needBoost + adpPart + projPart;
       const rival = [...shockMeters]
         .filter((s) => s.mostLikelyPosition === p.position)
         .sort((a, b) => (b.surpriseProbability || 0) - (a.surpriseProbability || 0))[0] || null;
@@ -429,7 +426,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-[18px] font-black leading-none" style={{ color: TEAL }}>{Math.round(p.projectedPoints || 0)}</div>
-                      <div className="text-[9px] uppercase tracking-wider mt-1" style={{ color: MUTED }}>proj · VORP {p.vorp >= 0 ? "+" : ""}{p.vorp}</div>
+                      <div className="text-[9px] uppercase tracking-wider mt-1" style={{ color: MUTED }}>proj · MKT {p.marketValue != null ? Math.round(p.marketValue) : "—"}</div>
                     </div>
                   </div>
                 );

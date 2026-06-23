@@ -21,6 +21,10 @@ import {
 import { resolveKeeperDraftGeometryForSeason } from "./keeperDraftGeometry";
 import { enrichDraftPickDbRow, summarizeDraftBoardCounts } from "./draftWarRoomPickClassification";
 import { buildLeagueCapabilities } from "./leagueCapabilities";
+// Phase 1 foundation: Draft War Room consumes the platform's authoritative engines only.
+import { getEspnPlayerInfoMap } from "./playerStatsRouter";          // real ADP + projection + percentStarted (single ESPN source)
+import { computeMarketValues, type MarketValueInput } from "./marketValue"; // sole player-value engine (0–100)
+import { computeKeeperValuations, type KeeperPoolRowLite } from "./keeperValuationService"; // sole keeper engine
 
 // Phase B1: LEAGUE_ID constant removed — leagueId is resolved per-request via resolveActiveLeagueId.
 
@@ -38,98 +42,10 @@ const LINEUP_REQS: Record<string, number> = {
   // DEF removed — this league uses individual defensive players (DL, LB, DB, S, CB)
 };
 
-// Position-round expected value (projected pts per round, avg)
-const POS_ROUND_VALUE: Record<string, number[]> = {
-  QB:  [480, 440, 400, 370, 340, 310, 280, 260, 240, 220, 200, 180, 160, 140],
-  RB:  [350, 310, 275, 250, 225, 205, 185, 165, 145, 130, 115, 100,  85,  70],
-  WR:  [340, 305, 270, 245, 220, 200, 180, 160, 143, 126, 110,  95,  80,  65],
-  TE:  [290, 240, 200, 175, 155, 135, 115, 100,  85,  72,  60,  50,  42,  35],
-  K:   [175, 160, 148, 135, 122, 110,  98,  88,  78,  68,  58,  50,  42,  35],
-  DEF: [160, 145, 130, 118, 106,  95,  84,  74,  65,  57,  49,  42,  35,  29],
-};
-
-// Position scarcity weight (higher = scarcer at high value)
-const POS_SCARCITY: Record<string, number> = {
-  QB: 0.85, RB: 1.10, WR: 1.05, TE: 1.15, K: 0.70, DEF: 0.70,
-};
-
-// Round position weights for mock draft
-const ROUND_POS_WEIGHTS: Record<number, Record<string, number>> = {
-  // R1-R2: elite RB/WR/TE only — almost never QB (use VORP tier filter instead)
-  1:  { RB: 48, WR: 46, QB:  2, TE:  4 },
-  2:  { RB: 40, WR: 42, QB:  6, TE: 12 },
-  3:  { RB: 35, WR: 38, QB: 12, TE: 15 },
-  4:  { WR: 32, RB: 28, QB: 22, TE: 18 },
-  5:  { WR: 28, RB: 22, QB: 26, TE: 14, K:  5, DEF:  5 },
-  6:  { WR: 25, RB: 20, QB: 28, TE: 12, K:  8, DEF:  7 },
-  7:  { WR: 24, RB: 18, QB: 22, TE: 14, K: 12, DEF: 10 },
-  8:  { WR: 22, RB: 17, QB: 18, TE: 13, K: 15, DEF: 15 },
-  9:  { WR: 20, RB: 15, QB: 16, TE: 12, K: 18, DEF: 19 },
-  10: { WR: 18, RB: 14, QB: 14, TE: 11, K: 22, DEF: 21 },
-  11: { WR: 18, RB: 14, QB: 12, TE: 10, K: 23, DEF: 23 },
-  12: { WR: 18, RB: 14, QB: 12, TE: 10, K: 23, DEF: 23 },
-  13: { WR: 18, RB: 14, QB: 10, TE: 10, K: 24, DEF: 24 },
-  14: { WR: 18, RB: 14, QB: 10, TE: 10, K: 24, DEF: 24 },
-};
-
-// VBD replacement baselines for 14-team 1QB/2RB/2WR/1TE/1K/2FLEX league
-// Calibrated to push QBs to rounds 3-5 where they are actually drafted
-const VBD_BASELINE: Record<string, number> = {
-  QB:  380,  // 12th QB -- teams wait until late rounds for QB2
-  RB:  140,  // 28th RB (2 starters + flex shares)
-  WR:  130,  // 28th WR
-  TE:  110,  // 14th TE (only 1 starter)
-  K:    90,  // 14th K
-  DEF:  80,
-};
-
-function vorp(projectedPoints: number, position: string): number {
-  return projectedPoints - (VBD_BASELINE[position] ?? 100);
-}
-
-function roundWeights(round: number) {
-  return ROUND_POS_WEIGHTS[Math.min(round, 14)] ?? ROUND_POS_WEIGHTS[14];
-}
-
-// ── KVS (Keeper Value Score) ──────────────────────────────────────────────────
-// Measures how much value the player gives relative to their keeper cost.
-// KVS = (projectedPts / expectedValueAtCostRound) × scarcityMultiplier × 100
-// Capped 0-200 (100 = break-even, >100 = value, <100 = overpay)
-
-function calcKVS(params: {
-  projectedPoints: number;
-  position:        string;
-  keeperRound:     number;
-}): {
-  kvs:          number;
-  kvsRaw:       number;
-  breakEven:    number;
-  surplus:      number;
-  surplusLabel: string;
-  evidence:     string[];
-} {
-  const { projectedPoints, position, keeperRound } = params;
-  const roundIdx = Math.min(keeperRound - 1, (POS_ROUND_VALUE[position]?.length ?? 1) - 1);
-  const expectedAtRound = POS_ROUND_VALUE[position]?.[roundIdx] ?? 100;
-  const scarcity = POS_SCARCITY[position] ?? 1.0;
-
-  const raw = projectedPoints > 0
-    ? (projectedPoints / expectedAtRound) * scarcity * 100
-    : 0;
-
-  const kvsRaw = Math.round(Math.max(0, raw));           // uncapped — used for sorting
-  const kvs    = Math.round(Math.min(200, kvsRaw));         // capped at 200 — used for display
-  const surplus = Math.round(projectedPoints - expectedAtRound);
-  const surplusLabel = surplus > 50 ? "ELITE VALUE" : surplus > 20 ? "GOOD VALUE" : surplus > 0 ? "SLIGHT VALUE" : surplus > -30 ? "FAIR" : "OVERPAY";
-
-  const evidence = [
-    `Projected ${projectedPoints.toFixed(0)} pts vs expected ${expectedAtRound} pts at Round ${keeperRound}`,
-    `Position scarcity multiplier: ${scarcity}× (${position})`,
-    `Value surplus: ${surplus > 0 ? "+" : ""}${surplus} pts → ${surplusLabel}`,
-  ];
-
-  return { kvs, kvsRaw, breakEven: expectedAtRound, surplus, surplusLabel, evidence };
-}
+// Phase 1 foundation cleanup: the hardcoded value tables (POS_ROUND_VALUE, POS_SCARCITY,
+// ROUND_POS_WEIGHTS, VBD_BASELINE), vorp(), roundWeights(), and calcKVS() were REMOVED.
+// Player value now comes from computeMarketValues; keeper value from computeKeeperValuations;
+// ADP + projection from getEspnPlayerInfoMap. No parallel valuation logic lives here anymore.
 
 // ── Traded pick detection ─────────────────────────────────────────────────────
 // A team has a traded pick if they have MORE than 1 pick in any round.
@@ -333,7 +249,7 @@ export interface ConfidenceDashboard {
   leastPredictable:  { teamName: string; ownerName: string; score: number; reason: string };
   biggestReach:      { teamName: string; ownerName: string; position: string; reason: string } | null;
   biggestRosterHole: { teamName: string; ownerName: string; position: string; urgency: string; reason: string } | null;
-  bestKeeperValue:   { teamName: string; ownerName: string; player: string; kvs: number; reason: string } | null;
+  bestKeeperValue:   { teamName: string; ownerName: string; player: string; recommendation: string; valueTier: string; roundSavings: number | null; marketValue: number | null; reason: string } | null;
   mostLikelyToChange:{ teamName: string; ownerName: string; score: number; reason: string };
 }
 
@@ -358,14 +274,17 @@ function buildConfidenceDashboard(
     reason: `Missing ${allCritical[0].gap} starter(s) at ${allCritical[0].position}`,
   } : null;
 
-  // Best keeper value = highest KVS from keeper predictions
-  const kvsKeepers = keeperPredictions
-    .filter((k: any) => k.kvs !== undefined)
-    .sort((a: any, b: any) => b.kvs - a.kvs);
-  const bestKeeperValue = kvsKeepers[0] ? {
-    teamName: kvsKeepers[0].teamName, ownerName: kvsKeepers[0].ownerName,
-    player: kvsKeepers[0].predictedPlayer, kvs: kvsKeepers[0].kvs,
-    reason: `KVS ${kvsKeepers[0].kvs} — ${kvsKeepers[0].surplusLabel ?? "value"}`,
+  // Best keeper value = best keeperValuationService valuation among predicted keepers.
+  const rankedKeepers = keeperPredictions
+    .filter((k: any) => k.predictedPlayer && k.predictedPlayer !== "Unknown" && k.roundSavings != null)
+    .sort((a: any, b: any) => (b.roundSavings - a.roundSavings) || ((b.marketValue ?? 0) - (a.marketValue ?? 0)));
+  const bk = rankedKeepers[0];
+  const bestKeeperValue = bk ? {
+    teamName: bk.teamName, ownerName: bk.ownerName,
+    player: bk.predictedPlayer,
+    recommendation: bk.recommendation, valueTier: bk.valueTier,
+    roundSavings: bk.roundSavings, marketValue: bk.marketValue,
+    reason: bk.explanation,
   } : null;
 
   // Biggest projected reach = team drafting from depth when already stacked (value pick expected but filling need)
@@ -521,17 +440,21 @@ async function loadRoster(db: any, season: number, leagueId: string) {
 const KEEPER_ELIGIBLE_POSITIONS = new Set(["QB", "RB", "WR", "TE"]);
 // keeperSlotRound = round on the current-season draft board (for mock draft + manual overrides).
 
-function predictKeepers(
+async function predictKeepers(
   teams: any[],
   byTeam: Map<number, any[]>,
   keeperSlots: any[],
   playerDraftRoundMap: Map<string, number>,
   prevByTeam: Map<number, Set<string>>,
-  consecutiveKeptPlayers: Set<string> = new Set(),
-  adpByName: Map<string, number> = new Map(),
+  consecutiveKeptPlayers: Set<string>,
+  nameToPlayerId: Map<string, number>,
+  espnAdpByPlayerId: Map<number, number | null>,
+  season: number,
+  leagueId: string,
+  userId: number | undefined,
   teamCount: number,
 ) {
-  const predictions: any[] = [];
+  const nameKey = (n: string) => n.toLowerCase().trim();
   const slotsByTeam = new Map<number, any[]>();
   for (const k of keeperSlots) {
     const tid = Number(k.teamId);
@@ -539,48 +462,114 @@ function predictKeepers(
     slotsByTeam.get(tid)!.push(k);
   }
 
+  // Keeper cost: league draft history → real ESPN ADP round (by playerId) → default R7.
+  const inferAdpRound = (name: string): number | null => {
+    const pid = nameToPlayerId.get(nameKey(name));
+    const adp = pid != null ? espnAdpByPlayerId.get(pid) ?? null : null;
+    if (!adp || adp <= 0) return null;
+    return Math.min(teamCount, Math.max(1, Math.ceil(adp / teamCount)));
+  };
+  const costFor = (name: string): { cost: number; source: string } => {
+    const actual = playerDraftRoundMap.get(nameKey(name));
+    if (actual != null) return { cost: actual, source: "history" };
+    const adpR = inferAdpRound(name);
+    if (adpR != null) return { cost: adpR, source: "adp" };
+    return { cost: DEFAULT_KEEPER_ROUND, source: "default" };
+  };
+
+  type Cand = {
+    tid: number; ownerName: string; teamName: string; playerName: string; position: string;
+    slotId: number; projectedPoints: number; cost: number; costSource: string;
+    wasKeptLastYear: boolean; playerId: number | null;
+  };
+  const candsByTeam = new Map<number, Cand[]>();
+  const poolRows: KeeperPoolRowLite[] = [];
+  const seenPid = new Set<number>();
+  const pushPool = (pid: number | null, name: string, pos: string, tid: number, owner: string, nflTeam: string, cost: number) => {
+    if (pid != null && pid > 0 && !seenPid.has(pid)) {
+      seenPid.add(pid);
+      poolRows.push({ playerId: pid, playerName: name, ownerKey: `team:${tid}`, ownerName: owner, position: pos, nflTeam, keeperRoundCost: cost });
+    }
+  };
+
+  // 1) Every keeper-eligible roster player across the league, with cost + identity.
   for (const team of teams) {
     const tid = Number(team.teamId);
     const roster = byTeam.get(tid) ?? [];
-    const slots = slotsByTeam.get(tid);
     const prevRoster = prevByTeam.get(tid) ?? new Set<string>();
-    const starters = [...roster]
-      .filter(p => p.playerName
-          && KEEPER_ELIGIBLE_POSITIONS.has(p.position)   // No K/DEF/IDP keepers
-          && p.slotId !== 20 && p.slotId !== 21          // No bench/IR
-          && p.projectedPoints > 0
-          && !consecutiveKeptPlayers.has(p.playerName.toLowerCase().trim())) // Max 2 consecutive years
-      .sort((a, b) => b.projectedPoints - a.projectedPoints);
+    const list: Cand[] = [];
+    for (const p of roster) {
+      if (!p.playerName) continue;
+      if (!KEEPER_ELIGIBLE_POSITIONS.has(p.position)) continue; // no K/DEF/IDP keepers
+      if (p.slotId === 20 || p.slotId === 21) continue;          // no bench/IR
+      if (!(p.projectedPoints > 0)) continue;
+      if (consecutiveKeptPlayers.has(nameKey(p.playerName))) continue; // max 2 straight
+      const { cost, source } = costFor(p.playerName);
+      const pid = nameToPlayerId.get(nameKey(p.playerName)) ?? null;
+      list.push({
+        tid, ownerName: team.ownerName, teamName: team.name,
+        playerName: p.playerName, position: p.position, slotId: p.slotId,
+        projectedPoints: p.projectedPoints, cost, costSource: source,
+        wasKeptLastYear: prevRoster.has(nameKey(p.playerName)), playerId: pid,
+      });
+      pushPool(pid, p.playerName, p.position, tid, team.ownerName, String(p.nflTeam ?? ""), cost);
+    }
+    candsByTeam.set(tid, list);
+    // Confirmed keepers may be excluded from candidates (already kept) — value them too.
+    for (const slot of slotsByTeam.get(tid) ?? []) {
+      if (slot.playerName?.trim() && slot.position !== "?") {
+        const pid = nameToPlayerId.get(nameKey(slot.playerName)) ?? null;
+        pushPool(pid, slot.playerName, slot.position, tid, team.ownerName, "", costFor(slot.playerName).cost);
+      }
+    }
+  }
 
-    const nameKey = (n: string) => n.toLowerCase().trim();
+  // 2) Sole keeper engine — value every eligible player via keeperValuationService (by playerId).
+  type KV = Awaited<ReturnType<typeof computeKeeperValuations>>[number];
+  let valByPid = new Map<number, KV>();
+  if (poolRows.length > 0) {
+    const vals = await computeKeeperValuations({ pool: poolRows, season, leagueId, userId, leagueSize: teamCount });
+    valByPid = new Map(vals.map((v) => [v.playerId, v]));
+  }
 
-    // ADP-based cost: when no draft history, infer keeper cost from ADP (not Round 7 default)
-    // Brock Bowers ADP 2.34 → Round 1 cost, not Round 7 free-steal
-    const inferAdpRound = (name: string): number | null => {
-      const adp = adpByName.get(name.toLowerCase().trim());
-      if (!adp || adp <= 0) return null;
-      return Math.min(teamCount, Math.max(1, Math.ceil(adp / teamCount)));
+  const valFields = (pid: number | null) => {
+    const v = pid != null ? valByPid.get(pid) : undefined;
+    return {
+      recommendation: v?.recommendation ?? "Unrated",
+      valueTier: v?.valueTier ?? "borderline",
+      roundSavings: v?.roundSavings ?? null,
+      marketValue: v?.marketValue ?? null,
+      adp: v?.adp ?? null,
+      adpRound: v?.adpRound ?? null,
+      explanation: v?.explanation ?? "No keeper valuation available.",
     };
+  };
+  const rsOf = (c: Cand) => (c.playerId != null ? valByPid.get(c.playerId)?.roundSavings ?? -Infinity : -Infinity);
+  const mvOf = (c: Cand) => (c.playerId != null ? valByPid.get(c.playerId)?.marketValue ?? -Infinity : -Infinity);
+  const sortCands = (arr: Cand[]) =>
+    [...arr].sort((a, b) => {
+      const ra = rsOf(a), rb = rsOf(b);
+      if (rb !== ra) return rb - ra;
+      const ma = mvOf(a), mb = mvOf(b);
+      if (mb !== ma) return mb - ma;
+      return b.projectedPoints - a.projectedPoints;
+    });
+  const tierConf = (tier: string) =>
+    tier === "elite" ? 0.92 : tier === "strong" ? 0.82 : tier === "viable" ? 0.7 : tier === "pass" ? 0.45 : 0.6;
+  const costEvidence = (source: string, cost: number) =>
+    source === "history" ? `Drafted Round ${cost} (from league history)`
+      : source === "adp" ? `Keeper cost inferred from real ADP → Round ${cost}`
+      : `No draft history — keeper cost defaults to Round ${DEFAULT_KEEPER_ROUND}`;
+  const altOf = (c: Cand) => {
+    const vf = valFields(c.playerId);
+    return { player: c.playerName, position: c.position, projectedPoints: c.projectedPoints, recommendation: vf.recommendation, valueTier: vf.valueTier, roundSavings: vf.roundSavings, keeperRound: c.cost, reason: vf.explanation };
+  };
 
-    const scoreCandidates = (excludeNames: Set<string>) =>
-      starters
-        .filter(p => !excludeNames.has(p.playerName))
-        .map(p => {
-          const actualRound = playerDraftRoundMap.get(nameKey(p.playerName));
-          const adpRound = actualRound == null ? inferAdpRound(p.playerName) : null;
-          const cost = actualRound ?? adpRound ?? DEFAULT_KEEPER_ROUND;
-          const costSource = actualRound != null ? "history" : adpRound != null ? "adp" : "default";
-          const wasKeptLastYear = prevRoster.has(nameKey(p.playerName));
-          const kvsResult = calcKVS({ projectedPoints: p.projectedPoints, position: p.position, keeperRound: cost });
-          return {
-            ...p,
-            ...kvsResult,
-            keeperRound: cost,
-            wasKeptLastYear,
-            draftRoundSource: costSource,
-          };
-        })
-        .sort((a, b) => (b.kvsRaw ?? b.kvs) - (a.kvsRaw ?? a.kvs));
+  const predictions: any[] = [];
+  for (const team of teams) {
+    const tid = Number(team.teamId);
+    const slots = slotsByTeam.get(tid);
+    const cands = candsByTeam.get(tid) ?? [];
 
     if (slots?.length) {
       const used = new Set<string>();
@@ -588,130 +577,83 @@ function predictKeepers(
         const keeperSlotRound = Number(slot.roundId);
         const isConfirmed = slot.playerName?.trim() && slot.position !== "?";
         if (isConfirmed) {
+          const pid = nameToPlayerId.get(nameKey(slot.playerName)) ?? null;
+          const vf = valFields(pid);
           const actualRound = playerDraftRoundMap.get(nameKey(slot.playerName)) ?? DEFAULT_KEEPER_ROUND;
-          const kvsResult = calcKVS({ projectedPoints: 0, position: slot.position, keeperRound: actualRound });
           const hist = playerDraftRoundMap.has(nameKey(slot.playerName));
           predictions.push({
             teamId: tid, teamName: team.name, ownerName: team.ownerName,
-            keeperRound: actualRound,
-            keeperSlotRound,
-            keeperRoundPick: Number(slot.roundPick),
+            keeperRound: actualRound, keeperSlotRound, keeperRoundPick: Number(slot.roundPick),
             predictedPlayer: slot.playerName, position: slot.position,
-            projectedPoints: 0, confidence: 100, ...kvsResult,
+            projectedPoints: 0, confidence: 100, ...vf,
             draftRoundSource: hist ? "history" : "default",
-            evidence: [
-              "Official keeper confirmed",
-              hist
-                ? `Drafted Round ${actualRound} (from league history)`
-                : `No draft history — keeper cost defaults to Round ${DEFAULT_KEEPER_ROUND}`,
-              ...kvsResult.evidence,
-            ],
-            status: "CONFIRMED", alternatives: [],
-            hasOfficialSlot: true,
+            evidence: ["Official keeper confirmed", costEvidence(hist ? "history" : "default", actualRound), vf.explanation].filter(Boolean),
+            status: "CONFIRMED", alternatives: [], hasOfficialSlot: true,
           });
           used.add(slot.playerName);
           continue;
         }
 
-        const candidates = scoreCandidates(used);
-        const best = candidates[0];
+        const ranked = sortCands(cands.filter((c) => !used.has(c.playerName)));
+        const best = ranked[0];
         if (!best) {
           predictions.push({
             teamId: tid, teamName: team.name, ownerName: team.ownerName,
-            keeperRound: DEFAULT_KEEPER_ROUND,
-            keeperSlotRound,
-            keeperRoundPick: Number(slot.roundPick),
-            predictedPlayer: "Unknown", position: "?",
-            projectedPoints: 0, kvs: 0, confidence: 20,
-            evidence: ["Insufficient roster data"], status: "PREDICTED", alternatives: [],
-            hasOfficialSlot: true,
+            keeperRound: DEFAULT_KEEPER_ROUND, keeperSlotRound, keeperRoundPick: Number(slot.roundPick),
+            predictedPlayer: "Unknown", position: "?", projectedPoints: 0, confidence: 20,
+            recommendation: "Unrated", valueTier: "borderline", roundSavings: null, marketValue: null, adp: null, adpRound: null,
+            explanation: "Insufficient roster data.",
+            evidence: ["Insufficient roster data"], status: "PREDICTED", alternatives: [], hasOfficialSlot: true,
           });
           continue;
         }
         used.add(best.playerName);
-        const confSignals = [
-          best.kvs >= 120 ? 0.88 : best.kvs >= 100 ? 0.75 : 0.60,
-          best.slotId < 20 ? 0.85 : 0.55,
-          best.wasKeptLastYear ? 0.90 : 0.65,
-        ];
-        const confidence = Math.round(Math.min(95, Math.max(35,
-          (confSignals.reduce((s, v) => s + v, 0) / confSignals.length) * 100,
-        )));
+        const vf = valFields(best.playerId);
+        const confidence = Math.round(Math.min(95, Math.max(35, ((tierConf(vf.valueTier) + (best.slotId < 20 ? 0.85 : 0.55) + (best.wasKeptLastYear ? 0.9 : 0.65)) / 3) * 100)));
         predictions.push({
           teamId: tid, teamName: team.name, ownerName: team.ownerName,
-          keeperRound: best.keeperRound,
-          keeperSlotRound,
-          keeperRoundPick: Number(slot.roundPick),
+          keeperRound: best.cost, keeperSlotRound, keeperRoundPick: Number(slot.roundPick),
           predictedPlayer: best.playerName, position: best.position,
-          projectedPoints: best.projectedPoints,
-          kvs: best.kvs, breakEven: best.breakEven, surplus: best.surplus,
-          surplusLabel: best.surplusLabel,
-          wasKeptLastYear: best.wasKeptLastYear,
-          draftRoundSource: best.draftRoundSource,
-          confidence,
+          projectedPoints: best.projectedPoints, ...vf,
+          wasKeptLastYear: best.wasKeptLastYear, draftRoundSource: best.costSource, confidence,
           evidence: [
-            best.draftRoundSource === "history"
-              ? `Drafted Round ${best.keeperRound} (from league history)`
-              : `No draft history — keeper cost defaults to Round ${DEFAULT_KEEPER_ROUND}`,
+            costEvidence(best.costSource, best.cost),
             best.wasKeptLastYear ? "Was on this roster last season — repeat keeper signal" : "",
-            `KVS ${best.kvs} — ${best.surplusLabel}`,
-            `Selected over ${candidates.length - 1} other candidates`,
+            vf.explanation,
+            `Selected over ${ranked.length - 1} other candidates`,
           ].filter(Boolean),
           status: "PREDICTED" as const,
-          alternatives: candidates.slice(1, 4).map(c => ({
-            player: c.playerName, position: c.position,
-            projectedPoints: c.projectedPoints, kvs: c.kvs,
-            keeperRound: c.keeperRound,
-            reason: `KVS ${c.kvs} — ${c.surplusLabel} (Rd ${c.keeperRound})`,
-          })),
+          alternatives: ranked.slice(1, 4).map(altOf),
           hasOfficialSlot: true,
         });
       }
     } else {
-      const candidates = scoreCandidates(new Set());
-      const best = candidates[0];
+      const ranked = sortCands(cands);
+      const best = ranked[0];
       if (!best) continue;
-      const confSignals = [
-        best.kvs >= 120 ? 0.78 : best.kvs >= 100 ? 0.65 : 0.50,
-        best.wasKeptLastYear ? 0.80 : 0.50,
-        0.55,
-      ];
-      const confidence = Math.round(Math.min(85, Math.max(25,
-        (confSignals.reduce((s, v) => s + v, 0) / confSignals.length) * 100,
-      )));
+      const vf = valFields(best.playerId);
+      const confidence = Math.round(Math.min(85, Math.max(25, ((tierConf(vf.valueTier) + (best.wasKeptLastYear ? 0.8 : 0.5) + 0.55) / 3) * 100)));
       predictions.push({
         teamId: tid, teamName: team.name, ownerName: team.ownerName,
-        keeperRound: best.keeperRound,
-        keeperSlotRound: null,
-        keeperRoundPick: 0,
+        keeperRound: best.cost, keeperSlotRound: null, keeperRoundPick: 0,
         predictedPlayer: best.playerName, position: best.position,
-        projectedPoints: best.projectedPoints,
-        kvs: best.kvs, breakEven: best.breakEven, surplus: best.surplus,
-        surplusLabel: best.surplusLabel,
-        wasKeptLastYear: best.wasKeptLastYear,
-        draftRoundSource: best.draftRoundSource,
-        confidence,
+        projectedPoints: best.projectedPoints, ...vf,
+        wasKeptLastYear: best.wasKeptLastYear, draftRoundSource: best.costSource, confidence,
         evidence: [
           "Hypothetical — no official keeper slot this team",
-          best.draftRoundSource === "history"
-            ? `Drafted Round ${best.keeperRound} (from league history)`
-            : `No draft history — keeper cost defaults to Round ${DEFAULT_KEEPER_ROUND}`,
+          costEvidence(best.costSource, best.cost),
           best.wasKeptLastYear ? "Was on this roster last season" : "",
-          `KVS ${best.kvs} — ${best.surplusLabel} at Round ${best.keeperRound}`,
+          vf.explanation,
         ].filter(Boolean),
         status: "HYPOTHETICAL" as const,
-        alternatives: candidates.slice(1, 3).map(c => ({
-          player: c.playerName, position: c.position,
-          projectedPoints: c.projectedPoints, kvs: c.kvs,
-          keeperRound: c.keeperRound,
-          reason: `KVS ${c.kvs} — ${c.surplusLabel}`,
-        })),
+        alternatives: ranked.slice(1, 3).map(altOf),
         hasOfficialSlot: false,
       });
     }
   }
   return predictions;
 }
+
 // ── Roster needs ──────────────────────────────────────────────────────────────
 
 function buildRosterNeeds(teams: any[], byTeam: Map<number, any[]>, keeperPredictions: any[]) {
@@ -794,7 +736,7 @@ function buildMockDraft(params: {
   rosterNeeds: any[];
   keeperPredictions: any[];
   tradedPicks: TradedPickInfo[];
-  playerPool: Array<{ name: string; position: string; projectedPoints: number; espnId: string | null }>;
+  playerPool: Array<{ name: string; position: string; projectedPoints: number; espnId: string | null; adp: number | null; marketValue: number | null }>;
 }) {
   const { allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool } = params;
   const picks: any[] = [];
@@ -812,7 +754,7 @@ function buildMockDraft(params: {
     }
   }
 
-  const pool = [...playerPool]; // preserve upstream ADP-composite (80% ADP + 20% VORP) order; do not re-sort by baseline projectedPoints
+  const pool = [...playerPool]; // already ordered by real ESPN ADP upstream (nulls last); do not re-sort
   const needMap = new Map(rosterNeeds.map(n => [n.teamId, n]));
   const teamPosCounts = new Map<number, Record<string, number>>();
   for (const p of allPicks) teamPosCounts.set(Number(p.teamId), {});
@@ -863,7 +805,6 @@ function buildMockDraft(params: {
         tradedPickContext: tradeCtx ? {
           type: tradeCtx.type, evidence: tradeCtx.evidence
         } : null,
-        kvs: kp?.kvs,
       });
       counts[kp?.position ?? "?"] = (counts[kp?.position ?? "?"] ?? 0) + 1;
       continue;
@@ -872,45 +813,50 @@ function buildMockDraft(params: {
     // Check if this is a traded pick
     const tradeCtx = tradedPickMap.get(`${round}_${tid}`);
 
-    // Determine position to target
-    const weights = roundWeights(round);
-    const needWeights = { ...weights };
-    if (needs) {
-      for (const n of needs.needs) {
-        const boost = ({ CRITICAL: 2.0, HIGH: 1.5, MEDIUM: 1.2, LOW: 1.0 } as Record<string,number>)[n.urgency] ?? 1.0;
-        if (needWeights[n.position] !== undefined) needWeights[n.position] = Math.round(needWeights[n.position] * boost);
+    // Real-ADP draft model: the pool is ESPN-ADP-ordered, so the best player available is the
+    // first undrafted player. Bias toward the team's actual roster needs with a need-driven
+    // reach window. No hardcoded position-by-round weights, no VORP — ordering is ESPN ADP.
+    const POS_CAP: Record<string, number> = { QB: 2, RB: 5, WR: 6, TE: 3, K: 2, DEF: 2 };
+    const cap = (pos: string) => POS_CAP[pos] ?? 3;
+    const undrafted = pool.filter(p => !drafted.has(p.name));
+    if (undrafted.length === 0) { continue; }
+    const bpa = undrafted[0];
+
+    const URG_RANK: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+    const REACH_BY_URG: Record<string, number> = { CRITICAL: 18, HIGH: 12, MEDIUM: 6, LOW: 0 };
+    const teamNeeds = (needs?.needs ?? [])
+      .filter((n: any) => (counts[n.position] ?? 0) < cap(n.position))
+      .sort((a: any, b: any) => (URG_RANK[b.urgency] ?? 0) - (URG_RANK[a.urgency] ?? 0));
+
+    let pick = bpa;
+    let targetPos = bpa.position;
+    let pickReason = "Best player available by ADP";
+    for (const n of teamNeeds) {
+      const idx = undrafted.findIndex(p => p.position === n.position);
+      if (idx < 0) continue;
+      if (idx <= (REACH_BY_URG[n.urgency] ?? 0)) {
+        pick = undrafted[idx]; targetPos = n.position;
+        pickReason = `${n.urgency} need at ${n.position} (within reach of best available)`;
+        break;
       }
     }
-    // Cap over-rostered positions
-    for (const [pos, cnt] of Object.entries(counts)) {
-      const cap = { QB: 2, RB: 5, WR: 6, TE: 3, K: 2, DEF: 2 }[pos] ?? 3;
-      if (cnt >= cap && needWeights[pos] !== undefined) needWeights[pos] = Math.max(1, Math.round(needWeights[pos] * 0.2));
+    // If BPA's own position is already capped, slide to the best uncapped player by ADP.
+    if (pick === bpa && (counts[bpa.position] ?? 0) >= cap(bpa.position)) {
+      const alt = undrafted.find(p => (counts[p.position] ?? 0) < cap(p.position));
+      if (alt) { pick = alt; targetPos = alt.position; pickReason = `Best available by ADP (${bpa.position} roster slots full)`; }
     }
-
-    // Deterministic weighted pick
-    const posEntries = Object.entries(needWeights).filter(([, w]) => w > 0);
-    const totalW = posEntries.reduce((s, [, w]) => s + w, 0);
-    const seed = (pickNum * 2654435761) >>> 0;
-    const threshold = ((seed % 10000) / 10000) * totalW;
-    let cumulative = 0;
-    let targetPos = posEntries[0][0];
-    for (const [pos, w] of posEntries) {
-      cumulative += w;
-      if (threshold <= cumulative) { targetPos = pos; break; }
-    }
-
-    const available = pool.filter(p => p.position === targetPos && !drafted.has(p.name));
-    const pick = available[0] ?? pool.filter(p => !drafted.has(p.name))[0];
 
     if (!pick) { continue; }
     drafted.add(pick.name);
     counts[pick.position] = (counts[pick.position] ?? 0) + 1;
 
+    const available = undrafted.filter(p => p.position === targetPos && p.name !== pick.name);
     const needUrg = needs?.needs.find((n: any) => n.position === targetPos)?.urgency;
+    const mv = pick.marketValue;
     const confSignals = [
-      pick.projectedPoints > 200 ? 0.9 : pick.projectedPoints > 100 ? 0.75 : 0.55,
+      mv != null ? (mv >= 70 ? 0.9 : mv >= 45 ? 0.75 : 0.6) : 0.6,
       needUrg === "CRITICAL" ? 0.95 : needUrg === "HIGH" ? 0.85 : 0.70,
-      available.length > 5 ? 0.80 : 0.65,
+      pick.adp != null ? 0.8 : 0.6,
     ];
     const conf = Math.round(Math.min(95, Math.max(35, (confSignals.reduce((s,v)=>s+v,0)/confSignals.length)*100)));
 
@@ -920,10 +866,12 @@ function buildMockDraft(params: {
         : `[TRADED PICK] This pick was traded in`
       : null;
 
+    const adpTxt = pick.adp != null ? `ADP ${pick.adp}` : "no current ADP";
+    const mvTxt = pick.marketValue != null ? `, market value ${Math.round(pick.marketValue)}/100` : "";
     const evidence = [
-      `Round ${round} ${targetPos} weight: ${needWeights[targetPos]}%`,
-      needUrg ? `${teamName} ${targetPos} urgency: ${needUrg}` : `Round ${round} positional tendency`,
-      `#${pool.filter(p => p.position === targetPos).findIndex(p => p.name === pick.name) + 1} available ${targetPos} (${pick.projectedPoints.toFixed(0)} pts)`,
+      pickReason,
+      needUrg ? `${teamName} ${targetPos} need: ${needUrg}` : `No pressing ${targetPos} need — value pick`,
+      `${pick.name} — ${adpTxt}${mvTxt}`,
       ...(tradeNote ? [tradeNote] : []),
     ];
 
@@ -931,10 +879,11 @@ function buildMockDraft(params: {
       pickNumber: pickNum, round, roundPick: rp,
       teamId: tid, teamName, ownerName,
       player: pick.name, position: pick.position, espnId: pick.espnId,
-      projectedPoints: pick.projectedPoints, confidence: conf,
-      reasoning: `${ownerName} targets ${targetPos} Round ${round}${needUrg ? ` [${needUrg} need]` : ""}${tradeCtx ? " [TRADED PICK]" : ""}`,
+      projectedPoints: pick.projectedPoints, marketValue: pick.marketValue ?? null, adp: pick.adp ?? null,
+      confidence: conf,
+      reasoning: `${ownerName} takes ${targetPos} in Round ${round}${needUrg ? ` [${needUrg} need]` : " [BPA]"}${tradeCtx ? " [TRADED PICK]" : ""}`,
       evidence,
-      alternatePicks: available.slice(1, 4).map(p => ({ player: p.name, position: p.position, projectedPoints: p.projectedPoints })),
+      alternatePicks: available.slice(0, 3).map(p => ({ player: p.name, position: p.position, projectedPoints: p.projectedPoints, marketValue: p.marketValue ?? null, adp: p.adp ?? null })),
       isKeeperSlot: false,
       tradedPickContext: tradeCtx ? { type: tradeCtx.type, evidence: tradeCtx.evidence } : null,
     });
@@ -985,70 +934,68 @@ export const draftWarRoomRouter = router({
       const geo = await resolveKeeperDraftGeometryForSeason(leagueId, season, ctx.user.id, payload);
       const totalRounds = Math.max(1, geo.roundCount || 1);
       const draftBoardSummary = summarizeDraftBoardCounts(allPicks);
+      // ── Draft pool: registry × the single ESPN source (real ADP + projection),
+      //    valued by computeMarketValues. No synthetic projection table, no name-joined ADP, no VORP.
       const [regRows] = await db.execute(drizzleSql`
-        SELECT fullName, position, espnPlayerId, adp, percentOwned, auctionValue
-        FROM gm_player_registry WHERE position IN ('QB','RB','WR','TE','K','DEF','DL','LB','DB')
-        ORDER BY adp ASC, lastSeasonSeen DESC, id ASC LIMIT 700
+        SELECT fullName, position, espnPlayerId
+        FROM gm_player_registry
+        WHERE espnPlayerId IS NOT NULL
+          AND position IN ('QB','RB','WR','TE','K','DEF','DL','LB','DB')
+        ORDER BY lastSeasonSeen DESC, id ASC LIMIT 2000
       `) as unknown as [any[]];
 
-      const inPool = new Set<string>();
-      const playerPool: any[] = [];
-      const posCounters: Record<string, number> = {};
-      const POS_BASELINE: Record<string, number[]> = {
-        QB:  [480,440,400,370,340,310,280,260,240,220,200,180,160,140],
-        RB:  [350,310,275,250,225,205,185,165,145,130,115,100,85,70],
-        WR:  [340,305,270,245,220,200,180,160,143,126,110,95,80,65],
-        TE:  [290,240,200,175,155,135,115,100,85,72,60,50,42,35],
-        K:   [175,160,148,135,122,110,98,88,78,68,58,50,42,35],
-        DEF: [160,145,130,118,106,95,84,74,65,57,49,42,35,29],
-      };
+      const espnInfo = await getEspnPlayerInfoMap();
 
-      // Build a quick ESPN ID → adp map from registry for roster players
-      const [espnAdpRows] = await db.execute(drizzleSql`
-        SELECT fullName, adp, percentOwned FROM gm_player_registry WHERE adp IS NOT NULL LIMIT 700
-      `) as unknown as [any[]];
-      const adpByName = new Map<string, number>(
-        (espnAdpRows as any[]).filter(r => r.adp).map(r => [r.fullName.toLowerCase(), parseFloat(r.adp)])
-      );
-
-      for (const [, players] of byTeam.entries()) {
-        for (const p of players) {
-          if (!p.playerName || inPool.has(p.playerName.toLowerCase())) continue;
-          playerPool.push({
-            name: p.playerName, position: p.position, projectedPoints: p.projectedPoints, espnId: null,
-            adp: adpByName.get(p.playerName.toLowerCase()) ?? null,
-          });
-          inPool.add(p.playerName.toLowerCase());
-        }
-      }
+      // Identity crosswalk for the keeper engine (name → ESPN playerId) + real ADP by playerId.
+      const nameToPlayerId = new Map<string, number>();
+      const espnAdpByPlayerId = new Map<number, number | null>();
       for (const reg of (regRows as any[])) {
-        if (inPool.has(reg.fullName.toLowerCase())) continue;
-        const pos = reg.position as string;
-        posCounters[pos] = (posCounters[pos] ?? 0) + 1;
-        const tier = Math.min(posCounters[pos] - 1, (POS_BASELINE[pos]?.length ?? 1) - 1);
-        playerPool.push({
-          name: reg.fullName, position: pos,
-          projectedPoints: POS_BASELINE[pos]?.[tier] ?? 0,
-          espnId: reg.espnPlayerId,
-          adp: reg.adp ? parseFloat(reg.adp) : null,
-          percentOwned: reg.percentOwned ? parseFloat(reg.percentOwned) : null,
-        });
-        inPool.add(reg.fullName.toLowerCase());
+        const espnId = String(reg.espnPlayerId ?? "").trim();
+        if (!espnId) continue;
+        const pid = Number(espnId);
+        const nameLc = String(reg.fullName).toLowerCase().trim();
+        if (nameLc && !nameToPlayerId.has(nameLc)) nameToPlayerId.set(nameLc, pid);
+        if (!espnAdpByPlayerId.has(pid)) espnAdpByPlayerId.set(pid, espnInfo.get(espnId)?.adp ?? null);
       }
 
-      // Composite sort: 80% ESPN ADP + 20% VORP rank
-      const withVorp = playerPool.map(p => ({ ...p, vorpScore: vorp(p.projectedPoints, p.position) }));
-      withVorp.sort((a, b) => b.vorpScore - a.vorpScore);
-      const vorpRankMap = new Map(withVorp.map((p: any, i: number) => [p.name, i + 1]));
+      // Build market-value inputs over the ESPN-ranked draftable universe (by playerId).
+      const seenPool = new Set<string>();
+      const poolMeta: Array<{ name: string; position: string; espnId: string; playerId: number; adp: number | null; projection: number | null }> = [];
+      const mvInputs: MarketValueInput[] = [];
+      for (const reg of (regRows as any[])) {
+        const espnId = String(reg.espnPlayerId ?? "").trim();
+        if (!espnId) continue;
+        const info = espnInfo.get(espnId);
+        if (!info) continue;                         // not in ESPN's ranked pool → not draftable
+        const nameLc = String(reg.fullName).toLowerCase().trim();
+        if (seenPool.has(nameLc)) continue;
+        seenPool.add(nameLc);
+        const pid = Number(espnId);
+        mvInputs.push({
+          playerId: pid, position: String(reg.position || "?"), adpRank: null,
+          projection: info.projection ?? null, keeperRoundSavings: null,
+          percentStarted: info.percentStarted ?? null,
+          currentSeasonWeekly: [], history: [], currentSeason: season,
+        });
+        poolMeta.push({ name: reg.fullName, position: String(reg.position || "?"), espnId, playerId: pid, adp: info.adp ?? null, projection: info.projection ?? null });
+      }
+      const mvMap = computeMarketValues(mvInputs, { playedWeeks: 0 });
+
+      const playerPool: any[] = poolMeta.map((m) => {
+        const v = mvMap.get(m.playerId);
+        return {
+          name: m.name, position: m.position, espnId: m.espnId,
+          projectedPoints: m.projection ?? 0,
+          adp: m.adp,
+          marketValue: v ? Math.round(v.value * 10) / 10 : null,
+        };
+      });
+      // Order by real ESPN ADP (nulls last), then market value.
       playerPool.sort((a, b) => {
-        const aAdp = adpByName.get(a.name.toLowerCase()) ?? a.adp ?? null;
-        const bAdp = adpByName.get(b.name.toLowerCase()) ?? b.adp ?? null;
-        const aVorp = vorpRankMap.get(a.name) ?? 999;
-        const bVorp = vorpRankMap.get(b.name) ?? 999;
-        if (aAdp !== null && bAdp !== null) return (aAdp * 0.8 + aVorp * 0.2) - (bAdp * 0.8 + bVorp * 0.2);
-        if (aAdp !== null) return -1;
-        if (bAdp !== null) return 1;
-        return aVorp - bVorp;
+        if (a.adp != null && b.adp != null) { if (a.adp !== b.adp) return a.adp - b.adp; }
+        else if (a.adp != null) return -1;
+        else if (b.adp != null) return 1;
+        return (b.marketValue ?? -1) - (a.marketValue ?? -1);
       });
 
       // Apply keeper overrides if provided
@@ -1077,7 +1024,7 @@ export const draftWarRoomRouter = router({
 
       // Phase 1: Keeper + Roster (no hypothetical keepers when ESPN reports 0 keeper slots)
       const keeperPredictions = leagueCapabilities.keepers
-        ? predictKeepers(teams, byTeam, effectiveKeepers, playerDraftRoundMap, prevByTeam, consecutiveKeptPlayers, adpByName, teams.length)
+        ? await predictKeepers(teams, byTeam, effectiveKeepers, playerDraftRoundMap, prevByTeam, consecutiveKeptPlayers, nameToPlayerId, espnAdpByPlayerId, season, leagueId, ctx.user.id, teams.length)
         : [];
       const rosterNeeds       = buildRosterNeeds(teams, byTeam, keeperPredictions);
 
@@ -1130,10 +1077,8 @@ export const draftWarRoomRouter = router({
           name: p.name, position: p.position,
           projectedPoints: p.projectedPoints,
           adp: p.adp ?? null,
-          percentOwned: p.percentOwned ?? null,
+          marketValue: p.marketValue ?? null,
           rank: idx + 1,
-          syntheticADP: idx + 1,
-          vorp: Math.round(vorp(p.projectedPoints, p.position)),
         }));
 
       return {

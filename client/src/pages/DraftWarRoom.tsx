@@ -78,17 +78,21 @@ function Section({ title, icon, badge, children, defaultOpen = true, accent }: {
   );
 }
 
-// ── KVS badge ─────────────────────────────────────────────────────────────────
+// ── Keeper tier badge (keeperValuationService: recommendation + round savings) ──
 
-function KvsBadge({ kvs, label }: { kvs: number; label?: string }) {
-  const color = kvs >= 130 ? "text-lime-300 bg-lime-500/15 border-lime-500/40"
-              : kvs >= 100 ? "text-violet-300 bg-violet-500/15 border-violet-500/40"
-              : kvs >= 80  ? "text-amber-300 bg-amber-500/15 border-amber-500/40"
-              : "text-zinc-300 bg-white/[0.06] border-white/[0.12]";
+function KeeperTierBadge({ recommendation, valueTier, roundSavings }: { recommendation?: string; valueTier?: string; roundSavings?: number | null }) {
+  const tier = (valueTier || "").toLowerCase();
+  const color = tier === "elite"  ? "text-lime-300 bg-lime-500/15 border-lime-500/40"
+              : tier === "strong" ? "text-violet-300 bg-violet-500/15 border-violet-500/40"
+              : tier === "viable" ? "text-sky-300 bg-sky-500/15 border-sky-500/40"
+              : tier === "pass"   ? "text-zinc-400 bg-white/[0.04] border-white/[0.12]"
+              : "text-amber-300 bg-amber-500/15 border-amber-500/40"; // borderline / unrated
   return (
-    <div className={cn("flex flex-col items-center px-2 py-1 rounded-lg border shrink-0", color)}>
-      <span className="text-sm font-black tabular-nums leading-none">{kvs}</span>
-      <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">KVS</span>
+    <div className={cn("flex flex-col items-center px-2.5 py-1 rounded-lg border shrink-0", color)}>
+      <span className="text-[11px] font-black uppercase tracking-wide leading-none text-center">{recommendation || "Unrated"}</span>
+      {roundSavings != null && (
+        <span className="text-[10px] font-bold tabular-nums opacity-80 mt-0.5">{roundSavings > 0 ? `+${roundSavings}` : roundSavings} rd</span>
+      )}
     </div>
   );
 }
@@ -130,7 +134,9 @@ function ConfidenceDashboard({ data, showKeeperInsights = true }: { data: any; s
       icon: Trophy, label: "Best Keeper Value",
       title: data.bestKeeperValue?.player ?? "—",
       sub: data.bestKeeperValue?.teamName ?? "",
-      value: data.bestKeeperValue ? `KVS ${data.bestKeeperValue.kvs}` : "—",
+      value: data.bestKeeperValue
+        ? `${data.bestKeeperValue.recommendation ?? "—"}${data.bestKeeperValue.roundSavings != null ? ` · +${data.bestKeeperValue.roundSavings} rd` : ""}`
+        : "—",
       detail: data.bestKeeperValue?.reason ?? "No keepers predicted",
       color: "border-violet-500/25 bg-violet-500/5",
       iconColor: "text-violet-400",
@@ -185,7 +191,7 @@ function ConfidenceDashboard({ data, showKeeperInsights = true }: { data: any; s
   );
 }
 
-// ── Keeper section (with KVS) ─────────────────────────────────────────────────
+// ── Keeper section (keeperValuationService tiers) ──────────────────────────────
 
 function KeeperSection({ predictions }: { predictions: any[] }) {
   if (!predictions.length) return (
@@ -219,17 +225,10 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
                 {k.projectedPoints > 0 && <span className="text-[11px] text-zinc-500">{k.projectedPoints.toFixed(0)} pts proj</span>}
               </div>
             </div>
-            {/* KVS + Confidence */}
+            {/* Keeper tier + Confidence */}
             <div className="flex items-start gap-2 shrink-0">
-              {k.kvs !== undefined && k.kvs > 0 && (
-                <div className="flex flex-col items-end gap-1">
-                  <KvsBadge kvs={k.kvs} />
-                  {k.surplusLabel && (
-                    <span className={cn("text-[10px] font-bold uppercase",
-                      k.surplus > 50 ? "text-violet-400" : k.surplus > 0 ? "text-violet-400" : k.surplus > -30 ? "text-amber-400" : "text-violet-400"
-                    )}>{k.surplusLabel}</span>
-                  )}
-                </div>
+              {k.recommendation && (
+                <KeeperTierBadge recommendation={k.recommendation} valueTier={k.valueTier} roundSavings={k.roundSavings} />
               )}
               <div className="w-24">
                 <div className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">Confidence</div>
@@ -238,12 +237,13 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
             </div>
           </div>
 
-          {/* KVS breakdown */}
-          {k.kvs !== undefined && k.kvs > 0 && k.breakEven !== undefined && (
+          {/* Keeper value breakdown (keeperValuationService) */}
+          {k.roundSavings != null && (
             <div className="flex items-center gap-4 px-3 py-2 rounded-lg bg-zinc-900/60 border border-white/[0.06] text-[11px]">
-              <div><span className="text-zinc-600">Projected:</span> <span className="text-zinc-200 font-bold">{k.projectedPoints?.toFixed(0)} pts</span></div>
-              <div><span className="text-zinc-600">Break-even (Rd {k.keeperRound}):</span> <span className="text-zinc-200 font-bold">{k.breakEven} pts</span></div>
-              <div><span className="text-zinc-600">Surplus:</span> <span className={cn("font-bold", k.surplus >= 0 ? "text-violet-400" : "text-violet-400")}>{k.surplus >= 0 ? "+" : ""}{k.surplus} pts</span></div>
+              <div><span className="text-zinc-600">Keeper cost:</span> <span className="text-zinc-200 font-bold">Rd {k.keeperRound}</span></div>
+              {k.adpRound != null && <div><span className="text-zinc-600">ADP value:</span> <span className="text-zinc-200 font-bold">Rd {k.adpRound}{k.adp != null ? ` (ADP ${k.adp})` : ""}</span></div>}
+              <div><span className="text-zinc-600">Rounds saved:</span> <span className={cn("font-bold", k.roundSavings > 0 ? "text-lime-400" : k.roundSavings < 0 ? "text-amber-400" : "text-zinc-300")}>{k.roundSavings > 0 ? "+" : ""}{k.roundSavings}</span></div>
+              {k.marketValue != null && <div><span className="text-zinc-600">Market value:</span> <span className="text-zinc-200 font-bold">{Math.round(k.marketValue)}/100</span></div>}
             </div>
           )}
 
@@ -251,12 +251,12 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
 
           {k.alternatives?.length > 0 && (
             <div>
-              <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1.5">Alternatives considered (by KVS)</p>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1.5">Alternatives considered (by keeper value)</p>
               <div className="flex flex-wrap gap-1.5">
                 {k.alternatives.map((a: any, j: number) => (
                   <span key={j} className="flex items-center gap-1 text-[11px] text-zinc-500 bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded">
                     {a.player} <PosPill pos={a.position} />
-                    {a.kvs !== undefined && <span className="text-zinc-600">KVS {a.kvs}</span>}
+                    {a.roundSavings != null && <span className="text-zinc-600">{a.recommendation ?? ""}{` (${a.roundSavings > 0 ? "+" : ""}${a.roundSavings} rd)`}</span>}
                   </span>
                 ))}
               </div>
@@ -538,7 +538,7 @@ function LiveDraftEngine({
         r[s.pickNumber] = {
           id: `keeper:${String(s.player).toLowerCase().trim()}`,
           name: s.player, position: s.position,
-          projectedPoints: s.projectedPoints ?? 0, adp: null, vorp: 0, isKeeper: true,
+          projectedPoints: s.projectedPoints ?? 0, adp: null, marketValue: null, isKeeper: true,
         };
       }
     }
@@ -548,7 +548,7 @@ function LiveDraftEngine({
   const [results, setResults] = useState<Record<number, any>>(initialResults);
   const [idx, setIdx]         = useState(0);
   const [running, setRunning] = useState(false);
-  const [sort, setSort]       = useState<"adp" | "proj" | "vorp" | "pos" | "name">("adp");
+  const [sort, setSort]       = useState<"adp" | "proj" | "value" | "pos" | "name">("adp");
   const [posFilter, setPos]   = useState<string>("ALL");
   const [searchQ, setSearchQ] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -559,7 +559,7 @@ function LiveDraftEngine({
     if (timer.current) clearTimeout(timer.current);
   }, [initialResults]);
 
-  const byAdp = (p: any) => (p.adp != null ? Number(p.adp) : (p.rank ?? p.syntheticADP ?? 9999));
+  const byAdp = (p: any) => (p.adp != null ? Number(p.adp) : (p.rank ?? 9999));
 
   const draftedKeys = useMemo(() => {
     const s = new Set<string>();
@@ -577,7 +577,7 @@ function LiveDraftEngine({
     const s = [...list];
     if (sort === "adp") s.sort((a, b) => byAdp(a) - byAdp(b));
     else if (sort === "proj") s.sort((a, b) => (b.projectedPoints ?? 0) - (a.projectedPoints ?? 0));
-    else if (sort === "vorp") s.sort((a, b) => (b.vorp ?? 0) - (a.vorp ?? 0));
+    else if (sort === "value") s.sort((a, b) => (b.marketValue ?? -1) - (a.marketValue ?? -1));
     else if (sort === "pos") s.sort((a, b) => (a.position ?? "").localeCompare(b.position ?? "") || byAdp(a) - byAdp(b));
     else s.sort((a, b) => a.name.localeCompare(b.name));
     return s;
@@ -646,7 +646,7 @@ function LiveDraftEngine({
     setResults(initialResults); setIdx(0); setRunning(false);
   }
 
-  const SORTS: [typeof sort, string][] = [["adp","ADP"],["proj","Proj"],["vorp","VORP"],["pos","Pos"],["name","Name"]];
+  const SORTS: [typeof sort, string][] = [["adp","ADP"],["proj","Proj"],["value","Value"],["pos","Pos"],["name","Name"]];
   const POSES = ["ALL","QB","RB","WR","TE","K","DEF"];
 
   return (
@@ -701,7 +701,7 @@ function LiveDraftEngine({
                 <PosPill pos={p.position} />
                 <span className="text-xs font-bold text-zinc-200 flex-1 truncate">{p.name}</span>
                 <span className="text-[11px] text-zinc-500 tabular-nums shrink-0">{Math.round(p.projectedPoints ?? 0)} pts</span>
-                <span className="text-[11px] text-zinc-600 tabular-nums shrink-0 w-10 text-right">V{p.vorp}</span>
+                <span className="text-[11px] text-zinc-600 tabular-nums shrink-0 w-12 text-right">{p.marketValue != null ? `${Math.round(p.marketValue)}` : "—"}</span>
                 {awaitingUser && <span className="text-[10px] font-black text-violet-400 shrink-0">DRAFT</span>}
               </button>
             ))}
@@ -949,13 +949,13 @@ function MockDraftBoard({
                         const options = rosterPlayers.length > 0
                           ? rosterPlayers.map((name: string) => {
                               const p = availablePool.find((ap: any) => ap.name === name);
-                              return { name, position: p?.position ?? "?", pts: p?.projectedPoints ?? 0, adp: p?.syntheticADP };
+                              return { name, position: p?.position ?? "?", pts: p?.projectedPoints ?? 0, adp: p?.adp ?? p?.rank };
                             })
                           : availablePool.slice(0, 80).map((p: any) => ({
                               name: p.name,
                               position: p.position,
                               pts: p.projectedPoints,
-                              adp: p.syntheticADP,
+                              adp: p.adp ?? p.rank,
                             }));
                         return options.map((p: any) => (
                           <option key={p.name} value={p.name}>
@@ -1003,10 +1003,10 @@ function MockDraftBoard({
                 className="text-left rounded-lg border border-zinc-700/60 bg-white/[0.04] hover:border-violet-500/40 hover:bg-violet-500/8 p-2 transition-all">
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <PosPill pos={p.position} />
-                  <span className="text-[10px] font-bold text-zinc-500">ADP {p.syntheticADP}</span>
+                  <span className="text-[10px] font-bold text-zinc-500">ADP {p.adp ?? p.rank}</span>
                 </div>
                 <div className="text-xs font-bold text-zinc-200 leading-tight truncate">{p.name}</div>
-                <div className="text-[10px] text-zinc-500">{p.projectedPoints.toFixed(0)} pts · VORP {p.vorp}</div>
+                <div className="text-[10px] text-zinc-500">{p.projectedPoints.toFixed(0)} pts · Val {p.marketValue != null ? Math.round(p.marketValue) : "—"}</div>
               </button>
             ))}
           </div>
@@ -1087,8 +1087,8 @@ function MockDraftBoard({
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-px bg-zinc-800/20">
                 {rPicks.map((p: any) => {
-                  // Find synthetic ADP for this player
-                  const adp = availablePool.find(ap => ap.name === p.player)?.syntheticADP;
+                  // Real ADP for this player (carried on the pick, fallback to the board)
+                  const adp = p.adp ?? availablePool.find(ap => ap.name === p.player)?.adp;
                   return (
                     <button key={p.pickNumber}
                       onClick={() => setExp(expandPick === p.pickNumber ? null : p.pickNumber)}
@@ -1121,8 +1121,8 @@ function MockDraftBoard({
               {/* Expanded pick detail */}
               {rPicks.some((p: any) => p.pickNumber === expandPick) && (() => {
                 const pk = rPicks.find((p: any) => p.pickNumber === expandPick)!;
-                const adp = availablePool.find(ap => ap.name === pk.player)?.syntheticADP;
-                const vorpVal = availablePool.find(ap => ap.name === pk.player)?.vorp;
+                const adp = pk.adp ?? availablePool.find(ap => ap.name === pk.player)?.adp;
+                const mv = pk.marketValue ?? availablePool.find(ap => ap.name === pk.player)?.marketValue;
                 return (
                   <div className="mx-2 my-2 rounded-lg border border-zinc-700/60 bg-zinc-900/80 p-4 space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -1136,8 +1136,8 @@ function MockDraftBoard({
                         </span>
                       )}
                       <div className="ml-auto flex items-center gap-3 text-[11px]">
-                        {adp && <span className="text-zinc-500">Synthetic ADP: <span className="text-zinc-300 font-bold">{adp}</span></span>}
-                        {vorpVal !== undefined && <span className="text-zinc-500">VORP: <span className={cn("font-bold", vorpVal > 100 ? "text-violet-400" : vorpVal > 50 ? "text-amber-400" : "text-zinc-400")}>{vorpVal}</span></span>}
+                        {adp != null && <span className="text-zinc-500">ADP: <span className="text-zinc-300 font-bold">{adp}</span></span>}
+                        {mv != null && <span className="text-zinc-500">Market value: <span className={cn("font-bold", mv >= 70 ? "text-violet-400" : mv >= 45 ? "text-amber-400" : "text-zinc-400")}>{Math.round(mv)}/100</span></span>}
                         <span className="text-zinc-600">Pick {pk.pickNumber} · Rd {pk.round}</span>
                       </div>
                     </div>
@@ -1150,7 +1150,7 @@ function MockDraftBoard({
                         <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">Alternates</p>
                         <div className="flex flex-wrap gap-1.5">
                           {pk.alternatePicks.map((a: any, j: number) => {
-                            const aAdp = availablePool.find(ap => ap.name === a.player)?.syntheticADP;
+                            const aAdp = a.adp ?? availablePool.find(ap => ap.name === a.player)?.adp;
                             return (
                               <span key={j} className="text-[11px] text-zinc-500 bg-white/[0.03] border border-white/[0.08] px-2 py-0.5 rounded">
                                 {a.player} ({a.position}) · {a.projectedPoints?.toFixed(0)} pts{aAdp ? ` · ADP ${aAdp}` : ""}
@@ -1174,21 +1174,21 @@ function MockDraftBoard({
           {/* Team summary */}
           {(() => {
             const tp = (teamPicks.get(selTeam) ?? []);
-            const totalVorp = tp.reduce((s: number, p: any) => {
-              const v = availablePool.find(ap => ap.name === p.player)?.vorp ?? 0;
-              return s + v;
-            }, 0);
+            const mvs = tp
+              .map((p: any) => p.marketValue ?? availablePool.find(ap => ap.name === p.player)?.marketValue)
+              .filter((v: any) => v != null) as number[];
+            const avgVal = mvs.length ? Math.round(mvs.reduce((s: number, v: number) => s + v, 0) / mvs.length) : null;
             return (
               <div className="px-4 py-3 bg-white/[0.03] flex items-center gap-4">
                 <span className="font-bold text-zinc-100 text-sm">{teams.find((t: any) => t.teamId === selTeam)?.teamName}</span>
                 <span className="text-[11px] text-zinc-500">{tp.length} picks</span>
-                <span className="text-[11px] text-violet-400 ml-auto">Total VORP: {totalVorp}</span>
+                <span className="text-[11px] text-violet-400 ml-auto">Avg market value: {avgVal != null ? `${avgVal}/100` : "—"}</span>
               </div>
             );
           })()}
           {(teamPicks.get(selTeam) ?? []).map((p: any) => {
-            const adp = availablePool.find(ap => ap.name === p.player)?.syntheticADP;
-            const vorpVal = availablePool.find(ap => ap.name === p.player)?.vorp;
+            const adp = p.adp ?? availablePool.find(ap => ap.name === p.player)?.adp;
+            const mv = p.marketValue ?? availablePool.find(ap => ap.name === p.player)?.marketValue;
             return (
               <div key={p.pickNumber} className={cn("flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-800/20",
                 p.isKeeperSlot && "bg-amber-500/5",
@@ -1204,8 +1204,8 @@ function MockDraftBoard({
                 </div>
                 <div className="shrink-0 text-right space-y-0.5">
                   {p.projectedPoints > 0 && <div className="text-xs tabular-nums text-zinc-400">{p.projectedPoints.toFixed(0)} pts</div>}
-                  {adp && <div className="text-[10px] text-zinc-600">ADP {adp}</div>}
-                  {vorpVal !== undefined && <div className={cn("text-[10px] font-bold", vorpVal > 80 ? "text-violet-400" : "text-zinc-600")}>+{vorpVal}</div>}
+                  {adp != null && <div className="text-[10px] text-zinc-600">ADP {adp}</div>}
+                  {mv != null && <div className={cn("text-[10px] font-bold", mv >= 70 ? "text-violet-400" : "text-zinc-600")}>{Math.round(mv)}/100</div>}
                 </div>
                 <div className="w-14 shrink-0"><ConfBar value={p.confidence} small /></div>
                 {p.isKeeperSlot && <span className="text-[10px] text-amber-400 font-bold shrink-0">KEEPER</span>}
@@ -1585,7 +1585,7 @@ export function DraftWarRoom() {
           <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-sm text-amber-100/90">
             <span className="font-semibold text-amber-200">Redraft league.</span>{" "}
             ESPN reports {keeperSlotsReported} keeper slot{keeperSlotsReported === 1 ? "" : "s"} per team.
-            Keeper predictions, compression, and KVS are hidden — they do not apply to this format.
+            Keeper predictions, compression, and keeper valuations are hidden — they do not apply to this format.
           </div>
         )}
 
@@ -1608,7 +1608,7 @@ export function DraftWarRoom() {
             <span>
               <span className="font-semibold text-zinc-400">KEEPER PRED</span> rows are model projections —{" "}
               <span className="font-bold text-amber-400 mx-0.5">NOT OFFICIAL</span> keeper slots unless you confirm them.
-              KVS = Keeper Value Score (100 = break-even, &gt;100 = value, &lt;100 = overpay).{" "}
+              Keeper tiers (Elite/Strong/Viable/Borderline/Pass) come from the keeper valuation service — round savings = keeper cost minus the player's ADP round.{" "}
               <span className="font-semibold text-zinc-400">TRADE ROWS</span> counts extra/missing{" "}
               <em>open-draft</em> slots per team×round vs “exactly one” (heuristic — not ESPN’s trade log or Draft History).{" "}
               <span className="font-semibold text-zinc-400">Mock Draft Board</span> badge = full board rows (keepers + open-draft).
@@ -1616,7 +1616,7 @@ export function DraftWarRoom() {
             </span>
           ) : (
             <span>
-              <span className="font-semibold text-zinc-400">Redraft:</span> no hypothetical keepers or KVS.
+              <span className="font-semibold text-zinc-400">Redraft:</span> no hypothetical keepers or keeper valuations.
               <span className="font-semibold text-zinc-400 ml-1">TRADE ROWS</span> counts extra/missing{" "}
               <em>open-draft</em> slots (heuristic).{" "}
               <span className="font-semibold text-zinc-400">Mock Draft Board</span> shows synced draft slots only.
