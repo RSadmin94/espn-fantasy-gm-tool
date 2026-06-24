@@ -122,6 +122,38 @@ export function ChampionshipDiagnosis() {
     : (cr?.topReasons ?? []);
   const blockersLabel = isChampionMode ? "Obstacles you overcame" : "Why it hasn't happened";
 
+  // Championship Benchmark — hoisted so "why-havent-i-won" can lead with it (the answer to the page's question).
+  // Champion modes keep it lower as supporting evidence (Phase 2 builds their "Your Edge" hero).
+  const benchmarkSection = (
+    <Section icon={<Activity className="h-5 w-5" />} title="Championship Benchmark" subtitle="How your starters measure against the average champion, position by position">
+      {positional.length > 0 ? (
+        <div className="space-y-1">
+          <p className="mb-1 text-[12px] uppercase tracking-wide text-white/40">Starter points/game by position · amber line = champion benchmark</p>
+          {positional.map((g: any) => (
+            <GapBar key={g.position} position={g.position} ownerAvg={g.ownerAvg} championAvg={g.championAvg} gap={g.gap} />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 text-center text-[14px] text-white/55">Position scoring populates once weekly player stats are synced.</div>
+      )}
+      {readiness?.components?.length > 0 && (
+        <div className="mt-5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          {readiness.components.map((c: any) => (
+            <div key={c.key} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+              <div className="mb-1.5 flex items-center justify-between text-[12px]">
+                <span className="font-semibold text-white/70">{c.label}</span>
+                <span className="tabular-nums font-bold text-white/85">{c.score}<span className="text-white/35"> · {Math.round(c.weight * 100)}%</span></span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
+                <div className={cn("h-full rounded-full", c.score >= 70 ? "bg-lime-400/80" : c.score >= 45 ? "bg-amber-400/80" : "bg-red-500/70")} style={{ width: `${Math.max(0, Math.min(100, c.score))}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+
   return (
     <div className="min-h-screen w-full" style={PAGEBG}>
       <div className="px-6 py-6 max-w-[1200px]">
@@ -172,6 +204,9 @@ export function ChampionshipDiagnosis() {
 
         {cr && !cr.needsOwnerSelection && (
           <div className="space-y-6">
+
+            {/* why-havent-i-won leads with the benchmark — it is the answer to "Why haven't I won?" */}
+            {mode === "why-havent-i-won" && benchmarkSection}
 
             {/* SECTION 1 — Title Gap Summary */}
             <Section icon={<Target className="h-5 w-5" />} title="Title Gap Summary" subtitle="The clearest read on how far you are from a championship">
@@ -231,34 +266,8 @@ export function ChampionshipDiagnosis() {
               )}
             </Section>
 
-            {/* SECTION 3 — Roster / Draft / Trade Weaknesses */}
-            <Section icon={<Activity className="h-5 w-5" />} title="Roster / Draft / Trade Weaknesses" subtitle="Where your roster falls short of the champion profile">
-              {positional.length > 0 ? (
-                <div className="space-y-1">
-                  <p className="mb-1 text-[12px] uppercase tracking-wide text-white/40">Starter points/game by position · amber line = champion benchmark</p>
-                  {positional.map((g: any) => (
-                    <GapBar key={g.position} position={g.position} ownerAvg={g.ownerAvg} championAvg={g.championAvg} gap={g.gap} />
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 text-center text-[14px] text-white/55">Position scoring populates once weekly player stats are synced.</div>
-              )}
-              {readiness?.components?.length > 0 && (
-                <div className="mt-5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                  {readiness.components.map((c: any) => (
-                    <div key={c.key} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
-                      <div className="mb-1.5 flex items-center justify-between text-[12px]">
-                        <span className="font-semibold text-white/70">{c.label}</span>
-                        <span className="tabular-nums font-bold text-white/85">{c.score}<span className="text-white/35"> · {Math.round(c.weight * 100)}%</span></span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
-                        <div className={cn("h-full rounded-full", c.score >= 70 ? "bg-lime-400/80" : c.score >= 45 ? "bg-amber-400/80" : "bg-red-500/70")} style={{ width: `${Math.max(0, Math.min(100, c.score))}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Section>
+            {/* SECTION 3 — Championship Benchmark. Champion modes keep it here as evidence; why-havent-i-won hoists it to the top. */}
+            {mode !== "why-havent-i-won" && benchmarkSection}
 
             {/* SECTION 4 — Rival / Playoff Obstacles */}
             <Section icon={<Swords className="h-5 w-5" />} title="Rival / Playoff Obstacles" subtitle="The owners and brackets standing in your way">
