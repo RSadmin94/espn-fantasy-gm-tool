@@ -116,6 +116,25 @@ export function ChampionshipDiagnosis() {
     () => [...positional].filter((p) => p.gap > 0).sort((a, b) => b.gap - a.gap)[0] ?? null,
     [positional],
   );
+
+  // Champion "edge" — the top strengths (components) and the positive drivers behind the title.
+  const edgeComponents = useMemo(
+    () => [...(readiness?.components ?? [])].sort((a: any, b: any) => b.score - a.score).slice(0, 3),
+    [readiness],
+  );
+  const edgeDrivers = useMemo(() => {
+    const ranked = [...(cr?.topReasons ?? [])].sort((a: any, b: any) => (b.severity ?? 0) - (a.severity ?? 0));
+    const seen = new Set<string>();
+    const out: any[] = [];
+    for (const d of ranked) {
+      const cat = String(d.category ?? d.id ?? out.length);
+      if (seen.has(cat)) continue;
+      seen.add(cat);
+      out.push(d);
+      if (out.length >= 2) break;
+    }
+    return out;
+  }, [cr]);
   // Blockers: champion modes surface "obstacles overcome"; everyone else gets the raw reasons.
   const blockers: any[] = isChampionMode
     ? (cr?.obstaclesOvercome?.findings ?? cr?.topReasons ?? [])
@@ -125,7 +144,7 @@ export function ChampionshipDiagnosis() {
   // Championship Benchmark — hoisted so "why-havent-won" can lead with it (the answer to the page's question).
   // Champion modes keep it lower as supporting evidence (Phase 2 builds their "Your Edge" hero).
   const benchmarkSection = (
-    <Section icon={<Activity className="h-5 w-5" />} title="Championship Benchmark" subtitle="How your starters measure against the average champion, position by position">
+    <Section icon={<Activity className="h-5 w-5" />} title="Championship Benchmark" subtitle={mode === "why-you-won" ? "Where your title profile still trails the champion average" : "How your starters measure against the average champion, position by position"}>
       {positional.length > 0 ? (
         <div className="space-y-1">
           <p className="mb-1 text-[12px] uppercase tracking-wide text-white/40">Starter points/game by position · amber line = champion benchmark</p>
@@ -154,62 +173,8 @@ export function ChampionshipDiagnosis() {
     </Section>
   );
 
-  return (
-    <div className="min-h-screen w-full" style={PAGEBG}>
-      <div className="px-6 py-6 max-w-[1200px]">
-        {/* Hero */}
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[12px] font-semibold uppercase tracking-wider text-violet-300">
-              <Trophy className="h-3.5 w-3.5" /> Championship Diagnosis
-            </div>
-            <h1 className="text-[34px] font-black leading-[1.05] tracking-tight sm:text-[42px]">
-              Championship Diagnosis
-            </h1>
-            {cr && <p className="mt-2 text-[15px] text-white/55">{taglineFor(mode, cr.ownerName)}</p>}
-          </div>
-          {cr && (
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 pt-1">
-              {cr.careerArc && (
-                <span className="rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold text-violet-200">{cr.careerArc}</span>
-              )}
-              <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">
-                {snapshot?.seasonsPlayed ?? 0} seasons
-              </span>
-              {cr.teamCount > 0 && (
-                <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">{cr.teamCount}-Team League</span>
-              )}
-              <span className={cn("rounded-full border px-3 py-1 text-[11px] font-semibold", cr.confidence === "High" ? "border-lime-400/30 bg-lime-500/10 text-lime-300" : "border-amber-400/30 bg-amber-500/10 text-amber-300")}>Confidence: {cr.confidence}</span>
-            </div>
-          )}
-        </div>
-
-        {/* States */}
-        {(!leagueKeyReady || (careerQ.isLoading && !cr)) && (
-          <div className={cn(PANEL, "flex items-center justify-center gap-3 p-16 text-white/50")}>
-            <Loader2 className="h-5 w-5 animate-spin text-lime-400" />{" "}
-            {!leagueKeyReady ? "Loading league…" : "Diagnosing your path to a title…"}
-          </div>
-        )}
-        {leagueKeyReady && careerQ.isError && (
-          <div className={cn(PANEL, "p-8 text-center text-red-300")}>Couldn't run the diagnosis. {String(careerQ.error?.message ?? "")}</div>
-        )}
-        {cr?.needsOwnerSelection && (
-          <div className={cn(PANEL, "p-8 text-center")}>
-            <Crown className="mx-auto mb-3 h-7 w-7 text-lime-400" />
-            <p className="text-[18px] font-black text-white/90">Select your team for this league</p>
-            <p className="mt-1 text-[14px] text-white/55">Pick your owner in Settings to run a personalized championship diagnosis.</p>
-          </div>
-        )}
-
-        {cr && !cr.needsOwnerSelection && (
-          <div className="space-y-6">
-
-            {/* why-havent-won leads with the benchmark — it is the answer to "Why haven't I won?" */}
-            {mode === "why-havent-won" && benchmarkSection}
-
-            {/* SECTION 1 — Title Gap Summary */}
-            <Section icon={<Target className="h-5 w-5" />} title="Title Gap Summary" subtitle="The clearest read on how far you are from a championship">
+  const titleGapSection = (
+      <Section icon={<Target className="h-5 w-5" />} title="Title Gap Summary" subtitle="The clearest read on how far you are from a championship">
               {cr.careerStory && <p className="mb-4 text-[15px] leading-relaxed text-white/75">{cr.careerStory}</p>}
               <div className="grid gap-3 sm:grid-cols-3">
                 <MiniCard icon={<ArrowUpCircle className="h-4 w-4" />} label="Biggest Gap" tone="warn">
@@ -238,9 +203,9 @@ export function ChampionshipDiagnosis() {
                 </MiniCard>
               </div>
             </Section>
-
-            {/* SECTION 2 — Historical Blockers */}
-            <Section icon={<TrendingDown className="h-5 w-5" />} title="Historical Blockers" subtitle={blockersLabel}>
+  );
+  const blockersSection = (
+      <Section icon={<TrendingDown className="h-5 w-5" />} title={mode === "why-you-won" ? "Historical Context" : "Historical Blockers"} subtitle={mode === "why-you-won" ? "What you had to overcome on the way to the title" : blockersLabel}>
               {blockers.length === 0 ? (
                 <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 text-center text-[14px] text-white/55">No clear blockers in the synced history.</div>
               ) : (
@@ -265,12 +230,9 @@ export function ChampionshipDiagnosis() {
                 </ol>
               )}
             </Section>
-
-            {/* SECTION 3 — Championship Benchmark. Champion modes keep it here as evidence; why-havent-won hoists it to the top. */}
-            {mode !== "why-havent-won" && benchmarkSection}
-
-            {/* SECTION 4 — Rival / Playoff Obstacles */}
-            <Section icon={<Swords className="h-5 w-5" />} title="Rival / Playoff Obstacles" subtitle="The owners and brackets standing in your way">
+  );
+  const rivalSection = (
+      <Section icon={<Swords className="h-5 w-5" />} title={mode === "why-you-won" ? "Biggest Threat to Repeat" : "Rival / Playoff Obstacles"} subtitle={mode === "why-you-won" ? "The owner most likely to deny your repeat" : "The owners and brackets standing in your way"}>
               {/* Canonical rivalry summary — single source of truth (Rivalry Center). Replaces the legacy careerReport threat/rival cards. */}
               <RivalrySummaryCard title="Your Top Rivalry" />
               {(() => {
@@ -288,9 +250,9 @@ export function ChampionshipDiagnosis() {
                 );
               })()}
             </Section>
-
-            {/* SECTION 5 — Most Realistic Path */}
-            <Section icon={<Route className="h-5 w-5" />} title="Most Realistic Path" subtitle="The champion you most resemble, and the moves that close the gap">
+  );
+  const pathSection = (
+      <Section icon={<Route className="h-5 w-5" />} title={mode === "why-you-won" ? "Closest Champion Archetype" : "Most Realistic Path"} subtitle={mode === "why-you-won" ? "The champion your profile most resembles" : "The champion you most resemble, and the moves that close the gap"}>
               {cp?.closestChampion ? (
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-lime-400/20 bg-lime-500/[0.06] px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -356,9 +318,9 @@ export function ChampionshipDiagnosis() {
                 </details>
               )}
             </Section>
-
-            {/* SECTION 6 — Action Plan */}
-            <Section icon={<ListChecks className="h-5 w-5" />} title="Action Plan" subtitle="Your highest-impact moves, in order">
+  );
+  const actionSection = (
+      <Section icon={<ListChecks className="h-5 w-5" />} title="Action Plan" subtitle="Your highest-impact moves, in order">
               {readiness?.topActions?.length > 0 ? (
                 <ol className="space-y-2">
                   {readiness.topActions.map((a: string, i: number) => (
@@ -372,6 +334,121 @@ export function ChampionshipDiagnosis() {
                 <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 text-center text-[14px] text-white/55">Action plan populates once readiness scoring has enough synced data.</div>
               )}
             </Section>
+  );
+  const edgeSection = (
+      <Section icon={<Crown className="h-5 w-5" />} title="Your Championship Edge" subtitle="The dimensions where your profile out-performs the field — how you got here">
+        <p className="mb-4 text-[15px] leading-relaxed text-white/80">
+          You won because your profile carried title-winning traits — not because every position was perfect.
+        </p>
+        {cr?.careerStory && <p className="mb-4 text-[13px] leading-relaxed text-white/55">{cr.careerStory}</p>}
+        {edgeComponents.length > 0 && (
+          <div className="grid gap-2.5 sm:grid-cols-3">
+            {edgeComponents.map((c: any) => (
+              <div key={c.key} className="rounded-xl border border-lime-400/20 bg-lime-500/[0.06] p-4">
+                <div className="mb-1.5 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-white/45">
+                  <ShieldCheck className="h-4 w-4 text-lime-400" /> {c.label}
+                </div>
+                <div className="text-[30px] font-black tabular-nums text-lime-300">{c.score}<span className="text-[14px] text-white/35">/100</span></div>
+              </div>
+            ))}
+          </div>
+        )}
+        {edgeDrivers.length > 0 && (
+          <div className="mt-5">
+            <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-white/45">Why it mattered</p>
+            <ul className="space-y-2">
+              {edgeDrivers.map((d: any, i: number) => (
+                <li key={d.id ?? i} className="rounded-xl border border-lime-400/15 bg-lime-500/[0.04] p-4">
+                  <p className="text-[15px] font-bold text-white/90">{d.headline}</p>
+                  {d.detail && <p className="mt-1 text-[13px] leading-relaxed text-white/60">{d.detail}</p>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Section>
+  );
+
+  return (
+    <div className="min-h-screen w-full" style={PAGEBG}>
+      <div className="px-6 py-6 max-w-[1200px]">
+        {/* Hero */}
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[12px] font-semibold uppercase tracking-wider text-violet-300">
+              <Trophy className="h-3.5 w-3.5" /> Championship Diagnosis
+            </div>
+            <h1 className="text-[34px] font-black leading-[1.05] tracking-tight sm:text-[42px]">
+              Championship Diagnosis
+            </h1>
+            {cr && <p className="mt-2 text-[15px] text-white/55">{taglineFor(mode, cr.ownerName)}</p>}
+          </div>
+          {cr && (
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 pt-1">
+              {cr.careerArc && (
+                <span className="rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold text-violet-200">{cr.careerArc}</span>
+              )}
+              <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">
+                {snapshot?.seasonsPlayed ?? 0} seasons
+              </span>
+              {cr.teamCount > 0 && (
+                <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">{cr.teamCount}-Team League</span>
+              )}
+              <span className={cn("rounded-full border px-3 py-1 text-[11px] font-semibold", cr.confidence === "High" ? "border-lime-400/30 bg-lime-500/10 text-lime-300" : "border-amber-400/30 bg-amber-500/10 text-amber-300")}>Confidence: {cr.confidence}</span>
+            </div>
+          )}
+        </div>
+
+        {/* States */}
+        {(!leagueKeyReady || (careerQ.isLoading && !cr)) && (
+          <div className={cn(PANEL, "flex items-center justify-center gap-3 p-16 text-white/50")}>
+            <Loader2 className="h-5 w-5 animate-spin text-lime-400" />{" "}
+            {!leagueKeyReady ? "Loading league…" : "Diagnosing your path to a title…"}
+          </div>
+        )}
+        {leagueKeyReady && careerQ.isError && (
+          <div className={cn(PANEL, "p-8 text-center text-red-300")}>Couldn't run the diagnosis. {String(careerQ.error?.message ?? "")}</div>
+        )}
+        {cr?.needsOwnerSelection && (
+          <div className={cn(PANEL, "p-8 text-center")}>
+            <Crown className="mx-auto mb-3 h-7 w-7 text-lime-400" />
+            <p className="text-[18px] font-black text-white/90">Select your team for this league</p>
+            <p className="mt-1 text-[14px] text-white/55">Pick your owner in Settings to run a personalized championship diagnosis.</p>
+          </div>
+        )}
+
+        {cr && !cr.needsOwnerSelection && (
+          <div className="space-y-6">
+
+            {/* Three modes, three hierarchies: why-you-won leads with the edge, why-havent-won with the benchmark, breakthrough keeps the interim order. */}
+            {mode === "why-you-won" ? (
+              <>
+                {edgeSection}
+                {rivalSection}
+                {pathSection}
+                {benchmarkSection}
+                {blockersSection}
+                {actionSection}
+              </>
+            ) : mode === "why-havent-won" ? (
+              <>
+                {benchmarkSection}
+                {titleGapSection}
+                {blockersSection}
+                {rivalSection}
+                {pathSection}
+                {actionSection}
+              </>
+            ) : (
+              <>
+                {titleGapSection}
+                {blockersSection}
+                {benchmarkSection}
+                {rivalSection}
+                {pathSection}
+                {actionSection}
+              </>
+            )}
 
             <p className="px-1 text-[12px] text-white/30">
               Every number is computed deterministically from real league history — matchups, standings, drafts, championships, and champion starter scoring. No projections. Champion benchmark = average of league champions' starter scoring by position.
