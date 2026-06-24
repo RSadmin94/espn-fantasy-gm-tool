@@ -107,7 +107,7 @@ export function ChampionshipDiagnosis() {
   const cr: any = leagueKeyReady ? careerQ.data : undefined;
   const cp: any = leagueKeyReady ? pathQ.data : undefined;
 
-  const mode: string = cr?.mode ?? "why-havent-i-won";
+  const mode: string = cr?.mode ?? "why-havent-won";
   const isChampionMode = mode === "why-you-won" || mode === "why-you-broke-through";
   const snapshot = cr?.snapshot ?? null;
   const readiness = cr?.readiness ?? null;
@@ -122,7 +122,7 @@ export function ChampionshipDiagnosis() {
     : (cr?.topReasons ?? []);
   const blockersLabel = isChampionMode ? "Obstacles you overcame" : "Why it hasn't happened";
 
-  // Championship Benchmark — hoisted so "why-havent-i-won" can lead with it (the answer to the page's question).
+  // Championship Benchmark — hoisted so "why-havent-won" can lead with it (the answer to the page's question).
   // Champion modes keep it lower as supporting evidence (Phase 2 builds their "Your Edge" hero).
   const benchmarkSection = (
     <Section icon={<Activity className="h-5 w-5" />} title="Championship Benchmark" subtitle="How your starters measure against the average champion, position by position">
@@ -205,8 +205,8 @@ export function ChampionshipDiagnosis() {
         {cr && !cr.needsOwnerSelection && (
           <div className="space-y-6">
 
-            {/* why-havent-i-won leads with the benchmark — it is the answer to "Why haven't I won?" */}
-            {mode === "why-havent-i-won" && benchmarkSection}
+            {/* why-havent-won leads with the benchmark — it is the answer to "Why haven't I won?" */}
+            {mode === "why-havent-won" && benchmarkSection}
 
             {/* SECTION 1 — Title Gap Summary */}
             <Section icon={<Target className="h-5 w-5" />} title="Title Gap Summary" subtitle="The clearest read on how far you are from a championship">
@@ -266,8 +266,8 @@ export function ChampionshipDiagnosis() {
               )}
             </Section>
 
-            {/* SECTION 3 — Championship Benchmark. Champion modes keep it here as evidence; why-havent-i-won hoists it to the top. */}
-            {mode !== "why-havent-i-won" && benchmarkSection}
+            {/* SECTION 3 — Championship Benchmark. Champion modes keep it here as evidence; why-havent-won hoists it to the top. */}
+            {mode !== "why-havent-won" && benchmarkSection}
 
             {/* SECTION 4 — Rival / Playoff Obstacles */}
             <Section icon={<Swords className="h-5 w-5" />} title="Rival / Playoff Obstacles" subtitle="The owners and brackets standing in your way">
