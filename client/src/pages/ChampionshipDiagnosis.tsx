@@ -175,7 +175,7 @@ export function ChampionshipDiagnosis() {
 
   const titleGapSection = (
       <Section icon={<Target className="h-5 w-5" />} title="Title Gap Summary" subtitle="The clearest read on how far you are from a championship">
-              {cr.careerStory && <p className="mb-4 text-[15px] leading-relaxed text-white/75">{cr.careerStory}</p>}
+              {cr?.careerStory && <p className="mb-4 text-[15px] leading-relaxed text-white/75">{cr.careerStory}</p>}
               <div className="grid gap-3 sm:grid-cols-3">
                 <MiniCard icon={<ArrowUpCircle className="h-4 w-4" />} label="Biggest Gap" tone="warn">
                   {biggestGap ? (
@@ -271,7 +271,7 @@ export function ChampionshipDiagnosis() {
                 <div className="mb-4 flex items-center gap-2 text-[13px] text-white/45"><Loader2 className="h-4 w-4 animate-spin" /> Finding your closest champion…</div>
               ) : null}
 
-              {cr.titlePath?.moves?.length > 0 ? (
+              {cr?.titlePath?.moves?.length > 0 ? (
                 <ol className="space-y-2">
                   {cr.titlePath.moves.map((m: any, i: number) => (
                     <li key={m.rank ?? i} className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5">
@@ -287,7 +287,7 @@ export function ChampionshipDiagnosis() {
                   ))}
                 </ol>
               ) : (
-                cr.titlePath?.summary && <p className="text-[14px] text-white/55">{cr.titlePath.summary}</p>
+                cr?.titlePath?.summary && <p className="text-[14px] text-white/55">{cr.titlePath.summary}</p>
               )}
 
               {cp?.championshipProfile?.available && (
