@@ -93,7 +93,7 @@ const NAV_GROUPS: NavGroup[] = [
       { kind: "link", label: "The Cast", href: "/the-cast", icon: Clapperboard },
       { kind: "link", label: "Owner Profiles", href: "/owner-profiles", icon: Users },
       { kind: "link", label: "Dynasty Power Rankings", href: "/dynasty-power-rankings", icon: Gem },
-      { kind: "link", label: "Why Haven't I Won?", href: "/why-havent-i-won", icon: HelpCircle },
+      { kind: "link", label: "Championship Diagnosis", href: "/championship-diagnosis", icon: Route },
       { kind: "link", label: "Acquisition Impact", href: "/acquisition-impact", icon: ShoppingCart },
       { kind: "link", label: "Rivalry Center", href: "/rivalry-center", icon: Swords },
       { kind: "link", label: "Commissioner Hub", href: "/commissioner-command-center", icon: Crown },
@@ -104,7 +104,6 @@ const NAV_GROUPS: NavGroup[] = [
     title: "HISTORY & RECORDS",
     items: [
       { kind: "link", label: "Hall of Fame", href: "/hall-of-fame", icon: Award },
-      { kind: "link", label: "Championship Path", href: "/championship-path", icon: Route },
       { kind: "link", label: "League History", href: "/history", icon: Building2 },
       { kind: "link", label: "Standings", href: "/standings", icon: Trophy },
       { kind: "link", label: "Matchups", href: "/matchups", icon: Swords },
