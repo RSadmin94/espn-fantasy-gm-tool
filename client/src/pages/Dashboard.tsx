@@ -21,6 +21,7 @@ import { DashboardMatchupMarquee, type MarqueeTeam, type ScoreboardLite } from "
 import { DashboardTimelineStrip, type TimelineChamp } from "@/components/dashboard/DashboardTimelineStrip";
 import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
 import { useRivalryDossierScan } from "@/components/dashboard/rivalryDossierScan";
+import { RivalrySummaryCard } from "@/components/RivalrySummaryCard";
 import { DashboardRecentLeagueEvents } from "@/components/dashboard/DashboardRecentLeagueEvents";
 import { LeagueWireNewsFeed } from "@/components/dashboard/LeagueWireNewsFeed";
 import { MiniTable, StatusBadge } from "@/components/dashboard/DashboardPrimitives";
@@ -502,7 +503,7 @@ export function Dashboard() {
     };
   }, [ownerListQ.data?.allOwners, rivalryEligibleOwnerKeys]);
 
-  const rivalryHero = useRivalryDossierScan(rivalryEligibleOwnerKeys);
+  // rivalryHero scan removed — Dashboard now uses canonical RivalrySummaryCard (rivalry.getScores).
 
   const eventSeasons = useMemo(() => {
     const out: number[] = [];
@@ -1217,68 +1218,7 @@ export function Dashboard() {
           </Link>
         </div>
 
-        <div className="flex min-h-[240px] flex-col rounded-2xl border border-red-500/25 bg-card p-5 shadow-[0_0_36px_-12px_rgba(239,68,68,0.3)]">
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-400/90">Hottest rivalry</p>
-            <Flame className="h-4 w-4 shrink-0 text-red-400/80" aria-hidden />
-          </div>
-          <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-border bg-black/20 px-2 py-1.5">
-            <span className="text-[10px] font-medium text-muted-foreground">Active owners only</span>
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] text-muted-foreground">Historical</span>
-              <Switch disabled checked={false} className="scale-90 opacity-50" aria-label="Include historical owners — coming soon" />
-            </div>
-          </div>
-          {rivalryHero.status === "loading" || ownerListQ.isLoading ? (
-            <div className="mt-8 flex flex-1 items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Scanning dossiers…
-            </div>
-          ) : rivalryHero.status === "ready" ? (
-            <div className="mt-4 flex flex-1 flex-col">
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-                <p className="text-lg font-bold text-foreground">{rivalryHero.focalDisplay}</p>
-                <span className="rounded-full border border-red-500/35 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-red-300">
-                  vs
-                </span>
-                <p className="text-lg font-bold text-foreground">{rivalryHero.opponentDisplay}</p>
-              </div>
-              <p className="mt-3 text-center font-mono text-3xl font-black tabular-nums text-red-400/95">
-                {rivalryHero.wins}-{rivalryHero.losses}
-                {rivalryHero.ties > 0 ? `-${rivalryHero.ties}` : ""}
-              </p>
-              <p className="text-center text-[10px] text-muted-foreground">Head-to-head (focal: {rivalryHero.focalDisplay})</p>
-              <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg border border-border bg-black/25 px-2 py-2 text-center">
-                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Heartbreak losses</p>
-                  <p className="mt-0.5 text-lg font-bold text-red-300/90">{rivalryHero.heartbreakLosses}</p>
-                </div>
-                <div className="rounded-lg border border-border bg-black/25 px-2 py-2 text-center">
-                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Closest game</p>
-                  <p className="mt-0.5 text-sm font-semibold text-foreground">
-                    {rivalryHero.closestMarginLabel ?? "—"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-6 flex flex-1 flex-col justify-center text-center text-sm text-muted-foreground">
-              <p className="font-medium text-muted-foreground">Not Yet Available</p>
-              <p className="mt-1 px-2 text-xs text-muted-foreground">
-                {rivalryHero.status === "idle"
-                  ? "No active owner list yet."
-                  : "Need at least two active owners with regular-season head-to-head rows in gmMatchups."}
-              </p>
-            </div>
-          )}
-          <Link to="/matchups" className="mt-4 text-xs font-medium text-red-400/90 hover:text-red-300">
-            Rivalry center →
-          </Link>
-          {rivalryEligibilityDiagnostics.totalOwners > 0 && (
-            <p className="mt-1 text-[9px] text-muted-foreground">
-              Eligible: {rivalryEligibilityDiagnostics.eligibleOwners} · Filtered: {rivalryEligibilityDiagnostics.filteredOwners} (inactive/unrecognized)
-            </p>
-          )}
-        </div>
+        <RivalrySummaryCard className="min-h-[240px]" title="Hottest Rivalry" />
 
         <DashboardLeagueHealthCard isLoading={dataHealthQ.isLoading} data={dataHealthQ.data ?? null} />
       </section>

@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { RivalrySummaryCard } from "@/components/RivalrySummaryCard";
 import { pickMostAndLeastHighActivity } from "@/lib/activityDnaExtremes";
 import {
   Activity,
@@ -699,51 +700,8 @@ export function CommissionerCommandCenter() {
 
           <div className="grid gap-3 sm:grid-cols-2">
 
-            {/* Biggest Active Rivalry */}
-            {rivalryQ.isLoading ? <LoadingCard /> : biggestRivalry ? (
-              <div className={cn(CARD, "border-red-500/15")}>
-                <div className="mb-3 flex items-center gap-2">
-                  <Swords className="h-4 w-4 text-red-400" />
-                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Active Rivalry</span>
-                  <SmallBadge color="red">{biggestRivalry.heatLabel}</SmallBadge>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-center">
-                    <p className="text-base font-bold text-white/90">You</p>
-                    <p className="text-[12px] text-white/40">{biggestRivalry.h2hWins}W</p>
-                  </div>
-                  <div className="flex-1 text-center">
-                    <div className={cn("inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-bold uppercase tracking-wide", heatBg(biggestRivalry.heatLabel))}>
-                      <span className={heatColor(biggestRivalry.heatLabel)}>{biggestRivalry.heatLabel}</span>
-                    </div>
-                    <p className="mt-1 text-[10px] text-white/25">score: {biggestRivalry.rivalryScore}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-base font-bold text-white/90">{biggestRivalry.rivalName.split(" ")[0]}</p>
-                    <p className="text-[12px] text-white/40">{biggestRivalry.h2hLosses}W</p>
-                  </div>
-                </div>
-                {biggestRivalry.loreSentence && (
-                  <p className="mt-3 text-[13px] italic text-white/50 leading-snug">"{biggestRivalry.loreSentence}"</p>
-                )}
-                <div className="mt-3 flex gap-3 text-[12px] text-white/35">
-                  {biggestRivalry.playoffEliminations > 0 && (
-                    <span className="text-red-400">{biggestRivalry.playoffEliminations} playoff elim{biggestRivalry.playoffEliminations > 1 ? "s" : ""}</span>
-                  )}
-                  {biggestRivalry.closeLossCount > 0 && (
-                    <span>{biggestRivalry.closeLossCount} close losses</span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className={CARD}>
-                <div className="mb-2 flex items-center gap-2">
-                  <Swords className="h-4 w-4 text-zinc-600" />
-                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Active Rivalry</span>
-                </div>
-                <p className="text-sm text-white/30">No rivalry data yet. Sync seasons to populate.</p>
-              </div>
-            )}
+            {/* Biggest Active Rivalry — canonical RivalrySummaryCard (rivalry.getScores) */}
+            <RivalrySummaryCard title="Biggest Active Rivalry" />
 
             {/* Hottest Storyline */}
             {storylinesQ.isLoading ? <LoadingCard /> : hottestStory ? (

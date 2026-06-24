@@ -262,24 +262,8 @@ export function ChampionshipDiagnosis() {
 
             {/* SECTION 4 — Rival / Playoff Obstacles */}
             <Section icon={<Swords className="h-5 w-5" />} title="Rival / Playoff Obstacles" subtitle="The owners and brackets standing in your way">
-              {/* Phase 1 test: canonical rivalry summary card (additive — existing cards retained) */}
-              <RivalrySummaryCard className="mb-3" title="Your Top Rivalry" />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <MiniCard icon={<Swords className="h-4 w-4" />} label="Biggest Threat" tone="warn">
-                  {snapshot?.biggestThreat ? (
-                    <>
-                      <div className="text-[18px] font-black text-white/90">{snapshot.biggestThreat.ownerName}</div>
-                      <p className="mt-1 text-[13px] text-white/55">{snapshot.biggestThreat.detail ?? `You're ${snapshot.biggestThreat.record}`}</p>
-                    </>
-                  ) : <p className="text-[13px] text-white/50">No dominant threat.</p>}
-                </MiniCard>
-                <MiniCard icon={<Crown className="h-4 w-4" />} label="Biggest Rival">
-                  {snapshot?.biggestRival ? (
-                    <div className="text-[18px] font-black text-white/90">{snapshot.biggestRival}</div>
-                  ) : <p className="text-[13px] text-white/50">No long-running rivalry.</p>}
-                  <p className="mt-1 text-[12px] text-white/40">Full head-to-head history lives in Rivalry Center.</p>
-                </MiniCard>
-              </div>
+              {/* Canonical rivalry summary — single source of truth (Rivalry Center). Replaces the legacy careerReport threat/rival cards. */}
+              <RivalrySummaryCard title="Your Top Rivalry" />
               {(() => {
                 const obstacles = blockers.filter((b: any) => ["rivals", "playoffs", "close_games"].includes(b.category));
                 if (obstacles.length === 0) return null;
