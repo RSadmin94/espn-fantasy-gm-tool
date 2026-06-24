@@ -210,7 +210,7 @@ export function ChampionshipDiagnosis() {
               ) : (
                 <ol className="space-y-2.5">
                   {blockers.slice(0, 6).map((b: any, i: number) => {
-                    const sev = Number(b.severity ?? 0);
+                    const sev = Math.round(Number(b.severity ?? 0));
                     return (
                       <li key={b.id ?? i} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                         <div className="flex items-start gap-3">
