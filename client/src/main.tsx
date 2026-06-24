@@ -36,6 +36,7 @@ import { OwnerProfiles } from "./pages/OwnerProfiles";
 import { HallOfFame } from "./pages/HallOfFame";
 import { DraftRealitySimulator } from "./pages/DraftRealitySimulator";
 import { WhyHaventIWon } from "./pages/WhyHaventIWon";
+import { ChampionshipDiagnosis } from "./pages/ChampionshipDiagnosis";
 import { ChampionshipPath } from "./pages/ChampionshipPath";
 import { AcquisitionImpact } from "./pages/AcquisitionImpact";
 import { LeagueDataHealth } from "./pages/LeagueDataHealth";
@@ -163,6 +164,7 @@ const router = createBrowserRouter([
           { path: "/hall-of-fame", element: <HallOfFame /> },
           { path: "/draft-reality", element: <DraftRealitySimulator /> },
           { path: "/why-havent-i-won", element: <WhyHaventIWon /> },
+      { path: "/championship-diagnosis", element: <ChampionshipDiagnosis /> },
       { path: "/league-dna", element: <LeagueDna /> },
           { path: "/the-cast", element: <TheCast /> },
           { path: "/championship-path", element: <ChampionshipPath /> },
