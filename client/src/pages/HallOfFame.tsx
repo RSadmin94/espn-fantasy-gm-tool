@@ -385,7 +385,6 @@ export function HallOfFame() {
     { id: "champions" as const, label: "Champions", Icon: Trophy },
     { id: "records" as const, label: "Records", Icon: Medal },
     { id: "dynasties" as const, label: "Dynasties", Icon: Crown },
-    { id: "rivalries" as const, label: "Rivalries", Icon: Swords },
     { id: "legacy" as const, label: "Legacy", Icon: Landmark },
     { id: "cemetery" as const, label: "Cemetery", Icon: Skull },
   ];
@@ -424,7 +423,7 @@ export function HallOfFame() {
       {/* HERO */}
       <section className="space-y-4">
         <div className="text-center">
-          <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-amber-500/90">Hall of Fame</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-amber-500/90">League Legacy Center</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-50 sm:text-4xl">{leagueLabel}</h1>
           <div className="mx-auto mt-4 flex max-w-xl flex-wrap justify-center gap-4 text-sm text-zinc-400">
             <span>
@@ -458,7 +457,7 @@ export function HallOfFame() {
                   {coLeaders.length > 1 ? null : leaderStats ? (
                     <>
                       <span className="text-zinc-600">·</span>
-                      <span className="tabular-nums">{leaderStats.winPct.toFixed(1)}% wins</span>
+                      <span className="tabular-nums">{leaderStats.winPct.toFixed(1)}% reg. season wins</span>
                       <span className="text-zinc-600">·</span>
                       <span>{leaderStats.seasonsActive} seasons active</span>
                     </>
@@ -613,6 +612,10 @@ export function HallOfFame() {
 
           {hofTab === "dynasties" && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="col-span-full flex flex-col gap-2 rounded-xl border border-sky-500/25 bg-sky-500/[0.07] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-[13px] text-sky-100/80">All-time legacy records (regular season). For current roster strength, see Dynasty Power Rankings.</p>
+                <Link to="/dynasty-power-rankings" className="shrink-0 text-sm font-semibold text-sky-300 hover:text-sky-200">Dynasty Power Rankings →</Link>
+              </div>
               {data.ownerRecords.length === 0 ? (
                 <p className="col-span-full text-center text-sm text-zinc-500">No owner rows.</p>
               ) : (
@@ -628,7 +631,7 @@ export function HallOfFame() {
                         <span className="font-semibold text-amber-200/90">{row.titles}</span>
                       </p>
                       <p>
-                        <span className="text-zinc-600">Win %</span>{" "}
+                        <span className="text-zinc-600">Regular Season Win %</span>{" "}
                         <span className="tabular-nums text-zinc-200">{row.winPct.toFixed(1)}%</span>
                       </p>
                       <p>
@@ -642,65 +645,15 @@ export function HallOfFame() {
             </div>
           )}
 
-          {hofTab === "rivalries" && hofGated && (
-            <HofPaywall heading="Head-to-head record book" onUnlock={startHofCheckout} pending={hofCheckout.isPending} />
-          )}
-          {hofTab === "rivalries" && !hofGated && (
-            <div className="grid gap-4 md:grid-cols-2">
-              {mostGames ? (
-                <RivalryPairWithDossier
-                  title="Most games (pair)"
-                  displayA={mostGames.displayA}
-                  displayB={mostGames.displayB}
-                  ownerKeyA={mostGames.ownerKeyA}
-                  ownerKeyB={mostGames.ownerKeyB}
-                  metricLabel="Games"
-                  metricValue={mostGames.games}
-                />
-              ) : (
-                <UnavailableBlock title="Most games (pair)" />
-              )}
-              {mostHb ? (
-                <RivalryPairWithDossier
-                  title="Most heartbreak games"
-                  displayA={mostHb.displayA}
-                  displayB={mostHb.displayB}
-                  ownerKeyA={mostHb.ownerKeyA}
-                  ownerKeyB={mostHb.ownerKeyB}
-                  metricLabel="Games tracked"
-                  metricValue={mostHb.games}
-                  sub={`Heartbreaks: ${mostHb.heartbreakGames}`}
-                />
-              ) : (
-                <UnavailableBlock title="Most heartbreak games" />
-              )}
-              {mostLop ? (
-                <RivalryPairWithDossier
-                  title="Most lopsided (avg |margin|)"
-                  displayA={mostLop.displayA}
-                  displayB={mostLop.displayB}
-                  ownerKeyA={mostLop.ownerKeyA}
-                  ownerKeyB={mostLop.ownerKeyB}
-                  metricLabel="Games"
-                  metricValue={mostLop.games}
-                  sub={`Avg |margin|: ${mostLop.avgAbsMargin.toFixed(2)}`}
-                />
-              ) : (
-                <UnavailableBlock title="Most lopsided rivalry" />
-              )}
-              {longDom ? (
-                <RivalryPairWithDossier
-                  title="Longest dominance streak"
-                  displayA={longDom.dominantDisplay}
-                  displayB={longDom.opponentDisplay}
-                  ownerKeyA={longDom.dominantOwnerKey}
-                  ownerKeyB={longDom.opponentOwnerKey}
-                  metricLabel="Consecutive wins"
-                  metricValue={longDom.consecutiveWins}
-                />
-              ) : (
-                <UnavailableBlock title="Longest dominance streak" />
-              )}
+          {hofTab === "rivalries" && (
+            <div className="rounded-xl border border-violet-500/30 bg-violet-500/[0.08] px-5 py-6 text-center">
+              <p className="text-sm font-semibold text-violet-50">Rivalries have moved</p>
+              <p className="mx-auto mt-1 max-w-md text-[13px] leading-relaxed text-violet-100/75">
+                Head-to-head rivalry intelligence now lives in its own home — the canonical source for every rivalry stat.
+              </p>
+              <Link to="/rivalry-center" className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-violet-300 hover:text-violet-200">
+                Rivalries now live in Rivalry Center →
+              </Link>
             </div>
           )}
 
@@ -760,14 +713,14 @@ export function HallOfFame() {
               )}
               {legacyBestWinPct && legacyBestWinPct.gamesPlayed > 0 ? (
                 <GoldGlowCard className="p-5">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Highest winning %</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Highest Regular Season Win %</p>
                   <p className="mt-2 text-xl font-bold text-zinc-50">{legacyBestWinPct.displayName}</p>
                   <p className="mt-2 text-sm text-zinc-400">
                     {legacyBestWinPct.winPct.toFixed(1)}% · {legacyBestWinPct.gamesPlayed} RS games
                   </p>
                 </GoldGlowCard>
               ) : (
-                <UnavailableBlock title="Highest winning %" />
+                <UnavailableBlock title="Highest Regular Season Win %" />
               )}
             </div>
           )}

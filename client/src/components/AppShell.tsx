@@ -103,7 +103,7 @@ const NAV_GROUPS: NavGroup[] = [
     id: "history-records",
     title: "HISTORY & RECORDS",
     items: [
-      { kind: "link", label: "Hall of Fame", href: "/hall-of-fame", icon: Award },
+      { kind: "link", label: "League Legacy Center", href: "/hall-of-fame", icon: Award },
       { kind: "link", label: "League History", href: "/history", icon: Building2 },
       { kind: "link", label: "Standings", href: "/standings", icon: Trophy },
       { kind: "link", label: "Matchups", href: "/matchups", icon: Swords },
