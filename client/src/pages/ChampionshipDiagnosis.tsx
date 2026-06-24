@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { RivalrySummaryCard } from "@/components/RivalrySummaryCard";
 import {
   Loader2, Trophy, Target, Crown, Swords, ShieldCheck, ListChecks,
   Route, AlertTriangle, TrendingDown, Gauge, Activity, ArrowUpCircle,
@@ -261,6 +262,8 @@ export function ChampionshipDiagnosis() {
 
             {/* SECTION 4 — Rival / Playoff Obstacles */}
             <Section icon={<Swords className="h-5 w-5" />} title="Rival / Playoff Obstacles" subtitle="The owners and brackets standing in your way">
+              {/* Phase 1 test: canonical rivalry summary card (additive — existing cards retained) */}
+              <RivalrySummaryCard className="mb-3" title="Your Top Rivalry" />
               <div className="grid gap-3 sm:grid-cols-2">
                 <MiniCard icon={<Swords className="h-4 w-4" />} label="Biggest Threat" tone="warn">
                   {snapshot?.biggestThreat ? (
