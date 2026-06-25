@@ -1,13 +1,11 @@
 import type { ReactNode } from "react";
-import { Loader2, HelpCircle, Flame } from "lucide-react";
+import { HelpCircle, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { IntelPanel, SectionLoading } from "@/components/layout";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type PosSplit = import("../../../server/playoffPositionSplit").PosSplit;
 type PlayoffPositionSplitResult = import("../../../server/playoffPositionSplit").PlayoffPositionSplitResult;
-
-const PANEL =
-  "rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#1b131f,#140e17)] shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
 
 function fmt(n: number | null | undefined): string {
   if (n == null || Number.isNaN(n)) return "—";
@@ -118,7 +116,7 @@ function MetricCell({ label, value, tip }: { label: string; value: string; tip: 
 
 function PanelShell({ icon, title, subtitle, children }: { icon: ReactNode; title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <section className={cn(PANEL, "p-5 sm:p-6")}>
+    <IntelPanel variant="elevated" className="p-5 sm:p-6">
       <div className="mb-5 flex items-center gap-3">
         <span className="text-orange-400">{icon}</span>
         <div>
@@ -127,7 +125,7 @@ function PanelShell({ icon, title, subtitle, children }: { icon: ReactNode; titl
         </div>
       </div>
       {children}
-    </section>
+    </IntelPanel>
   );
 }
 
@@ -143,9 +141,10 @@ export function PlayoffPositionTruthPanel({
   if (loading) {
     return (
       <PanelShell icon={<Flame className="h-5 w-5" />} title="Playoff Position Truth" subtitle="Why your playoff lineup won or lost vs championship teams">
-        <div className="flex items-center justify-center gap-2 py-10 text-white/45">
-          <Loader2 className="h-4 w-4 animate-spin text-orange-400" /> Reading playoff film…
-        </div>
+        <SectionLoading
+          message="Reading playoff film…"
+          className="justify-center py-10 text-white/45 [&_svg]:text-orange-400"
+        />
       </PanelShell>
     );
   }
