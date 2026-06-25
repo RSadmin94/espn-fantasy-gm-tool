@@ -4,6 +4,7 @@ import { gateCareerReport, gateChampionshipPath, gateAcquisitionImpact } from ".
 import { computeWhyHaventIWon } from "./whyHaventIWon";
 import { computeChampionshipPath } from "./championshipPath";
 import { computeAcquisitionImpact } from "./acquisitionImpact";
+import { computePlayoffPositionSplit } from "./playoffPositionSplit";
 import { computeCareerReport } from "./careerReportService";
 
 const optionalOwnerSalt = z
@@ -55,5 +56,13 @@ export const leagueIntelRouter = router({
       void input?.activeLeagueKey;
       const result = await computeAcquisitionImpact(ctx.user?.id, input?.ownerKey ?? null);
       return gateAcquisitionImpact(result, await resolvePremiumAccess(ctx.user));
+    }),
+
+  /** Playoff Position Split — playoff starter scoring vs regular season & champion benchmarks */
+  playoffPositionSplit: publicProcedure
+    .input(optionalOwnerSalt)
+    .query(async ({ ctx, input }) => {
+      void input?.activeLeagueKey;
+      return computePlayoffPositionSplit(ctx.user?.id, input?.ownerKey ?? null);
     }),
 });
