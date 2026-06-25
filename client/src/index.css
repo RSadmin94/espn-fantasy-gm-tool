@@ -50,6 +50,15 @@
   --color-intel-marketing-to: oklch(0.13 0.017 300);
   --radius-intel: 0.9375rem;
   --radius-intel-sub: 0.625rem;
+
+  /* Intel page backgrounds (replaces duplicated PAGEBG constants) */
+  --color-intel-page-from: oklch(0.12 0.015 300);
+  --color-intel-page-to: oklch(0.10 0.012 300);
+  --color-intel-page-owner-from: oklch(0.13 0.016 300);
+  --color-intel-page-owner-to: oklch(0.11 0.013 300);
+  --color-intel-page-wire: oklch(0.13 0.016 300);
+  --color-intel-page-landing-from: oklch(0.11 0.014 300);
+  --color-intel-page-landing-to: oklch(0.09 0.011 300);
 }
 
 @layer base {
@@ -119,6 +128,107 @@
   }
   .shadow-intel-gold {
     box-shadow: 0 0 32px -12px color-mix(in oklch, var(--color-brand-gold) 22%, transparent);
+  }
+
+  /* Intel page backgrounds */
+  .bg-intel-page-cinematic {
+    background:
+      radial-gradient(
+        circle at 80% -10%,
+        color-mix(in oklch, var(--color-brand-purple) 20%, transparent),
+        transparent 42%
+      ),
+      linear-gradient(180deg, var(--color-intel-page-from), var(--color-intel-page-to));
+  }
+  .bg-intel-page-cinematic-token {
+    background:
+      radial-gradient(
+        circle at 80% -10%,
+        color-mix(in oklch, var(--color-brand-purple) 20%, transparent),
+        transparent 42%
+      ),
+      var(--color-background);
+  }
+  .bg-intel-page-cinematic-commissioner {
+    background:
+      radial-gradient(
+        circle at 75% -8%,
+        color-mix(in oklch, var(--color-brand-purple) 18%, transparent),
+        transparent 40%
+      ),
+      radial-gradient(
+        circle at 20% 80%,
+        color-mix(in oklch, var(--color-chart-3) 8%, transparent),
+        transparent 40%
+      ),
+      linear-gradient(180deg, var(--color-intel-page-from), var(--color-intel-page-to));
+  }
+  .bg-intel-page-cinematic-gold {
+    background:
+      radial-gradient(
+        circle at 50% -8%,
+        color-mix(in oklch, var(--color-brand-gold) 10%, transparent),
+        transparent 45%
+      ),
+      radial-gradient(
+        circle at 85% 18%,
+        color-mix(in oklch, var(--color-brand-purple) 16%, transparent),
+        transparent 42%
+      ),
+      linear-gradient(180deg, var(--color-intel-page-from), var(--color-intel-page-to));
+  }
+  .bg-intel-page-cinematic-owner {
+    background:
+      radial-gradient(
+        circle at 80% -10%,
+        color-mix(in oklch, var(--color-brand-purple) 16%, transparent),
+        transparent 42%
+      ),
+      linear-gradient(
+        180deg,
+        var(--color-intel-page-owner-from),
+        var(--color-intel-page-owner-to)
+      );
+  }
+  .bg-intel-page-cinematic-draft {
+    background:
+      radial-gradient(
+        circle at 85% -10%,
+        color-mix(in oklch, var(--color-brand-gold) 6%, transparent),
+        transparent 45%
+      ),
+      linear-gradient(
+        180deg,
+        var(--color-intel-elevated-to),
+        var(--color-intel-page-owner-to)
+      );
+  }
+  .bg-intel-page-cinematic-wire {
+    background:
+      radial-gradient(
+        60% 80% at 80% -10%,
+        color-mix(in oklch, var(--color-brand-purple) 10%, transparent),
+        transparent 42%
+      ),
+      var(--color-intel-page-wire);
+  }
+  .bg-intel-page-landing {
+    background:
+      radial-gradient(
+        circle at 82% -8%,
+        color-mix(in oklch, var(--color-brand-purple) 18%, transparent),
+        transparent 44%
+      ),
+      radial-gradient(
+        circle at 0% 100%,
+        color-mix(in oklch, var(--color-brand-lime) 6%, transparent),
+        transparent 40%
+      ),
+      linear-gradient(
+        180deg,
+        var(--color-intel-page-landing-from),
+        var(--color-intel-page-landing-to)
+      );
   }
 
   /* Brand gradient: lime -> purple (kept under the legacy class name so existing
