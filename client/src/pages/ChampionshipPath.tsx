@@ -5,7 +5,6 @@ import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Loader2, Trophy, Target, ArrowUpCircle, ShieldCheck, Crown, Route, Swords, ListChecks } from "lucide-react";
-import { PlayoffPositionTruthPanel } from "@/components/PlayoffPositionTruthPanel";
 
 const PAGEBG: React.CSSProperties = {
   background:
@@ -93,11 +92,6 @@ export function ChampionshipPath() {
     { staleTime: 60_000, enabled: leagueKeyReady },
   );
   const data = leagueKeyReady ? q.data : undefined;
-  const showPaidPath = Boolean(data && !data.gated);
-  const playoffQ = trpc.leagueIntel.playoffPositionSplit.useQuery(
-    withLeagueSalt({}, leagueContextKey),
-    { staleTime: 60_000, enabled: leagueKeyReady && showPaidPath },
-  );
   const checkout = trpc.billing.createCheckoutSession.useMutation({
     onSuccess: (r) => {
       if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
@@ -180,12 +174,6 @@ export function ChampionshipPath() {
                 </span>
               </div>
             </Section>
-
-            <PlayoffPositionTruthPanel
-              data={playoffQ.data}
-              loading={playoffQ.isLoading}
-              error={playoffQ.isError ? String(playoffQ.error?.message ?? "Couldn't load playoff split.") : undefined}
-            />
 
             {/* Championship Profile: avg starter pts/game by position, per champion + all-champions combined */}
             <Section icon={<Crown className="h-5 w-5" />} title="Championship Profile" subtitle="Avg starter points/game by position - each season's champion, plus all champions combined">

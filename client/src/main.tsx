@@ -37,7 +37,6 @@ import { HallOfFame } from "./pages/HallOfFame";
 import { DraftRealitySimulator } from "./pages/DraftRealitySimulator";
 import { WhyHaventIWon } from "./pages/WhyHaventIWon";
 import { ChampionshipDiagnosis } from "./pages/ChampionshipDiagnosis";
-import { ChampionshipPath } from "./pages/ChampionshipPath";
 import { AcquisitionImpact } from "./pages/AcquisitionImpact";
 import { LeagueDataHealth } from "./pages/LeagueDataHealth";
 import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
