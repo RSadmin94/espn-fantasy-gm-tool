@@ -39,6 +39,17 @@
   /* Brand accent colors (use directly where a literal brand hue is needed) */
   --color-brand-lime: oklch(0.84 0.205 128);
   --color-brand-purple: oklch(0.55 0.24 295);
+  --color-brand-gold: oklch(0.85 0.16 95);
+
+  /* Intel / cinematic panel surfaces (replaces duplicated PANEL constants) */
+  --color-intel-elevated-from: oklch(0.18 0.022 300);
+  --color-intel-elevated-to: oklch(0.14 0.018 300);
+  --color-intel-warm-from: oklch(0.19 0.024 300);
+  --color-intel-warm-to: oklch(0.16 0.020 300);
+  --color-intel-marketing-from: oklch(0.17 0.021 300);
+  --color-intel-marketing-to: oklch(0.13 0.017 300);
+  --radius-intel: 0.9375rem;
+  --radius-intel-sub: 0.625rem;
 }
 
 @layer base {
@@ -59,6 +70,57 @@
     @apply mx-auto px-4;
     max-width: 1400px;
   }
+
+  /* Intel panel surfaces */
+  .bg-intel-elevated {
+    background: linear-gradient(
+      180deg,
+      var(--color-intel-elevated-from),
+      var(--color-intel-elevated-to)
+    );
+  }
+  .bg-intel-warm {
+    background: linear-gradient(
+      180deg,
+      var(--color-intel-warm-from),
+      var(--color-intel-warm-to)
+    );
+  }
+  .bg-intel-marketing {
+    background: linear-gradient(
+      180deg,
+      var(--color-intel-marketing-from),
+      var(--color-intel-marketing-to)
+    );
+  }
+  .bg-intel-sub {
+    background: color-mix(in oklch, var(--color-foreground) 3%, transparent);
+  }
+  .border-intel-elevated {
+    border-color: color-mix(in oklch, var(--color-foreground) 7%, transparent);
+  }
+  .border-intel-profile {
+    border-color: color-mix(in oklch, var(--color-foreground) 8%, transparent);
+  }
+  .border-intel-sub {
+    border-color: color-mix(in oklch, var(--color-foreground) 6%, transparent);
+  }
+  .rounded-intel {
+    border-radius: var(--radius-intel);
+  }
+  .rounded-intel-sub {
+    border-radius: var(--radius-intel-sub);
+  }
+  .shadow-intel-panel {
+    box-shadow: 0 0 28px -14px rgba(0, 0, 0, 0.65);
+  }
+  .shadow-intel-marketing {
+    box-shadow: 0 0 30px -16px rgba(0, 0, 0, 0.7);
+  }
+  .shadow-intel-gold {
+    box-shadow: 0 0 32px -12px color-mix(in oklch, var(--color-brand-gold) 22%, transparent);
+  }
+
   /* Brand gradient: lime -> purple (kept under the legacy class name so existing
      references continue to work, now recolored to the Fantasy Football Rivals palette) */
   .espn-gradient {
