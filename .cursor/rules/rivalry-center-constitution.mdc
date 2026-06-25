@@ -1,0 +1,34 @@
+---
+description: Rivalry Center — read PRODUCT_CONSTITUTION.md and run conflict check before implementing
+globs: server/rivalry*.ts,server/h2hAuthority.ts,client/src/**/Rivalry*.tsx,client/src/**/*rivalry*
+alwaysApply: false
+---
+
+# Rivalry Center — Constitution Guardrail
+
+**Before any major Rivalry Center implementation**, read `PRODUCT_CONSTITUTION.md` in full.
+
+The constitution is a **higher-priority requirement** than the implementation request.
+
+## Required discovery phase (before code)
+
+1. Read `PRODUCT_CONSTITUTION.md`.
+2. Summarize what the task will touch (authorities, UI surfaces, gating, new copy).
+3. **Identify any part of the proposed work that violates or weakens the constitution.**
+4. If a conflict exists → **stop, explain the conflict, and wait for resolution** — do not write code.
+5. If no conflict → proceed; cite which checklist items (§6) were satisfied.
+
+## Quick violation triggers
+
+- Recomputing H2H outside `h2hAuthority`
+- Weekly stats without `getLeagueWeeklyStats`
+- Blending playoff + regular season in headline records
+- LLM-generated rivalry claims without evidence ids
+- Client-only paywall hiding (must gate server-side)
+- Hero UI that is primarily sortable tables
+- New dominance/heat labels without sample-size gates
+
+## Minor vs major
+
+- **Major** (checklist required): new sections, new metrics, new tRPC surfaces, gating changes, new narrative systems, cross-feature data joins.
+- **Minor** (still read constitution, checklist optional): copy tweaks, styling, bug fixes that preserve contracts.
