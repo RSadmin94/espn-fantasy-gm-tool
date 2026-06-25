@@ -3,7 +3,7 @@ import type { LucideIcon } from "lucide-react";
 
 type PageHeaderProps = {
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   eyebrow?: string;
   icon?: LucideIcon;
   actions?: ReactNode;

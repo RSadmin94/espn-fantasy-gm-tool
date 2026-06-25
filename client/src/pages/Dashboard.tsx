@@ -15,7 +15,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Flame, Loader2, RefreshCw, Trophy, ChevronRight, Activity, Swords, FileText, Star, TrendingUp, ShieldAlert, Medal, Binoculars, Users } from "lucide-react";
+import { Flame, RefreshCw, Trophy, ChevronRight, Activity, Swords, FileText, Star, TrendingUp, ShieldAlert, Medal, Binoculars, Users } from "lucide-react";
+import {
+  CinematicPageHeader,
+  IntelPageShell,
+  IntelPanel,
+  SectionLoading,
+} from "@/components/layout";
 import { DashboardLeagueHealthCard } from "@/components/dashboard/DashboardLeagueHealthCard";
 import { DashboardMatchupMarquee, type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
 import { DashboardTimelineStrip, type TimelineChamp } from "@/components/dashboard/DashboardTimelineStrip";
@@ -608,7 +614,15 @@ export function Dashboard() {
 
   if (pageLoading) {
     return (
-      <div className="mx-auto max-w-[1400px] space-y-4 bg-background px-4 py-6" aria-busy="true">
+      <IntelPageShell
+        width="full"
+        background="none"
+        minHeight="none"
+        bleed={false}
+        padding="none"
+        className="mx-auto max-w-[1400px] space-y-4 bg-background px-4 py-6"
+        aria-busy="true"
+      >
         <Skeleton className="h-10 w-72 max-w-full" />
         <Skeleton className="h-4 w-96 max-w-full" />
         <div className="grid gap-3 md:grid-cols-3">
@@ -617,7 +631,7 @@ export function Dashboard() {
           ))}
         </div>
         <Skeleton className="h-80 w-full rounded-2xl" />
-      </div>
+      </IntelPageShell>
     );
   }
 
@@ -670,46 +684,56 @@ export function Dashboard() {
     !!leagueCtx.myTeamId && !!thisWeekOpponent && (pulseQ.data?.week ?? 0) >= 1 && !pulseQ.data?.isSeasonComplete;
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-10 bg-background px-4 pb-16 pt-6 sm:px-6">
-      <header className="border-b border-border pb-6 space-y-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 space-y-3">
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-lime-500/90">Welcome back</p>
-            <h1 className="truncate text-3xl font-bold tracking-tight text-foreground md:text-4xl">{welcomeName}</h1>
-            <p className="text-sm text-muted-foreground">
+    <IntelPageShell
+      width="full"
+      background="none"
+      minHeight="none"
+      bleed={false}
+      padding="none"
+      className="mx-auto max-w-[1400px] space-y-10 bg-background px-4 pb-16 pt-6 sm:px-6"
+    >
+      <header className="space-y-5 border-b border-border pb-6">
+        <CinematicPageHeader
+          className="mb-0 [&_h1]:truncate"
+          eyebrow="Welcome back"
+          title={welcomeName}
+          subtitle={
+            <>
               <span className="font-medium text-foreground">{leagueName}</span>
               {subtitle ? <span className="text-muted-foreground"> · {subtitle}</span> : null}
-            </p>
-          </div>
-          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-            <div className="w-full min-w-[160px] sm:w-48">
-              <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
-                <SelectTrigger className="border-border bg-card">
-                  <SelectValue placeholder="Season" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SEASONS_DESC.map((s) => (
-                    <SelectItem key={s} value={String(s)} disabled={!cachedSeasons.includes(s)}>
-                      Season {s}
-                      {!cachedSeasons.includes(s) ? " (not cached)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="shrink-0 border-red-500/25 bg-red-500/[0.06] text-red-200 hover:bg-red-500/15"
-            >
-              <Link to="/sync" className="gap-2">
-                <RefreshCw className="h-4 w-4" />
-                Sync
-              </Link>
-            </Button>
-          </div>
-        </div>
+            </>
+          }
+          actions={
+            <>
+              <div className="w-full min-w-[160px] sm:w-48">
+                <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
+                  <SelectTrigger className="border-border bg-card">
+                    <SelectValue placeholder="Season" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEASONS_DESC.map((s) => (
+                      <SelectItem key={s} value={String(s)} disabled={!cachedSeasons.includes(s)}>
+                        Season {s}
+                        {!cachedSeasons.includes(s) ? " (not cached)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="shrink-0 border-red-500/25 bg-red-500/[0.06] text-red-200 hover:bg-red-500/15"
+              >
+                <Link to="/sync" className="gap-2">
+                  <RefreshCw className="h-4 w-4" />
+                  Sync
+                </Link>
+              </Button>
+            </>
+          }
+        />
 
         {ownerHomeQ.isLoading ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -936,9 +960,7 @@ export function Dashboard() {
         const scarce: any[] = d.scarcityAlerts ?? [];
         const teamCount: number = d.teamCount ?? leagueCtx.teamCount ?? 0;
         const keepersCap = d.leagueCapabilities?.keepers !== false;
-        const GOLD = "#f5c518", TEAL = "#a3e635", MUTED = "var(--color-muted-foreground)", RED = "#ef4444", ORANGE = "#f7902f", BLUE = "#8b5cf6", TXT = "var(--color-foreground)", ACCENT = "#a3e635";
-        const PANEL = { background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 15 } as const;
-        const SUB = { background: "var(--color-muted)", border: "1px solid var(--color-border)", borderRadius: 10 } as const;
+        const GOLD = "var(--color-brand-gold)", TEAL = "var(--color-brand-lime)", MUTED = "var(--color-muted-foreground)", RED = "#ef4444", ORANGE = "#f7902f", BLUE = "var(--color-brand-purple)", TXT = "var(--color-foreground)", ACCENT = "var(--color-brand-lime)";
         const fn = (x: any) => String(x || "").trim().split(" ")[0] || "Owner";
         const sev = (c: number) => (c >= 60 ? { t: "High", color: RED } : c >= 40 ? { t: "Med", color: ORANGE } : { t: "Low", color: TEAL });
         const arch = (m: any) => { const p = Number(m?.predictabilityScore ?? 0), su = Number(m?.surpriseProbability ?? 0); if (su >= 55) return { label: "Panic Pivot", color: RED }; if (p >= 72) return { label: "By-the-Book", color: TEAL }; if (p >= 55) return { label: "Steady Hand", color: BLUE }; return { label: "Wildcard", color: ORANGE }; };
@@ -980,48 +1002,48 @@ export function Dashboard() {
         return (
           <div className="mb-4 space-y-3" style={{ color: TXT }}>
             <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3">
-              <div style={PANEL} className="overflow-hidden"><div className="p-5">
+              <IntelPanel variant="card" className="overflow-hidden"><div className="p-5">
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Star className="h-5 w-5" style={{ color: ACCENT }} /> Today's GM Briefing</h3>
-                  <span className="px-2 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap" style={{ background: "rgba(163,230,53,.10)", border: "1px solid rgba(163,230,53,.33)", color: TEAL }}>{pulse.length} signals</span>
+                  <span className="px-2 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap" style={{ background: "color-mix(in oklch, var(--color-brand-lime) 10%, transparent)", border: "1px solid color-mix(in oklch, var(--color-brand-lime) 33%, transparent)", color: TEAL }}>{pulse.length} signals</span>
                 </div>
                 <div className="mt-3 text-[17px] leading-snug font-black" style={{ color: GOLD }}>{memo}</div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4">
-                  {metrics.map((m: any, i: number) => (<div key={i} style={SUB} className="p-2.5"><b className="block text-xl">{m.b}</b><span className="text-xs" style={{ color: MUTED }}>{m.s}</span></div>))}
+                  {metrics.map((m: any, i: number) => (<IntelPanel key={i} variant="sub" className="bg-muted p-2.5"><b className="block text-xl">{m.b}</b><span className="text-xs" style={{ color: MUTED }}>{m.s}</span></IntelPanel>))}
                 </div>
-              </div></div>
-              <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
+              </div></IntelPanel>
+              <IntelPanel variant="card" className="overflow-hidden"><div className="p-[18px]">
                 <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Activity className="h-5 w-5" style={{ color: ACCENT }} /> League Intelligence Pulse</h3>
                 <div className="mt-3">
                   {pulse.length === 0 && <div className="text-sm py-6 text-center" style={{ color: MUTED }}>No live signals yet.</div>}
                   {pulse.map((p: any, i: number) => (<div key={i} className="grid items-center gap-2 h-9 text-sm" style={{ gridTemplateColumns: "26px 1fr 58px", borderTop: "1px solid var(--color-border)" }}><span style={{ color: MUTED }}>{p.icon}</span><span>{p.text}</span><b className="text-right font-black" style={{ color: p.s.color }}>{p.s.t}</b></div>))}
                 </div>
-              </div></div>
+              </div></IntelPanel>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
+              <IntelPanel variant="card" className="overflow-hidden"><div className="p-[18px]">
                 <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2" style={{ color: TXT }}><span style={{ color: ACCENT }}>&rarr;</span> Action Queue</h3>
                 <div className="mt-3 space-y-2.5">
-                  {actions.map((a: any, i: number) => (<Link key={i} to={a.to} className="grid items-center gap-2.5 no-underline" style={{ gridTemplateColumns: "34px 1fr 78px", ...SUB, padding: "8px 10px", minHeight: 60, color: TXT }}><span className="w-[30px] h-[30px] rounded-full flex items-center justify-center font-black" style={{ background: "rgba(139,92,246,.14)", border: "1px solid rgba(139,92,246,.45)", color: ACCENT }}>{i + 1}</span><span><b className="block text-sm">{a.t}</b><span className="text-xs" style={{ color: MUTED }}>{a.d}</span></span><span className="text-center text-xs font-extrabold rounded-md px-2 py-1.5" style={{ border: "1px solid rgba(163,230,53,.35)", background: "rgba(163,230,53,.08)", color: TEAL }}>{a.cta}</span></Link>))}
+                  {actions.map((a: any, i: number) => (<Link key={i} to={a.to} className="grid items-center gap-2.5 no-underline bg-muted border border-border rounded-intel-sub p-2.5 min-h-[60px]" style={{ gridTemplateColumns: "34px 1fr 78px", color: TXT }}><span className="w-[30px] h-[30px] rounded-full flex items-center justify-center font-black" style={{ background: "color-mix(in oklch, var(--color-brand-purple) 14%, transparent)", border: "1px solid color-mix(in oklch, var(--color-brand-purple) 45%, transparent)", color: ACCENT }}>{i + 1}</span><span><b className="block text-sm">{a.t}</b><span className="text-xs" style={{ color: MUTED }}>{a.d}</span></span><span className="text-center text-xs font-extrabold rounded-md px-2 py-1.5" style={{ border: "1px solid color-mix(in oklch, var(--color-brand-lime) 35%, transparent)", background: "color-mix(in oklch, var(--color-brand-lime) 8%, transparent)", color: TEAL }}>{a.cta}</span></Link>))}
                 </div>
-              </div></div>
-              <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
+              </div></IntelPanel>
+              <IntelPanel variant="card" className="overflow-hidden"><div className="p-[18px]">
                 <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Users className="h-5 w-5" style={{ color: ACCENT }} /> Owner DNA Snapshot</h3>
                 <div className="mt-2">
                   {dnaOwners.length === 0 && <div className="text-sm py-6 text-center" style={{ color: MUTED }}>No owner reads yet.</div>}
                   {dnaOwners.map((m: any, i: number) => { const a = arch(m); return (<div key={i} className="grid items-center gap-2.5 h-[50px]" style={{ gridTemplateColumns: "36px 1fr 70px", borderTop: "1px solid var(--color-border)" }}><span className="w-8 h-8 rounded-full flex items-center justify-center font-black text-white" style={{ background: a.color }}>{fn(m.ownerName).charAt(0).toUpperCase()}</span><span><b className="block text-sm">{fn(m.ownerName)}</b><span className="text-xs" style={{ color: MUTED }}>{a.label}</span></span><span className="text-right font-black" style={{ color: TEAL }}>{Math.round(m.predictabilityScore ?? 0)}%</span></div>); })}
                 </div>
-              </div></div>
+              </div></IntelPanel>
             </div>
-            <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
+            <IntelPanel variant="card" className="overflow-hidden"><div className="p-[18px]">
               <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Trophy className="h-5 w-5" style={{ color: ACCENT }} /> GM Readiness</h3>
               <div className="grid grid-cols-3 gap-2.5 mt-3">
-                {rings.map((r: any, i: number) => (<div key={i} style={SUB} className="flex flex-col items-center justify-center py-4"><div className="w-[62px] h-[62px] rounded-full flex items-center justify-center text-xl font-black mb-2" style={{ border: `5px solid ${r.color}` }}>{r.v}</div><b className="text-sm">{r.label}</b><span className="text-xs" style={{ color: MUTED }}>{r.sub}</span></div>))}
+                {rings.map((r: any, i: number) => (<IntelPanel key={i} variant="sub" className="bg-muted flex flex-col items-center justify-center py-4"><div className="w-[62px] h-[62px] rounded-full flex items-center justify-center text-xl font-black mb-2" style={{ border: `5px solid ${r.color}` }}>{r.v}</div><b className="text-sm">{r.label}</b><span className="text-xs" style={{ color: MUTED }}>{r.sub}</span></IntelPanel>))}
               </div>
               <div className="mt-3">
                 {readinessTable.map((t: any, i: number) => (<div key={i} className="grid items-center h-7 text-sm" style={{ gridTemplateColumns: "1fr 80px", borderTop: "1px solid var(--color-border)" }}><span style={{ color: MUTED }}>{t.k}</span><b className="text-right" style={{ color: TEAL }}>{t.v}</b></div>))}
               </div>
-            </div></div>
+            </div></IntelPanel>
           </div>
         );
       })()}
@@ -1179,9 +1201,7 @@ export function Dashboard() {
             <Trophy className="h-4 w-4 shrink-0 text-amber-400/80" aria-hidden />
           </div>
           {hofQ.isLoading ? (
-            <div className="mt-8 flex flex-1 items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-            </div>
+            <SectionLoading message="Loading…" className="mt-8 flex-1 text-sm" />
           ) : hofLeader ? (
             <div className="mt-4 flex flex-1 flex-col">
               <p className="text-2xl font-bold tracking-tight text-foreground">{hofLeader.displayName}</p>
@@ -1291,9 +1311,7 @@ export function Dashboard() {
             </div>
             <div className="flex flex-1 flex-col gap-3 px-4 py-3 text-sm">
               {hofQ.isLoading ? (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-                </div>
+                <SectionLoading message="Loading…" className="text-sm" />
               ) : (
                 <>
                   <div className="flex flex-col gap-0.5 border-b border-border pb-2">
@@ -1353,9 +1371,7 @@ export function Dashboard() {
           </div>
           <div className="flex-1 px-3 py-3">
             {ownerListQ.isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-              </div>
+              <SectionLoading message="Loading…" className="text-sm" />
             ) : powerTop.length === 0 ? (
               <p className="text-sm text-muted-foreground">Not Yet Available</p>
             ) : (
@@ -1427,6 +1443,6 @@ export function Dashboard() {
       <div className="mt-6 border-t border-border pt-4 pb-6 text-center text-[11px] tracking-wide text-muted-foreground/60">
         Build: {__APP_GIT_HASH__ && __APP_GIT_HASH__ !== "unknown" ? __APP_GIT_HASH__.slice(0, 7) : "Unknown"}
       </div>
-    </div>
+    </IntelPageShell>
   );
 }

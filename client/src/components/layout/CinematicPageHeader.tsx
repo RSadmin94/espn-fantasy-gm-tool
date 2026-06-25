@@ -13,7 +13,7 @@ type CinematicBadge = {
 
 export type CinematicPageHeaderProps = {
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   /** PageHeader-style eyebrow with lime bar */
   eyebrow?: string;
   /** OwnerProfiles-style mono uppercase eyebrow */
