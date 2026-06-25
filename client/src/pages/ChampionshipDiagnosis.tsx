@@ -4,6 +4,7 @@ import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { RivalrySummaryCard } from "@/components/RivalrySummaryCard";
+import { PlayoffPositionTruthPanel } from "@/components/PlayoffPositionTruthPanel";
 import {
   Loader2, Trophy, Target, Crown, Swords, ShieldCheck, ListChecks,
   Route, AlertTriangle, TrendingDown, Gauge, Activity, ArrowUpCircle,
@@ -103,9 +104,14 @@ export function ChampionshipDiagnosis() {
     withLeagueSalt({}, leagueContextKey),
     { staleTime: 60_000, enabled: leagueKeyReady },
   );
+  const cp: any = leagueKeyReady ? pathQ.data : undefined;
+  const showPlayoffPanel = Boolean(cp && !cp.gated);
+  const playoffQ = trpc.leagueIntel.playoffPositionSplit.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady && showPlayoffPanel },
+  );
 
   const cr: any = leagueKeyReady ? careerQ.data : undefined;
-  const cp: any = leagueKeyReady ? pathQ.data : undefined;
 
   const mode: string = cr?.mode ?? "why-havent-won";
   const isChampionMode = mode === "why-you-won" || mode === "why-you-broke-through";
@@ -172,6 +178,14 @@ export function ChampionshipDiagnosis() {
       )}
     </Section>
   );
+
+  const playoffTruthSection = showPlayoffPanel ? (
+    <PlayoffPositionTruthPanel
+      data={playoffQ.data}
+      loading={playoffQ.isLoading}
+      error={playoffQ.isError ? String(playoffQ.error?.message ?? "Couldn't load playoff split.") : undefined}
+    />
+  ) : null;
 
   const titleGapSection = (
       <Section icon={<Target className="h-5 w-5" />} title="Title Gap Summary" subtitle="The clearest read on how far you are from a championship">
@@ -427,12 +441,14 @@ export function ChampionshipDiagnosis() {
                 {rivalSection}
                 {pathSection}
                 {benchmarkSection}
+                {playoffTruthSection}
                 {blockersSection}
                 {actionSection}
               </>
             ) : mode === "why-havent-won" ? (
               <>
                 {benchmarkSection}
+                {playoffTruthSection}
                 {titleGapSection}
                 {blockersSection}
                 {rivalSection}
@@ -444,6 +460,7 @@ export function ChampionshipDiagnosis() {
                 {titleGapSection}
                 {blockersSection}
                 {benchmarkSection}
+                {playoffTruthSection}
                 {rivalSection}
                 {pathSection}
                 {actionSection}
