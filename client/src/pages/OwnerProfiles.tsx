@@ -4,7 +4,6 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import {
-  Loader2,
   AlertTriangle,
   ChevronDown,
   ChevronRight,
@@ -27,6 +26,14 @@ import {
 import { cn } from "@/lib/utils";
 import { displayOwnerName } from "@/lib/ownerName";
 import type { CSSProperties, ReactNode } from "react";
+import {
+  CinematicPageHeader,
+  IntelPageShell,
+  IntelPanel,
+  PageError,
+  PageLoading,
+  SectionLoading,
+} from "@/components/layout";
 import { RivalryDossierPanel, type RivalryPickerOption } from "@/components/RivalryDossierPanel";
 import { ActivityDnaCard } from "@/components/ActivityDnaCard";
 import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
@@ -75,7 +82,7 @@ function ProfileShellCard({
   right?: ReactNode;
 }) {
   return (
-    <div className={cn(PROFILE_SURFACE, "flex flex-col overflow-hidden")}>
+    <IntelPanel variant="warm" className="flex flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-4 py-3">
         <h3 className="flex items-center gap-2 text-[15px] font-extrabold tracking-tight text-[#f3f8ff]">
           {title}
@@ -84,7 +91,7 @@ function ProfileShellCard({
         {right}
       </div>
       <div className="px-4 py-4">{children}</div>
-    </div>
+    </IntelPanel>
   );
 }
 
@@ -93,7 +100,7 @@ function Section({ title, icon, children, defaultOpen = true }: {
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className={cn(PROFILE_SURFACE, "overflow-hidden")}>
+    <IntelPanel variant="warm" className="overflow-hidden">
       <button type="button" onClick={() => setOpen(v => !v)}
         className="flex w-full items-center gap-2 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left transition-colors hover:bg-white/[0.04]">
         <span className="text-[#a3e635]">{icon}</span>
@@ -101,7 +108,7 @@ function Section({ title, icon, children, defaultOpen = true }: {
         {open ? <ChevronDown className="h-4 w-4 text-zinc-500" /> : <ChevronRight className="h-4 w-4 text-zinc-500" />}
       </button>
       {open && <div className="px-4 py-3">{children}</div>}
-    </div>
+    </IntelPanel>
   );
 }
 
@@ -115,10 +122,6 @@ const TAG_STYLES: Record<string, string> = {
   "Difficult":    "border-orange-700 bg-orange-900/30 text-orange-300",
   "Normal":       "border-border bg-muted/30 text-muted-foreground",
 };
-
-/** Owner profile / Draft DNA surface — matches command-center mockup cards */
-const PROFILE_SURFACE =
-  "rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#1f1624,#18111c)] shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
 
 const POS_TEXT: Record<string, string> = {
   RB: "text-red-400",
@@ -179,14 +182,16 @@ function ScoutingLock({ title, blurb, onUnlock, pending }: { title: string; blur
 
 function OwnerCard({ o, selected, onClick }: { o: any; selected: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick}
-      className={cn(
-        "w-full rounded-xl border text-left px-4 py-3 transition-all",
-        PROFILE_SURFACE,
-        selected
-          ? "border-[#a3e635]/50 ring-1 ring-[#a3e635]/25 shadow-[0_0_24px_-10px_rgba(139,92,246,0.35)]"
-          : "border-white/[0.08] hover:border-[#a3e635]/25 hover:bg-white/[0.03]",
-      )}>
+    <button type="button" onClick={onClick} className="w-full text-left">
+      <IntelPanel
+        variant="warm"
+        className={cn(
+          "px-4 py-3 transition-all",
+          selected
+            ? "border-[#a3e635]/50 ring-1 ring-[#a3e635]/25 shadow-[0_0_24px_-10px_rgba(139,92,246,0.35)]"
+            : "hover:border-[#a3e635]/25 hover:bg-white/[0.03]",
+        )}
+      >
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="font-bold text-sm text-[#f3f8ff]">{o.ownerName}</p>
@@ -202,6 +207,7 @@ function OwnerCard({ o, selected, onClick }: { o: any; selected: boolean; onClic
         <span>{pct(num(o.winPct))} win</span>
         <span>{Array.isArray(o.seasons) ? o.seasons.length : 0} season{(Array.isArray(o.seasons) ? o.seasons.length : 0) !== 1 ? "s" : ""}</span>
       </div>
+      </IntelPanel>
     </button>
   );
 }
@@ -432,9 +438,7 @@ function ProfilePanel({
   );
 
   if (q.isPending || q.isLoading) return (
-    <div className="flex items-center justify-center py-20 text-muted-foreground">
-      <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading profile…
-    </div>
+    <SectionLoading message="Loading profile…" className="justify-center py-20" />
   );
   const profileLeagueId = typeof p?.leagueId === "string" ? p.leagueId : null;
   const profileLeagueGuardOk =
@@ -443,25 +447,23 @@ function ProfilePanel({
     p?.ownerProfileLeagueMismatch !== true;
   if (q.isSuccess && p != null && !profileLeagueGuardOk) {
     return (
-      <div className="flex items-center justify-center py-20 text-muted-foreground">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Resolving profile for active league…
-      </div>
+      <SectionLoading message="Resolving profile for active league…" className="justify-center py-20" />
     );
   }
   if (q.isError) {
     return (
-      <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-6 text-sm text-destructive">
+      <IntelPanel variant="warm" className="rounded-lg border-destructive/40 bg-destructive/10 px-4 py-6 text-sm text-destructive">
         <AlertTriangle className="mb-2 inline h-5 w-5" /> Could not load profile: {String((q.error as Error)?.message ?? q.error)}
         <div className="mt-3 font-mono text-xs text-foreground/80 space-y-1">
           <div>ownerKey (query input): {profileLookupKey}</div>
           <div>ownerList ownerKey count: {availableOwnerKeysCount}</div>
         </div>
-      </div>
+      </IntelPanel>
     );
   }
   if (!p) {
     return (
-      <div className="rounded-lg border border-amber-500/40 bg-amber-950/20 px-4 py-6 text-sm text-amber-100/90">
+      <IntelPanel variant="warm" className="rounded-lg border-amber-500/40 bg-amber-950/20 px-4 py-6 text-sm text-amber-100/90">
         <AlertTriangle className="mb-2 inline h-5 w-5 text-amber-400" /> Profile not found.
         <div className="mt-3 font-mono text-[11px] text-foreground/85 space-y-1">
           <div>
@@ -471,7 +473,7 @@ function ProfilePanel({
             <span className="text-muted-foreground">available ownerKeys (from list):</span> {availableOwnerKeysCount}
           </div>
         </div>
-      </div>
+      </IntelPanel>
     );
   }
 
@@ -584,7 +586,7 @@ function ProfilePanel({
   return (
     <div className="space-y-6">
       {/* Profile header — mockup: avatar + name + meta + tab strip */}
-      <div className={cn(PROFILE_SURFACE, "overflow-hidden")}>
+      <IntelPanel variant="warm" className="overflow-hidden">
         <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-start">
           <div
             className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-[#a3e635]/50 bg-zinc-900 text-lg font-bold text-zinc-100 shadow-[0_0_28px_-6px_rgba(239,68,68,0.55)]"
@@ -669,11 +671,11 @@ function ProfilePanel({
             );
           })}
         </div>
-      </div>
+      </IntelPanel>
 
       {/* Compare owners */}
       {!gated && (
-      <div className={cn(PROFILE_SURFACE, "overflow-hidden")}>
+      <IntelPanel variant="warm" className="overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2">
             <GitCompare className="h-4 w-4 text-violet-400/90" />
@@ -699,10 +701,7 @@ function ProfilePanel({
           </div>
         </div>
         {compareWith && !peer && (q.isFetching || q.isLoading) ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-zinc-500">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm">Loading comparison…</span>
-          </div>
+          <SectionLoading message="Loading comparison…" className="justify-center py-10 text-zinc-500" />
         ) : peer ? (
           <div className="overflow-x-auto p-4">
             <div className="grid min-w-[300px] grid-cols-[minmax(7.5rem,1fr)_1fr_1fr] gap-x-2 gap-y-1">
@@ -808,13 +807,13 @@ function ProfilePanel({
             Pick another owner to see side-by-side career stats (same data as your profile).
           </p>
         )}
-      </div>
+      </IntelPanel>
       )}
 
       {/* Tab panels — layout matches Draft DNA mockup (dark cards, position colors, gold insights) */}
       {profileTab === "snapshot" && (
         <div className="space-y-4">
-          <div className={cn(PROFILE_SURFACE, "overflow-hidden p-4 sm:p-5")}>
+          <IntelPanel variant="warm" className="overflow-hidden p-4 sm:p-5">
             <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold tracking-tight text-zinc-100">
               <Users className="h-4 w-4 text-zinc-500" aria-hidden />
               Owner snapshot
@@ -869,9 +868,10 @@ function ProfilePanel({
                 </tbody>
               </table>
             </div>
-          </div>
+          </IntelPanel>
 
-          <Collapsible open={dataSourceOpen} onOpenChange={setDataSourceOpen} className={cn(PROFILE_SURFACE, "overflow-hidden")}>
+          <Collapsible open={dataSourceOpen} onOpenChange={setDataSourceOpen}>
+            <IntelPanel variant="warm" className="overflow-hidden">
             <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-semibold text-zinc-300 transition-colors hover:bg-white/[0.03]">
               <span>Data source</span>
               <ChevronDown
@@ -947,6 +947,7 @@ function ProfilePanel({
                 )}
               </div>
             </CollapsibleContent>
+            </IntelPanel>
           </Collapsible>
         </div>
       )}
@@ -1170,7 +1171,7 @@ function ProfilePanel({
         <ScoutingLock title="Keeper DNA" blurb="Know who they keep and when - keeper rate, average keeper round, and the positions they protect year after year." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
       )}
       {profileTab === "keeper" && !gated && (
-        <div className={cn(PROFILE_SURFACE, "overflow-hidden p-4 sm:p-5")}>
+        <IntelPanel variant="warm" className="overflow-hidden p-4 sm:p-5">
           <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-zinc-100">
             <Trophy className="h-4 w-4 text-amber-500/80" aria-hidden />
             Keeper DNA
@@ -1202,7 +1203,7 @@ function ProfilePanel({
               </div>
             </div>
           )}
-        </div>
+        </IntelPanel>
       )}
 
       {profileTab === "activity" && gated && (
@@ -1524,42 +1525,38 @@ export function OwnerProfiles() {
 
   if (!leagueKeyReady) {
     return (
-      <div className="flex items-center justify-center py-24 text-muted-foreground">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading league…
-      </div>
+      <IntelPageShell bleed minHeight="full" background="cinematic-owner" padding="default" className="text-zinc-100">
+        <PageLoading message="Loading league…" />
+      </IntelPageShell>
     );
   }
 
   if (listQ.isError && !listQ.isFetching) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 py-24 text-destructive">
-        <AlertTriangle className="h-6 w-6" />
-        <p className="text-sm font-medium">Could not load owner list for this league.</p>
-        <p className="text-xs text-muted-foreground">{String((listQ.error as Error)?.message ?? listQ.error)}</p>
-      </div>
+      <IntelPageShell bleed minHeight="full" background="cinematic-owner" padding="default" className="text-zinc-100">
+        <PageError message={`Could not load owner list for this league. ${String((listQ.error as Error)?.message ?? listQ.error)}`} />
+      </IntelPageShell>
     );
   }
 
   if (!ownerListHydrated) {
     return (
-      <div className="flex items-center justify-center py-24 text-muted-foreground">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading owner profiles…
-      </div>
+      <IntelPageShell bleed minHeight="full" background="cinematic-owner" padding="default" className="text-zinc-100">
+        <PageLoading message="Loading owner profiles…" />
+      </IntelPageShell>
     );
   }
 
   return (
-    <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 80% -10%,rgba(139,92,246,.16),transparent 42%),linear-gradient(180deg,#130e16,#0f0b11)" }}>
-      <div className="mb-5 flex items-center gap-3">
-        <div className="grid place-items-center rounded-2xl shrink-0" style={{ width: 46, height: 46, background: "rgba(139,92,246,.10)", border: "1px solid rgba(139,92,246,.30)" }}>
-          <Users className="h-6 w-6 text-[#a3e635]" />
-        </div>
-        <div className="min-w-0">
-          <div className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#8b97a8]">League Intelligence Desk</div>
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-[#f3f8ff] leading-none">Owner Profiles</h1>
-          <p className="mt-1.5 text-sm text-[#8b97a8]">{active.length} active owner{active.length !== 1 ? "s" : ""} - click to view full profile</p>
-        </div>
-      </div>
+    <IntelPageShell bleed minHeight="full" background="cinematic-owner" padding="default" className="text-zinc-100">
+      <CinematicPageHeader
+        eyebrowMono="League Intelligence Desk"
+        icon={Users}
+        iconAccent="purple"
+        title="Owner Profiles"
+        subtitle={`${active.length} active owner${active.length !== 1 ? "s" : ""} - click to view full profile`}
+        className="mb-5"
+      />
 
       <div className="flex gap-6">
         <div className="w-72 shrink-0 space-y-2">
@@ -1625,13 +1622,15 @@ export function OwnerProfiles() {
               leagueKeyReady={leagueKeyReady}
             />
           ) : (
-            <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-[#18111c]/50 text-sm text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>{selectedOwnerKey ? "Resolving selection…" : "Select an owner to view their profile."}</span>
-            </div>
+            <IntelPanel variant="warm" className="flex h-64 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+              <SectionLoading
+                message={selectedOwnerKey ? "Resolving selection…" : "Select an owner to view their profile."}
+                className="justify-center"
+              />
+            </IntelPanel>
           )}
         </div>
       </div>
-    </div>
+    </IntelPageShell>
   );
 }
