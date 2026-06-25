@@ -21,6 +21,7 @@ import { sql } from "drizzle-orm";
 import { getDb, memberIdFromOwnerKey } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import { getWeeklyStatsSeasonsForLeague } from "./weeklyStatsLeagueCoverage";
+import { getLeagueWeeklyStats } from "./leagueWeeklyStats";
 import { buildChampionshipAuthority } from "./championshipAuthority";
 import { computeActivityDna } from "./activityDnaService";
 
@@ -226,15 +227,9 @@ export async function computeWhyHaventIWon(userId?: number, ownerKeyOverride?: s
     }
   }
 
-  // ── Load weekly stats + draft sets for scoring/position/acquisition reasons ──
-  const weekly = rowsOf(await db.execute(sql`
-    SELECT w.season AS season, w.week AS week, w.ownerKey AS ownerKey, w.isStarter AS isStarter,
-           w.pointsScored AS pts, r.espnPlayerId AS espnId, r.position AS position
-    FROM gm_weekly_player_stats w
-    JOIN gm_player_registry r ON r.id = w.playerId
-    INNER JOIN teams t ON w.teamId IS NOT NULL AND w.teamId = t.teamId AND w.season = t.season AND t.leagueId = ${leagueId}
-    WHERE 1=1 ${weeklySeasonSql}`))
-    .map((r: any) => ({ season: Number(r.season), week: Number(r.week), ownerKey: String(r.ownerKey), isStarter: Number(r.isStarter) === 1, pts: Number(r.pts ?? 0), espnId: Number(r.espnId), position: String(r.position ?? "") }));
+  // ── Load weekly stats (owner-pinned accessor) + draft sets for scoring/position/acquisition reasons ──
+  const weekly = (await getLeagueWeeklyStats(leagueId, { seasons: weeklyStatsSeasons })).rows
+    .map((r) => ({ season: r.season, week: r.week, ownerKey: r.ownerKey, isStarter: r.isStarter, pts: r.pts, espnId: r.espnId, position: r.position }));
 
   // drafted sets per owner GUID per season (from combined cache)
   const draftedByOwnerSeason = new Map<string, Set<number>>(); // `${guid}:${season}` -> espnIds

@@ -18,6 +18,7 @@ import { computeWhyHaventIWon } from "./whyHaventIWon";
 import { computeDraftReality } from "./draftRealitySimulator";
 import { getWeeklyStatsSeasonsForLeague } from "./weeklyStatsLeagueCoverage";
 import { buildChampionshipAuthority } from "./championshipAuthority";
+import { getLeagueWeeklyStats } from "./leagueWeeklyStats";
 const POSITIONS = ["QB", "RB", "WR", "TE"] as const;
 type Pos = (typeof POSITIONS)[number];
 
@@ -175,15 +176,9 @@ export async function computeChampionshipPath(userId?: number, ownerKeyOverride?
   const focalCanon = champAuthority.canonicalKeyForOwnerId(focal);
   const hasWon = (champAuthority.championSeasonsByKey.get(focalCanon)?.length ?? 0) > 0;
 
-  // ── positional starter scoring (weekly stats, league-scoped seasons only) ──
-  const weekly = rowsOf(await db.execute(sql`
-    SELECT w.season AS season, w.teamId AS teamId, w.ownerKey AS ownerKey, w.isStarter AS isStarter,
-           w.pointsScored AS pts, r.position AS position
-    FROM gm_weekly_player_stats w
-    JOIN gm_player_registry r ON r.id = w.playerId
-    INNER JOIN teams t ON w.teamId IS NOT NULL AND w.teamId = t.teamId AND w.season = t.season AND t.leagueId = ${leagueId}
-    WHERE w.isStarter=1 AND r.position IN ('QB','RB','WR','TE') AND ${weeklySeasonSql}`))
-    .map((r: any) => ({ season: Number(r.season), teamId: Number(r.teamId), ownerKey: String(r.ownerKey), pts: Number(r.pts ?? 0), position: String(r.position) as Pos }));
+  // ── positional starter scoring (owner-pinned, league-scoped accessor) ──
+  const weekly = (await getLeagueWeeklyStats(leagueId, { startersOnly: true, positions: POSITIONS, seasons: weeklyStatsSeasons })).rows
+    .map((r) => ({ season: r.season, teamId: r.teamId, ownerKey: r.ownerKey, pts: r.pts, position: r.position as Pos }));
 
   // champion profile: average across champions of each champion's per-position pts/game
   const champPerPos: Record<Pos, number[]> = { QB: [], RB: [], WR: [], TE: [] };

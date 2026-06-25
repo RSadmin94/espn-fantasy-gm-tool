@@ -24,6 +24,7 @@ import { getDb, memberIdFromOwnerKey } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import { getWeeklyStatsSeasonsForLeague } from "./weeklyStatsLeagueCoverage";
 import { buildChampionshipAuthority } from "./championshipAuthority";
+import { getLeagueWeeklyStats } from "./leagueWeeklyStats";
 
 const POSITIONS = ["QB", "RB", "WR", "TE"] as const;
 type Pos = (typeof POSITIONS)[number];
@@ -119,7 +120,6 @@ export async function computePlayoffPositionSplit(
   const base = { leagueId, ownerKey: focal, ownerName, isSetupComplete };
   if (!focalCanon) return emptyResult(base, "No owner identity resolved.", coverageSeasons);
   if (coverageSeasons.length === 0) return emptyResult(base, "No weekly player stats for this league (needs 2018+).", coverageSeasons);
-  const weeklySeasonSql = sql.join(coverageSeasons.map((s) => sql`${s}`), sql`, `);
 
   // focal canonical -> set of (season -> teamId)
   const focalTeamBySeason = new Map<number, number>();
@@ -142,20 +142,9 @@ export async function computePlayoffPositionSplit(
   const isPlayoffGame = (season: number, teamId: number, week: number) =>
     playoffWeeks.get(`${season}:${teamId}`)?.has(week) ?? false;
 
-  // Weekly starter scoring, league-scoped + position-tagged.
-  // NOTE: gm_weekly_player_stats has no leagueId and multiple leagues share teamId
-  // numbers, so a bare teamId+season join leaks other leagues' same-numbered teams.
-  // We additionally pin w.ownerKey = t.ownerId so each row belongs to the actual
-  // owner of THIS league's (season, teamId). (The shared championshipPath/whyHaventIWon
-  // join omits this and is therefore cross-league contaminated — flagged separately.)
-  const weekly = rowsOf(await db.execute(sql`
-    SELECT w.season AS season, w.teamId AS teamId, w.week AS week,
-           w.pointsScored AS pts, r.position AS position
-    FROM gm_weekly_player_stats w
-    JOIN gm_player_registry r ON r.id = w.playerId
-    INNER JOIN teams t ON w.teamId IS NOT NULL AND w.teamId = t.teamId AND w.season = t.season AND t.leagueId = ${leagueId} AND w.ownerKey = t.ownerId
-    WHERE w.isStarter=1 AND r.position IN ('QB','RB','WR','TE') AND w.season IN (${weeklySeasonSql})`))
-    .map((r: any) => ({ season: Number(r.season), teamId: Number(r.teamId), week: Number(r.week), pts: Number(r.pts ?? 0), position: String(r.position) as Pos }));
+  // Weekly starter scoring via the shared owner-pinned accessor (one join, no cross-league leak).
+  const weekly = (await getLeagueWeeklyStats(leagueId, { startersOnly: true, positions: POSITIONS, seasons: coverageSeasons })).rows
+    .map((r) => ({ season: r.season, teamId: r.teamId, week: r.week, pts: r.pts, position: r.position as Pos }));
 
   // Aggregator: returns per-position list of pts for a row predicate.
   function collect(pred: (row: { season: number; teamId: number; week: number; pts: number; position: Pos }) => boolean): Record<Pos, number[]> {
