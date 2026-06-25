@@ -6,8 +6,18 @@ import { cn } from "@/lib/utils";
 import { RivalrySummaryCard } from "@/components/RivalrySummaryCard";
 import { PlayoffPositionTruthPanel } from "@/components/PlayoffPositionTruthPanel";
 import {
-  Loader2, Trophy, Target, Crown, Swords, ShieldCheck, ListChecks,
-  Route, AlertTriangle, TrendingDown, Gauge, Activity, ArrowUpCircle,
+  CinematicMetaPill,
+  CinematicPageHeader,
+  EmptyState,
+  IntelPageShell,
+  IntelPanel,
+  PageError,
+  PageLoading,
+  SectionLoading,
+} from "@/components/layout";
+import {
+  Trophy, Target, Crown, Swords, ShieldCheck, ListChecks,
+  Route, TrendingDown, Gauge, Activity, ArrowUpCircle,
 } from "lucide-react";
 
 /**
@@ -16,17 +26,9 @@ import {
  * Secondary (2 unique cards only): leagueIntel.championshipPath → Closest Champion + Championship Profile.
  * Pure presentation composition of existing outputs — no new scoring.
  */
-const PAGEBG: React.CSSProperties = {
-  background:
-    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0e0a10,#080609)",
-  color: "#f3f8ff",
-};
-const PANEL =
-  "rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#1b131f,#140e17)] shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
-
 function Section({ icon, title, subtitle, children }: { icon: ReactNode; title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <section className={cn(PANEL, "p-5 sm:p-6")}>
+    <IntelPanel variant="elevated" className="p-5 sm:p-6">
       <div className="mb-4 flex items-center gap-3">
         <span className="text-lime-400">{icon}</span>
         <div>
@@ -35,7 +37,7 @@ function Section({ icon, title, subtitle, children }: { icon: ReactNode; title: 
         </div>
       </div>
       {children}
-    </section>
+    </IntelPanel>
   );
 }
 
@@ -282,7 +284,11 @@ export function ChampionshipDiagnosis() {
                   </div>
                 </div>
               ) : pathQ.isLoading ? (
-                <div className="mb-4 flex items-center gap-2 text-[13px] text-white/45"><Loader2 className="h-4 w-4 animate-spin" /> Finding your closest champion…</div>
+                <SectionLoading
+                  size="sm"
+                  message="Finding your closest champion…"
+                  className="mb-4 text-[13px] text-white/45"
+                />
               ) : null}
 
               {cr?.titlePath?.moves?.length > 0 ? (
@@ -384,96 +390,99 @@ export function ChampionshipDiagnosis() {
   );
 
   return (
-    <div className="min-h-screen w-full" style={PAGEBG}>
-      <div className="px-6 py-6 max-w-[1200px]">
-        {/* Hero */}
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[12px] font-semibold uppercase tracking-wider text-violet-300">
-              <Trophy className="h-3.5 w-3.5" /> Championship Diagnosis
-            </div>
-            <h1 className="text-[34px] font-black leading-[1.05] tracking-tight sm:text-[42px]">
-              Championship Diagnosis
-            </h1>
-            {cr && <p className="mt-2 text-[15px] text-white/55">{taglineFor(mode, cr.ownerName)}</p>}
-          </div>
-          {cr && (
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 pt-1">
-              {cr.careerArc && (
-                <span className="rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold text-violet-200">{cr.careerArc}</span>
-              )}
-              <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">
+    <IntelPageShell
+      minHeight="screen"
+      width="diagnosis"
+      background="cinematic"
+      padding="diagnosis"
+    >
+      <CinematicPageHeader
+        title="Championship Diagnosis"
+        subtitle={cr ? taglineFor(mode, cr.ownerName) : undefined}
+        titleSize="large"
+        badge={{ label: "Championship Diagnosis", icon: Trophy, tone: "violet" }}
+        className="mb-0"
+        meta={
+          cr ? (
+            <>
+              {cr.careerArc ? (
+                <CinematicMetaPill tone="violet">{cr.careerArc}</CinematicMetaPill>
+              ) : null}
+              <CinematicMetaPill tone="neutral">
                 {snapshot?.seasonsPlayed ?? 0} seasons
-              </span>
-              {cr.teamCount > 0 && (
-                <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">{cr.teamCount}-Team League</span>
-              )}
-              <span className={cn("rounded-full border px-3 py-1 text-[11px] font-semibold", cr.confidence === "High" ? "border-lime-400/30 bg-lime-500/10 text-lime-300" : "border-amber-400/30 bg-amber-500/10 text-amber-300")}>Confidence: {cr.confidence}</span>
-            </div>
+              </CinematicMetaPill>
+              {cr.teamCount > 0 ? (
+                <CinematicMetaPill tone="neutral">{cr.teamCount}-Team League</CinematicMetaPill>
+              ) : null}
+              <CinematicMetaPill tone={cr.confidence === "High" ? "good" : "warn"}>
+                Confidence: {cr.confidence}
+              </CinematicMetaPill>
+            </>
+          ) : undefined
+        }
+      />
+
+      {(!leagueKeyReady || (careerQ.isLoading && !cr)) && (
+        <PageLoading
+          message={
+            !leagueKeyReady ? "Loading league…" : "Diagnosing your path to a title…"
+          }
+        />
+      )}
+      {leagueKeyReady && careerQ.isError && (
+        <PageError
+          message={`Couldn't run the diagnosis. ${String(careerQ.error?.message ?? "")}`}
+        />
+      )}
+      {cr?.needsOwnerSelection && (
+        <EmptyState
+          icon={Crown}
+          title="Select your team for this league"
+          description="Pick your owner in Settings to run a personalized championship diagnosis."
+        />
+      )}
+
+      {cr && !cr.needsOwnerSelection && (
+        <>
+          {/* Three modes, three hierarchies: why-you-won leads with the edge, why-havent-won with the benchmark, breakthrough keeps the interim order. */}
+          {mode === "why-you-won" ? (
+            <>
+              {edgeSection}
+              {rivalSection}
+              {pathSection}
+              {benchmarkSection}
+              {playoffTruthSection}
+              {blockersSection}
+              {actionSection}
+            </>
+          ) : mode === "why-havent-won" ? (
+            <>
+              {benchmarkSection}
+              {playoffTruthSection}
+              {titleGapSection}
+              {blockersSection}
+              {rivalSection}
+              {pathSection}
+              {actionSection}
+            </>
+          ) : (
+            <>
+              {titleGapSection}
+              {blockersSection}
+              {benchmarkSection}
+              {playoffTruthSection}
+              {rivalSection}
+              {pathSection}
+              {actionSection}
+            </>
           )}
-        </div>
 
-        {/* States */}
-        {(!leagueKeyReady || (careerQ.isLoading && !cr)) && (
-          <div className={cn(PANEL, "flex items-center justify-center gap-3 p-16 text-white/50")}>
-            <Loader2 className="h-5 w-5 animate-spin text-lime-400" />{" "}
-            {!leagueKeyReady ? "Loading league…" : "Diagnosing your path to a title…"}
-          </div>
-        )}
-        {leagueKeyReady && careerQ.isError && (
-          <div className={cn(PANEL, "p-8 text-center text-red-300")}>Couldn't run the diagnosis. {String(careerQ.error?.message ?? "")}</div>
-        )}
-        {cr?.needsOwnerSelection && (
-          <div className={cn(PANEL, "p-8 text-center")}>
-            <Crown className="mx-auto mb-3 h-7 w-7 text-lime-400" />
-            <p className="text-[18px] font-black text-white/90">Select your team for this league</p>
-            <p className="mt-1 text-[14px] text-white/55">Pick your owner in Settings to run a personalized championship diagnosis.</p>
-          </div>
-        )}
-
-        {cr && !cr.needsOwnerSelection && (
-          <div className="space-y-6">
-
-            {/* Three modes, three hierarchies: why-you-won leads with the edge, why-havent-won with the benchmark, breakthrough keeps the interim order. */}
-            {mode === "why-you-won" ? (
-              <>
-                {edgeSection}
-                {rivalSection}
-                {pathSection}
-                {benchmarkSection}
-                {playoffTruthSection}
-                {blockersSection}
-                {actionSection}
-              </>
-            ) : mode === "why-havent-won" ? (
-              <>
-                {benchmarkSection}
-                {playoffTruthSection}
-                {titleGapSection}
-                {blockersSection}
-                {rivalSection}
-                {pathSection}
-                {actionSection}
-              </>
-            ) : (
-              <>
-                {titleGapSection}
-                {blockersSection}
-                {benchmarkSection}
-                {playoffTruthSection}
-                {rivalSection}
-                {pathSection}
-                {actionSection}
-              </>
-            )}
-
-            <p className="px-1 text-[12px] text-white/30">
-              Every number is computed deterministically from real league history — matchups, standings, drafts, championships, and champion starter scoring. No projections. Champion benchmark = average of league champions' starter scoring by position.
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
+          <p className="px-1 text-[12px] text-white/30">
+            Every number is computed deterministically from real league history — matchups, standings, drafts, championships, and champion starter scoring. No projections. Champion benchmark = average of league champions' starter scoring by position.
+          </p>
+        </>
+      )}
+    </IntelPageShell>
   );
 }
 
