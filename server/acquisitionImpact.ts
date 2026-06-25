@@ -20,6 +20,7 @@ import { sql } from "drizzle-orm";
 import { getDb, memberIdFromOwnerKey } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import { computeDraftReality } from "./draftRealitySimulator";
+import { getLeagueWeeklyStats } from "./leagueWeeklyStats";
 
 // Phase B4: DEFAULT_LEAGUE_ID constant removed — setup required if no active league.
 const WEEKLY_SEASONS = [2021, 2022, 2023, 2024, 2025];
@@ -122,18 +123,9 @@ export async function computeAcquisitionImpact(userId?: number, ownerKeyOverride
     }
   }
 
-  // ── weekly starters joined to registry espnId ─────────────────────────
-  // Owner key comes from the JOINED teams row (t.ownerId) — the authoritative
-  // owner for each team-season — not w.ownerKey, which can be a stale GUID or a
-  // synthetic `team:N` fallback that has no matching teams row (would render as
-  // a raw GUID and mis-score as 100% acquired).
-  const weekly = rowsOf(await db.execute(sql`
-    SELECT w.season AS season, w.week AS week, t.ownerId AS ownerKey, w.pointsScored AS pts, r.espnPlayerId AS espnId
-    FROM gm_weekly_player_stats w
-    JOIN gm_player_registry r ON r.id = w.playerId
-    JOIN teams t ON t.teamId = w.teamId AND t.season = w.season AND t.leagueId = ${leagueId}
-    WHERE w.season IN (2021,2022,2023,2024,2025) AND w.isStarter=1`))
-    .map((r: any) => ({ season: Number(r.season), week: Number(r.week), ownerKey: String(r.ownerKey), pts: Number(r.pts ?? 0), espnId: Number(r.espnId) }));
+  // ── weekly starters (owner-pinned league accessor) ────────────────────
+  const weekly = (await getLeagueWeeklyStats(leagueId, { startersOnly: true, seasons: WEEKLY_SEASONS })).rows
+    .map((r) => ({ season: r.season, week: r.week, ownerKey: r.ownerKey, pts: r.pts, espnId: r.espnId }));
 
   // aggregate drafted vs acquired points (overall + per season) + per-owner-week acquired
   type Agg = { drafted: number; acquired: number; seasons: Set<number> };
