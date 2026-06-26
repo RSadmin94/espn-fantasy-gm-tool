@@ -111,6 +111,86 @@ vi.mock("./rivalryStoryReceipts", () => ({
   resolveReceiptsForStory: (...args: unknown[]) => mockResolveReceiptsForStory(...args),
 }));
 
+const mockBuildH2HAuthority = vi.fn();
+
+vi.mock("./h2hAuthority", () => ({
+  buildH2HAuthority: (...args: unknown[]) => mockBuildH2HAuthority(...args),
+}));
+
+function mockH2hForStory(story: RivalryStoryResult) {
+  const isRevenge = story.headline.key === "REVENGE_COMPLETE";
+  const isQuiet = story.tier === "quiet";
+  return {
+    personA: story.focalOwnerKey,
+    personB: story.rivalOwnerKey,
+    displayA: "Rod",
+    displayB: isRevenge ? "Sheldon" : isQuiet ? "Quiet" : "Marlon",
+    career: isQuiet
+      ? { wins: 2, losses: 1, ties: 0, games: 3 }
+      : isRevenge
+        ? { wins: 6, losses: 3, ties: 0, games: 9 }
+        : { wins: 6, losses: 6, ties: 0, games: 12 },
+    playoffs: isQuiet
+      ? { wins: 0, losses: 0, ties: 0, games: 0 }
+      : isRevenge
+        ? { wins: 1, losses: 1, ties: 0, games: 2 }
+        : { wins: 1, losses: 4, ties: 0, games: 5 },
+    recent5: isQuiet
+      ? { wins: 2, losses: 1, ties: 0, games: 3 }
+      : isRevenge
+        ? { wins: 4, losses: 1, ties: 0, games: 5 }
+        : { wins: 1, losses: 4, ties: 0, games: 5 },
+    recent10: { wins: 0, losses: 0, ties: 0, games: 0 },
+    streak: { type: "none" as const, count: 0 },
+    lastMeeting: null,
+    largestVictory: null,
+    largestLoss: null,
+    averageMarginA: 0,
+    seasonHistory: [],
+    meetings: [],
+  };
+}
+
+function mockReceiptsForStory(story: RivalryStoryResult) {
+  if (story.headline.key === "THREE_ELIMINATIONS") {
+    return ["gm:2016:15", "gm:2021:16", "gm:2023:15", "gm:2024:17"].map((receiptId) => ({
+      receiptId,
+      type: "game" as const,
+      season: 2024,
+      isPlayoff: true,
+      focalOwnerKey: story.focalOwnerKey,
+      rivalOwnerKey: story.rivalOwnerKey,
+      factKeys: ["PLAYOFF_ELIMINATION"],
+      source: "gmMatchups" as const,
+    }));
+  }
+  const ids = [
+    ...story.headline.receiptIds,
+    ...story.documentaryFacts.flatMap((f) => f.supportingGameIds),
+  ];
+  return [...new Set(ids)].map((receiptId) => ({
+    receiptId,
+    type: "game" as const,
+    season: 2024,
+    isPlayoff: receiptId.includes(":16"),
+    focalOwnerKey: story.focalOwnerKey,
+    rivalOwnerKey: story.rivalOwnerKey,
+    factKeys: [] as string[],
+    source: "gmMatchups" as const,
+  }));
+}
+
+function setupH2HMock() {
+  mockBuildH2HAuthority.mockImplementation(async () => ({
+    getH2H: (_a: string, b: string) => {
+      if (b === RIVAL) return mockH2hForStory(MOCK_LEGENDARY);
+      if (b === MOCK_REVENGE.rivalOwnerKey) return mockH2hForStory(MOCK_REVENGE);
+      if (b === QUIET_RIVAL) return mockH2hForStory(MOCK_QUIET);
+      return mockH2hForStory(MOCK_LEGENDARY);
+    },
+  }));
+}
+
 import { appRouter } from "./routers";
 import { storiesMapToArray } from "./rivalryStoryRouter";
 import { buildRivalryStoryForPair } from "./rivalryStoryAuthority";
@@ -349,6 +429,85 @@ describe("rivalryStoryRouter.receipts", () => {
     const caller = appRouter.createCaller(anonCtx());
     await expect(
       caller.rivalryStory.receipts({
+        leagueId: "457622",
+        focalOwnerKey: FOCAL,
+        rivalOwnerKey: "id:{EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE}",
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" } satisfies Partial<TRPCError>);
+  });
+});
+
+describe("rivalryStoryRouter.statements", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupH2HMock();
+    mockResolveReceiptsForStory.mockImplementation(async ({ story }: { story: RivalryStoryResult }) =>
+      mockReceiptsForStory(story),
+    );
+  });
+
+  it("returns controlled statements for THREE_ELIMINATIONS rivalry", async () => {
+    const caller = appRouter.createCaller(anonCtx());
+    const result = await caller.rivalryStory.statements({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+      rivalOwnerKey: RIVAL,
+    });
+    expect(result.focalOwnerKey).toBe(FOCAL);
+    expect(result.rivalOwnerKey).toBe(RIVAL);
+    expect(buildRivalryStoryForPair).toHaveBeenCalled();
+    expect(mockResolveReceiptsForStory).toHaveBeenCalled();
+    expect(mockBuildH2HAuthority).toHaveBeenCalled();
+    expect(result.statements.map((s) => s.statementKey)).toEqual([
+      "THREE_ELIMINATIONS_LEAD",
+      "CAREER_RECORD",
+      "PLAYOFF_RECORD",
+      "RECENT_FORM",
+    ]);
+    expect(result.statements[0]?.text).toContain("Marlon has ended Rod's season");
+  });
+
+  it("returns tape statements only for REVENGE_COMPLETE headline", async () => {
+    const caller = appRouter.createCaller(anonCtx());
+    const result = await caller.rivalryStory.statements({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+      rivalOwnerKey: MOCK_REVENGE.rivalOwnerKey,
+    });
+    expect(result.statements.map((s) => s.statementKey)).toEqual([
+      "CAREER_RECORD",
+      "PLAYOFF_RECORD",
+      "RECENT_FORM",
+    ]);
+    expect(result.statements.some((s) => s.statementKey === "THREE_ELIMINATIONS_LEAD")).toBe(false);
+  });
+
+  it("quiet pair has no cold-open lead statements", async () => {
+    const caller = appRouter.createCaller(anonCtx());
+    const result = await caller.rivalryStory.statements({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+      rivalOwnerKey: QUIET_RIVAL,
+    });
+    expect(result.statements.every((s) => s.block !== "coldOpen")).toBe(true);
+    expect(result.statements.map((s) => s.statementKey)).toEqual(["CAREER_RECORD", "RECENT_FORM"]);
+  });
+
+  it("rejects statements when focal and rival are the same", async () => {
+    const caller = appRouter.createCaller(anonCtx());
+    await expect(
+      caller.rivalryStory.statements({
+        leagueId: "457622",
+        focalOwnerKey: FOCAL,
+        rivalOwnerKey: FOCAL,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" } satisfies Partial<TRPCError>);
+  });
+
+  it("returns NOT_FOUND when pair has no story", async () => {
+    const caller = appRouter.createCaller(anonCtx());
+    await expect(
+      caller.rivalryStory.statements({
         leagueId: "457622",
         focalOwnerKey: FOCAL,
         rivalOwnerKey: "id:{EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE}",

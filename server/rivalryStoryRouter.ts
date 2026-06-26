@@ -18,6 +18,11 @@ import {
   resolveRivalryStoryReceipts,
   type RivalryStoryReceipt,
 } from "./rivalryStoryReceipts";
+import { buildH2HAuthority } from "./h2hAuthority";
+import {
+  buildRivalryNarrativeStatements,
+  type RivalryNarrativeStatement,
+} from "./rivalryNarrativeTemplates";
 import { getDb } from "./db";
 
 const leagueIdInput = z.object({
@@ -51,6 +56,12 @@ export type RivalryStoryReceiptsResponse = {
   focalOwnerKey: string;
   rivalOwnerKey: string;
   receipts: RivalryStoryReceipt[];
+};
+
+export type RivalryStoryStatementsResponse = {
+  focalOwnerKey: string;
+  rivalOwnerKey: string;
+  statements: RivalryNarrativeStatement[];
 };
 
 const receiptsInput = pairInput.extend({
@@ -162,6 +173,56 @@ export const rivalryStoryRouter = router({
         focalOwnerKey: input.focalOwnerKey,
         rivalOwnerKey: input.rivalOwnerKey,
         receipts,
+      };
+    }),
+
+  /** Controlled narrative statements for one rivalry pair. */
+  statements: publicProcedure
+    .input(pairInput)
+    .query(async ({ input }): Promise<RivalryStoryStatementsResponse> => {
+      if (input.focalOwnerKey === input.rivalOwnerKey) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "focalOwnerKey and rivalOwnerKey must be different owners",
+        });
+      }
+
+      await assertDatabase();
+
+      const story = await buildRivalryStoryForPair({
+        leagueId: input.leagueId,
+        focalOwnerKey: input.focalOwnerKey,
+        rivalOwnerKey: input.rivalOwnerKey,
+      });
+
+      if (!story) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No rivalry story for the requested owner pair in this league",
+        });
+      }
+
+      const [receipts, h2hAuth] = await Promise.all([
+        resolveReceiptsForStory({
+          leagueId: input.leagueId,
+          story,
+        }),
+        buildH2HAuthority(input.leagueId),
+      ]);
+
+      const h2h = h2hAuth.getH2H(input.focalOwnerKey, input.rivalOwnerKey);
+      const statements = buildRivalryNarrativeStatements({
+        story,
+        receipts,
+        h2h,
+        focalName: h2h.displayA,
+        rivalName: h2h.displayB,
+      });
+
+      return {
+        focalOwnerKey: input.focalOwnerKey,
+        rivalOwnerKey: input.rivalOwnerKey,
+        statements,
       };
     }),
 });
