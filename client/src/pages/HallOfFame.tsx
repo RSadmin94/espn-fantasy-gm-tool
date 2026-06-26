@@ -8,20 +8,19 @@ import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Loader2, Trophy, Medal, Crown, Swords, Landmark, ChevronDown, Skull } from "lucide-react";
 import {
+  CinematicPageHeader,
+  IntelPageShell,
+  IntelPanel,
+  PageError,
+  PageLoading,
+  ProGate,
+  TabBar,
+} from "@/components/layout";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-
-/** Matches Owner Profiles / Dashboard prestige surfaces */
-const PROFILE_SURFACE =
-  "rounded-xl border border-white/[0.08] bg-[linear-gradient(180deg,#1b131f,#140e17)] shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
-
-const PAGEBG: React.CSSProperties = {
-  background:
-    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0e0a10,#080609)",
-  color: "#f3f8ff",
-};
 
 type MaybeAvail<T> = { available: true; value: T } | { available: false; reason: string };
 
@@ -30,47 +29,21 @@ function unwrapMaybe<T>(m: MaybeAvail<T> | undefined | null): T | null {
   return null;
 }
 
-function HofPaywall({ heading, onUnlock, pending }: { heading: string; onUnlock: () => void; pending: boolean }) {
-  return (
-    <div className={cn(PROFILE_SURFACE, "p-8 text-center")}>
-      <Trophy className="mx-auto mb-3 h-8 w-8 text-amber-300/80" />
-      <p className="text-xl font-black text-zinc-100">{heading}</p>
-      <p className="mx-auto mt-2 max-w-md text-sm text-zinc-400">
-        The leaderboard, titles, tenure and win % stay free. The deep record book - single-game marks,
-        season bests, and head-to-head legacy - unlocks with Rivals Pro.
-      </p>
-      <button
-        onClick={onUnlock}
-        disabled={pending}
-        className="mt-5 inline-flex items-center gap-2 rounded-[10px] bg-amber-300 px-6 py-3 text-sm font-extrabold text-[#1e1623] transition hover:brightness-110 disabled:opacity-60"
-      >
-        {pending ? "Opening..." : "Unlock the Record Book"}
-      </button>
-    </div>
-  );
-}
-
 function UnavailableBlock({ title }: { title: string }) {
   return (
-    <div className={cn(PROFILE_SURFACE, "p-5")}>
+    <IntelPanel variant="profile" className="p-5">
       <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">{title}</p>
       <p className="mt-2 text-lg font-semibold text-zinc-300">Unavailable</p>
       <p className="mt-1 text-xs text-zinc-600">Data not yet imported.</p>
-    </div>
+    </IntelPanel>
   );
 }
 
 function GoldGlowCard({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div
-      className={cn(
-        PROFILE_SURFACE,
-        "border-amber-500/20 shadow-[0_0_32px_-12px_rgba(245,158,11,0.22)]",
-        className,
-      )}
-    >
+    <IntelPanel variant="profile" accent="gold" className={className}>
       {children}
-    </div>
+    </IntelPanel>
   );
 }
 
@@ -329,25 +302,27 @@ export function HallOfFame() {
 
   if (!leagueKeyReady) {
     return (
-      <div className="flex items-center justify-center gap-2 bg-[#0e0a10] py-20 text-zinc-500">
-        <Loader2 className="h-5 w-5 animate-spin" /> Loading league…
-      </div>
+      <IntelPageShell bleed minHeight="full" background="cinematic" width="standard" padding="compact">
+        <PageLoading message="Loading league…" />
+      </IntelPageShell>
     );
   }
 
   if (hofQ.isLoading) {
     return (
-      <div className="flex items-center justify-center gap-2 bg-[#0e0a10] py-20 text-zinc-500">
-        <Loader2 className="h-5 w-5 animate-spin" /> Loading Hall of Fame…
-      </div>
+      <IntelPageShell bleed minHeight="full" background="cinematic" width="standard" padding="compact">
+        <PageLoading message="Loading Hall of Fame…" />
+      </IntelPageShell>
     );
   }
 
   if (hofQ.isError || !data) {
     return (
-      <div className="mx-auto max-w-6xl bg-[#0e0a10] px-4 py-12 text-sm text-red-400 sm:px-6">
-        Could not load Hall of Fame: {hofQ.isError ? String(hofQ.error?.message ?? hofQ.error) : "no data"}
-      </div>
+      <IntelPageShell bleed minHeight="full" background="cinematic" width="standard" padding="compact">
+        <PageError
+          message={`Could not load Hall of Fame: ${hofQ.isError ? String(hofQ.error?.message ?? hofQ.error) : "no data"}`}
+        />
+      </IntelPageShell>
     );
   }
 
@@ -382,16 +357,23 @@ export function HallOfFame() {
   const cemetery = (() => { const activeNames = new Set(((ownerListQ.data?.active ?? []) as any[]).map((o: any) => String(o.ownerName ?? o.ownerKey).trim().toLowerCase())); const byName = new Map<string, { name: string; years: number[]; champs: number }>(); for (const o of ((ownerListQ.data?.allOwners ?? []) as any[])) { const nm = String(o.ownerName ?? o.ownerKey).trim(); const k = nm.toLowerCase(); const e = byName.get(k) ?? { name: nm, years: [], champs: 0 }; if (Array.isArray(o.seasons)) for (const s of o.seasons) { const y = Number(s); if (y && !e.years.includes(y)) e.years.push(y); } e.champs += Number(o.championships ?? 0); byName.set(k, e); } return [...byName.values()].filter((e) => e.years.length > 0 && e.years.length < 2 && e.champs === 0 && !activeNames.has(e.name.toLowerCase())).map((e) => ({ name: e.name, years: [...e.years].sort((x, y) => x - y) })).sort((p, q) => (p.years[0] ?? 0) - (q.years[0] ?? 0)); })();
 
   const tabs = [
-    { id: "champions" as const, label: "Champions", Icon: Trophy },
-    { id: "records" as const, label: "Records", Icon: Medal },
-    { id: "dynasties" as const, label: "Dynasties", Icon: Crown },
-    { id: "legacy" as const, label: "Legacy", Icon: Landmark },
-    { id: "cemetery" as const, label: "Cemetery", Icon: Skull },
+    { id: "champions", label: "Champions", icon: Trophy },
+    { id: "records", label: "Records", icon: Medal },
+    { id: "dynasties", label: "Dynasties", icon: Crown },
+    { id: "legacy", label: "Legacy", icon: Landmark },
+    { id: "cemetery", label: "Cemetery", icon: Skull },
   ];
 
   return (
-    <div style={PAGEBG} className="-m-4 md:-m-6 px-4 pt-6 pb-20 sm:px-6 min-h-full">
-      <div className="mx-auto max-w-6xl space-y-8">
+    <IntelPageShell
+      bleed
+      minHeight="full"
+      width="standard"
+      background="cinematic"
+      padding="compact"
+      className="pb-20"
+    >
+      <div className="space-y-8">
       {diag && diag.totalMedals === 0 && (
         <div className="rounded-xl border border-amber-500/35 bg-amber-500/[0.08] px-4 py-3 text-sm text-amber-100/95">
           <p className="font-semibold text-amber-50">No championship medals imported yet</p>
@@ -422,26 +404,29 @@ export function HallOfFame() {
       )}
       {/* HERO */}
       <section className="space-y-4">
-        <div className="text-center">
-          <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-amber-500/90">League Legacy Center</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-50 sm:text-4xl">{leagueLabel}</h1>
-          <div className="mx-auto mt-4 flex max-w-xl flex-wrap justify-center gap-4 text-sm text-zinc-400">
-            <span>
-              <span className="text-zinc-600">Seasons in coverage</span>{" "}
-              <span className="font-semibold tabular-nums text-zinc-200">{totalSeasonsTouched}</span>
+        <CinematicPageHeader
+          eyebrowMono="League Legacy Center"
+          title={leagueLabel}
+          subtitle={
+            <span className="inline-flex flex-wrap justify-center gap-x-4 gap-y-1">
+              <span>
+                <span className="text-zinc-600">Seasons in coverage</span>{" "}
+                <span className="font-semibold tabular-nums text-zinc-200">{totalSeasonsTouched}</span>
+              </span>
+              <span className="text-zinc-700">·</span>
+              <span>
+                <span className="text-zinc-600">Total titles</span>{" "}
+                <span className="font-semibold tabular-nums text-amber-200/90">{totalTitles}</span>
+              </span>
+              <span className="text-zinc-700">·</span>
+              <span>
+                <span className="text-zinc-600">Owners tracked</span>{" "}
+                <span className="font-semibold tabular-nums text-zinc-200">{totalOwners}</span>
+              </span>
             </span>
-            <span className="text-zinc-700">·</span>
-            <span>
-              <span className="text-zinc-600">Total titles</span>{" "}
-              <span className="font-semibold tabular-nums text-amber-200/90">{totalTitles}</span>
-            </span>
-            <span className="text-zinc-700">·</span>
-            <span>
-              <span className="text-zinc-600">Owners tracked</span>{" "}
-              <span className="font-semibold tabular-nums text-zinc-200">{totalOwners}</span>
-            </span>
-          </div>
-        </div>
+          }
+          className="mb-0 text-center [&>div]:w-full [&>div]:items-center [&_h1]:text-center [&_p]:mx-auto"
+        />
 
         {leader ? (
           <GoldGlowCard className="relative overflow-hidden p-6 sm:p-8">
@@ -484,26 +469,13 @@ export function HallOfFame() {
       </section>
 
       {/* TABS */}
-      <div className={cn(PROFILE_SURFACE, "overflow-hidden")}>
-        <div className="flex flex-wrap gap-0 border-b border-white/[0.06] px-1 sm:px-2">
-          {tabs.map(({ id, label, Icon }) => {
-            const active = hofTab === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setHofTab(id)}
-                className={cn(
-                  "flex min-w-0 flex-1 basis-[45%] items-center justify-center gap-2 border-b-2 py-3.5 text-[10px] font-bold uppercase tracking-[0.1em] transition-colors sm:basis-0 sm:text-xs",
-                  active ? "border-red-500 text-red-400" : "border-transparent text-zinc-500 hover:text-zinc-300",
-                )}
-              >
-                <Icon className={cn("h-4 w-4 shrink-0", active ? "text-red-400" : "text-zinc-600")} aria-hidden />
-                <span className="truncate">{label}</span>
-              </button>
-            );
-          })}
-        </div>
+      <IntelPanel variant="profile" className="overflow-hidden">
+        <TabBar
+          tabs={tabs}
+          value={hofTab}
+          onChange={(id) => setHofTab(id as typeof hofTab)}
+          tone="hof"
+        />
 
         <div className="p-4 sm:p-6">
           {hofTab === "champions" && (
@@ -540,7 +512,15 @@ export function HallOfFame() {
           )}
 
           {hofTab === "records" && hofGated && (
-            <HofPaywall heading="Single-game & season records" onUnlock={startHofCheckout} pending={hofCheckout.isPending} />
+            <ProGate
+              icon={Trophy}
+              heading="Single-game & season records"
+              description="The leaderboard, titles, tenure and win % stay free. The deep record book - single-game marks, season bests, and head-to-head legacy - unlocks with Rivals Pro."
+              ctaLabel="Unlock the Record Book"
+              accent="amber"
+              onUnlock={startHofCheckout}
+              pending={hofCheckout.isPending}
+            />
           )}
           {hofTab === "records" && !hofGated && (
             <div className="grid gap-3 md:grid-cols-2">
@@ -620,7 +600,7 @@ export function HallOfFame() {
                 <p className="col-span-full text-center text-sm text-zinc-500">No owner rows.</p>
               ) : (
                 data.ownerRecords.slice(0, 12).map((row, idx) => (
-                  <div key={row.ownerKey} className={cn(PROFILE_SURFACE, "relative overflow-hidden p-5")}>
+                  <IntelPanel key={row.ownerKey} variant="profile" className="relative overflow-hidden p-5">
                     <span className="absolute right-3 top-3 text-4xl font-black tabular-nums text-white/[0.04]">
                       {idx + 1}
                     </span>
@@ -639,7 +619,7 @@ export function HallOfFame() {
                         <span className="tabular-nums text-zinc-200">{row.seasonsActive}</span>
                       </p>
                     </div>
-                  </div>
+                  </IntelPanel>
                 ))
               )}
             </div>
@@ -754,10 +734,11 @@ export function HallOfFame() {
             </div>
           )}
         </div>
-      </div>
+      </IntelPanel>
 
       {/* Data coverage — collapsed */}
-      <Collapsible open={coverageOpen} onOpenChange={setCoverageOpen} className={cn(PROFILE_SURFACE, "overflow-hidden")}>
+      <Collapsible open={coverageOpen} onOpenChange={setCoverageOpen}>
+        <IntelPanel variant="profile" className="overflow-hidden">
         <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-semibold text-zinc-300 transition-colors hover:bg-white/[0.03]">
           <span>Data Coverage &amp; Diagnostics</span>
           <ChevronDown className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-transform", coverageOpen && "rotate-180")} />
@@ -868,30 +849,31 @@ export function HallOfFame() {
             </p>
           </div>
         </CollapsibleContent>
+        </IntelPanel>
       </Collapsible>
       </div>
-    </div>
+    </IntelPageShell>
   );
 }
 
 function RecordDump({ title, rec }: { title: string; rec: MaybeAvail<Record<string, unknown>> }) {
   if (!rec.available) {
     return (
-      <div className={cn(PROFILE_SURFACE, "p-3")}>
+      <IntelPanel variant="profile" className="p-3">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{title}</p>
         <p className="mt-1 text-xs text-zinc-600">Unavailable — {rec.reason}</p>
-      </div>
+      </IntelPanel>
     );
   }
   const o = rec.value;
   return (
-    <div className={cn(PROFILE_SURFACE, "p-3")}>
+    <IntelPanel variant="profile" className="p-3">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{title}</p>
       <p className="mt-1 font-mono text-[11px] text-zinc-300">
         {Object.entries(o)
           .map(([k, v]) => `${k}: ${typeof v === "number" ? (Number.isInteger(v) ? v : Number(v).toFixed(2)) : String(v)}`)
           .join(" · ")}
       </p>
-    </div>
+    </IntelPanel>
   );
 }
