@@ -4,22 +4,23 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
-import { Loader2, ShoppingCart, TrendingUp, Trophy, Layers, Info, Crown, Hammer, BookOpen, Sparkles } from "lucide-react";
-
-const PAGEBG: React.CSSProperties = {
-  background:
-    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0e0a10,#080609)",
-  color: "#f3f8ff",
-};
-const PANEL =
-  "rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#1b131f,#140e17)] shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
+import {
+  CinematicMetaPill,
+  CinematicPageHeader,
+  IntelPageShell,
+  IntelPanel,
+  PageError,
+  PageLoading,
+  ProGate,
+} from "@/components/layout";
+import { ShoppingCart, TrendingUp, Trophy, Layers, Info, Crown, Hammer, BookOpen, Sparkles } from "lucide-react";
 
 type AcqResult = import("../../../server/acquisitionImpact").AcquisitionImpactResult;
 type AcqOwner = import("../../../server/acquisitionImpact").AcquisitionOwner;
 
 function Section({ icon, title, subtitle, children }: { icon: ReactNode; title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <section className={cn(PANEL, "p-5 sm:p-6")}>
+    <IntelPanel variant="elevated" className="p-5 sm:p-6">
       <div className="mb-4 flex items-center gap-3">
         <span className="text-lime-400">{icon}</span>
         <div>
@@ -28,7 +29,7 @@ function Section({ icon, title, subtitle, children }: { icon: ReactNode; title: 
         </div>
       </div>
       {children}
-    </section>
+    </IntelPanel>
   );
 }
 
@@ -82,27 +83,6 @@ function RankRow({ rank, name, value, max, suffix, highlight, barClass }: { rank
   );
 }
 
-function AcqPaywall({ onUnlock, pending }: { onUnlock: () => void; pending: boolean }) {
-  return (
-    <div className={cn(PANEL, "p-8 text-center")}>
-      <ShoppingCart className="mx-auto mb-3 h-8 w-8 text-lime-400" />
-      <p className="text-xl font-black text-white/95">Scout the whole league</p>
-      <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
-        Your own acquisition dashboard above is free. The league leaderboards - who adds the most
-        value off waivers, who leans hardest on the draft, the top roster builders, and the biggest
-        in-season pickups in league history - unlock with Rivals Pro.
-      </p>
-      <button
-        onClick={onUnlock}
-        disabled={pending}
-        className="mt-5 inline-flex items-center gap-2 rounded-[10px] bg-lime-400 px-6 py-3 text-sm font-extrabold text-[#0e0a10] transition hover:brightness-110 disabled:opacity-60"
-      >
-        {pending ? "Opening..." : "Unlock the Leaderboards"}
-      </button>
-    </div>
-  );
-}
-
 export function AcquisitionImpact() {
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
@@ -128,42 +108,47 @@ export function AcquisitionImpact() {
   };
 
   return (
-    <div className="min-h-screen w-full" style={PAGEBG}>
-      <div className="px-6 py-6 max-w-[1400px]">
-        {/* Hero */}
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[12px] font-semibold uppercase tracking-wider text-violet-300">
-              <ShoppingCart className="h-3.5 w-3.5" /> LeagueDNA Intelligence
-            </div>
-            <h1 className="text-[34px] font-black leading-[1.05] tracking-tight sm:text-[42px]">
-              Acquisition Impact<span className="text-lime-400">™</span>
-            </h1>
-            <p className="mt-2 text-[15px] text-white/55">How much of your season was built after draft day?</p>
-          </div>
-          {data && (
-            <div className="flex shrink-0 flex-wrap items-center gap-2 pt-1">
-              <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">{data.qualifiedCount} Owners</span>
-              <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">17 Seasons</span>
-              <span className={cn("rounded-full border px-3 py-1 text-[11px] font-semibold", data.confidence === "High" ? "border-lime-400/30 bg-lime-500/10 text-lime-300" : "border-amber-400/30 bg-amber-500/10 text-amber-300")}>Confidence: {data.confidence}</span>
-            </div>
-          )}
-        </div>
+    <IntelPageShell
+      minHeight="screen"
+      width="wide"
+      background="cinematic"
+      padding="default"
+    >
+      <CinematicPageHeader
+        title="Acquisition Impact™"
+        subtitle="How much of your season was built after draft day?"
+        titleSize="large"
+        badge={{ label: "LeagueDNA Intelligence", icon: ShoppingCart, tone: "violet" }}
+        className="mb-0"
+        meta={
+          data ? (
+            <>
+              <CinematicMetaPill tone="neutral">{data.qualifiedCount} Owners</CinematicMetaPill>
+              <CinematicMetaPill tone="neutral">17 Seasons</CinematicMetaPill>
+              <CinematicMetaPill tone={data.confidence === "High" ? "good" : "warn"}>
+                Confidence: {data.confidence}
+              </CinematicMetaPill>
+            </>
+          ) : undefined
+        }
+      />
 
-        {(!leagueKeyReady || (q.isLoading && !data)) && (
-          <div className={cn(PANEL, "flex items-center justify-center gap-3 p-16 text-white/50")}>
-            <Loader2 className="h-5 w-5 animate-spin text-lime-400" />{" "}
-            {!leagueKeyReady ? "Loading league…" : "Tracing every non-drafted starter…"}
-          </div>
-        )}
-        {leagueKeyReady && q.isError && (
-          <div className={cn(PANEL, "p-8 text-center text-red-300")}>Couldn't compute acquisition impact. {String(q.error?.message ?? "")}</div>
-        )}
+      {(!leagueKeyReady || (q.isLoading && !data)) && (
+        <PageLoading
+          message={
+            !leagueKeyReady ? "Loading league…" : "Tracing every non-drafted starter…"
+          }
+        />
+      )}
+      {leagueKeyReady && q.isError && (
+        <PageError
+          message={`Couldn't compute acquisition impact. ${String(q.error?.message ?? "")}`}
+        />
+      )}
 
-        {data && f && (
-          <div className="space-y-6">
-            {/* Focal dashboard */}
-            <div className={cn(PANEL, "p-5 sm:p-6")}>
+      {data && f && (
+        <>
+          <IntelPanel variant="elevated" className="p-5 sm:p-6">
               <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-6">
                   <ImpactMeter value={f.acquisitionImpactScore} label="Impact Score" />
@@ -194,9 +179,8 @@ export function AcquisitionImpact() {
                 <StatCard icon={<Trophy className="h-4 w-4" />} label="Wins Added" value={f.decisiveAcqWins} sub={`of ${f.totalWins} wins (acq. decisive)`} />
                 <StatCard icon={<Layers className="h-4 w-4" />} label="Lineup Dependency" value={`${f.lineupDependency}%`} sub="of starting points" />
               </div>
-            </div>
+            </IntelPanel>
 
-            {/* Insights */}
             <Section icon={<Sparkles className="h-5 w-5" />} title="LeagueDNA Insights">
               <ul className="space-y-2">
                 {data.insights.map((t, i) => (
@@ -208,7 +192,14 @@ export function AcquisitionImpact() {
             </Section>
 
             {gated && (
-              <AcqPaywall onUnlock={startCheckout} pending={checkout.isPending} />
+              <ProGate
+                icon={ShoppingCart}
+                heading="Scout the whole league"
+                description="Your own acquisition dashboard above is free. The league leaderboards - who adds the most value off waivers, who leans hardest on the draft, the top roster builders, and the biggest in-season pickups in league history - unlock with Rivals Pro."
+                ctaLabel="Unlock the Leaderboards"
+                onUnlock={startCheckout}
+                pending={checkout.isPending}
+              />
             )}
             {!gated && (<>
             {/* Best Acquisition Managers */}
@@ -262,10 +253,9 @@ export function AcquisitionImpact() {
               Deterministic: a "non-drafted player" is any starter not on that owner's draft board that season. Wins Added counts games won where acquired starters exceeded the margin of victory. Confidence: {data.confidence}.
             </p>
             </>)}
-          </div>
-        )}
-      </div>
-    </div>
+        </>
+      )}
+    </IntelPageShell>
   );
 }
 
