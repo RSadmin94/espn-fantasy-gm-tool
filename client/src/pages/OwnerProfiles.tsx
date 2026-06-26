@@ -22,6 +22,10 @@ import {
   Crosshair,
   Ban,
   Award,
+  ScrollText,
+  History,
+  Clapperboard,
+  ArrowLeftRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { displayOwnerName } from "@/lib/ownerName";
@@ -524,6 +528,279 @@ function DynastyIdentityStrip({ row }: { row: DynastyIdentityRow | null | undefi
   );
 }
 
+type CareerTimelineEvent = { season: number; label: string; detail: string; sortKey: number };
+
+function buildCareerTimelineEvents(
+  champSeasons: number[],
+  runnerUpSeasons: number[],
+  thirdSeasons: number[],
+  seasonRecords: any[],
+  tradeHist?: { biggestWin?: any; biggestLoss?: any } | null,
+): CareerTimelineEvent[] {
+  const events: CareerTimelineEvent[] = [];
+  for (const s of champSeasons) {
+    events.push({ season: s, label: "Championship", detail: `Title · ${s}`, sortKey: s * 100 });
+  }
+  for (const s of runnerUpSeasons) {
+    events.push({ season: s, label: "Finals", detail: `Runner-up · ${s}`, sortKey: s * 100 + 1 });
+  }
+  for (const s of thirdSeasons) {
+    events.push({ season: s, label: "Podium", detail: `3rd place · ${s}`, sortKey: s * 100 + 2 });
+  }
+  if (tradeHist?.biggestWin) {
+    const t = tradeHist.biggestWin;
+    const season = Number(t.season) || 0;
+    events.push({
+      season,
+      label: "Major trade",
+      detail: `Biggest win · +${Math.round(num(t.margin))} value`,
+      sortKey: season * 100 + 3,
+    });
+  }
+  if (tradeHist?.biggestLoss) {
+    const t = tradeHist.biggestLoss;
+    const season = Number(t.season) || 0;
+    events.push({
+      season,
+      label: "Major trade",
+      detail: `Biggest loss · −${Math.round(num(t.margin))} value`,
+      sortKey: season * 100 + 4,
+    });
+  }
+  for (const sr of seasonRecords) {
+    const season = Number(sr.season);
+    if (!season) continue;
+    if (sr.isChampion || sr.isRunnerUp || sr.isThirdPlace) continue;
+    events.push({
+      season,
+      label: "Season",
+      detail: `${sr.wins}–${sr.losses}${num(sr.ties) ? `–${num(sr.ties)}` : ""} · ${str(sr.teamName)}`,
+      sortKey: season * 100 + 5,
+    });
+  }
+  return events.sort((a, b) => a.sortKey - b.sortKey);
+}
+
+function resolveOpponentOwnerKey(name: string, pickers: RivalryPickerOption[]): string {
+  const n = name.trim().toLowerCase();
+  const hit = pickers.find((p) => p.label.trim().toLowerCase() === n);
+  return hit?.ownerKey ?? "";
+}
+
+function pickRivalryHighlights(intel: any[]) {
+  if (!intel.length) return { topRival: null as any, biggestThreat: null as any };
+  const byGames = [...intel].sort((a, b) => num(b.games) - num(a.games));
+  const nemesis = intel.filter((r) => r.tag === "Nemesis").sort((a, b) => num(b.games) - num(a.games))[0];
+  const rival = intel.find((r) => r.tag === "Rival");
+  const topRival = nemesis ?? rival ?? byGames[0] ?? null;
+  const biggestThreat =
+    nemesis ??
+    [...intel].filter((r) => num(r.games) >= 3).sort((a, b) => num(a.winPct) - num(b.winPct))[0] ??
+    null;
+  return { topRival, biggestThreat };
+}
+
+function DossierSectionHeader({
+  icon,
+  title,
+  accent = "#a3e635",
+}: {
+  icon: ReactNode;
+  title: string;
+  accent?: string;
+}) {
+  return (
+    <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-zinc-500">
+      <span style={{ color: accent }}>{icon}</span>
+      {title}
+    </div>
+  );
+}
+
+const DOSSIER_NAV_ITEMS = [
+  { id: "dossier-summary", label: "Summary" },
+  { id: "dossier-gm", label: "GM Profile" },
+  { id: "dossier-building", label: "Team Building" },
+  { id: "dossier-trading", label: "Trading" },
+  { id: "dossier-matchups", label: "Matchups" },
+  { id: "dossier-rivalries", label: "Rivalries" },
+  { id: "dossier-highlights", label: "Highlights" },
+] as const;
+
+function dossierScrollTo(sectionId: string) {
+  document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function DossierSectionNav() {
+  return (
+    <nav
+      aria-label="Dossier sections"
+      className="sticky top-16 z-10 overflow-x-auto rounded-xl border border-white/[0.08] bg-[#110c14]/95 px-2 py-2 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.65)] backdrop-blur-md"
+    >
+      <ul className="flex min-w-max gap-1">
+        {DOSSIER_NAV_ITEMS.map((item) => (
+          <li key={item.id}>
+            <button
+              type="button"
+              onClick={() => dossierScrollTo(item.id)}
+              className="rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
+            >
+              {item.label}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+function CompareOwnersPanel({
+  compareWith,
+  headerDisplayName,
+  profileLookupKey,
+  powerRankings,
+  ownerAwards,
+  peer,
+  isLoadingComparison,
+  snap,
+  snapP,
+  draft,
+  draftP,
+  keeper,
+  keeperP,
+  activity,
+  activityP,
+  h2h,
+}: {
+  compareWith: string;
+  headerDisplayName: string;
+  profileLookupKey: string;
+  powerRankings: any[];
+  ownerAwards: any[];
+  peer: Record<string, unknown> | null | undefined;
+  isLoadingComparison: boolean;
+  snap: Record<string, unknown>;
+  snapP: Record<string, unknown>;
+  draft: Record<string, unknown>;
+  draftP: Record<string, unknown>;
+  keeper: Record<string, unknown>;
+  keeperP: Record<string, unknown>;
+  activity: Record<string, unknown>;
+  activityP: Record<string, unknown>;
+  h2h: { games: number; winsForOwner: number; lossesForOwner: number; ties?: number } | null | undefined;
+}) {
+  if (!compareWith) return null;
+
+  return (
+    <IntelPanel id="dossier-compare" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
+      <DossierSectionHeader icon={<GitCompare className="h-4 w-4" />} title={`Compare · ${headerDisplayName} vs ${compareWith}`} accent="#c4b5fd" />
+      {compareWith && !peer && isLoadingComparison ? (
+        <SectionLoading message="Loading comparison…" className="justify-center py-10 text-zinc-500" />
+      ) : peer ? (
+        <div className="overflow-x-auto p-4">
+          <div className="grid min-w-[300px] grid-cols-[minmax(7.5rem,1fr)_1fr_1fr] gap-x-2 gap-y-1">
+            <div className="py-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Metric</div>
+            <div
+              className="truncate py-2 text-[10px] font-semibold uppercase tracking-wide text-lime-400/90"
+              title={headerDisplayName}
+            >
+              {headerDisplayName}
+            </div>
+            <div
+              className="truncate py-2 text-[10px] font-semibold uppercase tracking-wide text-amber-400/90"
+              title={compareWith}
+            >
+              {compareWith}
+            </div>
+
+            {(() => {
+              const prL = powerRankings.find((r: any) => listRowLookupKey(r) === profileLookupKey);
+              const prR = powerRankings.find((r: any) => r.ownerName === compareWith);
+              const rankL = prL ? num(prL.rank) : 999;
+              const rankR = prR ? num(prR.rank) : 999;
+              const awardsL = ownerAwards.filter((a: any) => listRowLookupKey(a) === profileLookupKey).length;
+              const awardsR = ownerAwards.filter((a: any) => a.ownerName === compareWith).length;
+              const topL = topDraftedPosCount(draft);
+              const topR = topDraftedPosCount(draftP);
+
+              const rows: Array<{
+                label: string;
+                l: ReactNode;
+                r: ReactNode;
+                w: "left" | "right" | "tie";
+              }> = [
+                {
+                  label: "Power rank #",
+                  l: rankL >= 999 ? "—" : `#${rankL}`,
+                  r: rankR >= 999 ? "—" : `#${rankR}`,
+                  w: cmpRankLowerWins(rankL, rankR),
+                },
+                { label: "Owner awards", l: awardsL, r: awardsR, w: cmp3(awardsL, awardsR) },
+                {
+                  label: "Career record",
+                  l: `${num(snap.totalWins)}–${num(snap.totalLosses)}${num(snap.totalTies) ? `–${num(snap.totalTies)}` : ""}`,
+                  r: `${num(snapP.totalWins)}–${num(snapP.totalLosses)}${num(snapP.totalTies) ? `–${num(snapP.totalTies)}` : ""}`,
+                  w: cmp3(num(snap.winPct), num(snapP.winPct)),
+                },
+                { label: "Win %", l: pct(num(snap.winPct)), r: pct(num(snapP.winPct)), w: cmp3(num(snap.winPct), num(snapP.winPct)) },
+                {
+                  label: "Medals (🏆 / 🥈+🥉)",
+                  l: `${num(snap.championships)} / ${num(snap.runnerUps) + num(snap.thirdPlace)}`,
+                  r: `${num(snapP.championships)} / ${num(snapP.runnerUps) + num(snapP.thirdPlace)}`,
+                  w: cmp3(medalScore(snap), medalScore(snapP)),
+                },
+                { label: "Open-draft picks", l: num(draft.totalPicks), r: num(draftP.totalPicks), w: cmp3(num(draft.totalPicks), num(draftP.totalPicks)) },
+                { label: "Most drafted (pos)", l: topL.label, r: topR.label, w: cmp3(topL.count, topR.count) },
+                { label: "Keeper slot rate", l: pct(num(keeper.keeperRate)), r: pct(num(keeperP.keeperRate)), w: cmp3(num(keeper.keeperRate), num(keeperP.keeperRate)) },
+                { label: "Acquisitions", l: num(activity.totalAcq), r: num(activityP.totalAcq), w: cmp3(num(activity.totalAcq), num(activityP.totalAcq)) },
+                { label: "Trades", l: num(activity.totalTrades), r: num(activityP.totalTrades), w: cmp3(num(activity.totalTrades), num(activityP.totalTrades)) },
+                { label: "Drops", l: num(activity.totalDrops), r: num(activityP.totalDrops), w: cmp3(num(activity.totalDrops), num(activityP.totalDrops)) },
+              ];
+
+              if (h2h && h2h.games > 0) {
+                rows.push({
+                  label: "Head-to-head",
+                  l: `${h2h.winsForOwner}–${h2h.lossesForOwner}${h2h.ties ? `–${h2h.ties}` : ""} (you)`,
+                  r: `${h2h.lossesForOwner}–${h2h.winsForOwner}${h2h.ties ? `–${h2h.ties}` : ""} (them)`,
+                  w: cmp3(h2h.winsForOwner, h2h.lossesForOwner),
+                });
+              }
+
+              return rows.map((row) => {
+                const tones = rowTones(row.w);
+                return (
+                  <Fragment key={row.label}>
+                    <div className="flex items-center border-b border-white/[0.06] py-2 pr-1 text-xs leading-snug text-zinc-500">
+                      {row.label}
+                    </div>
+                    <div className="border-b border-white/[0.06] py-1">
+                      <CompareCell tone={tones.left}>
+                        <span className="font-medium">{row.l}</span>
+                      </CompareCell>
+                    </div>
+                    <div className="border-b border-white/[0.06] py-1">
+                      <CompareCell tone={tones.right}>
+                        <span className="font-medium">{row.r}</span>
+                      </CompareCell>
+                    </div>
+                  </Fragment>
+                );
+              });
+            })()}
+          </div>
+          {(!h2h || h2h.games === 0) && (
+            <p className="mt-3 text-xs text-zinc-500">
+              No regular-season head-to-head matchups on file for this pair.
+            </p>
+          )}
+        </div>
+      ) : compareWith ? (
+        <p className="text-sm text-zinc-500">Could not load comparison for that owner.</p>
+      ) : null}
+    </IntelPanel>
+  );
+}
+
 function ProfilePanel({
   profileLookupKey,
   headerDisplayName,
@@ -571,8 +848,9 @@ function ProfilePanel({
   const p = q.data as any;
   const [intelExpanded, setIntelExpanded] = useState<string | null>(null);
   const [showRivalryDossier, setShowRivalryDossier] = useState(false);
-  const [profileTab, setProfileTab] = useState<"snapshot" | "draft" | "keeper" | "activity">("draft");
+  const [rivalryDocOpponentKey, setRivalryDocOpponentKey] = useState("");
   const [dataSourceOpen, setDataSourceOpen] = useState(false);
+  const [developerOpen, setDeveloperOpen] = useState(false);
 
   const gated = Boolean(p?.gated);
   const ownProfile = Boolean(p?.ownProfile);
@@ -601,9 +879,16 @@ function ProfilePanel({
     setIntelExpanded(null);
     setCompareWith("");
     setShowRivalryDossier(false);
-    setProfileTab("draft");
+    setRivalryDocOpponentKey("");
     setDataSourceOpen(false);
+    setDeveloperOpen(false);
   }, [profileLookupKey, leagueContextKey]);
+
+  useEffect(() => {
+    if (!compareWith) return;
+    const t = window.setTimeout(() => dossierScrollTo("dossier-compare"), 80);
+    return () => window.clearTimeout(t);
+  }, [compareWith]);
   const allSeasonsQ2 = trpcAny.espn.allSeasons.useQuery(withLeagueSalt({}, leagueContextKey), {
     staleTime: 60_000,
     enabled: leagueKeyReady,
@@ -613,6 +898,24 @@ function ProfilePanel({
   const dynastyPowerQ = trpcAny.dynasty.powerRankings.useQuery(
     withLeagueSalt({ season: 2026 }, leagueContextKey),
     { staleTime: 60_000, enabled: leagueKeyReady },
+  );
+  const acqImpactQ = trpc.leagueIntel.acquisitionImpact.useQuery(
+    withLeagueSalt({ ownerKey: profileLookupKey }, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady && !!profileLookupKey.trim() },
+  );
+  const tradeHistoryQ = (trpc as any).completedTradeIntel.ownerTradeHistory.useQuery(
+    withLeagueSalt(
+      {
+        leagueId: leagueContextKey,
+        season: dossierActiveSeason,
+        ownerKey: profileLookupKey,
+      },
+      leagueContextKey,
+    ),
+    {
+      enabled: leagueKeyReady && !!profileLookupKey.trim(),
+      staleTime: 60_000,
+    },
   );
   const draftSeasonList: number[] = Array.isArray(allSeasonsQ2.data) ? (allSeasonsQ2.data as number[]) : [];
   const draftSeasonQueries = (trpc as any).useQueries((t: any) =>
@@ -775,13 +1078,37 @@ function ProfilePanel({
   })();
   const earlyLead = earlySorted[0];
 
+  const prMe = powerRankings.find((r: any) => listRowLookupKey(r) === profileLookupKey);
+  const legacyRank = prMe != null && prMe.rank != null && num(prMe.rank) < 999 ? num(prMe.rank) : null;
+  const intelligenceScore = prMe != null && prMe.score != null ? num(prMe.score) : null;
+  const currentSeasonRow = seasonRecords.length > 0 ? (seasonRecords as any[])[seasonRecords.length - 1] : null;
+  const draftStyle = str((draft as Record<string, unknown>).draftStyleBadge ?? "");
+  const { topRival, biggestThreat } = pickRivalryHighlights(intel);
+  const careerTimeline = buildCareerTimelineEvents(
+    champSeasons,
+    runnerUpSeasons,
+    thirdSeasons,
+    seasonRecords as any[],
+    tradeHistoryQ.data as any,
+  );
+  const acqFocal = (acqImpactQ.data as any)?.focal ?? (acqImpactQ.data as any)?.owner ?? null;
+
+  const openRivalryDocumentary = (opponentName: string) => {
+    const key = resolveOpponentOwnerKey(opponentName, dossierPickerOptions);
+    if (key) setRivalryDocOpponentKey(key);
+    setShowRivalryDossier(true);
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Profile header — mockup: avatar + name + meta + tab strip */}
-      <IntelPanel variant="warm" className="overflow-hidden">
-        <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-start">
+    <div className="space-y-4">
+      {/* ── 1. Executive Summary ───────────────────────────────────────────── */}
+      <IntelPanel id="dossier-summary" variant="warm" className="scroll-mt-24 overflow-hidden" style={{ borderTop: "3px solid #f5c65a" }}>
+        <div className="border-b border-white/[0.06] px-4 py-3">
+          <DossierSectionHeader icon={<ScrollText className="h-4 w-4" />} title="Executive Summary" accent="#f5c65a" />
+        </div>
+        <div className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-start">
           <div
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-[#a3e635]/50 bg-zinc-900 text-lg font-bold text-zinc-100 shadow-[0_0_28px_-6px_rgba(239,68,68,0.55)]"
+            className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-2 border-[#a3e635]/50 bg-zinc-900 text-2xl font-bold text-zinc-100 shadow-[0_0_28px_-6px_rgba(163,230,53,0.35)]"
             aria-hidden
           >
             {headerDisplayName
@@ -795,8 +1122,8 @@ function ProfilePanel({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h2 className="text-2xl font-bold tracking-tight text-zinc-50">{headerDisplayName}</h2>
-                <p className="mt-0.5 text-sm text-zinc-500">{str(snap.currentTeam)}</p>
+                <h2 className="text-2xl font-extrabold tracking-tight text-zinc-50 md:text-3xl">{headerDisplayName}</h2>
+                <p className="mt-1 text-sm text-zinc-500">{str(snap.currentTeam)}</p>
               </div>
               <div className="flex flex-wrap justify-end gap-1.5">
                 {champSeasons.length > 0 && <Badge color="gold">🏆 {champSeasons.length}× Champ</Badge>}
@@ -804,82 +1131,49 @@ function ProfilePanel({
                 {thirdSeasons.length > 0 && <Badge color="bronze">🥉 {thirdSeasons.length}× 3rd</Badge>}
               </div>
             </div>
-            <p className="mt-3 text-sm text-zinc-400">
-              Active since {seasons.length > 0 ? String(seasons[0]) : "—"} · {champSeasons.length} Championships
-              {(() => {
-                const prMe = powerRankings.find((r: any) => listRowLookupKey(r) === profileLookupKey);
-                const sc = prMe != null && prMe.score != null ? num(prMe.score) : null;
-                return (
-                  <>
-                    {" "}
-                    · Power Score:{" "}
-                    {sc != null && sc > 0 ? (
-                      <span
-                        className="font-semibold text-red-400 tabular-nums"
-                        title="From owners.ownerList powerRankings composite score"
-                      >
-                        {Math.round(sc)}
-                      </span>
-                    ) : (
-                      <span className="text-zinc-500">—</span>
-                    )}
-                  </>
-                );
-              })()}
-            </p>
-            {p.scoutingSummary && (
-              <p className="mt-3 border-t border-white/[0.06] pt-3 text-sm italic leading-relaxed text-zinc-500">
-                {p.scoutingSummary}
-              </p>
-            )}
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Legacy rank</div>
+                <div className="mt-1 text-xl font-extrabold tabular-nums text-zinc-100">
+                  {legacyRank != null ? `#${legacyRank}` : "—"}
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Intelligence score</div>
+                <div className="mt-1 text-xl font-extrabold tabular-nums text-red-400">
+                  {intelligenceScore != null && intelligenceScore > 0 ? Math.round(intelligenceScore) : "—"}
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Overall record</div>
+                <div className="mt-1 text-xl font-extrabold tabular-nums text-zinc-100">
+                  {num(snap.totalWins)}–{num(snap.totalLosses)}
+                  {num(snap.totalTies) > 0 ? `–${num(snap.totalTies)}` : ""}
+                </div>
+                <div className="mt-0.5 text-[11px] text-zinc-500">{pct(num(snap.winPct))} win · RS matchups</div>
+              </div>
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5 sm:col-span-2 lg:col-span-3">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Current season snapshot</div>
+                <div className="mt-1 text-sm font-semibold text-zinc-100">
+                  {currentSeasonRow
+                    ? `${currentSeasonRow.season} · ${str(currentSeasonRow.teamName)} · ${currentSeasonRow.wins}–${currentSeasonRow.losses}${num(currentSeasonRow.ties) ? `–${num(currentSeasonRow.ties)}` : ""}`
+                    : "—"}
+                </div>
+                {currentSeasonRow?.playoffSeed != null ? (
+                  <div className="mt-0.5 text-[11px] text-zinc-500">Playoff seed: {currentSeasonRow.playoffSeed}</div>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
-        <DynastyIdentityStrip row={dynastyIdentityRow} />
-        <div className="flex gap-0 border-t border-white/[0.06] px-2">
-          {(
-            [
-              { id: "snapshot" as const, label: "Snapshot", Icon: Gauge },
-              { id: "draft" as const, label: "Draft DNA", Icon: Dna },
-              { id: "keeper" as const, label: "Keeper DNA", Icon: Shield },
-              { id: "activity" as const, label: "Activity DNA", Icon: Activity },
-            ] as const
-          ).map(({ id, label, Icon }) => {
-            const active = profileTab === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setProfileTab(id)}
-                className={cn(
-                  "flex flex-1 flex-col items-center gap-1.5 border-b-2 py-3 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors sm:flex-row sm:justify-center sm:gap-2 sm:text-xs",
-                  active
-                    ? "border-[#a3e635] text-[#a3e635]"
-                    : "border-transparent text-zinc-500 hover:text-zinc-300",
-                )}
-              >
-                <Icon className={cn("h-4 w-4", active ? "text-[#a3e635]" : "text-zinc-600")} aria-hidden />
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      </IntelPanel>
-
-      {/* Compare owners */}
-      {!gated && (
-      <IntelPanel variant="warm" className="overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-2">
-            <GitCompare className="h-4 w-4 text-violet-400/90" />
-            <h2 className="text-sm font-semibold tracking-tight text-zinc-100">Compare Owners</h2>
-          </div>
-          <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
-            <label className="shrink-0 text-xs text-zinc-500" htmlFor="owner-compare-select">
-              vs
-            </label>
+        {!gated ? (
+          <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] px-5 py-3">
+            <GitCompare className="h-4 w-4 shrink-0 text-violet-400/90" aria-hidden />
+            <span className="text-xs font-semibold text-zinc-400">Compare with another owner</span>
             <select
-              id="owner-compare-select"
-              className="min-w-[160px] max-w-full rounded-md border border-white/[0.1] bg-[#110c14] px-2 py-1.5 text-sm text-zinc-100"
+              id="owner-compare-hero-select"
+              aria-label="Compare with another owner"
+              className="min-w-[160px] max-w-full rounded-md border border-violet-500/25 bg-[#110c14] px-2 py-1.5 text-sm text-zinc-100"
               value={compareWith}
               onChange={(e) => setCompareWith(e.target.value)}
             >
@@ -890,264 +1184,87 @@ function ProfilePanel({
                 </option>
               ))}
             </select>
-          </div>
-        </div>
-        {compareWith && !peer && (q.isFetching || q.isLoading) ? (
-          <SectionLoading message="Loading comparison…" className="justify-center py-10 text-zinc-500" />
-        ) : peer ? (
-          <div className="overflow-x-auto p-4">
-            <div className="grid min-w-[300px] grid-cols-[minmax(7.5rem,1fr)_1fr_1fr] gap-x-2 gap-y-1">
-              <div className="py-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Metric</div>
-              <div
-                className="truncate py-2 text-[10px] font-semibold uppercase tracking-wide text-lime-400/90"
-                title={headerDisplayName}
+            {compareWith ? (
+              <button
+                type="button"
+                onClick={() => dossierScrollTo("dossier-compare")}
+                className="text-xs font-medium text-violet-300 underline-offset-2 hover:text-violet-200 hover:underline"
               >
-                {headerDisplayName}
-              </div>
-              <div
-                className="truncate py-2 text-[10px] font-semibold uppercase tracking-wide text-amber-400/90"
-                title={compareWith}
-              >
-                {compareWith}
-              </div>
-
-              {(() => {
-                const prL = powerRankings.find((r: any) => listRowLookupKey(r) === profileLookupKey);
-                const prR = powerRankings.find((r: any) => r.ownerName === compareWith);
-                const rankL = prL ? num(prL.rank) : 999;
-                const rankR = prR ? num(prR.rank) : 999;
-                const awardsL = ownerAwards.filter((a: any) => listRowLookupKey(a) === profileLookupKey).length;
-                const awardsR = ownerAwards.filter((a: any) => a.ownerName === compareWith).length;
-                const topL = topDraftedPosCount(draft as Record<string, unknown>);
-                const topR = topDraftedPosCount(draftP as Record<string, unknown>);
-
-                const rows: Array<{
-                  label: string;
-                  l: ReactNode;
-                  r: ReactNode;
-                  w: "left" | "right" | "tie";
-                }> = [
-                  {
-                    label: "Power rank #",
-                    l: rankL >= 999 ? "—" : `#${rankL}`,
-                    r: rankR >= 999 ? "—" : `#${rankR}`,
-                    w: cmpRankLowerWins(rankL, rankR),
-                  },
-                  { label: "Owner awards", l: awardsL, r: awardsR, w: cmp3(awardsL, awardsR) },
-                  {
-                    label: "Career record",
-                    l: `${num(snap.totalWins)}–${num(snap.totalLosses)}${num(snap.totalTies) ? `–${num(snap.totalTies)}` : ""}`,
-                    r: `${num(snapP.totalWins)}–${num(snapP.totalLosses)}${num(snapP.totalTies) ? `–${num(snapP.totalTies)}` : ""}`,
-                    w: cmp3(num(snap.winPct), num(snapP.winPct)),
-                  },
-                  { label: "Win %", l: pct(num(snap.winPct)), r: pct(num(snapP.winPct)), w: cmp3(num(snap.winPct), num(snapP.winPct)) },
-                  {
-                    label: "Medals (🏆 / 🥈+🥉)",
-                    l: `${num(snap.championships)} / ${num(snap.runnerUps) + num(snap.thirdPlace)}`,
-                    r: `${num(snapP.championships)} / ${num(snapP.runnerUps) + num(snapP.thirdPlace)}`,
-                    w: cmp3(medalScore(snap as Record<string, unknown>), medalScore(snapP as Record<string, unknown>)),
-                  },
-                  { label: "Open-draft picks", l: num(draft.totalPicks), r: num(draftP.totalPicks), w: cmp3(num(draft.totalPicks), num(draftP.totalPicks)) },
-                  { label: "Most drafted (pos)", l: topL.label, r: topR.label, w: cmp3(topL.count, topR.count) },
-                  { label: "Keeper slot rate", l: pct(num(keeper.keeperRate)), r: pct(num(keeperP.keeperRate)), w: cmp3(num(keeper.keeperRate), num(keeperP.keeperRate)) },
-                  { label: "Acquisitions", l: num(activity.totalAcq), r: num(activityP.totalAcq), w: cmp3(num(activity.totalAcq), num(activityP.totalAcq)) },
-                  { label: "Trades", l: num(activity.totalTrades), r: num(activityP.totalTrades), w: cmp3(num(activity.totalTrades), num(activityP.totalTrades)) },
-                  { label: "Drops", l: num(activity.totalDrops), r: num(activityP.totalDrops), w: cmp3(num(activity.totalDrops), num(activityP.totalDrops)) },
-                ];
-
-                if (h2h && h2h.games > 0) {
-                  rows.push({
-                    label: "Head-to-head",
-                    l: `${h2h.winsForOwner}–${h2h.lossesForOwner}${h2h.ties ? `–${h2h.ties}` : ""} (you)`,
-                    r: `${h2h.lossesForOwner}–${h2h.winsForOwner}${h2h.ties ? `–${h2h.ties}` : ""} (them)`,
-                    w: cmp3(h2h.winsForOwner, h2h.lossesForOwner),
-                  });
-                }
-
-                return rows.map((row) => {
-                  const tones = rowTones(row.w);
-                  return (
-                    <Fragment key={row.label}>
-                      <div className="flex items-center border-b border-white/[0.06] py-2 pr-1 text-xs leading-snug text-zinc-500">
-                        {row.label}
-                      </div>
-                      <div className="border-b border-white/[0.06] py-1">
-                        <CompareCell tone={tones.left}>
-                          <span className="font-medium">{row.l}</span>
-                        </CompareCell>
-                      </div>
-                      <div className="border-b border-white/[0.06] py-1">
-                        <CompareCell tone={tones.right}>
-                          <span className="font-medium">{row.r}</span>
-                        </CompareCell>
-                      </div>
-                    </Fragment>
-                  );
-                });
-              })()}
-            </div>
-            {(!h2h || h2h.games === 0) && (
-              <p className="mt-3 text-xs text-zinc-500">
-                No regular-season head-to-head matchups on file for this pair.
-              </p>
-            )}
+                Jump to comparison
+              </button>
+            ) : null}
           </div>
-        ) : compareWith ? (
-          <p className="px-4 py-5 text-sm text-zinc-500">Could not load comparison for that owner.</p>
+        ) : null}
+        <DynastyIdentityStrip row={dynastyIdentityRow} />
+      </IntelPanel>
+
+      <DossierSectionNav />
+
+      {!gated ? (
+        <CompareOwnersPanel
+          compareWith={compareWith}
+          headerDisplayName={headerDisplayName}
+          profileLookupKey={profileLookupKey}
+          powerRankings={powerRankings}
+          ownerAwards={ownerAwards}
+          peer={peer}
+          isLoadingComparison={q.isFetching || q.isLoading}
+          snap={snap as Record<string, unknown>}
+          snapP={snapP}
+          draft={draft as Record<string, unknown>}
+          draftP={draftP as Record<string, unknown>}
+          keeper={keeper as Record<string, unknown>}
+          keeperP={keeperP as Record<string, unknown>}
+          activity={activity as Record<string, unknown>}
+          activityP={activityP as Record<string, unknown>}
+          h2h={h2h}
+        />
+      ) : null}
+
+      {/* ── 2. GM Profile ──────────────────────────────────────────────────── */}
+      <IntelPanel id="dossier-gm" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
+        <DossierSectionHeader icon={<Dna className="h-4 w-4" />} title="GM Profile" />
+        {gated && !ownProfile ? (
+          <ScoutingLock title="GM Profile" blurb="Owner DNA, Draft DNA, and Activity DNA for this manager." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
         ) : (
-          <p className="px-4 py-5 text-sm text-zinc-500">
-            Pick another owner to see side-by-side career stats (same data as your profile).
-          </p>
+          <div className="space-y-4">
+            {gated && ownProfile && (
+              <div className="rounded-xl border border-[#a3e635]/25 bg-[#a3e635]/[0.05] px-4 py-2.5 text-[12px] text-zinc-300">
+                <span className="font-semibold text-[#a3e635]">Your Draft DNA is free.</span> Keeper, Activity, and Matchup Intel unlock with Rivals Pro.
+              </div>
+            )}
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Owner DNA</p>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-300">{p.scoutingSummary || "—"}</p>
+              </div>
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Draft DNA</p>
+                <StatRow label="Draft style" value={draftStyle || "—"} />
+                <StatRow label="Open-draft picks" value={num(draft.totalPicks)} />
+                <StatRow label="Top positions" value={mostDraftedPos.slice(0, 3).join(" › ") || "—"} />
+              </div>
+            </div>
+            {!gated ? <ActivityDnaCard ownerKey={profileLookupKey} /> : ownProfile ? (
+              <ScoutingLock title="Activity DNA" blurb="In-season management archetypes and transaction patterns." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
+            ) : null}
+          </div>
         )}
       </IntelPanel>
-      )}
 
-      {/* Tab panels — layout matches Draft DNA mockup (dark cards, position colors, gold insights) */}
-      {profileTab === "snapshot" && (
-        <div className="space-y-4">
-          <IntelPanel variant="warm" className="overflow-hidden p-4 sm:p-5">
-            <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold tracking-tight text-zinc-100">
-              <Users className="h-4 w-4 text-zinc-500" aria-hidden />
-              Owner snapshot
-            </h3>
-            <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
-              <div>
-                <StatRow label="Seasons Active"     value={seasons.length > 0 ? `${seasons[0]}–${seasons[seasons.length - 1]} (${seasons.length})` : "—"} />
-                <StatRow label="Career Record"      value={`${num(snap.totalWins)}–${num(snap.totalLosses)}${num(snap.totalTies) > 0 ? `–${num(snap.totalTies)}` : ""} (RS matchups)`} />
-                <StatRow label="Win %"              value={pct(num(snap.winPct))} />
-                <StatRow label="Championships"      value={champSeasons.length > 0 ? `${champSeasons.length} (${champSeasons.join(", ")})` : "—"} />
-                <StatRow label="Finals Appearances" value={runnerUpSeasons.length > 0 ? `${runnerUpSeasons.length} (${runnerUpSeasons.join(", ")})` : "—"} />
-                <StatRow label="3rd Place"          value={thirdSeasons.length > 0 ? `${thirdSeasons.length} (${thirdSeasons.join(", ")})` : "—"} />
-              </div>
-              <div>
-                {snap.bestSeason?.season > 0 && (
-                  <StatRow
-                    label="Best Season"
-                    value={`${snap.bestSeason.season}: ${snap.bestSeason.wins}–${snap.bestSeason.losses}${num(snap.bestSeason.ties) ? `–${num(snap.bestSeason.ties)}` : ""}`}
-                  />
-                )}
-                {snap.worstSeason?.season > 0 && (
-                  <StatRow
-                    label="Worst Season"
-                    value={`${snap.worstSeason.season}: ${snap.worstSeason.wins}–${snap.worstSeason.losses}${num(snap.worstSeason.ties) ? `–${num(snap.worstSeason.ties)}` : ""}`}
-                  />
-                )}
-              </div>
-            </div>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-white/[0.08] text-zinc-500">
-                    <th className="py-1.5 pr-3 text-left">Season</th>
-                    <th className="pr-3 text-left">Team</th>
-                    <th className="pr-3 text-right">W–L–T</th>
-                    <th className="pr-2 text-right" title="Completed regular-season matchups counted">RS</th>
-                    <th className="pr-3 text-right">Seed</th>
-                    <th className="text-right">Medal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...seasonRecords].reverse().map((sr: any) => (
-                    <tr key={sr.season} className="border-b border-white/[0.05] hover:bg-white/[0.03]">
-                      <td className="py-1.5 pr-3 font-medium text-zinc-200">{sr.season}</td>
-                      <td className="max-w-[120px] truncate pr-3 text-zinc-500">{sr.teamName}</td>
-                      <td className="pr-3 text-right tabular-nums text-zinc-300">{sr.wins}–{sr.losses}{num(sr.ties) ? `–${num(sr.ties)}` : ""}</td>
-                      <td className="pr-2 text-right tabular-nums text-zinc-500">{num(sr.matchupGames) || "—"}</td>
-                      <td className="pr-3 text-right text-zinc-500">{sr.playoffSeed ?? "—"}</td>
-                      <td className="text-right">{sr.isChampion ? "🏆" : sr.isRunnerUp ? "🥈" : sr.isThirdPlace ? "🥉" : ""}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </IntelPanel>
-
-          <Collapsible open={dataSourceOpen} onOpenChange={setDataSourceOpen}>
-            <IntelPanel variant="warm" className="overflow-hidden">
-            <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-semibold text-zinc-300 transition-colors hover:bg-white/[0.03]">
-              <span>Data source</span>
-              <ChevronDown
-                className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-transform", dataSourceOpen && "rotate-180")}
-                aria-hidden
-              />
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="space-y-4 border-t border-white/[0.06] px-4 py-4">
-                <div className="space-y-1 text-[11px] font-mono text-zinc-500">
-                  <div>
-                    <span className="text-zinc-600">selectedOwnerKey:</span>{" "}
-                    <span className="text-zinc-200">{profileLookupKey}</span>
-                  </div>
-                  <div>
-                    <span className="text-zinc-600">returned ownerKey:</span>{" "}
-                    <span className="text-zinc-200">{str((p.dataSourceDiagnostics as any)?.ownerKey ?? "—")}</span>
-                  </div>
-                  <div>
-                    <span className="text-zinc-600">serviceVersion:</span>{" "}
-                    <span className="text-zinc-200">{str((p.dataSourceDiagnostics as any)?.serviceVersion ?? "—")}</span>
-                  </div>
-                </div>
-
-                {hasProfileResolutionDiag ? (
-                  <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-3 text-xs text-zinc-500">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200/90">Profile resolution</p>
-                    {unSeas.length > 0 && (
-                      <div>
-                        <p className="mb-1 font-semibold text-zinc-200">Unresolved season teams (expected 2010–2026 coverage)</p>
-                        <ul className="list-disc space-y-0.5 pl-4">
-                          {unSeas.map((u) => (
-                            <li key={u.season}>
-                              <span className="text-zinc-200">{u.season}</span>: {str(u.reason)}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {missRec.length > 0 && (
-                      <div>
-                        <p className="mb-1 font-semibold text-zinc-200">Missing matchup record (gmTeams row but 0 RS games)</p>
-                        <p className="font-mono text-zinc-400">{missRec.join(", ")}</p>
-                      </div>
-                    )}
-                    {missMed.length > 0 && (
-                      <div>
-                        <p className="mb-1 font-semibold text-zinc-200">Medal rows that did not join to a team</p>
-                        <ul className="list-disc space-y-0.5 pl-4">
-                          {missMed.map((m, i) => (
-                            <li key={`${m.season}-${m.slot}-${i}`}>
-                              {m.season} · {str(m.slot)} · {str(m.raw)}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {unDraft.length > 0 && (
-                      <div>
-                        <p className="mb-1 font-semibold text-zinc-200">Draft pick owner resolution</p>
-                        <ul className="list-disc space-y-0.5 pl-4">
-                          {unDraft.map((n) => (
-                            <li key={n} className="font-mono">
-                              {str(n)}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-xs text-zinc-600">No profile resolution diagnostics for this owner.</p>
-                )}
-              </div>
-            </CollapsibleContent>
-            </IntelPanel>
-          </Collapsible>
+      {/* ── 3. Team Building Philosophy ────────────────────────────────────── */}
+      <IntelPanel id="dossier-building" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
+        <DossierSectionHeader icon={<Shield className="h-4 w-4" />} title="Team Building Philosophy" accent="#f5c65a" />
+        <div className="mb-4 grid gap-2 sm:grid-cols-3">
+          <StatRow label="Acquisitions" value={num(activity.totalAcq)} />
+          <StatRow label="Trades" value={num(activity.totalTrades)} />
+          <StatRow label="Drops" value={num(activity.totalDrops)} />
         </div>
-      )}
 
-      {profileTab === "draft" && !draftUnlocked && (
+      {!draftUnlocked && (
         <ScoutingLock title="Draft DNA" blurb="See exactly how this manager drafts - round-by-round tendencies, position bias, reaches and value - so you can predict and counter their board." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
       )}
-      {profileTab === "draft" && draftUnlocked && (
+      {draftUnlocked && (
         <div className="space-y-4">
           {gated && ownProfile && (
             <div className="rounded-xl border border-[#a3e635]/25 bg-[#a3e635]/[0.05] px-4 py-2.5 text-[12px] leading-relaxed text-zinc-300">
@@ -1356,89 +1473,85 @@ function ProfilePanel({
               </div>
             </div>
           </ProfileShellCard>
+
+          {gated ? (
+            <ScoutingLock title="Keeper DNA" blurb="Keeper rate, average keeper round, and protected positions." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
+          ) : (
+            <ProfileShellCard title="Keeper intelligence">
+              <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+                <div>
+                  <StatRow label="Keeper / retained slots" value={num(keeper.totalKeepers)} />
+                  <StatRow label="Strict keeper rows (ESPN)" value={num((keeper as Record<string, unknown>).strictKeeperCount)} />
+                  <StatRow label="Retained-only rows" value={num((keeper as Record<string, unknown>).retainedSlotCount)} />
+                  <StatRow label="% of board (keeper + retained)" value={pct(num(keeper.keeperRate))} />
+                  <StatRow label="Avg keeper round" value={keeper.avgKeeperRound != null ? `Rd ${keeper.avgKeeperRound}` : "—"} />
+                </div>
+                <div>
+                  {sortedKPos.map(([pos, cnt]) => (
+                    <StatRow key={pos} label={`${pos} (keeper+retained)`} value={cnt} />
+                  ))}
+                </div>
+              </div>
+              {lastYearKeepers.length > 0 ? (
+                <div className="mt-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Most recent keeper / retained</p>
+                  <div className="flex flex-wrap gap-2">
+                    {lastYearKeepers.map((k: any, i: number) => (
+                      <span key={i} className="inline-flex items-center gap-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-xs">
+                        <span className="font-semibold text-zinc-100">{k.playerName}</span>
+                        <span className="text-zinc-500">{k.position} · Rd {k.round}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </ProfileShellCard>
+          )}
         </div>
       )}
+      </IntelPanel>
 
-      {profileTab === "keeper" && gated && (
-        <ScoutingLock title="Keeper DNA" blurb="Know who they keep and when - keeper rate, average keeper round, and the positions they protect year after year." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
-      )}
-      {profileTab === "keeper" && !gated && (
-        <IntelPanel variant="warm" className="overflow-hidden p-4 sm:p-5">
-          <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-zinc-100">
-            <Trophy className="h-4 w-4 text-amber-500/80" aria-hidden />
-            Keeper DNA
-          </h3>
-          <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
-            <div>
-              <StatRow label="Keeper / retained slots"    value={num(keeper.totalKeepers)} />
-              <StatRow label="Strict keeper rows (ESPN)"   value={num((keeper as Record<string, unknown>).strictKeeperCount)} />
-              <StatRow label="Retained-only rows"          value={num((keeper as Record<string, unknown>).retainedSlotCount)} />
-              <StatRow label="% of board (keeper + retained)"      value={pct(num(keeper.keeperRate))} />
-              <StatRow label="Avg Keeper Round" value={keeper.avgKeeperRound != null ? `Rd ${keeper.avgKeeperRound}` : "—"} />
-            </div>
-            <div>
-              {sortedKPos.map(([pos, cnt]) => (
-                <StatRow key={pos} label={`${pos} (keeper+retained)`} value={cnt} />
-              ))}
-            </div>
-          </div>
-          {lastYearKeepers.length > 0 && (
-            <div className="mt-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Most recent keeper / retained</p>
-              <div className="flex flex-wrap gap-2">
-                {lastYearKeepers.map((k: any, i: number) => (
-                  <span key={i} className="inline-flex items-center gap-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-xs">
-                    <span className="font-semibold text-zinc-100">{k.playerName}</span>
-                    <span className="text-zinc-500">{k.position} · Rd {k.round}</span>
-                  </span>
-                ))}
+      {/* ── 4. Trading Profile ─────────────────────────────────────────────── */}
+      {!gated ? (
+        <IntelPanel id="dossier-trading" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
+          <DossierSectionHeader icon={<ArrowLeftRight className="h-4 w-4" />} title="Trading Profile" accent="#c4b5fd" />
+          {acqFocal ? (
+            <div className="mb-4 grid gap-2 sm:grid-cols-3">
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Acquisition impact</div>
+                <div className="mt-1 text-lg font-extrabold tabular-nums text-lime-300">{num(acqFocal.acquisitionImpactScore)}</div>
+              </div>
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Points per start</div>
+                <div className="mt-1 text-lg font-extrabold tabular-nums text-zinc-100">
+                  {acqFocal.pointsPerStart != null ? num(acqFocal.pointsPerStart).toFixed(1) : "—"}
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Qualified seasons</div>
+                <div className="mt-1 text-lg font-extrabold tabular-nums text-zinc-100">{num(acqFocal.qualifiedSeasons)}</div>
               </div>
             </div>
-          )}
+          ) : null}
+          <OwnerTradeHistoryCard
+            profileLookupKey={profileLookupKey}
+            leagueContextKey={leagueContextKey}
+            leagueKeyReady={leagueKeyReady}
+            dossierActiveSeason={dossierActiveSeason}
+          />
         </IntelPanel>
+      ) : (
+        <ScoutingLock title="Trading Profile" blurb="Trade history, completed trade intelligence, and acquisition impact." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
       )}
 
-      {profileTab === "activity" && gated && (
-        <ScoutingLock title="Activity DNA" blurb="Track their in-season moves - waiver aggression, trade and add/drop volume, and the weeks they tend to panic." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
-      )}
-      {profileTab === "activity" && !gated && (
-        <ActivityDnaCard ownerKey={profileLookupKey} />
-      )}
-      {profileTab === "activity" && (
-        <OwnerTradeHistoryCard
-          profileLookupKey={profileLookupKey}
-          leagueContextKey={leagueContextKey}
-          leagueKeyReady={leagueKeyReady}
-          dossierActiveSeason={dossierActiveSeason}
-        />
-      )}
-
-      {/* 5. Matchup Intel */}
-      {!gated && (
-      <Section title="Matchup Intel" icon={<Swords className="h-4 w-4" />} defaultOpen={false}>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[11px] text-zinc-500">
+      {/* ── 5. Matchup Intelligence ───────────────────────────────────────── */}
+      {!gated ? (
+        <IntelPanel id="dossier-matchups" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
+          <DossierSectionHeader icon={<Swords className="h-4 w-4" />} title="Matchup Intelligence" accent="#c4b5fd" />
+          <p className="mb-3 text-[11px] text-zinc-500">
             Intel uses matchup pipeline with cache fallback; dossier uses completed gmMatchups (RS + playoffs).
           </p>
-          <button
-            type="button"
-            onClick={() => setShowRivalryDossier((v) => !v)}
-            className="text-xs font-medium text-violet-400 underline-offset-2 hover:text-violet-300 hover:underline"
-          >
-            {showRivalryDossier ? "Hide rivalry dossier" : "Rivalry dossier (gmMatchups)"}
-          </button>
-        </div>
-        {showRivalryDossier && (
-          <div className="mb-4 rounded-xl border border-white/[0.08] bg-[#110c14]/80 p-4">
-            <RivalryDossierPanel
-              focalOwnerKey={profileLookupKey}
-              pickerOptions={dossierPickerOptions}
-              rivalryEligibleOwnerKeys={rivalryEligibleOwnerKeysForDossier}
-              activeSeason={dossierActiveSeason}
-            />
-          </div>
-        )}
-        {intel.length === 0 ? (
+          {intel.length === 0 ? (
           <div className="py-4 text-center text-sm text-muted-foreground">
             {num(intelDiag.unresolvedMatchups) > 0
               ? `Matchup data found but ${num(intelDiag.unresolvedMatchups)} games could not be attributed to known owners.`
@@ -1579,15 +1692,205 @@ function ProfilePanel({
             </div>
           </>
         )}
-      </Section>
+        </IntelPanel>
+      ) : (
+        <ScoutingLock title="Matchup Intelligence" blurb="Head-to-head records, nemesis tags, and opponent tendencies." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
       )}
 
-      {/* 6. Scouting Summary */}
-      {!gated && (
-      <Section title="Scouting Summary" icon={<FileText className="h-4 w-4" />} defaultOpen={false}>
-        <p className="text-sm text-foreground leading-relaxed">{str(p.scoutingSummary)}</p>
-      </Section>
-      )}
+      {/* ── 6. Rivalries ───────────────────────────────────────────────────── */}
+      {!gated ? (
+        <IntelPanel id="dossier-rivalries" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
+          <DossierSectionHeader icon={<Clapperboard className="h-4 w-4" />} title="Rivalries" accent="#f472b6" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Top rival</div>
+              {topRival ? (
+                <>
+                  <div className="mt-1 text-lg font-bold text-zinc-100">{topRival.opponentOwner}</div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {num(topRival.wins)}–{num(topRival.losses)}
+                    {num(topRival.ties) > 0 ? `–${num(topRival.ties)}` : ""} · {pct(num(topRival.winPct))} · {num(topRival.games)} games
+                  </div>
+                  {topRival.tag ? (
+                    <div className="mt-2">
+                      <MatchupTag tag={topRival.tag} />
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-zinc-500">No rivalry data yet.</p>
+              )}
+            </div>
+            <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Biggest threat</div>
+              {biggestThreat ? (
+                <>
+                  <div className="mt-1 text-lg font-bold text-zinc-100">{biggestThreat.opponentOwner}</div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {num(biggestThreat.wins)}–{num(biggestThreat.losses)}
+                    {num(biggestThreat.ties) > 0 ? `–${num(biggestThreat.ties)}` : ""} · {pct(num(biggestThreat.winPct))} · {num(biggestThreat.games)} games
+                  </div>
+                  {biggestThreat.tag ? (
+                    <div className="mt-2">
+                      <MatchupTag tag={biggestThreat.tag} />
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-zinc-500">No threat profile yet.</p>
+              )}
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {topRival ? (
+              <button
+                type="button"
+                onClick={() => openRivalryDocumentary(topRival.opponentOwner)}
+                className="inline-flex items-center gap-2 rounded-lg border border-violet-500/35 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200 transition-colors hover:bg-violet-500/20"
+              >
+                <Clapperboard className="h-3.5 w-3.5" aria-hidden />
+                Open documentary · {topRival.opponentOwner}
+              </button>
+            ) : null}
+            {biggestThreat && biggestThreat.opponentOwner !== topRival?.opponentOwner ? (
+              <button
+                type="button"
+                onClick={() => openRivalryDocumentary(biggestThreat.opponentOwner)}
+                className="inline-flex items-center gap-2 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-xs font-semibold text-zinc-300 transition-colors hover:bg-white/[0.06]"
+              >
+                <Clapperboard className="h-3.5 w-3.5" aria-hidden />
+                Open documentary · {biggestThreat.opponentOwner}
+              </button>
+            ) : null}
+          </div>
+          {showRivalryDossier ? (
+            <div className="mt-4 rounded-xl border border-white/[0.08] bg-[#110c14]/80 p-4">
+              <RivalryDossierPanel
+                focalOwnerKey={profileLookupKey}
+                pickerOptions={dossierPickerOptions}
+                rivalryEligibleOwnerKeys={rivalryEligibleOwnerKeysForDossier}
+                activeSeason={dossierActiveSeason}
+                initialOpponentKey={rivalryDocOpponentKey || undefined}
+              />
+            </div>
+          ) : null}
+        </IntelPanel>
+      ) : null}
+
+      {/* ── 7. Career Highlights ───────────────────────────────────────────── */}
+      <IntelPanel id="dossier-highlights" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
+        <DossierSectionHeader icon={<History className="h-4 w-4" />} title="Career Highlights" accent="#f5c65a" />
+        {careerTimeline.length === 0 ? (
+          <p className="text-sm text-zinc-500">No career highlights on file yet.</p>
+        ) : (
+          <div className="relative space-y-0 border-l border-white/[0.08] pl-4">
+            {[...careerTimeline].reverse().map((ev, i) => (
+              <div key={`${ev.season}-${ev.label}-${i}`} className="relative pb-4 last:pb-0">
+                <span className="absolute -left-[1.3rem] top-1.5 h-2 w-2 rounded-full bg-[#f5c65a]/80 ring-2 ring-[#110c14]" aria-hidden />
+                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{ev.season}</div>
+                <div className="text-sm font-semibold text-zinc-100">{ev.label}</div>
+                <div className="text-xs text-zinc-500">{ev.detail}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </IntelPanel>
+
+      {/* ── 8. Developer ─────────────────────────────────────────────────────── */}
+      <Collapsible open={developerOpen} onOpenChange={setDeveloperOpen}>
+        <IntelPanel variant="warm" className="overflow-hidden">
+          <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:bg-white/[0.03]">
+            <span>Developer sections</span>
+            <ChevronDown
+              className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-transform", developerOpen && "rotate-180")}
+              aria-hidden
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="space-y-4 border-t border-white/[0.06] px-4 py-4">
+              <Collapsible open={dataSourceOpen} onOpenChange={setDataSourceOpen}>
+                <IntelPanel variant="warm" className="overflow-hidden">
+                  <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-semibold text-zinc-300 transition-colors hover:bg-white/[0.03]">
+                    <span>Data source & diagnostics</span>
+                    <ChevronDown
+                      className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-transform", dataSourceOpen && "rotate-180")}
+                      aria-hidden
+                    />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="space-y-4 border-t border-white/[0.06] px-4 py-4">
+                      <div className="space-y-1 text-[11px] font-mono text-zinc-500">
+                        <div>
+                          <span className="text-zinc-600">selectedOwnerKey:</span>{" "}
+                          <span className="text-zinc-200">{profileLookupKey}</span>
+                        </div>
+                        <div>
+                          <span className="text-zinc-600">returned ownerKey:</span>{" "}
+                          <span className="text-zinc-200">{str((p.dataSourceDiagnostics as any)?.ownerKey ?? "—")}</span>
+                        </div>
+                        <div>
+                          <span className="text-zinc-600">serviceVersion:</span>{" "}
+                          <span className="text-zinc-200">{str((p.dataSourceDiagnostics as any)?.serviceVersion ?? "—")}</span>
+                        </div>
+                      </div>
+
+                      {hasProfileResolutionDiag ? (
+                        <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-3 text-xs text-zinc-500">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200/90">Profile resolution</p>
+                          {unSeas.length > 0 && (
+                            <div>
+                              <p className="mb-1 font-semibold text-zinc-200">Unresolved season teams (expected 2010–2026 coverage)</p>
+                              <ul className="list-disc space-y-0.5 pl-4">
+                                {unSeas.map((u) => (
+                                  <li key={u.season}>
+                                    <span className="text-zinc-200">{u.season}</span>: {str(u.reason)}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {missRec.length > 0 && (
+                            <div>
+                              <p className="mb-1 font-semibold text-zinc-200">Missing matchup record (gmTeams row but 0 RS games)</p>
+                              <p className="font-mono text-zinc-400">{missRec.join(", ")}</p>
+                            </div>
+                          )}
+                          {missMed.length > 0 && (
+                            <div>
+                              <p className="mb-1 font-semibold text-zinc-200">Medal rows that did not join to a team</p>
+                              <ul className="list-disc space-y-0.5 pl-4">
+                                {missMed.map((m, i) => (
+                                  <li key={`${m.season}-${m.slot}-${i}`}>
+                                    {m.season} · {str(m.slot)} · {str(m.raw)}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {unDraft.length > 0 && (
+                            <div>
+                              <p className="mb-1 font-semibold text-zinc-200">Draft pick owner resolution</p>
+                              <ul className="list-disc space-y-0.5 pl-4">
+                                {unDraft.map((n) => (
+                                  <li key={n} className="font-mono">
+                                    {str(n)}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-zinc-600">No profile resolution diagnostics for this owner.</p>
+                      )}
+                    </div>
+                  </CollapsibleContent>
+                </IntelPanel>
+              </Collapsible>
+            </div>
+          </CollapsibleContent>
+        </IntelPanel>
+      </Collapsible>
 
     </div>
   );
@@ -1753,8 +2056,8 @@ export function OwnerProfiles() {
         eyebrowMono="League Intelligence Desk"
         icon={Users}
         iconAccent="purple"
-        title="Owner Profiles"
-        subtitle={`${active.length} active owner${active.length !== 1 ? "s" : ""} - click to view full profile`}
+        title="GM Intelligence Dossier"
+        subtitle={`${active.length} active manager${active.length !== 1 ? "s" : ""} — unified scouting report per owner`}
         className="mb-5"
       />
 
