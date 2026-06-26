@@ -123,6 +123,94 @@ function tradeResultStyle(result: "win" | "loss" | "tie"): React.CSSProperties {
   return { border: `1px solid rgba(255,255,255,.1)`, background: "rgba(255,255,255,.04)", color: MUTED };
 }
 
+function RivalryStoryMetadataSection({
+  focalOwnerKey,
+  opponentOwnerKey,
+  leagueContextKey,
+  leagueKeyReady,
+}: {
+  focalOwnerKey: string;
+  opponentOwnerKey: string;
+  leagueContextKey: string;
+  leagueKeyReady: boolean;
+}) {
+  const storyQ = (trpc as any).rivalryStory.pair.useQuery(
+    withLeagueSalt(
+      {
+        leagueId: leagueContextKey,
+        focalOwnerKey,
+        rivalOwnerKey: opponentOwnerKey,
+      },
+      leagueContextKey,
+    ),
+    {
+      enabled: leagueKeyReady && !!focalOwnerKey && !!opponentOwnerKey,
+      staleTime: 60_000,
+    },
+  );
+
+  if (storyQ.isLoading) {
+    return (
+      <div className="p-3" style={SUB}>
+        <div className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Loading story metadata…
+        </div>
+      </div>
+    );
+  }
+
+  if (storyQ.isError || !storyQ.data) {
+    return (
+      <div className="p-3" style={SUB}>
+        <p className="text-[11px]" style={{ color: MUTED }}>Story metadata unavailable.</p>
+      </div>
+    );
+  }
+
+  const story = storyQ.data as {
+    tier: string;
+    headline: { key: string };
+    availableBlocks: string[];
+    documentaryFacts: Array<{ factKey: string }>;
+  };
+  const factKeys = [...new Set(story.documentaryFacts.map((f) => f.factKey))];
+
+  return (
+    <div className="p-3" style={SUB}>
+      <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+        <ScrollText className="h-4 w-4" style={{ color: ACCENT }} />
+        Story Metadata
+        <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold normal-case tracking-normal" style={{ border: "1px solid rgba(255,255,255,.1)", color: MUTED }}>
+          internal
+        </span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
+          <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Tier</div>
+          <div className="mt-1 font-mono text-sm font-semibold" style={{ color: TEXT }}>{story.tier}</div>
+        </div>
+        <div className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
+          <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Headline Key</div>
+          <div className="mt-1 break-all font-mono text-sm font-semibold" style={{ color: ACCENT }}>{story.headline.key}</div>
+        </div>
+      </div>
+      <div className="mt-2 rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
+        <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Blocks</div>
+        <p className="mt-1 font-mono text-xs leading-relaxed" style={{ color: TEXT }}>
+          {story.availableBlocks.length > 0 ? story.availableBlocks.join(", ") : "—"}
+        </p>
+      </div>
+      <div className="mt-2 rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
+        <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Facts</div>
+        <p className="mt-1 font-mono text-xs leading-relaxed" style={{ color: TEXT }}>
+          {factKeys.length > 0 ? factKeys.join(", ") : "—"}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function RivalryTradeLedgerSection({
   focalOwnerKey,
   opponentOwnerKey,
@@ -552,6 +640,13 @@ export function RivalryDossierPanel({
             <StatCard icon={<Trophy className="h-4 w-4" style={{ color: GOLD }} />} label="Playoff Encounters" value={String(pd.playoffEncounters)} sub="From playoff gmMatchups" />
             <StatCard icon={<Crosshair className="h-4 w-4" style={{ color: ACCENT }} />} label="Waiver Snipes" value={pd.waiverSnipes.available ? String(pd.waiverSnipes.count) : "—"} sub={pd.waiverSnipes.available ? "Detected from transactions" : pd.waiverSnipes.label} />
           </div>
+
+          <RivalryStoryMetadataSection
+            focalOwnerKey={queryKey}
+            opponentOwnerKey={opponentKey}
+            leagueContextKey={leagueContextKey}
+            leagueKeyReady={leagueKeyReady}
+          />
 
           <RivalryTradeLedgerSection
             focalOwnerKey={queryKey}
