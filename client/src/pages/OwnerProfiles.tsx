@@ -33,6 +33,7 @@ import {
   PageError,
   PageLoading,
   SectionLoading,
+  EmptyState,
 } from "@/components/layout";
 import { RivalryDossierPanel, type RivalryPickerOption } from "@/components/RivalryDossierPanel";
 import { ActivityDnaCard } from "@/components/ActivityDnaCard";
@@ -109,6 +110,197 @@ function Section({ title, icon, children, defaultOpen = true }: {
       </button>
       {open && <div className="px-4 py-3">{children}</div>}
     </IntelPanel>
+  );
+}
+
+function formatTradeProcessedDate(ms: number): string {
+  if (!ms || !Number.isFinite(ms)) return "—";
+  try {
+    return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return "—";
+  }
+}
+
+function tradeAssetLabels(side: { assetsReceived?: { displayLabel?: string }[] } | null | undefined): string[] {
+  const assets = Array.isArray(side?.assetsReceived) ? side.assetsReceived : [];
+  return assets.map((a) => String(a.displayLabel ?? "").trim()).filter(Boolean);
+}
+
+function tradeOpponentName(trade: {
+  sideA: { ownerName?: string; teamId?: number };
+  sideB: { ownerName?: string; teamId?: number };
+}, ownerSide: "A" | "B"): string {
+  return ownerSide === "A"
+    ? String(trade.sideB.ownerName ?? "Opponent")
+    : String(trade.sideA.ownerName ?? "Opponent");
+}
+
+function tradeResultClasses(result: string): string {
+  if (result === "win") return "border-lime-500/30 bg-lime-500/10 text-lime-300";
+  if (result === "loss") return "border-red-500/30 bg-red-500/10 text-red-300";
+  return "border-white/[0.1] bg-white/[0.04] text-zinc-300";
+}
+
+function OwnerTradeHistoryCard({
+  profileLookupKey,
+  leagueContextKey,
+  leagueKeyReady,
+  dossierActiveSeason,
+}: {
+  profileLookupKey: string;
+  leagueContextKey: string;
+  leagueKeyReady: boolean;
+  dossierActiveSeason: number;
+}) {
+  const tradeQ = (trpc as any).completedTradeIntel.ownerTradeHistory.useQuery(
+    withLeagueSalt(
+      {
+        leagueId: leagueContextKey,
+        season: dossierActiveSeason,
+        ownerKey: profileLookupKey,
+      },
+      leagueContextKey,
+    ),
+    {
+      enabled: leagueKeyReady && !!profileLookupKey.trim(),
+      staleTime: 60_000,
+    },
+  );
+
+  const hist = tradeQ.data;
+
+  return (
+    <ProfileShellCard
+      title="Trade History"
+      right={
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+          {dossierActiveSeason} season
+        </span>
+      }
+    >
+      {tradeQ.isLoading ? (
+        <SectionLoading message="Loading trade history…" size="sm" />
+      ) : tradeQ.isError ? (
+        <p className="text-sm text-red-300">Could not load trade history.</p>
+      ) : !hist || hist.tradeCount === 0 ? (
+        <EmptyState
+          panelVariant="warm"
+          className="p-6"
+          title="No completed trade history found for this owner."
+          description="Completed ESPN trades will appear here after league sync."
+        />
+      ) : (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Trade record</div>
+              <div className="mt-1 text-lg font-bold tabular-nums text-zinc-100">
+                {hist.wins}–{hist.losses}{hist.ties > 0 ? `–${hist.ties}` : ""}
+              </div>
+              <div className="mt-1 text-xs text-zinc-500">{hist.tradeCount} completed trade{hist.tradeCount === 1 ? "" : "s"}</div>
+            </div>
+            <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Net value</div>
+              <div
+                className={cn(
+                  "mt-1 text-lg font-bold tabular-nums",
+                  hist.netValue > 0 ? "text-lime-300" : hist.netValue < 0 ? "text-red-300" : "text-zinc-200",
+                )}
+              >
+                {hist.netValue > 0 ? "+" : ""}
+                {hist.netValue}
+              </div>
+              <div className="mt-1 text-xs text-zinc-500">
+                Pick {hist.pickOnlyCount} · Player {hist.playerOnlyCount} · Mixed {hist.mixedCount}
+              </div>
+            </div>
+          </div>
+
+          {(hist.biggestWin || hist.biggestLoss) && (
+            <div className="space-y-2 text-sm">
+              {hist.biggestWin && (
+                <div className="rounded-lg border border-lime-500/20 bg-lime-500/5 px-3 py-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-lime-400/90">Biggest win</div>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-300">
+                    +{Math.round(hist.biggestWin.margin)} value vs{" "}
+                    {tradeOpponentName(hist.biggestWin, hist.biggestWin.sideA.ownerKey === profileLookupKey ? "A" : "B")}
+                  </p>
+                </div>
+              )}
+              {hist.biggestLoss && (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-red-400/90">Biggest loss</div>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-300">
+                    −{Math.round(hist.biggestLoss.margin)} value vs{" "}
+                    {tradeOpponentName(hist.biggestLoss, hist.biggestLoss.sideA.ownerKey === profileLookupKey ? "A" : "B")}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div>
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-zinc-500">Recent completed trades</p>
+            <div className="space-y-2">
+              {(hist.recentTrades ?? hist.trades ?? []).map((entry: any) => {
+                const trade = entry.trade;
+                const ownerSide = entry.ownerSide as "A" | "B";
+                const mine = ownerSide === "A" ? trade.sideA : trade.sideB;
+                const opp = ownerSide === "A" ? trade.sideB : trade.sideA;
+                const received = tradeAssetLabels(mine);
+                const sent = tradeAssetLabels(opp);
+                return (
+                  <div
+                    key={trade.clusterId ?? trade.tradeId}
+                    className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5 text-xs"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-semibold text-zinc-100">
+                        {trade.season} · {formatTradeProcessedDate(trade.processedDate)}
+                      </div>
+                      <span
+                        className={cn(
+                          "rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                          tradeResultClasses(entry.result),
+                        )}
+                      >
+                        {entry.result === "win" ? "Win" : entry.result === "loss" ? "Loss" : "Even"}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-zinc-400">vs {tradeOpponentName(trade, ownerSide)}</div>
+                    <div className="mt-2 space-y-1 text-zinc-300">
+                      <div>
+                        <span className="font-semibold text-zinc-400">Received:</span>{" "}
+                        {received.length ? received.join(", ") : "—"}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-zinc-400">Sent:</span>{" "}
+                        {sent.length ? sent.join(", ") : "—"}
+                      </div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+                      <span>
+                        Margin:{" "}
+                        <span className="font-semibold tabular-nums text-zinc-300">
+                          {entry.netReceived > 0 ? "+" : ""}
+                          {Math.round(entry.netReceived)}
+                        </span>
+                      </span>
+                      {trade.verdictLabel ? (
+                        <span className="rounded border border-white/[0.08] px-1.5 py-0.5 text-[10px] text-zinc-400">
+                          {trade.verdictLabel}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </ProfileShellCard>
   );
 }
 
@@ -1211,6 +1403,14 @@ function ProfilePanel({
       )}
       {profileTab === "activity" && !gated && (
         <ActivityDnaCard ownerKey={profileLookupKey} />
+      )}
+      {profileTab === "activity" && (
+        <OwnerTradeHistoryCard
+          profileLookupKey={profileLookupKey}
+          leagueContextKey={leagueContextKey}
+          leagueKeyReady={leagueKeyReady}
+          dossierActiveSeason={dossierActiveSeason}
+        />
       )}
 
       {/* 5. Matchup Intel */}
