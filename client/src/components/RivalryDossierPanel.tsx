@@ -17,7 +17,14 @@ import {
   ScrollText,
   Swords,
   ArrowLeftRight,
+  ChevronDown,
+  Receipt,
 } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   CartesianGrid,
   Line,
@@ -197,6 +204,19 @@ type StoryPairPayload = {
   documentaryFacts: Array<{ factKey: string }>;
 };
 
+type StoryReceiptPayload = {
+  receiptId: string;
+  type: string;
+  season: number;
+  week?: number;
+  isPlayoff?: boolean;
+  focalScore?: number;
+  rivalScore?: number;
+  margin?: number;
+  factKeys: string[];
+  source: string;
+};
+
 function useRivalryStoryPairQuery(
   focalOwnerKey: string,
   opponentOwnerKey: string,
@@ -216,6 +236,168 @@ function useRivalryStoryPairQuery(
       enabled: leagueKeyReady && !!focalOwnerKey && !!opponentOwnerKey,
       staleTime: 60_000,
     },
+  );
+}
+
+function useRivalryStoryReceiptsQuery(
+  focalOwnerKey: string,
+  opponentOwnerKey: string,
+  leagueContextKey: string,
+  leagueKeyReady: boolean,
+) {
+  return (trpc as any).rivalryStory.receipts.useQuery(
+    withLeagueSalt(
+      {
+        leagueId: leagueContextKey,
+        focalOwnerKey,
+        rivalOwnerKey: opponentOwnerKey,
+      },
+      leagueContextKey,
+    ),
+    {
+      enabled: leagueKeyReady && !!focalOwnerKey && !!opponentOwnerKey,
+      staleTime: 60_000,
+    },
+  );
+}
+
+function formatReceiptField(value: string | number | boolean | undefined | null): string {
+  if (value === undefined || value === null) return "—";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "—";
+  return String(value);
+}
+
+function countReceiptSources(receipts: StoryReceiptPayload[]) {
+  const counts = {
+    gmMatchups: 0,
+    completedTradeAuthority: 0,
+    championshipAuthority: 0,
+    derived: 0,
+  };
+  for (const r of receipts) {
+    if (r.source in counts) counts[r.source as keyof typeof counts]++;
+  }
+  return counts;
+}
+
+function ReceiptKvRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+      <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</span>
+      <span className="break-all font-mono text-[11px] tabular-nums" style={{ color: TEXT }}>{value}</span>
+    </div>
+  );
+}
+
+function RivalryStoryReceiptsSection({
+  focalOwnerKey,
+  opponentOwnerKey,
+  leagueContextKey,
+  leagueKeyReady,
+}: {
+  focalOwnerKey: string;
+  opponentOwnerKey: string;
+  leagueContextKey: string;
+  leagueKeyReady: boolean;
+}) {
+  const [listOpen, setListOpen] = useState(false);
+  const receiptsQ = useRivalryStoryReceiptsQuery(
+    focalOwnerKey,
+    opponentOwnerKey,
+    leagueContextKey,
+    leagueKeyReady,
+  );
+
+  if (receiptsQ.isLoading) {
+    return (
+      <div className="p-3" style={SUB}>
+        <div className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Loading story receipts…
+        </div>
+      </div>
+    );
+  }
+
+  if (receiptsQ.isError) {
+    return (
+      <div className="p-3" style={SUB}>
+        <p className="text-[11px]" style={{ color: MUTED }}>Story receipts unavailable.</p>
+      </div>
+    );
+  }
+
+  const receipts = (receiptsQ.data?.receipts ?? []) as StoryReceiptPayload[];
+  if (receipts.length === 0) {
+    return (
+      <div className="p-3" style={SUB}>
+        <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+          <Receipt className="h-4 w-4" style={{ color: GOLD }} />
+          Story Receipts
+        </div>
+        <p className="text-[11px]" style={{ color: MUTED }}>No story receipts available.</p>
+      </div>
+    );
+  }
+
+  const knownCount = receipts.filter((r) => r.type !== "unknown").length;
+  const unknownCount = receipts.length - knownCount;
+  const sourceCounts = countReceiptSources(receipts);
+
+  return (
+    <div className="p-3" style={SUB}>
+      <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+        <Receipt className="h-4 w-4" style={{ color: GOLD }} />
+        Story Receipts
+        <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold normal-case tracking-normal" style={{ border: "1px solid rgba(255,255,255,.1)", color: MUTED }}>
+          internal
+        </span>
+      </div>
+
+      <div className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
+        <TapeRow label="Total" value={String(receipts.length)} />
+        <TapeRow label="Known" value={String(knownCount)} />
+        <TapeRow label="Unknown" value={String(unknownCount)} />
+        <TapeRow label="gmMatchups" value={String(sourceCounts.gmMatchups)} />
+        <TapeRow label="completedTradeAuthority" value={String(sourceCounts.completedTradeAuthority)} />
+        <TapeRow label="championshipAuthority" value={String(sourceCounts.championshipAuthority)} />
+        <TapeRow label="derived" value={String(sourceCounts.derived)} />
+      </div>
+
+      <Collapsible open={listOpen} onOpenChange={setListOpen} className="mt-2">
+        <CollapsibleTrigger
+          className="flex w-full items-center justify-between gap-2 rounded-[8px] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide transition-colors hover:bg-white/[0.03]"
+          style={{ border: "1px solid rgba(255,255,255,.08)", color: MUTED }}
+        >
+          <span>Receipt list ({receipts.length})</span>
+          <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", listOpen && "rotate-180")} />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-2 space-y-2">
+          {receipts.map((receipt) => (
+            <div
+              key={receipt.receiptId}
+              className="rounded-[8px] px-3 py-2"
+              style={{ ...SUB, borderRadius: 8 }}
+            >
+              <ReceiptKvRow label="receiptId" value={receipt.receiptId} />
+              <ReceiptKvRow label="type" value={receipt.type} />
+              <ReceiptKvRow label="source" value={receipt.source} />
+              <ReceiptKvRow label="season" value={formatReceiptField(receipt.season)} />
+              <ReceiptKvRow label="week" value={formatReceiptField(receipt.week)} />
+              <ReceiptKvRow label="isPlayoff" value={formatReceiptField(receipt.isPlayoff)} />
+              <ReceiptKvRow label="focalScore" value={formatReceiptField(receipt.focalScore)} />
+              <ReceiptKvRow label="rivalScore" value={formatReceiptField(receipt.rivalScore)} />
+              <ReceiptKvRow label="margin" value={formatReceiptField(receipt.margin)} />
+              <ReceiptKvRow
+                label="factKeys"
+                value={receipt.factKeys.length > 0 ? receipt.factKeys.join(", ") : "—"}
+              />
+            </div>
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
   );
 }
 
@@ -356,6 +538,12 @@ function RivalryStoryPairBlocks({
     <>
       <RivalryTaleOfTheTapeSection storyQ={storyQ} meetings={meetings} lastMeeting={lastMeeting} />
       <RivalryStoryMetadataSection storyQ={storyQ} />
+      <RivalryStoryReceiptsSection
+        focalOwnerKey={focalOwnerKey}
+        opponentOwnerKey={opponentOwnerKey}
+        leagueContextKey={leagueContextKey}
+        leagueKeyReady={leagueKeyReady}
+      />
     </>
   );
 }
