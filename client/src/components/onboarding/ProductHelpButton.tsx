@@ -29,7 +29,7 @@ export function ProductHelpButton() {
         <DialogHeader>
           <DialogTitle className="text-lg font-bold">Fantasy Football Rivals</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Quick guide to the flagship experiences.
+            Quick guide — what am I looking at?
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

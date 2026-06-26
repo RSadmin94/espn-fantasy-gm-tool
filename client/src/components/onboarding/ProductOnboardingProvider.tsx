@@ -11,18 +11,14 @@ import { useUser } from "@clerk/react-router";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import {
   completeOnboarding,
-  dismissWelcome,
   isOnboardingComplete,
   markFirstSyncSuccess,
   shouldShowWelcome,
-  type ProductTourStepId,
 } from "@/lib/productOnboarding";
-import { WelcomeModal } from "./WelcomeModal";
-import { ProductTour } from "./ProductTour";
+import { LeagueRevealModal } from "./LeagueRevealModal";
 
 type ProductOnboardingContextValue = {
   notifyLeagueSyncSuccess: () => void;
-  startTour: (stepId?: ProductTourStepId) => void;
   isComplete: boolean;
 };
 
@@ -33,7 +29,6 @@ export function useProductOnboarding(): ProductOnboardingContextValue {
   if (!ctx) {
     return {
       notifyLeagueSyncSuccess: () => {},
-      startTour: () => {},
       isComplete: true,
     };
   }
@@ -45,71 +40,40 @@ export function ProductOnboardingProvider({ children }: { children: ReactNode })
   const { leagueId } = useLeagueContext();
   const userId = user?.id;
 
-  const [welcomeOpen, setWelcomeOpen] = useState(false);
-  const [tourOpen, setTourOpen] = useState(false);
-  const [tourStepId, setTourStepId] = useState<ProductTourStepId | undefined>();
+  const [revealOpen, setRevealOpen] = useState(false);
   const [complete, setComplete] = useState(() => isOnboardingComplete(userId, leagueId));
 
   useEffect(() => {
     if (!isLoaded) return;
     setComplete(isOnboardingComplete(userId, leagueId));
-    if (shouldShowWelcome(userId, leagueId)) setWelcomeOpen(true);
+    if (shouldShowWelcome(userId, leagueId)) setRevealOpen(true);
   }, [isLoaded, userId, leagueId]);
 
   const persistComplete = useCallback(() => {
     if (!userId || !leagueId) return;
     completeOnboarding(userId, leagueId);
     setComplete(true);
-    setWelcomeOpen(false);
-    setTourOpen(false);
+    setRevealOpen(false);
   }, [userId, leagueId]);
 
   const notifyLeagueSyncSuccess = useCallback(() => {
     if (!userId || !leagueId) return;
     markFirstSyncSuccess(userId, leagueId);
-    if (shouldShowWelcome(userId, leagueId)) setWelcomeOpen(true);
+    if (shouldShowWelcome(userId, leagueId)) setRevealOpen(true);
   }, [userId, leagueId]);
-
-  const startTour = useCallback((stepId?: ProductTourStepId) => {
-    setTourStepId(stepId);
-    setTourOpen(true);
-  }, []);
-
-  const handleExplore = useCallback(
-    (stepId: ProductTourStepId) => {
-      if (!userId || !leagueId) return;
-      dismissWelcome(userId, leagueId);
-      setWelcomeOpen(false);
-      startTour(stepId);
-    },
-    [userId, leagueId, startTour],
-  );
 
   const value = useMemo(
     () => ({
       notifyLeagueSyncSuccess,
-      startTour,
       isComplete: complete,
     }),
-    [notifyLeagueSyncSuccess, startTour, complete],
+    [notifyLeagueSyncSuccess, complete],
   );
 
   return (
     <ProductOnboardingContext.Provider value={value}>
       {children}
-      <WelcomeModal
-        open={welcomeOpen}
-        onOpenChange={setWelcomeOpen}
-        onExplore={handleExplore}
-        onSkipTour={persistComplete}
-      />
-      <ProductTour
-        open={tourOpen}
-        initialStepId={tourStepId}
-        onOpenChange={setTourOpen}
-        onComplete={persistComplete}
-        onSkip={persistComplete}
-      />
+      <LeagueRevealModal open={revealOpen} onOpenChange={setRevealOpen} onComplete={persistComplete} />
     </ProductOnboardingContext.Provider>
   );
 }
