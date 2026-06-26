@@ -13,6 +13,11 @@ import {
   normalizeOwnerKey,
   type RivalryStoryResult,
 } from "./rivalryStoryAuthority";
+import {
+  resolveReceiptsForStory,
+  resolveRivalryStoryReceipts,
+  type RivalryStoryReceipt,
+} from "./rivalryStoryReceipts";
 import { getDb } from "./db";
 
 const leagueIdInput = z.object({
@@ -41,6 +46,16 @@ export type RivalryStoryForOwnerResponse = {
   /** One story per rival with at least one meeting (authority filter). */
   stories: RivalryStoryResult[];
 };
+
+export type RivalryStoryReceiptsResponse = {
+  focalOwnerKey: string;
+  rivalOwnerKey: string;
+  receipts: RivalryStoryReceipt[];
+};
+
+const receiptsInput = pairInput.extend({
+  receiptIds: z.array(z.string().min(1).max(128)).optional(),
+});
 
 export function storiesMapToArray(map: Map<string, RivalryStoryResult>): RivalryStoryResult[] {
   return [...map.values()].sort((a, b) => a.rivalOwnerKey.localeCompare(b.rivalOwnerKey));
@@ -95,6 +110,58 @@ export const rivalryStoryRouter = router({
       return {
         focalOwnerKey: input.focalOwnerKey,
         stories: storiesMapToArray(storiesByRival),
+      };
+    }),
+
+  /** Structured evidence objects for story receipt IDs. */
+  receipts: publicProcedure
+    .input(receiptsInput)
+    .query(async ({ input }): Promise<RivalryStoryReceiptsResponse> => {
+      if (input.focalOwnerKey === input.rivalOwnerKey) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "focalOwnerKey and rivalOwnerKey must be different owners",
+        });
+      }
+
+      await assertDatabase();
+
+      if (input.receiptIds !== undefined) {
+        const receipts = await resolveRivalryStoryReceipts({
+          leagueId: input.leagueId,
+          focalOwnerKey: input.focalOwnerKey,
+          rivalOwnerKey: input.rivalOwnerKey,
+          receiptIds: input.receiptIds,
+        });
+        return {
+          focalOwnerKey: input.focalOwnerKey,
+          rivalOwnerKey: input.rivalOwnerKey,
+          receipts,
+        };
+      }
+
+      const story = await buildRivalryStoryForPair({
+        leagueId: input.leagueId,
+        focalOwnerKey: input.focalOwnerKey,
+        rivalOwnerKey: input.rivalOwnerKey,
+      });
+
+      if (!story) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No rivalry story for the requested owner pair in this league",
+        });
+      }
+
+      const receipts = await resolveReceiptsForStory({
+        leagueId: input.leagueId,
+        story,
+      });
+
+      return {
+        focalOwnerKey: input.focalOwnerKey,
+        rivalOwnerKey: input.rivalOwnerKey,
+        receipts,
       };
     }),
 });

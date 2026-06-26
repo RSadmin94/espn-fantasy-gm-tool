@@ -103,8 +103,17 @@ vi.mock("./db", async (importOriginal) => {
   };
 });
 
+const mockResolveRivalryStoryReceipts = vi.fn();
+const mockResolveReceiptsForStory = vi.fn();
+
+vi.mock("./rivalryStoryReceipts", () => ({
+  resolveRivalryStoryReceipts: (...args: unknown[]) => mockResolveRivalryStoryReceipts(...args),
+  resolveReceiptsForStory: (...args: unknown[]) => mockResolveReceiptsForStory(...args),
+}));
+
 import { appRouter } from "./routers";
 import { storiesMapToArray } from "./rivalryStoryRouter";
+import { buildRivalryStoryForPair } from "./rivalryStoryAuthority";
 
 function anonCtx(): TrpcContext {
   return {
@@ -128,6 +137,41 @@ describe("rivalryStoryRouter helpers", () => {
 describe("rivalryStoryRouter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockResolveReceiptsForStory.mockImplementation(async ({ story }: { story: RivalryStoryResult }) => {
+      const ids = [
+        ...story.headline.receiptIds,
+        ...story.documentaryFacts.flatMap((f) => f.supportingGameIds),
+      ];
+      return [...new Set(ids)].map((receiptId) => ({
+        receiptId,
+        type: "game" as const,
+        season: 2024,
+        focalOwnerKey: story.focalOwnerKey,
+        rivalOwnerKey: story.rivalOwnerKey,
+        factKeys: [],
+        source: "gmMatchups" as const,
+      }));
+    });
+    mockResolveRivalryStoryReceipts.mockImplementation(
+      async ({
+        receiptIds,
+        focalOwnerKey,
+        rivalOwnerKey,
+      }: {
+        receiptIds: string[];
+        focalOwnerKey: string;
+        rivalOwnerKey: string;
+      }) =>
+        receiptIds.map((receiptId) => ({
+          receiptId,
+          type: receiptId === "bogus:id" ? ("unknown" as const) : ("game" as const),
+          season: receiptId === "bogus:id" ? 0 : 2024,
+          focalOwnerKey,
+          rivalOwnerKey,
+          factKeys: [],
+          source: receiptId === "bogus:id" ? ("derived" as const) : ("gmMatchups" as const),
+        })),
+    );
   });
 
   it("pair returns structured story without prose transformation", async () => {
@@ -191,6 +235,120 @@ describe("rivalryStoryRouter", () => {
     const caller = appRouter.createCaller(anonCtx());
     await expect(
       caller.rivalryStory.pair({
+        leagueId: "457622",
+        focalOwnerKey: FOCAL,
+        rivalOwnerKey: "id:{EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE}",
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" } satisfies Partial<TRPCError>);
+  });
+});
+
+describe("rivalryStoryRouter.receipts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolveReceiptsForStory.mockImplementation(async ({ story }: { story: RivalryStoryResult }) => {
+      const ids = [
+        ...story.headline.receiptIds,
+        ...story.documentaryFacts.flatMap((f) => f.supportingGameIds),
+      ];
+      return [...new Set(ids)].map((receiptId) => ({
+        receiptId,
+        type: "game" as const,
+        season: 2024,
+        focalOwnerKey: story.focalOwnerKey,
+        rivalOwnerKey: story.rivalOwnerKey,
+        factKeys: [],
+        source: "gmMatchups" as const,
+      }));
+    });
+    mockResolveRivalryStoryReceipts.mockImplementation(
+      async ({
+        receiptIds,
+        focalOwnerKey,
+        rivalOwnerKey,
+      }: {
+        receiptIds: string[];
+        focalOwnerKey: string;
+        rivalOwnerKey: string;
+      }) =>
+        receiptIds.map((receiptId) => ({
+          receiptId,
+          type: receiptId === "bogus:id" ? ("unknown" as const) : ("game" as const),
+          season: receiptId === "bogus:id" ? 0 : 2024,
+          focalOwnerKey,
+          rivalOwnerKey,
+          factKeys: [],
+          source: receiptId === "bogus:id" ? ("derived" as const) : ("gmMatchups" as const),
+        })),
+    );
+  });
+
+  it("resolves all story receipts when receiptIds are omitted", async () => {
+    const caller = appRouter.createCaller(anonCtx());
+    const result = await caller.rivalryStory.receipts({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+      rivalOwnerKey: RIVAL,
+    });
+    expect(result.focalOwnerKey).toBe(FOCAL);
+    expect(result.rivalOwnerKey).toBe(RIVAL);
+    expect(buildRivalryStoryForPair).toHaveBeenCalled();
+    expect(mockResolveReceiptsForStory).toHaveBeenCalled();
+    expect(mockResolveRivalryStoryReceipts).not.toHaveBeenCalled();
+    expect(result.receipts.length).toBeGreaterThan(0);
+    expect(result.receipts.every((r) => r.type === "game")).toBe(true);
+  });
+
+  it("resolves explicit receiptIds without loading the full story", async () => {
+    const caller = appRouter.createCaller(anonCtx());
+    const result = await caller.rivalryStory.receipts({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+      rivalOwnerKey: MOCK_REVENGE.rivalOwnerKey,
+      receiptIds: ["gm:2024:16", "gm:2025:7"],
+    });
+    expect(mockResolveRivalryStoryReceipts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        receiptIds: ["gm:2024:16", "gm:2025:7"],
+      }),
+    );
+    expect(buildRivalryStoryForPair).not.toHaveBeenCalled();
+    expect(mockResolveReceiptsForStory).not.toHaveBeenCalled();
+    expect(result.receipts.map((r) => r.receiptId)).toEqual(["gm:2024:16", "gm:2025:7"]);
+  });
+
+  it("returns unknown receipts for bogus ids without throwing", async () => {
+    const caller = appRouter.createCaller(anonCtx());
+    const result = await caller.rivalryStory.receipts({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+      rivalOwnerKey: RIVAL,
+      receiptIds: ["bogus:id"],
+    });
+    expect(result.receipts).toHaveLength(1);
+    expect(result.receipts[0]).toMatchObject({
+      receiptId: "bogus:id",
+      type: "unknown",
+      season: 0,
+      source: "derived",
+    });
+  });
+
+  it("rejects receipts when focal and rival are the same", async () => {
+    const caller = appRouter.createCaller(anonCtx());
+    await expect(
+      caller.rivalryStory.receipts({
+        leagueId: "457622",
+        focalOwnerKey: FOCAL,
+        rivalOwnerKey: FOCAL,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" } satisfies Partial<TRPCError>);
+  });
+
+  it("returns NOT_FOUND when story is missing and receiptIds are omitted", async () => {
+    const caller = appRouter.createCaller(anonCtx());
+    await expect(
+      caller.rivalryStory.receipts({
         leagueId: "457622",
         focalOwnerKey: FOCAL,
         rivalOwnerKey: "id:{EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE}",
