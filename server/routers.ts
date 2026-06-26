@@ -4018,6 +4018,11 @@ export const appRouter = router({
       .input(z.object({ season: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const { calcVORP, calcROSValue, calcPickValue } = await import("./analytics");
+        const {
+          resolveAndValueTradePick,
+          compareReceivedSideTotals,
+          toTradeAgingVerdict,
+        } = await import("./tradePickValueAuthority");
         // Helper: compute a single player's ROS composite value
         const playerCompositeValue = (avgPoints: number, position: string, vorp: number): number => {
           const fakePlayer = { playerId: 0, playerName: "", position, teamId: 0, ownerName: "", seasonPoints: 0, avgPoints, projectedTotal: null, keeperValue: 0, keeperValueFuture: 0, injuryStatus: "", appliedStats: {} };
@@ -4236,25 +4241,18 @@ export const appRouter = router({
 
               for (const r of group.pickRows) {
                 if ((r.toTeamId as number) === receivingTeamId) {
-                  const round = (r.round as number) || 1;
-                  const pickInRound = (r.pickInRound as number) || 7;
-                  const overall = Number(r.overallPickNumber ?? 0);
-                  let derivedRound = round;
-                  let derivedPick = pickInRound;
-                  if (overall > 0 && pickTeamCountTradeAging > 0) {
-                    const d = snakeRoundAndPickFromOverall(overall, pickTeamCountTradeAging);
-                    derivedRound = d.round;
-                    derivedPick = d.pickInRound;
-                  }
-                  const value =
-                    pickTeamCountTradeAging > 0
-                      ? calcPickValue(derivedRound, derivedPick, pickTeamCountTradeAging)
-                      : 0;
+                  const resolved = resolveAndValueTradePick({
+                    round: r.round as number | null,
+                    pickInRound: r.pickInRound as number | null,
+                    overallPickNumber: r.overallPickNumber as number | null,
+                    teamCount: pickTeamCountTradeAging,
+                    roundCount: agingGeo?.roundCount,
+                  });
                   picks.push({
-                    label: `${derivedRound}.${String(derivedPick).padStart(2, "0")}`,
-                    round: derivedRound,
-                    pickInRound: derivedPick,
-                    value,
+                    label: resolved.label,
+                    round: resolved.round,
+                    pickInRound: resolved.pickInRound,
+                    value: resolved.rawValue,
                   });
                 }
               }
@@ -4278,9 +4276,8 @@ export const appRouter = router({
             // Skip trades where both sides are empty (e.g. header-only rows)
             if (sideA.players.length + sideA.picks.length + sideB.players.length + sideB.picks.length === 0) continue;
 
-            const margin = sideA.totalValue - sideB.totalValue;
-            const verdict: TradeRecord["verdict"] =
-              Math.abs(margin) < 50 ? "even" : margin > 0 ? "sideA" : "sideB";
+            const cmp = compareReceivedSideTotals(sideA.totalValue, sideB.totalValue);
+            const verdict: TradeRecord["verdict"] = toTradeAgingVerdict(cmp.winner);
 
             // Get proposedDate from first row, or fall back to acceptance-row date (2026 path)
             const firstRow = group.playerRows[0] || group.pickRows[0];
@@ -4293,7 +4290,7 @@ export const appRouter = router({
               sideA,
               sideB,
               verdict,
-              verdictMargin: Math.abs(margin),
+              verdictMargin: cmp.margin,
             });
           }
         }
@@ -4341,8 +4338,8 @@ export const appRouter = router({
               };
               const builtA = buildScrapedSide(sideA, tcScraped);
               const builtB = buildScrapedSide(sideB, tcScraped);
-              const margin = builtA.totalValue - builtB.totalValue;
-              const verdict: "sideA" | "sideB" | "even" = Math.abs(margin) < 50 ? "even" : margin > 0 ? "sideA" : "sideB";
+              const cmpScraped = compareReceivedSideTotals(builtA.totalValue, builtB.totalValue);
+              const verdict: "sideA" | "sideB" | "even" = toTradeAgingVerdict(cmpScraped.winner);
               allTrades.push({
                 season: row.season,
                 tradeId: row.tradeKey,
@@ -4350,7 +4347,7 @@ export const appRouter = router({
                 sideA: builtA,
                 sideB: builtB,
                 verdict,
-                verdictMargin: Math.abs(margin),
+                verdictMargin: cmpScraped.margin,
               });
             } catch {
               // skip malformed rows
@@ -8169,20 +8166,17 @@ Respond with JSON in this exact format:
     .query(async ({ ctx, input }) => {
       const g = await resolvePickValueGeometryForUser(ctx);
       const TEAMS = g.teamCount;
-      const BASE = 3000;
-      const K = 0.028;
-      function pickValue(round: number, pickInRound: number): number {
-        if (TEAMS <= 0) return 0;
-        return expPickValueFromSnakeRound(round, pickInRound, TEAMS, BASE, K);
-      }
-      const valueA = input.sideA.reduce((s, p) => s + pickValue(p.round, p.pickInRound), 0);
-      const valueB = input.sideB.reduce((s, p) => s + pickValue(p.round, p.pickInRound), 0);
+      const {
+        sumTradePickValues,
+        pickPackageVerdictForSideA,
+        compareGivenSideTotals,
+      } = await import("./tradePickValueAuthority");
+      const valueA = sumTradePickValues(input.sideA, TEAMS, "raw");
+      const valueB = sumTradePickValues(input.sideB, TEAMS, "raw");
       const diff = valueA - valueB;
-      const pct = valueB > 0 ? Math.round((valueA / valueB) * 100) : 0;
-      let verdict: 'WIN' | 'FAIR' | 'LOSS';
-      if (pct >= 110) verdict = 'WIN';
-      else if (pct >= 90) verdict = 'FAIR';
-      else verdict = 'LOSS';
+      const cmp = compareGivenSideTotals(valueA, valueB);
+      const pct = valueB > 0 ? Math.round(cmp.gainRatioA * 100) : 0;
+      const verdict = pickPackageVerdictForSideA(valueA, valueB);
 
       // ── DNA-based acceptance probability ──────────────────────────────────
       let dnaAnalysis: {
@@ -9605,8 +9599,13 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       picksB: z.array(z.object({ round: z.number(), pick: z.number().default(7) })).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const { calcVORP, calcPositionalScarcity, calcKeeperEfficiency, calcROSValue, calcTradeValue, calcPickValue } = await import("./analytics");
-      const { computeMarketValues, MARKET_VALUE_COMPOSITE_SCALE } = await import("./marketValue");
+      const { calcVORP, calcPositionalScarcity, calcKeeperEfficiency, calcROSValue, calcTradeValue } = await import("./analytics");
+      const { computeMarketValues } = await import("./marketValue");
+      const {
+        sumTradePickValues,
+        compareGivenSideTotals,
+        PICK_TO_MARKET_SCALE,
+      } = await import("./tradePickValueAuthority");
       const data = await getSeasonData(input.season, undefined, ctx.user?.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season. Sync ESPN first." });
 
@@ -9789,37 +9788,28 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       const sideAValues = input.sideA.map(scorePlayer);
       const sideBValues = input.sideB.map(scorePlayer);
 
-      // Score picks. calcPickValue runs on the legacy base-3000 curve (a 1.01 ≈ 3000),
-      // but players are now on the 0–(100*MARKET_VALUE_COMPOSITE_SCALE) market scale.
-      // Rescale picks onto that same scale so a pick is valued like the player you'd
-      // expect at that slot (a 1.01 ≈ a top player), not ~10× one. We rescale only
-      // here at the trade totals — calcPickValue stays untouched for every other caller.
-      const PICK_TO_MARKET_SCALE = (100 * MARKET_VALUE_COMPOSITE_SCALE) / 3000; // = 0.1
-      const pickValueA = Math.round((input.picksA || []).reduce(
-        (sum, p) => sum + (pickTeamCountAnalyze > 0 ? calcPickValue(p.round, p.pick, pickTeamCountAnalyze) : 0),
-        0,
-      ) * PICK_TO_MARKET_SCALE);
-      const pickValueB = Math.round((input.picksB || []).reduce(
-        (sum, p) => sum + (pickTeamCountAnalyze > 0 ? calcPickValue(p.round, p.pick, pickTeamCountAnalyze) : 0),
-        0,
-      ) * PICK_TO_MARKET_SCALE);
+      const pickValueA = sumTradePickValues(
+        (input.picksA || []).map((p) => ({ round: p.round, pick: p.pick })),
+        pickTeamCountAnalyze,
+        "market",
+      );
+      const pickValueB = sumTradePickValues(
+        (input.picksB || []).map((p) => ({ round: p.round, pick: p.pick })),
+        pickTeamCountAnalyze,
+        "market",
+      );
 
       const totalA = sideAValues.reduce((s, v) => s + v.compositeValue, 0) + pickValueA;
       const totalB = sideBValues.reduce((s, v) => s + v.compositeValue, 0) + pickValueB;
 
-      const ratio = totalB > 0 ? totalA / totalB : 1;
-      // `ratio = totalA / totalB` is given ÷ received (how much A GIVES per unit received), so
-      // ratio < 1 means A comes out ahead. The fairness ladder is phrased from A's gain, so it
-      // grades off gainRatioA = received ÷ given; > 1 then correctly means side A (You) wins.
-      const gainRatioA = ratio > 0 ? 1 / ratio : 1;
-      const fairnessGrade =
-        gainRatioA >= 0.95 && gainRatioA <= 1.05 ? "FAIR"
-        : gainRatioA > 1.05 && gainRatioA <= 1.18 ? "SLIGHT EDGE A"
-        : gainRatioA > 1.18 && gainRatioA <= 1.34 ? "A WINS"
-        : gainRatioA > 1.34 ? "LOPSIDED"
-        : gainRatioA >= 0.85 ? "SLIGHT EDGE B"
-        : gainRatioA >= 0.75 ? "B WINS"
-        : "LOPSIDED";
+      const tradeCmp = compareGivenSideTotals(
+        totalA,
+        totalB,
+        Math.round(50 * PICK_TO_MARKET_SCALE),
+      );
+      const ratio = tradeCmp.ratio;
+      const gainRatioA = tradeCmp.gainRatioA;
+      const fairnessGrade = tradeCmp.fairnessGrade;
 
       // Positional needs analysis
       const teamARoster = allPlayers.filter(p => p.teamId === input.teamAId);
@@ -10066,10 +10056,22 @@ Provide:
             dnaB: dnaLiteB,
             needsA,
             needsB,
-            receivedByA: input.sideB.map((p) => p.position),
-            gaveByA: input.sideA.map((p) => p.position),
-            receivedByB: input.sideA.map((p) => p.position),
-            gaveByB: input.sideB.map((p) => p.position),
+            receivedByA: [
+              ...input.sideB.map((p) => p.position),
+              ...((input.picksB?.length ?? 0) > 0 ? ["PICK"] : []),
+            ],
+            gaveByA: [
+              ...input.sideA.map((p) => p.position),
+              ...((input.picksA?.length ?? 0) > 0 ? ["PICK"] : []),
+            ],
+            receivedByB: [
+              ...input.sideA.map((p) => p.position),
+              ...((input.picksA?.length ?? 0) > 0 ? ["PICK"] : []),
+            ],
+            gaveByB: [
+              ...input.sideB.map((p) => p.position),
+              ...((input.picksB?.length ?? 0) > 0 ? ["PICK"] : []),
+            ],
             ratio,
             recordA: metaA.record,
             recordB: metaB.record,
