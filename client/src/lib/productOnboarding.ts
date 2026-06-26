@@ -42,7 +42,7 @@ export const PRODUCT_TOUR_STEPS: ProductTourStep[] = [
     id: "league-archives",
     title: "League History",
     lead: "Explore the history of your league.",
-    highlights: ["Hall of Fame", "Championship History", "Notorious Trades", "Records"],
+    highlights: ["Championship History", "Notorious Trades", "Records", "Dynasties"],
     href: "/hall-of-fame",
   },
   {
@@ -106,7 +106,11 @@ export const PRODUCT_HELP_ITEMS = [
   },
   {
     title: "What is League History?",
-    body: "The permanent record of your league—titles, records, notorious trades, and milestones.",
+    body: "Championships, dynasties, notorious trades, and the full legacy archive for your league.",
+  },
+  {
+    title: "What is the Trade Analyzer?",
+    body: "Stress-test proposed deals with deterministic fair-value before you pull the trigger.",
   },
   {
     title: "What is the ESPN Connector?",

@@ -1098,7 +1098,7 @@ export function Trades() {
     <div className="mx-auto max-w-5xl space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Trades</h1>
+        <h1 className="text-3xl font-bold text-foreground">Trade Analyzer</h1>
         <p className="mt-1 text-muted-foreground">
           Analyze trade fairness using real season data, draft pick values, and AI evaluation.
         </p>

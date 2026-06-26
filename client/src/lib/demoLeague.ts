@@ -50,7 +50,7 @@ export const DEMO_LEAGUE: DemoLeague = {
   teams: 12,
   you: "Thunderhawks",
   snapshot: [
-    { label: "Hall of Fame Rank", value: "#4", hint: "of 12 all-time" },
+    { label: "Legacy rank", value: "#4", hint: "of 12 all-time" },
     { label: "Championships", value: "0", hint: "in 11 seasons" },
     { label: "Playoff Trips", value: "6", hint: "more than half your seasons" },
     { label: "All-Time Record", value: "78-66", hint: ".542 - a contender, never a champion" },
@@ -63,14 +63,14 @@ export const DEMO_LEAGUE: DemoLeague = {
     { id: "rival", kicker: "Rivalry", headline: "We found your biggest rival.", proof: "17 meetings / 7 seasons / 2 playoff exits", unlock: "Unlock the rivalry report", tone: "rival" },
     { id: "heartbreak", kicker: "Heartbreak", headline: "We found why you've never won.", proof: "3 finals / 0 rings / one pattern repeats", unlock: "Unlock your title path", tone: "heartbreak" },
     { id: "trades", kicker: "Trades", headline: "We found who runs your trade table.", proof: "23 trades / 71% go their way", unlock: "Unlock the trade ledger", tone: "trades" },
-    { id: "dynasty", kicker: "Dynasty", headline: "We found your league's dynasty.", proof: "4 titles / 9 years / one name", unlock: "Unlock the Hall of Fame", tone: "dynasty" },
+    { id: "dynasty", kicker: "Dynasty", headline: "We found your league's dynasty.", proof: "4 titles / 9 years / one name", unlock: "Unlock League History", tone: "dynasty" },
   ],
   showcase: [
     {
       id: "rivalry",
       eyebrow: "Rivalries",
       title: "The grudge match you keep losing",
-      line: "GM War Room maps every head-to-head in your league and surfaces the one rivalry that quietly defines your seasons - the owner who always seems to end your year.",
+      line: "Fantasy Football Rivals maps every head-to-head in your league and surfaces the one rivalry that quietly defines your seasons - the owner who always seems to end your year.",
       chips: [
         { k: "Head-to-head", v: "8-17" },
         { k: "Playoff exits", v: "2" },
@@ -103,7 +103,7 @@ export const DEMO_LEAGUE: DemoLeague = {
       id: "legacy",
       eyebrow: "Legacy",
       title: "Eleven seasons, written down at last",
-      line: "Champions, chokers, dynasties, and one-year wonders - the full story of your league, with a living Hall of Fame and the storylines ESPN never bothered to keep.",
+      line: "Champions, chokers, dynasties, and one-year wonders - the full story of your league, with living League History and the storylines ESPN never bothered to keep.",
       chips: [
         { k: "Seasons", v: "11" },
         { k: "Champions", v: "5" },

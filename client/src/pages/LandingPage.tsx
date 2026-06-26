@@ -125,7 +125,7 @@ export function LandingPage() {
               </p>
             </div>
             <div className="lg:pl-2">
-              <EvidenceShot src="/screenshots/rivalry-center.png" alt="Rivalry Center" onZoom={setZoom} />
+              <EvidenceShot src="/screenshots/rivalry-center.png" alt="Rivalries" onZoom={setZoom} />
             </div>
           </div>
         </section>
@@ -155,7 +155,7 @@ export function LandingPage() {
           title="Every League Has One Rival"
           insight="Find the owner who always seems to stand in your way."
           cta="View Rivalries"
-          alt="Rivalry Center"
+          alt="Rivalries"
           src="/screenshots/rivalry-center.png"
         />
 
@@ -188,8 +188,8 @@ export function LandingPage() {
           onZoom={setZoom}
           title="Decode Every Owner"
           insight="Draft habits, roster behavior, keeper tendencies, and more."
-          cta="View Profiles"
-          alt="Owner Profiles"
+          cta="View My GM Profile"
+          alt="My GM Profile"
           src="/screenshots/owner-profiles.png"
         />
 
@@ -222,15 +222,15 @@ export function LandingPage() {
           </p>
           <div className="mt-7 grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div>
-              <span className={MONO}>Hall of Fame</span>
-              <div className="mt-2"><EvidenceShot src="/screenshots/hall-of-fame.png" alt="Hall of Fame" onZoom={setZoom} /></div>
+              <span className={MONO}>League History</span>
+              <div className="mt-2"><EvidenceShot src="/screenshots/hall-of-fame.png" alt="League History" onZoom={setZoom} /></div>
             </div>
             <div>
               <span className={MONO}>Championship Path</span>
               <div className="mt-2"><EvidenceShot src="/screenshots/championship-path.png" alt="Championship Path" onZoom={setZoom} /></div>
             </div>
           </div>
-          <div className="mt-7"><CTA label="Explore the Record Books" onClick={go} /></div>
+          <div className="mt-7"><CTA label="Explore League History" onClick={go} /></div>
         </section>
 
         {/* Pricing */}
@@ -244,7 +244,7 @@ export function LandingPage() {
               <div className="mt-3 text-[42px] font-black leading-none">$0</div>
               <p className="mt-2 text-[13px] text-white/50">Connect and explore your league</p>
               <ul className="mt-5 flex-1 space-y-2 text-[14px] text-white/75">
-                {["League snapshot and Hall of Fame rank","One DNA insight","Rivalry and dynasty teasers"].map((f) => (
+                {["League snapshot and legacy rank","One DNA insight","Rivalry and dynasty teasers"].map((f) => (
                   <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4 text-white/40" /> {f}</li>
                 ))}
               </ul>
@@ -261,7 +261,7 @@ export function LandingPage() {
               <p className="mt-2 text-[13px] font-semibold text-lime-300/90">Intro price - first 100 members, then $99.99</p>
               <p className="mt-3 text-[14px] leading-relaxed text-white/70">Access your league. Unlock every rivalry, dynasty, draft trend, championship path, and DNA profile in your league.</p>
               <ul className="mt-4 flex-1 space-y-2 text-[14px] text-white/75">
-                {["Every rivalry and grudge","Every dynasty and Hall of Fame","Draft trends and reaches","Championship paths","Owner DNA profiles"].map((f) => (
+                {["Every rivalry and grudge","League History and dynasties","Draft trends and reaches","Championship paths","My GM Profile for every owner"].map((f) => (
                   <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4 text-lime-400" /> {f}</li>
                 ))}
               </ul>

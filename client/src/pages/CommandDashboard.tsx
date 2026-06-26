@@ -14,7 +14,7 @@ function firstName(s: any){ return String(s||"").trim().split(" ")[0] || "Owner"
 
 const SCAN_DNA_MAX_EVIDENCE_LEN = 120;
 
-/** Action Queue "Scan Owner DNA" — league/evidence-specific copy from existing shock meter fields only. */
+/** Action Queue "Open My GM Profile" — league/evidence-specific copy from existing shock meter fields only. */
 function scanOwnerDnaActionDescription(topSurprise: unknown, teamCount: number): string {
   const m = topSurprise as Record<string, unknown> | null | undefined;
   if (!m) return "Review owner tendencies.";
@@ -120,13 +120,13 @@ export function CommandDashboard(){
   ].filter(Boolean) as any[];
   const shortcuts = [
     { t:"Draft War Room", to:"/draft-war-room", d:"Live pick board, rival threat windows, and decision memo." },
-    { t:"Rivalry Center", to:"/matchups", d:"Head-to-head records, heat, and matchup history." },
+    { t:"Rivalries", to:"/rivalry-center", d:"Head-to-head records, heat, and matchup history." },
     { t:"League Wire", to:"/league-wire", d:"Newsfeed, transactions, and league movement." },
-    { t:"Owner Profiles", to:"/owner-profiles", d:"Owner DNA, historical behavior, and dossiers." },
+    { t:"My GM Profile", to:"/owner-profiles", d:"Scouting report, historical behavior, and career arc." },
   ];
   const actions = [
     { t:"Open Draft War Room", to:"/draft-war-room", d: topRun?`${topRun.position} run risk building — get owner-risk context.`:"Next pick needs owner-risk context.", cta:"Review" },
-    { t:"Scan Owner DNA", to:"/owner-profiles", d: scanOwnerDnaLine, cta:"Analyze" },
+    { t:"Open My GM Profile", to:"/owner-profiles", d: scanOwnerDnaLine, cta:"Open" },
     ...(keepersCap ? [{ t:"Check Keeper Lab", to:"/keeper-advisor", d:"Confirm your value holds before the draft.", cta:"Compare" }] as const : []),
   ];
   const rings = [
@@ -211,7 +211,7 @@ export function CommandDashboard(){
         </div></div>
 
         <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><span style={{color:ACCENT}}>&#9638;</span> War Room Shortcuts</h3>
+          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><span style={{color:ACCENT}}>&#9638;</span> Shortcuts</h3>
           <div className="grid grid-cols-2 gap-2.5 mt-3">
             {shortcuts.map((s:any,i:number)=>(
               <Link key={i} to={s.to} className="no-underline p-3.5 block" style={{...SUB,borderRadius:12,minHeight:94,color:TEXT}}>
@@ -223,7 +223,7 @@ export function CommandDashboard(){
         </div></div>
 
         <div style={PANEL} className="overflow-hidden"><div className="p-[18px]">
-          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Users className="h-5 w-5" style={{color:ACCENT}}/> Owner DNA Snapshot</h3>
+          <h3 className="text-[20px] font-extrabold tracking-tight flex items-center gap-2"><Users className="h-5 w-5" style={{color:ACCENT}}/> My GM Profile Snapshot</h3>
           <div className="mt-2">
             {dnaOwners.length===0 && <div className="text-sm py-6 text-center" style={{color:MUTED}}>No owner reads yet.</div>}
             {dnaOwners.map((m:any,i:number)=>{ const a=archetype(m); return (

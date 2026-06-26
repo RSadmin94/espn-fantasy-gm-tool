@@ -419,7 +419,7 @@ export function CommissionerCommandCenter() {
 
     if (hofHighScore) {
       facts.push({
-        label: "Hall of Fame Fact",
+        label: "League History Fact",
         icon: <Trophy className="h-4 w-4" />,
         fact: `${hofHighScore.label} holds the ${leagueName} single-game record with ${hofHighScore.score.toFixed(1)} points in Week ${hofHighScore.week} of ${hofHighScore.season}. That record still stands.`,
       });
@@ -988,7 +988,7 @@ export function CommissionerCommandCenter() {
               </div>
             ) : (
               <div className={cn(PANEL, "p-5 text-center text-white/30 text-sm")}>
-                No broadcast facts available yet. Sync more seasons to unlock Hall of Fame data.
+                No broadcast facts available yet. Sync more seasons to unlock League History data.
               </div>
             )
           ) : (

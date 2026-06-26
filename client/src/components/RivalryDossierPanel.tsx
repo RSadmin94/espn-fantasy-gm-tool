@@ -1021,7 +1021,7 @@ function RivalryDocumentaryEvidenceSection({
 
   return (
     <div className="border-b border-white/[0.06] p-4">
-      <DocumentarySectionHeader icon={<FolderOpen className="h-4 w-4" />} title="Documentary Evidence" accent={ACCENT} />
+      <DocumentarySectionHeader icon={<FolderOpen className="h-4 w-4" />} title="Rivalry Evidence" accent={ACCENT} />
       <div className="space-y-2">
         {sections.map((section) => (
           <Collapsible
@@ -1205,7 +1205,7 @@ function RivalryDocumentaryExperience({
       <IntelPanel variant="warm" className="overflow-hidden p-4">
         <div className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Loading rivalry documentary…
+          Loading rivalry story…
         </div>
       </IntelPanel>
     );
@@ -1221,7 +1221,7 @@ function RivalryDocumentaryExperience({
       >
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em]" style={{ color: MUTED }}>
           <Clapperboard className="h-4 w-4" style={{ color: GOLD }} />
-          Rivalry Documentary
+          Rivalries
         </div>
       </div>
 
@@ -1583,7 +1583,7 @@ export function RivalryDossierPanel({
         </div>
         <p className="text-sm" style={{ color: MUTED }}>
           The full head-to-head record, heartbreak losses, playoff scars, points for and against, and
-          the meeting-by-meeting timeline are part of the paid Rivalry Center.
+          the meeting-by-meeting timeline are part of paid Rivalries.
         </p>
         <button
           onClick={() => {

@@ -1719,7 +1719,7 @@ function ProfilePanel({
                 </>
               ) : (
                 <p className="mt-2 text-sm text-zinc-500">
-                  Your league hasn&apos;t built enough history for Rivalry Documentary yet.
+                  Your league hasn&apos;t built enough history for Rivalries yet.
                 </p>
               )}
             </div>
@@ -1751,7 +1751,7 @@ function ProfilePanel({
                 className="inline-flex items-center gap-2 rounded-lg border border-violet-500/35 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200 transition-colors hover:bg-violet-500/20"
               >
                 <Clapperboard className="h-3.5 w-3.5" aria-hidden />
-                Open documentary · {topRival.opponentOwner}
+                Open Rivalries · {topRival.opponentOwner}
               </button>
             ) : null}
             {biggestThreat && biggestThreat.opponentOwner !== topRival?.opponentOwner ? (
@@ -1761,7 +1761,7 @@ function ProfilePanel({
                 className="inline-flex items-center gap-2 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-xs font-semibold text-zinc-300 transition-colors hover:bg-white/[0.06]"
               >
                 <Clapperboard className="h-3.5 w-3.5" aria-hidden />
-                Open documentary · {biggestThreat.opponentOwner}
+                Open Rivalries · {biggestThreat.opponentOwner}
               </button>
             ) : null}
           </div>
@@ -2058,7 +2058,7 @@ export function OwnerProfiles() {
         eyebrowMono="League Intelligence Desk"
         icon={Users}
         iconAccent="purple"
-        title="GM Intelligence Dossier"
+        title="My GM Profile"
         subtitle={`${active.length} active manager${active.length !== 1 ? "s" : ""} — unified scouting report per owner`}
         className="mb-5"
       />

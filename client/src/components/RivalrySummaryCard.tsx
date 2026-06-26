@@ -56,7 +56,7 @@ export function RivalrySummaryCard({ className, title = "Your Top Rivalry" }: { 
         </div>
         <p className="text-[13px] text-white/55">No rivalry data yet.</p>
         <Link to="/rivalry-center" className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-violet-300 hover:text-violet-200">
-          Open Rivalry Center <ArrowRight className="h-3.5 w-3.5" />
+          Open Rivalries <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>
     );
@@ -106,7 +106,7 @@ export function RivalrySummaryCard({ className, title = "Your Top Rivalry" }: { 
       )}
 
       <Link to="/rivalry-center" className="mt-3 inline-flex items-center gap-1 text-[13px] font-semibold text-violet-300 hover:text-violet-200">
-        View Full Rivalry <ArrowRight className="h-3.5 w-3.5" />
+        View Rivalries <ArrowRight className="h-3.5 w-3.5" />
       </Link>
     </div>
   );

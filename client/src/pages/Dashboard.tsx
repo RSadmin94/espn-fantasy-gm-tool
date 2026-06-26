@@ -990,7 +990,7 @@ export function Dashboard() {
         ].filter(Boolean) as any[];
         const actions = [
           { t: "Open Draft War Room", to: "/draft-war-room", d: topRun ? `${topRun.position} run risk building - get owner-risk context.` : "Next pick needs owner-risk context.", cta: "Review" },
-          { t: "Scan Owner DNA", to: "/owner-profiles", d: topSurprise ? `${fn(topSurprise.ownerName)} is ${Math.round(topSurprise.surpriseProbability ?? 0)}% surprise risk${teamCount ? ` in this ${teamCount}-team league` : ""}.` : "Review owner tendencies.", cta: "Analyze" },
+          { t: "Open My GM Profile", to: "/owner-profiles", d: topSurprise ? `${fn(topSurprise.ownerName)} is ${Math.round(topSurprise.surpriseProbability ?? 0)}% surprise risk${teamCount ? ` in this ${teamCount}-team league` : ""}.` : "Review owner tendencies.", cta: "Open" },
           ...(keepersCap ? [{ t: "Check Keeper Lab", to: "/keeper-advisor", d: "Confirm your value holds before the draft.", cta: "Compare" }] : []),
         ];
         const rings = [
@@ -1032,7 +1032,7 @@ export function Dashboard() {
                 </div>
               </div></IntelPanel>
               <IntelPanel variant="card" className="overflow-hidden"><div className="p-[18px]">
-                <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Users className="h-5 w-5" style={{ color: ACCENT }} /> Owner DNA Snapshot</h3>
+                <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Users className="h-5 w-5" style={{ color: ACCENT }} /> My GM Profile Snapshot</h3>
                 <div className="mt-2">
                   {dnaOwners.length === 0 && <div className="text-sm py-6 text-center" style={{ color: MUTED }}>No owner reads yet.</div>}
                   {dnaOwners.map((m: any, i: number) => { const a = arch(m); return (<div key={i} className="grid items-center gap-2.5 h-[50px]" style={{ gridTemplateColumns: "36px 1fr 70px", borderTop: "1px solid var(--color-border)" }}><span className="w-8 h-8 rounded-full flex items-center justify-center font-black text-white" style={{ background: a.color }}>{fn(m.ownerName).charAt(0).toUpperCase()}</span><span><b className="block text-sm">{fn(m.ownerName)}</b><span className="text-xs" style={{ color: MUTED }}>{a.label}</span></span><span className="text-right font-black" style={{ color: TEAL }}>{Math.round(m.predictabilityScore ?? 0)}%</span></div>); })}
@@ -1089,7 +1089,7 @@ export function Dashboard() {
             );
           })()}
           <Link to="/owner-profiles" className="mt-4 flex items-center gap-1 text-[10px] font-bold text-red-400/80 hover:text-red-300 transition-colors">
-            Owner profiles <ChevronRight className="h-3 w-3" />
+            My GM Profile <ChevronRight className="h-3 w-3" />
           </Link>
         </div>
 
@@ -1191,7 +1191,7 @@ export function Dashboard() {
             </Link>
             <span className="text-muted-foreground">·</span>
             <Link to="/hall-of-fame" className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-muted-foreground transition-colors">
-              Hall of Fame <ChevronRight className="h-3 w-3" />
+              League History <ChevronRight className="h-3 w-3" />
             </Link>
           </div>
         </div>
@@ -1201,7 +1201,7 @@ export function Dashboard() {
       <section aria-label="League highlights" className="grid gap-4 md:grid-cols-3">
         <div className="flex min-h-[240px] flex-col rounded-2xl border border-amber-500/25 bg-card p-5 shadow-[0_0_40px_-12px_rgba(245,158,11,0.35)]">
           <div className="flex items-start justify-between gap-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-400/90">Hall of Fame leader</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-400/90">League History leader</p>
             <Trophy className="h-4 w-4 shrink-0 text-amber-400/80" aria-hidden />
           </div>
           {hofQ.isLoading ? (
@@ -1227,7 +1227,7 @@ export function Dashboard() {
                 </div>
               </div>
               <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Hall of Fame score</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Legacy score</p>
                 <p className="mt-1 text-sm font-medium text-foreground">Coming Soon</p>
               </div>
             </div>
@@ -1238,7 +1238,7 @@ export function Dashboard() {
             </div>
           )}
           <Link to="/hall-of-fame" className="mt-4 text-xs font-medium text-amber-400/90 hover:text-amber-300">
-            View Hall of Fame →
+            View League History →
           </Link>
         </div>
 
@@ -1351,7 +1351,7 @@ export function Dashboard() {
             </div>
             <div className="border-t border-border px-4 py-2">
               <Link to="/hall-of-fame" className="text-xs font-medium text-amber-400/90 hover:text-amber-300">
-                Full records →
+                League History →
               </Link>
             </div>
           </div>
@@ -1396,7 +1396,7 @@ export function Dashboard() {
           </div>
           <div className="border-t border-border px-4 py-2">
             <Link to="/owner-profiles" className="text-xs font-medium text-violet-400 hover:text-violet-300">
-              Owner profiles →
+              My GM Profile →
             </Link>
           </div>
         </div>
