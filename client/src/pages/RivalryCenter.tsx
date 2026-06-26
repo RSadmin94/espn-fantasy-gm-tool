@@ -9,6 +9,13 @@ import {
   type RivalryPickerOption,
 } from "@/components/RivalryDossierPanel";
 import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
+import { cn } from "@/lib/utils";
+import {
+  CinematicPageHeader,
+  IntelPageShell,
+  IntelPanel,
+  SectionLoading,
+} from "@/components/layout";
 import {
   Swords,
   Flame,
@@ -24,14 +31,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-// ── theme (matches Command Dashboard: dark slate panels, teal accent) ────────
+// ── theme tokens (semantic colors for heat badges, matrix cells, modal) ────────
 const INK = "var(--color-card)";
-const PAGEBG: React.CSSProperties = {
-  background:
-    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),var(--color-background)",
-  color: "var(--color-foreground)",
-};
-const PAPER = "var(--color-card)";
 const PAPER2 = "var(--color-card)";
 const LINE = "color-mix(in oklch, var(--color-foreground) 7%, transparent)";
 const TEXT = "var(--color-foreground)";
@@ -43,8 +44,8 @@ const RED = "#ef4444";
 const ORANGE = "#f7902f";
 const BLUE = "#8b5cf6";
 const CRIMSON = "#e23b3b";
-const PANEL: React.CSSProperties = { background: PAPER, border: `1px solid ${LINE}`, borderRadius: 15 };
-const SUB: React.CSSProperties = { background: "color-mix(in oklch, var(--color-foreground) 3%, transparent)", border: "1px solid color-mix(in oklch, var(--color-foreground) 6%, transparent)", borderRadius: 10 };
+/** Nested sub-panels — maps to IntelPanel variant="sub" */
+const SUB_CLASS = "rounded-intel-sub border-intel-sub bg-intel-sub";
 
 const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell", "rod s"];
 
@@ -127,9 +128,9 @@ function SectionHead({
 
 function Panel({ children, className = "", id }: { children: React.ReactNode; className?: string; id?: string }) {
   return (
-    <section id={id} style={PANEL} className={`overflow-hidden ${className}`}>
+    <IntelPanel variant="card" id={id} className={cn("overflow-hidden", className)}>
       <div className="p-[18px] md:p-5">{children}</div>
-    </section>
+    </IntelPanel>
   );
 }
 
@@ -392,18 +393,18 @@ export function RivalryCenter() {
   const ranked = pairs.slice(0, 10);
 
   return (
-    <div style={PAGEBG} className="-m-4 md:-m-6 p-5 md:p-7 min-h-full">
-      {/* ── Header (dashboard style) ─────────────────────────────── */}
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
-        <div>
-          <h2 className="text-3xl md:text-4xl font-black tracking-tight leading-none">Rivalry Center</h2>
-          <p className="mt-2 text-sm" style={{ color: MUTED }}>
-            Head-to-head records, heat, playoff scars, and the receipts behind every feud.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <Pill gold>{activeSeason} Season</Pill>
-          <Pill>{(gridOwners.length || allOwners.length) ? `${gridOwners.length || allOwners.length} Owners` : "League"}</Pill>
+    <IntelPageShell bleed minHeight="full" background="cinematic-token" padding="default">
+      <CinematicPageHeader
+        title="Rivalry Center"
+        subtitle="Head-to-head records, heat, playoff scars, and the receipts behind every feud."
+        className="mb-5"
+        meta={
+          <>
+            <Pill gold>{activeSeason} Season</Pill>
+            <Pill>{(gridOwners.length || allOwners.length) ? `${gridOwners.length || allOwners.length} Owners` : "League"}</Pill>
+          </>
+        }
+        actions={
           <button
             onClick={() => refreshScores.mutate()}
             disabled={refreshScores.isPending}
@@ -412,8 +413,8 @@ export function RivalryCenter() {
           >
             <RefreshCw className="h-3.5 w-3.5" /> {refreshScores.isPending ? "Generating…" : "Refresh"}
           </button>
-        </div>
-      </div>
+        }
+      />
 
       <main className="space-y-3">
         {rivalryGated && !loading && (
@@ -447,7 +448,7 @@ export function RivalryCenter() {
         )}
         {loading ? (
           <Panel>
-            <div className="py-16 text-center text-sm" style={{ color: MUTED }}>Loading league rivalries…</div>
+            <SectionLoading message="Loading league rivalries…" className="justify-center py-16" />
           </Panel>
         ) : allEmpty ? (
           <Panel>
@@ -529,7 +530,7 @@ export function RivalryCenter() {
                       </a>
                     </div>
                   </div>
-                  <div style={SUB} className="flex shrink-0 flex-col items-center justify-center px-8 py-6">
+                  <div className={cn(SUB_CLASS, "flex shrink-0 flex-col items-center justify-center px-8 py-6")}>
                     <div className="text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>Rivalry Score</div>
                     <div className="text-6xl font-black" style={{ color: GOLD }}>{n(hero.rivalryScore)}</div>
                     {!rivalryGated && (
@@ -544,7 +545,7 @@ export function RivalryCenter() {
                   </div>
                 </div>
                 {showScoreMath && !rivalryGated && (
-                  <div style={SUB} className="mt-4 p-4">
+                  <div className={cn(SUB_CLASS, "mt-4 p-4")}>
                     <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>Why this score?</div>
                     <div className="space-y-1.5 text-sm">
                       {([
@@ -578,7 +579,7 @@ export function RivalryCenter() {
             <Panel>
               <SectionHead icon={Flame} title="The Ledger" caption="League rivalry power rankings — every pairing in league history." />
               {leagueLoading ? (
-                <div className="py-8 text-center text-sm" style={{ color: MUTED }}>Reading every head-to-head in league history…</div>
+                <SectionLoading message="Reading every head-to-head in league history…" className="justify-center py-8" />
               ) : leaguePairs.length === 0 ? (
                 <p className="py-6 text-sm" style={{ color: MUTED }}>{rivalryGated ? "The league-wide rivalry grid unlocks with Rivals Pro." : "Not enough cross-league matchup history yet."}</p>
               ) : (
@@ -589,8 +590,7 @@ export function RivalryCenter() {
                       <button
                         key={lp.key}
                         onClick={() => openLeague(lp)}
-                        style={SUB}
-                        className="group flex w-full items-center gap-4 p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        className={cn(SUB_CLASS, "group flex w-full items-center gap-4 p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background")}
                       >
                         <div className="w-9 shrink-0 text-center text-2xl font-black" style={{ color: i === 0 ? GOLD : MUTED }}>{i + 1}</div>
                         <div className="h-10 w-1 shrink-0 rounded-full" style={{ background: h.c }} />
@@ -622,7 +622,7 @@ export function RivalryCenter() {
             <Panel>
               <SectionHead icon={Swords} title="Your Feuds" caption="Tap any rivalry for the full dossier." />
               {ranked.length === 0 && (
-                <div style={SUB} className="mt-4 p-5 text-sm">
+                <div className={cn(SUB_CLASS, "mt-4 p-5 text-sm")}>
                   <span style={{ color: MUTED }}>Your personalized rivalry scores haven&rsquo;t been generated yet. </span>
                   <button
                     onClick={() => refreshScores.mutate()}
@@ -641,8 +641,7 @@ export function RivalryCenter() {
                     <button
                       key={`${p.rivalId ?? p.rivalName ?? i}`}
                       onClick={() => openDossier(p)}
-                      style={SUB}
-                      className="group flex w-full items-center gap-4 p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      className={cn(SUB_CLASS, "group flex w-full items-center gap-4 p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background")}
                     >
                       <div className="w-9 shrink-0 text-center text-2xl font-black" style={{ color: i === 0 ? GOLD : MUTED }}>{i + 1}</div>
                       <div className="h-10 w-1 shrink-0 rounded-full" style={{ background: h.c }} />
@@ -689,8 +688,7 @@ export function RivalryCenter() {
                     <button
                       key={i}
                       onClick={() => setOpen({ focalKey: m.aKey, focalName: m.a, rivalKey: m.bKey, rivalName: m.b })}
-                      style={SUB}
-                      className="p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      className={cn(SUB_CLASS, "p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background")}
                     >
                       <div className="text-[11px] font-bold uppercase tracking-[0.25em]" style={{ color: GOLD }}>{m.title}</div>
                       <div className="mt-1 text-lg font-black leading-tight">{m.a} <span style={{ color: MUTED }}>vs</span> {m.b}</div>
@@ -706,7 +704,7 @@ export function RivalryCenter() {
               <Panel>
                 <SectionHead icon={Users} title="The Matrix" caption="Each cell is the row owner's all-time record vs the column owner. Tap a cell for the dossier." />
                 {leagueLoading ? (
-                  <div className="py-8 text-center text-sm" style={{ color: MUTED }}>Building the grid…</div>
+                  <SectionLoading message="Building the grid…" className="justify-center py-8" />
                 ) : (
                   <div className="mt-4 overflow-x-auto">
                     <table className="border-collapse text-center text-xs">
@@ -761,8 +759,7 @@ export function RivalryCenter() {
                     <button
                       key={nm.key}
                       onClick={() => setOpen({ focalKey: nm.key, focalName: nm.name, rivalKey: nm.rivalKey, rivalName: nm.rivalName })}
-                      style={SUB}
-                      className="flex items-center justify-between p-3 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      className={cn(SUB_CLASS, "flex items-center justify-between p-3 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background")}
                     >
                       <div className="min-w-0">
                         <div className="truncate font-bold">{nm.name}</div>
@@ -814,7 +811,7 @@ export function RivalryCenter() {
                 return (
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     {out.slice(0, 8).map((r, i) => (
-                      <div key={i} style={SUB} className="p-4">
+                      <div key={i} className={cn(SUB_CLASS, "p-4")}>
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold uppercase tracking-widest" style={{ color: MUTED }}>{r.season ?? "—"}</span>
                           <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: r.tone === "good" ? GOLD : RED }}>{r.impact}</span>
@@ -838,7 +835,7 @@ export function RivalryCenter() {
                   return (
                     <div className="mt-4 space-y-2">
                       {rev.map((p, i) => (
-                        <button key={i} onClick={() => openDossier(p)} style={SUB} className="flex w-full items-center justify-between p-3 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+                        <button key={i} onClick={() => openDossier(p)} className={cn(SUB_CLASS, "flex w-full items-center justify-between p-3 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background")}>
                           <div>
                             <div className="font-bold">{String(p.rivalName)}</div>
                             <div className="text-xs" style={{ color: MUTED }}>Eliminated {rodName} {n(p.playoffEliminations)}× · revenge pending</div>
@@ -869,7 +866,7 @@ export function RivalryCenter() {
                   return (
                     <div className="mt-4 grid gap-2">
                       {items.map((x, i) => (
-                        <div key={i} style={SUB} className="flex items-center gap-3 p-3">
+                        <div key={i} className={cn(SUB_CLASS, "flex items-center gap-3 p-3")}>
                           <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: `${GOLD}1a`, color: GOLD }}>{x.icon}</span>
                           <div className="min-w-0">
                             <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>{x.t}</div>
@@ -922,7 +919,7 @@ export function RivalryCenter() {
           </div>
         </div>
       )}
-    </div>
+    </IntelPageShell>
   );
 }
 
@@ -938,7 +935,7 @@ function HeroStrip({ p, gated, yearsActive }: { p: Pair; gated?: boolean; yearsA
     return (
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {cellsFree.map(([k, v], i) => (
-          <div key={i} style={SUB} className="px-3 py-3">
+          <div key={i} className={cn(SUB_CLASS, "px-3 py-3")}>
             <div className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: MUTED }}>{k}</div>
             <div className="mt-1 text-xl font-black" style={{ color: TEXT }}>{v}</div>
           </div>
@@ -963,7 +960,7 @@ function HeroStrip({ p, gated, yearsActive }: { p: Pair; gated?: boolean; yearsA
   return (
     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
       {cells.map(([k, v], i) => (
-        <div key={i} style={SUB} className="px-3 py-3">
+        <div key={i} className={cn(SUB_CLASS, "px-3 py-3")}>
           <div className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: MUTED }}>{k}</div>
           <div className="mt-1 text-xl font-black" style={{ color: TEXT }}>{v}</div>
         </div>
