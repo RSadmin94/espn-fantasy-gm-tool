@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
-import { Loader2, Trophy, Medal, Crown, Swords, Landmark, ChevronDown, Skull } from "lucide-react";
+import { Loader2, Trophy, Medal, Crown, Swords, Landmark, ChevronDown, Skull, ArrowLeftRight } from "lucide-react";
 import {
   CinematicPageHeader,
   IntelPageShell,
@@ -15,6 +15,8 @@ import {
   PageLoading,
   ProGate,
   TabBar,
+  SectionLoading,
+  EmptyState,
 } from "@/components/layout";
 import {
   Collapsible,
@@ -157,6 +159,185 @@ function ClosestChampionshipCard({ hasPlayoffGmMatchups }: { hasPlayoffGmMatchup
   );
 }
 
+function formatTradeProcessedDate(ms: number): string {
+  if (!ms || !Number.isFinite(ms)) return "—";
+  try {
+    return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return "—";
+  }
+}
+
+function tradeOwnersLine(trade: {
+  sideA: { ownerName?: string };
+  sideB: { ownerName?: string };
+}): string {
+  return `${trade.sideA.ownerName ?? "Owner A"} vs ${trade.sideB.ownerName ?? "Owner B"}`;
+}
+
+function tradeWinnerName(trade: {
+  winnerOwnerKey: string | null;
+  sideA: { ownerKey?: string | null; ownerName?: string };
+  sideB: { ownerKey?: string | null; ownerName?: string };
+}): string {
+  if (!trade.winnerOwnerKey) return "Even";
+  if (trade.winnerOwnerKey === trade.sideA.ownerKey) return String(trade.sideA.ownerName ?? "Owner A");
+  if (trade.winnerOwnerKey === trade.sideB.ownerKey) return String(trade.sideB.ownerName ?? "Owner B");
+  return "—";
+}
+
+function TradeHighlightCard({
+  title,
+  trade,
+}: {
+  title: string;
+  trade: {
+    season: number;
+    processedDate: number;
+    margin: number;
+    verdictLabel: string;
+    sideA: { ownerKey?: string | null; ownerName?: string };
+    sideB: { ownerKey?: string | null; ownerName?: string };
+    winnerOwnerKey: string | null;
+    receiptText?: string;
+  } | null;
+}) {
+  if (!trade) return null;
+  return (
+    <GoldGlowCard className="p-5">
+      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">{title}</p>
+      <p className="mt-2 text-sm font-semibold text-zinc-100">{tradeOwnersLine(trade)}</p>
+      <p className="mt-1 text-xs text-zinc-500">
+        {trade.season} · {formatTradeProcessedDate(trade.processedDate)}
+      </p>
+      <p className="mt-3 text-lg font-bold tabular-nums text-amber-200">+{Math.round(trade.margin)} value</p>
+      <p className="mt-1 text-xs text-zinc-400">
+        {tradeWinnerName(trade)} · {trade.verdictLabel}
+      </p>
+    </GoldGlowCard>
+  );
+}
+
+function NotoriousTradesSection({
+  leagueContextKey,
+  leagueKeyReady,
+  seasons,
+}: {
+  leagueContextKey: string;
+  leagueKeyReady: boolean;
+  seasons: number[];
+}) {
+  const seasonLabel =
+    seasons.length === 0
+      ? "—"
+      : seasons.length === 1
+        ? String(seasons[0])
+        : `${seasons[0]}–${seasons[seasons.length - 1]}`;
+
+  const reportQ = (trpc as any).completedTradeIntel.notoriousTradesReport.useQuery(
+    withLeagueSalt(
+      {
+        leagueId: leagueContextKey,
+        seasons: seasons.length > 0 ? seasons : [new Date().getFullYear()],
+      },
+      leagueContextKey,
+    ),
+    {
+      enabled: leagueKeyReady && seasons.length > 0,
+      staleTime: 60_000,
+    },
+  );
+
+  const report = reportQ.data;
+  const ranked = Array.isArray(report?.rankedByMargin) ? report.rankedByMargin.slice(0, 5) : [];
+  const hasTrades = ranked.length > 0;
+
+  return (
+    <IntelPanel variant="profile" className="overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.06] px-4 py-3">
+        <div className="flex items-center gap-2">
+          <ArrowLeftRight className="h-4 w-4 text-amber-400/90" aria-hidden />
+          <h3 className="text-sm font-extrabold uppercase tracking-[0.16em] text-zinc-100">Notorious Trades</h3>
+        </div>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{seasonLabel} season coverage</span>
+      </div>
+      <div className="p-4 sm:p-5">
+        {reportQ.isLoading ? (
+          <SectionLoading message="Loading completed trade rankings…" size="sm" />
+        ) : reportQ.isError ? (
+          <p className="text-sm text-red-300">Could not load notorious trades.</p>
+        ) : !hasTrades ? (
+          <EmptyState
+            panelVariant="profile"
+            className="p-6"
+            title="No completed trades found for this league."
+            description="Completed ESPN trades will appear here after league sync."
+          />
+        ) : (
+          <div className="space-y-5">
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              <TradeHighlightCard title="Biggest value gap" trade={report?.biggestValueGap ?? null} />
+              <TradeHighlightCard title="Most lopsided trade" trade={report?.mostLopsided ?? null} />
+              <TradeHighlightCard title="Closest fair trade" trade={report?.closestFairTrade ?? null} />
+              <TradeHighlightCard title="Biggest pick-only gap" trade={report?.biggestPickOnlyGap ?? null} />
+              {report?.biggestPlayerTrade ? (
+                <TradeHighlightCard title="Biggest player trade" trade={report.biggestPlayerTrade} />
+              ) : null}
+              {report?.biggestMixedTrade ? (
+                <TradeHighlightCard title="Biggest mixed trade" trade={report.biggestMixedTrade} />
+              ) : null}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {report?.mostActivePair ? (
+                <GoldGlowCard className="p-5">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Most active trading pair</p>
+                  <p className="mt-2 text-sm font-semibold text-zinc-100">
+                    {report.mostActivePair.ownerAName} vs {report.mostActivePair.ownerBName}
+                  </p>
+                  <p className="mt-2 text-lg font-bold tabular-nums text-amber-200">{report.mostActivePair.count} trades</p>
+                </GoldGlowCard>
+              ) : null}
+              {report?.mostSuccessfulOwner ? (
+                <GoldGlowCard className="p-5">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Most successful trader</p>
+                  <p className="mt-2 text-sm font-semibold text-zinc-100">{report.mostSuccessfulOwner.ownerName}</p>
+                  <p className="mt-2 text-lg font-bold tabular-nums text-amber-200">
+                    {report.mostSuccessfulOwner.wins} wins · +{report.mostSuccessfulOwner.netValue} net value
+                  </p>
+                </GoldGlowCard>
+              ) : null}
+            </div>
+
+            <div>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-zinc-500">Top trades by value margin</p>
+              <div className="space-y-2">
+                {ranked.map((trade: any) => (
+                  <div
+                    key={trade.clusterId ?? trade.tradeId}
+                    className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5 text-xs"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold text-zinc-100">{tradeOwnersLine(trade)}</span>
+                      <span className="rounded border border-white/[0.1] px-1.5 py-0.5 text-[10px] text-zinc-400">
+                        {trade.verdictLabel}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-zinc-500">
+                      {trade.season} · {formatTradeProcessedDate(trade.processedDate)} · +{Math.round(trade.margin)} value ·{" "}
+                      {tradeWinnerName(trade)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </IntelPanel>
+  );
+}
+
 export function HallOfFame() {
   const [backfilling, setBackfilling] = useState(false);
   const [backfillNote, setBackfillNote] = useState<string | null>(null);
@@ -263,6 +444,12 @@ export function HallOfFame() {
 
     return { kind: "no_medals" as const };
   }, [hofQ.data, runnerUpFinishesByOwner]);
+
+  const tradeSeasons = useMemo(() => {
+    const touched = hofQ.data?.coverage?.seasonsTouched ?? [];
+    if (touched.length > 0) return [...touched].sort((a, b) => a - b);
+    return [new Date().getFullYear()];
+  }, [hofQ.data?.coverage?.seasonsTouched]);
 
   const leagueLabel =
     activeQ.data?.leagueName?.trim() ||
@@ -638,6 +825,12 @@ export function HallOfFame() {
           )}
 
           {hofTab === "legacy" && (
+            <div className="space-y-6">
+              <NotoriousTradesSection
+                leagueContextKey={leagueContextKey}
+                leagueKeyReady={leagueKeyReady}
+                seasons={tradeSeasons}
+              />
             <div className="grid gap-3 md:grid-cols-2">
               {legacyMostTitles ? (
                 <GoldGlowCard className="p-5">
@@ -702,6 +895,7 @@ export function HallOfFame() {
               ) : (
                 <UnavailableBlock title="Highest Regular Season Win %" />
               )}
+            </div>
             </div>
           )}
           {hofTab === "cemetery" && (
