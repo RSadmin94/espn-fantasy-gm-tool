@@ -123,18 +123,87 @@ function tradeResultStyle(result: "win" | "loss" | "tie"): React.CSSProperties {
   return { border: `1px solid rgba(255,255,255,.1)`, background: "rgba(255,255,255,.04)", color: MUTED };
 }
 
-function RivalryStoryMetadataSection({
-  focalOwnerKey,
-  opponentOwnerKey,
-  leagueContextKey,
-  leagueKeyReady,
-}: {
-  focalOwnerKey: string;
-  opponentOwnerKey: string;
-  leagueContextKey: string;
-  leagueKeyReady: boolean;
-}) {
-  const storyQ = (trpc as any).rivalryStory.pair.useQuery(
+function formatRecord(wins: number, losses: number, ties = 0): string {
+  return ties > 0 ? `${wins}–${losses}–${ties}` : `${wins}–${losses}`;
+}
+
+type TapeMeeting = {
+  isPlayoff: boolean;
+  result: "W" | "L" | "T";
+  season: number;
+  week: number;
+  ownerScore: number;
+  opponentScore: number;
+};
+
+function tallyFocalRecord(meetings: TapeMeeting[]): { wins: number; losses: number; ties: number } {
+  let wins = 0;
+  let losses = 0;
+  let ties = 0;
+  for (const m of meetings) {
+    if (m.result === "W") wins++;
+    else if (m.result === "L") losses++;
+    else ties++;
+  }
+  return { wins, losses, ties };
+}
+
+function computeTapeStats(meetings: TapeMeeting[]) {
+  const rs = meetings.filter((m) => !m.isPlayoff);
+  const playoffs = meetings.filter((m) => m.isPlayoff);
+  const career = tallyFocalRecord(rs);
+  const playoffRec = tallyFocalRecord(playoffs);
+  const recentFive = tallyFocalRecord(rs.slice(0, 5));
+  let streak = "—";
+  if (rs.length > 0 && rs[0]!.result !== "T") {
+    const dir = rs[0]!.result;
+    let count = 0;
+    for (const m of rs) {
+      if (m.result !== dir) break;
+      count++;
+    }
+    streak = `${dir}${count}`;
+  }
+  return {
+    career,
+    playoffRec,
+    recentFive,
+    streak,
+    meetings: meetings.length,
+    rsMeetings: rs.length,
+    playoffMeetings: playoffs.length,
+  };
+}
+
+function formatLastMeeting(m: TapeMeeting | null | undefined): string {
+  if (!m) return "—";
+  const playoff = m.isPlayoff ? " (P)" : "";
+  return `${m.season} W${m.week}${playoff} · ${m.result} ${m.ownerScore.toFixed(1)}–${m.opponentScore.toFixed(1)}`;
+}
+
+function TapeRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b py-1.5 last:border-b-0" style={{ borderColor: "rgba(255,255,255,.06)" }}>
+      <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</span>
+      <span className="font-mono text-sm font-semibold tabular-nums" style={{ color: TEXT }}>{value}</span>
+    </div>
+  );
+}
+
+type StoryPairPayload = {
+  tier: string;
+  headline: { key: string };
+  availableBlocks: string[];
+  documentaryFacts: Array<{ factKey: string }>;
+};
+
+function useRivalryStoryPairQuery(
+  focalOwnerKey: string,
+  opponentOwnerKey: string,
+  leagueContextKey: string,
+  leagueKeyReady: boolean,
+) {
+  return (trpc as any).rivalryStory.pair.useQuery(
     withLeagueSalt(
       {
         leagueId: leagueContextKey,
@@ -148,7 +217,68 @@ function RivalryStoryMetadataSection({
       staleTime: 60_000,
     },
   );
+}
 
+function RivalryTaleOfTheTapeSection({
+  storyQ,
+  meetings,
+  lastMeeting,
+}: {
+  storyQ: ReturnType<typeof useRivalryStoryPairQuery>;
+  meetings: TapeMeeting[];
+  lastMeeting: TapeMeeting | null;
+}) {
+  if (storyQ.isLoading) {
+    return (
+      <div className="p-3" style={SUB}>
+        <div className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Loading tale of the tape…
+        </div>
+      </div>
+    );
+  }
+
+  const story = storyQ.data as StoryPairPayload | undefined;
+  if (storyQ.isError || !story || !story.availableBlocks.includes("taleOfTape")) {
+    return null;
+  }
+
+  const tape = computeTapeStats(meetings);
+  const factCount = story.documentaryFacts.length;
+  const blockCount = story.availableBlocks.length;
+
+  return (
+    <div className="p-3" style={SUB}>
+      <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+        <Swords className="h-4 w-4" style={{ color: GOLD }} />
+        Tale of the Tape
+      </div>
+      <div className="rounded-[8px] px-3 py-1" style={{ ...SUB, borderRadius: 8 }}>
+        <TapeRow label="Tier" value={story.tier} />
+        <TapeRow label="Headline" value={story.headline.key} />
+        <TapeRow label="Career" value={formatRecord(tape.career.wins, tape.career.losses, tape.career.ties)} />
+        {tape.playoffMeetings > 0 ? (
+          <TapeRow label="Playoffs" value={formatRecord(tape.playoffRec.wins, tape.playoffRec.losses, tape.playoffRec.ties)} />
+        ) : null}
+        {tape.rsMeetings >= 5 ? (
+          <TapeRow label="Recent five" value={formatRecord(tape.recentFive.wins, tape.recentFive.losses, tape.recentFive.ties)} />
+        ) : null}
+        <TapeRow label="Current streak" value={tape.streak} />
+        <TapeRow label="Meetings" value={String(tape.meetings)} />
+        <TapeRow label="Last meeting" value={formatLastMeeting(lastMeeting)} />
+        <TapeRow label="Facts" value={String(factCount)} />
+        <TapeRow label="Blocks" value={String(blockCount)} />
+      </div>
+    </div>
+  );
+}
+
+function RivalryStoryMetadataSection({
+  storyQ,
+}: {
+  storyQ: ReturnType<typeof useRivalryStoryPairQuery>;
+}) {
   if (storyQ.isLoading) {
     return (
       <div className="p-3" style={SUB}>
@@ -168,12 +298,7 @@ function RivalryStoryMetadataSection({
     );
   }
 
-  const story = storyQ.data as {
-    tier: string;
-    headline: { key: string };
-    availableBlocks: string[];
-    documentaryFacts: Array<{ factKey: string }>;
-  };
+  const story = storyQ.data as StoryPairPayload;
   const factKeys = [...new Set(story.documentaryFacts.map((f) => f.factKey))];
 
   return (
@@ -208,6 +333,30 @@ function RivalryStoryMetadataSection({
         </p>
       </div>
     </div>
+  );
+}
+
+function RivalryStoryPairBlocks({
+  focalOwnerKey,
+  opponentOwnerKey,
+  leagueContextKey,
+  leagueKeyReady,
+  meetings,
+  lastMeeting,
+}: {
+  focalOwnerKey: string;
+  opponentOwnerKey: string;
+  leagueContextKey: string;
+  leagueKeyReady: boolean;
+  meetings: TapeMeeting[];
+  lastMeeting: TapeMeeting | null;
+}) {
+  const storyQ = useRivalryStoryPairQuery(focalOwnerKey, opponentOwnerKey, leagueContextKey, leagueKeyReady);
+  return (
+    <>
+      <RivalryTaleOfTheTapeSection storyQ={storyQ} meetings={meetings} lastMeeting={lastMeeting} />
+      <RivalryStoryMetadataSection storyQ={storyQ} />
+    </>
   );
 }
 
@@ -641,11 +790,13 @@ export function RivalryDossierPanel({
             <StatCard icon={<Crosshair className="h-4 w-4" style={{ color: ACCENT }} />} label="Waiver Snipes" value={pd.waiverSnipes.available ? String(pd.waiverSnipes.count) : "—"} sub={pd.waiverSnipes.available ? "Detected from transactions" : pd.waiverSnipes.label} />
           </div>
 
-          <RivalryStoryMetadataSection
+          <RivalryStoryPairBlocks
             focalOwnerKey={queryKey}
             opponentOwnerKey={opponentKey}
             leagueContextKey={leagueContextKey}
             leagueKeyReady={leagueKeyReady}
+            meetings={pd.headToHeadHistory}
+            lastMeeting={pd.lastMeeting}
           />
 
           <RivalryTradeLedgerSection
