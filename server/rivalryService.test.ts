@@ -3,6 +3,7 @@
  * Unit tests for the rivalry score engine.
  */
 import { describe, it, expect } from "vitest";
+import { accumulateTradeVerdictLosses } from "./rivalryService";
 
 // ── Inline the pure scoring helpers so we don't need DB ──────────────────────
 
@@ -333,5 +334,88 @@ describe("rich H2H stat accumulator", () => {
     expect(sorted).toHaveLength(2);
     expect(sorted[0]).toEqual({ season: 2022, rodWins: 1, rodLosses: 1 });
     expect(sorted[1]).toEqual({ season: 2023, rodWins: 1, rodLosses: 0 });
+  });
+});
+
+describe("accumulateTradeVerdictLosses", () => {
+  const rodKey = "id:rod";
+  const sheldonKey = "id:sheldon";
+
+  function tradeFixture(partial: {
+    clusterId: string;
+    winnerOwnerKey: string | null;
+    sideAKey?: string;
+    sideBKey?: string;
+  }) {
+    return {
+      clusterId: partial.clusterId,
+      tradeId: partial.clusterId,
+      season: 2026,
+      processedDate: 1,
+      kind: "pick_only" as const,
+      sideA: {
+        teamId: 11,
+        ownerKey: partial.sideAKey ?? rodKey,
+        ownerName: "Rod Sellers",
+        teamName: "T1",
+        assetsReceived: [],
+        valueReceived: 100,
+      },
+      sideB: {
+        teamId: 23,
+        ownerKey: partial.sideBKey ?? sheldonKey,
+        ownerName: "Sheldon deRoux",
+        teamName: "T2",
+        assetsReceived: [],
+        valueReceived: 50,
+      },
+      winnerTeamId: partial.winnerOwnerKey === rodKey ? 11 : partial.winnerOwnerKey === sheldonKey ? 23 : null,
+      winnerOwnerKey: partial.winnerOwnerKey,
+      loserTeamId: null,
+      loserOwnerKey: null,
+      margin: 50,
+      verdictLabel: "SLIGHT EDGE A",
+      confidence: "high" as const,
+      receiptText: "",
+      netValueA: 50,
+    };
+  }
+
+  it("counts value-loss trades per rival (no player-count proxy)", () => {
+    const losses = accumulateTradeVerdictLosses({
+      focalOwnerKey: rodKey,
+      trades: [
+        tradeFixture({ clusterId: "t1", winnerOwnerKey: rodKey }),
+        tradeFixture({ clusterId: "t2", winnerOwnerKey: rodKey }),
+      ],
+    });
+    expect(losses.get(sheldonKey) ?? 0).toBe(0);
+  });
+
+  it("increments rival when focal lost by value verdict", () => {
+    const losses = accumulateTradeVerdictLosses({
+      focalOwnerKey: sheldonKey,
+      trades: [
+        tradeFixture({ clusterId: "t1", winnerOwnerKey: rodKey }),
+        tradeFixture({ clusterId: "t2", winnerOwnerKey: rodKey }),
+      ],
+    });
+    expect(losses.get(rodKey)).toBe(2);
+  });
+
+  it("ignores even trades", () => {
+    const losses = accumulateTradeVerdictLosses({
+      focalOwnerKey: rodKey,
+      trades: [tradeFixture({ clusterId: "t-even", winnerOwnerKey: null })],
+    });
+    expect(losses.size).toBe(0);
+  });
+
+  it("skips trades that do not involve the focal owner", () => {
+    const losses = accumulateTradeVerdictLosses({
+      focalOwnerKey: "id:other",
+      trades: [tradeFixture({ clusterId: "t1", winnerOwnerKey: rodKey })],
+    });
+    expect(losses.size).toBe(0);
   });
 });

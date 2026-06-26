@@ -18,16 +18,14 @@
  *   175+    → "Inferno"
  */
 
-import { getAllCachedSeasons, getCachedView, getDb, resolveActiveLeagueId } from "./db";
+import { getAllCachedSeasons, getDb, resolveActiveLeagueId } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import { buildOwnerIdentityAuthority } from "./ownerIdentityAuthority";
 import { buildH2HAuthority } from "./h2hAuthority";
 import {
-  normalizeTeams,
-  normalizeMatchups,
-  normalizeTransactions,
-  normalizeRosters,
-} from "./espnService";
+  loadCompletedTradeIntelligence,
+  type CompletedTradeIntel,
+} from "./completedTradeAuthority";
 import { invokeLLM } from "./_core/llm";
 import { rivalryScores } from "../drizzle/schema";
 import { isMissingTableError } from "./optionalEnrichmentTable";
@@ -97,14 +95,44 @@ function heatLabel(score: number): RivalryPair["heatLabel"] {
   return "Cold";
 }
 
+/**
+ * Count completed-trade value losses for the focal owner per rival.
+ * Uses completedTradeAuthority verdicts only — no player-count proxy.
+ */
+export function accumulateTradeVerdictLosses(args: {
+  trades: CompletedTradeIntel[];
+  focalOwnerKey: string;
+}): Map<string, number> {
+  const losses = new Map<string, number>();
+  const focalKey = args.focalOwnerKey.trim();
+  if (!focalKey) return losses;
+
+  for (const trade of args.trades) {
+    const focalOnA = trade.sideA.ownerKey === focalKey;
+    const focalOnB = trade.sideB.ownerKey === focalKey;
+    if (!focalOnA && !focalOnB) continue;
+
+    const rivalKey = focalOnA ? trade.sideB.ownerKey : trade.sideA.ownerKey;
+    if (!rivalKey) continue;
+
+    // Even trades and focal wins do not count as trade-verdict losses.
+    if (!trade.winnerOwnerKey || trade.winnerOwnerKey === focalKey) continue;
+    if (trade.winnerOwnerKey !== rivalKey) continue;
+
+    losses.set(rivalKey, (losses.get(rivalKey) ?? 0) + 1);
+  }
+
+  return losses;
+}
+
 // ── Core computation ──────────────────────────────────────────────────────────
 
 /**
  * Compute rivalry scores for all opponents vs the primary user (Rod).
  * Head-to-head is sourced from the H2H Authority (complete gmMatchups history,
- * resolved through the Owner Identity Authority); trade-verdict losses still
- * come from the ESPN season cache. Only opponents who fielded a team in the
- * league last year receive a heat score.
+ * resolved through the Owner Identity Authority); trade-verdict losses come from
+ * completedTradeAuthority (gmTransactions + value verdict). Only opponents who
+ * fielded a team in the league last year receive a heat score.
  */
 export async function computeRivalryScores(userId?: number, leagueId?: string): Promise<RivalryPair[]> {
   const cachedSeasons = await getAllCachedSeasons(leagueId, userId);
@@ -162,7 +190,7 @@ export async function computeRivalryScores(userId?: number, leagueId?: string): 
     identity.listPersons().map((p) => [p.canonicalPersonId, p.canonicalName] as const),
   );
 
-  // Seasons with an ESPN combined cache (used only by the trade pass below).
+  // Seasons with completed trade rows in gmTransactions.
   const sortedSeasons = [...cachedSeasons].sort((a, b) => a - b);
 
   // Per-opponent accumulators (keyed by canonical person id)
@@ -286,62 +314,20 @@ export async function computeRivalryScores(userId?: number, leagueId?: string): 
     }
   }
 
-  // ── Pass 2: Trade verdict losses ─────────────────────────────────────────
-  // We re-run the simplified trade verdict logic from tradeAging
-  // (only need winner/loser per trade, not full value breakdown)
-  for (const season of sortedSeasons) {
-    const row = await getCachedView(season, "combined", leagueId, { userId });
-    if (!row) continue;
-    const data = row.payload as Record<string, unknown>;
-    if (!focalMemberId) continue;
-
-    const transactions = normalizeTransactions(data) as Record<string, unknown>[];
-    // Group TRADE_PROPOSAL rows by transactionId
-    const tradeGroups = new Map<string, { teamAId: number; teamBId: number; playerRows: Record<string, unknown>[] }>();
-
-    for (const txn of transactions) {
-      const type = txn.type as string;
-      if (type !== "TRADE" && type !== "TRADE_PROPOSAL") continue;
-      const status = txn.status as string;
-      if (status !== "EXECUTED" && status !== "PENDING") continue;
-      const tid = txn.transactionId as string;
-      if (!tid) continue;
-      const fromTeamId = txn.fromTeamId as number;
-      const toTeamId = txn.toTeamId as number;
-      if (!fromTeamId || !toTeamId) continue;
-
-      if (!tradeGroups.has(tid)) {
-        tradeGroups.set(tid, { teamAId: fromTeamId, teamBId: toTeamId, playerRows: [] });
-      }
-      tradeGroups.get(tid)!.playerRows.push(txn);
-    }
-
-    for (const [, group] of Array.from(tradeGroups)) {
-      const teamAMember = identity.resolve(season, group.teamAId).canonicalPersonId;
-      const teamBMember = identity.resolve(season, group.teamBId).canonicalPersonId;
-      if (!teamAMember || !teamBMember) continue;
-
-      const rodIsA = teamAMember === focalCanon;
-      const rodIsB = teamBMember === focalCanon;
-      if (!rodIsA && !rodIsB) continue;
-
-      const rivalMemberId = rodIsA ? teamBMember : teamAMember;
-
-      // Simple value: count players received per side (proxy for value)
-      // A proper value calc would require the full playerMap — here we use
-      // a lightweight heuristic: side that received more players "won"
-      let aReceived = 0;
-      let bReceived = 0;
-      for (const r of group.playerRows) {
-        const toTeamId = r.toTeamId as number;
-        if (toTeamId === group.teamAId) aReceived++;
-        else if (toTeamId === group.teamBId) bReceived++;
-      }
-      // Rod lost the trade if his side received fewer players
-      const rodLostTrade = (rodIsA && aReceived < bReceived) || (rodIsB && bReceived < aReceived);
-      if (rodLostTrade) {
-        getAcc(rivalMemberId).tradeVerdictLosses++;
-      }
+  // ── Pass 2: Trade verdict losses (completed trade intelligence authority) ──
+  const db = await getDb();
+  if (db) {
+    const completedTrades = await loadCompletedTradeIntelligence({
+      db,
+      leagueId: lid,
+      seasons: sortedSeasons,
+    });
+    const tradeLosses = accumulateTradeVerdictLosses({
+      trades: completedTrades,
+      focalOwnerKey: focalCanon,
+    });
+    for (const [rivalCanon, count] of tradeLosses) {
+      if (count > 0) getAcc(rivalCanon).tradeVerdictLosses += count;
     }
   }
 
