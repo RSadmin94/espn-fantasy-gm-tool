@@ -16,6 +16,7 @@ import {
   HeartCrack,
   ScrollText,
   Swords,
+  ArrowLeftRight,
 } from "lucide-react";
 import {
   CartesianGrid,
@@ -89,6 +90,214 @@ function coverageNote(c: { seasonsWithData: number[]; missingSeasons: number[]; 
     return `Partial matchup history: seasons ${formatSeasonRanges(c.missingSeasons)} not synced. Records reflect available seasons only.`;
   }
   return "Partial matchup history. Records reflect available seasons only.";
+}
+
+function formatTradeProcessedDate(ms: number): string {
+  if (!ms || !Number.isFinite(ms)) return "—";
+  try {
+    return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return "—";
+  }
+}
+
+function tradeAssetLabels(side: { assetsReceived?: { displayLabel?: string }[] } | null | undefined): string[] {
+  const assets = Array.isArray(side?.assetsReceived) ? side.assetsReceived : [];
+  return assets.map((a) => String(a.displayLabel ?? "").trim()).filter(Boolean);
+}
+
+function focalTradeResult(
+  winnerOwnerKey: string | null | undefined,
+  focalOwnerKey: string,
+  opponentOwnerKey: string,
+): "win" | "loss" | "tie" {
+  if (!winnerOwnerKey) return "tie";
+  if (winnerOwnerKey === focalOwnerKey) return "win";
+  if (winnerOwnerKey === opponentOwnerKey) return "loss";
+  return "tie";
+}
+
+function tradeResultStyle(result: "win" | "loss" | "tie"): React.CSSProperties {
+  if (result === "win") return { border: `1px solid ${GREEN}44`, background: "rgba(163,230,53,.08)", color: GREEN };
+  if (result === "loss") return { border: `1px solid ${RED}44`, background: "rgba(239,68,68,.08)", color: RED };
+  return { border: `1px solid rgba(255,255,255,.1)`, background: "rgba(255,255,255,.04)", color: MUTED };
+}
+
+function RivalryTradeLedgerSection({
+  focalOwnerKey,
+  opponentOwnerKey,
+  focalDisplayName,
+  opponentDisplayName,
+  leagueContextKey,
+  leagueKeyReady,
+  activeSeason,
+}: {
+  focalOwnerKey: string;
+  opponentOwnerKey: string;
+  focalDisplayName: string;
+  opponentDisplayName: string;
+  leagueContextKey: string;
+  leagueKeyReady: boolean;
+  activeSeason?: number;
+}) {
+  const season = activeSeason ?? new Date().getFullYear();
+  const tradeQ = (trpc as any).completedTradeIntel.rivalryTradeLedger.useQuery(
+    withLeagueSalt(
+      {
+        leagueId: leagueContextKey,
+        season,
+        ownerAKey: focalOwnerKey,
+        ownerBKey: opponentOwnerKey,
+      },
+      leagueContextKey,
+    ),
+    {
+      enabled: leagueKeyReady && !!focalOwnerKey && !!opponentOwnerKey,
+      staleTime: 60_000,
+    },
+  );
+
+  const ledger = tradeQ.data;
+
+  return (
+    <div className="p-3" style={SUB}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+          <ArrowLeftRight className="h-4 w-4" style={{ color: ACCENT }} />
+          Trade Ledger
+        </div>
+        <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+          {season} season
+        </span>
+      </div>
+
+      {tradeQ.isLoading ? (
+        <div className="flex items-center gap-2 py-4 text-sm" style={{ color: MUTED }}>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading trade ledger…
+        </div>
+      ) : tradeQ.isError ? (
+        <p className="text-sm" style={{ color: RED }}>Could not load trade ledger.</p>
+      ) : !ledger || ledger.tradeCount === 0 ? (
+        <div className="rounded-[8px] border border-dashed px-4 py-6 text-center" style={{ borderColor: "rgba(255,255,255,.12)" }}>
+          <p className="text-sm font-medium" style={{ color: TEXT }}>No completed trades found between these owners.</p>
+          <p className="mt-1 text-xs" style={{ color: MUTED }}>Completed ESPN trades will appear here after league sync.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
+              <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Trade record</div>
+              <div className="mt-1 text-lg font-extrabold tabular-nums" style={{ color: TEXT }}>
+                {ledger.recordA}–{ledger.recordB}
+                {ledger.ties > 0 ? `–${ledger.ties}` : ""}
+              </div>
+              <div className="mt-0.5 text-[10px] leading-snug" style={{ color: MUTED }}>
+                {focalDisplayName} vs {opponentDisplayName} · {ledger.tradeCount} trade{ledger.tradeCount === 1 ? "" : "s"}
+              </div>
+            </div>
+            <div className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
+              <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Ledger winner</div>
+              <div className="mt-1 text-sm font-bold" style={{ color: ledger.ledgerWinnerKey ? ACCENT : MUTED }}>
+                {ledger.ledgerWinnerName ?? "Even"}
+              </div>
+            </div>
+            <div className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
+              <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Trade count</div>
+              <div className="mt-1 text-lg font-extrabold tabular-nums" style={{ color: TEXT }}>{ledger.tradeCount}</div>
+            </div>
+          </div>
+
+          {(ledger.biggestFleece || ledger.mostBalanced) && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {ledger.biggestFleece && (
+                <div className="rounded-[8px] px-3 py-2" style={{ border: `1px solid ${ACCENT}33`, background: "rgba(163,230,53,.06)" }}>
+                  <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: ACCENT }}>Biggest trade win</div>
+                  <p className="mt-1 text-xs leading-relaxed" style={{ color: TEXT }}>
+                    {ledger.biggestFleece.winnerOwnerKey === focalOwnerKey
+                      ? focalDisplayName
+                      : ledger.biggestFleece.winnerOwnerKey === opponentOwnerKey
+                        ? opponentDisplayName
+                        : "Even"}{" "}
+                    · +{Math.round(ledger.biggestFleece.margin)} value
+                  </p>
+                  <p className="mt-1 text-[10px]" style={{ color: MUTED }}>{ledger.biggestFleece.verdictLabel}</p>
+                </div>
+              )}
+              {ledger.mostBalanced && (
+                <div className="rounded-[8px] px-3 py-2" style={{ border: "1px solid rgba(255,255,255,.08)", background: "rgba(255,255,255,.03)" }}>
+                  <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Most balanced trade</div>
+                  <p className="mt-1 text-xs leading-relaxed" style={{ color: TEXT }}>
+                    Margin {Math.round(ledger.mostBalanced.margin)} · {ledger.mostBalanced.verdictLabel}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div>
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Recent trades</p>
+            <div className="space-y-2">
+              {(ledger.recentTrades ?? ledger.trades ?? []).map((entry: any) => {
+                const trade = entry.trade;
+                const focalSide = trade.sideA.ownerKey === focalOwnerKey ? trade.sideA : trade.sideB;
+                const oppSide = trade.sideA.ownerKey === focalOwnerKey ? trade.sideB : trade.sideA;
+                const focalReceived = tradeAssetLabels(focalSide);
+                const oppReceived = tradeAssetLabels(oppSide);
+                const result = focalTradeResult(entry.winnerOwnerKey, focalOwnerKey, opponentOwnerKey);
+                const focalValue = focalSide.valueReceived ?? 0;
+                const oppValue = oppSide.valueReceived ?? 0;
+                const netFocal = focalValue - oppValue;
+                return (
+                  <div
+                    key={trade.clusterId ?? trade.tradeId}
+                    className="rounded-[8px] px-3 py-2.5 text-xs"
+                    style={{ border: "1px solid rgba(255,255,255,.08)", background: "rgba(255,255,255,.02)" }}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-semibold" style={{ color: TEXT }}>
+                        {trade.season} · {formatTradeProcessedDate(trade.processedDate)}
+                      </div>
+                      <span
+                        className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                        style={tradeResultStyle(result)}
+                      >
+                        {result === "win" ? "Win" : result === "loss" ? "Loss" : "Even"}
+                      </span>
+                    </div>
+                    <div className="mt-2 space-y-1" style={{ color: TEXT }}>
+                      <div>
+                        <span className="font-semibold" style={{ color: ACCENT }}>{focalDisplayName} received:</span>{" "}
+                        {focalReceived.length ? focalReceived.join(", ") : "—"}
+                      </div>
+                      <div>
+                        <span className="font-semibold" style={{ color: BLUE }}>{opponentDisplayName} received:</span>{" "}
+                        {oppReceived.length ? oppReceived.join(", ") : "—"}
+                      </div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: MUTED }}>
+                      <span>
+                        Margin:{" "}
+                        <span className="font-semibold tabular-nums" style={{ color: TEXT }}>
+                          {netFocal > 0 ? "+" : ""}
+                          {Math.round(netFocal)}
+                        </span>
+                      </span>
+                      {trade.verdictLabel ? (
+                        <span className="rounded border px-1.5 py-0.5 text-[10px]" style={{ borderColor: "rgba(255,255,255,.1)", color: MUTED }}>
+                          {trade.verdictLabel}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function RivalryDossierPanel({
@@ -343,6 +552,16 @@ export function RivalryDossierPanel({
             <StatCard icon={<Trophy className="h-4 w-4" style={{ color: GOLD }} />} label="Playoff Encounters" value={String(pd.playoffEncounters)} sub="From playoff gmMatchups" />
             <StatCard icon={<Crosshair className="h-4 w-4" style={{ color: ACCENT }} />} label="Waiver Snipes" value={pd.waiverSnipes.available ? String(pd.waiverSnipes.count) : "—"} sub={pd.waiverSnipes.available ? "Detected from transactions" : pd.waiverSnipes.label} />
           </div>
+
+          <RivalryTradeLedgerSection
+            focalOwnerKey={queryKey}
+            opponentOwnerKey={opponentKey}
+            focalDisplayName={pd.focalDisplayName}
+            opponentDisplayName={pd.opponentDisplayName}
+            leagueContextKey={leagueContextKey}
+            leagueKeyReady={leagueKeyReady}
+            activeSeason={activeSeason}
+          />
 
           <div className="grid gap-4 lg:grid-cols-2">
             {/* H2H table */}
