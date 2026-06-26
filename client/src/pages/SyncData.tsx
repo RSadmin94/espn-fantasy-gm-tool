@@ -10,6 +10,7 @@ import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { fetchEspnSeasonBundleBrowserOrExtension } from "@/lib/espnApi";
 import { cn } from "@/lib/utils";
 import { useProductOnboarding } from "@/components/onboarding";
+import { EspnConnectorCtaRow, EspnConnectorGuide } from "@/components/connect";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -582,7 +583,7 @@ export function SyncData() {
       { ok: draftOk, label: draftOk ? "Draft picks present in sync manifests" : "Draft history thin or missing in manifests" },
       { ok: teamsOk, label: teamsOk ? "Team snapshots present" : "Team snapshots missing" },
       { ok: missing.length === 0, label: missing.length === 0 ? "No missing historical seasons (per discovery)" : `${missing.length} season(s) still missing vs ESPN history` },
-      { ok: medalRows > 0, label: medalRows > 0 ? "Championship medals on file (Hall of Fame source)" : "Championship medals missing — Hall of Fame needs League History Medals" },
+      { ok: medalRows > 0, label: medalRows > 0 ? "Championship medals on file (League History source)" : "Championship medals missing — League History needs medal sync" },
     ];
     const okCount = items.filter((i) => i.ok).length;
     const score = items.length ? Math.round((okCount / items.length) * 100) : 0;
@@ -1289,7 +1290,7 @@ export function SyncData() {
       await handleScrapeLeagueHistoryMedals();
       setSyncHubNote("Step 4 — Weekly box scores for every season (the long one)…");
       await runCaptureWeeklyBoxScoresCore();
-      toast.success("Fix pass completed. Review League Health above and Hall of Fame.");
+      toast.success("Fix pass completed. Review League Health above and League History.");
     } catch (e) {
       toast.error(trpcLikeErrorMessage(e as Error));
     } finally {
@@ -1389,10 +1390,26 @@ export function SyncData() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">League Synchronization Center</h1>
         <p className="mt-1 text-muted-foreground">
-          Keep your league accurate and complete. Use the three primary actions below — engineering tools stay in{" "}
-          <span className="font-medium text-foreground">Advanced Admin Tools</span> (collapsed by default).
+          Step 4 of ESPN setup: pull seasons into Fantasy Football Rivals. Private league data still flows through the{" "}
+          <span className="font-medium text-foreground">ESPN Connector</span> — this page is where sync runs.
         </p>
       </div>
+
+      {!isConnected ? (
+        <div className="space-y-3">
+          <EspnConnectorGuide highlightStep={4} />
+          <p className="text-sm text-muted-foreground">
+            Complete steps 1–3 on{" "}
+            <a href="/connect" className="font-medium text-primary underline underline-offset-2">
+              Connect ESPN
+            </a>{" "}
+            before syncing.
+          </p>
+          <EspnConnectorCtaRow />
+        </div>
+      ) : (
+        <EspnConnectorGuide variant="compact" />
+      )}
 
       {/* League health + primary CTAs */}
       <Card className="border-primary/25 bg-gradient-to-b from-primary/[0.06] to-card">
@@ -1402,8 +1419,9 @@ export function SyncData() {
             League health
           </CardTitle>
           <CardDescription>
-            Quick read on cache, history, and Hall of Fame inputs.{" "}
-            <span className="font-semibold text-foreground">{leagueHealth.score}%</span> checks passing.
+            Quick read on cache, history, and League History inputs.{" "}
+            <span className="font-semibold text-foreground">{leagueHealth.score}%</span> checks passing. Advanced tools
+            live in <span className="font-medium text-foreground">Advanced Admin Tools</span> below.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1427,7 +1445,7 @@ export function SyncData() {
           </ul>
           {!leagueHealth.items.some((i) => i.ok && i.label.includes("Championship medals on file")) && (
             <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-              Hall of Fame requires championship history.{" "}
+              League History requires championship medals.{" "}
               <Button
                 variant="link"
                 className="h-auto p-0 text-amber-50 underline"
@@ -1489,7 +1507,7 @@ export function SyncData() {
                 Import weekly box scores
               </span>
               <span className="text-xs font-normal opacity-90">
-                Every season's player-level scorecards (extension)
+                Every season&apos;s player-level scorecards (ESPN Connector)
               </span>
             </Button>
             <Button
@@ -1778,7 +1796,7 @@ export function SyncData() {
         <CardHeader>
           <CardTitle className="text-base">Browser session import (historical JSON)</CardTitle>
           <CardDescription>
-            Fetches historical JSON using your ESPN login in this browser (or the GM War Room extension if ESPN
+            Fetches historical JSON using your ESPN login in this browser (or the Fantasy Football Rivals ESPN Connector if ESPN
             blocks the page). Test mode: sync <strong>{BROWSER_SYNC_TEST_SEASON}</strong> first. After the database
             shows draft picks or matchups for {BROWSER_SYNC_TEST_SEASON}, you can sync seasons{" "}
             {BROWSER_SYNC_REMAINING_SEASONS[0]}–{BROWSER_SYNC_REMAINING_SEASONS[BROWSER_SYNC_REMAINING_SEASONS.length - 1]}.
@@ -1786,7 +1804,13 @@ export function SyncData() {
         </CardHeader>
         <CardContent className="space-y-3">
           {!leagueId && (
-            <p className="text-sm text-muted-foreground">Connect an active league to enable browser session sync.</p>
+            <p className="text-sm text-muted-foreground">
+              Connect your league on{" "}
+              <a href="/connect" className="font-medium text-primary underline underline-offset-2">
+                Connect ESPN
+              </a>{" "}
+              (steps 1–3) to enable browser session sync via the ESPN Connector.
+            </p>
           )}
           {browserSyncStatusQuery.isLoading && leagueId ? (
             <p className="text-xs text-muted-foreground flex items-center gap-2">
@@ -1955,7 +1979,7 @@ export function SyncData() {
           <CardTitle className="text-base">Import Historical Standings (2010–2017)</CardTitle>
           <CardDescription>
             Scrapes the ESPN standings page for each season and imports final standings into League History.
-            Requires you to be logged in to ESPN in this browser. Extension opens each tab automatically.
+            Requires you to be logged in to ESPN in this browser. The ESPN Connector opens each tab automatically.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -2415,8 +2439,8 @@ export function SyncData() {
             {!discoverHistoryQuery.isLoading && available.length === 0 && (
               <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
                 {leagueConnectionMissing
-                  ? "League not connected — connect ESPN to detect history."
-                  : "No league history detected yet."}
+                  ? "League not connected — complete steps 1–3 on Connect ESPN (ESPN Connector required)."
+                  : "No league history detected yet — run Import league history after connecting."}
               </div>
             )}
 

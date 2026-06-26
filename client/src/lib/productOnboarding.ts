@@ -94,6 +94,10 @@ export const PRODUCT_HELP_ITEMS = [
     title: "What is League History?",
     body: "The permanent record of your league—titles, records, notorious trades, and milestones.",
   },
+  {
+    title: "What is the ESPN Connector?",
+    body: "A Chrome extension that passes your ESPN session to Fantasy Football Rivals — required for private league sync. It does not replace the app.",
+  },
 ];
 
 function storageKey(userId: string, leagueId: string) {

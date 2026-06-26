@@ -529,7 +529,7 @@ export function DraftHistory() {
                 {scrapeEspnBusy ? "Scraping…" : "Scrape from ESPN"}
               </Button>
               <span className="text-xs text-muted-foreground">
-                Requires GM War Room extension + ESPN login.
+                Requires Fantasy Football Rivals ESPN Connector + ESPN login.
               </span>
             </div>
             {scrapeEspnNote && (

@@ -35,6 +35,7 @@ export function WelcomeModal({
           <DialogTitle className="text-2xl font-black tracking-tight">Welcome to Fantasy Football Rivals</DialogTitle>
           <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
             Fantasy Football Rivals transforms years of fantasy football history into intelligence, rivalries, and league legacy.
+            Private ESPN leagues use the Fantasy Football Rivals ESPN Connector to sync securely.
           </DialogDescription>
         </DialogHeader>
 

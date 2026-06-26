@@ -28,6 +28,7 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react";
+import { EspnConnectorGuide } from "@/components/connect";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -107,6 +108,7 @@ function QuickConnectCard({ onSuccess }: { onSuccess: (leagueId: string, leagueN
             <code className="text-xs bg-muted px-1 py-0.5 rounded text-foreground">
               fantasy.espn.com/football/league?leagueId=<span className="text-primary font-bold">457622</span>
             </code>
+            . For private leagues, install the ESPN Connector before syncing history.
           </p>
         </div>
 
@@ -445,6 +447,10 @@ export function ConnectESPN() {
         </p>
       </div>
 
+      <EspnConnectorGuide
+        highlightStep={newLeague ? 4 : isWaiting ? 2 : alreadyConnected ? 3 : 1}
+      />
+
       {/* Quick connect by League ID */}
       <QuickConnectCard onSuccess={(id, name) => handleManualSuccess(id, name)} />
 
@@ -476,11 +482,10 @@ export function ConnectESPN() {
                 </div>
               </div>
               <p className="text-sm text-muted-foreground">
-                Your league data sync has been queued. Head to{" "}
+                League linked. Next:{" "}
                 <a href="/sync" className="text-primary underline underline-offset-2">Sync Data</a>{" "}
-                to track progress or{" "}
-                <a href="/dashboard" className="text-primary underline underline-offset-2">Dashboard</a>{" "}
-                to get started.
+                (step 4 — Sync my league or Import league history), or go to the{" "}
+                <a href="/dashboard" className="text-primary underline underline-offset-2">Dashboard</a>.
               </p>
               <Button
                 variant="outline"
@@ -513,21 +518,21 @@ export function ConnectESPN() {
                 <div className="flex items-start gap-2 rounded border border-yellow-500/20 bg-yellow-500/10 px-3 py-3 text-sm text-yellow-300">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    Still waiting. Make sure the Chrome extension is installed, you're logged
-                    into ESPN, and then return to this tab.
+                    Still waiting. Install the Fantasy Football Rivals ESPN Connector, open ESPN Fantasy Football,
+                    log in, then return to this tab.
                   </span>
                 </div>
               )}
 
               <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground space-y-1">
                 <p className="font-medium text-foreground text-xs uppercase tracking-wide mb-2">
-                  What to do in the ESPN tab:
+                  In the ESPN tab (step 2):
                 </p>
                 <ol className="list-decimal pl-4 space-y-1 text-xs">
                   <li>Log in to ESPN if prompted</li>
-                  <li>Navigate to your fantasy football league</li>
-                  <li>The Chrome extension will detect your cookies automatically</li>
-                  <li>Return to this tab — it will update within seconds</li>
+                  <li>Open your fantasy football league</li>
+                  <li>The ESPN Connector reads your session — nothing to paste manually</li>
+                  <li>Return here — connection updates within seconds</li>
                 </ol>
               </div>
 
@@ -566,12 +571,11 @@ export function ConnectESPN() {
 
               <div>
                 <p className="text-sm text-foreground font-medium mb-1">
-                  How it works
+                  Step 3 — Connect your league
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Click <span className="font-medium text-foreground">Connect ESPN</span>,
-                  log into ESPN if prompted, then return to this tab. The Chrome extension
-                  detects your cookies and links your league automatically.
+                  Click <span className="font-medium text-foreground">Connect ESPN</span> to open ESPN in a new tab.
+                  The ESPN Connector passes your session back here — you stay in Fantasy Football Rivals for everything else.
                 </p>
               </div>
 
@@ -587,7 +591,8 @@ export function ConnectESPN() {
 
               <p className="text-center text-xs text-muted-foreground">
                 Requires the{" "}
-                <span className="text-foreground font-medium">Fantasy Football Rivals ESPN Connector</span>.
+                <span className="text-foreground font-medium">Fantasy Football Rivals ESPN Connector</span>{" "}
+                (Chrome extension) for private league data.
               </p>
             </div>
           )}

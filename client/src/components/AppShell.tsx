@@ -236,6 +236,9 @@ function LeagueSwitcher({
         <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
           League
         </p>
+        <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
+          Install the ESPN Connector, then connect your league.
+        </p>
         <Button asChild variant="outline" size="sm" className="h-auto w-full justify-center gap-2 py-2">
           <Link to="/connect" onClick={onAfterSwitch}>
             <Plug className="h-4 w-4 shrink-0" />
