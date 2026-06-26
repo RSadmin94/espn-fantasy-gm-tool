@@ -19,6 +19,7 @@ import {
   ArrowLeftRight,
   ChevronDown,
   Receipt,
+  Clapperboard,
 } from "lucide-react";
 import {
   Collapsible,
@@ -217,6 +218,44 @@ type StoryReceiptPayload = {
   source: string;
 };
 
+type StoryStatementPayload = {
+  statementKey: string;
+  block: string;
+  priority: number;
+  text: string;
+  receiptIds: string[];
+  factKeys: string[];
+  confidence: number;
+};
+
+function topColdOpenStatement(statements: StoryStatementPayload[]): StoryStatementPayload | null {
+  const cold = statements.filter((s) => s.block === "coldOpen");
+  if (cold.length === 0) return null;
+  return [...cold].sort((a, b) => b.priority - a.priority)[0] ?? null;
+}
+
+function useRivalryStoryStatementsQuery(
+  focalOwnerKey: string,
+  opponentOwnerKey: string,
+  leagueContextKey: string,
+  leagueKeyReady: boolean,
+) {
+  return (trpc as any).rivalryStory.statements.useQuery(
+    withLeagueSalt(
+      {
+        leagueId: leagueContextKey,
+        focalOwnerKey,
+        rivalOwnerKey: opponentOwnerKey,
+      },
+      leagueContextKey,
+    ),
+    {
+      enabled: leagueKeyReady && !!focalOwnerKey && !!opponentOwnerKey,
+      staleTime: 60_000,
+    },
+  );
+}
+
 function useRivalryStoryPairQuery(
   focalOwnerKey: string,
   opponentOwnerKey: string,
@@ -290,6 +329,135 @@ function ReceiptKvRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function TapeStatCell({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="rounded-[8px] px-3 py-2.5" style={{ ...SUB, borderRadius: 8 }}>
+      <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</div>
+      <div className="mt-1 text-lg font-extrabold tabular-nums" style={{ color: accent ?? TEXT }}>{value}</div>
+    </div>
+  );
+}
+
+function RivalryColdOpenSection({
+  statementsQ,
+  receiptsQ,
+}: {
+  statementsQ: ReturnType<typeof useRivalryStoryStatementsQuery>;
+  receiptsQ: ReturnType<typeof useRivalryStoryReceiptsQuery>;
+}) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  if (statementsQ.isLoading) {
+    return (
+      <div className="p-4" style={{ ...SUB, borderTop: `3px solid ${GOLD}` }}>
+        <div className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Loading cold open…
+        </div>
+      </div>
+    );
+  }
+
+  if (statementsQ.isError) return null;
+
+  const statements = (statementsQ.data?.statements ?? []) as StoryStatementPayload[];
+  const coldOpen = topColdOpenStatement(statements);
+  if (!coldOpen) return null;
+
+  const allReceipts = (receiptsQ.data?.receipts ?? []) as StoryReceiptPayload[];
+  const idSet = new Set(coldOpen.receiptIds);
+  const attached = allReceipts.filter((r) => idSet.has(r.receiptId));
+
+  return (
+    <div className="p-4" style={{ ...SUB, borderTop: `3px solid ${GOLD}` }}>
+      <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+        <Clapperboard className="h-4 w-4" style={{ color: GOLD }} />
+        Cold Open
+      </div>
+      <p className="text-base font-semibold leading-snug md:text-lg" style={{ color: TEXT }}>
+        {coldOpen.text}
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]" style={{ color: MUTED }}>
+        <span>
+          Confidence:{" "}
+          <span className="font-mono font-semibold tabular-nums" style={{ color: TEXT }}>
+            {coldOpen.confidence.toFixed(2)}
+          </span>
+        </span>
+        <span>
+          Receipts:{" "}
+          <span className="font-mono font-semibold tabular-nums" style={{ color: TEXT }}>
+            {coldOpen.receiptIds.length}
+          </span>
+        </span>
+        {coldOpen.receiptIds.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setDrawerOpen((o) => !o)}
+            className="rounded px-2 py-0.5 font-semibold uppercase tracking-wide transition-colors hover:bg-white/[0.06]"
+            style={{ border: `1px solid ${GOLD}44`, color: GOLD }}
+          >
+            {drawerOpen ? "Hide receipts" : "View receipts"}
+          </button>
+        ) : null}
+      </div>
+
+      {drawerOpen && coldOpen.receiptIds.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          {receiptsQ.isLoading ? (
+            <div className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading receipts…
+            </div>
+          ) : attached.length === 0 ? (
+            <p className="text-[11px]" style={{ color: MUTED }}>Receipts unavailable.</p>
+          ) : (
+            attached.map((receipt) => (
+              <div
+                key={receipt.receiptId}
+                className="rounded-[8px] px-3 py-2"
+                style={{ border: "1px solid rgba(255,255,255,.08)", background: "rgba(255,255,255,.02)" }}
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="font-mono text-xs font-semibold" style={{ color: TEXT }}>
+                    {receipt.receiptId}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: receipt.isPlayoff ? GOLD : MUTED }}>
+                    {receipt.isPlayoff ? "Playoff" : "Regular"}
+                  </span>
+                </div>
+                <div className="mt-1.5 grid gap-1 text-[11px] sm:grid-cols-2">
+                  <span style={{ color: MUTED }}>
+                    Season {receipt.season}
+                    {receipt.week != null ? ` · Wk ${receipt.week}` : ""}
+                  </span>
+                  <span className="font-mono tabular-nums" style={{ color: TEXT }}>
+                    {receipt.focalScore != null && receipt.rivalScore != null
+                      ? `${receipt.focalScore}–${receipt.rivalScore}`
+                      : "—"}
+                    {receipt.margin != null ? (
+                      <span style={{ color: receipt.margin < 0 ? RED : receipt.margin > 0 ? GREEN : MUTED }}>
+                        {" "}
+                        ({receipt.margin > 0 ? "+" : ""}
+                        {receipt.margin.toFixed(1)})
+                      </span>
+                    ) : null}
+                  </span>
+                </div>
+                {receipt.factKeys.length > 0 ? (
+                  <p className="mt-1 font-mono text-[10px]" style={{ color: MUTED }}>
+                    {receipt.factKeys.join(", ")}
+                  </p>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function RivalryStoryReceiptsSection({
   focalOwnerKey,
   opponentOwnerKey,
@@ -331,13 +499,21 @@ function RivalryStoryReceiptsSection({
   const receipts = (receiptsQ.data?.receipts ?? []) as StoryReceiptPayload[];
   if (receipts.length === 0) {
     return (
-      <div className="p-3" style={SUB}>
-        <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
-          <Receipt className="h-4 w-4" style={{ color: GOLD }} />
-          Story Receipts
-        </div>
-        <p className="text-[11px]" style={{ color: MUTED }}>No story receipts available.</p>
-      </div>
+      <Collapsible defaultOpen={false} className="p-3" style={SUB}>
+        <CollapsibleTrigger
+          className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-semibold uppercase tracking-wide"
+          style={{ color: MUTED }}
+        >
+          <span className="flex items-center gap-2">
+            <Receipt className="h-4 w-4" style={{ color: GOLD }} />
+            Raw receipts
+          </span>
+          <ChevronDown className="h-4 w-4 shrink-0 transition-transform [[data-state=open]_&]:rotate-180" />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-2">
+          <p className="text-[11px]" style={{ color: MUTED }}>No story receipts available.</p>
+        </CollapsibleContent>
+      </Collapsible>
     );
   }
 
@@ -346,15 +522,21 @@ function RivalryStoryReceiptsSection({
   const sourceCounts = countReceiptSources(receipts);
 
   return (
-    <div className="p-3" style={SUB}>
-      <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
-        <Receipt className="h-4 w-4" style={{ color: GOLD }} />
-        Story Receipts
-        <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold normal-case tracking-normal" style={{ border: "1px solid rgba(255,255,255,.1)", color: MUTED }}>
-          internal
+    <Collapsible defaultOpen={false} className="p-3" style={SUB}>
+      <CollapsibleTrigger
+        className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-semibold uppercase tracking-wide transition-colors hover:opacity-90"
+        style={{ color: MUTED }}
+      >
+        <span className="flex items-center gap-2">
+          <Receipt className="h-4 w-4" style={{ color: GOLD }} />
+          Raw receipts
+          <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold normal-case tracking-normal" style={{ border: "1px solid rgba(255,255,255,.1)", color: MUTED }}>
+            debug
+          </span>
         </span>
-      </div>
-
+        <ChevronDown className="h-4 w-4 shrink-0 transition-transform [[data-state=open]_&]:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-3">
       <div className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
         <TapeRow label="Total" value={String(receipts.length)} />
         <TapeRow label="Known" value={String(knownCount)} />
@@ -397,18 +579,17 @@ function RivalryStoryReceiptsSection({
           ))}
         </CollapsibleContent>
       </Collapsible>
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
 function RivalryTaleOfTheTapeSection({
   storyQ,
   meetings,
-  lastMeeting,
 }: {
   storyQ: ReturnType<typeof useRivalryStoryPairQuery>;
   meetings: TapeMeeting[];
-  lastMeeting: TapeMeeting | null;
 }) {
   if (storyQ.isLoading) {
     return (
@@ -427,30 +608,51 @@ function RivalryTaleOfTheTapeSection({
   }
 
   const tape = computeTapeStats(meetings);
-  const factCount = story.documentaryFacts.length;
-  const blockCount = story.availableBlocks.length;
 
   return (
-    <div className="p-3" style={SUB}>
-      <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
-        <Swords className="h-4 w-4" style={{ color: GOLD }} />
-        Tale of the Tape
+    <div className="p-4" style={SUB}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+          <Swords className="h-4 w-4" style={{ color: GOLD }} />
+          Tale of the Tape
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span
+            className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+            style={{ border: `1px solid ${GOLD}44`, color: GOLD, background: "rgba(245,198,90,.08)" }}
+          >
+            {story.tier}
+          </span>
+          <span
+            className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold"
+            style={{ border: "1px solid rgba(255,255,255,.1)", color: ACCENT }}
+          >
+            {story.headline.key}
+          </span>
+        </div>
       </div>
-      <div className="rounded-[8px] px-3 py-1" style={{ ...SUB, borderRadius: 8 }}>
-        <TapeRow label="Tier" value={story.tier} />
-        <TapeRow label="Headline" value={story.headline.key} />
-        <TapeRow label="Career" value={formatRecord(tape.career.wins, tape.career.losses, tape.career.ties)} />
+
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <TapeStatCell label="Career" value={formatRecord(tape.career.wins, tape.career.losses, tape.career.ties)} />
         {tape.playoffMeetings > 0 ? (
-          <TapeRow label="Playoffs" value={formatRecord(tape.playoffRec.wins, tape.playoffRec.losses, tape.playoffRec.ties)} />
+          <TapeStatCell
+            label="Playoffs"
+            value={formatRecord(tape.playoffRec.wins, tape.playoffRec.losses, tape.playoffRec.ties)}
+          />
         ) : null}
         {tape.rsMeetings >= 5 ? (
-          <TapeRow label="Recent five" value={formatRecord(tape.recentFive.wins, tape.recentFive.losses, tape.recentFive.ties)} />
+          <TapeStatCell
+            label="Recent five"
+            value={formatRecord(tape.recentFive.wins, tape.recentFive.losses, tape.recentFive.ties)}
+          />
+        ) : tape.rsMeetings > 0 ? (
+          <TapeStatCell
+            label="Recent"
+            value={formatRecord(tape.recentFive.wins, tape.recentFive.losses, tape.recentFive.ties)}
+          />
         ) : null}
-        <TapeRow label="Current streak" value={tape.streak} />
-        <TapeRow label="Meetings" value={String(tape.meetings)} />
-        <TapeRow label="Last meeting" value={formatLastMeeting(lastMeeting)} />
-        <TapeRow label="Facts" value={String(factCount)} />
-        <TapeRow label="Blocks" value={String(blockCount)} />
+        <TapeStatCell label="Streak" value={tape.streak} accent={tape.streak.startsWith("W") ? GREEN : tape.streak.startsWith("L") ? RED : undefined} />
+        <TapeStatCell label="Meetings" value={String(tape.meetings)} />
       </div>
     </div>
   );
@@ -484,14 +686,18 @@ function RivalryStoryMetadataSection({
   const factKeys = [...new Set(story.documentaryFacts.map((f) => f.factKey))];
 
   return (
-    <div className="p-3" style={SUB}>
-      <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
-        <ScrollText className="h-4 w-4" style={{ color: ACCENT }} />
-        Story Metadata
-        <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold normal-case tracking-normal" style={{ border: "1px solid rgba(255,255,255,.1)", color: MUTED }}>
-          internal
+    <Collapsible defaultOpen={false} className="p-3" style={SUB}>
+      <CollapsibleTrigger
+        className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-semibold uppercase tracking-wide transition-colors hover:opacity-90"
+        style={{ color: MUTED }}
+      >
+        <span className="flex items-center gap-2">
+          <ScrollText className="h-4 w-4" style={{ color: ACCENT }} />
+          Developer metadata
         </span>
-      </div>
+        <ChevronDown className="h-4 w-4 shrink-0 transition-transform [[data-state=open]_&]:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-3">
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
           <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Tier</div>
@@ -514,7 +720,8 @@ function RivalryStoryMetadataSection({
           {factKeys.length > 0 ? factKeys.join(", ") : "—"}
         </p>
       </div>
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -524,19 +731,21 @@ function RivalryStoryPairBlocks({
   leagueContextKey,
   leagueKeyReady,
   meetings,
-  lastMeeting,
 }: {
   focalOwnerKey: string;
   opponentOwnerKey: string;
   leagueContextKey: string;
   leagueKeyReady: boolean;
   meetings: TapeMeeting[];
-  lastMeeting: TapeMeeting | null;
 }) {
   const storyQ = useRivalryStoryPairQuery(focalOwnerKey, opponentOwnerKey, leagueContextKey, leagueKeyReady);
+  const statementsQ = useRivalryStoryStatementsQuery(focalOwnerKey, opponentOwnerKey, leagueContextKey, leagueKeyReady);
+  const receiptsQ = useRivalryStoryReceiptsQuery(focalOwnerKey, opponentOwnerKey, leagueContextKey, leagueKeyReady);
+
   return (
-    <>
-      <RivalryTaleOfTheTapeSection storyQ={storyQ} meetings={meetings} lastMeeting={lastMeeting} />
+    <div className="space-y-3">
+      <RivalryColdOpenSection statementsQ={statementsQ} receiptsQ={receiptsQ} />
+      <RivalryTaleOfTheTapeSection storyQ={storyQ} meetings={meetings} />
       <RivalryStoryMetadataSection storyQ={storyQ} />
       <RivalryStoryReceiptsSection
         focalOwnerKey={focalOwnerKey}
@@ -544,7 +753,7 @@ function RivalryStoryPairBlocks({
         leagueContextKey={leagueContextKey}
         leagueKeyReady={leagueKeyReady}
       />
-    </>
+    </div>
   );
 }
 
@@ -984,7 +1193,6 @@ export function RivalryDossierPanel({
             leagueContextKey={leagueContextKey}
             leagueKeyReady={leagueKeyReady}
             meetings={pd.headToHeadHistory}
-            lastMeeting={pd.lastMeeting}
           />
 
           <RivalryTradeLedgerSection
