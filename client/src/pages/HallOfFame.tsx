@@ -432,7 +432,7 @@ function NotoriousTradesSection({
             panelVariant="profile"
             className="p-6"
             title="No completed trades found for this league."
-            description="Completed ESPN trades will appear here after league sync."
+            description="Completed trades become part of your permanent league history. They will appear here after league sync."
           />
         ) : (
           <div className="space-y-5">

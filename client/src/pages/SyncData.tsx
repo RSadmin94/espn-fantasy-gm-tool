@@ -9,6 +9,7 @@ import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { fetchEspnSeasonBundleBrowserOrExtension } from "@/lib/espnApi";
 import { cn } from "@/lib/utils";
+import { useProductOnboarding } from "@/components/onboarding";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -317,6 +318,7 @@ export function SyncData() {
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady =
     Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
+  const { notifyLeagueSyncSuccess } = useProductOnboarding();
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
   const [forceRefresh, setForceRefresh] = useState(false);
   const [runResults, setRunResults] = useState<Record<number, RefreshResult>>({});
@@ -1222,8 +1224,10 @@ export function SyncData() {
     setSyncHubNote("Discovering seasons and syncing from ESPN…");
     try {
       const ok = await runSyncMyLeagueCore();
-      if (ok) toast.success("League synchronized successfully.");
-      else toast.message("Nothing to refresh right now — try Import League History if you need older seasons.");
+      if (ok) {
+        toast.success("League synchronized successfully.");
+        notifyLeagueSyncSuccess();
+      } else toast.message("Nothing to refresh right now — try Import League History if you need older seasons.");
     } catch (e) {
       toast.error(trpcLikeErrorMessage(e as Error));
     } finally {
@@ -1249,6 +1253,7 @@ export function SyncData() {
       toast.success(
         `Historical import complete. Seasons ${range.min}–${range.max} (${range.count} in ESPN discovery window).`,
       );
+      notifyLeagueSyncSuccess();
     } catch (e) {
       toast.error(trpcLikeErrorMessage(e as Error));
     } finally {

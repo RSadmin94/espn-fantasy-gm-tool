@@ -454,9 +454,9 @@ export function RivalryCenter() {
           <Panel>
             <div className="py-12 text-center">
               <Swords className="mx-auto mb-3 h-8 w-8" style={{ color: MUTED }} />
-              <div className="text-lg font-extrabold">No rivalry data yet</div>
+              <div className="text-lg font-extrabold">No rivalries yet</div>
               <p className="mt-1 text-sm" style={{ color: MUTED }}>
-                Rivalry scores are computed from synced matchups, playoffs and trades. Sync more seasons to light up the board.
+                Your league hasn&apos;t built enough history for Rivalry Documentary yet. Sync more seasons to light up the board.
               </p>
             </div>
           </Panel>

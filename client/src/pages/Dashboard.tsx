@@ -31,6 +31,7 @@ import { RivalrySummaryCard } from "@/components/RivalrySummaryCard";
 import { DashboardRecentLeagueEvents } from "@/components/dashboard/DashboardRecentLeagueEvents";
 import { LeagueWireNewsFeed } from "@/components/dashboard/LeagueWireNewsFeed";
 import { MiniTable, StatusBadge } from "@/components/dashboard/DashboardPrimitives";
+import { FlagshipDiscoveryGrid, useProductOnboarding } from "@/components/onboarding";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -291,6 +292,7 @@ function classifyPlayoff(
 export function Dashboard() {
   const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
+  const { isComplete: onboardingComplete } = useProductOnboarding();
   const leagueCtx = useLeagueContext();
   const leagueKeyReady =
     authLoaded && isSignedIn && !leagueCtx.leagueContextKey.startsWith("__");
@@ -801,6 +803,8 @@ export function Dashboard() {
           </div>
         )}
       </header>
+
+      {!onboardingComplete ? <FlagshipDiscoveryGrid /> : null}
 
       {/* Matchup Intelligence: this-week opponent (linked team + in-season week) */}
       {showMatchupIntelPanel && thisWeekOpponent ? (

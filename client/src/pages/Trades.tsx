@@ -260,7 +260,7 @@ function TradeIntelSections({ ti, teamAName, teamBName }: { ti: TradeIntelligenc
       </div>
 
       {/* 4. Rivalry & Trade History — hidden when the pair has never traded (was an empty "never traded" stub). */}
-      {ti.rivalry.completedTrades > 0 && (
+      {ti.rivalry.completedTrades > 0 ? (
       <div>
         <SectionLabel icon={<Swords className="h-3.5 w-3.5" />}>Rivalry &amp; Trade History</SectionLabel>
         <Card className="border-border/60">
@@ -281,6 +281,10 @@ function TradeIntelSections({ ti, teamAName, teamBName }: { ti: TradeIntelligenc
           </CardContent>
         </Card>
       </div>
+      ) : (
+      <p className="text-xs text-muted-foreground rounded-md border border-dashed border-border/60 bg-muted/20 px-3 py-2">
+        Completed trades become part of your permanent league history.
+      </p>
       )}
 
       {/* 5. Championship Window — hidden in preseason, when every team defaults to the same roster-value bucket. */}

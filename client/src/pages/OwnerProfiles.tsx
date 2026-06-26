@@ -191,8 +191,8 @@ function OwnerTradeHistoryCard({
         <EmptyState
           panelVariant="warm"
           className="p-6"
-          title="No completed trade history found for this owner."
-          description="Completed ESPN trades will appear here after league sync."
+          title="No completed trade history for this owner."
+          description="Completed trades become part of your permanent league history. They will appear here after league sync."
         />
       ) : (
         <div className="space-y-4">
@@ -1718,7 +1718,9 @@ function ProfilePanel({
                   ) : null}
                 </>
               ) : (
-                <p className="mt-2 text-sm text-zinc-500">No rivalry data yet.</p>
+                <p className="mt-2 text-sm text-zinc-500">
+                  Your league hasn&apos;t built enough history for Rivalry Documentary yet.
+                </p>
               )}
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3">

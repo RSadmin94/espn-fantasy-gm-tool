@@ -60,6 +60,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useTheme, LOCK_DARK } from "@/context/ThemeContext";
+import { ProductHelpButton, ProductOnboardingProvider } from "@/components/onboarding";
 
 type NavEntry =
   | { kind: "link"; label: string; href: string; icon: LucideIcon }
@@ -90,7 +91,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: "LEAGUE INTEL",
     items: [
       { kind: "link", label: "Rivalry Center", href: "/rivalry-center", icon: Swords },
-      { kind: "link", label: "Owner Profiles", href: "/owner-profiles", icon: Users },
+      { kind: "link", label: "GM Intelligence", href: "/owner-profiles", icon: Users },
       { kind: "link", label: "Championship Diagnosis", href: "/championship-diagnosis", icon: Route },
       { kind: "link", label: "Dynasty Power Rankings", href: "/dynasty-power-rankings", icon: Gem },
       { kind: "link", label: "Acquisition Impact", href: "/acquisition-impact", icon: ShoppingCart },
@@ -103,7 +104,7 @@ const NAV_GROUPS: NavGroup[] = [
     id: "history-records",
     title: "HISTORY & RECORDS",
     items: [
-      { kind: "link", label: "League Legacy Center", href: "/hall-of-fame", icon: Award },
+      { kind: "link", label: "League Archives", href: "/hall-of-fame", icon: Award },
       { kind: "link", label: "League History", href: "/history", icon: Building2 },
       { kind: "link", label: "Standings", href: "/standings", icon: Trophy },
       { kind: "link", label: "Matchups", href: "/matchups", icon: Swords },
@@ -617,6 +618,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
       </div>
 
       <div className="flex items-center gap-3">
+        <ProductHelpButton />
         {user && (
           <span className="hidden text-sm text-muted-foreground sm:block">
             {user.primaryEmailAddress?.emailAddress}
@@ -645,6 +647,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const leagueSwitchBlocking = leagueSwitchOverlayDepth > 0;
 
   return (
+    <ProductOnboardingProvider>
     <div className="flex h-screen overflow-hidden bg-background">
       <aside className="hidden w-64 shrink-0 md:block">
         <Sidebar onLeagueSwitchOverlayDepth={bumpLeagueSwitchOverlay} />
@@ -690,5 +693,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
     </div>
+    </ProductOnboardingProvider>
   );
 }
