@@ -8,6 +8,8 @@ export function FeatureDiscoveryCard({
   title,
   description,
   href,
+  ctaLabel = "Open",
+  teaser,
   icon: Icon,
   accentClassName = "text-lime-400",
   className,
@@ -15,6 +17,8 @@ export function FeatureDiscoveryCard({
   title: string;
   description: string;
   href: string;
+  ctaLabel?: string;
+  teaser?: string | null;
   icon: LucideIcon;
   accentClassName?: string;
   className?: string;
@@ -28,13 +32,16 @@ export function FeatureDiscoveryCard({
         <div className="min-w-0 flex-1">
           <h3 className="text-base font-bold text-foreground">{title}</h3>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
+          {teaser ? (
+            <p className="mt-2 text-xs font-medium leading-relaxed text-foreground/80">{teaser}</p>
+          ) : null}
         </div>
       </div>
       <Link
         to={href}
         className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-lime-300 transition-colors hover:text-lime-200"
       >
-        Open
+        {ctaLabel}
         <ChevronRight className="h-4 w-4" aria-hidden />
       </Link>
     </IntelPanel>

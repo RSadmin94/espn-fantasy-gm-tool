@@ -54,32 +54,46 @@ export const PRODUCT_TOUR_STEPS: ProductTourStep[] = [
   },
 ];
 
-export const FLAGSHIP_DISCOVERY = [
+export const LEAGUE_DISCOVERY_CARDS = [
   {
-    id: "gm-intelligence" as const,
+    id: "gm-profile" as const,
     title: "My GM Profile",
-    description: "Understand how every owner builds, drafts, trades, and wins.",
+    description: "See your complete scouting report—draft DNA, trades, and career arc.",
     href: "/owner-profiles",
+    cta: "Open My GM Profile",
   },
   {
-    id: "rivalry-documentary" as const,
-    title: "Rivalries",
-    description: "Relive your biggest feuds with receipts, timelines, and trade chapters.",
+    id: "biggest-rivalry" as const,
+    title: "Biggest Rivalry",
+    description: "Your league's most personal matchup is waiting.",
     href: "/rivalry-center",
+    cta: "Open Rivalries",
   },
   {
-    id: "league-archives" as const,
+    id: "league-history" as const,
     title: "League History",
-    description: "Browse championships, records, notorious trades, and league legacy.",
+    description: "Championships, dynasties, and the receipts behind your league legacy.",
     href: "/hall-of-fame",
+    cta: "Explore League History",
   },
   {
-    id: "trade-intelligence" as const,
+    id: "trade-analyzer" as const,
     title: "Trade Analyzer",
-    description: "Analyze proposed trades and review completed deals with fair-value authority.",
+    description: "Stress-test deals with deterministic fair-value before you pull the trigger.",
     href: "/trades",
+    cta: "Open Trade Analyzer",
   },
-];
+  {
+    id: "notorious-trades" as const,
+    title: "Notorious Trades",
+    description: "The biggest steals and collapses in your league's trade history.",
+    href: "/hall-of-fame#archive-trades",
+    cta: "See Notorious Trades",
+  },
+] as const;
+
+/** @deprecated Use LEAGUE_DISCOVERY_CARDS */
+export const FLAGSHIP_DISCOVERY = LEAGUE_DISCOVERY_CARDS;
 
 export const PRODUCT_HELP_ITEMS = [
   {
