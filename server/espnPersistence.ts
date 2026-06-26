@@ -21,6 +21,7 @@ import {
   hasCookies,
   type EspnCreds,
 } from "./espnService";
+import { mapNormalizedLegToPersist } from "./transactionPersist";
 import { matchupIsPlayoffFromEspnTier } from "./matchupPlayoffTier";
 import { TRPCError } from "@trpc/server";
 
@@ -46,13 +47,6 @@ export function safeStringify(value: unknown): string {
 
 export function getPayloadBytes(value: unknown): number {
   return Buffer.byteLength(safeStringify(value), "utf8");
-}
-
-function txPlayerKey(transactionId: string, seq: number): number {
-  let h = 0;
-  const s = `${transactionId}#${seq}`;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-  return Math.abs(h) % 2_000_000_000;
 }
 
 export async function upsertRawEspnCache(
@@ -523,62 +517,68 @@ export async function upsertTransactions(
     const tid = String(tx.transactionId ?? tx.id ?? "");
     if (!tid) continue;
     try {
-      const seq = (seqByTid.get(tid) ?? 0) + 1;
-      seqByTid.set(tid, seq);
-      const playerKey = txPlayerKey(tid, seq);
-      const pid =
-        tx.playerId != null && Number.isFinite(Number(tx.playerId)) && Number(tx.playerId) > 0
-          ? Number(tx.playerId)
-          : null;
+      const legIndex = (seqByTid.get(tid) ?? 0) + 1;
+      seqByTid.set(tid, legIndex);
       const parent = rawById.get(tid) ?? tx;
       const rawTransaction = safeStringify(parent);
-      const rel =
-        tx.relatedTransactionId != null && String(tx.relatedTransactionId).trim() !== ""
-          ? String(tx.relatedTransactionId).slice(0, 64)
-          : null;
-      const bidAmount =
-        tx.bidAmount != null && Number.isFinite(Number(tx.bidAmount)) ? Number(tx.bidAmount) : 0;
-      const proposedDate =
-        tx.proposedDate != null && Number.isFinite(Number(tx.proposedDate))
-          ? Math.floor(Number(tx.proposedDate))
-          : null;
-      const processedDate =
-        tx.processedDate != null && Number.isFinite(Number(tx.processedDate))
-          ? Math.floor(Number(tx.processedDate))
-          : null;
+      const leg = mapNormalizedLegToPersist({
+        leagueId: lid,
+        season: yr,
+        legIndex,
+        row: tx,
+        rawTransaction,
+      });
       await db
         .insert(schema.gmTransactions)
         .values({
-          leagueId: lid,
-          season: yr,
-          transactionId: tid.slice(0, 64),
-          relatedTransactionId: rel,
-          type: String(tx.type ?? ""),
-          status: String(tx.status ?? ""),
-          playerId: pid,
-          playerKey,
-          playerName: tx.playerName != null ? String(tx.playerName) : null,
-          fromTeamId: tx.fromTeamId != null ? Number(tx.fromTeamId) : null,
-          toTeamId: tx.toTeamId != null ? Number(tx.toTeamId) : tx.teamId != null ? Number(tx.teamId) : null,
-          bidAmount,
-          proposedDate,
-          processedDate,
-          rawTransaction,
+          leagueId: leg.leagueId,
+          season: leg.season,
+          transactionId: leg.transactionId,
+          relatedTransactionId: leg.relatedTransactionId,
+          type: leg.type,
+          status: leg.status,
+          playerId: leg.playerId,
+          playerKey: leg.playerKey,
+          playerName: leg.playerName,
+          fromTeamId: leg.fromTeamId,
+          toTeamId: leg.toTeamId,
+          teamId: leg.teamId,
+          itemType: leg.itemType,
+          position: leg.position,
+          round: leg.round,
+          pickInRound: leg.pickInRound,
+          overallPickNumber: leg.overallPickNumber,
+          pickSeason: leg.pickSeason,
+          legIndex: leg.legIndex,
+          executionType: leg.executionType,
+          bidAmount: leg.bidAmount,
+          proposedDate: leg.proposedDate,
+          processedDate: leg.processedDate,
+          rawTransaction: leg.rawTransaction,
           updatedAt: now,
         })
         .onDuplicateKeyUpdate({
           set: {
-            relatedTransactionId: rel,
-            type: String(tx.type ?? ""),
-            status: String(tx.status ?? ""),
-            playerId: pid,
-            playerName: tx.playerName != null ? String(tx.playerName) : null,
-            fromTeamId: tx.fromTeamId != null ? Number(tx.fromTeamId) : null,
-            toTeamId: tx.toTeamId != null ? Number(tx.toTeamId) : tx.teamId != null ? Number(tx.teamId) : null,
-            bidAmount,
-            proposedDate,
-            processedDate,
-            rawTransaction,
+            relatedTransactionId: leg.relatedTransactionId,
+            type: leg.type,
+            status: leg.status,
+            playerId: leg.playerId,
+            playerName: leg.playerName,
+            fromTeamId: leg.fromTeamId,
+            toTeamId: leg.toTeamId,
+            teamId: leg.teamId,
+            itemType: leg.itemType,
+            position: leg.position,
+            round: leg.round,
+            pickInRound: leg.pickInRound,
+            overallPickNumber: leg.overallPickNumber,
+            pickSeason: leg.pickSeason,
+            legIndex: leg.legIndex,
+            executionType: leg.executionType,
+            bidAmount: leg.bidAmount,
+            proposedDate: leg.proposedDate,
+            processedDate: leg.processedDate,
+            rawTransaction: leg.rawTransaction,
             updatedAt: now,
           },
         });

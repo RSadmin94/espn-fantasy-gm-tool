@@ -1188,6 +1188,22 @@ function txLinePlayerId(player: Record<string, unknown>, item: Record<string, un
   return n;
 }
 
+function txLinePosition(player: Record<string, unknown>): string | null {
+  const posId = player.defaultPositionId;
+  if (posId != null && POSITION_MAP[Number(posId)]) return POSITION_MAP[Number(posId)]!;
+  const abbr = (player.position as string) || (player.defaultPosition as string);
+  return abbr ? String(abbr).trim() : null;
+}
+
+/** Draft year for a pick leg; explicit item.seasonId wins, else league season for DRAFT_TRADE. */
+function txPickSeason(item: Record<string, unknown>, leagueSeason: number): number | null {
+  const sid = item.seasonId ?? item.pickSeason ?? item.draftSeasonId;
+  if (sid != null && Number.isFinite(Number(sid)) && Number(sid) > 0) return Math.floor(Number(sid));
+  const it = String(item.type ?? "").toUpperCase();
+  if (it.includes("DRAFT")) return leagueSeason;
+  return null;
+}
+
 export function normalizeTransactions(data: Record<string, unknown>) {
   const season = data.seasonId as number;
   const txs = (data.transactions as Record<string, unknown>[]) || [];
@@ -1233,6 +1249,7 @@ export function normalizeTransactions(data: Record<string, unknown>) {
         teamId: tx.teamId,
         playerId: pid,
         playerName: (player.fullName as string | undefined) ?? (item.playerName as string | undefined) ?? null,
+        position: txLinePosition(player),
         fromTeamId: item.fromTeamId,
         toTeamId: item.toTeamId,
         bidAmount: txBidAmount(item, tx),
@@ -1240,6 +1257,7 @@ export function normalizeTransactions(data: Record<string, unknown>) {
         overallPickNumber: item.overallPickNumber ?? null,
         round: item.round ?? item.roundId ?? null,
         pickInRound: item.pickInRound ?? item.roundPickNumber ?? null,
+        pickSeason: txPickSeason(item, season),
         relatedTransactionId: relId,
         ...meta,
       });
