@@ -1182,6 +1182,7 @@ function RivalryDocumentaryExperience({
   lastMeeting?: { season: number; week: number; result: string; ownerScore: number; opponentScore: number } | null;
   activeSeason?: number;
 }) {
+  const [developerOpen, setDeveloperOpen] = useState(false);
   const storyQ = useRivalryStoryPairQuery(focalOwnerKey, opponentOwnerKey, leagueContextKey, leagueKeyReady);
   const statementsQ = useRivalryStoryStatementsQuery(focalOwnerKey, opponentOwnerKey, leagueContextKey, leagueKeyReady);
   const receiptsQ = useRivalryStoryReceiptsQuery(focalOwnerKey, opponentOwnerKey, leagueContextKey, leagueKeyReady);
@@ -1247,19 +1248,27 @@ function RivalryDocumentaryExperience({
       <RivalryDocumentaryTimelineSection receiptsQ={receiptsQ} />
       <RivalryDocumentaryEvidenceSection receiptsQ={receiptsQ} />
 
-      <div className="border-t border-white/[0.06] bg-black/10">
-        <p className="px-4 pt-3 text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>
-          Developer
-        </p>
-        <RivalryStoryMetadataSection storyQ={storyQ} />
-        <RivalryStoryReceiptsSection
-          focalOwnerKey={focalOwnerKey}
-          opponentOwnerKey={opponentOwnerKey}
-          leagueContextKey={leagueContextKey}
-          leagueKeyReady={leagueKeyReady}
-        />
-        <RivalryControlledStatementsSection statementsQ={statementsQ} />
-      </div>
+      <Collapsible open={developerOpen} onOpenChange={setDeveloperOpen}>
+        <div className="border-t border-white/[0.06] bg-black/10">
+          <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:bg-white/[0.03]">
+            <span>Documentary debug</span>
+            <ChevronDown
+              className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-transform", developerOpen && "rotate-180")}
+              aria-hidden
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <RivalryStoryMetadataSection storyQ={storyQ} />
+            <RivalryStoryReceiptsSection
+              focalOwnerKey={focalOwnerKey}
+              opponentOwnerKey={opponentOwnerKey}
+              leagueContextKey={leagueContextKey}
+              leagueKeyReady={leagueKeyReady}
+            />
+            <RivalryControlledStatementsSection statementsQ={statementsQ} />
+          </CollapsibleContent>
+        </div>
+      </Collapsible>
     </IntelPanel>
   );
 }
