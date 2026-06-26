@@ -176,6 +176,22 @@ function fitGradeClass(grade: string): string {
   if (grade === "C") return "border-yellow-500/40 bg-yellow-500/10 text-yellow-400";
   return "border-red-500/40 bg-red-500/10 text-red-400";
 }
+
+/** Map server fairnessGrade to winner side — display only, no valuation math. */
+function winnerSideFromFairnessGrade(grade: string): "A" | "B" | "even" | null {
+  if (grade === "FAIR") return "even";
+  if (grade === "A WINS" || grade === "SLIGHT EDGE A") return "A";
+  if (grade === "B WINS" || grade === "SLIGHT EDGE B") return "B";
+  return null;
+}
+
+function formatSignedNet(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  const r = Math.round(n);
+  if (r > 0) return `+${r}`;
+  if (r < 0) return `${r}`;
+  return "±0";
+}
 const WINDOW_CLASS: Record<string, string> = {
   "Contender":    "text-emerald-400",
   "Playoff Team": "text-lime-400",
@@ -744,20 +760,42 @@ function TradeResults({
 
   const ftA = Number.isFinite(result.totalA) ? result.totalA : 0;
   const ftB = Number.isFinite(result.totalB) ? result.totalB : 0;
-  const maxVal = Math.max(ftA, ftB, 1);
-  const barA = Math.round((ftA / maxVal) * 100);
-  const barB = Math.round((ftB / maxVal) * 100);
+  const receivedA = ftB;
+  const receivedB = ftA;
+  const netA = receivedA - ftA;
+  const netB = receivedB - ftB;
+  const maxGiven = Math.max(ftA, ftB, 1);
+  const barA = Math.round((ftA / maxGiven) * 100);
+  const barB = Math.round((ftB / maxGiven) * 100);
   const ti = result.tradeIntelligence ?? null;
   const verdictCfg = ti ? VERDICT_CONFIG[ti.verdict.verdict] : undefined;
+  const winnerSide = winnerSideFromFairnessGrade(result.fairnessGrade);
 
   return (
     <div className="space-y-4">
-      {/* 1. Executive Summary — deterministic verdict */}
+      {/* 1. Canonical winner — primary visual (server fairnessGrade) */}
+      <div className={cn(
+        "rounded-lg border px-4 py-3",
+        grade.className,
+      )}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Trophy className="h-5 w-5 shrink-0" />
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide opacity-80">Trade Winner</div>
+            <div className="text-xl font-extrabold tracking-tight">{grade.label}</div>
+          </div>
+          <span className="ml-auto text-sm font-normal opacity-70">
+            Fairness: {result.fairnessGrade}
+          </span>
+        </div>
+      </div>
+
+      {/* 2. Executive Summary — deterministic value verdict */}
       {ti && (
         <div className={cn("rounded-lg border px-4 py-3", verdictCfg?.className ?? "border-border bg-muted/30 text-foreground")}>
           <div className="flex items-center gap-2">
             {verdictCfg?.icon}
-            <span className="text-xl font-extrabold tracking-tight">{ti.verdict.verdict}</span>
+            <span className="text-lg font-extrabold tracking-tight">{ti.verdict.verdict}</span>
             <span className="ml-auto text-xs font-medium opacity-80">Confidence: {ti.verdict.confidence}</span>
           </div>
         </div>
@@ -796,35 +834,102 @@ function TradeResults({
         </div>
       )}
 
-      {/* 2. Trade Value */}
-      {ti && <SectionLabel icon={<Scale className="h-3.5 w-3.5" />}>Trade Value</SectionLabel>}
-      {/* Grade badge */}
+      {/* 3. Trade result — given / received / net (server totals only) */}
+      <div className="rounded-lg border border-border bg-muted/15 px-4 py-3 space-y-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Trade Result</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Net value received = what you get back minus what you send away. A positive net means you came out ahead on value.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="pb-2 pr-3 font-semibold">Side</th>
+                <th className="pb-2 pr-3 font-semibold text-right">Value Given</th>
+                <th className="pb-2 pr-3 font-semibold text-right">Value Received</th>
+                <th className="pb-2 font-semibold text-right">Net Received</th>
+              </tr>
+            </thead>
+            <tbody>
+              {([
+                { key: "A" as const, name: teamAName, given: ftA, received: receivedA, net: netA },
+                { key: "B" as const, name: teamBName, given: ftB, received: receivedB, net: netB },
+              ]).map(({ key, name, given, received, net }) => {
+                const isWinner = winnerSide === key;
+                const isLoser = winnerSide != null && winnerSide !== "even" && winnerSide !== key;
+                return (
+                  <tr
+                    key={key}
+                    className={cn(
+                      "border-t border-border/50",
+                      isWinner && "bg-emerald-500/5",
+                      isLoser && winnerSide != null && "opacity-90",
+                    )}
+                  >
+                    <td className="py-2 pr-3 font-medium text-foreground">
+                      {name}
+                      {isWinner && (
+                        <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-emerald-400">Winner</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 text-right font-mono tabular-nums">{Math.round(given)}</td>
+                    <td className="py-2 pr-3 text-right font-mono tabular-nums">{Math.round(received)}</td>
+                    <td className={cn(
+                      "py-2 text-right font-mono font-semibold tabular-nums",
+                      net > 0 && "text-emerald-400",
+                      net < 0 && "text-red-400",
+                    )}>
+                      {formatSignedNet(net)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 4. Value breakdown label (fairness detail) */}
       <div className={cn(
-        "flex items-center gap-2 rounded-lg border px-4 py-3 font-semibold",
-        grade.className
+        "flex items-center gap-2 rounded-lg border border-border/60 bg-muted/10 px-4 py-2.5 text-sm text-muted-foreground",
       )}>
         {grade.icon}
-        <span className="text-base">{grade.label}</span>
-        <span className="ml-auto text-sm font-normal opacity-70">
-          Ratio: {result.ratio.toFixed(2)}
+        <span>
+          Value ratio (given ÷ given): <span className="font-mono text-foreground">{result.ratio.toFixed(2)}</span>
         </span>
       </div>
 
-      {/* Value comparison bars */}
+      {/* 5. Value Given — outgoing assets only; taller bar ≠ winning */}
+      <div className="space-y-2">
+        <SectionLabel icon={<Scale className="h-3.5 w-3.5" />}>Value Given</SectionLabel>
+        <p className="text-xs text-muted-foreground -mt-1">
+          Bars show outgoing value only. A taller bar means that side is sending more away — not winning the trade.
+        </p>
+      </div>
       <div className="space-y-4">
         {(
           [
-            { label: teamAName, value: result.totalA, bar: barA, players: result.sideAValues, pickVal: result.pickValueA, picks: picksA },
-            { label: teamBName, value: result.totalB, bar: barB, players: result.sideBValues, pickVal: result.pickValueB, picks: picksB },
+            { label: teamAName, sub: "You give", value: result.totalA, bar: barA, players: result.sideAValues, pickVal: result.pickValueA, picks: picksA },
+            { label: teamBName, sub: "They give", value: result.totalB, bar: barB, players: result.sideBValues, pickVal: result.pickValueB, picks: picksB },
           ] as const
-        ).map(({ label, value, bar, players, pickVal, picks }) => (
+        ).map(({ label, sub, value, bar, players, pickVal, picks }) => (
           <div key={label}>
             <div className="flex items-center justify-between mb-1.5 text-sm">
-              <span className="font-medium text-foreground truncate">{label}</span>
-              <span className="font-mono text-foreground ml-2 shrink-0">{Number.isFinite(value) ? Math.round(value) : "—"}</span>
+              <div className="min-w-0">
+                <span className="font-medium text-foreground truncate block">{label}</span>
+                <span className="text-[11px] text-muted-foreground">{sub}</span>
+              </div>
+              <span className="font-mono text-muted-foreground ml-2 shrink-0">
+                {Number.isFinite(value) ? Math.round(value) : "—"}
+              </span>
             </div>
-            <div className="h-2 rounded-full bg-muted/40 overflow-hidden">
-              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${bar}%` }} />
+            <div className="h-2 rounded-full bg-muted/40 overflow-hidden" title="Value given (outgoing)">
+              <div
+                className="h-full rounded-full bg-muted-foreground/35 transition-all"
+                style={{ width: `${bar}%` }}
+              />
             </div>
             <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
               {players.map(pv => (
