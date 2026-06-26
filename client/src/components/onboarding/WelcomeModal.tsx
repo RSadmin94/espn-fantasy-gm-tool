@@ -32,9 +32,9 @@ export function WelcomeModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg border-border bg-card text-foreground">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-black tracking-tight">Welcome to GM War Room</DialogTitle>
+          <DialogTitle className="text-2xl font-black tracking-tight">Welcome to Fantasy Football Rivals</DialogTitle>
           <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
-            GM War Room transforms years of fantasy football history into intelligence, rivalries, and league legacy.
+            Fantasy Football Rivals transforms years of fantasy football history into intelligence, rivalries, and league legacy.
           </DialogDescription>
         </DialogHeader>
 
@@ -60,7 +60,7 @@ export function WelcomeModal({
             className="w-full justify-center font-semibold"
             onClick={() => handleExplore("/hall-of-fame", "league-archives")}
           >
-            Explore League Archives
+            Explore League History
           </Button>
           <Button
             type="button"

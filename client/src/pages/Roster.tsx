@@ -293,7 +293,7 @@ function RosterTable({
             {warRoomColumns && (
               <>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide w-24" style={{ color: MUTED }}>
-                  War Room KVS
+                  KVS
                 </th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide w-28" style={{ color: MUTED }}>
                   Rec.

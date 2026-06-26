@@ -395,7 +395,7 @@ export function RivalryCenter() {
   return (
     <IntelPageShell bleed minHeight="full" background="cinematic-token" padding="default">
       <CinematicPageHeader
-        title="Rivalry Center"
+        title="Rivalries"
         subtitle="Head-to-head records, heat, playoff scars, and the receipts behind every feud."
         className="mb-5"
         meta={
@@ -456,7 +456,7 @@ export function RivalryCenter() {
               <Swords className="mx-auto mb-3 h-8 w-8" style={{ color: MUTED }} />
               <div className="text-lg font-extrabold">No rivalries yet</div>
               <p className="mt-1 text-sm" style={{ color: MUTED }}>
-                Your league hasn&apos;t built enough history for Rivalry Documentary yet. Sync more seasons to light up the board.
+                Your league hasn&apos;t built enough history for Rivalries yet. Sync more seasons to light up the board.
               </p>
             </div>
           </Panel>

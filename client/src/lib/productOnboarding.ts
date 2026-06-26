@@ -26,28 +26,28 @@ export type ProductTourStep = {
 export const PRODUCT_TOUR_STEPS: ProductTourStep[] = [
   {
     id: "gm-intelligence",
-    title: "GM Intelligence",
+    title: "My GM Profile",
     lead: "This is your complete scouting report.",
     highlights: ["Executive Summary", "DNA", "Trading Profile", "Matchup Intelligence"],
     href: "/owner-profiles",
   },
   {
     id: "rivalry-documentary",
-    title: "Rivalry Documentary",
+    title: "Rivalries",
     lead: "Every rivalry has a history.",
     highlights: ["Cold Open", "Trade Chapter", "Evidence", "Timeline"],
     href: "/rivalry-center",
   },
   {
     id: "league-archives",
-    title: "League Archives",
+    title: "League History",
     lead: "Explore the history of your league.",
     highlights: ["Hall of Fame", "Championship History", "Notorious Trades", "Records"],
     href: "/hall-of-fame",
   },
   {
     id: "trade-intelligence",
-    title: "Trade Intelligence",
+    title: "Trade Analyzer",
     lead: "Every trade is backed by deterministic valuation.",
     highlights: ["Trade Analyzer", "Trade History", "Completed Trades"],
     href: "/trades",
@@ -57,25 +57,25 @@ export const PRODUCT_TOUR_STEPS: ProductTourStep[] = [
 export const FLAGSHIP_DISCOVERY = [
   {
     id: "gm-intelligence" as const,
-    title: "GM Intelligence",
+    title: "My GM Profile",
     description: "Understand how every owner builds, drafts, trades, and wins.",
     href: "/owner-profiles",
   },
   {
     id: "rivalry-documentary" as const,
-    title: "Rivalry Documentary",
+    title: "Rivalries",
     description: "Relive your biggest feuds with receipts, timelines, and trade chapters.",
     href: "/rivalry-center",
   },
   {
     id: "league-archives" as const,
-    title: "League Archives",
+    title: "League History",
     description: "Browse championships, records, notorious trades, and league legacy.",
     href: "/hall-of-fame",
   },
   {
     id: "trade-intelligence" as const,
-    title: "Trade Intelligence",
+    title: "Trade Analyzer",
     description: "Analyze proposed trades and review completed deals with fair-value authority.",
     href: "/trades",
   },
@@ -83,15 +83,15 @@ export const FLAGSHIP_DISCOVERY = [
 
 export const PRODUCT_HELP_ITEMS = [
   {
-    title: "What is GM Intelligence?",
+    title: "What is My GM Profile?",
     body: "Your complete scouting report—how every owner builds, drafts, trades, and wins.",
   },
   {
-    title: "What is Rivalry Documentary?",
+    title: "What are Rivalries?",
     body: "A receipt-backed story for each rivalry—cold opens, trade chapters, and evidence.",
   },
   {
-    title: "What are League Archives?",
+    title: "What is League History?",
     body: "The permanent record of your league—titles, records, notorious trades, and milestones.",
   },
 ];

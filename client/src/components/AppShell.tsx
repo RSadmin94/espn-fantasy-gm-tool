@@ -90,8 +90,8 @@ const NAV_GROUPS: NavGroup[] = [
     id: "league-intel",
     title: "LEAGUE INTEL",
     items: [
-      { kind: "link", label: "Rivalry Center", href: "/rivalry-center", icon: Swords },
-      { kind: "link", label: "GM Intelligence", href: "/owner-profiles", icon: Users },
+      { kind: "link", label: "Rivalries", href: "/rivalry-center", icon: Swords },
+      { kind: "link", label: "My GM Profile", href: "/owner-profiles", icon: Users },
       { kind: "link", label: "Championship Diagnosis", href: "/championship-diagnosis", icon: Route },
       { kind: "link", label: "Dynasty Power Rankings", href: "/dynasty-power-rankings", icon: Gem },
       { kind: "link", label: "Acquisition Impact", href: "/acquisition-impact", icon: ShoppingCart },
@@ -104,7 +104,7 @@ const NAV_GROUPS: NavGroup[] = [
     id: "history-records",
     title: "HISTORY & RECORDS",
     items: [
-      { kind: "link", label: "League Archives", href: "/hall-of-fame", icon: Award },
+      { kind: "link", label: "League History", href: "/hall-of-fame", icon: Award },
       { kind: "link", label: "League History", href: "/history", icon: Building2 },
       { kind: "link", label: "Standings", href: "/standings", icon: Trophy },
       { kind: "link", label: "Matchups", href: "/matchups", icon: Swords },

@@ -127,7 +127,7 @@ export function ReceiptShare() {
       {/* Warm/cold CTA */}
       {isSignedIn ? (
         <Link to={code ? `/claim?code=${encodeURIComponent(code)}` : "/the-cast"} className="mt-5 flex items-center justify-center gap-2 rounded-[12px] px-5 py-3.5 text-sm font-extrabold" style={{ background: LIME, color: "#0b0809" }}>
-          {code ? "Reveal My Card" : "Open your War Room"} <ArrowRight className="h-4 w-4" />
+          {code ? "Reveal My Card" : "Open Fantasy Football Rivals"} <ArrowRight className="h-4 w-4" />
         </Link>
       ) : (
         <div className="mt-5 rounded-2xl p-5 text-center" style={{ border: `1px solid ${LINE}`, background: "rgba(255,255,255,0.02)" }}>

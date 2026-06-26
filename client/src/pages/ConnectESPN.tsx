@@ -440,7 +440,8 @@ export function ConnectESPN() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Connect ESPN</h1>
         <p className="mt-1 text-muted-foreground">
-          Link your ESPN Fantasy Football league via the GM War Room Chrome extension.
+          Link your league using the Fantasy Football Rivals ESPN Connector — a Chrome extension that securely passes
+          your ESPN session to this app.
         </p>
       </div>
 
@@ -586,7 +587,7 @@ export function ConnectESPN() {
 
               <p className="text-center text-xs text-muted-foreground">
                 Requires the{" "}
-                <span className="text-foreground font-medium">GM War Room Chrome extension</span>.
+                <span className="text-foreground font-medium">Fantasy Football Rivals ESPN Connector</span>.
               </p>
             </div>
           )}

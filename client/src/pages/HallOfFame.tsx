@@ -46,7 +46,7 @@ const ARCHIVE_NAV_ITEMS = [
   { id: "archive-championships", label: "Championships" },
   { id: "archive-records", label: "Records" },
   { id: "archive-dynasty", label: "Dynasties" },
-  { id: "archive-trades", label: "Trades" },
+  { id: "archive-trades", label: "Notorious Trades" },
   { id: "archive-milestones", label: "Milestones" },
 ] as const;
 
@@ -74,7 +74,7 @@ function ArchiveSectionHeader({
 function ArchiveSectionNav() {
   return (
     <nav
-      aria-label="League Archives sections"
+      aria-label="League History sections"
       className="sticky top-16 z-10 overflow-x-auto rounded-xl border border-white/[0.08] bg-[#110c14]/95 px-2 py-2 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.65)] backdrop-blur-md"
     >
       <ul className="flex min-w-max gap-1">
@@ -623,7 +623,7 @@ export function HallOfFame() {
   if (hofQ.isLoading) {
     return (
       <IntelPageShell bleed minHeight="full" background="cinematic" width="standard" padding="compact">
-        <PageLoading message="Loading League Archives…" />
+        <PageLoading message="Loading League History…" />
       </IntelPageShell>
     );
   }
@@ -632,7 +632,7 @@ export function HallOfFame() {
     return (
       <IntelPageShell bleed minHeight="full" background="cinematic" width="standard" padding="compact">
         <PageError
-          message={`Could not load League Archives: ${hofQ.isError ? String(hofQ.error?.message ?? hofQ.error) : "no data"}`}
+          message={`Could not load League History: ${hofQ.isError ? String(hofQ.error?.message ?? hofQ.error) : "no data"}`}
         />
       </IntelPageShell>
     );
@@ -743,12 +743,12 @@ export function HallOfFame() {
       {/* ── 1. League Legacy Overview ──────────────────────────────────────── */}
       <IntelPanel id="archive-overview" variant="profile" className="scroll-mt-24 overflow-hidden" style={{ borderTop: "3px solid #f5c65a" }}>
         <div className="border-b border-white/[0.06] px-4 py-3">
-          <ArchiveSectionHeader icon={<ScrollText className="h-4 w-4" />} title="League Legacy Overview" accent="#f5c65a" />
+          <ArchiveSectionHeader icon={<ScrollText className="h-4 w-4" />} title="League History Overview" accent="#f5c65a" />
         </div>
         <div className="px-4 py-4 sm:px-6">
           <CinematicPageHeader
-            eyebrowMono="League Legacy Center"
-            title="League Archives"
+            eyebrowMono="League History"
+            title="League History"
             subtitle={leagueLabel}
             className="mb-4 text-center [&>div]:w-full [&>div]:items-center [&_h1]:text-center [&_p]:mx-auto"
           />
@@ -1133,9 +1133,9 @@ export function HallOfFame() {
         )}
         <div className="mt-6 rounded-xl border border-violet-500/30 bg-violet-500/[0.08] px-4 py-3 text-center">
           <p className="text-sm font-semibold text-violet-50">Rivalry intelligence</p>
-          <p className="mt-1 text-[13px] text-violet-100/75">Head-to-head feuds live in Rivalry Center.</p>
+          <p className="mt-1 text-[13px] text-violet-100/75">Head-to-head feuds live in Rivalries.</p>
           <Link to="/rivalry-center" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-violet-300 hover:text-violet-200">
-            Open Rivalry Center →
+            Open Rivalries →
           </Link>
         </div>
       </IntelPanel>

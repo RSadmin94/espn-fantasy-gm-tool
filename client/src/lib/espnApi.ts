@@ -1,6 +1,6 @@
 /**
  * ESPN Fantasy API helpers for in-browser session sync (same-origin cookies on fantasy.espn.com).
- * Falls back to the GM War Room Chrome extension via `postMessage` when ESPN blocks credentialed fetches.
+ * Falls back to the Fantasy Football Rivals ESPN Connector via `postMessage` when ESPN blocks credentialed fetches.
  */
 
 const FANTASY_FFL = "https://fantasy.espn.com/apis/v3/games/ffl";
@@ -325,7 +325,7 @@ export async function gatherEspnBrowserSessionBundle(
         kind: "cors_or_network",
         message: usedExtension
           ? `Extension fetch failed: ${combinedRes.message}`
-          : "Browser fetch blocked (CORS or network). Install the GM War Room extension or try again from a context that can reach ESPN.",
+          : "Browser fetch blocked (CORS or network). Install the Fantasy Football Rivals ESPN Connector or try again from a context that can reach ESPN.",
       };
     }
     return {
@@ -419,7 +419,7 @@ export async function fetchEspnCombinedAndWeekliesViaExtension(
       ok: false,
       usedExtension: false,
       kind: "no_extension",
-      message: "GM War Room extension is not active on this page (missing data-gmwr-extension).",
+      message: "Fantasy Football Rivals ESPN Connector is not active on this page (missing data-gmwr-extension).",
     };
   }
   const usedExtension = true;

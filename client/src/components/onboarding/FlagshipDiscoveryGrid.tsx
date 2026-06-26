@@ -21,7 +21,7 @@ export function FlagshipDiscoveryGrid() {
   return (
     <IntelPanel variant="elevated" className="overflow-hidden p-4 sm:p-5">
       <div className="mb-4">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Explore GM War Room</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Explore Fantasy Football Rivals</p>
         <h2 className="mt-1 text-lg font-bold text-foreground">Flagship experiences</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Years of league history, distilled into intelligence, rivalries, and legacy.

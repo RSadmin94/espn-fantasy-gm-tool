@@ -27,7 +27,7 @@ export function ProductHelpButton() {
       </DialogTrigger>
       <DialogContent className="max-w-md border-border bg-card text-foreground">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold">GM War Room</DialogTitle>
+          <DialogTitle className="text-lg font-bold">Fantasy Football Rivals</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
             Quick guide to the flagship experiences.
           </DialogDescription>

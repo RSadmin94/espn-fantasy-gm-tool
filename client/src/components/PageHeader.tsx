@@ -11,7 +11,7 @@ type PageHeaderProps = {
 };
 
 /**
- * Canonical page header for GM War Room: large black title + muted subtitle
+ * Canonical page header for Fantasy Football Rivals: large black title + muted subtitle
  * + right-aligned actions, built on theme tokens so it works in dark and light.
  * Use instead of ad-hoc <h1>/<h2> markup for visual consistency across pages.
  */

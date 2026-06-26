@@ -226,7 +226,7 @@ function BiggestThreatCard({ data, loading }: { data: ThreatData | undefined; lo
           className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-opacity hover:opacity-85"
           style={{ color: c.text, background: c.bg, border: `1px solid ${c.ring}` }}
         >
-          Open Rivalry Center <ArrowRight className="h-3.5 w-3.5" />
+          Open Rivalries <ArrowRight className="h-3.5 w-3.5" />
         </a>
       </div>
     </div>

@@ -90,7 +90,7 @@ export function LeagueHistoryPlugin() {
         <ToggleGroupItem value="dynasty">Dynasty Board</ToggleGroupItem>
         <ToggleGroupItem value="seasons">Season Explorer</ToggleGroupItem>
         <ToggleGroupItem value="rivalries">Rivalries</ToggleGroupItem>
-        <ToggleGroupItem value="profiles">Owner Profiles</ToggleGroupItem>
+        <ToggleGroupItem value="profiles">My GM Profile</ToggleGroupItem>
       </ToggleGroup>
 
       {tab === "dynasty" && (
