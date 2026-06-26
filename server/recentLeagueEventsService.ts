@@ -5,6 +5,11 @@
 import { gmTeams, gmTransactions } from "../drizzle/schema";
 import { and as andDrizzle, desc as descDrizzle, eq as eqDrizzle, inArray as inArrayDrizzle } from "drizzle-orm";
 import type { AppDb } from "./db";
+import {
+  formatCompletedTradePlayersLine,
+  tradeAssetsFromGmLegs,
+  tradeClusterKeyFromLeg,
+} from "./transactionPersist";
 
 export type RecentLeagueEventRow = {
   eventType: string;
@@ -23,18 +28,6 @@ function isTradeType(type: string | undefined): boolean {
   return t === "TRADE" || t.startsWith("TRADE_");
 }
 
-function tradeClusterKey(r: {
-  type: string;
-  transactionId: string;
-  relatedTransactionId: string | null;
-}): string {
-  const t = r.type || "";
-  if (t === "TRADE_UPHOLD" || t === "TRADE_ACCEPT") {
-    return String(r.relatedTransactionId || r.transactionId || "");
-  }
-  return String(r.transactionId || "");
-}
-
 function eventMs(processedDate: number | null, proposedDate: number | null): number {
   const p = processedDate != null ? Number(processedDate) : NaN;
   if (Number.isFinite(p) && p > 0) return p;
@@ -49,6 +42,43 @@ function teamLabelFromMap(
 ): string {
   if (teamId == null || !Number.isFinite(teamId) || teamId <= 0) return "—";
   return map.get(`${season}:${teamId}`) || `Team ${teamId}`;
+}
+
+type TradeLegRow = {
+  season: number;
+  transactionId: string;
+  relatedTransactionId: string | null;
+  type: string;
+  status: string;
+  playerId: number | null;
+  playerName: string | null;
+  position: string | null;
+  fromTeamId: number | null;
+  toTeamId: number | null;
+  itemType: string | null;
+  round: number | null;
+  pickInRound: number | null;
+  overallPickNumber: number | null;
+  pickSeason: number | null;
+  legIndex: number;
+  proposedDate: number | null;
+  processedDate: number | null;
+};
+
+/** Prefer TRADE_PROPOSAL / legacy TRADE legs; accept rows often duplicate with sparse pick metadata. */
+function legsForTradeAssetReconstruction(group: TradeLegRow[]): TradeLegRow[] {
+  const proposals = group.filter((r) => r.type === "TRADE_PROPOSAL");
+  if (tradeAssetsFromGmLegs(proposals).length > 0) return proposals;
+  const legacy = group.filter((r) => r.type === "TRADE");
+  if (tradeAssetsFromGmLegs(legacy).length > 0) return legacy;
+  return group;
+}
+
+function legacyTradePlayersLine(group: TradeLegRow[]): string {
+  const names = [
+    ...new Set(group.map((r) => String(r.playerName ?? "").trim()).filter(Boolean)),
+  ];
+  return names.length ? names.slice(0, 8).join(", ") : "(see Transactions for details)";
 }
 
 /**
@@ -78,6 +108,7 @@ export async function loadRecentLeagueTransactionEvents(args: {
     .where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), inArrayDrizzle(gmTeams.season, seasons)));
 
   const teamLabel = new Map<string, string>();
+  const ownerNameByTeam = new Map<string, string>();
   for (const t of teamRows) {
     const tid = Number(t.teamId);
     if (!tid) continue;
@@ -85,6 +116,7 @@ export async function loadRecentLeagueTransactionEvents(args: {
     const nm = String(t.name ?? "").trim();
     const label = own && nm ? `${own} (${nm})` : own || nm || `Team ${tid}`;
     teamLabel.set(`${t.season}:${tid}`, label);
+    ownerNameByTeam.set(`${t.season}:${tid}`, own || nm || `Team ${tid}`);
   }
 
   const txRows = await db
@@ -96,8 +128,15 @@ export async function loadRecentLeagueTransactionEvents(args: {
       status: gmTransactions.status,
       playerId: gmTransactions.playerId,
       playerName: gmTransactions.playerName,
+      position: gmTransactions.position,
       fromTeamId: gmTransactions.fromTeamId,
       toTeamId: gmTransactions.toTeamId,
+      itemType: gmTransactions.itemType,
+      round: gmTransactions.round,
+      pickInRound: gmTransactions.pickInRound,
+      overallPickNumber: gmTransactions.overallPickNumber,
+      pickSeason: gmTransactions.pickSeason,
+      legIndex: gmTransactions.legIndex,
       proposedDate: gmTransactions.proposedDate,
       processedDate: gmTransactions.processedDate,
     })
@@ -105,7 +144,7 @@ export async function loadRecentLeagueTransactionEvents(args: {
     .where(andDrizzle(eqDrizzle(gmTransactions.leagueId, lid), inArrayDrizzle(gmTransactions.season, seasons)))
     .orderBy(descDrizzle(gmTransactions.processedDate), descDrizzle(gmTransactions.season));
 
-  type Tx = (typeof txRows)[number];
+  type Tx = TradeLegRow;
 
   const isCompleted = (r: Tx): boolean => {
     const st = normStatus(r.status);
@@ -127,7 +166,7 @@ export async function loadRecentLeagueTransactionEvents(args: {
   const simple: Tx[] = [];
   for (const r of completed) {
     if (isTradeType(r.type)) {
-      const k = tradeClusterKey(r);
+      const k = tradeClusterKeyFromLeg(r);
       if (!k) continue;
       const arr = tradeBuckets.get(k) ?? [];
       arr.push(r);
@@ -153,17 +192,25 @@ export async function loadRecentLeagueTransactionEvents(args: {
 
     const ms = Math.max(0, ...group.map((r) => eventMs(r.processedDate, r.proposedDate)));
     const season = group[0]!.season;
-    const names = [
-      ...new Set(
-        group
-          .map((r) => String(r.playerName ?? "").trim())
-          .filter(Boolean),
-      ),
-    ];
+
+    const assetLegs = legsForTradeAssetReconstruction(group);
+    const assets = tradeAssetsFromGmLegs(assetLegs);
+    const enrichedLine = formatCompletedTradePlayersLine({
+      assets,
+      season,
+      ownerNameByTeam,
+    });
+
     const involved = new Set<number>();
-    for (const r of group) {
-      if (r.toTeamId != null && r.toTeamId > 0) involved.add(Number(r.toTeamId));
-      if (r.fromTeamId != null && r.fromTeamId > 0) involved.add(Number(r.fromTeamId));
+    for (const a of assets) {
+      if (a.toTeamId != null && a.toTeamId > 0) involved.add(a.toTeamId);
+      if (a.fromTeamId != null && a.fromTeamId > 0) involved.add(a.fromTeamId);
+    }
+    if (involved.size === 0) {
+      for (const r of group) {
+        if (r.toTeamId != null && r.toTeamId > 0) involved.add(Number(r.toTeamId));
+        if (r.fromTeamId != null && r.fromTeamId > 0) involved.add(Number(r.fromTeamId));
+      }
     }
     const teamBits = [...involved]
       .slice(0, 4)
@@ -173,7 +220,7 @@ export async function loadRecentLeagueTransactionEvents(args: {
     events.push({
       eventType: "Trade completed",
       teamLabel: teamBits || "League",
-      playersLine: names.length ? names.slice(0, 8).join(", ") : "(see Transactions for details)",
+      playersLine: enrichedLine ?? legacyTradePlayersLine(group),
       processedMs: ms,
       season,
     });

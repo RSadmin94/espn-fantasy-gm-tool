@@ -71,7 +71,15 @@ export function DashboardRecentLeagueEvents({ seasons, enabled = true }: Props) 
             <span className="shrink-0 text-[10px] text-muted-foreground">{formatWhen(r.processedMs)}</span>
           </div>
           <p className="mt-1 truncate text-sm font-medium text-foreground">{r.teamLabel}</p>
-          <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{r.playersLine}</p>
+          <p
+            className={`mt-0.5 text-[11px] text-muted-foreground ${
+              r.eventType === "Trade completed" && r.playersLine.includes("\n")
+                ? "line-clamp-4 whitespace-pre-line"
+                : "line-clamp-2"
+            }`}
+          >
+            {r.playersLine}
+          </p>
           <p className="mt-1 text-[10px] text-muted-foreground">Season {r.season}</p>
         </li>
       ))}

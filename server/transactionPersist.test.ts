@@ -5,6 +5,8 @@ import {
   tradeAssetsFromGmLegs,
   isDraftPickLeg,
   tradeClusterKeyFromLeg,
+  formatTradeLegAssetLabel,
+  formatCompletedTradePlayersLine,
 } from "./transactionPersist";
 
 const mockPickOnlyPayload = {
@@ -181,5 +183,83 @@ describe("transactionPersist", () => {
         relatedTransactionId: null,
       }),
     ).toBe("proposal-1");
+  });
+
+  it("formats pick and player labels for dashboard display", () => {
+    expect(
+      formatTradeLegAssetLabel(
+        {
+          fromTeamId: 11,
+          toTeamId: 23,
+          playerId: null,
+          playerName: null,
+          position: null,
+          itemType: "DRAFT_TRADE",
+          round: 2,
+          pickInRound: 9,
+          overallPickNumber: 23,
+          pickSeason: 2026,
+        },
+        2026,
+      ),
+    ).toBe("2026 2nd Round Pick R2.09");
+
+    expect(
+      formatTradeLegAssetLabel(
+        {
+          fromTeamId: 8,
+          toTeamId: 2,
+          playerId: 1234567,
+          playerName: "CeeDee Lamb",
+          position: "WR",
+          itemType: "ADD",
+          overallPickNumber: null,
+          round: null,
+          pickInRound: null,
+          pickSeason: null,
+        },
+        2025,
+      ),
+    ).toBe("CeeDee Lamb (WR)");
+  });
+
+  it("builds per-side received lines for mixed trades", () => {
+    const line = formatCompletedTradePlayersLine({
+      season: 2026,
+      ownerNameByTeam: new Map([
+        ["2026:11", "Rod"],
+        ["2026:23", "Marlon"],
+      ]),
+      assets: [
+        {
+          fromTeamId: 11,
+          toTeamId: 23,
+          playerId: null,
+          playerName: null,
+          position: null,
+          itemType: "DRAFT_TRADE",
+          round: 1,
+          pickInRound: 11,
+          overallPickNumber: 11,
+          pickSeason: 2026,
+        },
+        {
+          fromTeamId: 23,
+          toTeamId: 11,
+          playerId: null,
+          playerName: null,
+          position: null,
+          itemType: "DRAFT_TRADE",
+          round: 2,
+          pickInRound: 9,
+          overallPickNumber: 23,
+          pickSeason: 2026,
+        },
+      ],
+    });
+    expect(line).toContain("Rod received:");
+    expect(line).toContain("Marlon received:");
+    expect(line).toContain("R1.11");
+    expect(line).toContain("R2.09");
   });
 });

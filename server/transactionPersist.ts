@@ -186,3 +186,94 @@ export function tradeClusterKeyFromLeg(row: {
   }
   return String(row.transactionId || "");
 }
+
+function ordinal(n: number): string {
+  const v = Math.floor(Math.abs(n)) * Math.sign(n || 1);
+  const j = v % 10;
+  const k = v % 100;
+  if (j === 1 && k !== 11) return `${v}st`;
+  if (j === 2 && k !== 12) return `${v}nd`;
+  if (j === 3 && k !== 13) return `${v}rd`;
+  return `${v}th`;
+}
+
+function padPickInRound(p: number): string {
+  return String(Math.max(0, Math.floor(Math.abs(p)))).padStart(2, "0");
+}
+
+/** Human-readable label for one trade leg (player or pick). */
+export function formatTradeLegAssetLabel(asset: TradeLegAsset, fallbackSeason: number): string {
+  if (asset.playerId != null && asset.playerId > 0) {
+    const name = (asset.playerName || "Unknown player").trim();
+    const pos = (asset.position || "").trim();
+    return pos && pos !== "?" ? `${name} (${pos})` : name;
+  }
+
+  const pickYear = asset.pickSeason ?? fallbackSeason;
+  const rnd = asset.round != null ? Number(asset.round) : NaN;
+  const pir = asset.pickInRound != null ? Number(asset.pickInRound) : NaN;
+  const hasR = Number.isFinite(rnd) && rnd > 0;
+  const hasPir = Number.isFinite(pir) && pir > 0;
+
+  if (hasR && hasPir) {
+    return `${pickYear} ${ordinal(Math.floor(rnd))} Round Pick R${Math.floor(rnd)}.${padPickInRound(pir)}`;
+  }
+  if (hasR) {
+    return `${pickYear} ${ordinal(Math.floor(rnd))} Round Pick`;
+  }
+  const ov = asset.overallPickNumber != null ? Number(asset.overallPickNumber) : NaN;
+  if (Number.isFinite(ov) && ov > 0) {
+    return `${pickYear} Draft Pick #${Math.floor(ov)}`;
+  }
+  return "Draft pick";
+}
+
+function tradeAssetDedupeKey(a: TradeLegAsset): string {
+  if (a.playerId != null && a.playerId > 0) {
+    return `p:${a.playerId}:${a.toTeamId ?? ""}`;
+  }
+  return `k:${a.toTeamId ?? ""}:${a.round ?? ""}:${a.pickInRound ?? ""}:${a.overallPickNumber ?? ""}`;
+}
+
+export function dedupeTradeLegAssets(assets: TradeLegAsset[]): TradeLegAsset[] {
+  const seen = new Set<string>();
+  const out: TradeLegAsset[] = [];
+  for (const a of assets) {
+    const key = tradeAssetDedupeKey(a);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(a);
+  }
+  return out;
+}
+
+/**
+ * Build per-side "Owner received: …" lines for a completed trade cluster.
+ * Returns null when no reconstructable assets exist (caller should fall back).
+ */
+export function formatCompletedTradePlayersLine(args: {
+  assets: TradeLegAsset[];
+  season: number;
+  ownerNameByTeam: Map<string, string>;
+}): string | null {
+  const assets = dedupeTradeLegAssets(args.assets);
+  if (assets.length === 0) return null;
+
+  const byReceiver = new Map<number, string[]>();
+  for (const a of assets) {
+    const tid = a.toTeamId;
+    if (tid == null || tid <= 0) continue;
+    const label = formatTradeLegAssetLabel(a, args.season);
+    const list = byReceiver.get(tid) ?? [];
+    list.push(label);
+    byReceiver.set(tid, list);
+  }
+  if (byReceiver.size === 0) return null;
+
+  const lines: string[] = [];
+  for (const [tid, items] of byReceiver) {
+    const name = args.ownerNameByTeam.get(`${args.season}:${tid}`) || `Team ${tid}`;
+    lines.push(`${name} received: ${items.join(", ")}`);
+  }
+  return lines.join("\n");
+}
