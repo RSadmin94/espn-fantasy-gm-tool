@@ -1,5 +1,45 @@
 /** Client-only helpers to shape existing dashboard query payloads for Welcome Back, Coach. */
 
+type StandingLike = {
+  wins?: number;
+  losses?: number;
+  ties?: number;
+  pointsFor?: number;
+};
+
+type ScoreboardMatchupLike = {
+  isCompleted?: boolean;
+  homeScore?: number;
+  awayScore?: number;
+};
+
+/** True when the selected season has at least one played game (not merely a scheduled week). */
+export function seasonHasRealResults(input: {
+  standings: StandingLike[];
+  scoreboardMatchups?: ScoreboardMatchupLike[];
+}): boolean {
+  const { standings, scoreboardMatchups } = input;
+
+  if (standings.some((t) => (t.wins ?? 0) > 0 || (t.losses ?? 0) > 0 || (t.ties ?? 0) > 0)) {
+    return true;
+  }
+  if (standings.some((t) => (t.pointsFor ?? 0) > 0)) {
+    return true;
+  }
+
+  if (
+    scoreboardMatchups?.some((m) => {
+      const hs = m.homeScore ?? 0;
+      const as = m.awayScore ?? 0;
+      return hs + as > 0;
+    })
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 type DynastyTeam = {
   ownerName?: string;
   badge?: { key?: string };

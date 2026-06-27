@@ -15,6 +15,7 @@ import {
   buildHofHeadline,
   buildPlayoffOutlook,
   countRecentTrades,
+  seasonHasRealResults,
 } from "@/lib/dashboardBriefingData";
 import {
   buildExecutiveBriefing,
@@ -154,6 +155,9 @@ type ScoreboardRow = {
   awayTeamId: number;
   homeProjected: number | null;
   awayProjected: number | null;
+  homeScore?: number;
+  awayScore?: number;
+  isCompleted?: boolean;
   home: { teamName: string; ownerName: string };
   away: { teamName: string; ownerName: string };
 };
@@ -408,11 +412,20 @@ export function Dashboard() {
   const subtitle =
     subtitleParts.length > 0 ? subtitleParts.join(" · ") : "Connect ESPN and sync to populate history";
 
+  const hasRealResults = useMemo(
+    () =>
+      seasonHasRealResults({
+        standings: ranked,
+        scoreboardMatchups: scoreRows,
+      }),
+    [ranked, scoreRows],
+  );
+
   const { isInSeason, isPreseason } = detectSeasonPhase({
     season,
-    pulseWeek: pulseQ.data?.week,
     pulseComplete: !!pulseQ.data?.isSeasonComplete,
     pulseReady: pulseQ.isSuccess,
+    hasRealResults,
   });
 
   const weekLabel =

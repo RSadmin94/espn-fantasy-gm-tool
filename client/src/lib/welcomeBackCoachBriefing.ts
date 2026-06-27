@@ -43,20 +43,18 @@ function isTradeDeadlineWeek(week: number): boolean {
 
 export function detectSeasonPhase(input: {
   season: number;
-  pulseWeek: number | undefined;
   pulseComplete: boolean;
   pulseReady: boolean;
+  hasRealResults: boolean;
 }): { isInSeason: boolean; isPreseason: boolean } {
   const calendarYear = new Date().getFullYear();
-  const week = input.pulseWeek ?? 0;
-  const seasonStarted =
-    input.pulseReady &&
-    typeof input.pulseWeek === "number" &&
-    week >= 1 &&
-    !input.pulseComplete;
+  const isInSeason = input.hasRealResults;
   const isPreseason =
-    input.season === calendarYear && input.pulseReady && !input.pulseComplete && !seasonStarted;
-  return { isInSeason: seasonStarted, isPreseason };
+    input.season === calendarYear &&
+    input.pulseReady &&
+    !input.pulseComplete &&
+    !input.hasRealResults;
+  return { isInSeason, isPreseason };
 }
 
 export function buildIntelligenceBeatCandidates(input: {
