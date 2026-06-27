@@ -2,12 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import React from "react";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
-import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { V1 } from "@/lib/v1Copy";
-import { COMMERCIAL } from "@/lib/commercialCopy";
-import { ProGate } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -131,20 +128,18 @@ interface TradeIntelligence {
 }
 
 interface TradeResult {
-  sideAValues?: PlayerValue[];
-  sideBValues?: PlayerValue[];
+  sideAValues: PlayerValue[];
+  sideBValues: PlayerValue[];
   totalA: number;
   totalB: number;
   pickValueA: number;
   pickValueB: number;
   ratio: number;
   fairnessGrade: string;
-  aiVerdict?: string;
-  teamANeeds?: Record<string, number>;
-  teamBNeeds?: Record<string, number>;
+  aiVerdict: string;
+  teamANeeds: Record<string, number>;
+  teamBNeeds: Record<string, number>;
   tradeIntelligence?: TradeIntelligence | null;
-  gated?: boolean;
-  entitled?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -197,14 +192,6 @@ function formatSignedNet(n: number): string {
   if (r > 0) return `+${r}`;
   if (r < 0) return `${r}`;
   return "±0";
-}
-
-/** Free-tier lean only — withholds winner identity on strong edges to preserve curiosity. */
-function freeTradeLean(grade: string, teamAName: string, teamBName: string): string {
-  if (grade === "FAIR") return "Balanced trade";
-  if (grade === "SLIGHT EDGE A") return `Slightly favors ${teamAName}`;
-  if (grade === "SLIGHT EDGE B") return `Slightly favors ${teamBName}`;
-  return "This trade favors one side — unlock to see who and why";
 }
 const WINDOW_CLASS: Record<string, string> = {
   "Contender":    "text-emerald-400",
@@ -763,21 +750,13 @@ function TradeResults({
   teamBName,
   picksA,
   picksB,
-  hasPremiumAccess,
-  onUnlock,
-  checkoutPending,
 }: {
   result: TradeResult;
   teamAName: string;
   teamBName: string;
   picksA: TradePick[];
   picksB: TradePick[];
-  hasPremiumAccess: boolean;
-  onUnlock: () => void;
-  checkoutPending: boolean;
 }) {
-  /** Server redaction is authoritative; client hook is presentation fallback only. */
-  const showProDetails = result.entitled !== false && !result.gated && hasPremiumAccess;
   const grade = GRADE_CONFIG[result.fairnessGrade] ?? {
     label: result.fairnessGrade,
     className: "border-border bg-muted/30 text-muted-foreground",
@@ -799,44 +778,6 @@ function TradeResults({
 
   return (
     <div className="space-y-4">
-      {/* Free: who — side values, lean, balance score */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Card className="border-border/60">
-          <CardContent className="py-4 px-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{teamAName}</p>
-            <p className="mt-1 text-3xl font-black tabular-nums text-foreground">{Math.round(ftA)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Total value given</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border/60">
-          <CardContent className="py-4 px-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{teamBName}</p>
-            <p className="mt-1 text-3xl font-black tabular-nums text-foreground">{Math.round(ftB)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Total value given</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="rounded-lg border border-border/60 bg-muted/15 px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Lean</p>
-        <p className="mt-1 text-lg font-bold text-foreground">{freeTradeLean(result.fairnessGrade, teamAName, teamBName)}</p>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Balance score: <span className="font-mono font-semibold text-foreground">{result.ratio.toFixed(2)}</span>
-          {" "}· 1.00 is even
-        </p>
-      </div>
-
-      {!showProDetails ? (
-        <ProGate
-          icon={Scale}
-          heading="Understand why this trade tilts one way"
-          description="Side values tell you who sends more away. Rivals Pro explains why it matters — verdict, tendencies, championship window, and what to do next."
-          ctaLabel={COMMERCIAL.upgradeCtaDiscoverWhatChanged}
-          onUnlock={onUnlock}
-          pending={checkoutPending}
-        />
-      ) : (
-        <>
       {/* 1. Canonical winner — primary visual (server fairnessGrade) */}
       <div className={cn(
         "rounded-lg border px-4 py-3",
@@ -996,7 +937,7 @@ function TradeResults({
               />
             </div>
             <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
-              {(players ?? []).map(pv => (
+              {players.map(pv => (
                 <span key={pv.playerId} className="text-xs text-muted-foreground">
                   {pv.name}:{" "}
                   <span className="text-foreground font-medium">{Number.isFinite(pv.compositeValue) ? Math.round(pv.compositeValue) : "Not available yet"}</span>
@@ -1034,7 +975,7 @@ function TradeResults({
             <CardContent className="py-3 px-4">
               <p className="text-xs font-medium text-muted-foreground mb-2">{label}</p>
               <div className="flex gap-2 flex-wrap">
-                {Object.entries(needs ?? {}).map(([pos, count]) => (
+                {Object.entries(needs).map(([pos, count]) => (
                   <span key={pos} className="text-xs">
                     <span className="font-semibold text-foreground">{pos}</span>
                     <span className="text-muted-foreground">:{count}</span>
@@ -1045,8 +986,6 @@ function TradeResults({
           </Card>
         ))}
       </div>
-        </>
-      )}
     </div>
   );
 }
@@ -1055,16 +994,6 @@ function TradeResults({
 
 export function Trades() {
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
-  const { hasAccess: hasPremiumAccess } = usePremiumAccess();
-  const checkoutMutation = trpc.billing.createCheckoutSession.useMutation({
-    onSuccess: (res) => {
-      if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer");
-    },
-  });
-  const startCheckout = () => {
-    if (typeof window === "undefined") return;
-    checkoutMutation.mutate({ origin: window.location.origin });
-  };
   const leagueKeyReady = Boolean(
     authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"),
   );
@@ -1300,9 +1229,6 @@ export function Trades() {
               teamBName={teamBName}
               picksA={picksA}
               picksB={picksB}
-              hasPremiumAccess={hasPremiumAccess}
-              onUnlock={startCheckout}
-              checkoutPending={checkoutMutation.isPending}
             />
           </CardContent>
         </Card>
