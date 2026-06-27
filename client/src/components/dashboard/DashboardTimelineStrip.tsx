@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { cn } from "@/lib/utils";
+import { V1 } from "@/lib/v1Copy";
 import { Loader2 } from "lucide-react";
 
 export type TimelineChamp = {
@@ -12,22 +13,28 @@ export function DashboardTimelineStrip({
   isLoading,
   rows,
   currentSeason,
+  hideHeader = false,
 }: {
   isLoading: boolean;
   rows: TimelineChamp[];
   currentSeason: number;
+  hideHeader?: boolean;
 }) {
   return (
-    <section className="space-y-3" aria-label="League timeline">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="h-4 w-0.5 rounded-full bg-amber-500" aria-hidden />
-          <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">League timeline</h2>
+    <section className="space-y-3" aria-label={V1.home.championsTimeline}>
+      {!hideHeader ? (
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="h-4 w-0.5 rounded-full bg-amber-500" aria-hidden />
+            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
+              {V1.home.championsTimeline}
+            </h2>
+          </div>
+          <Link to="/history" className="text-xs font-medium text-amber-400/90 hover:text-amber-300">
+            {V1.features.leagueHistory} →
+          </Link>
         </div>
-        <Link to="/league-timeline" className="text-xs font-medium text-amber-400/90 hover:text-amber-300">
-          Full timeline →
-        </Link>
-      </div>
+      ) : null}
 
       <div className="overflow-x-auto rounded-xl border border-border bg-card/90 px-2 py-4 shadow-inner shadow-black/40 sm:px-4">
         {isLoading ? (

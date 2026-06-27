@@ -1,5 +1,6 @@
 import { Archive, Binoculars, Flame, Repeat2, Swords } from "lucide-react";
 import { IntelPanel } from "@/components/layout";
+import { V1 } from "@/lib/v1Copy";
 import { LEAGUE_DISCOVERY_CARDS } from "@/lib/productOnboarding";
 import { useLeagueDiscoveryTeasers } from "@/hooks/useLeagueDiscoveryTeasers";
 import { FeatureDiscoveryCard } from "./FeatureDiscoveryCard";
@@ -26,11 +27,9 @@ export function FlagshipDiscoveryGrid() {
   return (
     <IntelPanel variant="elevated" className="overflow-hidden p-4 sm:p-5">
       <div className="mb-4">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">League discovery</p>
-        <h2 className="mt-1 text-lg font-bold text-foreground">What should I look at first?</h2>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Start with the stories your synced league history already tells.
-        </p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{V1.home.exploreGrid}</p>
+        <h2 className="mt-1 text-lg font-bold text-foreground">{V1.home.exploreGridTitle}</h2>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{V1.home.exploreGridLead}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {LEAGUE_DISCOVERY_CARDS.map((item) => (

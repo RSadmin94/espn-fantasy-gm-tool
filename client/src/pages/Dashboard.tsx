@@ -1,40 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
 import { useAuth, useUser } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
-import { cn } from "@/lib/utils";
-import { V1 } from "@/lib/v1Copy";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
+import { IntelPageShell } from "@/components/layout";
+import { type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
+import { type TimelineChamp } from "@/components/dashboard/DashboardTimelineStrip";
+import { WelcomeBackCoachHome } from "@/components/dashboard/welcomeBackCoach/WelcomeBackCoachHome";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Flame, RefreshCw, Trophy, ChevronRight, Activity, Swords, FileText, Star, TrendingUp, ShieldAlert, Medal, Binoculars, Users } from "lucide-react";
+  buildAcquisitionHeadline,
+  buildDraftMemo,
+  buildDynastyLine,
+  buildHofHeadline,
+  buildPlayoffOutlook,
+  countRecentTrades,
+} from "@/lib/dashboardBriefingData";
 import {
-  CinematicPageHeader,
-  IntelPageShell,
-  IntelPanel,
-  SectionLoading,
-} from "@/components/layout";
-import { DashboardLeagueHealthCard } from "@/components/dashboard/DashboardLeagueHealthCard";
-import { DashboardMatchupMarquee, type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
-import { DashboardTimelineStrip, type TimelineChamp } from "@/components/dashboard/DashboardTimelineStrip";
-import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
-import { useRivalryDossierScan } from "@/components/dashboard/rivalryDossierScan";
-import { RivalrySummaryCard } from "@/components/RivalrySummaryCard";
-import { DashboardRecentLeagueEvents } from "@/components/dashboard/DashboardRecentLeagueEvents";
-import { LeagueWireNewsFeed } from "@/components/dashboard/LeagueWireNewsFeed";
-import { MiniTable, StatusBadge } from "@/components/dashboard/DashboardPrimitives";
-import { FlagshipDiscoveryGrid, useProductOnboarding } from "@/components/onboarding";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+  buildExecutiveBriefing,
+  buildIntelligenceBeatCandidates,
+  detectSeasonPhase,
+  selectIntelligenceTrio,
+  stateOfTheWeekLine,
+  thisWeekInHistoryLine,
+} from "@/lib/welcomeBackCoachBriefing";
 
 type NormalizedStanding = {
   teamId: number;
@@ -53,19 +42,9 @@ type NormalizedStanding = {
 
 type StandingWithoutDisplayRank = Omit<NormalizedStanding, "displayRank">;
 
-type MaybeAvail<T> = { available: true; value: T } | { available: false; reason: string };
-
-function unwrapMaybe<T>(m: MaybeAvail<T> | undefined | null): T | null {
-  if (m && m.available) return m.value;
-  return null;
-}
-
-// ── Standings helpers (aligned with Standings page tie-break logic) ───────────
-
 const CURRENT_YEAR = new Date().getFullYear();
 const SEASONS_DESC = Array.from({ length: CURRENT_YEAR - 2009 + 1 }, (_, i) => CURRENT_YEAR - i);
 
-/** Dashboard: avoid refetch storms on tab focus / route remount */
 const DASH_QUERY_OPTS = {
   staleTime: 5 * 60 * 1000,
   refetchOnMount: false,
@@ -161,14 +140,7 @@ function rankStandings(rows: Omit<NormalizedStanding, "displayRank">[]): Normali
 
 function formatRecord(t: Pick<NormalizedStanding, "wins" | "losses" | "ties">): string {
   const ti = num(t.ties);
-  return ti > 0
-    ? `${num(t.wins)}-${num(t.losses)}-${ti}`
-    : `${num(t.wins)}-${num(t.losses)}`;
-}
-
-function normalizeOwnerKeyForMatch(key: string | null | undefined): string {
-  if (!key) return "";
-  return String(key).replace(/^id:/i, "").trim();
+  return ti > 0 ? `${num(t.wins)}-${num(t.losses)}-${ti}` : `${num(t.wins)}-${num(t.losses)}`;
 }
 
 function firstNameFromDisplay(displayName: string | null | undefined): string {
@@ -176,67 +148,6 @@ function firstNameFromDisplay(displayName: string | null | undefined): string {
   if (!s) return "";
   return s.split(/\s+/)[0] ?? "";
 }
-
-/** Plain labels for Matchup Intelligence (DNA + draft war room). */
-function matchupIntelWeakness(dna: Record<string, unknown> | null | undefined): string {
-  const draft = dna?.draft as Record<string, unknown> | undefined;
-  if (!draft) return "—";
-  const value = (draft.valuePositions as string[] | undefined) ?? [];
-  const biases = (draft.biasVsLeague as Record<string, number> | undefined) ?? {};
-  if (value.length > 0) {
-    let bestPos = value[0];
-    let bestBias = biases[bestPos] ?? 0;
-    for (const p of value) {
-      const b = biases[p] ?? 0;
-      if (b < bestBias) {
-        bestPos = p;
-        bestBias = b;
-      }
-    }
-    return `${bestPos} depth`;
-  }
-  const reach = (draft.reachPositions as string[] | undefined)?.[0];
-  if (reach) return `${reach}-heavy builds`;
-  const wins = (dna?.exploitWindows as string[] | undefined) ?? [];
-  const w0 = wins[0];
-  if (w0 && typeof w0 === "string") return w0.length > 52 ? `${w0.slice(0, 49)}…` : w0;
-  return "—";
-}
-
-function matchupIntelDraftTendency(dna: Record<string, unknown> | null | undefined): string {
-  const draft = dna?.draft as Record<string, unknown> | undefined;
-  if (!draft) return "—";
-  const badge = String(draft.draftStyleBadge ?? "").trim();
-  const r1 = (draft.round1Distribution as Record<string, number> | undefined) ?? {};
-  const entries = Object.entries(r1).filter(([, n]) => Number(n) > 0);
-  entries.sort((a, b) => Number(b[1]) - Number(a[1]));
-  if (entries.length > 0 && Number(entries[0][1]) >= 3) {
-    return `${entries[0][0]} early`;
-  }
-  return badge || "—";
-}
-
-function matchupIntelTradeTendency(dna: Record<string, unknown> | null | undefined): string {
-  const trade = dna?.trade as Record<string, unknown> | undefined;
-  if (!trade) return "—";
-  const freq = Number(trade.tradeFrequency ?? 0);
-  const avg = Number(trade.avgTradesPerSeason ?? 0);
-  if (freq < 28 && avg < 1.3) return "Rarely accepts 2-for-1 deals";
-  if (freq < 38) return "Selective — prefers one-for-one upgrades";
-  if (freq >= 62) return "Active dealmaker — open to multi-player swaps";
-  return `~${avg.toFixed(1)} trades/season`;
-}
-
-function opponentKeeperPick(teamId: number, predictions: unknown[] | undefined): string {
-  if (!predictions?.length) return "—";
-  const row = (predictions as Array<Record<string, unknown>>).find(
-    (p) => Number(p.teamId) === teamId,
-  );
-  const name = row?.predictedPlayer;
-  return typeof name === "string" && name.trim() ? name.trim() : "—";
-}
-
-// ── Matchup scoreboard ─────────────────────────────────────────────────────────
 
 type ScoreboardRow = {
   homeTeamId: number;
@@ -272,32 +183,13 @@ function toMarqueeTeam(t: NormalizedStanding): MarqueeTeam {
   };
 }
 
-function classifyPlayoff(
-  t: NormalizedStanding,
-  playoffSpots: number,
-): { label: string; tone: "success" | "warning" | "danger" | "default" } {
-  const spots = playoffSpots > 0 ? playoffSpots : 6;
-  if (t.playoffSeed != null) {
-    if (t.playoffSeed <= spots) return { label: "In", tone: "success" };
-    if (t.playoffSeed === spots + 1) return { label: "Bubble", tone: "warning" };
-    return { label: "Outside", tone: "danger" };
-  }
-  const r = t.displayRank;
-  if (r <= spots) return { label: "In", tone: "success" };
-  if (r === spots + 1) return { label: "Bubble", tone: "warning" };
-  return { label: "Outside", tone: "danger" };
-}
-
-// ── Dashboard ───────────────────────────────────────────────────────────────────
-
 export function Dashboard() {
   const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
-  const { isComplete: onboardingComplete } = useProductOnboarding();
   const leagueCtx = useLeagueContext();
   const leagueKeyReady =
     authLoaded && isSignedIn && !leagueCtx.leagueContextKey.startsWith("__");
-  /** X.30C — focal owner snapshot (no league picker required; resolves from active profile). */
+
   const ownerHomeQ = trpc.me.ownerHome.useQuery(
     withLeagueSalt({}, leagueCtx.leagueContextKey),
     { ...DASH_QUERY_OPTS, enabled: authLoaded && !!isSignedIn },
@@ -328,18 +220,6 @@ export function Dashboard() {
     withLeagueSalt({}, leagueCtx.leagueContextKey),
     { ...DASH_QUERY_OPTS, staleTime: 60_000 },
   );
-  const ownerListQ = trpc.owners.ownerList.useQuery(
-    withLeagueSalt({}, leagueCtx.leagueContextKey),
-    { ...DASH_QUERY_OPTS, staleTime: 60_000 },
-  );
-  const dataHealthQ = trpc.dataHealth.leagueOverview.useQuery(
-    withLeagueSalt({}, leagueCtx.leagueContextKey),
-    { ...DASH_QUERY_OPTS, staleTime: 60_000 },
-  );
-  const coverageQ = trpc.espn.ownerMatchupCoverage.useQuery(
-    withLeagueSalt({}, leagueCtx.leagueContextKey),
-    { ...DASH_QUERY_OPTS, staleTime: 60_000 },
-  );
 
   const pulseQ = trpc.weeklyAssessment.leaguePulse.useQuery(
     withLeagueSalt({ season }, leagueCtx.leagueContextKey),
@@ -362,8 +242,20 @@ export function Dashboard() {
     { ...DASH_QUERY_OPTS, enabled: !leagueCtx.isLoading, staleTime: 60_000 },
   );
 
-  // pulseTeams must be declared before `ranked` so we can overlay real ownerNames.
-  // The standings API returns owners as ESPN member-ID GUIDs; pulse data has real names.
+  const draftIntelQ = trpc.draftWarRoom.getDraftWarRoomData.useQuery(
+    withLeagueSalt({ season: CURRENT_YEAR }, leagueCtx.leagueContextKey),
+    {
+      ...DASH_QUERY_OPTS,
+      staleTime: 5 * 60 * 1000,
+      enabled: leagueKeyReady && CURRENT_YEAR > 0,
+    },
+  );
+
+  const dynastyLandscapeQ = trpc.dynasty.powerRankings.useQuery(
+    withLeagueSalt({ season: CURRENT_YEAR }, leagueCtx.leagueContextKey),
+    { ...DASH_QUERY_OPTS, staleTime: 60_000, enabled: leagueKeyReady },
+  );
+
   const pulseTeams = (pulseQ.data?.teams ?? []) as Array<{
     teamId: number;
     teamName: string;
@@ -376,43 +268,27 @@ export function Dashboard() {
     memberIds?: string[];
   }>;
 
-  const thisWeekOpponent = useMemo(() => {
-    const my = leagueCtx.myTeamId;
-    if (!my || !pulseTeams.length) return null;
-    const mine = pulseTeams.find((t) => t.teamId === my);
-    const oid = mine?.currentOpponentTeamId ?? null;
-    if (oid == null) return null;
-    const opp = pulseTeams.find((t) => t.teamId === oid);
-    if (!opp) return null;
-    return {
-      teamId: oid,
-      ownerName: opp.ownerName?.trim() || opp.teamName || "Opponent",
-      teamName: opp.teamName?.trim() || "",
-    };
-  }, [leagueCtx.myTeamId, pulseTeams]);
+  const eventSeasons = useMemo(() => {
+    const out: number[] = [];
+    if (cachedSeasons.includes(season)) out.push(season);
+    for (let y = season - 1; y >= season - 4 && y >= 2009; y--) {
+      if (cachedSeasons.includes(y)) out.push(y);
+    }
+    return [...new Set(out)];
+  }, [season, cachedSeasons]);
 
-  const opponentMemberId = useMemo(() => {
-    if (!thisWeekOpponent) return null;
-    const row = pulseTeams.find((t) => t.teamId === thisWeekOpponent.teamId);
-    const mids = row?.memberIds;
-    return mids && mids[0] ? String(mids[0]) : null;
-  }, [thisWeekOpponent, pulseTeams]);
-
-  const matchupIntelEnabled =
-    leagueKeyReady &&
-    !!opponentMemberId &&
-    (pulseQ.data?.week ?? 0) >= 1 &&
-    !pulseQ.data?.isSeasonComplete;
-
-  const opponentDnaQ = trpc.dna.managerProfile.useQuery(
-    withLeagueSalt({ memberId: opponentMemberId ?? "__none__" }, leagueCtx.leagueContextKey),
+  const recentEventsQ = trpc.espn.recentLeagueTransactionEvents.useQuery(
+    withLeagueSalt(
+      { seasons: eventSeasons.length ? eventSeasons : [CURRENT_YEAR], limit: 12 },
+      leagueCtx.leagueContextKey,
+    ),
     {
       ...DASH_QUERY_OPTS,
-      enabled: matchupIntelEnabled && !!opponentMemberId,
+      enabled: leagueKeyReady && eventSeasons.length > 0,
+      staleTime: 45_000,
     },
   );
 
-  // teamId → ownerName from pulse (has real display names, not GUIDs)
   const pulseOwnerMap = useMemo(() => {
     const m = new Map<number, string>();
     for (const t of pulseTeams) {
@@ -428,100 +304,26 @@ export function Dashboard() {
       .map(normalizeStandingRow)
       .filter((r): r is NonNullable<typeof r> => r != null);
     const sorted = rankStandings(base);
-    // Overlay real ownerName from pulse data — standings API may return ESPN member-ID GUIDs
     return sorted.map((t) => ({
       ...t,
       ownerName: pulseOwnerMap.get(t.teamId) || t.ownerName || t.teamName,
     }));
   }, [standingsQ.data, pulseOwnerMap]);
 
-  const legacyRankDisplay = useMemo(() => {
-    const focalKey = ownerHomeQ.data?.owner?.ownerKey;
-    const pr = (ownerListQ.data?.powerRankings ?? []) as Array<{ rank: number; ownerKey: string }>;
-    if (focalKey && pr.length > 0) {
-      const target = normalizeOwnerKeyForMatch(focalKey);
-      const row = pr.find((r) => normalizeOwnerKeyForMatch(r.ownerKey) === target);
-      if (row) return { primary: `#${row.rank}`, secondary: `of ${pr.length} managers` };
-    }
-    if (leagueCtx.myTeamId && ranked.length > 0) {
-      const t = ranked.find((x) => x.teamId === leagueCtx.myTeamId);
-      if (t) return { primary: `#${t.displayRank}`, secondary: `${season} standings` };
-    }
-    return { primary: "—", secondary: "Sync data or finish setup" };
-  }, [
-    ownerHomeQ.data?.owner?.ownerKey,
-    ownerListQ.data?.powerRankings,
-    leagueCtx.myTeamId,
-    ranked,
-    season,
-  ]);
-
-  const leagueName =
-    activeLeagueQ.data?.leagueName?.trim() ||
-    (leagueCtx.leagueId ? `League ${leagueCtx.leagueId}` : "Your league");
-
-  const seasonsWithData = hofQ.data?.coverage?.seasonsTouched?.length ?? null;
-  const ownerCount =
-    ownerListQ.data?.active?.length ??
-    (ranked.length > 0 ? ranked.length : leagueCtx.teamCount > 0 ? leagueCtx.teamCount : null);
-
-  const subtitleParts: string[] = [];
-  if (seasonsWithData != null && seasonsWithData > 0) {
-    subtitleParts.push(`${seasonsWithData} season${seasonsWithData === 1 ? "" : "s"}`);
-  }
-  if (ownerCount != null && ownerCount > 0) {
-    subtitleParts.push(`${ownerCount} owner${ownerCount === 1 ? "" : "s"}`);
-  }
-  const subtitle =
-    subtitleParts.length > 0 ? subtitleParts.join(" · ") : "Connect ESPN and sync to populate history";
-
-  const hofLeader = hofQ.data?.championships?.leaderboard?.[0];
-  const leaderStats = hofLeader
-    ? hofQ.data?.ownerRecords?.find((r) => r.ownerKey === hofLeader.ownerKey)
-    : undefined;
-
-  const sg = hofQ.data?.singleGameRecords;
-  const sr = hofQ.data?.seasonRecords;
-  const highest = unwrapMaybe(sg?.highestTeamScore);
-  const lowest = unwrapMaybe(sg?.lowestTeamScore);
-  const hiSeasonPf = unwrapMaybe(sr?.mostPointsInSeason);
-
-  const hasPlayoffGmMatchups = useMemo(() => {
-    const rows = coverageQ.data?.seasons ?? [];
-    return rows.some((s) => s.completedPlayoffDedupedRows > 0);
-  }, [coverageQ.data?.seasons]);
-
-  const rivalryEligibleOwnerKeys = useMemo(() => {
-    const all = ownerListQ.data?.allOwners ?? [];
-    return buildDefaultRivalryEligibleOwnerKeys(
-      all.map((o) => ({
-        ownerKey: o.ownerKey,
-        seasons: Array.isArray(o.seasons) ? o.seasons : [],
-        championships: typeof o.championships === "number" ? o.championships : 0,
-      })),
-      season,
-    );
-  }, [ownerListQ.data?.allOwners, season]);
-
-  const rivalryEligibilityDiagnostics = useMemo(() => {
-    const all = ownerListQ.data?.allOwners ?? [];
+  const thisWeekOpponent = useMemo(() => {
+    const my = leagueCtx.myTeamId;
+    if (!my || !pulseTeams.length) return null;
+    const mine = pulseTeams.find((t) => t.teamId === my);
+    const oid = mine?.currentOpponentTeamId ?? null;
+    if (oid == null) return null;
+    const opp = pulseTeams.find((t) => t.teamId === oid);
+    if (!opp) return null;
     return {
-      totalOwners:    all.length,
-      eligibleOwners: rivalryEligibleOwnerKeys.length,
-      filteredOwners: all.length - rivalryEligibleOwnerKeys.length,
+      teamId: oid,
+      ownerName: opp.ownerName?.trim() || opp.teamName || "Opponent",
+      teamName: opp.teamName?.trim() || "",
     };
-  }, [ownerListQ.data?.allOwners, rivalryEligibleOwnerKeys]);
-
-  // rivalryHero scan removed — Dashboard now uses canonical RivalrySummaryCard (rivalry.getScores).
-
-  const eventSeasons = useMemo(() => {
-    const out: number[] = [];
-    if (cachedSeasons.includes(season)) out.push(season);
-    for (let y = season - 1; y >= season - 4 && y >= 2009; y--) {
-      if (cachedSeasons.includes(y)) out.push(y);
-    }
-    return [...new Set(out)];
-  }, [season, cachedSeasons]);
+  }, [leagueCtx.myTeamId, pulseTeams]);
 
   const scoreRows = scoreboardQ.data?.matchups as ScoreboardRow[] | undefined;
 
@@ -569,27 +371,6 @@ export function Dashboard() {
     return Math.round(p.playoffProbability);
   }, [marqueePick, pulseTeams]);
 
-  const draftIntelQ = trpc.draftWarRoom.getDraftWarRoomData.useQuery(
-    withLeagueSalt({ season: CURRENT_YEAR }, leagueCtx.leagueContextKey),
-    {
-      ...DASH_QUERY_OPTS,
-      staleTime: 5 * 60 * 1000,
-      enabled: leagueKeyReady && CURRENT_YEAR > 0,
-    },
-  );
-
-  // Stage 4 — Dynasty Landscape story card. Pure consumer of the existing
-  // dynasty.powerRankings engine (same payload as the Power Rankings page
-  // and the Owner Profile badge). No new engine/router/service; only the badge
-  // counts + grouped owner names are read from the rows below.
-  const dynastyLandscapeQ = trpc.dynasty.powerRankings.useQuery(
-    withLeagueSalt({ season: 2026 }, leagueCtx.leagueContextKey),
-    { ...DASH_QUERY_OPTS, staleTime: 60_000, enabled: leagueKeyReady },
-  );
-
-
-  const powerTop = (ownerListQ.data?.powerRankings ?? []).slice(0, 5);
-
   const timelineRows = useMemo(() => {
     const hist = hofQ.data?.championships?.history;
     if (!Array.isArray(hist) || hist.length === 0) return [];
@@ -608,6 +389,137 @@ export function Dashboard() {
       })),
     [timelineRows, season],
   );
+
+  const leagueName =
+    activeLeagueQ.data?.leagueName?.trim() ||
+    (leagueCtx.leagueId ? `League ${leagueCtx.leagueId}` : "Your league");
+
+  const seasonsWithData = hofQ.data?.coverage?.seasonsTouched?.length ?? null;
+  const ownerCount =
+    ranked.length > 0 ? ranked.length : leagueCtx.teamCount > 0 ? leagueCtx.teamCount : null;
+
+  const subtitleParts: string[] = [];
+  if (seasonsWithData != null && seasonsWithData > 0) {
+    subtitleParts.push(`${seasonsWithData} season${seasonsWithData === 1 ? "" : "s"}`);
+  }
+  if (ownerCount != null && ownerCount > 0) {
+    subtitleParts.push(`${ownerCount} owner${ownerCount === 1 ? "" : "s"}`);
+  }
+  const subtitle =
+    subtitleParts.length > 0 ? subtitleParts.join(" · ") : "Connect ESPN and sync to populate history";
+
+  const { isInSeason, isPreseason } = detectSeasonPhase({
+    season,
+    pulseWeek: pulseQ.data?.week,
+    pulseComplete: !!pulseQ.data?.isSeasonComplete,
+    pulseReady: pulseQ.isSuccess,
+  });
+
+  const weekLabel =
+    week >= 1 && !pulseQ.data?.isSeasonComplete
+      ? `Season ${season} · Week ${week}`
+      : pulseQ.data?.isSeasonComplete
+        ? `Season ${season} · Final`
+        : `Season ${season}`;
+
+  const oh = ownerHomeQ.data;
+  const focalOwner = oh?.owner;
+  const welcomeName =
+    user?.firstName?.trim() ||
+    firstNameFromDisplay(user?.fullName) ||
+    firstNameFromDisplay(focalOwner?.displayName) ||
+    focalOwner?.franchiseName?.trim() ||
+    focalOwner?.leagueName?.trim() ||
+    "Manager";
+
+  const hofLeader = hofQ.data?.championships?.leaderboard?.[0];
+  const dynastyLine = buildDynastyLine(dynastyLandscapeQ.data);
+  const draftMemo = buildDraftMemo(draftIntelQ.data as Record<string, unknown> | null | undefined);
+  const hofHeadline = buildHofHeadline(hofLeader);
+  const recentTradeCount = countRecentTrades(recentEventsQ.data);
+  const acquisitionHeadline = buildAcquisitionHeadline(recentEventsQ.data);
+
+  const myPulse = leagueCtx.myTeamId
+    ? pulseTeams.find((t) => t.teamId === leagueCtx.myTeamId)
+    : undefined;
+  const playoffSpots = leagueCtx.playoffTeams > 0 ? leagueCtx.playoffTeams : 6;
+  const playoffOutlook = buildPlayoffOutlook({
+    standingRank: myPulse?.standingRank,
+    playoffProbability: myPulse?.playoffProbability,
+    playoffSpots,
+  });
+
+  const beatCandidates = useMemo(
+    () =>
+      buildIntelligenceBeatCandidates({
+        isPreseason,
+        week,
+        ownerHome: oh,
+        topRival: oh?.rival
+          ? {
+              rivalName: oh.rival.rivalName ?? undefined,
+              loreSentence: oh.threat?.primary?.reason ?? undefined,
+              heatLabel: oh.rival.heatLabel ?? undefined,
+            }
+          : null,
+        dynastyLine,
+        draftMemo,
+        playoffOutlook,
+        recentTradeCount,
+        hofHeadline,
+        acquisitionHeadline,
+      }),
+    [
+      isPreseason,
+      week,
+      oh,
+      dynastyLine,
+      draftMemo,
+      playoffOutlook,
+      recentTradeCount,
+      hofHeadline,
+      acquisitionHeadline,
+    ],
+  );
+
+  const executiveBriefing = useMemo(
+    () =>
+      buildExecutiveBriefing({
+        isPreseason,
+        isInSeason,
+        welcomeName,
+        weekLabel,
+        week,
+        opponentName: thisWeekOpponent?.ownerName,
+        rivalName: oh?.rival?.rivalName,
+        threatName: oh?.threat?.primary?.ownerName,
+        dynastyLine,
+        draftMemo,
+        hofHeadline,
+        candidates: beatCandidates,
+      }),
+    [
+      isPreseason,
+      isInSeason,
+      welcomeName,
+      weekLabel,
+      thisWeekOpponent?.ownerName,
+      oh?.rival?.rivalName,
+      oh?.threat?.primary?.ownerName,
+      dynastyLine,
+      draftMemo,
+      hofHeadline,
+      beatCandidates,
+    ],
+  );
+
+  const trio = useMemo(
+    () => selectIntelligenceTrio(beatCandidates, executiveBriefing.action, isPreseason),
+    [beatCandidates, executiveBriefing.action, isPreseason],
+  );
+
+  const stateLine = stateOfTheWeekLine({ isPreseason, isInSeason, weekLabel, leagueName });
+  const thisWeekInHistory = thisWeekInHistoryLine(timelineChamps, season);
 
   const pageLoading =
     leagueCtx.isLoading ||
@@ -628,826 +540,51 @@ export function Dashboard() {
       >
         <Skeleton className="h-10 w-72 max-w-full" />
         <Skeleton className="h-4 w-96 max-w-full" />
+        <Skeleton className="h-32 w-full rounded-2xl" />
         <div className="grid gap-3 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-48 rounded-2xl" />
           ))}
         </div>
-        <Skeleton className="h-80 w-full rounded-2xl" />
+        <Skeleton className="h-48 w-full rounded-2xl" />
       </IntelPageShell>
     );
   }
 
   const teamA = marqueePick.a ? toMarqueeTeam(marqueePick.a) : null;
   const teamB = marqueePick.b ? toMarqueeTeam(marqueePick.b) : null;
-  const weekLabel =
-    week >= 1 && !pulseQ.data?.isSeasonComplete
-      ? `Season ${season} · Week ${week}`
-      : pulseQ.data?.isSeasonComplete
-        ? `Season ${season} · Final`
-        : `Season ${season}`;
-
-  const playoffSpots = leagueCtx.playoffTeams > 0 ? leagueCtx.playoffTeams : 6;
-
-  const oh = ownerHomeQ.data;
-  const focalOwner = oh?.owner;
-  const welcomeName =
-    user?.firstName?.trim() ||
-    firstNameFromDisplay(user?.fullName) ||
-    firstNameFromDisplay(focalOwner?.displayName) ||
-    focalOwner?.franchiseName?.trim() ||
-    focalOwner?.leagueName?.trim() ||
-    "Manager";
-  const careerFmt = oh?.careerRecord
-    ? `${oh.careerRecord.wins}-${oh.careerRecord.losses} (${Number(oh.careerRecord.winPct).toFixed(1)}% win)`
-    : "—";
-  const champsFmt =
-    oh?.championships != null
-      ? oh.championships.count > 0
-        ? `${oh.championships.count}${
-            oh.championships.seasons.length > 0
-              ? ` · ${oh.championships.seasons.slice(-4).join(", ")}${oh.championships.seasons.length > 4 ? "…" : ""}`
-              : ""
-          }`
-        : "0 titles"
-      : "—";
-  const rivalFmt = oh?.rival?.rivalName?.trim() || "—";
-  const threatFmt = oh?.threat?.primary
-    ? `${oh.threat.primary.ownerName} · ${oh.threat.primary.threatLevel}`
-    : "—";
-
-  const opponentDna = opponentDnaQ.data as Record<string, unknown> | null | undefined;
-  const matchupWeakLabel = matchupIntelWeakness(opponentDna);
-  const matchupDraftLabel = matchupIntelDraftTendency(opponentDna);
-  const matchupTradeLabel = matchupIntelTradeTendency(opponentDna);
-  const matchupKeeperLabel = thisWeekOpponent
-    ? opponentKeeperPick(thisWeekOpponent.teamId, (draftIntelQ as any)?.data?.keeperPredictions as unknown[] | undefined)
-    : "—";
-  const showMatchupIntelPanel =
-    !!leagueCtx.myTeamId && !!thisWeekOpponent && (pulseQ.data?.week ?? 0) >= 1 && !pulseQ.data?.isSeasonComplete;
 
   return (
-    <IntelPageShell
-      width="full"
-      background="none"
-      minHeight="none"
-      bleed={false}
-      padding="none"
-      className="mx-auto max-w-[1400px] space-y-10 bg-background px-4 pb-16 pt-6 sm:px-6"
-    >
-      <header className="space-y-5 border-b border-border pb-6">
-        <CinematicPageHeader
-          className="mb-0 [&_h1]:truncate"
-          eyebrow={V1.home.eyebrow}
-          title={welcomeName}
-          subtitle={
-            <>
-              <span className="font-medium text-foreground">{leagueName}</span>
-              {subtitle ? <span className="text-muted-foreground"> · {subtitle}</span> : null}
-            </>
-          }
-          actions={
-            <>
-              <div className="w-full min-w-[160px] sm:w-48">
-                <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
-                  <SelectTrigger className="border-border bg-card">
-                    <SelectValue placeholder="Season" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SEASONS_DESC.map((s) => (
-                      <SelectItem key={s} value={String(s)} disabled={!cachedSeasons.includes(s)}>
-                        Season {s}
-                        {!cachedSeasons.includes(s) ? " (not cached)" : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="shrink-0 border-red-500/25 bg-red-500/[0.06] text-red-200 hover:bg-red-500/15"
-              >
-                <Link to="/sync" className="gap-2">
-                  <RefreshCw className="h-4 w-4" />
-                  Sync
-                </Link>
-              </Button>
-            </>
-          }
-        />
-
-        {ownerHomeQ.isLoading ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-24 rounded-xl" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" aria-label="Your owner snapshot">
-            <div className="rounded-xl border border-amber-500/20 bg-muted/40 p-4 flex flex-col gap-1">
-              <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-amber-400/90">
-                <Medal className="h-3.5 w-3.5 shrink-0" />
-                Your legacy rank
-              </div>
-              <p className="text-xl font-black tabular-nums text-foreground">{legacyRankDisplay.primary}</p>
-              <p className="text-[11px] text-muted-foreground leading-snug">{legacyRankDisplay.secondary}</p>
-            </div>
-            <div className="rounded-xl border border-yellow-500/20 bg-muted/40 p-4 flex flex-col gap-1">
-              <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-yellow-400/90">
-                <Trophy className="h-3.5 w-3.5 shrink-0" />
-                Championships
-              </div>
-              <p className="text-lg font-bold text-foreground leading-snug break-words">{champsFmt}</p>
-              {isSignedIn && focalOwner && !focalOwner.isSetupComplete ? (
-                <p className="text-[11px] text-muted-foreground">Select your team in Settings to personalize.</p>
-              ) : null}
-            </div>
-            <div className="rounded-xl border border-orange-500/20 bg-muted/40 p-4 flex flex-col gap-1">
-              <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-orange-400/90">
-                <Swords className="h-3.5 w-3.5 shrink-0" />
-                Biggest rival
-              </div>
-              <p className="text-lg font-bold text-foreground truncate" title={rivalFmt}>
-                {rivalFmt}
-              </p>
-              {oh?.rival?.heatLabel ? (
-                <p className="text-[11px] text-muted-foreground">{oh.rival.heatLabel} · score {oh.rival.rivalryScore}</p>
-              ) : null}
-            </div>
-            <div className="rounded-xl border border-red-500/20 bg-muted/40 p-4 flex flex-col gap-1">
-              <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-red-400/90">
-                <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
-                Biggest threat
-              </div>
-              <p className="text-lg font-bold text-foreground leading-snug break-words">{threatFmt}</p>
-              {oh?.threat?.primary?.reason ? (
-                <p className="text-[11px] text-muted-foreground line-clamp-2">{oh.threat.primary.reason}</p>
-              ) : oh?.threat?.note ? (
-                <p className="text-[11px] text-muted-foreground">{oh.threat.note}</p>
-              ) : null}
-            </div>
-            <div className="rounded-xl border border-emerald-500/20 bg-muted/40 p-4 flex flex-col gap-1 sm:col-span-2 lg:col-span-1">
-              <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-emerald-400/90">
-                <TrendingUp className="h-3.5 w-3.5 shrink-0" />
-                Career record
-              </div>
-              <p className="text-xl font-black tabular-nums text-foreground">{careerFmt}</p>
-              {oh?.careerRecord ? (
-                <p className="text-[11px] text-muted-foreground">
-                  {oh.careerRecord.seasonsActive} season{oh.careerRecord.seasonsActive === 1 ? "" : "s"} ·{" "}
-                  {oh.careerRecord.playoffAppearances} playoff run{oh.careerRecord.playoffAppearances === 1 ? "" : "s"}
-                </p>
-              ) : null}
-            </div>
-          </div>
-        )}
-      </header>
-
-      {!onboardingComplete ? <FlagshipDiscoveryGrid /> : null}
-
-      {/* Matchup Intelligence: this-week opponent (linked team + in-season week) */}
-      {showMatchupIntelPanel && thisWeekOpponent ? (
-        <section
-          className="rounded-2xl border border-sky-500/25 bg-card p-6 shadow-[0_0_50px_-22px_rgba(56,189,248,0.25)] mb-2"
-          aria-label="Matchup intelligence"
-        >
-          <div className="flex items-start gap-3 mb-5">
-            <div className="w-9 h-9 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center shrink-0">
-              <Binoculars className="h-4 w-4 text-sky-400" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[9px] font-black uppercase tracking-widest text-sky-400/90">Matchup intelligence</p>
-              <p className="text-lg md:text-xl font-bold text-foreground mt-1">
-                You play{" "}
-                <span className="text-sky-200">{thisWeekOpponent.ownerName}</span>
-                {thisWeekOpponent.teamName ? (
-                  <span className="text-muted-foreground font-medium"> · {thisWeekOpponent.teamName}</span>
-                ) : null}{" "}
-                this week.
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-1">{weekLabel}</p>
-            </div>
-          </div>
-          {opponentMemberId && opponentDnaQ.isLoading ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 rounded-xl" />
-              ))}
-            </div>
-          ) : !opponentMemberId ? (
-            <p className="text-sm text-muted-foreground">
-              Opponent DNA loads when member IDs are on this week&apos;s schedule. Run a league sync if this stays blank.
-            </p>
-          ) : (
-            <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-xl border border-border/60 bg-background/40 px-4 py-3">
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Biggest weakness</dt>
-                <dd className="mt-1 text-sm font-semibold text-foreground">{matchupWeakLabel}</dd>
-              </div>
-              <div className="rounded-xl border border-border/60 bg-background/40 px-4 py-3">
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Draft tendency</dt>
-                <dd className="mt-1 text-sm font-semibold text-foreground">{matchupDraftLabel}</dd>
-              </div>
-              <div className="rounded-xl border border-border/60 bg-background/40 px-4 py-3">
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Trade tendency</dt>
-                <dd className="mt-1 text-sm font-semibold text-foreground">{matchupTradeLabel}</dd>
-              </div>
-              <div className="rounded-xl border border-border/60 bg-background/40 px-4 py-3">
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Most likely keeper</dt>
-                <dd className="mt-1 text-sm font-semibold text-foreground">{matchupKeeperLabel}</dd>
-                {!(draftIntelQ as any)?.data?.ok ? (
-                  <p className="text-[10px] text-muted-foreground mt-1">Sync draft data for keeper model.</p>
-                ) : null}
-              </div>
-            </dl>
-          )}
-        </section>
-      ) : null}
-
-      {/* Dynasty Landscape — Stage 4 story card; pure consumer of dynasty.powerRankings (counts + grouped names only) */}
-      {(() => {
-        const teams: any[] = Array.isArray(dynastyLandscapeQ.data?.teams) ? (dynastyLandscapeQ.data!.teams as any[]) : [];
-        if (teams.length === 0) return null;
-
-        // Group owner names by badge key (grouping only — no recompute of badges).
-        const groupOf = (key: string) =>
-          teams.filter((t) => t?.badge?.key === key).map((t) => String(t.ownerName || "")).filter(Boolean);
-        const builtToLast = groupOf("built_to_last");
-        const winNow = groupOf("win_now_window");
-        const risingEmpire = groupOf("rising_empire");
-        const crossroads = groupOf("crossroads");
-        const groundFloor = groupOf("ground_floor");
-
-        const builtToLastCount = builtToLast.length;
-        const winNowCount = winNow.length;
-        const risingEmpireCount = risingEmpire.length;
-        const crossroadsCount = crossroads.length;
-        const groundFloorCount = groundFloor.length;
-
-        // "A", "A and B", "A, B and C"
-        const joinNames = (arr: string[]) =>
-          arr.length <= 1 ? (arr[0] ?? "") : arr.length === 2 ? `${arr[0]} and ${arr[1]}` : `${arr.slice(0, -1).join(", ")} and ${arr[arr.length - 1]}`;
-        const isAre = (n: number) => (n === 1 ? "is" : "are");
-        const teamWord = (n: number) => (n === 1 ? "team" : "teams");
-        const franchiseWord = (n: number) => (n === 1 ? "franchise" : "franchises");
-
-        const lines: string[] = [];
-        if (builtToLastCount) {
-          lines.push(`${builtToLastCount <= 2 ? "Only " : ""}${builtToLastCount} ${teamWord(builtToLastCount)} ${isAre(builtToLastCount)} Built to Last. ${joinNames(builtToLast)} ${isAre(builtToLastCount)} positioned to compete now while maintaining long-term dynasty value.`);
-        }
-        if (winNowCount) {
-          lines.push(`${joinNames(winNow)} ${isAre(winNowCount)} operating in a Win-Now Window.`);
-        }
-        if (risingEmpireCount) {
-          lines.push(`The league currently has ${risingEmpireCount} Rising Empire ${franchiseWord(risingEmpireCount)}. ${joinNames(risingEmpire)} ${isAre(risingEmpireCount)} building future value faster than current production — watch ${risingEmpireCount === 1 ? "this team" : "these teams"} over the next two seasons.`);
-        }
-        if (groundFloorCount) {
-          lines.push(`${groundFloorCount} ${franchiseWord(groundFloorCount)} ${groundFloorCount === 1 ? "remains" : "remain"} in Ground Floor status. The biggest long-term rebuilds belong to ${joinNames(groundFloor)}.`);
-        }
-        if (crossroadsCount && lines.length === 0) {
-          lines.push(`${crossroadsCount} ${teamWord(crossroadsCount)} ${isAre(crossroadsCount)} at a Crossroads — balanced between competing now and building for later.`);
-        }
-        if (lines.length === 0) return null;
-
-        const chips = [
-          { label: "Built to Last", n: builtToLastCount, color: "#34d399" },
-          { label: "Win-Now", n: winNowCount, color: "#f5c518" },
-          { label: "Rising", n: risingEmpireCount, color: "#8b5cf6" },
-          { label: "Crossroads", n: crossroadsCount, color: "#94a3b8" },
-          { label: "Ground Floor", n: groundFloorCount, color: "#f7902f" },
-        ].filter((c) => c.n > 0);
-
-        return (
-          <section
-            className="rounded-2xl border border-emerald-500/25 bg-card p-6 shadow-[0_0_50px_-22px_rgba(52,211,153,0.25)] mb-2"
-            aria-label="Dynasty Landscape"
-          >
-            <div className="flex items-start gap-3 mb-4">
-              <div className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0 text-lg" aria-hidden>
-                🏛
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400/90">Dynasty Landscape</p>
-                <p className="text-lg md:text-xl font-bold text-foreground mt-1">Where every franchise stands — now vs. the future.</p>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {lines.map((ln, i) => (
-                <p key={i} className="text-sm leading-relaxed text-muted-foreground">{ln}</p>
-              ))}
-            </div>
-            {chips.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {chips.map((c) => (
-                  <span
-                    key={c.label}
-                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                    style={{ background: `color-mix(in oklch, ${c.color} 14%, transparent)`, border: `1px solid color-mix(in oklch, ${c.color} 40%, transparent)`, color: c.color }}
-                  >
-                    {c.n} {c.label}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </section>
-        );
-      })()}
-
-      {/* GM Command Center - richer CommandDashboard aesthetic; data sourced from draftIntelQ */}
-      {(() => {
-        const di: any = draftIntelQ as any;
-        if (!di?.data?.ok) return null;
-        const d: any = di.data ?? {};
-        const meters: any[] = d.shockMeters ?? [];
-        const runs: any[] = d.positionRunAlerts ?? [];
-        const scarce: any[] = d.scarcityAlerts ?? [];
-        const teamCount: number = d.teamCount ?? leagueCtx.teamCount ?? 0;
-        const keepersCap = d.leagueCapabilities?.keepers !== false;
-        const GOLD = "var(--color-brand-gold)", TEAL = "var(--color-brand-lime)", MUTED = "var(--color-muted-foreground)", RED = "#ef4444", ORANGE = "#f7902f", BLUE = "var(--color-brand-purple)", TXT = "var(--color-foreground)", ACCENT = "var(--color-brand-lime)";
-        const fn = (x: any) => String(x || "").trim().split(" ")[0] || "Owner";
-        const sev = (c: number) => (c >= 60 ? { t: "High", color: RED } : c >= 40 ? { t: "Med", color: ORANGE } : { t: "Low", color: TEAL });
-        const arch = (m: any) => { const p = Number(m?.predictabilityScore ?? 0), su = Number(m?.surpriseProbability ?? 0); if (su >= 55) return { label: "Panic Pivot", color: RED }; if (p >= 72) return { label: "By-the-Book", color: TEAL }; if (p >= 55) return { label: "Steady Hand", color: BLUE }; return { label: "Wildcard", color: ORANGE }; };
-        const bySurprise = [...meters].sort((a, b) => (b.surpriseProbability ?? 0) - (a.surpriseProbability ?? 0));
-        const byPredict = [...meters].sort((a, b) => (b.predictabilityScore ?? 0) - (a.predictabilityScore ?? 0));
-        const topRuns = [...runs].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
-        const dnaOwners = byPredict.slice(0, 4);
-        const avgPredict = meters.length ? Math.round(meters.reduce((s, m) => s + (m.predictabilityScore ?? 0), 0) / meters.length) : 0;
-        const ownerCoverage = teamCount ? Math.min(100, Math.round((meters.length / teamCount) * 100)) : 0;
-        const topSurprise = bySurprise[0];
-        const topRun = topRuns[0];
-        const pulse: any[] = [
-          ...topRuns.slice(0, 2).map((r: any) => ({ icon: "\u2316", text: `${r.position} scarcity run forming`, s: sev(r.confidence ?? 0) })),
-          ...(scarce[0] ? [{ icon: "\u25CC", text: `${scarce[0].position || "Value"} value window open`, s: sev(45) }] : []),
-          ...(topSurprise ? [{ icon: "\u273A", text: `${fn(topSurprise.ownerName)} surprise risk ${Math.round(topSurprise.surpriseProbability ?? 0)}%`, s: sev(topSurprise.surpriseProbability ?? 0) }] : []),
-        ];
-        const memo = meters.length === 0 ? "Sync your league to generate today's GM briefing." : `Draft prep is live. ${topSurprise ? fn(topSurprise.ownerName) + " is your least predictable rival (" + (topSurprise.mostLikelyPosition || "flex") + " lean). " : ""}${topRun ? topRun.position + " run risk is the strongest board signal. " : ""}Protect leverage where value is thin.`;
-        const metrics = [
-          topSurprise && { b: `${Math.round(topSurprise.surpriseProbability ?? 0)}%`, s: `${fn(topSurprise.ownerName)} surprise` },
-          bySurprise[1] && { b: `${Math.round(bySurprise[1].surpriseProbability ?? 0)}%`, s: `${fn(bySurprise[1].ownerName)} surprise` },
-          topRun && { b: `${Math.round(topRun.confidence ?? 0)}%`, s: `${topRun.position} run risk` },
-          { b: `${pulse.length}`, s: "Live signals" },
-        ].filter(Boolean) as any[];
-        const actions = [
-          { t: "Open Draft War Room", to: "/draft-war-room", d: topRun ? `${topRun.position} run risk building - get owner-risk context.` : "Next pick needs owner-risk context.", cta: "Review" },
-          { t: "Open My GM Profile", to: "/owner-profiles", d: topSurprise ? `${fn(topSurprise.ownerName)} is ${Math.round(topSurprise.surpriseProbability ?? 0)}% surprise risk${teamCount ? ` in this ${teamCount}-team league` : ""}.` : "Review owner tendencies.", cta: "Open" },
-          ...(keepersCap ? [{ t: "Check Keeper Lab", to: "/keeper-advisor", d: "Confirm your value holds before the draft.", cta: "Compare" }] : []),
-        ];
-        const rings = [
-          { v: ownerCoverage, label: "Owner Read", sub: `${meters.length}/${teamCount || "?"} profiled`, color: TEAL },
-          { v: avgPredict, label: "Predictability", sub: "League avg", color: GOLD },
-          { v: topRun ? Math.round(topRun.confidence ?? 0) : 0, label: "Top Signal", sub: topRun ? `${topRun.position} run` : "-", color: BLUE },
-        ];
-        const readinessTable = [
-          { k: "Owners profiled", v: `${meters.length}/${teamCount || "?"}` },
-          { k: "Position run windows", v: `${runs.length}` },
-          { k: "Value windows", v: `${scarce.length}` },
-        ];
-        return (
-          <div className="mb-4 space-y-3" style={{ color: TXT }}>
-            <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3">
-              <IntelPanel variant="card" className="overflow-hidden"><div className="p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Star className="h-5 w-5" style={{ color: ACCENT }} /> Today's GM Briefing</h3>
-                  <span className="px-2 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap" style={{ background: "color-mix(in oklch, var(--color-brand-lime) 10%, transparent)", border: "1px solid color-mix(in oklch, var(--color-brand-lime) 33%, transparent)", color: TEAL }}>{pulse.length} signals</span>
-                </div>
-                <div className="mt-3 text-[17px] leading-snug font-black" style={{ color: GOLD }}>{memo}</div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4">
-                  {metrics.map((m: any, i: number) => (<IntelPanel key={i} variant="sub" className="bg-muted p-2.5"><b className="block text-xl">{m.b}</b><span className="text-xs" style={{ color: MUTED }}>{m.s}</span></IntelPanel>))}
-                </div>
-              </div></IntelPanel>
-              <IntelPanel variant="card" className="overflow-hidden"><div className="p-[18px]">
-                <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Activity className="h-5 w-5" style={{ color: ACCENT }} /> League Intelligence Pulse</h3>
-                <div className="mt-3">
-                  {pulse.length === 0 && <div className="text-sm py-6 text-center" style={{ color: MUTED }}>No live signals yet.</div>}
-                  {pulse.map((p: any, i: number) => (<div key={i} className="grid items-center gap-2 h-9 text-sm" style={{ gridTemplateColumns: "26px 1fr 58px", borderTop: "1px solid var(--color-border)" }}><span style={{ color: MUTED }}>{p.icon}</span><span>{p.text}</span><b className="text-right font-black" style={{ color: p.s.color }}>{p.s.t}</b></div>))}
-                </div>
-              </div></IntelPanel>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <IntelPanel variant="card" className="overflow-hidden"><div className="p-[18px]">
-                <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2" style={{ color: TXT }}><span style={{ color: ACCENT }}>&rarr;</span> Action Queue</h3>
-                <div className="mt-3 space-y-2.5">
-                  {actions.map((a: any, i: number) => (<Link key={i} to={a.to} className="grid items-center gap-2.5 no-underline bg-muted border border-border rounded-intel-sub p-2.5 min-h-[60px]" style={{ gridTemplateColumns: "34px 1fr 78px", color: TXT }}><span className="w-[30px] h-[30px] rounded-full flex items-center justify-center font-black" style={{ background: "color-mix(in oklch, var(--color-brand-purple) 14%, transparent)", border: "1px solid color-mix(in oklch, var(--color-brand-purple) 45%, transparent)", color: ACCENT }}>{i + 1}</span><span><b className="block text-sm">{a.t}</b><span className="text-xs" style={{ color: MUTED }}>{a.d}</span></span><span className="text-center text-xs font-extrabold rounded-md px-2 py-1.5" style={{ border: "1px solid color-mix(in oklch, var(--color-brand-lime) 35%, transparent)", background: "color-mix(in oklch, var(--color-brand-lime) 8%, transparent)", color: TEAL }}>{a.cta}</span></Link>))}
-                </div>
-              </div></IntelPanel>
-              <IntelPanel variant="card" className="overflow-hidden"><div className="p-[18px]">
-                <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Users className="h-5 w-5" style={{ color: ACCENT }} /> My GM Profile Snapshot</h3>
-                <div className="mt-2">
-                  {dnaOwners.length === 0 && <div className="text-sm py-6 text-center" style={{ color: MUTED }}>No owner reads yet.</div>}
-                  {dnaOwners.map((m: any, i: number) => { const a = arch(m); return (<div key={i} className="grid items-center gap-2.5 h-[50px]" style={{ gridTemplateColumns: "36px 1fr 70px", borderTop: "1px solid var(--color-border)" }}><span className="w-8 h-8 rounded-full flex items-center justify-center font-black text-white" style={{ background: a.color }}>{fn(m.ownerName).charAt(0).toUpperCase()}</span><span><b className="block text-sm">{fn(m.ownerName)}</b><span className="text-xs" style={{ color: MUTED }}>{a.label}</span></span><span className="text-right font-black" style={{ color: TEAL }}>{Math.round(m.predictabilityScore ?? 0)}%</span></div>); })}
-                </div>
-              </div></IntelPanel>
-            </div>
-            <IntelPanel variant="card" className="overflow-hidden"><div className="p-[18px]">
-              <h3 className="text-[18px] font-extrabold tracking-tight flex items-center gap-2"><Trophy className="h-5 w-5" style={{ color: ACCENT }} /> GM Readiness</h3>
-              <div className="grid grid-cols-3 gap-2.5 mt-3">
-                {rings.map((r: any, i: number) => (<IntelPanel key={i} variant="sub" className="bg-muted flex flex-col items-center justify-center py-4"><div className="w-[62px] h-[62px] rounded-full flex items-center justify-center text-xl font-black mb-2" style={{ border: `5px solid ${r.color}` }}>{r.v}</div><b className="text-sm">{r.label}</b><span className="text-xs" style={{ color: MUTED }}>{r.sub}</span></IntelPanel>))}
-              </div>
-              <div className="mt-3">
-                {readinessTable.map((t: any, i: number) => (<div key={i} className="grid items-center h-7 text-sm" style={{ gridTemplateColumns: "1fr 80px", borderTop: "1px solid var(--color-border)" }}><span style={{ color: MUTED }}>{t.k}</span><b className="text-right" style={{ color: TEAL }}>{t.v}</b></div>))}
-              </div>
-            </div></IntelPanel>
-          </div>
-        );
-      })()}
-
-      {/* ── Intelligence Briefing Layer: Rival Threats · Decision Memo · Historical Receipts ── */}
-      <section aria-label="Intelligence briefing" className="grid gap-4 lg:grid-cols-3 mb-2">
-
-        {/* 1. Rival Threat Window */}
-        <div className="rounded-2xl border border-red-500/20 bg-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 rounded-lg bg-red-500/10 border border-red-500/25 flex items-center justify-center shrink-0">
-              <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
-            </div>
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-red-400/80">Rival Threat Window</p>
-              <p className="text-[10px] text-muted-foreground">Highest-scoring opponents</p>
-            </div>
-          </div>
-          {standingsQ.isLoading ? (
-            <div className="space-y-2">{[0,1,2].map(i => <div key={i} className="h-8 rounded-lg bg-muted/60 animate-pulse" />)}</div>
-          ) : (() => {
-            const threats = (ranked ?? [])
-              .slice().sort((a: any, b: any) => (b.pointsFor ?? 0) - (a.pointsFor ?? 0))
-              .slice(0, 4);
-            if (!threats.length) return <p className="text-xs text-muted-foreground">Sync league data to see threats.</p>;
-            return (
-              <ul className="space-y-2">
-                {threats.map((t: any, i: number) => (
-                  <li key={t.teamId ?? i} className="flex items-center gap-3 rounded-lg bg-muted/50 border border-border/40 px-3 py-2">
-                    <span className={cn("text-[10px] font-black w-5 text-center tabular-nums", i === 0 ? "text-red-400" : i === 1 ? "text-orange-400/80" : "text-muted-foreground")}>#{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-foreground truncate">{t.ownerName ?? t.teamName ?? "—"}</p>
-                      <p className="text-[10px] text-muted-foreground">{t.wins ?? 0}W–{t.losses ?? 0}L</p>
-                    </div>
-                    <span className="text-xs font-black tabular-nums text-foreground">{typeof t.pointsFor === "number" ? t.pointsFor.toFixed(0) : "—"}</span>
-                  </li>
-                ))}
-              </ul>
-            );
-          })()}
-          <Link to="/owner-profiles" className="mt-4 flex items-center gap-1 text-[10px] font-bold text-red-400/80 hover:text-red-300 transition-colors">
-            My GM Profile <ChevronRight className="h-3 w-3" />
-          </Link>
-        </div>
-
-        {/* 2. Decision Memo */}
-        <div className="rounded-2xl border border-lime-500/20 bg-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 rounded-lg bg-lime-500/10 border border-lime-500/25 flex items-center justify-center shrink-0">
-              <FileText className="h-3.5 w-3.5 text-lime-400" />
-            </div>
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-lime-400/80">Decision Memo</p>
-              <p className="text-[10px] text-muted-foreground">Your draft action plan</p>
-            </div>
-          </div>
-          {(draftIntelQ as any)?.isLoading ? (
-            <div className="space-y-2">{[0,1,2].map(i => <div key={i} className="h-8 rounded-lg bg-muted/60 animate-pulse" />)}</div>
-          ) : (() => {
-            const di = (draftIntelQ as any)?.data;
-            if (!di?.ok) return <p className="text-xs text-muted-foreground">Sync draft data to generate memo.</p>;
-            const keepMemo = di.leagueCapabilities?.keepers !== false;
-            const kps: any[] = di.keeperPredictions ?? [];
-            const top = kps.slice().sort((a: any, b: any) => (b.kvs ?? 0) - (a.kvs ?? 0))[0];
-            const sas: any[] = di.scarcityAlerts ?? [];
-            const crit = sas.find((a: any) => a.urgency === "CRITICAL" || a.urgency === "HIGH");
-            const runs: any[] = di.positionRunAlerts ?? [];
-            const topRun = runs[0];
-            const memo = [
-              {
-                label: "Primary",
-                color: "text-lime-400",
-                text: keepMemo && top
-                  ? `Lock ${top.predictedPlayer} as keeper — KVS ${top.kvs} at Round ${top.keeperRound}`
-                  : keepMemo
-                    ? "Review keeper eligibility before draft"
-                    : crit
-                      ? `Secure ${crit.position} depth early — scarcity window active`
-                      : topRun
-                        ? `Watch the ${topRun.position} window (${topRun.roundWindow ?? "mid-draft"})`
-                        : "Best player available early — build positional leverage",
-              },
-              { label: "Contingency", color: "text-amber-400",   text: crit ? `Secure ${crit.position} depth early — scarcity window active` : "Monitor waiver wire for positional value" },
-              { label: "Avoid",       color: "text-red-400",     text: topRun ? `Reaching for ${topRun.position} before ${topRun.roundWindow} — run expected` : "Panic drafting in rounds 1–3" },
-            ];
-            return (
-              <ul className="space-y-2.5">
-                {memo.map((m, i) => (
-                  <li key={i} className="flex gap-2.5 text-xs">
-                    <span className={cn("shrink-0 font-black w-18 text-right", m.color)} style={{minWidth:"68px"}}>{m.label}:</span>
-                    <span className="text-muted-foreground leading-snug">{m.text}</span>
-                  </li>
-                ))}
-              </ul>
-            );
-          })()}
-          <Link to="/draft-war-room" className="mt-4 flex items-center gap-1 text-[10px] font-bold text-lime-400/80 hover:text-lime-300 transition-colors">
-            Full Draft War Room <ChevronRight className="h-3 w-3" />
-          </Link>
-        </div>
-
-        {/* 3. Historical Receipts */}
-        <div className="rounded-2xl border border-amber-500/20 bg-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center shrink-0">
-              <Star className="h-3.5 w-3.5 text-amber-400" />
-            </div>
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-amber-400/80">Historical Receipts</p>
-              <p className="text-[10px] text-muted-foreground">League decisions on record</p>
-            </div>
-          </div>
-          {hofQ.isLoading ? (
-            <div className="space-y-2">{[0,1,2].map(i => <div key={i} className="h-8 rounded-lg bg-muted/60 animate-pulse" />)}</div>
-          ) : (() => {
-            const champions: any[] = hofQ.data?.championships?.history ?? [];
-            if (!champions.length) return (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">No championship records found.</p>
-                <p className="text-[10px] text-muted-foreground">Import historical data to unlock receipts.</p>
-              </div>
-            );
-            return (
-              <ul className="space-y-2">
-                {champions.slice().reverse().slice(0, 4).map((c: any, i: number) => (
-                  <li key={i} className="flex items-center gap-3 rounded-lg bg-muted/50 border border-border/40 px-3 py-2">
-                    <span className="text-[10px] font-black text-amber-400 tabular-nums w-10 shrink-0">{c.season ?? "—"}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-foreground truncate">{c.displayName ?? c.ownerName ?? "—"}</p>
-                      <p className="text-[10px] text-muted-foreground">Champion{c.playoffSeed ? ` · Seed ${c.playoffSeed}` : ""}</p>
-                    </div>
-                    <Trophy className="h-3 w-3 text-amber-500/60 shrink-0" />
-                  </li>
-                ))}
-              </ul>
-            );
-          })()}
-          <div className="mt-4 flex items-center gap-3">
-            <Link to="/draft-history" className="flex items-center gap-1 text-[10px] font-bold text-amber-400/80 hover:text-amber-300 transition-colors">
-              Draft History <ChevronRight className="h-3 w-3" />
-            </Link>
-            <span className="text-muted-foreground">·</span>
-            <Link to="/hall-of-fame" className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-muted-foreground transition-colors">
-              League History <ChevronRight className="h-3 w-3" />
-            </Link>
-          </div>
-        </div>
-
-      </section>
-      {/* Hero — three prestige cards */}
-      <section aria-label="League highlights" className="grid gap-4 md:grid-cols-3">
-        <div className="flex min-h-[240px] flex-col rounded-2xl border border-amber-500/25 bg-card p-5 shadow-[0_0_40px_-12px_rgba(245,158,11,0.35)]">
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-400/90">League History leader</p>
-            <Trophy className="h-4 w-4 shrink-0 text-amber-400/80" aria-hidden />
-          </div>
-          {hofQ.isLoading ? (
-            <SectionLoading message="Loading…" className="mt-8 flex-1 text-sm" />
-          ) : hofLeader ? (
-            <div className="mt-4 flex flex-1 flex-col">
-              <p className="text-2xl font-bold tracking-tight text-foreground">{hofLeader.displayName}</p>
-              <p className="mt-1 text-sm text-amber-200/90">
-                {hofLeader.titles} championship{hofLeader.titles === 1 ? "" : "s"}
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                <div className="rounded-lg border border-border bg-black/20 px-2 py-2">
-                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Win %</p>
-                  <p className="mt-0.5 font-semibold tabular-nums text-foreground">
-                    {leaderStats ? `${leaderStats.winPct.toFixed(1)}%` : "—"}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border bg-black/20 px-2 py-2">
-                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">Seasons active</p>
-                  <p className="mt-0.5 font-semibold tabular-nums text-foreground">
-                    {leaderStats?.seasonsActive ?? "—"}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Legacy score</p>
-                <p className="mt-1 text-sm font-medium text-foreground">Coming Soon</p>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-6 flex flex-1 flex-col justify-center text-sm text-muted-foreground">
-              <p className="font-medium text-muted-foreground">Not Yet Available</p>
-              <p className="mt-1 text-xs text-muted-foreground">Import medals to crown a league leader.</p>
-            </div>
-          )}
-          <Link to="/hall-of-fame" className="mt-4 text-xs font-medium text-amber-400/90 hover:text-amber-300">
-            View League History →
-          </Link>
-        </div>
-
-        <RivalrySummaryCard className="min-h-[240px]" title="Hottest Rivalry" />
-
-        <DashboardLeagueHealthCard isLoading={dataHealthQ.isLoading} data={dataHealthQ.data ?? null} />
-      </section>
-
-      {/* Row 2 — standings | marquee matchup | records */}
-      <section className="grid gap-4 xl:grid-cols-12" aria-label="League board">
-        <div className="space-y-3 xl:col-span-3">
-          <div className="flex min-h-[280px] flex-col rounded-2xl border border-border bg-card/95 shadow-lg shadow-black/40">
-            <div className="border-b border-border px-4 py-3">
-              <h3 className="text-sm font-semibold text-foreground">Current standings</h3>
-              <p className="text-xs text-muted-foreground">Top 6 · Season {season}</p>
-            </div>
-            <div className="flex-1 px-3 py-3">
-              {standingsQ.isError ? (
-                <div className="flex flex-col gap-2 text-sm text-red-300">
-                  <span>Could not load standings.</span>
-                  <Button type="button" size="sm" variant="outline" onClick={() => void standingsQ.refetch()}>
-                    Retry
-                  </Button>
-                </div>
-              ) : ranked.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Not Yet Available for this season.</p>
-              ) : (
-                <MiniTable
-                  dense
-                  columns={["Rank", "Owner", "Record", "PF"]}
-                  rows={ranked.slice(0, 6).map((t) => {
-                    const mine = leagueCtx.myTeamId != null && t.teamId === leagueCtx.myTeamId;
-                    return [
-                      <span key="r" className="tabular-nums text-muted-foreground">
-                        {t.displayRank}
-                      </span>,
-                      <div key="o" className={cn("min-w-0 font-medium", mine && "text-red-400")}>
-                        <div className="truncate">{t.ownerName || t.teamName}</div>
-                      </div>,
-                      formatRecord(t),
-                      <span key="pf" className="tabular-nums text-foreground">
-                        {num(t.pointsFor).toFixed(1)}
-                      </span>,
-                    ];
-                  })}
-                />
-              )}
-            </div>
-            <div className="border-t border-border px-4 py-2">
-              <Link to="/standings" className="text-xs font-medium text-violet-400 hover:text-violet-300">
-                View full standings →
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <div className="xl:col-span-6">
-          <DashboardMatchupMarquee
-            isLoading={pulseQ.isLoading || scoreboardQ.isLoading}
-            weekLabel={weekLabel}
-            teamA={teamA}
-            teamB={teamB}
-            board={boardLite}
-            winProbPct={outlookPct}
-            winProbCaption="Uses weeklyAssessment.leaguePulse team outlook when available."
-          />
-        </div>
-
-        <div className="space-y-3 xl:col-span-3">
-          <div className="flex min-h-[280px] flex-col rounded-2xl border border-amber-500/20 bg-card/95 shadow-[0_0_28px_-12px_rgba(245,158,11,0.22)]">
-            <div className="border-b border-border px-4 py-3">
-              <h3 className="text-sm font-semibold text-foreground">League records</h3>
-              <p className="text-xs text-muted-foreground">All-time marks</p>
-            </div>
-            <div className="flex flex-1 flex-col gap-3 px-4 py-3 text-sm">
-              {hofQ.isLoading ? (
-                <SectionLoading message="Loading…" className="text-sm" />
-              ) : (
-                <>
-                  <div className="flex flex-col gap-0.5 border-b border-border pb-2">
-                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Highest single game</span>
-                    <span className="text-foreground">
-                      {highest ? `${highest.score.toFixed(1)} pts · ${highest.label}` : "Not Yet Calculated"}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-0.5 border-b border-border pb-2">
-                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Lowest single game</span>
-                    <span className="text-foreground">
-                      {lowest ? `${lowest.score.toFixed(1)} pts · ${lowest.label}` : "Not Yet Calculated"}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-0.5 border-b border-border pb-2">
-                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Most points (season)</span>
-                    <span className="text-foreground">
-                      {hiSeasonPf
-                        ? `${hiSeasonPf.pointsFor.toFixed(1)} PF · ${hiSeasonPf.displayName} (${hiSeasonPf.season})`
-                        : "Not Yet Calculated"}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Closest championship</span>
-                    <span className="text-xs leading-snug text-muted-foreground">
-                      {hasPlayoffGmMatchups
-                        ? "Playoff rows exist in gmMatchups; smallest championship margin is not included in the Hall of Fame payload for this view."
-                        : "Not included in Hall of Fame payload."}
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="border-t border-border px-4 py-2">
-              <Link to="/hall-of-fame" className="text-xs font-medium text-amber-400/90 hover:text-amber-300">
-                League History →
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Row 3 — events | power | playoff */}
-      <section className="grid gap-4 lg:grid-cols-3" aria-label="League insights">
-        <div className="flex min-h-[220px] flex-col rounded-2xl border border-border bg-card/95">
-          <div className="border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold text-foreground">Recent League Events</h3>
-            <p className="text-xs text-muted-foreground">Latest completed transactions (stored league data)</p>
-          </div>
-          <DashboardRecentLeagueEvents seasons={eventSeasons} enabled={eventSeasons.length > 0} />
-        </div>
-
-        <div className="flex min-h-[220px] flex-col rounded-2xl border border-border bg-card/95">
-          <div className="border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold text-foreground">{V1.features.powerRankings}</h3>
-            <p className="text-xs text-muted-foreground">Top 5 · owners.ownerList</p>
-          </div>
-          <div className="flex-1 px-3 py-3">
-            {ownerListQ.isLoading ? (
-              <SectionLoading message="Loading…" className="text-sm" />
-            ) : powerTop.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Not Yet Available</p>
-            ) : (
-              <MiniTable
-                dense
-                columns={["Owner", "Power Score"]}
-                rows={powerTop.map((o) => [
-                  <div key="n" className="min-w-0">
-                    <div className="truncate font-medium text-foreground">{o.ownerName}</div>
-                    <div className="truncate text-[10px] text-muted-foreground">{o.currentTeam}</div>
-                  </div>,
-                  <span key="s" className="tabular-nums font-semibold text-lime-300/90">
-                    {o.score}
-                  </span>,
-                ])}
-              />
-            )}
-          </div>
-          <div className="border-t border-border px-4 py-2">
-            <Link to="/owner-profiles" className="text-xs font-medium text-violet-400 hover:text-violet-300">
-              My GM Profile →
-            </Link>
-          </div>
-        </div>
-
-        <div className="flex min-h-[220px] flex-col rounded-2xl border border-border bg-card/95">
-          <div className="border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold text-foreground">Playoff picture</h3>
-            <p className="text-xs text-muted-foreground">Seed-based · top 6 · no fabricated odds</p>
-          </div>
-          <div className="flex-1 space-y-2 px-3 py-3">
-            {ranked.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Not Yet Available</p>
-            ) : (
-              <ul className="space-y-2">
-                {ranked.slice(0, 6).map((t) => {
-                  const { label, tone } = classifyPlayoff(t, playoffSpots);
-                  const mine = leagueCtx.myTeamId != null && t.teamId === leagueCtx.myTeamId;
-                  return (
-                    <li
-                      key={t.teamId}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-border bg-foreground/[0.02] px-2 py-2"
-                    >
-                      <div className={cn("min-w-0", mine && "text-red-400")}>
-                        <p className="truncate text-sm font-medium text-foreground">{t.ownerName || t.teamName}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          #{t.displayRank} · {formatRecord(t)}
-                          {t.playoffSeed != null ? ` · Seed ${t.playoffSeed}` : ""}
-                        </p>
-                      </div>
-                      <StatusBadge tone={tone}>{label}</StatusBadge>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <DashboardTimelineStrip
-        isLoading={hofQ.isLoading}
-        rows={timelineChamps}
-        currentSeason={season}
-      />
-
-
-      <LeagueWireNewsFeed />
-      <div className="mt-6 border-t border-border pt-4 pb-6 text-center text-[11px] tracking-wide text-muted-foreground/60">
-        Build: {__APP_GIT_HASH__ && __APP_GIT_HASH__ !== "unknown" ? __APP_GIT_HASH__.slice(0, 7) : "Unknown"}
-      </div>
-    </IntelPageShell>
+    <WelcomeBackCoachHome
+      welcomeName={welcomeName}
+      leagueName={leagueName}
+      subtitle={subtitle}
+      stateLine={stateLine}
+      season={season}
+      seasonsDesc={SEASONS_DESC}
+      cachedSeasons={cachedSeasons}
+      onSeasonChange={setSeason}
+      isPreseason={isPreseason}
+      isInSeason={isInSeason}
+      weekLabel={weekLabel}
+      briefingParagraph={executiveBriefing.paragraph}
+      briefingActionLabel={executiveBriefing.action.label}
+      briefingActionHref={executiveBriefing.action.href}
+      trio={trio}
+      teamA={teamA}
+      teamB={teamB}
+      boardLite={boardLite}
+      outlookPct={outlookPct}
+      matchupLoading={pulseQ.isLoading || scoreboardQ.isLoading}
+      opponentName={isInSeason ? thisWeekOpponent?.ownerName ?? null : null}
+      rivalryHeat={oh?.rival?.heatLabel ?? null}
+      ranked={ranked}
+      myTeamId={leagueCtx.myTeamId}
+      formatRecord={formatRecord}
+      eventSeasons={eventSeasons}
+      timelineChamps={timelineChamps}
+      timelineLoading={hofQ.isLoading}
+      thisWeekInHistory={thisWeekInHistory}
+    />
   );
 }
