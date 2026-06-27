@@ -5,14 +5,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import type { LucideIcon } from "lucide-react";
 import {
-  LayoutDashboard,
-  Plug,
-  ArrowLeftRight,
-  Award,
-  Trophy,
-  Users,
-  Repeat2,
-  Bot,
   Settings,
   Menu,
   X,
@@ -21,18 +13,9 @@ import {
   ChevronDown,
   ChevronsUpDown,
   Loader2,
-  Calendar,
-  Building2,
-  Swords,
-  Dna,
-  Newspaper,
-  Crown,
+  Plug,
   Sun,
   Moon,
-  Route,
-  ShoppingCart,
-  Clapperboard,
-  Gem,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -52,70 +35,43 @@ import {
 import { useTheme, LOCK_DARK } from "@/context/ThemeContext";
 import { ProductHelpButton, ProductOnboardingProvider } from "@/components/onboarding";
 import { V1 } from "@/lib/v1Copy";
+import { buildNavGroups, type FeatureEntry } from "@/lib/featureRegistry";
+import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 
 type NavEntry =
-  | { kind: "link"; label: string; href: string; icon: LucideIcon }
+  | { kind: "link"; label: string; href: string; icon: LucideIcon; locked?: boolean }
   | { kind: "placeholder"; label: string; icon: LucideIcon };
 
 type NavGroup = { id: string; title: string; items: NavEntry[] };
 
-const NAV_GROUPS: NavGroup[] = [
-  {
-    id: "home",
-    title: V1.navGroups.home,
-    items: [
-      { kind: "link", label: V1.home.nav, href: "/dashboard", icon: LayoutDashboard },
-    ],
-  },
-  {
-    id: "weekly",
-    title: V1.navGroups.weekly,
-    items: [
-      { kind: "link", label: V1.features.leagueWire, href: "/league-wire", icon: Newspaper },
-      { kind: "link", label: V1.features.rosters, href: "/roster", icon: Users },
-      { kind: "link", label: V1.features.matchups, href: "/matchups", icon: Swords },
-      { kind: "link", label: V1.features.tradeIntelligence, href: "/trades", icon: Repeat2 },
-      { kind: "link", label: V1.features.advisor, href: "/advisor", icon: Bot },
-    ],
-  },
-  {
-    id: "know-rivals",
-    title: V1.navGroups.knowRivals,
-    items: [
-      { kind: "link", label: V1.features.rivalries, href: "/rivalry-center", icon: Swords },
-    ],
-  },
-  {
-    id: "know-yourself",
-    title: V1.navGroups.knowYourself,
-    items: [
-      { kind: "link", label: V1.features.myGmProfile, href: "/owner-profiles", icon: Users },
-      { kind: "link", label: V1.features.whyHaventIWon, href: "/championship-diagnosis", icon: Route },
-    ],
-  },
-  {
-    id: "league",
-    title: V1.navGroups.league,
-    items: [
-      { kind: "link", label: V1.features.leagueDna, href: "/league-dna", icon: Dna },
-      { kind: "link", label: V1.features.theCast, href: "/the-cast", icon: Clapperboard },
-      { kind: "link", label: V1.features.powerRankings, href: "/dynasty-power-rankings", icon: Gem },
-      { kind: "link", label: V1.features.acquisitionImpact, href: "/acquisition-impact", icon: ShoppingCart },
-      { kind: "link", label: V1.features.standings, href: "/standings", icon: Trophy },
-      { kind: "link", label: V1.features.commissionerHub, href: "/commissioner-command-center", icon: Crown },
-    ],
-  },
-  {
-    id: "history",
-    title: V1.navGroups.history,
-    items: [
-      { kind: "link", label: V1.features.hallOfFame, href: "/hall-of-fame", icon: Award },
-      { kind: "link", label: V1.features.leagueHistory, href: "/history", icon: Building2 },
-      { kind: "link", label: V1.features.draftHistory, href: "/draft-history", icon: Calendar },
-      { kind: "link", label: V1.features.transactions, href: "/transactions", icon: ArrowLeftRight },
-    ],
-  },
-];
+const NAV_GROUP_TITLES = {
+  home: V1.navGroups.home,
+  weekly: V1.navGroups.weekly,
+  knowRivals: V1.navGroups.knowRivals,
+  knowYourself: V1.navGroups.knowYourself,
+  league: V1.navGroups.league,
+  history: V1.navGroups.history,
+} as const;
+
+function featureToNavEntry(feature: FeatureEntry, locked: boolean): NavEntry {
+  return {
+    kind: "link",
+    label: feature.label,
+    href: feature.route,
+    icon: feature.icon,
+    locked,
+  };
+}
+
+function buildSidebarNavGroups(hasAccess: boolean): NavGroup[] {
+  return buildNavGroups((category) => NAV_GROUP_TITLES[category]).map((group) => ({
+    id: group.id,
+    title: group.title,
+    items: group.items.map((feature) =>
+      featureToNavEntry(feature, feature.requiredPlan === "pro" && !hasAccess),
+    ),
+  }));
+}
 
 function formatLeagueSeason(season: number | null | undefined): string {
   if (season != null && season > 0) return String(season);
@@ -389,6 +345,7 @@ function NavItemRow({
   }
 
   const Icon = entry.icon;
+  const locked = entry.locked === true;
   const isActive =
     pathname === entry.href ||
     (entry.href === "/hall-of-fame" &&
@@ -401,14 +358,34 @@ function NavItemRow({
         onClick={onNavigate}
         className={cn(
           "group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all",
-          isActive
-            ? "border border-lime-500/30 border-l-2 border-l-lime-400 bg-lime-500/10 text-foreground"
-            : "border border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground"
+          locked
+            ? "cursor-pointer border border-transparent text-muted-foreground/50 hover:border-border/60 hover:bg-muted/50 hover:text-muted-foreground/70"
+            : isActive
+              ? "border border-lime-500/30 border-l-2 border-l-lime-400 bg-lime-500/10 text-foreground"
+              : "border border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground",
         )}
       >
-        <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-lime-300" : "text-muted-foreground group-hover:text-foreground")} />
+        <Icon
+          className={cn(
+            "h-4 w-4 shrink-0",
+            locked
+              ? "text-muted-foreground/40"
+              : isActive
+                ? "text-lime-300"
+                : "text-muted-foreground group-hover:text-foreground",
+          )}
+        />
         <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-        {isActive && <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-lime-400/80" />}
+        {locked ? (
+          <Badge
+            variant="outline"
+            className="shrink-0 border-amber-500/25 bg-amber-500/[0.06] px-1.5 py-0 text-[10px] font-medium text-amber-300/90"
+          >
+            🔒 Rivals Pro
+          </Badge>
+        ) : isActive ? (
+          <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-lime-400/80" />
+        ) : null}
       </Link>
     </li>
   );
@@ -478,6 +455,8 @@ function Sidebar({
   const pathname = location.pathname;
   const isMobile = useViewportMobile();
   const { theme, toggle } = useTheme();
+  const { hasAccess } = usePremiumAccess();
+  const navGroups = buildSidebarNavGroups(hasAccess);
   const adpMutation = trpc.playerStats.refreshAdpFromEspn.useMutation();
   useEffect(() => {
     if (sessionStorage.getItem("gmwr-adp-refreshed")) return;
@@ -492,17 +471,17 @@ function Sidebar({
     const mobile =
       typeof globalThis !== "undefined" &&
       globalThis.matchMedia?.("(max-width: 767px)")?.matches === true;
-    for (const g of NAV_GROUPS) init[g.id] = !mobile;
+    for (const g of buildSidebarNavGroups(false)) init[g.id] = !mobile;
     return init;
   });
 
   useEffect(() => {
     if (!isMobile) {
-      setOpenGroups(() => Object.fromEntries(NAV_GROUPS.map((g) => [g.id, true])));
+      setOpenGroups(() => Object.fromEntries(navGroups.map((g) => [g.id, true])));
       return;
     }
-    setOpenGroups(() => Object.fromEntries(NAV_GROUPS.map((g) => [g.id, false])));
-  }, [isMobile]);
+    setOpenGroups(() => Object.fromEntries(navGroups.map((g) => [g.id, false])));
+  }, [isMobile, navGroups]);
 
   return (
     <div className="flex h-full flex-col border-r border-border bg-card">
@@ -539,7 +518,7 @@ function Sidebar({
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-3">
         <div className="flex flex-col">
-          {NAV_GROUPS.map((group, idx) => {
+          {navGroups.map((group, idx) => {
             if (!isMobile) {
               return (
                 <div key={group.id} className={cn(idx > 0 && "mt-2 border-t border-border/40 pt-2")}>

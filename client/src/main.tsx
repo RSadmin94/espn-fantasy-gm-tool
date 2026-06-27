@@ -45,6 +45,7 @@ import { LeagueWire }         from "./pages/LeagueWire";
 import { DraftWarRoom }      from "./pages/DraftWarRoom";
 import { RivalryCenter }     from "./pages/RivalryCenter";
 import { CommissionerCommandCenter } from "./pages/CommissionerCommandCenter";
+import { FeatureRouteGate } from "./components/FeatureRouteGate";
 import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
@@ -141,7 +142,7 @@ const router = createBrowserRouter([
           { path: "/dashboard", element: <Dashboard /> },
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/sync", element: <SyncData /> },
-          { path: "/commissioner-command-center", element: <CommissionerCommandCenter /> },
+          { path: "/commissioner-command-center", element: <FeatureRouteGate route="/commissioner-command-center"><CommissionerCommandCenter /></FeatureRouteGate> },
           { path: "/league-settings",      element: <LeagueSettings /> },
           { path: "/owner-profiles",         element: <OwnerProfiles /> },
           { path: "/league-data-health",     element: <LeagueDataHealth /> },
@@ -149,7 +150,7 @@ const router = createBrowserRouter([
           { path: "/player-intelligence",    element: <Navigate to="/player-database" replace /> },
           { path: "/player-database",         element: <PlayerDatabase /> },
           { path: "/league-wire",               element: <LeagueWire /> },
-          { path: "/draft-war-room",           element: <DraftWarRoom /> },
+          { path: "/draft-war-room",           element: <FeatureRouteGate route="/draft-war-room"><DraftWarRoom /></FeatureRouteGate> },
           { path: "/transactions", element: <Transactions /> },
           { path: "/standings", element: <Standings /> },
           { path: "/dynasty-power-rankings", element: <DynastyPowerRankings /> },
@@ -163,15 +164,15 @@ const router = createBrowserRouter([
           { path: "/hall-of-fame", element: <HallOfFame /> },
           { path: "/draft-reality", element: <DraftRealitySimulator /> },
           { path: "/why-havent-i-won", element: <Navigate to="/championship-diagnosis" replace /> },
-      { path: "/championship-diagnosis", element: <ChampionshipDiagnosis /> },
+      { path: "/championship-diagnosis", element: <FeatureRouteGate route="/championship-diagnosis"><ChampionshipDiagnosis /></FeatureRouteGate> },
       { path: "/league-dna", element: <LeagueDna /> },
           { path: "/the-cast", element: <TheCast /> },
           { path: "/championship-path", element: <Navigate to="/championship-diagnosis" replace /> },
-          { path: "/acquisition-impact", element: <AcquisitionImpact /> },
+          { path: "/acquisition-impact", element: <FeatureRouteGate route="/acquisition-impact"><AcquisitionImpact /></FeatureRouteGate> },
           { path: "/ring-of-honor", element: <Navigate to="/hall-of-fame" replace /> },
           { path: "/roster", element: <Roster /> },
-          { path: "/trades", element: <Trades /> },
-          { path: "/advisor", element: <Advisor /> },
+          { path: "/trades", element: <FeatureRouteGate route="/trades"><Trades /></FeatureRouteGate> },
+          { path: "/advisor", element: <FeatureRouteGate route="/advisor"><Advisor /></FeatureRouteGate> },
           { path: "/settings", element: <Settings /> },
 
           // ── Legacy route redirects ────────────────────────────────────
