@@ -1,5 +1,8 @@
 import { useMemo, type ReactNode } from "react";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { COMMERCIAL } from "@/lib/commercialCopy";
+import { V1 } from "@/lib/v1Copy";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
@@ -13,6 +16,7 @@ import {
   IntelPanel,
   PageError,
   PageLoading,
+  ProGate,
   SectionLoading,
 } from "@/components/layout";
 import {
@@ -107,13 +111,46 @@ export function ChampionshipDiagnosis() {
     { staleTime: 60_000, enabled: leagueKeyReady },
   );
   const cp: any = leagueKeyReady ? pathQ.data : undefined;
-  const showPlayoffPanel = Boolean(cp && !cp.gated);
+  const cr: any = leagueKeyReady ? careerQ.data : undefined;
+  const diagnosisGated = Boolean(cr?.gated);
+  const pathGated = Boolean(cp?.gated);
+  const lockedReasons = Number(cr?.lockedReasons ?? 0);
+  const showCareerPro = !diagnosisGated;
+  const showPathPro = !pathGated;
+  const showPlayoffPanel = Boolean(showPathPro && cp);
   const playoffQ = trpc.leagueIntel.playoffPositionSplit.useQuery(
     withLeagueSalt({}, leagueContextKey),
     { staleTime: 60_000, enabled: leagueKeyReady && showPlayoffPanel },
   );
 
-  const cr: any = leagueKeyReady ? careerQ.data : undefined;
+  const checkout = trpc.billing.createCheckoutSession.useMutation({
+    onSuccess: (r) => {
+      if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
+      else toast.error("Checkout did not return a link. Try again or contact support.");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Could not start checkout. Please try again.");
+    },
+  });
+  const startCheckout = () => {
+    if (typeof window === "undefined") return;
+    checkout.mutate({ origin: window.location.origin });
+  };
+
+  const upgradeGate = (diagnosisGated || pathGated) ? (
+    <ProGate
+      icon={Trophy}
+      heading="Unlock your complete championship diagnosis"
+      description={
+        diagnosisGated && lockedReasons > 0
+          ? `We found ${lockedReasons} more factor${lockedReasons === 1 ? "" : "s"} blocking your title — plus readiness scoring, positional gaps, playoff truth, and your action plan.`
+          : "Rivals Pro unlocks readiness scoring, positional gaps vs champions, playoff truth, path analysis, and your ranked action plan."
+      }
+      ctaLabel={COMMERCIAL.upgradeCtaUnderstandWhy}
+      onUnlock={startCheckout}
+      pending={checkout.isPending}
+    />
+  ) : null;
 
   const mode: string = cr?.mode ?? "why-havent-won";
   const isChampionMode = mode === "why-you-won" || mode === "why-you-broke-through";
@@ -397,10 +434,10 @@ export function ChampionshipDiagnosis() {
       padding="diagnosis"
     >
       <CinematicPageHeader
-        title="Championship Diagnosis"
+        title={V1.features.whyHaventIWon}
         subtitle={cr ? taglineFor(mode, cr.ownerName) : undefined}
         titleSize="large"
-        badge={{ label: "Championship Diagnosis", icon: Trophy, tone: "violet" }}
+        badge={{ label: V1.features.whyHaventIWon, icon: Trophy, tone: "violet" }}
         className="mb-0"
         meta={
           cr ? (
@@ -447,33 +484,36 @@ export function ChampionshipDiagnosis() {
           {/* Three modes, three hierarchies: why-you-won leads with the edge, why-havent-won with the benchmark, breakthrough keeps the interim order. */}
           {mode === "why-you-won" ? (
             <>
-              {edgeSection}
+              {showCareerPro ? edgeSection : null}
               {rivalSection}
-              {pathSection}
-              {benchmarkSection}
-              {playoffTruthSection}
-              {blockersSection}
-              {actionSection}
+              {showPathPro ? pathSection : null}
+              {showCareerPro ? benchmarkSection : null}
+              {showPathPro ? playoffTruthSection : null}
+              {showCareerPro ? blockersSection : null}
+              {upgradeGate}
+              {showCareerPro ? actionSection : null}
             </>
           ) : mode === "why-havent-won" ? (
             <>
-              {benchmarkSection}
-              {playoffTruthSection}
+              {showCareerPro ? benchmarkSection : null}
+              {showPathPro ? playoffTruthSection : null}
               {titleGapSection}
               {blockersSection}
+              {upgradeGate}
               {rivalSection}
-              {pathSection}
-              {actionSection}
+              {showPathPro ? pathSection : null}
+              {showCareerPro ? actionSection : null}
             </>
           ) : (
             <>
               {titleGapSection}
               {blockersSection}
-              {benchmarkSection}
-              {playoffTruthSection}
+              {showCareerPro ? benchmarkSection : null}
+              {showPathPro ? playoffTruthSection : null}
+              {upgradeGate}
               {rivalSection}
-              {pathSection}
-              {actionSection}
+              {showPathPro ? pathSection : null}
+              {showCareerPro ? actionSection : null}
             </>
           )}
 
