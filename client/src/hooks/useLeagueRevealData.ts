@@ -153,7 +153,8 @@ export function useLeagueRevealData(enabled: boolean) {
       : "—";
     const tradeDetail = gap
       ? `Biggest value gap: +${Math.round(gap.margin)} points`
-      : notoriousQ.data?.rankedByMargin?.length
+      : (notoriousQ.data as { tradeCount?: number; rankedByMargin?: unknown[] } | undefined)?.tradeCount ??
+          notoriousQ.data?.rankedByMargin?.length
         ? "Completed trades on file — open League History for the full ledger"
         : "Notorious trades appear after completed ESPN trades sync";
 

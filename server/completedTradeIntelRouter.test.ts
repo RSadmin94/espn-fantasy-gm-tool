@@ -144,6 +144,30 @@ function anonCtx(): TrpcContext {
   };
 }
 
+function entitledCtx(): TrpcContext {
+  return {
+    user: {
+      id: 1,
+      openId: "test-user",
+      email: "rod@example.com",
+      name: "Rod Sellers",
+      loginMethod: "manus",
+      role: "user",
+      subscriptionStatus: "active" as const,
+      trialStartedAt: null,
+      currentPeriodEnd: null,
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastSignedIn: new Date(),
+    },
+    req: { protocol: "https", headers: {} } as TrpcContext["req"],
+    res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
+    auth: { userId: "test-user" } as TrpcContext["auth"],
+  };
+}
+
 describe("completedTradeIntelRouter helpers", () => {
   it("resolveSeasons accepts single season", () => {
     expect(resolveSeasons({ season: 2026 })).toEqual([2026]);
@@ -169,21 +193,50 @@ describe("completedTradeIntelRouter", () => {
     vi.clearAllMocks();
   });
 
-  it("ownerTradeHistory returns summary and recent trades", async () => {
+  it("ownerTradeHistory returns gated summary for anonymous users", async () => {
     const caller = appRouter.createCaller(anonCtx());
     const result = await caller.completedTradeIntel.ownerTradeHistory({
       leagueId: "457622",
       season: 2026,
       ownerName: "Rod",
     });
+    expect(result.gated).toBe(true);
+    expect(result.tradeCount).toBe(2);
+    expect(result.wins).toBe(0);
+    expect(result.netValue).toBe(0);
+    expect(result.recentTrades).toEqual([]);
+  });
+
+  it("ownerTradeHistory returns summary and recent trades for entitled users", async () => {
+    const caller = appRouter.createCaller(entitledCtx());
+    const result = await caller.completedTradeIntel.ownerTradeHistory({
+      leagueId: "457622",
+      season: 2026,
+      ownerName: "Rod",
+    });
+    expect(result.gated).toBe(false);
     expect(result.tradeCount).toBe(2);
     expect(result.wins).toBe(2);
     expect(result.netValue).toBe(348);
     expect(result.recentTrades.length).toBeGreaterThan(0);
   });
 
-  it("rivalryTradeLedger returns pairwise ledger", async () => {
+  it("rivalryTradeLedger returns gated ledger for anonymous users", async () => {
     const caller = appRouter.createCaller(anonCtx());
+    const result = await caller.completedTradeIntel.rivalryTradeLedger({
+      leagueId: "457622",
+      seasons: [2026],
+      ownerAName: "Rod",
+      ownerBName: "Sheldon",
+    });
+    expect(result.gated).toBe(true);
+    expect(result.tradeCount).toBe(2);
+    expect(result.recordA).toBe(0);
+    expect(result.trades).toEqual([]);
+  });
+
+  it("rivalryTradeLedger returns pairwise ledger for entitled users", async () => {
+    const caller = appRouter.createCaller(entitledCtx());
     const result = await caller.completedTradeIntel.rivalryTradeLedger({
       leagueId: "457622",
       seasons: [2026],
@@ -196,8 +249,20 @@ describe("completedTradeIntelRouter", () => {
     expect(result.ledgerWinnerName).toBe("Rod Sellers");
   });
 
-  it("notoriousTradesReport returns league rankings", async () => {
+  it("notoriousTradesReport returns gated count-only payload for anonymous users", async () => {
     const caller = appRouter.createCaller(anonCtx());
+    const result = await caller.completedTradeIntel.notoriousTradesReport({
+      leagueId: "457622",
+      season: 2026,
+    });
+    expect(result.gated).toBe(true);
+    expect(result.tradeCount).toBeGreaterThan(0);
+    expect(result.rankedByMargin).toEqual([]);
+    expect(result.biggestValueGap).toBeNull();
+  });
+
+  it("notoriousTradesReport returns league rankings for entitled users", async () => {
+    const caller = appRouter.createCaller(entitledCtx());
     const result = await caller.completedTradeIntel.notoriousTradesReport({
       leagueId: "457622",
       season: 2026,

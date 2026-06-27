@@ -243,6 +243,69 @@ function tryRecentForm(
   };
 }
 
+export type BuildRivalryColdOpenTeaserInput = Pick<
+  BuildRivalryNarrativeStatementsInput,
+  "story" | "h2h" | "focalName" | "rivalName"
+>;
+
+function tryThreeEliminationsTeaser(
+  input: BuildRivalryColdOpenTeaserInput,
+): RivalryNarrativeStatement | null {
+  const { story, focalName, rivalName } = input;
+  if (story.headline.key !== "THREE_ELIMINATIONS") return null;
+
+  const count = story.headline.receiptIds.length;
+  if (count < 3) return null;
+
+  return {
+    statementKey: "THREE_ELIMINATIONS_LEAD",
+    block: "coldOpen",
+    priority: 100,
+    text: `${rivalName} has ended ${focalName}'s season ${count} times.`,
+    receiptIds: [],
+    factKeys: [],
+    confidence: story.headline.confidence,
+  };
+}
+
+function tryDeadEvenDifferentLegaciesTeaser(
+  input: BuildRivalryColdOpenTeaserInput,
+): RivalryNarrativeStatement | null {
+  const { story, h2h } = input;
+  if (story.headline.key !== "DEAD_EVEN_DIFFERENT_LEGACIES") return null;
+  if (!careerTied(h2h)) return null;
+
+  const hasTitleDivergence = story.documentaryFacts.some((f) => f.factKey === "TITLE_DIVERGENCE");
+  const playoffDiffers = !playoffTied(h2h) && h2h.playoffs.games > 0;
+  if (!playoffDiffers && !hasTitleDivergence) return null;
+
+  return {
+    statementKey: "DEAD_EVEN_DIFFERENT_LEGACIES_LEAD",
+    block: "coldOpen",
+    priority: 90,
+    text: "Dead even in the series. Not in the legacy.",
+    receiptIds: [],
+    factKeys: [],
+    confidence: story.headline.confidence,
+  };
+}
+
+/** Cold-open teaser from story metadata + H2H only — no receipt resolution (freemium). */
+export function buildRivalryColdOpenTeaser(
+  input: BuildRivalryColdOpenTeaserInput,
+): RivalryNarrativeStatement | null {
+  if (!input.story.availableBlocks.includes("coldOpen")) return null;
+
+  const candidates = [
+    tryThreeEliminationsTeaser(input),
+    tryDeadEvenDifferentLegaciesTeaser(input),
+    tryPlayoffOwnerLead({ ...input, receipts: [] }),
+  ].filter((s): s is RivalryNarrativeStatement => s != null);
+
+  if (candidates.length === 0) return null;
+  return candidates.sort((a, b) => b.priority - a.priority)[0]!;
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export function buildRivalryNarrativeStatements(

@@ -4,6 +4,8 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { COMMERCIAL } from "@/lib/commercialCopy";
+import { resolvePaywallCopy } from "@/lib/paywallCopy";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { IntelPanel } from "@/components/layout";
@@ -1462,6 +1464,80 @@ function RivalryTradeLedgerSection({
   );
 }
 
+function GatedRivalryDossierTeaser({
+  focalOwnerKey,
+  opponentOwnerKey,
+  leagueContextKey,
+  leagueKeyReady,
+  onUnlock,
+  checkoutPending,
+}: {
+  focalOwnerKey: string;
+  opponentOwnerKey: string;
+  leagueContextKey: string;
+  leagueKeyReady: boolean;
+  onUnlock: () => void;
+  checkoutPending: boolean;
+}) {
+  const lockedCopy = resolvePaywallCopy(
+    "This rivalry has a story worth telling — unlock the complete story.",
+    "Receipts, timeline, turning points, trade chapters, and evidence stay locked. Rivals Pro unlocks the complete why behind this feud.",
+  );
+  const statementsQ = useRivalryStoryStatementsQuery(
+    focalOwnerKey,
+    opponentOwnerKey,
+    leagueContextKey,
+    leagueKeyReady && opponentOwnerKey.length > 0,
+  );
+
+  const coldOpen = topColdOpenStatement(
+    (statementsQ.data?.statements ?? []) as StoryStatementPayload[],
+  );
+
+  return (
+    <div className="space-y-4 p-4" style={{ ...PANEL, boxShadow: "0 0 40px rgba(0,0,0,0.45)" }}>
+      <div className="flex items-center gap-2" style={{ color: ACCENT }}>
+        <Swords className="h-4 w-4" />
+        <h3 className="text-sm font-extrabold uppercase tracking-[0.18em]">Rivalry Documentary</h3>
+      </div>
+
+      {opponentOwnerKey && statementsQ.isLoading ? (
+        <div className="flex items-center gap-2 text-xs" style={{ color: MUTED }}>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Loading documentary preview…
+        </div>
+      ) : coldOpen ? (
+        <div className="p-4" style={{ ...SUB, borderTop: `3px solid ${GOLD}` }}>
+          <DocumentarySectionHeader icon={<Clapperboard className="h-4 w-4" />} title="Cold Open" accent={GOLD} />
+          <p className="text-base font-semibold leading-snug md:text-lg" style={{ color: TEXT }}>
+            {coldOpen.text}
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm" style={{ color: MUTED }}>
+          {opponentOwnerKey ? lockedCopy.heading : "Select a rival to preview one line from their documentary."}
+        </p>
+      )}
+
+      {coldOpen ? (
+        <p className="text-sm" style={{ color: MUTED }}>
+          {lockedCopy.description}
+        </p>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={onUnlock}
+        disabled={checkoutPending}
+        className="inline-flex items-center gap-2 rounded-[10px] px-5 py-3 text-sm font-extrabold"
+        style={{ background: ACCENT, color: "#1e1623" }}
+      >
+        {checkoutPending ? COMMERCIAL.upgradeCtaPending : COMMERCIAL.upgradeCtaUnderstandWhy}
+      </button>
+    </div>
+  );
+}
+
 export function RivalryDossierPanel({
   focalOwnerKey,
   pickerOptions,
@@ -1575,29 +1651,21 @@ export function RivalryDossierPanel({
   }
 
   if ((data as any).gated) {
+    const teaserOpponentKey = opponentKey || initialOpponentKey || "";
+    const startDossierCheckout = () => {
+      if (typeof window === "undefined") return;
+      dossierLog.mutate({ eventType: "cta_click", featureName: "rivalry_dossier_unlock_clicked" });
+      dossierCheckout.mutate({ origin: window.location.origin });
+    };
     return (
-      <div className="space-y-4 p-4" style={{ ...PANEL, boxShadow: "0 0 40px rgba(0,0,0,0.45)" }}>
-        <div className="flex items-center gap-2" style={{ color: ACCENT }}>
-          <Swords className="h-4 w-4" />
-          <h3 className="text-sm font-extrabold uppercase tracking-[0.18em]">Rivalry Records Locked</h3>
-        </div>
-        <p className="text-sm" style={{ color: MUTED }}>
-          The full head-to-head record, heartbreak losses, playoff scars, points for and against, and
-          the meeting-by-meeting timeline are part of paid Rivalries.
-        </p>
-        <button
-          onClick={() => {
-            if (typeof window === "undefined") return;
-            dossierLog.mutate({ eventType: "cta_click", featureName: "rivalry_dossier_unlock_clicked" });
-            dossierCheckout.mutate({ origin: window.location.origin });
-          }}
-          disabled={dossierCheckout.isPending}
-          className="inline-flex items-center gap-2 rounded-[10px] px-5 py-3 text-sm font-extrabold"
-          style={{ background: ACCENT, color: "#1e1623" }}
-        >
-          {dossierCheckout.isPending ? "Opening..." : "Unlock Rivalry Records"}
-        </button>
-      </div>
+      <GatedRivalryDossierTeaser
+        focalOwnerKey={queryKey}
+        opponentOwnerKey={teaserOpponentKey}
+        leagueContextKey={leagueContextKey}
+        leagueKeyReady={leagueKeyReady}
+        onUnlock={startDossierCheckout}
+        checkoutPending={dossierCheckout.isPending}
+      />
     );
   }
 

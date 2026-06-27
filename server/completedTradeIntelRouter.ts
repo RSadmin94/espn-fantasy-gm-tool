@@ -6,7 +6,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { router, publicProcedure } from "./_core/trpc";
+import { router, publicProcedure, resolvePremiumAccess } from "./_core/trpc";
 import {
   buildNotoriousTradesReport,
   buildOwnerTradeHistory,
@@ -14,10 +14,14 @@ import {
   findOwnerKeyByName,
   loadCompletedTradeIntelligence,
   type CompletedTradeIntel,
-  type NotoriousTradesReport,
   type OwnerTradeHistorySummary,
   type RivalryTradeLedger,
 } from "./completedTradeAuthority";
+import {
+  gateNotoriousTradesReport,
+  gateOwnerTradeHistory,
+  gateRivalryTradeLedger,
+} from "./leagueIntelGating";
 import { getDb } from "./db";
 
 const RECENT_TRADE_LIMIT = 10;
@@ -106,7 +110,7 @@ export const completedTradeIntelRouter = router({
   /** Completed trades + lifetime record for one owner. */
   ownerTradeHistory: publicProcedure
     .input(leagueSeasonInput.merge(ownerIdentifierInput))
-    .query(async ({ input }): Promise<OwnerTradeHistoryResponse> => {
+    .query(async ({ ctx, input }): Promise<OwnerTradeHistoryResponse> => {
       const seasons = resolveSeasons(input);
       const trades = await loadTradesForLeague(input.leagueId, seasons);
       const owner = resolveOwnerIdentifier(trades, input);
@@ -117,10 +121,12 @@ export const completedTradeIntelRouter = router({
         });
       }
 
+      const entitled = await resolvePremiumAccess(ctx.user);
       const history = buildOwnerTradeHistory(trades, owner.ownerKey, owner.ownerName);
+      const gated = gateOwnerTradeHistory(history, entitled);
       return {
-        ...history,
-        recentTrades: history.trades.slice(0, RECENT_TRADE_LIMIT),
+        ...gated,
+        recentTrades: entitled ? history.trades.slice(0, RECENT_TRADE_LIMIT) : [],
       };
     }),
 
@@ -145,7 +151,7 @@ export const completedTradeIntelRouter = router({
           ),
       ),
     )
-    .query(async ({ input }): Promise<RivalryTradeLedgerResponse> => {
+    .query(async ({ ctx, input }): Promise<RivalryTradeLedgerResponse> => {
       const seasons = resolveSeasons(input);
       const trades = await loadTradesForLeague(input.leagueId, seasons);
 
@@ -170,6 +176,7 @@ export const completedTradeIntelRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "ownerA and ownerB must be different owners" });
       }
 
+      const entitled = await resolvePremiumAccess(ctx.user);
       const ledger = buildRivalryTradeLedger(
         trades,
         ownerA.ownerKey,
@@ -177,18 +184,20 @@ export const completedTradeIntelRouter = router({
         ownerA.ownerName,
         ownerB.ownerName,
       );
+      const gated = gateRivalryTradeLedger(ledger, entitled);
       return {
-        ...ledger,
-        recentTrades: ledger.trades.slice(0, RECENT_TRADE_LIMIT),
+        ...gated,
+        recentTrades: entitled ? ledger.trades.slice(0, RECENT_TRADE_LIMIT) : [],
       };
     }),
 
   /** League-level completed trade rankings (biggest fleeces, active pairs, etc.). */
   notoriousTradesReport: publicProcedure
     .input(leagueSeasonInput)
-    .query(async ({ input }): Promise<NotoriousTradesReport> => {
+    .query(async ({ ctx, input }) => {
       const seasons = resolveSeasons(input);
       const trades = await loadTradesForLeague(input.leagueId, seasons);
-      return buildNotoriousTradesReport(trades);
+      const report = buildNotoriousTradesReport(trades);
+      return gateNotoriousTradesReport(report, await resolvePremiumAccess(ctx.user));
     }),
 });

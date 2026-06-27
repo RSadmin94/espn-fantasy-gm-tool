@@ -1,6 +1,16 @@
 import type { CareerReport } from "./careerReportService";
 import type { ChampionshipPathResult } from "./championshipPath";
 import type { AcquisitionImpactResult } from "./acquisitionImpact";
+import type { WhyHaventIWonResult } from "./whyHaventIWon";
+import type { PlayoffPositionSplitResult } from "./playoffPositionSplit";
+import type { RivalryStoryResult, StoryBlockKey } from "./rivalryStoryAuthority";
+import type { RivalryNarrativeStatement } from "./rivalryNarrativeTemplates";
+import type { RivalryStoryReceipt } from "./rivalryStoryReceipts";
+import type {
+  NotoriousTradesReport,
+  OwnerTradeHistorySummary,
+  RivalryTradeLedger,
+} from "./completedTradeAuthority";
 
 /**
  * Freemium gating for the Why Haven't I Won / Career Report.
@@ -336,5 +346,334 @@ export function gateAcquisitionImpact(
     gated: true,
     entitled: false,
     lockedManagers: result.qualifiedCount,
+  };
+}
+
+// --- Why Haven't I Won (legacy endpoint) gating --------------------------------
+// Mirrors careerReport teaser: identity + one finding; withhold the rest.
+
+export type GatedWhyHaventIWon = WhyHaventIWonResult & {
+  gated: boolean;
+  entitled: boolean;
+  totalFindings: number;
+  lockedFindings: number;
+};
+
+export function gateWhyHaventIWon(result: WhyHaventIWonResult, entitled: boolean): GatedWhyHaventIWon {
+  const totalFindings = result.findings.length;
+  if (entitled || totalFindings <= 1) {
+    return { ...result, gated: false, entitled, totalFindings, lockedFindings: 0 };
+  }
+  const primary = result.findings.slice(0, 1);
+  const lockedFindings = totalFindings - primary.length;
+  const more =
+    lockedFindings > 0
+      ? ` We found ${lockedFindings} more factor${lockedFindings === 1 ? "" : "s"} working against your title — unlock Rivals Pro for the full diagnosis.`
+      : "";
+  const narrative = primary[0]
+    ? `Your biggest championship blocker: ${primary[0].headline}. ${primary[0].detail}${more}`
+    : result.narrative;
+  return {
+    ...result,
+    findings: primary,
+    narrative,
+    gated: true,
+    entitled: false,
+    totalFindings,
+    lockedFindings,
+  };
+}
+
+// --- Playoff Position Split gating -------------------------------------------
+// Paid-only depth layer on Championship Diagnosis; free users get identity shell only.
+
+export type GatedPlayoffPositionSplit = PlayoffPositionSplitResult & {
+  gated: boolean;
+  entitled: boolean;
+};
+
+export function gatePlayoffPositionSplit(
+  result: PlayoffPositionSplitResult,
+  entitled: boolean,
+): GatedPlayoffPositionSplit {
+  if (entitled) return { ...result, gated: false, entitled: true };
+  return {
+    ...result,
+    available: false,
+    reason: "Unlock with Rivals Pro",
+    playoffSeasonsForOwner: [],
+    positions: [],
+    overall: {
+      playoffPF: null,
+      regularPF: null,
+      championFullPF: null,
+      championPlayoffPF: null,
+      headline: null,
+    },
+    narrative: "",
+    gated: true,
+    entitled: false,
+  };
+}
+
+// --- Trade Analyzer gating ---------------------------------------------------
+// Free = WHO: side totals, lean (fairnessGrade), balance score (ratio).
+// Paid = WHY/HOW: per-player breakdown, AI verdict, trade intelligence, roster needs.
+
+export type TradeAnalyzeCore = {
+  totalA: number;
+  totalB: number;
+  pickValueA: number;
+  pickValueB: number;
+  ratio: number;
+  fairnessGrade: string;
+  leagueFormat: string;
+  formatSource: string;
+  requiresFormatDisclaimer: boolean;
+  disclaimers: string[];
+};
+
+export type GatedTradeAnalyzeResult = TradeAnalyzeCore & {
+  gated: boolean;
+  entitled: boolean;
+  sideAValues?: unknown[];
+  sideBValues?: unknown[];
+  aiVerdict?: string;
+  mathSummary?: string;
+  teamANeeds?: Record<string, number>;
+  teamBNeeds?: Record<string, number>;
+  tradeIntelligence?: unknown | null;
+};
+
+export function gateTradeAnalyzeResult(
+  payload: Record<string, unknown>,
+  entitled: boolean,
+): GatedTradeAnalyzeResult {
+  if (entitled) {
+    return { ...payload, gated: false, entitled: true } as GatedTradeAnalyzeResult;
+  }
+  return {
+    totalA: Number(payload.totalA ?? 0),
+    totalB: Number(payload.totalB ?? 0),
+    pickValueA: Number(payload.pickValueA ?? 0),
+    pickValueB: Number(payload.pickValueB ?? 0),
+    ratio: Number(payload.ratio ?? 0),
+    fairnessGrade: String(payload.fairnessGrade ?? ""),
+    leagueFormat: String(payload.leagueFormat ?? "unknown"),
+    formatSource: String(payload.formatSource ?? ""),
+    requiresFormatDisclaimer: Boolean(payload.requiresFormatDisclaimer),
+    disclaimers: Array.isArray(payload.disclaimers) ? (payload.disclaimers as string[]) : [],
+    gated: true,
+    entitled: false,
+  };
+}
+
+// --- Rivalry Documentary gating ------------------------------------------------
+// Free = Cold Open teaser only (one statement, no receipt IDs). Paid = full
+// documentary metadata, statements, and evidence receipts.
+
+const FREE_RIVALRY_STORY_BLOCKS = new Set<StoryBlockKey>(["coldOpen", "taleOfTape"]);
+
+function teaserAvailableBlocks(blocks: StoryBlockKey[]): StoryBlockKey[] {
+  return blocks.filter((b) => FREE_RIVALRY_STORY_BLOCKS.has(b));
+}
+
+export type GatedRivalryStoryResult = RivalryStoryResult & {
+  gated: boolean;
+  entitled: boolean;
+};
+
+export function gateRivalryStoryPair(story: RivalryStoryResult, entitled: boolean): GatedRivalryStoryResult {
+  if (entitled) return { ...story, gated: false, entitled: true };
+  return {
+    focalOwnerKey: story.focalOwnerKey,
+    rivalOwnerKey: story.rivalOwnerKey,
+    tier: story.tier,
+    headline: {
+      key: story.headline.key,
+      confidence: story.headline.confidence,
+      receiptIds: [],
+    },
+    documentaryFacts: [],
+    availableBlocks: teaserAvailableBlocks(story.availableBlocks),
+    gated: true,
+    entitled: false,
+  };
+}
+
+export type GatedRivalryStoryForOwner = {
+  focalOwnerKey: string;
+  stories: GatedRivalryStoryResult[];
+  gated: boolean;
+  entitled: boolean;
+};
+
+export function gateRivalryStoryForOwner(
+  focalOwnerKey: string,
+  stories: RivalryStoryResult[],
+  entitled: boolean,
+): GatedRivalryStoryForOwner {
+  return {
+    focalOwnerKey,
+    stories: stories.map((s) => gateRivalryStoryPair(s, entitled)),
+    gated: !entitled,
+    entitled,
+  };
+}
+
+export type GatedRivalryStoryReceipts = {
+  focalOwnerKey: string;
+  rivalOwnerKey: string;
+  receipts: RivalryStoryReceipt[];
+  gated: boolean;
+  entitled: boolean;
+};
+
+export function gateRivalryStoryReceipts(
+  focalOwnerKey: string,
+  rivalOwnerKey: string,
+  receipts: RivalryStoryReceipt[],
+  entitled: boolean,
+): GatedRivalryStoryReceipts {
+  if (entitled) {
+    return { focalOwnerKey, rivalOwnerKey, receipts, gated: false, entitled: true };
+  }
+  return { focalOwnerKey, rivalOwnerKey, receipts: [], gated: true, entitled: false };
+}
+
+export type GatedRivalryStoryStatements = {
+  focalOwnerKey: string;
+  rivalOwnerKey: string;
+  statements: RivalryNarrativeStatement[];
+  gated: boolean;
+  entitled: boolean;
+  totalStatements: number;
+  lockedStatements: number;
+};
+
+export function gateRivalryStoryStatements(
+  focalOwnerKey: string,
+  rivalOwnerKey: string,
+  statements: RivalryNarrativeStatement[],
+  entitled: boolean,
+): GatedRivalryStoryStatements {
+  const totalStatements = statements.length;
+  if (entitled) {
+    return {
+      focalOwnerKey,
+      rivalOwnerKey,
+      statements,
+      gated: false,
+      entitled: true,
+      totalStatements,
+      lockedStatements: 0,
+    };
+  }
+  const coldOpen = statements
+    .filter((s) => s.block === "coldOpen")
+    .sort((a, b) => b.priority - a.priority);
+  const teaser = coldOpen[0]
+    ? [{ ...coldOpen[0], receiptIds: [], factKeys: [] }]
+    : [];
+  return {
+    focalOwnerKey,
+    rivalOwnerKey,
+    statements: teaser,
+    gated: true,
+    entitled: false,
+    totalStatements,
+    lockedStatements: totalStatements - teaser.length,
+  };
+}
+
+// --- Completed Trade Intelligence gating -------------------------------------
+// Free = trade count teasers only. Paid = full ledgers, rankings, and receipts.
+
+export type GatedNotoriousTradesReport = NotoriousTradesReport & {
+  gated: boolean;
+  entitled: boolean;
+  /** Ranked completed trades in scope — safe count for free-tier teasers. */
+  tradeCount: number;
+};
+
+export function gateNotoriousTradesReport(
+  report: NotoriousTradesReport,
+  entitled: boolean,
+): GatedNotoriousTradesReport {
+  const tradeCount = report.rankedByMargin.length;
+  if (entitled) return { ...report, gated: false, entitled: true, tradeCount };
+  return {
+    biggestValueGap: null,
+    mostLopsided: null,
+    closestFairTrade: null,
+    biggestPickOnlyGap: null,
+    biggestPlayerTrade: null,
+    biggestMixedTrade: null,
+    mostActivePair: null,
+    mostSuccessfulOwner: null,
+    rankedByMargin: [],
+    gated: true,
+    entitled: false,
+    tradeCount,
+  };
+}
+
+export type GatedOwnerTradeHistory = OwnerTradeHistorySummary & {
+  gated: boolean;
+  entitled: boolean;
+};
+
+export function gateOwnerTradeHistory(
+  history: OwnerTradeHistorySummary,
+  entitled: boolean,
+): GatedOwnerTradeHistory {
+  if (entitled) return { ...history, gated: false, entitled: true };
+  return {
+    ownerKey: history.ownerKey,
+    ownerName: history.ownerName,
+    tradeCount: history.tradeCount,
+    wins: 0,
+    losses: 0,
+    ties: 0,
+    pickOnlyCount: 0,
+    playerOnlyCount: 0,
+    mixedCount: 0,
+    totalValueGained: 0,
+    totalValueLost: 0,
+    netValue: 0,
+    biggestWin: null,
+    biggestLoss: null,
+    trades: [],
+    gated: true,
+    entitled: false,
+  };
+}
+
+export type GatedRivalryTradeLedger = RivalryTradeLedger & {
+  gated: boolean;
+  entitled: boolean;
+};
+
+export function gateRivalryTradeLedger(
+  ledger: RivalryTradeLedger,
+  entitled: boolean,
+): GatedRivalryTradeLedger {
+  if (entitled) return { ...ledger, gated: false, entitled: true };
+  return {
+    ownerAKey: ledger.ownerAKey,
+    ownerBKey: ledger.ownerBKey,
+    ownerAName: ledger.ownerAName,
+    ownerBName: ledger.ownerBName,
+    tradeCount: ledger.tradeCount,
+    recordA: 0,
+    recordB: 0,
+    ties: 0,
+    ledgerWinnerKey: null,
+    ledgerWinnerName: null,
+    biggestFleece: null,
+    mostBalanced: null,
+    trades: [],
+    gated: true,
+    entitled: false,
   };
 }

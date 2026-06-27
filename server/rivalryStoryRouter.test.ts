@@ -204,6 +204,30 @@ function anonCtx(): TrpcContext {
   };
 }
 
+function entitledCtx(): TrpcContext {
+  return {
+    user: {
+      id: 1,
+      openId: "test-user",
+      email: "rod@example.com",
+      name: "Rod Sellers",
+      loginMethod: "manus",
+      role: "user",
+      subscriptionStatus: "active" as const,
+      trialStartedAt: null,
+      currentPeriodEnd: null,
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastSignedIn: new Date(),
+    },
+    req: { protocol: "https", headers: {} } as TrpcContext["req"],
+    res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
+    auth: { userId: "test-user" } as TrpcContext["auth"],
+  };
+}
+
 describe("rivalryStoryRouter helpers", () => {
   it("storiesMapToArray sorts by rivalOwnerKey", () => {
     const map = new Map<string, RivalryStoryResult>([
@@ -254,13 +278,41 @@ describe("rivalryStoryRouter", () => {
     );
   });
 
-  it("pair returns structured story without prose transformation", async () => {
+  it("pair returns gated teaser for anonymous users", async () => {
     const caller = appRouter.createCaller(anonCtx());
     const result = await caller.rivalryStory.pair({
       leagueId: "457622",
       focalOwnerKey: FOCAL,
       rivalOwnerKey: RIVAL,
     });
+    expect(result.gated).toBe(true);
+    expect(result.tier).toBe("legendary");
+    expect(result.headline.key).toBe("THREE_ELIMINATIONS");
+    expect(result.headline.receiptIds).toEqual([]);
+    expect(result.documentaryFacts).toEqual([]);
+    expect(result.availableBlocks).toEqual(["coldOpen", "taleOfTape"]);
+    expect(result.availableBlocks).not.toContain("turningPoint");
+  });
+
+  it("pair returns only teaser blocks for quiet rival when anonymous", async () => {
+    const caller = appRouter.createCaller(anonCtx());
+    const result = await caller.rivalryStory.pair({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+      rivalOwnerKey: QUIET_RIVAL,
+    });
+    expect(result.gated).toBe(true);
+    expect(result.availableBlocks).toEqual(["coldOpen", "taleOfTape"]);
+  });
+
+  it("pair returns full story for entitled users", async () => {
+    const caller = appRouter.createCaller(entitledCtx());
+    const result = await caller.rivalryStory.pair({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+      rivalOwnerKey: RIVAL,
+    });
+    expect(result.gated).toBe(false);
     expect(result.tier).toBe("legendary");
     expect(result.headline.key).toBe("THREE_ELIMINATIONS");
     expect(result.availableBlocks).toContain("turningPoint");
@@ -268,7 +320,7 @@ describe("rivalryStoryRouter", () => {
   });
 
   it("pair returns REVENGE_COMPLETE for a different rival shape", async () => {
-    const caller = appRouter.createCaller(anonCtx());
+    const caller = appRouter.createCaller(entitledCtx());
     const result = await caller.rivalryStory.pair({
       leagueId: "457622",
       focalOwnerKey: FOCAL,
@@ -277,8 +329,8 @@ describe("rivalryStoryRouter", () => {
     expect(result.headline.key).toBe("REVENGE_COMPLETE");
   });
 
-  it("pair returns quiet tier with minimal blocks", async () => {
-    const caller = appRouter.createCaller(anonCtx());
+  it("pair returns quiet tier with minimal blocks when entitled", async () => {
+    const caller = appRouter.createCaller(entitledCtx());
     const result = await caller.rivalryStory.pair({
       leagueId: "457622",
       focalOwnerKey: FOCAL,
@@ -288,12 +340,25 @@ describe("rivalryStoryRouter", () => {
     expect(result.availableBlocks).toEqual(["coldOpen", "taleOfTape"]);
   });
 
-  it("forOwner returns all rival stories without throwing", async () => {
+  it("forOwner returns gated stories for anonymous users", async () => {
     const caller = appRouter.createCaller(anonCtx());
     const result = await caller.rivalryStory.forOwner({
       leagueId: "457622",
       focalOwnerKey: FOCAL,
     });
+    expect(result.gated).toBe(true);
+    expect(result.stories.length).toBe(3);
+    expect(result.stories.every((s) => s.gated)).toBe(true);
+    expect(result.stories.every((s) => s.documentaryFacts.length === 0)).toBe(true);
+  });
+
+  it("forOwner returns all rival stories for entitled users", async () => {
+    const caller = appRouter.createCaller(entitledCtx());
+    const result = await caller.rivalryStory.forOwner({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+    });
+    expect(result.gated).toBe(false);
     expect(result.focalOwnerKey).toBe(FOCAL);
     expect(result.stories.length).toBe(3);
     expect(result.stories.some((s) => s.headline.key === "THREE_ELIMINATIONS")).toBe(true);
@@ -363,8 +428,34 @@ describe("rivalryStoryRouter.receipts", () => {
     );
   });
 
-  it("resolves all story receipts when receiptIds are omitted", async () => {
+  it("returns empty receipts for anonymous users", async () => {
     const caller = appRouter.createCaller(anonCtx());
+    const result = await caller.rivalryStory.receipts({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+      rivalOwnerKey: RIVAL,
+    });
+    expect(result.gated).toBe(true);
+    expect(result.entitled).toBe(false);
+    expect(result.receipts).toEqual([]);
+    expect(mockResolveReceiptsForStory).not.toHaveBeenCalled();
+    expect(mockResolveRivalryStoryReceipts).not.toHaveBeenCalled();
+  });
+
+  it("returns empty receipts for anonymous users even when receiptIds are provided", async () => {
+    const caller = appRouter.createCaller(anonCtx());
+    const result = await caller.rivalryStory.receipts({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+      rivalOwnerKey: RIVAL,
+      receiptIds: ["gm:2016:15", "gm:2021:16"],
+    });
+    expect(result.receipts).toEqual([]);
+    expect(mockResolveRivalryStoryReceipts).not.toHaveBeenCalled();
+  });
+
+  it("resolves all story receipts when receiptIds are omitted for entitled users", async () => {
+    const caller = appRouter.createCaller(entitledCtx());
     const result = await caller.rivalryStory.receipts({
       leagueId: "457622",
       focalOwnerKey: FOCAL,
@@ -379,8 +470,8 @@ describe("rivalryStoryRouter.receipts", () => {
     expect(result.receipts.every((r) => r.type === "game")).toBe(true);
   });
 
-  it("resolves explicit receiptIds without loading the full story", async () => {
-    const caller = appRouter.createCaller(anonCtx());
+  it("resolves explicit receiptIds for entitled users", async () => {
+    const caller = appRouter.createCaller(entitledCtx());
     const result = await caller.rivalryStory.receipts({
       leagueId: "457622",
       focalOwnerKey: FOCAL,
@@ -397,8 +488,8 @@ describe("rivalryStoryRouter.receipts", () => {
     expect(result.receipts.map((r) => r.receiptId)).toEqual(["gm:2024:16", "gm:2025:7"]);
   });
 
-  it("returns unknown receipts for bogus ids without throwing", async () => {
-    const caller = appRouter.createCaller(anonCtx());
+  it("returns unknown receipts for bogus ids when entitled", async () => {
+    const caller = appRouter.createCaller(entitledCtx());
     const result = await caller.rivalryStory.receipts({
       leagueId: "457622",
       focalOwnerKey: FOCAL,
@@ -425,15 +516,16 @@ describe("rivalryStoryRouter.receipts", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" } satisfies Partial<TRPCError>);
   });
 
-  it("returns NOT_FOUND when story is missing and receiptIds are omitted", async () => {
+  it("returns gated empty receipts for anonymous users even when story is missing", async () => {
     const caller = appRouter.createCaller(anonCtx());
-    await expect(
-      caller.rivalryStory.receipts({
-        leagueId: "457622",
-        focalOwnerKey: FOCAL,
-        rivalOwnerKey: "id:{EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE}",
-      }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" } satisfies Partial<TRPCError>);
+    const result = await caller.rivalryStory.receipts({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+      rivalOwnerKey: "id:{EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE}",
+    });
+    expect(result.gated).toBe(true);
+    expect(result.entitled).toBe(false);
+    expect(result.receipts).toEqual([]);
   });
 });
 
@@ -446,8 +538,36 @@ describe("rivalryStoryRouter.statements", () => {
     );
   });
 
-  it("returns controlled statements for THREE_ELIMINATIONS rivalry", async () => {
+  it("returns no statements for quiet pair when anonymous and no cold open exists", async () => {
     const caller = appRouter.createCaller(anonCtx());
+    const result = await caller.rivalryStory.statements({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+      rivalOwnerKey: QUIET_RIVAL,
+    });
+    expect(result.gated).toBe(true);
+    expect(result.statements).toEqual([]);
+    expect(result.lockedStatements).toBeGreaterThan(0);
+    expect(mockResolveReceiptsForStory).not.toHaveBeenCalled();
+  });
+
+  it("returns cold-open only for anonymous users", async () => {
+    const caller = appRouter.createCaller(anonCtx());
+    const result = await caller.rivalryStory.statements({
+      leagueId: "457622",
+      focalOwnerKey: FOCAL,
+      rivalOwnerKey: RIVAL,
+    });
+    expect(result.gated).toBe(true);
+    expect(result.statements).toHaveLength(1);
+    expect(result.statements[0]?.block).toBe("coldOpen");
+    expect(result.statements[0]?.receiptIds).toEqual([]);
+    expect(result.lockedStatements).toBeGreaterThan(0);
+    expect(mockResolveReceiptsForStory).not.toHaveBeenCalled();
+  });
+
+  it("returns controlled statements for THREE_ELIMINATIONS rivalry when entitled", async () => {
+    const caller = appRouter.createCaller(entitledCtx());
     const result = await caller.rivalryStory.statements({
       leagueId: "457622",
       focalOwnerKey: FOCAL,
@@ -467,8 +587,8 @@ describe("rivalryStoryRouter.statements", () => {
     expect(result.statements[0]?.text).toContain("Marlon has ended Rod's season");
   });
 
-  it("returns tape statements only for REVENGE_COMPLETE headline", async () => {
-    const caller = appRouter.createCaller(anonCtx());
+  it("returns tape statements only for REVENGE_COMPLETE headline when entitled", async () => {
+    const caller = appRouter.createCaller(entitledCtx());
     const result = await caller.rivalryStory.statements({
       leagueId: "457622",
       focalOwnerKey: FOCAL,
@@ -482,8 +602,8 @@ describe("rivalryStoryRouter.statements", () => {
     expect(result.statements.some((s) => s.statementKey === "THREE_ELIMINATIONS_LEAD")).toBe(false);
   });
 
-  it("quiet pair has no cold-open lead statements", async () => {
-    const caller = appRouter.createCaller(anonCtx());
+  it("quiet pair has no cold-open lead statements when entitled", async () => {
+    const caller = appRouter.createCaller(entitledCtx());
     const result = await caller.rivalryStory.statements({
       leagueId: "457622",
       focalOwnerKey: FOCAL,

@@ -84,7 +84,10 @@ export function useLeagueDiscoveryTeasers() {
       out["league-history"] = `${leader.displayName} leads with ${titles} title${titles === 1 ? "" : "s"}`;
     }
 
-    const ranked = notoriousQ.data?.rankedByMargin?.length ?? 0;
+    const ranked =
+      (notoriousQ.data as { tradeCount?: number; rankedByMargin?: unknown[] } | undefined)?.tradeCount ??
+      notoriousQ.data?.rankedByMargin?.length ??
+      0;
     if (ranked > 0) {
       out["trade-analyzer"] = `${ranked} completed trade${ranked === 1 ? "" : "s"} on file`;
     }

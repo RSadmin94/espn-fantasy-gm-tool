@@ -2,11 +2,11 @@
  * rivalryStoryRouter.ts
  *
  * Read-only tRPC exposure for rivalryStoryAuthority.
- * No classifier duplication, no prose, no UI mapping.
+ * Freemium: free users get Cold Open teaser only; full documentary is paid.
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { router, publicProcedure } from "./_core/trpc";
+import { router, publicProcedure, resolvePremiumAccess } from "./_core/trpc";
 import {
   buildRivalryStoryAuthority,
   buildRivalryStoryForPair,
@@ -16,13 +16,18 @@ import {
 import {
   resolveReceiptsForStory,
   resolveRivalryStoryReceipts,
-  type RivalryStoryReceipt,
 } from "./rivalryStoryReceipts";
 import { buildH2HAuthority } from "./h2hAuthority";
 import {
+  buildRivalryColdOpenTeaser,
   buildRivalryNarrativeStatements,
-  type RivalryNarrativeStatement,
 } from "./rivalryNarrativeTemplates";
+import {
+  gateRivalryStoryForOwner,
+  gateRivalryStoryPair,
+  gateRivalryStoryReceipts,
+  gateRivalryStoryStatements,
+} from "./leagueIntelGating";
 import { getDb } from "./db";
 
 const leagueIdInput = z.object({
@@ -46,24 +51,6 @@ const forOwnerInput = leagueIdInput.extend({
 
 export type RivalryStoryPairResponse = RivalryStoryResult;
 
-export type RivalryStoryForOwnerResponse = {
-  focalOwnerKey: string;
-  /** One story per rival with at least one meeting (authority filter). */
-  stories: RivalryStoryResult[];
-};
-
-export type RivalryStoryReceiptsResponse = {
-  focalOwnerKey: string;
-  rivalOwnerKey: string;
-  receipts: RivalryStoryReceipt[];
-};
-
-export type RivalryStoryStatementsResponse = {
-  focalOwnerKey: string;
-  rivalOwnerKey: string;
-  statements: RivalryNarrativeStatement[];
-};
-
 const receiptsInput = pairInput.extend({
   receiptIds: z.array(z.string().min(1).max(128)).optional(),
 });
@@ -81,7 +68,7 @@ async function assertDatabase(): Promise<void> {
 
 export const rivalryStoryRouter = router({
   /** Documentary metadata for one rivalry pair. */
-  pair: publicProcedure.input(pairInput).query(async ({ input }): Promise<RivalryStoryPairResponse> => {
+  pair: publicProcedure.input(pairInput).query(async ({ ctx, input }) => {
     if (input.focalOwnerKey === input.rivalOwnerKey) {
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -104,13 +91,13 @@ export const rivalryStoryRouter = router({
       });
     }
 
-    return story;
+    return gateRivalryStoryPair(story, await resolvePremiumAccess(ctx.user));
   }),
 
   /** Documentary metadata for all rivals of a focal owner. */
   forOwner: publicProcedure
     .input(forOwnerInput)
-    .query(async ({ input }): Promise<RivalryStoryForOwnerResponse> => {
+    .query(async ({ ctx, input }) => {
       await assertDatabase();
 
       const storiesByRival = await buildRivalryStoryAuthority({
@@ -118,16 +105,17 @@ export const rivalryStoryRouter = router({
         focalOwnerKey: input.focalOwnerKey,
       });
 
-      return {
-        focalOwnerKey: input.focalOwnerKey,
-        stories: storiesMapToArray(storiesByRival),
-      };
+      return gateRivalryStoryForOwner(
+        input.focalOwnerKey,
+        storiesMapToArray(storiesByRival),
+        await resolvePremiumAccess(ctx.user),
+      );
     }),
 
   /** Structured evidence objects for story receipt IDs. */
   receipts: publicProcedure
     .input(receiptsInput)
-    .query(async ({ input }): Promise<RivalryStoryReceiptsResponse> => {
+    .query(async ({ ctx, input }) => {
       if (input.focalOwnerKey === input.rivalOwnerKey) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -136,6 +124,11 @@ export const rivalryStoryRouter = router({
       }
 
       await assertDatabase();
+      const entitled = await resolvePremiumAccess(ctx.user);
+
+      if (!entitled) {
+        return gateRivalryStoryReceipts(input.focalOwnerKey, input.rivalOwnerKey, [], false);
+      }
 
       if (input.receiptIds !== undefined) {
         const receipts = await resolveRivalryStoryReceipts({
@@ -144,11 +137,7 @@ export const rivalryStoryRouter = router({
           rivalOwnerKey: input.rivalOwnerKey,
           receiptIds: input.receiptIds,
         });
-        return {
-          focalOwnerKey: input.focalOwnerKey,
-          rivalOwnerKey: input.rivalOwnerKey,
-          receipts,
-        };
+        return gateRivalryStoryReceipts(input.focalOwnerKey, input.rivalOwnerKey, receipts, true);
       }
 
       const story = await buildRivalryStoryForPair({
@@ -169,17 +158,13 @@ export const rivalryStoryRouter = router({
         story,
       });
 
-      return {
-        focalOwnerKey: input.focalOwnerKey,
-        rivalOwnerKey: input.rivalOwnerKey,
-        receipts,
-      };
+      return gateRivalryStoryReceipts(input.focalOwnerKey, input.rivalOwnerKey, receipts, true);
     }),
 
   /** Controlled narrative statements for one rivalry pair. */
   statements: publicProcedure
     .input(pairInput)
-    .query(async ({ input }): Promise<RivalryStoryStatementsResponse> => {
+    .query(async ({ ctx, input }) => {
       if (input.focalOwnerKey === input.rivalOwnerKey) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -202,27 +187,38 @@ export const rivalryStoryRouter = router({
         });
       }
 
-      const [receipts, h2hAuth] = await Promise.all([
-        resolveReceiptsForStory({
-          leagueId: input.leagueId,
-          story,
-        }),
-        buildH2HAuthority(input.leagueId),
-      ]);
-
+      const entitled = await resolvePremiumAccess(ctx.user);
+      const h2hAuth = await buildH2HAuthority(input.leagueId);
       const h2h = h2hAuth.getH2H(input.focalOwnerKey, input.rivalOwnerKey);
-      const statements = buildRivalryNarrativeStatements({
-        story,
-        receipts,
-        h2h,
-        focalName: h2h.displayA,
-        rivalName: h2h.displayB,
-      });
+      const names = { focalName: h2h.displayA, rivalName: h2h.displayB };
 
-      return {
-        focalOwnerKey: input.focalOwnerKey,
-        rivalOwnerKey: input.rivalOwnerKey,
+      const statements = entitled
+        ? buildRivalryNarrativeStatements({
+            story,
+            receipts: await resolveReceiptsForStory({
+              leagueId: input.leagueId,
+              story,
+            }),
+            h2h,
+            ...names,
+          })
+        : (() => {
+            const tape = buildRivalryNarrativeStatements({
+              story,
+              receipts: [],
+              h2h,
+              ...names,
+            });
+            const coldOpen = buildRivalryColdOpenTeaser({ story, h2h, ...names });
+            if (!coldOpen) return tape;
+            return [coldOpen, ...tape.filter((s) => s.block !== "coldOpen")];
+          })();
+
+      return gateRivalryStoryStatements(
+        input.focalOwnerKey,
+        input.rivalOwnerKey,
         statements,
-      };
+        entitled,
+      );
     }),
 });
