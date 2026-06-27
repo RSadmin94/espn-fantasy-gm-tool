@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
+import { V1 } from "@/lib/v1Copy";
 import { useLeagueRevealData, type LeagueRevealCard } from "@/hooks/useLeagueRevealData";
 
 function RevealCard({ card }: { card: LeagueRevealCard }) {
@@ -74,7 +75,7 @@ export function LeagueRevealModal({
             disabled={isLoading}
             onClick={() => finish("/dashboard")}
           >
-            Enter My League
+            {V1.home.enterCta}
           </Button>
           <div className="grid gap-2 sm:grid-cols-3">
             <Button
@@ -105,7 +106,7 @@ export function LeagueRevealModal({
               disabled={isLoading}
               onClick={() => finish("/hall-of-fame")}
             >
-              Explore League History
+              Explore {V1.features.hallOfFame}
             </Button>
           </div>
         </div>

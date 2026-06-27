@@ -9,6 +9,7 @@ import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { fetchEspnSeasonBundleBrowserOrExtension } from "@/lib/espnApi";
 import { cn } from "@/lib/utils";
+import { V1 } from "@/lib/v1Copy";
 import { useProductOnboarding } from "@/components/onboarding";
 import { EspnConnectorCtaRow, EspnConnectorGuide } from "@/components/connect";
 import { Button } from "@/components/ui/button";
@@ -1579,7 +1580,7 @@ export function SyncData() {
       {autoSync2026RefreshDone && (
         <div className="rounded-lg border border-lime-500/25 bg-lime-500/10 px-4 py-3">
           <Button asChild variant="default" className="gap-2">
-            <Link to="/dashboard">Go to Dashboard</Link>
+            <Link to="/dashboard">Go to {V1.home.nav}</Link>
           </Button>
         </div>
       )}

@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { buildEspnFantasyFootballConnectUrl } from "@/lib/espnConnectUrl";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { V1 } from "@/lib/v1Copy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -485,7 +486,7 @@ export function ConnectESPN() {
                 League linked. Next:{" "}
                 <a href="/sync" className="text-primary underline underline-offset-2">Sync Data</a>{" "}
                 (step 4 — Sync my league or Import league history), or go to the{" "}
-                <a href="/dashboard" className="text-primary underline underline-offset-2">Dashboard</a>.
+                <a href="/dashboard" className="text-primary underline underline-offset-2">{V1.home.nav}</a>.
               </p>
               <Button
                 variant="outline"

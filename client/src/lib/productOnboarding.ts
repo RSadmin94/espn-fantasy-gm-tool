@@ -1,5 +1,7 @@
 /** Client-only first-run onboarding persistence (per user + league). */
 
+import { V1 } from "./v1Copy";
+
 export const ONBOARDING_STORAGE_VERSION = 1 as const;
 
 export type ProductOnboardingRecord = {
@@ -47,9 +49,9 @@ export const PRODUCT_TOUR_STEPS: ProductTourStep[] = [
   },
   {
     id: "trade-intelligence",
-    title: "Trade Analyzer",
+    title: V1.features.tradeIntelligence,
     lead: "Every trade is backed by deterministic valuation.",
-    highlights: ["Trade Analyzer", "Trade History", "Completed Trades"],
+    highlights: [V1.features.tradeIntelligence, "Trade History", "Completed Trades"],
     href: "/trades",
   },
 ];
@@ -78,10 +80,10 @@ export const LEAGUE_DISCOVERY_CARDS = [
   },
   {
     id: "trade-analyzer" as const,
-    title: "Trade Analyzer",
+    title: V1.features.tradeIntelligence,
     description: "Stress-test deals with deterministic fair-value before you pull the trigger.",
     href: "/trades",
-    cta: "Open Trade Analyzer",
+    cta: `Open ${V1.features.tradeIntelligence}`,
   },
   {
     id: "notorious-trades" as const,
@@ -109,7 +111,7 @@ export const PRODUCT_HELP_ITEMS = [
     body: "Championships, dynasties, notorious trades, and the full legacy archive for your league.",
   },
   {
-    title: "What is the Trade Analyzer?",
+    title: `What is ${V1.features.tradeIntelligence}?`,
     body: "Stress-test proposed deals with deterministic fair-value before you pull the trigger.",
   },
   {

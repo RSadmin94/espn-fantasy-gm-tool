@@ -43,7 +43,7 @@ export const COMMERCIAL = {
     "Complete documentary rivalries",
     "Complete GM Profile for every owner",
     "League History and dynasty records",
-    "Trade Analyzer and historical reports",
+    "Trade Intelligence and historical reports",
     "Future AI Advisor access",
   ] as const,
   productStorySteps: [
