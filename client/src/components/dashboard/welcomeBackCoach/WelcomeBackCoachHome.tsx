@@ -14,8 +14,8 @@ import { DashboardRecentLeagueEvents } from "@/components/dashboard/DashboardRec
 import { DashboardTimelineStrip, type TimelineChamp } from "@/components/dashboard/DashboardTimelineStrip";
 import { LeagueWireNewsFeed } from "@/components/dashboard/LeagueWireNewsFeed";
 import { MiniTable } from "@/components/dashboard/DashboardPrimitives";
-import { RivalrySummaryCard } from "@/components/RivalrySummaryCard";
 import { FlagshipDiscoveryGrid } from "@/components/onboarding";
+import { FreeExperienceJourney } from "@/components/dashboard/welcomeBackCoach/FreeExperienceSections";
 import { V1 } from "@/lib/v1Copy";
 import type { IntelligenceBeat } from "@/lib/welcomeBackCoachBriefing";
 import {
@@ -67,6 +67,11 @@ export type WelcomeBackCoachHomeProps = {
   timelineChamps: TimelineChamp[];
   timelineLoading: boolean;
   thisWeekInHistory: string | null;
+  freeProfileDisplayName: string;
+  freeProfileCareerLine: string | null;
+  freeProfileTitlesLine: string | null;
+  freeProfileRivalName: string | null;
+  freeProfileThreatLine: string | null;
   headerActions?: React.ReactNode;
 };
 
@@ -106,6 +111,11 @@ export function WelcomeBackCoachHome(props: WelcomeBackCoachHomeProps) {
     timelineChamps,
     timelineLoading,
     thisWeekInHistory,
+    freeProfileDisplayName,
+    freeProfileCareerLine,
+    freeProfileTitlesLine,
+    freeProfileRivalName,
+    freeProfileThreatLine,
   } = props;
 
   const snapshotRows = ranked.slice(0, 5);
@@ -187,6 +197,17 @@ export function WelcomeBackCoachHome(props: WelcomeBackCoachHomeProps) {
         </p>
       ) : null}
 
+      <FreeExperienceJourney
+        displayName={freeProfileDisplayName}
+        careerLine={freeProfileCareerLine}
+        titlesLine={freeProfileTitlesLine}
+        rivalName={freeProfileRivalName}
+        threatLine={freeProfileThreatLine}
+        season={season}
+        cachedSeasons={cachedSeasons}
+        isPreseason={isPreseason}
+      />
+
       {/* §3 This Week — in-season only */}
       {isInSeason && opponentName ? (
         <section aria-label={V1.home.thisWeek} className="space-y-4">
@@ -199,18 +220,15 @@ export function WelcomeBackCoachHome(props: WelcomeBackCoachHomeProps) {
               </Link>
             }
           />
-          <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-            <DashboardMatchupMarquee
-              isLoading={matchupLoading}
-              weekLabel={weekLabel}
-              teamA={teamA}
-              teamB={teamB}
-              board={boardLite}
-              winProbPct={outlookPct}
-              winProbCaption="Uses weeklyAssessment.leaguePulse team outlook when available."
-            />
-            <RivalrySummaryCard title={V1.features.rivalries} className="min-h-[280px]" />
-          </div>
+          <DashboardMatchupMarquee
+            isLoading={matchupLoading}
+            weekLabel={weekLabel}
+            teamA={teamA}
+            teamB={teamB}
+            board={boardLite}
+            winProbPct={outlookPct}
+            winProbCaption="Uses weeklyAssessment.leaguePulse team outlook when available."
+          />
           {rivalryHeat ? (
             <p className="text-sm text-muted-foreground">
               {V1.home.rivalryAngle}: <span className="font-medium text-foreground">{rivalryHeat}</span>

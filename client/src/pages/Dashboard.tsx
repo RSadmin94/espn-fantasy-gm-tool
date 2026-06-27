@@ -567,6 +567,24 @@ export function Dashboard() {
   const teamA = marqueePick.a ? toMarqueeTeam(marqueePick.a) : null;
   const teamB = marqueePick.b ? toMarqueeTeam(marqueePick.b) : null;
 
+  const freeProfileDisplayName =
+    firstNameFromDisplay(focalOwner?.displayName) ||
+    focalOwner?.franchiseName?.trim() ||
+    welcomeName;
+  const freeProfileCareerLine = oh?.careerRecord
+    ? `${oh.careerRecord.wins}-${oh.careerRecord.losses} (${Number(oh.careerRecord.winPct).toFixed(1)}% win)`
+    : null;
+  const freeProfileTitlesLine =
+    oh?.championships != null
+      ? oh.championships.count > 0
+        ? `${oh.championships.count} title${oh.championships.count === 1 ? "" : "s"}`
+        : "0 titles"
+      : null;
+  const freeProfileRivalName = oh?.rival?.rivalName?.trim() || null;
+  const freeProfileThreatLine = oh?.threat?.primary
+    ? `${oh.threat.primary.ownerName} · ${oh.threat.primary.threatLevel}`
+    : null;
+
   return (
     <WelcomeBackCoachHome
       welcomeName={welcomeName}
@@ -598,6 +616,11 @@ export function Dashboard() {
       timelineChamps={timelineChamps}
       timelineLoading={hofQ.isLoading}
       thisWeekInHistory={thisWeekInHistory}
+      freeProfileDisplayName={freeProfileDisplayName}
+      freeProfileCareerLine={freeProfileCareerLine}
+      freeProfileTitlesLine={freeProfileTitlesLine}
+      freeProfileRivalName={freeProfileRivalName}
+      freeProfileThreatLine={freeProfileThreatLine}
     />
   );
 }

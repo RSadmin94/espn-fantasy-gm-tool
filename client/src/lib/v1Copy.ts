@@ -25,6 +25,14 @@ export const V1 = {
     standingsSnapshotHint: "Top 5 · your row pinned",
     thisWeekVs: "You play {opponent} this week",
     rivalryAngle: "Rivalry angle",
+    storylinesKickoffLine: "Weekly storylines switch on at kickoff.",
+    storylinesLastSeasonNote: "Last season's top storyline",
+    freeJourney: {
+      myGmProfile: "My GM Profile",
+      ownerDnaBasic: "Owner DNA",
+      oneRival: "Your Biggest Rival",
+      oneStoryline: "League Storyline",
+    },
     beats: {
       rivalThreat: "Rival Threat",
       yourPattern: "Your Pattern",
