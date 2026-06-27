@@ -6,6 +6,8 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { COMMERCIAL } from "@/lib/commercialCopy";
+import { V1 } from "@/lib/v1Copy";
 import { Loader2, Trophy, Medal, Crown, Landmark, ChevronDown, Skull, ArrowLeftRight, ScrollText, History, Archive, BookOpen } from "lucide-react";
 import {
   CinematicPageHeader,
@@ -747,8 +749,8 @@ export function HallOfFame() {
         </div>
         <div className="px-4 py-4 sm:px-6">
           <CinematicPageHeader
-            eyebrowMono="League History"
-            title="League History"
+            eyebrowMono={V1.features.hallOfFame}
+            title={V1.features.hallOfFame}
             subtitle={leagueLabel}
             className="mb-4 text-center [&>div]:w-full [&>div]:items-center [&_h1]:text-center [&_p]:mx-auto"
           />
@@ -892,9 +894,9 @@ export function HallOfFame() {
         {hofGated ? (
           <ProGate
             icon={Trophy}
-            heading="Single-game & season records"
-            description="The leaderboard, titles, tenure and win % stay free. The deep record book - single-game marks, season bests, and head-to-head legacy - unlocks with Rivals Pro."
-            ctaLabel="Unlock the Record Book"
+            heading="Discover what changed in your league's record book"
+            description="Champions and legacy rank stay free — the who. Rivals Pro explains why certain seasons, games, and dynasties still echo today."
+            ctaLabel={COMMERCIAL.upgradeCtaDiscoverWhatChanged}
             accent="amber"
             onUnlock={startHofCheckout}
             pending={hofCheckout.isPending}
@@ -1070,8 +1072,8 @@ export function HallOfFame() {
       <IntelPanel id="archive-dynasty" variant="profile" className="scroll-mt-24 overflow-hidden p-4 sm:p-6">
         <ArchiveSectionHeader icon={<Landmark className="h-4 w-4" />} title="Dynasty Timeline" accent="#a3e635" />
         <div className="mb-6 flex flex-col gap-2 rounded-xl border border-sky-500/25 bg-sky-500/[0.07] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[13px] text-sky-100/80">Championship seasons from league medals. For current roster strength, see Dynasty Power Rankings.</p>
-          <Link to="/dynasty-power-rankings" className="shrink-0 text-sm font-semibold text-sky-300 hover:text-sky-200">Dynasty Power Rankings →</Link>
+          <p className="text-[13px] text-sky-100/80">Championship seasons from league medals. For current roster strength, see {V1.features.powerRankings}.</p>
+          <Link to="/dynasty-power-rankings" className="shrink-0 text-sm font-semibold text-sky-300 hover:text-sky-200">{V1.features.powerRankings} →</Link>
         </div>
         {dynastyTimeline.length === 0 ? (
           <p className="text-sm text-zinc-500">No resolved championship seasons yet.</p>
@@ -1111,10 +1113,39 @@ export function HallOfFame() {
 
       {/* ── 6. Notorious Trades ────────────────────────────────────────────── */}
       <div id="archive-trades" className="scroll-mt-24">
-        <NotoriousTradesSection leagueContextKey={leagueContextKey} leagueKeyReady={leagueKeyReady} seasons={tradeSeasons} />
+        {hofGated ? (
+          <IntelPanel variant="profile" className="overflow-hidden p-4 sm:p-6">
+            <ArchiveSectionHeader icon={<ArrowLeftRight className="h-4 w-4" />} title="Notorious Trades" accent="#f472b6" />
+            <ProGate
+              icon={ArrowLeftRight}
+              heading="Discover what changed in your trade history"
+              description="You know trades happened. Rivals Pro shows who got fleeced, when the ledger flipped, and why those deals still shape your league."
+              ctaLabel={COMMERCIAL.upgradeCtaDiscoverWhatChanged}
+              accent="amber"
+              onUnlock={startHofCheckout}
+              pending={hofCheckout.isPending}
+            />
+          </IntelPanel>
+        ) : (
+          <NotoriousTradesSection leagueContextKey={leagueContextKey} leagueKeyReady={leagueKeyReady} seasons={tradeSeasons} />
+        )}
       </div>
 
       {/* ── 7. Historic Milestones ─────────────────────────────────────────── */}
+      {hofGated ? (
+        <IntelPanel id="archive-milestones" variant="profile" className="scroll-mt-24 overflow-hidden p-4 sm:p-6">
+          <ArchiveSectionHeader icon={<History className="h-4 w-4" />} title="Historic Milestones" accent="#fbbf24" />
+          <ProGate
+            icon={History}
+            heading="Understand why your league history unfolded this way"
+            description="Titles and legacy rank are free — the who. Milestone timelines and historical reports explain how your league got here."
+            ctaLabel={COMMERCIAL.upgradeCtaUnderstandWhy}
+            accent="amber"
+            onUnlock={startHofCheckout}
+            pending={hofCheckout.isPending}
+          />
+        </IntelPanel>
+      ) : (
       <IntelPanel id="archive-milestones" variant="profile" className="scroll-mt-24 overflow-hidden p-4 sm:p-6">
         <ArchiveSectionHeader icon={<History className="h-4 w-4" />} title="Historic Milestones" accent="#fbbf24" />
         {historicMilestones.length === 0 ? (
@@ -1139,8 +1170,7 @@ export function HallOfFame() {
           </Link>
         </div>
       </IntelPanel>
-
-      {/* ── Developer sections ─────────────────────────────────────────────── */}
+      )}
       <Collapsible open={developerOpen} onOpenChange={setDeveloperOpen}>
         <IntelPanel variant="profile" className="overflow-hidden">
           <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:bg-white/[0.03]">
