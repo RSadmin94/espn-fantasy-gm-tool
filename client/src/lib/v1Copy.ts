@@ -15,8 +15,6 @@ export const V1 = {
     knowYourself: "Know Yourself",
     league: "League",
     history: "History",
-    draft: "Draft",
-    tools: "Tools",
   },
   features: {
     tradeIntelligence: "Trade Intelligence",
@@ -24,7 +22,6 @@ export const V1 = {
     powerRankings: "Power Rankings",
     hallOfFame: "Hall of Fame",
     leagueHistory: "League History",
-    leagueTimeline: "League Timeline",
     rivalries: "Rivalries",
     myGmProfile: "My GM Profile",
     leagueDna: "League DNA",

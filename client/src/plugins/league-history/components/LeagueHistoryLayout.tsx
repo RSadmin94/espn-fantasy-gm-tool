@@ -29,7 +29,7 @@ export function LeagueHistoryPlugin() {
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-1 pb-12">
       <div className="space-y-1">
-        <h1 className="text-3xl font-bold text-foreground">{V1.features.leagueTimeline}</h1>
+        <h1 className="text-3xl font-bold text-foreground">{V1.features.leagueHistory}</h1>
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </div>
 
