@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/collapsible";
 import { useTheme, LOCK_DARK } from "@/context/ThemeContext";
 import { ProductHelpButton, ProductOnboardingProvider } from "@/components/onboarding";
+import { V1 } from "@/lib/v1Copy";
 
 type NavEntry =
   | { kind: "link"; label: string; href: string; icon: LucideIcon }
@@ -71,50 +72,62 @@ type NavGroup = { id: string; title: string; items: NavEntry[] };
 const NAV_GROUPS: NavGroup[] = [
   {
     id: "home",
-    title: "HOME",
+    title: V1.navGroups.home,
     items: [
-      { kind: "link", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { kind: "link", label: V1.home.nav, href: "/dashboard", icon: LayoutDashboard },
     ],
   },
   {
-    id: "my-team",
-    title: "MY TEAM",
+    id: "weekly",
+    title: V1.navGroups.weekly,
     items: [
-      { kind: "link", label: "Rosters", href: "/roster", icon: Users },
-      { kind: "link", label: "Trade Analyzer", href: "/trades", icon: Repeat2 },
-      { kind: "link", label: "LeagueDNA Advisor", href: "/advisor", icon: Dna },
-      { kind: "link", label: "League Wire", href: "/league-wire", icon: Newspaper },
+      { kind: "link", label: V1.features.leagueWire, href: "/league-wire", icon: Newspaper },
+      { kind: "link", label: V1.features.rosters, href: "/roster", icon: Users },
+      { kind: "link", label: V1.features.matchups, href: "/matchups", icon: Swords },
+      { kind: "link", label: V1.features.tradeIntelligence, href: "/trades", icon: Repeat2 },
+      { kind: "link", label: V1.features.advisor, href: "/advisor", icon: Bot },
     ],
   },
   {
-    id: "league-intel",
-    title: "LEAGUE INTEL",
+    id: "know-rivals",
+    title: V1.navGroups.knowRivals,
     items: [
-      { kind: "link", label: "Rivalries", href: "/rivalry-center", icon: Swords },
-      { kind: "link", label: "My GM Profile", href: "/owner-profiles", icon: Users },
-      { kind: "link", label: "Championship Diagnosis", href: "/championship-diagnosis", icon: Route },
-      { kind: "link", label: "Dynasty Power Rankings", href: "/dynasty-power-rankings", icon: Gem },
-      { kind: "link", label: "Acquisition Impact", href: "/acquisition-impact", icon: ShoppingCart },
-      { kind: "link", label: "League DNA", href: "/league-dna", icon: Dna },
-      { kind: "link", label: "The Cast", href: "/the-cast", icon: Clapperboard },
-      { kind: "link", label: "Commissioner Hub", href: "/commissioner-command-center", icon: Crown },
+      { kind: "link", label: V1.features.rivalries, href: "/rivalry-center", icon: Swords },
     ],
   },
   {
-    id: "history-records",
-    title: "HISTORY & RECORDS",
+    id: "know-yourself",
+    title: V1.navGroups.knowYourself,
     items: [
-      { kind: "link", label: "League History", href: "/hall-of-fame", icon: Award },
-      { kind: "link", label: "League History", href: "/history", icon: Building2 },
-      { kind: "link", label: "Standings", href: "/standings", icon: Trophy },
-      { kind: "link", label: "Matchups", href: "/matchups", icon: Swords },
-      { kind: "link", label: "Transactions", href: "/transactions", icon: ArrowLeftRight },
-      { kind: "link", label: "Draft History", href: "/draft-history", icon: Calendar },
+      { kind: "link", label: V1.features.myGmProfile, href: "/owner-profiles", icon: Users },
+      { kind: "link", label: V1.features.whyHaventIWon, href: "/championship-diagnosis", icon: Route },
+    ],
+  },
+  {
+    id: "league",
+    title: V1.navGroups.league,
+    items: [
+      { kind: "link", label: V1.features.leagueDna, href: "/league-dna", icon: Dna },
+      { kind: "link", label: V1.features.theCast, href: "/the-cast", icon: Clapperboard },
+      { kind: "link", label: V1.features.powerRankings, href: "/dynasty-power-rankings", icon: Gem },
+      { kind: "link", label: V1.features.acquisitionImpact, href: "/acquisition-impact", icon: ShoppingCart },
+      { kind: "link", label: V1.features.standings, href: "/standings", icon: Trophy },
+      { kind: "link", label: V1.features.commissionerHub, href: "/commissioner-command-center", icon: Crown },
+    ],
+  },
+  {
+    id: "history",
+    title: V1.navGroups.history,
+    items: [
+      { kind: "link", label: V1.features.hallOfFame, href: "/hall-of-fame", icon: Award },
+      { kind: "link", label: V1.features.leagueHistory, href: "/history", icon: Building2 },
+      { kind: "link", label: V1.features.draftHistory, href: "/draft-history", icon: Calendar },
+      { kind: "link", label: V1.features.transactions, href: "/transactions", icon: ArrowLeftRight },
     ],
   },
   {
     id: "draft",
-    title: "DRAFT",
+    title: V1.navGroups.draft,
     items: [
       { kind: "link", label: "Draft War Room", href: "/draft-war-room", icon: Zap },
       { kind: "link", label: "Draft Reality Sim", href: "/draft-reality", icon: FlaskConical },
@@ -124,10 +137,10 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    id: "data-admin",
-    title: "DATA & ADMIN",
+    id: "tools",
+    title: V1.navGroups.tools,
     items: [
-      { kind: "link", label: "Sync Data", href: "/sync", icon: RefreshCw },
+      { kind: "link", label: V1.features.syncData, href: "/sync", icon: RefreshCw },
       { kind: "link", label: "Data Health", href: "/league-data-health", icon: ShieldCheck },
       { kind: "link", label: "Identity Review", href: "/owner-identity-review", icon: UserSearch },
       { kind: "link", label: "League Settings", href: "/league-settings", icon: Settings },
@@ -410,7 +423,8 @@ function NavItemRow({
   const isActive =
     pathname === entry.href ||
     (entry.href === "/hall-of-fame" &&
-      (pathname === "/ring-of-honor" || pathname === "/championships"));
+      (pathname === "/ring-of-honor" || pathname === "/championships")) ||
+    (entry.href === "/history" && pathname === "/history");
   return (
     <li>
       <Link
@@ -603,6 +617,7 @@ function Sidebar({
 function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { user } = useUser();
   const { signOut } = useClerk();
+  const location = useLocation();
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-md md:px-6">
@@ -622,6 +637,38 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
 
       <div className="flex items-center gap-3">
         <ProductHelpButton />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "text-muted-foreground hover:text-foreground",
+                location.pathname === "/settings" && "text-lime-300",
+              )}
+              aria-label={V1.features.settings}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem asChild>
+              <Link to="/settings" className="cursor-pointer">
+                {V1.features.settings}
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link to="/sync" className="cursor-pointer">
+                {V1.features.syncData}
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link to="/league-settings" className="cursor-pointer">
+                League Settings
+              </Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         {user && (
           <span className="hidden text-sm text-muted-foreground sm:block">
             {user.primaryEmailAddress?.emailAddress}
