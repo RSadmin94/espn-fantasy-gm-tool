@@ -468,6 +468,20 @@ function listRowLookupKey(o: { ownerKey?: string; ownerName?: string } | null | 
   return String(o?.ownerName ?? "").trim();
 }
 
+function ownerKeysMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  const norm = (key: string) =>
+    key
+      .replace(/^\{?id:\{?/i, "")
+      .replace(/\}?\}?$/, "")
+      .trim()
+      .toUpperCase();
+  const left = a?.trim();
+  const right = b?.trim();
+  if (!left || !right) return false;
+  if (left === right) return true;
+  return norm(left) === norm(right);
+}
+
 // ─── Dynasty Identity badge ───────────────────────────────────────────────────
 // Presentational only. The badge identity (key/label/icon/explanation) and the
 // Now/Later percentiles are consumed verbatim from the dynasty.powerRankings
@@ -1922,6 +1936,10 @@ export function OwnerProfiles() {
     staleTime: 60_000,
     enabled: leagueKeyReady,
   });
+  const ownerHomeQ = trpc.me.ownerHome.useQuery(withLeagueSalt({}, leagueContextKey), {
+    staleTime: 60_000,
+    enabled: leagueKeyReady,
+  });
 
   const [selectedOwnerKey, setSelectedOwnerKey] = useState<string | null>(null);
   const [showGraveyard, setShowGraveyard] = useState(false);
@@ -2005,12 +2023,24 @@ export function OwnerProfiles() {
   useEffect(() => {
     if (!ownerListHydrated) return;
     if (selectedOwnerKey != null && selectedOwnerKey !== "") return;
+
+    const focalKey = ownerHomeQ.data?.owner?.ownerKey?.trim();
+    if (focalKey) {
+      for (const o of [...active, ...graveyard] as any[]) {
+        const rowKey = listRowLookupKey(o);
+        if (rowKey && ownerKeysMatch(rowKey, focalKey)) {
+          setSelectedOwnerKey(rowKey);
+          return;
+        }
+      }
+    }
+
     const first =
       listRowLookupKey(active[0]) ||
       listRowLookupKey(graveyard[0]) ||
       "";
     if (first) setSelectedOwnerKey(first);
-  }, [ownerListHydrated, active, graveyard, selectedOwnerKey]);
+  }, [ownerListHydrated, active, graveyard, selectedOwnerKey, ownerHomeQ.data?.owner?.ownerKey]);
 
   const headerDisplayName = useMemo(() => {
     if (!selectedOwnerKey) return "";
