@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
+import { V1 } from "@/lib/v1Copy";
 import { AlertCircle, Loader2, Gem, Landmark, Hourglass, TrendingUp, Scale, Building } from "lucide-react";
 
 // ── theme (matches the rest of GM War Room) ─────────────────────────────────
@@ -105,7 +106,7 @@ export default function DynastyPowerRankings() {
       <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
         <PageHeader
           eyebrow="Dynasty Identity"
-          title="Dynasty Power Rankings"
+          title={V1.features.powerRankings}
           subtitle="Every team's roster strength right now vs. its long-term dynasty value — and the identity that falls out of the two."
           icon={Gem}
         />

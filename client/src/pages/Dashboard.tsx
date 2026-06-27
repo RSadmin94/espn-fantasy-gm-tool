@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { V1 } from "@/lib/v1Copy";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -697,7 +698,7 @@ export function Dashboard() {
       <header className="space-y-5 border-b border-border pb-6">
         <CinematicPageHeader
           className="mb-0 [&_h1]:truncate"
-          eyebrow="Welcome back"
+          eyebrow={V1.home.eyebrow}
           title={welcomeName}
           subtitle={
             <>
