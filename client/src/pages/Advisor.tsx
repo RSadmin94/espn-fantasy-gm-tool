@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { V1 } from "@/lib/v1Copy";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { Button } from "@/components/ui/button";
@@ -112,7 +113,7 @@ function InsightCard({ icon, tag, children }: { icon: React.ReactNode; tag: stri
   );
 }
 
-// ── Biggest Threat card (LeagueDNA Advisor — Increment 2) ────────────────────
+// ── Biggest Threat card (GM Advisor — Increment 2) ─────────────────────────
 // Consumes me.biggestThreat (deterministic, no LLM). Renders one prominent card
 // near the top, or hides entirely when no threat is available.
 
@@ -432,7 +433,7 @@ export function Advisor() {
       <div className="rounded-2xl border border-border bg-gradient-to-b from-card to-background p-6">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
           <Dna className="h-4 w-4" />
-          LeagueDNA Advisor
+          {V1.features.advisor}
         </div>
         <h1 className="mt-2 text-2xl font-bold text-foreground">
           {timeGreeting()}{firstName ? ", " + firstName : ""}.
@@ -441,7 +442,7 @@ export function Advisor() {
         <p className="mt-1 text-xs text-muted-foreground/70">The only AI trained on your league's history.</p>
       </div>
 
-      {/* Biggest Threat (LeagueDNA Advisor — Increment 2) */}
+      {/* Biggest Threat (GM Advisor — Increment 2) */}
       <BiggestThreatCard data={threatQ.data} loading={threatQ.isLoading} />
 
       {/* League-wide insight cards */}
@@ -480,14 +481,14 @@ export function Advisor() {
         </InsightCard>
       </div>
 
-      {/* Ask LeagueDNA Advisor (chat) */}
+      {/* Ask GM Advisor (chat) */}
       <Card className="flex flex-col overflow-hidden">
         <CardContent className="flex flex-col p-0">
           {/* Chat header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold text-foreground">Ask LeagueDNA Advisor</span>
+              <span className="text-sm font-semibold text-foreground">Ask {V1.features.advisor}</span>
             </div>
             <div className="flex items-center gap-2">
               <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
@@ -563,7 +564,7 @@ export function Advisor() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask your LeagueDNA Advisor... (Enter to send, Shift+Enter for newline)"
+                placeholder={`Ask your ${V1.features.advisor}... (Enter to send, Shift+Enter for newline)`}
                 disabled={isSending}
                 className={cn(
                   "flex-1 resize-none rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground",

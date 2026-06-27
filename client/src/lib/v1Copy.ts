@@ -29,7 +29,7 @@ export const V1 = {
     myGmProfile: "My GM Profile",
     leagueDna: "League DNA",
     leagueWire: "League Wire",
-    advisor: "LeagueDNA Advisor",
+    advisor: "GM Advisor",
     rosters: "Rosters",
     matchups: "Matchups",
     theCast: "The Cast",
