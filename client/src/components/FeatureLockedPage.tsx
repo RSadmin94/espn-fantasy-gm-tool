@@ -1,14 +1,14 @@
-import { toast } from "sonner";
 import type { LucideIcon } from "lucide-react";
 import { Lock } from "lucide-react";
-import { trpc } from "@/lib/trpc";
 import { COMMERCIAL } from "@/lib/commercialCopy";
-import type { FeatureEntry } from "@/lib/featureRegistry";
+import type { RouteFeatureEntry } from "@/lib/featureRegistry";
+import { UpgradeDialog } from "@/components/commercial/UpgradeDialog";
 import {
   CinematicPageHeader,
   IntelPageShell,
   IntelPanel,
 } from "@/components/layout";
+import { Button } from "@/components/ui/button";
 
 /** Static placeholder visuals — never live user data. */
 function StaticSampleVisual({ icon: Icon }: { icon: LucideIcon }) {
@@ -51,25 +51,10 @@ function StaticSampleVisual({ icon: Icon }: { icon: LucideIcon }) {
 }
 
 type FeatureLockedPageProps = {
-  feature: FeatureEntry;
+  feature: RouteFeatureEntry;
 };
 
 export function FeatureLockedPage({ feature }: FeatureLockedPageProps) {
-  const checkout = trpc.billing.createCheckoutSession.useMutation({
-    onSuccess: (r) => {
-      if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
-      else toast.error("Checkout did not return a link. Try again or contact support.");
-    },
-    onError: (err) => {
-      toast.error(err.message || "Could not start checkout. Please try again.");
-    },
-  });
-
-  const startCheckout = () => {
-    if (typeof window === "undefined") return;
-    checkout.mutate({ origin: window.location.origin });
-  };
-
   const Icon = feature.icon;
 
   return (
@@ -89,14 +74,15 @@ export function FeatureLockedPage({ feature }: FeatureLockedPageProps) {
           <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
             {feature.marketingDescription}
           </p>
-          <button
-            type="button"
-            onClick={startCheckout}
-            disabled={checkout.isPending}
-            className="mt-5 inline-flex items-center gap-2 rounded-intel-sub bg-primary px-6 py-3 text-sm font-extrabold text-primary-foreground transition hover:brightness-110 disabled:opacity-60"
-          >
-            {checkout.isPending ? COMMERCIAL.upgradeCtaPending : "Unlock Rivals Pro"}
-          </button>
+          <UpgradeDialog
+            title={`Unlock ${feature.label}`}
+            description={feature.marketingDescription}
+            trigger={
+              <Button type="button" className="mt-5 font-extrabold">
+                Unlock Rivals Pro
+              </Button>
+            }
+          />
         </IntelPanel>
 
         <StaticSampleVisual icon={Icon} />

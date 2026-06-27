@@ -35,7 +35,7 @@ import {
 import { useTheme, LOCK_DARK } from "@/context/ThemeContext";
 import { ProductHelpButton, ProductOnboardingProvider } from "@/components/onboarding";
 import { V1 } from "@/lib/v1Copy";
-import { buildNavGroups, type FeatureEntry } from "@/lib/featureRegistry";
+import { buildNavGroups, type RouteFeatureEntry } from "@/lib/featureRegistry";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 
 type NavEntry =
@@ -53,7 +53,7 @@ const NAV_GROUP_TITLES = {
   history: V1.navGroups.history,
 } as const;
 
-function featureToNavEntry(feature: FeatureEntry, locked: boolean): NavEntry {
+function featureToNavEntry(feature: RouteFeatureEntry, locked: boolean): NavEntry {
   return {
     kind: "link",
     label: feature.label,

@@ -8,6 +8,8 @@ import { useState, type CSSProperties } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { useAuth } from "@clerk/react-router";
 import { cn } from "@/lib/utils";
+import { COMMERCIAL } from "@/lib/commercialCopy";
+import { RivalsProPricingFeatures } from "@/components/commercial/RivalsProPricingFeatures";
 import { ScanLine, ChevronRight, ChevronDown, Check, X, Maximize2 } from "lucide-react";
 
 const PAGEBG: CSSProperties = {
@@ -112,7 +114,7 @@ export function LandingPage() {
                 Analyze years of league history to uncover rivalries, owner tendencies, championship paths, draft behavior, and the hidden stories that define your league.
               </p>
               <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-                <CTA label="Analyze My League" onClick={go} className="w-full sm:w-auto" />
+                <CTA label={COMMERCIAL.discoverCta} onClick={go} className="w-full sm:w-auto" />
                 <a href="#finds" className="inline-flex items-center gap-1 text-[14px] font-semibold text-white/55 transition hover:text-white">
                   See what it finds <ChevronDown className="h-3.5 w-3.5" />
                 </a>
@@ -121,7 +123,7 @@ export function LandingPage() {
                 Read-only ESPN connection. We never modify league settings, rosters, transactions, or scoring.
               </p>
               <p className="mt-1.5 text-[13px] text-white/40">
-                See your league snapshot before unlocking the full experience.
+                {COMMERCIAL.freemiumForeverLine}
               </p>
             </div>
             <div className="lg:pl-2">
@@ -233,42 +235,67 @@ export function LandingPage() {
           <div className="mt-7"><CTA label="Explore League History" onClick={go} /></div>
         </section>
 
+        {/* How it works */}
+        <section id="how-it-works" className="border-t border-white/[0.08] py-14">
+          <span className={MONO}>How it works</span>
+          <h2 className="mt-3 max-w-[20ch] text-[26px] font-extrabold tracking-tight sm:text-[32px]">
+            Discover first. Understand everything with Rivals Pro.
+          </h2>
+          <p className="mt-2 max-w-[52ch] text-[15px] text-white/55">
+            Free answers <span className="text-white/75">who</span> you are. Rivals Pro answers <span className="text-white/75">why</span> — and what to do about it.
+          </p>
+          <ol className="mx-auto mt-8 grid max-w-[780px] gap-4">
+            {COMMERCIAL.productStorySteps.map(({ step, title, body }) => (
+              <li key={step} className={cn(PANEL, "flex gap-4 p-5 sm:p-6")}>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-lime-400/30 bg-lime-500/10 font-mono text-sm font-bold text-lime-300">
+                  {step}
+                </span>
+                <div>
+                  <h3 className="text-[16px] font-bold text-white/95 sm:text-[17px]">{title}</h3>
+                  <p className="mt-1 text-[14px] leading-relaxed text-white/60">{body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+
         {/* Pricing */}
         <section className="py-12">
           <span className={MONO}>Pricing</span>
-          <h2 className="mt-3 text-[26px] font-extrabold tracking-tight sm:text-[32px]">One season. One price. Every answer.</h2>
-          <p className="mt-2 text-[15px] text-white/55">Start free. Upgrade when you want the answers.</p>
+          <h2 className="mt-3 text-[26px] font-extrabold tracking-tight sm:text-[32px]">Free forever. Complete story with Rivals Pro.</h2>
+          <p className="mt-2 text-[15px] text-white/55">{COMMERCIAL.landingTagline}</p>
           <div className="mx-auto mt-7 grid max-w-[780px] grid-cols-1 gap-4 md:grid-cols-2">
             <div className={cn(PANEL, "flex flex-col p-6")}>
-              <span className={MONO}>Free</span>
+              <span className={MONO}>{COMMERCIAL.freePlanName}</span>
               <div className="mt-3 text-[42px] font-black leading-none">$0</div>
-              <p className="mt-2 text-[13px] text-white/50">Connect and explore your league</p>
+              <p className="mt-2 text-[13px] text-white/50">Always free — discover who you are in your league</p>
               <ul className="mt-5 flex-1 space-y-2 text-[14px] text-white/75">
-                {["League snapshot and legacy rank","One DNA insight","Rivalry and dynasty teasers"].map((f) => (
+                {COMMERCIAL.freePlanHighlights.map((f) => (
                   <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4 text-white/40" /> {f}</li>
                 ))}
               </ul>
               <button onClick={go} className="mt-6 rounded-xl border border-white/15 bg-white/[0.03] px-4 py-2.5 text-[14px] font-bold text-white/85 transition hover:bg-white/[0.07]">
-                Start free
+                {COMMERCIAL.discoverCta}
               </button>
             </div>
             <div className={cn(PANEL, "relative flex flex-col p-6 ring-1 ring-lime-400/40")}>
               <span className="absolute -top-2.5 left-6 rounded-full border border-lime-400/40 bg-lime-500/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.15em] text-lime-200">
-                Founding offer
+                {COMMERCIAL.foundingOfferLabel}
               </span>
-              <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-lime-400">Founding Member</span>
-              <div className="mt-3 flex items-baseline gap-2"><span className="text-[42px] font-black leading-none">$79.99</span><span className="text-[16px] font-bold text-white/35 line-through">$99.99</span><span className="text-[14px] text-white/45">/ year</span></div>
-              <p className="mt-2 text-[13px] font-semibold text-lime-300/90">Intro price - first 100 members, then $99.99</p>
-              <p className="mt-3 text-[14px] leading-relaxed text-white/70">Access your league. Unlock every rivalry, dynasty, draft trend, championship path, and DNA profile in your league.</p>
-              <ul className="mt-4 flex-1 space-y-2 text-[14px] text-white/75">
-                {["Every rivalry and grudge","League History and dynasties","Draft trends and reaches","Championship paths","My GM Profile for every owner"].map((f) => (
-                  <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4 text-lime-400" /> {f}</li>
-                ))}
-              </ul>
-              <CTA label="Analyze My League" onClick={go} className="mt-6 w-full" />
+              <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-lime-400">{COMMERCIAL.productName}</span>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-[42px] font-black leading-none">{COMMERCIAL.annualPriceAmount}</span>
+                <span className="text-[16px] font-bold text-white/35 line-through">{COMMERCIAL.annualPriceCompareAt}</span>
+                <span className="text-[14px] text-white/45">{COMMERCIAL.annualPriceSuffix}</span>
+              </div>
+              <p className="mt-2 text-[13px] font-semibold text-lime-300/90">{COMMERCIAL.launchPricingLine}</p>
+              <div className="mt-4 flex-1">
+                <RivalsProPricingFeatures />
+              </div>
+              <CTA label={COMMERCIAL.unlockStoryCta} onClick={go} className="mt-6 w-full" />
             </div>
           </div>
-          <p className="mt-4 text-[12px] text-white/35">Prices shown are a preview. Final checkout options are set at launch.</p>
+          <p className="mt-4 text-[12px] text-white/35">{COMMERCIAL.freemiumForeverLine}.</p>
         </section>
 
         {/* Final CTA */}
@@ -277,13 +304,13 @@ export function LandingPage() {
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-lime-400/40 to-transparent" />
             <span className={MONO}>Your league is waiting</span>
             <h2 className="mx-auto mt-4 max-w-[26ch] text-[30px] font-black leading-tight tracking-tight sm:text-[42px]">
-              Your league has a story. Go find out what it says about you.
+              See who you really are. Then unlock the complete story.
             </h2>
             <p className="mx-auto mt-3 max-w-[46ch] text-[15px] text-white/55">
-              Connect your ESPN league in under a minute. Free to start.
+              Connect your ESPN league in under a minute. {COMMERCIAL.freemiumForeverLine}
             </p>
             <div className="mt-7 flex justify-center">
-              <CTA label="Analyze My League" onClick={go} />
+              <CTA label={COMMERCIAL.discoverCta} onClick={go} />
             </div>
           </div>
         </section>
