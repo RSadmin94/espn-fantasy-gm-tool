@@ -472,7 +472,7 @@ function listRowLookupKey(o: { ownerKey?: string; ownerName?: string } | null | 
 // Presentational only. The badge identity (key/label/icon/explanation) and the
 // Now/Later percentiles are consumed verbatim from the dynasty.powerRankings
 // payload — NO recompute, NO classification logic here. The maps below are pure
-// cosmetics (accent + axis colors), matched to the Dynasty Power Rankings page.
+// cosmetics (accent + axis colors), matched to the Power Rankings page.
 const DYN_BADGE_ACCENT: Record<string, string> = {
   built_to_last: "#34d399",
   win_now_window: "#f5c518",
@@ -894,7 +894,7 @@ function ProfilePanel({
     enabled: leagueKeyReady,
   });
   // Dynasty Identity badge — consume the existing dynasty.powerRankings payload for the
-  // active league (same query the Dynasty Power Rankings page uses). No recompute.
+  // active league (same query the Power Rankings page uses). No recompute.
   const dynastyPowerQ = trpcAny.dynasty.powerRankings.useQuery(
     withLeagueSalt({ season: 2026 }, leagueContextKey),
     { staleTime: 60_000, enabled: leagueKeyReady },

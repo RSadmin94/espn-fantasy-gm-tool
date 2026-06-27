@@ -579,7 +579,7 @@ export function Dashboard() {
   );
 
   // Stage 4 — Dynasty Landscape story card. Pure consumer of the existing
-  // dynasty.powerRankings engine (same payload as the Dynasty Power Rankings page
+  // dynasty.powerRankings engine (same payload as the Power Rankings page
   // and the Owner Profile badge). No new engine/router/service; only the badge
   // counts + grouped owner names are read from the rows below.
   const dynastyLandscapeQ = trpc.dynasty.powerRankings.useQuery(
@@ -1371,7 +1371,7 @@ export function Dashboard() {
 
         <div className="flex min-h-[220px] flex-col rounded-2xl border border-border bg-card/95">
           <div className="border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold text-foreground">Dynasty power rankings</h3>
+            <h3 className="text-sm font-semibold text-foreground">{V1.features.powerRankings}</h3>
             <p className="text-xs text-muted-foreground">Top 5 · owners.ownerList</p>
           </div>
           <div className="flex-1 px-3 py-3">
