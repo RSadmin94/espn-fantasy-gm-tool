@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
-import type { LeagueHistoryTab, SortKey, OwnerWithTitles } from "../hooks/useLeagueHistoryModel";
+import type { SortKey, OwnerWithTitles } from "../hooks/useLeagueHistoryModel";
 import type { StandingsSeasonEntry } from "../utils/seasonTabChampions";
 
 function seasonChipTitle(season: number, entry: StandingsSeasonEntry): string {
@@ -35,8 +35,6 @@ type Props = {
   setSortBy: (s: SortKey) => void;
   expandedOwner: string | null;
   setExpandedOwner: (k: string | null) => void;
-  setSelectedSeason: (s: number) => void;
-  setTab: (t: LeagueHistoryTab) => void;
   isLoading: boolean;
 };
 
@@ -46,8 +44,6 @@ export function DynastyBoardTab({
   setSortBy,
   expandedOwner,
   setExpandedOwner,
-  setSelectedSeason,
-  setTab,
   isLoading,
 }: Props) {
   if (isLoading) {
@@ -154,21 +150,16 @@ export function DynastyBoardTab({
                 {isOpen && (
                   <div className="flex flex-wrap gap-1.5 pt-0.5">
                     {owner.seasons.map(({ season, entry }) => (
-                      <button
+                      <span
                         key={season}
-                        type="button"
                         title={seasonChipTitle(season, entry)}
-                        onClick={() => {
-                          setSelectedSeason(season);
-                          setTab("seasons");
-                        }}
                         className={cn(
-                          "rounded border px-2 py-0.5 text-[11px] tabular-nums transition-opacity hover:opacity-80",
+                          "rounded border px-2 py-0.5 text-[11px] tabular-nums",
                           chipStyle(entry.finalStanding),
                         )}
                       >
                         {season}
-                      </button>
+                      </span>
                     ))}
                   </div>
                 )}
