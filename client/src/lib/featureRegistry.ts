@@ -222,7 +222,7 @@ export const FEATURE_REGISTRY: FeatureEntry[] = [
     route: "/owner-profiles",
     navCategory: "knowYourself",
     icon: Users,
-    requiredPlan: "free",
+    requiredPlan: "pro",
     discoverable: true,
     showInOnboarding: true,
     showInPricing: false,

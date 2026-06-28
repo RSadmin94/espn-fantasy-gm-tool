@@ -141,7 +141,7 @@ const router = createBrowserRouter([
           { path: "/sync", element: <SyncData /> },
           { path: "/commissioner-command-center", element: <FeatureRouteGate route="/commissioner-command-center"><CommissionerCommandCenter /></FeatureRouteGate> },
           { path: "/league-settings",      element: <LeagueSettings /> },
-          { path: "/owner-profiles",         element: <OwnerProfiles /> },
+          { path: "/owner-profiles",         element: <FeatureRouteGate route="/owner-profiles"><OwnerProfiles /></FeatureRouteGate> },
           { path: "/league-data-health",     element: <LeagueDataHealth /> },
           { path: "/owner-identity-review",  element: <OwnerIdentityReview /> },
           { path: "/player-intelligence",    element: <Navigate to="/player-database" replace /> },
