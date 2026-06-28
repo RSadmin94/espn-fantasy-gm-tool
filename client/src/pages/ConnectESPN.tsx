@@ -483,10 +483,11 @@ export function ConnectESPN() {
                 </div>
               </div>
               <p className="text-sm text-muted-foreground">
-                League linked. Next:{" "}
+                League linked — syncing in the background. The ESPN Connector will return you to the{" "}
+                <a href="/dashboard" className="text-primary underline underline-offset-2">{V1.home.nav}</a>{" "}
+                when ready. You can also open{" "}
                 <a href="/sync" className="text-primary underline underline-offset-2">Sync Data</a>{" "}
-                (step 4 — Sync my league or Import league history), or go to the{" "}
-                <a href="/dashboard" className="text-primary underline underline-offset-2">{V1.home.nav}</a>.
+                to import full league history anytime.
               </p>
               <Button
                 variant="outline"

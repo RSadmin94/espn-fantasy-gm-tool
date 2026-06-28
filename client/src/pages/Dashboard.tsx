@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { useAuth, useUser } from "@clerk/react-router";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -188,9 +190,12 @@ function toMarqueeTeam(t: NormalizedStanding): MarqueeTeam {
 }
 
 export function Dashboard() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const espnConnected = searchParams.get("espnConnected") === "1";
   const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const leagueCtx = useLeagueContext();
+  const utils = trpc.useUtils();
   const leagueKeyReady =
     authLoaded && isSignedIn && !leagueCtx.leagueContextKey.startsWith("__");
 
@@ -198,7 +203,11 @@ export function Dashboard() {
     withLeagueSalt({}, leagueCtx.leagueContextKey),
     { ...DASH_QUERY_OPTS, enabled: authLoaded && !!isSignedIn },
   );
-  const activeLeagueQ = trpc.league.getActive.useQuery(undefined, { ...DASH_QUERY_OPTS, staleTime: 30_000 });
+  const activeLeagueQ = trpc.league.getActive.useQuery(undefined, {
+    ...DASH_QUERY_OPTS,
+    staleTime: 5_000,
+    refetchInterval: espnConnected ? 2_000 : false,
+  });
   const cachedSeasonsQ = trpc.espn.cachedSeasons.useQuery(
     withLeagueSalt({}, leagueCtx.leagueContextKey),
     { ...DASH_QUERY_OPTS, staleTime: 60_000 },
@@ -212,6 +221,27 @@ export function Dashboard() {
   useEffect(() => {
     if (leagueCtx.season > 0) setSeason(leagueCtx.season);
   }, [leagueCtx.season]);
+
+  useEffect(() => {
+    if (!espnConnected) return;
+    const syncStatus = activeLeagueQ.data?.syncStatus;
+    if (syncStatus === "ok") {
+      void utils.me.ownerHome.invalidate();
+      void utils.me.activeProfile.invalidate();
+      void utils.rivalry.getScores.invalidate();
+      void utils.espn.hallOfFame.invalidate();
+      void utils.espn.cachedSeasons.invalidate();
+      toast.success("Your league is connected and ready.");
+      searchParams.delete("espnConnected");
+      setSearchParams(searchParams, { replace: true });
+      return;
+    }
+    if (syncStatus === "error") {
+      toast.error("League sync failed. Open Sync Data to retry.");
+      searchParams.delete("espnConnected");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [espnConnected, activeLeagueQ.data?.syncStatus, utils, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (cachedSeasons.length > 0) {

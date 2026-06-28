@@ -11,7 +11,8 @@
 const WAR_ROOM_ORIGIN = "https://gmwarroom.online";
 const TRPC_SAVE_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.saveCredentials`;
 const TRPC_ME_URL = `${WAR_ROOM_ORIGIN}/api/trpc/auth.me`;
-const SYNC_AUTOSYNC_URL = `${WAR_ROOM_ORIGIN}/sync?autoSync=2026`;
+/** Server runs full onboarding sync; land on dashboard when leagues are linked. */
+const POST_CONNECT_URL = `${WAR_ROOM_ORIGIN}/dashboard?espnConnected=1`;
 /**
  * ESPN Fantasy web draft recap (same query shape the server uses as Referer for historical mDraftDetail).
  * Example: https://fantasy.espn.com/football/league/draftrecap?seasonId=2024&leagueId=457622
@@ -2282,15 +2283,15 @@ async function postImportDraftFromEspnApi(leagueId, season, espnCreds, warRoomCo
   return { ok: post.ok, status: post.status, error: post.error, result, parsed: post.parsed };
 }
 
-async function openOrFocusSyncTab() {
+async function openOrFocusPostConnectTab() {
   const tabs = await chrome.tabs.query({ url: "https://gmwarroom.online/*" });
   const existing = tabs.find((t) => t.id != null) ?? null;
   if (existing?.id != null) {
-    await chrome.tabs.update(existing.id, { url: SYNC_AUTOSYNC_URL, active: true });
+    await chrome.tabs.update(existing.id, { url: POST_CONNECT_URL, active: true });
     await chrome.windows.update(existing.windowId, { focused: true });
     return;
   }
-  await chrome.tabs.create({ url: SYNC_AUTOSYNC_URL, active: true });
+  await chrome.tabs.create({ url: POST_CONNECT_URL, active: true });
 }
 
 /**
@@ -2577,7 +2578,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
       }
 
-      await openOrFocusSyncTab();
+      await openOrFocusPostConnectTab();
       sendResponse({ ok: true });
     })().catch((err) => {
       const msg = err instanceof Error ? err.message : String(err);

@@ -1,5 +1,5 @@
 /**
- * Single-season ESPN refresh — used by saveCredentials background sync and bulk refresh.
+ * Single-season ESPN refresh — used by espn onboarding pipeline and bulk refresh.
  */
 import {
   fetchEspnViewsHardened,

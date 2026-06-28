@@ -5000,15 +5000,18 @@ export const appRouter = router({
             espnS2,
           };
           void (async () => {
-            const { refreshSingleSeason } = await import("./espnSeasonRefresh");
-            await refreshSingleSeason({
-              season: refreshSeason,
+            const { completeEspnConnectOnboarding } = await import("./espnOnboardingService");
+            const result = await completeEspnConnectOnboarding({
+              userId: ctx.user!.id,
               leagueId: testLeagueId || "default",
               creds,
-              userId: ctx.user!.id,
+              season: refreshSeason,
             });
+            if (result.errors.length) {
+              console.warn("[saveCredentials] onboarding completed with warnings:", result);
+            }
           })().catch(err => {
-            console.error("[saveCredentials] Background refresh failed:", err);
+            console.error("[saveCredentials] Background onboarding failed:", err);
           });
         }
 

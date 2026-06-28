@@ -1502,6 +1502,71 @@ function emptyActiveProfile(clerkUserId: string | null): ActiveProfile {
 export function memberIdFromOwnerKey(ownerKey: string | null | undefined): string | null {
   return ownerKey ? ownerKey.replace(/^id:/, "") : null;
 }
+
+/**
+ * Persist focal owner from encrypted ESPN SWID when the connection has credentials
+ * but no selected team yet. Returns true when a row was updated.
+ */
+export async function persistOwnerFromSwidIfUnset(userId: number, leagueId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const lid = String(leagueId).trim().slice(0, 32);
+  if (!lid) return false;
+
+  const [conn] = await db
+    .select({
+      id: leagueConnections.id,
+      selectedTeamId: leagueConnections.selectedTeamId,
+      credentials: leagueConnections.credentials,
+    })
+    .from(leagueConnections)
+    .where(
+      and(
+        eq(leagueConnections.userId, userId),
+        eq(leagueConnections.leagueId, lid),
+        eq(leagueConnections.provider, "espn"),
+      ),
+    )
+    .limit(1);
+  if (!conn || conn.selectedTeamId != null || !conn.credentials) return false;
+
+  let swid = "";
+  try {
+    const creds = decryptCredentialsFromDb(conn.credentials) as Record<string, string> | null;
+    swid = typeof creds?.swid === "string" ? creds.swid.trim() : "";
+  } catch {
+    return false;
+  }
+  if (!swid.startsWith("{")) return false;
+
+  const rows = await db
+    .select({
+      teamId: gmTeams.teamId,
+      season: gmTeams.season,
+      ownerName: gmTeams.ownerName,
+      name: gmTeams.name,
+    })
+    .from(gmTeams)
+    .where(and(eq(gmTeams.leagueId, lid), eq(gmTeams.ownerId, swid)));
+  const distinctTeams = new Set(rows.map((r) => r.teamId));
+  if (rows.length === 0 || distinctTeams.size !== 1) return false;
+
+  const latest = [...rows].sort((a, b) => (b.season ?? 0) - (a.season ?? 0))[0]!;
+  await db
+    .update(leagueConnections)
+    .set({
+      selectedTeamId: latest.teamId,
+      selectedOwnerKey: `id:${swid}`,
+      selectedOwnerName: latest.ownerName ?? null,
+      selectedFranchiseName: latest.name ?? null,
+      selectedSeason: latest.season ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(leagueConnections.id, conn.id));
+  memCache.invalidate(`currentOwner:${userId}`);
+  return true;
+}
+
 export async function resolveActiveProfile(
   user: { id: number; openId?: string | null } | null | undefined,
 ): Promise<ActiveProfile> {
