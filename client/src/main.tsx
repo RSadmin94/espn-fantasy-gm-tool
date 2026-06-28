@@ -148,7 +148,7 @@ const router = createBrowserRouter([
           { path: "/player-database",         element: <PlayerDatabase /> },
           { path: "/league-wire",               element: <LeagueWire /> },
           { path: "/draft-war-room",           element: <FeatureRouteGate route="/draft-war-room"><DraftWarRoom /></FeatureRouteGate> },
-          { path: "/transactions", element: <Transactions /> },
+          { path: "/transactions", element: <FeatureRouteGate route="/transactions"><Transactions /></FeatureRouteGate> },
           { path: "/standings", element: <Standings /> },
           { path: "/dynasty-power-rankings", element: <DynastyPowerRankings /> },
           { path: "/matchups", element: <Matchups /> },

@@ -379,7 +379,7 @@ export const FEATURE_REGISTRY: FeatureEntry[] = [
     route: "/transactions",
     navCategory: "history",
     icon: ArrowLeftRight,
-    requiredPlan: "free",
+    requiredPlan: "pro",
     discoverable: true,
     showInOnboarding: false,
     showInPricing: false,
