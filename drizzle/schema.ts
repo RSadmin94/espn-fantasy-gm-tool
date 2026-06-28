@@ -32,6 +32,12 @@ export const users = mysqlTable("users", {
   subscriptionStatus: mysqlEnum("subscriptionStatus", ["free", "trialing", "active", "past_due", "canceled"]).default("free").notNull(),
   trialStartedAt: timestamp("trialStartedAt"),
   currentPeriodEnd: timestamp("currentPeriodEnd"),
+  /** Active Stripe price id (rivals/league × month/year). */
+  subscriptionPriceId: varchar("subscriptionPriceId", { length: 128 }),
+  /** Billing interval for the active subscription. */
+  subscriptionInterval: mysqlEnum("subscriptionInterval", ["month", "year"]),
+  /** Paid tier: rivals intelligence vs league commissioner suite. */
+  subscriptionPlan: mysqlEnum("subscriptionPlan", ["rivals", "league"]),
 });
 
 export type User = typeof users.$inferSelect;

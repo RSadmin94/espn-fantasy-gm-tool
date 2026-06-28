@@ -5,7 +5,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, subscribedProcedure, router, resolvePremiumAccess } from "./_core/trpc";
-import { gateRivalryScores, gateH2H, gateRivalryDossier, gateHallOfFame, gateOwnerProfile } from "./leagueIntelGating";
+import { gateRivalryScores, gateH2H, gateRivalryDossier, gateHallOfFame, gateOwnerProfile, gateTradeAnalyzeResult, gateOwnerAllTimeRecords } from "./leagueIntelGating";
 import { invokeLLM, type Message } from "./_core/llm";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 import { injuryRouter } from "./injuryRouter";
@@ -4842,7 +4842,9 @@ export const appRouter = router({
           averages: { acquisitions: live.avgAcquisitions, trades: live.avgTrades },
           gmArchetype: live.gmArchetype,
           gmArchetypeDesc: live.gmArchetypeDesc,
-          strengthsWeaknesses: live.strengthsWeaknesses,
+          strengthsWeaknesses: (await resolvePremiumAccess(ctx.user))
+            ? live.strengthsWeaknesses
+            : [],
         };
 
         return {
@@ -6428,7 +6430,7 @@ export const appRouter = router({
         })
         .sort((a, b) => b.winPct - a.winPct || b.wins - a.wins || a.displayName.localeCompare(b.displayName));
 
-      return {
+      const payload = {
         owners,
         diagnostics: {
           rawMatchupRows: allMatchups.length,
@@ -6446,6 +6448,11 @@ export const appRouter = router({
           seasonCoverage,
         },
       };
+      return gateOwnerAllTimeRecords(
+        payload.owners,
+        payload.diagnostics,
+        await resolvePremiumAccess(ctx.user),
+      );
     }),
 
     /** Per-season matchup coverage diagnostics: how many matchup rows exist per source per season. */
@@ -9603,6 +9610,7 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       picksB: z.array(z.object({ round: z.number(), pick: z.number().default(7) })).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const entitled = await resolvePremiumAccess(ctx.user);
       const { calcVORP, calcPositionalScarcity, calcKeeperEfficiency, calcROSValue, calcTradeValue } = await import("./analytics");
       const { computeMarketValues } = await import("./marketValue");
       const {
@@ -9826,6 +9834,43 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       const needsA = posCount(teamARoster);
       const needsB = posCount(teamBRoster);
 
+      // Slice 2: League-format awareness (TRUST/TRANSPARENCY ONLY — does not affect valuation).
+      const { resolveLeagueContext } = await import("./leagueContext");
+      const leagueCtx = await resolveLeagueContext(ctx.user?.id, input.season);
+      const disclaimers: string[] = [];
+      if (leagueCtx.format === "dynasty") {
+        disclaimers.push(
+          "⚠ Dynasty League Detected. Current valuations are redraft-oriented and may undervalue youth, rookie picks, and long-term assets.",
+        );
+      }
+      if (leagueCtx.format === "keeper") {
+        disclaimers.push(
+          "⚠ Keeper League Detected. Current valuations do not yet fully account for keeper economics.",
+        );
+      }
+      if (leagueCtx.format === "unknown") {
+        disclaimers.push(
+          "⚠ League format confidence is limited. Trade valuations may be less accurate until format is confirmed.",
+        );
+      }
+
+      const tradeCore = {
+        totalA,
+        totalB,
+        pickValueA,
+        pickValueB,
+        ratio: Math.round(ratio * 100) / 100,
+        fairnessGrade,
+        leagueFormat: leagueCtx.format,
+        formatSource: leagueCtx.formatSource,
+        requiresFormatDisclaimer: leagueCtx.requiresFormatDisclaimer,
+        disclaimers,
+      };
+
+      if (!entitled) {
+        return gateTradeAnalyzeResult(tradeCore, false);
+      }
+
       // Build math summary for AI context
       const mathSummary = [
         `TRADE MATH (${input.season} Season Data):`,
@@ -9994,28 +10039,6 @@ Provide:
       });
       const aiVerdict = response.choices?.[0]?.message?.content ?? "Analysis unavailable.";
 
-      // Slice 2: League-format awareness (TRUST/TRANSPARENCY ONLY — does not affect valuation).
-      // Format/declaration come from the League Context Foundation; the message is selected by
-      // `format`. requiresFormatDisclaimer is returned for the client to surface as it sees fit.
-      const { resolveLeagueContext } = await import("./leagueContext");
-      const leagueCtx = await resolveLeagueContext(ctx.user?.id, input.season);
-      const disclaimers: string[] = [];
-      if (leagueCtx.format === "dynasty") {
-        disclaimers.push(
-          "⚠ Dynasty League Detected. Current valuations are redraft-oriented and may undervalue youth, rookie picks, and long-term assets.",
-        );
-      }
-      if (leagueCtx.format === "keeper") {
-        disclaimers.push(
-          "⚠ Keeper League Detected. Current valuations do not yet fully account for keeper economics.",
-        );
-      }
-      if (leagueCtx.format === "unknown") {
-        disclaimers.push(
-          "⚠ League format confidence is limited. Trade valuations may be less accurate until format is confirmed.",
-        );
-      }
-
       // ── Phase 1: Trade Intelligence Report (deterministic, completed-trade data only) ──
       const tradeIntelligence = await (async () => {
         try {
@@ -10086,27 +10109,16 @@ Provide:
         }
       })();
 
-      return {
+      return gateTradeAnalyzeResult({
+        ...tradeCore,
         sideAValues,
         sideBValues,
-        totalA,
-        totalB,
-        pickValueA,
-        pickValueB,
-        ratio: Math.round(ratio * 100) / 100,
-        fairnessGrade,
         aiVerdict,
         mathSummary,
         teamANeeds: needsA,
         teamBNeeds: needsB,
-        // Slice 2 (trust/transparency — does NOT affect valuation):
-        leagueFormat: leagueCtx.format,
-        formatSource: leagueCtx.formatSource,
-        requiresFormatDisclaimer: leagueCtx.requiresFormatDisclaimer,
-        disclaimers,
-        // Phase 1 Trade Intelligence Report (deterministic; null if unavailable). Does NOT alter value fields above.
         tradeIntelligence,
-      };
+      }, true);
     }),
 
   advisor: router({

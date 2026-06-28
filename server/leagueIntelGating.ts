@@ -90,18 +90,13 @@ export type GatedRivalries = {
   lockedRivalries: number;
 };
 
-/** Whitelist the free "headline" for a single rivalry - no record fields cross the wire. */
-function rivalryHeadline(p: Record<string, unknown>): Record<string, unknown> {
-  // Free identity headline: name, severity, playoff eliminations, last meeting,
-  // and ONE storyline (loreSentence). No W-L / heartbreaks / points / timeline.
+/** Visible-but-locked rivalry stub — name + heat/score only; no deep H2H or behavioral intel. */
+function rivalryLockedStub(p: Record<string, unknown>): Record<string, unknown> {
   return {
     rivalId: p.rivalId,
     rivalName: p.rivalName,
     rivalryScore: p.rivalryScore,
     heatLabel: p.heatLabel,
-    playoffEliminations: p.playoffEliminations,
-    lastMatchupSeason: p.lastMatchupSeason ?? null,
-    loreSentence: p.loreSentence ?? null,
     focalKey: p.focalKey,
     rivalKey: p.rivalKey,
     locked: true,
@@ -117,7 +112,7 @@ export function gateRivalryScores(scores: Record<string, unknown>[], entitled: b
     (a, b) => (Number(b.rivalryScore) || 0) - (Number(a.rivalryScore) || 0),
   );
   return {
-    rivalries: [rivalryHeadline(sorted[0])],
+    rivalries: [sorted[0], ...sorted.slice(1).map(rivalryLockedStub)],
     gated: true,
     entitled: false,
     totalRivalries: total,
@@ -198,6 +193,8 @@ export function gateLeagueDna<
     rosterDna: unknown;
     championComparison: unknown;
     blindSpots: unknown;
+    primaryTrait?: unknown;
+    blindSpot?: unknown;
   },
 >(profile: T, entitled: boolean): T & { gated: boolean; entitled: boolean } {
   if (entitled) return { ...profile, gated: false, entitled: true };
@@ -208,6 +205,8 @@ export function gateLeagueDna<
     rosterDna: null,
     championComparison: null,
     blindSpots: null,
+    primaryTrait: null,
+    blindSpot: null,
     gated: true,
     entitled: false,
   } as T & { gated: boolean; entitled: boolean };
@@ -481,6 +480,7 @@ function teaserAvailableBlocks(blocks: StoryBlockKey[]): StoryBlockKey[] {
 export type GatedRivalryStoryResult = RivalryStoryResult & {
   gated: boolean;
   entitled: boolean;
+  locked?: boolean;
 };
 
 export function gateRivalryStoryPair(story: RivalryStoryResult, entitled: boolean): GatedRivalryStoryResult {
@@ -508,16 +508,128 @@ export type GatedRivalryStoryForOwner = {
   entitled: boolean;
 };
 
+function rivalryStoryLockedStub(story: RivalryStoryResult): GatedRivalryStoryResult {
+  return {
+    focalOwnerKey: story.focalOwnerKey,
+    rivalOwnerKey: story.rivalOwnerKey,
+    tier: story.tier,
+    headline: {
+      key: story.headline.key,
+      confidence: story.headline.confidence,
+      receiptIds: [],
+    },
+    documentaryFacts: [],
+    availableBlocks: [],
+    locked: true,
+    gated: true,
+    entitled: false,
+  };
+}
+
 export function gateRivalryStoryForOwner(
   focalOwnerKey: string,
   stories: RivalryStoryResult[],
   entitled: boolean,
 ): GatedRivalryStoryForOwner {
+  if (entitled || stories.length <= 1) {
+    return {
+      focalOwnerKey,
+      stories: stories.map((s) => gateRivalryStoryPair(s, entitled)),
+      gated: !entitled,
+      entitled,
+    };
+  }
+  const sorted = [...stories].sort((a, b) => {
+    const tierOrder: Record<string, number> = { legendary: 0, heated: 1, simmering: 2, cold: 3 };
+    const ta = tierOrder[a.tier] ?? 9;
+    const tb = tierOrder[b.tier] ?? 9;
+    return ta - tb;
+  });
   return {
     focalOwnerKey,
-    stories: stories.map((s) => gateRivalryStoryPair(s, entitled)),
-    gated: !entitled,
-    entitled,
+    stories: [
+      gateRivalryStoryPair(sorted[0], true),
+      ...sorted.slice(1).map(rivalryStoryLockedStub),
+    ],
+    gated: true,
+    entitled: false,
+  };
+}
+
+// --- Deep Records / Dynasty gating -------------------------------------------
+
+export type OwnerAllTimeRecordRow = {
+  ownerKey: string;
+  displayName: string;
+  wins?: number;
+  losses?: number;
+  ties?: number;
+  gamesPlayed?: number;
+  winPct?: number;
+  locked?: boolean;
+};
+
+export type GatedOwnerAllTimeRecords<TDiagnostics> = {
+  owners: OwnerAllTimeRecordRow[];
+  diagnostics: TDiagnostics | null;
+  gated: boolean;
+  entitled: boolean;
+  totalOwners: number;
+};
+
+export function gateOwnerAllTimeRecords<TDiagnostics>(
+  owners: OwnerAllTimeRecordRow[],
+  diagnostics: TDiagnostics,
+  entitled: boolean,
+): GatedOwnerAllTimeRecords<TDiagnostics> {
+  const totalOwners = owners.length;
+  if (entitled) {
+    return { owners, diagnostics, gated: false, entitled: true, totalOwners };
+  }
+  return {
+    owners: owners.map((o, i) => ({
+      ownerKey: o.ownerKey,
+      displayName: o.displayName,
+      winPct: o.winPct,
+      locked: true,
+      rank: i + 1,
+    })),
+    diagnostics: null,
+    gated: true,
+    entitled: false,
+    totalOwners,
+  };
+}
+
+export type DynastyTeamRow = Record<string, unknown>;
+
+export type GatedDynastyPowerRankings<T extends { teams: DynastyTeamRow[] }> = T & {
+  gated: boolean;
+  entitled: boolean;
+  lockedTeamCount: number;
+};
+
+export function gateDynastyPowerRankings<T extends { teams: DynastyTeamRow[] }>(
+  payload: T,
+  entitled: boolean,
+): GatedDynastyPowerRankings<T> {
+  const total = payload.teams.length;
+  if (entitled || total === 0) {
+    return { ...payload, gated: false, entitled, lockedTeamCount: 0 };
+  }
+  const lockedTeams = payload.teams.map((t, i) => ({
+    ownerKey: t.ownerKey,
+    ownerName: t.ownerName ?? t.teamName,
+    rank: i + 1,
+    identityBadge: t.identityBadge ?? null,
+    locked: true,
+  }));
+  return {
+    ...payload,
+    teams: lockedTeams,
+    gated: true,
+    entitled: false,
+    lockedTeamCount: total,
   };
 }
 

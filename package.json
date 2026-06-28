@@ -28,6 +28,8 @@
     "player:validate": "tsx scripts/validatePlayerStatsIngestion.ts",
     "format": "prettier --write .",
     "test": "vitest run",
+    "stripe:setup-rivals-pro": "tsx scripts/setup-stripe-rivals-pro.ts",
+    "stripe:setup-products": "tsx scripts/setup-stripe-products.ts",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {

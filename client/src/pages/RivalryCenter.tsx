@@ -10,6 +10,8 @@ import {
 } from "@/components/RivalryDossierPanel";
 import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
 import { cn } from "@/lib/utils";
+import { COMMERCIAL } from "@/lib/commercialCopy";
+import { resolvePaywallCopy } from "@/lib/paywallCopy";
 import {
   CinematicPageHeader,
   IntelPageShell,
@@ -29,6 +31,7 @@ import {
   RefreshCw,
   X,
   ChevronRight,
+  Lock,
 } from "lucide-react";
 
 // ── theme tokens (semantic colors for heat badges, matrix cells, modal) ────────
@@ -83,6 +86,7 @@ type Pair = {
   /** Canonical owner-keys from rivalry.getScores — used to open the dossier reliably. */
   focalKey?: string;
   rivalKey?: string;
+  locked?: boolean;
 };
 
 function Pill({ children, gold }: { children: React.ReactNode; gold?: boolean }) {
@@ -236,6 +240,10 @@ export function RivalryCenter() {
   const rivalryGated: boolean = Boolean((scoresQ.data as any)?.gated);
   const lockedRivalries: number = Number((scoresQ.data as any)?.lockedRivalries ?? 0);
   const totalRivalries: number = Number((scoresQ.data as any)?.totalRivalries ?? 0);
+  const rivalryPaywallCopy = resolvePaywallCopy(
+    `${totalRivalries > 1 ? `${totalRivalries} rivalries on your ledger.` : "Your full rivalry ledger."} The records are locked.`,
+    `You can see your hottest rival above — the who. Unlock the complete story: head-to-head records, heartbreak losses, playoff scars, every other rivalry${lockedRivalries > 0 ? ` (${lockedRivalries} more)` : ""}, and the league-wide rivalry grid.`,
+  );
   const checkoutMutation = trpc.billing.createCheckoutSession.useMutation({
     onSuccess: (res) => {
       if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer");
@@ -265,7 +273,7 @@ export function RivalryCenter() {
   const startCheckout = () => {
     if (typeof window === "undefined") return;
     logEvent.mutate({ eventType: "cta_click", featureName: "rivalry_unlock_clicked" });
-    checkoutMutation.mutate({ origin: window.location.origin });
+    checkoutMutation.mutate({ origin: window.location.origin, plan: "rivals", interval: "year" });
   };
 
   const keyForRival = (p: Pair) => nameToKey[norm(p.rivalName)] ?? undefined;
@@ -371,13 +379,18 @@ export function RivalryCenter() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const openDossier = (p: Pair) =>
+  const openDossier = (p: Pair) => {
+    if (p.locked) {
+      startCheckout();
+      return;
+    }
     setOpen({
       focalKey: p.focalKey ?? rodKey,
       focalName: rodName,
       rivalKey: p.rivalKey ?? keyForRival(p),
       rivalName: String(p.rivalName ?? "Rival"),
     });
+  };
 
   const loading = !leagueKeyReady || scoresQ.isLoading || listQ.isLoading;
   const allEmpty = !leagueLoading && leaguePairs.length === 0 && pairs.length === 0;
@@ -425,13 +438,10 @@ export function RivalryCenter() {
                   <Swords className="h-4 w-4" /> Records Locked
                 </div>
                 <h3 className="mt-2 text-2xl font-black leading-tight">
-                  {totalRivalries > 1 ? `${totalRivalries} rivalries on your ledger.` : "Your full rivalry ledger."}{" "}
-                  The records are locked.
+                  {rivalryPaywallCopy.heading}
                 </h3>
                 <p className="mt-2 max-w-xl text-sm" style={{ color: MUTED }}>
-                  You can see your hottest rival above. Unlock the head-to-head records, heartbreak
-                  losses, playoff scars, every other rivalry
-                  {lockedRivalries > 0 ? ` (${lockedRivalries} more)` : ""}, and the league-wide rivalry grid.
+                  {rivalryPaywallCopy.description}
                 </p>
               </div>
               <button
@@ -440,7 +450,7 @@ export function RivalryCenter() {
                 className="shrink-0 inline-flex items-center gap-2 rounded-[10px] px-5 py-3 text-sm font-extrabold"
                 style={{ background: ACCENT, color: "#1e1623" }}
               >
-                {checkoutMutation.isPending ? "Opening..." : "Unlock Rivalry Records"}
+                {checkoutMutation.isPending ? COMMERCIAL.upgradeCtaPending : COMMERCIAL.upgradeCtaUnderstandWhy}
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
@@ -637,25 +647,37 @@ export function RivalryCenter() {
               <div className="mt-4 space-y-2">
                 {ranked.map((p, i) => {
                   const h = HEAT[p.heatLabel ?? "Cold"] ?? HEAT.Cold;
+                  const isLocked = Boolean(p.locked);
                   return (
                     <button
                       key={`${p.rivalId ?? p.rivalName ?? i}`}
                       onClick={() => openDossier(p)}
-                      className={cn(SUB_CLASS, "group flex w-full items-center gap-4 p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background")}
+                      className={cn(
+                        SUB_CLASS,
+                        "group flex w-full items-center gap-4 p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                        isLocked && "opacity-85",
+                      )}
                     >
                       <div className="w-9 shrink-0 text-center text-2xl font-black" style={{ color: i === 0 ? GOLD : MUTED }}>{i + 1}</div>
                       <div className="h-10 w-1 shrink-0 rounded-full" style={{ background: h.c }} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="truncate text-lg font-bold">{rodName} <span style={{ color: MUTED }}>vs</span> {String(p.rivalName ?? "Rival")}</span>
-                          <HeatBadge label={p.heatLabel} />
+                          {isLocked ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/60">
+                              <Lock className="h-3 w-3" /> Locked
+                            </span>
+                          ) : (
+                            <HeatBadge label={p.heatLabel} />
+                          )}
                         </div>
                         <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs" style={{ color: MUTED }}>
-                          {rivalryGated ? (
+                          {isLocked || rivalryGated ? (
                             <>
-                              <span>Playoff elims <b style={{ color: TEXT }}>{n(p.playoffEliminations)}</b></span>
-                              <span>Severity <b style={{ color: TEXT }}>{String(HEAT[String(p.heatLabel ?? "")]?.label ?? p.heatLabel ?? "-")}</b></span>
-                              {p.lastMatchupSeason != null && <span>Last <b style={{ color: TEXT }}>{p.lastMatchupSeason}</b></span>}
+                              {p.rivalryScore != null && (
+                                <span>Score <b style={{ color: TEXT }}>{n(p.rivalryScore)}</b></span>
+                              )}
+                              <span>Heat <b style={{ color: TEXT }}>{String(HEAT[String(p.heatLabel ?? "")]?.label ?? p.heatLabel ?? "-")}</b></span>
                             </>
                           ) : (
                             <>
@@ -667,8 +689,14 @@ export function RivalryCenter() {
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
-                        <div className="text-3xl font-black" style={{ color: GOLD }}>{n(p.rivalryScore)}</div>
-                        <div className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>score</div>
+                        {isLocked ? (
+                          <Lock className="mx-auto h-6 w-6 opacity-50" style={{ color: MUTED }} />
+                        ) : (
+                          <>
+                            <div className="text-3xl font-black" style={{ color: GOLD }}>{n(p.rivalryScore)}</div>
+                            <div className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>score</div>
+                          </>
+                        )}
                       </div>
                       <ChevronRight className="h-5 w-5 shrink-0 opacity-40 transition group-hover:translate-x-0.5 group-hover:opacity-90" />
                     </button>

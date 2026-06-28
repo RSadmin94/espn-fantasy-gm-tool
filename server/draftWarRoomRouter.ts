@@ -11,7 +11,8 @@
  */
 
 import { z }                       from "zod";
-import { router, publicProcedure } from "./_core/trpc";
+import { TRPCError } from "@trpc/server";
+import { router, protectedProcedure, resolvePremiumAccess } from "./_core/trpc";
 import { getDb, resolveActiveLeagueId, getCachedView } from "./db";
 import { sql as drizzleSql }       from "drizzle-orm";
 import {
@@ -936,7 +937,7 @@ function buildMockDraft(params: {
 
 export const draftWarRoomRouter = router({
 
-  getDraftWarRoomData: publicProcedure
+  getDraftWarRoomData: protectedProcedure
     .input(z.object({
       season: z.number().int().min(2018).max(2030),
       activeLeagueKey: z.string().optional(),
@@ -949,6 +950,12 @@ export const draftWarRoomRouter = router({
       })).optional(),
     }))
     .query(async ({ ctx, input }) => {
+      if (!(await resolvePremiumAccess(ctx.user))) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Draft Intelligence requires Rivals. Upgrade to unlock the Draft War Room.",
+        });
+      }
       const db = await getDb();
       if (!db) return { ok: false, error: "DB unavailable" };
       const { season } = input;

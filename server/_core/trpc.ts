@@ -44,12 +44,26 @@ export function isUserEntitled(
   user: Pick<User, "subscriptionStatus" | "trialStartedAt"> | null | undefined,
 ): boolean {
   if (!user) return false;
-  if (user.subscriptionStatus === 'active') return true;
-  if (user.subscriptionStatus === 'trialing' && user.trialStartedAt) {
+  if (user.subscriptionStatus === "active") return true;
+  if (user.subscriptionStatus === "trialing" && user.trialStartedAt) {
     const elapsed = Date.now() - new Date(user.trialStartedAt).getTime();
     if (elapsed <= TRIAL_DURATION_MS) return true;
   }
   return false;
+}
+
+/** Rivals intelligence — active/trial billing excluding League-only subscribers. */
+export function hasRivalsIntelligenceEntitlement(
+  user:
+    | (Pick<User, "subscriptionStatus" | "trialStartedAt"> & {
+        subscriptionPlan?: User["subscriptionPlan"] | null;
+      })
+    | null
+    | undefined,
+): boolean {
+  if (!isUserEntitled(user)) return false;
+  if (user?.subscriptionPlan === "league") return false;
+  return true;
 }
 
 /**
@@ -58,10 +72,15 @@ export function isUserEntitled(
  * subscription / live trial (isUserEntitled). The founder path never touches billing state.
  */
 export function hasPremiumAccess(
-  user: Pick<User, "openId" | "email" | "subscriptionStatus" | "trialStartedAt"> | null | undefined,
+  user:
+    | (Pick<User, "openId" | "email" | "subscriptionStatus" | "trialStartedAt"> & {
+        subscriptionPlan?: User["subscriptionPlan"] | null;
+      })
+    | null
+    | undefined,
 ): boolean {
   if (isFounderAccount(user)) return true;
-  return isUserEntitled(user);
+  return hasRivalsIntelligenceEntitlement(user);
 }
 
 /**
@@ -73,7 +92,10 @@ export function hasPremiumAccess(
  */
 export async function resolvePremiumAccess(
   user:
-    | (Pick<User, "openId" | "email" | "subscriptionStatus" | "trialStartedAt"> & { id?: number | null })
+    | (Pick<User, "openId" | "email" | "subscriptionStatus" | "trialStartedAt"> & {
+        id?: number | null;
+        subscriptionPlan?: User["subscriptionPlan"] | null;
+      })
     | null
     | undefined,
 ): Promise<boolean> {
@@ -96,7 +118,7 @@ export const subscribedProcedure = t.procedure.use(
     if (!(await resolvePremiumAccess(ctx.user))) {
       throw new TRPCError({
         code: "FORBIDDEN",
-        message: "Your free trial has ended. Upgrade to continue.",
+        message: "Rivals Pro is required for this feature. Continue with free previews, or unlock the complete story.",
       });
     }
     return next({ ctx: { ...ctx, user: ctx.user } });

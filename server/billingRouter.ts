@@ -3,64 +3,197 @@
  *
  * tRPC procedures for Stripe billing:
  *   billing.createCheckoutSession  — creates a Stripe Checkout session, returns URL
+ *   billing.getUpgradeQuote        — server-computed upgrade amounts (client never calculates)
  *   billing.getSubscriptionStatus  — returns current user subscription state
  *   billing.createPortalSession    — creates a Stripe Customer Portal session for self-service
  *
  * All procedures are protected (require login).
  */
 import { z } from "zod";
-import { protectedProcedure, router } from "./_core/trpc";
+import { protectedProcedure, router, hasRivalsIntelligenceEntitlement } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { stripe } from "./stripe/client";
-import { PRODUCTS } from "./stripe/products";
-import { ENV } from "./_core/env";
+import {
+  PRODUCTS,
+  RIVALS_TO_LEAGUE_ANNUAL_UPGRADE_CENTS,
+  STRIPE_BRAND,
+  STRIPE_CHECKOUT_COPY,
+  getPriceDefinition,
+  intervalFromPriceId,
+  planFromPriceId,
+  type BillingInterval,
+  type PaidPlan,
+} from "./stripe/products";
+import { resolveStripePriceId } from "./stripe/resolveCheckoutPrice";
 import { getDb } from "./db";
 import { users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { recordFunnelEvent } from "./funnelService";
 
+const checkoutInput = z.object({
+  origin: z.string().url(),
+  plan: z.enum(["rivals", "league"]).default("rivals"),
+  interval: z.enum(["month", "year"]).default("year"),
+  /** Upgrade Rivals annual → League annual (+$20). Server validates eligibility. */
+  upgradeToLeagueAnnual: z.boolean().optional(),
+});
+
+async function ensureStripeCustomer(userId: number, userRow: typeof users.$inferSelect) {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+  let customerId = userRow.stripeCustomerId ?? undefined;
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: userRow.email ?? undefined,
+      name: userRow.name ?? undefined,
+      metadata: {
+        userId: userId.toString(),
+        app: "fantasy_football_rivals",
+      },
+    });
+    customerId = customer.id;
+    await db.update(users).set({ stripeCustomerId: customerId }).where(eq(users.id, userId));
+  }
+  return customerId;
+}
+
+function resolveConfiguredPriceId(plan: PaidPlan, interval: BillingInterval): string | null {
+  const def = getPriceDefinition(plan, interval);
+  return def.priceId || null;
+}
+
 export const billingRouter = router({
-  /**
-   * Create a Stripe Checkout session for the monthly plan.
-   * Returns the checkout URL — frontend opens it in a new tab.
-   */
+  getUpgradeQuote: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+    const [userRow] = await db.select().from(users).where(eq(users.id, ctx.user.id));
+    if (!userRow) throw new TRPCError({ code: "NOT_FOUND" });
+
+    const priceId = userRow.subscriptionPriceId ?? null;
+    const plan = userRow.subscriptionPlan ?? planFromPriceId(priceId);
+    const interval = userRow.subscriptionInterval ?? intervalFromPriceId(priceId);
+
+    const rivalsAnnual = PRODUCTS.rivals.annual;
+    const leagueAnnual = PRODUCTS.league.annual;
+    const leagueMonthly = PRODUCTS.league.monthly;
+
+    const canUpgradeToLeagueAnnual =
+      userRow.subscriptionStatus === "active" &&
+      plan === "rivals" &&
+      interval === "year";
+
+    return {
+      rivalsAnnualCents: rivalsAnnual.amount,
+      leagueAnnualCents: leagueAnnual.amount,
+      leagueMonthlyCents: leagueMonthly.amount,
+      rivalsToLeagueAnnualUpgradeCents: RIVALS_TO_LEAGUE_ANNUAL_UPGRADE_CENTS,
+      canUpgradeToLeagueAnnual,
+      /** Monthly subscribers pay full annual price — no credit. */
+      monthlyToAnnualChargesFullPrice: interval === "month",
+      currentPlan: plan,
+      currentInterval: interval,
+      leagueCheckoutEnabled: false,
+    };
+  }),
+
   createCheckoutSession: protectedProcedure
-    .input(z.object({ origin: z.string().url() }))
+    .input(checkoutInput)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id;
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
-      // Get or create Stripe customer
       const [userRow] = await db.select().from(users).where(eq(users.id, userId));
       if (!userRow) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
 
-      let customerId = userRow.stripeCustomerId ?? undefined;
-      if (!customerId) {
-        const customer = await stripe.customers.create({
-          email: userRow.email ?? undefined,
-          name: userRow.name ?? undefined,
-          metadata: { userId: userId.toString() },
+      const customerId = await ensureStripeCustomer(userId, userRow);
+
+      if (input.upgradeToLeagueAnnual) {
+        const priceId = userRow.subscriptionPriceId ?? null;
+        const plan = userRow.subscriptionPlan ?? planFromPriceId(priceId);
+        const interval = userRow.subscriptionInterval ?? intervalFromPriceId(priceId);
+        if (
+          userRow.subscriptionStatus !== "active" ||
+          plan !== "rivals" ||
+          interval !== "year"
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Annual upgrade credit applies only to active Rivals annual subscribers.",
+          });
+        }
+        if (!userRow.stripeSubscriptionId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "No active subscription found for upgrade.",
+          });
+        }
+
+        const leagueAnnualPriceId =
+          resolveConfiguredPriceId("league", "year") ??
+          (await resolveStripePriceId(stripe, "league", "year"));
+        if (!leagueAnnualPriceId) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "League annual price not configured. Run pnpm stripe:setup-products.",
+          });
+        }
+
+        const session = await stripe.checkout.sessions.create({
+          customer: customerId,
+          mode: "payment",
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                unit_amount: RIVALS_TO_LEAGUE_ANNUAL_UPGRADE_CENTS,
+                product_data: {
+                  name: "Upgrade to The League (Annual)",
+                  description: `Upgrade from Rivals Annual to The League Annual (+$${(RIVALS_TO_LEAGUE_ANNUAL_UPGRADE_CENTS / 100).toFixed(2)})`,
+                },
+              },
+              quantity: 1,
+            },
+          ],
+          success_url: `${input.origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${input.origin}/settings`,
+          client_reference_id: userId.toString(),
+          metadata: {
+            user_id: userId.toString(),
+            upgrade: "rivals_annual_to_league_annual",
+            league_annual_price_id: leagueAnnualPriceId,
+            subscription_id: userRow.stripeSubscriptionId,
+          },
         });
-        customerId = customer.id;
-          await db.update(users).set({ stripeCustomerId: customerId }).where(eq(users.id, userId));
+
+        if (!session.url) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Stripe did not return a checkout URL" });
+        }
+
+        await recordFunnelEvent({
+          userId,
+          event: "clicked_cta",
+          metadata: { plan: "league", interval: "year", upgrade: true },
+        });
+
+        return { url: session.url };
       }
 
-      // Resolve price ID — from env or fallback to lookup
-      let priceId = ENV.stripePriceIdMonthly || PRODUCTS.gmWarRoom.monthly.priceId;
-      if (!priceId) {
-        // Dynamically look up the price from Stripe if no env var is set
-        const prices = await stripe.prices.list({ active: true, limit: 10 });
-        const found = prices.data.find(
-          (p) => p.unit_amount === PRODUCTS.gmWarRoom.monthly.amount && p.recurring?.interval === "month"
-        );
-        if (found) priceId = found.id;
+      if (input.plan === "league") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "The League checkout opens in Sprint 4. Rivals annual upgrade (+$20) is available for current Rivals annual subscribers.",
+        });
       }
 
+      const priceId =
+        resolveConfiguredPriceId(input.plan, input.interval) ??
+        (await resolveStripePriceId(stripe, input.plan, input.interval));
       if (!priceId) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "No active monthly price configured. Set STRIPE_PRICE_ID_MONTHLY.",
+          message: `No active ${input.plan} ${input.interval} price configured. Run pnpm stripe:setup-products.`,
         });
       }
 
@@ -72,10 +205,26 @@ export const billingRouter = router({
         success_url: `${input.origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${input.origin}/reveal`,
         client_reference_id: userId.toString(),
+        custom_text: {
+          submit: { message: STRIPE_CHECKOUT_COPY.submitMessage },
+        },
+        subscription_data: {
+          description: STRIPE_CHECKOUT_COPY.rivalsSubscriptionDescription,
+          metadata: {
+            app: "fantasy_football_rivals",
+            brand: STRIPE_BRAND.appName,
+            plan: input.plan,
+            interval: input.interval,
+          },
+        },
         metadata: {
           user_id: userId.toString(),
           customer_email: userRow.email ?? "",
           customer_name: userRow.name ?? "",
+          product: "fantasy_football_rivals",
+          plan: input.plan,
+          interval: input.interval,
+          price_id: priceId,
         },
       });
 
@@ -83,16 +232,15 @@ export const billingRouter = router({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Stripe did not return a checkout URL" });
       }
 
-      // Track funnel event: clicked_cta
-      await recordFunnelEvent({ userId, event: "clicked_cta", metadata: { priceId } });
+      await recordFunnelEvent({
+        userId,
+        event: "clicked_cta",
+        metadata: { priceId, plan: input.plan, interval: input.interval },
+      });
 
       return { url: session.url };
     }),
 
-  /**
-   * Returns the current user's subscription status and trial info.
-   * Used by the frontend to show trial banners and paywall states.
-   */
   getSubscriptionStatus: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
@@ -107,20 +255,31 @@ export const billingRouter = router({
     const isTrialExpired = trialStartedAt !== null && trialDaysLeft === 0;
     const currentPeriodEnd = userRow.currentPeriodEnd ? new Date(userRow.currentPeriodEnd).getTime() : null;
 
+    const plan =
+      userRow.subscriptionPlan ??
+      planFromPriceId(userRow.subscriptionPriceId) ??
+      (userRow.subscriptionStatus === "active" ? "rivals" : null);
+    const interval =
+      userRow.subscriptionInterval ?? intervalFromPriceId(userRow.subscriptionPriceId);
+
+    const hasRivalsAccess = hasRivalsIntelligenceEntitlement(userRow);
+    const hasLeagueAccess =
+      userRow.subscriptionStatus === "active" && userRow.subscriptionPlan === "league";
+
     return {
       status: userRow.subscriptionStatus,
+      plan,
+      interval,
       trialDaysLeft,
       isTrialExpired,
       currentPeriodEnd,
-      hasAccess:
-        userRow.subscriptionStatus === "active" ||
-        (userRow.subscriptionStatus === "trialing" && !isTrialExpired),
+      hasAccess: hasRivalsAccess,
+      hasRivalsAccess,
+      hasLeagueAccess,
+      subscriptionPriceId: userRow.subscriptionPriceId ?? null,
     };
   }),
 
-  /**
-   * Create a Stripe Customer Portal session for self-service billing management.
-   */
   createPortalSession: protectedProcedure
     .input(z.object({ origin: z.string().url() }))
     .mutation(async ({ ctx, input }) => {
@@ -133,7 +292,7 @@ export const billingRouter = router({
 
       const session = await stripe.billingPortal.sessions.create({
         customer: userRow.stripeCustomerId,
-        return_url: `${input.origin}/command-center`,
+        return_url: `${input.origin}/settings`,
       });
 
       return { url: session.url };

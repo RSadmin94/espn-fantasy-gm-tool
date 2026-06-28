@@ -17,6 +17,13 @@ export const ENV = {
   oddsApiKey: process.env.THE_ODDS_API_KEY ?? "",
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
-  stripePriceIdMonthly: process.env.STRIPE_PRICE_ID_MONTHLY ?? "",
+  /** Rivals annual ($59.99/yr) — primary checkout price */
+  stripePriceIdAnnual: process.env.STRIPE_PRICE_ID_RIVALS_ANNUAL ?? process.env.STRIPE_PRICE_ID_ANNUAL ?? "",
+  /** Rivals monthly ($5.99/mo) */
+  stripePriceIdMonthly: process.env.STRIPE_PRICE_ID_RIVALS_MONTHLY ?? process.env.STRIPE_PRICE_ID_MONTHLY ?? "",
+  stripePriceIdRivalsAnnual: process.env.STRIPE_PRICE_ID_RIVALS_ANNUAL ?? process.env.STRIPE_PRICE_ID_ANNUAL ?? "",
+  stripePriceIdRivalsMonthly: process.env.STRIPE_PRICE_ID_RIVALS_MONTHLY ?? process.env.STRIPE_PRICE_ID_MONTHLY ?? "",
+  stripePriceIdLeagueAnnual: process.env.STRIPE_PRICE_ID_LEAGUE_ANNUAL ?? "",
+  stripePriceIdLeagueMonthly: process.env.STRIPE_PRICE_ID_LEAGUE_MONTHLY ?? "",
   clerkSecretKey: process.env.CLERK_SECRET_KEY ?? "",
 };

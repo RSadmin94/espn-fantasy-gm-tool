@@ -299,12 +299,13 @@ export function useLeagueHistoryModel() {
       { wins: number; losses: number; ties: number; gamesPlayed: number; winPct: number }
     >();
     for (const row of recordsQ.data?.owners ?? []) {
+      if (row.wins == null || row.losses == null) continue;
       const entry = {
         wins: row.wins,
         losses: row.losses,
-        ties: row.ties,
-        gamesPlayed: row.gamesPlayed,
-        winPct: row.winPct,
+        ties: row.ties ?? 0,
+        gamesPlayed: row.gamesPlayed ?? row.wins + row.losses + (row.ties ?? 0),
+        winPct: row.winPct ?? 0,
       };
       byKey.set(row.ownerKey, entry);
       byKey.set(ownerKeyFromLabel(row.displayName), entry);

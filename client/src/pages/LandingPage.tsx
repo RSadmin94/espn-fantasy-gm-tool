@@ -9,7 +9,6 @@ import { Navigate, useNavigate } from "react-router";
 import { useAuth } from "@clerk/react-router";
 import { cn } from "@/lib/utils";
 import { COMMERCIAL } from "@/lib/commercialCopy";
-import { RivalsProPricingFeatures } from "@/components/commercial/RivalsProPricingFeatures";
 import { ScanLine, ChevronRight, ChevronDown, Check, X, Maximize2 } from "lucide-react";
 
 const PAGEBG: CSSProperties = {
@@ -239,10 +238,10 @@ export function LandingPage() {
         <section id="how-it-works" className="border-t border-white/[0.08] py-14">
           <span className={MONO}>How it works</span>
           <h2 className="mt-3 max-w-[20ch] text-[26px] font-extrabold tracking-tight sm:text-[32px]">
-            Discover first. Understand everything with Rivals Pro.
+            Discover first. Compete smarter with Rivals.
           </h2>
           <p className="mt-2 max-w-[52ch] text-[15px] text-white/55">
-            Free answers <span className="text-white/75">who</span> you are. Rivals Pro answers <span className="text-white/75">why</span> — and what to do about it.
+            Free answers <span className="text-white/75">who</span> you are. Rivals answers <span className="text-white/75">why</span> — and what to do about it.
           </p>
           <ol className="mx-auto mt-8 grid max-w-[780px] gap-4">
             {COMMERCIAL.productStorySteps.map(({ step, title, body }) => (
@@ -262,13 +261,13 @@ export function LandingPage() {
         {/* Pricing */}
         <section className="py-12">
           <span className={MONO}>Pricing</span>
-          <h2 className="mt-3 text-[26px] font-extrabold tracking-tight sm:text-[32px]">Free forever. Complete story with Rivals Pro.</h2>
+          <h2 className="mt-3 text-[26px] font-extrabold tracking-tight sm:text-[32px]">Three tiers. One league story.</h2>
           <p className="mt-2 text-[15px] text-white/55">{COMMERCIAL.landingTagline}</p>
-          <div className="mx-auto mt-7 grid max-w-[780px] grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="mx-auto mt-7 grid max-w-[1100px] grid-cols-1 gap-4 md:grid-cols-3">
             <div className={cn(PANEL, "flex flex-col p-6")}>
               <span className={MONO}>{COMMERCIAL.freePlanName}</span>
               <div className="mt-3 text-[42px] font-black leading-none">$0</div>
-              <p className="mt-2 text-[13px] text-white/50">Always free — discover who you are in your league</p>
+              <p className="mt-2 text-[13px] text-white/50">Discover yourself — identity and league facts</p>
               <ul className="mt-5 flex-1 space-y-2 text-[14px] text-white/75">
                 {COMMERCIAL.freePlanHighlights.map((f) => (
                   <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4 text-white/40" /> {f}</li>
@@ -283,19 +282,34 @@ export function LandingPage() {
                 {COMMERCIAL.foundingOfferLabel}
               </span>
               <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-lime-400">{COMMERCIAL.productName}</span>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-[42px] font-black leading-none">{COMMERCIAL.annualPriceAmount}</span>
-                <span className="text-[16px] font-bold text-white/35 line-through">{COMMERCIAL.annualPriceCompareAt}</span>
-                <span className="text-[14px] text-white/45">{COMMERCIAL.annualPriceSuffix}</span>
-              </div>
-              <p className="mt-2 text-[13px] font-semibold text-lime-300/90">{COMMERCIAL.launchPricingLine}</p>
-              <div className="mt-4 flex-1">
-                <RivalsProPricingFeatures />
-              </div>
+              <div className="mt-3 text-[42px] font-black leading-none">{COMMERCIAL.rivalsAnnualPrice}</div>
+              <p className="mt-1 text-[14px] text-white/45">{COMMERCIAL.rivalsAnnualPriceLabel}</p>
+              <p className="mt-1 text-[13px] text-white/55">or {COMMERCIAL.rivalsMonthlyPriceLabel}</p>
+              <p className="mt-2 text-[13px] font-semibold text-lime-300/90">Competitive intelligence — interpretation + recommendations</p>
+              <ul className="mt-4 flex-1 space-y-2 text-[13px] text-white/75">
+                {COMMERCIAL.rivalsPlanHighlights.map((f) => (
+                  <li key={f} className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-lime-400" /> {f}</li>
+                ))}
+              </ul>
               <CTA label={COMMERCIAL.unlockStoryCta} onClick={go} className="mt-6 w-full" />
             </div>
+            <div className={cn(PANEL, "flex flex-col p-6 opacity-90")}>
+              <span className={MONO}>{COMMERCIAL.leaguePlanName}</span>
+              <div className="mt-3 text-[42px] font-black leading-none">{COMMERCIAL.leagueAnnualPrice}</div>
+              <p className="mt-1 text-[14px] text-white/45">{COMMERCIAL.leagueAnnualPriceLabel}</p>
+              <p className="mt-1 text-[13px] text-white/55">or {COMMERCIAL.leagueMonthlyPriceLabel}</p>
+              <p className="mt-2 text-[13px] font-semibold text-violet-300/90">{COMMERCIAL.leagueComingSoon}</p>
+              <ul className="mt-4 flex-1 space-y-2 text-[13px] text-white/65">
+                {COMMERCIAL.leaguePlanHighlights.map((f) => (
+                  <li key={f} className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-violet-400/70" /> {f}</li>
+                ))}
+              </ul>
+              <button disabled className="mt-6 cursor-not-allowed rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-[14px] font-bold text-white/40">
+                {COMMERCIAL.leagueComingSoon}
+              </button>
+            </div>
           </div>
-          <p className="mt-4 text-[12px] text-white/35">{COMMERCIAL.freemiumForeverLine}.</p>
+          <p className="mt-4 text-[12px] text-white/35">{COMMERCIAL.freemiumForeverLine}</p>
         </section>
 
         {/* Final CTA */}
