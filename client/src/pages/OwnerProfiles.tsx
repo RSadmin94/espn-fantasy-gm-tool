@@ -2155,18 +2155,52 @@ export function OwnerProfiles() {
 
       <div className="flex gap-6">
         <div className="w-72 shrink-0 space-y-2">
-          {active.map((o: any, i: number) => (
-            <OwnerCard
-              key={listRowLookupKey(o) || `active-${i}`}
-              o={o}
-              selected={listRowLookupKey(o) !== "" && selectedOwnerKey === listRowLookupKey(o)}
-              onClick={() => {
-                const id = listRowLookupKey(o);
-                if (id) { setSelectedOwnerKey(id); setTimeout(() => profileRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }
-              }}
-              onLockedClick={startScoutCheckout}
-            />
-          ))}
+          {(() => {
+            const selectAndScroll = (id: string) => {
+              if (id) { setSelectedOwnerKey(id); setTimeout(() => profileRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }
+            };
+            const renderCard = (o: any, key: string) => (
+              <OwnerCard
+                key={key}
+                o={o}
+                selected={listRowLookupKey(o) !== "" && selectedOwnerKey === listRowLookupKey(o)}
+                onClick={() => selectAndScroll(listRowLookupKey(o))}
+                onLockedClick={startScoutCheckout}
+              />
+            );
+
+            if (listGated) {
+              // Free tier: just YOU + YOUR BIGGEST RIVAL, then the unlock CTA.
+              const rows = active as any[];
+              const viewerRow = rows.find((r) => listRowLookupKey(r) === viewerOwnerKey) ?? rows[0] ?? null;
+              const rivalRow = rows.find((r) => r !== viewerRow) ?? null;
+              const totalOwners = Number((listQ.data as any)?.totalOwners ?? rows.length);
+              const remaining = Number((listQ.data as any)?.lockedOwners ?? Math.max(0, totalOwners - rows.length));
+              return (
+                <>
+                  <div className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">You</div>
+                  {viewerRow && renderCard(viewerRow, "gated-you")}
+                  {rivalRow && (
+                    <>
+                      <div className="mt-4 px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#a3e635]">Your Biggest Rival</div>
+                      {renderCard(rivalRow, "gated-rival")}
+                    </>
+                  )}
+                  {remaining > 0 && (
+                    <button
+                      type="button"
+                      onClick={startScoutCheckout}
+                      className="mt-4 w-full rounded-xl border border-[#a3e635]/30 bg-[#a3e635]/[0.06] px-3 py-3 text-center text-xs font-semibold text-[#a3e635] transition-colors hover:bg-[#a3e635]/[0.12]"
+                    >
+                      Unlock the remaining {remaining} owner{remaining !== 1 ? "s" : ""}
+                    </button>
+                  )}
+                </>
+              );
+            }
+
+            return active.map((o: any, i: number) => renderCard(o, listRowLookupKey(o) || `active-${i}`));
+          })()}
 
           {graveyard.length > 0 && (
             <div className="mt-4">

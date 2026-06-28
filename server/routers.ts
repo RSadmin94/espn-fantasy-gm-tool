@@ -6,6 +6,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, subscribedProcedure, router, resolvePremiumAccess } from "./_core/trpc";
 import { gateRivalryScores, gateH2H, gateRivalryDossier, gateHallOfFame, gateOwnerProfile, gateOwnerList, gateTradeAnalyzeResult, gateOwnerAllTimeRecords } from "./leagueIntelGating";
+import { computeBiggestThreat } from "./biggestThreatService";
 import { invokeLLM, type Message } from "./_core/llm";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 import { injuryRouter } from "./injuryRouter";
@@ -12132,6 +12133,21 @@ Provide:
           const resolved = resolveOwnerTeamsForProfile(fullRows, seed);
           return resolved?.profileOwnerKey ?? focal.ownerKey;
         })(),
+        await (async () => {
+          // Biggest rival — single source of truth (same as the Dashboard / me.ownerHome).
+          // We only resolve the rival's canonical ownerKey here; the gating layer redacts.
+          try {
+            const threat = await computeBiggestThreat(userId);
+            const pair = threat.topRivalryPair;
+            if (!pair) return null;
+            const resolved =
+              (pair.rivalId ? resolveOwnerTeamsForProfile(fullRows, `id:${String(pair.rivalId).trim()}`) : null) ??
+              (pair.rivalName ? resolveOwnerTeamsForProfile(fullRows, String(pair.rivalName).trim()) : null);
+            return resolved?.profileOwnerKey ?? null;
+          } catch {
+            return null;
+          }
+        })(),
       );
     }),
 
@@ -12305,11 +12321,25 @@ Provide:
                 }
               : null;
 
-        // Own-profile: basic identity shell only for free users (no draft/trade/scouting).
+        // Free tier shows two profiles in full — the viewer and their biggest
+        // rival (same rival source as the Dashboard). Everyone else stays locked.
         const focalOwner = await resolveCurrentOwner(ctx.user);
         const viewerSeed = (focalOwner.ownerKey || focalOwner.displayName || "").trim();
         const viewerResolved = viewerSeed ? resolveOwnerTeamsForProfile(allGmRows, viewerSeed) : null;
-        const isOwnProfile = !!viewerResolved && viewerResolved.profileOwnerKey === profileOwnerKey;
+        const viewerOwnerKey = viewerResolved?.profileOwnerKey ?? null;
+        const rivalOwnerKey = await (async () => {
+          try {
+            const threat = await computeBiggestThreat(userId);
+            const pair = threat.topRivalryPair;
+            if (!pair) return null;
+            const resolved =
+              (pair.rivalId ? resolveOwnerTeamsForProfile(allGmRows, `id:${String(pair.rivalId).trim()}`) : null) ??
+              (pair.rivalName ? resolveOwnerTeamsForProfile(allGmRows, String(pair.rivalName).trim()) : null);
+            return resolved?.profileOwnerKey ?? null;
+          } catch {
+            return null;
+          }
+        })();
 
         return gateOwnerProfile(
           {
@@ -12320,7 +12350,9 @@ Provide:
             headToHead,
           },
           await resolvePremiumAccess(ctx.user),
-          isOwnProfile,
+          profileOwnerKey,
+          viewerOwnerKey,
+          rivalOwnerKey,
         );
       }),
 

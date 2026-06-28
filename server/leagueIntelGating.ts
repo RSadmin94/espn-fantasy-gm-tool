@@ -260,9 +260,21 @@ export function gateOwnerProfile<
 >(
   payload: T,
   entitled: boolean,
-  isOwnProfile = false,
+  profileOwnerKey: string | null,
+  viewerOwnerKey: string | null,
+  rivalOwnerKey: string | null,
 ): T & { gated: boolean; entitled: boolean; ownProfile: boolean; locked?: boolean } {
-  if (entitled) return { ...payload, gated: false, entitled: true, ownProfile: isOwnProfile };
+  const pk = profileOwnerKey?.trim() || null;
+  const vk = viewerOwnerKey?.trim() || null;
+  const rk = rivalOwnerKey?.trim() || null;
+  const isOwnProfile = !!pk && pk === vk;
+  const isRivalProfile = !!pk && !!rk && pk === rk;
+
+  // Free tier shows two profiles in full: the viewer and their biggest rival
+  // ("Who am I?" + "Who is my rival?"). Everyone else is locked. Pro unlocks all.
+  if (entitled || isOwnProfile || isRivalProfile) {
+    return { ...payload, gated: false, entitled, ownProfile: isOwnProfile };
+  }
 
   const redactedScouting = {
     draftDNA: null,
@@ -276,32 +288,6 @@ export function gateOwnerProfile<
     gated: true as const,
     entitled: false as const,
   };
-
-  if (isOwnProfile) {
-    const snap = payload.snapshot;
-    return {
-      ...payload,
-      ...redactedScouting,
-      snapshot: {
-        seasons: snap?.seasons ?? [],
-        currentTeam: snap?.currentTeam ?? "",
-        championships: snap?.championships ?? 0,
-        runnerUps: 0,
-        thirdPlace: 0,
-        totalWins: 0,
-        totalLosses: 0,
-        totalTies: 0,
-        winPct: 0,
-        champSeasons: [],
-        runnerUpSeasons: [],
-        thirdSeasons: [],
-        bestSeason: null,
-        worstSeason: null,
-        seasonRecords: [],
-      },
-      ownProfile: true,
-    } as T & { gated: boolean; entitled: boolean; ownProfile: boolean };
-  }
 
   return {
     leagueId: (payload as { leagueId?: string }).leagueId,
@@ -633,6 +619,7 @@ export function gateOwnerList<
   },
   entitled: boolean,
   viewerOwnerKey: string | null,
+  rivalOwnerKey: string | null,
 ): GatedOwnerList<
   Array<TRow | ReturnType<typeof ownerListLockedStub> | ReturnType<typeof ownerListPreviewStub>>,
   Array<TRow | ReturnType<typeof ownerListLockedStub> | ReturnType<typeof ownerListPreviewStub>>,
@@ -649,20 +636,29 @@ export function gateOwnerList<
     };
   }
 
-  const previewKey = viewerOwnerKey?.trim() || null;
+  // Free tier: show only the viewer and their biggest rival as full, unmasked
+  // rows. Everyone else — and the Graveyard (league history) — is dropped, not
+  // stubbed. The rival key is resolved upstream and passed in; this layer only
+  // redacts by identity and never looks rivals up itself.
+  const vk = viewerOwnerKey?.trim() || null;
+  const rk = rivalOwnerKey?.trim() || null;
+  const keep = (k: string) => (!!vk && k === vk) || (!!rk && k === rk);
+
+  const activeKept = payload.active.filter((row) => keep(row.ownerKey));
+  const allOwnersKept = payload.allOwners.filter((row) => keep(row.ownerKey));
 
   return {
     leagueId: payload.leagueId,
-    active: payload.active.map((row) => mapOwnerListRow(row, previewKey)),
-    graveyard: payload.graveyard.map((row) => mapOwnerListRow(row, previewKey)),
+    active: activeKept,
+    graveyard: [],
     powerRankings: [],
     ownerAwards: [],
-    allOwners: payload.allOwners.map((row) => mapOwnerListAllOwner(row, previewKey)),
+    allOwners: allOwnersKept,
     canonicalLeagueDebug: payload.canonicalLeagueDebug,
     gated: true,
     entitled: false,
     totalOwners,
-    lockedOwners: previewKey ? Math.max(0, totalOwners - 1) : totalOwners,
+    lockedOwners: Math.max(0, totalOwners - allOwnersKept.length),
   };
 }
 

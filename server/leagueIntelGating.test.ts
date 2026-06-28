@@ -318,19 +318,24 @@ describe("gateOwnerProfile", () => {
     comparisonCandidates: ["Rod"],
   };
 
-  it("returns identity shell only for own profile on free tier", () => {
-    const out = gateOwnerProfile(fullProfile, false, true);
-    expect(out.gated).toBe(true);
+  it("returns the full profile for the viewer on free tier", () => {
+    const out = gateOwnerProfile(fullProfile, false, "id:mark", "id:mark", "id:rod");
+    expect(out.gated).toBe(false);
     expect(out.ownProfile).toBe(true);
-    expect(out.draftDNA).toBeNull();
-    expect(out.scoutingSummary).toBeNull();
-    expect(out.snapshot?.seasonRecords).toEqual([]);
-    expect(out.snapshot?.totalWins).toBe(0);
-    expect(out.snapshot?.championships).toBe(1);
+    expect(out.draftDNA).toEqual({ totalPicks: 50 });
+    expect(out.scoutingSummary).toBe("Aggressive drafter");
+    expect(out.snapshot?.totalWins).toBe(30);
+  });
+
+  it("returns the full profile for the viewer's biggest rival on free tier", () => {
+    const out = gateOwnerProfile(fullProfile, false, "id:rod", "id:mark", "id:rod");
+    expect(out.gated).toBe(false);
+    expect(out.ownProfile).toBe(false);
+    expect(out.draftDNA).toEqual({ totalPicks: 50 });
   });
 
   it("returns locked stub for other owners on free tier", () => {
-    const out = gateOwnerProfile(fullProfile, false, false);
+    const out = gateOwnerProfile(fullProfile, false, "id:other", "id:mark", "id:rod");
     expect(out.gated).toBe(true);
     expect(out.locked).toBe(true);
     expect(out.snapshot).toBeNull();
@@ -344,25 +349,39 @@ describe("gateOwnerList", () => {
     active: [
       { ownerKey: "id:mark", ownerName: "Mark", currentTeam: "A", seasons: [2022], championships: 1, totalWins: 10, totalLosses: 5, winPct: 66 },
       { ownerKey: "id:rod", ownerName: "Rod", currentTeam: "B", seasons: [2022], championships: 0, totalWins: 8, totalLosses: 7, winPct: 53 },
+      { ownerKey: "id:joe", ownerName: "Joe", currentTeam: "C", seasons: [2021], championships: 0, totalWins: 4, totalLosses: 9, winPct: 30 },
     ],
-    graveyard: [],
+    graveyard: [
+      { ownerKey: "id:ghost", ownerName: "Ghost", currentTeam: "", seasons: [2019], championships: 0, totalWins: 1, totalLosses: 12, winPct: 7 },
+    ],
     powerRankings: [{ rank: 1 }],
     ownerAwards: [{ awardName: "MVP" }],
     allOwners: [
       { ownerKey: "id:mark", ownerName: "Mark", seasons: [2022], championships: 1 },
       { ownerKey: "id:rod", ownerName: "Rod", seasons: [2022], championships: 0 },
+      { ownerKey: "id:joe", ownerName: "Joe", seasons: [2021], championships: 0 },
     ],
   };
 
-  it("returns preview row for viewer and locked stubs for others", () => {
-    const out = gateOwnerList(payload, false, "id:mark");
+  it("returns the viewer and their rival as full rows, dropping everyone else", () => {
+    const out = gateOwnerList(payload, false, "id:mark", "id:rod");
     expect(out.gated).toBe(true);
-    expect(out.active[0]).toMatchObject({ ownerKey: "id:mark", preview: true });
-    expect((out.active[0] as Record<string, unknown>).totalWins).toBeUndefined();
-    expect(out.active[1]).toMatchObject({ ownerKey: "id:rod", locked: true });
+    const keys = (out.active as Array<{ ownerKey: string }>).map((r) => r.ownerKey).sort();
+    expect(keys).toEqual(["id:mark", "id:rod"]);
+    const mark = (out.active as Array<Record<string, unknown>>).find((r) => r.ownerKey === "id:mark");
+    expect(mark?.totalWins).toBe(10); // full row, not masked
+    expect(mark?.preview).toBeUndefined();
+    expect(out.graveyard).toEqual([]); // league history hidden on free tier
     expect(out.powerRankings).toEqual([]);
     expect(out.ownerAwards).toEqual([]);
-    expect(out.lockedOwners).toBe(1);
+    expect(out.lockedOwners).toBe(1); // 3 owners total, 2 shown
+  });
+
+  it("passes through everything for entitled users", () => {
+    const out = gateOwnerList(payload, true, "id:mark", "id:rod");
+    expect(out.gated).toBe(false);
+    expect(out.active).toHaveLength(3);
+    expect(out.lockedOwners).toBe(0);
   });
 });
 
