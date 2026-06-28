@@ -377,9 +377,15 @@ function ScoutingLock({ title, blurb, onUnlock, pending }: { title: string; blur
   );
 }
 
-function OwnerCard({ o, selected, onClick }: { o: any; selected: boolean; onClick: () => void }) {
+function OwnerCard({ o, selected, onClick, onLockedClick }: { o: any; selected: boolean; onClick: () => void; onLockedClick?: () => void }) {
+  const isLocked = Boolean(o.locked);
+  const isPreview = Boolean(o.preview);
   return (
-    <button type="button" onClick={onClick} className="w-full text-left">
+    <button
+      type="button"
+      onClick={isLocked ? onLockedClick ?? onClick : onClick}
+      className="w-full text-left"
+    >
       <IntelPanel
         variant="warm"
         className={cn(
@@ -387,23 +393,40 @@ function OwnerCard({ o, selected, onClick }: { o: any; selected: boolean; onClic
           selected
             ? "border-[#a3e635]/50 ring-1 ring-[#a3e635]/25 shadow-[0_0_24px_-10px_rgba(139,92,246,0.35)]"
             : "hover:border-[#a3e635]/25 hover:bg-white/[0.03]",
+          isLocked && "opacity-80",
         )}
       >
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="font-bold text-sm text-[#f3f8ff]">{o.ownerName}</p>
-          <p className="text-xs text-[#8b97a8] mt-0.5">{o.currentTeam}</p>
+          {!isLocked && o.currentTeam ? (
+            <p className="text-xs text-[#8b97a8] mt-0.5">{o.currentTeam}</p>
+          ) : null}
         </div>
         <div className="flex gap-1 flex-wrap justify-end">
-          {num(o.championships) > 0 && <Badge color="gold">🏆 {num(o.championships)}</Badge>}
-          {num(o.runnerUps)     > 0 && <Badge color="silver">🥈 {num(o.runnerUps)}</Badge>}
+          {isLocked ? (
+            <Badge color="silver">Locked</Badge>
+          ) : (
+            <>
+              {num(o.championships) > 0 && <Badge color="gold">🏆 {num(o.championships)}</Badge>}
+              {num(o.runnerUps) > 0 && <Badge color="silver">🥈 {num(o.runnerUps)}</Badge>}
+            </>
+          )}
         </div>
       </div>
-      <div className="mt-2 flex gap-3 text-xs text-zinc-500">
-        <span>{num(o.totalWins)}–{num(o.totalLosses)}</span>
-        <span>{pct(num(o.winPct))} win</span>
-        <span>{Array.isArray(o.seasons) ? o.seasons.length : 0} season{(Array.isArray(o.seasons) ? o.seasons.length : 0) !== 1 ? "s" : ""}</span>
-      </div>
+      {!isLocked ? (
+        <div className="mt-2 flex gap-3 text-xs text-zinc-500">
+          {!isPreview && (
+            <>
+              <span>{num(o.totalWins)}–{num(o.totalLosses)}</span>
+              <span>{pct(num(o.winPct))} win</span>
+            </>
+          )}
+          <span>{Array.isArray(o.seasons) ? o.seasons.length : 0} season{(Array.isArray(o.seasons) ? o.seasons.length : 0) !== 1 ? "s" : ""}</span>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-zinc-500">Unlock Rivals Pro to scout this manager.</p>
+      )}
       </IntelPanel>
     </button>
   );
@@ -869,7 +892,8 @@ function ProfilePanel({
 
   const gated = Boolean(p?.gated);
   const ownProfile = Boolean(p?.ownProfile);
-  const draftUnlocked = !gated || ownProfile;
+  const profileLocked = Boolean(p?.locked);
+  const draftUnlocked = !gated;
   const scoutCheckout = trpc.billing.createCheckoutSession.useMutation({
     onSuccess: (r) => {
       if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
@@ -983,6 +1007,19 @@ function ProfilePanel({
             <span className="text-muted-foreground">available ownerKeys (from list):</span> {availableOwnerKeysCount}
           </div>
         </div>
+      </IntelPanel>
+    );
+  }
+
+  if (profileLocked) {
+    return (
+      <IntelPanel variant="warm" className="scroll-mt-24 overflow-hidden p-6 sm:p-8">
+        <ScoutingLock
+          title={`${headerDisplayName}'s GM Profile`}
+          blurb="Scout how this manager drafts, trades, and builds rosters — unlock Rivals Pro for the full scouting report."
+          onUnlock={startScoutCheckout}
+          pending={scoutCheckout.isPending}
+        />
       </IntelPanel>
     );
   }
@@ -1239,15 +1276,10 @@ function ProfilePanel({
       {/* ── 2. GM Profile ──────────────────────────────────────────────────── */}
       <IntelPanel id="dossier-gm" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
         <DossierSectionHeader icon={<Dna className="h-4 w-4" />} title="GM Profile" />
-        {gated && !ownProfile ? (
-          <ScoutingLock title="GM Profile" blurb="Owner DNA, Draft DNA, and Activity DNA for this manager." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
+        {gated ? (
+          <ScoutingLock title="GM Profile" blurb="Draft DNA, trade tendencies, activity patterns, and matchup intel unlock with Rivals Pro." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
         ) : (
           <div className="space-y-4">
-            {gated && ownProfile && (
-              <div className="rounded-xl border border-[#a3e635]/25 bg-[#a3e635]/[0.05] px-4 py-2.5 text-[12px] text-zinc-300">
-                <span className="font-semibold text-[#a3e635]">Your Draft DNA is free.</span> Keeper, Activity, and Matchup Intel unlock with Rivals Pro.
-              </div>
-            )}
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Owner DNA</p>
@@ -1260,9 +1292,7 @@ function ProfilePanel({
                 <StatRow label="Top positions" value={mostDraftedPos.slice(0, 3).join(" › ") || "—"} />
               </div>
             </div>
-            {!gated ? <ActivityDnaCard ownerKey={profileLookupKey} /> : ownProfile ? (
-              <ScoutingLock title="Activity DNA" blurb="In-season management archetypes and transaction patterns." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
-            ) : null}
+            <ActivityDnaCard ownerKey={profileLookupKey} />
           </div>
         )}
       </IntelPanel>
@@ -1281,11 +1311,6 @@ function ProfilePanel({
       )}
       {draftUnlocked && (
         <div className="space-y-4">
-          {gated && ownProfile && (
-            <div className="rounded-xl border border-[#a3e635]/25 bg-[#a3e635]/[0.05] px-4 py-2.5 text-[12px] leading-relaxed text-zinc-300">
-              <span className="font-semibold text-[#a3e635]">Your Draft DNA is free.</span> Keeper, Activity, Matchup Intel and the Scouting Summary unlock with Rivals Pro.
-            </div>
-          )}
           <ProfileShellCard title="Draft tendencies by round">
             {draftSeasonsCovered.length > 0 && (
               <p className="mb-3 text-[11px] text-zinc-500">Drafts analyzed: <span className="font-semibold text-zinc-300">{draftSeasonsCovered[0]}{draftSeasonsCovered.length > 1 ? `-${draftSeasonsCovered[draftSeasonsCovered.length - 1]}` : ""}</span> ({draftSeasonsCovered.length} season{draftSeasonsCovered.length === 1 ? "" : "s"})</p>
@@ -1941,6 +1966,18 @@ export function OwnerProfiles() {
     staleTime: 60_000,
     enabled: leagueKeyReady,
   });
+  const listGated = Boolean(listQ.data?.gated);
+  const scoutCheckout = trpc.billing.createCheckoutSession.useMutation({
+    onSuccess: (r) => {
+      if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
+      else toast.error("Checkout did not return a link. Try again or contact support.");
+    },
+    onError: (err) => toast.error(err.message || "Could not start checkout. Please try again."),
+  });
+  const startScoutCheckout = () => {
+    if (typeof window === "undefined") return;
+    scoutCheckout.mutate({ origin: window.location.origin });
+  };
 
   const [selectedOwnerKey, setSelectedOwnerKey] = useState<string | null>(null);
   const [showGraveyard, setShowGraveyard] = useState(false);
@@ -2012,6 +2049,18 @@ export function OwnerProfiles() {
   const profileShouldRender = profileKeyValid;
 
   const availableOwnerKeysCount = ownerListHydrated ? currentLeagueOwnerKeys.size : 0;
+
+  const viewerOwnerKey = useMemo(() => {
+    const fromHome = ownerHomeQ.data?.owner?.ownerKey;
+    if (fromHome) return String(fromHome).trim();
+    const preview = active.find((o: any) => o.preview);
+    return preview ? listRowLookupKey(preview) : null;
+  }, [ownerHomeQ.data?.owner?.ownerKey, active]);
+
+  useEffect(() => {
+    if (!ownerListHydrated || !listGated || !viewerOwnerKey) return;
+    if (!selectedOwnerKey) setSelectedOwnerKey(viewerOwnerKey);
+  }, [ownerListHydrated, listGated, viewerOwnerKey, selectedOwnerKey]);
 
   useEffect(() => {
     if (!ownerListHydrated) return;
@@ -2090,9 +2139,19 @@ export function OwnerProfiles() {
         icon={Users}
         iconAccent="purple"
         title="My GM Profile"
-        subtitle={`${active.length} active manager${active.length !== 1 ? "s" : ""} — unified scouting report per owner`}
+        subtitle={
+          listGated
+            ? "Your identity preview — unlock Rivals Pro to scout every manager in your league."
+            : `${active.length} active manager${active.length !== 1 ? "s" : ""} — unified scouting report per owner`
+        }
         className="mb-5"
       />
+
+      {listGated ? (
+        <IntelPanel variant="warm" className="mb-4 border-[#a3e635]/20 bg-[#a3e635]/[0.04] px-4 py-3 text-sm text-zinc-300">
+          Free includes your basic profile and locked previews of other managers. Upgrade to unlock full GM scouting reports.
+        </IntelPanel>
+      ) : null}
 
       <div className="flex gap-6">
         <div className="w-72 shrink-0 space-y-2">
@@ -2105,6 +2164,7 @@ export function OwnerProfiles() {
                 const id = listRowLookupKey(o);
                 if (id) { setSelectedOwnerKey(id); setTimeout(() => profileRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }
               }}
+              onLockedClick={startScoutCheckout}
             />
           ))}
 

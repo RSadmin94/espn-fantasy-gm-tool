@@ -407,7 +407,7 @@ export function RivalryCenter() {
   }, [open]);
 
   const openDossier = (p: Pair) => {
-    if (p.locked) {
+    if (p.locked || rivalryGated) {
       startCheckout();
       return;
     }
@@ -514,12 +514,12 @@ export function RivalryCenter() {
                       {rodName} <span style={{ color: MUTED }}>vs</span>{" "}
                       <span style={{ color: ACCENT }}>{String(hero.rivalName ?? "Rival")}</span>
                     </h3>
-                    {hero.revengeAchieved === false && n(hero.playoffEliminations) > 0 && (
+                    {hero.revengeAchieved === false && !rivalryGated && n(hero.playoffEliminations) > 0 && (
                       <span className="mt-2 inline-block text-[11px] font-bold uppercase tracking-wider" style={{ color: RED }}>
                         Revenge pending
                       </span>
                     )}
-                    {hero.loreSentence && (
+                    {!rivalryGated && hero.loreSentence && (
                       <p className="mt-3 max-w-xl text-[15px] leading-relaxed" style={{ color: "color-mix(in oklch, var(--color-foreground) 80%, transparent)" }}>
                         {hero.loreSentence}
                       </p>
@@ -982,13 +982,11 @@ export function RivalryCenter() {
 function HeroStrip({ p, gated, yearsActive }: { p: Pair; gated?: boolean; yearsActive?: number | null }) {
   if (gated) {
     const cellsFree: Array<[string, string]> = [
-      ["Years Active", yearsActive && yearsActive > 0 ? `${yearsActive} seasons` : "-"],
-      ["Playoff Eliminations", String(n(p.playoffEliminations))],
-      ["Last Meeting", p.lastMatchupSeason != null ? String(p.lastMatchupSeason) : "-"],
-      ["Severity", String(HEAT[String(p.heatLabel ?? "")]?.label ?? p.heatLabel ?? "-")],
+      ["Rivalry Score", p.rivalryScore != null ? String(n(p.rivalryScore)) : "-"],
+      ["Heat", String(HEAT[String(p.heatLabel ?? "")]?.label ?? p.heatLabel ?? "-")],
     ];
     return (
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2">
         {cellsFree.map(([k, v], i) => (
           <div key={i} className={cn(SUB_CLASS, "px-3 py-3")}>
             <div className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: MUTED }}>{k}</div>

@@ -90,6 +90,19 @@ export type GatedRivalries = {
   lockedRivalries: number;
 };
 
+/** Free-tier rivalry preview — name + heat/score only; no H2H, ledger, or behavioral fields. */
+function rivalryPreviewStub(p: Record<string, unknown>): Record<string, unknown> {
+  return {
+    rivalId: p.rivalId,
+    rivalName: p.rivalName,
+    rivalryScore: p.rivalryScore,
+    heatLabel: p.heatLabel,
+    focalKey: p.focalKey,
+    rivalKey: p.rivalKey,
+    preview: true,
+  };
+}
+
 /** Visible-but-locked rivalry stub — name + heat/score only; no deep H2H or behavioral intel. */
 function rivalryLockedStub(p: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -105,14 +118,14 @@ function rivalryLockedStub(p: Record<string, unknown>): Record<string, unknown> 
 
 export function gateRivalryScores(scores: Record<string, unknown>[], entitled: boolean): GatedRivalries {
   const total = scores.length;
-  if (entitled || total <= 1) {
+  if (entitled || total === 0) {
     return { rivalries: scores, gated: false, entitled, totalRivalries: total, lockedRivalries: 0 };
   }
   const sorted = [...scores].sort(
     (a, b) => (Number(b.rivalryScore) || 0) - (Number(a.rivalryScore) || 0),
   );
   return {
-    rivalries: [sorted[0], ...sorted.slice(1).map(rivalryLockedStub)],
+    rivalries: [rivalryPreviewStub(sorted[0]), ...sorted.slice(1).map(rivalryLockedStub)],
     gated: true,
     entitled: false,
     totalRivalries: total,
@@ -213,16 +226,28 @@ export function gateLeagueDna<
 }
 
 // --- Owner Profiles gating ---------------------------------------------------
-// Free = the Owner Card: identity + public record (snapshot: career record, win %,
-// titles, best/worst season, season-by-season). Paid = the Scouting Report: how an
-// owner drafts, keeps, and trades, the matchup-intel exploit data, the scouting
-// writeup, and the head-to-head Compare tool. Scouting OTHER owners is the competitive
-// weapon, so the deep fields are redacted server-side for free users (not just hidden).
-// Exception: on the viewer's OWN profile, Draft DNA is free (their own Proof, like the
-// League DNA archetype); the rest of the Scouting Report stays paid. `isOwnProfile` is
-// resolved server-side by matching the viewer's focal owner to the requested profile.
+// Free = viewer's own basic identity shell only (name, team, seasons, titles).
+// Other owners = locked name stubs. No draft/trade/evidence/tendency/scouting data.
 export function gateOwnerProfile<
   T extends {
+    ownerName: string;
+    snapshot?: {
+      seasons?: number[];
+      currentTeam?: string;
+      championships?: number;
+      runnerUps?: number;
+      thirdPlace?: number;
+      totalWins?: number;
+      totalLosses?: number;
+      totalTies?: number;
+      winPct?: number;
+      champSeasons?: unknown[];
+      runnerUpSeasons?: unknown[];
+      thirdSeasons?: unknown[];
+      bestSeason?: unknown;
+      worstSeason?: unknown;
+      seasonRecords?: unknown[];
+    };
     draftDNA: unknown;
     keeperDNA: unknown;
     activityDNA: unknown;
@@ -230,42 +255,62 @@ export function gateOwnerProfile<
     matchupIntel: unknown;
     comparison: unknown;
     headToHead: unknown;
+    comparisonCandidates?: unknown[];
   },
 >(
   payload: T,
   entitled: boolean,
   isOwnProfile = false,
-): T & { gated: boolean; entitled: boolean; ownProfile: boolean } {
+): T & { gated: boolean; entitled: boolean; ownProfile: boolean; locked?: boolean } {
   if (entitled) return { ...payload, gated: false, entitled: true, ownProfile: isOwnProfile };
-  if (isOwnProfile) {
-    // Own profile: keep Draft DNA, redact the rest of the Scouting Report.
-    return {
-      ...payload,
-      keeperDNA: null,
-      activityDNA: null,
-      scoutingSummary: null,
-      matchupIntel: [],
-      comparison: null,
-      headToHead: null,
-      gated: true,
-      entitled: false,
-      ownProfile: true,
-    } as T & { gated: boolean; entitled: boolean; ownProfile: boolean };
-  }
-  // Another owner: redact the entire Scouting Report (Draft DNA included).
-  return {
-    ...payload,
+
+  const redactedScouting = {
     draftDNA: null,
     keeperDNA: null,
     activityDNA: null,
     scoutingSummary: null,
-    matchupIntel: [],
+    matchupIntel: [] as unknown[],
     comparison: null,
     headToHead: null,
-    gated: true,
-    entitled: false,
+    comparisonCandidates: [] as unknown[],
+    gated: true as const,
+    entitled: false as const,
+  };
+
+  if (isOwnProfile) {
+    const snap = payload.snapshot;
+    return {
+      ...payload,
+      ...redactedScouting,
+      snapshot: {
+        seasons: snap?.seasons ?? [],
+        currentTeam: snap?.currentTeam ?? "",
+        championships: snap?.championships ?? 0,
+        runnerUps: 0,
+        thirdPlace: 0,
+        totalWins: 0,
+        totalLosses: 0,
+        totalTies: 0,
+        winPct: 0,
+        champSeasons: [],
+        runnerUpSeasons: [],
+        thirdSeasons: [],
+        bestSeason: null,
+        worstSeason: null,
+        seasonRecords: [],
+      },
+      ownProfile: true,
+    } as T & { gated: boolean; entitled: boolean; ownProfile: boolean };
+  }
+
+  return {
+    leagueId: (payload as { leagueId?: string }).leagueId,
+    ownerName: payload.ownerName,
+    locked: true,
+    ...redactedScouting,
+    snapshot: null,
     ownProfile: false,
-  } as T & { gated: boolean; entitled: boolean; ownProfile: boolean };
+  } as unknown as T & { gated: boolean; entitled: boolean; ownProfile: boolean; locked: boolean };
 }
 
 
@@ -471,7 +516,7 @@ export function gateTradeAnalyzeResult(
 // Free = Cold Open teaser only (one statement, no receipt IDs). Paid = full
 // documentary metadata, statements, and evidence receipts.
 
-const FREE_RIVALRY_STORY_BLOCKS = new Set<StoryBlockKey>(["coldOpen", "taleOfTape"]);
+const FREE_RIVALRY_STORY_BLOCKS = new Set<StoryBlockKey>(["coldOpen"]);
 
 function teaserAvailableBlocks(blocks: StoryBlockKey[]): StoryBlockKey[] {
   return blocks.filter((b) => FREE_RIVALRY_STORY_BLOCKS.has(b));
@@ -548,12 +593,143 @@ export function gateRivalryStoryForOwner(
   return {
     focalOwnerKey,
     stories: [
-      gateRivalryStoryPair(sorted[0], true),
+      gateRivalryStoryPair(sorted[0], false),
       ...sorted.slice(1).map(rivalryStoryLockedStub),
     ],
     gated: true,
     entitled: false,
   };
+}
+
+// --- Owner list gating -------------------------------------------------------
+// Free = viewer's own identity row + locked named stubs for every other owner.
+
+export type GatedOwnerList<TActive, TGraveyard, TAllOwners> = {
+  leagueId: string;
+  active: TActive;
+  graveyard: TGraveyard;
+  powerRankings: unknown[];
+  ownerAwards: unknown[];
+  allOwners: TAllOwners;
+  canonicalLeagueDebug?: unknown;
+  gated: boolean;
+  entitled: boolean;
+  totalOwners: number;
+  lockedOwners: number;
+};
+
+export function gateOwnerList<
+  TRow extends { ownerKey: string; ownerName: string },
+  TAll extends { ownerKey: string; ownerName: string; seasons?: number[]; championships?: number },
+>(
+  payload: {
+    leagueId: string;
+    active: TRow[];
+    graveyard: TRow[];
+    powerRankings: unknown[];
+    ownerAwards: unknown[];
+    allOwners: TAll[];
+    canonicalLeagueDebug?: unknown;
+  },
+  entitled: boolean,
+  viewerOwnerKey: string | null,
+): GatedOwnerList<
+  Array<TRow | ReturnType<typeof ownerListLockedStub> | ReturnType<typeof ownerListPreviewStub>>,
+  Array<TRow | ReturnType<typeof ownerListLockedStub> | ReturnType<typeof ownerListPreviewStub>>,
+  Array<TAll | ReturnType<typeof ownerListAllOwnerLockedStub> | ReturnType<typeof ownerListAllOwnerPreviewStub>>
+> {
+  const totalOwners = payload.allOwners.length;
+  if (entitled) {
+    return {
+      ...payload,
+      gated: false,
+      entitled: true,
+      totalOwners,
+      lockedOwners: 0,
+    };
+  }
+
+  const previewKey = viewerOwnerKey?.trim() || null;
+
+  return {
+    leagueId: payload.leagueId,
+    active: payload.active.map((row) => mapOwnerListRow(row, previewKey)),
+    graveyard: payload.graveyard.map((row) => mapOwnerListRow(row, previewKey)),
+    powerRankings: [],
+    ownerAwards: [],
+    allOwners: payload.allOwners.map((row) => mapOwnerListAllOwner(row, previewKey)),
+    canonicalLeagueDebug: payload.canonicalLeagueDebug,
+    gated: true,
+    entitled: false,
+    totalOwners,
+    lockedOwners: previewKey ? Math.max(0, totalOwners - 1) : totalOwners,
+  };
+}
+
+function ownerListPreviewStub(row: {
+  ownerKey: string;
+  ownerName: string;
+  currentTeam?: string;
+  seasons?: number[];
+  championships?: number;
+}) {
+  return {
+    ownerKey: row.ownerKey,
+    ownerName: row.ownerName,
+    preview: true as const,
+    currentTeam: row.currentTeam ?? "",
+    seasons: row.seasons ?? [],
+    championships: row.championships ?? 0,
+  };
+}
+
+function ownerListLockedStub(row: { ownerKey: string; ownerName: string }) {
+  return {
+    ownerKey: row.ownerKey,
+    ownerName: row.ownerName,
+    locked: true as const,
+  };
+}
+
+function ownerListAllOwnerPreviewStub(row: {
+  ownerKey: string;
+  ownerName: string;
+  seasons?: number[];
+  championships?: number;
+}) {
+  return {
+    ownerKey: row.ownerKey,
+    ownerName: row.ownerName,
+    preview: true as const,
+    seasons: row.seasons ?? [],
+    championships: row.championships ?? 0,
+  };
+}
+
+function ownerListAllOwnerLockedStub(row: { ownerKey: string; ownerName: string }) {
+  return {
+    ownerKey: row.ownerKey,
+    ownerName: row.ownerName,
+    locked: true as const,
+  };
+}
+
+function mapOwnerListRow<
+  T extends { ownerKey: string; ownerName: string; currentTeam?: string; seasons?: number[]; championships?: number },
+>(row: T, viewerOwnerKey: string | null) {
+  if (viewerOwnerKey && row.ownerKey === viewerOwnerKey) {
+    return ownerListPreviewStub(row);
+  }
+  return ownerListLockedStub(row);
+}
+
+function mapOwnerListAllOwner<
+  T extends { ownerKey: string; ownerName: string; seasons?: number[]; championships?: number },
+>(row: T, viewerOwnerKey: string | null) {
+  if (viewerOwnerKey && row.ownerKey === viewerOwnerKey) {
+    return ownerListAllOwnerPreviewStub(row);
+  }
+  return ownerListAllOwnerLockedStub(row);
 }
 
 // --- Deep Records / Dynasty gating -------------------------------------------

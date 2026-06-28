@@ -5,7 +5,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, subscribedProcedure, router, resolvePremiumAccess } from "./_core/trpc";
-import { gateRivalryScores, gateH2H, gateRivalryDossier, gateHallOfFame, gateOwnerProfile, gateTradeAnalyzeResult, gateOwnerAllTimeRecords } from "./leagueIntelGating";
+import { gateRivalryScores, gateH2H, gateRivalryDossier, gateHallOfFame, gateOwnerProfile, gateOwnerList, gateTradeAnalyzeResult, gateOwnerAllTimeRecords } from "./leagueIntelGating";
 import { invokeLLM, type Message } from "./_core/llm";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 import { injuryRouter } from "./injuryRouter";
@@ -12109,20 +12109,30 @@ Provide:
         });
       }
 
-      return {
-        leagueId: lid,
-        active: all.filter((o) => o.seasons.length >= 2).sort((a, b) => b.totalWins - a.totalWins),
-        graveyard: all.filter((o) => o.seasons.length === 1).sort((a, b) => b.seasons[0] - a.seasons[0]),
-        powerRankings,
-        ownerAwards,
-        canonicalLeagueDebug,
-        allOwners: all.map((o) => ({
-          ownerKey: o.ownerKey,
-          ownerName: o.ownerName,
-          seasons: o.seasons,
-          championships: o.championships,
-        })),
-      };
+      return gateOwnerList(
+        {
+          leagueId: lid,
+          active: all.filter((o) => o.seasons.length >= 2).sort((a, b) => b.totalWins - a.totalWins),
+          graveyard: all.filter((o) => o.seasons.length === 1).sort((a, b) => b.seasons[0] - a.seasons[0]),
+          powerRankings,
+          ownerAwards,
+          canonicalLeagueDebug,
+          allOwners: all.map((o) => ({
+            ownerKey: o.ownerKey,
+            ownerName: o.ownerName,
+            seasons: o.seasons,
+            championships: o.championships,
+          })),
+        },
+        await resolvePremiumAccess(ctx.user),
+        await (async () => {
+          const focal = await resolveCurrentOwner({ id: userId });
+          const seed = (focal.ownerKey || focal.displayName || "").trim();
+          if (!seed) return null;
+          const resolved = resolveOwnerTeamsForProfile(fullRows, seed);
+          return resolved?.profileOwnerKey ?? focal.ownerKey;
+        })(),
+      );
     }),
 
     /** Full profile panel: `buildOwnerProfilePayload` in `server/ownerProfileService.ts` (matchup-based RS records). */
@@ -12295,8 +12305,7 @@ Provide:
                 }
               : null;
 
-        // Own-profile carve-out: Draft DNA is free on the viewer's own profile. Match the
-        // viewer's focal owner (resolveCurrentOwner) to the requested profile's canonical key.
+        // Own-profile: basic identity shell only for free users (no draft/trade/scouting).
         const focalOwner = await resolveCurrentOwner(ctx.user);
         const viewerSeed = (focalOwner.ownerKey || focalOwner.displayName || "").trim();
         const viewerResolved = viewerSeed ? resolveOwnerTeamsForProfile(allGmRows, viewerSeed) : null;
