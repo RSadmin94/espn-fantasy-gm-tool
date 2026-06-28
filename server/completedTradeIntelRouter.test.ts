@@ -121,6 +121,11 @@ vi.mock("./completedTradeAuthority", async (importOriginal) => {
   };
 });
 
+vi.mock("./leagueAccess", () => ({
+  assertUserLeagueAccess: vi.fn().mockResolvedValue(undefined),
+  userHasLeagueAccess: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock("./db", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./db")>();
   return {
@@ -188,13 +193,35 @@ describe("completedTradeIntelRouter helpers", () => {
   });
 });
 
+function freeCtx(): TrpcContext {
+  const base = entitledCtx();
+  return {
+    ...base,
+    user: {
+      ...base.user!,
+      subscriptionStatus: "inactive" as const,
+    },
+  };
+}
+
 describe("completedTradeIntelRouter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("ownerTradeHistory returns gated summary for anonymous users", async () => {
+  it("ownerTradeHistory rejects unauthenticated callers", async () => {
     const caller = appRouter.createCaller(anonCtx());
+    await expect(
+      caller.completedTradeIntel.ownerTradeHistory({
+        leagueId: "457622",
+        season: 2026,
+        ownerName: "Rod",
+      }),
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" } satisfies Partial<TRPCError>);
+  });
+
+  it("ownerTradeHistory returns gated summary for free users", async () => {
+    const caller = appRouter.createCaller(freeCtx());
     const result = await caller.completedTradeIntel.ownerTradeHistory({
       leagueId: "457622",
       season: 2026,
@@ -221,8 +248,8 @@ describe("completedTradeIntelRouter", () => {
     expect(result.recentTrades.length).toBeGreaterThan(0);
   });
 
-  it("rivalryTradeLedger returns gated ledger for anonymous users", async () => {
-    const caller = appRouter.createCaller(anonCtx());
+  it("rivalryTradeLedger returns gated ledger for free users", async () => {
+    const caller = appRouter.createCaller(freeCtx());
     const result = await caller.completedTradeIntel.rivalryTradeLedger({
       leagueId: "457622",
       seasons: [2026],
@@ -249,8 +276,8 @@ describe("completedTradeIntelRouter", () => {
     expect(result.ledgerWinnerName).toBe("Rod Sellers");
   });
 
-  it("notoriousTradesReport returns gated count-only payload for anonymous users", async () => {
-    const caller = appRouter.createCaller(anonCtx());
+  it("notoriousTradesReport returns gated count-only payload for free users", async () => {
+    const caller = appRouter.createCaller(freeCtx());
     const result = await caller.completedTradeIntel.notoriousTradesReport({
       leagueId: "457622",
       season: 2026,
@@ -272,7 +299,7 @@ describe("completedTradeIntelRouter", () => {
   });
 
   it("rejects ownerTradeHistory without owner identifier", async () => {
-    const caller = appRouter.createCaller(anonCtx());
+    const caller = appRouter.createCaller(freeCtx());
     await expect(
       caller.completedTradeIntel.ownerTradeHistory({
         leagueId: "457622",
@@ -288,7 +315,7 @@ describe("completedTradeIntelRouter", () => {
     vi.mocked(loadCompletedTradeIntelligence).mockResolvedValueOnce([MOCK_TRADE]);
     vi.mocked(buildRivalryTradeLedger).mockClear();
 
-    const caller = appRouter.createCaller(anonCtx());
+    const caller = appRouter.createCaller(freeCtx());
     await expect(
       caller.completedTradeIntel.rivalryTradeLedger({
         leagueId: "457622",

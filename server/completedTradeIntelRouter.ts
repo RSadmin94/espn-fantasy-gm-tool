@@ -6,7 +6,8 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { router, publicProcedure, resolvePremiumAccess } from "./_core/trpc";
+import { router, protectedProcedure, resolvePremiumAccess } from "./_core/trpc";
+import { assertUserLeagueAccess } from "./leagueAccess";
 import {
   buildNotoriousTradesReport,
   buildOwnerTradeHistory,
@@ -108,9 +109,11 @@ export type RivalryTradeLedgerResponse = RivalryTradeLedger & {
 
 export const completedTradeIntelRouter = router({
   /** Completed trades + lifetime record for one owner. */
-  ownerTradeHistory: publicProcedure
+  ownerTradeHistory: protectedProcedure
     .input(leagueSeasonInput.merge(ownerIdentifierInput))
     .query(async ({ ctx, input }): Promise<OwnerTradeHistoryResponse> => {
+      await assertUserLeagueAccess(ctx.user.id, input.leagueId);
+
       const seasons = resolveSeasons(input);
       const trades = await loadTradesForLeague(input.leagueId, seasons);
       const owner = resolveOwnerIdentifier(trades, input);
@@ -131,7 +134,7 @@ export const completedTradeIntelRouter = router({
     }),
 
   /** Head-to-head completed trade ledger between two owners. */
-  rivalryTradeLedger: publicProcedure
+  rivalryTradeLedger: protectedProcedure
     .input(
       leagueSeasonInput.merge(
         z
@@ -152,6 +155,8 @@ export const completedTradeIntelRouter = router({
       ),
     )
     .query(async ({ ctx, input }): Promise<RivalryTradeLedgerResponse> => {
+      await assertUserLeagueAccess(ctx.user.id, input.leagueId);
+
       const seasons = resolveSeasons(input);
       const trades = await loadTradesForLeague(input.leagueId, seasons);
 
@@ -192,9 +197,11 @@ export const completedTradeIntelRouter = router({
     }),
 
   /** League-level completed trade rankings (biggest fleeces, active pairs, etc.). */
-  notoriousTradesReport: publicProcedure
+  notoriousTradesReport: protectedProcedure
     .input(leagueSeasonInput)
     .query(async ({ ctx, input }) => {
+      await assertUserLeagueAccess(ctx.user.id, input.leagueId);
+
       const seasons = resolveSeasons(input);
       const trades = await loadTradesForLeague(input.leagueId, seasons);
       const report = buildNotoriousTradesReport(trades);

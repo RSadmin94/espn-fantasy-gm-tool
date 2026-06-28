@@ -1079,12 +1079,16 @@ export async function resolveActiveLeagueId(
     inputLeagueId != null && String(inputLeagueId).trim() !== ""
       ? String(inputLeagueId).trim().slice(0, 32)
       : null;
+  const uid = ctx.user?.id ?? undefined;
+
   if (inL) {
+    if (uid != null) {
+      const { assertUserLeagueAccess } = await import("./leagueAccess");
+      await assertUserLeagueAccess(uid, inL);
+    }
     log(inL, "input");
     return { leagueId: inL, source: "input" };
   }
-
-  const uid = ctx.user?.id ?? undefined;
   const syncSeason =
     season != null && Number.isFinite(Number(season)) ? Math.floor(Number(season)) : null;
 

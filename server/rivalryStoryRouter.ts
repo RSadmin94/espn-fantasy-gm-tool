@@ -6,7 +6,8 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { router, publicProcedure, resolvePremiumAccess } from "./_core/trpc";
+import { router, protectedProcedure, resolvePremiumAccess } from "./_core/trpc";
+import { assertUserLeagueAccess } from "./leagueAccess";
 import {
   buildRivalryStoryAuthority,
   buildRivalryStoryForPair,
@@ -68,7 +69,9 @@ async function assertDatabase(): Promise<void> {
 
 export const rivalryStoryRouter = router({
   /** Documentary metadata for one rivalry pair. */
-  pair: publicProcedure.input(pairInput).query(async ({ ctx, input }) => {
+  pair: protectedProcedure.input(pairInput).query(async ({ ctx, input }) => {
+    await assertUserLeagueAccess(ctx.user.id, input.leagueId);
+
     if (input.focalOwnerKey === input.rivalOwnerKey) {
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -95,9 +98,11 @@ export const rivalryStoryRouter = router({
   }),
 
   /** Documentary metadata for all rivals of a focal owner. */
-  forOwner: publicProcedure
+  forOwner: protectedProcedure
     .input(forOwnerInput)
     .query(async ({ ctx, input }) => {
+      await assertUserLeagueAccess(ctx.user.id, input.leagueId);
+
       await assertDatabase();
 
       const storiesByRival = await buildRivalryStoryAuthority({
@@ -113,9 +118,11 @@ export const rivalryStoryRouter = router({
     }),
 
   /** Structured evidence objects for story receipt IDs. */
-  receipts: publicProcedure
+  receipts: protectedProcedure
     .input(receiptsInput)
     .query(async ({ ctx, input }) => {
+      await assertUserLeagueAccess(ctx.user.id, input.leagueId);
+
       if (input.focalOwnerKey === input.rivalOwnerKey) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -162,9 +169,11 @@ export const rivalryStoryRouter = router({
     }),
 
   /** Controlled narrative statements for one rivalry pair. */
-  statements: publicProcedure
+  statements: protectedProcedure
     .input(pairInput)
     .query(async ({ ctx, input }) => {
+      await assertUserLeagueAccess(ctx.user.id, input.leagueId);
+
       if (input.focalOwnerKey === input.rivalOwnerKey) {
         throw new TRPCError({
           code: "BAD_REQUEST",
