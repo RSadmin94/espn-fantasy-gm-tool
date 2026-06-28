@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link, useLocation } from "react-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useOutlet } from "react-router";
 import { useUser, useClerk } from "@clerk/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
@@ -456,7 +456,7 @@ function Sidebar({
   const isMobile = useViewportMobile();
   const { theme, toggle } = useTheme();
   const { hasAccess } = usePremiumAccess();
-  const navGroups = buildSidebarNavGroups(hasAccess);
+  const navGroups = useMemo(() => buildSidebarNavGroups(hasAccess), [hasAccess]);
   const adpMutation = trpc.playerStats.refreshAdpFromEspn.useMutation();
   useEffect(() => {
     if (sessionStorage.getItem("gmwr-adp-refreshed")) return;
@@ -476,12 +476,13 @@ function Sidebar({
   });
 
   useEffect(() => {
+    const groupIds = navGroups.map((g) => g.id);
     if (!isMobile) {
-      setOpenGroups(() => Object.fromEntries(navGroups.map((g) => [g.id, true])));
+      setOpenGroups(Object.fromEntries(groupIds.map((id) => [id, true])));
       return;
     }
-    setOpenGroups(() => Object.fromEntries(navGroups.map((g) => [g.id, false])));
-  }, [isMobile, navGroups]);
+    setOpenGroups(Object.fromEntries(groupIds.map((id) => [id, false])));
+  }, [isMobile, hasAccess]);
 
   return (
     <div className="flex h-full flex-col border-r border-border bg-card">
@@ -636,7 +637,9 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell() {
+  const location = useLocation();
+  const outlet = useOutlet();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [leagueSwitchOverlayDepth, setLeagueSwitchOverlayDepth] = useState(0);
   const bumpLeagueSwitchOverlay = useCallback((delta: 1 | -1) => {
@@ -673,7 +676,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6">{children}</main>
+        <main key={location.pathname} className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
+          {outlet}
+        </main>
       </div>
 
       {leagueSwitchBlocking ? (

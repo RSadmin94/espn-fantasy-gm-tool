@@ -104,11 +104,7 @@ function ProtectedLayout() {
   const { isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return <LoadingSpinner />;
   if (!isSignedIn) return <Navigate to="/sign-in" replace />;
-  return (
-    <AppShell>
-      <Outlet />
-    </AppShell>
-  );
+  return <AppShell />;
 }
 
 // Placeholder page component
