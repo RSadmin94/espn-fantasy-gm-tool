@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { useClerk, useUser } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
+import { setSessionUnlocked } from "@/lib/rivalsProSessionUnlock";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -130,7 +131,7 @@ function ProfileSection() {
             variant="outline"
             size="sm"
             className="gap-1.5 shrink-0"
-            onClick={() => void signOut()}
+            onClick={() => { setSessionUnlocked(false); void signOut(); }}
           >
             <LogOut className="h-3.5 w-3.5" />
             Sign out

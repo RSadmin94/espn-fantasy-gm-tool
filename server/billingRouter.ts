@@ -10,7 +10,7 @@
  * All procedures are protected (require login).
  */
 import { z } from "zod";
-import { protectedProcedure, router, hasRivalsIntelligenceEntitlement } from "./_core/trpc";
+import { protectedProcedure, router, hasRivalsIntelligenceEntitlement, resolvePremiumAccess } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { stripe } from "./stripe/client";
 import {
@@ -278,6 +278,18 @@ export const billingRouter = router({
       hasLeagueAccess,
       subscriptionPriceId: userRow.subscriptionPriceId ?? null,
     };
+  }),
+
+  /**
+   * Session-access claim for already-entitled accounts. Returns whether the
+   * signed-in user is truly entitled per resolvePremiumAccess (paid OR founder
+   * whitelist OR claimed founder owner-identity). The client uses this so an
+   * entitled founder who clicks "Unlock Rivals Pro" flips the UI to full access
+   * for the session instead of being routed to Stripe. Server data gates remain
+   * the real enforcement — this only governs presentation.
+   */
+  claimSessionAccess: protectedProcedure.mutation(async ({ ctx }) => {
+    return { granted: await resolvePremiumAccess(ctx.user) };
   }),
 
   createPortalSession: protectedProcedure

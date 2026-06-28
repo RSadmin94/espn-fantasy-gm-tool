@@ -37,6 +37,7 @@ import { ProductHelpButton, ProductOnboardingProvider } from "@/components/onboa
 import { V1 } from "@/lib/v1Copy";
 import { buildNavGroups, type RouteFeatureEntry } from "@/lib/featureRegistry";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
+import { setSessionUnlocked } from "@/lib/rivalsProSessionUnlock";
 
 type NavEntry =
   | { kind: "link"; label: string; href: string; icon: LucideIcon; locked?: boolean }
@@ -626,7 +627,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => signOut()}
+          onClick={() => { setSessionUnlocked(false); signOut(); }}
           className="gap-2 text-muted-foreground hover:text-foreground"
         >
           <LogOut className="h-4 w-4" />
