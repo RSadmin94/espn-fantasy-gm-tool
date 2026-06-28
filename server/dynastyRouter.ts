@@ -3,12 +3,13 @@
  * Thin wrapper over `computeDynastyPowerRankings`; no logic lives here.
  */
 import { z } from "zod";
-import { router, publicProcedure } from "./_core/trpc";
+import { router, protectedProcedure } from "./_core/trpc";
+import { assertUserLeagueAccess } from "./leagueAccess";
 import { computeDynastyPowerRankings, DYNASTY_BADGE_HI, DYNASTY_BADGE_LO } from "./dynastyPowerRankings";
 
 export const dynastyRouter = router({
   /** Full league board: per-team Now/Later scores, percentiles, and identity badge. */
-  powerRankings: publicProcedure
+  powerRankings: protectedProcedure
     .input(z.object({
       season: z.number().int().default(2026),
       leagueId: z.string().optional(),
@@ -17,6 +18,10 @@ export const dynastyRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       void input.activeLeagueKey;
+      const explicitLeagueId = input.leagueId?.trim();
+      if (explicitLeagueId) {
+        await assertUserLeagueAccess(ctx.user.id, explicitLeagueId);
+      }
       const result = await computeDynastyPowerRankings({
         season: input.season,
         leagueId: input.leagueId,

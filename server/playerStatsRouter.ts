@@ -14,9 +14,14 @@
  *   - Heavy joins capped at 500 rows per call.
  */
 
+import { TRPCError }      from "@trpc/server";
 import { z }              from "zod";
-import { router, publicProcedure } from "./_core/trpc";
+import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { getDb }          from "./db";
+import {
+  assertUserLeagueAccess,
+  resolveAccessibleLeagueIdsForOwnerKey,
+} from "./leagueAccess";
 import {
   gmPlayerRegistry,
   gmWeeklyPlayerStats,
@@ -154,9 +159,17 @@ export const playerStatsRouter = router({
   getCanonicalPlayers: publicProcedure
     .input(GetCanonicalPlayersInput)
     .output(GetCanonicalPlayersOutput)
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { players: [], total: 0, page: input.page, pageSize: input.pageSize };
+
+      const scopedLeagueId = input.leagueId?.trim();
+      if (scopedLeagueId) {
+        if (!ctx.user?.id) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Please login (10001)" });
+        }
+        await assertUserLeagueAccess(ctx.user.id, scopedLeagueId);
+      }
 
       const conditions: ReturnType<typeof eqDrizzle>[] = [];
 
@@ -338,7 +351,7 @@ export const playerStatsRouter = router({
   // Per-owner per-season weekly fantasy performance.
   // Optional week filter. Capped at 200 rows. No fabricated stats.
 
-  getWeeklyStatsByOwner: publicProcedure
+  getWeeklyStatsByOwner: protectedProcedure
     .input(GetWeeklyStatsByOwnerInput)
     .output(z.object({
       rows: z.array(z.object({
@@ -357,41 +370,46 @@ export const playerStatsRouter = router({
       })),
       totalRows: z.number(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { rows: [], totalRows: 0 };
 
-      const conds: any[] = [
-        eqDrizzle(gmWeeklyPlayerStats.ownerKey, input.ownerKey),
-        eqDrizzle(gmWeeklyPlayerStats.season, input.season),
-        // Only return rows with source confidence >= 85 (proven data)
-        gteDrizzle(gmWeeklyPlayerStats.sourceConfidence, 85),
-      ];
-      if (input.week !== undefined) {
-        conds.push(eqDrizzle(gmWeeklyPlayerStats.week, input.week));
-      }
+      const allowedLeagueIds = await resolveAccessibleLeagueIdsForOwnerKey(ctx.user.id, input.ownerKey);
+      const leagueIn = sql.join(allowedLeagueIds.map((lid) => sql`${lid}`), sql`, `);
+      const weekClause =
+        input.week !== undefined ? sql`AND w.week = ${input.week}` : sql``;
 
-      const rows = await db
-        .select({
-          playerId:         gmWeeklyPlayerStats.playerId,
-          fullName:         gmPlayerRegistry.fullName,
-          position:         gmPlayerRegistry.position,
-          season:           gmWeeklyPlayerStats.season,
-          week:             gmWeeklyPlayerStats.week,
-          pointsScored:     gmWeeklyPlayerStats.pointsScored,
-          rosterSlotId:     gmWeeklyPlayerStats.rosterSlotId,
-          isStarter:        gmWeeklyPlayerStats.isStarter,
-          ownerKey:         gmWeeklyPlayerStats.ownerKey,
-          teamId:           gmWeeklyPlayerStats.teamId,
-          source:           gmWeeklyPlayerStats.source,
-          sourceConfidence: gmWeeklyPlayerStats.sourceConfidence,
-        })
-        .from(gmWeeklyPlayerStats)
-        .innerJoin(gmPlayerRegistry, eqDrizzle(gmWeeklyPlayerStats.playerId, gmPlayerRegistry.id))
-        .where(andDrizzle(...conds))
-        .orderBy(ascDrizzle(gmWeeklyPlayerStats.week), descDrizzle(gmWeeklyPlayerStats.pointsScored))
-        .limit(input.limit)
-        .offset(input.offset);
+      const rawRows = (await db.execute(sql`
+        SELECT
+          w.playerId AS playerId,
+          r.fullName AS fullName,
+          r.position AS position,
+          w.season AS season,
+          w.week AS week,
+          w.pointsScored AS pointsScored,
+          w.rosterSlotId AS rosterSlotId,
+          w.isStarter AS isStarter,
+          w.ownerKey AS ownerKey,
+          w.teamId AS teamId,
+          w.source AS source,
+          w.sourceConfidence AS sourceConfidence
+        FROM gm_weekly_player_stats w
+        INNER JOIN gm_player_registry r ON r.id = w.playerId
+        INNER JOIN teams t
+          ON t.leagueId IN (${leagueIn})
+         AND t.season = w.season
+         AND t.teamId = w.teamId
+         AND UPPER(REPLACE(REPLACE(REPLACE(t.ownerId, '{', ''), '}', ''), '-', ''))
+           = UPPER(REPLACE(REPLACE(REPLACE(w.ownerKey, '{', ''), '}', ''), '-', ''))
+        WHERE w.season = ${input.season}
+          AND w.sourceConfidence >= 85
+          ${weekClause}
+        ORDER BY w.week ASC, w.pointsScored DESC
+        LIMIT ${input.limit}
+        OFFSET ${input.offset}
+      `)) as unknown as [{ playerId: number; fullName: string; position: string; season: number; week: number; pointsScored: number; rosterSlotId: number; isStarter: number | boolean; ownerKey: string; teamId: number | null; source: string; sourceConfidence: number }[]];
+
+      const rows = (Array.isArray(rawRows[0]) ? rawRows[0] : rawRows) as typeof rawRows[0];
 
       return {
         rows: rows.map(r => ({
@@ -410,7 +428,7 @@ export const playerStatsRouter = router({
   // Only uses proven weekly stats (sourceConfidence >= 85).
   // Does NOT fabricate data for picks with no matching weekly stats.
 
-  getDraftPickPerformance: publicProcedure
+  getDraftPickPerformance: protectedProcedure
     .input(GetDraftPickPerformanceInput)
     .output(z.array(z.object({
       playerName:        z.string(),
@@ -425,12 +443,14 @@ export const playerStatsRouter = router({
       avgPointsPerStart: z.number().nullable(),
       hasStats:          z.boolean(),
     })))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
 
-      const leagueId = input.leagueId;
+      const leagueId = input.leagueId?.trim();
       if (!leagueId) return [];
+
+      await assertUserLeagueAccess(ctx.user.id, leagueId);
 
       // Step 1: Get draft picks for the season
       const picks = await db
