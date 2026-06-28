@@ -4,6 +4,9 @@ import { trpc } from "@/lib/trpc";
 import { useFunnel } from "@/lib/funnel";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
+import { COMMERCIAL } from "@/lib/commercialCopy";
+import { resolvePaywallCopy } from "@/lib/paywallCopy";
+import { setLastFreeFeature } from "@/lib/lastFreeFeature";
 import {
   Dna, Users, TrendingUp, AlertTriangle, ChevronRight, Loader2,
   Trophy, Repeat2, Boxes, Crown,
@@ -44,6 +47,10 @@ export function LeagueDna() {
   const data = q.data;
   /** Server: `gateLeagueDna(..., hasPremiumAccess(ctx.user))` — founders + subscribers get full dossier. */
   const showPaywall = Boolean(data?.gated === true && data?.entitled !== true);
+  const dnaPaywallCopy = resolvePaywallCopy(
+    "Understand why your GM philosophy wins or loses",
+    "Your archetype and blind spot are free — the who. Rivals Pro explains why your draft, trade, and roster DNA succeed or cost you titles.",
+  );
 
   const checkout = trpc.billing.createCheckoutSession.useMutation({
     onSuccess: (r) => {
@@ -62,6 +69,7 @@ export function LeagueDna() {
   useEffect(() => {
     if (!snap.current && data) {
       snap.current = true;
+      setLastFreeFeature("league_dna");
       track("league_dna_viewed", { eventType: "page_view", page: "league-dna" });
       track("dna_snapshot_viewed", { eventType: "feature_open", page: "league-dna" });
     }
@@ -216,10 +224,9 @@ export function LeagueDna() {
             {showPaywall ? (
               <div style={PANEL} className="p-6 md:p-8 text-center">
                 <Dna className="mx-auto mb-3 h-8 w-8" style={{ color: ACCENT }} />
-                <h3 className="text-2xl font-black">Unlock your full DNA dossier</h3>
+                <h3 className="text-2xl font-black">{dnaPaywallCopy.heading}</h3>
                 <p className="mx-auto mt-2 max-w-lg text-sm" style={{ color: MUTED }}>
-                  Your archetype, blind spot and League Twin are free. The full breakdown - Draft DNA, Trade DNA,
-                  Roster DNA, how you differ from champions, and every blind spot - unlocks with Rivals Pro.
+                  {dnaPaywallCopy.description}
                 </p>
                 <button
                   onClick={startCheckout}
@@ -227,7 +234,7 @@ export function LeagueDna() {
                   className="mt-5 inline-flex items-center gap-2 rounded-[10px] px-6 py-3 text-sm font-extrabold disabled:opacity-60"
                   style={{ background: ACCENT, color: "#1e1623" }}
                 >
-                  {checkout.isPending ? "Opening..." : "Unlock Full DNA"} <ChevronRight className="h-4 w-4" />
+                  {checkout.isPending ? COMMERCIAL.upgradeCtaPending : COMMERCIAL.upgradeCtaUnderstandWhy} <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
             ) : (

@@ -42,6 +42,7 @@ import {
 import { RivalryDossierPanel, type RivalryPickerOption } from "@/components/RivalryDossierPanel";
 import { ActivityDnaCard } from "@/components/ActivityDnaCard";
 import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
+import { setLastFreeFeature } from "@/lib/lastFreeFeature";
 import {
   Collapsible,
   CollapsibleContent,
@@ -881,7 +882,7 @@ function ProfilePanel({
   const scoutLog = (trpc as any).usageMonitor.logUIEvent.useMutation();
   const scoutSnapSeen = useRef(false);
   const scoutPaySeen = useRef(false);
-  useEffect(() => { if (!scoutSnapSeen.current && p) { scoutSnapSeen.current = true; scoutLog.mutate({ eventType: "feature_open", featureName: "owner_profile_snapshot_viewed" }); } }, [p]);
+  useEffect(() => { if (!scoutSnapSeen.current && p) { scoutSnapSeen.current = true; setLastFreeFeature("owner_profile"); scoutLog.mutate({ eventType: "feature_open", featureName: "owner_profile_snapshot_viewed" }); } }, [p]);
   useEffect(() => { if (gated && !scoutPaySeen.current) { scoutPaySeen.current = true; scoutLog.mutate({ eventType: "feature_open", featureName: "owner_profile_paywall_viewed" }); } }, [gated]);
   const startScoutCheckout = () => {
     if (typeof window === "undefined") return;

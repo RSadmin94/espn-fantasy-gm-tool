@@ -7,6 +7,7 @@ import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { COMMERCIAL } from "@/lib/commercialCopy";
+import { setLastFreeFeature } from "@/lib/lastFreeFeature";
 import { V1 } from "@/lib/v1Copy";
 import { Loader2, Trophy, Medal, Crown, Landmark, ChevronDown, Skull, ArrowLeftRight, ScrollText, History, Archive, BookOpen } from "lucide-react";
 import {
@@ -599,6 +600,7 @@ export function HallOfFame() {
   useEffect(() => {
     if (!hofSnapLogged.current && hofQ.data) {
       hofSnapLogged.current = true;
+      setLastFreeFeature("hall_of_fame");
       hofLog.mutate({ eventType: "feature_open", featureName: "hof_snapshot_viewed" });
     }
   }, [hofQ.data]);

@@ -2,6 +2,9 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { COMMERCIAL } from "@/lib/commercialCopy";
+import { resolvePaywallCopy } from "@/lib/paywallCopy";
+import { setLastFreeFeature } from "@/lib/lastFreeFeature";
 import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import {
   Loader2, HelpCircle, Trophy, Target, TrendingDown, TrendingUp, Swords, Crown, Calendar, ShoppingCart,
@@ -192,6 +195,12 @@ export function WhyHaventIWon() {
     return fn ? patterns.filter((p: { id?: string }) => fn(String(p.id ?? ""))) : [];
   };
   const isWin = data?.mode === "why-you-won" || data?.mode === "why-you-broke-through";
+  const whyPaywallCopy = resolvePaywallCopy(
+    data?.lockedReasons && data.lockedReasons > 0
+      ? `You're seeing 1 of ${data.totalReasons} reasons. ${data.lockedReasons} more are locked.`
+      : "Your full Championship Report is locked.",
+    "You know enough to be curious. Unlock why you haven't won — every ranked factor, your Championship Readiness score, positional gaps vs league champions, and your Title Path.",
+  );
 
   // Conversion funnel instrumentation (fire-and-forget; see docs/FREEMIUM_GATING_SPEC.md)
   const logEvent = trpc.usageMonitor.logUIEvent.useMutation();
@@ -200,6 +209,7 @@ export function WhyHaventIWon() {
   useEffect(() => {
     if (data && !data.needsOwnerSelection && !firedSnapshot.current) {
       firedSnapshot.current = true;
+      setLastFreeFeature("why_havent_i_won");
       logEvent.mutate({ eventType: "feature_open", featureName: "whyhavent_snapshot_viewed", page: "why-havent-i-won" });
     }
   }, [data]);
@@ -467,13 +477,13 @@ export function WhyHaventIWon() {
                 </div>
                 <h3 className="mt-3 text-[22px] font-black leading-tight sm:text-[26px]">
                   {data.lockedReasons > 0 ? (
-                    <>You're seeing 1 of {data.totalReasons} reasons. <span className="text-lime-400">{data.lockedReasons} more are locked.</span></>
+                    <>You&apos;re seeing 1 of {data.totalReasons} reasons. <span className="text-lime-400">{data.lockedReasons} more are locked.</span></>
                   ) : (
                     <>Your full Championship Report is <span className="text-lime-400">locked.</span></>
                   )}
                 </h3>
                 <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-white/60">
-                  Unlock every factor behind why you haven't won, your Championship Readiness score, your positional gaps versus league champions, and your Title Path.
+                  {whyPaywallCopy.description}
                 </p>
                 {data.titlePath?.available && (
                   <div className="mt-3 rounded-lg border border-lime-400/20 bg-lime-500/[0.05] p-3 text-[14px] leading-relaxed text-white/80">
@@ -494,7 +504,7 @@ export function WhyHaventIWon() {
                   disabled={checkoutMutation.isPending}
                   className="mt-5 inline-flex items-center gap-2 rounded-xl bg-lime-400 px-5 py-2.5 text-[15px] font-bold text-black transition hover:bg-lime-300 disabled:opacity-60"
                 >
-                  {checkoutMutation.isPending ? "Opening checkout..." : "Unlock Full Championship Report"}
+                  {checkoutMutation.isPending ? COMMERCIAL.upgradeCtaPending : COMMERCIAL.upgradeCtaUnderstandWhy}
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>

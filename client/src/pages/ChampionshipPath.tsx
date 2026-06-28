@@ -1,9 +1,13 @@
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { COMMERCIAL } from "@/lib/commercialCopy";
+import { resolvePaywallCopy } from "@/lib/paywallCopy";
+import { setLastFreeFeature } from "@/lib/lastFreeFeature";
 import { Loader2, Trophy, Target, ArrowUpCircle, ShieldCheck, Crown, Route, Swords, ListChecks } from "lucide-react";
 
 const PAGEBG: React.CSSProperties = {
@@ -64,21 +68,21 @@ function MiniCard({ icon, label, children, tone = "neutral" }: { icon: ReactNode
 }
 
 function PathPaywall({ onUnlock, pending }: { onUnlock: () => void; pending: boolean }) {
+  const copy = resolvePaywallCopy(
+    "Understand why you haven't broken through yet",
+    "The one-line verdict above is free — the who. Rivals Pro maps position gaps, the rival blocking you, and the ranked moves that change your path.",
+  );
   return (
     <div className={cn(PANEL, "p-8 text-center")}>
       <Route className="mx-auto mb-3 h-8 w-8 text-lime-400" />
-      <p className="text-xl font-black text-white/95">Unlock your full Championship Path</p>
-      <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
-        The one-line verdict above is free. The plan that gets you there - your position-by-position
-        gaps vs the average champion, the champion you most resemble, the rival blocking your path,
-        and your ranked action plan - unlocks with Rivals Pro.
-      </p>
+      <p className="text-xl font-black text-white/95">{copy.heading}</p>
+      <p className="mx-auto mt-2 max-w-md text-sm text-white/55">{copy.description}</p>
       <button
         onClick={onUnlock}
         disabled={pending}
         className="mt-5 inline-flex items-center gap-2 rounded-[10px] bg-lime-400 px-6 py-3 text-sm font-extrabold text-[#0e0a10] transition hover:brightness-110 disabled:opacity-60"
       >
-        {pending ? "Opening..." : "Unlock the Path"}
+        {pending ? COMMERCIAL.upgradeCtaPending : COMMERCIAL.upgradeCtaUnderstandWhy}
       </button>
     </div>
   );
@@ -105,6 +109,10 @@ export function ChampionshipPath() {
     if (typeof window === "undefined") return;
     checkout.mutate({ origin: window.location.origin });
   };
+
+  useEffect(() => {
+    if (data) setLastFreeFeature("championship_path");
+  }, [data]);
 
   return (
     <div className="min-h-screen w-full" style={PAGEBG}>

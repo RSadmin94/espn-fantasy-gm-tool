@@ -173,8 +173,8 @@ export const billingRouter = router({
 
         await recordFunnelEvent({
           userId,
-          event: "clicked_cta",
-          metadata: { plan: "league", interval: "year", upgrade: true },
+          event: "checkout_opened",
+          metadata: { plan: "league", interval: "year", stripeSessionId: session.id },
         });
 
         return { url: session.url };
@@ -234,8 +234,8 @@ export const billingRouter = router({
 
       await recordFunnelEvent({
         userId,
-        event: "clicked_cta",
-        metadata: { priceId, plan: input.plan, interval: input.interval },
+        event: "checkout_opened",
+        metadata: { plan: input.plan, interval: input.interval, stripeSessionId: session.id },
       });
 
       return { url: session.url };

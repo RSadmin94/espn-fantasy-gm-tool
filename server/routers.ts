@@ -23,6 +23,7 @@ import { mlRouter } from "./mlRouter";
 import { weeklyAssessmentRouter } from "./weeklyAssessmentRouter";
 import { providerRouter } from "./providerRouter";
 import { billingRouter } from "./billingRouter";
+import { funnelRouter } from "./funnelRouter";
 import { onboardingRouter } from "./onboardingRouter";
 import { meRouter } from "./meRouter";
 import { draftRealityRouter } from "./draftRealityRouter";
@@ -537,6 +538,7 @@ type KeeperValuationResponse = {
 export const appRouter = router({
   system: systemRouter,
   billing: billingRouter,
+  funnel: funnelRouter,
   me: meRouter,
   draftReality: draftRealityRouter,
   leagueIntel: leagueIntelRouter,

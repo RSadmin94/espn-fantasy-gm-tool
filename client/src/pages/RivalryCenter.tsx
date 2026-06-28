@@ -13,6 +13,12 @@ import { cn } from "@/lib/utils";
 import { COMMERCIAL } from "@/lib/commercialCopy";
 import { resolvePaywallCopy } from "@/lib/paywallCopy";
 import {
+  getLastFreeFeature,
+  hasWallViewedRecorded,
+  markWallViewedRecorded,
+  setLastFreeFeature,
+} from "@/lib/lastFreeFeature";
+import {
   CinematicPageHeader,
   IntelPageShell,
   IntelPanel,
@@ -254,7 +260,8 @@ export function RivalryCenter() {
     },
   });
 
-  // -- Conversion funnel events --------------------------------------------
+  // -- Conversion funnel (funnel_events; rivalry-wall beta path) --------------
+  const funnelRecord = trpc.funnel.record.useMutation();
   const logEvent = (trpc as any).usageMonitor.logUIEvent.useMutation();
   const snapshotLogged = useRef(false);
   const paywallLogged = useRef(false);
@@ -265,14 +272,34 @@ export function RivalryCenter() {
     }
   }, [pairs.length]);
   useEffect(() => {
-    if (rivalryGated && !paywallLogged.current) {
+    if (!rivalryGated || pairs.length === 0 || hasWallViewedRecorded()) return;
+    markWallViewedRecorded();
+    setLastFreeFeature("rivalry_wall");
+    if (!paywallLogged.current) {
       paywallLogged.current = true;
       logEvent.mutate({ eventType: "feature_open", featureName: "rivalry_paywall_viewed" });
     }
-  }, [rivalryGated]);
+    funnelRecord.mutate({
+      event: "wall_viewed",
+      metadata: {
+        totalRivalries,
+        lockedRivalries,
+        leagueTeamCount: allOwners.length,
+      },
+    });
+  }, [rivalryGated, pairs.length, totalRivalries, lockedRivalries, allOwners.length]);
   const startCheckout = () => {
     if (typeof window === "undefined") return;
     logEvent.mutate({ eventType: "cta_click", featureName: "rivalry_unlock_clicked" });
+    funnelRecord.mutate({
+      event: "upgrade_clicked",
+      metadata: {
+        lastFreeFeature: getLastFreeFeature() ?? "rivalry_wall",
+        source: "rivalry_wall",
+        totalRivalries,
+        lockedRivalries,
+      },
+    });
     checkoutMutation.mutate({ origin: window.location.origin, plan: "rivals", interval: "year" });
   };
 

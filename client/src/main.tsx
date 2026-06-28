@@ -44,6 +44,7 @@ import { PlayerDatabase }    from "./pages/PlayerDatabase";
 import { LeagueWire }         from "./pages/LeagueWire";
 import { DraftWarRoom }      from "./pages/DraftWarRoom";
 import { RivalryCenter }     from "./pages/RivalryCenter";
+import { AdminConversionFunnel } from "./pages/AdminConversionFunnel";
 import { CommissionerCommandCenter } from "./pages/CommissionerCommandCenter";
 import { FeatureRouteGate } from "./components/FeatureRouteGate";
 import { trpc } from "@/lib/trpc";
@@ -213,6 +214,7 @@ const router = createBrowserRouter([
           { path: "/reveal", element: <Navigate to="/dashboard" replace /> },
           { path: "/admin/behavioral", element: <Navigate to="/dashboard" replace /> },
           { path: "/admin/activity-capture", element: <Navigate to="/dashboard" replace /> },
+          { path: "/admin/conversion-funnel", element: <AdminConversionFunnel /> },
         ],
       },
     ],

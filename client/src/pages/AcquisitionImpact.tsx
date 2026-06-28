@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { COMMERCIAL } from "@/lib/commercialCopy";
+import { setLastFreeFeature } from "@/lib/lastFreeFeature";
 import {
   CinematicMetaPill,
   CinematicPageHeader,
@@ -107,6 +110,10 @@ export function AcquisitionImpact() {
     checkout.mutate({ origin: window.location.origin });
   };
 
+  useEffect(() => {
+    if (data) setLastFreeFeature("acquisition_impact");
+  }, [data]);
+
   return (
     <IntelPageShell
       minHeight="screen"
@@ -194,9 +201,9 @@ export function AcquisitionImpact() {
             {gated && (
               <ProGate
                 icon={ShoppingCart}
-                heading="Scout the whole league"
-                description="Your own acquisition dashboard above is free. The league leaderboards - who adds the most value off waivers, who leans hardest on the draft, the top roster builders, and the biggest in-season pickups in league history - unlock with Rivals Pro."
-                ctaLabel="Unlock the Leaderboards"
+                heading="Understand why certain GMs always win the wire"
+                description="Your own dashboard above is free — the who. Rivals Pro explains why some managers consistently add value and how the rest of the league compares."
+                ctaLabel={COMMERCIAL.upgradeCtaUnderstandWhy}
                 onUnlock={startCheckout}
                 pending={checkout.isPending}
               />
