@@ -51,6 +51,7 @@ const ARCHIVE_NAV_ITEMS = [
   { id: "archive-dynasty", label: "Dynasties" },
   { id: "archive-trades", label: "Notorious Trades" },
   { id: "archive-milestones", label: "Milestones" },
+  { id: "archive-graveyard", label: "Graveyard" },
 ] as const;
 
 function archiveScrollTo(sectionId: string) {
@@ -105,6 +106,7 @@ function ArchiveExplorerCards() {
     { id: "archive-dynasty", label: "Dynasties", icon: Landmark, accent: "#a3e635" },
     { id: "archive-trades", label: "Notorious Trades", icon: ArrowLeftRight, accent: "#f472b6" },
     { id: "archive-milestones", label: "Milestones", icon: History, accent: "#fbbf24" },
+    { id: "archive-graveyard", label: "Graveyard", icon: Skull, accent: "#94a3b8" },
   ] as const;
 
   return (
@@ -1173,6 +1175,37 @@ export function HallOfFame() {
         </div>
       </IntelPanel>
       )}
+
+      {/* ── 8. The Graveyard ─────────────────────────────── */}
+      <IntelPanel id="archive-graveyard" variant="profile" className="scroll-mt-24 overflow-hidden p-4 sm:p-6">
+        <ArchiveSectionHeader icon={<Skull className="h-4 w-4" />} title="The Graveyard" accent="#94a3b8" />
+        <p className="mb-4 -mt-1 max-w-2xl text-sm text-zinc-500">
+          Owners who lasted less than two seasons. They came, they lost, they left.
+        </p>
+        {cemetery.length === 0 ? (
+          <p className="text-sm text-zinc-500">No short-timers — everyone who joined stuck around.</p>
+        ) : (
+          <div className="rounded-2xl border border-white/[0.06] bg-[linear-gradient(180deg,#1b131f,#140e17)] px-5 pt-8 pb-4">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
+              {cemetery.map((g, i) => (
+                <div key={g.name + i} className="flex flex-col items-center">
+                  <div className="relative flex w-full max-w-[170px] flex-col items-center rounded-t-[80px] rounded-b-md border border-zinc-700/60 bg-[linear-gradient(180deg,#3a4150,#281d2e)] px-4 pt-7 pb-6 text-center shadow-[inset_0_2px_12px_rgba(0,0,0,.45),0_10px_20px_-12px_rgba(0,0,0,.8)]">
+                    <span className="text-[10px] font-bold tracking-[0.35em] text-zinc-500">R . I . P</span>
+                    <span className="my-2 block h-px w-10 bg-white/15" />
+                    <Skull className="mb-2 h-5 w-5 text-zinc-500" />
+                    <span className="font-serif text-[15px] font-bold leading-tight text-zinc-200">{g.name}</span>
+                    <span className="mt-1.5 text-xs tabular-nums text-zinc-400">{g.years.length ? g.years.join(" - ") : "Unknown"}</span>
+                    <span className="mt-2 text-[9px] italic text-zinc-600">gone too soon</span>
+                  </div>
+                  <span className="h-3 w-[88%] max-w-[150px] rounded-b-sm bg-[linear-gradient(180deg,#1f1624,#16101a)] shadow-[0_6px_8px_-6px_rgba(0,0,0,.9)]" />
+                  <span className="mb-6 h-1.5 w-[96%] max-w-[160px] rounded-full bg-lime-900/30 blur-[1px]" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </IntelPanel>
+
       <Collapsible open={developerOpen} onOpenChange={setDeveloperOpen}>
         <IntelPanel variant="profile" className="overflow-hidden">
           <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:bg-white/[0.03]">
@@ -1295,35 +1328,6 @@ export function HallOfFame() {
         </CollapsibleContent>
         </IntelPanel>
       </Collapsible>
-
-              <IntelPanel variant="profile" className="overflow-hidden p-4">
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">The Graveyard</p>
-                <p className="mb-4 mt-2 max-w-2xl text-sm text-zinc-500">
-                  Owners who lasted less than two seasons. They came, they lost, they left.
-                </p>
-                {cemetery.length === 0 ? (
-                  <p className="text-sm text-zinc-500">No short-timers — everyone who joined stuck around.</p>
-                ) : (
-                  <div className="rounded-2xl border border-white/[0.06] bg-[linear-gradient(180deg,#1b131f,#140e17)] px-5 pt-8 pb-4">
-                    <div className="grid grid-cols-2 gap-x-5 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
-                      {cemetery.map((g, i) => (
-                        <div key={g.name + i} className="flex flex-col items-center">
-                          <div className="relative flex w-full max-w-[170px] flex-col items-center rounded-t-[80px] rounded-b-md border border-zinc-700/60 bg-[linear-gradient(180deg,#3a4150,#281d2e)] px-4 pt-7 pb-6 text-center shadow-[inset_0_2px_12px_rgba(0,0,0,.45),0_10px_20px_-12px_rgba(0,0,0,.8)]">
-                            <span className="text-[10px] font-bold tracking-[0.35em] text-zinc-500">R . I . P</span>
-                            <span className="my-2 block h-px w-10 bg-white/15" />
-                            <Skull className="mb-2 h-5 w-5 text-zinc-500" />
-                            <span className="font-serif text-[15px] font-bold leading-tight text-zinc-200">{g.name}</span>
-                            <span className="mt-1.5 text-xs tabular-nums text-zinc-400">{g.years.length ? g.years.join(" - ") : "Unknown"}</span>
-                            <span className="mt-2 text-[9px] italic text-zinc-600">gone too soon</span>
-                          </div>
-                          <span className="h-3 w-[88%] max-w-[150px] rounded-b-sm bg-[linear-gradient(180deg,#1f1624,#16101a)] shadow-[0_6px_8px_-6px_rgba(0,0,0,.9)]" />
-                          <span className="mb-6 h-1.5 w-[96%] max-w-[160px] rounded-full bg-lime-900/30 blur-[1px]" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </IntelPanel>
             </div>
           </CollapsibleContent>
         </IntelPanel>
