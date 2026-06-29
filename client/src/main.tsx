@@ -47,6 +47,7 @@ import { RivalryCenter }     from "./pages/RivalryCenter";
 import { AdminConversionFunnel } from "./pages/AdminConversionFunnel";
 import { CommissionerCommandCenter } from "./pages/CommissionerCommandCenter";
 import { FeatureRouteGate } from "./components/FeatureRouteGate";
+import { SignatureReveal } from "./pages/SignatureReveal";
 import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
@@ -132,6 +133,7 @@ const router = createBrowserRouter([
       { path: "/p/:token", element: <ReceiptShare /> },
       { path: "/r/:code", element: <ReceiptShare /> },
       { path: "/claim", element: <Claim /> },
+      { path: "/reveal", element: <SignatureReveal /> },
       {
         element: <ProtectedLayout />,
         children: [
@@ -207,7 +209,6 @@ const router = createBrowserRouter([
           { path: "/ml-forecast", element: <Navigate to="/dashboard" replace /> },
           { path: "/weekly-intelligence", element: <Navigate to="/dashboard" replace /> },
           { path: "/offseason", element: <Navigate to="/dashboard" replace /> },
-          { path: "/reveal", element: <Navigate to="/dashboard" replace /> },
           { path: "/admin/behavioral", element: <Navigate to="/dashboard" replace /> },
           { path: "/admin/activity-capture", element: <Navigate to="/dashboard" replace /> },
           { path: "/admin/conversion-funnel", element: <AdminConversionFunnel /> },
