@@ -122,48 +122,6 @@ async function handleCheckoutCompleted(session: import("stripe").Stripe.Checkout
     return;
   }
 
-  if (session.metadata?.upgrade === "rivals_annual_to_league_annual") {
-    const subscriptionId = session.metadata.subscription_id;
-    const leaguePriceId = session.metadata.league_annual_price_id;
-    if (!subscriptionId || !leaguePriceId) {
-      console.error("[Webhook] upgrade checkout missing subscription_id or league_annual_price_id");
-      return;
-    }
-
-    try {
-      const sub = await stripe.subscriptions.retrieve(subscriptionId);
-      const itemId = sub.items.data[0]?.id;
-      if (!itemId) {
-        console.error("[Webhook] upgrade: subscription has no items");
-        return;
-      }
-      const updated = await stripe.subscriptions.update(subscriptionId, {
-        items: [{ id: itemId, price: leaguePriceId }],
-        proration_behavior: "none",
-        metadata: { app: "fantasy_football_rivals", plan: "league", interval: "year" },
-      });
-      const periodEnd = new Date((updated as unknown as { current_period_end: number }).current_period_end * 1000);
-      await persistSubscriptionFields(
-        userId,
-        subscriptionId,
-        customerId,
-        leaguePriceId,
-        periodEnd,
-        updated.status === "active" ? "active" : "past_due",
-      );
-    } catch (err) {
-      console.error("[Webhook] Failed to upgrade subscription to League annual:", err);
-      return;
-    }
-
-    await recordFunnelEvent({
-      userId,
-      event: "completed_payment",
-      metadata: { sessionId: session.id, upgrade: "rivals_annual_to_league_annual" },
-    });
-    return;
-  }
-
   const subscriptionId =
     typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null;
 

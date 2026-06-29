@@ -1,33 +1,28 @@
 /**
- * Creates (or reuses) all Fantasy Football Rivals Stripe products and prices:
- *   Rivals Monthly ($5.99), Rivals Annual ($59.99)
- *   The League Monthly ($9.99), The League Annual ($79.99)
+ * Creates (or reuses) Fantasy Football Rivals Stripe products and prices (V1):
+ *   Rivals Monthly ($8.99), Rivals Annual ($79.99)
  *
  * Usage:
  *   STRIPE_SECRET_KEY=sk_test_... pnpm stripe:setup-products
  */
 import Stripe from "stripe";
-import { PRODUCTS, STRIPE_BRAND, type BillingInterval, type PaidPlan } from "../server/stripe/products";
+import { PRODUCTS, STRIPE_BRAND, type BillingInterval } from "../server/stripe/products";
 
 type CatalogEntry = {
-  plan: PaidPlan;
   interval: BillingInterval;
   envKey: string;
 };
 
 const CATALOG: CatalogEntry[] = [
-  { plan: "rivals", interval: "month", envKey: "STRIPE_PRICE_ID_RIVALS_MONTHLY" },
-  { plan: "rivals", interval: "year", envKey: "STRIPE_PRICE_ID_RIVALS_ANNUAL" },
-  { plan: "league", interval: "month", envKey: "STRIPE_PRICE_ID_LEAGUE_MONTHLY" },
-  { plan: "league", interval: "year", envKey: "STRIPE_PRICE_ID_LEAGUE_ANNUAL" },
+  { interval: "month", envKey: "STRIPE_PRICE_ID_RIVALS_MONTHLY" },
+  { interval: "year", envKey: "STRIPE_PRICE_ID_RIVALS_ANNUAL" },
 ];
 
 async function findOrCreatePrice(
   stripe: Stripe,
-  plan: PaidPlan,
   interval: BillingInterval,
 ): Promise<{ priceId: string; created: boolean }> {
-  const productDef = PRODUCTS[plan];
+  const productDef = PRODUCTS.rivals;
   const priceDef = interval === "month" ? productDef.monthly : productDef.annual;
   const targetAmount = priceDef.amount;
 
@@ -62,7 +57,7 @@ async function findOrCreatePrice(
       metadata: {
         app: "fantasy_football_rivals",
         brand: STRIPE_BRAND.appName,
-        plan,
+        plan: "rivals",
       },
     });
     productId = product.id;
@@ -74,7 +69,7 @@ async function findOrCreatePrice(
     currency: priceDef.currency,
     recurring: { interval: priceDef.interval },
     nickname: `${productDef.productName} — ${priceDef.label}`,
-    metadata: { plan, interval },
+    metadata: { plan: "rivals", interval },
   });
 
   return { priceId: price.id, created: true };
@@ -88,22 +83,18 @@ async function main() {
   }
 
   const stripe = new Stripe(secretKey);
-  console.log("Fantasy Football Rivals — Stripe catalog setup\n");
+  console.log("Fantasy Football Rivals — Stripe catalog setup (V1: Rivals only)\n");
 
   for (const entry of CATALOG) {
-    const def = entry.interval === "month"
-      ? PRODUCTS[entry.plan].monthly
-      : PRODUCTS[entry.plan].annual;
-    const { priceId, created } = await findOrCreatePrice(stripe, entry.plan, entry.interval);
-    console.log(`${created ? "Created" : "Found"} ${PRODUCTS[entry.plan].productName} ${def.label}`);
+    const def = entry.interval === "month" ? PRODUCTS.rivals.monthly : PRODUCTS.rivals.annual;
+    const { priceId, created } = await findOrCreatePrice(stripe, entry.interval);
+    console.log(`${created ? "Created" : "Found"} ${PRODUCTS.rivals.productName} ${def.label}`);
     console.log(`  ${entry.envKey}=${priceId}`);
     if (entry.envKey === "STRIPE_PRICE_ID_RIVALS_ANNUAL") {
       console.log(`  STRIPE_PRICE_ID_ANNUAL=${priceId}  # legacy alias`);
     }
     console.log("");
   }
-
-  console.log("Upgrade math (server-side): Rivals Annual → League Annual = +$20.00");
 }
 
 main().catch((err) => {

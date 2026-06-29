@@ -260,7 +260,7 @@ Note the shape difference: `additionalFactors` is a **count (number)** for free,
 ## 12. Open questions / decisions needed
 
 1. **Anonymous teaser vs login-required.** Do we allow a thin, fully-anonymous teaser (one storyline + one card) on shareable links to preserve virality and SEO, with the personalized dashboard behind login? Recommendation: **yes** - a shareable link landing renders a cached teaser, login gates the personalized version. Ties directly to the landing-page lead-capture work.
-2. **Tier model.** The gate is currently binary (subscribed / not). Founding Member is one paid tier. If a league/commissioner tier returns later, the gate must become tiered (not just boolean).
+2. **Tier model (V1).** Two commercial tiers only: **Free** and **Rivals** ($8.99/mo or $79.99/yr). The gate is binary (subscribed / not). Commissioner / "The League" subscription is deferred to a future release — see `docs/DECISION_LOG.md`.
 3. **Title Path engine.** Deterministic rules or LLM-generated "3 moves"? For launch, the **teaser** can ship before the full engine. Decide the generation approach before building the paid side.
 4. **Proof selection quality.** Implementing G1 (undeniable proof) requires a ranking function that picks the most undeniable pattern per user, not the most dramatic. This is the make-or-break of the whole model and deserves dedicated tuning.
 

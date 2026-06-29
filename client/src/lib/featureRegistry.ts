@@ -23,7 +23,7 @@ import {
   Library,
 } from "lucide-react";
 
-/** Extensible plan tier — "league" / "commissioner" can be added later. */
+/** V1 paid tier is Rivals (pro). Commissioner subscription deferred. */
 export type RequiredPlan = "free" | "pro";
 
 export type NavCategory =

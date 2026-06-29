@@ -52,7 +52,7 @@ export function isUserEntitled(
   return false;
 }
 
-/** Rivals intelligence — active/trial billing excluding League-only subscribers. */
+/** Rivals intelligence — active/trial billing (V1: Rivals is the only paid tier). */
 export function hasRivalsIntelligenceEntitlement(
   user:
     | (Pick<User, "subscriptionStatus" | "trialStartedAt"> & {
@@ -61,9 +61,7 @@ export function hasRivalsIntelligenceEntitlement(
     | null
     | undefined,
 ): boolean {
-  if (!isUserEntitled(user)) return false;
-  if (user?.subscriptionPlan === "league") return false;
-  return true;
+  return isUserEntitled(user);
 }
 
 /**

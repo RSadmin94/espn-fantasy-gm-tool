@@ -220,7 +220,7 @@ try {
     ok ? checkout.url!.slice(0, 80) + "…" : JSON.stringify(checkout),
   );
   if (ok) {
-    console.log("\nOpen checkout URL in browser to inspect Stripe line item ($59.99/yr):\n", checkout.url);
+    console.log("\nOpen checkout URL in browser to inspect Stripe line item ($79.99/yr):\n", checkout.url);
   }
 } catch (e) {
   record("Checkout — Rivals annual", false, String(e));

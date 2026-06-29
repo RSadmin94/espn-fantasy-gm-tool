@@ -79,7 +79,7 @@ export function FeatureLockedPage({ feature }: FeatureLockedPageProps) {
             description={feature.marketingDescription}
             trigger={
               <Button type="button" className="mt-5 font-extrabold">
-                Unlock Rivals Pro
+                {COMMERCIAL.upgradeCta}
               </Button>
             }
           />

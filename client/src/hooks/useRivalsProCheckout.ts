@@ -2,16 +2,13 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { setSessionUnlocked } from "@/lib/rivalsProSessionUnlock";
 
-export type CheckoutPlan = "rivals" | "league";
 export type CheckoutInterval = "month" | "year";
 
 export type CheckoutOptions = {
-  plan?: CheckoutPlan;
   interval?: CheckoutInterval;
-  upgradeToLeagueAnnual?: boolean;
 };
 
-/** Shared tier checkout — defaults to Rivals annual (primary free conversion path). */
+/** Shared Rivals checkout — defaults to annual (primary free conversion path). */
 export function useRivalsProCheckout(defaults: CheckoutOptions = {}) {
   const checkout = trpc.billing.createCheckoutSession.useMutation({
     onSuccess: (r) => {
@@ -41,9 +38,7 @@ export function useRivalsProCheckout(defaults: CheckoutOptions = {}) {
     }
     checkout.mutate({
       origin: window.location.origin,
-      plan: overrides.plan ?? defaults.plan ?? "rivals",
       interval: overrides.interval ?? defaults.interval ?? "year",
-      upgradeToLeagueAnnual: overrides.upgradeToLeagueAnnual ?? defaults.upgradeToLeagueAnnual,
     });
   };
 

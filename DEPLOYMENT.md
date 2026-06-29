@@ -47,7 +47,10 @@ In your Railway project, go to **Service → Variables** and add:
 | `STRIPE_SECRET_KEY` | optional | Stripe Dashboard → Developers → API keys |
 | `VITE_STRIPE_PUBLISHABLE_KEY` | optional | Stripe Dashboard → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | optional | Stripe Dashboard → Webhooks |
-| `STRIPE_PRICE_ID_MONTHLY` | optional | Stripe Dashboard → Products |
+| `STRIPE_PRICE_ID_RIVALS_MONTHLY` | optional | Rivals $8.99/mo — run `pnpm stripe:setup-products` |
+| `STRIPE_PRICE_ID_RIVALS_ANNUAL` | optional | Rivals $79.99/yr — run `pnpm stripe:setup-products` |
+| `STRIPE_PRICE_ID_ANNUAL` | optional | Legacy alias for `STRIPE_PRICE_ID_RIVALS_ANNUAL` |
+| `STRIPE_PRICE_ID_MONTHLY` | optional | Legacy alias for `STRIPE_PRICE_ID_RIVALS_MONTHLY` |
 | `THE_ODDS_API_KEY` | optional | https://the-odds-api.com |
 
 > **Tip:** Use `env-template.txt` in the repo root as a reference for all variables.

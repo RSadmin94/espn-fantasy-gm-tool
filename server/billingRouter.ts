@@ -1,9 +1,8 @@
 /**
  * billingRouter.ts
  *
- * tRPC procedures for Stripe billing:
+ * tRPC procedures for Stripe billing (V1 — Rivals monthly/annual only):
  *   billing.createCheckoutSession  — creates a Stripe Checkout session, returns URL
- *   billing.getUpgradeQuote        — server-computed upgrade amounts (client never calculates)
  *   billing.getSubscriptionStatus  — returns current user subscription state
  *   billing.createPortalSession    — creates a Stripe Customer Portal session for self-service
  *
@@ -14,15 +13,12 @@ import { protectedProcedure, router, hasRivalsIntelligenceEntitlement, resolvePr
 import { TRPCError } from "@trpc/server";
 import { stripe } from "./stripe/client";
 import {
-  PRODUCTS,
-  RIVALS_TO_LEAGUE_ANNUAL_UPGRADE_CENTS,
   STRIPE_BRAND,
   STRIPE_CHECKOUT_COPY,
   getPriceDefinition,
   intervalFromPriceId,
   planFromPriceId,
   type BillingInterval,
-  type PaidPlan,
 } from "./stripe/products";
 import { resolveStripePriceId } from "./stripe/resolveCheckoutPrice";
 import { getDb } from "./db";
@@ -32,10 +28,9 @@ import { recordFunnelEvent } from "./funnelService";
 
 const checkoutInput = z.object({
   origin: z.string().url(),
-  plan: z.enum(["rivals", "league"]).default("rivals"),
   interval: z.enum(["month", "year"]).default("year"),
-  /** Upgrade Rivals annual → League annual (+$20). Server validates eligibility. */
-  upgradeToLeagueAnnual: z.boolean().optional(),
+  /** @deprecated V1 always checks out Rivals; ignored if present */
+  plan: z.literal("rivals").optional(),
 });
 
 async function ensureStripeCustomer(userId: number, userRow: typeof users.$inferSelect) {
@@ -58,45 +53,11 @@ async function ensureStripeCustomer(userId: number, userRow: typeof users.$infer
   return customerId;
 }
 
-function resolveConfiguredPriceId(plan: PaidPlan, interval: BillingInterval): string | null {
-  const def = getPriceDefinition(plan, interval);
-  return def.priceId || null;
+function resolveConfiguredPriceId(interval: BillingInterval): string | null {
+  return getPriceDefinition(interval).priceId || null;
 }
 
 export const billingRouter = router({
-  getUpgradeQuote: protectedProcedure.query(async ({ ctx }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-    const [userRow] = await db.select().from(users).where(eq(users.id, ctx.user.id));
-    if (!userRow) throw new TRPCError({ code: "NOT_FOUND" });
-
-    const priceId = userRow.subscriptionPriceId ?? null;
-    const plan = userRow.subscriptionPlan ?? planFromPriceId(priceId);
-    const interval = userRow.subscriptionInterval ?? intervalFromPriceId(priceId);
-
-    const rivalsAnnual = PRODUCTS.rivals.annual;
-    const leagueAnnual = PRODUCTS.league.annual;
-    const leagueMonthly = PRODUCTS.league.monthly;
-
-    const canUpgradeToLeagueAnnual =
-      userRow.subscriptionStatus === "active" &&
-      plan === "rivals" &&
-      interval === "year";
-
-    return {
-      rivalsAnnualCents: rivalsAnnual.amount,
-      leagueAnnualCents: leagueAnnual.amount,
-      leagueMonthlyCents: leagueMonthly.amount,
-      rivalsToLeagueAnnualUpgradeCents: RIVALS_TO_LEAGUE_ANNUAL_UPGRADE_CENTS,
-      canUpgradeToLeagueAnnual,
-      /** Monthly subscribers pay full annual price — no credit. */
-      monthlyToAnnualChargesFullPrice: interval === "month",
-      currentPlan: plan,
-      currentInterval: interval,
-      leagueCheckoutEnabled: false,
-    };
-  }),
-
   createCheckoutSession: protectedProcedure
     .input(checkoutInput)
     .mutation(async ({ ctx, input }) => {
@@ -108,92 +69,14 @@ export const billingRouter = router({
       if (!userRow) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
 
       const customerId = await ensureStripeCustomer(userId, userRow);
-
-      if (input.upgradeToLeagueAnnual) {
-        const priceId = userRow.subscriptionPriceId ?? null;
-        const plan = userRow.subscriptionPlan ?? planFromPriceId(priceId);
-        const interval = userRow.subscriptionInterval ?? intervalFromPriceId(priceId);
-        if (
-          userRow.subscriptionStatus !== "active" ||
-          plan !== "rivals" ||
-          interval !== "year"
-        ) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Annual upgrade credit applies only to active Rivals annual subscribers.",
-          });
-        }
-        if (!userRow.stripeSubscriptionId) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "No active subscription found for upgrade.",
-          });
-        }
-
-        const leagueAnnualPriceId =
-          resolveConfiguredPriceId("league", "year") ??
-          (await resolveStripePriceId(stripe, "league", "year"));
-        if (!leagueAnnualPriceId) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "League annual price not configured. Run pnpm stripe:setup-products.",
-          });
-        }
-
-        const session = await stripe.checkout.sessions.create({
-          customer: customerId,
-          mode: "payment",
-          line_items: [
-            {
-              price_data: {
-                currency: "usd",
-                unit_amount: RIVALS_TO_LEAGUE_ANNUAL_UPGRADE_CENTS,
-                product_data: {
-                  name: "Upgrade to The League (Annual)",
-                  description: `Upgrade from Rivals Annual to The League Annual (+$${(RIVALS_TO_LEAGUE_ANNUAL_UPGRADE_CENTS / 100).toFixed(2)})`,
-                },
-              },
-              quantity: 1,
-            },
-          ],
-          success_url: `${input.origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${input.origin}/settings`,
-          client_reference_id: userId.toString(),
-          metadata: {
-            user_id: userId.toString(),
-            upgrade: "rivals_annual_to_league_annual",
-            league_annual_price_id: leagueAnnualPriceId,
-            subscription_id: userRow.stripeSubscriptionId,
-          },
-        });
-
-        if (!session.url) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Stripe did not return a checkout URL" });
-        }
-
-        await recordFunnelEvent({
-          userId,
-          event: "checkout_opened",
-          metadata: { plan: "league", interval: "year", stripeSessionId: session.id },
-        });
-
-        return { url: session.url };
-      }
-
-      if (input.plan === "league") {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "The League checkout opens in Sprint 4. Rivals annual upgrade (+$20) is available for current Rivals annual subscribers.",
-        });
-      }
+      const interval = input.interval;
 
       const priceId =
-        resolveConfiguredPriceId(input.plan, input.interval) ??
-        (await resolveStripePriceId(stripe, input.plan, input.interval));
+        resolveConfiguredPriceId(interval) ?? (await resolveStripePriceId(stripe, interval));
       if (!priceId) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `No active ${input.plan} ${input.interval} price configured. Run pnpm stripe:setup-products.`,
+          message: `No active Rivals ${interval} price configured. Run pnpm stripe:setup-products.`,
         });
       }
 
@@ -213,8 +96,8 @@ export const billingRouter = router({
           metadata: {
             app: "fantasy_football_rivals",
             brand: STRIPE_BRAND.appName,
-            plan: input.plan,
-            interval: input.interval,
+            plan: "rivals",
+            interval,
           },
         },
         metadata: {
@@ -222,8 +105,8 @@ export const billingRouter = router({
           customer_email: userRow.email ?? "",
           customer_name: userRow.name ?? "",
           product: "fantasy_football_rivals",
-          plan: input.plan,
-          interval: input.interval,
+          plan: "rivals",
+          interval,
           price_id: priceId,
         },
       });
@@ -235,7 +118,7 @@ export const billingRouter = router({
       await recordFunnelEvent({
         userId,
         event: "checkout_opened",
-        metadata: { plan: input.plan, interval: input.interval, stripeSessionId: session.id },
+        metadata: { plan: "rivals", interval, stripeSessionId: session.id },
       });
 
       return { url: session.url };
@@ -256,15 +139,14 @@ export const billingRouter = router({
     const currentPeriodEnd = userRow.currentPeriodEnd ? new Date(userRow.currentPeriodEnd).getTime() : null;
 
     const plan =
-      userRow.subscriptionPlan ??
-      planFromPriceId(userRow.subscriptionPriceId) ??
-      (userRow.subscriptionStatus === "active" ? "rivals" : null);
+      userRow.subscriptionPlan === "rivals"
+        ? "rivals"
+        : planFromPriceId(userRow.subscriptionPriceId) ??
+          (userRow.subscriptionStatus === "active" ? "rivals" : null);
     const interval =
       userRow.subscriptionInterval ?? intervalFromPriceId(userRow.subscriptionPriceId);
 
     const hasRivalsAccess = hasRivalsIntelligenceEntitlement(userRow);
-    const hasLeagueAccess =
-      userRow.subscriptionStatus === "active" && userRow.subscriptionPlan === "league";
 
     return {
       status: userRow.subscriptionStatus,
@@ -275,7 +157,6 @@ export const billingRouter = router({
       currentPeriodEnd,
       hasAccess: hasRivalsAccess,
       hasRivalsAccess,
-      hasLeagueAccess,
       subscriptionPriceId: userRow.subscriptionPriceId ?? null,
     };
   }),

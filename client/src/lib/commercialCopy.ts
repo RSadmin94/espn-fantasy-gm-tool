@@ -1,28 +1,23 @@
 /**
- * User-facing commercial copy — three tiers: Free, Rivals, The League.
+ * User-facing commercial copy — V1 tiers: Free and Rivals.
+ * Commissioner / "The League" subscription is deferred to a future release.
  */
 export const COMMERCIAL = {
   productName: "Rivals",
   productNameFull: "Fantasy Football Rivals",
   freePlanName: "Free",
-  leaguePlanName: "The League",
   foundingOfferLabel: "Launch pricing",
-  rivalsMonthlyPrice: "$5.99",
-  rivalsAnnualPrice: "$59.99",
-  leagueMonthlyPrice: "$9.99",
-  leagueAnnualPrice: "$79.99",
-  rivalsAnnualPriceLabel: "$59.99 / year",
-  rivalsMonthlyPriceLabel: "$5.99 / month",
-  leagueAnnualPriceLabel: "$79.99 / year",
-  leagueMonthlyPriceLabel: "$9.99 / month",
-  upgradeAnnualDelta: "+$20 / year",
-  annualPriceAmount: "$59.99",
-  annualPriceLabel: "$59.99 / year",
+  rivalsMonthlyPrice: "$8.99",
+  rivalsAnnualPrice: "$79.99",
+  rivalsAnnualPriceLabel: "$79.99 / year",
+  rivalsMonthlyPriceLabel: "$8.99 / month",
+  annualPriceAmount: "$79.99",
+  annualPriceLabel: "$79.99 / year",
   annualPriceSuffix: "/ year",
   landingTagline: "Discover who you are in your league. Unlock competitive intelligence with Rivals.",
   freemiumForeverLine:
     "Fantasy Football Rivals is free forever — upgrade to Rivals for interpretation, recommendations, and the full rivalry ledger.",
-  launchPricingLine: "Rivals from $5.99/month or $59.99/year",
+  launchPricingLine: "Rivals Monthly — $8.99 · Rivals Annual — $79.99",
   discoverCta: "Discover your league",
   seeWhoYouAreCta: "See who you really are",
   unlockStoryCta: "Unlock Rivals",
@@ -36,13 +31,11 @@ export const COMMERCIAL = {
   exploreEverythingCta: "Explore Everything",
   settingsPlanFree: "Fantasy Football Rivals (Free)",
   settingsPlanRivals: "Rivals",
-  settingsPlanLeague: "The League",
   settingsPlanActive: "Rivals",
-  settingsLaunchPricing: "$59.99 / year (Rivals annual)",
+  settingsLaunchPricing: "Rivals Monthly — $8.99 · Rivals Annual — $79.99",
   manageBillingCta: "Manage Billing",
   subscriptionRequired: "Requires Rivals",
   unlockWithPro: "Unlocks with Rivals",
-  leagueComingSoon: "Coming in Sprint 4",
   freePlanHighlights: [
     "My GM Profile and basic DNA",
     "Career summary and league snapshot",
@@ -55,13 +48,6 @@ export const COMMERCIAL = {
     "Deep Records and dynasty rankings",
     "GM Advisor and opponent intelligence",
     "Behavioral and matchup intelligence",
-  ] as const,
-  leaguePlanHighlights: [
-    "League Story and Weekly Briefings publishing",
-    "League Headlines, Awards, Ring of Honor",
-    "Championship announcements and storyline publishing",
-    "Shareable league content and commissioner command center",
-    "Does not unlock Rivals intelligence for the whole league",
   ] as const,
   productStorySteps: [
     { step: 1, title: "Connect your ESPN league", body: "Link your league in under a minute." },
@@ -78,7 +64,7 @@ export const COMMERCIAL = {
     {
       step: 4,
       title: "Upgrade to Rivals for competitive intelligence",
-      body: "Interpretation, recommendations, full rivalries, and deep records — from $5.99/month.",
+      body: "Interpretation, recommendations, full rivalries, and deep records — from $8.99/month.",
     },
   ] as const,
 } as const;

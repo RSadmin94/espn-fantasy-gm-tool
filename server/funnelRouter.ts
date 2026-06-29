@@ -27,7 +27,7 @@ function sanitizeMetadata(raw: Record<string, unknown> | undefined): Record<stri
     if (k === "lastFreeFeature" || k === "source") {
       out[k] = typeof v === "string" ? v.slice(0, 64) : undefined;
     } else if (k === "plan") {
-      out[k] = v === "rivals" || v === "league" ? v : undefined;
+      out[k] = v === "rivals" ? v : undefined;
     } else if (k === "interval") {
       out[k] = v === "month" || v === "year" ? v : undefined;
     } else if (typeof v === "number" && Number.isFinite(v)) {

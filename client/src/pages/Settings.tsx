@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { useClerk, useUser } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { setSessionUnlocked } from "@/lib/rivalsProSessionUnlock";
+import { COMMERCIAL } from "@/lib/commercialCopy";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -355,6 +356,20 @@ function SubscriptionSection() {
               )}
             </div>
 
+            {/* Plan + pricing */}
+            <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5 text-sm">
+              <p className="font-medium text-foreground">
+                {sub.hasAccess ? COMMERCIAL.settingsPlanRivals : COMMERCIAL.settingsPlanFree}
+              </p>
+              {!sub.hasAccess ? (
+                <p className="mt-1 text-xs text-muted-foreground">{COMMERCIAL.settingsLaunchPricing}</p>
+              ) : sub.interval === "year" ? (
+                <p className="mt-1 text-xs text-muted-foreground">{COMMERCIAL.rivalsAnnualPriceLabel}</p>
+              ) : sub.interval === "month" ? (
+                <p className="mt-1 text-xs text-muted-foreground">{COMMERCIAL.rivalsMonthlyPriceLabel}</p>
+              ) : null}
+            </div>
+
             {/* Actions */}
             <div className="flex flex-wrap gap-2">
               {!sub.hasAccess && (
@@ -367,7 +382,7 @@ function SubscriptionSection() {
                   {checkoutMutation.isPending
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     : <ExternalLink className="h-3.5 w-3.5" />}
-                  Upgrade to Pro
+                  {checkoutMutation.isPending ? COMMERCIAL.upgradeCtaPending : COMMERCIAL.upgradeCta}
                 </Button>
               )}
               {sub.status === "active" && (
@@ -381,7 +396,7 @@ function SubscriptionSection() {
                   {portalMutation.isPending
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     : <ExternalLink className="h-3.5 w-3.5" />}
-                  Manage Billing
+                  {COMMERCIAL.manageBillingCta}
                 </Button>
               )}
             </div>

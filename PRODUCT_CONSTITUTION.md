@@ -88,6 +88,21 @@ From `docs/FREEMIUM_GATING_SPEC.md`:
 
 ---
 
+## 4b. Commercial tiers (V1)
+
+Version 1 ships **two commercial tiers only**:
+
+| Tier | Price | Billing |
+|------|-------|---------|
+| **Free** | $0 | Default — identity shell + one rivalry preview |
+| **Rivals** | $8.99/mo or $79.99/yr | Stripe subscription — full competitive intelligence |
+
+**The League** (commissioner engagement suite) is **deferred** — not sold, not in checkout, not in pricing UI. Commissioner routes may exist in code for future work but are not a purchasable subscription in V1.
+
+See `docs/DECISION_LOG.md` and `docs/V1_COMMERCIAL_PRICING.md`.
+
+---
+
 ## 5. Engineering constraints (implementation)
 
 - **Routers expose engines; they do not duplicate calculations.**

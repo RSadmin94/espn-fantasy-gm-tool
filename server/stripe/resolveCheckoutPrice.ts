@@ -3,20 +3,18 @@ import { ENV } from "../_core/env";
 import {
   PRODUCTS,
   type BillingInterval,
-  type PaidPlan,
   getPriceDefinition,
 } from "./products";
 
 export async function resolveStripePriceId(
   stripe: Stripe,
-  plan: PaidPlan,
   interval: BillingInterval,
 ): Promise<string | null> {
-  const def = getPriceDefinition(plan, interval);
+  const def = getPriceDefinition(interval);
   if (def.priceId) return def.priceId;
 
   const prices = await stripe.prices.list({ active: true, limit: 100 });
-  const productName = PRODUCTS[plan].productName;
+  const productName = PRODUCTS.rivals.productName;
   const found = prices.data.find((p) => {
     if (p.unit_amount !== def.amount || p.currency !== def.currency) return false;
     if (p.recurring?.interval !== def.interval) return false;
@@ -28,9 +26,9 @@ export async function resolveStripePriceId(
   return found?.id ?? null;
 }
 
-/** @deprecated Use resolveStripePriceId("rivals", "year") */
+/** @deprecated Use resolveStripePriceId("year") */
 export async function resolveRivalsProAnnualPriceId(stripe: Stripe): Promise<string | null> {
   const configured = ENV.stripePriceIdAnnual || PRODUCTS.rivals.annual.priceId;
   if (configured) return configured;
-  return resolveStripePriceId(stripe, "rivals", "year");
+  return resolveStripePriceId(stripe, "year");
 }

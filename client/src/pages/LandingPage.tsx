@@ -261,9 +261,9 @@ export function LandingPage() {
         {/* Pricing */}
         <section className="py-12">
           <span className={MONO}>Pricing</span>
-          <h2 className="mt-3 text-[26px] font-extrabold tracking-tight sm:text-[32px]">Three tiers. One league story.</h2>
+          <h2 className="mt-3 text-[26px] font-extrabold tracking-tight sm:text-[32px]">Two tiers. One league story.</h2>
           <p className="mt-2 text-[15px] text-white/55">{COMMERCIAL.landingTagline}</p>
-          <div className="mx-auto mt-7 grid max-w-[1100px] grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="mx-auto mt-7 grid max-w-[820px] grid-cols-1 gap-4 md:grid-cols-2">
             <div className={cn(PANEL, "flex flex-col p-6")}>
               <span className={MONO}>{COMMERCIAL.freePlanName}</span>
               <div className="mt-3 text-[42px] font-black leading-none">$0</div>
@@ -282,9 +282,18 @@ export function LandingPage() {
                 {COMMERCIAL.foundingOfferLabel}
               </span>
               <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-lime-400">{COMMERCIAL.productName}</span>
-              <div className="mt-3 text-[42px] font-black leading-none">{COMMERCIAL.rivalsAnnualPrice}</div>
-              <p className="mt-1 text-[14px] text-white/45">{COMMERCIAL.rivalsAnnualPriceLabel}</p>
-              <p className="mt-1 text-[13px] text-white/55">or {COMMERCIAL.rivalsMonthlyPriceLabel}</p>
+              <div className="mt-4 space-y-3">
+                <div>
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-white/45">Rivals Monthly</p>
+                  <div className="mt-1 text-[32px] font-black leading-none">{COMMERCIAL.rivalsMonthlyPrice}</div>
+                  <p className="text-[13px] text-white/50">{COMMERCIAL.rivalsMonthlyPriceLabel}</p>
+                </div>
+                <div className="border-t border-white/[0.08] pt-3">
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-lime-300/80">Rivals Annual</p>
+                  <div className="mt-1 text-[32px] font-black leading-none">{COMMERCIAL.rivalsAnnualPrice}</div>
+                  <p className="text-[13px] text-white/50">{COMMERCIAL.rivalsAnnualPriceLabel}</p>
+                </div>
+              </div>
               <p className="mt-2 text-[13px] font-semibold text-lime-300/90">Competitive intelligence — interpretation + recommendations</p>
               <ul className="mt-4 flex-1 space-y-2 text-[13px] text-white/75">
                 {COMMERCIAL.rivalsPlanHighlights.map((f) => (
@@ -292,21 +301,6 @@ export function LandingPage() {
                 ))}
               </ul>
               <CTA label={COMMERCIAL.unlockStoryCta} onClick={go} className="mt-6 w-full" />
-            </div>
-            <div className={cn(PANEL, "flex flex-col p-6 opacity-90")}>
-              <span className={MONO}>{COMMERCIAL.leaguePlanName}</span>
-              <div className="mt-3 text-[42px] font-black leading-none">{COMMERCIAL.leagueAnnualPrice}</div>
-              <p className="mt-1 text-[14px] text-white/45">{COMMERCIAL.leagueAnnualPriceLabel}</p>
-              <p className="mt-1 text-[13px] text-white/55">or {COMMERCIAL.leagueMonthlyPriceLabel}</p>
-              <p className="mt-2 text-[13px] font-semibold text-violet-300/90">{COMMERCIAL.leagueComingSoon}</p>
-              <ul className="mt-4 flex-1 space-y-2 text-[13px] text-white/65">
-                {COMMERCIAL.leaguePlanHighlights.map((f) => (
-                  <li key={f} className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-violet-400/70" /> {f}</li>
-                ))}
-              </ul>
-              <button disabled className="mt-6 cursor-not-allowed rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-[14px] font-bold text-white/40">
-                {COMMERCIAL.leagueComingSoon}
-              </button>
             </div>
           </div>
           <p className="mt-4 text-[12px] text-white/35">{COMMERCIAL.freemiumForeverLine}</p>

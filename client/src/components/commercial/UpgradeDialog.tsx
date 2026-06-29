@@ -54,7 +54,7 @@ export function UpgradeDialog({
         onClick={() => startCheckout()}
         disabled={isPending}
       >
-        {isPending ? COMMERCIAL.upgradeCtaPending : "Unlock Rivals Pro"}
+        {isPending ? COMMERCIAL.upgradeCtaPending : COMMERCIAL.upgradeCta}
       </Button>
     </>
   );
