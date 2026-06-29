@@ -113,6 +113,24 @@ async function persistSubscriptionFields(
   console.log(`[Webhook] User ${userId} subscription persisted — plan=${plan} interval=${interval}`);
 }
 
+/**
+ * Stripe moved `current_period_end` off the Subscription object and onto each
+ * subscription item. Read it from the item first, fall back to the legacy
+ * top-level field, and return null for any missing/invalid value so we never
+ * build an Invalid Date (which throws "Invalid time value" when persisted and
+ * aborts the whole upgrade).
+ */
+function periodEndFromSubscription(sub: import("stripe").Stripe.Subscription): Date | null {
+  const item = sub.items?.data?.[0] as unknown as { current_period_end?: number } | undefined;
+  const raw =
+    item?.current_period_end ??
+    (sub as unknown as { current_period_end?: number }).current_period_end ??
+    null;
+  if (raw == null || !Number.isFinite(raw)) return null;
+  const d = new Date(raw * 1000);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 async function handleCheckoutCompleted(session: import("stripe").Stripe.Checkout.Session): Promise<void> {
   const userId = session.metadata?.user_id ? parseInt(session.metadata.user_id, 10) : null;
   const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id ?? null;
@@ -131,7 +149,7 @@ async function handleCheckoutCompleted(session: import("stripe").Stripe.Checkout
   if (subscriptionId) {
     try {
       const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ["items.data.price"] });
-      currentPeriodEnd = new Date((sub as unknown as { current_period_end: number }).current_period_end * 1000);
+      currentPeriodEnd = periodEndFromSubscription(sub);
       if (!priceId) {
         priceId = sub.items.data[0]?.price?.id ?? null;
       }
@@ -163,7 +181,7 @@ async function handleSubscriptionUpsert(subscription: import("stripe").Stripe.Su
   }
 
   const priceId = subscription.items.data[0]?.price?.id ?? null;
-  const periodEnd = new Date((subscription as unknown as { current_period_end: number }).current_period_end * 1000);
+  const periodEnd = periodEndFromSubscription(subscription);
   const status =
     subscription.status === "active"
       ? "active"
