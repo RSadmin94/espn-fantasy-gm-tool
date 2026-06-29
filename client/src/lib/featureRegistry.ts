@@ -92,7 +92,7 @@ export const FEATURE_REGISTRY: FeatureEntry[] = [
   {
     entryType: "route",
     id: "dashboard",
-    label: "Dashboard",
+    label: "The Briefing",
     route: "/dashboard",
     navCategory: "home",
     icon: LayoutDashboard,

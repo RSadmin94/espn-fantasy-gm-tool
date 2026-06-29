@@ -1,0 +1,37 @@
+/** User-facing copy for GM Briefing (never "Dashboard"). */
+export const BRIEFING = {
+  navLabel: "The Briefing",
+  mastheadTitle: "Today's Briefing",
+  readMore: "Read More →",
+  leagueHeadlines: "League Headlines",
+  moreHeadlines: (n: number) => `+${n} more`,
+  rivalOfTheWeek: "Rival of the Week",
+  whyNow: "Why now?",
+  viewFullProfile: "View Full GM Profile →",
+  viewRivalry: "Read More →",
+  comingNext: "Coming Next…",
+  availableInRivals: "Available in Rivals.",
+  unlockAdvantage: "Unlock Rivals for your weekly winning formula.",
+  advantageTitles: {
+    beat: (name: string) => `Beat ${name}`,
+    default: "This Week's Advantage",
+    howYouWin: "How You Win",
+    winningFormula: "Winning Formula",
+  },
+  identity: {
+    reputation: "Your Reputation",
+    leagueSays: "League says…",
+    knownFor: "Known for",
+    fearedBecause: "Feared because",
+    career: "Career",
+    titles: "Championships",
+    rank: "Current Rank",
+  },
+  headlineCategories: {
+    news: "League News",
+    milestone: "Milestone",
+    trade: "Trade",
+    rivalry: "Rivalry",
+    upset: "Upset Alert",
+  } as const,
+} as const;

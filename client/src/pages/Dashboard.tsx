@@ -10,6 +10,11 @@ import { IntelPageShell } from "@/components/layout";
 import { type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
 import { type TimelineChamp } from "@/components/dashboard/DashboardTimelineStrip";
 import { WelcomeBackCoachHome } from "@/components/dashboard/welcomeBackCoach/WelcomeBackCoachHome";
+import { GmBriefingPage } from "@/components/briefing/GmBriefingPage";
+import { Link } from "react-router";
+import { RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { V1 } from "@/lib/v1Copy";
 import {
   buildAcquisitionHeadline,
   buildDraftMemo,
@@ -47,6 +52,8 @@ type StandingWithoutDisplayRank = Omit<NormalizedStanding, "displayRank">;
 
 const CURRENT_YEAR = new Date().getFullYear();
 const SEASONS_DESC = Array.from({ length: CURRENT_YEAR - 2009 + 1 }, (_, i) => CURRENT_YEAR - i);
+
+const USE_GM_BRIEFING = import.meta.env.VITE_GM_BRIEFING_V2 !== "false";
 
 const DASH_QUERY_OPTS = {
   staleTime: 5 * 60 * 1000,
@@ -614,6 +621,63 @@ export function Dashboard() {
   const freeProfileThreatLine = oh?.threat?.primary
     ? `${oh.threat.primary.ownerName} · ${oh.threat.primary.threatLevel}`
     : null;
+
+  const myStandingRank =
+    myPulse?.standingRank ??
+    (leagueCtx.myTeamId != null ? ranked.find((t) => t.teamId === leagueCtx.myTeamId)?.displayRank : null);
+  const rankLine = myStandingRank != null ? `#${myStandingRank}` : null;
+  const syncReady = activeLeagueQ.data?.syncStatus === "ok" || cachedSeasons.length > 0;
+  const syncHeaderAction = (
+    <Button
+      asChild
+      variant="outline"
+      size="sm"
+      className="h-8 shrink-0 border-red-500/25 bg-red-500/[0.06] text-red-200 hover:bg-red-500/15"
+    >
+      <Link to="/sync" className="gap-2">
+        <RefreshCw className="h-4 w-4" />
+        {V1.features.syncData}
+      </Link>
+    </Button>
+  );
+
+  if (USE_GM_BRIEFING) {
+    return (
+      <GmBriefingPage
+        welcomeName={welcomeName}
+        leagueName={leagueName}
+        weekLabel={weekLabel}
+        season={season}
+        seasonsDesc={SEASONS_DESC}
+        cachedSeasons={cachedSeasons}
+        onSeasonChange={setSeason}
+        isPreseason={isPreseason}
+        isInSeason={isInSeason}
+        week={week}
+        beats={beatCandidates}
+        opponentName={isInSeason ? thisWeekOpponent?.ownerName ?? null : null}
+        rivalName={oh?.rival?.rivalName ?? null}
+        threatName={oh?.threat?.primary?.ownerName ?? null}
+        threatReason={oh?.threat?.primary?.reason ?? null}
+        threatLevel={oh?.threat?.primary?.threatLevel ?? null}
+        hofHeadline={hofHeadline}
+        displayName={freeProfileDisplayName}
+        careerLine={freeProfileCareerLine}
+        titlesLine={freeProfileTitlesLine}
+        rankLine={rankLine}
+        winPct={oh?.careerRecord?.winPct != null ? Number(oh.careerRecord.winPct) : null}
+        syncReady={syncReady}
+        seasonCount={cachedSeasons.length}
+        teamA={teamA}
+        teamB={teamB}
+        boardLite={boardLite}
+        outlookPct={outlookPct}
+        matchupLoading={pulseQ.isLoading || scoreboardQ.isLoading}
+        eventSeasons={eventSeasons}
+        headerActions={syncHeaderAction}
+      />
+    );
+  }
 
   return (
     <WelcomeBackCoachHome
