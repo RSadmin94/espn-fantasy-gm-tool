@@ -58,6 +58,7 @@ function normalizeOwnerName(name: string | null | undefined): string {
 /** Founder owner display names (normalized). Add a name here to grant founder access by claimed identity. */
 export const FOUNDER_OWNER_NAMES: ReadonlySet<string> = new Set<string>([
   normalizeOwnerName("Demetri Clark"),
+  normalizeOwnerName("Vincent Sellers"),
 ]);
 
 /** Pure decision: is this owner display name on the founder owner-name list? (case- and space-insensitive) */
