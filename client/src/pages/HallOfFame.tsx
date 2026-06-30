@@ -678,7 +678,14 @@ export function HallOfFame() {
   const leagueAge =
     seasonsSpan.length > 0 ? seasonsSpan[seasonsSpan.length - 1]! - seasonsSpan[0]! + 1 : totalSeasonsTouched;
   const totalGames = data.coverage.completedRsGmMatchupGames || data.coverage.dedupedMatchupRows;
-  const championshipHistory = [...data.championships.history].sort((a, b) => b.season - a.season);
+  // Display safety gate (defect #1): only render championship rows that resolve to a
+  // valid champion owner for THIS league. Unresolved rows (e.g. foreign/contaminated
+  // medal labels that could not be matched to an owner) are never shown as champions.
+  // When every row is unresolved, championshipHistory is empty and the table falls back
+  // to its existing empty state. This is a display gate only — no data is mutated.
+  const championshipHistory = [...data.championships.history]
+    .filter((h) => h.resolvedChampionDisplay)
+    .sort((a, b) => b.season - a.season);
   const dynastyTimeline = [...data.championships.history]
     .filter((h) => h.resolvedChampionDisplay)
     .sort((a, b) => a.season - b.season);
@@ -881,9 +888,9 @@ export function HallOfFame() {
                 {championshipHistory.map((h) => (
                   <tr key={h.season} className="border-b border-white/[0.05]">
                     <td className="py-2 pr-3 font-semibold tabular-nums text-zinc-200">{h.season}</td>
-                    <td className="py-2 pr-3 text-zinc-100">{h.resolvedChampionDisplay ?? h.championTeam ?? "—"}</td>
-                    <td className="py-2 pr-3 text-zinc-400">{h.resolvedRunnerUpDisplay ?? h.runnerUpTeam ?? "—"}</td>
-                    <td className="py-2 text-zinc-500">{h.resolvedThirdDisplay ?? h.thirdTeam ?? "—"}</td>
+                    <td className="py-2 pr-3 text-zinc-100">{h.resolvedChampionDisplay ?? "—"}</td>
+                    <td className="py-2 pr-3 text-zinc-400">{h.resolvedRunnerUpDisplay ?? "—"}</td>
+                    <td className="py-2 text-zinc-500">{h.resolvedThirdDisplay ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
