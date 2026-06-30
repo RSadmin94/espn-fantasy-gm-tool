@@ -147,10 +147,10 @@ async function saveArticle(db: any, leagueId: string, params: {
 
 // ── League resolver helper ────────────────────────────────────────────────────
 
-async function resolveLeagueId(userId: number): Promise<string> {
+async function resolveLeagueId(userId: number, inputLeagueKey?: string | null): Promise<string> {
   const { leagueId } = await resolveActiveLeagueId(
     { user: userId ? { id: userId } : undefined },
-    null,
+    inputLeagueKey ?? null,
     undefined,
   );
   return leagueId;
@@ -162,10 +162,11 @@ export const leagueNewsroomRouter = router({
 
   /** Available seasons for the archive */
   getArchiveSeasons: publicProcedure
-    .query(async ({ ctx }) => {
+    .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
-      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0, input?.activeLeagueKey);
       if (!leagueId || leagueId === "default") return [];
       const [rows] = await db.execute(drizzleSql`
         SELECT DISTINCT season FROM league_medals
@@ -177,11 +178,11 @@ export const leagueNewsroomRouter = router({
 
   /** Articles for a season (from cache) */
   getSeasonArticles: publicProcedure
-    .input(z.object({ season: z.number().int(), category: z.string().optional() }))
+    .input(z.object({ season: z.number().int(), category: z.string().optional(), activeLeagueKey: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
-      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0, input.activeLeagueKey);
       if (!leagueId || leagueId === "default") return [];
       const [rows] = await db.execute(drizzleSql`
         SELECT id, season, articleType, slug, category, headline, subheadline, body, byline, isPredicted, createdAt
@@ -195,11 +196,11 @@ export const leagueNewsroomRouter = router({
 
   /** All articles across all seasons for the newsroom feed */
   getNewsroomFeed: publicProcedure
-    .input(z.object({ limit: z.number().int().min(1).max(50).default(20) }))
+    .input(z.object({ limit: z.number().int().min(1).max(50).default(20), activeLeagueKey: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
-      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0, input.activeLeagueKey);
       if (!leagueId || leagueId === "default") return [];
       const [rows] = await db.execute(drizzleSql`
         SELECT id, season, articleType, slug, category, headline, subheadline, body, byline, isPredicted, createdAt

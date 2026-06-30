@@ -16,7 +16,7 @@
 
 import { z }                    from "zod";
 import { router, publicProcedure } from "./_core/trpc";
-import { getDb }                from "./db";
+import { getDb, resolveActiveLeagueId } from "./db";
 import { sql as drizzleSql }    from "drizzle-orm";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -263,14 +263,19 @@ export const leagueWireRouter = router({
   /** All available season/week combos that have completed matchups */
   getAvailableWeeks: publicProcedure
     .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
-    .query(async ({ input }) => {
-      void input?.activeLeagueKey;
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
+      const { leagueId: lid } = await resolveActiveLeagueId(
+        { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined },
+        input?.activeLeagueKey ?? null,
+        undefined,
+      );
+      if (!lid) return [];
       const rows = await db.execute(drizzleSql`
         SELECT season, week, COUNT(*) AS cnt
         FROM matchups
-        WHERE isCompleted = 1 AND homeScore > 0
+        WHERE leagueId = ${lid} AND isCompleted = 1 AND homeScore > 0
         GROUP BY season, week
         ORDER BY season DESC, week DESC
       `) as unknown as [Array<{ season: number; week: number; cnt: number }>];
@@ -288,16 +293,21 @@ export const leagueWireRouter = router({
         activeLeagueKey: z.string().optional(),
       }),
     )
-    .query(async ({ input }) => {
-      void input.activeLeagueKey;
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
       const { season, week } = input;
+      const { leagueId: lid } = await resolveActiveLeagueId(
+        { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined },
+        input.activeLeagueKey ?? null,
+        season,
+      );
+      if (!lid) return [];
 
       // Load matchups for this week
       const matchupRows = await db.execute(drizzleSql`
         SELECT * FROM matchups
-        WHERE season = ${season} AND week = ${week} AND isCompleted = 1
+        WHERE leagueId = ${lid} AND season = ${season} AND week = ${week} AND isCompleted = 1
       `) as unknown as [any[]];
       const weekMatchups = (matchupRows[0] as any[]);
       if (!weekMatchups.length) return [];
@@ -305,7 +315,7 @@ export const leagueWireRouter = router({
       // Load all teams for this season
       const teamRows = await db.execute(drizzleSql`
         SELECT teamId, name, ownerName, wins, losses, pointsFor
-        FROM teams WHERE season = ${season}
+        FROM teams WHERE leagueId = ${lid} AND season = ${season}
       `) as unknown as [any[]];
       const teamMap = new Map((teamRows[0] as any[]).map(t => [Number(t.teamId), t]));
       const teamCount = teamMap.size;
@@ -317,7 +327,7 @@ export const leagueWireRouter = router({
       const priorRows = await db.execute(drizzleSql`
         SELECT homeTeamId, awayTeamId, winnerTeamId
         FROM matchups
-        WHERE season = ${season} AND week < ${week} AND isCompleted = 1
+        WHERE leagueId = ${lid} AND season = ${season} AND week < ${week} AND isCompleted = 1
       `) as unknown as [any[]];
       const priorMatchups = (priorRows[0] as any[]);
 
@@ -325,7 +335,7 @@ export const leagueWireRouter = router({
       const thruRows = await db.execute(drizzleSql`
         SELECT homeTeamId, awayTeamId, winnerTeamId
         FROM matchups
-        WHERE season = ${season} AND week <= ${week} AND isCompleted = 1
+        WHERE leagueId = ${lid} AND season = ${season} AND week <= ${week} AND isCompleted = 1
       `) as unknown as [any[]];
       const thruMatchups = (thruRows[0] as any[]);
 
@@ -356,27 +366,28 @@ export const leagueWireRouter = router({
       if (!matchup) return null;
 
       const { season, week } = matchup;
+      const lid = matchup.leagueId;
 
       const teamRows = await db.execute(drizzleSql`
         SELECT teamId, name, ownerName, wins, losses, pointsFor
-        FROM teams WHERE season = ${season}
+        FROM teams WHERE leagueId = ${lid} AND season = ${season}
       `) as unknown as [any[]];
       const teamMap = new Map((teamRows[0] as any[]).map(t => [Number(t.teamId), t]));
 
       const weekMatchupRows = await db.execute(drizzleSql`
         SELECT homeScore, awayScore FROM matchups
-        WHERE season = ${season} AND week = ${week} AND isCompleted = 1
+        WHERE leagueId = ${lid} AND season = ${season} AND week = ${week} AND isCompleted = 1
       `) as unknown as [any[]];
       const allScores = (weekMatchupRows[0] as any[]).flatMap(r => [parseFloat(r.homeScore), parseFloat(r.awayScore)]);
 
       const priorRows = await db.execute(drizzleSql`
         SELECT homeTeamId, awayTeamId, winnerTeamId
-        FROM matchups WHERE season = ${season} AND week < ${week} AND isCompleted = 1
+        FROM matchups WHERE leagueId = ${lid} AND season = ${season} AND week < ${week} AND isCompleted = 1
       `) as unknown as [any[]];
 
       const thruRows = await db.execute(drizzleSql`
         SELECT homeTeamId, awayTeamId, winnerTeamId
-        FROM matchups WHERE season = ${season} AND week <= ${week} AND isCompleted = 1
+        FROM matchups WHERE leagueId = ${lid} AND season = ${season} AND week <= ${week} AND isCompleted = 1
       `) as unknown as [any[]];
 
       return buildPostgameReport({
