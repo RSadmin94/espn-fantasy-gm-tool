@@ -3,7 +3,7 @@
  * matchup stats and single-game records from completed regular-season gmMatchups only
  * (no ESPN cache fallback; no gmTeams W/L/T).
  */
-import { gmMatchups, gmTeams, leagueMedals } from "../drizzle/schema";
+import { gmMatchups, gmTeams, leagueMedals, ownerAliases } from "../drizzle/schema";
 import { and as andDrizzle, asc as ascDrizzle, eq as eqDrizzle } from "drizzle-orm";
 import type { AppDb } from "./db";
 import {
@@ -12,6 +12,8 @@ import {
   buildRawKeyToCanonicalProfileKey,
   buildTeamToCanonicalProfileKey,
   cleanOwnerDisplay,
+  normalizeOwnerStr,
+  personMergeKey,
   resolveMedalTeamToOwnerKey,
   type FlatRegularSeasonMatchup,
   type GmTeamRow,
@@ -265,6 +267,40 @@ export async function buildHallOfFamePayload(args: {
   }
   const ownerLabel = (key: string) => ownerDisplayLatest.get(key)?.label || key;
 
+  // Alias fallback: legacy team names from seasons with no gm_teams (e.g. pre-2010,
+  // where ESPN exposes only the championship podium, not team rosters) resolve via
+  // commissioner-approved owner_aliases pointing at an owner who DOES exist in gm_teams,
+  // so the legacy title merges into that owner's real identity.
+  const personKeyToCanonical = new Map<string, string>();
+  for (const t of allGmRows) {
+    if (t.teamId <= 0) continue;
+    const k = teamToOwnerKey.get(`${t.season}:${t.teamId}`);
+    if (!k) continue;
+    const pk = personMergeKey(t.ownerName || "");
+    if (pk && !personKeyToCanonical.has(pk)) personKeyToCanonical.set(pk, k);
+  }
+  const aliasRows = await db
+    .select({
+      legacyTeamName: ownerAliases.legacyTeamName,
+      resolvedOwnerName: ownerAliases.resolvedOwnerName,
+      status: ownerAliases.status,
+    })
+    .from(ownerAliases)
+    .where(eqDrizzle(ownerAliases.leagueId, lid));
+  const aliasLabelToKey = new Map<string, string>();
+  for (const a of aliasRows) {
+    if (a.status !== "approved" || !a.resolvedOwnerName) continue;
+    const ck = personKeyToCanonical.get(personMergeKey(a.resolvedOwnerName));
+    if (ck) aliasLabelToKey.set(normalizeOwnerStr(a.legacyTeamName), ck);
+  }
+  /** gm_teams resolution first; fall back to an approved alias for seasons lacking rosters. */
+  const resolveMedalKey = (season: number, label: string | null): string | null => {
+    const viaGm = canonicalMedalOwnerKey(allGmRows, nameToOwnerId, season, label);
+    if (viaGm) return viaGm;
+    if (!label?.trim()) return null;
+    return aliasLabelToKey.get(normalizeOwnerStr(label)) ?? null;
+  };
+
   function teamRowLabel(season: number, teamId: number): string {
     const t = allGmRows.find((r) => r.season === season && r.teamId === teamId);
     if (!t) return `team ${teamId}`;
@@ -293,9 +329,9 @@ export async function buildHallOfFamePayload(args: {
   const history: HallOfFamePayload["championships"]["history"] = [];
 
   for (const m of medalRows) {
-    const ck = canonicalMedalOwnerKey(allGmRows, nameToOwnerId, m.season, m.championOwner);
-    const rk = canonicalMedalOwnerKey(allGmRows, nameToOwnerId, m.season, m.runnerUpOwner);
-    const tk = canonicalMedalOwnerKey(allGmRows, nameToOwnerId, m.season, m.thirdPlaceOwner);
+    const ck = resolveMedalKey(m.season, m.championOwner);
+    const rk = resolveMedalKey(m.season, m.runnerUpOwner);
+    const tk = resolveMedalKey(m.season, m.thirdPlaceOwner);
 
     if (m.championOwner?.trim() && !ck) unmatchedChampionTeams.push({ season: m.season, teamName: m.championOwner });
     if (m.runnerUpOwner?.trim() && !rk) unmatchedRunnerUpTeams.push({ season: m.season, teamName: m.runnerUpOwner });
