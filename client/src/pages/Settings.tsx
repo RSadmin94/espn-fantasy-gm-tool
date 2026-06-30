@@ -300,6 +300,7 @@ function SubscriptionSection() {
   });
 
   const sub = subQ.data;
+  const [billingInterval, setBillingInterval] = useState<"month" | "year">("year");
 
   const statusConfig: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
     active:    { label: "Active",    className: "border-lime-500/20 bg-lime-500/10 text-lime-400", icon: <CheckCircle2 className="h-4 w-4" /> },
@@ -370,6 +371,38 @@ function SubscriptionSection() {
               ) : null}
             </div>
 
+            {/* Plan interval choice (only when upgrading) */}
+            {!sub.hasAccess && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBillingInterval("year")}
+                  className={cn(
+                    "flex-1 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
+                    billingInterval === "year"
+                      ? "border-primary bg-primary/10 ring-1 ring-primary/30"
+                      : "border-border/60 bg-muted/20 hover:border-primary/40",
+                  )}
+                >
+                  <div className="font-bold text-foreground">Annual</div>
+                  <div className="text-muted-foreground">{COMMERCIAL.rivalsAnnualPriceLabel}</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillingInterval("month")}
+                  className={cn(
+                    "flex-1 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
+                    billingInterval === "month"
+                      ? "border-primary bg-primary/10 ring-1 ring-primary/30"
+                      : "border-border/60 bg-muted/20 hover:border-primary/40",
+                  )}
+                >
+                  <div className="font-bold text-foreground">Monthly</div>
+                  <div className="text-muted-foreground">{COMMERCIAL.rivalsMonthlyPriceLabel}</div>
+                </button>
+              </div>
+            )}
+
             {/* Actions */}
             <div className="flex flex-wrap gap-2">
               {!sub.hasAccess && (
@@ -377,7 +410,7 @@ function SubscriptionSection() {
                   size="sm"
                   className="gap-1.5"
                   disabled={checkoutMutation.isPending}
-                  onClick={() => checkoutMutation.mutate({ origin: window.location.origin })}
+                  onClick={() => checkoutMutation.mutate({ origin: window.location.origin, interval: billingInterval })}
                 >
                   {checkoutMutation.isPending
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
