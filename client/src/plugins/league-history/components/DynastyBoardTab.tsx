@@ -58,19 +58,19 @@ export function DynastyBoardTab({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground">Sort by:</span>
-        {(["titles", "wins", "winpct"] as SortKey[]).map((s) => (
+        {(["titles", "wins", "winpct", "draft"] as SortKey[]).map((s) => (
           <button
             key={s}
             type="button"
             onClick={() => setSortBy(s)}
             className={cn(
-              "rounded border px-2.5 py-1 text-xs transition-colors",
+              "rounded border px-2.5 py-1 text-label transition-colors",
               sortBy === s
                 ? "border-primary/60 bg-primary/10 text-primary"
                 : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground",
             )}
           >
-            {s === "titles" ? "Titles" : s === "wins" ? "Wins" : "Win %"}
+            {s === "titles" ? "Titles" : s === "wins" ? "Wins" : s === "winpct" ? "Win %" : "Draft order"}
           </button>
         ))}
       </div>
@@ -95,11 +95,18 @@ export function DynastyBoardTab({
               <CardContent className="space-y-3 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-semibold leading-tight text-foreground">{owner.displayName}</div>
-                  {owner.titleCount > 0 && (
-                    <div className="shrink-0 rounded-full bg-yellow-500/15 px-2 py-0.5 text-xs font-bold text-yellow-300">
-                      🏆&nbsp;{owner.titleCount}
-                    </div>
-                  )}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {sortBy === "draft" && owner.draftSlot != null && (
+                      <div className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-label font-bold text-cyan-300">
+                        Pick {owner.draftSlot}
+                      </div>
+                    )}
+                    {owner.titleCount > 0 && (
+                      <div className="rounded-full bg-yellow-500/15 px-2 py-0.5 text-xs font-bold text-yellow-300">
+                        🏆&nbsp;{owner.titleCount}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -134,7 +141,7 @@ export function DynastyBoardTab({
                 <button
                   type="button"
                   onClick={() => setExpandedOwner(isOpen ? null : owner.ownerKey)}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                  className="flex items-center gap-1 text-label text-muted-foreground transition-colors hover:text-foreground"
                 >
                   {isOpen ? (
                     <>
@@ -154,7 +161,7 @@ export function DynastyBoardTab({
                         key={season}
                         title={seasonChipTitle(season, entry)}
                         className={cn(
-                          "rounded border px-2 py-0.5 text-[11px] tabular-nums",
+                          "rounded border px-2 py-0.5 text-label tabular-nums",
                           chipStyle(entry.finalStanding),
                         )}
                       >

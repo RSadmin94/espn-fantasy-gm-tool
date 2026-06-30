@@ -5,7 +5,7 @@ import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { buildSeasonTabRows, type StandingsOwnerRow } from "../utils/seasonTabChampions";
 
 export type LeagueHistoryTab = "dynasty" | "seasons" | "rivalries" | "profiles";
-export type SortKey = "titles" | "wins" | "winpct";
+export type SortKey = "titles" | "wins" | "winpct" | "draft";
 
 type MedalRow = {
   season: number;
@@ -27,6 +27,8 @@ export type OwnerWithTitles = StandingsOwnerRow & {
   allTimeTies: number;
   allTimeGamesPlayed: number;
   allTimeWinPct: number;
+  /** Round-1 draft slot for latest synced season (1 = first pick). */
+  draftSlot: number | null;
 };
 
 type MatrixRow = {
@@ -213,6 +215,32 @@ export type UnmatchedChampionTeam = {
   availableTeamNamesForSeason: string[];
 };
 
+function buildDraftSlotByOwnerKey(
+  pickOrder: Array<{ position: number; teamId: number; name?: string; owners?: string }>,
+  rawOwners: StandingsOwnerRow[],
+): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const slot of pickOrder) {
+    const ownerLabels = (slot.owners ?? "")
+      .split(";")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const label of ownerLabels) {
+      map.set(ownerKeyFromLabel(label), slot.position);
+    }
+    const teamNorm = normalizeTeamName(slot.name ?? "");
+    for (const o of rawOwners) {
+      if (teamNorm && normalizeTeamName(o.displayName) === teamNorm) {
+        map.set(o.ownerKey, slot.position);
+      }
+      if (ownerLabels.some((l) => ownerKeyFromLabel(l) === o.ownerKey || l === o.displayName)) {
+        map.set(o.ownerKey, slot.position);
+      }
+    }
+  }
+  return map;
+}
+
 function spotlightsForSeason(medals: MedalRow[], season: number) {
   const row = medals.find((m) => m.season === season);
   return {
@@ -246,6 +274,14 @@ export function useLeagueHistoryModel() {
   );
 
   const historySeasons = standingsQ.data?.seasons ?? [];
+  const draftSeason = useMemo(
+    () => (historySeasons.length ? Math.max(...historySeasons) : null),
+    [historySeasons.join(",")],
+  );
+  const draftOrderQ = trpc.espn.draftOrder.useQuery(
+    withLeagueSalt({ season: draftSeason ?? 0 }, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady && draftSeason != null },
+  );
   const medalSeasons = (medalsQ.data ?? []).map((m) => m.season);
   const seasonsToLoad = useMemo(
     () => [...new Set([...historySeasons, ...medalSeasons])].sort((a, b) => a - b),
@@ -313,6 +349,16 @@ export function useLeagueHistoryModel() {
     return byKey;
   }, [recordsQ.data?.owners]);
 
+  const draftSlotByOwnerKey = useMemo(() => {
+    const pickOrder = (draftOrderQ.data?.pickOrder ?? []) as Array<{
+      position: number;
+      teamId: number;
+      name?: string;
+      owners?: string;
+    }>;
+    return buildDraftSlotByOwnerKey(pickOrder, rawOwners);
+  }, [draftOrderQ.data?.pickOrder, rawOwners]);
+
   const mergedOwners = useMemo((): OwnerWithTitles[] => {
     return rawOwners.map((o) => {
       const titleSeasons = [...(titleSeasonsByOwnerKey.get(o.ownerKey) ?? [])].sort((a, b) => b - a);
@@ -328,12 +374,13 @@ export function useLeagueHistoryModel() {
         allTimeTies: rec?.ties ?? 0,
         allTimeGamesPlayed: gamesPlayed,
         allTimeWinPct: gamesPlayed > 0 ? rec!.winPct : 0,
+        draftSlot: draftSlotByOwnerKey.get(o.ownerKey) ?? null,
       };
     });
-  }, [rawOwners, titleSeasonsByOwnerKey, recordLookup]);
+  }, [rawOwners, titleSeasonsByOwnerKey, recordLookup, draftSlotByOwnerKey]);
 
   const standingsLoading =
-    standingsQ.isLoading || medalsQ.isLoading || teamsLoading || recordsQ.isLoading;
+    standingsQ.isLoading || medalsQ.isLoading || teamsLoading || recordsQ.isLoading || draftOrderQ.isLoading;
   const matrix = (h2hQ.data?.matrix ?? []) as MatrixRow[];
   const totalTitles = useMemo(
     () => [...titleSeasonsByOwnerKey.values()].reduce((sum, seasons) => sum + seasons.size, 0),
@@ -366,6 +413,12 @@ export function useLeagueHistoryModel() {
         return b.allTimeWins - a.allTimeWins;
       }
       if (sortBy === "wins") return b.allTimeWins - a.allTimeWins;
+      if (sortBy === "draft") {
+        const slotA = a.draftSlot ?? 999;
+        const slotB = b.draftSlot ?? 999;
+        if (slotA !== slotB) return slotA - slotB;
+        return a.displayName.localeCompare(b.displayName);
+      }
       return b.allTimeWinPct - a.allTimeWinPct;
     });
   }
@@ -386,6 +439,8 @@ export function useLeagueHistoryModel() {
     standingsQ,
     medalsQ,
     h2hQ,
+    draftOrderQ,
+    draftSeason,
     standingsLoading,
     allSeasons: historySeasons,
     rawOwners,

@@ -709,29 +709,40 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
         </Panel>
       </div>
 
-      {/* mock timeline + receipts */}
+      {/* Upcoming picks from synced draft board (no speculative player projections) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel>
           <div className="flex items-center justify-between gap-3">
-            <SectionTitle icon={Clock} kicker={usePersonalNeeds ? "Projected" : "Projected · league order"} title="Mock Against Your League" color={TEAL} />
-            <span className="text-[12px] font-bold px-2.5 py-1.5 rounded-full shrink-0" style={{ color: TEAL, background: TEAL + "14" }}>{timelineConf}% conf</span>
+            <SectionTitle icon={Clock} kicker="Draft board" title="Upcoming Picks" color={TEAL} />
+            {timeline.length > 0 ? (
+              <span className="text-caption font-bold px-2.5 py-1.5 rounded-full shrink-0" style={{ color: TEAL, background: TEAL + "14" }}>
+                {timeline.length} on the clock
+              </span>
+            ) : null}
           </div>
           <div className="space-y-3 mt-4">
-            {timeline.length === 0 && <Empty>No upcoming picks projected.</Empty>}
+            {timeline.length === 0 && <Empty>No upcoming picks on the synced board.</Empty>}
             {timeline.map((p) => (
               <div key={p.pickNumber} className="flex items-center gap-3.5">
                 <div className="shrink-0 text-center" style={{ width: 46 }}>
                   <div className="text-[15px] font-black" style={{ color: GOLD }}>{p.round}.{pad2(p.roundPick)}</div>
                 </div>
-                <Avatar name={p.ownerName} color={CYAN} size={36} />
+                <Avatar name={p.ownerName ?? p.teamName} color={CYAN} size={36} />
                 <div className="min-w-0 flex-1">
-                  <div className="text-[14px] font-bold truncate" style={{ color: TEXT }}>{p.ownerName} <span style={{ color: MUTED, fontWeight: 400 }}>likely {p.position}</span></div>
-                  <div className="text-[13px] truncate" style={{ color: MUTED }}>e.g. {p.player}</div>
+                  <div className="text-[15px] font-bold truncate" style={{ color: TEXT }}>
+                    {p.ownerName ?? p.teamName ?? "TBD"}
+                  </div>
+                  <div className="text-caption truncate" style={{ color: MUTED }}>
+                    {p.teamName ?? "Pick order from ESPN"}
+                    {p.isKeeperSlot ? " · Keeper slot" : ""}
+                  </div>
                 </div>
-                <div className="text-[13px] font-bold shrink-0" style={{ color: riskColor(100 - (p.confidence || 0)) }}>{clamp(p.confidence || 0)}%</div>
               </div>
             ))}
           </div>
+          <p className="mt-4 text-2xs leading-snug" style={{ color: MUTED }}>
+            Pick order from your synced league — open Draft War Room for full mock simulation.
+          </p>
         </Panel>
 
         <Panel>
