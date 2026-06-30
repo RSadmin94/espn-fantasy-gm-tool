@@ -177,6 +177,7 @@ function creditTitlesFromMedalTeams(
   medals: MedalRow[],
   teamsBySeason: ReadonlyMap<number, readonly SeasonTeamRow[]>,
   rawOwners: StandingsOwnerRow[],
+  aliasResolvedNameByTeam: ReadonlyMap<string, string>,
 ): { titleSeasonsByOwnerKey: Map<string, Set<number>>; unmatched: UnmatchedChampionTeam[] } {
   const titleSeasonsByOwnerKey = new Map<string, Set<number>>();
   const unmatched: UnmatchedChampionTeam[] = [];
@@ -189,12 +190,18 @@ function creditTitlesFromMedalTeams(
     const availableTeamNamesForSeason = seasonTeams.map((t) => t.teamName);
     const matchedTeam = findTeamForChampion(seasonTeams, championTeamName);
 
-    if (!matchedTeam) {
-      unmatched.push({ season: medal.season, championTeamName, availableTeamNamesForSeason });
-      continue;
+    let owner = matchedTeam
+      ? resolveOwnerForChampionTeam(medal.season, championTeamName, matchedTeam, rawOwners)
+      : undefined;
+
+    // Alias fallback: seasons with no team rosters (e.g. pre-2010 podium-only, where ESPN
+    // exposes champions but no teams) credit via an approved owner alias mapping the legacy
+    // team name to a known owner.
+    if (!owner) {
+      const aliasName = aliasResolvedNameByTeam.get(normalizeTeamName(championTeamName));
+      if (aliasName) owner = findOwnerForTeamLabel(rawOwners, aliasName);
     }
 
-    const owner = resolveOwnerForChampionTeam(medal.season, championTeamName, matchedTeam, rawOwners);
     if (!owner) {
       unmatched.push({ season: medal.season, championTeamName, availableTeamNamesForSeason });
       continue;
@@ -264,6 +271,10 @@ export function useLeagueHistoryModel() {
     withLeagueSalt({}, leagueContextKey),
     { staleTime: 60_000, enabled: leagueKeyReady },
   );
+  const aliasesQ = trpc.espn.leagueOwnerAliases.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
   const recordsQ = trpc.espn.ownerAllTimeRecords.useQuery(
     withLeagueSalt({}, leagueContextKey),
     { staleTime: 60_000, enabled: leagueKeyReady },
@@ -290,6 +301,14 @@ export function useLeagueHistoryModel() {
 
   const rawOwners = (standingsQ.data?.owners ?? []) as StandingsOwnerRow[];
   const medals = (medalsQ.data ?? []) as MedalRow[];
+  const aliasResolvedNameByTeam = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of (aliasesQ.data ?? []) as Array<{ legacyTeamName: string; resolvedOwnerName: string | null }>) {
+      const resolved = (a.resolvedOwnerName ?? "").trim();
+      if (resolved) m.set(normalizeTeamName(a.legacyTeamName), resolved);
+    }
+    return m;
+  }, [aliasesQ.data]);
 
   const [teamsBySeason, setTeamsBySeason] = useState<Map<number, SeasonTeamRow[]>>(new Map());
   const [teamsLoading, setTeamsLoading] = useState(false);
@@ -325,8 +344,8 @@ export function useLeagueHistoryModel() {
   }, [seasonsToLoad.join(","), utils, leagueContextKey, leagueKeyReady]);
 
   const { titleSeasonsByOwnerKey, unmatched } = useMemo(
-    () => creditTitlesFromMedalTeams(medals, teamsBySeason, rawOwners),
-    [medals, teamsBySeason, rawOwners],
+    () => creditTitlesFromMedalTeams(medals, teamsBySeason, rawOwners, aliasResolvedNameByTeam),
+    [medals, teamsBySeason, rawOwners, aliasResolvedNameByTeam],
   );
 
   const recordLookup = useMemo(() => {
@@ -380,7 +399,7 @@ export function useLeagueHistoryModel() {
   }, [rawOwners, titleSeasonsByOwnerKey, recordLookup, draftSlotByOwnerKey]);
 
   const standingsLoading =
-    standingsQ.isLoading || medalsQ.isLoading || teamsLoading || recordsQ.isLoading || draftOrderQ.isLoading;
+    standingsQ.isLoading || medalsQ.isLoading || teamsLoading || recordsQ.isLoading || draftOrderQ.isLoading || aliasesQ.isLoading;
   const matrix = (h2hQ.data?.matrix ?? []) as MatrixRow[];
   const totalTitles = useMemo(
     () => [...titleSeasonsByOwnerKey.values()].reduce((sum, seasons) => sum + seasons.size, 0),

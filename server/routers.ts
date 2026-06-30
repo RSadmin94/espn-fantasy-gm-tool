@@ -6125,6 +6125,29 @@ export const appRouter = router({
         .orderBy(ascDrizzle(leagueMedals.season));
     }),
 
+    /** Approved owner aliases for the active league (legacy team name → owner name). */
+    leagueOwnerAliases: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+        if (!ctx.user?.id) return [];
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          undefined,
+        );
+        const db = await getDb();
+        if (!db) return [];
+        const rows = await db
+          .select({
+            legacyTeamName: ownerAliases.legacyTeamName,
+            resolvedOwnerName: ownerAliases.resolvedOwnerName,
+          })
+          .from(ownerAliases)
+          .where(andDrizzle(eqDrizzle(ownerAliases.leagueId, leagueId), eqDrizzle(ownerAliases.status, "approved")));
+        return rows.filter((r) => r.resolvedOwnerName);
+      }),
+
     /**
      * Ring of Honor: `league_medals` champion / runner-up / third, resolved with the same
      * `resolveMedalTeamToOwnerKey` + canonical owner-key pipeline as Hall of Fame.
