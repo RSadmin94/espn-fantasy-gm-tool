@@ -1011,10 +1011,12 @@ export function SyncData() {
   const handleSaveMedal = async (season: number) => {
     const entry = medalEntries[season];
     if (!entry?.champion.trim()) return;
+    if (!leagueId) { setMedalErr((p) => ({ ...p, [season]: "No active league \u2014 connect a league first." })); return; }
     setMedalBusy(season);
     setMedalErr((p) => { const n = { ...p }; delete n[season]; return n; });
     try {
       await upsertSeasonMedalsMutation.mutateAsync({
+        leagueId,
         season,
         championOwner:   entry.champion.trim(),
         runnerUpOwner:   entry.runnerUp.trim(),
@@ -1055,6 +1057,7 @@ export function SyncData() {
   };
 
   const handleSaveAll = async () => {
+    if (!leagueId) return;
     setSaveAllBusy(true);
     const errs: Record<number, string> = {};
     const saved = new Set<number>();
@@ -1063,6 +1066,7 @@ export function SyncData() {
       if (!entry?.champion.trim()) continue;
       try {
         await upsertSeasonMedalsMutation.mutateAsync({
+          leagueId,
           season:          yr,
           championOwner:   entry.champion.trim(),
           runnerUpOwner:   entry.runnerUp.trim(),
@@ -1081,6 +1085,7 @@ export function SyncData() {
   };
 
   const handleScrapeLeagueHistoryMedals = async () => {
+    if (!leagueId) { setScrapeLeagueMedalsErr("No active league \u2014 connect a league first."); return; }
     setScrapeLeagueMedalsErr(null);
     setScrapeLeagueMedalsNote("Opening ESPN League History page…");
     setScrapeLeagueMedalsBusy(true);
@@ -1120,6 +1125,7 @@ export function SyncData() {
       for (const row of medals as { season: number; championOwner: string; runnerUpOwner: string; thirdPlaceOwner: string }[]) {
         try {
           await upsertSeasonMedalsMutation.mutateAsync({
+            leagueId,
             season: row.season,
             championOwner: row.championOwner ?? "",
             runnerUpOwner: row.runnerUpOwner ?? "",

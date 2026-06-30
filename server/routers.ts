@@ -6,6 +6,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, subscribedProcedure, router, resolvePremiumAccess } from "./_core/trpc";
 import { gateRivalryScores, gateH2H, gateRivalryDossier, gateHallOfFame, gateOwnerProfile, gateOwnerList, gateTradeAnalyzeResult, gateOwnerAllTimeRecords } from "./leagueIntelGating";
+import { assertUserLeagueAccess } from "./leagueAccess";
 import { computeBiggestThreat } from "./biggestThreatService";
 import { invokeLLM, type Message } from "./_core/llm";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
@@ -6855,8 +6856,13 @@ export const appRouter = router({
     }),
 
     /** Upsert gold/silver/bronze medal data for one season from the ESPN League History page. */
-    upsertSeasonMedals: publicProcedure
+    upsertSeasonMedals: protectedProcedure
       .input(z.object({
+        // leagueId is REQUIRED and explicit. Medal writes must never infer the league
+        // from ambient active-league state: doing so previously wrote one league's
+        // championship history under another league's id (cross-league contamination).
+        // The caller must pass the league the medal actually belongs to.
+        leagueId:        z.string().min(1).max(32),
         season:          z.number().int().min(2009).max(2030),
         championOwner:   z.string().max(255),
         runnerUpOwner:   z.string().max(255).default(""),
@@ -6864,11 +6870,10 @@ export const appRouter = router({
         source:          z.string().max(64).default("espn_history_medal"),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { leagueId } = await resolveActiveLeagueId(
-          { user: ctx.user ? { id: ctx.user.id } : undefined },
-          null,
-          undefined,
-        );
+        // Explicit league only — never the active league. Validate that the signed-in
+        // user is actually connected to this league before writing any medal row.
+        const leagueId = input.leagueId.trim().slice(0, 32);
+        await assertUserLeagueAccess(ctx.user.id, leagueId);
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
         await db
