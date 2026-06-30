@@ -18,8 +18,8 @@ import { resolveCurrentOwner } from "../currentOwnerService";
 // Clerk user ids (`User.openId`, e.g. "user_3E8K7..."). Preferred: stable and unspoofable.
 export const FOUNDER_CLERK_IDS: ReadonlySet<string> = new Set<string>([
   "user_3E8K7ihI9tYXU06UJ5BfeCsg1bo", // Rod Sellers (account #1, founder/owner)
+  "user_3EZybqbNQ3RjILvNEjAlXCK06PS", // Demetri Clark — league 457622
   // Mark Deroux (user_3EZzDAQ6LKumtOff17svR32NYYe) removed for free-flow QA — restore to re-grant founder access.
-  // TODO(founder-list): add Demetri Clark Clerk id (their `User.openId`).
 ]);
 
 // Fallback: sign-in emails, lowercased. Useful when only the email is known (e.g. before the
