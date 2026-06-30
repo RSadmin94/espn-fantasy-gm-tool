@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -188,6 +188,89 @@ function slotOrder(slot: string | undefined) {
   return idx === -1 ? 99 : idx;
 }
 
+const STARTER_SLOT_SET = new Set([
+  "QB", "RB", "RB/WR", "WR", "TE", "FLEX", "RB/WR/TE", "K", "D/ST",
+]);
+
+function isStarterSlot(slot: string | undefined) {
+  const s = slot ?? "Bench";
+  return STARTER_SLOT_SET.has(s);
+}
+
+type RosterTotals = {
+  starterCount: number;
+  avgPerStarter: number | null;
+  totalPoints: number;
+  projectedTotal: number;
+  projectedPerGame: number | null;
+};
+
+function computeRosterTotals(
+  players: RosterEntry[],
+  regularSeasonGames?: number | null,
+): RosterTotals {
+  const starters = players.filter((p) => isStarterSlot(p.lineupSlot));
+  let totalPoints = 0;
+  let projectedTotal = 0;
+  for (const p of starters) {
+    if (p.appliedTotal != null && Number.isFinite(Number(p.appliedTotal))) {
+      totalPoints += Number(p.appliedTotal);
+    }
+    if (p.projectedTotal != null && Number.isFinite(Number(p.projectedTotal))) {
+      projectedTotal += Number(p.projectedTotal);
+    }
+  }
+  const starterCount = starters.length;
+  return {
+    starterCount,
+    avgPerStarter: starterCount > 0 ? totalPoints / starterCount : null,
+    totalPoints,
+    projectedTotal,
+    projectedPerGame: projPerGame(projectedTotal, regularSeasonGames),
+  };
+}
+
+function RosterTotalsRow({
+  totals,
+  warRoomColumns,
+}: {
+  totals: RosterTotals;
+  warRoomColumns: boolean;
+}) {
+  return (
+    <tr
+      className="border-t-2 font-semibold"
+      style={{ borderColor: "color-mix(in oklch, var(--color-foreground) 14%, transparent)", background: "color-mix(in oklch, var(--color-foreground) 4%, transparent)" }}
+    >
+      <td className="px-4 py-2.5 text-label uppercase tracking-wide" style={{ color: MUTED }} colSpan={2}>
+        Starters total
+      </td>
+      <td className="px-4 py-2.5 text-center text-label font-bold" style={{ color: MUTED }}>
+        {totals.starterCount}
+      </td>
+      <td className="px-4 py-2.5 text-right font-mono text-sm" style={{ color: TEXT }}>
+        {fmt(totals.avgPerStarter)}
+      </td>
+      <td className="px-4 py-2.5 text-right font-mono text-sm" style={{ color: TEXT }}>
+        {fmt(totals.totalPoints, 0)}
+      </td>
+      <td className="hidden px-4 py-2.5 text-right font-mono text-sm md:table-cell" style={{ color: TEXT }}>
+        {fmt(totals.projectedTotal, 0)}
+      </td>
+      <td className="hidden px-4 py-2.5 text-right font-mono text-sm md:table-cell" style={{ color: TEXT }}>
+        {fmt(totals.projectedPerGame, 1)}
+      </td>
+      {warRoomColumns ? (
+        <>
+          <td className="px-3 py-2.5" />
+          <td className="px-3 py-2.5" />
+        </>
+      ) : null}
+      <td className="hidden px-4 py-2.5 lg:table-cell" />
+    </tr>
+  );
+}
+
 function PosBadge({ pos }: { pos: string | undefined }) {
   const colors: Record<string, string> = {
     QB:   "border-red-500/30 bg-red-500/10 text-red-400",
@@ -277,19 +360,23 @@ function RosterTable({
   }, [players]);
 
   const hasPred = keeperPredictions != null && keeperPredictions.length > 0;
+  const totals = useMemo(
+    () => computeRosterTotals(players, regularSeasonGames),
+    [players, regularSeasonGames],
+  );
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr style={{ borderBottom: "1px solid color-mix(in oklch, var(--color-foreground) 8%, transparent)" }}>
-            <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide w-20" style={{ color: MUTED }}>Slot</th>
-            <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide" style={{ color: MUTED }}>Player</th>
-            <th className="px-4 py-2.5 text-center text-[11px] font-medium uppercase tracking-wide w-12" style={{ color: MUTED }}>Pos</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide w-16" style={{ color: MUTED }}>Avg</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide w-16" style={{ color: MUTED }}>Total</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide w-16 hidden md:table-cell" style={{ color: MUTED }}>Proj Total</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide w-16 hidden md:table-cell" style={{ color: MUTED }}>Proj/G</th>
+            <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-wide w-20" style={{ color: MUTED }}>Slot</th>
+            <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-wide" style={{ color: MUTED }}>Player</th>
+            <th className="px-4 py-2.5 text-center text-label font-medium uppercase tracking-wide w-12" style={{ color: MUTED }}>Pos</th>
+            <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-wide w-16" style={{ color: MUTED }}>Avg</th>
+            <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-wide w-16" style={{ color: MUTED }}>Total</th>
+            <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-wide w-16 hidden md:table-cell" style={{ color: MUTED }}>Proj Total</th>
+            <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-wide w-16 hidden md:table-cell" style={{ color: MUTED }}>Proj/G</th>
             {warRoomColumns && (
               <>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide w-24" style={{ color: MUTED }}>
@@ -304,8 +391,13 @@ function RosterTable({
           </tr>
         </thead>
         <tbody>
-          {groups.map(([slot, entries]) =>
-            entries.map((p, i) => {
+          {groups.map(([slot, entries], groupIdx) => {
+            const nextSlot = groups[groupIdx + 1]?.[0];
+            const showTotalsAfter =
+              isStarterSlot(slot) && (nextSlot == null || !isStarterSlot(nextSlot));
+            return (
+              <Fragment key={slot}>
+                {entries.map((p, i) => {
               const injColor = INJURY_COLORS[p.injuryStatus ?? ""] ?? "";
               const wr =
                 warRoomColumns && hasPred && !warRoomLoading && !warRoomFailed
@@ -381,7 +473,7 @@ function RosterTable({
                           (() => {
                             const { label, cls } = kvsRecStyle(wr.kvs);
                             return (
-                              <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border", cls)}>
+                              <span className={cn("text-2xs font-bold px-1.5 py-0.5 rounded border", cls)}>
                                 {label}
                               </span>
                             );
@@ -395,8 +487,13 @@ function RosterTable({
                   </td>
                 </tr>
               );
-            })
-          )}
+            })}
+                {showTotalsAfter ? (
+                  <RosterTotalsRow totals={totals} warRoomColumns={warRoomColumns} />
+                ) : null}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

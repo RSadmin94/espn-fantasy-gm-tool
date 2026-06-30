@@ -172,10 +172,10 @@ function LeagueSwitcher({
   if (leagues.length === 0) {
     return (
       <div className="border-b border-border px-3 py-3">
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+        <p className="mb-2 text-2xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
           League
         </p>
-        <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
+        <p className="mb-2 text-label leading-snug text-muted-foreground">
           Install the ESPN Connector, then connect your league.
         </p>
         <Button asChild variant="outline" size="sm" className="h-auto w-full justify-center gap-2 py-2">
@@ -211,7 +211,7 @@ function LeagueSwitcher({
   if (leagues.length === 1) {
     return (
       <div className="border-b border-border px-3 py-3">
-        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+        <p className="mb-1.5 text-2xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
           Active league
         </p>
         <div className="rounded-lg border border-border bg-muted px-3 py-2">
@@ -224,7 +224,7 @@ function LeagueSwitcher({
 
   return (
     <div className="border-b border-border px-3 py-3">
-      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+      <p className="mb-1.5 text-2xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
         Active league
       </p>
       <DropdownMenu>
@@ -306,7 +306,7 @@ function SidebarGroupTitle({ title, isFirst }: { title: string; isFirst?: boolea
   return (
     <div
       className={cn(
-        "px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground",
+        "px-3 pb-1.5 text-2xs font-bold uppercase tracking-[0.2em] text-muted-foreground",
         isFirst ? "pt-0" : "pt-4"
       )}
     >
@@ -336,7 +336,7 @@ function NavItemRow({
           <span className="min-w-0 flex-1 truncate">{entry.label}</span>
           <Badge
             variant="outline"
-            className="shrink-0 border-lime-500/25 bg-lime-500/[0.05] px-1.5 py-0 text-[10px] font-medium text-lime-300/90"
+            className="shrink-0 border-lime-500/25 bg-lime-500/[0.05] px-1.5 py-0 text-2xs font-medium text-lime-300/90"
           >
             Coming Soon
           </Badge>
@@ -380,7 +380,7 @@ function NavItemRow({
         {locked ? (
           <Badge
             variant="outline"
-            className="shrink-0 border-amber-500/25 bg-amber-500/[0.06] px-1.5 py-0 text-[10px] font-medium text-amber-300/90"
+            className="shrink-0 border-amber-500/25 bg-amber-500/[0.06] px-1.5 py-0 text-2xs font-medium text-amber-300/90"
           >
             🔒 Rivals Pro
           </Badge>
@@ -431,14 +431,14 @@ function SidebarFooter() {
               {user.fullName || user.username || "GM"}
             </p>
             {user.primaryEmailAddress?.emailAddress ? (
-              <p className="truncate text-[10px] text-muted-foreground">
+              <p className="truncate text-2xs text-muted-foreground">
                 {user.primaryEmailAddress.emailAddress}
               </p>
             ) : null}
           </div>
         </div>
       ) : null}
-      <div className="rounded-lg border border-border/80 bg-muted/40 px-3 py-2 text-[10px] leading-snug text-muted-foreground">
+      <div className="rounded-lg border border-border/80 bg-muted/40 px-3 py-2 text-2xs leading-snug text-muted-foreground">
         <span className="font-semibold text-lime-500/80">ESPN Fantasy</span> · Fantasy Football Rivals
       </div>
     </div>
@@ -542,7 +542,7 @@ function Sidebar({
               >
                 <CollapsibleTrigger
                   type="button"
-                  className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-2xs font-bold uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <span>{group.title}</span>
                   <ChevronDown

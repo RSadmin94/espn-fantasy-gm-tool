@@ -72,10 +72,10 @@ function BriefingMasthead({
   return (
     <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border/60 pb-4">
       <div>
-        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+        <p className="text-label font-bold uppercase tracking-[0.2em] text-muted-foreground">
           {BRIEFING.mastheadTitle}
         </p>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-caption text-muted-foreground">
           {new Date().toLocaleDateString(undefined, {
             weekday: "long",
             month: "long",
@@ -104,16 +104,21 @@ function BriefingMasthead({
 }
 
 function PersonalizationStrip({
+  welcomeName,
   greeting,
   meta,
 }: {
+  welcomeName: string;
   greeting: string;
   meta: string;
 }) {
   return (
-    <div className="space-y-1 py-3">
-      <p className="font-mono text-[11px] font-bold tracking-[0.14em] text-lime-400/90">{greeting}</p>
-      <p className="text-[12px] text-muted-foreground">{meta}</p>
+    <div className="space-y-2 border-b border-border/40 py-4">
+      <p className="text-label font-bold uppercase tracking-[0.18em] text-lime-400/80">{greeting}</p>
+      <h2 className="text-[clamp(1.75rem,4vw,2.75rem)] font-black leading-[1.05] tracking-tight text-foreground">
+        {welcomeName}
+      </h2>
+      <p className="text-caption text-muted-foreground">{meta}</p>
     </div>
   );
 }
@@ -168,7 +173,7 @@ function HeadlinesSection({
         className="flex w-full items-center justify-between gap-2 text-left sm:pointer-events-none"
         onClick={() => setOpen((o) => !o)}
       >
-        <span className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+        <span className="text-label font-bold uppercase tracking-[0.16em] text-muted-foreground">
           {BRIEFING.leagueHeadlines}
         </span>
         <span className="sm:hidden text-muted-foreground">
@@ -205,14 +210,14 @@ function HeadlinesSection({
 function IdentityCard({ identity }: { identity: GmBriefingEdition["identity"] }) {
   return (
     <section className="flex h-full flex-col rounded-2xl border border-border/60 bg-card/40 p-5">
-      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-        {identity.displayName}
-      </p>
-      <p className="mt-3 text-[11px] font-bold uppercase tracking-wide text-lime-400/90">
+      <p className="text-label font-bold uppercase tracking-[0.14em] text-muted-foreground">
         {BRIEFING.identity.reputation}
       </p>
-      <p className="mt-1 text-2xl font-black text-foreground">{identity.reputation}</p>
-      <dl className="mt-4 space-y-3 text-[13px]">
+      <p className="mt-2 text-[clamp(1.35rem,3vw,1.85rem)] font-black leading-tight tracking-tight text-foreground">
+        {identity.displayName}
+      </p>
+      <p className="mt-1 text-lg font-bold text-lime-400/95">{identity.reputation}</p>
+      <dl className="mt-4 space-y-3 text-caption">
         <div>
           <dt className="text-muted-foreground">{BRIEFING.identity.leagueSays}</dt>
           <dd className="font-medium text-foreground">{identity.leagueSays}</dd>
@@ -227,7 +232,7 @@ function IdentityCard({ identity }: { identity: GmBriefingEdition["identity"] })
         </div>
       </dl>
       {(identity.careerLine || identity.titlesLine || identity.rankLine) && (
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-border/50 pt-4 text-[11px] text-muted-foreground">
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-border/50 pt-4 text-label text-muted-foreground">
           {identity.careerLine ? <span>{identity.careerLine}</span> : null}
           {identity.titlesLine ? <span>· {identity.titlesLine}</span> : null}
           {identity.rankLine ? <span>· {identity.rankLine}</span> : null}
@@ -256,12 +261,14 @@ function RivalCard({
 }) {
   return (
     <section className="flex h-full flex-col rounded-2xl border border-violet-500/20 bg-violet-500/[0.04] p-5">
-      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-violet-300/80">
+      <p className="text-label font-bold uppercase tracking-[0.14em] text-violet-300/80">
         {BRIEFING.rivalOfTheWeek}
       </p>
-      <p className="mt-2 text-2xl font-black uppercase tracking-tight text-foreground">{rival.name}</p>
-      <p className="mt-3 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{BRIEFING.whyNow}</p>
-      <ul className="mt-2 space-y-1.5 text-[13px] text-foreground/80">
+      <p className="mt-2 text-[clamp(1.35rem,3vw,2rem)] font-black uppercase tracking-tight text-foreground">
+        {rival.name}
+      </p>
+      <p className="mt-3 text-label font-bold uppercase tracking-wide text-muted-foreground">{BRIEFING.whyNow}</p>
+      <ul className="mt-2 space-y-1.5 text-caption text-foreground/80">
         {rival.whyNow.map((line) => (
           <li key={line} className="flex gap-2">
             <span className="text-violet-400">•</span>
@@ -485,7 +492,7 @@ export function GmBriefingPage(props: GmBriefingPageProps) {
         headerActions={props.headerActions}
       />
 
-      <PersonalizationStrip greeting={greeting} meta={meta} />
+      <PersonalizationStrip welcomeName={props.welcomeName} greeting={greeting} meta={meta} />
 
       <HeroStory hero={edition.hero} />
 
