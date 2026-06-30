@@ -1209,6 +1209,11 @@ export function normalizeTransactions(data: Record<string, unknown>) {
   const txs = (data.transactions as Record<string, unknown>[]) || [];
   const rows: unknown[] = [];
   const proposalMeta = txProposalMeta;
+  // Fallback identity source: rosters + free-agent pool already in this season's payload.
+  // ESPN's 2026 transaction items often omit the embedded player object, leaving
+  // item.player.fullName empty — resolve name/position from the in-payload player map
+  // instead of rendering "Unknown player".
+  const playerIdMap = buildPlayerIdMap(data);
 
   for (const tx of txs) {
     const meta = proposalMeta(tx);
@@ -1239,6 +1244,8 @@ export function normalizeTransactions(data: Record<string, unknown>) {
     for (const item of items) {
       const player = (item.player as Record<string, unknown>) || {};
       const pid = txLinePlayerId(player, item);
+      const fallback = pid != null ? playerIdMap.get(pid) : undefined;
+      const fallbackPos = fallback && fallback.position && fallback.position !== "?" ? fallback.position : null;
       rows.push({
         season,
         transactionId: txId,
@@ -1248,8 +1255,8 @@ export function normalizeTransactions(data: Record<string, unknown>) {
         processedDate,
         teamId: tx.teamId,
         playerId: pid,
-        playerName: (player.fullName as string | undefined) ?? (item.playerName as string | undefined) ?? null,
-        position: txLinePosition(player),
+        playerName: (player.fullName as string | undefined) ?? (item.playerName as string | undefined) ?? (fallback?.name || null),
+        position: txLinePosition(player) ?? fallbackPos,
         fromTeamId: item.fromTeamId,
         toTeamId: item.toTeamId,
         bidAmount: txBidAmount(item, tx),
