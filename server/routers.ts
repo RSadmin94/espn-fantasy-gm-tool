@@ -179,6 +179,7 @@ import {
   buildRawKeyToCanonicalProfileKey,
   buildTeamNameResolver,
   resolveMedalTeamToOwnerKey,
+  buildApprovedAliasLabelToOwnerKey,
   aggregateMatchupWLByOwnerSeason,
   type GmTeamRow,
 } from "./ownerProfileService";
@@ -11644,6 +11645,25 @@ Provide:
         .from(leagueMedals)
         .where(eqDrizzle(leagueMedals.leagueId, lid));
 
+      const approvedAliasRows = await db
+        .select({
+          legacyTeamName: ownerAliases.legacyTeamName,
+          resolvedOwnerName: ownerAliases.resolvedOwnerName,
+          status: ownerAliases.status,
+        })
+        .from(ownerAliases)
+        .where(eqDrizzle(ownerAliases.leagueId, lid));
+      const aliasLabelToKey = buildApprovedAliasLabelToOwnerKey(fullRows, approvedAliasRows);
+      /** gm_teams resolution first; approved-alias fallback for podium-only seasons
+       *  lacking gm_teams rows (same authority as Hall of Fame / League History / Owner Profiles). */
+      const resolveMedalOwnerKey = (season: number, label: string | null): string | null => {
+        const raw = resolveMedalTeamToOwnerKey(season, label, fullRows, nameToOwnerId);
+        if (raw) return ownerKeyRemap.get(raw) ?? raw;
+        if (!label?.trim()) return null;
+        const viaAlias = aliasLabelToKey.get(normalizeOwnerStr(label));
+        return viaAlias ? (ownerKeyRemap.get(viaAlias) ?? viaAlias) : null;
+      };
+
       const medalsByKey = new Map<string, { championships: number; runnerUps: number; thirdPlace: number }>();
       const ensureMed = (key: string | null) => {
         if (!key) return;
@@ -11652,20 +11672,17 @@ Provide:
         }
       };
       for (const m of medalRows) {
-        const ckRaw = resolveMedalTeamToOwnerKey(m.season, m.c, fullRows, nameToOwnerId);
-        const ck = ckRaw ? ownerKeyRemap.get(ckRaw) ?? ckRaw : null;
+        const ck = resolveMedalOwnerKey(m.season, m.c);
         if (ck) {
           ensureMed(ck);
           medalsByKey.get(ck)!.championships++;
         }
-        const rkRaw = resolveMedalTeamToOwnerKey(m.season, m.r, fullRows, nameToOwnerId);
-        const rk = rkRaw ? ownerKeyRemap.get(rkRaw) ?? rkRaw : null;
+        const rk = resolveMedalOwnerKey(m.season, m.r);
         if (rk) {
           ensureMed(rk);
           medalsByKey.get(rk)!.runnerUps++;
         }
-        const tkRaw = resolveMedalTeamToOwnerKey(m.season, m.t, fullRows, nameToOwnerId);
-        const tk = tkRaw ? ownerKeyRemap.get(tkRaw) ?? tkRaw : null;
+        const tk = resolveMedalOwnerKey(m.season, m.t);
         if (tk) {
           ensureMed(tk);
           medalsByKey.get(tk)!.thirdPlace++;
@@ -12243,6 +12260,16 @@ Provide:
           leagueId: lid,
         });
 
+        const approvedAliasRowsForProfile = await db
+          .select({
+            legacyTeamName: ownerAliases.legacyTeamName,
+            resolvedOwnerName: ownerAliases.resolvedOwnerName,
+            status: ownerAliases.status,
+          })
+          .from(ownerAliases)
+          .where(eqDrizzle(ownerAliases.leagueId, lid));
+        const profileAliasLabelToKey = buildApprovedAliasLabelToOwnerKey(allGmRows, approvedAliasRowsForProfile);
+
         const comparisonOwnerKeys = new Set<string>();
         const comparisonCandidates: string[] = [];
         for (const t of allGmRows) {
@@ -12267,6 +12294,7 @@ Provide:
           allLeagueGmRows: allGmRows,
           medalRows,
           flatRegularSeason: flatRS,
+          aliasLabelToKey: profileAliasLabelToKey,
         });
 
         const compareResolved = compareRaw ? resolveOwnerTeamsForProfile(allGmRows, compareRaw) : null;
@@ -12289,6 +12317,7 @@ Provide:
             allLeagueGmRows: allGmRows,
             medalRows,
             flatRegularSeason: flatRS,
+            aliasLabelToKey: profileAliasLabelToKey,
           });
         }
 

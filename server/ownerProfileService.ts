@@ -628,6 +628,44 @@ export function resolveMedalTeamToOwnerKey(
 }
 
 /**
+ * Approved-alias fallback map (same authority as Hall of Fame / League History):
+ * `normalizeOwnerStr(legacyTeamName)` → canonical profile owner key.
+ *
+ * Legacy medal labels from seasons with no gm_teams rows (e.g. pre-2010 podium-only
+ * seasons where ESPN exposes only the championship podium, not team rosters) cannot be
+ * resolved by {@link resolveMedalTeamToOwnerKey} (which matches within-season gm_teams).
+ * A commissioner-APPROVED `owner_aliases` row maps that legacy label to an owner who DOES
+ * exist in gm_teams, so the legacy title merges into that owner's real identity. Only
+ * `status === "approved"` aliases are honored. Reads only; never mutates league_medals or
+ * gm_teams. Returned keys share the canonical space of {@link buildRawKeyToCanonicalProfileKey}.
+ */
+export function buildApprovedAliasLabelToOwnerKey(
+  allRows: GmTeamRow[],
+  aliasRows: ReadonlyArray<{
+    legacyTeamName: string | null;
+    resolvedOwnerName: string | null;
+    status: string | null;
+  }>,
+): Map<string, string> {
+  const teamToOwnerKey = buildTeamToCanonicalProfileKey(allRows);
+  const personKeyToCanonical = new Map<string, string>();
+  for (const t of allRows) {
+    if ((t.teamId ?? 0) <= 0) continue;
+    const k = teamToOwnerKey.get(`${t.season}:${t.teamId}`);
+    if (!k) continue;
+    const pk = personMergeKey(t.ownerName || "");
+    if (pk && !personKeyToCanonical.has(pk)) personKeyToCanonical.set(pk, k);
+  }
+  const aliasLabelToKey = new Map<string, string>();
+  for (const a of aliasRows) {
+    if (a.status !== "approved" || !a.resolvedOwnerName || !a.legacyTeamName) continue;
+    const ck = personKeyToCanonical.get(personMergeKey(a.resolvedOwnerName));
+    if (ck) aliasLabelToKey.set(normalizeOwnerStr(a.legacyTeamName), ck);
+  }
+  return aliasLabelToKey;
+}
+
+/**
  * Regular-season completed matchups: gmMatchups + cache fallback per season
  * (same strategy as owners.ownerAllTimeRecords), deduped, playoff excluded.
  */
@@ -827,8 +865,11 @@ export function computeOwnerProfileRecordBundle(args: {
   allLeagueGmRows: GmTeamRow[];
   medalRows: (typeof leagueMedals.$inferSelect)[];
   flatRegularSeason: FlatRegularSeasonMatchup[];
+  /** Approved-alias fallback (HoF/League-History authority) for podium-only seasons
+   *  lacking gm_teams rows. Omit for identical pre-alias behaviour. */
+  aliasLabelToKey?: ReadonlyMap<string, string>;
 }): OwnerProfileRecordBundle {
-  const { profileOwnerKey: profileOwnerKeyIn, ownerTeamRows, allLeagueGmRows, medalRows, flatRegularSeason } = args;
+  const { profileOwnerKey: profileOwnerKeyIn, ownerTeamRows, allLeagueGmRows, medalRows, flatRegularSeason, aliasLabelToKey } = args;
   const nameToOwnerId = buildNameToOwnerId(allLeagueGmRows);
   const keyRemap = buildRawKeyToCanonicalProfileKey(allLeagueGmRows);
   const profileOwnerKey = keyRemap.get(profileOwnerKeyIn) ?? profileOwnerKeyIn;
@@ -846,23 +887,32 @@ export function computeOwnerProfileRecordBundle(args: {
   const thirdSeasons: number[] = [];
 
   const canonMedalKey = (k: string | null) => (k == null ? null : keyRemap.get(k) ?? k);
+  /** gm_teams resolution first; fall back to an approved alias for podium-only seasons
+   *  lacking gm_teams rows (same authority as Hall of Fame / League History). */
+  const resolveMedalOwner = (season: number, label: string | null): string | null => {
+    const viaGm = canonMedalKey(resolveMedalTeamToOwnerKey(season, label, allLeagueGmRows, nameToOwnerId));
+    if (viaGm) return viaGm;
+    if (!label?.trim() || !aliasLabelToKey) return null;
+    const viaAlias = aliasLabelToKey.get(normalizeOwnerStr(label));
+    return viaAlias ? (keyRemap.get(viaAlias) ?? viaAlias) : null;
+  };
 
   for (const m of medalRows) {
-    const ck = canonMedalKey(resolveMedalTeamToOwnerKey(m.season, m.championOwner, allLeagueGmRows, nameToOwnerId));
+    const ck = resolveMedalOwner(m.season, m.championOwner);
     if (m.championOwner?.trim() && !ck) {
       missingMedalJoinSeasons.push({ season: m.season, slot: "champion", raw: m.championOwner });
     } else if (ck === profileOwnerKey) {
       champSeasons.push(m.season);
     }
 
-    const rk = canonMedalKey(resolveMedalTeamToOwnerKey(m.season, m.runnerUpOwner, allLeagueGmRows, nameToOwnerId));
+    const rk = resolveMedalOwner(m.season, m.runnerUpOwner);
     if (m.runnerUpOwner?.trim() && !rk) {
       missingMedalJoinSeasons.push({ season: m.season, slot: "runnerUp", raw: m.runnerUpOwner });
     } else if (rk === profileOwnerKey) {
       runnerUpSeasons.push(m.season);
     }
 
-    const tk = canonMedalKey(resolveMedalTeamToOwnerKey(m.season, m.thirdPlaceOwner, allLeagueGmRows, nameToOwnerId));
+    const tk = resolveMedalOwner(m.season, m.thirdPlaceOwner);
     if (m.thirdPlaceOwner?.trim() && !tk) {
       missingMedalJoinSeasons.push({ season: m.season, slot: "third", raw: m.thirdPlaceOwner });
     } else if (tk === profileOwnerKey) {
