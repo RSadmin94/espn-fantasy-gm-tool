@@ -1385,8 +1385,8 @@ export async function buildOwnerProfilePayload(args: {
   const topPos = mostDraftedPos[0] ?? "unknown";
   const champStr =
     snapR.champSeasons.length > 0
-      ? `${snapR.champSeasons.length}-time champion (${snapR.champSeasons.join(", ")})`
-      : "no championships yet";
+      ? `They are a ${snapR.champSeasons.length}-time champion (${snapR.champSeasons.join(", ")}).`
+      : "They have no championships yet.";
   const keeperStr =
     keeperRate > 20
       ? `heavy keeper user (${keeperRate}% keeper rate)`
@@ -1410,7 +1410,7 @@ export async function buildOwnerProfilePayload(args: {
     `${ownerName} has been active for ${seasons.length} season${seasons.length !== 1 ? "s" : ""}${
       seasons.length > 0 ? ` (${seasons[0]}–${seasons[seasons.length - 1]})` : ""
     } with a ${tw}–${tl}${tt ? `–${tt}` : ""} regular-season record from completed matchups (${snapR.winPct}% win rate).`,
-    `They are ${champStr}.`,
+    champStr,
     `Draft profile: ${draftStyle}, with ${topPos} as their most drafted position (${posShare[topPos] ?? 0}% of picks).`,
     `Keeper profile: ${keeperStr}${avgKeeperRound != null ? `, averaging keeper round ${avgKeeperRound}` : ""}.`,
     `Activity profile: ${activityDnaNarrative(activityDna) ?? txnStyle}.`,
