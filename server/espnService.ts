@@ -1319,14 +1319,21 @@ export async function fetchRecentActivityTrades(
       });
     }
 
-    // messageTypeId 246 = trade executed
-    // Each topic with a 246 message represents one completed trade.
-    // Messages in the topic: each message has from=teamId, to=teamId, targetId=pickSlotId
+    // Executed trades are authored by ESPN's server-side "TradeTaskProcessor".
+    // The numeric messageTypeId is NOT reliable across leagues/seasons (it is 244 in
+    // some leagues, while 246 marks non-trade activity in others), so detect the
+    // executed-trade legs by author instead. Each such message carries one asset leg:
+    // from=teamId, to=teamId, targetId=playerId (or a draft pick slot id).
     const syntheticTrades: Record<string, unknown>[] = [];
 
     for (const topic of actTx) {
       const msgs = (topic.messages as Record<string, unknown>[]) || [];
-      const executedMsgs = msgs.filter(m => m.messageTypeId === 246);
+      const executedMsgs = msgs.filter(m => {
+        const author = String(m.author ?? "");
+        const isExecuted = author.includes("TradeTaskProcessor");
+        const hasMovement = m.from != null && m.to != null && m.targetId != null;
+        return isExecuted && hasMovement;
+      });
       if (executedMsgs.length === 0) continue;
 
       const topicDate = topic.date as number;
@@ -1340,21 +1347,32 @@ export async function fetchRecentActivityTrades(
         const toTeamId = m.to as number;
         const targetId = m.targetId as number;
 
-        // Look up pick info
+        // targetId is either a draft pick slot id (present in the pick map) or an
+        // ESPN playerId. Build the appropriate asset item for each.
         const pickInfo = pickMap.get(targetId);
-        items.push({
-          type: "DRAFT_TRADE",
-          fromTeamId,
-          toTeamId,
-          // Use targetId as a synthetic playerId so the normalizer can process it
-          playerId: null,
-          playerName: null,
-          overallPickNumber: targetId,
-          round: pickInfo?.round ?? null,
-          pickInRound: pickInfo?.pickInRound ?? null,
-          // Store original pick owner for display
-          originalTeamId: pickInfo?.teamId ?? null,
-        });
+        if (pickInfo) {
+          items.push({
+            type: "DRAFT_TRADE",
+            fromTeamId,
+            toTeamId,
+            playerId: null,
+            playerName: null,
+            overallPickNumber: targetId,
+            round: pickInfo.round ?? null,
+            pickInRound: pickInfo.pickInRound ?? null,
+            // Store original pick owner for display
+            originalTeamId: pickInfo.teamId ?? null,
+          });
+        } else {
+          // Player asset: name/position resolve downstream via the payload player map.
+          items.push({
+            type: "TRADE",
+            fromTeamId,
+            toTeamId,
+            playerId: targetId,
+            playerName: null,
+          });
+        }
       }
 
       if (items.length === 0) continue;
