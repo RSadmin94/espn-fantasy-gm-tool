@@ -1132,7 +1132,19 @@ function ProfilePanel({
 
   const prMe = powerRankings.find((r: any) => listRowLookupKey(r) === profileLookupKey);
   const legacyRank = prMe != null && prMe.rank != null && num(prMe.rank) < 999 ? num(prMe.rank) : null;
-  const intelligenceScore = prMe != null && prMe.score != null ? num(prMe.score) : null;
+  const intelligenceRaw = prMe != null && prMe.score != null ? num(prMe.score) : null;
+  // Formula A — normalize the raw power-ranking composite to 0–100 relative to the
+  // league's top score (top owner = 100). The raw score is an unbounded internal
+  // metric, so this presents it as a clear, league-relative rating rather than an
+  // absolute universal number.
+  const maxLeagueScore = Math.max(
+    0,
+    ...powerRankings.map((r: any) => num(r?.score)).filter((n: number) => Number.isFinite(n)),
+  );
+  const intelligenceScore =
+    intelligenceRaw != null && intelligenceRaw > 0 && maxLeagueScore > 0
+      ? Math.max(0, Math.min(100, Math.round((intelligenceRaw / maxLeagueScore) * 100)))
+      : null;
   const currentSeasonRow = seasonRecords.length > 0 ? (seasonRecords as any[])[seasonRecords.length - 1] : null;
   const draftStyle = str((draft as Record<string, unknown>).draftStyleBadge ?? "");
   const { topRival, biggestThreat } = pickRivalryHighlights(intel);
@@ -1192,8 +1204,14 @@ function ProfilePanel({
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
                 <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Intelligence score</div>
-                <div className="mt-1 text-xl font-extrabold tabular-nums text-red-400">
-                  {intelligenceScore != null && intelligenceScore > 0 ? Math.round(intelligenceScore) : "—"}
+                <div className="mt-1 text-xl font-extrabold tabular-nums text-zinc-100">
+                  {intelligenceScore != null ? intelligenceScore : "—"}
+                  {intelligenceScore != null && (
+                    <span className="text-sm font-semibold text-zinc-500"> / 100</span>
+                  )}
+                </div>
+                <div className="mt-0.5 text-[11px] text-zinc-500">
+                  {intelligenceScore != null ? "Relative to league leader" : "Not enough data"}
                 </div>
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
