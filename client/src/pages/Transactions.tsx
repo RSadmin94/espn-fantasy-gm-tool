@@ -137,7 +137,17 @@ function tryParseRaw(raw: string | null | undefined): Record<string, unknown> | 
 
 function isDraftish(r: TxnRow): boolean {
   const it = String(r.itemType || "").toUpperCase();
-  return it.includes("DRAFT") || r.overallPickNumber != null || (r.playerId == null && (r.round != null || r.pickInRound != null));
+  const ov = Number(r.overallPickNumber);
+  const rd = Number(r.round);
+  const pir = Number(r.pickInRound);
+  // ESPN stamps ordinary (non-draft) line items with overallPickNumber:0 — sometimes
+  // round:0 too. A pick only counts when the number is actually positive, otherwise
+  // every add/drop/waiver gets mislabeled as a generic "Draft pick".
+  return (
+    it.includes("DRAFT") ||
+    (Number.isFinite(ov) && ov > 0) ||
+    (r.playerId == null && ((Number.isFinite(rd) && rd > 0) || (Number.isFinite(pir) && pir > 0)))
+  );
 }
 
 type DraftPickBitsInput = {
@@ -453,25 +463,33 @@ function rowMatchesSearch(r: TxnRow, q: string): boolean {
 }
 
 function fantasyTeamForRow(r: TxnRow, teamMap: Map<number, string>): string {
-  const tid = r.toTeamId ?? r.teamId ?? r.fromTeamId;
-  if (tid == null) return "—";
+  // ESPN uses teamId 0 for the free-agent / waiver pool, so skip non-positive ids.
+  // (`0 ?? x` would otherwise keep the 0 and render a literal "Team 0".) teamId is the
+  // acting team for both adds and drops, so it leads.
+  const tid = [r.teamId, r.toTeamId, r.fromTeamId].find((x) => x != null && Number(x) > 0);
+  if (tid == null) return "Free agency";
   return teamMap.get(Number(tid)) || `Team ${tid}`;
 }
 
 function addDropLine(
   r: TxnRow,
-  kind: "ADD" | "DROP" | "WAIVER",
   teamMap: Map<number, string>,
   meta: Map<number, PlayerBits>,
   season: number
 ): string {
   const ft = fantasyTeamForRow(r, teamMap);
   const label = assetLabel(r, meta, season);
-  if (kind === "ADD") return `Added ${label} — ${ft}`;
-  if (kind === "DROP") return `Dropped ${label} — ${ft}`;
+  const it = String(r.itemType || "").toUpperCase();
+  const ty = String(r.type || "").toUpperCase();
+  // Direction comes from the line item (ADD vs DROP); the transaction type only tells
+  // us the mechanism (waiver vs free agency). A waiver's DROP companion is a drop, not
+  // a claim.
+  if (it === "DROP" || (it === "" && ty === "DROP")) return `Dropped ${label} — ${ft}`;
   const bid = r.bidAmount != null ? Number(r.bidAmount) : 0;
-  const bidPart = Number.isFinite(bid) && bid > 0 ? ` ($${bid.toFixed(0)} bid)` : "";
-  return `Claimed ${label}${bidPart} — ${ft}`;
+  const dollars = "$" + bid.toFixed(0);
+  const bidPart = Number.isFinite(bid) && bid > 0 ? ` (${dollars} bid)` : "";
+  if (ty === "WAIVER") return `Claimed ${label}${bidPart} — ${ft}`;
+  return `Added ${label}${bidPart} — ${ft}`;
 }
 
 function involvedTeamIds(rows: TxnRow[]): number[] {
@@ -537,7 +555,11 @@ function isMeaningfulEntry(entry: DisplayEntry): boolean {
   }
   const r = entry.row;
   const t = String(r.type || "").toUpperCase();
-  const isMovement = t === "ADD" || t === "DROP" || t === "WAIVER";
+  const it = String(r.itemType || "").toUpperCase();
+  // FREEAGENT adds/drops are real activity (ESPN shows them); ROSTER/LINEUP moves and
+  // bare DRAFT rows are not. Item-level ADD/DROP covers waiver + free-agent companions.
+  const isMovement =
+    t === "ADD" || t === "DROP" || t === "WAIVER" || t === "FREEAGENT" || it === "ADD" || it === "DROP";
   const raw = tryParseRaw(r.rawTransaction ?? undefined);
   const hasMemo = !!(raw && typeof raw.memo === "string" && raw.memo.trim());
   return isMovement || hasMemo;
@@ -1318,12 +1340,16 @@ export function Transactions() {
                 const r = entry.row;
                 const ms = eventMs(r);
                 const { date, time } = formatWhen(ms);
-                const t = r.type || "";
+                const t = (r.type || "").toUpperCase();
+                const it = String(r.itemType || "").toUpperCase();
+                const isMovement =
+                  t === "ADD" || t === "DROP" || t === "WAIVER" || t === "FREEAGENT" || it === "ADD" || it === "DROP";
+                // Badge reflects the line's actual direction, not just the mechanism.
+                const badgeType = it === "DROP" ? "DROP" : it === "ADD" ? (t === "WAIVER" ? "WAIVER" : "ADD") : t;
                 let detail = "";
-                if (t === "ADD") detail = addDropLine(r, "ADD", teamMap, playerMeta, season);
-                else if (t === "DROP") detail = addDropLine(r, "DROP", teamMap, playerMeta, season);
-                else if (t === "WAIVER") detail = addDropLine(r, "WAIVER", teamMap, playerMeta, season);
-                else {
+                if (isMovement) {
+                  detail = addDropLine(r, teamMap, playerMeta, season);
+                } else {
                   const raw = tryParseRaw(r.rawTransaction ?? undefined);
                   const memo = raw && typeof raw.memo === "string" ? raw.memo : null;
                   detail = memo || [assetLabel(r, playerMeta, season), r.status ? `(${String(r.status)})` : ""].filter(Boolean).join(" ");
