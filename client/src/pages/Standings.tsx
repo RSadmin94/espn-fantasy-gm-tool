@@ -267,7 +267,7 @@ export function Standings() {
       <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
         <PageHeader
           title="Standings"
-          subtitle="League standings in ESPN layout â€” switch between regular-season order and final ranks."
+          subtitle="League standings in ESPN layout — switch between regular-season order and final ranks."
         />
         <div className="flex flex-wrap items-center gap-2.5">
           <Pill gold>{season} Season</Pill>

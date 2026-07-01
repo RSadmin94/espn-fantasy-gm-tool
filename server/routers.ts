@@ -2358,11 +2358,16 @@ export const appRouter = router({
             const pointsAgainst = Number(t.pointsAgainst ?? 0) || 0;
             const rankFinal = Number(t.rankCalculatedFinal ?? t.rankFinal ?? 99) || 99;
             const memberIds = coerceOwnerIdList(t.memberIds);
+            const ownerDisplay = String(t.ownerDisplay ?? "").trim();
             const ownersStr = String(t.owners ?? "").trim();
-            const ownerNames =
-              memberIds.length > 0
-                ? memberIds
-                : ownersStr.split(";").map((s) => s.trim()).filter(Boolean);
+            // Prefer the resolved owner display name; never surface raw member
+            // GUIDs as the label (they stay in `memberIds`). teamRowFromGmTeam sets
+            // ownerDisplay = gm_teams.ownerName; ownersStr falls back to the GUID,
+            // so GUID-like tokens are filtered out of the display list.
+            const looksLikeGuid = (s: string) => /^\{?[0-9a-f]{8}-[0-9a-f]{4}-/i.test(s);
+            const ownerNames = ownerDisplay
+              ? ownerDisplay.split(";").map((s) => s.trim()).filter(Boolean)
+              : ownersStr.split(";").map((s) => s.trim()).filter((s) => s && !looksLikeGuid(s));
             return {
               season: input.season,
               teamId,
@@ -2370,8 +2375,8 @@ export const appRouter = router({
               teamName: String(t.name ?? t.nickname ?? `Team ${teamId}`),
               location: String(t.location ?? ""),
               nickname: String(t.nickname ?? ""),
-              owners: ownerNames.length > 0 ? ownerNames : ownersStr || `Team ${teamId}`,
-              memberIds: ownerNames,
+              owners: ownerNames.length > 0 ? ownerNames : `Team ${teamId}`,
+              memberIds,
               wins,
               losses,
               ties,
