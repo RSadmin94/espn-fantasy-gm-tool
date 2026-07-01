@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
-import { createBrowserRouter, Navigate, Outlet, RouterProvider } from "react-router";
+import { createBrowserRouter, Link, Navigate, Outlet, RouterProvider } from "react-router";
 import superjson from "superjson";
 import {
   AuthenticateWithRedirectCallback,
@@ -118,6 +118,39 @@ function PlaceholderPage({ title }: { title: string }) {
   );
 }
 
+// Branded catch-all for unmatched routes (replaces React Router's default error UI).
+function NotFoundPage() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background px-6 text-center text-foreground">
+      <div className="text-xs font-bold uppercase tracking-[0.2em] text-lime-400">
+        Fantasy Football Rivals
+      </div>
+      <div className="flex flex-col items-center gap-2">
+        <div className="text-6xl font-black tracking-tight">404</div>
+        <h1 className="text-xl font-bold">Off the grid.</h1>
+        <p className="max-w-md text-sm text-muted-foreground">
+          The page you requested does not exist or may have moved. Head back to the war
+          room to keep scouting.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <Link
+          to="/dashboard"
+          className="rounded-lg bg-lime-500 px-4 py-2.5 text-sm font-bold text-black transition-colors hover:bg-lime-400"
+        >
+          Back to The Briefing
+        </Link>
+        <Link
+          to="/connect"
+          className="rounded-lg border border-white/15 px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:border-white/30 hover:text-foreground"
+        >
+          Connect ESPN
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 const router = createBrowserRouter([
   {
     element: (
@@ -214,6 +247,7 @@ const router = createBrowserRouter([
           { path: "/admin/conversion-funnel", element: <AdminConversionFunnel /> },
         ],
       },
+      { path: "*", element: <NotFoundPage /> },
     ],
   },
 ]);
