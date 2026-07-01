@@ -92,14 +92,24 @@ function scoringTypeFromReceptionPoints(receptionPoints: unknown): string | null
 export async function resolveLeaguePromptContext(
   userId: number | undefined,
   season?: number,
+  leagueIdOverride?: string | null,
 ): Promise<LeaguePromptContext> {
+  // Optional explicit league override (e.g. League Wire generators pass the
+  // active league key so the prompt framing matches where the article is saved).
+  // ADDITIVE: when omitted, behaviour is identical to the profile-resolved path.
+  const override =
+    leagueIdOverride != null && String(leagueIdOverride).trim() !== ""
+      ? String(leagueIdOverride).trim().slice(0, 32)
+      : null;
+
   // Active profile (league id/name + focal owner/team identity).
   const co = await resolveCurrentOwner(userId != null ? { id: userId } : null);
 
   // -- Active league id ---------------------------------------------------------
-  // Prefer the profile resolved league id; only fall back to the canonical
-  // resolver for an authenticated user. Never hardcode an id.
-  let leagueId = co.leagueId ?? "";
+  // An explicit override always wins (validated by the caller's resolveLeagueId).
+  // Otherwise prefer the profile resolved league id; only fall back to the
+  // canonical resolver for an authenticated user. Never hardcode an id.
+  let leagueId = override ?? co.leagueId ?? "";
   if (!leagueId && userId != null) {
     try {
       const resolved = await resolveActiveLeagueId({ user: { id: userId } }, null, season);
@@ -112,7 +122,7 @@ export async function resolveLeaguePromptContext(
   // -- Season range from discovered cached seasons (active league) --------------
   let seasonRange = { start: 0, end: 0, count: 0 };
   try {
-    const seasons = (await getAllCachedSeasons(undefined, userId))
+    const seasons = (await getAllCachedSeasons(override ?? undefined, userId))
       .map((s) => Number(s))
       .filter((s) => Number.isFinite(s))
       .sort((a, b) => a - b);
@@ -141,7 +151,7 @@ export async function resolveLeaguePromptContext(
   let teams: ReturnType<typeof normalizeTeams> = [];
   let data: Record<string, unknown> | null = null;
   try {
-    const row = await getCachedView(effectiveSeason, "combined", undefined, { userId });
+    const row = await getCachedView(effectiveSeason, "combined", override ?? undefined, { userId });
     data = (row?.payload as Record<string, unknown>) || null;
     if (data) {
       settings = normalizeSettings(data);
@@ -152,7 +162,11 @@ export async function resolveLeaguePromptContext(
   }
 
   // -- League name --------------------------------------------------------------
-  let leagueName = (co.leagueName ?? "").trim();
+  // With an explicit override, the override league's cached settings name is the
+  // source of truth (co.* reflects the user's active profile league, which may differ).
+  let leagueName = override
+    ? (settings && settings.leagueName != null ? String(settings.leagueName).trim() : "")
+    : (co.leagueName ?? "").trim();
   if (!leagueName && settings && settings.leagueName != null) {
     leagueName = String(settings.leagueName).trim();
   }

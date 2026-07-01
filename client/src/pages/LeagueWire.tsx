@@ -138,7 +138,7 @@ function ArticleReader({ article, onClose, leagueName }: { article: Article; onC
 
 // ── Generate button ────────────────────────────────────────────────────────────
 
-function GenerateControls({ onRefresh, onSwitchToFeed }: { onRefresh: () => void; onSwitchToFeed: () => void }) {
+function GenerateControls({ onRefresh, onSwitchToFeed, leagueContextKey }: { onRefresh: () => void; onSwitchToFeed: () => void; leagueContextKey: string }) {
   const _trpc = trpc as any;
   const [status, setStatus] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -151,7 +151,7 @@ function GenerateControls({ onRefresh, onSwitchToFeed }: { onRefresh: () => void
     setLoading(true);
     setStatus("Generating championship march articles for all seasons…");
     try {
-      const r = await genAll.mutateAsync();
+      const r = await genAll.mutateAsync({ activeLeagueKey: leagueContextKey });
       const done = r.results?.filter((x: any) => x.status === "generated").length ?? 0;
       const cached = r.results?.filter((x: any) => x.status === "cached").length ?? 0;
       setStatus(`✓ Generated ${done} new articles (${cached} already cached). Switching to feed...`);
@@ -166,7 +166,7 @@ function GenerateControls({ onRefresh, onSwitchToFeed }: { onRefresh: () => void
     setLoading(true);
     setStatus("Generating 2026 roster construction report…");
     try {
-      const r = await genRoster.mutateAsync({ season: 2026 });
+      const r = await genRoster.mutateAsync({ season: 2026, activeLeagueKey: leagueContextKey });
       setStatus(`✓ ${r.headline}`);
       onRefresh();
       setTimeout(() => onSwitchToFeed(), 500);
@@ -178,7 +178,7 @@ function GenerateControls({ onRefresh, onSwitchToFeed }: { onRefresh: () => void
     setLoading(true);
     setStatus("Generating keeper preview article…");
     try {
-      const r = await genKeeper.mutateAsync({ draftYear: new Date().getFullYear() });
+      const r = await genKeeper.mutateAsync({ draftYear: new Date().getFullYear(), activeLeagueKey: leagueContextKey });
       setStatus(`✓ ${r.headline}`);
       onRefresh();
     } catch (e: any) { setStatus(`Error: ${e.message}`); }
@@ -361,7 +361,7 @@ export function LeagueWire() {
         )}
 
         {/* Generate controls */}
-        <GenerateControls onRefresh={() => { void refetchFeed(); }} onSwitchToFeed={() => { setView("feed"); setSelectedSeason(null); }} />
+        <GenerateControls onRefresh={() => { void refetchFeed(); }} onSwitchToFeed={() => { setView("feed"); setSelectedSeason(null); }} leagueContextKey={leagueContextKey} />
 
         {/* Live Wire reports (latest scores) - only in feed view */}
         {view === "feed" && (wireReports as any[]).length > 0 && (

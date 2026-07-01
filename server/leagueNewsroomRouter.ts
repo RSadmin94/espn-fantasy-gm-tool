@@ -214,11 +214,11 @@ export const leagueNewsroomRouter = router({
 
   /** Generate Championship March article for a season */
   generateChampionshipMarch: publicProcedure
-    .input(z.object({ season: z.number().int().min(2010).max(2030) }))
+    .input(z.object({ season: z.number().int().min(2010).max(2030), activeLeagueKey: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { ok: false, error: "DB unavailable" };
-      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0, input.activeLeagueKey);
       if (!leagueId || leagueId === "default") return { ok: false, error: "setup_required", requiresSetup: true };
 
       const { season } = input;
@@ -237,7 +237,7 @@ export const leagueNewsroomRouter = router({
       const evidence = await buildChampionshipEvidence(db, season, leagueId);
       if (!evidence) return { ok: false, error: `No data found for season ${season}` };
 
-      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id, season);
+      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id, season, leagueId);
       const { leagueDescriptor } = buildLeaguePromptContext(promptCtx);
 
       const llmEvidence = {
@@ -285,10 +285,11 @@ export const leagueNewsroomRouter = router({
 
   /** Generate all missing Championship March articles (batch) */
   generateAllChampionshipMarches: publicProcedure
-    .mutation(async ({ ctx }) => {
+    .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { ok: false, error: "DB unavailable" };
-      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0, input?.activeLeagueKey);
       if (!leagueId || leagueId === "default") return { ok: false, error: "setup_required", requiresSetup: true };
 
       const [seasonRows] = await db.execute(drizzleSql`
@@ -299,7 +300,7 @@ export const leagueNewsroomRouter = router({
 
       const seasons = (seasonRows as any[]).map(r => Number(r.season));
       const results = [];
-      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id);
+      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id, undefined, leagueId);
       const { leagueDescriptor } = buildLeaguePromptContext(promptCtx);
 
       for (const season of seasons) {
@@ -359,11 +360,11 @@ export const leagueNewsroomRouter = router({
 
   /** Generate keeper preview articles for upcoming season */
   generateKeeperPreviews: publicProcedure
-    .input(z.object({ draftYear: z.number().int() }))
+    .input(z.object({ draftYear: z.number().int(), activeLeagueKey: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { ok: false, error: "DB unavailable" };
-      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0, input.activeLeagueKey);
       if (!leagueId || leagueId === "default") return { ok: false, error: "setup_required", requiresSetup: true };
       const { draftYear } = input;
 
@@ -389,7 +390,7 @@ export const leagueNewsroomRouter = router({
         byOwner.get(key)!.push(k);
       }
 
-      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id, draftYear);
+      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id, draftYear, leagueId);
       const { leagueDescriptor } = buildLeaguePromptContext(promptCtx);
       const displayLeague = promptCtx.leagueName?.trim() || "this league";
 
@@ -431,11 +432,11 @@ export const leagueNewsroomRouter = router({
 
   /** Generate roster construction article for current season */
   generateRosterConstruction: publicProcedure
-    .input(z.object({ season: z.number().int() }))
+    .input(z.object({ season: z.number().int(), activeLeagueKey: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { ok: false, error: "DB unavailable" };
-      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0, input.activeLeagueKey);
       if (!leagueId || leagueId === "default") return { ok: false, error: "setup_required", requiresSetup: true };
       const { season } = input;
 
@@ -483,7 +484,7 @@ export const leagueNewsroomRouter = router({
 
       const leagueAvg = Math.round(teamAnalyses.reduce((s, t) => s + t.projectedTotal, 0) / (teamAnalyses.length || 1));
 
-      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id, season);
+      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id, season, leagueId);
       const { leagueDescriptor } = buildLeaguePromptContext(promptCtx);
       const displayLeague = promptCtx.leagueName?.trim() || "this league";
 
@@ -520,11 +521,11 @@ export const leagueNewsroomRouter = router({
 
   /** Delete cached article to force regeneration */
   deleteArticle: publicProcedure
-    .input(z.object({ slug: z.string() }))
+    .input(z.object({ slug: z.string(), activeLeagueKey: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { ok: false };
-      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0);
+      const leagueId = await resolveLeagueId(ctx.user?.id ?? 0, input.activeLeagueKey);
       if (!leagueId || leagueId === "default") return { ok: false, error: "setup_required" };
       await db.execute(drizzleSql`
         DELETE FROM league_wire_articles
