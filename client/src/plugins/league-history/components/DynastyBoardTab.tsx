@@ -87,7 +87,14 @@ export function DynastyBoardTab({
           const totalW = owner.allTimeWins;
           const totalL = owner.allTimeLosses;
           const totalT = owner.allTimeTies;
-          const best = owner.seasons.reduce((b, r) => Math.min(b, r.entry.finalStanding ?? 99), 99);
+          // Ignore invalid/unplayed finishes: ESPN stores finalStanding 0 for seasons
+          // with no recorded final rank (e.g. an in-progress season), and legacy rows
+          // may be null. Counting those would poison the min to "0th". Only positive
+          // standings count; if none are valid, best stays 99 and renders as "—".
+          const best = owner.seasons.reduce((b, r) => {
+            const fs = Number(r.entry.finalStanding);
+            return Number.isFinite(fs) && fs > 0 ? Math.min(b, fs) : b;
+          }, 99);
           const isOpen = expandedOwner === owner.ownerKey;
 
           return (
