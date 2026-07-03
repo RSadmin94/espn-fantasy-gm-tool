@@ -9,6 +9,7 @@ import {
   type RivalryPickerOption,
 } from "@/components/RivalryDossierPanel";
 import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
+import { RivalryShareButton } from "@/components/RivalryShareButton";
 import { cn } from "@/lib/utils";
 import { COMMERCIAL } from "@/lib/commercialCopy";
 import { resolvePaywallCopy } from "@/lib/paywallCopy";
@@ -422,6 +423,7 @@ export function RivalryCenter() {
   const loading = !leagueKeyReady || scoresQ.isLoading || listQ.isLoading;
   const allEmpty = !leagueLoading && leaguePairs.length === 0 && pairs.length === 0;
   const hero = pairs[0];
+  const heroRivalKey = hero ? nameToKey[norm(String(hero.rivalName ?? ""))] : undefined;
   const heroYearsActive: number = (() => {
     if (!hero) return 0;
     const focal = allOwners.find((o) => o.ownerKey === rodKey);
@@ -506,7 +508,21 @@ export function RivalryCenter() {
                   icon={Flame}
                   title="Rivalry of the Year"
                   caption="Your hottest active feud right now."
-                  right={<HeatBadge label={hero.heatLabel} />}
+                  right={
+                    <div className="flex items-center gap-2">
+                      <HeatBadge label={hero.heatLabel} />
+                      {heroRivalKey && (
+                        <RivalryShareButton
+                          leagueId={leagueContextKey}
+                          focalOwnerKey={rodKey}
+                          rivalOwnerKey={heroRivalKey}
+                          ownerAName={rodName}
+                          ownerBName={String(hero.rivalName ?? "Rival")}
+                          heatLabel={hero.heatLabel}
+                        />
+                      )}
+                    </div>
+                  }
                 />
                 <div className="mt-4 flex flex-col gap-5 md:flex-row md:items-center">
                   <div className="flex-1">

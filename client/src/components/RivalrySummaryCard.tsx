@@ -4,6 +4,7 @@ import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Swords, Flame, ShieldAlert, ArrowRight, Loader2 } from "lucide-react";
+import { RivalryShareButton } from "@/components/RivalryShareButton";
 
 /**
  * RivalrySummaryCard — a lightweight, reusable reference card for surfaces that need
@@ -68,11 +69,22 @@ export function RivalrySummaryCard({ className, title = "Your Top Rivalry" }: { 
         <span className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-white/45">
           <Swords className="h-4 w-4" /> {title}
         </span>
-        {top.heatLabel && (
-          <span className={cn("flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold", HEAT_TONE[top.heatLabel] ?? HEAT_TONE.Cold)}>
-            <Flame className="h-3 w-3" /> {top.heatLabel}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {top.heatLabel && (
+            <span className={cn("flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold", HEAT_TONE[top.heatLabel] ?? HEAT_TONE.Cold)}>
+              <Flame className="h-3 w-3" /> {top.heatLabel}
+            </span>
+          )}
+          {top.focalKey && top.rivalKey && (
+            <RivalryShareButton
+              leagueId={leagueContextKey}
+              focalOwnerKey={top.focalKey}
+              rivalOwnerKey={top.rivalKey}
+              ownerBName={top.rivalName}
+              heatLabel={top.heatLabel}
+            />
+          )}
+        </div>
       </div>
 
       {/* Top Rival */}

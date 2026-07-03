@@ -5,6 +5,8 @@ import { Loader2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { RivalryDossierPanel } from "@/components/RivalryDossierPanel";
+import { RivalryShareButton } from "@/components/RivalryShareButton";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import type { StandingsOwnerRow } from "../utils/seasonTabChampions";
 
 type VsRec = { wins: number; losses: number; ties: number; gamesPlayed?: number };
@@ -57,6 +59,8 @@ export function RivalriesTab({
   rawOwners,
 }: Props) {
   const [includeHistoricalOwners, setIncludeHistoricalOwners] = useState(false);
+  const { leagueContextKey } = useLeagueActiveGate();
+  const shareLeagueId = leagueContextKey && !leagueContextKey.startsWith("__") ? leagueContextKey : "";
 
   const rosterSet = useMemo(() => new Set(rivalryEligibleOwnerKeys), [rivalryEligibleOwnerKeys.join("|")]);
 
@@ -208,7 +212,22 @@ export function RivalriesTab({
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="text-[10px] uppercase tracking-wide text-muted-foreground">vs</div>
-                        <div className="font-semibold text-foreground">{rival}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-foreground">{rival}</span>
+                          {(() => {
+                            const fKey = ownerKeyForDisplayName(rawOwners, activeRival);
+                            const rKey = ownerKeyForDisplayName(rawOwners, rival);
+                            return shareLeagueId && fKey && rKey ? (
+                              <RivalryShareButton
+                                leagueId={shareLeagueId}
+                                focalOwnerKey={fKey}
+                                rivalOwnerKey={rKey}
+                                ownerAName={activeRival}
+                                ownerBName={rival}
+                              />
+                            ) : null;
+                          })()}
+                        </div>
                       </div>
                       <div
                         className={cn(

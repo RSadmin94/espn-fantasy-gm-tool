@@ -32,6 +32,7 @@ import { draftRealityRouter } from "./draftRealityRouter";
 import { leagueIntelRouter } from "./leagueIntelRouter";
 import { completedTradeIntelRouter } from "./completedTradeIntelRouter";
 import { rivalryStoryRouter } from "./rivalryStoryRouter";
+import { rivalryShareRouter } from "./rivalryShareRouter";
 import { activityDnaRouter } from "./activityDnaRouter";
 import { transactionAnalysisRouter } from "./transactionAnalysisRouter";
 import { getActivityDnaForOwner } from "./activityDnaService";
@@ -547,6 +548,7 @@ export const appRouter = router({
   leagueIntel: leagueIntelRouter,
   completedTradeIntel: completedTradeIntelRouter,
   rivalryStory: rivalryStoryRouter,
+  rivalryShare: rivalryShareRouter,
   activityDna: activityDnaRouter,
   transactionAnalysis: transactionAnalysisRouter,
   onboarding: onboardingRouter,

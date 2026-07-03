@@ -14,6 +14,7 @@ import { registerAdvisorStreamRoute } from "../advisorStreamHandler";
 import { registerStripeWebhook } from "../stripeWebhook";
 import { registerHealthRoute } from "./healthRoute";
 import { registerReceiptOg } from "../receiptOg";
+import { registerRivalryOg } from "../rivalryOg";
 
 async function startServer() {
   const { runMigrations } = await import("../runMigrations");
@@ -53,6 +54,9 @@ async function startServer() {
 
   // Receipt OG image route + /p/:token meta injection (before the SPA fallthrough)
   registerReceiptOg(app);
+
+  // Rivalry share: OG image + /rivalry/:shareCode meta injection (before the SPA fallthrough)
+  registerRivalryOg(app);
 
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {

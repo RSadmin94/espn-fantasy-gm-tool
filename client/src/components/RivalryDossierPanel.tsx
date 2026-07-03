@@ -9,6 +9,7 @@ import { resolvePaywallCopy } from "@/lib/paywallCopy";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { IntelPanel } from "@/components/layout";
+import { RivalryShareButton } from "@/components/RivalryShareButton";
 import {
   Loader2,
   Calendar,
@@ -1671,6 +1672,9 @@ export function RivalryDossierPanel({
 
   const pd = data.pairDetail;
   const oppRow = data.opponents.find((o) => o.opponentOwnerKey === opponentKey);
+  const focalLabel =
+    filteredPickers.find((o) => o.ownerKey === queryKey)?.label ??
+    pickerOptions?.find((o) => o.ownerKey === queryKey)?.label;
 
   return (
     <div className="space-y-5 p-4" style={{ ...PANEL, boxShadow: "0 0 40px rgba(0,0,0,0.45)" }}>
@@ -1679,6 +1683,15 @@ export function RivalryDossierPanel({
           <div className="flex items-center gap-2" style={{ color: TEXT }}>
             <ScrollText className="h-4 w-4" style={{ color: ACCENT }} />
             <h3 className="text-base font-extrabold uppercase tracking-[0.18em]">Rivalry Dossier</h3>
+            {opponentKey && (
+              <RivalryShareButton
+                leagueId={leagueContextKey}
+                focalOwnerKey={queryKey}
+                rivalOwnerKey={opponentKey}
+                ownerAName={focalLabel}
+                ownerBName={oppRow?.opponentDisplayName}
+              />
+            )}
           </div>
           <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
             Completed games (RS + playoffs) · {data.matchupRowsUsed} deduped rows · season {activeSeason ?? "—"}
