@@ -10,6 +10,7 @@ import {
   useAuth,
 } from "@clerk/react-router";
 import { AppShell } from "./components/AppShell";
+import { DemoBanner } from "./components/DemoBanner";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ConnectESPN } from "./pages/ConnectESPN";
 import { LandingPage } from "./pages/LandingPage";
@@ -106,7 +107,12 @@ function ProtectedLayout() {
   const { isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return <LoadingSpinner />;
   if (!isSignedIn) return <Navigate to="/sign-in" replace />;
-  return <AppShell />;
+  return (
+    <>
+      <DemoBanner />
+      <AppShell />
+    </>
+  );
 }
 
 // Placeholder page component

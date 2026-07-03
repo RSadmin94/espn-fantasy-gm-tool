@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
+import { isDemoAccount } from "./_core/demoAccount";
 import { resolveActiveProfile, resolveActiveLeagueId, getDb } from "./db";
 import { computeBiggestThreat } from "./biggestThreatService";
 import { resolveCurrentOwner } from "./currentOwnerService";
@@ -15,6 +16,15 @@ const countOf = (r: any) => Number(rowsOf(r)[0]?.c ?? 0);
  * profile, and the fallback league summary) instead of an error.
  */
 export const meRouter = router({
+  /**
+   * Lightweight session flags (read-only). Powers the demo-mode banner and any
+   * client-side read-only affordances. Anonymous callers get isDemo:false.
+   */
+  session: publicProcedure.query(({ ctx }) => ({
+    isAuthenticated: !!ctx.user,
+    isDemo: isDemoAccount(ctx.user ?? null),
+  })),
+
   /** The user's selected league/team identity (see resolveActiveProfile). */
   activeProfile: publicProcedure
     .input(z.object({ activeLeagueKey: z.string().optional() }).optional())

@@ -4,13 +4,29 @@ import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import type { User } from "../../drizzle/schema";
 import { isFounderAccount, hasFounderOwnerIdentity } from "./founders";
+import { isDemoAccount, DEMO_READONLY_MSG } from "./demoAccount";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
 });
 
 export const router = t.router;
-export const publicProcedure = t.procedure;
+
+/**
+ * Read-only demo guard. A recognized demo account (see demoAccount.ts) may READ freely but
+ * is blocked from EVERY write: this middleware rejects any `mutation` originating from the
+ * demo account. It is composed into publicProcedure, protectedProcedure, subscribedProcedure
+ * and adminProcedure so the guarantee holds at the shared chokepoint — no per-endpoint audit,
+ * no reliance on hidden buttons. For every non-demo user, and for all queries, it is a no-op.
+ */
+const blockDemoMutations = t.middleware(async ({ ctx, type, next }) => {
+  if (type === "mutation" && isDemoAccount(ctx.user)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: DEMO_READONLY_MSG });
+  }
+  return next();
+});
+
+export const publicProcedure = t.procedure.use(blockDemoMutations);
 
 const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;
@@ -30,7 +46,7 @@ const requireUser = t.middleware(async opts => {
   });
 });
 
-export const protectedProcedure = t.procedure.use(requireUser);
+export const protectedProcedure = t.procedure.use(blockDemoMutations).use(requireUser);
 
 const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -104,7 +120,7 @@ export async function resolvePremiumAccess(
 }
 
 /** Requires an active subscription or a non-expired trial. */
-export const subscribedProcedure = t.procedure.use(
+export const subscribedProcedure = t.procedure.use(blockDemoMutations).use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
     if (!ctx.auth?.userId) {
@@ -123,7 +139,7 @@ export const subscribedProcedure = t.procedure.use(
   }),
 );
 
-export const adminProcedure = t.procedure.use(
+export const adminProcedure = t.procedure.use(blockDemoMutations).use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 
