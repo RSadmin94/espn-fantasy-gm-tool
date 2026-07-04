@@ -434,11 +434,11 @@ export function buildGmBriefingEdition(input: {
   };
 }
 
-export function personalizationGreeting(name: string): string {
+export function personalizationGreeting(_name: string): string {
   const hour = new Date().getHours();
-  if (hour < 12) return `GOOD MORNING, ${name.toUpperCase()}`;
-  if (hour < 17) return `GOOD AFTERNOON, ${name.toUpperCase()}`;
-  return `GOOD EVENING, ${name.toUpperCase()}`;
+  if (hour < 12) return "GOOD MORNING, COACH";
+  if (hour < 17) return "GOOD AFTERNOON, COACH";
+  return "GOOD EVENING, COACH";
 }
 
 export function personalizationMeta(input: {
