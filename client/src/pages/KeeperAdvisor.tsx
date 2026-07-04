@@ -460,13 +460,24 @@ export function KeeperAdvisor() {
                               const isSel = selectedPlayerIds.has(v.playerId);
                               const ownerCount = selectedCountByOwnerKey.get(v.ownerKey) ?? 0;
                               const atLimit = manualLimit != null && manualLimit > 0 && ownerCount >= manualLimit;
-                              const disabled = setManual.isPending || (!isSel && atLimit);
+                              const single = manualLimit === 1;
+                              // Single-keeper leagues: clicking a new player REPLACES that team's keeper,
+                              // so never disable at limit — let the user set/swap it in one click.
+                              const disabled = setManual.isPending || (!isSel && atLimit && !single);
                               return (
                                 <button
                                   type="button"
                                   onClick={() => toggleKeep(v)}
                                   disabled={disabled}
-                                  title={!isSel && atLimit ? `Keeper limit reached (${manualLimit} per team)` : isSel ? "Remove keeper" : "Mark as keeper"}
+                                  title={
+                                    isSel
+                                      ? "Remove keeper"
+                                      : atLimit && single
+                                        ? "Set as this team's keeper (replaces current)"
+                                        : atLimit
+                                          ? `Keeper limit reached (${manualLimit} per team)`
+                                          : "Mark as keeper"
+                                  }
                                   className={cn(
                                     "inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-colors",
                                     isSel

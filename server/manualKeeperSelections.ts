@@ -124,7 +124,13 @@ export async function setManualKeeperSelection(args: {
     // keep = true
     if (has) return { ok: true, selected: true, count: existing.length, limit: keeperLimit };
     if (keeperLimit != null && keeperLimit > 0 && existing.length >= keeperLimit) {
-      return { ok: false, error: "limit_reached", count: existing.length, limit: keeperLimit };
+      if (keeperLimit === 1) {
+        // Single-keeper league: a new pick REPLACES this team's current keeper (one-click swap),
+        // so the user can freely set/change each team's one keeper for draft predictions.
+        await db.delete(gmManualKeeperSelections).where(whereOwner);
+      } else {
+        return { ok: false, error: "limit_reached", count: existing.length, limit: keeperLimit };
+      }
     }
     await db.insert(gmManualKeeperSelections).values({
       userId,
@@ -135,7 +141,7 @@ export async function setManualKeeperSelection(args: {
       playerName: playerName ?? "",
       position: position ?? "",
     } as typeof gmManualKeeperSelections.$inferInsert);
-    return { ok: true, selected: true, count: existing.length + 1, limit: keeperLimit };
+    return { ok: true, selected: true, count: keeperLimit === 1 ? 1 : existing.length + 1, limit: keeperLimit };
   } catch (err) {
     if (isMissingTableError(err)) return { ok: false, error: "table_missing" };
     throw err;
