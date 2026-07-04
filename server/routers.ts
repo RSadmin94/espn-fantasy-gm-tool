@@ -72,6 +72,8 @@ import {
   upsertUserMemory,
   getActiveLeagueForUser,
   setActiveLeagueForUser,
+  isDemoAppUserId,
+  resolveActiveProfile,
   reconcileActiveLeague,
   resolveActiveLeagueId,
   persistLlmUsage,
@@ -1358,7 +1360,25 @@ export const appRouter = router({
     // Get the user's active league connection
     getActive: protectedProcedure.query(async ({ ctx }) => {
       const row = await getActiveLeagueForUser(ctx.user.id);
-      if (!row) return null;
+      if (!row) {
+        // Demo account has no league_connections row — synthesize a read-only pointer to the
+        // curated demo league so the client loads it (data served from existing synced tables).
+        if (await isDemoAppUserId(ctx.user.id)) {
+          const prof = await resolveActiveProfile({ id: ctx.user.id, openId: ctx.user.openId });
+          if (prof.leagueId) {
+            return {
+              id: -1,
+              provider: "espn",
+              leagueId: prof.leagueId,
+              leagueName: prof.leagueName ?? "Demo League",
+              season: prof.selectedSeason ?? new Date().getFullYear(),
+              syncStatus: "ok" as const,
+              lastSyncedAt: null as Date | null,
+            };
+          }
+        }
+        return null;
+      }
       return {
         id: row.id,
         provider: row.provider,
