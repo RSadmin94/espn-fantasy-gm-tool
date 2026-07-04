@@ -39,7 +39,7 @@ export function RivalryShareButton({
   ownerAName,
   ownerBName,
   heatLabel,
-  variant = "icon",
+  variant = "button",
   className,
 }: RivalryShareButtonProps) {
   const [open, setOpen] = useState(false);
@@ -163,7 +163,7 @@ export function RivalryShareButton({
         aria-haspopup="menu"
         aria-expanded={open}
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 font-semibold text-white/85 transition-colors hover:border-white/30 hover:bg-white/10",
+          "inline-flex items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-500/15 font-semibold text-purple-200 transition-colors hover:border-purple-400 hover:bg-purple-500/25",
           variant === "icon" ? "h-8 w-8 justify-center p-0" : "px-3 py-1.5 text-sm",
         )}
       >
