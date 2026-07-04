@@ -213,7 +213,7 @@ function IdentityCard({ identity }: { identity: GmBriefingEdition["identity"] })
       <p className="text-label font-bold uppercase tracking-[0.14em] text-muted-foreground">
         {BRIEFING.identity.reputation}
       </p>
-      <p className="mt-2 text-[clamp(1.35rem,3vw,1.85rem)] font-black leading-tight tracking-tight text-foreground">
+      <p className="mt-2 text-[clamp(1.35rem,3vw,2rem)] font-black leading-tight tracking-tight text-foreground">
         {identity.displayName}
       </p>
       <p className="mt-1 text-lg font-bold text-lime-400/95">{identity.reputation}</p>
