@@ -5,6 +5,7 @@ import type { TrpcContext } from "./context";
 import type { User } from "../../drizzle/schema";
 import { isFounderAccount, hasFounderOwnerIdentity } from "./founders";
 import { isDemoAccount, DEMO_READONLY_MSG } from "./demoAccount";
+import { isStaffAccount } from "./staff";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -94,6 +95,7 @@ export function hasPremiumAccess(
     | undefined,
 ): boolean {
   if (isFounderAccount(user)) return true;
+  if (isStaffAccount(user)) return true;
   return hasRivalsIntelligenceEntitlement(user);
 }
 
