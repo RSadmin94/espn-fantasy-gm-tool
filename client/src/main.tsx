@@ -11,6 +11,7 @@ import {
 } from "@clerk/react-router";
 import { AppShell } from "./components/AppShell";
 import { DemoBanner } from "./components/DemoBanner";
+import { TryDemoButton } from "./components/TryDemoButton";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ConnectESPN } from "./pages/ConnectESPN";
 import { LandingPage } from "./pages/LandingPage";
@@ -93,8 +94,15 @@ function LoadingSpinner() {
 
 function SignInPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background">
       <SignIn routing="path" path="/sign-in" signUpUrl={undefined} fallbackRedirectUrl="/connect" signUpFallbackRedirectUrl="/connect" />
+      <div className="flex flex-col items-center gap-2">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">or</div>
+        <TryDemoButton />
+        <div className="max-w-xs text-center text-xs text-muted-foreground">
+          Explore a real league read-only. No account, no ESPN connection.
+        </div>
+      </div>
     </div>
   );
 }

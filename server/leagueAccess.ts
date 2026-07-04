@@ -4,7 +4,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import { and, eq, sql } from "drizzle-orm";
-import { getDb } from "./db";
+import { getDb, demoLeagueId, isDemoAppUserId } from "./db";
 import { gmTeams, leagueConnections } from "../drizzle/schema";
 import { personMergeKey } from "./ownerProfileService";
 
@@ -16,6 +16,9 @@ function normalizeLeagueId(leagueId: string): string {
 export async function userHasLeagueAccess(userId: number, leagueId: string): Promise<boolean> {
   const lid = normalizeLeagueId(leagueId);
   if (!lid || !Number.isFinite(userId) || userId <= 0) return false;
+
+  // Demo account: read-only access to the curated demo league (and only that league).
+  if (lid === demoLeagueId() && (await isDemoAppUserId(userId))) return true;
 
   const db = await getDb();
   if (!db) {

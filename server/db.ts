@@ -1061,6 +1061,103 @@ async function resolveLeagueFromSyncRunsForSeason(
  *   These are only reached by server-side scheduled tasks that don't carry a user context.
  *   Anonymous callers are blocked earlier by per-procedure ctx.user?.id guards (Phase C).
  */
+// ── Demo account mount (read-only) ─────────────────────────────────────────
+// The demo account is mounted onto ONE curated league using EXISTING synced data — no
+// league_connections row, no ESPN credentials, no data copy. The two resolvers below force
+// the demo account onto this league so it can only ever read that single league; every write
+// is already blocked centrally (see _core/trpc.ts). Dormant until DEMO_ACCOUNT_CLERK_ID is set.
+
+/** Curated demo league id (defaults to the keeper league). Override via DEMO_LEAGUE_ID. */
+export function demoLeagueId(): string {
+  return ((process.env.DEMO_LEAGUE_ID ?? "457622").trim().slice(0, 32)) || "457622";
+}
+
+let _demoAppUserId: number | null = null;
+/** App-user id of the demo account (from DEMO_ACCOUNT_CLERK_ID), cached once it exists. */
+export async function resolveDemoAppUserId(): Promise<number | null> {
+  if (_demoAppUserId != null) return _demoAppUserId;
+  const clerkId = (process.env.DEMO_ACCOUNT_CLERK_ID ?? "")
+    .split(",").map((s) => s.trim()).filter(Boolean)[0];
+  if (!clerkId) return null;
+  const u = await getUserByOpenId(clerkId);
+  if (u?.id) _demoAppUserId = u.id;
+  return _demoAppUserId;
+}
+
+/** True iff this app-user id is the demo account. */
+export async function isDemoAppUserId(userId: number | null | undefined): Promise<boolean> {
+  if (userId == null) return false;
+  const demoId = await resolveDemoAppUserId();
+  return demoId != null && demoId === userId;
+}
+
+/**
+ * Read-only, "set up" profile for the demo account, anchored to a focal owner in the demo
+ * league (from existing synced data). Focal owner: DEMO_OWNER_NAME if it matches a team, else
+ * the owner with the most synced seasons, else the most recent team.
+ */
+async function resolveDemoActiveProfile(clerkUserId: string | null): Promise<ActiveProfile> {
+  const lid = demoLeagueId();
+  const db = await getDb();
+  if (!db) return { ...emptyActiveProfile(clerkUserId), leagueId: lid };
+
+  const teams = await db
+    .select({
+      teamId: gmTeams.teamId,
+      ownerId: gmTeams.ownerId,
+      ownerName: gmTeams.ownerName,
+      name: gmTeams.name,
+      season: gmTeams.season,
+    })
+    .from(gmTeams)
+    .where(eq(gmTeams.leagueId, lid));
+
+  const [conn] = await db
+    .select({ leagueName: leagueConnections.leagueName })
+    .from(leagueConnections)
+    .where(eq(leagueConnections.leagueId, lid))
+    .limit(1);
+  const leagueName = conn?.leagueName ?? null;
+
+  const norm = (s: string | null | undefined) => (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  const wantName = norm(process.env.DEMO_OWNER_NAME ?? "Rod Sellers");
+
+  type Agg = { ownerId: string; ownerName: string | null; teamId: number; name: string | null; season: number; seasons: number };
+  const byOwner = new Map<string, Agg>();
+  for (const t of teams) {
+    const oid = String(t.ownerId ?? "");
+    if (!oid) continue;
+    const season = Number(t.season ?? 0);
+    const prev = byOwner.get(oid);
+    if (!prev) {
+      byOwner.set(oid, { ownerId: oid, ownerName: t.ownerName ?? null, teamId: t.teamId, name: t.name ?? null, season, seasons: 1 });
+    } else {
+      prev.seasons += 1;
+      if (season >= prev.season) { prev.season = season; prev.teamId = t.teamId; prev.name = t.name ?? null; prev.ownerName = t.ownerName ?? prev.ownerName; }
+    }
+  }
+  const owners = [...byOwner.values()];
+  const focal =
+    owners.find((o) => norm(o.ownerName) === wantName) ??
+    owners.slice().sort((a, b) => b.seasons - a.seasons || b.season - a.season)[0];
+
+  if (!focal) {
+    return { ...emptyActiveProfile(clerkUserId), leagueId: lid, leagueName, isSetupComplete: false };
+  }
+
+  return {
+    clerkUserId,
+    leagueId: lid,
+    leagueName,
+    selectedTeamId: focal.teamId,
+    selectedOwnerKey: `id:${focal.ownerId}`,
+    selectedOwnerName: focal.ownerName,
+    selectedFranchiseName: focal.name,
+    selectedSeason: focal.season || null,
+    isSetupComplete: true,
+  };
+}
+
 export async function resolveActiveLeagueId(
   ctx: ActiveLeagueResolveCtx,
   inputLeagueId?: string | null,
@@ -1080,6 +1177,14 @@ export async function resolveActiveLeagueId(
       ? String(inputLeagueId).trim().slice(0, 32)
       : null;
   const uid = ctx.user?.id ?? undefined;
+
+  // Demo account: always the curated demo league, ignoring any requested league. This is the
+  // read-only mount — the demo account can never resolve to any other league.
+  if (uid != null && (await isDemoAppUserId(uid))) {
+    const demoLid = demoLeagueId();
+    log(demoLid, "demo_account");
+    return { leagueId: demoLid, source: "demo_account" };
+  }
 
   if (inL) {
     if (uid != null) {
@@ -1571,6 +1676,13 @@ export async function resolveActiveProfile(
   user: { id: number; openId?: string | null } | null | undefined,
 ): Promise<ActiveProfile> {
   if (!user) return emptyActiveProfile(null);
+
+  // Demo account: read-only mount onto the curated demo league (existing synced data), anchored
+  // to a focal owner. Appears "set up" so the demo lands on the app rather than onboarding.
+  if (await isDemoAppUserId(user.id)) {
+    return resolveDemoActiveProfile(user.openId ?? null);
+  }
+
   const clerkUserId = user.openId ?? null;
   const db = await getDb();
   if (!db) return emptyActiveProfile(clerkUserId);
