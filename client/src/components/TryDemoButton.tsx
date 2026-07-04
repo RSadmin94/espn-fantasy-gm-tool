@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
 import { useClerk } from "@clerk/react-router";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -17,7 +16,6 @@ import { trpc } from "@/lib/trpc";
  */
 export function TryDemoButton() {
   const clerk = useClerk();
-  const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const start = trpc.demo.start.useMutation();
 
@@ -31,7 +29,11 @@ export function TryDemoButton() {
       const res = await client.signIn.create({ strategy: "ticket", ticket });
       if (res.status === "complete" && res.createdSessionId) {
         await clerk.setActive({ session: res.createdSessionId });
-        navigate("/dashboard");
+        // Hard-navigate so the /sign-in page (and its Clerk <SignIn fallbackRedirectUrl="/connect">,
+        // which would otherwise redirect the just-signed-in demo to /connect) is fully unmounted.
+        // The demo must always land on the dashboard, never onboarding. A full load also picks up
+        // the demo's league context (457622) cleanly.
+        window.location.replace("/dashboard");
         return;
       }
       throw new Error("incomplete");
