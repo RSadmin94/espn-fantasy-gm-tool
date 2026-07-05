@@ -729,8 +729,11 @@ function buildRosterNeeds(teams: any[], byTeam: Map<number, any[]>, keeperPredic
     const starters = roster.filter(p => p.slotId !== 20 && p.slotId !== 21);
     const starterByPos: Record<string, any[]> = {};
     for (const p of starters) {
-      if (!starterByPos[p.position]) starterByPos[p.position] = [];
-      starterByPos[p.position].push(p);
+      // Count IDP starters (LB/DL/DB/S/CB/DE/DT) toward the single DP requirement: a rostered
+      // defender satisfies the DP starter slot, so the DP need no longer reads as CRITICAL.
+      const sp = normalizeDraftPos(p.position);
+      if (!starterByPos[sp]) starterByPos[sp] = [];
+      starterByPos[sp].push(p);
     }
 
     const rosterNeeds: any[] = [];
@@ -899,7 +902,9 @@ function buildMockDraft(params: {
       switch (pos) {
         case "QB":  return lateWindow ? 2 : 1;
         case "TE":  return lateWindow ? 3 : 1;
-        case "DP":  return lateWindow ? 2 : 1;
+        // One DP per team by default — drive the cap from the league's DP starter requirement so a
+        // league that starts N defenders drafts N. No late-round backup unless the roster rule asks.
+        case "DP":  return LINEUP_REQS.DP ?? 1;
         case "K":   return round >= maxRound - 1 ? 1 : 0;
         case "DEF": return round >= maxRound - 2 ? 1 : 0;
         case "RB":  return 6;
@@ -1203,7 +1208,9 @@ export const draftWarRoomRouter = router({
       // Board-reality pool — keepers removed by playerId (Deliverable B). Replaces the
       // previous name-based removal. availablePool and availablePoolAfterKeepers are the
       // SAME single board (Rule 4: no duplicate boards), named explicitly for clarity.
-      const DRAFT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
+      // Include DP so individual defensive players (already normalized + carrying real ADP in
+      // playerPool) surface in the Available Players board, matching what the mock draft uses.
+      const DRAFT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DEF", "DP"]);
       const availablePoolAfterKeepers = playerPool
         .filter((p) => !removedKeeperIds.has(Number(p.espnId)) && DRAFT_POSITIONS.has(p.position))
         .slice(0, 320)
