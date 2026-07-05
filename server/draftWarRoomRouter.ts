@@ -28,9 +28,8 @@ import { computeMarketValues, type MarketValueInput } from "./marketValue"; // s
 import { computeKeeperValuations, type KeeperPoolRowLite } from "./keeperValuationService"; // sole keeper engine
 import { getManualKeeperSelections } from "./manualKeeperSelections"; // user keeper overrides (degrades safely if table absent)
 import { computeLeaguePositionTimingProfiles, type PositionTimingProfile } from "./leagueDraftTimingProfile";
+import { buildDraftDecisionFromResolvedPick } from "./draftDecisionBridge";
 import {
-  buildDpPickIntelligence,
-  buildOwnerDnaPickIntelligence,
   evaluateDpDraftability,
   evaluateDpNeedReachGuard,
   isDpWindowOpen,
@@ -805,7 +804,7 @@ function buildRosterNeeds(teams: any[], byTeam: Map<number, any[]>, keeperPredic
 
 // ── Mock draft ────────────────────────────────────────────────────────────────
 
-function buildMockDraft(params: {
+export function buildMockDraft(params: {
   allPicks: any[];
   rosterNeeds: any[];
   keeperPredictions: any[];
@@ -894,6 +893,39 @@ function buildMockDraft(params: {
         k.teamId === tid && k.predictedPlayer === keeperPlayer,
       );
       const tradeCtx = tradedPickMap.get(`${round}_${tid}`);
+      const keeperDecision = buildDraftDecisionFromResolvedPick({
+        pickNum,
+        round,
+        ownerName,
+        teamName,
+        pick: {
+          name: keeperPlayer,
+          position: kp?.position ?? "?",
+          adp: null,
+          projectedPoints: kp?.projectedPoints ?? 0,
+          marketValue: null,
+        },
+        targetPosition: kp?.position ?? "?",
+        primaryFactor: "KEEPER",
+        pickReason: `Keeper slot — Round ${round} reserved`,
+        blockedOverrides: [],
+        bpa: {
+          name: keeperPlayer,
+          position: kp?.position ?? "?",
+          adp: null,
+          projectedPoints: kp?.projectedPoints ?? 0,
+          marketValue: null,
+        },
+        needUrgency: null,
+        teamNeeds: [],
+        dpTiming,
+        ownerDnaMeta: null,
+        ownerConfidence: null,
+        legacyReason: `Keeper slot — Round ${round} reserved`,
+        confidenceScore: 100,
+        isKeeper: true,
+        keeperRound: round,
+      });
       picks.push({
         pickNumber: pickNum, round, roundPick: rp,
         teamId: tid, teamName, ownerName,
@@ -906,6 +938,8 @@ function buildMockDraft(params: {
         evidence: kp?.evidence ?? [`Keeper in Round ${round}`],
         alternatePicks: [],
         isKeeperSlot: true,
+        pickIntelligence: keeperDecision.pickIntelligence,
+        draftDecision: keeperDecision,
         tradedPickContext: tradeCtx ? {
           type: tradeCtx.type, evidence: tradeCtx.evidence
         } : null,
@@ -1126,43 +1160,6 @@ function buildMockDraft(params: {
     const available = undrafted.filter(p => p.position === targetPos && p.name !== pick.name);
     const needUrg = needs?.needs.find((n: any) => n.position === targetPos)?.urgency;
 
-    let pickIntelligence: PickIntelligence | null = null;
-    if (pick.position === "DP" && dpTiming) {
-      if (primaryFactor === "LEAGUE_TIMING") {
-        pickReason = `League history DP window — ${pickReason}`;
-      } else if (primaryFactor === "ROSTER_NEED") {
-        pickReason = `${pickReason} (within league timing window)`;
-      }
-      pickIntelligence = buildDpPickIntelligence({
-        pickNum,
-        round,
-        playerName: pick.name,
-        playerAdp: pick.adp,
-        primaryFactor,
-        profile: dpTiming,
-        needUrgency: needUrg ?? null,
-        pickReason,
-        blockedOverrides,
-      });
-    } else if (
-      ownerDnaMeta
-      && OFFENSE_DNA_POSITIONS.has(String(pick.position))
-      && (primaryFactor === "OWNER_DNA" || ownerDnaMeta.closeBlocked)
-    ) {
-      pickIntelligence = buildOwnerDnaPickIntelligence({
-        pickNum,
-        round,
-        playerName: pick.name,
-        playerAdp: pick.adp,
-        applied: primaryFactor === "OWNER_DNA",
-        explanation: ownerDnaMeta.explanation,
-        blockedReason: ownerDnaMeta.blockedReason,
-        positionProbabilities: ownerDnaMeta.positionProbabilities,
-        ownerConfidence: resolveOwnerDnaModel(ownerDnaContext, ownerName)?.confidence ?? null,
-        legacyReason,
-        structuredSections: ownerDnaMeta.structuredSections,
-      });
-    }
     const mv = pick.marketValue;
     const confSignals = [
       mv != null ? (mv >= 70 ? 0.9 : mv >= 45 ? 0.75 : 0.6) : 0.6,
@@ -1170,6 +1167,43 @@ function buildMockDraft(params: {
       pick.adp != null ? 0.8 : 0.6,
     ];
     const conf = Math.round(Math.min(95, Math.max(35, (confSignals.reduce((s,v)=>s+v,0)/confSignals.length)*100)));
+
+    const draftDecision = buildDraftDecisionFromResolvedPick({
+      pickNum,
+      round,
+      ownerName,
+      teamName,
+      pick: {
+        name: pick.name,
+        position: pick.position,
+        adp: pick.adp,
+        projectedPoints: pick.projectedPoints,
+        marketValue: pick.marketValue ?? null,
+      },
+      targetPosition: targetPos,
+      primaryFactor,
+      pickReason,
+      blockedOverrides,
+      bpa: {
+        name: bpa.name,
+        position: bpa.position,
+        adp: bpa.adp,
+        projectedPoints: bpa.projectedPoints,
+        marketValue: bpa.marketValue ?? null,
+      },
+      needUrgency: needUrg ?? null,
+      teamNeeds: teamNeeds.map((n: { position: string; urgency: string }) => ({
+        position: n.position,
+        urgency: String(n.urgency),
+      })),
+      dpTiming,
+      ownerDnaMeta: ownerDnaMeta,
+      ownerConfidence: resolveOwnerDnaModel(ownerDnaContext, ownerName)?.confidence ?? null,
+      legacyReason,
+      confidenceScore: conf,
+      cappedPosition: primaryFactor === "POSITION_CAP" ? bpa.position : undefined,
+    });
+    const pickIntelligence = draftDecision.pickIntelligence;
 
     const tradeNote = tradeCtx
       ? tradeCtx.type === "ACQUIRED"
@@ -1195,6 +1229,7 @@ function buildMockDraft(params: {
       reasoning: `${ownerName} takes ${targetPos} in Round ${round}${needUrg ? ` [${needUrg} need]` : " [BPA]"}${tradeCtx ? " [TRADED PICK]" : ""}`,
       evidence,
       pickIntelligence,
+      draftDecision,
       alternatePicks: available.slice(0, 3).map(p => ({ player: p.name, position: p.position, projectedPoints: p.projectedPoints, marketValue: p.marketValue ?? null, adp: p.adp ?? null })),
       isKeeperSlot: false,
       tradedPickContext: tradeCtx ? { type: tradeCtx.type, evidence: tradeCtx.evidence } : null,

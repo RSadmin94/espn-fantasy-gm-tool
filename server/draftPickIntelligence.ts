@@ -275,3 +275,100 @@ export function buildOwnerDnaPickIntelligence(input: OwnerDnaIntelligenceInput):
     sections: structuredSections.length ? structuredSections : undefined,
   };
 }
+
+export function buildNeedPickIntelligence(params: {
+  pickNum: number;
+  round: number;
+  playerName: string;
+  playerAdp: number | null;
+  position: string;
+  needUrgency: string | null;
+  pickReason: string;
+  blockedOverrides: string[];
+}): PickIntelligence {
+  const { playerName, playerAdp, position, needUrgency, pickReason, blockedOverrides } = params;
+  const factors: PickIntelligenceFactor[] = [
+    {
+      name: "rosterNeed",
+      weight: 0.45,
+      detail: needUrgency ? `${needUrgency} roster need at ${position}.` : `Roster need at ${position}.`,
+    },
+    {
+      name: "espnAdp",
+      weight: 0.35,
+      detail: playerAdp != null
+        ? `${playerName} — ESPN ADP ${playerAdp} (within reach window).`
+        : `${playerName} — no ESPN ADP on file.`,
+    },
+  ];
+  const total = factors.reduce((s, f) => s + f.weight, 0);
+  for (const f of factors) f.weight = Math.round((f.weight / total) * 100) / 100;
+
+  let plainEnglish = pickReason;
+  if (blockedOverrides.length) plainEnglish += ` ${blockedOverrides.join(" ")}`;
+
+  return {
+    primaryFactor: "ROSTER_NEED",
+    factors,
+    blockedOverrides,
+    timingConfidence: null,
+    plainEnglish,
+  };
+}
+
+export function buildCapPickIntelligence(params: {
+  pickNum: number;
+  round: number;
+  playerName: string;
+  playerAdp: number | null;
+  position: string;
+  cappedPosition: string;
+  pickReason: string;
+}): PickIntelligence {
+  const { playerName, playerAdp, position, cappedPosition, pickReason } = params;
+  const factors: PickIntelligenceFactor[] = [
+    {
+      name: "espnAdp",
+      weight: 0.5,
+      detail: playerAdp != null
+        ? `${playerName} — ESPN ADP ${playerAdp} (best uncapped ${position}).`
+        : `${playerName} — best uncapped player.`,
+    },
+    {
+      name: "rosterNeed",
+      weight: 0.3,
+      detail: `${cappedPosition} roster slots full — slid to next best by ADP.`,
+    },
+  ];
+  const total = factors.reduce((s, f) => s + f.weight, 0);
+  for (const f of factors) f.weight = Math.round((f.weight / total) * 100) / 100;
+
+  return {
+    primaryFactor: "POSITION_CAP",
+    factors,
+    blockedOverrides: [],
+    timingConfidence: null,
+    plainEnglish: pickReason,
+  };
+}
+
+export function buildKeeperPickIntelligence(params: {
+  round: number;
+  playerName: string;
+  position: string;
+}): PickIntelligence {
+  const { round, playerName, position } = params;
+  return {
+    primaryFactor: "KEEPER",
+    factors: [
+      {
+        name: "rosterNeed",
+        weight: 1,
+        detail: `Keeper slot — ${playerName} (${position}) reserved in Round ${round}.`,
+      },
+    ],
+    blockedOverrides: [],
+    timingConfidence: null,
+    plainEnglish: `Keeper slot — Round ${round} reserved for ${playerName}.`,
+  };
+}
