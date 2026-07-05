@@ -11,12 +11,18 @@ export type PickPrimaryFactor =
   | "ESPN_ADP"
   | "ROSTER_NEED"
   | "POSITION_CAP"
-  | "KEEPER";
+  | "KEEPER"
+  | "OWNER_DNA";
 
 export interface PickIntelligenceFactor {
   name: "leagueHistory" | "espnAdp" | "rosterNeed" | "scarcity" | "projections" | "ownerDna";
   weight: number;
   detail: string;
+}
+
+export interface PickIntelligenceSection {
+  title: string;
+  lines: string[];
 }
 
 export interface PickIntelligence {
@@ -25,6 +31,8 @@ export interface PickIntelligence {
   blockedOverrides: string[];
   timingConfidence: TimingConfidence | null;
   plainEnglish: string;
+  /** UI-ready structured reasoning blocks (Phase 2a owner DNA). */
+  sections?: PickIntelligenceSection[];
 }
 
 const ROUND_EARLY_OVERRIDE = 4;
@@ -181,5 +189,89 @@ export function buildDpPickIntelligence(params: {
     blockedOverrides,
     timingConfidence: profile?.confidence ?? null,
     plainEnglish,
+  };
+}
+
+export interface OwnerDnaIntelligenceInput {
+  pickNum: number;
+  round: number;
+  playerName: string;
+  playerAdp: number | null;
+  applied: boolean;
+  explanation: string | null;
+  blockedReason: string | null;
+  positionProbabilities: Array<{ position: string; probability: number }>;
+  ownerConfidence: string | null;
+  legacyReason: string;
+  structuredSections?: PickIntelligenceSection[];
+  closeDecisionSummary?: string | null;
+}
+
+function formatStructuredPlainEnglish(sections: PickIntelligenceSection[]): string {
+  return sections.map((s) => `${s.title}\n${s.lines.map((l) => `- ${l}`).join("\n")}`).join("\n\n");
+}
+
+export function buildOwnerDnaPickIntelligence(input: OwnerDnaIntelligenceInput): PickIntelligence {
+  const {
+    playerName, playerAdp, applied, explanation, blockedReason,
+    positionProbabilities, ownerConfidence, legacyReason,
+    structuredSections = [], closeDecisionSummary,
+  } = input;
+
+  const factors: PickIntelligenceFactor[] = [
+    {
+      name: "ownerDna",
+      weight: applied ? 0.4 : 0.25,
+      detail: applied
+        ? (explanation ?? "Owner tendency nudged a close decision within ADP band.")
+        : (blockedReason ?? "Owner lean did not override best available."),
+    },
+    {
+      name: "espnAdp",
+      weight: applied ? 0.35 : 0.45,
+      detail: playerAdp != null
+        ? `${playerName} — ESPN ADP ${playerAdp}.`
+        : `${playerName} — no ESPN ADP on file.`,
+    },
+  ];
+
+  if (positionProbabilities.length) {
+    const top3 = positionProbabilities.slice(0, 3)
+      .map((p) => `${p.position} ${Math.round(p.probability * 100)}%`)
+      .join(", ");
+    factors.push({
+      name: "leagueHistory",
+      weight: 0.2,
+      detail: `Position lean: ${top3}${ownerConfidence ? ` (${ownerConfidence} owner sample).` : "."}`,
+    });
+  }
+
+  const total = factors.reduce((s, f) => s + f.weight, 0);
+  if (total > 0) {
+    for (const f of factors) f.weight = Math.round((f.weight / total) * 100) / 100;
+  }
+
+  const structuredPlain = structuredSections.length
+    ? formatStructuredPlainEnglish(structuredSections)
+    : null;
+
+  let plainEnglish = structuredPlain
+    ?? (applied && explanation
+      ? explanation
+      : blockedReason
+        ? `${legacyReason} ${blockedReason}`
+        : legacyReason);
+
+  if (closeDecisionSummary && !structuredPlain) {
+    plainEnglish = `${closeDecisionSummary} ${plainEnglish}`;
+  }
+
+  return {
+    primaryFactor: applied ? "OWNER_DNA" : "ESPN_ADP",
+    factors,
+    blockedOverrides: blockedReason ? [blockedReason] : [],
+    timingConfidence: null,
+    plainEnglish,
+    sections: structuredSections.length ? structuredSections : undefined,
   };
 }

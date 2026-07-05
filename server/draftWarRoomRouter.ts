@@ -30,11 +30,23 @@ import { getManualKeeperSelections } from "./manualKeeperSelections"; // user ke
 import { computeLeaguePositionTimingProfiles, type PositionTimingProfile } from "./leagueDraftTimingProfile";
 import {
   buildDpPickIntelligence,
+  buildOwnerDnaPickIntelligence,
   evaluateDpDraftability,
   evaluateDpNeedReachGuard,
   isDpWindowOpen,
   type PickIntelligence,
 } from "./draftPickIntelligence";
+import {
+  evaluateCloseDecisionGate,
+  evaluateOwnerDnaNudge,
+  loadOwnerDraftDnaContext,
+  normOwnerKey,
+  OFFENSE_DNA_POSITIONS,
+  ownerDnaDecayMultiplier,
+  resolveOwnerDnaModel,
+  type DraftPoolPlayer,
+  type OwnerDraftDnaContext,
+} from "./ownerDraftDnaModel";
 
 // Phase B1: LEAGUE_ID constant removed — leagueId is resolved per-request via resolveActiveLeagueId.
 
@@ -801,8 +813,10 @@ function buildMockDraft(params: {
   playerPool: Array<{ name: string; position: string; projectedPoints: number; espnId: string | null; adp: number | null; marketValue: number | null }>;
   /** Phase 1 league-intelligence: DP timing baseline from draft history. */
   dpTiming?: PositionTimingProfile | null;
+  /** Phase 2a: probabilistic owner offense tendencies (QB/RB/WR/TE). */
+  ownerDnaContext?: OwnerDraftDnaContext | null;
 }) {
-  const { allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool, dpTiming = null } = params;
+  const { allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool, dpTiming = null, ownerDnaContext = null } = params;
   const picks: any[] = [];
   const drafted = new Set<string>();
 
@@ -846,6 +860,8 @@ function buildMockDraft(params: {
   const needMap = new Map(rosterNeeds.map(n => [n.teamId, n]));
   const teamPosCounts = new Map<number, Record<string, number>>();
   for (const p of allPicks) teamPosCounts.set(Number(p.teamId), {});
+  /** Phase 2a: consecutive applied DNA nudges per owner (resets on value pick). */
+  const ownerDnaNudgeStreak = new Map<string, number>();
 
   // Traded pick context
   const tradedPickMap = new Map<string, TradedPickInfo>();
@@ -999,6 +1015,110 @@ function buildMockDraft(params: {
       }
     }
 
+    // Phase 2a: owner DNA nudge — offense only, probability signal inside ADP band (DP path unchanged).
+    const legacyPick = pick;
+    const legacyReason = pickReason;
+    const legacyPrimary = primaryFactor;
+    let ownerDnaMeta: {
+      applied: boolean;
+      closeBlocked: boolean;
+      positionProbabilities: Array<{ position: string; probability: number }>;
+      explanation: string | null;
+      blockedReason: string | null;
+      structuredSections: Array<{ title: string; lines: string[] }>;
+    } | null = null;
+
+    const ownerKey = normOwnerKey(ownerName);
+    const toPoolPlayer = (p: typeof bpa): DraftPoolPlayer => ({
+      name: p.name,
+      position: p.position,
+      adp: p.adp,
+      projectedPoints: p.projectedPoints,
+      marketValue: p.marketValue ?? null,
+    });
+
+    if (
+      ownerDnaContext
+      && legacyPick
+      && legacyPrimary !== "ROSTER_NEED"
+      && legacyPrimary !== "LEAGUE_TIMING"
+      && OFFENSE_DNA_POSITIONS.has(String(legacyPick.position))
+    ) {
+      const ownerModel = resolveOwnerDnaModel(ownerDnaContext, ownerName);
+      const reachSlots = Math.max(
+        12,
+        ...teamNeeds.map((n: { urgency: string }) => REACH_BY_URG[n.urgency] ?? 0),
+      );
+      const undraftedPool = (undraftedForBpa.length ? undraftedForBpa : undrafted.filter((p) => p.position !== "DP"))
+        .map(toPoolPlayer);
+      const bpaPool = toPoolPlayer(bpa);
+      const closeDecision = evaluateCloseDecisionGate({
+        undrafted: undraftedPool,
+        bpa: bpaPool,
+        reachSlots,
+        counts,
+        cap,
+        teamNeeds: teamNeeds.map((n: { position: string; urgency: string }) => ({
+          position: n.position,
+          urgency: String(n.urgency),
+        })),
+      });
+
+      if (closeDecision.isClose) {
+        const streak = ownerDnaNudgeStreak.get(ownerKey) ?? 0;
+        const decayMultiplier = ownerDnaDecayMultiplier(streak);
+        const dnaResult = evaluateOwnerDnaNudge({
+          ownerName,
+          ownerModel,
+          dnaContext: ownerDnaContext,
+          round,
+          pickNum,
+          undrafted: undraftedPool,
+          bpa: bpaPool,
+          legacyPick: toPoolPlayer(legacyPick),
+          closeDecision,
+          decayMultiplier,
+          consecutiveAppliedNudges: streak,
+          teamNeeds: teamNeeds.map((n: { position: string; urgency: string }) => ({
+            position: n.position,
+            urgency: String(n.urgency),
+          })),
+          reachSlots,
+          counts,
+          cap,
+        });
+        ownerDnaMeta = {
+          applied: dnaResult.applied,
+          closeBlocked: dnaResult.closeBlocked,
+          positionProbabilities: dnaResult.positionProbabilities.map((p) => ({
+            position: p.position,
+            probability: p.probability,
+          })),
+          explanation: dnaResult.explanation,
+          blockedReason: dnaResult.blockedReason,
+          structuredSections: dnaResult.structuredSections,
+        };
+        if (dnaResult.applied && dnaResult.player) {
+          const dnaPlayer = undrafted.find((p) => p.name === dnaResult.player!.name);
+          if (dnaPlayer && OFFENSE_DNA_POSITIONS.has(dnaPlayer.position)) {
+            pick = dnaPlayer;
+            targetPos = dnaPlayer.position;
+            pickReason = dnaResult.explanation ?? legacyReason;
+            primaryFactor = "OWNER_DNA";
+          }
+        }
+      }
+    }
+
+    // Decay streak: reset on any non-DNA pick; increment on applied DNA nudge.
+    if (ownerDnaContext && OFFENSE_DNA_POSITIONS.has(String(pick?.position ?? ""))) {
+      if (primaryFactor === "OWNER_DNA") {
+        ownerDnaNudgeStreak.set(ownerKey, (ownerDnaNudgeStreak.get(ownerKey) ?? 0) + 1);
+      } else {
+        ownerDnaNudgeStreak.set(ownerKey, 0);
+      }
+    }
+
     if (!pick) { continue; }
     drafted.add(pick.name);
     counts[pick.position] = (counts[pick.position] ?? 0) + 1;
@@ -1023,6 +1143,24 @@ function buildMockDraft(params: {
         needUrgency: needUrg ?? null,
         pickReason,
         blockedOverrides,
+      });
+    } else if (
+      ownerDnaMeta
+      && OFFENSE_DNA_POSITIONS.has(String(pick.position))
+      && (primaryFactor === "OWNER_DNA" || ownerDnaMeta.closeBlocked)
+    ) {
+      pickIntelligence = buildOwnerDnaPickIntelligence({
+        pickNum,
+        round,
+        playerName: pick.name,
+        playerAdp: pick.adp,
+        applied: primaryFactor === "OWNER_DNA",
+        explanation: ownerDnaMeta.explanation,
+        blockedReason: ownerDnaMeta.blockedReason,
+        positionProbabilities: ownerDnaMeta.positionProbabilities,
+        ownerConfidence: resolveOwnerDnaModel(ownerDnaContext, ownerName)?.confidence ?? null,
+        legacyReason,
+        structuredSections: ownerDnaMeta.structuredSections,
       });
     }
     const mv = pick.marketValue;
@@ -1239,10 +1377,16 @@ export const draftWarRoomRouter = router({
       // Phase 1 league-intelligence: DP timing baseline from draft_picks history.
       const leagueTimingProfiles = await computeLeaguePositionTimingProfiles({ db, sql: drizzleSql, leagueId });
 
-      // Phase 1.5 Mock draft with traded pick awareness + DP timing intelligence
+      // Phase 2a: owner draft DNA (offense slice) from historical draft_picks.
+      const ownerDraftDna = await loadOwnerDraftDnaContext({
+        db, sql: drizzleSql, leagueId, currentSeason: season,
+      });
+
+      // Phase 1.5 Mock draft with traded pick awareness + DP timing + owner DNA intelligence
       const mockDraft = buildMockDraft({
         allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool,
         dpTiming: leagueTimingProfiles.dp,
+        ownerDnaContext: ownerDraftDna,
       });
 
       // Phase 1.75 — Pressure Engine (keeper compression only when league supports keepers)
