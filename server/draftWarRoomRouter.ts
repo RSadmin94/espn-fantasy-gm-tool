@@ -813,7 +813,17 @@ function buildMockDraft(params: {
     keeperByOverallPick.set(arr[ordinal - 1], kp.predictedPlayer);
   }
 
-  const pool = [...playerPool]; // already ordered by real ESPN ADP upstream (nulls last); do not re-sort
+  // Only draft players at positions the league actually rosters. At draft time every starting
+  // slot surfaces as a need, so the union of need positions IS the league's position set — this
+  // drops team D/ST in leagues that don't roster it (e.g. IDP leagues), which otherwise leaked in
+  // as late-round filler. FLEX implies RB/WR/TE are draftable.
+  const leaguePositions = new Set<string>();
+  for (const t of rosterNeeds) for (const n of (t.needs || [])) leaguePositions.add(String(n.position));
+  if (leaguePositions.has("FLEX")) { leaguePositions.add("RB"); leaguePositions.add("WR"); leaguePositions.add("TE"); }
+  const draftablePool = leaguePositions.size > 0
+    ? playerPool.filter(p => leaguePositions.has(String(p.position)))
+    : playerPool;
+  const pool = [...draftablePool]; // already ordered by real ESPN ADP upstream (nulls last); do not re-sort
   const needMap = new Map(rosterNeeds.map(n => [n.teamId, n]));
   const teamPosCounts = new Map<number, Record<string, number>>();
   for (const p of allPicks) teamPosCounts.set(Number(p.teamId), {});
@@ -884,7 +894,7 @@ function buildMockDraft(params: {
         case "QB":  return lateWindow ? 2 : 1;
         case "TE":  return lateWindow ? 3 : 1;
         case "K":   return round >= maxRound - 1 ? 1 : 0;
-        case "DEF": return round >= maxRound - 2 ? 2 : 0;
+        case "DEF": return round >= maxRound - 2 ? 1 : 0;
         case "RB":  return 6;
         case "WR":  return 7;
         default:    return 3;
