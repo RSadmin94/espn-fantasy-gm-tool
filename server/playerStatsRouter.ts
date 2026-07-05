@@ -140,6 +140,70 @@ export async function getEspnPlayerInfoMap(): Promise<Map<string, EspnPlayerInfo
   return loadEspnPlayerInfo();
 }
 
+// ── Individual defensive players (IDP) ────────────────────────────────────────
+// Additive, SEPARATE fetch so the primary ADP feed (keepers/dynasty/draft) is untouched.
+// IDP players have season projections but no ADP, so they're pulled by defensive lineup-slot
+// eligibility and ranked downstream by projection/value. IDP slot ids: DT/DE/LB/DL/CB/S/DB (8–14)
+// plus the generic DP slot (15).
+let _espnDefCache: Map<string, EspnPlayerInfo> | null = null;
+let _espnDefCacheTime = 0;
+
+async function loadEspnDefensiveInfo(): Promise<Map<string, EspnPlayerInfo>> {
+  const now = Date.now();
+  if (_espnDefCache && (now - _espnDefCacheTime) < ESPN_INFO_TTL_MS) return _espnDefCache;
+
+  const year = new Date().getFullYear();
+  const filter = JSON.stringify({
+    players: {
+      limit: 800,
+      sortAdp: { sortPriority: 1, sortAsc: true },
+      filterRanksForScoringPeriodIds: { value: [1] },
+      filterRanksForRankTypes: { value: ["PPR"] },
+      filterSlotIds: { value: [8, 9, 10, 11, 12, 13, 14, 15] },
+    },
+  });
+
+  let players: any[] = [];
+  try {
+    const resp = await fetch(
+      `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${year}/segments/0/leaguedefaults/3?view=kona_player_info&scoringPeriodId=1`,
+      { headers: { "X-Fantasy-Filter": filter } },
+    );
+    if (resp.ok) { const d = await resp.json(); players = d?.players ?? []; }
+  } catch { /* network error - empty cache */ }
+
+  const cache = new Map<string, EspnPlayerInfo>();
+  for (const entry of players) {
+    const id = String(entry?.id ?? "").trim();
+    if (!id) continue;
+    const own = entry?.player?.ownership ?? {};
+    const adpRaw = own.averageDraftPosition;
+    const adp = (typeof adpRaw === "number" && adpRaw > 0 && adpRaw < 500) ? Math.round(adpRaw * 100) / 100 : null;
+    const psRaw = own.percentStarted;
+    const percentStarted = (typeof psRaw === "number" && psRaw >= 0) ? Math.round(psRaw * 10) / 10 : null;
+    let projection: number | null = null;
+    const stats = Array.isArray(entry?.player?.stats) ? entry.player.stats : [];
+    for (const s of stats) {
+      if (s?.statSourceId === 1 && Number(s?.scoringPeriodId) === 0 && Number(s?.seasonId) === year) {
+        const at = Number(s?.appliedTotal);
+        if (Number.isFinite(at)) { projection = Math.round(at * 10) / 10; break; }
+      }
+    }
+    cache.set(id, { adp, projection, percentStarted });
+  }
+
+  _espnDefCache = cache;
+  _espnDefCacheTime = now;
+  console.log(`[ESPN IDP] Cached ${cache.size} defensive players (proj) from ${players.length} fetched`);
+  return cache;
+}
+
+/** ESPN individual-defensive-player draft inputs (projection/percentStarted; adp always null),
+ * keyed by ESPN playerId string. Additive to the offensive ADP feed — used only by the draft. */
+export async function getEspnDefensiveInfoMap(): Promise<Map<string, EspnPlayerInfo>> {
+  return loadEspnDefensiveInfo();
+}
+
 /** ESPN live PPR ADP keyed by ESPN playerId string (Keeper Intelligence / Dynasty consumer).
  * Derives from the shared player-info cache — same single fetch, same 4h TTL, adp-only view. */
 export async function getEspnAdpMap(): Promise<Map<string, number>> {

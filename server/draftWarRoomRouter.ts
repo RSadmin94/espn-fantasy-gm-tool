@@ -23,7 +23,7 @@ import { resolveKeeperDraftGeometryForSeason } from "./keeperDraftGeometry";
 import { enrichDraftPickDbRow, summarizeDraftBoardCounts } from "./draftWarRoomPickClassification";
 import { buildLeagueCapabilities } from "./leagueCapabilities";
 // Phase 1 foundation: Draft War Room consumes the platform's authoritative engines only.
-import { getEspnPlayerInfoMap } from "./playerStatsRouter";          // real ADP + projection + percentStarted (single ESPN source)
+import { getEspnPlayerInfoMap, getEspnDefensiveInfoMap } from "./playerStatsRouter";          // real ADP + projection + percentStarted (single ESPN source) + IDP feed
 import { computeMarketValues, type MarketValueInput } from "./marketValue"; // sole player-value engine (0–100)
 import { computeKeeperValuations, type KeeperPoolRowLite } from "./keeperValuationService"; // sole keeper engine
 import { getManualKeeperSelections } from "./manualKeeperSelections"; // user keeper overrides (degrades safely if table absent)
@@ -1033,6 +1033,8 @@ export const draftWarRoomRouter = router({
       `) as unknown as [any[]];
 
       const espnInfo = await getEspnPlayerInfoMap();
+      const espnDefInfo = await getEspnDefensiveInfoMap(); // additive IDP feed (defensive players + ADP)
+      const infoFor = (espnId: string) => espnInfo.get(espnId) ?? espnDefInfo.get(espnId);
 
       // Identity crosswalk for the keeper engine (name → ESPN playerId) + real ADP by playerId.
       const nameToPlayerId = new Map<string, number>();
@@ -1043,7 +1045,7 @@ export const draftWarRoomRouter = router({
         const pid = Number(espnId);
         const nameLc = String(reg.fullName).toLowerCase().trim();
         if (nameLc && !nameToPlayerId.has(nameLc)) nameToPlayerId.set(nameLc, pid);
-        if (!espnAdpByPlayerId.has(pid)) espnAdpByPlayerId.set(pid, espnInfo.get(espnId)?.adp ?? null);
+        if (!espnAdpByPlayerId.has(pid)) espnAdpByPlayerId.set(pid, infoFor(espnId)?.adp ?? null);
       }
 
       // Build market-value inputs over the ESPN-ranked draftable universe (by playerId).
@@ -1053,8 +1055,8 @@ export const draftWarRoomRouter = router({
       for (const reg of (regRows as any[])) {
         const espnId = String(reg.espnPlayerId ?? "").trim();
         if (!espnId) continue;
-        const info = espnInfo.get(espnId);
-        if (!info) continue;                         // not in ESPN's ranked pool → not draftable
+        const info = infoFor(espnId);
+        if (!info) continue;                         // not in ESPN's ranked pool (offense or IDP) → not draftable
         const nameLc = String(reg.fullName).toLowerCase().trim();
         if (seenPool.has(nameLc)) continue;
         seenPool.add(nameLc);
