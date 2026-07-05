@@ -40,9 +40,15 @@ const SLOT_MAP: Record<number, string> = {
 };
 
 const LINEUP_REQS: Record<string, number> = {
-  QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2, K: 1,
-  // DEF removed — this league uses individual defensive players (DL, LB, DB, S, CB)
+  QB: 1, RB: 1, WR: 2, TE: 1, FLEX: 2, DP: 1, K: 1,
+  // This league starts an individual defensive player in a DP slot (ESPN slot 15), not team D/ST.
+  // IDP positions (DL/LB/DB/S/CB/DE/DT) are normalized to "DP" in the draft pool so they fill it.
 };
+
+// Every individual-defensive position fills the single DP lineup slot — collapse them to "DP"
+// for the draft pool so the DP need is matched and drafted like any other slot.
+const IDP_POSITIONS = new Set(["DL", "LB", "DB", "S", "CB", "DE", "DT"]);
+const normalizeDraftPos = (pos: string): string => (IDP_POSITIONS.has(pos) ? "DP" : pos);
 
 // Phase 1 foundation cleanup: the hardcoded value tables (POS_ROUND_VALUE, POS_SCARCITY,
 // ROUND_POS_WEIGHTS, VBD_BASELINE), vorp(), roundWeights(), and calcKVS() were REMOVED.
@@ -893,6 +899,7 @@ function buildMockDraft(params: {
       switch (pos) {
         case "QB":  return lateWindow ? 2 : 1;
         case "TE":  return lateWindow ? 3 : 1;
+        case "DP":  return lateWindow ? 2 : 1;
         case "K":   return round >= maxRound - 1 ? 1 : 0;
         case "DEF": return round >= maxRound - 2 ? 1 : 0;
         case "RB":  return 6;
@@ -1033,7 +1040,7 @@ export const draftWarRoomRouter = router({
       `) as unknown as [any[]];
 
       const espnInfo = await getEspnPlayerInfoMap();
-      const espnDefInfo = await getEspnDefensiveInfoMap(); // additive IDP feed (defensive players + ADP)
+      const espnDefInfo = await getEspnDefensiveInfoMap(leagueId, ctx.user.id); // IDP feed from the league's authenticated data (real ADP)
       const infoFor = (espnId: string) => espnInfo.get(espnId) ?? espnDefInfo.get(espnId);
 
       // Identity crosswalk for the keeper engine (name → ESPN playerId) + real ADP by playerId.
@@ -1061,13 +1068,14 @@ export const draftWarRoomRouter = router({
         if (seenPool.has(nameLc)) continue;
         seenPool.add(nameLc);
         const pid = Number(espnId);
+        const draftPos = normalizeDraftPos(String(reg.position || "?"));
         mvInputs.push({
-          playerId: pid, position: String(reg.position || "?"), adpRank: null,
+          playerId: pid, position: draftPos, adpRank: null,
           projection: info.projection ?? null, keeperRoundSavings: null,
           percentStarted: info.percentStarted ?? null,
           currentSeasonWeekly: [], history: [], currentSeason: season,
         });
-        poolMeta.push({ name: reg.fullName, position: String(reg.position || "?"), espnId, playerId: pid, adp: info.adp ?? null, projection: info.projection ?? null });
+        poolMeta.push({ name: reg.fullName, position: draftPos, espnId, playerId: pid, adp: info.adp ?? null, projection: info.projection ?? null });
       }
       const mvMap = computeMarketValues(mvInputs, { playedWeeks: 0 });
 
