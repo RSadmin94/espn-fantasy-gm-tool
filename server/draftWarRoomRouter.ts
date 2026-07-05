@@ -824,6 +824,9 @@ function buildMockDraft(params: {
     if (tp.pickNumber) tradedPickMap.set(`${tp.round}_${tp.teamId}`, tp);
   }
 
+  // Total rounds in the draft — used for starter-aware position caps (backup QB, K, DEF come late).
+  const maxRound = Math.max(1, ...allPicks.map((p: any) => Number(p.roundId) || 1));
+
   let processedPick = 0;
   for (const draftPick of allPicks) {
     processedPick++;
@@ -872,8 +875,21 @@ function buildMockDraft(params: {
     // Real-ADP draft model: the pool is ESPN-ADP-ordered, so the best player available is the
     // first undrafted player. Bias toward the team's actual roster needs with a need-driven
     // reach window. No hardcoded position-by-round weights, no VORP — ordering is ESPN ADP.
-    const POS_CAP: Record<string, number> = { QB: 2, RB: 5, WR: 6, TE: 3, K: 2, DEF: 2 };
-    const cap = (pos: string) => POS_CAP[pos] ?? 3;
+    // Starter-aware caps by round: a single-QB league never drafts a 2nd QB early (nor a
+    // starting-caliber 2nd TE), and K/DEF only come off the board in the final rounds — matching
+    // how managers actually draft. Backups/streamers become allowed only in the last few rounds.
+    const lateWindow = round > maxRound - 3;
+    const cap = (pos: string): number => {
+      switch (pos) {
+        case "QB":  return lateWindow ? 2 : 1;
+        case "TE":  return lateWindow ? 3 : 1;
+        case "K":   return round >= maxRound - 1 ? 1 : 0;
+        case "DEF": return round >= maxRound - 2 ? 2 : 0;
+        case "RB":  return 6;
+        case "WR":  return 7;
+        default:    return 3;
+      }
+    };
     const undrafted = pool.filter(p => !drafted.has(p.name) && !keeperPlayerIds.has(Number(p.espnId)));
     if (undrafted.length === 0) { continue; }
     const bpa = undrafted[0];
