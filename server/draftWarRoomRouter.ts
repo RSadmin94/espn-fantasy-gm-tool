@@ -27,6 +27,14 @@ import { getEspnPlayerInfoMap, getEspnDefensiveInfoMap } from "./playerStatsRout
 import { computeMarketValues, type MarketValueInput } from "./marketValue"; // sole player-value engine (0–100)
 import { computeKeeperValuations, type KeeperPoolRowLite } from "./keeperValuationService"; // sole keeper engine
 import { getManualKeeperSelections } from "./manualKeeperSelections"; // user keeper overrides (degrades safely if table absent)
+import { computeLeaguePositionTimingProfiles, type PositionTimingProfile } from "./leagueDraftTimingProfile";
+import {
+  buildDpPickIntelligence,
+  evaluateDpDraftability,
+  evaluateDpNeedReachGuard,
+  isDpWindowOpen,
+  type PickIntelligence,
+} from "./draftPickIntelligence";
 
 // Phase B1: LEAGUE_ID constant removed — leagueId is resolved per-request via resolveActiveLeagueId.
 
@@ -791,8 +799,10 @@ function buildMockDraft(params: {
   keeperPredictions: any[];
   tradedPicks: TradedPickInfo[];
   playerPool: Array<{ name: string; position: string; projectedPoints: number; espnId: string | null; adp: number | null; marketValue: number | null }>;
+  /** Phase 1 league-intelligence: DP timing baseline from draft history. */
+  dpTiming?: PositionTimingProfile | null;
 }) {
-  const { allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool } = params;
+  const { allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool, dpTiming = null } = params;
   const picks: any[] = [];
   const drafted = new Set<string>();
 
@@ -914,7 +924,13 @@ function buildMockDraft(params: {
     };
     const undrafted = pool.filter(p => !drafted.has(p.name) && !keeperPlayerIds.has(Number(p.espnId)));
     if (undrafted.length === 0) { continue; }
-    const bpa = undrafted[0];
+
+    // Phase 1 DP intelligence: defenders are not draftable before the league timing window opens.
+    const dpSelectable = (p: typeof undrafted[0]) =>
+      p.position !== "DP" || evaluateDpDraftability(pickNum, dpTiming).selectable;
+    const undraftedForBpa = undrafted.filter(dpSelectable);
+    const bpa = undraftedForBpa[0] ?? undrafted.find(p => p.position !== "DP");
+    if (!bpa) { continue; }
 
     const URG_RANK: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
     const REACH_BY_URG: Record<string, number> = { CRITICAL: 18, HIGH: 12, MEDIUM: 6, LOW: 0 };
@@ -922,22 +938,65 @@ function buildMockDraft(params: {
       .filter((n: any) => (counts[n.position] ?? 0) < cap(n.position))
       .sort((a: any, b: any) => (URG_RANK[b.urgency] ?? 0) - (URG_RANK[a.urgency] ?? 0));
 
+    const blockedOverrides: string[] = [];
     let pick = bpa;
     let targetPos = bpa.position;
     let pickReason = "Best player available by ADP";
+    let primaryFactor: PickIntelligence["primaryFactor"] = "ESPN_ADP";
+
     for (const n of teamNeeds) {
+      if (n.position === "DP" && dpTiming) {
+        const draftability = evaluateDpDraftability(pickNum, dpTiming);
+        if (!draftability.selectable) {
+          const guard = evaluateDpNeedReachGuard({
+            pickNum, urgency: String(n.urgency), profile: dpTiming,
+          });
+          if (!guard.allowed) {
+            if (guard.blockedReason) blockedOverrides.push(guard.blockedReason);
+            continue;
+          }
+        }
+      }
       const idx = undrafted.findIndex(p => p.position === n.position);
       if (idx < 0) continue;
       if (idx <= (REACH_BY_URG[n.urgency] ?? 0)) {
+        if (n.position === "DP" && dpTiming && !evaluateDpDraftability(pickNum, dpTiming).selectable) {
+          continue;
+        }
         pick = undrafted[idx]; targetPos = n.position;
         pickReason = `${n.urgency} need at ${n.position} (within reach of best available)`;
+        primaryFactor = "ROSTER_NEED";
         break;
       }
     }
     // If BPA's own position is already capped, slide to the best uncapped player by ADP.
     if (pick === bpa && (counts[bpa.position] ?? 0) >= cap(bpa.position)) {
-      const alt = undrafted.find(p => (counts[p.position] ?? 0) < cap(p.position));
-      if (alt) { pick = alt; targetPos = alt.position; pickReason = `Best available by ADP (${bpa.position} roster slots full)`; }
+      const alt = undraftedForBpa.find(p => (counts[p.position] ?? 0) < cap(p.position))
+        ?? undrafted.find(p => (counts[p.position] ?? 0) < cap(p.position) && dpSelectable(p));
+      if (alt) {
+        pick = alt; targetPos = alt.position;
+        pickReason = `Best available by ADP (${bpa.position} roster slots full)`;
+        primaryFactor = "POSITION_CAP";
+      }
+    }
+
+    // Late-draft safety: once past league baseline, allow best DP by ADP if slot uncapped and window open.
+    if (
+      dpTiming
+      && (counts["DP"] ?? 0) < cap("DP")
+      && isDpWindowOpen(pickNum, dpTiming)
+      && dpTiming.baselineFirstPick != null
+      && pickNum >= dpTiming.baselineFirstPick
+      && pick.position !== "DP"
+    ) {
+      const dpNeed = teamNeeds.find((n: any) => n.position === "DP");
+      const bestDp = undrafted.find(p => p.position === "DP");
+      if (bestDp && dpNeed) {
+        pick = bestDp;
+        targetPos = "DP";
+        pickReason = `League DP window open (median first-DP pick ${dpTiming.baselineFirstPick}) — best IDP by ESPN ADP`;
+        primaryFactor = "LEAGUE_TIMING";
+      }
     }
 
     if (!pick) { continue; }
@@ -946,6 +1005,26 @@ function buildMockDraft(params: {
 
     const available = undrafted.filter(p => p.position === targetPos && p.name !== pick.name);
     const needUrg = needs?.needs.find((n: any) => n.position === targetPos)?.urgency;
+
+    let pickIntelligence: PickIntelligence | null = null;
+    if (pick.position === "DP" && dpTiming) {
+      if (primaryFactor === "LEAGUE_TIMING") {
+        pickReason = `League history DP window — ${pickReason}`;
+      } else if (primaryFactor === "ROSTER_NEED") {
+        pickReason = `${pickReason} (within league timing window)`;
+      }
+      pickIntelligence = buildDpPickIntelligence({
+        pickNum,
+        round,
+        playerName: pick.name,
+        playerAdp: pick.adp,
+        primaryFactor,
+        profile: dpTiming,
+        needUrgency: needUrg ?? null,
+        pickReason,
+        blockedOverrides,
+      });
+    }
     const mv = pick.marketValue;
     const confSignals = [
       mv != null ? (mv >= 70 ? 0.9 : mv >= 45 ? 0.75 : 0.6) : 0.6,
@@ -963,7 +1042,7 @@ function buildMockDraft(params: {
     const adpTxt = pick.adp != null ? `ADP ${pick.adp}` : "no current ADP";
     const mvTxt = pick.marketValue != null ? `, market value ${Math.round(pick.marketValue)}/100` : "";
     const evidence = [
-      pickReason,
+      pickIntelligence?.plainEnglish ?? pickReason,
       needUrg ? `${teamName} ${targetPos} need: ${needUrg}` : `No pressing ${targetPos} need — value pick`,
       `${pick.name} — ${adpTxt}${mvTxt}`,
       ...(tradeNote ? [tradeNote] : []),
@@ -977,6 +1056,7 @@ function buildMockDraft(params: {
       confidence: conf,
       reasoning: `${ownerName} takes ${targetPos} in Round ${round}${needUrg ? ` [${needUrg} need]` : " [BPA]"}${tradeCtx ? " [TRADED PICK]" : ""}`,
       evidence,
+      pickIntelligence,
       alternatePicks: available.slice(0, 3).map(p => ({ player: p.name, position: p.position, projectedPoints: p.projectedPoints, marketValue: p.marketValue ?? null, adp: p.adp ?? null })),
       isKeeperSlot: false,
       tradedPickContext: tradeCtx ? { type: tradeCtx.type, evidence: tradeCtx.evidence } : null,
@@ -1156,8 +1236,14 @@ export const draftWarRoomRouter = router({
 
       const confidenceDashboard = buildConfidenceDashboard(shockMeters, rosterNeeds, keeperPredictions);
 
-      // Phase 1.5 Mock draft with traded pick awareness
-      const mockDraft = buildMockDraft({ allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool });
+      // Phase 1 league-intelligence: DP timing baseline from draft_picks history.
+      const leagueTimingProfiles = await computeLeaguePositionTimingProfiles({ db, sql: drizzleSql, leagueId });
+
+      // Phase 1.5 Mock draft with traded pick awareness + DP timing intelligence
+      const mockDraft = buildMockDraft({
+        allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool,
+        dpTiming: leagueTimingProfiles.dp,
+      });
 
       // Phase 1.75 — Pressure Engine (keeper compression only when league supports keepers)
       const keeperCompression = leagueCapabilities.keepers
