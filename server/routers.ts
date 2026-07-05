@@ -103,6 +103,7 @@ import {
   count as sqlCount,
   like as likeDrizzle,
 } from "drizzle-orm";
+import { computeLeagueIdpDraftProfile, normalizeDefensivePosition } from "./leagueIdpDraftProfile";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
 import { parse as parseCookie } from "cookie";
@@ -7959,6 +7960,24 @@ Respond with JSON in this exact format:
     };
     const cachedSeasons = (await getAllCachedSeasons(leagueId)).sort((a, b) => a - b);
 
+    // Canonical position source: draft_picks carries the resolved position string for every pick,
+    // including individual defenders. Build (season:overallPick) → normalized position so IDPs
+    // collapse into "DP" instead of falling through to "UNK" in the tendency tallies below.
+    const tendencyDb = await getDb();
+    const dpPosByPick = new Map<string, string>();
+    try {
+      if (tendencyDb) {
+        const [dpRows] = (await tendencyDb.execute(sql`
+          SELECT season, overallPick, position FROM draft_picks WHERE leagueId = ${leagueId}
+        `)) as unknown as [Array<{ season: number; overallPick: number; position: string | null }>];
+        for (const r of dpRows) {
+          const p = String(r.position ?? "").trim();
+          if (!p || p === "?") continue;
+          dpPosByPick.set(`${Number(r.season)}:${Number(r.overallPick)}`, normalizeDefensivePosition(p));
+        }
+      }
+    } catch { /* draft_picks unavailable → fall back to ESPN position ids below */ }
+
     // owner key -> stats
     const ownerMap = new Map<string, {
       memberId: string; name: string; seasons: Set<number>;
@@ -8032,7 +8051,9 @@ Respond with JSON in this exact format:
         const playerInfo = playerInfoMap.get(playerId);
         const playerName = (pPlayer.fullName as string) || playerInfo?.name || `Player#${playerId}`;
         const posId = pPlayer.defaultPositionId as number || 0;
-        const position = POS_MAP[posId] || playerInfo?.position || "UNK";
+        // Prefer the canonical draft_picks position (recognizes defenders), then ESPN ids; fold IDP → DP.
+        const canonicalPos = dpPosByPick.get(`${season}:${overall}`);
+        const position = normalizeDefensivePosition(canonicalPos || POS_MAP[posId] || playerInfo?.position || "UNK");
 
         if (!ownerMap.has(ownerId)) {
           ownerMap.set(ownerId, {
@@ -8205,7 +8226,11 @@ Respond with JSON in this exact format:
       }
     }
 
-     return { owners, leagueByRound, seasons: cachedSeasons };
+     // Read-only IDP/DP draft-tendency summary (history + confidence + coverage).
+     const idpDraftProfile = tendencyDb
+       ? await computeLeagueIdpDraftProfile({ db: tendencyDb, sql, leagueId })
+       : null;
+     return { owners, leagueByRound, seasons: cachedSeasons, idpDraftProfile };
     }); // end memCache
   }),
   // ── Pick Value Calculator ─────────────────────────────────────────────────

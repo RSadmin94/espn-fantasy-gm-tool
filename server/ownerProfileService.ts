@@ -16,6 +16,7 @@ import {
 } from "./resolveDraftPickOwner";
 import { activityDnaNarrative, type ActivityDnaResult } from "./activityDnaService";
 import { classifyDraftPickRawPick, SlotClass } from "./draftTruth";
+import { normalizeDefensivePosition } from "./leagueIdpDraftProfile";
 
 /** Seasons we expect owner timelines / diagnostics to cover (inclusive). */
 export const OWNER_PROFILE_HIST_SEASONS: readonly number[] = Object.freeze(
@@ -1177,7 +1178,8 @@ export function computeDraftDnaFromOwnedPicks(ownedPicks: OwnedDraftPick[]): {
   const posRoundSum: Record<string, number> = {};
   const posRoundCount: Record<string, number> = {};
   for (const p of draftDnaPicks) {
-    const pos = p.position || "UNK";
+    // Fold individual defenders (LB/DL/DB/…) into "DP" so they aren't counted as "UNK".
+    const pos = normalizeDefensivePosition(p.position || "UNK");
     posDist[pos] = (posDist[pos] ?? 0) + 1;
     if (p.roundId <= 3) earlyPos[pos] = (earlyPos[pos] ?? 0) + 1;
     posRoundSum[pos] = (posRoundSum[pos] ?? 0) + p.roundId;
@@ -1202,7 +1204,7 @@ export function computeDraftDnaFromOwnedPicks(ownedPicks: OwnedDraftPick[]): {
     if (!byRoundMap.has(r)) byRoundMap.set(r, []);
     byRoundMap.get(r)!.push({
       season: p.season,
-      position: p.position || "UNK",
+      position: normalizeDefensivePosition(p.position || "UNK"),
       playerName: p.playerName || "",
       isKeeper: false,
     });
