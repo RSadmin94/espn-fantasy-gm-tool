@@ -237,10 +237,15 @@ export function KeeperAdvisor() {
 
   const manualLimit = (manualQ.data as { keeperLimit?: number | null } | undefined)?.keeperLimit ?? null;
   const manualSelections = useMemo(
-    () => ((manualQ.data as { selections?: Array<{ ownerKey: string; playerId: number }> } | undefined)?.selections ?? []),
+    () => ((manualQ.data as { selections?: Array<{ ownerKey: string; playerId: number; keeperRoundPick?: number }> } | undefined)?.selections ?? []),
     [manualQ.data],
   );
   const selectedPlayerIds = useMemo(() => new Set(manualSelections.map((s) => s.playerId)), [manualSelections]);
+  const pickByPlayerId = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const s of manualSelections) m.set(s.playerId, s.keeperRoundPick ?? 0);
+    return m;
+  }, [manualSelections]);
   const selectedCountByOwnerKey = useMemo(() => {
     const m = new Map<string, number>();
     for (const s of manualSelections) m.set(s.ownerKey, (m.get(s.ownerKey) ?? 0) + 1);
@@ -257,6 +262,22 @@ export function KeeperAdvisor() {
       playerName: v.playerName,
       position: v.position,
       keep: !isSel,
+    });
+  };
+
+  // Re-assign an already-kept player to a specific pick in its cost round (1 = first pick
+  // in the round, 2 = second, …). Only meaningful when the team holds multiple picks in
+  // that round (e.g. a traded pick); the server clamps to what the team actually has.
+  const setPick = (v: KeeperValuation, pick: number) => {
+    setManualError(null);
+    setManual.mutate({
+      season: draftYear,
+      ownerKey: v.ownerKey,
+      playerId: v.playerId,
+      playerName: v.playerName,
+      position: v.position,
+      keep: true,
+      keeperRoundPick: pick,
     });
   };
 
@@ -464,7 +485,9 @@ export function KeeperAdvisor() {
                               // Single-keeper leagues: clicking a new player REPLACES that team's keeper,
                               // so never disable at limit — let the user set/swap it in one click.
                               const disabled = setManual.isPending || (!isSel && atLimit && !single);
+                              const curPick = pickByPlayerId.get(v.playerId) ?? 0;
                               return (
+                                <div className="flex flex-col items-center gap-1">
                                 <button
                                   type="button"
                                   onClick={() => toggleKeep(v)}
@@ -489,6 +512,21 @@ export function KeeperAdvisor() {
                                 >
                                   {isSel ? "✓ Keeper" : "Keep"}
                                 </button>
+                                {isSel && (
+                                  <select
+                                    value={curPick}
+                                    onChange={(e) => setPick(v, Number(e.target.value))}
+                                    disabled={setManual.isPending}
+                                    title="Which of this team's picks in the keeper's round to use (for teams holding multiple picks in that round)"
+                                    className="rounded border border-zinc-700 bg-zinc-800/60 px-1 py-0.5 text-[10px] text-zinc-300"
+                                  >
+                                    <option value={0}>Auto (later pick)</option>
+                                    <option value={1}>1st pick</option>
+                                    <option value={2}>2nd pick</option>
+                                    <option value={3}>3rd pick</option>
+                                  </select>
+                                )}
+                                </div>
                               );
                             })()}
                           </td>

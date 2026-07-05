@@ -7,6 +7,8 @@ export type ManualKeeperSelection = {
   playerId: number;
   playerName: string;
   position: string;
+  /** Which pick in the keeper's cost round this keeper occupies. 0 = Auto → later / less valuable pick; 1 = first pick, 2 = second, … */
+  keeperRoundPick: number;
 };
 
 /**
@@ -23,7 +25,7 @@ function isMissingTableError(err: unknown): boolean {
 
 /** All manual selections for a (user, league, season). Empty if the table is missing. */
 export async function getManualKeeperSelections(args: {
-  userId: number;
+  userId: number | undefined;
   leagueId: string;
   season: number;
 }): Promise<ManualKeeperSelection[]> {
@@ -38,6 +40,7 @@ export async function getManualKeeperSelections(args: {
         playerId: gmManualKeeperSelections.playerId,
         playerName: gmManualKeeperSelections.playerName,
         position: gmManualKeeperSelections.position,
+        keeperRoundPick: gmManualKeeperSelections.keeperRoundPick,
       })
       .from(gmManualKeeperSelections)
       .where(
@@ -52,6 +55,7 @@ export async function getManualKeeperSelections(args: {
       playerId: Number(r.playerId),
       playerName: r.playerName ?? "",
       position: r.position ?? "",
+      keeperRoundPick: Number(r.keeperRoundPick ?? 0),
     }));
   } catch (err) {
     if (isMissingTableError(err)) return [];
@@ -93,8 +97,10 @@ export async function setManualKeeperSelection(args: {
   position: string;
   keep: boolean;
   keeperLimit: number | null;
+  keeperRoundPick?: number;
 }): Promise<SetManualResult> {
   const { userId, leagueId, season, ownerKey, playerId, playerName, position, keep, keeperLimit } = args;
+  const roundPick = args.keeperRoundPick != null && args.keeperRoundPick >= 0 ? Math.floor(args.keeperRoundPick) : 0;
   const db = await getDb();
   if (!db) return { ok: false, error: "no_db" };
 
@@ -122,7 +128,15 @@ export async function setManualKeeperSelection(args: {
     }
 
     // keep = true
-    if (has) return { ok: true, selected: true, count: existing.length, limit: keeperLimit };
+    if (has) {
+      // Already this team's keeper — update which pick in the round it occupies. Lets the user
+      // re-assign the keeper to a different pick (e.g. their 2nd 2nd-round pick) in one click.
+      await db
+        .update(gmManualKeeperSelections)
+        .set({ keeperRoundPick: roundPick })
+        .where(and(whereOwner, eq(gmManualKeeperSelections.playerId, playerId)));
+      return { ok: true, selected: true, count: existing.length, limit: keeperLimit };
+    }
     if (keeperLimit != null && keeperLimit > 0 && existing.length >= keeperLimit) {
       if (keeperLimit === 1) {
         // Single-keeper league: a new pick REPLACES this team's current keeper (one-click swap),
@@ -140,6 +154,7 @@ export async function setManualKeeperSelection(args: {
       playerId,
       playerName: playerName ?? "",
       position: position ?? "",
+      keeperRoundPick: roundPick,
     } as typeof gmManualKeeperSelections.$inferInsert);
     return { ok: true, selected: true, count: keeperLimit === 1 ? 1 : existing.length + 1, limit: keeperLimit };
   } catch (err) {

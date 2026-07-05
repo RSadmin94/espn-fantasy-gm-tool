@@ -3396,6 +3396,7 @@ export const appRouter = router({
         playerName: z.string().max(128).optional(),
         position: z.string().max(8).optional(),
         keep: z.boolean(),
+        keeperRoundPick: z.number().int().min(0).max(20).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const userId = ctx.user.id;
@@ -3417,6 +3418,7 @@ export const appRouter = router({
           position: input.position ?? "",
           keep: input.keep,
           keeperLimit,
+          keeperRoundPick: input.keeperRoundPick,
         });
       }),
     keeperPoolByOwner: publicProcedure

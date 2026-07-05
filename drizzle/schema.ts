@@ -1456,6 +1456,11 @@ export const gmManualKeeperSelections = mysqlTable(
     playerId: int("playerId").notNull(),
     playerName: varchar("playerName", { length: 128 }).notNull().default(""),
     position: varchar("position", { length: 8 }).notNull().default(""),
+    // Which of the team's picks in the keeper's cost round this keeper occupies.
+    // 0 = auto (use the team's LATER / less-valuable pick in that round — the default rule);
+    // 1 = first pick, 2 = second, … (explicit override). Matters when a team holds multiple
+    // picks in a round (e.g. a traded pick). Additive; defaults to 0 (auto → later pick).
+    keeperRoundPick: int("keeperRoundPick").notNull().default(0),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },

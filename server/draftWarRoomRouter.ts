@@ -26,7 +26,7 @@ import { buildLeagueCapabilities } from "./leagueCapabilities";
 import { getEspnPlayerInfoMap } from "./playerStatsRouter";          // real ADP + projection + percentStarted (single ESPN source)
 import { computeMarketValues, type MarketValueInput } from "./marketValue"; // sole player-value engine (0–100)
 import { computeKeeperValuations, type KeeperPoolRowLite } from "./keeperValuationService"; // sole keeper engine
-import { loadManualKeeperPlayerIds } from "./manualKeeperSelections"; // user keeper overrides (degrades safely)
+import { getManualKeeperSelections } from "./manualKeeperSelections"; // user keeper overrides (degrades safely if table absent)
 
 // Phase B1: LEAGUE_ID constant removed — leagueId is resolved per-request via resolveActiveLeagueId.
 
@@ -573,10 +573,13 @@ async function predictKeepers(
   // that team — matched by playerId via the eligible pool (never by ownerKey, whose
   // convention differs between Keeper Advisor and the War Room). Teams with no manual
   // selection fall through to the predicted logic below, unchanged.
-  const manualPids = await loadManualKeeperPlayerIds(userId, leagueId, season);
+  const manualSels = await getManualKeeperSelections({ userId, leagueId, season });
+  const manualPickByPid = new Map<number, number>();
+  for (const s of manualSels) manualPickByPid.set(s.playerId, s.keeperRoundPick ?? 0);
   const poolByPid = new Map(poolRows.map((r) => [r.playerId, r]));
   const manualByTid = new Map<number, number[]>();
-  for (const pid of manualPids) {
+  for (const s of manualSels) {
+    const pid = s.playerId;
     const row = poolByPid.get(pid);
     if (!row) continue;
     const mtid = Number(String(row.ownerKey).replace("team:", ""));
@@ -600,7 +603,7 @@ async function predictKeepers(
         const vf = valFields(pid);
         predictions.push({
           teamId: tid, teamName: team.name, ownerName: team.ownerName, playerId: pid,
-          keeperRound: row.keeperRoundCost, keeperSlotRound: null, keeperRoundPick: 0,
+          keeperRound: row.keeperRoundCost, keeperSlotRound: null, keeperRoundPick: manualPickByPid.get(pid) ?? 0,
           predictedPlayer: row.playerName, position: row.position,
           projectedPoints: 0, ...vf,
           wasKeptLastYear: false, draftRoundSource: "manual", confidence: 100,
@@ -786,15 +789,28 @@ function buildMockDraft(params: {
 
   // Pre-mark keeper players — removed from the draftable pool by playerId (never by name).
   const keeperPlayerIds = new Set<number>();
-  const keeperByTeamRound = new Map<string, string>();
+  // Resolve each keeper to the EXACT pick it occupies in its cost round, clamped to what the team
+  // actually holds. 0 = Auto → later / less valuable pick; N>0 → the explicit Nth pick. This lets a
+  // keeper sit on, e.g., the team's 2nd 2nd-round pick when they hold two picks in that round.
+  const teamRoundPicksSorted = new Map<string, number[]>(); // "team_round" -> [overallPick asc]
+  for (const dp of allPicks) {
+    const k = `${Number(dp.teamId)}_${Number(dp.roundId)}`;
+    const arr = teamRoundPicksSorted.get(k) ?? [];
+    arr.push(Number(dp.overallPick));
+    teamRoundPicksSorted.set(k, arr);
+  }
+  for (const arr of teamRoundPicksSorted.values()) arr.sort((a, b) => a - b);
+  const keeperByOverallPick = new Map<number, string>(); // overallPick -> keeper player name
   for (const kp of keeperPredictions) {
-    if (kp.predictedPlayer && kp.predictedPlayer !== "Unknown") {
-      if (kp.playerId != null) keeperPlayerIds.add(Number(kp.playerId));
-      // Slot the keeper by the round he was DRAFTED in previously (history-derived
-      // keeper cost). Never ESPN's current-season keeper-slot round.
-      const slotR = Number(kp.keeperRound);
-      keeperByTeamRound.set(`${kp.teamId}_${slotR}`, kp.predictedPlayer);
-    }
+    if (!kp.predictedPlayer || kp.predictedPlayer === "Unknown") continue;
+    if (kp.playerId != null) keeperPlayerIds.add(Number(kp.playerId));
+    const slotR = Number(kp.keeperRound);
+    const arr = teamRoundPicksSorted.get(`${kp.teamId}_${slotR}`);
+    if (!arr || arr.length === 0) continue;
+    // 0/auto → the team's LATER (less-valuable) pick in the round; N>0 → the explicit Nth pick.
+    const explicit = Number(kp.keeperRoundPick) || 0;
+    const ordinal = explicit > 0 ? Math.min(explicit, arr.length) : arr.length;
+    keeperByOverallPick.set(arr[ordinal - 1], kp.predictedPlayer);
   }
 
   const pool = [...playerPool]; // already ordered by real ESPN ADP upstream (nulls last); do not re-sort
@@ -823,12 +839,11 @@ function buildMockDraft(params: {
     const needs    = needMap.get(tid);
     const counts   = teamPosCounts.get(tid) ?? {};
 
-    // Keeper slot?
-    const keeperPlayer = keeperByTeamRound.get(`${tid}_${round}`);
+    // Keeper slot? — this specific overall pick is a keeper's assigned pick.
+    const keeperPlayer = keeperByOverallPick.get(pickNum);
     if (keeperPlayer && keeperPlayer !== "Unknown") {
-      const slotR = Number(draftPick.roundId);
       const kp = keeperPredictions.find(k =>
-        k.teamId === tid && Number(k.keeperRound) === slotR,
+        k.teamId === tid && k.predictedPlayer === keeperPlayer,
       );
       const tradeCtx = tradedPickMap.get(`${round}_${tid}`);
       picks.push({
