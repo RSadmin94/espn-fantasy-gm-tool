@@ -219,13 +219,16 @@ import type { RequestHandler } from "express";
 const WAR_ROOM_CORS_ORIGINS = new Set([
   "https://gmwarroom.online",
   "http://gmwarroom.online",
+  "https://fantasyfootballrivals.com",
+  "https://www.fantasyfootballrivals.com",
 ]);
 
 const GM_WAR_ROOM_ORIGIN_RE = /^https?:\/\/([\w-]+\.)*gmwarroom\.online$/;
+const FANTASY_FOOTBALL_RIVALS_ORIGIN_RE = /^https?:\/\/([\w-]+\.)*fantasyfootballrivals\.com$/;
 
 function isAllowedGmWarRoomOrigin(origin: string): boolean {
   if (WAR_ROOM_CORS_ORIGINS.has(origin)) return true;
-  return GM_WAR_ROOM_ORIGIN_RE.test(origin);
+  return GM_WAR_ROOM_ORIGIN_RE.test(origin) || FANTASY_FOOTBALL_RIVALS_ORIGIN_RE.test(origin);
 }
 
 /**

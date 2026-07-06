@@ -8,7 +8,7 @@
  * Historical draft recap: scrape the rendered draftrecap page in a background tab (no ESPN draft JSON API).
  */
 
-const WAR_ROOM_ORIGIN = "https://gmwarroom.online";
+const WAR_ROOM_ORIGIN = "https://fantasyfootballrivals.com";
 const TRPC_SAVE_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.saveCredentials`;
 const TRPC_ME_URL = `${WAR_ROOM_ORIGIN}/api/trpc/auth.me`;
 /** Server runs full onboarding sync; land on dashboard when leagues are linked. */
@@ -495,7 +495,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://gmwarroom.online/api/trpc/espn.ingestParsedDraftPicks*",
+          urlFilter: "https://fantasyfootballrivals.com/api/trpc/espn.ingestParsedDraftPicks*",
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -507,7 +507,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://gmwarroom.online/api/trpc/espn.importDraftFromEspnApi*",
+          urlFilter: "https://fantasyfootballrivals.com/api/trpc/espn.importDraftFromEspnApi*",
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -519,7 +519,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://gmwarroom.online/api/trpc/espn.historicalImportStatus*",
+          urlFilter: "https://fantasyfootballrivals.com/api/trpc/espn.historicalImportStatus*",
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -531,7 +531,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://gmwarroom.online/api/trpc/espn.ingestLegacyDraftRecap*",
+          urlFilter: "https://fantasyfootballrivals.com/api/trpc/espn.ingestLegacyDraftRecap*",
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -543,7 +543,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://gmwarroom.online/api/trpc/espn.ingestSeasonRosters*",
+          urlFilter: "https://fantasyfootballrivals.com/api/trpc/espn.ingestSeasonRosters*",
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -555,7 +555,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://gmwarroom.online/api/trpc/playerStatsCache.saveWeeklyPlayerStats*",
+          urlFilter: "https://fantasyfootballrivals.com/api/trpc/playerStatsCache.saveWeeklyPlayerStats*",
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -567,7 +567,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://gmwarroom.online/api/trpc/playerStatsCache.getPlayerStatsCacheStatus*",
+          urlFilter: "https://fantasyfootballrivals.com/api/trpc/playerStatsCache.getPlayerStatsCacheStatus*",
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -2284,7 +2284,7 @@ async function postImportDraftFromEspnApi(leagueId, season, espnCreds, warRoomCo
 }
 
 async function openOrFocusPostConnectTab() {
-  const tabs = await chrome.tabs.query({ url: "https://gmwarroom.online/*" });
+  const tabs = await chrome.tabs.query({ url: ["https://fantasyfootballrivals.com/*", "https://www.fantasyfootballrivals.com/*", "https://gmwarroom.online/*"] });
   const existing = tabs.find((t) => t.id != null) ?? null;
   if (existing?.id != null) {
     await chrome.tabs.update(existing.id, { url: POST_CONNECT_URL, active: true });
@@ -2412,7 +2412,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       const warRoomCookieHeader = await getWarRoomCookieHeaderString();
       if (!warRoomCookieHeader) {
-        onceRespondWS({ ok: false, error: "GM War Room session not found. Sign in at gmwarroom.online, then retry." });
+        onceRespondWS({ ok: false, error: "GM War Room session not found. Sign in at fantasyfootballrivals.com, then retry." });
         return;
       }
 
@@ -2545,7 +2545,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse({
           ok: false,
           error:
-            "GM War Room session not found. Sign in at gmwarroom.online in this browser, then try again.",
+            "GM War Room session not found. Sign in at fantasyfootballrivals.com in this browser, then try again.",
         });
         return;
       }
@@ -2715,7 +2715,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       const warRoomCookieHeader = await getWarRoomCookieHeaderString();
       if (!warRoomCookieHeader) {
-        onceRespond({ ok: false, error: "Sign in at gmwarroom.online first." });
+        onceRespond({ ok: false, error: "Sign in at fantasyfootballrivals.com first." });
         return;
       }
 
@@ -2823,7 +2823,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       const warRoomCookieHeader = await getWarRoomCookieHeaderString();
       if (!warRoomCookieHeader) {
-        onceTrends({ ok: false, error: "Sign in at gmwarroom.online first." });
+        onceTrends({ ok: false, error: "Sign in at fantasyfootballrivals.com first." });
         return;
       }
 

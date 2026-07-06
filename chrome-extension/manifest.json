@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GM War Room — ESPN",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Connect ESPN Fantasy credentials to GM War Room using your logged-in session.",
   "permissions": ["cookies", "tabs", "scripting", "storage", "declarativeNetRequest", "declarativeNetRequestWithHostAccess"],
   "host_permissions": [
@@ -9,6 +9,8 @@
     "https://lm-api-reads.fantasy.espn.com/*",
     "https://www.espn.com/*",
     "https://*.espn.com/*",
+    "https://fantasyfootballrivals.com/*",
+    "https://www.fantasyfootballrivals.com/*",
     "https://gmwarroom.online/*",
     "http://localhost:*/*",
     "http://127.0.0.1:*/*"
@@ -16,6 +18,8 @@
   "content_scripts": [
     {
       "matches": [
+        "https://fantasyfootballrivals.com/*",
+        "https://www.fantasyfootballrivals.com/*",
         "https://gmwarroom.online/*",
         "http://localhost:*/*",
         "http://127.0.0.1:*/*"
