@@ -18,35 +18,149 @@
     "Nate West",
     "Randy Broner Jr"
   ],
-  "picksCompleted": 117,
+  "picksCompleted": 224,
   "plannedPicks": 224,
   "poolExhaustedAtPick": null,
   "skillPoolSize": 190,
-  "augmentedPoolSize": 216,
+  "augmentedPoolSize": 1020,
+  "poolStats": {
+    "skillFromTerrain": 190,
+    "skillFromEspn": 643,
+    "kickers": 56,
+    "defenders": 131,
+    "defendersFromEspn": 131,
+    "defendersFromFallback": 0,
+    "total": 1020
+  },
+  "runtimeMs": {
+    "total": 30183,
+    "simLoop": 362
+  },
+  "simTiming": {
+    "buckets": [
+      {
+        "label": "pick:resolveMoment",
+        "ms": 254.5,
+        "count": 224
+      },
+      {
+        "label": "pick:mutateWeather",
+        "ms": 99.3,
+        "count": 224
+      }
+    ],
+    "totalMs": 353.8,
+    "pickCount": 224,
+    "summary": "Hot path: pick:resolveMoment (254.5ms, 72% of measured time) · 224 picks avg 1.6ms/pick"
+  },
   "emergentRuns": [
     {
       "position": "WR",
-      "startPick": 23,
-      "endPick": 25,
-      "pickCount": 3
-    },
-    {
-      "position": "WR",
-      "startPick": 46,
-      "endPick": 49,
-      "pickCount": 4
-    },
-    {
-      "position": "WR",
-      "startPick": 76,
-      "endPick": 77,
+      "startPick": 6,
+      "endPick": 7,
       "pickCount": 2
     },
     {
       "position": "RB",
-      "startPick": 81,
-      "endPick": 83,
+      "startPick": 10,
+      "endPick": 12,
       "pickCount": 3
+    },
+    {
+      "position": "RB",
+      "startPick": 14,
+      "endPick": 15,
+      "pickCount": 2
+    },
+    {
+      "position": "WR",
+      "startPick": 27,
+      "endPick": 30,
+      "pickCount": 4
+    },
+    {
+      "position": "WR",
+      "startPick": 48,
+      "endPick": 49,
+      "pickCount": 2
+    },
+    {
+      "position": "WR",
+      "startPick": 64,
+      "endPick": 67,
+      "pickCount": 4
+    },
+    {
+      "position": "RB",
+      "startPick": 89,
+      "endPick": 90,
+      "pickCount": 2
+    },
+    {
+      "position": "WR",
+      "startPick": 103,
+      "endPick": 105,
+      "pickCount": 3
+    },
+    {
+      "position": "WR",
+      "startPick": 107,
+      "endPick": 108,
+      "pickCount": 2
+    },
+    {
+      "position": "RB",
+      "startPick": 112,
+      "endPick": 113,
+      "pickCount": 2
+    },
+    {
+      "position": "WR",
+      "startPick": 124,
+      "endPick": 125,
+      "pickCount": 2
+    },
+    {
+      "position": "DP",
+      "startPick": 129,
+      "endPick": 140,
+      "pickCount": 12
+    },
+    {
+      "position": "K",
+      "startPick": 143,
+      "endPick": 154,
+      "pickCount": 12
+    },
+    {
+      "position": "WR",
+      "startPick": 171,
+      "endPick": 172,
+      "pickCount": 2
+    },
+    {
+      "position": "WR",
+      "startPick": 178,
+      "endPick": 179,
+      "pickCount": 2
+    },
+    {
+      "position": "WR",
+      "startPick": 195,
+      "endPick": 196,
+      "pickCount": 2
+    },
+    {
+      "position": "RB",
+      "startPick": 206,
+      "endPick": 207,
+      "pickCount": 2
+    },
+    {
+      "position": "QB",
+      "startPick": 214,
+      "endPick": 215,
+      "pickCount": 2
     }
   ],
   "picks": [
@@ -55,26 +169,26 @@
       "round": 1,
       "owner": "Mark Deroux",
       "provisional": false,
-      "player": "Dak Prescott",
-      "position": "QB",
+      "player": "Jahmyr Gibbs",
+      "position": "RB",
       "takenOver": [
         "Puka Nacua (WR)",
         "Ja'Marr Chase (WR)",
-        "Jaxon Smith-Njigba (WR)"
+        "CeeDee Lamb (WR)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "rbEarlyRound",
+      "winningDriveLabel": "early RB tilt"
     },
     {
       "overallPick": 2,
       "round": 1,
       "owner": "Steffon Bizzell",
       "provisional": false,
-      "player": "Jahmyr Gibbs",
+      "player": "De'Von Achane",
       "position": "RB",
       "takenOver": [
         "Christian McCaffrey (RB)",
-        "Jaxon Smith-Njigba (WR)",
+        "Saquon Barkley (RB)",
         "Puka Nacua (WR)"
       ],
       "winningDrive": "value",
@@ -85,12 +199,12 @@
       "round": 1,
       "owner": "Marlon Moore",
       "provisional": false,
-      "player": "Amon-Ra St. Brown",
+      "player": "Justin Jefferson",
       "position": "WR",
       "takenOver": [
-        "Ja'Marr Chase (WR)",
+        "Amon-Ra St. Brown (WR)",
         "Puka Nacua (WR)",
-        "Jaxon Smith-Njigba (WR)"
+        "Ja'Marr Chase (WR)"
       ],
       "winningDrive": "wrEarlyRound",
       "winningDriveLabel": "early WR tilt"
@@ -100,27 +214,27 @@
       "round": 1,
       "owner": "Rod Sellers",
       "provisional": false,
-      "player": "Bijan Robinson",
-      "position": "RB",
+      "player": "Jaxon Smith-Njigba",
+      "position": "WR",
       "takenOver": [
-        "Christian McCaffrey (RB)",
-        "Jaxon Smith-Njigba (WR)",
-        "Puka Nacua (WR)"
+        "Amon-Ra St. Brown (WR)",
+        "Bijan Robinson (RB)",
+        "Christian McCaffrey (RB)"
       ],
-      "winningDrive": "rbEarlyRound",
-      "winningDriveLabel": "early RB tilt"
+      "winningDrive": "panic",
+      "winningDriveLabel": "tier urgency"
     },
     {
       "overallPick": 5,
       "round": 1,
       "owner": "Marcus Reese",
       "provisional": true,
-      "player": "Jonathan Taylor",
+      "player": "James Cook III",
       "position": "RB",
       "takenOver": [
         "Puka Nacua (WR)",
         "Ja'Marr Chase (WR)",
-        "Jaxon Smith-Njigba (WR)"
+        "Amon-Ra St. Brown (WR)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -130,12 +244,12 @@
       "round": 1,
       "owner": "Sheldon deRoux",
       "provisional": false,
-      "player": "Puka Nacua",
+      "player": "Amon-Ra St. Brown",
       "position": "WR",
       "takenOver": [
-        "Christian McCaffrey (RB)",
-        "De'Von Achane (RB)",
-        "George Pickens (WR)"
+        "CeeDee Lamb (WR)",
+        "Drake London (WR)",
+        "Christian McCaffrey (RB)"
       ],
       "winningDrive": "panic",
       "winningDriveLabel": "tier urgency"
@@ -145,27 +259,27 @@
       "round": 1,
       "owner": "LOZELL STYLES",
       "provisional": false,
-      "player": "Jaxon Smith-Njigba",
+      "player": "Ja'Marr Chase",
       "position": "WR",
       "takenOver": [
-        "Ja'Marr Chase (WR)",
-        "George Pickens (WR)",
-        "Christian McCaffrey (RB)"
+        "Drake London (WR)",
+        "Puka Nacua (WR)",
+        "CeeDee Lamb (WR)"
       ],
-      "winningDrive": "panic",
-      "winningDriveLabel": "tier urgency"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 8,
       "round": 1,
       "owner": "Tony Dorsey",
       "provisional": true,
-      "player": "De'Von Achane",
+      "player": "Omarion Hampton",
       "position": "RB",
       "takenOver": [
-        "Ashton Jeanty (RB)",
-        "Nico Collins (WR)",
-        "George Pickens (WR)"
+        "Puka Nacua (WR)",
+        "CeeDee Lamb (WR)",
+        "Drake London (WR)"
       ],
       "winningDrive": "rbEarlyRound",
       "winningDriveLabel": "early RB tilt"
@@ -175,27 +289,27 @@
       "round": 1,
       "owner": "Jan Graham",
       "provisional": false,
-      "player": "Drake Maye",
-      "position": "QB",
+      "player": "Christian McCaffrey",
+      "position": "RB",
       "takenOver": [
-        "Ja'Marr Chase (WR)",
-        "George Pickens (WR)",
-        "Nico Collins (WR)"
+        "Jonathan Taylor (RB)",
+        "Breece Hall (RB)",
+        "Puka Nacua (WR)"
       ],
-      "winningDrive": "value",
-      "winningDriveLabel": "board value"
+      "winningDrive": "rbEarlyRound",
+      "winningDriveLabel": "early RB tilt"
     },
     {
       "overallPick": 10,
       "round": 1,
       "owner": "Bruce Edwards",
       "provisional": false,
-      "player": "Christian McCaffrey",
+      "player": "Bijan Robinson",
       "position": "RB",
       "takenOver": [
         "Nico Collins (WR)",
-        "George Pickens (WR)",
-        "Ja'Marr Chase (WR)"
+        "Rashee Rice (WR)",
+        "Puka Nacua (WR)"
       ],
       "winningDrive": "rbEarlyRound",
       "winningDriveLabel": "early RB tilt"
@@ -205,27 +319,27 @@
       "round": 1,
       "owner": "Christian Graham",
       "provisional": false,
-      "player": "Nico Collins",
-      "position": "WR",
+      "player": "Derrick Henry",
+      "position": "RB",
       "takenOver": [
-        "George Pickens (WR)",
-        "Ja'Marr Chase (WR)",
-        "Justin Herbert (QB)"
+        "CeeDee Lamb (WR)",
+        "Puka Nacua (WR)",
+        "Drake London (WR)"
       ],
-      "winningDrive": "wrEarlyModernEra",
-      "winningDriveLabel": "modern WR shift"
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run"
     },
     {
       "overallPick": 12,
       "round": 1,
       "owner": "Demetri Clark",
       "provisional": false,
-      "player": "James Cook III",
+      "player": "Saquon Barkley",
       "position": "RB",
       "takenOver": [
-        "Ja'Marr Chase (WR)",
-        "George Pickens (WR)",
-        "Chris Olave (WR)"
+        "Rashee Rice (WR)",
+        "Puka Nacua (WR)",
+        "CeeDee Lamb (WR)"
       ],
       "winningDrive": "rbEarlyRound",
       "winningDriveLabel": "early RB tilt"
@@ -235,72 +349,72 @@
       "round": 1,
       "owner": "Nate West",
       "provisional": false,
-      "player": "Baker Mayfield",
-      "position": "QB",
+      "player": "Brock Bowers",
+      "position": "TE",
       "takenOver": [
-        "Ja'Marr Chase (WR)",
-        "James Cook (RB)",
-        "Chris Olave (WR)"
+        "Puka Nacua (WR)",
+        "CeeDee Lamb (WR)",
+        "Drake London (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "contrarian",
+      "winningDriveLabel": "fading the run"
     },
     {
       "overallPick": 14,
       "round": 1,
       "owner": "Randy Broner Jr",
       "provisional": false,
-      "player": "Jalen Hurts",
-      "position": "QB",
+      "player": "Jeremiyah Love",
+      "position": "RB",
       "takenOver": [
+        "A.J. Brown (WR)",
         "George Pickens (WR)",
-        "Chris Olave (WR)",
-        "Ja'Marr Chase (WR)"
+        "Jonathan Taylor (RB)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "rbEarlyRound",
+      "winningDriveLabel": "early RB tilt"
     },
     {
       "overallPick": 15,
       "round": 2,
       "owner": "Randy Broner Jr",
       "provisional": false,
-      "player": "Ja'Marr Chase",
-      "position": "WR",
+      "player": "Jonathan Taylor",
+      "position": "RB",
       "takenOver": [
+        "A.J. Brown (WR)",
         "George Pickens (WR)",
-        "Chris Olave (WR)",
-        "James Cook (RB)"
+        "Puka Nacua (WR)"
       ],
-      "winningDrive": "panic",
-      "winningDriveLabel": "tier urgency"
+      "winningDrive": "rbEarlyRound",
+      "winningDriveLabel": "early RB tilt"
     },
     {
       "overallPick": 16,
       "round": 2,
       "owner": "Nate West",
       "provisional": false,
-      "player": "Wan'Dale Robinson",
-      "position": "WR",
+      "player": "Lamar Jackson",
+      "position": "QB",
       "takenOver": [
-        "James Cook (RB)",
-        "Chris Olave (WR)",
-        "George Pickens (WR)"
+        "Zay Flowers (WR)",
+        "Puka Nacua (WR)",
+        "CeeDee Lamb (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 17,
       "round": 2,
       "owner": "Demetri Clark",
       "provisional": false,
-      "player": "Kyle Pitts Sr.",
-      "position": "TE",
+      "player": "George Pickens",
+      "position": "WR",
       "takenOver": [
+        "Rashee Rice (WR)",
         "A.J. Brown (WR)",
-        "George Pickens (WR)",
-        "Chris Olave (WR)"
+        "Puka Nacua (WR)"
       ],
       "winningDrive": "value",
       "winningDriveLabel": "board value"
@@ -310,42 +424,42 @@
       "round": 2,
       "owner": "Christian Graham",
       "provisional": false,
-      "player": "Jake Ferguson",
-      "position": "TE",
+      "player": "Kenneth Walker III",
+      "position": "RB",
       "takenOver": [
-        "George Pickens (WR)",
-        "Derrick Henry (RB)",
-        "James Cook (RB)"
+        "CeeDee Lamb (WR)",
+        "Puka Nacua (WR)",
+        "Drake London (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 19,
       "round": 2,
       "owner": "Bruce Edwards",
       "provisional": false,
-      "player": "Chris Olave",
+      "player": "Nico Collins",
       "position": "WR",
       "takenOver": [
-        "A.J. Brown (WR)",
-        "George Pickens (WR)",
-        "Javonte Williams (RB)"
+        "Rashee Rice (WR)",
+        "Puka Nacua (WR)",
+        "CeeDee Lamb (WR)"
       ],
-      "winningDrive": "panic",
-      "winningDriveLabel": "tier urgency"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 20,
       "round": 2,
       "owner": "Jan Graham",
       "provisional": false,
-      "player": "A.J. Brown",
+      "player": "Drake London",
       "position": "WR",
       "takenOver": [
-        "Courtland Sutton (WR)",
-        "George Pickens (WR)",
-        "James Cook (RB)"
+        "Puka Nacua (WR)",
+        "CeeDee Lamb (WR)",
+        "Rashee Rice (WR)"
       ],
       "winningDrive": "panic",
       "winningDriveLabel": "tier urgency"
@@ -355,72 +469,72 @@
       "round": 2,
       "owner": "Tony Dorsey",
       "provisional": true,
-      "player": "Courtland Sutton",
-      "position": "WR",
+      "player": "Josh Jacobs",
+      "position": "RB",
       "takenOver": [
-        "Zay Flowers (WR)",
-        "George Pickens (WR)",
-        "Ashton Jeanty (RB)"
+        "Puka Nacua (WR)",
+        "CeeDee Lamb (WR)",
+        "Rashee Rice (WR)"
       ],
-      "winningDrive": "panic",
-      "winningDriveLabel": "tier urgency"
+      "winningDrive": "rbEarlyRound",
+      "winningDriveLabel": "early RB tilt"
     },
     {
       "overallPick": 22,
       "round": 2,
       "owner": "LOZELL STYLES",
       "provisional": false,
-      "player": "Matthew Stafford",
-      "position": "QB",
+      "player": "Malik Nabers",
+      "position": "WR",
       "takenOver": [
-        "Derrick Henry (RB)",
-        "George Pickens (WR)",
-        "Zay Flowers (WR)"
+        "A.J. Brown (WR)",
+        "Chase Brown (RB)",
+        "Puka Nacua (WR)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "panic",
+      "winningDriveLabel": "tier urgency"
     },
     {
       "overallPick": 23,
       "round": 2,
       "owner": "Sheldon deRoux",
       "provisional": false,
-      "player": "George Pickens",
-      "position": "WR",
+      "player": "Ashton Jeanty",
+      "position": "RB",
       "takenOver": [
-        "Derrick Henry (RB)",
-        "James Cook (RB)",
-        "Zay Flowers (WR)"
+        "CeeDee Lamb (WR)",
+        "A.J. Brown (WR)",
+        "Chase Brown (RB)"
       ],
-      "winningDrive": "panic",
-      "winningDriveLabel": "tier urgency"
+      "winningDrive": "rbEarlyRound",
+      "winningDriveLabel": "early RB tilt"
     },
     {
       "overallPick": 24,
       "round": 2,
       "owner": "Marcus Reese",
       "provisional": true,
-      "player": "Zay Flowers",
-      "position": "WR",
+      "player": "Josh Allen",
+      "position": "QB",
       "takenOver": [
-        "Jameson Williams (WR)",
-        "Deebo Samuel (WR)",
-        "Travis Kelce (TE)"
+        "Puka Nacua (WR)",
+        "CeeDee Lamb (WR)",
+        "Rashee Rice (WR)"
       ],
-      "winningDrive": "wrEarlyRound",
-      "winningDriveLabel": "early WR tilt"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 25,
       "round": 2,
       "owner": "Rod Sellers",
       "provisional": false,
-      "player": "Deebo Samuel",
+      "player": "Rashee Rice",
       "position": "WR",
       "takenOver": [
-        "Jameson Williams (WR)",
-        "Rashid Shaheed (WR)",
-        "James Cook (RB)"
+        "Zay Flowers (WR)",
+        "Chase Brown (RB)",
+        "Breece Hall (RB)"
       ],
       "winningDrive": "panic",
       "winningDriveLabel": "tier urgency"
@@ -430,42 +544,42 @@
       "round": 2,
       "owner": "Marlon Moore",
       "provisional": false,
-      "player": "Patrick Mahomes",
-      "position": "QB",
+      "player": "Tetairoa McMillan",
+      "position": "WR",
       "takenOver": [
-        "Rashid Shaheed (WR)",
-        "Jameson Williams (WR)",
-        "Travis Etienne Jr. (RB)"
+        "Puka Nacua (WR)",
+        "CeeDee Lamb (WR)",
+        "A.J. Brown (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "wrEarlyRound",
+      "winningDriveLabel": "early WR tilt"
     },
     {
       "overallPick": 27,
       "round": 2,
       "owner": "Steffon Bizzell",
       "provisional": false,
-      "player": "Travis Kelce",
-      "position": "TE",
+      "player": "Garrett Wilson",
+      "position": "WR",
       "takenOver": [
-        "Rashid Shaheed (WR)",
+        "Chris Olave (WR)",
         "DeVonta Smith (WR)",
-        "Jameson Williams (WR)"
+        "Puka Nacua (WR)"
       ],
-      "winningDrive": "value",
-      "winningDriveLabel": "board value"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 28,
       "round": 2,
       "owner": "Mark Deroux",
       "provisional": false,
-      "player": "Jameson Williams",
+      "player": "CeeDee Lamb",
       "position": "WR",
       "takenOver": [
-        "Rashid Shaheed (WR)",
-        "Tee Higgins (WR)",
-        "James Cook (RB)"
+        "Puka Nacua (WR)",
+        "Chris Olave (WR)",
+        "DeVonta Smith (WR)"
       ],
       "winningDrive": "comfortAnchor",
       "winningDriveLabel": "comfort re-draft"
@@ -475,11 +589,11 @@
       "round": 3,
       "owner": "Mark Deroux",
       "provisional": false,
-      "player": "Travis Etienne Jr.",
-      "position": "RB",
+      "player": "DeVonta Smith",
+      "position": "WR",
       "takenOver": [
-        "James Cook (RB)",
-        "Derrick Henry (RB)",
+        "Puka Nacua (WR)",
+        "Chris Olave (WR)",
         "Trey McBride (TE)"
       ],
       "winningDrive": "comfortAnchor",
@@ -490,12 +604,12 @@
       "round": 3,
       "owner": "Steffon Bizzell",
       "provisional": false,
-      "player": "Rashid Shaheed",
+      "player": "Chris Olave",
       "position": "WR",
       "takenOver": [
-        "DeVonta Smith (WR)",
-        "Tee Higgins (WR)",
-        "Jaylen Waddle (WR)"
+        "Davante Adams (WR)",
+        "Puka Nacua (WR)",
+        "A.J. Brown (WR)"
       ],
       "winningDrive": "comfortAnchor",
       "winningDriveLabel": "comfort re-draft"
@@ -505,12 +619,12 @@
       "round": 3,
       "owner": "Marlon Moore",
       "provisional": false,
-      "player": "Kyle Pitts",
-      "position": "TE",
+      "player": "Travis Etienne Jr.",
+      "position": "RB",
       "takenOver": [
-        "Ashton Jeanty (RB)",
-        "Derrick Henry (RB)",
-        "James Cook (RB)"
+        "Zay Flowers (WR)",
+        "Davante Adams (WR)",
+        "Puka Nacua (WR)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -520,27 +634,27 @@
       "round": 3,
       "owner": "Rod Sellers",
       "provisional": false,
-      "player": "DeVonta Smith",
+      "player": "Zay Flowers",
       "position": "WR",
       "takenOver": [
         "Trey McBride (TE)",
-        "James Cook (RB)",
-        "Derrick Henry (RB)"
+        "Chase Brown (RB)",
+        "Breece Hall (RB)"
       ],
-      "winningDrive": "value",
-      "winningDriveLabel": "board value"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 33,
       "round": 3,
       "owner": "Marcus Reese",
       "provisional": true,
-      "player": "Derrick Henry",
+      "player": "Cam Skattebo",
       "position": "RB",
       "takenOver": [
-        "Michael Pittman Jr. (WR)",
-        "Jaylen Waddle (WR)",
-        "Tee Higgins (WR)"
+        "Puka Nacua (WR)",
+        "A.J. Brown (WR)",
+        "Davante Adams (WR)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -550,41 +664,41 @@
       "round": 3,
       "owner": "Sheldon deRoux",
       "provisional": false,
-      "player": "Kyren Williams",
-      "position": "RB",
+      "player": "Terry McLaurin",
+      "position": "WR",
       "takenOver": [
-        "Dallas Goedert (TE)",
-        "Ashton Jeanty (RB)",
-        "Jared Goff (QB)"
+        "A.J. Brown (WR)",
+        "Puka Nacua (WR)",
+        "Davante Adams (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 35,
       "round": 3,
       "owner": "LOZELL STYLES",
       "provisional": false,
-      "player": "Dallas Goedert",
-      "position": "TE",
+      "player": "Davante Adams",
+      "position": "WR",
       "takenOver": [
-        "Dalton Schultz (TE)",
-        "James Cook (RB)",
-        "Ashton Jeanty (RB)"
+        "Chase Brown (RB)",
+        "Breece Hall (RB)",
+        "Kyren Williams (RB)"
       ],
-      "winningDrive": "value",
-      "winningDriveLabel": "board value"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 36,
       "round": 3,
       "owner": "Tony Dorsey",
       "provisional": true,
-      "player": "Tyler Warren",
+      "player": "Colston Loveland",
       "position": "TE",
       "takenOver": [
-        "Michael Pittman Jr. (WR)",
-        "Jaylen Waddle (WR)",
+        "Puka Nacua (WR)",
+        "A.J. Brown (WR)",
         "Tee Higgins (WR)"
       ],
       "winningDrive": "need",
@@ -595,12 +709,12 @@
       "round": 3,
       "owner": "Jan Graham",
       "provisional": false,
-      "player": "James Cook",
+      "player": "Chase Brown",
       "position": "RB",
       "takenOver": [
-        "Javonte Williams (RB)",
-        "Ashton Jeanty (RB)",
-        "Hunter Henry (TE)"
+        "Puka Nacua (WR)",
+        "A.J. Brown (WR)",
+        "Tee Higgins (WR)"
       ],
       "winningDrive": "value",
       "winningDriveLabel": "board value"
@@ -610,42 +724,42 @@
       "round": 3,
       "owner": "Bruce Edwards",
       "provisional": false,
-      "player": "Trey McBride",
-      "position": "TE",
+      "player": "Puka Nacua",
+      "position": "WR",
       "takenOver": [
         "Emeka Egbuka (WR)",
-        "Michael Pittman Jr. (WR)",
-        "Jaylen Waddle (WR)"
+        "Drake Maye (QB)",
+        "A.J. Brown (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
     },
     {
       "overallPick": 39,
       "round": 3,
       "owner": "Christian Graham",
       "provisional": false,
-      "player": "Ashton Jeanty",
+      "player": "Kyren Williams",
       "position": "RB",
       "takenOver": [
         "Tee Higgins (WR)",
-        "Chase Brown (RB)",
-        "Josh Jacobs (RB)"
+        "A.J. Brown (WR)",
+        "Emeka Egbuka (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 40,
       "round": 3,
       "owner": "Demetri Clark",
       "provisional": false,
-      "player": "Josh Jacobs",
+      "player": "Quinshon Judkins",
       "position": "RB",
       "takenOver": [
+        "A.J. Brown (WR)",
         "Tee Higgins (WR)",
-        "Jaylen Waddle (WR)",
-        "Michael Pittman Jr. (WR)"
+        "Tyler Warren (TE)"
       ],
       "winningDrive": "value",
       "winningDriveLabel": "board value"
@@ -655,27 +769,27 @@
       "round": 3,
       "owner": "Nate West",
       "provisional": false,
-      "player": "Jaylen Waddle",
+      "player": "Tee Higgins",
       "position": "WR",
       "takenOver": [
-        "Tee Higgins (WR)",
-        "Hunter Henry (TE)",
-        "Chase Brown (RB)"
+        "Jaylen Waddle (WR)",
+        "A.J. Brown (WR)",
+        "Emeka Egbuka (WR)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 42,
       "round": 3,
       "owner": "Randy Broner Jr",
       "provisional": false,
-      "player": "Brock Bowers",
-      "position": "TE",
+      "player": "Joe Burrow",
+      "position": "QB",
       "takenOver": [
-        "DK Metcalf (WR)",
-        "Chase Brown (RB)",
-        "Javonte Williams (RB)"
+        "A.J. Brown (WR)",
+        "Emeka Egbuka (WR)",
+        "Ladd McConkey (WR)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -685,27 +799,27 @@
       "round": 4,
       "owner": "Randy Broner Jr",
       "provisional": false,
-      "player": "DK Metcalf",
+      "player": "Emeka Egbuka",
       "position": "WR",
       "takenOver": [
-        "TreVeyon Henderson (RB)",
-        "Chase Brown (RB)",
-        "Javonte Williams (RB)"
+        "A.J. Brown (WR)",
+        "Ladd McConkey (WR)",
+        "Trey McBride (TE)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 44,
       "round": 4,
       "owner": "Nate West",
       "provisional": false,
-      "player": "Javonte Williams",
+      "player": "Breece Hall",
       "position": "RB",
       "takenOver": [
-        "TreVeyon Henderson (RB)",
-        "Chase Brown (RB)",
-        "Hunter Henry (TE)"
+        "Jaylen Waddle (WR)",
+        "Javonte Williams (RB)",
+        "Bucky Irving (RB)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -715,12 +829,12 @@
       "round": 4,
       "owner": "Demetri Clark",
       "provisional": false,
-      "player": "Michael Pittman Jr.",
+      "player": "Carnell Tate",
       "position": "WR",
       "takenOver": [
-        "Tee Higgins (WR)",
-        "Emeka Egbuka (WR)",
-        "Josh Allen (QB)"
+        "A.J. Brown (WR)",
+        "Ladd McConkey (WR)",
+        "Tyler Warren (TE)"
       ],
       "winningDrive": "value",
       "winningDriveLabel": "board value"
@@ -730,72 +844,72 @@
       "round": 4,
       "owner": "Christian Graham",
       "provisional": false,
-      "player": "Emeka Egbuka",
+      "player": "Ladd McConkey",
       "position": "WR",
       "takenOver": [
-        "Tee Higgins (WR)",
-        "Justin Jefferson (WR)",
-        "Jordan Love (QB)"
+        "A.J. Brown (WR)",
+        "Jaylen Waddle (WR)",
+        "Trey McBride (TE)"
       ],
-      "winningDrive": "scarcityTierCliff",
-      "winningDriveLabel": "tier cliff"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 47,
       "round": 4,
       "owner": "Bruce Edwards",
       "provisional": false,
-      "player": "Ladd McConkey",
-      "position": "WR",
+      "player": "Jayden Daniels",
+      "position": "QB",
       "takenOver": [
-        "Justin Jefferson (WR)",
-        "Tee Higgins (WR)",
-        "D'Andre Swift (RB)"
+        "DJ Moore (WR)",
+        "A.J. Brown (WR)",
+        "Jaylen Waddle (WR)"
       ],
-      "winningDrive": "herdFomo",
-      "winningDriveLabel": "joining the run"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 48,
       "round": 4,
       "owner": "Jan Graham",
       "provisional": false,
-      "player": "Stefon Diggs",
+      "player": "DJ Moore",
       "position": "WR",
       "takenOver": [
-        "Tee Higgins (WR)",
-        "Justin Jefferson (WR)",
-        "Hunter Henry (TE)"
+        "A.J. Brown (WR)",
+        "Jaylen Waddle (WR)",
+        "Drake Maye (QB)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "value",
+      "winningDriveLabel": "board value"
     },
     {
       "overallPick": 49,
       "round": 4,
       "owner": "Tony Dorsey",
       "provisional": true,
-      "player": "Jauan Jennings",
+      "player": "DK Metcalf",
       "position": "WR",
       "takenOver": [
-        "Jakobi Meyers (WR)",
-        "Justin Jefferson (WR)",
-        "Tee Higgins (WR)"
+        "Michael Pittman Jr. (WR)",
+        "A.J. Brown (WR)",
+        "Jaylen Waddle (WR)"
       ],
-      "winningDrive": "herdFomo",
-      "winningDriveLabel": "joining the run"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 50,
       "round": 4,
       "owner": "LOZELL STYLES",
       "provisional": false,
-      "player": "Chase Brown",
+      "player": "D'Andre Swift",
       "position": "RB",
       "takenOver": [
-        "Tee Higgins (WR)",
-        "TreVeyon Henderson (RB)",
-        "Jaylen Warren (RB)"
+        "Javonte Williams (RB)",
+        "Bucky Irving (RB)",
+        "TreVeyon Henderson (RB)"
       ],
       "winningDrive": "comfortAnchor",
       "winningDriveLabel": "comfort re-draft"
@@ -805,12 +919,12 @@
       "round": 4,
       "owner": "Sheldon deRoux",
       "provisional": false,
-      "player": "Josh Allen",
-      "position": "QB",
+      "player": "Trey McBride",
+      "position": "TE",
       "takenOver": [
-        "Bo Nix (QB)",
-        "Jared Goff (QB)",
-        "C.J. Stroud (QB)"
+        "A.J. Brown (WR)",
+        "Jaylen Waddle (WR)",
+        "Tyler Warren (TE)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -820,12 +934,12 @@
       "round": 4,
       "owner": "Marcus Reese",
       "provisional": true,
-      "player": "Trevor Lawrence",
-      "position": "QB",
+      "player": "A.J. Brown",
+      "position": "WR",
       "takenOver": [
-        "Romeo Doubs (WR)",
-        "Justin Jefferson (WR)",
-        "Tee Higgins (WR)"
+        "Jaylen Waddle (WR)",
+        "Jameson Williams (WR)",
+        "Tyler Warren (TE)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -835,12 +949,12 @@
       "round": 4,
       "owner": "Rod Sellers",
       "provisional": false,
-      "player": "Bo Nix",
-      "position": "QB",
+      "player": "Harold Fannin Jr.",
+      "position": "TE",
       "takenOver": [
         "Jaylen Warren (RB)",
-        "Keenan Allen (WR)",
-        "Jared Goff (QB)"
+        "Travis Kelce (TE)",
+        "Javonte Williams (RB)"
       ],
       "winningDrive": "value",
       "winningDriveLabel": "board value"
@@ -850,12 +964,12 @@
       "round": 4,
       "owner": "Marlon Moore",
       "provisional": false,
-      "player": "Jaylen Warren",
-      "position": "RB",
+      "player": "Jalen Hurts",
+      "position": "QB",
       "takenOver": [
-        "Saquon Barkley (RB)",
-        "Justin Jefferson (WR)",
-        "D'Andre Swift (RB)"
+        "Drake Maye (QB)",
+        "Jaxson Dart (QB)",
+        "David Montgomery (RB)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -865,27 +979,27 @@
       "round": 4,
       "owner": "Steffon Bizzell",
       "provisional": false,
-      "player": "Keenan Allen",
-      "position": "WR",
+      "player": "Jadarian Price",
+      "position": "RB",
       "takenOver": [
-        "Saquon Barkley (RB)",
-        "Tee Higgins (WR)",
-        "Justin Jefferson (WR)"
+        "George Kittle (TE)",
+        "Mike Evans (WR)",
+        "Drake Maye (QB)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "value",
+      "winningDriveLabel": "board value"
     },
     {
       "overallPick": 56,
       "round": 4,
       "owner": "Mark Deroux",
       "provisional": false,
-      "player": "TreVeyon Henderson",
-      "position": "RB",
+      "player": "Jaxson Dart",
+      "position": "QB",
       "takenOver": [
-        "Tee Higgins (WR)",
-        "Justin Jefferson (WR)",
-        "Romeo Doubs (WR)"
+        "Kyle Pitts Sr. (TE)",
+        "Jameson Williams (WR)",
+        "Drake Maye (QB)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -895,12 +1009,12 @@
       "round": 5,
       "owner": "Mark Deroux",
       "provisional": false,
-      "player": "Dalton Schultz",
+      "player": "Tyler Warren",
       "position": "TE",
       "takenOver": [
-        "Tee Higgins (WR)",
-        "Justin Jefferson (WR)",
-        "Romeo Doubs (WR)"
+        "Kyle Pitts Sr. (TE)",
+        "Jameson Williams (WR)",
+        "Javonte Williams (RB)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -910,12 +1024,12 @@
       "round": 5,
       "owner": "Steffon Bizzell",
       "provisional": false,
-      "player": "Tee Higgins",
+      "player": "Jaylen Waddle",
       "position": "WR",
       "takenOver": [
-        "Saquon Barkley (RB)",
-        "Davante Adams (WR)",
-        "Jared Goff (QB)"
+        "George Kittle (TE)",
+        "Mike Evans (WR)",
+        "Drake Maye (QB)"
       ],
       "winningDrive": "value",
       "winningDriveLabel": "board value"
@@ -925,12 +1039,12 @@
       "round": 5,
       "owner": "Marlon Moore",
       "provisional": false,
-      "player": "Justin Jefferson",
-      "position": "WR",
+      "player": "Javonte Williams",
+      "position": "RB",
       "takenOver": [
-        "Romeo Doubs (WR)",
-        "Quentin Johnston (WR)",
-        "Saquon Barkley (RB)"
+        "Kyle Pitts Sr. (TE)",
+        "Sam LaPorta (TE)",
+        "David Montgomery (RB)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -940,12 +1054,12 @@
       "round": 5,
       "owner": "Rod Sellers",
       "provisional": false,
-      "player": "Colston Loveland",
-      "position": "TE",
+      "player": "David Montgomery",
+      "position": "RB",
       "takenOver": [
-        "Khalil Shakir (WR)",
-        "Hunter Henry (TE)",
-        "Rico Dowdle (RB)"
+        "Jaylen Warren (RB)",
+        "Bucky Irving (RB)",
+        "TreVeyon Henderson (RB)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -955,42 +1069,42 @@
       "round": 5,
       "owner": "Marcus Reese",
       "provisional": true,
-      "player": "Tetairoa McMillan",
+      "player": "Marvin Harrison Jr.",
       "position": "WR",
       "takenOver": [
-        "Quentin Johnston (WR)",
-        "Romeo Doubs (WR)",
-        "Hunter Henry (TE)"
+        "Jameson Williams (WR)",
+        "Rome Odunze (WR)",
+        "Luther Burden III (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
     },
     {
       "overallPick": 62,
       "round": 5,
       "owner": "Sheldon deRoux",
       "provisional": false,
-      "player": "D'Andre Swift",
-      "position": "RB",
+      "player": "Rome Odunze",
+      "position": "WR",
       "takenOver": [
-        "George Kittle (TE)",
-        "Quentin Johnston (WR)",
-        "Romeo Doubs (WR)"
+        "Jaylen Warren (RB)",
+        "J.K. Dobbins (RB)",
+        "Drake Maye (QB)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run"
     },
     {
       "overallPick": 63,
       "round": 5,
       "owner": "LOZELL STYLES",
       "provisional": false,
-      "player": "Jared Goff",
+      "player": "Drake Maye",
       "position": "QB",
       "takenOver": [
-        "Davante Adams (WR)",
-        "Romeo Doubs (WR)",
-        "Quentin Johnston (WR)"
+        "Matthew Stafford (QB)",
+        "Chuba Hubbard (RB)",
+        "Kyle Pitts Sr. (TE)"
       ],
       "winningDrive": "value",
       "winningDriveLabel": "board value"
@@ -1000,72 +1114,72 @@
       "round": 5,
       "owner": "Tony Dorsey",
       "provisional": true,
-      "player": "Jakobi Meyers",
+      "player": "Mike Evans",
       "position": "WR",
       "takenOver": [
-        "Justin Herbert (QB)",
-        "Lamar Jackson (QB)",
-        "Caleb Williams (QB)"
+        "Michael Pittman Jr. (WR)",
+        "Jameson Williams (WR)",
+        "Luther Burden III (WR)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 65,
       "round": 5,
       "owner": "Jan Graham",
       "provisional": false,
-      "player": "Hunter Henry",
-      "position": "TE",
+      "player": "Jameson Williams",
+      "position": "WR",
       "takenOver": [
-        "George Kittle (TE)",
-        "Breece Hall (RB)",
-        "Rico Dowdle (RB)"
+        "Michael Pittman Jr. (WR)",
+        "Courtland Sutton (WR)",
+        "Luther Burden III (WR)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
     },
     {
       "overallPick": 66,
       "round": 5,
       "owner": "Bruce Edwards",
       "provisional": false,
-      "player": "CeeDee Lamb",
+      "player": "Courtland Sutton",
       "position": "WR",
       "takenOver": [
-        "Lamar Jackson (QB)",
-        "Davante Adams (WR)",
-        "Caleb Williams (QB)"
+        "Christian Watson (WR)",
+        "Luther Burden III (WR)",
+        "Michael Pittman Jr. (WR)"
       ],
-      "winningDrive": "scarcityTierCliff",
-      "winningDriveLabel": "tier cliff"
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run"
     },
     {
       "overallPick": 67,
       "round": 5,
       "owner": "Christian Graham",
       "provisional": false,
-      "player": "Rico Dowdle",
-      "position": "RB",
+      "player": "Luther Burden III",
+      "position": "WR",
       "takenOver": [
-        "Caleb Williams (QB)",
-        "Jordan Love (QB)",
-        "Justin Herbert (QB)"
+        "Michael Pittman Jr. (WR)",
+        "Alec Pierce (WR)",
+        "Jordyn Tyson (WR)"
       ],
-      "winningDrive": "scarcityTierCliff",
-      "winningDriveLabel": "tier cliff"
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run"
     },
     {
       "overallPick": 68,
       "round": 5,
       "owner": "Demetri Clark",
       "provisional": false,
-      "player": "C.J. Stroud",
-      "position": "QB",
+      "player": "Kyle Pitts Sr.",
+      "position": "TE",
       "takenOver": [
-        "Lamar Jackson (QB)",
-        "Romeo Doubs (WR)",
-        "Quentin Johnston (WR)"
+        "George Kittle (TE)",
+        "Travis Kelce (TE)",
+        "Michael Pittman Jr. (WR)"
       ],
       "winningDrive": "value",
       "winningDriveLabel": "board value"
@@ -1075,27 +1189,27 @@
       "round": 5,
       "owner": "Nate West",
       "provisional": false,
-      "player": "Breece Hall",
-      "position": "RB",
+      "player": "Christian Watson",
+      "position": "WR",
       "takenOver": [
-        "Saquon Barkley (RB)",
-        "Tucker Kraft (TE)",
-        "George Kittle (TE)"
+        "Michael Pittman Jr. (WR)",
+        "Alec Pierce (WR)",
+        "Jordyn Tyson (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 70,
       "round": 5,
       "owner": "Randy Broner Jr",
       "provisional": false,
-      "player": "Davante Adams",
-      "position": "WR",
+      "player": "Travis Kelce",
+      "position": "TE",
       "takenOver": [
-        "Kenneth Walker III (RB)",
-        "Saquon Barkley (RB)",
-        "RJ Harvey (RB)"
+        "Michael Pittman Jr. (WR)",
+        "Alec Pierce (WR)",
+        "Jordyn Tyson (WR)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -1105,12 +1219,12 @@
       "round": 6,
       "owner": "Randy Broner Jr",
       "provisional": false,
-      "player": "RJ Harvey",
-      "position": "RB",
+      "player": "Alec Pierce",
+      "position": "WR",
       "takenOver": [
-        "Kenneth Walker III (RB)",
-        "Saquon Barkley (RB)",
-        "Romeo Doubs (WR)"
+        "Michael Pittman Jr. (WR)",
+        "Jordyn Tyson (WR)",
+        "Bhayshul Tuten (RB)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -1120,72 +1234,72 @@
       "round": 6,
       "owner": "Nate West",
       "provisional": false,
-      "player": "Saquon Barkley",
+      "player": "Bucky Irving",
       "position": "RB",
       "takenOver": [
-        "Tucker Kraft (TE)",
-        "George Kittle (TE)",
-        "Khalil Shakir (WR)"
+        "Chuba Hubbard (RB)",
+        "Michael Pittman Jr. (WR)",
+        "Jordyn Tyson (WR)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 73,
       "round": 6,
       "owner": "Demetri Clark",
       "provisional": false,
-      "player": "Quentin Johnston",
-      "position": "WR",
+      "player": "Matthew Stafford",
+      "position": "QB",
       "takenOver": [
-        "Jordan Addison (WR)",
-        "Romeo Doubs (WR)",
-        "Khalil Shakir (WR)"
+        "Dak Prescott (QB)",
+        "Michael Pittman Jr. (WR)",
+        "Jordyn Tyson (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
     },
     {
       "overallPick": 74,
       "round": 6,
       "owner": "Christian Graham",
       "provisional": false,
-      "player": "Romeo Doubs",
-      "position": "WR",
+      "player": "George Kittle",
+      "position": "TE",
       "takenOver": [
-        "Caleb Williams (QB)",
-        "Jordan Love (QB)",
-        "Justin Herbert (QB)"
+        "Sam LaPorta (TE)",
+        "Dak Prescott (QB)",
+        "Michael Pittman Jr. (WR)"
       ],
-      "winningDrive": "scarcityTierCliff",
-      "winningDriveLabel": "tier cliff"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 75,
       "round": 6,
       "owner": "Bruce Edwards",
       "provisional": false,
-      "player": "Lamar Jackson",
-      "position": "QB",
+      "player": "Sam LaPorta",
+      "position": "TE",
       "takenOver": [
         "Tony Pollard (RB)",
-        "Quinshon Judkins (RB)",
-        "Brock Purdy (QB)"
+        "TreVeyon Henderson (RB)",
+        "Bhayshul Tuten (RB)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 76,
       "round": 6,
       "owner": "Jan Graham",
       "provisional": false,
-      "player": "Khalil Shakir",
-      "position": "WR",
+      "player": "Chuba Hubbard",
+      "position": "RB",
       "takenOver": [
-        "Tony Pollard (RB)",
-        "David Montgomery (RB)",
-        "Kenneth Walker III (RB)"
+        "Dak Prescott (QB)",
+        "Brock Purdy (QB)",
+        "Caleb Williams (QB)"
       ],
       "winningDrive": "value",
       "winningDriveLabel": "board value"
@@ -1195,27 +1309,27 @@
       "round": 6,
       "owner": "Tony Dorsey",
       "provisional": true,
-      "player": "Christian Watson",
-      "position": "WR",
+      "player": "Dak Prescott",
+      "position": "QB",
       "takenOver": [
         "Brock Purdy (QB)",
-        "Kenneth Walker III (RB)",
-        "Justin Herbert (QB)"
+        "Michael Pittman Jr. (WR)",
+        "Caleb Williams (QB)"
       ],
-      "winningDrive": "herdFomo",
-      "winningDriveLabel": "joining the run"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 78,
       "round": 6,
       "owner": "LOZELL STYLES",
       "provisional": false,
-      "player": "Kenneth Walker III",
+      "player": "TreVeyon Henderson",
       "position": "RB",
       "takenOver": [
-        "Jordan Addison (WR)",
-        "Drake London (WR)",
-        "DJ Moore (WR)"
+        "J.K. Dobbins (RB)",
+        "Bhayshul Tuten (RB)",
+        "Tony Pollard (RB)"
       ],
       "winningDrive": "value",
       "winningDriveLabel": "board value"
@@ -1225,12 +1339,12 @@
       "round": 6,
       "owner": "Sheldon deRoux",
       "provisional": false,
-      "player": "Quinshon Judkins",
-      "position": "RB",
+      "player": "Caleb Williams",
+      "position": "QB",
       "takenOver": [
-        "George Kittle (TE)",
-        "Drake London (WR)",
-        "Mark Andrews (TE)"
+        "Jaylen Warren (RB)",
+        "J.K. Dobbins (RB)",
+        "Brock Purdy (QB)"
       ],
       "winningDrive": "need",
       "winningDriveLabel": "roster need"
@@ -1240,12 +1354,12 @@
       "round": 6,
       "owner": "Marcus Reese",
       "provisional": true,
-      "player": "Drake London",
+      "player": "Parker Washington",
       "position": "WR",
       "takenOver": [
-        "Mark Andrews (TE)",
-        "Sam LaPorta (TE)",
-        "Tucker Kraft (TE)"
+        "Dallas Goedert (TE)",
+        "Michael Pittman Jr. (WR)",
+        "Jordyn Tyson (WR)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -1255,12 +1369,12 @@
       "round": 6,
       "owner": "Rod Sellers",
       "provisional": false,
-      "player": "Tony Pollard",
-      "position": "RB",
+      "player": "Jordyn Tyson",
+      "position": "WR",
       "takenOver": [
-        "Aaron Jones (RB)",
-        "Tre Tucker (WR)",
-        "David Montgomery (RB)"
+        "Jaylen Warren (RB)",
+        "Brock Purdy (QB)",
+        "Bhayshul Tuten (RB)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -1270,27 +1384,27 @@
       "round": 6,
       "owner": "Marlon Moore",
       "provisional": false,
-      "player": "Omarion Hampton",
+      "player": "Jaylen Warren",
       "position": "RB",
       "takenOver": [
-        "David Montgomery (RB)",
-        "Zach Charbonnet (RB)",
-        "DJ Moore (WR)"
+        "Dallas Goedert (TE)",
+        "Michael Pittman Jr. (WR)",
+        "Brian Thomas Jr. (WR)"
       ],
-      "winningDrive": "herdFomo",
-      "winningDriveLabel": "joining the run"
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
     },
     {
       "overallPick": 83,
       "round": 6,
       "owner": "Steffon Bizzell",
       "provisional": false,
-      "player": "Zach Charbonnet",
-      "position": "RB",
+      "player": "Dallas Goedert",
+      "position": "TE",
       "takenOver": [
-        "Aaron Jones (RB)",
-        "Aaron Rodgers (QB)",
-        "David Montgomery (RB)"
+        "Brock Purdy (QB)",
+        "Chris Godwin Jr. (WR)",
+        "Rashid Shaheed (WR)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -1300,72 +1414,72 @@
       "round": 6,
       "owner": "Mark Deroux",
       "provisional": false,
-      "player": "DJ Moore",
-      "position": "WR",
+      "player": "Brock Purdy",
+      "position": "QB",
       "takenOver": [
-        "Jordan Addison (WR)",
-        "Jerry Jeudy (WR)",
-        "Aaron Jones (RB)"
+        "Rhamondre Stevenson (RB)",
+        "Bhayshul Tuten (RB)",
+        "Tony Pollard (RB)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
     },
     {
       "overallPick": 85,
       "round": 7,
       "owner": "Mark Deroux",
       "provisional": false,
-      "player": "Luther Burden III",
+      "player": "Chris Godwin Jr.",
       "position": "WR",
       "takenOver": [
-        "Jordan Addison (WR)",
-        "Jerry Jeudy (WR)",
-        "Aaron Jones (RB)"
+        "Rhamondre Stevenson (RB)",
+        "Isiah Pacheco (RB)",
+        "Bhayshul Tuten (RB)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
     },
     {
       "overallPick": 86,
       "round": 7,
       "owner": "Steffon Bizzell",
       "provisional": false,
-      "player": "Justin Herbert",
-      "position": "QB",
+      "player": "Bhayshul Tuten",
+      "position": "RB",
       "takenOver": [
-        "Aaron Rodgers (QB)",
-        "Jordan Love (QB)",
-        "Aaron Jones (RB)"
+        "Patrick Mahomes (QB)",
+        "Trevor Lawrence (QB)",
+        "Bo Nix (QB)"
       ],
-      "winningDrive": "value",
-      "winningDriveLabel": "board value"
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
     },
     {
       "overallPick": 87,
       "round": 7,
       "owner": "Marlon Moore",
       "provisional": false,
-      "player": "Jordan Addison",
-      "position": "WR",
+      "player": "Tony Pollard",
+      "position": "RB",
       "takenOver": [
-        "Rashee Rice (WR)",
-        "Jerry Jeudy (WR)",
-        "David Montgomery (RB)"
+        "Tucker Kraft (TE)",
+        "Michael Pittman Jr. (WR)",
+        "Brian Thomas Jr. (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
     },
     {
       "overallPick": 88,
       "round": 7,
       "owner": "Rod Sellers",
       "provisional": false,
-      "player": "David Montgomery",
-      "position": "RB",
+      "player": "Michael Pittman Jr.",
+      "position": "WR",
       "takenOver": [
-        "Tre Tucker (WR)",
-        "Jerry Jeudy (WR)",
-        "Rashee Rice (WR)"
+        "Aaron Jones Sr. (RB)",
+        "Rico Dowdle (RB)",
+        "J.K. Dobbins (RB)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -1375,72 +1489,72 @@
       "round": 7,
       "owner": "Marcus Reese",
       "provisional": true,
-      "player": "Dalton Kincaid",
-      "position": "TE",
+      "player": "Kenneth Gainwell",
+      "position": "RB",
       "takenOver": [
-        "Brenton Strange (TE)",
-        "Mark Andrews (TE)",
-        "Sam LaPorta (TE)"
+        "Tucker Kraft (TE)",
+        "Jake Ferguson (TE)",
+        "Isaiah Likely (TE)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
     },
     {
       "overallPick": 90,
       "round": 7,
       "owner": "Sheldon deRoux",
       "provisional": false,
-      "player": "Brock Purdy",
-      "position": "QB",
+      "player": "Rachaad White",
+      "position": "RB",
       "takenOver": [
-        "George Kittle (TE)",
-        "Terry McLaurin (WR)",
-        "Brenton Strange (TE)"
+        "J.K. Dobbins (RB)",
+        "Aaron Jones Sr. (RB)",
+        "Rico Dowdle (RB)"
       ],
-      "winningDrive": "herdFomo",
-      "winningDriveLabel": "joining the run"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 91,
       "round": 7,
       "owner": "LOZELL STYLES",
       "provisional": false,
-      "player": "Chuba Hubbard",
-      "position": "RB",
+      "player": "Jake Ferguson",
+      "position": "TE",
       "takenOver": [
-        "Brian Thomas Jr. (WR)",
-        "Roquan Smith (DP)",
-        "Jerry Jeudy (WR)"
+        "Tucker Kraft (TE)",
+        "Isaiah Likely (TE)",
+        "J.K. Dobbins (RB)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 92,
       "round": 7,
       "owner": "Tony Dorsey",
       "provisional": true,
-      "player": "Rashee Rice",
+      "player": "Wan'Dale Robinson",
       "position": "WR",
       "takenOver": [
-        "Joe Burrow (QB)",
-        "Aaron Rodgers (QB)",
-        "Rhamondre Stevenson (RB)"
+        "Jakobi Meyers (WR)",
+        "Brian Thomas Jr. (WR)",
+        "Makai Lemon (WR)"
       ],
-      "winningDrive": "herdFomo",
-      "winningDriveLabel": "joining the run"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 93,
       "round": 7,
       "owner": "Jan Graham",
       "provisional": false,
-      "player": "Roquan Smith",
-      "position": "DP",
+      "player": "Makai Lemon",
+      "position": "WR",
       "takenOver": [
-        "Bucky Irving (RB)",
-        "Foyesade Oluokun (DP)",
-        "Aaron Jones Sr. (RB)"
+        "Mark Andrews (TE)",
+        "Patrick Mahomes (QB)",
+        "Trevor Lawrence (QB)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -1450,27 +1564,27 @@
       "round": 7,
       "owner": "Bruce Edwards",
       "provisional": false,
-      "player": "Terry McLaurin",
-      "position": "WR",
+      "player": "RJ Harvey",
+      "position": "RB",
       "takenOver": [
         "Rhamondre Stevenson (RB)",
-        "Foyesade Oluokun (DP)",
-        "Aaron Jones Sr. (RB)"
+        "Aaron Jones Sr. (RB)",
+        "Rico Dowdle (RB)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 95,
       "round": 7,
       "owner": "Christian Graham",
       "provisional": false,
-      "player": "Aaron Jones",
-      "position": "RB",
+      "player": "Trevor Lawrence",
+      "position": "QB",
       "takenOver": [
-        "Aaron Rodgers (QB)",
-        "Caleb Williams (QB)",
-        "Jordan Love (QB)"
+        "Patrick Mahomes (QB)",
+        "Brian Thomas Jr. (WR)",
+        "Jakobi Meyers (WR)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -1480,27 +1594,27 @@
       "round": 7,
       "owner": "Demetri Clark",
       "provisional": false,
-      "player": "Zack Baun",
-      "position": "DP",
+      "player": "J.K. Dobbins",
+      "position": "RB",
       "takenOver": [
-        "Jerry Jeudy (WR)",
-        "Foyesade Oluokun (DP)",
-        "Zaire Franklin (DP)"
+        "Jordan Addison (WR)",
+        "Brian Thomas Jr. (WR)",
+        "Jakobi Meyers (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "value",
+      "winningDriveLabel": "board value"
     },
     {
       "overallPick": 97,
       "round": 7,
       "owner": "Nate West",
       "provisional": false,
-      "player": "Sam LaPorta",
-      "position": "TE",
+      "player": "Travis Hunter",
+      "position": "WR",
       "takenOver": [
-        "Jerry Jeudy (WR)",
-        "T.J. Hockenson (TE)",
-        "Brenton Strange (TE)"
+        "Jakobi Meyers (WR)",
+        "Brian Thomas Jr. (WR)",
+        "Michael Wilson (WR)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -1510,42 +1624,42 @@
       "round": 7,
       "owner": "Randy Broner Jr",
       "provisional": false,
-      "player": "Rome Odunze",
-      "position": "WR",
+      "player": "Rhamondre Stevenson",
+      "position": "RB",
       "takenOver": [
-        "Rhamondre Stevenson (RB)",
-        "Foyesade Oluokun (DP)",
-        "Zaire Franklin (DP)"
+        "Brian Thomas Jr. (WR)",
+        "Jakobi Meyers (WR)",
+        "Michael Wilson (WR)"
       ],
-      "winningDrive": "scarcityTierCliff",
-      "winningDriveLabel": "tier cliff"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 99,
       "round": 8,
       "owner": "Randy Broner Jr",
       "provisional": false,
-      "player": "Bucky Irving",
+      "player": "Rico Dowdle",
       "position": "RB",
       "takenOver": [
-        "T.J. Watt (DP)",
-        "Rhamondre Stevenson (RB)",
-        "Foyesade Oluokun (DP)"
+        "Brian Thomas Jr. (WR)",
+        "Jakobi Meyers (WR)",
+        "Michael Wilson (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 100,
       "round": 8,
       "owner": "Nate West",
       "provisional": false,
-      "player": "Foyesade Oluokun",
-      "position": "DP",
+      "player": "Jakobi Meyers",
+      "position": "WR",
       "takenOver": [
-        "Jerry Jeudy (WR)",
-        "Zaire Franklin (DP)",
-        "Myles Garrett (DP)"
+        "Tyjae Spears (RB)",
+        "Brian Thomas Jr. (WR)",
+        "Michael Wilson (WR)"
       ],
       "winningDrive": "comfortAnchor",
       "winningDriveLabel": "comfort re-draft"
@@ -1555,27 +1669,27 @@
       "round": 8,
       "owner": "Demetri Clark",
       "provisional": false,
-      "player": "Aaron Jones Sr.",
-      "position": "RB",
+      "player": "Jordan Addison",
+      "position": "WR",
       "takenOver": [
-        "Jerry Jeudy (WR)",
         "Brian Thomas Jr. (WR)",
-        "Marvin Harrison Jr. (WR)"
+        "Michael Wilson (WR)",
+        "Matthew Golden (WR)"
       ],
-      "winningDrive": "scarcityTierCliff",
-      "winningDriveLabel": "tier cliff"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 102,
       "round": 8,
       "owner": "Christian Graham",
       "provisional": false,
-      "player": "Bobby Wagner",
-      "position": "DP",
+      "player": "Blake Corum",
+      "position": "RB",
       "takenOver": [
-        "Aaron Rodgers (QB)",
-        "Caleb Williams (QB)",
-        "Jordan Love (QB)"
+        "Brian Thomas Jr. (WR)",
+        "Michael Wilson (WR)",
+        "Matthew Golden (WR)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -1585,12 +1699,12 @@
       "round": 8,
       "owner": "Bruce Edwards",
       "provisional": false,
-      "player": "Jerry Jeudy",
+      "player": "Matthew Golden",
       "position": "WR",
       "takenOver": [
-        "Zaire Franklin (DP)",
-        "Rhamondre Stevenson (RB)",
-        "Myles Garrett (DP)"
+        "Stefon Diggs (WR)",
+        "Brian Thomas Jr. (WR)",
+        "Michael Wilson (WR)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -1600,12 +1714,12 @@
       "round": 8,
       "owner": "Jan Graham",
       "provisional": false,
-      "player": "Maxx Crosby",
-      "position": "DP",
+      "player": "KC Concepcion",
+      "position": "WR",
       "takenOver": [
-        "Brandon Aubrey (K)",
-        "Myles Garrett (DP)",
-        "T.J. Watt (DP)"
+        "Mark Andrews (TE)",
+        "Patrick Mahomes (QB)",
+        "Bo Nix (QB)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -1615,27 +1729,27 @@
       "round": 8,
       "owner": "Tony Dorsey",
       "provisional": true,
-      "player": "Myles Garrett",
-      "position": "DP",
+      "player": "Ricky Pearsall",
+      "position": "WR",
       "takenOver": [
-        "Najee Harris (RB)",
-        "Joe Burrow (QB)",
-        "Aaron Rodgers (QB)"
+        "Jerry Jeudy (WR)",
+        "Brian Thomas Jr. (WR)",
+        "Michael Wilson (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run"
     },
     {
       "overallPick": 106,
       "round": 8,
       "owner": "LOZELL STYLES",
       "provisional": false,
-      "player": "Marvin Harrison Jr.",
-      "position": "WR",
+      "player": "Bo Nix",
+      "position": "QB",
       "takenOver": [
         "Brian Thomas Jr. (WR)",
-        "Cooper Kupp (WR)",
-        "Zaire Franklin (DP)"
+        "Aaron Jones Sr. (RB)",
+        "Kyle Monangai (RB)"
       ],
       "winningDrive": "value",
       "winningDriveLabel": "board value"
@@ -1645,42 +1759,42 @@
       "round": 8,
       "owner": "Sheldon deRoux",
       "provisional": false,
-      "player": "Brenton Strange",
-      "position": "TE",
+      "player": "Michael Wilson",
+      "position": "WR",
       "takenOver": [
-        "George Kittle (TE)",
         "Xavier Worthy (WR)",
-        "T.J. Hockenson (TE)"
+        "Brian Thomas Jr. (WR)",
+        "Josh Downs (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run"
     },
     {
       "overallPick": 108,
       "round": 8,
       "owner": "Marcus Reese",
       "provisional": true,
-      "player": "Brian Thomas Jr.",
+      "player": "Josh Downs",
       "position": "WR",
       "takenOver": [
-        "Zaire Franklin (DP)",
-        "T.J. Watt (DP)",
-        "E.J. Speed (DP)"
+        "Tucker Kraft (TE)",
+        "Isaiah Likely (TE)",
+        "Mark Andrews (TE)"
       ],
-      "winningDrive": "scarcityTierCliff",
-      "winningDriveLabel": "tier cliff"
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run"
     },
     {
       "overallPick": 109,
       "round": 8,
       "owner": "Rod Sellers",
       "provisional": false,
-      "player": "Zaire Franklin",
-      "position": "DP",
+      "player": "Aaron Jones Sr.",
+      "position": "RB",
       "takenOver": [
-        "Quincy Williams (DP)",
-        "C.J. Mosley (DP)",
-        "Tre Tucker (WR)"
+        "Patrick Mahomes (QB)",
+        "Justin Herbert (QB)",
+        "Khalil Shakir (WR)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -1690,27 +1804,27 @@
       "round": 8,
       "owner": "Marlon Moore",
       "provisional": false,
-      "player": "Quincy Williams",
-      "position": "DP",
+      "player": "Jonathon Brooks",
+      "position": "RB",
       "takenOver": [
-        "E.J. Speed (DP)",
-        "C.J. Mosley (DP)",
-        "T.J. Watt (DP)"
+        "Tucker Kraft (TE)",
+        "Isaiah Likely (TE)",
+        "Brian Thomas Jr. (WR)"
       ],
-      "winningDrive": "need",
-      "winningDriveLabel": "roster need"
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
     },
     {
       "overallPick": 111,
       "round": 8,
       "owner": "Steffon Bizzell",
       "provisional": false,
-      "player": "Xavier Worthy",
+      "player": "Khalil Shakir",
       "position": "WR",
       "takenOver": [
-        "T.J. Watt (DP)",
-        "E.J. Speed (DP)",
-        "C.J. Mosley (DP)"
+        "Patrick Mahomes (QB)",
+        "Justin Herbert (QB)",
+        "Jared Goff (QB)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -1720,56 +1834,57 @@
       "round": 8,
       "owner": "Mark Deroux",
       "provisional": false,
-      "player": "Tre Tucker",
-      "position": "WR",
+      "player": "Woody Marks",
+      "position": "RB",
       "takenOver": [
-        "T.J. Watt (DP)",
-        "E.J. Speed (DP)",
-        "C.J. Mosley (DP)"
+        "Isiah Pacheco (RB)",
+        "Alvin Kamara (RB)",
+        "Kyle Monangai (RB)"
       ],
-      "winningDrive": "scarcityTierCliff",
-      "winningDriveLabel": "tier cliff"
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
     },
     {
       "overallPick": 113,
       "round": 9,
       "owner": "Mark Deroux",
       "provisional": false,
-      "player": "C.J. Mosley",
-      "position": "DP",
+      "player": "Isiah Pacheco",
+      "position": "RB",
       "takenOver": [
-        "T.J. Watt (DP)",
-        "E.J. Speed (DP)"
+        "Alvin Kamara (RB)",
+        "Brian Thomas Jr. (WR)",
+        "Xavier Worthy (WR)"
       ],
-      "winningDrive": "scarcityTierCliff",
-      "winningDriveLabel": "roster slot fill",
-      "rosterConstructionNote": "must fill DP before draft ends"
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 114,
       "round": 9,
       "owner": "Steffon Bizzell",
       "provisional": false,
-      "player": "T.J. Watt",
-      "position": "DP",
+      "player": "Deebo Samuel",
+      "position": "WR",
       "takenOver": [
-        "E.J. Speed (DP)"
+        "Patrick Mahomes (QB)",
+        "Justin Herbert (QB)",
+        "Jared Goff (QB)"
       ],
       "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "roster slot fill",
-      "rosterConstructionNote": "must fill DP before draft ends"
+      "winningDriveLabel": "comfort re-draft"
     },
     {
       "overallPick": 115,
       "round": 9,
       "owner": "Marlon Moore",
       "provisional": false,
-      "player": "J.K. Dobbins",
-      "position": "RB",
+      "player": "Quentin Johnston",
+      "position": "WR",
       "takenOver": [
-        "Justin Tucker (K)",
-        "Brandon Aubrey (K)",
-        "Chase McLaughlin (K)"
+        "Tucker Kraft (TE)",
+        "Mark Andrews (TE)",
+        "Isaiah Likely (TE)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff"
@@ -1779,27 +1894,1668 @@
       "round": 9,
       "owner": "Rod Sellers",
       "provisional": false,
-      "player": "Travis Hunter",
-      "position": "WR",
+      "player": "Jacory Croskey-Merritt",
+      "position": "RB",
       "takenOver": [
-        "Marquise Brown (WR)",
-        "Cooper Kupp (WR)",
-        "Jayden Higgins (WR)"
+        "Patrick Mahomes (QB)",
+        "Justin Herbert (QB)",
+        "Jared Goff (QB)"
       ],
-      "winningDrive": "comfortAnchor",
-      "winningDriveLabel": "comfort re-draft"
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
     },
     {
       "overallPick": 117,
       "round": 9,
       "owner": "Marcus Reese",
       "provisional": true,
-      "player": "E.J. Speed",
-      "position": "DP",
-      "takenOver": [],
+      "player": "Patrick Mahomes",
+      "position": "QB",
+      "takenOver": [
+        "Tucker Kraft (TE)",
+        "Isaiah Likely (TE)",
+        "Mark Andrews (TE)"
+      ],
       "winningDrive": "scarcityTierCliff",
-      "winningDriveLabel": "roster slot fill",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 118,
+      "round": 9,
+      "owner": "Sheldon deRoux",
+      "provisional": false,
+      "player": "Alvin Kamara",
+      "position": "RB",
+      "takenOver": [
+        "Tyjae Spears (RB)",
+        "Xavier Worthy (WR)",
+        "Kyle Monangai (RB)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
+    },
+    {
+      "overallPick": 119,
+      "round": 9,
+      "owner": "LOZELL STYLES",
+      "provisional": false,
+      "player": "Jalen Coker",
+      "position": "WR",
+      "takenOver": [
+        "Brian Thomas Jr. (WR)",
+        "Jayden Reed (WR)",
+        "Kyle Monangai (RB)"
+      ],
+      "winningDrive": "value",
+      "winningDriveLabel": "board value"
+    },
+    {
+      "overallPick": 120,
+      "round": 9,
+      "owner": "Tony Dorsey",
+      "provisional": true,
+      "player": "Zach Charbonnet",
+      "position": "RB",
+      "takenOver": [
+        "Jerry Jeudy (WR)",
+        "Kyle Monangai (RB)",
+        "Tyjae Spears (RB)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
+    },
+    {
+      "overallPick": 121,
+      "round": 9,
+      "owner": "Jan Graham",
+      "provisional": false,
+      "player": "T.J. Hockenson",
+      "position": "TE",
+      "takenOver": [
+        "Mark Andrews (TE)",
+        "Justin Herbert (QB)",
+        "Tucker Kraft (TE)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
+    },
+    {
+      "overallPick": 122,
+      "round": 9,
+      "owner": "Bruce Edwards",
+      "provisional": false,
+      "player": "Brian Thomas Jr.",
+      "position": "WR",
+      "takenOver": [
+        "Stefon Diggs (WR)",
+        "Cooper Kupp (WR)",
+        "Kyle Monangai (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 123,
+      "round": 9,
+      "owner": "Christian Graham",
+      "provisional": false,
+      "player": "Xavier Worthy",
+      "position": "WR",
+      "takenOver": [
+        "Jayden Reed (WR)",
+        "Romeo Doubs (WR)",
+        "Jayden Higgins (WR)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 124,
+      "round": 9,
+      "owner": "Demetri Clark",
+      "provisional": false,
+      "player": "Jayden Reed",
+      "position": "WR",
+      "takenOver": [
+        "Calvin Ridley (WR)",
+        "Jerry Jeudy (WR)",
+        "Romeo Doubs (WR)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 125,
+      "round": 9,
+      "owner": "Nate West",
+      "provisional": false,
+      "player": "Jayden Higgins",
+      "position": "WR",
+      "takenOver": [
+        "Tyjae Spears (RB)",
+        "Kyle Monangai (RB)",
+        "Jordan Mason (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 126,
+      "round": 9,
+      "owner": "Randy Broner Jr",
+      "provisional": false,
+      "player": "Jordan Mason",
+      "position": "RB",
+      "takenOver": [
+        "Romeo Doubs (WR)",
+        "Stefon Diggs (WR)",
+        "Omar Cooper Jr. (WR)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 127,
+      "round": 10,
+      "owner": "Randy Broner Jr",
+      "provisional": false,
+      "player": "Myles Garrett",
+      "position": "DP",
+      "takenOver": [
+        "Jordyn Brooks (DP)",
+        "Maxx Crosby (DP)",
+        "Fred Warner (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
       "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 128,
+      "round": 10,
+      "owner": "Nate West",
+      "provisional": false,
+      "player": "Jordyn Brooks",
+      "position": "DP",
+      "takenOver": [
+        "Maxx Crosby (DP)",
+        "Fred Warner (DP)",
+        "Jack Campbell (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 129,
+      "round": 10,
+      "owner": "Demetri Clark",
+      "provisional": false,
+      "player": "Maxx Crosby",
+      "position": "DP",
+      "takenOver": [
+        "Fred Warner (DP)",
+        "Jack Campbell (DP)",
+        "Blake Cashman (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 130,
+      "round": 10,
+      "owner": "Christian Graham",
+      "provisional": false,
+      "player": "Fred Warner",
+      "position": "DP",
+      "takenOver": [
+        "Jack Campbell (DP)",
+        "Blake Cashman (DP)",
+        "Will Anderson Jr. (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 131,
+      "round": 10,
+      "owner": "Bruce Edwards",
+      "provisional": false,
+      "player": "Jack Campbell",
+      "position": "DP",
+      "takenOver": [
+        "Blake Cashman (DP)",
+        "Will Anderson Jr. (DP)",
+        "Jeffery Simmons (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 132,
+      "round": 10,
+      "owner": "Jan Graham",
+      "provisional": false,
+      "player": "Blake Cashman",
+      "position": "DP",
+      "takenOver": [
+        "Will Anderson Jr. (DP)",
+        "Jeffery Simmons (DP)",
+        "Nick Bolton (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 133,
+      "round": 10,
+      "owner": "Tony Dorsey",
+      "provisional": true,
+      "player": "Will Anderson Jr.",
+      "position": "DP",
+      "takenOver": [
+        "Jeffery Simmons (DP)",
+        "Nick Bolton (DP)",
+        "Carson Schwesinger (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 134,
+      "round": 10,
+      "owner": "LOZELL STYLES",
+      "provisional": false,
+      "player": "Jeffery Simmons",
+      "position": "DP",
+      "takenOver": [
+        "Nick Bolton (DP)",
+        "Carson Schwesinger (DP)",
+        "Aidan Hutchinson (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 135,
+      "round": 10,
+      "owner": "Sheldon deRoux",
+      "provisional": false,
+      "player": "Nick Bolton",
+      "position": "DP",
+      "takenOver": [
+        "Carson Schwesinger (DP)",
+        "Aidan Hutchinson (DP)",
+        "Brian Burns (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 136,
+      "round": 10,
+      "owner": "Marcus Reese",
+      "provisional": true,
+      "player": "Carson Schwesinger",
+      "position": "DP",
+      "takenOver": [
+        "Aidan Hutchinson (DP)",
+        "Brian Burns (DP)",
+        "Cedric Gray (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 137,
+      "round": 10,
+      "owner": "Rod Sellers",
+      "provisional": false,
+      "player": "Aidan Hutchinson",
+      "position": "DP",
+      "takenOver": [
+        "Brian Burns (DP)",
+        "Cedric Gray (DP)",
+        "Foyesade Oluokun (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 138,
+      "round": 10,
+      "owner": "Marlon Moore",
+      "provisional": false,
+      "player": "Brian Burns",
+      "position": "DP",
+      "takenOver": [
+        "Cedric Gray (DP)",
+        "Foyesade Oluokun (DP)",
+        "Nick Bosa (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 139,
+      "round": 10,
+      "owner": "Steffon Bizzell",
+      "provisional": false,
+      "player": "Cedric Gray",
+      "position": "DP",
+      "takenOver": [
+        "Foyesade Oluokun (DP)",
+        "Nick Bosa (DP)",
+        "T.J. Watt (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 140,
+      "round": 10,
+      "owner": "Mark Deroux",
+      "provisional": false,
+      "player": "Foyesade Oluokun",
+      "position": "DP",
+      "takenOver": [
+        "Nick Bosa (DP)",
+        "T.J. Watt (DP)",
+        "Nakobe Dean (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill DP before draft ends"
+    },
+    {
+      "overallPick": 141,
+      "round": 11,
+      "owner": "Mark Deroux",
+      "provisional": false,
+      "player": "Brandon Aubrey",
+      "position": "K",
+      "takenOver": [
+        "Cameron Dicker (K)",
+        "Jason Myers (K)",
+        "Ka'imi Fairbairn (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 142,
+      "round": 11,
+      "owner": "Steffon Bizzell",
+      "provisional": false,
+      "player": "Cameron Dicker",
+      "position": "K",
+      "takenOver": [
+        "Jason Myers (K)",
+        "Ka'imi Fairbairn (K)",
+        "Cam Little (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 143,
+      "round": 11,
+      "owner": "Marlon Moore",
+      "provisional": false,
+      "player": "Jason Myers",
+      "position": "K",
+      "takenOver": [
+        "Ka'imi Fairbairn (K)",
+        "Cam Little (K)",
+        "Harrison Mevis (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 144,
+      "round": 11,
+      "owner": "Rod Sellers",
+      "provisional": false,
+      "player": "Ka'imi Fairbairn",
+      "position": "K",
+      "takenOver": [
+        "Cam Little (K)",
+        "Harrison Mevis (K)",
+        "Eddy Pineiro (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 145,
+      "round": 11,
+      "owner": "Marcus Reese",
+      "provisional": true,
+      "player": "Cam Little",
+      "position": "K",
+      "takenOver": [
+        "Harrison Mevis (K)",
+        "Eddy Pineiro (K)",
+        "Jake Bates (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 146,
+      "round": 11,
+      "owner": "Sheldon deRoux",
+      "provisional": false,
+      "player": "Harrison Mevis",
+      "position": "K",
+      "takenOver": [
+        "Eddy Pineiro (K)",
+        "Jake Bates (K)",
+        "Harrison Butker (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 147,
+      "round": 11,
+      "owner": "LOZELL STYLES",
+      "provisional": false,
+      "player": "Eddy Pineiro",
+      "position": "K",
+      "takenOver": [
+        "Jake Bates (K)",
+        "Harrison Butker (K)",
+        "Tyler Loop (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 148,
+      "round": 11,
+      "owner": "Tony Dorsey",
+      "provisional": true,
+      "player": "Jake Bates",
+      "position": "K",
+      "takenOver": [
+        "Harrison Butker (K)",
+        "Tyler Loop (K)",
+        "Chris Boswell (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 149,
+      "round": 11,
+      "owner": "Jan Graham",
+      "provisional": false,
+      "player": "Harrison Butker",
+      "position": "K",
+      "takenOver": [
+        "Tyler Loop (K)",
+        "Chris Boswell (K)",
+        "Will Reichard (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 150,
+      "round": 11,
+      "owner": "Bruce Edwards",
+      "provisional": false,
+      "player": "Tyler Loop",
+      "position": "K",
+      "takenOver": [
+        "Chris Boswell (K)",
+        "Will Reichard (K)",
+        "Cairo Santos (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 151,
+      "round": 11,
+      "owner": "Christian Graham",
+      "provisional": false,
+      "player": "Chris Boswell",
+      "position": "K",
+      "takenOver": [
+        "Will Reichard (K)",
+        "Cairo Santos (K)",
+        "Chase McLaughlin (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 152,
+      "round": 11,
+      "owner": "Demetri Clark",
+      "provisional": false,
+      "player": "Will Reichard",
+      "position": "K",
+      "takenOver": [
+        "Cairo Santos (K)",
+        "Chase McLaughlin (K)",
+        "Evan McPherson (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 153,
+      "round": 11,
+      "owner": "Nate West",
+      "provisional": false,
+      "player": "Cairo Santos",
+      "position": "K",
+      "takenOver": [
+        "Chase McLaughlin (K)",
+        "Evan McPherson (K)",
+        "Jake Elliott (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 154,
+      "round": 11,
+      "owner": "Randy Broner Jr",
+      "provisional": false,
+      "player": "Chase McLaughlin",
+      "position": "K",
+      "takenOver": [
+        "Evan McPherson (K)",
+        "Jake Elliott (K)",
+        "Trey Smack (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "rosterConstructionNote": "must fill K before draft ends"
+    },
+    {
+      "overallPick": 155,
+      "round": 12,
+      "owner": "Randy Broner Jr",
+      "provisional": false,
+      "player": "Rashid Shaheed",
+      "position": "WR",
+      "takenOver": [
+        "Romeo Doubs (WR)",
+        "Stefon Diggs (WR)",
+        "Omar Cooper Jr. (WR)"
+      ],
+      "winningDrive": "panic",
+      "winningDriveLabel": "tier urgency"
+    },
+    {
+      "overallPick": 156,
+      "round": 12,
+      "owner": "Nate West",
+      "provisional": false,
+      "player": "Stefon Diggs",
+      "position": "WR",
+      "takenOver": [
+        "Tyjae Spears (RB)",
+        "Kyle Monangai (RB)",
+        "Romeo Doubs (WR)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 157,
+      "round": 12,
+      "owner": "Demetri Clark",
+      "provisional": false,
+      "player": "Tyjae Spears",
+      "position": "RB",
+      "takenOver": [
+        "Calvin Ridley (WR)",
+        "Jerry Jeudy (WR)",
+        "Romeo Doubs (WR)"
+      ],
+      "winningDrive": "value",
+      "winningDriveLabel": "board value"
+    },
+    {
+      "overallPick": 158,
+      "round": 12,
+      "owner": "Christian Graham",
+      "provisional": false,
+      "player": "Omar Cooper Jr.",
+      "position": "WR",
+      "takenOver": [
+        "Romeo Doubs (WR)",
+        "Jalen McMillan (WR)",
+        "Kyle Monangai (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 159,
+      "round": 12,
+      "owner": "Bruce Edwards",
+      "provisional": false,
+      "player": "Chris Rodriguez Jr.",
+      "position": "RB",
+      "takenOver": [
+        "Cooper Kupp (WR)",
+        "Odell Beckham Jr. (WR)",
+        "Kyle Monangai (RB)"
+      ],
+      "winningDrive": "panic",
+      "winningDriveLabel": "tier urgency"
+    },
+    {
+      "overallPick": 160,
+      "round": 12,
+      "owner": "Jan Graham",
+      "provisional": false,
+      "player": "Cam Ward",
+      "position": "QB",
+      "takenOver": [
+        "Jared Goff (QB)",
+        "Baker Mayfield (QB)",
+        "Justin Herbert (QB)"
+      ],
+      "winningDrive": "panic",
+      "winningDriveLabel": "roster slot fill",
+      "rosterConstructionNote": "must fill QB before draft ends"
+    },
+    {
+      "overallPick": 161,
+      "round": 12,
+      "owner": "Tony Dorsey",
+      "provisional": true,
+      "player": "Kyle Monangai",
+      "position": "RB",
+      "takenOver": [
+        "Jerry Jeudy (WR)",
+        "Tyler Allgeier (RB)",
+        "Romeo Doubs (WR)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
+    },
+    {
+      "overallPick": 162,
+      "round": 12,
+      "owner": "LOZELL STYLES",
+      "provisional": false,
+      "player": "Tyler Allgeier",
+      "position": "RB",
+      "takenOver": [
+        "Tank Bigsby (RB)",
+        "Brian Robinson Jr. (RB)",
+        "Tyrone Tracy Jr. (RB)"
+      ],
+      "winningDrive": "panic",
+      "winningDriveLabel": "tier urgency"
+    },
+    {
+      "overallPick": 163,
+      "round": 12,
+      "owner": "Sheldon deRoux",
+      "provisional": false,
+      "player": "Jalen McMillan",
+      "position": "WR",
+      "takenOver": [
+        "Tank Bigsby (RB)",
+        "Brian Robinson Jr. (RB)",
+        "Romeo Doubs (WR)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
+    },
+    {
+      "overallPick": 164,
+      "round": 12,
+      "owner": "Marcus Reese",
+      "provisional": true,
+      "player": "Dalton Kincaid",
+      "position": "TE",
+      "takenOver": [
+        "Tucker Kraft (TE)",
+        "Isaiah Likely (TE)",
+        "Mark Andrews (TE)"
+      ],
+      "winningDrive": "panic",
+      "winningDriveLabel": "roster slot fill",
+      "rosterConstructionNote": "must fill TE before draft ends"
+    },
+    {
+      "overallPick": 165,
+      "round": 12,
+      "owner": "Rod Sellers",
+      "provisional": false,
+      "player": "Kirk Cousins",
+      "position": "QB",
+      "takenOver": [
+        "Deshaun Watson (QB)",
+        "Justin Herbert (QB)",
+        "Jared Goff (QB)"
+      ],
+      "winningDrive": "panic",
+      "winningDriveLabel": "roster slot fill",
+      "rosterConstructionNote": "must fill QB before draft ends"
+    },
+    {
+      "overallPick": 166,
+      "round": 12,
+      "owner": "Marlon Moore",
+      "provisional": false,
+      "player": "Mark Andrews",
+      "position": "TE",
+      "takenOver": [
+        "Tucker Kraft (TE)",
+        "Hunter Henry (TE)",
+        "Pat Freiermuth (TE)"
+      ],
+      "winningDrive": "panic",
+      "winningDriveLabel": "roster slot fill",
+      "rosterConstructionNote": "must fill TE before draft ends"
+    },
+    {
+      "overallPick": 167,
+      "round": 12,
+      "owner": "Steffon Bizzell",
+      "provisional": false,
+      "player": "Russell Wilson",
+      "position": "QB",
+      "takenOver": [
+        "Aaron Rodgers (QB)",
+        "Justin Herbert (QB)",
+        "Jared Goff (QB)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "roster slot fill",
+      "rosterConstructionNote": "must fill QB before draft ends"
+    },
+    {
+      "overallPick": 168,
+      "round": 12,
+      "owner": "Mark Deroux",
+      "provisional": false,
+      "player": "Calvin Ridley",
+      "position": "WR",
+      "takenOver": [
+        "Brian Robinson Jr. (RB)",
+        "Romeo Doubs (WR)",
+        "Tyreek Hill (WR)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
+    },
+    {
+      "overallPick": 169,
+      "round": 13,
+      "owner": "Mark Deroux",
+      "provisional": false,
+      "player": "Cooper Kupp",
+      "position": "WR",
+      "takenOver": [
+        "Brian Robinson Jr. (RB)",
+        "Odell Beckham Jr. (WR)",
+        "Tank Bigsby (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 170,
+      "round": 13,
+      "owner": "Steffon Bizzell",
+      "provisional": false,
+      "player": "Jordan Love",
+      "position": "QB",
+      "takenOver": [
+        "Marvin Mims Jr. (WR)",
+        "Tank Bigsby (RB)",
+        "Romeo Doubs (WR)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 171,
+      "round": 13,
+      "owner": "Marlon Moore",
+      "provisional": false,
+      "player": "Jerry Jeudy",
+      "position": "WR",
+      "takenOver": [
+        "Romeo Doubs (WR)",
+        "Tyreek Hill (WR)",
+        "C.J. Stroud (QB)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
+    },
+    {
+      "overallPick": 172,
+      "round": 13,
+      "owner": "Rod Sellers",
+      "provisional": false,
+      "player": "Tre Tucker",
+      "position": "WR",
+      "takenOver": [
+        "Darnell Mooney (WR)",
+        "Romeo Doubs (WR)",
+        "Tyreek Hill (WR)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
+    },
+    {
+      "overallPick": 173,
+      "round": 13,
+      "owner": "Marcus Reese",
+      "provisional": true,
+      "player": "Tank Bigsby",
+      "position": "RB",
+      "takenOver": [
+        "Jauan Jennings (WR)",
+        "Romeo Doubs (WR)",
+        "Tyreek Hill (WR)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 174,
+      "round": 13,
+      "owner": "Sheldon deRoux",
+      "provisional": false,
+      "player": "Brian Robinson Jr.",
+      "position": "RB",
+      "takenOver": [
+        "Romeo Doubs (WR)",
+        "Tyreek Hill (WR)",
+        "Jared Goff (QB)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
+    },
+    {
+      "overallPick": 175,
+      "round": 13,
+      "owner": "LOZELL STYLES",
+      "provisional": false,
+      "player": "Germie Bernard",
+      "position": "WR",
+      "takenOver": [
+        "Tyreek Hill (WR)",
+        "Odell Beckham Jr. (WR)",
+        "Tyrone Tracy Jr. (RB)"
+      ],
+      "winningDrive": "value",
+      "winningDriveLabel": "board value"
+    },
+    {
+      "overallPick": 176,
+      "round": 13,
+      "owner": "Tony Dorsey",
+      "provisional": true,
+      "player": "Romeo Doubs",
+      "position": "WR",
+      "takenOver": [
+        "Najee Harris (RB)",
+        "Tyreek Hill (WR)",
+        "Tyrone Tracy Jr. (RB)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
+    },
+    {
+      "overallPick": 177,
+      "round": 13,
+      "owner": "Jan Graham",
+      "provisional": false,
+      "player": "Jared Goff",
+      "position": "QB",
+      "takenOver": [
+        "Tyrone Tracy Jr. (RB)",
+        "Tyreek Hill (WR)",
+        "Denzel Boston (WR)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
+    },
+    {
+      "overallPick": 178,
+      "round": 13,
+      "owner": "Bruce Edwards",
+      "provisional": false,
+      "player": "Odell Beckham Jr.",
+      "position": "WR",
+      "takenOver": [
+        "Tyrone Tracy Jr. (RB)",
+        "Tyreek Hill (WR)",
+        "Denzel Boston (WR)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
+    },
+    {
+      "overallPick": 179,
+      "round": 13,
+      "owner": "Christian Graham",
+      "provisional": false,
+      "player": "Denzel Boston",
+      "position": "WR",
+      "takenOver": [
+        "Tyreek Hill (WR)",
+        "Tyrone Tracy Jr. (RB)",
+        "Justin Herbert (QB)"
+      ],
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run"
+    },
+    {
+      "overallPick": 180,
+      "round": 13,
+      "owner": "Demetri Clark",
+      "provisional": false,
+      "player": "Tyrone Tracy Jr.",
+      "position": "RB",
+      "takenOver": [
+        "Tyreek Hill (WR)",
+        "Jauan Jennings (WR)",
+        "Aaron Rodgers (QB)"
+      ],
+      "winningDrive": "value",
+      "winningDriveLabel": "board value"
+    },
+    {
+      "overallPick": 181,
+      "round": 13,
+      "owner": "Nate West",
+      "provisional": false,
+      "player": "James Conner",
+      "position": "RB",
+      "takenOver": [
+        "Braelon Allen (RB)",
+        "Mike Washington Jr. (RB)",
+        "Kyler Murray (QB)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
+    },
+    {
+      "overallPick": 182,
+      "round": 13,
+      "owner": "Randy Broner Jr",
+      "provisional": false,
+      "player": "Jauan Jennings",
+      "position": "WR",
+      "takenOver": [
+        "Tyreek Hill (WR)",
+        "Brandon Aiyuk (WR)",
+        "Kyler Murray (QB)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
+    },
+    {
+      "overallPick": 183,
+      "round": 14,
+      "owner": "Randy Broner Jr",
+      "provisional": false,
+      "player": "Daniel Jones",
+      "position": "QB",
+      "takenOver": [
+        "Tyreek Hill (WR)",
+        "Brandon Aiyuk (WR)",
+        "Tank Dell (WR)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 184,
+      "round": 14,
+      "owner": "Nate West",
+      "provisional": false,
+      "player": "Nick Bellore",
+      "position": "RB",
+      "takenOver": [
+        "Braelon Allen (RB)",
+        "Mike Washington Jr. (RB)",
+        "Kyler Murray (QB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 185,
+      "round": 14,
+      "owner": "Demetri Clark",
+      "provisional": false,
+      "player": "Tyreek Hill",
+      "position": "WR",
+      "takenOver": [
+        "Brandon Aiyuk (WR)",
+        "Tank Dell (WR)",
+        "Aaron Rodgers (QB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 186,
+      "round": 14,
+      "owner": "Christian Graham",
+      "provisional": false,
+      "player": "Brandon Aiyuk",
+      "position": "WR",
+      "takenOver": [
+        "Tank Dell (WR)",
+        "Braelon Allen (RB)",
+        "Justin Herbert (QB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 187,
+      "round": 14,
+      "owner": "Bruce Edwards",
+      "provisional": false,
+      "player": "Justice Hill",
+      "position": "RB",
+      "takenOver": [
+        "Joe Mixon (RB)",
+        "Braelon Allen (RB)",
+        "Mike Washington Jr. (RB)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
+    },
+    {
+      "overallPick": 188,
+      "round": 14,
+      "owner": "Jan Graham",
+      "provisional": false,
+      "player": "Mike Washington Jr.",
+      "position": "RB",
+      "takenOver": [
+        "Nyheim Hines (RB)",
+        "Keenan Allen (WR)",
+        "Braelon Allen (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 189,
+      "round": 14,
+      "owner": "Tony Dorsey",
+      "provisional": true,
+      "player": "Najee Harris",
+      "position": "RB",
+      "takenOver": [
+        "Braelon Allen (RB)",
+        "Tank Dell (WR)",
+        "Chris Bell (WR)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
+    },
+    {
+      "overallPick": 190,
+      "round": 14,
+      "owner": "LOZELL STYLES",
+      "provisional": false,
+      "player": "Darnell Mooney",
+      "position": "WR",
+      "takenOver": [
+        "Christian Kirk (WR)",
+        "Amari Cooper (WR)",
+        "Braelon Allen (RB)"
+      ],
+      "winningDrive": "value",
+      "winningDriveLabel": "board value"
+    },
+    {
+      "overallPick": 191,
+      "round": 14,
+      "owner": "Sheldon deRoux",
+      "provisional": false,
+      "player": "Braelon Allen",
+      "position": "RB",
+      "takenOver": [
+        "Amari Cooper (WR)",
+        "Keaton Mitchell (RB)",
+        "Tank Dell (WR)"
+      ],
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run"
+    },
+    {
+      "overallPick": 192,
+      "round": 14,
+      "owner": "Marcus Reese",
+      "provisional": true,
+      "player": "Antonio Williams",
+      "position": "WR",
+      "takenOver": [
+        "Keaton Mitchell (RB)",
+        "Jonah Coleman (RB)",
+        "Jaydon Blue (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 193,
+      "round": 14,
+      "owner": "Rod Sellers",
+      "provisional": false,
+      "player": "Jonah Coleman",
+      "position": "RB",
+      "takenOver": [
+        "Keaton Mitchell (RB)",
+        "Jaydon Blue (RB)",
+        "Deshaun Watson (QB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 194,
+      "round": 14,
+      "owner": "Marlon Moore",
+      "provisional": false,
+      "player": "Ja'Kobi Lane",
+      "position": "WR",
+      "takenOver": [
+        "Tank Dell (WR)",
+        "Chris Bell (WR)",
+        "C.J. Stroud (QB)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
+    },
+    {
+      "overallPick": 195,
+      "round": 14,
+      "owner": "Steffon Bizzell",
+      "provisional": false,
+      "player": "Jalen Nailor",
+      "position": "WR",
+      "takenOver": [
+        "Antonio Gibson (RB)",
+        "Marvin Mims Jr. (WR)",
+        "Keaton Mitchell (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 196,
+      "round": 14,
+      "owner": "Mark Deroux",
+      "provisional": false,
+      "player": "Amari Cooper",
+      "position": "WR",
+      "takenOver": [
+        "Christian Kirk (WR)",
+        "Keaton Mitchell (RB)",
+        "Jaydon Blue (RB)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
+    },
+    {
+      "overallPick": 197,
+      "round": 15,
+      "owner": "Mark Deroux",
+      "provisional": false,
+      "player": "Dylan Sampson",
+      "position": "RB",
+      "takenOver": [
+        "Antonio Gibson (RB)",
+        "Raheem Mostert (RB)",
+        "Keaton Mitchell (RB)"
+      ],
+      "winningDrive": "contrarian",
+      "winningDriveLabel": "fading the run"
+    },
+    {
+      "overallPick": 198,
+      "round": 15,
+      "owner": "Steffon Bizzell",
+      "provisional": false,
+      "player": "Jordan James",
+      "position": "RB",
+      "takenOver": [
+        "Antonio Gibson (RB)",
+        "Raheem Mostert (RB)",
+        "Keaton Mitchell (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 199,
+      "round": 15,
+      "owner": "Marlon Moore",
+      "provisional": false,
+      "player": "Isaac TeSlaa",
+      "position": "WR",
+      "takenOver": [
+        "Tank Dell (WR)",
+        "Chris Bell (WR)",
+        "C.J. Stroud (QB)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
+    },
+    {
+      "overallPick": 200,
+      "round": 15,
+      "owner": "Rod Sellers",
+      "provisional": false,
+      "player": "Nicholas Singleton",
+      "position": "RB",
+      "takenOver": [
+        "Keaton Mitchell (RB)",
+        "Jaydon Blue (RB)",
+        "Deshaun Watson (QB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 201,
+      "round": 15,
+      "owner": "Marcus Reese",
+      "provisional": true,
+      "player": "Christian Kirk",
+      "position": "WR",
+      "takenOver": [
+        "Keaton Mitchell (RB)",
+        "Jaydon Blue (RB)",
+        "Ray Davis (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 202,
+      "round": 15,
+      "owner": "Sheldon deRoux",
+      "provisional": false,
+      "player": "Kyler Murray",
+      "position": "QB",
+      "takenOver": [
+        "Tank Dell (WR)",
+        "Chris Bell (WR)",
+        "Zachariah Branch (WR)"
+      ],
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run"
+    },
+    {
+      "overallPick": 203,
+      "round": 15,
+      "owner": "LOZELL STYLES",
+      "provisional": false,
+      "player": "Antonio Gibson",
+      "position": "RB",
+      "takenOver": [
+        "Austin Ekeler (RB)",
+        "Keaton Mitchell (RB)",
+        "Jaydon Blue (RB)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
+    },
+    {
+      "overallPick": 204,
+      "round": 15,
+      "owner": "Tony Dorsey",
+      "provisional": true,
+      "player": "Baker Mayfield",
+      "position": "QB",
+      "takenOver": [
+        "Tank Dell (WR)",
+        "Chris Bell (WR)",
+        "Zachariah Branch (WR)"
+      ],
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run"
+    },
+    {
+      "overallPick": 205,
+      "round": 15,
+      "owner": "Jan Graham",
+      "provisional": false,
+      "player": "Nyheim Hines",
+      "position": "RB",
+      "takenOver": [
+        "Keenan Allen (WR)",
+        "Tank Dell (WR)",
+        "Chris Bell (WR)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
+    },
+    {
+      "overallPick": 206,
+      "round": 15,
+      "owner": "Bruce Edwards",
+      "provisional": false,
+      "player": "Jaydon Blue",
+      "position": "RB",
+      "takenOver": [
+        "Joe Mixon (RB)",
+        "Keaton Mitchell (RB)",
+        "Ray Davis (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 207,
+      "round": 15,
+      "owner": "Christian Graham",
+      "provisional": false,
+      "player": "Ray Davis",
+      "position": "RB",
+      "takenOver": [
+        "Keaton Mitchell (RB)",
+        "Emmett Johnson (RB)",
+        "Justin Herbert (QB)"
+      ],
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run"
+    },
+    {
+      "overallPick": 208,
+      "round": 15,
+      "owner": "Demetri Clark",
+      "provisional": false,
+      "player": "Chris Bell",
+      "position": "WR",
+      "takenOver": [
+        "Tank Dell (WR)",
+        "Zachariah Branch (WR)",
+        "Aaron Rodgers (QB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 209,
+      "round": 15,
+      "owner": "Nate West",
+      "provisional": false,
+      "player": "Emmett Johnson",
+      "position": "RB",
+      "takenOver": [
+        "Keaton Mitchell (RB)",
+        "MarShawn Lloyd (RB)",
+        "Aaron Rodgers (QB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 210,
+      "round": 15,
+      "owner": "Randy Broner Jr",
+      "provisional": false,
+      "player": "Zachariah Branch",
+      "position": "WR",
+      "takenOver": [
+        "Tyler Boyd (WR)",
+        "DeAndre Hopkins (WR)",
+        "Tank Dell (WR)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 211,
+      "round": 16,
+      "owner": "Randy Broner Jr",
+      "provisional": false,
+      "player": "Isaiah Bond",
+      "position": "WR",
+      "takenOver": [
+        "Tyler Boyd (WR)",
+        "DeAndre Hopkins (WR)",
+        "Tank Dell (WR)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 212,
+      "round": 16,
+      "owner": "Nate West",
+      "provisional": false,
+      "player": "C.J. Stroud",
+      "position": "QB",
+      "takenOver": [
+        "Aaron Rodgers (QB)",
+        "Deshaun Watson (QB)",
+        "Justin Herbert (QB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 213,
+      "round": 16,
+      "owner": "Demetri Clark",
+      "provisional": false,
+      "player": "Sam Darnold",
+      "position": "QB",
+      "takenOver": [
+        "Aaron Rodgers (QB)",
+        "Philip Rivers (QB)",
+        "Justin Herbert (QB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 214,
+      "round": 16,
+      "owner": "Christian Graham",
+      "provisional": false,
+      "player": "Deshaun Watson",
+      "position": "QB",
+      "takenOver": [
+        "Justin Herbert (QB)",
+        "Aaron Rodgers (QB)",
+        "Philip Rivers (QB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 215,
+      "round": 16,
+      "owner": "Bruce Edwards",
+      "provisional": false,
+      "player": "J.J. McCarthy",
+      "position": "QB",
+      "takenOver": [
+        "Geno Smith (QB)",
+        "Joe Flacco (QB)",
+        "Justin Herbert (QB)"
+      ],
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run"
+    },
+    {
+      "overallPick": 216,
+      "round": 16,
+      "owner": "Jan Graham",
+      "provisional": false,
+      "player": "Keenan Allen",
+      "position": "WR",
+      "takenOver": [
+        "JuJu Smith-Schuster (WR)",
+        "Tank Dell (WR)",
+        "Kayshon Boutte (WR)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
+    },
+    {
+      "overallPick": 217,
+      "round": 16,
+      "owner": "Tony Dorsey",
+      "provisional": true,
+      "player": "Kayshon Boutte",
+      "position": "WR",
+      "takenOver": [
+        "Tank Dell (WR)",
+        "KaVontae Turpin (WR)",
+        "Devontez Walker (WR)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
+    },
+    {
+      "overallPick": 218,
+      "round": 16,
+      "owner": "LOZELL STYLES",
+      "provisional": false,
+      "player": "Deuce Vaughn",
+      "position": "RB",
+      "takenOver": [
+        "Austin Ekeler (RB)",
+        "Khalil Herbert (RB)",
+        "Keaton Mitchell (RB)"
+      ],
+      "winningDrive": "value",
+      "winningDriveLabel": "board value"
+    },
+    {
+      "overallPick": 219,
+      "round": 16,
+      "owner": "Sheldon deRoux",
+      "provisional": false,
+      "player": "Malachi Fields",
+      "position": "WR",
+      "takenOver": [
+        "Adam Thielen (WR)",
+        "Elijah Moore (WR)",
+        "Tank Dell (WR)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need"
+    },
+    {
+      "overallPick": 220,
+      "round": 16,
+      "owner": "Marcus Reese",
+      "provisional": true,
+      "player": "Clyde Edwards-Helaire",
+      "position": "RB",
+      "takenOver": [
+        "Keaton Mitchell (RB)",
+        "MarShawn Lloyd (RB)",
+        "Kaelon Black (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 221,
+      "round": 16,
+      "owner": "Rod Sellers",
+      "provisional": false,
+      "player": "Aaron Rodgers",
+      "position": "QB",
+      "takenOver": [
+        "Philip Rivers (QB)",
+        "Jameis Winston (QB)",
+        "Justin Herbert (QB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 222,
+      "round": 16,
+      "owner": "Marlon Moore",
+      "provisional": false,
+      "player": "Bryce Young",
+      "position": "QB",
+      "takenOver": [
+        "Tua Tagovailoa (QB)",
+        "Justin Herbert (QB)",
+        "Tyler Shough (QB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff"
+    },
+    {
+      "overallPick": 223,
+      "round": 16,
+      "owner": "Steffon Bizzell",
+      "provisional": false,
+      "player": "Austin Ekeler",
+      "position": "RB",
+      "takenOver": [
+        "Raheem Mostert (RB)",
+        "Keaton Mitchell (RB)",
+        "MarShawn Lloyd (RB)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft"
+    },
+    {
+      "overallPick": 224,
+      "round": 16,
+      "owner": "Mark Deroux",
+      "provisional": false,
+      "player": "Raheem Blackshear",
+      "position": "RB",
+      "takenOver": [
+        "Raheem Mostert (RB)",
+        "Dalvin Cook (RB)",
+        "Keaton Mitchell (RB)"
+      ],
+      "winningDrive": "value",
+      "winningDriveLabel": "board value"
     }
   ]
 }

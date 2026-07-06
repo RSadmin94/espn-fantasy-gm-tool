@@ -27,6 +27,13 @@ export type DriveFeatures = Record<DriveName, number>;
 
 export type TerrainLookup = Map<number, Map<string, PlayerTerrainCard>>;
 
+export type PositionScarcity = {
+  availCount: number;
+  tier12Remaining: number;
+};
+
+export type ScarcityByPos = Map<string, PositionScarcity>;
+
 export function buildTerrainLookup(terrains: Map<number, SeasonTerrain>): TerrainLookup {
   const out: TerrainLookup = new Map();
   for (const [season, terrain] of terrains) {
@@ -50,6 +57,7 @@ export function computeDriveFeatures(args: {
   terrainLookup: TerrainLookup;
   ownerRosterCounts: Record<string, number>;
   ownerPriorPlayerKeys: Set<string>;
+  scarcityByPos?: ScarcityByPos;
 }): DriveFeatures {
   const { record, candidateName, candidatePosition, terrainLookup, ownerRosterCounts, ownerPriorPlayerKeys } = args;
   const pos = normalizePosition(candidatePosition);
@@ -60,14 +68,22 @@ export function computeDriveFeatures(args: {
 
   const valueNorm = (terrainFor(terrainLookup, record.season, candidateName)?.valueScore ?? 50) / 100;
 
-  const available = record.availableSet;
-  const availSamePos = available.filter((p) => normalizePosition(p.position) === pos);
-  const tier12Remaining = availSamePos.filter((p) => {
-    const t = terrainFor(terrainLookup, record.season, p.playerName);
-    return t && (t.tier === "T1" || t.tier === "T2");
-  }).length;
-  const scarcityTierCliff =
-    availSamePos.length > 0 ? Math.max(0, 1 - tier12Remaining / Math.min(3, availSamePos.length)) : 0;
+  let scarcityTierCliff = 0;
+  if (args.scarcityByPos) {
+    const s = args.scarcityByPos.get(pos);
+    if (s && s.availCount > 0) {
+      scarcityTierCliff = Math.max(0, 1 - s.tier12Remaining / Math.min(3, s.availCount));
+    }
+  } else {
+    const available = record.availableSet;
+    const availSamePos = available.filter((p) => normalizePosition(p.position) === pos);
+    const tier12Remaining = availSamePos.filter((p) => {
+      const t = terrainFor(terrainLookup, record.season, p.playerName);
+      return t && (t.tier === "T1" || t.tier === "T2");
+    }).length;
+    scarcityTierCliff =
+      availSamePos.length > 0 ? Math.max(0, 1 - tier12Remaining / Math.min(3, availSamePos.length)) : 0;
+  }
 
   const runPos = record.roomState.runInProgress?.position ?? null;
   const herdFomo = runPos === pos ? 1 : 0;

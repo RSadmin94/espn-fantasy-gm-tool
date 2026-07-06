@@ -1,165 +1,286 @@
 GATE 5 (FULL) — 14-team simulated draft · league 457622 only
-Season 2026 · seed 457622 · 117/224 picks · partial board (~190 skill names + K/IDP fillers)
+Season 2026 · seed 457622 · 224/224 picks · ESPN board 1020 (K 56 · DP 131)
 Lineup (espn_reliable): QB1 RB1 WR2 TE1 FLEX2 DP1 K1 · bench 5
 steven hibbard: departed — board context only, no sim seat.
 
 ── PICK-BY-PICK (draft order) ──
 
-#1 R1 · Mark Deroux · Dak Prescott (QB) · over Puka Nacua (WR), Ja'Marr Chase (WR), Jaxon Smith-Njigba (WR) · comfort re-draft
-#2 R1 · Steffon Bizzell · Jahmyr Gibbs (RB) · over Christian McCaffrey (RB), Jaxon Smith-Njigba (WR), Puka Nacua (WR) · board value
-#3 R1 · Marlon Moore · Amon-Ra St. Brown (WR) · over Ja'Marr Chase (WR), Puka Nacua (WR), Jaxon Smith-Njigba (WR) · early WR tilt
-#4 R1 · Rod Sellers · Bijan Robinson (RB) · over Christian McCaffrey (RB), Jaxon Smith-Njigba (WR), Puka Nacua (WR) · early RB tilt
-#5 R1 · Marcus Reese [PROVISIONAL] · Jonathan Taylor (RB) · over Puka Nacua (WR), Ja'Marr Chase (WR), Jaxon Smith-Njigba (WR) · roster need
-#6 R1 · Sheldon deRoux · Puka Nacua (WR) · over Christian McCaffrey (RB), De'Von Achane (RB), George Pickens (WR) · tier urgency
-#7 R1 · LOZELL STYLES · Jaxon Smith-Njigba (WR) · over Ja'Marr Chase (WR), George Pickens (WR), Christian McCaffrey (RB) · tier urgency
-#8 R1 · Tony Dorsey [PROVISIONAL] · De'Von Achane (RB) · over Ashton Jeanty (RB), Nico Collins (WR), George Pickens (WR) · early RB tilt
-#9 R1 · Jan Graham · Drake Maye (QB) · over Ja'Marr Chase (WR), George Pickens (WR), Nico Collins (WR) · board value
-#10 R1 · Bruce Edwards · Christian McCaffrey (RB) · over Nico Collins (WR), George Pickens (WR), Ja'Marr Chase (WR) · early RB tilt
-#11 R1 · Christian Graham · Nico Collins (WR) · over George Pickens (WR), Ja'Marr Chase (WR), Justin Herbert (QB) · modern WR shift
-#12 R1 · Demetri Clark · James Cook III (RB) · over Ja'Marr Chase (WR), George Pickens (WR), Chris Olave (WR) · early RB tilt
-#13 R1 · Nate West · Baker Mayfield (QB) · over Ja'Marr Chase (WR), James Cook (RB), Chris Olave (WR) · roster need
-#14 R1 · Randy Broner Jr · Jalen Hurts (QB) · over George Pickens (WR), Chris Olave (WR), Ja'Marr Chase (WR) · comfort re-draft
-#15 R2 · Randy Broner Jr · Ja'Marr Chase (WR) · over George Pickens (WR), Chris Olave (WR), James Cook (RB) · tier urgency
-#16 R2 · Nate West · Wan'Dale Robinson (WR) · over James Cook (RB), Chris Olave (WR), George Pickens (WR) · roster need
-#17 R2 · Demetri Clark · Kyle Pitts Sr. (TE) · over A.J. Brown (WR), George Pickens (WR), Chris Olave (WR) · board value
-#18 R2 · Christian Graham · Jake Ferguson (TE) · over George Pickens (WR), Derrick Henry (RB), James Cook (RB) · roster need
-#19 R2 · Bruce Edwards · Chris Olave (WR) · over A.J. Brown (WR), George Pickens (WR), Javonte Williams (RB) · tier urgency
-#20 R2 · Jan Graham · A.J. Brown (WR) · over Courtland Sutton (WR), George Pickens (WR), James Cook (RB) · tier urgency
-#21 R2 · Tony Dorsey [PROVISIONAL] · Courtland Sutton (WR) · over Zay Flowers (WR), George Pickens (WR), Ashton Jeanty (RB) · tier urgency
-#22 R2 · LOZELL STYLES · Matthew Stafford (QB) · over Derrick Henry (RB), George Pickens (WR), Zay Flowers (WR) · comfort re-draft
-#23 R2 · Sheldon deRoux · George Pickens (WR) · over Derrick Henry (RB), James Cook (RB), Zay Flowers (WR) · tier urgency
-#24 R2 · Marcus Reese [PROVISIONAL] · Zay Flowers (WR) · over Jameson Williams (WR), Deebo Samuel (WR), Travis Kelce (TE) · early WR tilt
-#25 R2 · Rod Sellers · Deebo Samuel (WR) · over Jameson Williams (WR), Rashid Shaheed (WR), James Cook (RB) · tier urgency
-#26 R2 · Marlon Moore · Patrick Mahomes (QB) · over Rashid Shaheed (WR), Jameson Williams (WR), Travis Etienne Jr. (RB) · roster need
-#27 R2 · Steffon Bizzell · Travis Kelce (TE) · over Rashid Shaheed (WR), DeVonta Smith (WR), Jameson Williams (WR) · board value
-#28 R2 · Mark Deroux · Jameson Williams (WR) · over Rashid Shaheed (WR), Tee Higgins (WR), James Cook (RB) · comfort re-draft
-#29 R3 · Mark Deroux · Travis Etienne Jr. (RB) · over James Cook (RB), Derrick Henry (RB), Trey McBride (TE) · comfort re-draft
-#30 R3 · Steffon Bizzell · Rashid Shaheed (WR) · over DeVonta Smith (WR), Tee Higgins (WR), Jaylen Waddle (WR) · comfort re-draft
-#31 R3 · Marlon Moore · Kyle Pitts (TE) · over Ashton Jeanty (RB), Derrick Henry (RB), James Cook (RB) · roster need
-#32 R3 · Rod Sellers · DeVonta Smith (WR) · over Trey McBride (TE), James Cook (RB), Derrick Henry (RB) · board value
-#33 R3 · Marcus Reese [PROVISIONAL] · Derrick Henry (RB) · over Michael Pittman Jr. (WR), Jaylen Waddle (WR), Tee Higgins (WR) · tier cliff
-#34 R3 · Sheldon deRoux · Kyren Williams (RB) · over Dallas Goedert (TE), Ashton Jeanty (RB), Jared Goff (QB) · roster need
-#35 R3 · LOZELL STYLES · Dallas Goedert (TE) · over Dalton Schultz (TE), James Cook (RB), Ashton Jeanty (RB) · board value
-#36 R3 · Tony Dorsey [PROVISIONAL] · Tyler Warren (TE) · over Michael Pittman Jr. (WR), Jaylen Waddle (WR), Tee Higgins (WR) · roster need
-#37 R3 · Jan Graham · James Cook (RB) · over Javonte Williams (RB), Ashton Jeanty (RB), Hunter Henry (TE) · board value
-#38 R3 · Bruce Edwards · Trey McBride (TE) · over Emeka Egbuka (WR), Michael Pittman Jr. (WR), Jaylen Waddle (WR) · roster need
-#39 R3 · Christian Graham · Ashton Jeanty (RB) · over Tee Higgins (WR), Chase Brown (RB), Josh Jacobs (RB) · roster need
-#40 R3 · Demetri Clark · Josh Jacobs (RB) · over Tee Higgins (WR), Jaylen Waddle (WR), Michael Pittman Jr. (WR) · board value
-#41 R3 · Nate West · Jaylen Waddle (WR) · over Tee Higgins (WR), Hunter Henry (TE), Chase Brown (RB) · comfort re-draft
-#42 R3 · Randy Broner Jr · Brock Bowers (TE) · over DK Metcalf (WR), Chase Brown (RB), Javonte Williams (RB) · roster need
-#43 R4 · Randy Broner Jr · DK Metcalf (WR) · over TreVeyon Henderson (RB), Chase Brown (RB), Javonte Williams (RB) · comfort re-draft
-#44 R4 · Nate West · Javonte Williams (RB) · over TreVeyon Henderson (RB), Chase Brown (RB), Hunter Henry (TE) · roster need
-#45 R4 · Demetri Clark · Michael Pittman Jr. (WR) · over Tee Higgins (WR), Emeka Egbuka (WR), Josh Allen (QB) · board value
-#46 R4 · Christian Graham · Emeka Egbuka (WR) · over Tee Higgins (WR), Justin Jefferson (WR), Jordan Love (QB) · tier cliff
-#47 R4 · Bruce Edwards · Ladd McConkey (WR) · over Justin Jefferson (WR), Tee Higgins (WR), D'Andre Swift (RB) · joining the run
-#48 R4 · Jan Graham · Stefon Diggs (WR) · over Tee Higgins (WR), Justin Jefferson (WR), Hunter Henry (TE) · comfort re-draft
-#49 R4 · Tony Dorsey [PROVISIONAL] · Jauan Jennings (WR) · over Jakobi Meyers (WR), Justin Jefferson (WR), Tee Higgins (WR) · joining the run
-#50 R4 · LOZELL STYLES · Chase Brown (RB) · over Tee Higgins (WR), TreVeyon Henderson (RB), Jaylen Warren (RB) · comfort re-draft
-#51 R4 · Sheldon deRoux · Josh Allen (QB) · over Bo Nix (QB), Jared Goff (QB), C.J. Stroud (QB) · roster need
-#52 R4 · Marcus Reese [PROVISIONAL] · Trevor Lawrence (QB) · over Romeo Doubs (WR), Justin Jefferson (WR), Tee Higgins (WR) · roster need
-#53 R4 · Rod Sellers · Bo Nix (QB) · over Jaylen Warren (RB), Keenan Allen (WR), Jared Goff (QB) · board value
-#54 R4 · Marlon Moore · Jaylen Warren (RB) · over Saquon Barkley (RB), Justin Jefferson (WR), D'Andre Swift (RB) · roster need
-#55 R4 · Steffon Bizzell · Keenan Allen (WR) · over Saquon Barkley (RB), Tee Higgins (WR), Justin Jefferson (WR) · comfort re-draft
-#56 R4 · Mark Deroux · TreVeyon Henderson (RB) · over Tee Higgins (WR), Justin Jefferson (WR), Romeo Doubs (WR) · roster need
-#57 R5 · Mark Deroux · Dalton Schultz (TE) · over Tee Higgins (WR), Justin Jefferson (WR), Romeo Doubs (WR) · roster need
-#58 R5 · Steffon Bizzell · Tee Higgins (WR) · over Saquon Barkley (RB), Davante Adams (WR), Jared Goff (QB) · board value
-#59 R5 · Marlon Moore · Justin Jefferson (WR) · over Romeo Doubs (WR), Quentin Johnston (WR), Saquon Barkley (RB) · roster need
-#60 R5 · Rod Sellers · Colston Loveland (TE) · over Khalil Shakir (WR), Hunter Henry (TE), Rico Dowdle (RB) · roster need
-#61 R5 · Marcus Reese [PROVISIONAL] · Tetairoa McMillan (WR) · over Quentin Johnston (WR), Romeo Doubs (WR), Hunter Henry (TE) · roster need
-#62 R5 · Sheldon deRoux · D'Andre Swift (RB) · over George Kittle (TE), Quentin Johnston (WR), Romeo Doubs (WR) · roster need
-#63 R5 · LOZELL STYLES · Jared Goff (QB) · over Davante Adams (WR), Romeo Doubs (WR), Quentin Johnston (WR) · board value
-#64 R5 · Tony Dorsey [PROVISIONAL] · Jakobi Meyers (WR) · over Justin Herbert (QB), Lamar Jackson (QB), Caleb Williams (QB) · comfort re-draft
-#65 R5 · Jan Graham · Hunter Henry (TE) · over George Kittle (TE), Breece Hall (RB), Rico Dowdle (RB) · comfort re-draft
-#66 R5 · Bruce Edwards · CeeDee Lamb (WR) · over Lamar Jackson (QB), Davante Adams (WR), Caleb Williams (QB) · tier cliff
-#67 R5 · Christian Graham · Rico Dowdle (RB) · over Caleb Williams (QB), Jordan Love (QB), Justin Herbert (QB) · tier cliff
-#68 R5 · Demetri Clark · C.J. Stroud (QB) · over Lamar Jackson (QB), Romeo Doubs (WR), Quentin Johnston (WR) · board value
-#69 R5 · Nate West · Breece Hall (RB) · over Saquon Barkley (RB), Tucker Kraft (TE), George Kittle (TE) · roster need
-#70 R5 · Randy Broner Jr · Davante Adams (WR) · over Kenneth Walker III (RB), Saquon Barkley (RB), RJ Harvey (RB) · roster need
-#71 R6 · Randy Broner Jr · RJ Harvey (RB) · over Kenneth Walker III (RB), Saquon Barkley (RB), Romeo Doubs (WR) · roster need
-#72 R6 · Nate West · Saquon Barkley (RB) · over Tucker Kraft (TE), George Kittle (TE), Khalil Shakir (WR) · comfort re-draft
-#73 R6 · Demetri Clark · Quentin Johnston (WR) · over Jordan Addison (WR), Romeo Doubs (WR), Khalil Shakir (WR) · roster need
-#74 R6 · Christian Graham · Romeo Doubs (WR) · over Caleb Williams (QB), Jordan Love (QB), Justin Herbert (QB) · tier cliff
-#75 R6 · Bruce Edwards · Lamar Jackson (QB) · over Tony Pollard (RB), Quinshon Judkins (RB), Brock Purdy (QB) · comfort re-draft
-#76 R6 · Jan Graham · Khalil Shakir (WR) · over Tony Pollard (RB), David Montgomery (RB), Kenneth Walker III (RB) · board value
-#77 R6 · Tony Dorsey [PROVISIONAL] · Christian Watson (WR) · over Brock Purdy (QB), Kenneth Walker III (RB), Justin Herbert (QB) · joining the run
-#78 R6 · LOZELL STYLES · Kenneth Walker III (RB) · over Jordan Addison (WR), Drake London (WR), DJ Moore (WR) · board value
-#79 R6 · Sheldon deRoux · Quinshon Judkins (RB) · over George Kittle (TE), Drake London (WR), Mark Andrews (TE) · roster need
-#80 R6 · Marcus Reese [PROVISIONAL] · Drake London (WR) · over Mark Andrews (TE), Sam LaPorta (TE), Tucker Kraft (TE) · tier cliff
-#81 R6 · Rod Sellers · Tony Pollard (RB) · over Aaron Jones (RB), Tre Tucker (WR), David Montgomery (RB) · tier cliff
-#82 R6 · Marlon Moore · Omarion Hampton (RB) · over David Montgomery (RB), Zach Charbonnet (RB), DJ Moore (WR) · joining the run
-#83 R6 · Steffon Bizzell · Zach Charbonnet (RB) · over Aaron Jones (RB), Aaron Rodgers (QB), David Montgomery (RB) · tier cliff
-#84 R6 · Mark Deroux · DJ Moore (WR) · over Jordan Addison (WR), Jerry Jeudy (WR), Aaron Jones (RB) · roster need
-#85 R7 · Mark Deroux · Luther Burden III (WR) · over Jordan Addison (WR), Jerry Jeudy (WR), Aaron Jones (RB) · roster need
-#86 R7 · Steffon Bizzell · Justin Herbert (QB) · over Aaron Rodgers (QB), Jordan Love (QB), Aaron Jones (RB) · board value
-#87 R7 · Marlon Moore · Jordan Addison (WR) · over Rashee Rice (WR), Jerry Jeudy (WR), David Montgomery (RB) · roster need
-#88 R7 · Rod Sellers · David Montgomery (RB) · over Tre Tucker (WR), Jerry Jeudy (WR), Rashee Rice (WR) · tier cliff
-#89 R7 · Marcus Reese [PROVISIONAL] · Dalton Kincaid (TE) · over Brenton Strange (TE), Mark Andrews (TE), Sam LaPorta (TE) · roster need
-#90 R7 · Sheldon deRoux · Brock Purdy (QB) · over George Kittle (TE), Terry McLaurin (WR), Brenton Strange (TE) · joining the run
-#91 R7 · LOZELL STYLES · Chuba Hubbard (RB) · over Brian Thomas Jr. (WR), Roquan Smith (DP), Jerry Jeudy (WR) · comfort re-draft
-#92 R7 · Tony Dorsey [PROVISIONAL] · Rashee Rice (WR) · over Joe Burrow (QB), Aaron Rodgers (QB), Rhamondre Stevenson (RB) · joining the run
-#93 R7 · Jan Graham · Roquan Smith (DP) · over Bucky Irving (RB), Foyesade Oluokun (DP), Aaron Jones Sr. (RB) · tier cliff
-#94 R7 · Bruce Edwards · Terry McLaurin (WR) · over Rhamondre Stevenson (RB), Foyesade Oluokun (DP), Aaron Jones Sr. (RB) · comfort re-draft
-#95 R7 · Christian Graham · Aaron Jones (RB) · over Aaron Rodgers (QB), Caleb Williams (QB), Jordan Love (QB) · tier cliff
-#96 R7 · Demetri Clark · Zack Baun (DP) · over Jerry Jeudy (WR), Foyesade Oluokun (DP), Zaire Franklin (DP) · roster need
-#97 R7 · Nate West · Sam LaPorta (TE) · over Jerry Jeudy (WR), T.J. Hockenson (TE), Brenton Strange (TE) · tier cliff
-#98 R7 · Randy Broner Jr · Rome Odunze (WR) · over Rhamondre Stevenson (RB), Foyesade Oluokun (DP), Zaire Franklin (DP) · tier cliff
-#99 R8 · Randy Broner Jr · Bucky Irving (RB) · over T.J. Watt (DP), Rhamondre Stevenson (RB), Foyesade Oluokun (DP) · roster need
-#100 R8 · Nate West · Foyesade Oluokun (DP) · over Jerry Jeudy (WR), Zaire Franklin (DP), Myles Garrett (DP) · comfort re-draft
-#101 R8 · Demetri Clark · Aaron Jones Sr. (RB) · over Jerry Jeudy (WR), Brian Thomas Jr. (WR), Marvin Harrison Jr. (WR) · tier cliff
-#102 R8 · Christian Graham · Bobby Wagner (DP) · over Aaron Rodgers (QB), Caleb Williams (QB), Jordan Love (QB) · tier cliff
-#103 R8 · Bruce Edwards · Jerry Jeudy (WR) · over Zaire Franklin (DP), Rhamondre Stevenson (RB), Myles Garrett (DP) · tier cliff
-#104 R8 · Jan Graham · Maxx Crosby (DP) · over Brandon Aubrey (K), Myles Garrett (DP), T.J. Watt (DP) · tier cliff
-#105 R8 · Tony Dorsey [PROVISIONAL] · Myles Garrett (DP) · over Najee Harris (RB), Joe Burrow (QB), Aaron Rodgers (QB) · roster need
-#106 R8 · LOZELL STYLES · Marvin Harrison Jr. (WR) · over Brian Thomas Jr. (WR), Cooper Kupp (WR), Zaire Franklin (DP) · board value
-#107 R8 · Sheldon deRoux · Brenton Strange (TE) · over George Kittle (TE), Xavier Worthy (WR), T.J. Hockenson (TE) · roster need
-#108 R8 · Marcus Reese [PROVISIONAL] · Brian Thomas Jr. (WR) · over Zaire Franklin (DP), T.J. Watt (DP), E.J. Speed (DP) · tier cliff
-#109 R8 · Rod Sellers · Zaire Franklin (DP) · over Quincy Williams (DP), C.J. Mosley (DP), Tre Tucker (WR) · tier cliff
-#110 R8 · Marlon Moore · Quincy Williams (DP) · over E.J. Speed (DP), C.J. Mosley (DP), T.J. Watt (DP) · roster need
-#111 R8 · Steffon Bizzell · Xavier Worthy (WR) · over T.J. Watt (DP), E.J. Speed (DP), C.J. Mosley (DP) · tier cliff
-#112 R8 · Mark Deroux · Tre Tucker (WR) · over T.J. Watt (DP), E.J. Speed (DP), C.J. Mosley (DP) · tier cliff
-#113 R9 · Mark Deroux · C.J. Mosley (DP) · over T.J. Watt (DP), E.J. Speed (DP) · roster slot fill (must fill DP before draft ends)
-#114 R9 · Steffon Bizzell · T.J. Watt (DP) · over E.J. Speed (DP) · roster slot fill (must fill DP before draft ends)
-#115 R9 · Marlon Moore · J.K. Dobbins (RB) · over Justin Tucker (K), Brandon Aubrey (K), Chase McLaughlin (K) · tier cliff
-#116 R9 · Rod Sellers · Travis Hunter (WR) · over Marquise Brown (WR), Cooper Kupp (WR), Jayden Higgins (WR) · comfort re-draft
-#117 R9 · Marcus Reese [PROVISIONAL] · E.J. Speed (DP) · over (thin board) · roster slot fill (must fill DP before draft ends)
+#1 R1 · Mark Deroux · Jahmyr Gibbs (RB) · over Puka Nacua (WR), Ja'Marr Chase (WR), CeeDee Lamb (WR) · early RB tilt
+#2 R1 · Steffon Bizzell · De'Von Achane (RB) · over Christian McCaffrey (RB), Saquon Barkley (RB), Puka Nacua (WR) · board value
+#3 R1 · Marlon Moore · Justin Jefferson (WR) · over Amon-Ra St. Brown (WR), Puka Nacua (WR), Ja'Marr Chase (WR) · early WR tilt
+#4 R1 · Rod Sellers · Jaxon Smith-Njigba (WR) · over Amon-Ra St. Brown (WR), Bijan Robinson (RB), Christian McCaffrey (RB) · tier urgency
+#5 R1 · Marcus Reese [PROVISIONAL] · James Cook III (RB) · over Puka Nacua (WR), Ja'Marr Chase (WR), Amon-Ra St. Brown (WR) · roster need
+#6 R1 · Sheldon deRoux · Amon-Ra St. Brown (WR) · over CeeDee Lamb (WR), Drake London (WR), Christian McCaffrey (RB) · tier urgency
+#7 R1 · LOZELL STYLES · Ja'Marr Chase (WR) · over Drake London (WR), Puka Nacua (WR), CeeDee Lamb (WR) · comfort re-draft
+#8 R1 · Tony Dorsey [PROVISIONAL] · Omarion Hampton (RB) · over Puka Nacua (WR), CeeDee Lamb (WR), Drake London (WR) · early RB tilt
+#9 R1 · Jan Graham · Christian McCaffrey (RB) · over Jonathan Taylor (RB), Breece Hall (RB), Puka Nacua (WR) · early RB tilt
+#10 R1 · Bruce Edwards · Bijan Robinson (RB) · over Nico Collins (WR), Rashee Rice (WR), Puka Nacua (WR) · early RB tilt
+#11 R1 · Christian Graham · Derrick Henry (RB) · over CeeDee Lamb (WR), Puka Nacua (WR), Drake London (WR) · joining the run
+#12 R1 · Demetri Clark · Saquon Barkley (RB) · over Rashee Rice (WR), Puka Nacua (WR), CeeDee Lamb (WR) · early RB tilt
+#13 R1 · Nate West · Brock Bowers (TE) · over Puka Nacua (WR), CeeDee Lamb (WR), Drake London (WR) · fading the run
+#14 R1 · Randy Broner Jr · Jeremiyah Love (RB) · over A.J. Brown (WR), George Pickens (WR), Jonathan Taylor (RB) · early RB tilt
+#15 R2 · Randy Broner Jr · Jonathan Taylor (RB) · over A.J. Brown (WR), George Pickens (WR), Puka Nacua (WR) · early RB tilt
+#16 R2 · Nate West · Lamar Jackson (QB) · over Zay Flowers (WR), Puka Nacua (WR), CeeDee Lamb (WR) · comfort re-draft
+#17 R2 · Demetri Clark · George Pickens (WR) · over Rashee Rice (WR), A.J. Brown (WR), Puka Nacua (WR) · board value
+#18 R2 · Christian Graham · Kenneth Walker III (RB) · over CeeDee Lamb (WR), Puka Nacua (WR), Drake London (WR) · comfort re-draft
+#19 R2 · Bruce Edwards · Nico Collins (WR) · over Rashee Rice (WR), Puka Nacua (WR), CeeDee Lamb (WR) · comfort re-draft
+#20 R2 · Jan Graham · Drake London (WR) · over Puka Nacua (WR), CeeDee Lamb (WR), Rashee Rice (WR) · tier urgency
+#21 R2 · Tony Dorsey [PROVISIONAL] · Josh Jacobs (RB) · over Puka Nacua (WR), CeeDee Lamb (WR), Rashee Rice (WR) · early RB tilt
+#22 R2 · LOZELL STYLES · Malik Nabers (WR) · over A.J. Brown (WR), Chase Brown (RB), Puka Nacua (WR) · tier urgency
+#23 R2 · Sheldon deRoux · Ashton Jeanty (RB) · over CeeDee Lamb (WR), A.J. Brown (WR), Chase Brown (RB) · early RB tilt
+#24 R2 · Marcus Reese [PROVISIONAL] · Josh Allen (QB) · over Puka Nacua (WR), CeeDee Lamb (WR), Rashee Rice (WR) · roster need
+#25 R2 · Rod Sellers · Rashee Rice (WR) · over Zay Flowers (WR), Chase Brown (RB), Breece Hall (RB) · tier urgency
+#26 R2 · Marlon Moore · Tetairoa McMillan (WR) · over Puka Nacua (WR), CeeDee Lamb (WR), A.J. Brown (WR) · early WR tilt
+#27 R2 · Steffon Bizzell · Garrett Wilson (WR) · over Chris Olave (WR), DeVonta Smith (WR), Puka Nacua (WR) · comfort re-draft
+#28 R2 · Mark Deroux · CeeDee Lamb (WR) · over Puka Nacua (WR), Chris Olave (WR), DeVonta Smith (WR) · comfort re-draft
+#29 R3 · Mark Deroux · DeVonta Smith (WR) · over Puka Nacua (WR), Chris Olave (WR), Trey McBride (TE) · comfort re-draft
+#30 R3 · Steffon Bizzell · Chris Olave (WR) · over Davante Adams (WR), Puka Nacua (WR), A.J. Brown (WR) · comfort re-draft
+#31 R3 · Marlon Moore · Travis Etienne Jr. (RB) · over Zay Flowers (WR), Davante Adams (WR), Puka Nacua (WR) · roster need
+#32 R3 · Rod Sellers · Zay Flowers (WR) · over Trey McBride (TE), Chase Brown (RB), Breece Hall (RB) · comfort re-draft
+#33 R3 · Marcus Reese [PROVISIONAL] · Cam Skattebo (RB) · over Puka Nacua (WR), A.J. Brown (WR), Davante Adams (WR) · tier cliff
+#34 R3 · Sheldon deRoux · Terry McLaurin (WR) · over A.J. Brown (WR), Puka Nacua (WR), Davante Adams (WR) · comfort re-draft
+#35 R3 · LOZELL STYLES · Davante Adams (WR) · over Chase Brown (RB), Breece Hall (RB), Kyren Williams (RB) · comfort re-draft
+#36 R3 · Tony Dorsey [PROVISIONAL] · Colston Loveland (TE) · over Puka Nacua (WR), A.J. Brown (WR), Tee Higgins (WR) · roster need
+#37 R3 · Jan Graham · Chase Brown (RB) · over Puka Nacua (WR), A.J. Brown (WR), Tee Higgins (WR) · board value
+#38 R3 · Bruce Edwards · Puka Nacua (WR) · over Emeka Egbuka (WR), Drake Maye (QB), A.J. Brown (WR) · tier cliff
+#39 R3 · Christian Graham · Kyren Williams (RB) · over Tee Higgins (WR), A.J. Brown (WR), Emeka Egbuka (WR) · comfort re-draft
+#40 R3 · Demetri Clark · Quinshon Judkins (RB) · over A.J. Brown (WR), Tee Higgins (WR), Tyler Warren (TE) · board value
+#41 R3 · Nate West · Tee Higgins (WR) · over Jaylen Waddle (WR), A.J. Brown (WR), Emeka Egbuka (WR) · roster need
+#42 R3 · Randy Broner Jr · Joe Burrow (QB) · over A.J. Brown (WR), Emeka Egbuka (WR), Ladd McConkey (WR) · roster need
+#43 R4 · Randy Broner Jr · Emeka Egbuka (WR) · over A.J. Brown (WR), Ladd McConkey (WR), Trey McBride (TE) · roster need
+#44 R4 · Nate West · Breece Hall (RB) · over Jaylen Waddle (WR), Javonte Williams (RB), Bucky Irving (RB) · roster need
+#45 R4 · Demetri Clark · Carnell Tate (WR) · over A.J. Brown (WR), Ladd McConkey (WR), Tyler Warren (TE) · board value
+#46 R4 · Christian Graham · Ladd McConkey (WR) · over A.J. Brown (WR), Jaylen Waddle (WR), Trey McBride (TE) · roster need
+#47 R4 · Bruce Edwards · Jayden Daniels (QB) · over DJ Moore (WR), A.J. Brown (WR), Jaylen Waddle (WR) · roster need
+#48 R4 · Jan Graham · DJ Moore (WR) · over A.J. Brown (WR), Jaylen Waddle (WR), Drake Maye (QB) · board value
+#49 R4 · Tony Dorsey [PROVISIONAL] · DK Metcalf (WR) · over Michael Pittman Jr. (WR), A.J. Brown (WR), Jaylen Waddle (WR) · comfort re-draft
+#50 R4 · LOZELL STYLES · D'Andre Swift (RB) · over Javonte Williams (RB), Bucky Irving (RB), TreVeyon Henderson (RB) · comfort re-draft
+#51 R4 · Sheldon deRoux · Trey McBride (TE) · over A.J. Brown (WR), Jaylen Waddle (WR), Tyler Warren (TE) · roster need
+#52 R4 · Marcus Reese [PROVISIONAL] · A.J. Brown (WR) · over Jaylen Waddle (WR), Jameson Williams (WR), Tyler Warren (TE) · roster need
+#53 R4 · Rod Sellers · Harold Fannin Jr. (TE) · over Jaylen Warren (RB), Travis Kelce (TE), Javonte Williams (RB) · board value
+#54 R4 · Marlon Moore · Jalen Hurts (QB) · over Drake Maye (QB), Jaxson Dart (QB), David Montgomery (RB) · roster need
+#55 R4 · Steffon Bizzell · Jadarian Price (RB) · over George Kittle (TE), Mike Evans (WR), Drake Maye (QB) · board value
+#56 R4 · Mark Deroux · Jaxson Dart (QB) · over Kyle Pitts Sr. (TE), Jameson Williams (WR), Drake Maye (QB) · roster need
+#57 R5 · Mark Deroux · Tyler Warren (TE) · over Kyle Pitts Sr. (TE), Jameson Williams (WR), Javonte Williams (RB) · roster need
+#58 R5 · Steffon Bizzell · Jaylen Waddle (WR) · over George Kittle (TE), Mike Evans (WR), Drake Maye (QB) · board value
+#59 R5 · Marlon Moore · Javonte Williams (RB) · over Kyle Pitts Sr. (TE), Sam LaPorta (TE), David Montgomery (RB) · roster need
+#60 R5 · Rod Sellers · David Montgomery (RB) · over Jaylen Warren (RB), Bucky Irving (RB), TreVeyon Henderson (RB) · roster need
+#61 R5 · Marcus Reese [PROVISIONAL] · Marvin Harrison Jr. (WR) · over Jameson Williams (WR), Rome Odunze (WR), Luther Burden III (WR) · tier cliff
+#62 R5 · Sheldon deRoux · Rome Odunze (WR) · over Jaylen Warren (RB), J.K. Dobbins (RB), Drake Maye (QB) · joining the run
+#63 R5 · LOZELL STYLES · Drake Maye (QB) · over Matthew Stafford (QB), Chuba Hubbard (RB), Kyle Pitts Sr. (TE) · board value
+#64 R5 · Tony Dorsey [PROVISIONAL] · Mike Evans (WR) · over Michael Pittman Jr. (WR), Jameson Williams (WR), Luther Burden III (WR) · roster need
+#65 R5 · Jan Graham · Jameson Williams (WR) · over Michael Pittman Jr. (WR), Courtland Sutton (WR), Luther Burden III (WR) · tier cliff
+#66 R5 · Bruce Edwards · Courtland Sutton (WR) · over Christian Watson (WR), Luther Burden III (WR), Michael Pittman Jr. (WR) · joining the run
+#67 R5 · Christian Graham · Luther Burden III (WR) · over Michael Pittman Jr. (WR), Alec Pierce (WR), Jordyn Tyson (WR) · joining the run
+#68 R5 · Demetri Clark · Kyle Pitts Sr. (TE) · over George Kittle (TE), Travis Kelce (TE), Michael Pittman Jr. (WR) · board value
+#69 R5 · Nate West · Christian Watson (WR) · over Michael Pittman Jr. (WR), Alec Pierce (WR), Jordyn Tyson (WR) · comfort re-draft
+#70 R5 · Randy Broner Jr · Travis Kelce (TE) · over Michael Pittman Jr. (WR), Alec Pierce (WR), Jordyn Tyson (WR) · roster need
+#71 R6 · Randy Broner Jr · Alec Pierce (WR) · over Michael Pittman Jr. (WR), Jordyn Tyson (WR), Bhayshul Tuten (RB) · roster need
+#72 R6 · Nate West · Bucky Irving (RB) · over Chuba Hubbard (RB), Michael Pittman Jr. (WR), Jordyn Tyson (WR) · roster need
+#73 R6 · Demetri Clark · Matthew Stafford (QB) · over Dak Prescott (QB), Michael Pittman Jr. (WR), Jordyn Tyson (WR) · tier cliff
+#74 R6 · Christian Graham · George Kittle (TE) · over Sam LaPorta (TE), Dak Prescott (QB), Michael Pittman Jr. (WR) · roster need
+#75 R6 · Bruce Edwards · Sam LaPorta (TE) · over Tony Pollard (RB), TreVeyon Henderson (RB), Bhayshul Tuten (RB) · roster need
+#76 R6 · Jan Graham · Chuba Hubbard (RB) · over Dak Prescott (QB), Brock Purdy (QB), Caleb Williams (QB) · board value
+#77 R6 · Tony Dorsey [PROVISIONAL] · Dak Prescott (QB) · over Brock Purdy (QB), Michael Pittman Jr. (WR), Caleb Williams (QB) · roster need
+#78 R6 · LOZELL STYLES · TreVeyon Henderson (RB) · over J.K. Dobbins (RB), Bhayshul Tuten (RB), Tony Pollard (RB) · board value
+#79 R6 · Sheldon deRoux · Caleb Williams (QB) · over Jaylen Warren (RB), J.K. Dobbins (RB), Brock Purdy (QB) · roster need
+#80 R6 · Marcus Reese [PROVISIONAL] · Parker Washington (WR) · over Dallas Goedert (TE), Michael Pittman Jr. (WR), Jordyn Tyson (WR) · tier cliff
+#81 R6 · Rod Sellers · Jordyn Tyson (WR) · over Jaylen Warren (RB), Brock Purdy (QB), Bhayshul Tuten (RB) · tier cliff
+#82 R6 · Marlon Moore · Jaylen Warren (RB) · over Dallas Goedert (TE), Michael Pittman Jr. (WR), Brian Thomas Jr. (WR) · tier cliff
+#83 R6 · Steffon Bizzell · Dallas Goedert (TE) · over Brock Purdy (QB), Chris Godwin Jr. (WR), Rashid Shaheed (WR) · tier cliff
+#84 R6 · Mark Deroux · Brock Purdy (QB) · over Rhamondre Stevenson (RB), Bhayshul Tuten (RB), Tony Pollard (RB) · tier cliff
+#85 R7 · Mark Deroux · Chris Godwin Jr. (WR) · over Rhamondre Stevenson (RB), Isiah Pacheco (RB), Bhayshul Tuten (RB) · tier cliff
+#86 R7 · Steffon Bizzell · Bhayshul Tuten (RB) · over Patrick Mahomes (QB), Trevor Lawrence (QB), Bo Nix (QB) · tier cliff
+#87 R7 · Marlon Moore · Tony Pollard (RB) · over Tucker Kraft (TE), Michael Pittman Jr. (WR), Brian Thomas Jr. (WR) · tier cliff
+#88 R7 · Rod Sellers · Michael Pittman Jr. (WR) · over Aaron Jones Sr. (RB), Rico Dowdle (RB), J.K. Dobbins (RB) · tier cliff
+#89 R7 · Marcus Reese [PROVISIONAL] · Kenneth Gainwell (RB) · over Tucker Kraft (TE), Jake Ferguson (TE), Isaiah Likely (TE) · tier cliff
+#90 R7 · Sheldon deRoux · Rachaad White (RB) · over J.K. Dobbins (RB), Aaron Jones Sr. (RB), Rico Dowdle (RB) · roster need
+#91 R7 · LOZELL STYLES · Jake Ferguson (TE) · over Tucker Kraft (TE), Isaiah Likely (TE), J.K. Dobbins (RB) · roster need
+#92 R7 · Tony Dorsey [PROVISIONAL] · Wan'Dale Robinson (WR) · over Jakobi Meyers (WR), Brian Thomas Jr. (WR), Makai Lemon (WR) · roster need
+#93 R7 · Jan Graham · Makai Lemon (WR) · over Mark Andrews (TE), Patrick Mahomes (QB), Trevor Lawrence (QB) · tier cliff
+#94 R7 · Bruce Edwards · RJ Harvey (RB) · over Rhamondre Stevenson (RB), Aaron Jones Sr. (RB), Rico Dowdle (RB) · roster need
+#95 R7 · Christian Graham · Trevor Lawrence (QB) · over Patrick Mahomes (QB), Brian Thomas Jr. (WR), Jakobi Meyers (WR) · tier cliff
+#96 R7 · Demetri Clark · J.K. Dobbins (RB) · over Jordan Addison (WR), Brian Thomas Jr. (WR), Jakobi Meyers (WR) · board value
+#97 R7 · Nate West · Travis Hunter (WR) · over Jakobi Meyers (WR), Brian Thomas Jr. (WR), Michael Wilson (WR) · tier cliff
+#98 R7 · Randy Broner Jr · Rhamondre Stevenson (RB) · over Brian Thomas Jr. (WR), Jakobi Meyers (WR), Michael Wilson (WR) · comfort re-draft
+#99 R8 · Randy Broner Jr · Rico Dowdle (RB) · over Brian Thomas Jr. (WR), Jakobi Meyers (WR), Michael Wilson (WR) · comfort re-draft
+#100 R8 · Nate West · Jakobi Meyers (WR) · over Tyjae Spears (RB), Brian Thomas Jr. (WR), Michael Wilson (WR) · comfort re-draft
+#101 R8 · Demetri Clark · Jordan Addison (WR) · over Brian Thomas Jr. (WR), Michael Wilson (WR), Matthew Golden (WR) · comfort re-draft
+#102 R8 · Christian Graham · Blake Corum (RB) · over Brian Thomas Jr. (WR), Michael Wilson (WR), Matthew Golden (WR) · tier cliff
+#103 R8 · Bruce Edwards · Matthew Golden (WR) · over Stefon Diggs (WR), Brian Thomas Jr. (WR), Michael Wilson (WR) · tier cliff
+#104 R8 · Jan Graham · KC Concepcion (WR) · over Mark Andrews (TE), Patrick Mahomes (QB), Bo Nix (QB) · tier cliff
+#105 R8 · Tony Dorsey [PROVISIONAL] · Ricky Pearsall (WR) · over Jerry Jeudy (WR), Brian Thomas Jr. (WR), Michael Wilson (WR) · joining the run
+#106 R8 · LOZELL STYLES · Bo Nix (QB) · over Brian Thomas Jr. (WR), Aaron Jones Sr. (RB), Kyle Monangai (RB) · board value
+#107 R8 · Sheldon deRoux · Michael Wilson (WR) · over Xavier Worthy (WR), Brian Thomas Jr. (WR), Josh Downs (WR) · joining the run
+#108 R8 · Marcus Reese [PROVISIONAL] · Josh Downs (WR) · over Tucker Kraft (TE), Isaiah Likely (TE), Mark Andrews (TE) · joining the run
+#109 R8 · Rod Sellers · Aaron Jones Sr. (RB) · over Patrick Mahomes (QB), Justin Herbert (QB), Khalil Shakir (WR) · tier cliff
+#110 R8 · Marlon Moore · Jonathon Brooks (RB) · over Tucker Kraft (TE), Isaiah Likely (TE), Brian Thomas Jr. (WR) · tier cliff
+#111 R8 · Steffon Bizzell · Khalil Shakir (WR) · over Patrick Mahomes (QB), Justin Herbert (QB), Jared Goff (QB) · tier cliff
+#112 R8 · Mark Deroux · Woody Marks (RB) · over Isiah Pacheco (RB), Alvin Kamara (RB), Kyle Monangai (RB) · roster need
+#113 R9 · Mark Deroux · Isiah Pacheco (RB) · over Alvin Kamara (RB), Brian Thomas Jr. (WR), Xavier Worthy (WR) · comfort re-draft
+#114 R9 · Steffon Bizzell · Deebo Samuel (WR) · over Patrick Mahomes (QB), Justin Herbert (QB), Jared Goff (QB) · comfort re-draft
+#115 R9 · Marlon Moore · Quentin Johnston (WR) · over Tucker Kraft (TE), Mark Andrews (TE), Isaiah Likely (TE) · tier cliff
+#116 R9 · Rod Sellers · Jacory Croskey-Merritt (RB) · over Patrick Mahomes (QB), Justin Herbert (QB), Jared Goff (QB) · tier cliff
+#117 R9 · Marcus Reese [PROVISIONAL] · Patrick Mahomes (QB) · over Tucker Kraft (TE), Isaiah Likely (TE), Mark Andrews (TE) · tier cliff
+#118 R9 · Sheldon deRoux · Alvin Kamara (RB) · over Tyjae Spears (RB), Xavier Worthy (WR), Kyle Monangai (RB) · roster need
+#119 R9 · LOZELL STYLES · Jalen Coker (WR) · over Brian Thomas Jr. (WR), Jayden Reed (WR), Kyle Monangai (RB) · board value
+#120 R9 · Tony Dorsey [PROVISIONAL] · Zach Charbonnet (RB) · over Jerry Jeudy (WR), Kyle Monangai (RB), Tyjae Spears (RB) · roster need
+#121 R9 · Jan Graham · T.J. Hockenson (TE) · over Mark Andrews (TE), Justin Herbert (QB), Tucker Kraft (TE) · comfort re-draft
+#122 R9 · Bruce Edwards · Brian Thomas Jr. (WR) · over Stefon Diggs (WR), Cooper Kupp (WR), Kyle Monangai (RB) · tier cliff
+#123 R9 · Christian Graham · Xavier Worthy (WR) · over Jayden Reed (WR), Romeo Doubs (WR), Jayden Higgins (WR) · tier cliff
+#124 R9 · Demetri Clark · Jayden Reed (WR) · over Calvin Ridley (WR), Jerry Jeudy (WR), Romeo Doubs (WR) · tier cliff
+#125 R9 · Nate West · Jayden Higgins (WR) · over Tyjae Spears (RB), Kyle Monangai (RB), Jordan Mason (RB) · tier cliff
+#126 R9 · Randy Broner Jr · Jordan Mason (RB) · over Romeo Doubs (WR), Stefon Diggs (WR), Omar Cooper Jr. (WR) · tier cliff
+#127 R10 · Randy Broner Jr · Myles Garrett (DP) · over Jordyn Brooks (DP), Maxx Crosby (DP), Fred Warner (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#128 R10 · Nate West · Jordyn Brooks (DP) · over Maxx Crosby (DP), Fred Warner (DP), Jack Campbell (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#129 R10 · Demetri Clark · Maxx Crosby (DP) · over Fred Warner (DP), Jack Campbell (DP), Blake Cashman (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#130 R10 · Christian Graham · Fred Warner (DP) · over Jack Campbell (DP), Blake Cashman (DP), Will Anderson Jr. (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#131 R10 · Bruce Edwards · Jack Campbell (DP) · over Blake Cashman (DP), Will Anderson Jr. (DP), Jeffery Simmons (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#132 R10 · Jan Graham · Blake Cashman (DP) · over Will Anderson Jr. (DP), Jeffery Simmons (DP), Nick Bolton (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#133 R10 · Tony Dorsey [PROVISIONAL] · Will Anderson Jr. (DP) · over Jeffery Simmons (DP), Nick Bolton (DP), Carson Schwesinger (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#134 R10 · LOZELL STYLES · Jeffery Simmons (DP) · over Nick Bolton (DP), Carson Schwesinger (DP), Aidan Hutchinson (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#135 R10 · Sheldon deRoux · Nick Bolton (DP) · over Carson Schwesinger (DP), Aidan Hutchinson (DP), Brian Burns (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#136 R10 · Marcus Reese [PROVISIONAL] · Carson Schwesinger (DP) · over Aidan Hutchinson (DP), Brian Burns (DP), Cedric Gray (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#137 R10 · Rod Sellers · Aidan Hutchinson (DP) · over Brian Burns (DP), Cedric Gray (DP), Foyesade Oluokun (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#138 R10 · Marlon Moore · Brian Burns (DP) · over Cedric Gray (DP), Foyesade Oluokun (DP), Nick Bosa (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#139 R10 · Steffon Bizzell · Cedric Gray (DP) · over Foyesade Oluokun (DP), Nick Bosa (DP), T.J. Watt (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#140 R10 · Mark Deroux · Foyesade Oluokun (DP) · over Nick Bosa (DP), T.J. Watt (DP), Nakobe Dean (DP) · roster slot fill (forced) (must fill DP before draft ends)
+#141 R11 · Mark Deroux · Brandon Aubrey (K) · over Cameron Dicker (K), Jason Myers (K), Ka'imi Fairbairn (K) · roster slot fill (forced) (must fill K before draft ends)
+#142 R11 · Steffon Bizzell · Cameron Dicker (K) · over Jason Myers (K), Ka'imi Fairbairn (K), Cam Little (K) · roster slot fill (forced) (must fill K before draft ends)
+#143 R11 · Marlon Moore · Jason Myers (K) · over Ka'imi Fairbairn (K), Cam Little (K), Harrison Mevis (K) · roster slot fill (forced) (must fill K before draft ends)
+#144 R11 · Rod Sellers · Ka'imi Fairbairn (K) · over Cam Little (K), Harrison Mevis (K), Eddy Pineiro (K) · roster slot fill (forced) (must fill K before draft ends)
+#145 R11 · Marcus Reese [PROVISIONAL] · Cam Little (K) · over Harrison Mevis (K), Eddy Pineiro (K), Jake Bates (K) · roster slot fill (forced) (must fill K before draft ends)
+#146 R11 · Sheldon deRoux · Harrison Mevis (K) · over Eddy Pineiro (K), Jake Bates (K), Harrison Butker (K) · roster slot fill (forced) (must fill K before draft ends)
+#147 R11 · LOZELL STYLES · Eddy Pineiro (K) · over Jake Bates (K), Harrison Butker (K), Tyler Loop (K) · roster slot fill (forced) (must fill K before draft ends)
+#148 R11 · Tony Dorsey [PROVISIONAL] · Jake Bates (K) · over Harrison Butker (K), Tyler Loop (K), Chris Boswell (K) · roster slot fill (forced) (must fill K before draft ends)
+#149 R11 · Jan Graham · Harrison Butker (K) · over Tyler Loop (K), Chris Boswell (K), Will Reichard (K) · roster slot fill (forced) (must fill K before draft ends)
+#150 R11 · Bruce Edwards · Tyler Loop (K) · over Chris Boswell (K), Will Reichard (K), Cairo Santos (K) · roster slot fill (forced) (must fill K before draft ends)
+#151 R11 · Christian Graham · Chris Boswell (K) · over Will Reichard (K), Cairo Santos (K), Chase McLaughlin (K) · roster slot fill (forced) (must fill K before draft ends)
+#152 R11 · Demetri Clark · Will Reichard (K) · over Cairo Santos (K), Chase McLaughlin (K), Evan McPherson (K) · roster slot fill (forced) (must fill K before draft ends)
+#153 R11 · Nate West · Cairo Santos (K) · over Chase McLaughlin (K), Evan McPherson (K), Jake Elliott (K) · roster slot fill (forced) (must fill K before draft ends)
+#154 R11 · Randy Broner Jr · Chase McLaughlin (K) · over Evan McPherson (K), Jake Elliott (K), Trey Smack (K) · roster slot fill (forced) (must fill K before draft ends)
+#155 R12 · Randy Broner Jr · Rashid Shaheed (WR) · over Romeo Doubs (WR), Stefon Diggs (WR), Omar Cooper Jr. (WR) · tier urgency
+#156 R12 · Nate West · Stefon Diggs (WR) · over Tyjae Spears (RB), Kyle Monangai (RB), Romeo Doubs (WR) · tier cliff
+#157 R12 · Demetri Clark · Tyjae Spears (RB) · over Calvin Ridley (WR), Jerry Jeudy (WR), Romeo Doubs (WR) · board value
+#158 R12 · Christian Graham · Omar Cooper Jr. (WR) · over Romeo Doubs (WR), Jalen McMillan (WR), Kyle Monangai (RB) · tier cliff
+#159 R12 · Bruce Edwards · Chris Rodriguez Jr. (RB) · over Cooper Kupp (WR), Odell Beckham Jr. (WR), Kyle Monangai (RB) · tier urgency
+#160 R12 · Jan Graham · Cam Ward (QB) · over Jared Goff (QB), Baker Mayfield (QB), Justin Herbert (QB) · roster slot fill (must fill QB before draft ends)
+#161 R12 · Tony Dorsey [PROVISIONAL] · Kyle Monangai (RB) · over Jerry Jeudy (WR), Tyler Allgeier (RB), Romeo Doubs (WR) · roster need
+#162 R12 · LOZELL STYLES · Tyler Allgeier (RB) · over Tank Bigsby (RB), Brian Robinson Jr. (RB), Tyrone Tracy Jr. (RB) · tier urgency
+#163 R12 · Sheldon deRoux · Jalen McMillan (WR) · over Tank Bigsby (RB), Brian Robinson Jr. (RB), Romeo Doubs (WR) · roster need
+#164 R12 · Marcus Reese [PROVISIONAL] · Dalton Kincaid (TE) · over Tucker Kraft (TE), Isaiah Likely (TE), Mark Andrews (TE) · roster slot fill (must fill TE before draft ends)
+#165 R12 · Rod Sellers · Kirk Cousins (QB) · over Deshaun Watson (QB), Justin Herbert (QB), Jared Goff (QB) · roster slot fill (must fill QB before draft ends)
+#166 R12 · Marlon Moore · Mark Andrews (TE) · over Tucker Kraft (TE), Hunter Henry (TE), Pat Freiermuth (TE) · roster slot fill (must fill TE before draft ends)
+#167 R12 · Steffon Bizzell · Russell Wilson (QB) · over Aaron Rodgers (QB), Justin Herbert (QB), Jared Goff (QB) · roster slot fill (must fill QB before draft ends)
+#168 R12 · Mark Deroux · Calvin Ridley (WR) · over Brian Robinson Jr. (RB), Romeo Doubs (WR), Tyreek Hill (WR) · comfort re-draft
+#169 R13 · Mark Deroux · Cooper Kupp (WR) · over Brian Robinson Jr. (RB), Odell Beckham Jr. (WR), Tank Bigsby (RB) · tier cliff
+#170 R13 · Steffon Bizzell · Jordan Love (QB) · over Marvin Mims Jr. (WR), Tank Bigsby (RB), Romeo Doubs (WR) · tier cliff
+#171 R13 · Marlon Moore · Jerry Jeudy (WR) · over Romeo Doubs (WR), Tyreek Hill (WR), C.J. Stroud (QB) · roster need
+#172 R13 · Rod Sellers · Tre Tucker (WR) · over Darnell Mooney (WR), Romeo Doubs (WR), Tyreek Hill (WR) · comfort re-draft
+#173 R13 · Marcus Reese [PROVISIONAL] · Tank Bigsby (RB) · over Jauan Jennings (WR), Romeo Doubs (WR), Tyreek Hill (WR) · tier cliff
+#174 R13 · Sheldon deRoux · Brian Robinson Jr. (RB) · over Romeo Doubs (WR), Tyreek Hill (WR), Jared Goff (QB) · roster need
+#175 R13 · LOZELL STYLES · Germie Bernard (WR) · over Tyreek Hill (WR), Odell Beckham Jr. (WR), Tyrone Tracy Jr. (RB) · board value
+#176 R13 · Tony Dorsey [PROVISIONAL] · Romeo Doubs (WR) · over Najee Harris (RB), Tyreek Hill (WR), Tyrone Tracy Jr. (RB) · roster need
+#177 R13 · Jan Graham · Jared Goff (QB) · over Tyrone Tracy Jr. (RB), Tyreek Hill (WR), Denzel Boston (WR) · comfort re-draft
+#178 R13 · Bruce Edwards · Odell Beckham Jr. (WR) · over Tyrone Tracy Jr. (RB), Tyreek Hill (WR), Denzel Boston (WR) · comfort re-draft
+#179 R13 · Christian Graham · Denzel Boston (WR) · over Tyreek Hill (WR), Tyrone Tracy Jr. (RB), Justin Herbert (QB) · joining the run
+#180 R13 · Demetri Clark · Tyrone Tracy Jr. (RB) · over Tyreek Hill (WR), Jauan Jennings (WR), Aaron Rodgers (QB) · board value
+#181 R13 · Nate West · James Conner (RB) · over Braelon Allen (RB), Mike Washington Jr. (RB), Kyler Murray (QB) · comfort re-draft
+#182 R13 · Randy Broner Jr · Jauan Jennings (WR) · over Tyreek Hill (WR), Brandon Aiyuk (WR), Kyler Murray (QB) · roster need
+#183 R14 · Randy Broner Jr · Daniel Jones (QB) · over Tyreek Hill (WR), Brandon Aiyuk (WR), Tank Dell (WR) · tier cliff
+#184 R14 · Nate West · Nick Bellore (RB) · over Braelon Allen (RB), Mike Washington Jr. (RB), Kyler Murray (QB) · tier cliff
+#185 R14 · Demetri Clark · Tyreek Hill (WR) · over Brandon Aiyuk (WR), Tank Dell (WR), Aaron Rodgers (QB) · tier cliff
+#186 R14 · Christian Graham · Brandon Aiyuk (WR) · over Tank Dell (WR), Braelon Allen (RB), Justin Herbert (QB) · tier cliff
+#187 R14 · Bruce Edwards · Justice Hill (RB) · over Joe Mixon (RB), Braelon Allen (RB), Mike Washington Jr. (RB) · roster need
+#188 R14 · Jan Graham · Mike Washington Jr. (RB) · over Nyheim Hines (RB), Keenan Allen (WR), Braelon Allen (RB) · tier cliff
+#189 R14 · Tony Dorsey [PROVISIONAL] · Najee Harris (RB) · over Braelon Allen (RB), Tank Dell (WR), Chris Bell (WR) · comfort re-draft
+#190 R14 · LOZELL STYLES · Darnell Mooney (WR) · over Christian Kirk (WR), Amari Cooper (WR), Braelon Allen (RB) · board value
+#191 R14 · Sheldon deRoux · Braelon Allen (RB) · over Amari Cooper (WR), Keaton Mitchell (RB), Tank Dell (WR) · joining the run
+#192 R14 · Marcus Reese [PROVISIONAL] · Antonio Williams (WR) · over Keaton Mitchell (RB), Jonah Coleman (RB), Jaydon Blue (RB) · tier cliff
+#193 R14 · Rod Sellers · Jonah Coleman (RB) · over Keaton Mitchell (RB), Jaydon Blue (RB), Deshaun Watson (QB) · tier cliff
+#194 R14 · Marlon Moore · Ja'Kobi Lane (WR) · over Tank Dell (WR), Chris Bell (WR), C.J. Stroud (QB) · roster need
+#195 R14 · Steffon Bizzell · Jalen Nailor (WR) · over Antonio Gibson (RB), Marvin Mims Jr. (WR), Keaton Mitchell (RB) · tier cliff
+#196 R14 · Mark Deroux · Amari Cooper (WR) · over Christian Kirk (WR), Keaton Mitchell (RB), Jaydon Blue (RB) · comfort re-draft
+#197 R15 · Mark Deroux · Dylan Sampson (RB) · over Antonio Gibson (RB), Raheem Mostert (RB), Keaton Mitchell (RB) · fading the run
+#198 R15 · Steffon Bizzell · Jordan James (RB) · over Antonio Gibson (RB), Raheem Mostert (RB), Keaton Mitchell (RB) · tier cliff
+#199 R15 · Marlon Moore · Isaac TeSlaa (WR) · over Tank Dell (WR), Chris Bell (WR), C.J. Stroud (QB) · roster need
+#200 R15 · Rod Sellers · Nicholas Singleton (RB) · over Keaton Mitchell (RB), Jaydon Blue (RB), Deshaun Watson (QB) · tier cliff
+#201 R15 · Marcus Reese [PROVISIONAL] · Christian Kirk (WR) · over Keaton Mitchell (RB), Jaydon Blue (RB), Ray Davis (RB) · tier cliff
+#202 R15 · Sheldon deRoux · Kyler Murray (QB) · over Tank Dell (WR), Chris Bell (WR), Zachariah Branch (WR) · joining the run
+#203 R15 · LOZELL STYLES · Antonio Gibson (RB) · over Austin Ekeler (RB), Keaton Mitchell (RB), Jaydon Blue (RB) · comfort re-draft
+#204 R15 · Tony Dorsey [PROVISIONAL] · Baker Mayfield (QB) · over Tank Dell (WR), Chris Bell (WR), Zachariah Branch (WR) · joining the run
+#205 R15 · Jan Graham · Nyheim Hines (RB) · over Keenan Allen (WR), Tank Dell (WR), Chris Bell (WR) · comfort re-draft
+#206 R15 · Bruce Edwards · Jaydon Blue (RB) · over Joe Mixon (RB), Keaton Mitchell (RB), Ray Davis (RB) · tier cliff
+#207 R15 · Christian Graham · Ray Davis (RB) · over Keaton Mitchell (RB), Emmett Johnson (RB), Justin Herbert (QB) · joining the run
+#208 R15 · Demetri Clark · Chris Bell (WR) · over Tank Dell (WR), Zachariah Branch (WR), Aaron Rodgers (QB) · tier cliff
+#209 R15 · Nate West · Emmett Johnson (RB) · over Keaton Mitchell (RB), MarShawn Lloyd (RB), Aaron Rodgers (QB) · tier cliff
+#210 R15 · Randy Broner Jr · Zachariah Branch (WR) · over Tyler Boyd (WR), DeAndre Hopkins (WR), Tank Dell (WR) · tier cliff
+#211 R16 · Randy Broner Jr · Isaiah Bond (WR) · over Tyler Boyd (WR), DeAndre Hopkins (WR), Tank Dell (WR) · tier cliff
+#212 R16 · Nate West · C.J. Stroud (QB) · over Aaron Rodgers (QB), Deshaun Watson (QB), Justin Herbert (QB) · tier cliff
+#213 R16 · Demetri Clark · Sam Darnold (QB) · over Aaron Rodgers (QB), Philip Rivers (QB), Justin Herbert (QB) · tier cliff
+#214 R16 · Christian Graham · Deshaun Watson (QB) · over Justin Herbert (QB), Aaron Rodgers (QB), Philip Rivers (QB) · tier cliff
+#215 R16 · Bruce Edwards · J.J. McCarthy (QB) · over Geno Smith (QB), Joe Flacco (QB), Justin Herbert (QB) · joining the run
+#216 R16 · Jan Graham · Keenan Allen (WR) · over JuJu Smith-Schuster (WR), Tank Dell (WR), Kayshon Boutte (WR) · comfort re-draft
+#217 R16 · Tony Dorsey [PROVISIONAL] · Kayshon Boutte (WR) · over Tank Dell (WR), KaVontae Turpin (WR), Devontez Walker (WR) · roster need
+#218 R16 · LOZELL STYLES · Deuce Vaughn (RB) · over Austin Ekeler (RB), Khalil Herbert (RB), Keaton Mitchell (RB) · board value
+#219 R16 · Sheldon deRoux · Malachi Fields (WR) · over Adam Thielen (WR), Elijah Moore (WR), Tank Dell (WR) · roster need
+#220 R16 · Marcus Reese [PROVISIONAL] · Clyde Edwards-Helaire (RB) · over Keaton Mitchell (RB), MarShawn Lloyd (RB), Kaelon Black (RB) · tier cliff
+#221 R16 · Rod Sellers · Aaron Rodgers (QB) · over Philip Rivers (QB), Jameis Winston (QB), Justin Herbert (QB) · tier cliff
+#222 R16 · Marlon Moore · Bryce Young (QB) · over Tua Tagovailoa (QB), Justin Herbert (QB), Tyler Shough (QB) · tier cliff
+#223 R16 · Steffon Bizzell · Austin Ekeler (RB) · over Raheem Mostert (RB), Keaton Mitchell (RB), MarShawn Lloyd (RB) · comfort re-draft
+#224 R16 · Mark Deroux · Raheem Blackshear (RB) · over Raheem Mostert (RB), Dalvin Cook (RB), Keaton Mitchell (RB) · board value
 
 ── EMERGENT RUNS ──
 
-WR run · picks 23–25 (3 consecutive WR picks in run window)
-WR run · picks 46–49 (4 consecutive WR picks in run window)
-WR run · picks 76–77 (2 consecutive WR picks in run window)
-RB run · picks 81–83 (3 consecutive RB picks in run window)
+WR run · picks 6–7 (2 consecutive WR picks in run window)
+RB run · picks 10–12 (3 consecutive RB picks in run window)
+RB run · picks 14–15 (2 consecutive RB picks in run window)
+WR run · picks 27–30 (4 consecutive WR picks in run window)
+WR run · picks 48–49 (2 consecutive WR picks in run window)
+WR run · picks 64–67 (4 consecutive WR picks in run window)
+RB run · picks 89–90 (2 consecutive RB picks in run window)
+WR run · picks 103–105 (3 consecutive WR picks in run window)
+WR run · picks 107–108 (2 consecutive WR picks in run window)
+RB run · picks 112–113 (2 consecutive RB picks in run window)
+WR run · picks 124–125 (2 consecutive WR picks in run window)
+DP run · picks 129–140 (12 consecutive DP picks in run window)
+K run · picks 143–154 (12 consecutive K picks in run window)
+WR run · picks 171–172 (2 consecutive WR picks in run window)
+WR run · picks 178–179 (2 consecutive WR picks in run window)
+WR run · picks 195–196 (2 consecutive WR picks in run window)
+RB run · picks 206–207 (2 consecutive RB picks in run window)
+QB run · picks 214–215 (2 consecutive QB picks in run window)
 
 ── PER-OWNER SCOUT ──
 
-Bruce Edwards (Evolving RB-to-WR): In-character. Early: RB→WR→TE. modern WR tilt visible early. Distinctive fit: rbEarlyLegacyEra, rbEarlyRound.
-Christian Graham (Modern WR-Forward): In-character. Early: WR→TE→RB. modern WR tilt visible early. Distinctive fit: panic, rbEarlyRound.
-Demetri Clark (RB-Forward): In-character. Early: RB→TE→RB. top drives: board value×4, roster need×2. Distinctive fit: value, rbEarlyLegacyEra.
-Jan Graham (RB-Forward): In-character. Early: QB→WR→RB. RB-leaning soul opened non-RB. Distinctive fit: wrEarlyRound, value.
-LOZELL STYLES (Comfort Re-Drafter): In-character. Early: WR→QB→TE. RB-leaning soul opened non-RB; modern WR tilt visible early; 3 comfort re-drafts. Distinctive fit: panic, value.
-Marcus Reese (WR-Forward): Provisional read. Early: RB→WR→RB. top drives: roster need×4, tier cliff×3; thin/shrinkage soul — treat as directional only. Distinctive fit: comfortAnchor, panic.
-Mark Deroux (WR-Forward): In-character. Early: QB→WR→RB. modern WR tilt visible early. Distinctive fit: wrEarlyRound, contrarian.
-Marlon Moore (WR-Forward): In-character. Early: WR→QB→TE. top drives: roster need×6, early WR tilt×1. Distinctive fit: wrEarlyRound, comfortAnchor.
-Nate West (RB-Forward): In-character. Early: QB→WR→WR. top drives: roster need×4, comfort re-draft×3. Distinctive fit: wrEarlyRound, panic.
-Randy Broner Jr (Herd-Responsive): In-character. Early: QB→WR→TE. top drives: roster need×4, comfort re-draft×2. Distinctive fit: contrarian, wrEarlyRound.
-Rod Sellers (RB-Forward): In-character. Early: RB→WR→WR. top drives: tier cliff×3, board value×2. Distinctive fit: rbEarlyRound, value.
-Sheldon deRoux (RB-Forward): In-character. Early: WR→WR→RB. RB-leaning soul opened non-RB. Distinctive fit: value, rbEarlyRound.
-Steffon Bizzell (WR-Forward): In-character. Early: RB→TE→WR. 3 comfort re-drafts. Distinctive fit: rbEarlyLegacyEra, comfortAnchor.
-Tony Dorsey (RB-Forward): Provisional read. Early: RB→WR→TE. top drives: joining the run×3, roster need×2; thin/shrinkage soul — treat as directional only. Distinctive fit: panic, value.
+Bruce Edwards (Evolving RB-to-WR): In-character. Early: RB→WR→WR. modern WR tilt visible early. Distinctive fit: rbEarlyLegacyEra, rbEarlyRound.
+Christian Graham (Modern WR-Forward): In-character. Early: RB→RB→RB. joined herd runs. Distinctive fit: panic, rbEarlyRound.
+Demetri Clark (RB-Forward): In-character. Early: RB→WR→RB. top drives: board value×7, tier cliff×5. Distinctive fit: value, rbEarlyLegacyEra.
+Jan Graham (RB-Forward): In-character. Early: RB→WR→RB. top drives: tier cliff×4, comfort re-draft×4. Distinctive fit: wrEarlyRound, value.
+LOZELL STYLES (Comfort Re-Drafter): In-character. Early: WR→WR→WR. RB-leaning soul opened non-RB; modern WR tilt visible early; 4 comfort re-drafts. Distinctive fit: panic, value.
+Marcus Reese (WR-Forward): Provisional read. Early: RB→QB→RB. top drives: tier cliff×9, roster need×3; thin/shrinkage soul — treat as directional only. Distinctive fit: comfortAnchor, panic.
+Mark Deroux (WR-Forward): In-character. Early: RB→WR→WR. modern WR tilt visible early. Distinctive fit: wrEarlyRound, contrarian.
+Marlon Moore (WR-Forward): In-character. Early: WR→WR→RB. top drives: roster need×6, tier cliff×5. Distinctive fit: wrEarlyRound, comfortAnchor.
+Nate West (RB-Forward): In-character. Early: TE→QB→WR. top drives: tier cliff×6, comfort re-draft×4. Distinctive fit: wrEarlyRound, panic.
+Randy Broner Jr (Herd-Responsive): In-character. Early: RB→RB→QB. top drives: roster need×5, tier cliff×4. Distinctive fit: contrarian, wrEarlyRound.
+Rod Sellers (RB-Forward): In-character. Early: WR→WR→WR. RB-leaning soul opened non-RB. Distinctive fit: rbEarlyRound, value.
+Sheldon deRoux (RB-Forward): In-character. Early: WR→RB→WR. RB-leaning soul opened non-RB. Distinctive fit: value, rbEarlyRound.
+Steffon Bizzell (WR-Forward): In-character. Early: RB→WR→WR. 5 comfort re-drafts. Distinctive fit: rbEarlyLegacyEra, comfortAnchor.
+Tony Dorsey (RB-Forward): Provisional read. Early: RB→RB→TE. top drives: roster need×8, early RB tilt×2; thin/shrinkage soul — treat as directional only. Distinctive fit: panic, value.
 
 ── ROSTER LEGALITY (honest) ──
 
-Bruce Edwards: [8 picks · RB1 WR5 TE1 QB1] skill OK · DP unfilled
-Christian Graham: [8 picks · WR3 TE1 RB3 DP1] skill gap: QB · K unfilled
-Demetri Clark: [8 picks · RB3 TE1 WR2 QB1 DP1] skill OK · K unfilled
-Jan Graham: [8 picks · QB1 WR3 RB1 TE1 DP2] skill gap: WR,RB · K unfilled
-LOZELL STYLES: [8 picks · WR2 QB2 TE1 RB3] skill OK · DP unfilled
-Marcus Reese: [9 picks · RB2 WR4 QB1 TE1 DP1] skill OK · K unfilled · PROVISIONAL soul
-Mark Deroux: [9 picks · QB1 WR4 RB2 TE1 DP1] skill OK · K unfilled
-Marlon Moore: [9 picks · WR3 QB1 TE1 RB3 DP1] skill OK · K unfilled
-Nate West: [8 picks · QB1 WR2 RB3 TE1 DP1] skill OK · K unfilled
-Randy Broner Jr: [8 picks · QB1 WR4 TE1 RB2] skill OK · DP unfilled
-Rod Sellers: [9 picks · RB3 WR3 QB1 TE1 DP1] skill OK · K unfilled
-Sheldon deRoux: [8 picks · WR2 RB3 QB2 TE1] skill OK · DP unfilled
-Steffon Bizzell: [9 picks · RB2 TE1 WR4 QB1 DP1] skill OK · K unfilled
-Tony Dorsey: [8 picks · RB1 WR5 TE1 DP1] skill gap: QB · K unfilled · PROVISIONAL soul
+Bruce Edwards: [16 picks · RB5 WR6 QB2 TE1 DP1 K1] skill OK
+Christian Graham: [16 picks · RB5 WR6 TE1 QB2 DP1 K1] skill OK
+Demetri Clark: [16 picks · RB5 WR6 TE1 QB2 DP1 K1] skill OK
+Jan Graham: [16 picks · RB5 WR6 TE1 DP1 K1 QB2] skill OK
+LOZELL STYLES: [16 picks · WR6 RB5 QB2 TE1 DP1 K1] skill OK
+Marcus Reese: [16 picks · RB5 QB2 WR6 DP1 K1 TE1] skill OK · PROVISIONAL soul
+Mark Deroux: [16 picks · RB5 WR6 QB2 TE1 DP1 K1] skill OK
+Marlon Moore: [16 picks · WR6 RB5 QB2 DP1 K1 TE1] skill OK
+Nate West: [16 picks · TE1 QB2 WR6 RB5 DP1 K1] skill OK
+Randy Broner Jr: [16 picks · RB5 QB2 WR6 TE1 DP1 K1] skill OK
+Rod Sellers: [16 picks · WR6 TE1 RB5 DP1 K1 QB2] skill OK
+Sheldon deRoux: [16 picks · WR6 RB5 TE1 QB2 DP1 K1] skill OK
+Steffon Bizzell: [16 picks · RB5 WR6 TE1 DP1 K1 QB2] skill OK
+Tony Dorsey: [16 picks · RB5 TE1 WR6 QB2 DP1 K1] skill OK · PROVISIONAL soul

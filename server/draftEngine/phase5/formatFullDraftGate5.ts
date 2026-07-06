@@ -73,21 +73,27 @@ export function formatPickTranscriptLine(p: SimPickRecord): string {
   return `#${p.overallPick} R${p.round} · ${p.chooserDisplayName}${prov} · ${p.chosen.playerName} (${p.chosen.position}) · over ${takenOverLine(p)} · ${reasonLine(p)}`;
 }
 
+import type { EspnSimPoolStats } from "./loadEspnSimPool";
+
 export function formatFullDraftGate(args: {
   result: DraftSimulationResult;
   souls: OwnerSoulProfile[];
   skillPoolSize: number;
   augmentedPoolSize: number;
+  poolStats?: EspnSimPoolStats;
 }): string {
   const { result } = args;
   const teamCount = CONFIRMED_ACTIVE_OWNERS.length;
   const planned = result.rounds * teamCount;
   const starters = result.rosterRules.starters;
   const lineupDesc = `QB${starters.QB} RB${starters.RB} WR${starters.WR} TE${starters.TE} FLEX${starters.FLEX}${starters.DP ? ` DP${starters.DP}` : ""}${starters.K ? ` K${starters.K}` : ""}`;
+  const poolDesc = args.poolStats
+    ? `ESPN board ${args.augmentedPoolSize} (K ${args.poolStats.kickers} · DP ${args.poolStats.defenders})`
+  : `partial board (~${args.skillPoolSize} skill + fillers)`;
 
   const lines: string[] = [
     "GATE 5 (FULL) — 14-team simulated draft · league 457622 only",
-    `Season ${result.season} · seed ${result.seed} · ${result.picksCompleted}/${planned} picks · partial board (~${args.skillPoolSize} skill names + K/IDP fillers)`,
+    `Season ${result.season} · seed ${result.seed} · ${result.picksCompleted}/${planned} picks · ${poolDesc}`,
     `Lineup (${result.rosterRules.source}): ${lineupDesc} · bench ${result.rosterRules.benchSlots}`,
     "steven hibbard: departed — board context only, no sim seat.",
     "",
@@ -95,7 +101,7 @@ export function formatFullDraftGate(args: {
 
   if (result.poolExhaustedAtPick != null || result.picksCompleted < planned) {
     lines.push(
-      `POOL LIMIT (data, not bug): sim completed ${result.picksCompleted}/${planned} picks (~${Math.ceil(result.picksCompleted / teamCount)} rounds of ${result.rounds}). Partial board (~${args.skillPoolSize} skill + K/IDP fillers); board ran dry or consideration sets emptied. Most teams missing K and/or DP — not personality bugs.`,
+      `POOL LIMIT: sim completed ${result.picksCompleted}/${planned} picks (~${Math.ceil(result.picksCompleted / teamCount)} rounds of ${result.rounds}). Board ran dry or consideration sets emptied.`,
       "",
     );
   }
@@ -214,6 +220,8 @@ export function formatFullDraftJson(args: {
   draftOrder: string[];
   skillPoolSize: number;
   augmentedPoolSize: number;
+  poolStats?: EspnSimPoolStats;
+  runtimeMs?: { total: number; simLoop: number };
 }) {
   return {
     seed: args.result.seed,
@@ -225,6 +233,9 @@ export function formatFullDraftJson(args: {
     poolExhaustedAtPick: args.result.poolExhaustedAtPick,
     skillPoolSize: args.skillPoolSize,
     augmentedPoolSize: args.augmentedPoolSize,
+    poolStats: args.poolStats,
+    runtimeMs: args.runtimeMs,
+    simTiming: args.result.timing,
     emergentRuns: detectEmergentRuns(args.result.picks),
     picks: args.result.picks.map((p) => ({
       overallPick: p.overallPick,

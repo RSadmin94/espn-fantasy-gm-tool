@@ -5,12 +5,30 @@
 import { buildRoomState } from "../phase1/roomState";
 import { normalizePlayerKey, normalizePosition, type ChoicePlayer } from "../phase1/types";
 import type { RoomState } from "../phase1/types";
+import { buildScarcityByPos } from "./boardScarcity";
+import type { ScarcityByPos } from "../phase3/driveFeatures";
 
 export type SimPlayer = ChoicePlayer & {
   playerKey: string;
   valueScore: number;
   tier: string;
+  adp?: number | null;
+  espnPlayerId?: string;
 };
+
+/**
+ * Cross-position board-ordering value derived from REAL ADP (higher = drafted earlier).
+ * Falls back to the position-normalized valueScore only when a player has no ADP, so nothing
+ * drops off the board.
+ *
+ * IMPORTANT: valueScore is the soul/personality model's feature input and is deliberately NOT
+ * used to order the draft board. valueScore is position-normalized (a #1 QB and a #1 WR both
+ * score ~100), which scrambles cross-position draft order and buries true studs. Board ordering
+ * and "best available" must use this ADP-based value instead; valueScore stays frozen for souls.
+ */
+export function boardValueOf(p: SimPlayer): number {
+  return p.adp != null && p.adp > 0 ? 1000 - p.adp : p.valueScore;
+}
 
 export type RivalryLedgerEntry = {
   blockerProfileKey: string;
@@ -36,6 +54,8 @@ export type DraftWeather = {
   tempo: "slow" | "normal" | "run-heavy";
   /** Simple cross-owner blocks (board-context grudges). */
   rivalryLedger: RivalryLedgerEntry[];
+  /** Cached position scarcity — updated when available mutates. */
+  scarcityByPos: ScarcityByPos;
 };
 
 function computeTempo(recent: string[], run: RoomState["runInProgress"]): DraftWeather["tempo"] {
@@ -75,6 +95,7 @@ export function createInitialWeather(args: {
     roomState,
     tempo: "normal",
     rivalryLedger: [],
+    scarcityByPos: buildScarcityByPos(available),
   };
 }
 
@@ -138,6 +159,7 @@ export function mutateWeatherAfterPick(args: {
     roomState,
     tempo,
     rivalryLedger,
+    scarcityByPos: buildScarcityByPos(available),
   };
 }
 

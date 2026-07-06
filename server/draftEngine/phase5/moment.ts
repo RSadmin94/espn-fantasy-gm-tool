@@ -17,7 +17,7 @@ import {
 import { normalizePlayerKey, normalizePosition, type ChoiceRecord } from "../phase1/types";
 import type { OwnerSoulProfile } from "../phase4/fitAllSouls";
 import { gumbelNoise, type Rng } from "./rng";
-import type { DraftWeather, SimPlayer } from "./weather";
+import { boardValueOf, type DraftWeather, type SimPlayer } from "./weather";
 import type { LeagueRosterRules, RosterPosition } from "./leagueRosterRules";
 import {
   isPositionBlocked,
@@ -95,7 +95,7 @@ function stubRecord(args: {
     chooserDisplayName: "",
     chooserRole: "active",
     chosenPlayer: { playerName: "", position: "RB" },
-    availableSet: args.weather.available.map((p) => ({ playerName: p.playerName, position: p.position })),
+    availableSet: [],
     roomState: args.weather.roomState,
   };
 }
@@ -148,6 +148,7 @@ export function buildConsiderationSet(args: {
       if (!rosterPos) return false;
       const have = args.ownerRoster[rosterPos] ?? 0;
       if (mandatory.length > 0 && !mandatory.includes(rosterPos)) return false;
+      if ((rosterPos === "K" || rosterPos === "DP" || rosterPos === "DST") && !completionWindow) return false;
       if (isPositionSaturatedForDraft(rosterPos, have, args.rosterRules)) return false;
       return !isPositionBlocked(rosterPos, have, args.rosterRules);
     });
@@ -163,12 +164,12 @@ export function buildConsiderationSet(args: {
     selected.set(normalizePlayerKey(p.playerKey), p);
   };
 
-  const byValue = [...avail].sort((a, b) => b.valueScore - a.valueScore);
+  const byValue = [...avail].sort((a, b) => boardValueOf(b) - boardValueOf(a));
   for (const p of byValue.slice(0, 4)) add(p);
 
   const runPos = args.weather.roomState.runInProgress?.position;
   if (runPos) {
-    for (const p of avail.filter((x) => normalizePosition(x.position) === runPos).sort((a, b) => b.valueScore - a.valueScore).slice(0, 2)) {
+    for (const p of avail.filter((x) => normalizePosition(x.position) === runPos).sort((a, b) => boardValueOf(b) - boardValueOf(a)).slice(0, 2)) {
       add(p);
     }
   }
@@ -186,7 +187,7 @@ export function buildConsiderationSet(args: {
           roster: args.ownerRoster,
           rules: args.rosterRules,
           ownerPicksRemaining: args.ownerPicksRemaining,
-        }) || b.valueScore - a.valueScore,
+        }) || boardValueOf(b) - boardValueOf(a),
   );
   for (const p of constructionSorted.slice(0, 3)) add(p);
 
@@ -197,18 +198,18 @@ export function buildConsiderationSet(args: {
   if (args.weather.roomState.runInProgress && args.ownerCoefficients.contrarian > 0.08) {
     const fadePos = ["RB", "WR", "QB", "TE"].filter((pos) => pos !== args.weather.roomState.runInProgress!.position);
     for (const pos of fadePos) {
-      const best = avail.filter((x) => normalizePosition(x.position) === pos).sort((a, b) => b.valueScore - a.valueScore)[0];
+      const best = avail.filter((x) => normalizePosition(x.position) === pos).sort((a, b) => boardValueOf(b) - boardValueOf(a))[0];
       if (best) add(best);
     }
   }
 
   const early = args.weather.picksCompleted < args.weather.teamCount * 2;
   if (early && args.ownerCoefficients.rbEarlyRound + args.ownerCoefficients.rbEarlyLegacyEra > 0.15) {
-    const rb = avail.filter((x) => normalizePosition(x.position) === "RB").sort((a, b) => b.valueScore - a.valueScore)[0];
+    const rb = avail.filter((x) => normalizePosition(x.position) === "RB").sort((a, b) => boardValueOf(b) - boardValueOf(a))[0];
     if (rb) add(rb);
   }
   if (early && args.ownerCoefficients.wrEarlyRound + args.ownerCoefficients.wrEarlyModernEra > 0.08) {
-    const wr = avail.filter((x) => normalizePosition(x.position) === "WR").sort((a, b) => b.valueScore - a.valueScore)[0];
+    const wr = avail.filter((x) => normalizePosition(x.position) === "WR").sort((a, b) => boardValueOf(b) - boardValueOf(a))[0];
     if (wr) add(wr);
   }
 
@@ -281,7 +282,7 @@ export function resolveMoment(args: {
   if (forcePos) {
     const fillers = args.weather.available
       .filter((p) => simPositionToRosterPos(p.position) === forcePos)
-      .sort((a, b) => b.valueScore - a.valueScore);
+      .sort((a, b) => boardValueOf(b) - boardValueOf(a));
     if (fillers.length > 0) {
       const chosen = fillers[0]!;
       return {
@@ -322,6 +323,7 @@ export function resolveMoment(args: {
       terrainLookup: args.terrainLookup,
       ownerRosterCounts: personalityRoster,
       ownerPriorPlayerKeys: args.ownerPriorKeys,
+      scarcityByPos: args.weather.scarcityByPos,
     });
     return { player, features };
   });

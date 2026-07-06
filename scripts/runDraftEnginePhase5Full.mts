@@ -20,19 +20,14 @@ if (fs.existsSync(envPath) && !process.env.DATABASE_URL) {
   }
 }
 
+const wallT0 = performance.now();
 const { getDb } = await import("../server/db.ts");
-const { confirmedActiveProfileKeySet } = await import("../server/draftEngine/activeOwners.ts");
-const { loadChoiceLedgerInputs } = await import("../server/draftEngine/phase1/loadChoiceLedgerInputs.ts");
-const { buildChoiceLedger } = await import("../server/draftEngine/phase1/choiceLedger.ts");
-const { loadSeasonTerrainInputs } = await import("../server/draftEngine/phase2/loadSeasonTerrainInputs.ts");
-const { buildSeasonTerrain } = await import("../server/draftEngine/phase2/buildSeasonTerrain.ts");
-const { buildTerrainLookup } = await import("../server/draftEngine/phase3/driveFeatures.ts");
-const { fitAllActiveSouls } = await import("../server/draftEngine/phase4/fitAllSouls.ts");
-const { resolveDraftOrderFromLedger, poolFromTerrain } = await import("../server/draftEngine/phase5/loadSimDraftSetup.ts");
-const { loadLeagueRosterRules } = await import("../server/draftEngine/phase5/loadLeagueRosterRules.ts");
+const { loadPhase5SimContext } = await import("../server/draftEngine/phase5/loadPhase5SimContext.ts");
 const { simulateDraft } = await import("../server/draftEngine/phase5/simulateDraft.ts");
-const { augmentPoolWithRosterFillers } = await import("../server/draftEngine/phase5/rosterConstruction.ts");
 const { formatFullDraftGate, formatFullDraftJson } = await import("../server/draftEngine/phase5/formatFullDraftGate5.ts");
+const { SimTimer } = await import("../server/draftEngine/phase5/simTiming.ts");
+const { CONFIRMED_ACTIVE_OWNERS } = await import("../server/draftEngine/activeOwners.ts");
+const { assessRosterLegality, addToRoster, emptyRosterCounts } = await import("../server/draftEngine/phase5/rosterConstruction.ts");
 
 const db = await getDb();
 if (!db) {
@@ -40,91 +35,72 @@ if (!db) {
   process.exit(1);
 }
 
-console.log("Phase 5 (FULL) — loading souls, terrain, 14-team draft...");
-const { shared, draftRows } = await loadChoiceLedgerInputs({ db, leagueId: LEAGUE_ID });
-const ledger = buildChoiceLedger({
-  leagueId: LEAGUE_ID,
-  draftRows,
-  allLeagueTeams: shared.allLeagueTeams,
-  activeProfileKeys: confirmedActiveProfileKeySet(),
-});
-
-let terrainInputs = await loadSeasonTerrainInputs({ db, leagueId: LEAGUE_ID, season: SIM_SEASON });
-let terrain = buildSeasonTerrain({
+const timer = new SimTimer(true);
+console.log("Phase 5 (FULL) — loading souls, terrain, ESPN pool, 14-team draft...");
+const ctx = await loadPhase5SimContext({
+  db,
   leagueId: LEAGUE_ID,
   season: SIM_SEASON,
-  ...terrainInputs,
-  teamCount: 14,
+  orderSeason: ORDER_SEASON,
+  userId: process.env.PHASE5_ESPN_USER_ID ? Number(process.env.PHASE5_ESPN_USER_ID) : undefined,
+  timer,
 });
 
-let mergedPicks: Awaited<ReturnType<typeof loadSeasonTerrainInputs>>["draftPicks"] = [];
-const poolSeasons = [ORDER_SEASON, ORDER_SEASON - 1, ORDER_SEASON - 2];
-const seen = new Set<string>();
-for (const s of poolSeasons) {
-  const inp = await loadSeasonTerrainInputs({ db, leagueId: LEAGUE_ID, season: s });
-  for (const p of inp.draftPicks) {
-    const key = `${p.playerName}`.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    mergedPicks.push({ ...p, season: SIM_SEASON });
-  }
-}
+console.log(
+  `Pool: ${ctx.poolStats.total} players (terrain skill ${ctx.poolStats.skillFromTerrain} + ESPN skill ${ctx.poolStats.skillFromEspn} · K ${ctx.poolStats.kickers} · DP ${ctx.poolStats.defenders}) · seed ${SEED}`,
+);
 
-if (poolFromTerrain(terrain).length < 180) {
-  console.log(`Building sim pool from ${ORDER_SEASON} draft universe + ${SIM_SEASON} value signals.`);
-  const priorInputs = await loadSeasonTerrainInputs({ db, leagueId: LEAGUE_ID, season: ORDER_SEASON });
-  const simPriorInputs = await loadSeasonTerrainInputs({ db, leagueId: LEAGUE_ID, season: SIM_SEASON });
-  terrain = buildSeasonTerrain({
-    leagueId: LEAGUE_ID,
-    season: SIM_SEASON,
-    draftPicks: mergedPicks.length > 80 ? mergedPicks : priorInputs.draftPicks.map((p) => ({ ...p, season: SIM_SEASON })),
-    priorSeasonPoints: simPriorInputs.priorSeasonPoints.length
-      ? simPriorInputs.priorSeasonPoints
-      : priorInputs.priorSeasonPoints,
-    playerCache: priorInputs.playerCache.length ? priorInputs.playerCache : simPriorInputs.playerCache,
-    teamCount: 14,
-  });
-}
-
-const skillPool = poolFromTerrain(terrain);
-const { pool: augmentedPool } = augmentPoolWithRosterFillers({ skillPool, draftPicks: mergedPicks });
-
-const rosterRules = await loadLeagueRosterRules({ db, leagueId: LEAGUE_ID, season: SIM_SEASON });
-
-const seasons = [...new Set(draftRows.map((r) => r.season))].sort();
-const terrainMap = new Map<number, ReturnType<typeof buildSeasonTerrain>>();
-for (const season of seasons) {
-  const inputs = await loadSeasonTerrainInputs({ db, leagueId: LEAGUE_ID, season });
-  terrainMap.set(season, buildSeasonTerrain({ leagueId: LEAGUE_ID, season, ...inputs }));
-}
-const terrainLookup = buildTerrainLookup(terrainMap);
-
-const registry = fitAllActiveSouls({ leagueId: LEAGUE_ID, ledger, terrainLookup });
-const draftOrder = resolveDraftOrderFromLedger({ ledger, orderSeason: ORDER_SEASON });
-
-console.log(`Simulating ${draftOrder.length} teams · skill pool ${skillPool.length} · augmented ${augmentedPool.length} · seed ${SEED}`);
-
+const simT0 = performance.now();
 const result = simulateDraft({
   leagueId: LEAGUE_ID,
   season: SIM_SEASON,
-  terrain,
-  souls: registry.souls,
-  draftOrder,
-  ledger,
-  rosterRules,
-  fillerDraftPicks: mergedPicks,
+  terrain: ctx.terrain,
+  terrainLookup: ctx.terrainLookup,
+  souls: ctx.registry.souls,
+  draftOrder: ctx.draftOrder,
+  ledger: ctx.ledger,
+  rosterRules: ctx.rosterRules,
+  playerPool: ctx.playerPool,
+  poolHas: ctx.poolHas,
   rounds: 16,
   seed: SEED,
+  profile: true,
 });
+const simMs = Math.round(performance.now() - simT0);
 
 const transcript = formatFullDraftGate({
   result,
-  souls: registry.souls,
-  skillPoolSize: skillPool.length,
-  augmentedPoolSize: augmentedPool.length,
+  souls: ctx.registry.souls,
+  skillPoolSize: ctx.skillPoolSize,
+  augmentedPoolSize: ctx.playerPool.length,
+  poolStats: ctx.poolStats,
 });
 
 console.log(transcript);
+console.log("");
+console.log("── RUNTIME ──");
+console.log(`  Sim loop: ${simMs}ms (${result.picksCompleted} picks)`);
+console.log(`  Total script: ${Math.round(performance.now() - wallT0)}ms`);
+if (result.timing) {
+  for (const line of timer.formatLines()) console.log(line);
+  for (const b of result.timing.buckets) {
+    console.log(`  ${b.label}: ${b.ms}ms (${b.count} calls)`);
+  }
+}
+
+const sampleOwner = CONFIRMED_ACTIVE_OWNERS.find((o) => o.displayName === "Bruce Edwards")!;
+let sampleRoster = emptyRosterCounts();
+for (const p of result.picks.filter((x) => x.chooserProfileKey === sampleOwner.profileOwnerKey)) {
+  sampleRoster = addToRoster(sampleRoster, p.chosen);
+}
+const sampleLeg = assessRosterLegality({ roster: sampleRoster, rules: ctx.rosterRules, poolHas: ctx.poolHas });
+const sampleK = result.picks.find((p) => p.chooserProfileKey === sampleOwner.profileOwnerKey && p.chosen.position === "K");
+const sampleDp = result.picks.find((p) => p.chooserProfileKey === sampleOwner.profileOwnerKey && p.chosen.position === "DP");
+console.log("");
+console.log("── SAMPLE LEGAL ROSTER (Bruce Edwards) ──");
+console.log(`  ${sampleLeg.honestSummary}`);
+if (sampleK) console.log(`  K: ${sampleK.chosen.playerName} (ADP ${sampleK.chosen.adp ?? "n/a"})`);
+if (sampleDp) console.log(`  DP: ${sampleDp.chosen.playerName} (ADP ${sampleDp.chosen.adp ?? "n/a"})`);
 
 const outTxt = path.join(ROOT, "scripts", `_draft_engine_phase5_full_${LEAGUE_ID}.txt`);
 const outJson = path.join(ROOT, "scripts", `_draft_engine_phase5_full_${LEAGUE_ID}.json`);
@@ -134,10 +110,12 @@ fs.writeFileSync(
   JSON.stringify(
     formatFullDraftJson({
       result,
-      souls: registry.souls,
-      draftOrder: draftOrder.map((d) => d.displayName),
-      skillPoolSize: skillPool.length,
-      augmentedPoolSize: augmentedPool.length,
+      souls: ctx.registry.souls,
+      draftOrder: ctx.draftOrder.map((d) => d.displayName),
+      skillPoolSize: ctx.skillPoolSize,
+      augmentedPoolSize: ctx.playerPool.length,
+      poolStats: ctx.poolStats,
+      runtimeMs: { total: Math.round(performance.now() - wallT0), simLoop: simMs },
     }),
     null,
     2,
