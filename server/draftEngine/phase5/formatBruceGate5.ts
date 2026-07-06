@@ -20,14 +20,25 @@ function formatBrucePick(p: SimPickRecord, pickIndex: number): string[] {
   const prob = `${(m.pickProbability * 100).toFixed(0)}% pick prob`;
   const construction = m.rosterConstructionNote ? ` · ${m.rosterConstructionNote}` : "";
 
-  return [
+  const lines = [
     `Round ${p.round} (pick ${p.overallPick}, Bruce pick #${pickIndex})`,
     `  Took: ${p.chosen.playerName} (${p.chosen.position}, ${p.chosen.tier}, value ${p.chosen.valueScore.toFixed(0)})`,
     `  Over: ${over || "(thin board)"}`,
     `  Reason: ${m.winningDriveLabel} won (${prob}${construction}${conf})`,
-    `  Consideration set (${m.consideration.length}): ${m.consideration.map((c) => c.playerName).join(" · ")}`,
-    "",
   ];
+
+  if ((p.round === 2 || p.round === 3) && m.scoreDebug) {
+    const d = m.scoreDebug;
+    const margin = d.marginOverRunnerUp;
+    const marginLabel = margin >= 0 ? `+${margin.toFixed(2)}` : margin.toFixed(2);
+    lines.push(
+      `  Score margins: personality=${d.personalityUtility.toFixed(2)} · value-drive=${d.valueContribution.toFixed(2)} · need-drive=${d.needContribution.toFixed(2)} · construction=${d.constructionUtility.toFixed(2)} · final=${d.finalUtility.toFixed(2)} (${marginLabel} vs runner-up)`,
+    );
+  }
+
+  lines.push(`  Consideration set (${m.consideration.length}): ${m.consideration.map((c) => c.playerName).join(" · ")}`, "");
+
+  return lines;
 }
 
 export function formatBrucePartialGate(result: DraftSimulationResult, weatherNote?: string): string {

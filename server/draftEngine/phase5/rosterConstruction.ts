@@ -70,8 +70,7 @@ export function rosterConstructionUtility(args: {
   if (deficit > 0) {
     const urgent =
       args.ownerPicksRemaining <= deficit ||
-      (pos === "DP" && args.ownerPicksRemaining <= 5) ||
-      (pos === "K" && args.ownerPicksRemaining <= 3);
+      ((pos === "DP" || pos === "K") && args.ownerPicksRemaining <= 5);
     const urgency = urgent ? 4.5 : args.ownerPicksRemaining <= deficit + 2 ? 2 : 0.4;
     util += deficit * urgency;
   }
@@ -89,8 +88,77 @@ export function isPositionSaturatedForDraft(pos: RosterPosition, have: number, r
   if (isPositionBlocked(pos, have, rules)) return true;
   if (pos === "TE" && have >= (rules.starters.TE ?? 1)) return true;
   if (pos === "QB" && have >= (rules.softCap.QB ?? 2)) return true;
+  if (pos === "K" && have >= (rules.starters.K ?? 1)) return true;
+  if (pos === "DP" && have >= (rules.starters.DP ?? 1)) return true;
+  if (pos === "DST" && have >= (rules.starters.DST ?? 1)) return true;
   const soft = rules.softCap[pos];
   return soft != null && have >= soft;
+}
+
+/** Starter slots still empty while fillers exist in the pool (QB / K / DP / DST). */
+export function unfilledRequiredSlots(
+  roster: RosterCounts,
+  rules: LeagueRosterRules,
+  poolHas: Partial<Record<RosterPosition, boolean>>,
+): RosterPosition[] {
+  const out: RosterPosition[] = [];
+  for (const pos of ["QB", "K", "DP", "DST"] as RosterPosition[]) {
+    const min = rules.starterMinimum[pos] ?? rules.starters[pos] ?? 0;
+    if (min <= 0) continue;
+    if ((roster[pos] ?? 0) >= min) continue;
+    if (!poolHas[pos]) continue;
+    out.push(pos);
+  }
+  return out;
+}
+
+/**
+ * Late completion window for K / DP / DST — same band as K today.
+ * Personality may still choose among skill players until this window opens.
+ */
+export function inSlotCompletionWindow(args: {
+  ownerPicksRemaining: number;
+  round: number;
+  totalRounds: number;
+  unfilled: RosterPosition[];
+}): boolean {
+  if (args.unfilled.length === 0) return false;
+  if (args.ownerPicksRemaining <= args.unfilled.length) return true;
+  const leagueLate = args.round >= args.totalRounds - 4;
+  const ownerLate = args.ownerPicksRemaining <= 5;
+  const needsKOrDp = args.unfilled.some((p) => p === "K" || p === "DP");
+  if (needsKOrDp && (ownerLate || leagueLate || args.round >= 10)) return true;
+  return false;
+}
+
+const FORCE_FILL_PRIORITY: RosterPosition[] = ["QB", "DP", "K", "DST"];
+
+/**
+ * Positions that must be taken this pick (deterministic filler) — no softmax.
+ * DP behaves like K: late completion only, never early attraction.
+ */
+export function mustForceFillThisPick(args: {
+  roster: RosterCounts;
+  rules: LeagueRosterRules;
+  poolHas: Partial<Record<RosterPosition, boolean>>;
+  ownerPicksRemaining: number;
+  round: number;
+  totalRounds: number;
+}): RosterPosition | null {
+  const unfilled = unfilledRequiredSlots(args.roster, args.rules, args.poolHas);
+  if (unfilled.length === 0) return null;
+
+  if (args.ownerPicksRemaining <= unfilled.length) {
+    return FORCE_FILL_PRIORITY.find((p) => unfilled.includes(p)) ?? unfilled[0]!;
+  }
+
+  if (!inSlotCompletionWindow({ ...args, unfilled })) return null;
+
+  const lateSlots = unfilled.filter((p): p is "K" | "DP" | "DST" => p === "K" || p === "DP" || p === "DST");
+  if (lateSlots.length === 0) return null;
+
+  const lateFillPriority: Array<"K" | "DP" | "DST"> = ["DP", "K", "DST"];
+  return lateFillPriority.find((p) => lateSlots.includes(p)) ?? lateSlots[0]!;
 }
 
 export function mandatoryFillPositions(args: {
@@ -101,19 +169,15 @@ export function mandatoryFillPositions(args: {
   ownerPicksRemaining: number;
   poolHas: Partial<Record<RosterPosition, boolean>>;
 }): RosterPosition[] {
+  const unfilled = unfilledRequiredSlots(args.roster, args.rules, args.poolHas);
   const out: RosterPosition[] = [];
   const leagueLate = args.round >= args.totalRounds - 4;
   const ownerLate = args.ownerPicksRemaining <= 4;
+  const completion = inSlotCompletionWindow({ ...args, unfilled });
 
-  for (const pos of ["QB", "K", "DP", "DST"] as RosterPosition[]) {
-    const min = args.rules.starterMinimum[pos] ?? 0;
-    if (min <= 0) continue;
-    if ((args.roster[pos] ?? 0) >= min) continue;
-    if (!args.poolHas[pos]) continue;
-
+  for (const pos of unfilled) {
     if (pos === "QB" && (args.ownerPicksRemaining <= 2 || leagueLate)) out.push(pos);
-    else if (pos === "K" && (ownerLate || leagueLate)) out.push(pos);
-    else if ((pos === "DP" || pos === "DST") && (ownerLate || args.round >= 9)) out.push(pos);
+    else if ((pos === "K" || pos === "DP" || pos === "DST") && completion) out.push(pos);
   }
 
   if (!canFieldSkillLineup(args.roster, args.rules).legal && (ownerLate || leagueLate)) {
@@ -215,7 +279,10 @@ const IDP_DRAFT_POSITIONS = new Set(["DL", "LB", "DB", "S", "CB", "DE", "DT", "D
 export function augmentPoolWithRosterFillers(args: {
   skillPool: SimPlayer[];
   draftPicks: TerrainDraftPickRow[];
+  /** One roster-filler copy per team so the board does not run dry before round 16. */
+  teamCount?: number;
 }): { pool: SimPlayer[]; poolHas: Partial<Record<RosterPosition, boolean>> } {
+  const teamCount = Math.max(1, args.teamCount ?? 14);
   const seen = new Set(args.skillPool.map((p) => p.playerKey));
   const extra: SimPlayer[] = [];
   const poolHas: Partial<Record<RosterPosition, boolean>> = {
@@ -229,6 +296,8 @@ export function augmentPoolWithRosterFillers(args: {
   };
 
   const sorted = [...args.draftPicks].sort((a, b) => a.overallPick - b.overallPick);
+  const templates: Array<{ rosterPos: RosterPosition; row: TerrainDraftPickRow; key: string }> = [];
+  const templateKeys = new Set<string>();
 
   for (const row of sorted) {
     const raw = String(row.position ?? "").trim().toUpperCase();
@@ -239,19 +308,26 @@ export function augmentPoolWithRosterFillers(args: {
     else continue;
 
     const key = row.playerName.trim().toLowerCase().replace(/\s+/g, " ");
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (seen.has(key) || templateKeys.has(key)) continue;
+    templateKeys.add(key);
+    templates.push({ rosterPos, row, key });
+  }
 
-    const valueScore =
-      rosterPos === "K" ? 25 : rosterPos === "DP" ? 30 : 28;
-    extra.push({
-      playerName: row.playerName,
-      position: rosterPos === "DP" ? "DP" : rosterPos,
-      playerKey: key,
-      valueScore,
-      tier: "T5",
-    });
-    poolHas[rosterPos] = true;
+  for (const { rosterPos, row, key } of templates) {
+    const valueScore = rosterPos === "K" ? 25 : rosterPos === "DP" ? 30 : 28;
+    for (let seat = 0; seat < teamCount; seat++) {
+      const playerKey = `${key}#${seat + 1}`;
+      if (seen.has(playerKey)) continue;
+      seen.add(playerKey);
+      extra.push({
+        playerName: seat === 0 ? row.playerName : `${row.playerName} (${seat + 1})`,
+        position: rosterPos === "DP" ? "DP" : rosterPos,
+        playerKey,
+        valueScore,
+        tier: "T5",
+      });
+      poolHas[rosterPos] = true;
+    }
   }
 
   return { pool: [...args.skillPool, ...extra], poolHas };

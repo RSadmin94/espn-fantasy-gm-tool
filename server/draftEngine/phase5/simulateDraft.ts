@@ -84,6 +84,7 @@ export function simulateDraft(args: {
   const { pool, poolHas } = augmentPoolWithRosterFillers({
     skillPool,
     draftPicks: args.fillerDraftPicks ?? [],
+    teamCount,
   });
 
   let weather = createInitialWeather({

@@ -143,6 +143,8 @@ fs.writeFileSync(
         winningDrive: p.moment?.winningDrive,
         winningDriveLabel: p.moment?.winningDriveLabel,
         pickProbability: p.moment?.pickProbability,
+        forcedSlotFill: p.moment?.forcedSlotFill,
+        scoreDebug: p.round === 2 || p.round === 3 ? p.moment?.scoreDebug : undefined,
         consideration: p.moment?.consideration.map((c) => c.playerName),
       })),
     },

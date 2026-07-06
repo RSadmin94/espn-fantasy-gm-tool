@@ -22,10 +22,13 @@ import type { LeagueRosterRules, RosterPosition } from "./leagueRosterRules";
 import {
   isPositionBlocked,
   isPositionSaturatedForDraft,
+  inSlotCompletionWindow,
   mandatoryFillPositions,
+  mustForceFillThisPick,
   rosterConstructionUtility,
   simPositionToRosterPos,
   skillCountsForPersonality,
+  unfilledRequiredSlots,
   type RosterCounts,
 } from "./rosterConstruction";
 
@@ -34,6 +37,15 @@ export type MomentCandidate = {
   features: ReturnType<typeof computeDriveFeatures>;
   utility: number;
   pickProbability: number;
+};
+
+export type PickScoreDebug = {
+  personalityUtility: number;
+  valueContribution: number;
+  needContribution: number;
+  constructionUtility: number;
+  finalUtility: number;
+  marginOverRunnerUp: number;
 };
 
 export type MomentDecision = {
@@ -47,6 +59,9 @@ export type MomentDecision = {
   pickProbability: number;
   lowConfidencePick: boolean;
   takenOver: string[];
+  /** Numeric breakdown for fidelity proof (R2/R3 in Bruce gate). */
+  scoreDebug?: PickScoreDebug;
+  forcedSlotFill?: boolean;
 };
 
 const DRIVE_WIN_LABELS: Record<DriveName, string> = {
@@ -110,11 +125,20 @@ export function buildConsiderationSet(args: {
     poolHas: args.poolHas,
   });
 
+  const unfilled = unfilledRequiredSlots(args.ownerRoster, args.rosterRules, args.poolHas);
+  const completionWindow = inSlotCompletionWindow({
+    ownerPicksRemaining: args.ownerPicksRemaining,
+    round: args.round,
+    totalRounds: args.totalRounds,
+    unfilled,
+  });
+
   let avail = args.weather.available.filter((p) => {
     const rosterPos = simPositionToRosterPos(p.position);
     if (!rosterPos) return false;
     const have = args.ownerRoster[rosterPos] ?? 0;
     if (mandatory.length > 0 && !mandatory.includes(rosterPos)) return false;
+    if ((rosterPos === "K" || rosterPos === "DP" || rosterPos === "DST") && !completionWindow) return false;
     if (isPositionSaturatedForDraft(rosterPos, have, args.rosterRules)) return false;
     return true;
   });
@@ -124,6 +148,7 @@ export function buildConsiderationSet(args: {
       if (!rosterPos) return false;
       const have = args.ownerRoster[rosterPos] ?? 0;
       if (mandatory.length > 0 && !mandatory.includes(rosterPos)) return false;
+      if (isPositionSaturatedForDraft(rosterPos, have, args.rosterRules)) return false;
       return !isPositionBlocked(rosterPos, have, args.rosterRules);
     });
   }
@@ -210,6 +235,26 @@ function centerNeedFeatures(
   for (const a of alts) a.features.need -= mean;
 }
 
+function buildScoreDebug(args: {
+  chosenAlt: { player: SimPlayer; features: ReturnType<typeof computeDriveFeatures> };
+  coefficients: PersonalityCoefficients;
+  invT: number;
+  construction: number;
+  finalUtility: number;
+  allFinalUtils: number[];
+}): PickScoreDebug {
+  const sorted = [...args.allFinalUtils].sort((a, b) => b - a);
+  const runnerUp = sorted[1] ?? sorted[0] ?? 0;
+  return {
+    personalityUtility: computeUtility(args.chosenAlt.features, args.coefficients) * args.invT,
+    valueContribution: args.coefficients.value * args.chosenAlt.features.value,
+    needContribution: args.coefficients.need * args.chosenAlt.features.need,
+    constructionUtility: args.construction,
+    finalUtility: args.finalUtility,
+    marginOverRunnerUp: args.finalUtility - runnerUp,
+  };
+}
+
 export function resolveMoment(args: {
   soul: OwnerSoulProfile;
   weather: DraftWeather;
@@ -225,6 +270,35 @@ export function resolveMoment(args: {
   rng: Rng;
   noiseScale?: number;
 }): MomentDecision | null {
+  const forcePos = mustForceFillThisPick({
+    roster: args.ownerRoster,
+    rules: args.rosterRules,
+    poolHas: args.poolHas,
+    ownerPicksRemaining: args.ownerPicksRemaining,
+    round: args.round,
+    totalRounds: args.totalRounds,
+  });
+  if (forcePos) {
+    const fillers = args.weather.available
+      .filter((p) => simPositionToRosterPos(p.position) === forcePos)
+      .sort((a, b) => b.valueScore - a.valueScore);
+    if (fillers.length > 0) {
+      const chosen = fillers[0]!;
+      return {
+        chosen,
+        consideration: fillers.slice(0, 12),
+        candidates: [],
+        winningDrive: "need",
+        winningDriveLabel: "roster slot fill (forced)",
+        rosterConstructionNote: `must fill ${forcePos} before draft ends`,
+        pickProbability: 1,
+        lowConfidencePick: args.soul.personalityFitTier === "shrinkage_cold",
+        takenOver: fillers.slice(1, 4).map((p) => `${p.playerName} (${p.position})`),
+        forcedSlotFill: true,
+      };
+    }
+  }
+
   const consideration = buildConsiderationSet({
     weather: args.weather,
     ownerRoster: args.ownerRoster,
@@ -255,16 +329,17 @@ export function resolveMoment(args: {
 
   const invT = args.soul.inverseTemperature;
   const noise = args.noiseScale ?? 0.06;
-  const utils = alts.map((a) => {
-    const personality = computeUtility(a.features, args.soul.coefficients) * invT;
-    const construction = rosterConstructionUtility({
+  const personalityUtils = alts.map((a) => computeUtility(a.features, args.soul.coefficients) * invT);
+  const constructionUtils = alts.map((a) =>
+    rosterConstructionUtility({
       player: a.player,
       roster: args.ownerRoster,
       rules: args.rosterRules,
       ownerPicksRemaining: args.ownerPicksRemaining,
-    });
-    return personality + construction + noise * gumbelNoise(args.rng);
-  });
+    }),
+  );
+  const noises = alts.map(() => noise * gumbelNoise(args.rng));
+  const utils = alts.map((_, i) => personalityUtils[i]! + constructionUtils[i]! + noises[i]!);
   const probs = softmaxProbs(utils);
 
   let chosenIdx = 0;
@@ -336,6 +411,15 @@ export function resolveMoment(args: {
     pickProbability: probs[i]!,
   }));
 
+  const scoreDebug = buildScoreDebug({
+    chosenAlt,
+    coefficients: args.soul.coefficients,
+    invT,
+    construction: chosenConstruction,
+    finalUtility: utils[chosenIdx]!,
+    allFinalUtils: utils,
+  });
+
   return {
     chosen: chosenAlt.player,
     consideration: consideration.map((p) => p),
@@ -346,6 +430,7 @@ export function resolveMoment(args: {
     pickProbability: probs[chosenIdx]!,
     lowConfidencePick: args.soul.personalityFitTier === "shrinkage_cold",
     takenOver,
+    scoreDebug,
   };
 }
 

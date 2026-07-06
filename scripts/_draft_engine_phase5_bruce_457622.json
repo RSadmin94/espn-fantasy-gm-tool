@@ -21,13 +21,13 @@
     "skillLineupLegal": true,
     "skillMissing": [],
     "kFilled": true,
-    "dpFilled": false,
+    "dpFilled": true,
     "dstFilled": true,
     "poolGapNotes": [
       "Kickers not in the ~190-name skill terrain pool — late-round K picks use draft-history fillers when available.",
       "IDP (DP slot) not in skill terrain — late-round DP picks use draft-history IDP fillers when available."
     ],
-    "honestSummary": "Roster CANNOT field a legal lineup — missing: DP."
+    "honestSummary": "Roster can field a legal starting lineup for league 457622 rules."
   },
   "rosterRules": {
     "starters": {
@@ -86,6 +86,14 @@
       "winningDrive": "panic",
       "winningDriveLabel": "tier urgency",
       "pickProbability": 0.13681131784940875,
+      "scoreDebug": {
+        "personalityUtility": 0.2151307770932198,
+        "valueContribution": -0.01874550248265959,
+        "needContribution": 0.011666666666666624,
+        "constructionUtility": 1.2000000000000002,
+        "finalUtility": 1.402926394377897,
+        "marginOverRunnerUp": 0
+      },
       "consideration": [
         "Trey McBride",
         "Josh Allen",
@@ -114,6 +122,14 @@
       "winningDrive": "need",
       "winningDriveLabel": "roster need",
       "pickProbability": 0.07302422505554823,
+      "scoreDebug": {
+        "personalityUtility": -0.005832239102384127,
+        "valueContribution": -0.030730331938786215,
+        "needContribution": 0.025277777777777802,
+        "constructionUtility": 0.4,
+        "finalUtility": 0.4787068590000235,
+        "marginOverRunnerUp": -0.2698529369031082
+      },
       "consideration": [
         "Trey McBride",
         "Josh Allen",
@@ -216,16 +232,16 @@
     {
       "round": 7,
       "overallPick": 94,
-      "player": "Terry McLaurin",
-      "position": "WR",
+      "player": "Rhamondre Stevenson",
+      "position": "RB",
       "takenOver": [
-        "Rhamondre Stevenson (RB)",
-        "Foyesade Oluokun (DP)",
-        "Aaron Jones Sr. (RB)"
+        "Aaron Jones Sr. (RB)",
+        "Aaron Jones (RB)",
+        "Bucky Irving (RB)"
       ],
       "winningDrive": "comfortAnchor",
       "winningDriveLabel": "comfort re-draft",
-      "pickProbability": 0.11088397238758449,
+      "pickProbability": 0.1894752378413571,
       "consideration": [
         "Jordan Love",
         "Caleb Williams",
@@ -234,39 +250,39 @@
         "Bucky Irving",
         "Aaron Jones Sr.",
         "Aaron Jones",
+        "Rashee Rice",
         "Rhamondre Stevenson",
-        "Terry McLaurin",
         "Jerry Jeudy",
-        "Rome Odunze",
-        "Foyesade Oluokun"
+        "Terry McLaurin",
+        "Marvin Harrison Jr."
       ]
     },
     {
       "round": 8,
       "overallPick": 103,
-      "player": "Jerry Jeudy",
+      "player": "Tre Tucker",
       "position": "WR",
       "takenOver": [
-        "Zaire Franklin (DP)",
-        "Rhamondre Stevenson (RB)",
-        "Myles Garrett (DP)"
+        "Terry McLaurin (WR)",
+        "Rashee Rice (WR)",
+        "Marvin Mims Jr. (WR)"
       ],
-      "winningDrive": "scarcityTierCliff",
-      "winningDriveLabel": "tier cliff",
-      "pickProbability": 0.06210326935181517,
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run",
+      "pickProbability": 0.1365913143719298,
       "consideration": [
         "Jordan Love",
         "Caleb Williams",
         "Aaron Rodgers",
         "Joe Burrow",
-        "Rhamondre Stevenson",
-        "Zaire Franklin",
-        "Myles Garrett",
-        "Cooper Kupp",
-        "Jerry Jeudy",
-        "T.J. Watt",
-        "E.J. Speed",
-        "Maxx Crosby"
+        "Rashee Rice",
+        "Terry McLaurin",
+        "Aaron Jones",
+        "Tre Tucker",
+        "J.K. Dobbins",
+        "Geno Smith",
+        "Marvin Mims Jr.",
+        "Hollywood Brown"
       ]
     },
     {
@@ -275,82 +291,168 @@
       "player": "Jordan Love",
       "position": "QB",
       "takenOver": [
-        "Brandon Aubrey (K)",
-        "Chase McLaughlin (K)",
-        "J.K. Dobbins (RB)"
+        "Garrett Wilson (WR)",
+        "Rashee Rice (WR)",
+        "Isiah Pacheco (RB)"
       ],
       "winningDrive": "scarcityTierCliff",
       "winningDriveLabel": "tier cliff",
-      "pickProbability": 0.012495660700019007,
+      "pickProbability": 0.01657278646633418,
       "consideration": [
         "Jordan Love",
         "Caleb Williams",
         "Aaron Rodgers",
-        "Joe Burrow",
-        "J.K. Dobbins",
-        "Brandon Aubrey",
-        "Chase McLaughlin",
-        "Geno Smith",
-        "Mike Evans",
-        "Marvin Mims Jr.",
-        "Hollywood Brown",
-        "Marquise Brown"
+        "Rashee Rice",
+        "Alvin Kamara",
+        "Garrett Wilson",
+        "Jayden Daniels",
+        "Tua Tagovailoa",
+        "Ricky Pearsall",
+        "Isiah Pacheco",
+        "Kyler Murray",
+        "Travis Hunter"
       ]
     },
     {
       "round": 10,
       "overallPick": 131,
-      "player": "Cam Little",
-      "position": "K",
+      "player": "Foyesade Oluokun (5)",
+      "position": "DP",
       "takenOver": [
-        "Harrison Butker (K)",
-        "Rachaad White (RB)",
-        "Brandon Aubrey (K)"
+        "Foyesade Oluokun (6) (DP)",
+        "Foyesade Oluokun (7) (DP)",
+        "Foyesade Oluokun (8) (DP)"
       ],
-      "winningDrive": "panic",
-      "winningDriveLabel": "tier urgency",
-      "pickProbability": 0.08236373251171665,
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "pickProbability": 1,
+      "forcedSlotFill": true,
       "consideration": [
-        "J.K. Dobbins",
-        "Hollywood Brown",
-        "Brandon Aubrey",
-        "Chase McLaughlin",
-        "Rachaad White",
-        "Chris Godwin",
-        "Cameron Dicker",
-        "Tyler Bass",
-        "Harrison Butker",
-        "Jake Moody",
-        "Cam Little",
-        "Ka'imi Fairbairn"
+        "Foyesade Oluokun (5)",
+        "Foyesade Oluokun (6)",
+        "Foyesade Oluokun (7)",
+        "Foyesade Oluokun (8)",
+        "Foyesade Oluokun (9)",
+        "Foyesade Oluokun (10)",
+        "Foyesade Oluokun (11)",
+        "Foyesade Oluokun (12)",
+        "Foyesade Oluokun (13)",
+        "Foyesade Oluokun (14)",
+        "Roquan Smith",
+        "Roquan Smith (2)"
       ]
     },
     {
       "round": 11,
       "overallPick": 150,
-      "player": "Brandon Aiyuk",
+      "player": "Brandon Aubrey (10)",
+      "position": "K",
+      "takenOver": [
+        "Brandon Aubrey (11) (K)",
+        "Brandon Aubrey (12) (K)",
+        "Brandon Aubrey (13) (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "pickProbability": 1,
+      "forcedSlotFill": true,
+      "consideration": [
+        "Brandon Aubrey (10)",
+        "Brandon Aubrey (11)",
+        "Brandon Aubrey (12)",
+        "Brandon Aubrey (13)",
+        "Brandon Aubrey (14)",
+        "Chase McLaughlin",
+        "Chase McLaughlin (2)",
+        "Chase McLaughlin (3)",
+        "Chase McLaughlin (4)",
+        "Chase McLaughlin (5)",
+        "Chase McLaughlin (6)",
+        "Chase McLaughlin (7)"
+      ]
+    },
+    {
+      "round": 12,
+      "overallPick": 159,
+      "player": "Calvin Ridley",
       "position": "WR",
       "takenOver": [
         "Joe Mixon (RB)",
-        "Brian Robinson Jr. (RB)",
-        "Bhayshul Tuten (RB)"
+        "Odell Beckham Jr. (WR)",
+        "Alvin Kamara (RB)"
       ],
-      "winningDrive": "scarcityTierCliff",
-      "winningDriveLabel": "tier cliff",
-      "pickProbability": 0.04622289878610118,
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run",
+      "pickProbability": 0.07242630189795901,
       "consideration": [
-        "Garrett Wilson",
-        "Nick Chubb",
-        "Bhayshul Tuten",
-        "Keon Coleman",
-        "Brian Robinson Jr.",
-        "Joe Mixon",
+        "Alvin Kamara",
+        "Ricky Pearsall",
+        "Tyreek Hill",
         "Brandon Aiyuk",
+        "Joe Mixon",
+        "Odell Beckham Jr.",
         "Malik Nabers",
         "Diontae Johnson",
         "Tank Dell",
         "Amari Cooper",
-        "Calvin Ridley"
+        "Calvin Ridley",
+        "Jayden Reed"
+      ]
+    },
+    {
+      "round": 13,
+      "overallPick": 178,
+      "player": "Trey Benson",
+      "position": "RB",
+      "takenOver": [
+        "Ezekiel Elliott (RB)",
+        "Jerick McKinnon (RB)",
+        "Gus Edwards (RB)"
+      ],
+      "winningDrive": "panic",
+      "winningDriveLabel": "tier urgency",
+      "pickProbability": 0.10988413793401969,
+      "consideration": [
+        "Tank Dell",
+        "Amari Cooper",
+        "Jayden Reed",
+        "Michael Thomas",
+        "Ezekiel Elliott",
+        "Tyler Lockett",
+        "Rondale Moore",
+        "James Conner",
+        "Gus Edwards",
+        "Trey Benson",
+        "DeAndre Hopkins",
+        "Jerick McKinnon"
+      ]
+    },
+    {
+      "round": 14,
+      "overallPick": 187,
+      "player": "Rondale Moore",
+      "position": "WR",
+      "takenOver": [
+        "Najee Harris (RB)",
+        "Tank Bigsby (RB)",
+        "James Conner (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff",
+      "pickProbability": 0.05970627778787702,
+      "consideration": [
+        "Tank Dell",
+        "Amari Cooper",
+        "Jayden Reed",
+        "Rondale Moore",
+        "James Conner",
+        "Tank Bigsby",
+        "Tyler Lockett",
+        "Brandin Cooks",
+        "DeAndre Hopkins",
+        "Christian Kirk",
+        "Curtis Samuel",
+        "Najee Harris"
       ]
     }
   ]
