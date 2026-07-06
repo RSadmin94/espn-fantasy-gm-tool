@@ -8491,9 +8491,41 @@ Respond with JSON in this exact format:
       ROUNDS = geo.roundCount;
     }
     let draftOrder: Array<{ teamId: number; teamName: string; round: number; pickInRound: number; overall: number }> = [];
+
+    // PRIMARY SOURCE — the draft_picks table, where each pick's teamId is its CURRENT
+    // owner (post-trade). This is the same trade-aware data the Draft War Room mock
+    // board reads: a pick a team traded away is already recorded under the team that
+    // acquired it, so no trade reconstruction is needed here.
+    if (leagueId) {
+      try {
+        const { getDb } = await import("./db");
+        const dbPicks = await getDb();
+        if (dbPicks) {
+          const [rows] = (await dbPicks.execute(sql`
+            SELECT dp.teamId, dp.roundId, dp.roundPick, dp.overallPick, t.name AS teamName
+            FROM draft_picks dp
+            LEFT JOIN teams t ON t.leagueId = dp.leagueId AND t.season = dp.season AND t.teamId = dp.teamId
+            WHERE dp.leagueId = ${leagueId} AND dp.season = ${DRAFT_YEAR}
+            ORDER BY dp.overallPick
+          `)) as unknown as [Array<Record<string, unknown>>];
+          for (const r of rows) {
+            const tid = Number(r.teamId);
+            if (!Number.isFinite(tid) || tid <= 0) continue;
+            draftOrder.push({
+              teamId: tid,
+              teamName: (r.teamName as string) || `Team ${tid}`,
+              round: Number(r.roundId),
+              pickInRound: Number(r.roundPick),
+              overall: Number(r.overallPick),
+            });
+          }
+        }
+      } catch { /* fall through to the draft-order snake below */ }
+    }
+
     try {
       const cached = await getCachedView(DRAFT_YEAR, "combined", undefined, { userId: ctx.user?.id });
-      if (cached?.payload && TEAMS > 0 && ROUNDS > 0) {
+      if (draftOrder.length === 0 && cached?.payload && TEAMS > 0 && ROUNDS > 0) {
         const raw = cached.payload as Record<string, unknown>;
         const normalized = normalizeDraftOrder(raw);
         const pickOrder = normalized.pickOrder as Array<{ position: number; teamId: number; name?: string; abbrev?: string; owners?: string }>;
@@ -8529,44 +8561,6 @@ Respond with JSON in this exact format:
           });
         }
       }
-    }
-
-    // ── Apply EXECUTED draft-pick trades so ownership reflects reality ──────────
-    // The base draftOrder above is the standard snake slate (every team its own pick
-    // each round). Real ESPN trades move picks between teams — without this, a team
-    // that traded its pick away still shows it. Source: gmTransactions, the same data
-    // behind completed-trade intelligence. Best-effort: on any failure the base slate
-    // is returned unchanged. Only EXECUTED legs with a concrete round+pick are applied,
-    // in chronological order so a pick traded twice lands with its final owner.
-    if (leagueId && draftOrder.length > 0) {
-      try {
-        const { getDb } = await import("./db");
-        const { loadGmTradeLegs } = await import("./completedTradeAuthority");
-        const dbTrades = await getDb();
-        if (dbTrades) {
-          const legs = await loadGmTradeLegs(dbTrades, leagueId, [DRAFT_YEAR]);
-          const executed = legs
-            .filter((l) =>
-              String(l.status).toUpperCase() === "EXECUTED" &&
-              l.round != null && l.pickInRound != null &&
-              Number(l.pickSeason) === DRAFT_YEAR &&
-              l.toTeamId != null && Number(l.toTeamId) > 0)
-            .sort((a, b) => Number(a.processedDate ?? 0) - Number(b.processedDate ?? 0));
-          if (executed.length > 0) {
-            const nameByTeam = new Map<number, string>();
-            for (const d of draftOrder) if (!nameByTeam.has(d.teamId)) nameByTeam.set(d.teamId, d.teamName);
-            const byKey = new Map<string, (typeof draftOrder)[number]>();
-            for (const d of draftOrder) byKey.set(`${d.round}_${d.pickInRound}`, d);
-            for (const leg of executed) {
-              const entry = byKey.get(`${leg.round}_${leg.pickInRound}`);
-              if (!entry) continue;
-              const toId = Number(leg.toTeamId);
-              entry.teamId = toId;
-              entry.teamName = nameByTeam.get(toId) ?? entry.teamName;
-            }
-          }
-        }
-      } catch { /* best-effort: base slate is returned if the trade read fails */ }
     }
 
     return {
