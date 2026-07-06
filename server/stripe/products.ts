@@ -36,10 +36,10 @@ export const PRODUCTS = {
     description: STRIPE_CHECKOUT_COPY.rivalsDescription,
     monthly: {
       priceId: envPrice("STRIPE_PRICE_ID_RIVALS_MONTHLY") || envPrice("STRIPE_PRICE_ID_MONTHLY"),
-      amount: 899,
+      amount: 799,
       currency: "usd" as const,
       interval: "month" as const,
-      label: "$8.99 / month",
+      label: "$7.99 / month",
     },
     annual: {
       priceId: envPrice("STRIPE_PRICE_ID_RIVALS_ANNUAL") || envPrice("STRIPE_PRICE_ID_ANNUAL"),
