@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { KeeperAdvisor } from "./KeeperAdvisor";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -807,7 +808,7 @@ export function Roster() {
 
       {/* ── Tabs: Roster / Keeper Advisor ────────────────────────── */}
       <div className="flex gap-1 mb-4 border-b" style={{ borderColor: LINE }}>
-        {([["roster", "Roster"], ["keeper", `Keeper Advisor ${draftYear}`]] as const).map(([key, label]) => (
+        {([["roster", "Roster"], ["keeper", "Keepers"]] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setRosterTab(key)}
@@ -930,7 +931,8 @@ export function Roster() {
 
         </>)}
 
-        {rosterTab === "keeper" && (<>
+        {rosterTab === "keeper" && <KeeperAdvisor />}
+        {false && (<>
         {/* ── Keeper Advisor (merged from KeeperAdvisor) ─────────────── */}
         <section style={PANEL} className="overflow-hidden">
           <button
