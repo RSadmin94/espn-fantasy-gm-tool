@@ -54,14 +54,14 @@ function EvidenceList({ items }: { items: string[] }) {
   );
 }
 
-function Section({ title, icon, badge, children, defaultOpen = true, accent }: {
-  title: string; icon: any; badge?: string | number; children: React.ReactNode;
+function Section({ id, title, icon, badge, children, defaultOpen = true, accent }: {
+  id?: string; title: string; icon: any; badge?: string | number; children: React.ReactNode;
   defaultOpen?: boolean; accent?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const Icon = icon;
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#1b131f,#140e17)] overflow-hidden">
+    <div id={id} className="scroll-mt-24 rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#1b131f,#140e17)] overflow-hidden">
       <button onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors">
         <div className="flex items-center gap-2.5">
@@ -595,6 +595,35 @@ function LiveDraftEngine({
     return m;
   }, [schedule, results]);
 
+  // Draft grades (A–F) per team: value captured (players landed later than their ADP = steals,
+  // vs reaches) blended with roster strength (avg market value of who they drafted). Scored 0–1
+  // then graded on a curve relative to the rest of the league. Drafted players only (not keepers).
+  const draftGrades = useMemo(() => {
+    const raw = new Map<number, { score: number; avgDelta: number; strength: number; n: number }>();
+    for (const [tid, roster] of rostersByTeam) {
+      const drafted = roster.filter((r: any) => !r.isKeeper && r.marketValue != null);
+      const withAdp = drafted.filter((r: any) => r.adp != null);
+      const avgDelta = withAdp.length
+        ? withAdp.reduce((s: number, r: any) => s + (Number(r.pickNumber) - Number(r.adp)), 0) / withAdp.length
+        : 0;
+      const strength = drafted.length
+        ? drafted.reduce((s: number, r: any) => s + Number(r.marketValue || 0), 0) / drafted.length
+        : 0;
+      const valueScore = Math.max(0, Math.min(1, 0.5 + avgDelta / 50));
+      const strengthScore = Math.max(0, Math.min(1, strength / 100));
+      raw.set(tid, { score: 0.5 * valueScore + 0.5 * strengthScore, avgDelta, strength, n: drafted.length });
+    }
+    const ranked = [...raw.entries()].sort((a, b) => b[1].score - a[1].score);
+    const total = ranked.length || 1;
+    const out = new Map<number, { letter: string; avgDelta: number; strength: number }>();
+    ranked.forEach(([tid, v], i) => {
+      const p = i / total;
+      const letter = v.n < 3 ? "—" : p < 0.14 ? "A" : p < 0.36 ? "B" : p < 0.68 ? "C" : p < 0.90 ? "D" : "F";
+      out.set(tid, { letter, avgDelta: v.avgDelta, strength: v.strength });
+    });
+    return out;
+  }, [rostersByTeam]);
+
   const slot = schedule[idx];
   const done = idx >= schedule.length;
   const awaitingUser = !!slot && !slot.isKeeperSlot && yourTeamId != null && Number(slot.teamId) === yourTeamId && !results[slot.pickNumber];
@@ -647,7 +676,7 @@ function LiveDraftEngine({
   }
 
   const SORTS: [typeof sort, string][] = [["adp","ADP"],["proj","Proj"],["value","Value"],["pos","Pos"],["name","Name"]];
-  const POSES = ["ALL","QB","RB","WR","TE","K","DEF"];
+  const POSES = ["ALL","QB","RB","WR","TE","K","DP"];
 
   return (
     <div className="p-4">
@@ -715,12 +744,25 @@ function LiveDraftEngine({
             {teams.map((t: any) => {
               const tid = Number(t.teamId);
               const roster = (rostersByTeam.get(tid) ?? []).sort((a, b) => a.pickNumber - b.pickNumber);
+              const grade = draftGrades.get(tid);
               const isOnClock = !done && slot && Number(slot.teamId) === tid;
               const isYou = yourTeamId === tid;
               return (
                 <div key={tid} className={cn("rounded-lg border p-2", isOnClock ? "border-violet-500/50 bg-violet-500/5" : isYou ? "border-violet-500/30 bg-violet-500/5" : "border-white/[0.06] bg-white/[0.03]")}>
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="text-[11px] font-black text-zinc-200 truncate">{t.teamName}</span>
+                    {grade && grade.letter !== "—" && (
+                      <span
+                        title={`Draft grade ${grade.letter} — ${grade.avgDelta >= 0 ? "+" : ""}${grade.avgDelta.toFixed(0)} avg value vs ADP, ${grade.strength.toFixed(0)}/100 avg talent`}
+                        className={cn("text-[10px] font-black px-1.5 rounded border shrink-0",
+                          grade.letter === "A" ? "text-emerald-300 bg-emerald-500/15 border-emerald-500/30" :
+                          grade.letter === "B" ? "text-lime-300 bg-lime-500/15 border-lime-500/30" :
+                          grade.letter === "C" ? "text-amber-300 bg-amber-500/15 border-amber-500/30" :
+                          grade.letter === "D" ? "text-orange-300 bg-orange-500/15 border-orange-500/30" :
+                          "text-red-300 bg-red-500/15 border-red-500/30")}>
+                        {grade.letter}
+                      </span>
+                    )}
                     {isYou && <span className="text-[10px] font-black text-violet-300 bg-violet-500/15 px-1 rounded">YOU</span>}
                     <span className="text-[10px] text-zinc-600 ml-auto tabular-nums">{roster.length}</span>
                   </div>
@@ -1471,6 +1513,46 @@ function CompressionSection({ compression }: { compression: any[] }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+const DWR_NAV_ITEMS: { id: string; label: string; keeperOnly?: boolean }[] = [
+  { id: "dwr-briefing", label: "Briefing" },
+  { id: "dwr-keepers", label: "Keepers", keeperOnly: true },
+  { id: "dwr-build", label: "Build Targets" },
+  { id: "dwr-dna", label: "Owner DNA" },
+  { id: "dwr-runs", label: "Run Windows" },
+  { id: "dwr-value", label: "Value Windows" },
+  { id: "dwr-compression", label: "Compression", keeperOnly: true },
+  { id: "dwr-trades", label: "Trade Signals" },
+  { id: "dwr-mock", label: "Mock Draft" },
+];
+
+function dwrScrollTo(sectionId: string) {
+  document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function DwrSectionNav({ keepersOn }: { keepersOn: boolean }) {
+  const items = DWR_NAV_ITEMS.filter((i) => !i.keeperOnly || keepersOn);
+  return (
+    <nav
+      aria-label="Draft War Room sections"
+      className="sticky top-16 z-10 overflow-x-auto rounded-xl border border-white/[0.08] bg-[#110c14]/95 px-2 py-2 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.65)] backdrop-blur-md"
+    >
+      <ul className="flex min-w-max gap-1">
+        {items.map((item) => (
+          <li key={item.id}>
+            <button
+              type="button"
+              onClick={() => dwrScrollTo(item.id)}
+              className="rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
+            >
+              {item.label}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
 export function DraftWarRoom() {
   const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const { leagueContextKey } = useLeagueActiveGate();
@@ -1624,26 +1706,28 @@ export function DraftWarRoom() {
           )}
         </div>
 
+        <DwrSectionNav keepersOn={keepersOn} />
+
         {/* 1. Confidence Dashboard */}
-        <Section title="Draft Briefing" icon={ShieldCheck}
+        <Section id="dwr-briefing" title="Draft Briefing" icon={ShieldCheck}
           accent="border-amber-500/20 bg-white/[0.03]" defaultOpen={true}>
           <ConfidenceDashboard data={confidenceDashboard} showKeeperInsights={keepersOn} />
         </Section>
 
         {/* 2. Keeper Predictions */}
         {keepersOn && (
-        <Section title="Keeper predictions" icon={Trophy} badge={keeperPredictions?.length}>
+        <Section id="dwr-keepers" title="Keeper predictions" icon={Trophy} badge={keeperPredictions?.length}>
           <KeeperSection predictions={keeperPredictions ?? []} />
         </Section>
         )}
 
         {/* 3. Roster Construction */}
-        <Section title="Build Targets" icon={BarChart2} badge={rosterNeeds?.length}>
+        <Section id="dwr-build" title="Build Targets" icon={BarChart2} badge={rosterNeeds?.length}>
           <RosterNeedsSection needs={rosterNeeds ?? []} />
         </Section>
 
         {/* 4. Draft Shock Meter */}
-        <Section title="Owner DNA Map" icon={Activity} badge={shockMeters?.length}>
+        <Section id="dwr-dna" title="Owner DNA Map" icon={Activity} badge={shockMeters?.length}>
           <ShockMeterSection meters={shockMeters ?? []} />
         </Section>
 
@@ -1651,29 +1735,29 @@ export function DraftWarRoom() {
         {/* League Context removed; format shown in header chips */}
 
         {/* 6. Position Run Alerts — PHASE 1.75 */}
-        <Section title="Position Run Windows" icon={Flame} badge={positionRunAlerts?.length ?? 0}>
+        <Section id="dwr-runs" title="Position Run Windows" icon={Flame} badge={positionRunAlerts?.length ?? 0}>
           <RunAlertsSection alerts={positionRunAlerts ?? []} />
         </Section>
 
         {/* 7. Scarcity Detection — PHASE 1.75 */}
-        <Section title="Value Windows" icon={Wind} badge={scarcityAlerts?.length ?? 0}>
+        <Section id="dwr-value" title="Value Windows" icon={Wind} badge={scarcityAlerts?.length ?? 0}>
           <ScarcitySection alerts={scarcityAlerts ?? []} />
         </Section>
 
         {/* 8. Keeper Compression — PHASE 1.75 */}
         {keepersOn && (
-        <Section title="Capital Compression" icon={Lock} badge={keeperCompression?.length ?? 0} defaultOpen={false}>
+        <Section id="dwr-compression" title="Capital Compression" icon={Lock} badge={keeperCompression?.length ?? 0} defaultOpen={false}>
           <CompressionSection compression={keeperCompression ?? []} />
         </Section>
         )}
 
         {/* 9. Trade pick signals (open-slot heuristic rows) */}
-        <Section title="Trade pick signals" icon={TrendingUp} badge={tradedPicks?.length ?? 0} defaultOpen={false}>
+        <Section id="dwr-trades" title="Trade pick signals" icon={TrendingUp} badge={tradedPicks?.length ?? 0} defaultOpen={false}>
           <TradedPicksBadge tradedPicks={tradedPicks ?? []} />
         </Section>
 
         {/* 10. Mock Draft Board */}
-        <Section title="Mock Draft Board" icon={Target} badge={totalPicks} defaultOpen={true}>
+        <Section id="dwr-mock" title="Mock Draft Board" icon={Target} badge={totalPicks} defaultOpen={true}>
           <MockDraftBoard
             picks={mockDraft ?? []}
             teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))}

@@ -966,7 +966,7 @@ export function buildMockDraft(params: {
         // league that starts N defenders drafts N. No late-round backup unless the roster rule asks.
         case "DP":  return LINEUP_REQS.DP ?? 1;
         case "K":   return round >= maxRound - 1 ? 1 : 0;
-        case "DEF": return round >= maxRound - 2 ? 1 : 0;
+        case "DEF": return 0; // league rosters individual defenders (DP), not team D/ST
         case "RB":  return 6;
         case "WR":  return 7;
         default:    return 3;
@@ -1293,7 +1293,7 @@ export const draftWarRoomRouter = router({
         SELECT fullName, position, espnPlayerId
         FROM gm_player_registry
         WHERE espnPlayerId IS NOT NULL
-          AND position IN ('QB','RB','WR','TE','K','DEF','DL','LB','DB')
+          AND position IN ('QB','RB','WR','TE','K','DL','LB','DB')
         ORDER BY lastSeasonSeen DESC, id ASC LIMIT 2000
       `) as unknown as [any[]];
 
@@ -1475,7 +1475,7 @@ export const draftWarRoomRouter = router({
       // SAME single board (Rule 4: no duplicate boards), named explicitly for clarity.
       // Include DP so individual defensive players (already normalized + carrying real ADP in
       // playerPool) surface in the Available Players board, matching what the mock draft uses.
-      const DRAFT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DEF", "DP"]);
+      const DRAFT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DP"]);
       const availablePoolAfterKeepers = playerPool
         .filter((p) => !removedKeeperIds.has(Number(p.espnId)) && DRAFT_POSITIONS.has(p.position))
         .slice(0, 320)
