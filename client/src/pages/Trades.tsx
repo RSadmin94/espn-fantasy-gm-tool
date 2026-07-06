@@ -144,7 +144,12 @@ interface TradeResult {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const ORDINALS = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th"];
+/** Ordinal label for ANY round number (1st, 2nd … 11th, 12th, 13th, 14th …). */
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
 /** "2027 R1.05" or "2027 R1.05 (via Team Alpha)" */
 function formatPick(year: number, round: number, pick: number, via?: string) {
   const base = `${year} R${round}.${String(pick).padStart(2, "0")}`;
@@ -381,6 +386,7 @@ function PickAdder({
   onAdd,
   onRemove,
   teamCount,
+  rounds,
   season,
   teams,
 }: {
@@ -388,6 +394,7 @@ function PickAdder({
   onAdd: (p: TradePick) => void;
   onRemove: (key: string) => void;
   teamCount: number;
+  rounds: number;
   season: number;
   teams: TeamRow[];
 }) {
@@ -455,9 +462,9 @@ function PickAdder({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {[1, 2, 3, 4, 5, 6, 7].map(r => (
+            {Array.from({ length: Math.max(1, rounds) }, (_, i) => i + 1).map(r => (
               <SelectItem key={r} value={String(r)} className="text-xs">
-                {ORDINALS[r]} Rd
+                {ordinal(r)} Rd
               </SelectItem>
             ))}
           </SelectContent>
@@ -734,6 +741,7 @@ function RosterPicker({
           onAdd={onAddPick}
           onRemove={onRemovePick}
           teamCount={teamCount}
+          rounds={Math.max(14, Math.min(20, players.length || 16))}
           season={season}
           teams={teams}
         />
