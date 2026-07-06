@@ -384,7 +384,11 @@ export function computeTradeFitScore(args: {
   valueRatioForThisSide: number; // >1 means this side gains value
 }): TradeFitScore {
   const ev: { ok: boolean; text: string }[] = [];
-  const weakest = Object.entries(args.teamNeeds).sort((a, b) => a[1] - b[1])[0]?.[0];
+  // Weakest need is judged among the multi-body skill slots only. QB/TE/DP/K each start one, so a
+  // single body already satisfies them — they should never read as "the thinnest position."
+  const weakest = (["QB", "RB", "WR", "TE"] as const)
+    .map((p) => [p, args.teamNeeds[p] ?? 0] as const)
+    .sort((a, b) => a[1] - b[1])[0]?.[0];
   if (weakest && args.receivedPositions.includes(weakest)) ev.push({ ok: true, text: `Addresses ${weakest} weakness (thinnest position).` });
   if (args.ownerMostAcquiredPos && args.receivedPositions.includes(args.ownerMostAcquiredPos)) ev.push({ ok: true, text: `Aligns with owner's trade behavior (most-acquired: ${args.ownerMostAcquiredPos}).` });
   if (args.window === "Contender" || args.window === "Playoff Team") ev.push({ ok: true, text: `Fits a ${args.window.toLowerCase()} timeline.` });
@@ -394,6 +398,17 @@ export function computeTradeFitScore(args: {
   if (args.ownerMostTradedAwayPos) {
     const rare = args.gavePositions.find((p) => p !== args.ownerMostTradedAwayPos);
     if (rare) ev.push({ ok: false, text: `Moves a ${rare}, a position this owner rarely trades away.` });
+  }
+  // Wasted-depth penalty: one-start slots (QB/TE/DP/K) only ever play one body, so carrying a big
+  // surplus is poor roster construction and pulls the fit grade down — and receiving MORE of an
+  // already-stacked slot is worse. 3+ at a one-start position (2+ kickers) is a clear overload.
+  const OVERLOAD_AT: Record<string, number> = { QB: 3, TE: 3, DP: 3, K: 2 };
+  for (const [pos, at] of Object.entries(OVERLOAD_AT)) {
+    const have = args.teamNeeds[pos] ?? 0;
+    if (have >= at) {
+      const adds = args.receivedPositions.includes(pos);
+      ev.push({ ok: false, text: `Overloaded at ${pos} — ${have} rostered but only one starts${adds ? ", and this trade adds another" : ""}.` });
+    }
   }
   const net = ev.filter((e) => e.ok).length - ev.filter((e) => !e.ok).length;
   return { grade: scoreToGrade(net), evidence: ev };

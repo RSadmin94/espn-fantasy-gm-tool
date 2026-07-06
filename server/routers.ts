@@ -9972,8 +9972,14 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       const teamARoster = allPlayers.filter(p => p.teamId === input.teamAId);
       const teamBRoster = allPlayers.filter(p => p.teamId === input.teamBId);
       const posCount = (roster: typeof allPlayers) => {
-        const counts: Record<string, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
-        for (const p of roster) if (p.position in counts) counts[p.position]++;
+        // Count DP (individual defenders) and K too — this is an IDP league, so a defender-heavy
+        // roster must be visible to the fit rating. Raw IDP positions collapse to "DP".
+        const IDP = new Set(["DP", "DL", "LB", "DB", "S", "CB", "DE", "DT", "EDGE"]);
+        const counts: Record<string, number> = { QB: 0, RB: 0, WR: 0, TE: 0, DP: 0, K: 0 };
+        for (const p of roster) {
+          const pos = IDP.has(String(p.position)) ? "DP" : String(p.position);
+          if (pos in counts) counts[pos]++;
+        }
         return counts;
       };
       const needsA = posCount(teamARoster);
