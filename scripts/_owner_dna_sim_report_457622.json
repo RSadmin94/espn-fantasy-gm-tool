@@ -1,0 +1,432 @@
+{
+  "leagueId": "457622",
+  "season": 2026,
+  "generatedAt": "2026-07-05T15:44:56.910Z",
+  "gridSize": 135,
+  "gridElapsedSec": 3,
+  "currentDefault": {
+    "tuning": {
+      "inferiorAdpSlots": 7,
+      "inferiorAdpSlotsCritical": 12,
+      "leagueTendencyDelta": 0.1,
+      "bpaTendencyDelta": 0.08,
+      "minProbMargin": 0.18,
+      "minProbHigh": 0.45,
+      "minProbMedium": 0.5,
+      "minProbLow": 0.55,
+      "closeTendencyDelta": 0.08,
+      "closeProbMargin": 0.15,
+      "closeDecisionGap": 14,
+      "decayMultipliers": [
+        1,
+        0.65,
+        0.4,
+        0.2
+      ]
+    },
+    "report": {
+      "leagueScore": 0.389033636458608,
+      "leagueBaselineScore": 0.33634605697788633,
+      "leagueLift": 0.05268757948072167,
+      "directDnaNudges": 16,
+      "offensePickCount": 155,
+      "top14PlayerMatches": 14,
+      "top14Total": 14,
+      "garrettPick": 75,
+      "warnerPick": 78,
+      "dpCount": 14,
+      "teamsWith2PlusDp": 0,
+      "perOwner": [
+        {
+          "ownerKey": "marlon moore",
+          "ownerName": "Marlon Moore",
+          "offensePicks": 11,
+          "score": 0.49172308807259313,
+          "baselineScore": 0.3522036231026097,
+          "lift": 0.13951946496998338,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "nate west",
+          "ownerName": "Nate West",
+          "offensePicks": 11,
+          "score": 0.4478753840768599,
+          "baselineScore": 0.32447873597416027,
+          "lift": 0.12339664810269965,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "bruce edwards",
+          "ownerName": "Bruce Edwards",
+          "offensePicks": 12,
+          "score": 0.3379169925879288,
+          "baselineScore": 0.244866399067595,
+          "lift": 0.09305059352033378,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "jan graham",
+          "ownerName": "Jan Graham",
+          "offensePicks": 11,
+          "score": 0.38084901847447183,
+          "baselineScore": 0.29336497467352285,
+          "lift": 0.08748404380094899,
+          "dnaNudges": 0
+        },
+        {
+          "ownerKey": "sheldon deroux",
+          "ownerName": "Sheldon deRoux",
+          "offensePicks": 11,
+          "score": 0.3860612077454919,
+          "baselineScore": 0.3037756032278882,
+          "lift": 0.08228560451760374,
+          "dnaNudges": 1
+        },
+        {
+          "ownerKey": "steffon bizzell",
+          "ownerName": "Steffon Bizzell",
+          "offensePicks": 11,
+          "score": 0.3738234814311577,
+          "baselineScore": 0.2968716481218244,
+          "lift": 0.07695183330933326,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "mark deroux",
+          "ownerName": "Mark Deroux",
+          "offensePicks": 11,
+          "score": 0.34115813939002476,
+          "baselineScore": 0.2847298542094294,
+          "lift": 0.056428285180595346,
+          "dnaNudges": 1
+        },
+        {
+          "ownerKey": "randy broner jr",
+          "ownerName": "Randy Broner Jr",
+          "offensePicks": 11,
+          "score": 0.4144206495623448,
+          "baselineScore": 0.3776242342153553,
+          "lift": 0.03679641534698952,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "rod sellers",
+          "ownerName": "Rod Sellers",
+          "offensePicks": 11,
+          "score": 0.4672635654056965,
+          "baselineScore": 0.4474072665583225,
+          "lift": 0.019856298847374033,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "christian graham",
+          "ownerName": "Christian Graham",
+          "offensePicks": 11,
+          "score": 0.30454834785996626,
+          "baselineScore": 0.29041267373559454,
+          "lift": 0.014135674124371767,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "marcus reese",
+          "ownerName": "Marcus Reese",
+          "offensePicks": 11,
+          "score": 0.29004442494742566,
+          "baselineScore": 0.2859925388502483,
+          "lift": 0.0040518860971773965,
+          "dnaNudges": 0
+        },
+        {
+          "ownerKey": "lozell styles",
+          "ownerName": "LOZELL STYLES",
+          "offensePicks": 11,
+          "score": 0.5601252280135852,
+          "baselineScore": 0.5601252280135852,
+          "lift": 0,
+          "dnaNudges": 0
+        },
+        {
+          "ownerKey": "demetri clark",
+          "ownerName": "Demetri Clark",
+          "offensePicks": 11,
+          "score": 0.386472148031768,
+          "baselineScore": 0.386472148031768,
+          "lift": 0,
+          "dnaNudges": 0
+        },
+        {
+          "ownerKey": "tony dorsey",
+          "ownerName": "Tony Dorsey",
+          "offensePicks": 11,
+          "score": 0.26883620244580303,
+          "baselineScore": 0.26883620244580303,
+          "lift": 0,
+          "dnaNudges": 0
+        }
+      ],
+      "compositeObjective": 49.440879542005135
+    }
+  },
+  "bestTuning": {
+    "tuning": {
+      "inferiorAdpSlots": 7,
+      "inferiorAdpSlotsCritical": 12,
+      "leagueTendencyDelta": 0.1,
+      "bpaTendencyDelta": 0.08,
+      "minProbMargin": 0.18,
+      "minProbHigh": 0.45,
+      "minProbMedium": 0.5,
+      "minProbLow": 0.55,
+      "closeTendencyDelta": 0.08,
+      "closeProbMargin": 0.15,
+      "closeDecisionGap": 14,
+      "decayMultipliers": [
+        1,
+        0.65,
+        0.4,
+        0.2
+      ]
+    },
+    "report": {
+      "leagueScore": 0.389033636458608,
+      "leagueBaselineScore": 0.33634605697788633,
+      "leagueLift": 0.05268757948072167,
+      "directDnaNudges": 16,
+      "offensePickCount": 155,
+      "top14PlayerMatches": 14,
+      "top14Total": 14,
+      "garrettPick": 75,
+      "warnerPick": 78,
+      "dpCount": 14,
+      "teamsWith2PlusDp": 0,
+      "perOwner": [
+        {
+          "ownerKey": "marlon moore",
+          "ownerName": "Marlon Moore",
+          "offensePicks": 11,
+          "score": 0.49172308807259313,
+          "baselineScore": 0.3522036231026097,
+          "lift": 0.13951946496998338,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "nate west",
+          "ownerName": "Nate West",
+          "offensePicks": 11,
+          "score": 0.4478753840768599,
+          "baselineScore": 0.32447873597416027,
+          "lift": 0.12339664810269965,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "bruce edwards",
+          "ownerName": "Bruce Edwards",
+          "offensePicks": 12,
+          "score": 0.3379169925879288,
+          "baselineScore": 0.244866399067595,
+          "lift": 0.09305059352033378,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "jan graham",
+          "ownerName": "Jan Graham",
+          "offensePicks": 11,
+          "score": 0.38084901847447183,
+          "baselineScore": 0.29336497467352285,
+          "lift": 0.08748404380094899,
+          "dnaNudges": 0
+        },
+        {
+          "ownerKey": "sheldon deroux",
+          "ownerName": "Sheldon deRoux",
+          "offensePicks": 11,
+          "score": 0.3860612077454919,
+          "baselineScore": 0.3037756032278882,
+          "lift": 0.08228560451760374,
+          "dnaNudges": 1
+        },
+        {
+          "ownerKey": "steffon bizzell",
+          "ownerName": "Steffon Bizzell",
+          "offensePicks": 11,
+          "score": 0.3738234814311577,
+          "baselineScore": 0.2968716481218244,
+          "lift": 0.07695183330933326,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "mark deroux",
+          "ownerName": "Mark Deroux",
+          "offensePicks": 11,
+          "score": 0.34115813939002476,
+          "baselineScore": 0.2847298542094294,
+          "lift": 0.056428285180595346,
+          "dnaNudges": 1
+        },
+        {
+          "ownerKey": "randy broner jr",
+          "ownerName": "Randy Broner Jr",
+          "offensePicks": 11,
+          "score": 0.4144206495623448,
+          "baselineScore": 0.3776242342153553,
+          "lift": 0.03679641534698952,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "rod sellers",
+          "ownerName": "Rod Sellers",
+          "offensePicks": 11,
+          "score": 0.4672635654056965,
+          "baselineScore": 0.4474072665583225,
+          "lift": 0.019856298847374033,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "christian graham",
+          "ownerName": "Christian Graham",
+          "offensePicks": 11,
+          "score": 0.30454834785996626,
+          "baselineScore": 0.29041267373559454,
+          "lift": 0.014135674124371767,
+          "dnaNudges": 2
+        },
+        {
+          "ownerKey": "marcus reese",
+          "ownerName": "Marcus Reese",
+          "offensePicks": 11,
+          "score": 0.29004442494742566,
+          "baselineScore": 0.2859925388502483,
+          "lift": 0.0040518860971773965,
+          "dnaNudges": 0
+        },
+        {
+          "ownerKey": "lozell styles",
+          "ownerName": "LOZELL STYLES",
+          "offensePicks": 11,
+          "score": 0.5601252280135852,
+          "baselineScore": 0.5601252280135852,
+          "lift": 0,
+          "dnaNudges": 0
+        },
+        {
+          "ownerKey": "demetri clark",
+          "ownerName": "Demetri Clark",
+          "offensePicks": 11,
+          "score": 0.386472148031768,
+          "baselineScore": 0.386472148031768,
+          "lift": 0,
+          "dnaNudges": 0
+        },
+        {
+          "ownerKey": "tony dorsey",
+          "ownerName": "Tony Dorsey",
+          "offensePicks": 11,
+          "score": 0.26883620244580303,
+          "baselineScore": 0.26883620244580303,
+          "lift": 0,
+          "dnaNudges": 0
+        }
+      ],
+      "compositeObjective": 49.440879542005135
+    }
+  },
+  "top5": [
+    {
+      "composite": 49.440879542005135,
+      "nudges": 16,
+      "lift": 0.05268757948072167,
+      "garrett": 75,
+      "warner": 78,
+      "tuning": {
+        "closeDecisionGap": 14,
+        "leagueTendencyDelta": 0.1,
+        "minProbMargin": 0.18,
+        "inferiorAdpSlots": 7
+      }
+    },
+    {
+      "composite": 49.440879542005135,
+      "nudges": 16,
+      "lift": 0.05268757948072167,
+      "garrett": 75,
+      "warner": 78,
+      "tuning": {
+        "closeDecisionGap": 14,
+        "leagueTendencyDelta": 0.1,
+        "minProbMargin": 0.2,
+        "inferiorAdpSlots": 7
+      }
+    },
+    {
+      "composite": 49.440879542005135,
+      "nudges": 16,
+      "lift": 0.05268757948072167,
+      "garrett": 75,
+      "warner": 78,
+      "tuning": {
+        "closeDecisionGap": 14,
+        "leagueTendencyDelta": 0.1,
+        "minProbMargin": 0.22,
+        "inferiorAdpSlots": 7
+      }
+    },
+    {
+      "composite": 49.440879542005135,
+      "nudges": 16,
+      "lift": 0.05268757948072167,
+      "garrett": 75,
+      "warner": 78,
+      "tuning": {
+        "closeDecisionGap": 14,
+        "leagueTendencyDelta": 0.12,
+        "minProbMargin": 0.18,
+        "inferiorAdpSlots": 7
+      }
+    },
+    {
+      "composite": 49.440879542005135,
+      "nudges": 16,
+      "lift": 0.05268757948072167,
+      "garrett": 75,
+      "warner": 78,
+      "tuning": {
+        "closeDecisionGap": 14,
+        "leagueTendencyDelta": 0.12,
+        "minProbMargin": 0.2,
+        "inferiorAdpSlots": 7
+      }
+    }
+  ],
+  "monteCarlo": {
+    "runs": 100,
+    "meanLeagueScore": 0.3708997817757752,
+    "meanLeagueLift": 0.03455372479788877,
+    "meanDnaNudges": 12.72,
+    "meanCompositeObjective": 44.000723137155234,
+    "garrettPickModes": {
+      "75": 100
+    },
+    "warnerPickModes": {
+      "78": 100
+    }
+  },
+  "recommendation": {
+    "inferiorAdpSlots": 7,
+    "inferiorAdpSlotsCritical": 12,
+    "leagueTendencyDelta": 0.1,
+    "bpaTendencyDelta": 0.08,
+    "minProbMargin": 0.18,
+    "minProbHigh": 0.45,
+    "minProbMedium": 0.5,
+    "minProbLow": 0.55,
+    "closeTendencyDelta": 0.08,
+    "closeProbMargin": 0.15,
+    "closeDecisionGap": 14,
+    "decayMultipliers": [
+      1,
+      0.65,
+      0.4,
+      0.2
+    ]
+  }
+}

@@ -1,0 +1,799 @@
+{
+  "leagueId": "457622",
+  "season": 2026,
+  "generatedAt": "2026-07-05T16:59:10.195Z",
+  "leagueQbTiming": {
+    "profile": {
+      "position": "QB",
+      "leagueId": "457622",
+      "teamCount": 14,
+      "confidence": "Medium",
+      "confidenceReasons": [
+        "16 seasons and 318 QB picks (84% labeled)"
+      ],
+      "baselineFirstPick": 71.5,
+      "baselineFirstRound": 6,
+      "firstPickP25": 38,
+      "firstPickP75": 100,
+      "earliestFirstPick": 1,
+      "averageFirstPick": 73.7,
+      "labeledCoveragePct": 84,
+      "windowStartPick": 38,
+      "windowEndPick": 100,
+      "window": {
+        "windowOpen": 38,
+        "baseline": 71.5,
+        "softClose": 100,
+        "hardClose": 38
+      },
+      "seasonsAnalyzed": 16,
+      "totalPositionPicks": 318,
+      "seasonsWithEarlyFirst": 16,
+      "earliestFirstBySeason": [
+        {
+          "season": 2010,
+          "firstPick": 2,
+          "firstRound": 1,
+          "firstPlayer": "Aaron Rodgers"
+        },
+        {
+          "season": 2011,
+          "firstPick": 2,
+          "firstRound": 1,
+          "firstPlayer": "Aaron Rodgers"
+        },
+        {
+          "season": 2012,
+          "firstPick": 1,
+          "firstRound": 1,
+          "firstPlayer": "Aaron Rodgers"
+        },
+        {
+          "season": 2013,
+          "firstPick": 1,
+          "firstRound": 1,
+          "firstPlayer": "Drew Brees"
+        },
+        {
+          "season": 2014,
+          "firstPick": 1,
+          "firstRound": 1,
+          "firstPlayer": "Peyton Manning"
+        },
+        {
+          "season": 2015,
+          "firstPick": 1,
+          "firstRound": 1,
+          "firstPlayer": "Andrew Luck"
+        },
+        {
+          "season": 2016,
+          "firstPick": 3,
+          "firstRound": 1,
+          "firstPlayer": "Cam Newton"
+        },
+        {
+          "season": 2017,
+          "firstPick": 3,
+          "firstRound": 1,
+          "firstPlayer": "Aaron Rodgers"
+        },
+        {
+          "season": 2018,
+          "firstPick": 11,
+          "firstRound": 1,
+          "firstPlayer": "Aaron Rodgers"
+        },
+        {
+          "season": 2019,
+          "firstPick": 20,
+          "firstRound": 2,
+          "firstPlayer": "Aaron Rodgers"
+        },
+        {
+          "season": 2020,
+          "firstPick": 12,
+          "firstRound": 1,
+          "firstPlayer": "Patrick Mahomes"
+        },
+        {
+          "season": 2021,
+          "firstPick": 7,
+          "firstRound": 1,
+          "firstPlayer": "Patrick Mahomes"
+        },
+        {
+          "season": 2022,
+          "firstPick": 21,
+          "firstRound": 2,
+          "firstPlayer": "Josh Allen"
+        },
+        {
+          "season": 2023,
+          "firstPick": 18,
+          "firstRound": 2,
+          "firstPlayer": "Jalen Hurts"
+        },
+        {
+          "season": 2024,
+          "firstPick": 24,
+          "firstRound": 2,
+          "firstPlayer": "Josh Allen"
+        },
+        {
+          "season": 2025,
+          "firstPick": 21,
+          "firstRound": 2,
+          "firstPlayer": "Lamar Jackson"
+        }
+      ],
+      "interpretation": "QB timing: median first-QB pick 71.5 (R6), window opens ~pick 38, soft close ~pick 100. 16 season(s), 84% labeled coverage, Medium confidence."
+    },
+    "avgFirstQbRoundHistorical": 1.625,
+    "avgFirstQbRoundSimulated": 5.9,
+    "confidence": "Medium",
+    "confidenceReasons": [
+      "16 seasons and 318 QB picks (84% labeled)"
+    ]
+  },
+  "owners": [
+    {
+      "ownerKey": "steffon bizzell",
+      "ownerName": "Steffon Bizzell",
+      "historicalFirstQbRound": 2.2,
+      "qbSeasons": 5,
+      "earliestFirstQbRound": 1,
+      "latestFirstQbRound": 3,
+      "simulatedFirstQbRound": 9,
+      "simulatedFirstQbPick": 125,
+      "simulatedFirstQbPlayer": "Trevor Lawrence",
+      "roundGap": 6.8,
+      "absRoundGap": 6.8,
+      "confidence": "High",
+      "confidenceReasons": [
+        "5 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Owner historically takes QB early; sim is late — investigate need-reach / DNA, not league-wide deferral."
+    },
+    {
+      "ownerKey": "nate west",
+      "ownerName": "Nate West",
+      "historicalFirstQbRound": 2.7,
+      "qbSeasons": 7,
+      "earliestFirstQbRound": 2,
+      "latestFirstQbRound": 4,
+      "simulatedFirstQbRound": 9,
+      "simulatedFirstQbPick": 113,
+      "simulatedFirstQbPlayer": "Patrick Mahomes",
+      "roundGap": 6.3,
+      "absRoundGap": 6.3,
+      "confidence": "High",
+      "confidenceReasons": [
+        "7 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Owner historically takes QB early; sim is late — investigate need-reach / DNA, not league-wide deferral."
+    },
+    {
+      "ownerKey": "demetri clark",
+      "ownerName": "Demetri Clark",
+      "historicalFirstQbRound": 6.3,
+      "qbSeasons": 8,
+      "earliestFirstQbRound": 2,
+      "latestFirstQbRound": 14,
+      "simulatedFirstQbRound": 1,
+      "simulatedFirstQbPick": 9,
+      "simulatedFirstQbPlayer": "Josh Allen",
+      "roundGap": -5.3,
+      "absRoundGap": 5.3,
+      "confidence": "High",
+      "confidenceReasons": [
+        "8 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Early QB in sim vs history and league median — likely CRITICAL need-reach; fix need engine before timing guard."
+    },
+    {
+      "ownerKey": "lozell styles",
+      "ownerName": "LOZELL STYLES",
+      "historicalFirstQbRound": 5.3,
+      "qbSeasons": 7,
+      "earliestFirstQbRound": 1,
+      "latestFirstQbRound": 13,
+      "simulatedFirstQbRound": 10,
+      "simulatedFirstQbPick": 138,
+      "simulatedFirstQbPlayer": "Bo Nix",
+      "roundGap": 4.7,
+      "absRoundGap": 4.7,
+      "confidence": "High",
+      "confidenceReasons": [
+        "7 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB later than history — check roster need urgency and close-decision DNA before league timing."
+    },
+    {
+      "ownerKey": "marlon moore",
+      "ownerName": "Marlon Moore",
+      "historicalFirstQbRound": 7.7,
+      "qbSeasons": 6,
+      "earliestFirstQbRound": 3,
+      "latestFirstQbRound": 12,
+      "simulatedFirstQbRound": 4,
+      "simulatedFirstQbPick": 50,
+      "simulatedFirstQbPlayer": "Jalen Hurts",
+      "roundGap": -3.7,
+      "absRoundGap": 3.7,
+      "confidence": "High",
+      "confidenceReasons": [
+        "6 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards."
+    },
+    {
+      "ownerKey": "bruce edwards",
+      "ownerName": "Bruce Edwards",
+      "historicalFirstQbRound": 7.5,
+      "qbSeasons": 6,
+      "earliestFirstQbRound": 4,
+      "latestFirstQbRound": 10,
+      "simulatedFirstQbRound": 4,
+      "simulatedFirstQbPick": 43,
+      "simulatedFirstQbPlayer": "Jayden Daniels",
+      "roundGap": -3.5,
+      "absRoundGap": 3.5,
+      "confidence": "High",
+      "confidenceReasons": [
+        "6 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards."
+    },
+    {
+      "ownerKey": "randy broner jr",
+      "ownerName": "Randy Broner Jr",
+      "historicalFirstQbRound": 5.1,
+      "qbSeasons": 7,
+      "earliestFirstQbRound": 2,
+      "latestFirstQbRound": 7,
+      "simulatedFirstQbRound": 8,
+      "simulatedFirstQbPick": 111,
+      "simulatedFirstQbPlayer": "Caleb Williams",
+      "roundGap": 2.9,
+      "absRoundGap": 2.9,
+      "confidence": "High",
+      "confidenceReasons": [
+        "7 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB later than history — check roster need urgency and close-decision DNA before league timing."
+    },
+    {
+      "ownerKey": "rod sellers",
+      "ownerName": "Rod Sellers",
+      "historicalFirstQbRound": 4.6,
+      "qbSeasons": 5,
+      "earliestFirstQbRound": 1,
+      "latestFirstQbRound": 8,
+      "simulatedFirstQbRound": 2,
+      "simulatedFirstQbPick": 18,
+      "simulatedFirstQbPlayer": "Lamar Jackson",
+      "roundGap": -2.6,
+      "absRoundGap": 2.6,
+      "confidence": "High",
+      "confidenceReasons": [
+        "5 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Early QB in sim vs history and league median — likely CRITICAL need-reach; fix need engine before timing guard."
+    },
+    {
+      "ownerKey": "christian graham",
+      "ownerName": "Christian Graham",
+      "historicalFirstQbRound": 6.5,
+      "qbSeasons": 6,
+      "earliestFirstQbRound": 2,
+      "latestFirstQbRound": 9,
+      "simulatedFirstQbRound": 4,
+      "simulatedFirstQbPick": 47,
+      "simulatedFirstQbPlayer": "Joe Burrow",
+      "roundGap": -2.5,
+      "absRoundGap": 2.5,
+      "confidence": "High",
+      "confidenceReasons": [
+        "6 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards."
+    },
+    {
+      "ownerKey": "sheldon deroux",
+      "ownerName": "Sheldon deRoux",
+      "historicalFirstQbRound": 7.1,
+      "qbSeasons": 8,
+      "earliestFirstQbRound": 1,
+      "latestFirstQbRound": 11,
+      "simulatedFirstQbRound": 5,
+      "simulatedFirstQbPick": 62,
+      "simulatedFirstQbPlayer": "Jaxson Dart",
+      "roundGap": -2.1,
+      "absRoundGap": 2.1,
+      "confidence": "High",
+      "confidenceReasons": [
+        "8 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards."
+    },
+    {
+      "ownerKey": "mark deroux",
+      "ownerName": "Mark Deroux",
+      "historicalFirstQbRound": 6.7,
+      "qbSeasons": 7,
+      "earliestFirstQbRound": 4,
+      "latestFirstQbRound": 12,
+      "simulatedFirstQbRound": 8,
+      "simulatedFirstQbPick": 108,
+      "simulatedFirstQbPlayer": "Dak Prescott",
+      "roundGap": 1.3,
+      "absRoundGap": 1.3,
+      "confidence": "High",
+      "confidenceReasons": [
+        "7 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Within normal variance — no QB timing guard recommended."
+    },
+    {
+      "ownerKey": "tony dorsey",
+      "ownerName": "Tony Dorsey",
+      "historicalFirstQbRound": 7.5,
+      "qbSeasons": 2,
+      "earliestFirstQbRound": 5,
+      "latestFirstQbRound": 10,
+      "simulatedFirstQbRound": 8,
+      "simulatedFirstQbPick": 109,
+      "simulatedFirstQbPlayer": "Brock Purdy",
+      "roundGap": 0.5,
+      "absRoundGap": 0.5,
+      "confidence": "Medium",
+      "confidenceReasons": [
+        "2 seasons with QB drafts (limited sample)"
+      ],
+      "recommendedIntervention": "Within normal variance — no QB timing guard recommended."
+    },
+    {
+      "ownerKey": "jan graham",
+      "ownerName": "Jan Graham",
+      "historicalFirstQbRound": 7.1,
+      "qbSeasons": 7,
+      "earliestFirstQbRound": 5,
+      "latestFirstQbRound": 12,
+      "simulatedFirstQbRound": 7,
+      "simulatedFirstQbPick": 92,
+      "simulatedFirstQbPlayer": "Matthew Stafford",
+      "roundGap": -0.1,
+      "absRoundGap": 0.1,
+      "confidence": "High",
+      "confidenceReasons": [
+        "7 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Within normal variance — no QB timing guard recommended."
+    },
+    {
+      "ownerKey": "marcus reese",
+      "ownerName": "Marcus Reese",
+      "historicalFirstQbRound": null,
+      "qbSeasons": 0,
+      "earliestFirstQbRound": null,
+      "latestFirstQbRound": null,
+      "simulatedFirstQbRound": 3,
+      "simulatedFirstQbPick": 40,
+      "simulatedFirstQbPlayer": "Drake Maye",
+      "roundGap": null,
+      "absRoundGap": null,
+      "confidence": "Low",
+      "confidenceReasons": [
+        "0 season(s) with QB drafts (sparse)"
+      ],
+      "recommendedIntervention": "No historical QB sample — defer any timing guard; use league median only after data accrues."
+    },
+    {
+      "ownerKey": "maurice welch",
+      "ownerName": "Maurice Welch",
+      "historicalFirstQbRound": 2,
+      "qbSeasons": 1,
+      "earliestFirstQbRound": 2,
+      "latestFirstQbRound": 2,
+      "simulatedFirstQbRound": null,
+      "simulatedFirstQbPick": null,
+      "simulatedFirstQbPlayer": null,
+      "roundGap": null,
+      "absRoundGap": null,
+      "confidence": "Low",
+      "confidenceReasons": [
+        "1 season(s) with QB drafts (sparse)"
+      ],
+      "recommendedIntervention": "Sim did not draft a QB — verify roster caps / pool before any timing intervention."
+    },
+    {
+      "ownerKey": "steven hibbard",
+      "ownerName": "steven hibbard",
+      "historicalFirstQbRound": 6,
+      "qbSeasons": 5,
+      "earliestFirstQbRound": 2,
+      "latestFirstQbRound": 12,
+      "simulatedFirstQbRound": null,
+      "simulatedFirstQbPick": null,
+      "simulatedFirstQbPlayer": null,
+      "roundGap": null,
+      "absRoundGap": null,
+      "confidence": "High",
+      "confidenceReasons": [
+        "5 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim did not draft a QB — verify roster caps / pool before any timing intervention."
+    },
+    {
+      "ownerKey": "teco browning",
+      "ownerName": "teco Browning",
+      "historicalFirstQbRound": 8,
+      "qbSeasons": 2,
+      "earliestFirstQbRound": 8,
+      "latestFirstQbRound": 8,
+      "simulatedFirstQbRound": null,
+      "simulatedFirstQbPick": null,
+      "simulatedFirstQbPlayer": null,
+      "roundGap": null,
+      "absRoundGap": null,
+      "confidence": "Medium",
+      "confidenceReasons": [
+        "2 seasons with QB drafts (limited sample)"
+      ],
+      "recommendedIntervention": "Sim did not draft a QB — verify roster caps / pool before any timing intervention."
+    },
+    {
+      "ownerKey": "vince sellers",
+      "ownerName": "Vince Sellers",
+      "historicalFirstQbRound": 7.3,
+      "qbSeasons": 3,
+      "earliestFirstQbRound": 4,
+      "latestFirstQbRound": 14,
+      "simulatedFirstQbRound": null,
+      "simulatedFirstQbPick": null,
+      "simulatedFirstQbPlayer": null,
+      "roundGap": null,
+      "absRoundGap": null,
+      "confidence": "High",
+      "confidenceReasons": [
+        "3 seasons with QB drafts (limited sample)"
+      ],
+      "recommendedIntervention": "Sim did not draft a QB — verify roster caps / pool before any timing intervention."
+    }
+  ],
+  "largestGaps": [
+    {
+      "ownerKey": "steffon bizzell",
+      "ownerName": "Steffon Bizzell",
+      "historicalFirstQbRound": 2.2,
+      "qbSeasons": 5,
+      "earliestFirstQbRound": 1,
+      "latestFirstQbRound": 3,
+      "simulatedFirstQbRound": 9,
+      "simulatedFirstQbPick": 125,
+      "simulatedFirstQbPlayer": "Trevor Lawrence",
+      "roundGap": 6.8,
+      "absRoundGap": 6.8,
+      "confidence": "High",
+      "confidenceReasons": [
+        "5 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Owner historically takes QB early; sim is late — investigate need-reach / DNA, not league-wide deferral."
+    },
+    {
+      "ownerKey": "nate west",
+      "ownerName": "Nate West",
+      "historicalFirstQbRound": 2.7,
+      "qbSeasons": 7,
+      "earliestFirstQbRound": 2,
+      "latestFirstQbRound": 4,
+      "simulatedFirstQbRound": 9,
+      "simulatedFirstQbPick": 113,
+      "simulatedFirstQbPlayer": "Patrick Mahomes",
+      "roundGap": 6.3,
+      "absRoundGap": 6.3,
+      "confidence": "High",
+      "confidenceReasons": [
+        "7 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Owner historically takes QB early; sim is late — investigate need-reach / DNA, not league-wide deferral."
+    },
+    {
+      "ownerKey": "demetri clark",
+      "ownerName": "Demetri Clark",
+      "historicalFirstQbRound": 6.3,
+      "qbSeasons": 8,
+      "earliestFirstQbRound": 2,
+      "latestFirstQbRound": 14,
+      "simulatedFirstQbRound": 1,
+      "simulatedFirstQbPick": 9,
+      "simulatedFirstQbPlayer": "Josh Allen",
+      "roundGap": -5.3,
+      "absRoundGap": 5.3,
+      "confidence": "High",
+      "confidenceReasons": [
+        "8 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Early QB in sim vs history and league median — likely CRITICAL need-reach; fix need engine before timing guard."
+    },
+    {
+      "ownerKey": "lozell styles",
+      "ownerName": "LOZELL STYLES",
+      "historicalFirstQbRound": 5.3,
+      "qbSeasons": 7,
+      "earliestFirstQbRound": 1,
+      "latestFirstQbRound": 13,
+      "simulatedFirstQbRound": 10,
+      "simulatedFirstQbPick": 138,
+      "simulatedFirstQbPlayer": "Bo Nix",
+      "roundGap": 4.7,
+      "absRoundGap": 4.7,
+      "confidence": "High",
+      "confidenceReasons": [
+        "7 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB later than history — check roster need urgency and close-decision DNA before league timing."
+    },
+    {
+      "ownerKey": "marlon moore",
+      "ownerName": "Marlon Moore",
+      "historicalFirstQbRound": 7.7,
+      "qbSeasons": 6,
+      "earliestFirstQbRound": 3,
+      "latestFirstQbRound": 12,
+      "simulatedFirstQbRound": 4,
+      "simulatedFirstQbPick": 50,
+      "simulatedFirstQbPlayer": "Jalen Hurts",
+      "roundGap": -3.7,
+      "absRoundGap": 3.7,
+      "confidence": "High",
+      "confidenceReasons": [
+        "6 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards."
+    },
+    {
+      "ownerKey": "bruce edwards",
+      "ownerName": "Bruce Edwards",
+      "historicalFirstQbRound": 7.5,
+      "qbSeasons": 6,
+      "earliestFirstQbRound": 4,
+      "latestFirstQbRound": 10,
+      "simulatedFirstQbRound": 4,
+      "simulatedFirstQbPick": 43,
+      "simulatedFirstQbPlayer": "Jayden Daniels",
+      "roundGap": -3.5,
+      "absRoundGap": 3.5,
+      "confidence": "High",
+      "confidenceReasons": [
+        "6 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards."
+    },
+    {
+      "ownerKey": "randy broner jr",
+      "ownerName": "Randy Broner Jr",
+      "historicalFirstQbRound": 5.1,
+      "qbSeasons": 7,
+      "earliestFirstQbRound": 2,
+      "latestFirstQbRound": 7,
+      "simulatedFirstQbRound": 8,
+      "simulatedFirstQbPick": 111,
+      "simulatedFirstQbPlayer": "Caleb Williams",
+      "roundGap": 2.9,
+      "absRoundGap": 2.9,
+      "confidence": "High",
+      "confidenceReasons": [
+        "7 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB later than history — check roster need urgency and close-decision DNA before league timing."
+    },
+    {
+      "ownerKey": "rod sellers",
+      "ownerName": "Rod Sellers",
+      "historicalFirstQbRound": 4.6,
+      "qbSeasons": 5,
+      "earliestFirstQbRound": 1,
+      "latestFirstQbRound": 8,
+      "simulatedFirstQbRound": 2,
+      "simulatedFirstQbPick": 18,
+      "simulatedFirstQbPlayer": "Lamar Jackson",
+      "roundGap": -2.6,
+      "absRoundGap": 2.6,
+      "confidence": "High",
+      "confidenceReasons": [
+        "5 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Early QB in sim vs history and league median — likely CRITICAL need-reach; fix need engine before timing guard."
+    },
+    {
+      "ownerKey": "christian graham",
+      "ownerName": "Christian Graham",
+      "historicalFirstQbRound": 6.5,
+      "qbSeasons": 6,
+      "earliestFirstQbRound": 2,
+      "latestFirstQbRound": 9,
+      "simulatedFirstQbRound": 4,
+      "simulatedFirstQbPick": 47,
+      "simulatedFirstQbPlayer": "Joe Burrow",
+      "roundGap": -2.5,
+      "absRoundGap": 2.5,
+      "confidence": "High",
+      "confidenceReasons": [
+        "6 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards."
+    },
+    {
+      "ownerKey": "sheldon deroux",
+      "ownerName": "Sheldon deRoux",
+      "historicalFirstQbRound": 7.1,
+      "qbSeasons": 8,
+      "earliestFirstQbRound": 1,
+      "latestFirstQbRound": 11,
+      "simulatedFirstQbRound": 5,
+      "simulatedFirstQbPick": 62,
+      "simulatedFirstQbPlayer": "Jaxson Dart",
+      "roundGap": -2.1,
+      "absRoundGap": 2.1,
+      "confidence": "High",
+      "confidenceReasons": [
+        "8 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards."
+    }
+  ],
+  "watchlist": [
+    {
+      "ownerKey": "steffon bizzell",
+      "ownerName": "Steffon Bizzell",
+      "historicalFirstQbRound": 2.2,
+      "qbSeasons": 5,
+      "earliestFirstQbRound": 1,
+      "latestFirstQbRound": 3,
+      "simulatedFirstQbRound": 9,
+      "simulatedFirstQbPick": 125,
+      "simulatedFirstQbPlayer": "Trevor Lawrence",
+      "roundGap": 6.8,
+      "absRoundGap": 6.8,
+      "confidence": "High",
+      "confidenceReasons": [
+        "5 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Owner historically takes QB early; sim is late — investigate need-reach / DNA, not league-wide deferral."
+    },
+    {
+      "ownerKey": "nate west",
+      "ownerName": "Nate West",
+      "historicalFirstQbRound": 2.7,
+      "qbSeasons": 7,
+      "earliestFirstQbRound": 2,
+      "latestFirstQbRound": 4,
+      "simulatedFirstQbRound": 9,
+      "simulatedFirstQbPick": 113,
+      "simulatedFirstQbPlayer": "Patrick Mahomes",
+      "roundGap": 6.3,
+      "absRoundGap": 6.3,
+      "confidence": "High",
+      "confidenceReasons": [
+        "7 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Owner historically takes QB early; sim is late — investigate need-reach / DNA, not league-wide deferral."
+    },
+    {
+      "ownerKey": "demetri clark",
+      "ownerName": "Demetri Clark",
+      "historicalFirstQbRound": 6.3,
+      "qbSeasons": 8,
+      "earliestFirstQbRound": 2,
+      "latestFirstQbRound": 14,
+      "simulatedFirstQbRound": 1,
+      "simulatedFirstQbPick": 9,
+      "simulatedFirstQbPlayer": "Josh Allen",
+      "roundGap": -5.3,
+      "absRoundGap": 5.3,
+      "confidence": "High",
+      "confidenceReasons": [
+        "8 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Early QB in sim vs history and league median — likely CRITICAL need-reach; fix need engine before timing guard."
+    },
+    {
+      "ownerKey": "lozell styles",
+      "ownerName": "LOZELL STYLES",
+      "historicalFirstQbRound": 5.3,
+      "qbSeasons": 7,
+      "earliestFirstQbRound": 1,
+      "latestFirstQbRound": 13,
+      "simulatedFirstQbRound": 10,
+      "simulatedFirstQbPick": 138,
+      "simulatedFirstQbPlayer": "Bo Nix",
+      "roundGap": 4.7,
+      "absRoundGap": 4.7,
+      "confidence": "High",
+      "confidenceReasons": [
+        "7 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB later than history — check roster need urgency and close-decision DNA before league timing."
+    },
+    {
+      "ownerKey": "marlon moore",
+      "ownerName": "Marlon Moore",
+      "historicalFirstQbRound": 7.7,
+      "qbSeasons": 6,
+      "earliestFirstQbRound": 3,
+      "latestFirstQbRound": 12,
+      "simulatedFirstQbRound": 4,
+      "simulatedFirstQbPick": 50,
+      "simulatedFirstQbPlayer": "Jalen Hurts",
+      "roundGap": -3.7,
+      "absRoundGap": 3.7,
+      "confidence": "High",
+      "confidenceReasons": [
+        "6 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards."
+    },
+    {
+      "ownerKey": "bruce edwards",
+      "ownerName": "Bruce Edwards",
+      "historicalFirstQbRound": 7.5,
+      "qbSeasons": 6,
+      "earliestFirstQbRound": 4,
+      "latestFirstQbRound": 10,
+      "simulatedFirstQbRound": 4,
+      "simulatedFirstQbPick": 43,
+      "simulatedFirstQbPlayer": "Jayden Daniels",
+      "roundGap": -3.5,
+      "absRoundGap": 3.5,
+      "confidence": "High",
+      "confidenceReasons": [
+        "6 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards."
+    },
+    {
+      "ownerKey": "sheldon deroux",
+      "ownerName": "Sheldon deRoux",
+      "historicalFirstQbRound": 7.1,
+      "qbSeasons": 8,
+      "earliestFirstQbRound": 1,
+      "latestFirstQbRound": 11,
+      "simulatedFirstQbRound": 5,
+      "simulatedFirstQbPick": 62,
+      "simulatedFirstQbPlayer": "Jaxson Dart",
+      "roundGap": -2.1,
+      "absRoundGap": 2.1,
+      "confidence": "High",
+      "confidenceReasons": [
+        "8 seasons with QB drafts"
+      ],
+      "recommendedIntervention": "Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards."
+    },
+    {
+      "ownerKey": "marcus reese",
+      "ownerName": "Marcus Reese",
+      "historicalFirstQbRound": null,
+      "qbSeasons": 0,
+      "earliestFirstQbRound": null,
+      "latestFirstQbRound": null,
+      "simulatedFirstQbRound": 3,
+      "simulatedFirstQbPick": 40,
+      "simulatedFirstQbPlayer": "Drake Maye",
+      "roundGap": null,
+      "absRoundGap": null,
+      "confidence": "Low",
+      "confidenceReasons": [
+        "0 season(s) with QB drafts (sparse)"
+      ],
+      "recommendedIntervention": "No historical QB sample — defer any timing guard; use league median only after data accrues."
+    }
+  ],
+  "summary": [
+    "League historical first-QB ~R1.6; sim ~R5.9.",
+    "League QB window (read-only profile): opens ~pick 38, median R6.",
+    "10 owner(s) with |gap| ≥ 1.5 rounds; 8 on watchlist.",
+    "QB timing guards are experimental — diagnose need-reach and owner DNA before shipping league-wide rules."
+  ]
+}
