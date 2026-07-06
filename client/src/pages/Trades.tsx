@@ -573,6 +573,8 @@ function RosterPicker({
   selectedPlayers,
   picks,
   teamCount,
+  ownedPicks,
+  draftYear,
   leagueContextKey,
   onTeamChange,
   onTogglePlayer,
@@ -587,6 +589,8 @@ function RosterPicker({
   selectedPlayers: TradePlayer[];
   picks: TradePick[];
   teamCount: number;
+  ownedPicks: Array<{ teamId: number; round: number; pickInRound: number }>;
+  draftYear: number;
   leagueContextKey: string;
   onTeamChange: (id: number) => void;
   onTogglePlayer: (p: TradePlayer) => void;
@@ -734,6 +738,39 @@ function RosterPicker({
             );
           })}
         </div>
+
+        {/* Your draft picks — auto-populated from the league's draft-pick portfolio; tap to add */}
+        {ownedPicks.length > 0 && (
+          <div className="space-y-1.5 border-t border-border/60 pt-3 mt-2">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {draftYear} Draft Picks — tap to add
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {[...ownedPicks].sort((a, b) => a.round - b.round || a.pickInRound - b.pickInRound).map((op) => {
+                const already = picks.some(pk => pk.round === op.round && pk.pick === op.pickInRound && pk.year === draftYear && !pk.via);
+                return (
+                  <button
+                    key={`${op.round}-${op.pickInRound}`}
+                    type="button"
+                    disabled={already}
+                    onClick={() => onAddPick({ round: op.round, pick: op.pickInRound, year: draftYear, key: `${draftYear}-${op.round}-${op.pickInRound}-${Date.now()}` })}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors",
+                      already
+                        ? "cursor-not-allowed border-border/40 bg-muted/20 text-muted-foreground/50"
+                        : "border-primary/25 bg-primary/5 text-primary hover:bg-primary/15",
+                    )}
+                    title={`Round ${op.round}, pick ${op.pickInRound}`}
+                  >
+                    R{op.round}.{String(op.pickInRound).padStart(2, "0")}
+                    {already ? <span>✓</span> : <Plus className="h-3 w-3" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Pick adder — always visible, not gated on team selection */}
         <PickAdder
@@ -1058,6 +1095,17 @@ export function Trades() {
       ? (teamsQ.data as TeamRow[] | undefined)
       : undefined) ?? [];
 
+  // Auto-populated draft picks per team (upcoming draft) — from the same draft-pick portfolio
+  // that powers the mock draft board, so the trade tool's picks always match it.
+  const portfolioQ = trpc.draftPickPortfolio.useQuery(undefined, { enabled: leagueKeyReady });
+  const ownedPickOrder = useMemo(() => {
+    const raw = (portfolioQ.data as { draftOrder?: Array<{ teamId: number; round: number; pickInRound: number }> } | undefined)?.draftOrder;
+    return Array.isArray(raw) ? raw : [];
+  }, [portfolioQ.data]);
+  const picksForTeam = (tid: number | null): Array<{ teamId: number; round: number; pickInRound: number }> =>
+    tid == null ? [] : ownedPickOrder.filter(p => Number(p.teamId) === Number(tid));
+  const draftPickYear = new Date().getFullYear();
+
   const analyzeMutation = trpc.tradeAnalyze.useMutation({
     onSuccess: data => setResult(data as TradeResult),
   });
@@ -1157,6 +1205,8 @@ export function Trades() {
           selectedPlayers={sideA}
           picks={picksA}
           teamCount={teams.length}
+          ownedPicks={picksForTeam(teamAId)}
+          draftYear={draftPickYear}
           leagueContextKey={leagueContextKey}
           onTeamChange={id => { setTeamAId(id); setSideA([]); setPicksA([]); setResult(null); }}
           onTogglePlayer={p => { setSideA(prev => prev.some(x => x.playerId === p.playerId) ? prev.filter(x => x.playerId !== p.playerId) : [...prev, p]); setResult(null); }}
@@ -1179,6 +1229,8 @@ export function Trades() {
           selectedPlayers={sideB}
           picks={picksB}
           teamCount={teams.length}
+          ownedPicks={picksForTeam(teamBId)}
+          draftYear={draftPickYear}
           leagueContextKey={leagueContextKey}
           onTeamChange={id => { setTeamBId(id); setSideB([]); setPicksB([]); setResult(null); }}
           onTogglePlayer={p => { setSideB(prev => prev.some(x => x.playerId === p.playerId) ? prev.filter(x => x.playerId !== p.playerId) : [...prev, p]); setResult(null); }}
