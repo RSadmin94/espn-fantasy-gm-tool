@@ -1,0 +1,3304 @@
+[
+  {
+    "displayName": "Christian Graham",
+    "personalityFitTier": "full",
+    "rules": [
+      {
+        "ifThen": "If a position is below roster target → prioritize filling that hole over raw board rank.",
+        "drive": "need",
+        "evidence": {
+          "matchingPicks": 192,
+          "draftSeasons": 16,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 52
+      },
+      {
+        "ifThen": "If a position run is live → join the run (negative contrarian = herd-responsive).",
+        "drive": "contrarian",
+        "evidence": {
+          "matchingPicks": 20,
+          "draftSeasons": 11,
+          "seasons": [
+            2011,
+            2015,
+            2016,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 38
+      },
+      {
+        "ifThen": "If a position run is live (3+ of last 4 picks same position) → join the run at that position.",
+        "drive": "herdFomo",
+        "evidence": {
+          "matchingPicks": 20,
+          "draftSeasons": 11,
+          "seasons": [
+            2011,
+            2015,
+            2016,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 36
+      },
+      {
+        "ifThen": "If top-tier players at a position are almost gone → reach before the cliff.",
+        "drive": "scarcityTierCliff",
+        "evidence": {
+          "matchingPicks": 42,
+          "draftSeasons": 16,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 34
+      },
+      {
+        "ifThen": "If tiers are thinning OR late-round hole at a position → act now, don't wait.",
+        "drive": "panic",
+        "evidence": {
+          "matchingPicks": 42,
+          "draftSeasons": 16,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 28
+      }
+    ],
+    "exceptions": [
+      {
+        "unless": "UNLESS board value gap is extreme at another position → need-fill rule yields to one-time value steal.",
+        "drives": [
+          "need",
+          "value"
+        ],
+        "evidence": {
+          "matchingPicks": 192,
+          "draftSeasons": 16,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 52
+      },
+      {
+        "unless": "UNLESS run is at a position you already filled → herd rule weakens; shape takes over.",
+        "drives": [
+          "herdFomo",
+          "need"
+        ],
+        "evidence": {
+          "matchingPicks": 20,
+          "draftSeasons": 11,
+          "seasons": [
+            2011,
+            2015,
+            2016,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 36
+      },
+      {
+        "unless": "UNLESS a WR tier-cliff is within ~2 picks in rounds 1–2 → pivot to WR before RB urgency fires.",
+        "drives": [
+          "panic",
+          "scarcityTierCliff"
+        ],
+        "evidence": {
+          "matchingPicks": 42,
+          "draftSeasons": 16,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 28
+      }
+    ],
+    "ruleModifiers": [
+      "Era chapter (2010–2017 → 2018–2022 → 2023–2025): early-round RB/WR rules shift by segment — see ERAS.",
+      "Run pressure: when the room stacks one position, run-rider vs fade rules activate.",
+      "Roster state: open holes at RB/WR/QB/TE strengthen need-fill rules on every pick.",
+      "Tier/scarcity: thinning tiers escalate urgency overrides in middle and late rounds."
+    ],
+    "eras": [
+      {
+        "label": "WR-forward chapter",
+        "seasonStart": 2010,
+        "seasonEnd": 2017,
+        "pickCount": 123,
+        "seasonCount": 8,
+        "earlyRbPct": 18,
+        "earlyWrPct": 41,
+        "confidenceLabel": "low",
+        "summary": "WR-forward chapter: rounds 1–2 were 18% RB / 41% WR across 123 picks (2010–2017)."
+      },
+      {
+        "label": "Balanced early-round chapter",
+        "seasonStart": 2018,
+        "seasonEnd": 2022,
+        "pickCount": 48,
+        "seasonCount": 5,
+        "earlyRbPct": 40,
+        "earlyWrPct": 40,
+        "confidenceLabel": "low",
+        "summary": "Balanced early-round chapter: rounds 1–2 were 40% RB / 40% WR across 48 picks (2018–2022)."
+      },
+      {
+        "label": "Modern WR-lean",
+        "seasonStart": 2023,
+        "seasonEnd": 2025,
+        "pickCount": 34,
+        "seasonCount": 3,
+        "earlyRbPct": 0,
+        "earlyWrPct": 100,
+        "confidenceLabel": "low",
+        "summary": "Modern WR-lean: rounds 1–2 were 0% RB / 100% WR across 34 picks (2023–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 52
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 47
+      },
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 40
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 33
+      },
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 21
+      },
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 14
+      },
+      {
+        "trait": "Board value",
+        "confidencePct": 10
+      }
+    ],
+    "overallStability": "low",
+    "choiceEventCount": 205,
+    "avgChosenProbability": 0.07327479138010891
+  },
+  {
+    "displayName": "LOZELL STYLES",
+    "personalityFitTier": "full",
+    "rules": [
+      {
+        "ifThen": "If tiers are thinning OR late-round hole at a position → act now, don't wait.",
+        "drive": "panic",
+        "evidence": {
+          "matchingPicks": 50,
+          "draftSeasons": 16,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 75
+      },
+      {
+        "ifThen": "If a player was on your roster in a prior season → boost his draft priority.",
+        "drive": "comfortAnchor",
+        "evidence": {
+          "matchingPicks": 42,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 65
+      },
+      {
+        "ifThen": "If a position is below roster target → prioritize filling that hole over raw board rank.",
+        "drive": "need",
+        "evidence": {
+          "matchingPicks": 188,
+          "draftSeasons": 16,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 57
+      },
+      {
+        "ifThen": "If position-normalized board value gap is large → take the stronger value play.",
+        "drive": "value",
+        "evidence": {
+          "matchingPicks": 197,
+          "draftSeasons": 16,
+          "seasons": [],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 44
+      },
+      {
+        "ifThen": "If pre-2023 draft AND rounds 1–2 → RB urgency is higher than league peers.",
+        "drive": "rbEarlyLegacyEra",
+        "evidence": {
+          "matchingPicks": 13,
+          "draftSeasons": 9,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2021
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 35
+      }
+    ],
+    "exceptions": [
+      {
+        "unless": "UNLESS the comfort re-draft is multiple rounds early for position → value rule overrides nostalgia.",
+        "drives": [
+          "comfortAnchor",
+          "value"
+        ],
+        "evidence": {
+          "matchingPicks": 42,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 65
+      },
+      {
+        "unless": "UNLESS in legacy era (pre-2023) → RB rule dominates; modern WR override only applies 2023+.",
+        "drives": [
+          "rbEarlyLegacyEra",
+          "wrEarlyModernEra"
+        ],
+        "evidence": {
+          "matchingPicks": 13,
+          "draftSeasons": 9,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2021
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 35
+      },
+      {
+        "unless": "UNLESS draft year is 2023+ AND rounds 1–2 → pivot toward WR even when RB rule would fire.",
+        "drives": [
+          "rbEarlyRound",
+          "wrEarlyModernEra"
+        ],
+        "evidence": {
+          "matchingPicks": 4,
+          "draftSeasons": 3,
+          "seasons": [
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 7
+      }
+    ],
+    "ruleModifiers": [
+      "Era chapter (2010–2017 → 2018–2022 → 2023–2025): early-round RB/WR rules shift by segment — see ERAS.",
+      "Roster state: open holes at RB/WR/QB/TE strengthen need-fill rules on every pick.",
+      "Tier/scarcity: thinning tiers escalate urgency overrides in middle and late rounds.",
+      "2023+ modern era: WR-early override can supersede legacy RB-first habits."
+    ],
+    "eras": [
+      {
+        "label": "Legacy RB-first",
+        "seasonStart": 2010,
+        "seasonEnd": 2017,
+        "pickCount": 123,
+        "seasonCount": 8,
+        "earlyRbPct": 71,
+        "earlyWrPct": 18,
+        "confidenceLabel": "medium",
+        "summary": "Legacy RB-first: rounds 1–2 were 71% RB / 18% WR across 123 picks (2010–2017)."
+      },
+      {
+        "label": "WR-forward chapter",
+        "seasonStart": 2018,
+        "seasonEnd": 2022,
+        "pickCount": 48,
+        "seasonCount": 5,
+        "earlyRbPct": 9,
+        "earlyWrPct": 73,
+        "confidenceLabel": "low",
+        "summary": "WR-forward chapter: rounds 1–2 were 9% RB / 73% WR across 48 picks (2018–2022)."
+      },
+      {
+        "label": "Modern WR-lean",
+        "seasonStart": 2023,
+        "seasonEnd": 2025,
+        "pickCount": 26,
+        "seasonCount": 3,
+        "earlyRbPct": 0,
+        "earlyWrPct": 100,
+        "confidenceLabel": "low",
+        "summary": "Modern WR-lean: rounds 1–2 were 0% RB / 100% WR across 26 picks (2023–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 74
+      },
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 65
+      },
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 60
+      },
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 57
+      },
+      {
+        "trait": "Board value",
+        "confidencePct": 44
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 26
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 5
+      }
+    ],
+    "overallStability": "medium",
+    "choiceEventCount": 197,
+    "avgChosenProbability": 0.08426269173713426
+  },
+  {
+    "displayName": "Demetri Clark",
+    "personalityFitTier": "full",
+    "rules": [
+      {
+        "ifThen": "If tiers are thinning OR late-round hole at a position → act now, don't wait.",
+        "drive": "panic",
+        "evidence": {
+          "matchingPicks": 42,
+          "draftSeasons": 16,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 59
+      },
+      {
+        "ifThen": "If a player was on your roster in a prior season → boost his draft priority.",
+        "drive": "comfortAnchor",
+        "evidence": {
+          "matchingPicks": 37,
+          "draftSeasons": 13,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 54
+      },
+      {
+        "ifThen": "If a position is below roster target → prioritize filling that hole over raw board rank.",
+        "drive": "need",
+        "evidence": {
+          "matchingPicks": 179,
+          "draftSeasons": 16,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 53
+      },
+      {
+        "ifThen": "If position-normalized board value gap is large → take the stronger value play.",
+        "drive": "value",
+        "evidence": {
+          "matchingPicks": 194,
+          "draftSeasons": 16,
+          "seasons": [],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 46
+      },
+      {
+        "ifThen": "If a position run is live → join the run (negative contrarian = herd-responsive).",
+        "drive": "contrarian",
+        "evidence": {
+          "matchingPicks": 18,
+          "draftSeasons": 9,
+          "seasons": [
+            2011,
+            2012,
+            2014,
+            2016,
+            2019,
+            2020,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 34
+      }
+    ],
+    "exceptions": [
+      {
+        "unless": "UNLESS a WR tier-cliff is within ~2 picks in rounds 1–2 → pivot to WR before RB urgency fires.",
+        "drives": [
+          "panic",
+          "scarcityTierCliff"
+        ],
+        "evidence": {
+          "matchingPicks": 42,
+          "draftSeasons": 16,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 59
+      },
+      {
+        "unless": "UNLESS the comfort re-draft is multiple rounds early for position → value rule overrides nostalgia.",
+        "drives": [
+          "comfortAnchor",
+          "value"
+        ],
+        "evidence": {
+          "matchingPicks": 37,
+          "draftSeasons": 13,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 54
+      }
+    ],
+    "ruleModifiers": [
+      "Era chapter (2010–2017 → 2018–2022 → 2023–2025): early-round RB/WR rules shift by segment — see ERAS.",
+      "Run pressure: when the room stacks one position, run-rider vs fade rules activate.",
+      "Roster state: open holes at RB/WR/QB/TE strengthen need-fill rules on every pick.",
+      "Tier/scarcity: thinning tiers escalate urgency overrides in middle and late rounds."
+    ],
+    "eras": [
+      {
+        "label": "Legacy RB-first",
+        "seasonStart": 2010,
+        "seasonEnd": 2017,
+        "pickCount": 123,
+        "seasonCount": 8,
+        "earlyRbPct": 53,
+        "earlyWrPct": 35,
+        "confidenceLabel": "medium",
+        "summary": "Legacy RB-first: rounds 1–2 were 53% RB / 35% WR across 123 picks (2010–2017)."
+      },
+      {
+        "label": "Balanced early-round chapter",
+        "seasonStart": 2018,
+        "seasonEnd": 2022,
+        "pickCount": 44,
+        "seasonCount": 5,
+        "earlyRbPct": 33,
+        "earlyWrPct": 44,
+        "confidenceLabel": "low",
+        "summary": "Balanced early-round chapter: rounds 1–2 were 33% RB / 44% WR across 44 picks (2018–2022)."
+      },
+      {
+        "label": "WR-forward chapter",
+        "seasonStart": 2023,
+        "seasonEnd": 2025,
+        "pickCount": 27,
+        "seasonCount": 3,
+        "earlyRbPct": 20,
+        "earlyWrPct": 40,
+        "confidenceLabel": "low",
+        "summary": "WR-forward chapter: rounds 1–2 were 20% RB / 40% WR across 27 picks (2023–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 62
+      },
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 54
+      },
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 54
+      },
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 53
+      },
+      {
+        "trait": "Board value",
+        "confidencePct": 46
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 29
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 5
+      }
+    ],
+    "overallStability": "medium",
+    "choiceEventCount": 194,
+    "avgChosenProbability": 0.07470880524154905
+  },
+  {
+    "displayName": "Jan Graham",
+    "personalityFitTier": "full",
+    "rules": [
+      {
+        "ifThen": "If tiers are thinning OR late-round hole at a position → act now, don't wait.",
+        "drive": "panic",
+        "evidence": {
+          "matchingPicks": 40,
+          "draftSeasons": 15,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 61
+      },
+      {
+        "ifThen": "If a position is below roster target → prioritize filling that hole over raw board rank.",
+        "drive": "need",
+        "evidence": {
+          "matchingPicks": 178,
+          "draftSeasons": 15,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 51
+      },
+      {
+        "ifThen": "If a player was on your roster in a prior season → boost his draft priority.",
+        "drive": "comfortAnchor",
+        "evidence": {
+          "matchingPicks": 34,
+          "draftSeasons": 13,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 44
+      },
+      {
+        "ifThen": "If a position run is live → join the run (negative contrarian = herd-responsive).",
+        "drive": "contrarian",
+        "evidence": {
+          "matchingPicks": 18,
+          "draftSeasons": 13,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2020,
+            2021,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 40
+      },
+      {
+        "ifThen": "If position-normalized board value gap is large → take the stronger value play.",
+        "drive": "value",
+        "evidence": {
+          "matchingPicks": 192,
+          "draftSeasons": 15,
+          "seasons": [],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 37
+      }
+    ],
+    "exceptions": [
+      {
+        "unless": "UNLESS a WR tier-cliff is within ~2 picks in rounds 1–2 → pivot to WR before RB urgency fires.",
+        "drives": [
+          "panic",
+          "scarcityTierCliff"
+        ],
+        "evidence": {
+          "matchingPicks": 40,
+          "draftSeasons": 15,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 61
+      },
+      {
+        "unless": "UNLESS the comfort re-draft is multiple rounds early for position → value rule overrides nostalgia.",
+        "drives": [
+          "comfortAnchor",
+          "value"
+        ],
+        "evidence": {
+          "matchingPicks": 34,
+          "draftSeasons": 13,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 44
+      },
+      {
+        "unless": "UNLESS in legacy era (pre-2023) → RB rule dominates; modern WR override only applies 2023+.",
+        "drives": [
+          "rbEarlyLegacyEra",
+          "wrEarlyModernEra"
+        ],
+        "evidence": {
+          "matchingPicks": 11,
+          "draftSeasons": 9,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2020
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 21
+      }
+    ],
+    "ruleModifiers": [
+      "Era chapter (2010–2017 → 2018–2022 → 2023–2025): early-round RB/WR rules shift by segment — see ERAS.",
+      "Run pressure: when the room stacks one position, run-rider vs fade rules activate.",
+      "Roster state: open holes at RB/WR/QB/TE strengthen need-fill rules on every pick.",
+      "Tier/scarcity: thinning tiers escalate urgency overrides in middle and late rounds."
+    ],
+    "eras": [
+      {
+        "label": "Legacy RB-first",
+        "seasonStart": 2010,
+        "seasonEnd": 2017,
+        "pickCount": 123,
+        "seasonCount": 8,
+        "earlyRbPct": 56,
+        "earlyWrPct": 6,
+        "confidenceLabel": "medium",
+        "summary": "Legacy RB-first: rounds 1–2 were 56% RB / 6% WR across 123 picks (2010–2017)."
+      },
+      {
+        "label": "Balanced early-round chapter",
+        "seasonStart": 2018,
+        "seasonEnd": 2022,
+        "pickCount": 38,
+        "seasonCount": 4,
+        "earlyRbPct": 29,
+        "earlyWrPct": 43,
+        "confidenceLabel": "low",
+        "summary": "Balanced early-round chapter: rounds 1–2 were 29% RB / 43% WR across 38 picks (2018–2022)."
+      },
+      {
+        "label": "Modern WR-lean",
+        "seasonStart": 2023,
+        "seasonEnd": 2025,
+        "pickCount": 31,
+        "seasonCount": 3,
+        "earlyRbPct": 50,
+        "earlyWrPct": 50,
+        "confidenceLabel": "low",
+        "summary": "Modern WR-lean: rounds 1–2 were 50% RB / 50% WR across 31 picks (2023–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 64
+      },
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 55
+      },
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 51
+      },
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 44
+      },
+      {
+        "trait": "Board value",
+        "confidencePct": 37
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 33
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 5
+      }
+    ],
+    "overallStability": "medium",
+    "choiceEventCount": 192,
+    "avgChosenProbability": 0.06536469438112298
+  },
+  {
+    "displayName": "Rod Sellers",
+    "personalityFitTier": "full",
+    "rules": [
+      {
+        "ifThen": "If tiers are thinning OR late-round hole at a position → act now, don't wait.",
+        "drive": "panic",
+        "evidence": {
+          "matchingPicks": 43,
+          "draftSeasons": 15,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 62
+      },
+      {
+        "ifThen": "If a player was on your roster in a prior season → boost his draft priority.",
+        "drive": "comfortAnchor",
+        "evidence": {
+          "matchingPicks": 37,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 55
+      },
+      {
+        "ifThen": "If a position is below roster target → prioritize filling that hole over raw board rank.",
+        "drive": "need",
+        "evidence": {
+          "matchingPicks": 178,
+          "draftSeasons": 16,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 51
+      },
+      {
+        "ifThen": "If rounds 1–2 AND a startable RB is on the board → lean RB over waiting.",
+        "drive": "rbEarlyRound",
+        "evidence": {
+          "matchingPicks": 17,
+          "draftSeasons": 13,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2015,
+            2016,
+            2017,
+            2018,
+            2020,
+            2021,
+            2022,
+            2023,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 48
+      },
+      {
+        "ifThen": "If pre-2023 draft AND rounds 1–2 → RB urgency is higher than league peers.",
+        "drive": "rbEarlyLegacyEra",
+        "evidence": {
+          "matchingPicks": 14,
+          "draftSeasons": 11,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2015,
+            2016,
+            2017,
+            2018,
+            2020,
+            2021,
+            2022
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 35
+      }
+    ],
+    "exceptions": [
+      {
+        "unless": "UNLESS a WR tier-cliff is within ~2 picks in rounds 1–2 → pivot to WR before RB urgency fires.",
+        "drives": [
+          "panic",
+          "scarcityTierCliff"
+        ],
+        "evidence": {
+          "matchingPicks": 43,
+          "draftSeasons": 15,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 62
+      },
+      {
+        "unless": "UNLESS the comfort re-draft is multiple rounds early for position → value rule overrides nostalgia.",
+        "drives": [
+          "comfortAnchor",
+          "value"
+        ],
+        "evidence": {
+          "matchingPicks": 37,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 55
+      }
+    ],
+    "ruleModifiers": [
+      "Era chapter (2010–2017 → 2018–2022 → 2023–2025): early-round RB/WR rules shift by segment — see ERAS.",
+      "Run pressure: when the room stacks one position, run-rider vs fade rules activate.",
+      "Roster state: open holes at RB/WR/QB/TE strengthen need-fill rules on every pick.",
+      "Tier/scarcity: thinning tiers escalate urgency overrides in middle and late rounds."
+    ],
+    "eras": [
+      {
+        "label": "Legacy RB-first",
+        "seasonStart": 2010,
+        "seasonEnd": 2017,
+        "pickCount": 123,
+        "seasonCount": 8,
+        "earlyRbPct": 50,
+        "earlyWrPct": 38,
+        "confidenceLabel": "medium",
+        "summary": "Legacy RB-first: rounds 1–2 were 50% RB / 38% WR across 123 picks (2010–2017)."
+      },
+      {
+        "label": "Legacy RB-first",
+        "seasonStart": 2018,
+        "seasonEnd": 2022,
+        "pickCount": 47,
+        "seasonCount": 5,
+        "earlyRbPct": 60,
+        "earlyWrPct": 30,
+        "confidenceLabel": "low",
+        "summary": "Legacy RB-first: rounds 1–2 were 60% RB / 30% WR across 47 picks (2018–2022)."
+      },
+      {
+        "label": "RB-forward chapter",
+        "seasonStart": 2023,
+        "seasonEnd": 2025,
+        "pickCount": 21,
+        "seasonCount": 3,
+        "earlyRbPct": 60,
+        "earlyWrPct": 20,
+        "confidenceLabel": "low",
+        "summary": "RB-forward chapter: rounds 1–2 were 60% RB / 20% WR across 21 picks (2023–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 64
+      },
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 64
+      },
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 55
+      },
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 51
+      },
+      {
+        "trait": "Board value",
+        "confidencePct": 32
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 14
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 5
+      }
+    ],
+    "overallStability": "medium",
+    "choiceEventCount": 191,
+    "avgChosenProbability": 0.06789817561532344
+  },
+  {
+    "displayName": "Mark Deroux",
+    "personalityFitTier": "full",
+    "rules": [
+      {
+        "ifThen": "If a player was on your roster in a prior season → boost his draft priority.",
+        "drive": "comfortAnchor",
+        "evidence": {
+          "matchingPicks": 31,
+          "draftSeasons": 14,
+          "seasons": [
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 52
+      },
+      {
+        "ifThen": "If a position is below roster target → prioritize filling that hole over raw board rank.",
+        "drive": "need",
+        "evidence": {
+          "matchingPicks": 169,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 50
+      },
+      {
+        "ifThen": "If rounds 1–2 AND WR value is available → take WR early rather than deferring.",
+        "drive": "wrEarlyRound",
+        "evidence": {
+          "matchingPicks": 18,
+          "draftSeasons": 11,
+          "seasons": [
+            2013,
+            2014,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 47
+      },
+      {
+        "ifThen": "If tiers are thinning OR late-round hole at a position → act now, don't wait.",
+        "drive": "panic",
+        "evidence": {
+          "matchingPicks": 43,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 47
+      },
+      {
+        "ifThen": "If 2023+ draft AND rounds 1–2 → WR urgency is higher than his legacy era.",
+        "drive": "wrEarlyModernEra",
+        "evidence": {
+          "matchingPicks": 4,
+          "draftSeasons": 3,
+          "seasons": [
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 6
+      }
+    ],
+    "exceptions": [
+      {
+        "unless": "UNLESS board value gap is extreme at another position → need-fill rule yields to one-time value steal.",
+        "drives": [
+          "need",
+          "value"
+        ],
+        "evidence": {
+          "matchingPicks": 169,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 50
+      }
+    ],
+    "ruleModifiers": [
+      "Era chapter (2011–2017 → 2018–2022 → 2023–2025): early-round RB/WR rules shift by segment — see ERAS.",
+      "Roster state: open holes at RB/WR/QB/TE strengthen need-fill rules on every pick.",
+      "Tier/scarcity: thinning tiers escalate urgency overrides in middle and late rounds.",
+      "2023+ modern era: WR-early override can supersede legacy RB-first habits."
+    ],
+    "eras": [
+      {
+        "label": "Balanced early-round chapter",
+        "seasonStart": 2011,
+        "seasonEnd": 2017,
+        "pickCount": 107,
+        "seasonCount": 7,
+        "earlyRbPct": 43,
+        "earlyWrPct": 43,
+        "confidenceLabel": "low",
+        "summary": "Balanced early-round chapter: rounds 1–2 were 43% RB / 43% WR across 107 picks (2011–2017)."
+      },
+      {
+        "label": "WR-forward chapter",
+        "seasonStart": 2018,
+        "seasonEnd": 2022,
+        "pickCount": 45,
+        "seasonCount": 5,
+        "earlyRbPct": 10,
+        "earlyWrPct": 80,
+        "confidenceLabel": "low",
+        "summary": "WR-forward chapter: rounds 1–2 were 10% RB / 80% WR across 45 picks (2018–2022)."
+      },
+      {
+        "label": "Modern WR-lean",
+        "seasonStart": 2023,
+        "seasonEnd": 2025,
+        "pickCount": 27,
+        "seasonCount": 3,
+        "earlyRbPct": 17,
+        "earlyWrPct": 67,
+        "confidenceLabel": "low",
+        "summary": "Modern WR-lean: rounds 1–2 were 17% RB / 67% WR across 27 picks (2023–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 52
+      },
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 50
+      },
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 48
+      },
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 9
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 9
+      },
+      {
+        "trait": "Board value",
+        "confidencePct": 9
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 5
+      }
+    ],
+    "overallStability": "low",
+    "choiceEventCount": 179,
+    "avgChosenProbability": 0.0666922764445206
+  },
+  {
+    "displayName": "Steffon Bizzell",
+    "personalityFitTier": "full",
+    "rules": [
+      {
+        "ifThen": "If a player was on your roster in a prior season → boost his draft priority.",
+        "drive": "comfortAnchor",
+        "evidence": {
+          "matchingPicks": 32,
+          "draftSeasons": 14,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 58
+      },
+      {
+        "ifThen": "If a position is below roster target → prioritize filling that hole over raw board rank.",
+        "drive": "need",
+        "evidence": {
+          "matchingPicks": 158,
+          "draftSeasons": 15,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 50
+      },
+      {
+        "ifThen": "If tiers are thinning OR late-round hole at a position → act now, don't wait.",
+        "drive": "panic",
+        "evidence": {
+          "matchingPicks": 28,
+          "draftSeasons": 13,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 44
+      },
+      {
+        "ifThen": "If top-tier players at a position are almost gone → reach before the cliff.",
+        "drive": "scarcityTierCliff",
+        "evidence": {
+          "matchingPicks": 28,
+          "draftSeasons": 13,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 39
+      },
+      {
+        "ifThen": "If position-normalized board value gap is large → take the stronger value play.",
+        "drive": "value",
+        "evidence": {
+          "matchingPicks": 179,
+          "draftSeasons": 15,
+          "seasons": [],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 35
+      }
+    ],
+    "exceptions": [
+      {
+        "unless": "UNLESS the comfort re-draft is multiple rounds early for position → value rule overrides nostalgia.",
+        "drives": [
+          "comfortAnchor",
+          "value"
+        ],
+        "evidence": {
+          "matchingPicks": 32,
+          "draftSeasons": 14,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 58
+      },
+      {
+        "unless": "UNLESS a WR tier-cliff is within ~2 picks in rounds 1–2 → pivot to WR before RB urgency fires.",
+        "drives": [
+          "panic",
+          "scarcityTierCliff"
+        ],
+        "evidence": {
+          "matchingPicks": 28,
+          "draftSeasons": 13,
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "seasonRange": "2010–2025"
+        },
+        "confidencePct": 44
+      }
+    ],
+    "ruleModifiers": [
+      "Era chapter (2010–2017 → 2018–2022 → 2023–2025): early-round RB/WR rules shift by segment — see ERAS.",
+      "Run pressure: when the room stacks one position, run-rider vs fade rules activate.",
+      "Roster state: open holes at RB/WR/QB/TE strengthen need-fill rules on every pick.",
+      "Tier/scarcity: thinning tiers escalate urgency overrides in middle and late rounds."
+    ],
+    "eras": [
+      {
+        "label": "WR-forward chapter",
+        "seasonStart": 2010,
+        "seasonEnd": 2017,
+        "pickCount": 123,
+        "seasonCount": 8,
+        "earlyRbPct": 19,
+        "earlyWrPct": 38,
+        "confidenceLabel": "low",
+        "summary": "WR-forward chapter: rounds 1–2 were 19% RB / 38% WR across 123 picks (2010–2017)."
+      },
+      {
+        "label": "Balanced early-round chapter",
+        "seasonStart": 2018,
+        "seasonEnd": 2022,
+        "pickCount": 36,
+        "seasonCount": 4,
+        "earlyRbPct": 33,
+        "earlyWrPct": 33,
+        "confidenceLabel": "low",
+        "summary": "Balanced early-round chapter: rounds 1–2 were 33% RB / 33% WR across 36 picks (2018–2022)."
+      },
+      {
+        "label": "RB-forward chapter",
+        "seasonStart": 2023,
+        "seasonEnd": 2025,
+        "pickCount": 20,
+        "seasonCount": 3,
+        "earlyRbPct": 50,
+        "earlyWrPct": 25,
+        "confidenceLabel": "low",
+        "summary": "RB-forward chapter: rounds 1–2 were 50% RB / 25% WR across 20 picks (2023–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 58
+      },
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 52
+      },
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 50
+      },
+      {
+        "trait": "Board value",
+        "confidencePct": 35
+      },
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 5
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 5
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 5
+      }
+    ],
+    "overallStability": "medium",
+    "choiceEventCount": 179,
+    "avgChosenProbability": 0.062471245681397766
+  },
+  {
+    "displayName": "Randy Broner Jr",
+    "personalityFitTier": "full",
+    "rules": [
+      {
+        "ifThen": "If tiers are thinning OR late-round hole at a position → act now, don't wait.",
+        "drive": "panic",
+        "evidence": {
+          "matchingPicks": 32,
+          "draftSeasons": 14,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 59
+      },
+      {
+        "ifThen": "If a position is below roster target → prioritize filling that hole over raw board rank.",
+        "drive": "need",
+        "evidence": {
+          "matchingPicks": 165,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 51
+      },
+      {
+        "ifThen": "If a player was on your roster in a prior season → boost his draft priority.",
+        "drive": "comfortAnchor",
+        "evidence": {
+          "matchingPicks": 30,
+          "draftSeasons": 12,
+          "seasons": [
+            2012,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 46
+      },
+      {
+        "ifThen": "If a position run is live → join the run (negative contrarian = herd-responsive).",
+        "drive": "contrarian",
+        "evidence": {
+          "matchingPicks": 16,
+          "draftSeasons": 8,
+          "seasons": [
+            2012,
+            2013,
+            2014,
+            2015,
+            2019,
+            2020,
+            2022,
+            2024
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 42
+      },
+      {
+        "ifThen": "If best board value conflicts with roster shape → take shape/need over pure BPA.",
+        "drive": "value",
+        "evidence": {
+          "matchingPicks": 165,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 22
+      }
+    ],
+    "exceptions": [
+      {
+        "unless": "UNLESS board value gap is extreme at another position → need-fill rule yields to one-time value steal.",
+        "drives": [
+          "need",
+          "value"
+        ],
+        "evidence": {
+          "matchingPicks": 165,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 51
+      },
+      {
+        "unless": "UNLESS in legacy era (pre-2023) → RB rule dominates; modern WR override only applies 2023+.",
+        "drives": [
+          "rbEarlyLegacyEra",
+          "wrEarlyModernEra"
+        ],
+        "evidence": {
+          "matchingPicks": 9,
+          "draftSeasons": 9,
+          "seasons": [
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 16
+      },
+      {
+        "unless": "UNLESS draft year is 2023+ AND rounds 1–2 → pivot toward WR even when RB rule would fire.",
+        "drives": [
+          "rbEarlyRound",
+          "wrEarlyModernEra"
+        ],
+        "evidence": {
+          "matchingPicks": 2,
+          "draftSeasons": 2,
+          "seasons": [
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 5
+      }
+    ],
+    "ruleModifiers": [
+      "Era chapter (2011–2017 → 2018–2022 → 2023–2025): early-round RB/WR rules shift by segment — see ERAS.",
+      "Run pressure: when the room stacks one position, run-rider vs fade rules activate.",
+      "Roster state: open holes at RB/WR/QB/TE strengthen need-fill rules on every pick.",
+      "Tier/scarcity: thinning tiers escalate urgency overrides in middle and late rounds."
+    ],
+    "eras": [
+      {
+        "label": "Legacy RB-first",
+        "seasonStart": 2011,
+        "seasonEnd": 2017,
+        "pickCount": 107,
+        "seasonCount": 7,
+        "earlyRbPct": 31,
+        "earlyWrPct": 15,
+        "confidenceLabel": "low",
+        "summary": "Legacy RB-first: rounds 1–2 were 31% RB / 15% WR across 107 picks (2011–2017)."
+      },
+      {
+        "label": "Legacy RB-first",
+        "seasonStart": 2018,
+        "seasonEnd": 2022,
+        "pickCount": 48,
+        "seasonCount": 5,
+        "earlyRbPct": 71,
+        "earlyWrPct": 29,
+        "confidenceLabel": "low",
+        "summary": "Legacy RB-first: rounds 1–2 were 71% RB / 29% WR across 48 picks (2018–2022)."
+      },
+      {
+        "label": "Modern WR-lean",
+        "seasonStart": 2023,
+        "seasonEnd": 2025,
+        "pickCount": 23,
+        "seasonCount": 3,
+        "earlyRbPct": 0,
+        "earlyWrPct": 67,
+        "confidenceLabel": "low",
+        "summary": "Modern WR-lean: rounds 1–2 were 0% RB / 67% WR across 23 picks (2023–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 60
+      },
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 51
+      },
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 46
+      },
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 36
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 34
+      },
+      {
+        "trait": "Board value",
+        "confidencePct": 22
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 5
+      }
+    ],
+    "overallStability": "medium",
+    "choiceEventCount": 178,
+    "avgChosenProbability": 0.06578465325792988
+  },
+  {
+    "displayName": "Bruce Edwards",
+    "personalityFitTier": "full",
+    "rules": [
+      {
+        "ifThen": "If tiers are thinning OR late-round hole at a position → act now, don't wait.",
+        "drive": "panic",
+        "evidence": {
+          "matchingPicks": 34,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 61
+      },
+      {
+        "ifThen": "If a player was on your roster in a prior season → boost his draft priority.",
+        "drive": "comfortAnchor",
+        "evidence": {
+          "matchingPicks": 30,
+          "draftSeasons": 12,
+          "seasons": [
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 53
+      },
+      {
+        "ifThen": "If a position is below roster target → prioritize filling that hole over raw board rank.",
+        "drive": "need",
+        "evidence": {
+          "matchingPicks": 168,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 52
+      },
+      {
+        "ifThen": "If pre-2023 draft AND rounds 1–2 → RB urgency is higher than league peers.",
+        "drive": "rbEarlyLegacyEra",
+        "evidence": {
+          "matchingPicks": 16,
+          "draftSeasons": 11,
+          "seasons": [
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 48
+      },
+      {
+        "ifThen": "If a position run is live → join the run (negative contrarian = herd-responsive).",
+        "drive": "contrarian",
+        "evidence": {
+          "matchingPicks": 22,
+          "draftSeasons": 11,
+          "seasons": [
+            2012,
+            2014,
+            2015,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 47
+      }
+    ],
+    "exceptions": [
+      {
+        "unless": "UNLESS a WR tier-cliff is within ~2 picks in rounds 1–2 → pivot to WR before RB urgency fires.",
+        "drives": [
+          "panic",
+          "scarcityTierCliff"
+        ],
+        "evidence": {
+          "matchingPicks": 34,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 61
+      },
+      {
+        "unless": "UNLESS board value gap is extreme at another position → need-fill rule yields to one-time value steal.",
+        "drives": [
+          "need",
+          "value"
+        ],
+        "evidence": {
+          "matchingPicks": 168,
+          "draftSeasons": 15,
+          "seasons": [
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 52
+      },
+      {
+        "unless": "UNLESS in legacy era (pre-2023) → RB rule dominates; modern WR override only applies 2023+.",
+        "drives": [
+          "rbEarlyLegacyEra",
+          "wrEarlyModernEra"
+        ],
+        "evidence": {
+          "matchingPicks": 16,
+          "draftSeasons": 11,
+          "seasons": [
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "seasonRange": "2011–2025"
+        },
+        "confidencePct": 48
+      }
+    ],
+    "ruleModifiers": [
+      "Era chapter (2011–2017 → 2018–2022 → 2023–2025): early-round RB/WR rules shift by segment — see ERAS.",
+      "Run pressure: when the room stacks one position, run-rider vs fade rules activate.",
+      "Roster state: open holes at RB/WR/QB/TE strengthen need-fill rules on every pick.",
+      "Tier/scarcity: thinning tiers escalate urgency overrides in middle and late rounds."
+    ],
+    "eras": [
+      {
+        "label": "Legacy RB-first",
+        "seasonStart": 2011,
+        "seasonEnd": 2017,
+        "pickCount": 107,
+        "seasonCount": 7,
+        "earlyRbPct": 64,
+        "earlyWrPct": 21,
+        "confidenceLabel": "medium",
+        "summary": "Legacy RB-first: rounds 1–2 were 64% RB / 21% WR across 107 picks (2011–2017)."
+      },
+      {
+        "label": "Legacy RB-first",
+        "seasonStart": 2018,
+        "seasonEnd": 2022,
+        "pickCount": 47,
+        "seasonCount": 5,
+        "earlyRbPct": 70,
+        "earlyWrPct": 20,
+        "confidenceLabel": "low",
+        "summary": "Legacy RB-first: rounds 1–2 were 70% RB / 20% WR across 47 picks (2018–2022)."
+      },
+      {
+        "label": "Modern WR-lean",
+        "seasonStart": 2023,
+        "seasonEnd": 2025,
+        "pickCount": 22,
+        "seasonCount": 3,
+        "earlyRbPct": 0,
+        "earlyWrPct": 100,
+        "confidenceLabel": "low",
+        "summary": "Modern WR-lean: rounds 1–2 were 0% RB / 100% WR across 22 picks (2023–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 66
+      },
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 63
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 56
+      },
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 53
+      },
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 52
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 14
+      },
+      {
+        "trait": "Board value",
+        "confidencePct": 8
+      }
+    ],
+    "overallStability": "medium",
+    "choiceEventCount": 176,
+    "avgChosenProbability": 0.06880072271792051
+  },
+  {
+    "displayName": "Nate West",
+    "personalityFitTier": "full",
+    "rules": [
+      {
+        "ifThen": "If a position is below roster target → prioritize filling that hole over raw board rank.",
+        "drive": "need",
+        "evidence": {
+          "matchingPicks": 143,
+          "draftSeasons": 13,
+          "seasons": [
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2012–2025"
+        },
+        "confidencePct": 49
+      },
+      {
+        "ifThen": "If a player was on your roster in a prior season → boost his draft priority.",
+        "drive": "comfortAnchor",
+        "evidence": {
+          "matchingPicks": 23,
+          "draftSeasons": 10,
+          "seasons": [
+            2013,
+            2014,
+            2015,
+            2016,
+            2019,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2012–2025"
+        },
+        "confidencePct": 43
+      },
+      {
+        "ifThen": "If tiers are thinning OR late-round hole at a position → act now, don't wait.",
+        "drive": "panic",
+        "evidence": {
+          "matchingPicks": 31,
+          "draftSeasons": 12,
+          "seasons": [
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2012–2025"
+        },
+        "confidencePct": 34
+      },
+      {
+        "ifThen": "If top-tier players at a position are almost gone → reach before the cliff.",
+        "drive": "scarcityTierCliff",
+        "evidence": {
+          "matchingPicks": 31,
+          "draftSeasons": 12,
+          "seasons": [
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2012–2025"
+        },
+        "confidencePct": 32
+      },
+      {
+        "ifThen": "If best board value conflicts with roster shape → take shape/need over pure BPA.",
+        "drive": "value",
+        "evidence": {
+          "matchingPicks": 143,
+          "draftSeasons": 13,
+          "seasons": [
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2012–2025"
+        },
+        "confidencePct": 25
+      }
+    ],
+    "exceptions": [
+      {
+        "unless": "UNLESS board value gap is extreme at another position → need-fill rule yields to one-time value steal.",
+        "drives": [
+          "need",
+          "value"
+        ],
+        "evidence": {
+          "matchingPicks": 143,
+          "draftSeasons": 13,
+          "seasons": [
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2012–2025"
+        },
+        "confidencePct": 49
+      },
+      {
+        "unless": "UNLESS a WR tier-cliff is within ~2 picks in rounds 1–2 → pivot to WR before RB urgency fires.",
+        "drives": [
+          "panic",
+          "scarcityTierCliff"
+        ],
+        "evidence": {
+          "matchingPicks": 31,
+          "draftSeasons": 12,
+          "seasons": [
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2012–2025"
+        },
+        "confidencePct": 34
+      }
+    ],
+    "ruleModifiers": [
+      "Era chapter (2012–2017 → 2019–2022 → 2023–2025): early-round RB/WR rules shift by segment — see ERAS.",
+      "Roster state: open holes at RB/WR/QB/TE strengthen need-fill rules on every pick.",
+      "Tier/scarcity: thinning tiers escalate urgency overrides in middle and late rounds."
+    ],
+    "eras": [
+      {
+        "label": "Balanced early-round chapter",
+        "seasonStart": 2012,
+        "seasonEnd": 2017,
+        "pickCount": 91,
+        "seasonCount": 6,
+        "earlyRbPct": 27,
+        "earlyWrPct": 36,
+        "confidenceLabel": "low",
+        "summary": "Balanced early-round chapter: rounds 1–2 were 27% RB / 36% WR across 91 picks (2012–2017)."
+      },
+      {
+        "label": "Legacy RB-first",
+        "seasonStart": 2019,
+        "seasonEnd": 2022,
+        "pickCount": 39,
+        "seasonCount": 4,
+        "earlyRbPct": 71,
+        "earlyWrPct": 0,
+        "confidenceLabel": "low",
+        "summary": "Legacy RB-first: rounds 1–2 were 71% RB / 0% WR across 39 picks (2019–2022)."
+      },
+      {
+        "label": "RB-forward chapter",
+        "seasonStart": 2023,
+        "seasonEnd": 2025,
+        "pickCount": 29,
+        "seasonCount": 3,
+        "earlyRbPct": 67,
+        "earlyWrPct": 0,
+        "confidenceLabel": "low",
+        "summary": "RB-forward chapter: rounds 1–2 were 67% RB / 0% WR across 29 picks (2023–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 49
+      },
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 43
+      },
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 43
+      },
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 42
+      },
+      {
+        "trait": "Board value",
+        "confidencePct": 25
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 16
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 5
+      }
+    ],
+    "overallStability": "low",
+    "choiceEventCount": 159,
+    "avgChosenProbability": 0.05949181084171433
+  },
+  {
+    "displayName": "Marlon Moore",
+    "personalityFitTier": "full",
+    "rules": [
+      {
+        "ifThen": "If tiers are thinning OR late-round hole at a position → act now, don't wait.",
+        "drive": "panic",
+        "evidence": {
+          "matchingPicks": 26,
+          "draftSeasons": 10,
+          "seasons": [
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2016–2025"
+        },
+        "confidencePct": 65
+      },
+      {
+        "ifThen": "If a position is below roster target → prioritize filling that hole over raw board rank.",
+        "drive": "need",
+        "evidence": {
+          "matchingPicks": 90,
+          "draftSeasons": 10,
+          "seasons": [
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2016–2025"
+        },
+        "confidencePct": 53
+      },
+      {
+        "ifThen": "If a position run is live → join the run (negative contrarian = herd-responsive).",
+        "drive": "contrarian",
+        "evidence": {
+          "matchingPicks": 14,
+          "draftSeasons": 7,
+          "seasons": [
+            2016,
+            2017,
+            2019,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "seasonRange": "2016–2025"
+        },
+        "confidencePct": 40
+      },
+      {
+        "ifThen": "If best board value conflicts with roster shape → take shape/need over pure BPA.",
+        "drive": "value",
+        "evidence": {
+          "matchingPicks": 90,
+          "draftSeasons": 10,
+          "seasons": [
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2016–2025"
+        },
+        "confidencePct": 35
+      },
+      {
+        "ifThen": "If a position run is live (3+ of last 4 picks same position) → join the run at that position.",
+        "drive": "herdFomo",
+        "evidence": {
+          "matchingPicks": 14,
+          "draftSeasons": 7,
+          "seasons": [
+            2016,
+            2017,
+            2019,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "seasonRange": "2016–2025"
+        },
+        "confidencePct": 34
+      }
+    ],
+    "exceptions": [
+      {
+        "unless": "UNLESS board value gap is extreme at another position → need-fill rule yields to one-time value steal.",
+        "drives": [
+          "need",
+          "value"
+        ],
+        "evidence": {
+          "matchingPicks": 90,
+          "draftSeasons": 10,
+          "seasons": [
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2016–2025"
+        },
+        "confidencePct": 53
+      },
+      {
+        "unless": "UNLESS run is at a position you already filled → herd rule weakens; shape takes over.",
+        "drives": [
+          "herdFomo",
+          "need"
+        ],
+        "evidence": {
+          "matchingPicks": 14,
+          "draftSeasons": 7,
+          "seasons": [
+            2016,
+            2017,
+            2019,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "seasonRange": "2016–2025"
+        },
+        "confidencePct": 34
+      }
+    ],
+    "ruleModifiers": [
+      "Era chapter (2016–2017 → 2018–2022 → 2023–2025): early-round RB/WR rules shift by segment — see ERAS.",
+      "Run pressure: when the room stacks one position, run-rider vs fade rules activate.",
+      "Roster state: open holes at RB/WR/QB/TE strengthen need-fill rules on every pick.",
+      "Tier/scarcity: thinning tiers escalate urgency overrides in middle and late rounds."
+    ],
+    "eras": [
+      {
+        "label": "WR-forward chapter",
+        "seasonStart": 2016,
+        "seasonEnd": 2017,
+        "pickCount": 28,
+        "seasonCount": 2,
+        "earlyRbPct": 33,
+        "earlyWrPct": 67,
+        "confidenceLabel": "low",
+        "summary": "WR-forward chapter: rounds 1–2 were 33% RB / 67% WR across 28 picks (2016–2017)."
+      },
+      {
+        "label": "WR-forward chapter",
+        "seasonStart": 2018,
+        "seasonEnd": 2022,
+        "pickCount": 46,
+        "seasonCount": 5,
+        "earlyRbPct": 33,
+        "earlyWrPct": 67,
+        "confidenceLabel": "low",
+        "summary": "WR-forward chapter: rounds 1–2 were 33% RB / 67% WR across 46 picks (2018–2022)."
+      },
+      {
+        "label": "Modern WR-lean",
+        "seasonStart": 2023,
+        "seasonEnd": 2025,
+        "pickCount": 20,
+        "seasonCount": 3,
+        "earlyRbPct": 0,
+        "earlyWrPct": 67,
+        "confidenceLabel": "low",
+        "summary": "Modern WR-lean: rounds 1–2 were 0% RB / 67% WR across 20 picks (2023–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 65
+      },
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 53
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 43
+      },
+      {
+        "trait": "Board value",
+        "confidencePct": 35
+      },
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 9
+      },
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 7
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 5
+      }
+    ],
+    "overallStability": "medium",
+    "choiceEventCount": 94,
+    "avgChosenProbability": 0.07249060247606179
+  },
+  {
+    "displayName": "Sheldon deRoux",
+    "personalityFitTier": "full",
+    "rules": [
+      {
+        "ifThen": "If best board value conflicts with roster shape → take shape/need over pure BPA.",
+        "drive": "value",
+        "evidence": {
+          "matchingPicks": 80,
+          "draftSeasons": 9,
+          "seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2017–2025"
+        },
+        "confidencePct": 61
+      },
+      {
+        "ifThen": "If a position is below roster target → prioritize filling that hole over raw board rank.",
+        "drive": "need",
+        "evidence": {
+          "matchingPicks": 80,
+          "draftSeasons": 9,
+          "seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2017–2025"
+        },
+        "confidencePct": 55
+      },
+      {
+        "ifThen": "If tiers are thinning OR late-round hole at a position → act now, don't wait.",
+        "drive": "panic",
+        "evidence": {
+          "matchingPicks": 23,
+          "draftSeasons": 9,
+          "seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2017–2025"
+        },
+        "confidencePct": 51
+      },
+      {
+        "ifThen": "If a player was on your roster in a prior season → boost his draft priority.",
+        "drive": "comfortAnchor",
+        "evidence": {
+          "matchingPicks": 11,
+          "draftSeasons": 6,
+          "seasons": [
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "seasonRange": "2017–2025"
+        },
+        "confidencePct": 34
+      },
+      {
+        "ifThen": "If rounds 1–2 AND a startable RB is on the board → lean RB over waiting.",
+        "drive": "rbEarlyRound",
+        "evidence": {
+          "matchingPicks": 8,
+          "draftSeasons": 7,
+          "seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2023,
+            2024
+          ],
+          "seasonRange": "2017–2025"
+        },
+        "confidencePct": 23
+      }
+    ],
+    "exceptions": [
+      {
+        "unless": "UNLESS board value gap is extreme at another position → need-fill rule yields to one-time value steal.",
+        "drives": [
+          "need",
+          "value"
+        ],
+        "evidence": {
+          "matchingPicks": 80,
+          "draftSeasons": 9,
+          "seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
+          "seasonRange": "2017–2025"
+        },
+        "confidencePct": 55
+      }
+    ],
+    "ruleModifiers": [
+      "Era chapter (2017–2022 → 2023–2025): early-round RB/WR rules shift by segment — see ERAS.",
+      "Roster state: open holes at RB/WR/QB/TE strengthen need-fill rules on every pick.",
+      "Tier/scarcity: thinning tiers escalate urgency overrides in middle and late rounds."
+    ],
+    "eras": [
+      {
+        "label": "Legacy RB-first",
+        "seasonStart": 2017,
+        "seasonEnd": 2022,
+        "pickCount": 59,
+        "seasonCount": 6,
+        "earlyRbPct": 42,
+        "earlyWrPct": 42,
+        "confidenceLabel": "low",
+        "summary": "Legacy RB-first: rounds 1–2 were 42% RB / 42% WR across 59 picks (2017–2022)."
+      },
+      {
+        "label": "RB-forward chapter",
+        "seasonStart": 2023,
+        "seasonEnd": 2025,
+        "pickCount": 23,
+        "seasonCount": 3,
+        "earlyRbPct": 60,
+        "earlyWrPct": 20,
+        "confidenceLabel": "low",
+        "summary": "RB-forward chapter: rounds 1–2 were 60% RB / 20% WR across 23 picks (2023–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "Board value",
+        "confidencePct": 61
+      },
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 55
+      },
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 47
+      },
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 40
+      },
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 34
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 5
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 5
+      }
+    ],
+    "overallStability": "medium",
+    "choiceEventCount": 82,
+    "avgChosenProbability": 0.08108586711208034
+  },
+  {
+    "displayName": "Tony Dorsey",
+    "personalityFitTier": "shrinkage_cold",
+    "provisionalNote": "Thin history (15 picks): ~13% of rules are own-signal; remainder inferred from league patterns. Marked provisional.",
+    "rules": [
+      {
+        "ifThen": "If rounds 1–2 AND a startable RB is on the board → lean RB over waiting.",
+        "drive": "rbEarlyRound",
+        "evidence": {
+          "matchingPicks": 3,
+          "draftSeasons": 2,
+          "seasons": [
+            2024,
+            2025
+          ],
+          "seasonRange": "2024–2025"
+        },
+        "confidencePct": 5
+      },
+      {
+        "ifThen": "If pre-2023 draft AND rounds 1–2 → RB urgency is higher than league peers.",
+        "drive": "rbEarlyLegacyEra",
+        "evidence": {
+          "matchingPicks": 0,
+          "draftSeasons": 0,
+          "seasons": [],
+          "seasonRange": "2024–2025"
+        },
+        "confidencePct": 5
+      },
+      {
+        "ifThen": "If best board value conflicts with roster shape → take shape/need over pure BPA.",
+        "drive": "value",
+        "evidence": {
+          "matchingPicks": 14,
+          "draftSeasons": 2,
+          "seasons": [
+            2024,
+            2025
+          ],
+          "seasonRange": "2024–2025"
+        },
+        "confidencePct": 5
+      }
+    ],
+    "exceptions": [],
+    "ruleModifiers": [
+      "Run pressure: when the room stacks one position, run-rider vs fade rules activate."
+    ],
+    "eras": [
+      {
+        "label": "RB-forward chapter",
+        "seasonStart": 2024,
+        "seasonEnd": 2025,
+        "pickCount": 15,
+        "seasonCount": 2,
+        "earlyRbPct": 75,
+        "earlyWrPct": 25,
+        "confidenceLabel": "low",
+        "summary": "RB-forward chapter: rounds 1–2 were 75% RB / 25% WR across 15 picks (2024–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 5
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 5
+      },
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 5
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 5
+      },
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 5
+      },
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 5
+      },
+      {
+        "trait": "Board value",
+        "confidencePct": 5
+      }
+    ],
+    "overallStability": "provisional",
+    "choiceEventCount": 15,
+    "avgChosenProbability": 0.06914975609427881
+  },
+  {
+    "displayName": "Marcus Reese",
+    "personalityFitTier": "shrinkage_cold",
+    "provisionalNote": "Thin history (7 picks): ~7% of rules are own-signal; remainder inferred from league patterns. Marked provisional.",
+    "rules": [
+      {
+        "ifThen": "If rounds 1–2 AND WR value is available → take WR early rather than deferring.",
+        "drive": "wrEarlyRound",
+        "evidence": {
+          "matchingPicks": 1,
+          "draftSeasons": 1,
+          "seasons": [
+            2025
+          ],
+          "seasonRange": "2025–2025"
+        },
+        "confidencePct": 5
+      },
+      {
+        "ifThen": "If 2023+ draft AND rounds 1–2 → WR urgency is higher than his legacy era.",
+        "drive": "wrEarlyModernEra",
+        "evidence": {
+          "matchingPicks": 1,
+          "draftSeasons": 1,
+          "seasons": [
+            2025
+          ],
+          "seasonRange": "2025–2025"
+        },
+        "confidencePct": 5
+      },
+      {
+        "ifThen": "If tiers are thinning OR late-round hole at a position → act now, don't wait.",
+        "drive": "panic",
+        "evidence": {
+          "matchingPicks": 2,
+          "draftSeasons": 1,
+          "seasons": [
+            2025
+          ],
+          "seasonRange": "2025–2025"
+        },
+        "confidencePct": 5
+      }
+    ],
+    "exceptions": [],
+    "ruleModifiers": [
+      "Tier/scarcity: thinning tiers escalate urgency overrides in middle and late rounds.",
+      "2023+ modern era: WR-early override can supersede legacy RB-first habits."
+    ],
+    "eras": [
+      {
+        "label": "Modern WR-lean",
+        "seasonStart": 2025,
+        "seasonEnd": 2025,
+        "pickCount": 7,
+        "seasonCount": 1,
+        "earlyRbPct": 0,
+        "earlyWrPct": 100,
+        "confidenceLabel": "tentative",
+        "summary": "Modern WR-lean: rounds 1–2 were 0% RB / 100% WR across 7 picks (2025–2025)."
+      }
+    ],
+    "stability": [
+      {
+        "trait": "RB-first (early rounds)",
+        "confidencePct": 5
+      },
+      {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 5
+      },
+      {
+        "trait": "Roster-need fill",
+        "confidencePct": 5
+      },
+      {
+        "trait": "Run-rider",
+        "confidencePct": 5
+      },
+      {
+        "trait": "Comfort re-draft",
+        "confidencePct": 5
+      },
+      {
+        "trait": "Tier urgency",
+        "confidencePct": 5
+      },
+      {
+        "trait": "Board value",
+        "confidencePct": 5
+      }
+    ],
+    "overallStability": "provisional",
+    "choiceEventCount": 7,
+    "avgChosenProbability": 0.056410616911353836
+  }
+]
