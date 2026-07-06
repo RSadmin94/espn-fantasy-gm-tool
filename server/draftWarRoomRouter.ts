@@ -46,6 +46,7 @@ import {
   type DraftPoolPlayer,
   type OwnerDraftDnaContext,
 } from "./ownerDraftDnaModel";
+import type { OwnerDraftDnaTuning } from "./ownerDraftDnaTuning";
 
 // Phase B1: LEAGUE_ID constant removed — leagueId is resolved per-request via resolveActiveLeagueId.
 
@@ -804,17 +805,32 @@ function buildRosterNeeds(teams: any[], byTeam: Map<number, any[]>, keeperPredic
 
 // ── Mock draft ────────────────────────────────────────────────────────────────
 
-export function buildMockDraft(params: {
+export type MockDraftInputs = {
   allPicks: any[];
   rosterNeeds: any[];
   keeperPredictions: any[];
   tradedPicks: TradedPickInfo[];
-  playerPool: Array<{ name: string; position: string; projectedPoints: number; espnId: string | null; adp: number | null; marketValue: number | null }>;
+  playerPool: Array<{
+    name: string;
+    position: string;
+    projectedPoints: number;
+    espnId: string | null;
+    adp: number | null;
+    marketValue: number | null;
+  }>;
   /** Phase 1 league-intelligence: DP timing baseline from draft history. */
   dpTiming?: PositionTimingProfile | null;
   /** Phase 2a: probabilistic owner offense tendencies (QB/RB/WR/TE). */
   ownerDnaContext?: OwnerDraftDnaContext | null;
-}) {
+  /** Validation harness — tuning override (ignored by production mock path when unset). */
+  dnaTuning?: OwnerDraftDnaTuning;
+  /** Validation harness — reproducible stochastic draws. */
+  stochasticSeed?: number;
+  /** Fixture metadata for simulation replay. */
+  registryPlayerCount?: number;
+};
+
+export function buildMockDraft(params: MockDraftInputs) {
   const { allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool, dpTiming = null, ownerDnaContext = null } = params;
   const picks: any[] = [];
   const drafted = new Set<string>();

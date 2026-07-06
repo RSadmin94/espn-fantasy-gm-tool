@@ -73,5 +73,6 @@ describe("mineLedgerEvidence", () => {
     const e = mineLedgerEvidence(records);
     expect(e.earlyRb.count).toBe(1);
     expect(e.earlyWr.count).toBe(1);
+    expect(e.allDraftedSeasons).toEqual([2020, 2021]);
   });
 });

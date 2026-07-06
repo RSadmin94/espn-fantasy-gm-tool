@@ -7,6 +7,8 @@ import { normalizePlayerKey, normalizePosition, type ChoiceRecord } from "../pha
 export type EvidenceBundle = {
   totalChoices: number;
   draftSeasons: number;
+  /** Every season this owner has at least one ledger choice (for board-wide rule attribution). */
+  allDraftedSeasons: number[];
   seasonRange: [number, number];
   earlyRb: { count: number; seasons: number[] };
   earlyWr: { count: number; seasons: number[] };
@@ -94,6 +96,7 @@ export function mineLedgerEvidence(records: ChoiceRecord[]): EvidenceBundle {
   return {
     totalChoices: sorted.length,
     draftSeasons: seasons.length,
+    allDraftedSeasons: seasons,
     seasonRange: [seasons[0] ?? 0, seasons[seasons.length - 1] ?? 0],
     earlyRb: { count: earlyRbRecords.length, seasons: seasonSet(sorted, (r) => r.round <= 2 && normalizePosition(r.chosenPlayer.position) === "RB") },
     earlyWr: { count: earlyWrRecords.length, seasons: seasonSet(sorted, (r) => r.round <= 2 && normalizePosition(r.chosenPlayer.position) === "WR") },

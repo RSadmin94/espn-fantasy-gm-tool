@@ -7,6 +7,9 @@ import type { EvidenceBundle } from "./evidenceMining";
 
 export type StabilityBand = "high" | "medium" | "low" | "tentative" | "provisional";
 
+/** Era chapters never use the owner-level provisional band. */
+export type EraConfidenceLabel = Exclude<StabilityBand, "provisional">;
+
 export function coefStrength(absCoef: number): number {
   return 1 - Math.exp(-Math.abs(absCoef) / 0.28);
 }
@@ -56,7 +59,7 @@ export function eraConfidenceLabel(args: {
   pickCount: number;
   seasonCount: number;
   traitConfidencePct: number;
-}): StabilityBand {
+}): EraConfidenceLabel {
   if (args.pickCount < 12 || args.seasonCount < 2) return "tentative";
   if (args.traitConfidencePct >= 70) return "high";
   if (args.traitConfidencePct >= 45) return "medium";

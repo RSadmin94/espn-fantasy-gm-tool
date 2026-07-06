@@ -334,7 +334,9 @@ export function buildLeagueAuthenticityDashboard(params: {
   const roundSim = roundVectorSimilarityPct(hist.avgRoundByPosition, sim.avgRoundByPosition, positions);
   const overallSimilarityPct = Math.round((posSim * 0.5 + roundSim * 0.5) * 10) / 10;
 
-  const poolAdp = new Map(playerPool.map((p) => [p.name.toLowerCase(), p.adp ?? 9999]));
+  const poolAdp = new Map<string, number>(
+    playerPool.map((p: MockDraftInputs["playerPool"][number]) => [p.name.toLowerCase(), p.adp ?? 9999]),
+  );
   const simReachValue = reachValueRates(simulatedPicks, poolAdp);
 
   return {

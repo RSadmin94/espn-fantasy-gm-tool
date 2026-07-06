@@ -271,16 +271,16 @@
         "confidencePct": 52
       },
       {
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 48
+      },
+      {
         "trait": "Run-rider",
         "confidencePct": 47
       },
       {
         "trait": "Tier urgency",
         "confidencePct": 40
-      },
-      {
-        "trait": "WR-transition (2023+)",
-        "confidencePct": 33
       },
       {
         "trait": "Comfort re-draft",
@@ -392,7 +392,24 @@
         "evidence": {
           "matchingPicks": 197,
           "draftSeasons": 16,
-          "seasons": [],
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
           "seasonRange": "2010–2025"
         },
         "confidencePct": 44
@@ -552,12 +569,12 @@
         "confidencePct": 57
       },
       {
-        "trait": "Board value",
-        "confidencePct": 44
+        "trait": "WR-transition (2023+)",
+        "confidencePct": 48
       },
       {
-        "trait": "WR-transition (2023+)",
-        "confidencePct": 26
+        "trait": "Board value",
+        "confidencePct": 44
       },
       {
         "trait": "Run-rider",
@@ -659,7 +676,24 @@
         "evidence": {
           "matchingPicks": 194,
           "draftSeasons": 16,
-          "seasons": [],
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
           "seasonRange": "2010–2025"
         },
         "confidencePct": 46
@@ -936,7 +970,23 @@
         "evidence": {
           "matchingPicks": 192,
           "draftSeasons": 15,
-          "seasons": [],
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
           "seasonRange": "2010–2025"
         },
         "confidencePct": 37
@@ -1056,7 +1106,7 @@
         "summary": "Balanced early-round chapter: rounds 1–2 were 29% RB / 43% WR across 38 picks (2018–2022)."
       },
       {
-        "label": "Modern WR-lean",
+        "label": "Balanced early-round chapter",
         "seasonStart": 2023,
         "seasonEnd": 2025,
         "pickCount": 31,
@@ -1064,7 +1114,7 @@
         "earlyRbPct": 50,
         "earlyWrPct": 50,
         "confidenceLabel": "low",
-        "summary": "Modern WR-lean: rounds 1–2 were 50% RB / 50% WR across 31 picks (2023–2025)."
+        "summary": "Balanced early-round chapter: rounds 1–2 were 50% RB / 50% WR across 31 picks (2023–2025)."
       }
     ],
     "stability": [
@@ -1306,7 +1356,7 @@
     ],
     "eras": [
       {
-        "label": "Legacy RB-first",
+        "label": "Balanced early-round chapter",
         "seasonStart": 2010,
         "seasonEnd": 2017,
         "pickCount": 123,
@@ -1314,7 +1364,7 @@
         "earlyRbPct": 50,
         "earlyWrPct": 38,
         "confidenceLabel": "medium",
-        "summary": "Legacy RB-first: rounds 1–2 were 50% RB / 38% WR across 123 picks (2010–2017)."
+        "summary": "Balanced early-round chapter: rounds 1–2 were 50% RB / 38% WR across 123 picks (2010–2017)."
       },
       {
         "label": "Legacy RB-first",
@@ -1716,7 +1766,23 @@
         "evidence": {
           "matchingPicks": 179,
           "draftSeasons": 15,
-          "seasons": [],
+          "seasons": [
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025
+          ],
           "seasonRange": "2010–2025"
         },
         "confidencePct": 35
@@ -2414,7 +2480,7 @@
       },
       {
         "trait": "WR-transition (2023+)",
-        "confidencePct": 14
+        "confidencePct": 47
       },
       {
         "trait": "Board value",
@@ -3052,7 +3118,7 @@
     ],
     "eras": [
       {
-        "label": "Legacy RB-first",
+        "label": "Balanced early-round chapter",
         "seasonStart": 2017,
         "seasonEnd": 2022,
         "pickCount": 59,
@@ -3060,7 +3126,7 @@
         "earlyRbPct": 42,
         "earlyWrPct": 42,
         "confidenceLabel": "low",
-        "summary": "Legacy RB-first: rounds 1–2 were 42% RB / 42% WR across 59 picks (2017–2022)."
+        "summary": "Balanced early-round chapter: rounds 1–2 were 42% RB / 42% WR across 59 picks (2017–2022)."
       },
       {
         "label": "RB-forward chapter",
@@ -3123,17 +3189,6 @@
             2024,
             2025
           ],
-          "seasonRange": "2024–2025"
-        },
-        "confidencePct": 5
-      },
-      {
-        "ifThen": "If pre-2023 draft AND rounds 1–2 → RB urgency is higher than league peers.",
-        "drive": "rbEarlyLegacyEra",
-        "evidence": {
-          "matchingPicks": 0,
-          "draftSeasons": 0,
-          "seasons": [],
           "seasonRange": "2024–2025"
         },
         "confidencePct": 5

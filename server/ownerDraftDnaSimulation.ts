@@ -65,7 +65,7 @@ export function serializeMockFixture(inputs: MockDraftInputs): SerializableMockF
     tradedPicks: inputs.tradedPicks,
     playerPool: inputs.playerPool,
     dpTiming: inputs.dpTiming,
-    registryPlayerCount: inputs.registryPlayerCount,
+    registryPlayerCount: inputs.registryPlayerCount ?? 0,
     ownerDnaContext: {
       league: {
         totalPicks: ownerDnaContext.league.totalPicks,

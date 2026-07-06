@@ -4,7 +4,7 @@
 
 import { normalizePosition, type ChoiceRecord } from "../phase1/types";
 import type { PersonalityCoefficients } from "../phase3/discreteChoiceModel";
-import { eraConfidenceLabel, traitConfidencePct } from "./traitConfidence";
+import { eraConfidenceLabel, traitConfidencePct, type EraConfidenceLabel } from "./traitConfidence";
 
 export type BehavioralEra = {
   label: string;
@@ -14,7 +14,7 @@ export type BehavioralEra = {
   seasonCount: number;
   earlyRbPct: number;
   earlyWrPct: number;
-  confidenceLabel: "high" | "medium" | "low" | "tentative";
+  confidenceLabel: EraConfidenceLabel;
   summary: string;
 };
 
@@ -43,7 +43,8 @@ function seasonSlices(records: ChoiceRecord[]): SeasonSlice[] {
     });
 }
 
-function labelForEra(args: {
+/** Exported for unit tests — label must match earlyRbPct / earlyWrPct. */
+export function labelForEra(args: {
   rbPct: number;
   wrPct: number;
   seasonStart: number;
@@ -51,11 +52,11 @@ function labelForEra(args: {
   modernCoef: number;
 }): string {
   const { rbPct, wrPct, seasonStart, legacyCoef, modernCoef } = args;
-  if (seasonStart >= 2023 && modernCoef > 0.08) return "Modern WR-lean";
-  if (seasonStart < 2023 && legacyCoef > 0.15 && rbPct >= wrPct) return "Legacy RB-first";
+  if (Math.abs(rbPct - wrPct) <= 15) return "Balanced early-round chapter";
+  if (seasonStart >= 2023 && modernCoef > 0.08 && wrPct > rbPct + 15) return "Modern WR-lean";
+  if (seasonStart < 2023 && legacyCoef > 0.15 && rbPct > wrPct + 15) return "Legacy RB-first";
   if (wrPct > rbPct + 15) return "WR-forward chapter";
   if (rbPct > wrPct + 15) return "RB-forward chapter";
-  if (Math.abs(rbPct - wrPct) <= 15) return "Balanced early-round chapter";
   return "Transitional chapter";
 }
 

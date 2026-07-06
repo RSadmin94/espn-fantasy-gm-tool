@@ -20,7 +20,7 @@ export type EmergentRun = {
 export function detectEmergentRuns(picks: SimPickRecord[]): EmergentRun[] {
   const recent: string[] = [];
   const runs: EmergentRun[] = [];
-  let active: EmergentRun | null = null;
+  let activeRun: EmergentRun | null = null;
 
   for (const p of picks) {
     const pos = normalizePosition(p.chosen.position);
@@ -31,19 +31,19 @@ export function detectEmergentRuns(picks: SimPickRecord[]): EmergentRun[] {
     const count = last4.filter((x) => x === pos).length;
 
     if (count >= 3) {
-      if (active?.position === pos) {
-        active.endPick = p.overallPick;
-        active.pickCount += 1;
+      if (activeRun !== null && activeRun.position === pos) {
+        activeRun.endPick = p.overallPick;
+        activeRun.pickCount += 1;
       } else {
-        if (active) runs.push(active);
-        active = { position: pos, startPick: p.overallPick, endPick: p.overallPick, pickCount: 1 };
+        if (activeRun) runs.push(activeRun);
+        activeRun = { position: pos, startPick: p.overallPick, endPick: p.overallPick, pickCount: 1 };
       }
-    } else if (active && active.position !== pos) {
-      runs.push(active);
-      active = null;
+    } else if (activeRun !== null && activeRun.position !== pos) {
+      runs.push(activeRun);
+      activeRun = null;
     }
   }
-  if (active) runs.push(active);
+  if (activeRun) runs.push(activeRun);
   return runs.filter((r) => r.pickCount >= 2);
 }
 

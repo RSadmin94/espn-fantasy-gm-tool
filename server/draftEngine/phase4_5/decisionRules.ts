@@ -52,11 +52,24 @@ export type OwnerDecisionProfile = {
   boardScopeNote: string;
 };
 
+type EvidenceCountKey =
+  | "earlyRb"
+  | "earlyWr"
+  | "legacyEarlyRb"
+  | "modernEarlyWr"
+  | "runJoin"
+  | "runFade"
+  | "comfortReDraft"
+  | "needFill"
+  | "tierUrgency";
+
+const ERA_SCOPED_EVIDENCE = new Set<EvidenceCountKey>(["legacyEarlyRb", "modernEarlyWr"]);
+
 type RuleCandidate = {
   drive: DriveName;
   coef: number;
   ifThen: string;
-  evidenceKey: keyof EvidenceBundle | "total";
+  evidenceKey: EvidenceCountKey | "total";
   minCoef?: number;
 };
 
@@ -140,29 +153,22 @@ const RULE_CANDIDATES: RuleCandidate[] = [
   },
 ];
 
-function evidenceForKey(bundle: EvidenceBundle, key: keyof EvidenceBundle | "total"): RuleEvidence {
+function evidenceForKey(bundle: EvidenceBundle, key: EvidenceCountKey | "total"): RuleEvidence {
+  const seasonRange = `${bundle.seasonRange[0]}–${bundle.seasonRange[1]}`;
   if (key === "total") {
     return {
       matchingPicks: bundle.totalChoices,
       draftSeasons: bundle.draftSeasons,
-      seasons: [],
-      seasonRange: `${bundle.seasonRange[0]}–${bundle.seasonRange[1]}`,
+      seasons: bundle.allDraftedSeasons,
+      seasonRange,
     };
   }
   const slice = bundle[key];
-  if (typeof slice === "number") {
-    return {
-      matchingPicks: slice,
-      draftSeasons: bundle.draftSeasons,
-      seasons: [],
-      seasonRange: `${bundle.seasonRange[0]}–${bundle.seasonRange[1]}`,
-    };
-  }
   return {
     matchingPicks: slice.count,
     draftSeasons: slice.seasons.length,
     seasons: slice.seasons,
-    seasonRange: `${bundle.seasonRange[0]}–${bundle.seasonRange[1]}`,
+    seasonRange,
   };
 }
 
@@ -192,6 +198,10 @@ function buildRules(args: {
     if (Math.abs(coef) < min) continue;
 
     const ev = evidenceForKey(args.evidence, cand.evidenceKey);
+    if (cand.evidenceKey !== "total" && ERA_SCOPED_EVIDENCE.has(cand.evidenceKey) && ev.matchingPicks === 0) {
+      continue;
+    }
+
     const conf = traitConfidencePct({
       coefficient: coef,
       evidenceCount: ev.matchingPicks,
@@ -258,8 +268,9 @@ function buildExceptions(args: {
   const c = args.coefficients;
   const exceptions: DecisionException[] = [];
 
-  const add = (unless: string, drives: DriveName[], evKey: keyof EvidenceBundle, coef: number) => {
+  const add = (unless: string, drives: DriveName[], evKey: EvidenceCountKey, coef: number) => {
     const ev = evidenceForKey(args.evidence, evKey);
+    if (ERA_SCOPED_EVIDENCE.has(evKey) && ev.matchingPicks === 0) return;
     exceptions.push({
       unless,
       drives,
