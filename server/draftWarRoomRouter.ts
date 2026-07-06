@@ -1000,6 +1000,13 @@ export function buildMockDraft(params: MockDraftInputs) {
 
     const URG_RANK: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
     const REACH_BY_URG: Record<string, number> = { CRITICAL: 18, HIGH: 12, MEDIUM: 6, LOW: 0 };
+    // Position-aware reach ceiling. RB/WR are scarce — worth reaching a full round-plus for.
+    // QB/TE/DP/K have deep, late supply, so real managers take them near their ADP rather than
+    // reaching. Without this cap every team's empty single-slot QB/TE/DP reads CRITICAL and gets
+    // pulled up ~18 picks, flooding the early rounds with quarterbacks, tight ends, and defenders.
+    const REACH_POS_CEIL: Record<string, number> = { QB: 3, TE: 3, DP: 2, K: 0 };
+    const reachFor = (pos: string, urgency: string): number =>
+      Math.min(REACH_BY_URG[urgency] ?? 0, REACH_POS_CEIL[pos] ?? Number.POSITIVE_INFINITY);
     const teamNeeds = (needs?.needs ?? [])
       .filter((n: any) => (counts[n.position] ?? 0) < cap(n.position))
       .sort((a: any, b: any) => (URG_RANK[b.urgency] ?? 0) - (URG_RANK[a.urgency] ?? 0));
@@ -1025,7 +1032,7 @@ export function buildMockDraft(params: MockDraftInputs) {
       }
       const idx = undrafted.findIndex(p => p.position === n.position);
       if (idx < 0) continue;
-      if (idx <= (REACH_BY_URG[n.urgency] ?? 0)) {
+      if (idx <= reachFor(n.position, n.urgency)) {
         if (n.position === "DP" && dpTiming && !evaluateDpDraftability(pickNum, dpTiming).selectable) {
           continue;
         }
