@@ -73,6 +73,7 @@ import {
   getActiveLeagueForUser,
   setActiveLeagueForUser,
   isDemoAppUserId,
+  demoLeagueId,
   resolveActiveProfile,
   reconcileActiveLeague,
   resolveActiveLeagueId,
@@ -1420,6 +1421,25 @@ export const appRouter = router({
         .from(lcTable)
         .where(eqDrizzle(lcTable.userId, ctx.user.id))
         .orderBy(lcTable.updatedAt);
+      if (rows.length === 0 && (await isDemoAppUserId(ctx.user.id))) {
+        const prof = await resolveActiveProfile({ id: ctx.user.id, openId: ctx.user.openId });
+        const lid = prof.leagueId ?? demoLeagueId();
+        return [
+          {
+            id: -1,
+            provider: "espn" as const,
+            leagueId: lid,
+            leagueName: prof.leagueName ?? "Demo League",
+            season: prof.selectedSeason ?? new Date().getFullYear(),
+            isActive: true,
+            selectedTeamId: prof.selectedTeamId,
+            selectedOwnerName: prof.selectedOwnerName,
+            syncStatus: "ok" as const,
+            lastSyncedAt: null as Date | null,
+            isSetupComplete: prof.isSetupComplete,
+          },
+        ];
+      }
       return Promise.all(
         rows.map(async (r) => ({
           ...r,
@@ -1428,7 +1448,6 @@ export const appRouter = router({
         })),
       );
     }),
-    // Remove a league connection (hard delete — user owns the row)
     removeLeague: protectedProcedure
       .input(z.object({ leagueConnectionId: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -8510,6 +8529,44 @@ Respond with JSON in this exact format:
           });
         }
       }
+    }
+
+    // ── Apply EXECUTED draft-pick trades so ownership reflects reality ──────────
+    // The base draftOrder above is the standard snake slate (every team its own pick
+    // each round). Real ESPN trades move picks between teams — without this, a team
+    // that traded its pick away still shows it. Source: gmTransactions, the same data
+    // behind completed-trade intelligence. Best-effort: on any failure the base slate
+    // is returned unchanged. Only EXECUTED legs with a concrete round+pick are applied,
+    // in chronological order so a pick traded twice lands with its final owner.
+    if (leagueId && draftOrder.length > 0) {
+      try {
+        const { getDb } = await import("./db");
+        const { loadGmTradeLegs } = await import("./completedTradeAuthority");
+        const dbTrades = await getDb();
+        if (dbTrades) {
+          const legs = await loadGmTradeLegs(dbTrades, leagueId, [DRAFT_YEAR]);
+          const executed = legs
+            .filter((l) =>
+              String(l.status).toUpperCase() === "EXECUTED" &&
+              l.round != null && l.pickInRound != null &&
+              Number(l.pickSeason) === DRAFT_YEAR &&
+              l.toTeamId != null && Number(l.toTeamId) > 0)
+            .sort((a, b) => Number(a.processedDate ?? 0) - Number(b.processedDate ?? 0));
+          if (executed.length > 0) {
+            const nameByTeam = new Map<number, string>();
+            for (const d of draftOrder) if (!nameByTeam.has(d.teamId)) nameByTeam.set(d.teamId, d.teamName);
+            const byKey = new Map<string, (typeof draftOrder)[number]>();
+            for (const d of draftOrder) byKey.set(`${d.round}_${d.pickInRound}`, d);
+            for (const leg of executed) {
+              const entry = byKey.get(`${leg.round}_${leg.pickInRound}`);
+              if (!entry) continue;
+              const toId = Number(leg.toTeamId);
+              entry.teamId = toId;
+              entry.teamName = nameByTeam.get(toId) ?? entry.teamName;
+            }
+          }
+        }
+      } catch { /* best-effort: base slate is returned if the trade read fails */ }
     }
 
     return {
