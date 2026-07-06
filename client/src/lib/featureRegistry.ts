@@ -137,11 +137,11 @@ export const FEATURE_REGISTRY: FeatureEntry[] = [
     marketingDescription: "Every roster in your league — starters, bench, and roster construction at a glance.",
   },
   {
-    entryType: "route",
+    // Keeper Advisor now lives as a tab inside the Rosters page (a free route),
+    // so it is a paid capability rather than its own sidebar route.
+    entryType: "capability",
     id: "keeper-advisor",
     label: "Keeper Advisor",
-    route: "/keeper-advisor",
-    navCategory: "weekly",
     icon: Crown,
     requiredPlan: "pro",
     discoverable: true,

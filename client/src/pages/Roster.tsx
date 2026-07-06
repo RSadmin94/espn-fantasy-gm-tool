@@ -636,7 +636,8 @@ export function Roster() {
       typeof warRoomQ.data === "object" &&
       (warRoomQ.data as { ok?: boolean }).ok === false);
   const draftYear  = new Date().getFullYear();
-  const [kaOpen,   setKaOpen]   = useState(false);
+  const [kaOpen,   setKaOpen]   = useState(true);
+  const [rosterTab, setRosterTab] = useState<"roster" | "keeper">("roster");
   const keeperPoolQ = trpc.espn.keeperPool.useQuery(
     withLeagueSalt({ draftYear }, leagueContextKey),
     { enabled: leagueKeyReady },
@@ -804,6 +805,22 @@ export function Roster() {
         </Select>
       </div>
 
+      {/* ── Tabs: Roster / Keeper Advisor ────────────────────────── */}
+      <div className="flex gap-1 mb-4 border-b" style={{ borderColor: LINE }}>
+        {([["roster", "Roster"], ["keeper", `Keeper Advisor ${draftYear}`]] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setRosterTab(key)}
+            className="px-4 py-2 text-sm font-bold transition-colors -mb-px border-b-2"
+            style={rosterTab === key
+              ? { borderColor: GOLD, color: TEXT }
+              : { borderColor: "transparent", color: MUTED }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Not-cached notice */}
       {isNotCached && (
         <div style={SUB} className="flex items-center gap-3 p-4 text-sm mb-3">
@@ -842,6 +859,7 @@ export function Roster() {
       )}
 
       <div className="space-y-3">
+        {rosterTab === "roster" && (<>
         {/* Single team view */}
         {teamId !== "ALL" && allPlayers.length > 0 && (
           <Panel>
@@ -910,6 +928,9 @@ export function Roster() {
           </>
         )}
 
+        </>)}
+
+        {rosterTab === "keeper" && (<>
         {/* ── Keeper Advisor (merged from KeeperAdvisor) ─────────────── */}
         <section style={PANEL} className="overflow-hidden">
           <button
@@ -1039,6 +1060,7 @@ export function Roster() {
             </div>
           </div>
         )}
+        </>)}
       </div>
     </div>
   );
