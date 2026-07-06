@@ -138,6 +138,22 @@ export const FEATURE_REGISTRY: FeatureEntry[] = [
   },
   {
     entryType: "route",
+    id: "keeper-advisor",
+    label: "Keeper Advisor",
+    route: "/keeper-advisor",
+    navCategory: "weekly",
+    icon: Crown,
+    requiredPlan: "pro",
+    discoverable: true,
+    showInOnboarding: false,
+    showInPricing: false,
+    showInDashboard: false,
+    experienceCategory: "Draft Intelligence",
+    marketingDescription:
+      "Set each team's keeper before the draft — keeper values, savings, and draft-board impact.",
+  },
+  {
+    entryType: "route",
     id: "matchups",
     label: "Matchups",
     route: "/matchups",
@@ -198,22 +214,6 @@ export const FEATURE_REGISTRY: FeatureEntry[] = [
     experienceCategory: "Draft Intelligence",
     marketingDescription:
       "Live draft intelligence — pick board, rival threat windows, and a decision memo for every pick.",
-  },
-  {
-    entryType: "route",
-    id: "keeper-advisor",
-    label: "Keeper Advisor",
-    route: "/keeper-advisor",
-    navCategory: "weekly",
-    icon: Crown,
-    requiredPlan: "pro",
-    discoverable: true,
-    showInOnboarding: false,
-    showInPricing: false,
-    showInDashboard: false,
-    experienceCategory: "Draft Intelligence",
-    marketingDescription:
-      "Set each team's keeper before the draft — keeper values, savings, and draft-board impact.",
   },
   {
     entryType: "route",
