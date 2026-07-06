@@ -204,7 +204,7 @@ export const FEATURE_REGISTRY: FeatureEntry[] = [
     id: "draft-war-room",
     label: "Draft War Room",
     route: "/draft-war-room",
-    navCategory: "weekly",
+    navCategory: "knowRivals",
     icon: Calendar,
     requiredPlan: "pro",
     discoverable: true,
