@@ -170,6 +170,24 @@ function LeagueSwitcher({
   }
 
   if (leagues.length === 0) {
+    const active = activeQ.data;
+    if (active?.leagueId) {
+      const label = leagueRowLabel({
+        leagueId: active.leagueId,
+        leagueName: active.leagueName,
+      });
+      return (
+        <div className="border-b border-border px-3 py-3">
+          <p className="mb-1 text-2xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
+            League
+          </p>
+          <p className="text-label font-semibold text-foreground">{label}</p>
+          <p className="mt-1 text-2xs text-muted-foreground">
+            Demo league · {formatLeagueSeason(active.season)}
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="border-b border-border px-3 py-3">
         <p className="mb-2 text-2xs font-bold uppercase tracking-[0.2em] text-muted-foreground">

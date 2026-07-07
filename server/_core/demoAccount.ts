@@ -19,6 +19,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import type { User } from "../../drizzle/schema";
+import { isBetaDemoAccount } from "./betaDemoUsers";
 
 export const DEMO_READONLY_MSG =
   "This is a read-only demo. Import your own ESPN league to make changes.";
@@ -45,6 +46,7 @@ export function isDemoAccount(
   if (!user) return false;
   if (user.openId && demoClerkIds().has(user.openId)) return true;
   if (user.email && demoEmails().has(user.email.trim().toLowerCase())) return true;
+  if (isBetaDemoAccount(user)) return true;
   return false;
 }
 

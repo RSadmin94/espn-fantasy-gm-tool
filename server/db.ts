@@ -23,6 +23,7 @@ import { upsertRawEspnCache, writeLegacyEspnCaches } from "./espnPersistence";
 import type { EspnCreds } from "./espnService";
 import { decryptCredentialsFromDb } from "./_core/crypto";
 import { ENV } from "./_core/env";
+import { isBetaDemoAccount, BETA_DEMO_LEAGUE_DISPLAY_NAME } from "./_core/betaDemoUsers";
 
 /** Drizzle client typed with the app schema (matches `espnPersistence` `AppDb`). */
 export type AppDb = MySql2Database<typeof schema>;
@@ -1084,11 +1085,20 @@ export async function resolveDemoAppUserId(): Promise<number | null> {
   return _demoAppUserId;
 }
 
-/** True iff this app-user id is the demo account. */
+export async function getUserById(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/** True iff this app-user id is mounted on the curated demo league (shared demo OR beta/demo whitelist). */
 export async function isDemoAppUserId(userId: number | null | undefined): Promise<boolean> {
   if (userId == null) return false;
   const demoId = await resolveDemoAppUserId();
-  return demoId != null && demoId === userId;
+  if (demoId != null && demoId === userId) return true;
+  const user = await getUserById(userId);
+  return isBetaDemoAccount(user);
 }
 
 /**
@@ -1117,7 +1127,10 @@ async function resolveDemoActiveProfile(clerkUserId: string | null): Promise<Act
     .from(leagueConnections)
     .where(eq(leagueConnections.leagueId, lid))
     .limit(1);
-  const leagueName = conn?.leagueName ?? null;
+  const leagueName =
+    conn?.leagueName?.trim() ||
+    (process.env.DEMO_LEAGUE_NAME ?? "").trim() ||
+    BETA_DEMO_LEAGUE_DISPLAY_NAME;
 
   const norm = (s: string | null | undefined) => (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
   const wantName = norm(process.env.DEMO_OWNER_NAME ?? "Rod Sellers");
