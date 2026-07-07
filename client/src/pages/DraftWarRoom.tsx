@@ -1846,7 +1846,7 @@ export function DraftWarRoom() {
                       // so the souls board reflects keepers in the same slots the mock does.
                       const keeperBySlot = new Map<string, { player: string; position: string }>();
                       for (const kp of (keeperPredictions ?? []) as any[]) {
-                        const rnd = Number(kp.keeperSlotRound);
+                        const rnd = Number(kp.keeperRound);
                         if (!rnd) continue;
                         const ov = (keeperOverrides ?? []).find((o: any) => o.teamId === kp.teamId && Number(o.keeperRound) === rnd);
                         keeperBySlot.set(`${kp.teamId}:${rnd}`, { player: ov?.playerName ?? kp.predictedPlayer, position: ov?.position ?? kp.position });
