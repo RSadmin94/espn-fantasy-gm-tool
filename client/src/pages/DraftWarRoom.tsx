@@ -786,6 +786,57 @@ function LiveDraftEngine({
   );
 }
 
+function SoulsBoardView({ board }: {
+  board: {
+    picks: Array<{ overall: number; round: number; pickInRound: number; ownerName: string; playerName: string; position: string; lowConfidence: boolean }>;
+    teamCount: number;
+    rounds: number;
+    picksCompleted: number;
+  };
+}) {
+  const posColor = (p: string) =>
+    p === "QB" ? "text-red-400"
+      : p === "RB" ? "text-green-400"
+      : p === "WR" ? "text-blue-400"
+      : p === "TE" ? "text-amber-400"
+      : p === "DP" ? "text-purple-400"
+      : "text-zinc-400";
+  const byRound = new Map<number, typeof board.picks>();
+  for (const p of board.picks) {
+    const arr = byRound.get(p.round) ?? [];
+    arr.push(p);
+    byRound.set(p.round, arr);
+  }
+  const rounds = [...byRound.keys()].sort((a, b) => a - b);
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-zinc-500">
+        Behavioral simulation — {board.picksCompleted} picks · each of {board.teamCount} owners drafts in-character from their fitted personality.
+      </p>
+      {rounds.map((r) => (
+        <div key={r}>
+          <div className="text-xs font-semibold text-zinc-400 mb-1">Round {r}</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+            {(byRound.get(r) ?? [])
+              .slice()
+              .sort((a, b) => a.pickInRound - b.pickInRound)
+              .map((p) => (
+                <div key={p.overall} className="flex items-center gap-2 rounded-md bg-zinc-800/40 px-2 py-1 text-xs">
+                  <span className="text-zinc-600 w-9 shrink-0">{p.round}.{String(p.pickInRound).padStart(2, "0")}</span>
+                  <span className="text-zinc-300 truncate max-w-[7rem]">{p.ownerName}</span>
+                  <span className="text-zinc-600 shrink-0">→</span>
+                  <span className="text-zinc-100 truncate flex-1">{p.playerName}</span>
+                  <span className={`${posColor(p.position)} shrink-0 font-medium`}>{p.position}</span>
+                  {p.lowConfidence && <span className="text-amber-600 shrink-0" title="thin signal — low confidence">~</span>}
+                </div>
+              ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function MockDraftBoard({
   picks, teams, availablePool, keeperPredictions, rosterNeeds,
   onKeeperOverride, keeperOverrides, keepersEnabled = true,
@@ -1577,6 +1628,8 @@ export function DraftWarRoom() {
     warRoomInput,
     { enabled: leagueKeyReady },
   );
+  const [draftEngine, setDraftEngine] = useState<"mock" | "souls">("mock");
+  const soulsQ = trpc.soulsDraftBoard.useQuery(undefined, { enabled: leagueKeyReady && draftEngine === "souls" });
 
   if (isLoading) return (
     <div className="min-h-screen bg-[#110c14] flex items-center justify-center gap-2 text-zinc-500 text-sm">
@@ -1758,18 +1811,48 @@ export function DraftWarRoom() {
 
         {/* 10. Mock Draft Board */}
         <Section id="dwr-mock" title="Mock Draft Board" icon={Target} badge={totalPicks} defaultOpen={true}>
-          <MockDraftBoard
-            picks={mockDraft ?? []}
-            teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))}
-            availablePool={data?.availablePool ?? []}
-            keeperPredictions={keeperPredictions ?? []}
-            rosterNeeds={rosterNeeds ?? []}
-            keeperOverrides={keeperOverrides}
-            keepersEnabled={keepersOn}
-            onKeeperOverride={(overrides) => {
-              setKeeperOverrides(overrides);
-            }}
-          />
+          <div className="mb-3 flex items-center gap-2">
+            <span className="text-xs text-zinc-500">Engine</span>
+            <div className="inline-flex rounded-lg border border-zinc-700 overflow-hidden">
+              {(["mock", "souls"] as const).map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => setDraftEngine(e)}
+                  className={`px-3 py-1 text-xs font-medium transition-colors ${draftEngine === e ? "bg-violet-600 text-white" : "bg-transparent text-zinc-400 hover:text-zinc-200"}`}
+                >
+                  {e === "mock" ? "Mock · ADP + tendencies" : "Souls · behavioral"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {draftEngine === "souls" ? (
+            soulsQ.isLoading ? (
+              <div className="py-10 text-center text-sm text-zinc-500">
+                <RefreshCw className="h-4 w-4 animate-spin text-violet-400 mx-auto mb-2" />
+                Simulating your league's behavioral draft… ~30 seconds the first time, instant after.
+              </div>
+            ) : !soulsQ.data?.supported || !soulsQ.data?.board ? (
+              <div className="py-10 text-center text-sm text-zinc-500">
+                The souls engine is fitted to your primary league only — this league uses the mock.
+              </div>
+            ) : (
+              <SoulsBoardView board={soulsQ.data.board} />
+            )
+          ) : (
+            <MockDraftBoard
+              picks={mockDraft ?? []}
+              teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))}
+              availablePool={data?.availablePool ?? []}
+              keeperPredictions={keeperPredictions ?? []}
+              rosterNeeds={rosterNeeds ?? []}
+              keeperOverrides={keeperOverrides}
+              keepersEnabled={keepersOn}
+              onKeeperOverride={(overrides) => {
+                setKeeperOverrides(overrides);
+              }}
+            />
+          )}
         </Section>
 
       </div>
