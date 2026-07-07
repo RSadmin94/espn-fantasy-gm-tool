@@ -8572,6 +8572,21 @@ Respond with JSON in this exact format:
     };
   }),
 
+    soulsDraftBoard: protectedProcedure
+    .input(z.object({ season: z.number().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const { resolveActiveLeagueId, getDb } = await import("./db");
+      const { runSoulsDraftBoard, soulsEngineSupportsLeague } = await import("./draftEngine/runSoulsDraftBoard");
+      const { leagueId } = await resolveActiveLeagueId({ user: ctx.user });
+      if (!leagueId || !soulsEngineSupportsLeague(String(leagueId))) {
+        return { supported: false as const, board: null };
+      }
+      const db = await getDb();
+      if (!db) return { supported: false as const, board: null };
+      const board = await runSoulsDraftBoard({ db, leagueId: String(leagueId), season: input?.season });
+      return { supported: !!board, board };
+    }),
+
     opponentProfile: protectedProcedure
     .input(z.object({ memberId: z.string() }))
     .query(async ({ ctx, input }) => {
