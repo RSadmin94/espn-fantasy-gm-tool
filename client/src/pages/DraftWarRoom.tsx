@@ -1836,8 +1836,23 @@ export function DraftWarRoom() {
                   ? (() => {
                       const pool = (data?.availablePool ?? []) as any[];
                       const byName = new Map(pool.map((pp: any) => [pp.name, pp]));
+                      // Overlay keepers: mark each team's keeper-slot round with the kept player,
+                      // so the souls board reflects keepers in the same slots the mock does.
+                      const keeperBySlot = new Map<string, { player: string; position: string }>();
+                      for (const kp of (keeperPredictions ?? []) as any[]) {
+                        const rnd = Number(kp.keeperSlotRound);
+                        if (!rnd) continue;
+                        const ov = (keeperOverrides ?? []).find((o: any) => o.teamId === kp.teamId && Number(o.keeperRound) === rnd);
+                        keeperBySlot.set(`${kp.teamId}:${rnd}`, { player: ov?.playerName ?? kp.predictedPlayer, position: ov?.position ?? kp.position });
+                      }
+                      const usedKeeper = new Set<string>();
                       return (soulsQ.data?.board?.picks ?? []).map((p: any) => {
-                        const pl: any = byName.get(p.playerName);
+                        const slotKey = `${p.teamId}:${p.round}`;
+                        const keeper = keepersOn && !usedKeeper.has(slotKey) ? keeperBySlot.get(slotKey) : undefined;
+                        if (keeper) usedKeeper.add(slotKey);
+                        const playerName = keeper?.player ?? p.playerName;
+                        const position = keeper?.position ?? p.position;
+                        const pl: any = byName.get(playerName);
                         return {
                           pickNumber: p.overall,
                           round: p.round,
@@ -1845,15 +1860,15 @@ export function DraftWarRoom() {
                           teamId: p.teamId,
                           teamName: p.teamName,
                           ownerName: p.ownerName,
-                          player: p.playerName,
-                          position: p.position,
+                          player: playerName,
+                          position,
                           espnId: pl?.espnId ?? null,
                           projectedPoints: pl?.projectedPoints ?? 0,
                           marketValue: pl?.marketValue ?? null,
                           adp: pl?.adp ?? pl?.rank ?? null,
-                          pickReason: p.reason,
+                          pickReason: keeper ? `Keeper — Round ${p.round} reserved` : p.reason,
                           alternatePicks: [],
-                          isKeeperSlot: false,
+                          isKeeperSlot: !!keeper,
                         };
                       });
                     })()
