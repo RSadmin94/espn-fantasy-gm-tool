@@ -722,7 +722,7 @@ function LiveDraftEngine({
                 onClick={() => awaitingUser && userDraft(p)}
                 className={cn("w-full flex items-center gap-2 px-3 py-1.5 text-left",
                   awaitingUser ? "hover:bg-violet-500/10 cursor-pointer" : "cursor-default")}>
-                <span className="text-[11px] text-zinc-600 w-8 tabular-nums shrink-0">{p.adp != null ? p.adp.toFixed(1) : p.rank}</span>
+                <span className="text-[11px] text-zinc-600 w-8 tabular-nums shrink-0">{p.adp != null ? Number(p.adp).toFixed(1) : (p.rank ?? "—")}</span>
                 <PosPill pos={p.position} />
                 <span className="text-xs font-bold text-zinc-200 flex-1 truncate">{p.name}</span>
                 <span className="text-[11px] text-zinc-500 tabular-nums shrink-0">{Math.round(p.projectedPoints ?? 0)} pts</span>
@@ -767,7 +767,7 @@ function LiveDraftEngine({
                       <span key={r.pickNumber} className={cn("text-[10px] px-1.5 py-0.5 rounded border truncate max-w-[120px]",
                         r.isKeeper ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-zinc-700/60 bg-zinc-800/50 text-zinc-300")}
                         title={`${r.name} (${r.position}) R${r.round}`}>
-                        <span className="text-zinc-500">{r.position}</span> {r.name.split(" ").slice(-1)[0]}
+                        <span className="text-zinc-500">{r.position}</span> {String(r.name ?? "—").split(" ").slice(-1)[0]}
                       </span>
                     ))}
                     {roster.length === 0 && <span className="text-[10px] text-zinc-600">—</span>}
