@@ -1826,40 +1826,31 @@ export function DraftWarRoom() {
               ))}
             </div>
           </div>
-          {draftEngine === "souls" ? (
-            soulsQ.isLoading ? (
-              <div className="py-10 text-center text-sm text-zinc-500">
-                <RefreshCw className="h-4 w-4 animate-spin text-violet-400 mx-auto mb-2" />
-                Building the board…
-              </div>
-            ) : !soulsQ.data?.supported || !soulsQ.data?.board ? (
-              <div className="py-10 text-center text-sm text-zinc-500">
-                The souls engine is fitted to your primary league only — this league uses the mock.
-              </div>
-            ) : (
-              <MockDraftBoard
-                picks={soulsQ.data.board.picks.map((p: any) => ({
-                  round: p.round,
-                  pickNumber: p.overall,
-                  pickInRound: p.pickInRound,
-                  player: p.playerName,
-                  position: p.position,
-                  teamId: p.teamId,
-                  teamName: p.teamName,
-                  isKeeperSlot: false,
-                }))}
-                teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))}
-                availablePool={data?.availablePool ?? []}
-                keeperPredictions={[]}
-                rosterNeeds={rosterNeeds ?? []}
-                keeperOverrides={[]}
-                keepersEnabled={false}
-                onKeeperOverride={() => {}}
-              />
-            )
+          {draftEngine === "souls" && soulsQ.isLoading ? (
+            <div className="py-10 text-center text-sm text-zinc-500">
+              <RefreshCw className="h-4 w-4 animate-spin text-violet-400 mx-auto mb-2" />
+              Building the board…
+            </div>
+          ) : draftEngine === "souls" && (!soulsQ.data?.supported || !soulsQ.data?.board) ? (
+            <div className="py-10 text-center text-sm text-zinc-500">
+              The souls engine is fitted to your primary league only — this league uses the mock.
+            </div>
           ) : (
             <MockDraftBoard
-              picks={mockDraft ?? []}
+              picks={
+                draftEngine === "souls"
+                  ? (soulsQ.data?.board?.picks ?? []).map((p: any) => ({
+                      round: p.round,
+                      pickNumber: p.overall,
+                      pickInRound: p.pickInRound,
+                      player: p.playerName,
+                      position: p.position,
+                      teamId: p.teamId,
+                      teamName: p.teamName,
+                      isKeeperSlot: false,
+                    }))
+                  : (mockDraft ?? [])
+              }
               teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))}
               availablePool={data?.availablePool ?? []}
               keeperPredictions={keeperPredictions ?? []}
