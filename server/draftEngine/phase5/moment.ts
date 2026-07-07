@@ -339,7 +339,19 @@ export function resolveMoment(args: {
     }),
   );
   const noises = alts.map(() => noise * gumbelNoise(args.rng));
-  const utils = alts.map((_, i) => personalityUtils[i]! + constructionUtils[i]! + noises[i]!);
+  // Regularity guard — follow the REGULAR strategy, not a one-off. An owner who opens with RB/WR
+  // as their habit (high observed earlyRoundRbPct/WrPct) shouldn't be pulled into an early QB/TE
+  // just because the fitted lean is faint or the noise broke that way. Penalize off-habit early
+  // QB/TE picks in proportion to how strongly this owner actually sticks to RB/WR early. Reads
+  // observed frequency (not a single event) and leaves the fitted souls untouched. A genuine
+  // early-QB owner (low RB/WR-early share) is not penalized.
+  const stickRbWr = Math.max(0, (args.soul.earlyRoundRbPct ?? 0) + (args.soul.earlyRoundWrPct ?? 0) - 0.5);
+  const earlyRound = args.round <= 3;
+  const regularityPenalty = (pos: string): number =>
+    earlyRound && (pos === "QB" || pos === "TE") ? 5 * stickRbWr : 0;
+  const utils = alts.map(
+    (_, i) => personalityUtils[i]! + constructionUtils[i]! + noises[i]! - regularityPenalty(alts[i]!.player.position),
+  );
   const probs = softmaxProbs(utils);
 
   let chosenIdx = 0;
