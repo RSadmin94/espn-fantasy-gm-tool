@@ -820,9 +820,6 @@ export type MockDraftInputs = {
   }>;
   /** Phase 1 league-intelligence: DP timing baseline from draft history. */
   dpTiming?: PositionTimingProfile | null;
-  qbTiming?: PositionTimingProfile | null;
-  teTiming?: PositionTimingProfile | null;
-  kTiming?: PositionTimingProfile | null;
   /** Phase 2a: probabilistic owner offense tendencies (QB/RB/WR/TE). */
   ownerDnaContext?: OwnerDraftDnaContext | null;
   /** Validation harness — tuning override (ignored by production mock path when unset). */
@@ -834,7 +831,7 @@ export type MockDraftInputs = {
 };
 
 export function buildMockDraft(params: MockDraftInputs) {
-  const { allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool, dpTiming = null, qbTiming = null, teTiming = null, kTiming = null, ownerDnaContext = null } = params;
+  const { allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool, dpTiming = null, ownerDnaContext = null } = params;
   const picks: any[] = [];
   const drafted = new Set<string>();
 
@@ -994,30 +991,15 @@ export function buildMockDraft(params: MockDraftInputs) {
     const undrafted = pool.filter(p => !drafted.has(p.name) && !keeperPlayerIds.has(Number(p.espnId)));
     if (undrafted.length === 0) { continue; }
 
-    // League-timing gate: a position is not draftable before the round THIS LEAGUE historically
-    // takes it — this is how the mock reflects the league's own tendencies instead of national
-    // ADP. DP keeps its dedicated evaluator; QB/TE/K use their own timing windows. RB/WR are
-    // ungated (draftable any time), which is why the early rounds resolve to RB/WR.
-    const posTimingWindowOpen = (pos: string): boolean => {
-      if (pos === "DP") return evaluateDpDraftability(pickNum, dpTiming).selectable;
-      const prof = pos === "QB" ? qbTiming : pos === "TE" ? teTiming : pos === "K" ? kTiming : null;
-      if (!prof || prof.windowStartPick == null) return true; // no data → no gate
-      return pickNum >= prof.windowStartPick;
-    };
-    const dpSelectable = (p: typeof undrafted[0]) => posTimingWindowOpen(p.position);
+    // Phase 1 DP intelligence: defenders are not draftable before the league timing window opens.
+    const dpSelectable = (p: typeof undrafted[0]) =>
+      p.position !== "DP" || evaluateDpDraftability(pickNum, dpTiming).selectable;
     const undraftedForBpa = undrafted.filter(dpSelectable);
-    const bpa = undraftedForBpa[0] ?? undrafted[0];
+    const bpa = undraftedForBpa[0] ?? undrafted.find(p => p.position !== "DP");
     if (!bpa) { continue; }
 
     const URG_RANK: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
     const REACH_BY_URG: Record<string, number> = { CRITICAL: 18, HIGH: 12, MEDIUM: 6, LOW: 0 };
-    // Position-aware reach ceiling. RB/WR are scarce — worth reaching a full round-plus for.
-    // QB/TE/DP/K have deep, late supply, so real managers take them near their ADP rather than
-    // reaching. Without this cap every team's empty single-slot QB/TE/DP reads CRITICAL and gets
-    // pulled up ~18 picks, flooding the early rounds with quarterbacks, tight ends, and defenders.
-    const REACH_POS_CEIL: Record<string, number> = { QB: 3, TE: 3, DP: 2, K: 0 };
-    const reachFor = (pos: string, urgency: string): number =>
-      Math.min(REACH_BY_URG[urgency] ?? 0, REACH_POS_CEIL[pos] ?? Number.POSITIVE_INFINITY);
     const teamNeeds = (needs?.needs ?? [])
       .filter((n: any) => (counts[n.position] ?? 0) < cap(n.position))
       .sort((a: any, b: any) => (URG_RANK[b.urgency] ?? 0) - (URG_RANK[a.urgency] ?? 0));
@@ -1041,11 +1023,9 @@ export function buildMockDraft(params: MockDraftInputs) {
           }
         }
       }
-      // QB/TE/K honor their league timing window when reached for a need, too (DP handled above).
-      if ((n.position === "QB" || n.position === "TE" || n.position === "K") && !posTimingWindowOpen(n.position)) continue;
       const idx = undrafted.findIndex(p => p.position === n.position);
       if (idx < 0) continue;
-      if (idx <= reachFor(n.position, n.urgency)) {
+      if (idx <= (REACH_BY_URG[n.urgency] ?? 0)) {
         if (n.position === "DP" && dpTiming && !evaluateDpDraftability(pickNum, dpTiming).selectable) {
           continue;
         }
@@ -1448,17 +1428,6 @@ export const draftWarRoomRouter = router({
       // Phase 1 league-intelligence: DP timing baseline from draft_picks history.
       const leagueTimingProfiles = await computeLeaguePositionTimingProfiles({ db, sql: drizzleSql, leagueId });
 
-      // Owner-tendency skew: QB/TE/K are gated to the round THIS league historically drafts them
-      // (built from up to 16 seasons), so the mock stops taking them early on national ADP — the
-      // same timing mechanism the defenders already use. A null profile simply falls back to no gate.
-      const { computeLeagueOffenseTimingProfile } = await import("./leagueOffenseTimingProfile");
-      const timingDb = db as unknown as { execute: (q: unknown) => Promise<unknown> };
-      const [qbTiming, teTiming, kTiming] = await Promise.all([
-        computeLeagueOffenseTimingProfile({ db: timingDb, sql: drizzleSql, leagueId, position: "QB" }),
-        computeLeagueOffenseTimingProfile({ db: timingDb, sql: drizzleSql, leagueId, position: "TE" }),
-        computeLeagueOffenseTimingProfile({ db: timingDb, sql: drizzleSql, leagueId, position: "K" }),
-      ]);
-
       // Phase 2a: owner draft DNA (offense slice) from historical draft_picks.
       const ownerDraftDna = await loadOwnerDraftDnaContext({
         db, sql: drizzleSql, leagueId, currentSeason: season,
@@ -1468,7 +1437,6 @@ export const draftWarRoomRouter = router({
       const mockDraft = buildMockDraft({
         allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool,
         dpTiming: leagueTimingProfiles.dp,
-        qbTiming, teTiming, kTiming,
         ownerDnaContext: ownerDraftDna,
       });
 
