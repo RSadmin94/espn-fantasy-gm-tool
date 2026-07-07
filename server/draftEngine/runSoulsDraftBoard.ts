@@ -25,6 +25,8 @@ export type SoulsBoardPick = {
   overall: number;
   round: number;
   pickInRound: number;
+  teamId: number;
+  teamName: string;
   ownerKey: string;
   ownerName: string;
   playerName: string;
@@ -144,13 +146,14 @@ export async function runSoulsDraftBoard(opts: {
   const slotByKey = new Map(draftOrder.map((s) => [s.profileOwnerKey, s]));
   const slotByName = new Map(draftOrder.map((s) => [s.displayName.trim().toLowerCase(), s]));
   const [seqRows] = (await db.execute(sql`
-    SELECT dp.overallPick, dp.roundId, t.ownerId, t.ownerName
+    SELECT dp.overallPick, dp.roundId, dp.teamId, t.ownerId, t.ownerName, t.name AS teamName
     FROM draft_picks dp
     LEFT JOIN teams t ON t.leagueId = dp.leagueId AND t.season = dp.season AND t.teamId = dp.teamId
     WHERE dp.leagueId = ${leagueId} AND dp.season = ${simSeason}
     ORDER BY dp.overallPick
   `)) as unknown as [Array<Record<string, unknown>>];
   const pickSequence: Array<(typeof draftOrder)[number] | undefined> = [];
+  const teamByProfileKey = new Map<string, { teamId: number; teamName: string }>();
   let maxRound = 0;
   for (const r of seqRows) {
     const overall = Number(r.overallPick);
@@ -160,7 +163,11 @@ export async function runSoulsDraftBoard(opts: {
     const ownerId = r.ownerId ? String(r.ownerId) : "";
     const byGuid = ownerId ? slotByKey.get(`id:${ownerId}`) : undefined;
     const byName = !byGuid && r.ownerName ? slotByName.get(String(r.ownerName).trim().toLowerCase()) : undefined;
-    pickSequence[overall - 1] = byGuid ?? byName;
+    const slot = byGuid ?? byName;
+    pickSequence[overall - 1] = slot;
+    if (slot && !teamByProfileKey.has(slot.profileOwnerKey)) {
+      teamByProfileKey.set(slot.profileOwnerKey, { teamId: Number(r.teamId) || 0, teamName: String(r.teamName ?? slot.displayName) });
+    }
   }
   const mapped = pickSequence.filter(Boolean).length;
   const useRealOrder = seqRows.length > 0 && mapped >= Math.floor(seqRows.length * 0.9);
@@ -181,17 +188,22 @@ export async function runSoulsDraftBoard(opts: {
   });
 
   const teamCount = draftOrder.length || 14;
-  const picks: SoulsBoardPick[] = result.picks.map((p: SimPickRecord) => ({
-    overall: p.overallPick,
-    round: p.round,
-    pickInRound: ((p.overallPick - 1) % teamCount) + 1,
-    ownerKey: p.chooserProfileKey,
-    ownerName: p.chooserDisplayName,
-    playerName: p.chosen.playerName,
-    position: p.chosen.position,
-    reason: p.lowConfidencePick ? "Behavioral pick (thin signal)" : "Behavioral pick",
-    lowConfidence: p.lowConfidencePick,
-  }));
+  const picks: SoulsBoardPick[] = result.picks.map((p: SimPickRecord) => {
+    const team = teamByProfileKey.get(p.chooserProfileKey);
+    return {
+      overall: p.overallPick,
+      round: p.round,
+      pickInRound: ((p.overallPick - 1) % teamCount) + 1,
+      teamId: team?.teamId ?? 0,
+      teamName: team?.teamName ?? p.chooserDisplayName,
+      ownerKey: p.chooserProfileKey,
+      ownerName: p.chooserDisplayName,
+      playerName: p.chosen.playerName,
+      position: p.chosen.position,
+      reason: p.lowConfidencePick ? "Behavioral pick (thin signal)" : "Behavioral pick",
+      lowConfidence: p.lowConfidencePick,
+    };
+  });
 
   const board: SoulsDraftBoard = {
     leagueId,

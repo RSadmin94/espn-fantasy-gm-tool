@@ -1849,7 +1849,25 @@ export function DraftWarRoom() {
                 The souls engine is fitted to your primary league only — this league uses the mock.
               </div>
             ) : (
-              <SoulsBoardView board={soulsQ.data.board} />
+              <MockDraftBoard
+                picks={soulsQ.data.board.picks.map((p: any) => ({
+                  round: p.round,
+                  pickNumber: p.overall,
+                  pickInRound: p.pickInRound,
+                  player: p.playerName,
+                  position: p.position,
+                  teamId: p.teamId,
+                  teamName: p.teamName,
+                  isKeeperSlot: false,
+                }))}
+                teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))}
+                availablePool={data?.availablePool ?? []}
+                keeperPredictions={[]}
+                rosterNeeds={rosterNeeds ?? []}
+                keeperOverrides={[]}
+                keepersEnabled={false}
+                onKeeperOverride={() => {}}
+              />
             )
           ) : (
             <MockDraftBoard
