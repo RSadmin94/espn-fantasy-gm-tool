@@ -346,13 +346,13 @@ export function resolveMoment(args: {
   // observed frequency (not a single event) and leaves the fitted souls untouched. A genuine
   // early-QB owner (low RB/WR-early share) is not penalized.
   const stickRbWr = Math.max(0, (args.soul.earlyRoundRbPct ?? 0) + (args.soul.earlyRoundWrPct ?? 0) - 0.5);
-  // Soft nudge (not a ban), ROUND 1 ONLY. This league drafts 0 QBs in round 1 historically but
-  // plenty in rounds 2-3 (~3 in R2, ~1 in R3 per draft), so only the faint one-off ROUND-1 leans
-  // get damped — rounds 2-3 are left free to draft QB/TE where they actually go. Scaled by how
-  // strongly the owner opens RB/WR; preserves the possibility (a strong lean still breaks through).
+  // Soft nudge (not a ban), ROUND 1, QB ONLY. This league drafts 0 QBs in round 1 historically, so
+  // the faint one-off round-1 QB leans get damped. TEs are NOT damped — the league does take a tight
+  // end in round 1 (~0.75/draft), so they're left free. Rounds 2+ are unconstrained for both. Scaled
+  // by how strongly the owner opens RB/WR; preserves the possibility (a strong lean still breaks through).
   const earlyRound = args.round === 1;
   const regularityPenalty = (pos: string): number =>
-    earlyRound && (pos === "QB" || pos === "TE") ? 0.5 * stickRbWr : 0;
+    earlyRound && pos === "QB" ? 0.5 * stickRbWr : 0;
   const utils = alts.map(
     (_, i) => personalityUtils[i]! + constructionUtils[i]! + noises[i]! - regularityPenalty(alts[i]!.player.position),
   );
