@@ -3,7 +3,10 @@ export function normalizePlayerKey(name: string): string {
   return String(name ?? "")
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, " ");
+    .replace(/[.'’]/g, "")                  // drop periods/apostrophes: "Sr." -> "sr", "A.J." -> "aj", "De'Von" -> "devon"
+    .replace(/\s+/g, " ")
+    .replace(/\s+(jr|sr|ii|iii|iv)$/i, "")  // strip a trailing generational suffix so "Kyle Pitts Sr" == "Kyle Pitts"
+    .trim();
 }
 
 export function normalizePosition(pos: string): string {
