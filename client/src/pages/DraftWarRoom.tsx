@@ -1839,16 +1839,30 @@ export function DraftWarRoom() {
             <MockDraftBoard
               picks={
                 draftEngine === "souls"
-                  ? (soulsQ.data?.board?.picks ?? []).map((p: any) => ({
-                      round: p.round,
-                      pickNumber: p.overall,
-                      pickInRound: p.pickInRound,
-                      player: p.playerName,
-                      position: p.position,
-                      teamId: p.teamId,
-                      teamName: p.teamName,
-                      isKeeperSlot: false,
-                    }))
+                  ? (() => {
+                      const pool = (data?.availablePool ?? []) as any[];
+                      const byName = new Map(pool.map((pp: any) => [pp.name, pp]));
+                      return (soulsQ.data?.board?.picks ?? []).map((p: any) => {
+                        const pl: any = byName.get(p.playerName);
+                        return {
+                          pickNumber: p.overall,
+                          round: p.round,
+                          roundPick: p.pickInRound,
+                          teamId: p.teamId,
+                          teamName: p.teamName,
+                          ownerName: p.ownerName,
+                          player: p.playerName,
+                          position: p.position,
+                          espnId: pl?.espnId ?? null,
+                          projectedPoints: pl?.projectedPoints ?? 0,
+                          marketValue: pl?.marketValue ?? null,
+                          adp: pl?.adp ?? pl?.rank ?? null,
+                          pickReason: p.reason,
+                          alternatePicks: [],
+                          isKeeperSlot: false,
+                        };
+                      });
+                    })()
                   : (mockDraft ?? [])
               }
               teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))}
