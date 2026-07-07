@@ -524,7 +524,11 @@ function LiveDraftEngine({
 }: {
   picks: any[]; teams: any[]; availablePool: any[]; yourTeamId: number | null;
 }) {
-  const keyOf = (p: any) => p?.id ?? `name:${String(p?.name ?? "").toLowerCase().trim()}`;
+  // Match drafted players to the pool by NORMALIZED NAME (strip punctuation + Jr/Sr/III suffixes),
+  // because the souls board and the available pool carry different ids/name spellings — id matching
+  // was leaving already-drafted players showing as available.
+  const norm = (n: any) => String(n ?? "").toLowerCase().replace(/[.'’`]/g, "").replace(/\s+(jr|sr|ii|iii|iv|v)$/i, "").trim();
+  const keyOf = (p: any) => `name:${norm(p?.name)}`;
   const POS_CAPS: Record<string, number> = { QB: 2, RB: 6, WR: 6, TE: 2, K: 1, DEF: 1 };
 
   const schedule = useMemo(() => [...picks].sort((a, b) => a.pickNumber - b.pickNumber), [picks]);
@@ -647,7 +651,7 @@ function LiveDraftEngine({
         // Play back the ACTUAL pre-computed pick for this slot (souls behavioral or mock ADP)
         // instead of re-simulating — so the Live Draft shows the real board and runs straight
         // through all rounds without ever stalling on a user pick.
-        const pl = availablePool.find((p: any) => p.name === cur.player);
+        const pl = availablePool.find((p: any) => norm(p.name) === norm(cur.player));
         const chosen = pl ?? {
           name: cur.player ?? "—",
           position: cur.position,
