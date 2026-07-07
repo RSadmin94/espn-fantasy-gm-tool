@@ -1629,8 +1629,7 @@ export function DraftWarRoom() {
     { enabled: leagueKeyReady },
   );
   const [draftEngine, setDraftEngine] = useState<"mock" | "souls">("mock");
-  const [soulsRan, setSoulsRan] = useState(false);
-  const soulsQ = trpc.soulsDraftBoard.useQuery(undefined, { enabled: leagueKeyReady && draftEngine === "souls" && soulsRan });
+  const soulsQ = trpc.soulsDraftBoard.useQuery(undefined, { enabled: leagueKeyReady && draftEngine === "souls" });
 
   if (isLoading) return (
     <div className="min-h-screen bg-[#110c14] flex items-center justify-center gap-2 text-zinc-500 text-sm">
@@ -1828,21 +1827,10 @@ export function DraftWarRoom() {
             </div>
           </div>
           {draftEngine === "souls" ? (
-            !soulsRan ? (
-              <div className="py-10 text-center">
-                <p className="text-sm text-zinc-400 mb-3">Simulates all 14 owners drafting in character — takes ~30 seconds.</p>
-                <button
-                  type="button"
-                  onClick={() => setSoulsRan(true)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors"
-                >
-                  <RefreshCw className="h-4 w-4" /> Run behavioral draft
-                </button>
-              </div>
-            ) : soulsQ.isLoading ? (
+            soulsQ.isLoading ? (
               <div className="py-10 text-center text-sm text-zinc-500">
                 <RefreshCw className="h-4 w-4 animate-spin text-violet-400 mx-auto mb-2" />
-                Simulating your league's behavioral draft… ~30 seconds the first time, instant after.
+                Building the board…
               </div>
             ) : !soulsQ.data?.supported || !soulsQ.data?.board ? (
               <div className="py-10 text-center text-sm text-zinc-500">
