@@ -70,10 +70,14 @@ export function simulateDraft(args: {
   fillerDraftPicks?: TerrainDraftPickRow[];
   rounds?: number;
   seed?: number;
+  /** Real, trade-aware pick order (one entry per overall pick). When provided the draft steps
+   *  through THIS exact sequence instead of a generic snake — so it matches the mock's order,
+   *  including owners who pick twice (or not at all) in a round because of trades. */
+  pickSequence?: Array<DraftSlot | undefined>;
 }): DraftSimulationResult {
   const teamCount = args.draftOrder.length;
   const rounds = args.rounds ?? 16;
-  const totalPicks = teamCount * rounds;
+  const totalPicks = args.pickSequence && args.pickSequence.length > 0 ? args.pickSequence.length : teamCount * rounds;
   const seed = args.seed ?? 457622;
   const rng: Rng = mulberry32(seed);
 
@@ -101,8 +105,15 @@ export function simulateDraft(args: {
 
   const picks: SimPickRecord[] = [];
 
+  // Owner total picks (for "picks remaining") — from the real sequence when trade-aware, else rounds.
+  const pickCountByOwner = new Map<string, number>();
+  if (args.pickSequence) for (const s of args.pickSequence) if (s) pickCountByOwner.set(s.profileOwnerKey, (pickCountByOwner.get(s.profileOwnerKey) ?? 0) + 1);
+
   for (let overallPick = 1; overallPick <= totalPicks && weather.available.length > 0; overallPick++) {
-    const chooser = chooserAtPick({ overallPick, draftOrder: args.draftOrder });
+    const chooser = args.pickSequence
+      ? args.pickSequence[overallPick - 1]
+      : chooserAtPick({ overallPick, draftOrder: args.draftOrder });
+    if (!chooser) continue;
     const soul = soulByKey.get(chooser.profileOwnerKey);
     if (!soul) continue;
 
@@ -110,7 +121,7 @@ export function simulateDraft(args: {
     const roster = rosters.get(chooser.profileOwnerKey) ?? emptyRosterCounts();
     const priors = priorKeys.get(chooser.profileOwnerKey) ?? new Set<string>();
     const ownerPicksMade = picks.filter((p) => p.chooserProfileKey === chooser.profileOwnerKey).length;
-    const ownerPicksRemaining = rounds - ownerPicksMade;
+    const ownerPicksRemaining = (pickCountByOwner.get(chooser.profileOwnerKey) ?? rounds) - ownerPicksMade;
 
     const moment = resolveMoment({
       soul,

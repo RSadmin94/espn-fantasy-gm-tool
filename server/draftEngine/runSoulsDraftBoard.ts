@@ -6,6 +6,7 @@
 // (currently the primary behavioral league). Callers get null for unsupported leagues
 // and fall back to the heuristic mock.
 
+import { sql } from "drizzle-orm";
 import { confirmedActiveProfileKeySet } from "./activeOwners";
 import { PRIMARY_BEHAVIORAL_LEAGUE_ID } from "./constants";
 import { loadChoiceLedgerInputs } from "./phase1/loadChoiceLedgerInputs";
@@ -132,11 +133,39 @@ export async function runSoulsDraftBoard(opts: {
   }
   const terrainLookup = buildTerrainLookup(terrainMap);
 
-  // 7. Fit each owner's soul + resolve the draft order from the prior-season ledger.
+  // 7. Fit each owner's soul + resolve the fallback (snake) draft order.
   const registry = fitAllActiveSouls({ leagueId, ledger, terrainLookup });
   const draftOrder = resolveDraftOrderFromLedger({ ledger, orderSeason });
 
-  // 8. Simulate the full board — every owner drafts in-character.
+  // 7b. Build the REAL, trade-aware pick order from the SAME 2026 draft data the mock uses, so the
+  // souls draft steps through the identical order: owners who traded FOR extra picks pick more than
+  // once in a round; owners who traded theirs away skip that slot. Each draft slot's team maps to its
+  // owner via the team's ESPN owner id (profile key = "id:{ownerId}"), reusing the resolved slots.
+  const slotByKey = new Map(draftOrder.map((s) => [s.profileOwnerKey, s]));
+  const slotByName = new Map(draftOrder.map((s) => [s.displayName.trim().toLowerCase(), s]));
+  const [seqRows] = (await db.execute(sql`
+    SELECT dp.overallPick, dp.roundId, t.ownerId, t.ownerName
+    FROM draft_picks dp
+    LEFT JOIN teams t ON t.leagueId = dp.leagueId AND t.season = dp.season AND t.teamId = dp.teamId
+    WHERE dp.leagueId = ${leagueId} AND dp.season = ${simSeason}
+    ORDER BY dp.overallPick
+  `)) as unknown as [Array<Record<string, unknown>>];
+  const pickSequence: Array<(typeof draftOrder)[number] | undefined> = [];
+  let maxRound = 0;
+  for (const r of seqRows) {
+    const overall = Number(r.overallPick);
+    if (!Number.isFinite(overall) || overall < 1) continue;
+    maxRound = Math.max(maxRound, Number(r.roundId) || 0);
+    // Prefer the ESPN owner id; fall back to owner name (an owner's GUID can change across seasons).
+    const ownerId = r.ownerId ? String(r.ownerId) : "";
+    const byGuid = ownerId ? slotByKey.get(`id:${ownerId}`) : undefined;
+    const byName = !byGuid && r.ownerName ? slotByName.get(String(r.ownerName).trim().toLowerCase()) : undefined;
+    pickSequence[overall - 1] = byGuid ?? byName;
+  }
+  const mapped = pickSequence.filter(Boolean).length;
+  const useRealOrder = seqRows.length > 0 && mapped >= Math.floor(seqRows.length * 0.9);
+
+  // 8. Simulate the full board — every owner drafts in-character, in the real trade-aware order.
   const result = simulateDraft({
     leagueId,
     season: simSeason,
@@ -146,8 +175,9 @@ export async function runSoulsDraftBoard(opts: {
     ledger,
     rosterRules,
     fillerDraftPicks: mergedPicks,
-    rounds: 16,
+    rounds: useRealOrder && maxRound > 0 ? maxRound : 16,
     seed,
+    pickSequence: useRealOrder ? pickSequence : undefined,
   });
 
   const teamCount = draftOrder.length || 14;
