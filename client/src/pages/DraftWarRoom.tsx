@@ -635,27 +635,21 @@ function LiveDraftEngine({
     const cur = schedule[idx];
     if (!cur) return;
     if (cur.isKeeperSlot) { timer.current = setTimeout(() => setIdx(i => i + 1), 50); return () => clearTimeout(timer.current!); }
-    if (yourTeamId != null && Number(cur.teamId) === yourTeamId) { setRunning(false); return; }
     timer.current = setTimeout(() => {
       setResults(prev => {
         if (prev[cur.pickNumber]) return prev;
-        const taken = new Set<string>();
-        const counts: Record<string, number> = {};
-        for (const k of Object.keys(prev)) {
-          const r = prev[Number(k)];
-          taken.add(keyOf(r));
-          const sd = schedule.find(s => s.pickNumber === Number(k));
-          if (sd && Number(sd.teamId) === Number(cur.teamId)) counts[r.position] = (counts[r.position] ?? 0) + 1;
-        }
-        const late = Number(cur.round) > totalRounds - 2;
-        const pool = availablePool.filter((p: any) => !taken.has(keyOf(p))).sort((a, b) => byAdp(a) - byAdp(b));
-        const pick = pool.find((p: any) => {
-          if ((p.position === "K" || p.position === "DEF") && !late) return false;
-          if ((counts[p.position] ?? 0) >= (POS_CAPS[p.position] ?? 99)) return false;
-          return true;
-        }) ?? pool[0];
-        if (!pick) return prev;
-        return { ...prev, [cur.pickNumber]: { ...pick, byAI: true } };
+        // Play back the ACTUAL pre-computed pick for this slot (souls behavioral or mock ADP)
+        // instead of re-simulating — so the Live Draft shows the real board and runs straight
+        // through all rounds without ever stalling on a user pick.
+        const pl = availablePool.find((p: any) => p.name === cur.player);
+        const chosen = pl ?? {
+          name: cur.player ?? "—",
+          position: cur.position,
+          projectedPoints: cur.projectedPoints ?? 0,
+          adp: cur.adp ?? null,
+          marketValue: cur.marketValue ?? null,
+        };
+        return { ...prev, [cur.pickNumber]: { ...chosen, byAI: true } };
       });
       setIdx(i => i + 1);
     }, SPEED_MS);
