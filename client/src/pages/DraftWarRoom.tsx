@@ -635,6 +635,8 @@ function LiveDraftEngine({
     const cur = schedule[idx];
     if (!cur) return;
     if (cur.isKeeperSlot) { timer.current = setTimeout(() => setIdx(i => i + 1), 50); return () => clearTimeout(timer.current!); }
+    // Your team pauses for a manual pick; every other team auto-plays the pre-computed board.
+    if (yourTeamId != null && Number(cur.teamId) === yourTeamId) { setRunning(false); return; }
     timer.current = setTimeout(() => {
       setResults(prev => {
         if (prev[cur.pickNumber]) return prev;
