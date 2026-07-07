@@ -8573,7 +8573,10 @@ Respond with JSON in this exact format:
   }),
 
     soulsDraftBoard: protectedProcedure
-    .input(z.object({ season: z.number().optional() }).optional())
+    .input(z.object({
+      season: z.number().optional(),
+      keepers: z.array(z.object({ teamId: z.number(), keeperRound: z.number(), player: z.string(), position: z.string() })).optional(),
+    }).optional())
     .query(async ({ ctx, input }) => {
       const { resolveActiveLeagueId, getDb } = await import("./db");
       const { runSoulsDraftBoard, soulsEngineSupportsLeague } = await import("./draftEngine/runSoulsDraftBoard");
@@ -8583,7 +8586,7 @@ Respond with JSON in this exact format:
       }
       const db = await getDb();
       if (!db) return { supported: false as const, board: null };
-      const board = await runSoulsDraftBoard({ db, leagueId: String(leagueId), season: input?.season });
+      const board = await runSoulsDraftBoard({ db, leagueId: String(leagueId), season: input?.season, keepers: input?.keepers });
       return { supported: !!board, board };
     }),
 

@@ -1629,7 +1629,12 @@ export function DraftWarRoom() {
     { enabled: leagueKeyReady },
   );
   const [draftEngine, setDraftEngine] = useState<"mock" | "souls">("mock");
-  const soulsQ = trpc.soulsDraftBoard.useQuery(undefined, { enabled: leagueKeyReady && draftEngine === "souls" });
+  const soulsKeepers = useMemo(() =>
+    ((data?.keeperPredictions ?? []) as any[])
+      .filter((kp: any) => kp?.predictedPlayer && kp.predictedPlayer !== "Unknown" && Number(kp.keeperRound))
+      .map((kp: any) => ({ teamId: Number(kp.teamId), keeperRound: Number(kp.keeperRound), player: String(kp.predictedPlayer), position: String(kp.position ?? "?") })),
+    [data]);
+  const soulsQ = trpc.soulsDraftBoard.useQuery({ keepers: soulsKeepers }, { enabled: leagueKeyReady && draftEngine === "souls" });
 
   if (isLoading) return (
     <div className="min-h-screen bg-[#110c14] flex items-center justify-center gap-2 text-zinc-500 text-sm">
@@ -1842,23 +1847,8 @@ export function DraftWarRoom() {
                   ? (() => {
                       const pool = (data?.availablePool ?? []) as any[];
                       const byName = new Map(pool.map((pp: any) => [pp.name, pp]));
-                      // Overlay keepers: mark each team's keeper-slot round with the kept player,
-                      // so the souls board reflects keepers in the same slots the mock does.
-                      const keeperBySlot = new Map<string, { player: string; position: string }>();
-                      for (const kp of (keeperPredictions ?? []) as any[]) {
-                        const rnd = Number(kp.keeperRound);
-                        if (!rnd) continue;
-                        const ov = (keeperOverrides ?? []).find((o: any) => o.teamId === kp.teamId && Number(o.keeperRound) === rnd);
-                        keeperBySlot.set(`${kp.teamId}:${rnd}`, { player: ov?.playerName ?? kp.predictedPlayer, position: ov?.position ?? kp.position });
-                      }
-                      const usedKeeper = new Set<string>();
                       return (soulsQ.data?.board?.picks ?? []).map((p: any) => {
-                        const slotKey = `${p.teamId}:${p.round}`;
-                        const keeper = keepersOn && !usedKeeper.has(slotKey) ? keeperBySlot.get(slotKey) : undefined;
-                        if (keeper) usedKeeper.add(slotKey);
-                        const playerName = keeper?.player ?? p.playerName;
-                        const position = keeper?.position ?? p.position;
-                        const pl: any = byName.get(playerName);
+                        const pl: any = byName.get(p.playerName);
                         return {
                           pickNumber: p.overall,
                           round: p.round,
@@ -1866,15 +1856,15 @@ export function DraftWarRoom() {
                           teamId: p.teamId,
                           teamName: p.teamName,
                           ownerName: p.ownerName,
-                          player: playerName,
-                          position,
+                          player: p.playerName,
+                          position: p.position,
                           espnId: pl?.espnId ?? null,
                           projectedPoints: pl?.projectedPoints ?? 0,
                           marketValue: pl?.marketValue ?? null,
                           adp: pl?.adp ?? pl?.rank ?? null,
-                          pickReason: keeper ? `Keeper — Round ${p.round} reserved` : p.reason,
+                          pickReason: p.reason,
                           alternatePicks: [],
-                          isKeeperSlot: !!keeper,
+                          isKeeperSlot: !!p.isKeeperSlot,
                         };
                       });
                     })()

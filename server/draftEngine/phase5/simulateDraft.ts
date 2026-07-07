@@ -74,6 +74,8 @@ export function simulateDraft(args: {
    *  through THIS exact sequence instead of a generic snake — so it matches the mock's order,
    *  including owners who pick twice (or not at all) in a round because of trades. */
   pickSequence?: Array<DraftSlot | undefined>;
+  /** Player names (lowercased) to remove from the draftable pool — e.g. kept players. */
+  excludePlayers?: Set<string>;
 }): DraftSimulationResult {
   const teamCount = args.draftOrder.length;
   const rounds = args.rounds ?? 16;
@@ -85,11 +87,16 @@ export function simulateDraft(args: {
   const priorKeys = buildOwnerPriorKeys({ ledger: args.ledger });
   const terrainLookup = buildTerrainLookup(new Map([[args.season, args.terrain]]));
   const skillPool = poolFromTerrain(args.terrain);
-  const { pool, poolHas } = augmentPoolWithRosterFillers({
+  const augmented = augmentPoolWithRosterFillers({
     skillPool,
     draftPicks: args.fillerDraftPicks ?? [],
     teamCount,
   });
+  const exclude = args.excludePlayers;
+  const pool = exclude && exclude.size > 0
+    ? augmented.pool.filter((p: { playerName: string }) => !exclude.has(String(p.playerName).toLowerCase().trim()))
+    : augmented.pool;
+  const poolHas = augmented.poolHas;
 
   let weather = createInitialWeather({
     leagueId: args.leagueId,

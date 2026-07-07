@@ -33,6 +33,7 @@ export type SoulsBoardPick = {
   position: string;
   reason: string;
   lowConfidence: boolean;
+  isKeeperSlot: boolean;
 };
 
 export type SoulsDraftBoard = {
@@ -59,11 +60,14 @@ export function peekSoulsDraftBoard(leagueId: string, season = 2026): SoulsDraft
   return hit && Date.now() - hit.computedAt < FRESH_MS ? hit : null;
 }
 
+export type SoulsKeeperInput = { teamId: number; keeperRound: number; player: string; position: string };
+
 export async function runSoulsDraftBoard(opts: {
   db: Db;
   leagueId: string;
   season?: number; // sim season (the upcoming draft); default 2026
   force?: boolean;
+  keepers?: SoulsKeeperInput[];
 }): Promise<SoulsDraftBoard | null> {
   const leagueId = String(opts.leagueId);
   if (!soulsEngineSupportsLeague(leagueId)) return null;
@@ -71,7 +75,11 @@ export async function runSoulsDraftBoard(opts: {
   const simSeason = opts.season ?? 2026;
   const orderSeason = simSeason - 1;
   const seed = Number(leagueId) || 457622;
-  const key = `${leagueId}:${simSeason}`;
+  const keeperSig = (opts.keepers ?? [])
+    .map((k) => `${k.teamId}:${k.keeperRound}:${String(k.player).toLowerCase().trim()}`)
+    .sort()
+    .join("|");
+  const key = `${leagueId}:${simSeason}:${keeperSig}`;
 
   const hit = cache.get(key);
   if (hit && !opts.force && Date.now() - hit.computedAt < FRESH_MS) return hit;
@@ -172,7 +180,34 @@ export async function runSoulsDraftBoard(opts: {
   const mapped = pickSequence.filter(Boolean).length;
   const useRealOrder = seqRows.length > 0 && mapped >= Math.floor(seqRows.length * 0.9);
 
-  // 8. Simulate the full board — every owner drafts in-character, in the real trade-aware order.
+  // 7c. Reserve keepers: pull kept players out of the pool and lock each keeper's slot (the team's
+  // pick at its keeper round) — exactly like the mock, so no kept player is ever drafted twice.
+  const overallByTeamRound = new Map<string, number[]>();
+  for (const r of seqRows) {
+    const tid = Number(r.teamId);
+    const rnd = Number(r.roundId);
+    const overall = Number(r.overallPick);
+    if (!tid || !rnd || !overall) continue;
+    const kkey = `${tid}:${rnd}`;
+    const arr = overallByTeamRound.get(kkey) ?? [];
+    arr.push(overall);
+    overallByTeamRound.set(kkey, arr);
+  }
+  const keeperByOverall = new Map<number, { player: string; position: string }>();
+  const excludeNames = new Set<string>();
+  for (const k of opts.keepers ?? []) {
+    const name = String(k.player ?? "").trim();
+    if (!name || name.toLowerCase() === "unknown") continue;
+    excludeNames.add(name.toLowerCase());
+    const overalls = (overallByTeamRound.get(`${Number(k.teamId)}:${Number(k.keeperRound)}`) ?? [])
+      .slice()
+      .sort((a, b) => a - b);
+    const overall = overalls.find((o) => !keeperByOverall.has(o));
+    if (overall) keeperByOverall.set(overall, { player: name, position: k.position || "?" });
+  }
+
+  // 8. Simulate the full board — every owner drafts in-character, in the real trade-aware order,
+  //    with kept players removed from the pool so they can't be drafted.
   const result = simulateDraft({
     leagueId,
     season: simSeason,
@@ -185,11 +220,13 @@ export async function runSoulsDraftBoard(opts: {
     rounds: useRealOrder && maxRound > 0 ? maxRound : 16,
     seed,
     pickSequence: useRealOrder ? pickSequence : undefined,
+    excludePlayers: excludeNames,
   });
 
   const teamCount = draftOrder.length || 14;
   const picks: SoulsBoardPick[] = result.picks.map((p: SimPickRecord) => {
     const team = teamByProfileKey.get(p.chooserProfileKey);
+    const keeper = keeperByOverall.get(p.overallPick);
     return {
       overall: p.overallPick,
       round: p.round,
@@ -198,10 +235,15 @@ export async function runSoulsDraftBoard(opts: {
       teamName: team?.teamName ?? p.chooserDisplayName,
       ownerKey: p.chooserProfileKey,
       ownerName: p.chooserDisplayName,
-      playerName: p.chosen.playerName,
-      position: p.chosen.position,
-      reason: p.lowConfidencePick ? "Behavioral pick (thin signal)" : "Behavioral pick",
-      lowConfidence: p.lowConfidencePick,
+      playerName: keeper ? keeper.player : p.chosen.playerName,
+      position: keeper ? keeper.position : p.chosen.position,
+      reason: keeper
+        ? `Keeper — Round ${p.round} reserved`
+        : p.lowConfidencePick
+          ? "Behavioral pick (thin signal)"
+          : "Behavioral pick",
+      lowConfidence: keeper ? false : p.lowConfidencePick,
+      isKeeperSlot: !!keeper,
     };
   });
 
