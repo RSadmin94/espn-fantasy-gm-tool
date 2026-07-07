@@ -528,6 +528,9 @@ function LiveDraftEngine({
   const POS_CAPS: Record<string, number> = { QB: 2, RB: 6, WR: 6, TE: 2, K: 1, DEF: 1 };
 
   const schedule = useMemo(() => [...picks].sort((a, b) => a.pickNumber - b.pickNumber), [picks]);
+  // Content signature so the draft only resets when the ACTUAL board changes — not when a parent
+  // re-render hands us a fresh-but-identical picks array (which was wiping the draft mid-pick).
+  const scheduleSig = useMemo(() => schedule.map((s: any) => `${s.pickNumber}:${s.teamId}:${s.player ?? ""}`).join("|"), [schedule]);
   const totalRounds = useMemo(() => schedule.reduce((m, s) => Math.max(m, Number(s.round) || 0), 0), [schedule]);
 
   // Keeper slots are pre-filled before the draft starts
@@ -557,7 +560,8 @@ function LiveDraftEngine({
   useEffect(() => {
     setResults(initialResults); setIdx(0); setRunning(false);
     if (timer.current) clearTimeout(timer.current);
-  }, [initialResults]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleSig]);
 
   const byAdp = (p: any) => (p.adp != null ? Number(p.adp) : (p.rank ?? 9999));
 
