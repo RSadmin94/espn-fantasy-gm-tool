@@ -346,11 +346,13 @@ export function resolveMoment(args: {
   // observed frequency (not a single event) and leaves the fitted souls untouched. A genuine
   // early-QB owner (low RB/WR-early share) is not penalized.
   const stickRbWr = Math.max(0, (args.soul.earlyRoundRbPct ?? 0) + (args.soul.earlyRoundWrPct ?? 0) - 0.5);
-  // Round 1 is left unconstrained so genuine (or elite-value) QB/TE picks CAN happen there.
-  // The regularity guard applies from round 2 on, where the one-off QB/TE clustering showed up.
-  const earlyRound = args.round === 2 || args.round === 3;
+  // Soft nudge (not a ban): make an early QB/TE UNLIKELY for owners who habitually open RB/WR, in
+  // proportion to how strongly they do — so it stays rare, matching a league that almost never
+  // opens with a QB, WITHOUT eliminating the possibility. A strong-enough lean or elite value can
+  // still break through.
+  const earlyRound = args.round <= 3;
   const regularityPenalty = (pos: string): number =>
-    earlyRound && (pos === "QB" || pos === "TE") ? 1.5 * stickRbWr : 0;
+    earlyRound && (pos === "QB" || pos === "TE") ? 0.5 * stickRbWr : 0;
   const utils = alts.map(
     (_, i) => personalityUtils[i]! + constructionUtils[i]! + noises[i]! - regularityPenalty(alts[i]!.player.position),
   );
