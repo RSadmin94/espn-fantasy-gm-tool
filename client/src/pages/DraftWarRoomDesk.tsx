@@ -374,6 +374,46 @@ function DraftRealityMode({
   );
 }
 
+const DWR_NAV_ITEMS: { id: string; label: string; keeperOnly?: boolean }[] = [
+  { id: "dwr-briefing", label: "Briefing" },
+  { id: "dwr-keepers", label: "Keepers", keeperOnly: true },
+  { id: "dwr-build", label: "Build Targets" },
+  { id: "dwr-dna", label: "Owner DNA" },
+  { id: "dwr-runs", label: "Run Windows" },
+  { id: "dwr-value", label: "Value Windows" },
+  { id: "dwr-compression", label: "Compression", keeperOnly: true },
+  { id: "dwr-trades", label: "Trade Signals" },
+  { id: "dwr-mock", label: "Mock Draft" },
+];
+
+function dwrScrollTo(sectionId: string) {
+  document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function DwrSectionNav({ keepersOn }: { keepersOn: boolean }) {
+  const items = DWR_NAV_ITEMS.filter((i) => !i.keeperOnly || keepersOn);
+  return (
+    <nav
+      aria-label="Draft War Room sections"
+      className="sticky top-16 z-30 overflow-x-auto rounded-xl border border-white/[0.08] bg-[#110c14]/95 px-2 py-2 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.65)] backdrop-blur-md"
+    >
+      <ul className="flex min-w-max gap-1">
+        {items.map((item) => (
+          <li key={item.id}>
+            <button
+              type="button"
+              onClick={() => dwrScrollTo(item.id)}
+              className="rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
+            >
+              {item.label}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
 /* ── main editorial desk ── */
 export function DraftWarRoomDesk({ data }: { data: any }) {
   const lg: any = useLeagueContext();
@@ -390,6 +430,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
   const pressureByRound: any[] = data?.pressureByRound ?? [];
   const draftEnvironment: any = data?.draftEnvironment ?? null;
   const conf: any = data?.confidenceDashboard ?? {};
+  const keepersOn = data?.leagueCapabilities?.keepers !== false;
 
   const myTeamId: number | null =
     lg?.myTeamId != null && Number.isFinite(Number(lg.myTeamId)) && Number(lg.myTeamId) > 0
@@ -708,6 +749,8 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
           </div>
         </Panel>
       </div>
+
+      <DwrSectionNav keepersOn={keepersOn} />
 
       {/* Upcoming picks from synced draft board (no speculative player projections) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
