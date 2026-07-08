@@ -25,6 +25,7 @@ import { buildLeagueCapabilities } from "./leagueCapabilities";
 // Phase 1 foundation: Draft War Room consumes the platform's authoritative engines only.
 import { getEspnPlayerInfoMap, getEspnDefensiveInfoMap } from "./playerStatsRouter";          // real ADP + projection + percentStarted (single ESPN source) + IDP feed
 import { computeMarketValues, type MarketValueInput } from "./marketValue"; // sole player-value engine (0–100)
+import { rosterRulesFromLineupSlotCounts } from "./draftEngine/phase5/leagueRosterRules";
 import { computeKeeperValuations, type KeeperPoolRowLite } from "./keeperValuationService"; // sole keeper engine
 import { getManualKeeperSelections } from "./manualKeeperSelections"; // user keeper overrides (degrades safely if table absent)
 import { computeLeaguePositionTimingProfiles, type PositionTimingProfile } from "./leagueDraftTimingProfile";
@@ -69,6 +70,26 @@ const LINEUP_REQS: Record<string, number> = {
 // for the draft pool so the DP need is matched and drafted like any other slot.
 const IDP_POSITIONS = new Set(["DL", "LB", "DB", "S", "CB", "DE", "DT"]);
 const normalizeDraftPos = (pos: string): string => (IDP_POSITIONS.has(pos) ? "DP" : pos);
+
+// Per-league starting lineup. Reuses the exact ESPN-slot parser the souls engine uses, so non-IDP
+// leagues (e.g. team D/ST) no longer inherit the hardcoded IDP "DP" slot. SAFE BY DESIGN: the
+// primary league (457622) always keeps the hardcoded LINEUP_REQS, and any league whose settings
+// don't parse cleanly falls back to it too — so nothing changes for leagues that work today.
+function leagueLineupReqs(leagueId: string, payload: Record<string, unknown> | null): Record<string, number> {
+  if (String(leagueId) === "457622") return LINEUP_REQS; // primary league: untouched, guaranteed
+  const counts = (payload as any)?.settings?.rosterSettings?.lineupSlotCounts;
+  if (!counts) return LINEUP_REQS;
+  try {
+    const s = rosterRulesFromLineupSlotCounts({ leagueId: String(leagueId), lineupSlotCounts: counts }).starters;
+    if (!(s.QB > 0 && s.WR > 0 && s.TE > 0)) return LINEUP_REQS; // degenerate parse → fall back, don't touch
+    const reqs: Record<string, number> = { QB: s.QB, RB: s.RB, WR: s.WR, TE: s.TE, FLEX: s.FLEX, K: s.K };
+    if (s.DP > 0) reqs.DP = s.DP;   // IDP league
+    if (s.DST > 0) reqs.DST = s.DST; // team D/ST league (Teco's) — no phantom IDP need
+    return reqs;
+  } catch {
+    return LINEUP_REQS;
+  }
+}
 
 // Phase 1 foundation cleanup: the hardcoded value tables (POS_ROUND_VALUE, POS_SCARCITY,
 // ROUND_POS_WEIGHTS, VBD_BASELINE), vorp(), roundWeights(), and calcKVS() were REMOVED.
@@ -727,7 +748,7 @@ async function predictKeepers(
 
 // ── Roster needs ──────────────────────────────────────────────────────────────
 
-function buildRosterNeeds(teams: any[], byTeam: Map<number, any[]>, keeperPredictions: any[]) {
+function buildRosterNeeds(teams: any[], byTeam: Map<number, any[]>, keeperPredictions: any[], lineupReqs: Record<string, number> = LINEUP_REQS) {
   const needs: any[] = [];
   const urgOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
 
@@ -760,7 +781,7 @@ function buildRosterNeeds(teams: any[], byTeam: Map<number, any[]>, keeperPredic
     const strengths: any[] = [];
     const priority: string[] = [];
 
-    for (const [pos, needed] of Object.entries(LINEUP_REQS)) {
+    for (const [pos, needed] of Object.entries(lineupReqs)) {
       const have = (starterByPos[pos] ?? []).length;
       const gap  = Math.max(0, needed - have);
       const top  = (posPlayers[pos] ?? []).sort((a, b) => b.projectedPoints - a.projectedPoints)[0];
@@ -1398,7 +1419,7 @@ export const draftWarRoomRouter = router({
       const keeperPredictions = leagueCapabilities.keepers
         ? await predictKeepers(teams, byTeam, effectiveKeepers, playerDraftRoundMap, prevByTeam, consecutiveKeptPlayers, nameToPlayerId, espnAdpByPlayerId, season, leagueId, ctx.user.id, teams.length)
         : [];
-      const rosterNeeds       = buildRosterNeeds(teams, byTeam, keeperPredictions);
+      const rosterNeeds       = buildRosterNeeds(teams, byTeam, keeperPredictions, leagueLineupReqs(leagueId, payload));
 
       // Traded picks: count only open-draft selections (keeper/retained slots are not tradable snake picks)
       const openDraftPicksForTrades = allPicks.filter((p: { draftedForAnalytics?: boolean }) => p.draftedForAnalytics);
