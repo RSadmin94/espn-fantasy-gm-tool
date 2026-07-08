@@ -1730,7 +1730,7 @@ export function DraftWarRoom() {
         )}
 
         {/* Editorial intelligence desk — mockup layout, real data */}
-        <DraftWarRoomDesk data={data} sectionNav={<DwrSectionNav keepersOn={keepersOn} />} />
+        <DraftWarRoomDesk data={data} />
 
         {/* Detailed analytics divider */}
         <div className="flex items-center gap-3 pt-1">
@@ -1763,6 +1763,8 @@ export function DraftWarRoom() {
             </span>
           )}
         </div>
+
+        <DwrSectionNav keepersOn={keepersOn} />
 
         {/* 1. Confidence Dashboard */}
         <Section id="dwr-briefing" title="Draft Briefing" icon={ShieldCheck}

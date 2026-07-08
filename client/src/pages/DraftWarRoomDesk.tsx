@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import {
   Crosshair, Flame, Shield, Activity, Clock, Target,
   AlertTriangle, ChevronRight, Radio, Quote,
@@ -375,7 +375,7 @@ function DraftRealityMode({
 }
 
 /* ── main editorial desk ── */
-export function DraftWarRoomDesk({ data, sectionNav }: { data: any; sectionNav?: ReactNode }) {
+export function DraftWarRoomDesk({ data }: { data: any }) {
   const lg: any = useLeagueContext();
   const scoring: string = lg?.scoringType || "PPR";
   const teamCount: number = data?.teamCount ?? lg?.teamCount ?? 0;
@@ -708,8 +708,6 @@ export function DraftWarRoomDesk({ data, sectionNav }: { data: any; sectionNav?:
           </div>
         </Panel>
       </div>
-
-      {sectionNav}
 
       {/* Upcoming picks from synced draft board (no speculative player projections) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
