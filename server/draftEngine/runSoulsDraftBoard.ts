@@ -102,7 +102,7 @@ export async function runSoulsDraftBoard(opts: {
   // 3. Merged draftable universe from recent seasons (fills the board out to a full draft).
   const mergedPicks: Awaited<ReturnType<typeof loadSeasonTerrainInputs>>["draftPicks"] = [];
   const seen = new Set<string>();
-  for (const s of [orderSeason, orderSeason - 1, orderSeason - 2]) {
+  for (const s of [orderSeason, orderSeason - 1, orderSeason - 2, orderSeason - 3, orderSeason - 4, orderSeason - 5]) {
     const inp = await loadSeasonTerrainInputs({ db, leagueId, season: s });
     for (const p of inp.draftPicks) {
       const k = `${p.playerName}`.toLowerCase();
@@ -183,6 +183,7 @@ export async function runSoulsDraftBoard(opts: {
   // 7c. Reserve keepers: pull kept players out of the pool and lock each keeper's slot (the team's
   // pick at its keeper round) — exactly like the mock, so no kept player is ever drafted twice.
   const overallByTeamRound = new Map<string, number[]>();
+  const overallByTeam = new Map<number, number[]>();
   for (const r of seqRows) {
     const tid = Number(r.teamId);
     const rnd = Number(r.roundId);
@@ -192,18 +193,24 @@ export async function runSoulsDraftBoard(opts: {
     const arr = overallByTeamRound.get(kkey) ?? [];
     arr.push(overall);
     overallByTeamRound.set(kkey, arr);
+    const tarr = overallByTeam.get(tid) ?? [];
+    tarr.push(overall);
+    overallByTeam.set(tid, tarr);
   }
   const keeperByOverall = new Map<number, { player: string; position: string }>();
   const excludeNames = new Set<string>();
   for (const k of opts.keepers ?? []) {
     const name = String(k.player ?? "").trim();
     if (!name || name.toLowerCase() === "unknown") continue;
-    excludeNames.add(name.toLowerCase());
-    const overalls = (overallByTeamRound.get(`${Number(k.teamId)}:${Number(k.keeperRound)}`) ?? [])
-      .slice()
-      .sort((a, b) => a - b);
-    const overall = overalls.find((o) => !keeperByOverall.has(o));
-    if (overall) keeperByOverall.set(overall, { player: name, position: k.position || "?" });
+    const teamId = Number(k.teamId);
+    const preferred = (overallByTeamRound.get(`${teamId}:${Number(k.keeperRound)}`) ?? []).slice().sort((a, b) => a - b);
+    const anyTeam = (overallByTeam.get(teamId) ?? []).slice().sort((a, b) => a - b);
+    // Place the keeper on its round slot if the team has one there; otherwise any of the team's picks.
+    const overall = preferred.find((o) => !keeperByOverall.has(o)) ?? anyTeam.find((o) => !keeperByOverall.has(o));
+    if (overall) {
+      keeperByOverall.set(overall, { player: name, position: k.position || "?" });
+      excludeNames.add(name.toLowerCase()); // only exclude from the pool once we've actually reserved a slot
+    }
   }
 
   // 8. Simulate the full board — every owner drafts in-character, in the real trade-aware order,
