@@ -1632,13 +1632,8 @@ export function DraftWarRoom() {
     warRoomInput,
     { enabled: leagueKeyReady },
   );
-  const [draftEngine, setDraftEngine] = useState<"mock" | "souls">("mock");
-  const soulsKeepers = useMemo(() =>
-    ((data?.keeperPredictions ?? []) as any[])
-      .filter((kp: any) => kp?.predictedPlayer && kp.predictedPlayer !== "Unknown" && Number(kp.keeperRound))
-      .map((kp: any) => ({ teamId: Number(kp.teamId), keeperRound: Number(kp.keeperRound), player: String(kp.predictedPlayer), position: String(kp.position ?? "?") })),
-    [data]);
-  const soulsQ = trpc.soulsDraftBoard.useQuery({ keepers: soulsKeepers }, { enabled: leagueKeyReady && draftEngine === "souls" });
+  const soulsQ = { data: null as any, isLoading: false };
+  void soulsQ;
 
   if (isLoading) return (
     <div className="min-h-screen bg-[#110c14] flex items-center justify-center gap-2 text-zinc-500 text-sm">
@@ -1820,71 +1815,18 @@ export function DraftWarRoom() {
 
         {/* 10. Mock Draft Board */}
         <Section id="dwr-mock" title="Mock Draft Board" icon={Target} badge={totalPicks} defaultOpen={true}>
-          <div className="mb-3 flex items-center gap-2">
-            <span className="text-xs text-zinc-500">Engine</span>
-            <div className="inline-flex rounded-lg border border-zinc-700 overflow-hidden">
-              {(["mock", "souls"] as const).map((e) => (
-                <button
-                  key={e}
-                  type="button"
-                  onClick={() => setDraftEngine(e)}
-                  className={`px-3 py-1 text-xs font-medium transition-colors ${draftEngine === e ? "bg-violet-600 text-white" : "bg-transparent text-zinc-400 hover:text-zinc-200"}`}
-                >
-                  {e === "mock" ? "Mock · ADP + tendencies" : "Souls · behavioral"}
-                </button>
-              ))}
-            </div>
-          </div>
-          {draftEngine === "souls" && soulsQ.isLoading ? (
-            <div className="py-10 text-center text-sm text-zinc-500">
-              <RefreshCw className="h-4 w-4 animate-spin text-violet-400 mx-auto mb-2" />
-              Building the board…
-            </div>
-          ) : draftEngine === "souls" && (!soulsQ.data?.supported || !soulsQ.data?.board) ? (
-            <div className="py-10 text-center text-sm text-zinc-500">
-              The souls engine is fitted to your primary league only — this league uses the mock.
-            </div>
-          ) : (
-            <MockDraftBoard
-              picks={
-                draftEngine === "souls"
-                  ? (() => {
-                      const pool = (data?.availablePool ?? []) as any[];
-                      const byName = new Map(pool.map((pp: any) => [pp.name, pp]));
-                      return (soulsQ.data?.board?.picks ?? []).map((p: any) => {
-                        const pl: any = byName.get(p.playerName);
-                        return {
-                          pickNumber: p.overall,
-                          round: p.round,
-                          roundPick: p.pickInRound,
-                          teamId: p.teamId,
-                          teamName: p.teamName,
-                          ownerName: p.ownerName,
-                          player: p.playerName,
-                          position: p.position,
-                          espnId: pl?.espnId ?? null,
-                          projectedPoints: pl?.projectedPoints ?? 0,
-                          marketValue: pl?.marketValue ?? null,
-                          adp: pl?.adp ?? pl?.rank ?? null,
-                          pickReason: p.reason,
-                          alternatePicks: [],
-                          isKeeperSlot: !!p.isKeeperSlot,
-                        };
-                      });
-                    })()
-                  : (mockDraft ?? [])
-              }
-              teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))}
-              availablePool={data?.availablePool ?? []}
-              keeperPredictions={keeperPredictions ?? []}
-              rosterNeeds={rosterNeeds ?? []}
-              keeperOverrides={keeperOverrides}
-              keepersEnabled={keepersOn}
-              onKeeperOverride={(overrides) => {
-                setKeeperOverrides(overrides);
-              }}
-            />
-          )}
+          <MockDraftBoard
+            picks={mockDraft ?? []}
+            teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))}
+            availablePool={data?.availablePool ?? []}
+            keeperPredictions={keeperPredictions ?? []}
+            rosterNeeds={rosterNeeds ?? []}
+            keeperOverrides={keeperOverrides}
+            keepersEnabled={keepersOn}
+            onKeeperOverride={(overrides) => {
+              setKeeperOverrides(overrides);
+            }}
+          />
         </Section>
 
       </div>
