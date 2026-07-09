@@ -1,6 +1,7 @@
 import type { AppDb } from "../../db";
 import { gmDraftPicks, gmPlayers } from "../../../drizzle/schema";
 import { and, eq, sql } from "drizzle-orm";
+import { getBlankPickResolver } from "../blankPickResolver";
 import type { PriorSeasonPointsRow, TerrainDraftPickRow } from "./types";
 
 export async function loadSeasonTerrainInputs(args: { db: AppDb; leagueId: string; season: number }) {
@@ -25,6 +26,18 @@ export async function loadSeasonTerrainInputs(args: { db: AppDb; leagueId: strin
     playerId: p.playerId ?? null,
     season: p.season,
   }));
+
+  // Enrich blank picks at read time (registry skill recovery + real ESPN D/ST). Read-only; a
+  // league with no blanks (e.g. 457622) is untouched. D/ST get position "DST" so the timing
+  // profile learns the defense window and the pool builds defense fillers.
+  const { map: resolver } = await getBlankPickResolver(db, leagueId);
+  if (resolver.size > 0) {
+    for (const row of draftPicks) {
+      if (row.playerName && row.position && row.position !== "?") continue;
+      const id = resolver.get(`${row.season}:${row.overallPick}`);
+      if (id) { row.playerName = id.playerName; row.position = id.position; if (id.playerId != null) row.playerId = id.playerId; }
+    }
+  }
 
   const teamCount = new Set(picks.map((p) => p.teamId)).size;
 

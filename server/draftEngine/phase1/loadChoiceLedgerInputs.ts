@@ -2,6 +2,7 @@ import type { AppDb } from "../../db";
 import { gmDraftPicks } from "../../../drizzle/schema";
 import { asc, eq } from "drizzle-orm";
 import { loadOwnerProfileSharedData } from "../../ownerProfileService";
+import { getBlankPickResolver } from "../blankPickResolver";
 import type { DraftPickRow } from "./types";
 
 export async function loadChoiceLedgerInputs(args: { db: AppDb; leagueId: string }) {
@@ -35,6 +36,17 @@ export async function loadChoiceLedgerInputs(args: { db: AppDb; leagueId: string
     teamId: r.teamId,
     rawPick: r.rawPick,
   }));
+
+  // Enrich blank picks (name/position "?") at read time from the registry + raw draftDetail + ESPN
+  // D/ST map. Read-only: draft_picks is never mutated. Leagues with no blanks are untouched.
+  const { map: resolver } = await getBlankPickResolver(db, leagueId);
+  if (resolver.size > 0) {
+    for (const row of draftRows) {
+      if (row.playerName && row.position && row.position !== "?") continue;
+      const id = resolver.get(`${row.season}:${row.overallPick}`);
+      if (id) { row.playerName = id.playerName; row.position = id.position; }
+    }
+  }
 
   return { shared, draftRows };
 }
