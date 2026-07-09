@@ -84,7 +84,7 @@ function leagueLineupReqs(leagueId: string, payload: Record<string, unknown> | n
     if (!(s.QB > 0 && s.WR > 0 && s.TE > 0)) return LINEUP_REQS; // degenerate parse → fall back, don't touch
     const reqs: Record<string, number> = { QB: s.QB, RB: s.RB, WR: s.WR, TE: s.TE, FLEX: s.FLEX, K: s.K };
     if (s.DP > 0) reqs.DP = s.DP;   // IDP league
-    if (s.DST > 0) reqs.DST = s.DST; // team D/ST league (Teco's) — no phantom IDP need
+    if (s.DST > 0) reqs.DEF = s.DST; // team D/ST league (Teco's): key under "DEF" so the pool/need/cap/counts (which use the registry's "DEF" label) all reconcile — DEF players satisfy the team-defense requirement
     return reqs;
   } catch {
     return LINEUP_REQS;
@@ -849,10 +849,13 @@ export type MockDraftInputs = {
   stochasticSeed?: number;
   /** Fixture metadata for simulation replay. */
   registryPlayerCount?: number;
+  /** Per-league starting-lineup requirements (drives position caps). Defaults to the hardcoded
+   *  457622 table when unset, so leagues that work today are unchanged. */
+  lineupReqs?: Record<string, number>;
 };
 
 export function buildMockDraft(params: MockDraftInputs) {
-  const { allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool, dpTiming = null, ownerDnaContext = null } = params;
+  const { allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool, dpTiming = null, ownerDnaContext = null, lineupReqs = LINEUP_REQS } = params;
   const picks: any[] = [];
   const drafted = new Set<string>();
 
@@ -999,11 +1002,11 @@ export function buildMockDraft(params: MockDraftInputs) {
       switch (pos) {
         case "QB":  return lateWindow ? 2 : 1;
         case "TE":  return lateWindow ? 3 : 1;
-        // One DP per team by default — drive the cap from the league's DP starter requirement so a
-        // league that starts N defenders drafts N. No late-round backup unless the roster rule asks.
-        case "DP":  return LINEUP_REQS.DP ?? 1;
+        // Drive the IDP (DP) cap from the league's real DP starter requirement, same as DEF —
+        // no hardcoded assumption. 457622 has DP:1; team-D/ST leagues (no DP) get 0.
+        case "DP":  return lineupReqs.DP ?? 0;
         case "K":   return round >= maxRound - 1 ? 1 : 0;
-        case "DEF": return 0; // league rosters individual defenders (DP), not team D/ST
+        case "DEF": return lineupReqs.DEF ?? 0; // team D/ST cap driven by the league's real DST starter requirement (keyed "DEF" to match the pool/registry label)
         case "RB":  return 6;
         case "WR":  return 7;
         default:    return 3;
@@ -1321,6 +1324,9 @@ export const draftWarRoomRouter = router({
       const cached = await getCachedView(season, "combined", leagueId, { userId: ctx.user.id });
       const payload = cached?.payload ? (cached.payload as Record<string, unknown>) : null;
       const leagueCapabilities = buildLeagueCapabilities(leagueId, season, payload);
+      // Per-league starting-lineup requirements (drives the pool filter, roster needs, and caps).
+      const leagueReqs = leagueLineupReqs(leagueId, payload);
+      const rostersTeamDefense = (leagueReqs.DEF ?? 0) > 0;
       const geo = await resolveKeeperDraftGeometryForSeason(leagueId, season, ctx.user.id, payload);
       const totalRounds = Math.max(1, geo.roundCount || 1);
       const draftBoardSummary = summarizeDraftBoardCounts(allPicks);
@@ -1330,7 +1336,7 @@ export const draftWarRoomRouter = router({
         SELECT fullName, position, espnPlayerId
         FROM gm_player_registry
         WHERE espnPlayerId IS NOT NULL
-          AND position IN ('QB','RB','WR','TE','K','DL','LB','DB')
+          AND position IN ('QB','RB','WR','TE','K','DL','LB','DB','DEF')
         ORDER BY lastSeasonSeen DESC, id ASC LIMIT 2000
       `) as unknown as [any[]];
 
@@ -1364,6 +1370,7 @@ export const draftWarRoomRouter = router({
         seenPool.add(nameLc);
         const pid = Number(espnId);
         const draftPos = normalizeDraftPos(String(reg.position || "?"));
+        if (draftPos === "DEF" && !rostersTeamDefense) continue; // team defenses only enter the pool for leagues that roster one (457622 stays DEF-free)
         mvInputs.push({
           playerId: pid, position: draftPos, adpRank: null,
           projection: info.projection ?? null, keeperRoundSavings: null,
@@ -1419,7 +1426,7 @@ export const draftWarRoomRouter = router({
       const keeperPredictions = leagueCapabilities.keepers
         ? await predictKeepers(teams, byTeam, effectiveKeepers, playerDraftRoundMap, prevByTeam, consecutiveKeptPlayers, nameToPlayerId, espnAdpByPlayerId, season, leagueId, ctx.user.id, teams.length)
         : [];
-      const rosterNeeds       = buildRosterNeeds(teams, byTeam, keeperPredictions, leagueLineupReqs(leagueId, payload));
+      const rosterNeeds       = buildRosterNeeds(teams, byTeam, keeperPredictions, leagueReqs);
 
       // Traded picks: count only open-draft selections (keeper/retained slots are not tradable snake picks)
       const openDraftPicksForTrades = allPicks.filter((p: { draftedForAnalytics?: boolean }) => p.draftedForAnalytics);
@@ -1459,6 +1466,7 @@ export const draftWarRoomRouter = router({
         allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool,
         dpTiming: leagueTimingProfiles.dp,
         ownerDnaContext: ownerDraftDna,
+        lineupReqs: leagueReqs,
       });
 
       // Phase 1.75 — Pressure Engine (keeper compression only when league supports keepers)
