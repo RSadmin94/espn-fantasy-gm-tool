@@ -10,6 +10,8 @@ export type SimPlayer = ChoicePlayer & {
   playerKey: string;
   valueScore: number;
   tier: string;
+  /** Real live ESPN ADP when known (Souls v2 draft anchor); null for late slots / unranked. */
+  adp?: number | null;
 };
 
 export type RivalryLedgerEntry = {

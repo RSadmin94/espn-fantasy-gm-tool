@@ -15,6 +15,8 @@ import {
   type DraftSlot,
 } from "./loadSimDraftSetup";
 import { resolveMoment, type MomentDecision } from "./moment";
+import type { ScoringWeights } from "./moment";
+import type { PositionTimingProfile } from "./positionTiming";
 import { mulberry32, type Rng } from "./rng";
 import type { LeagueRosterRules } from "./leagueRosterRules";
 import {
@@ -76,6 +78,12 @@ export function simulateDraft(args: {
   pickSequence?: Array<DraftSlot | undefined>;
   /** Player names (lowercased) to remove from the draftable pool — e.g. kept players. */
   excludePlayers?: Set<string>;
+  /** Data-driven per-position draft-round windows (Souls v2). When provided, K/DP/DST spread
+   *  across their real historical window instead of being force-walled into one round. */
+  positionTiming?: PositionTimingProfile;
+  /** ADP-anchored weighted scoring weights (Souls v2 step 4). When provided and players carry
+   *  ADP, the draft scores by adp/soul/need/pos instead of the terrain-value utility. */
+  scoring?: ScoringWeights;
 }): DraftSimulationResult {
   const teamCount = args.draftOrder.length;
   const rounds = args.rounds ?? 16;
@@ -84,7 +92,7 @@ export function simulateDraft(args: {
   const rng: Rng = mulberry32(seed);
 
   const soulByKey = new Map(args.souls.map((s) => [s.profileOwnerKey, s]));
-  const priorKeys = buildOwnerPriorKeys({ ledger: args.ledger });
+  const priorKeys = buildOwnerPriorKeys({ ledger: args.ledger, ownerKeys: args.draftOrder.map((s) => s.profileOwnerKey) });
   const terrainLookup = buildTerrainLookup(new Map([[args.season, args.terrain]]));
   const skillPool = poolFromTerrain(args.terrain);
   const augmented = augmentPoolWithRosterFillers({
@@ -143,6 +151,8 @@ export function simulateDraft(args: {
       poolHas,
       ownerPriorKeys: priors,
       rng,
+      positionTiming: args.positionTiming,
+      scoring: args.scoring,
     });
     if (!moment) break;
 

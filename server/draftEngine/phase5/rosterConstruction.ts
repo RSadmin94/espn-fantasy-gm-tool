@@ -7,6 +7,12 @@ import { normalizePosition } from "../phase1/types";
 import type { SimPlayer } from "./weather";
 import type { LeagueRosterRules, RosterPosition } from "./leagueRosterRules";
 import type { TerrainDraftPickRow } from "../phase2/types";
+import { timingDraftability, type PositionTimingProfile } from "./positionTiming";
+
+// Completion window (and forced fill) for a late slot opens once its data-driven draftability
+// reaches this level — i.e. around the position's real historical mean round. Replaces the old
+// hardcoded round-10 gate. Only used when a timing profile is supplied (else legacy behavior).
+const COMPLETION_OPEN_THRESHOLD = 0.5;
 
 export type RosterCounts = Partial<Record<RosterPosition, number>>;
 
@@ -121,9 +127,25 @@ export function inSlotCompletionWindow(args: {
   round: number;
   totalRounds: number;
   unfilled: RosterPosition[];
+  timing?: PositionTimingProfile;
 }): boolean {
   if (args.unfilled.length === 0) return false;
+  // Hard safety net (keeps rosters legal): about to run out of picks for the slots still open.
   if (args.ownerPicksRemaining <= args.unfilled.length) return true;
+
+  if (args.timing) {
+    // Data-driven: the window for a late slot opens once the round reaches that position's real
+    // historical window (no hardcoded round-10 gate). DP (earlier mean) opens before K, so forced
+    // fills land in their true windows and spread instead of stacking in one round.
+    const lateReady = args.unfilled.some(
+      (p) =>
+        (p === "K" || p === "DP" || p === "DST") &&
+        timingDraftability(args.timing![p], args.round) >= COMPLETION_OPEN_THRESHOLD,
+    );
+    const qbLate = args.unfilled.includes("QB") && (args.ownerPicksRemaining <= 5 || args.round >= args.totalRounds - 2);
+    return lateReady || qbLate;
+  }
+
   const leagueLate = args.round >= args.totalRounds - 4;
   const ownerLate = args.ownerPicksRemaining <= 5;
   const needsKOrDp = args.unfilled.some((p) => p === "K" || p === "DP");
@@ -144,6 +166,7 @@ export function mustForceFillThisPick(args: {
   ownerPicksRemaining: number;
   round: number;
   totalRounds: number;
+  timing?: PositionTimingProfile;
 }): RosterPosition | null {
   const unfilled = unfilledRequiredSlots(args.roster, args.rules, args.poolHas);
   if (unfilled.length === 0) return null;
@@ -168,6 +191,7 @@ export function mandatoryFillPositions(args: {
   totalRounds: number;
   ownerPicksRemaining: number;
   poolHas: Partial<Record<RosterPosition, boolean>>;
+  timing?: PositionTimingProfile;
 }): RosterPosition[] {
   const unfilled = unfilledRequiredSlots(args.roster, args.rules, args.poolHas);
   const out: RosterPosition[] = [];

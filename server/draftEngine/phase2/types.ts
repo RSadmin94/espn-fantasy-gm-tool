@@ -33,6 +33,8 @@ export interface PlayerTerrainCard {
   /** Eventual league draft slot (not used in value — audit only). */
   eventualOverallPick: number | null;
   priorSeasonPoints: number | null;
+  /** Real live ESPN ADP when attached (Souls v2 draft anchor); null/undefined otherwise. */
+  adp?: number | null;
 }
 
 export interface SeasonTerrain {

@@ -31,6 +31,43 @@ import {
   unfilledRequiredSlots,
   type RosterCounts,
 } from "./rosterConstruction";
+import { timingDraftability, type PositionTimingProfile } from "./positionTiming";
+
+// --- Data-driven timing (Souls v2 gate fix) -------------------------------------------------
+// K/DP/DST admission ramp opens this many rounds before the position's historical mean.
+const TIMING_ADMIT_EARLINESS = 1.5;
+// Utility bias applied to a late-slot candidate: negative before its window, positive after.
+const TIMING_UTIL_WEIGHT = 5.0;
+// Only honor the deterministic completion force for a late slot once it is genuinely in-window
+// (draftability >= this) OR the owner is near pick-exhaustion (handled separately). Below this,
+// the pick is left to the softmax so late slots spread across their real window, not a wall.
+const FORCE_HONOR_THRESHOLD = 0.5;
+const LATE_SLOTS = new Set<RosterPosition>(["K", "DP", "DST"]);
+
+// --- ADP-anchored weighted scoring (Souls v2 step 4) ----------------------------------------
+// score(c) = adp·adpScore + soul·soulScore + need·needScore + pos·posScore  (per-owner softmax)
+// When `scoring` is supplied AND candidates carry ADP, this replaces the terrain-value utility.
+export type ScoringWeights = { adp: number; soul: number; need: number; pos: number; T: number; N: number };
+
+// Positional scarcity premium (0–100): RB dries up fastest, QB deepest. posScore in the formula.
+const POS_SCARCITY: Record<string, number> = { RB: 100, WR: 75, TE: 55, QB: 35, K: 15, DP: 15, DST: 15 };
+
+// Roster-need bucket → score. CRITICAL 100 · HIGH 70 · MEDIUM 40 · LOW 10.
+function needLevelScore(
+  pos: RosterPosition | null,
+  roster: RosterCounts,
+  rules: LeagueRosterRules,
+  remaining: number,
+): number {
+  if (!pos) return 0;
+  const min = rules.starterMinimum[pos] ?? rules.starters[pos] ?? 0;
+  const have = roster[pos] ?? 0;
+  const deficit = min - have;
+  if (deficit > 0) return remaining <= deficit ? 100 : 70;
+  const soft = rules.softCap[pos];
+  if (soft != null && have < soft) return 40;
+  return 10;
+}
 
 export type MomentCandidate = {
   player: SimPlayer;
@@ -110,35 +147,64 @@ export function buildConsiderationSet(args: {
   totalRounds: number;
   ownerPicksRemaining: number;
   poolHas: Partial<Record<RosterPosition, boolean>>;
+  positionTiming?: PositionTimingProfile;
+  rng?: Rng;
+  adpScoring?: boolean;
   minSize?: number;
   maxSize?: number;
 }): SimPlayer[] {
   const minSize = args.minSize ?? 5;
   const maxSize = args.maxSize ?? 12;
 
-  const mandatory = mandatoryFillPositions({
+  const unfilled = unfilledRequiredSlots(args.ownerRoster, args.rosterRules, args.poolHas);
+
+  const rawMandatory = mandatoryFillPositions({
     roster: args.ownerRoster,
     rules: args.rosterRules,
     round: args.round,
     totalRounds: args.totalRounds,
     ownerPicksRemaining: args.ownerPicksRemaining,
     poolHas: args.poolHas,
+    timing: args.positionTiming,
   });
-
-  const unfilled = unfilledRequiredSlots(args.ownerRoster, args.rosterRules, args.poolHas);
+  // Timing-soften the late slots: a K/DP/DST is only "mandatory" (restricting the whole
+  // consideration set to it) once we're near pick-exhaustion or actually inside its historical
+  // window. Before that it stays optional so skill players remain in play. Skill mandates
+  // (QB / lineup legality) pass through unchanged.
+  const mandatory = args.positionTiming
+    ? rawMandatory.filter((p) => {
+        if (!LATE_SLOTS.has(p)) return true;
+        if (args.ownerPicksRemaining <= unfilled.length) return true;
+        if (args.adpScoring) return false; // ADP path: never restrict the set to a late slot pre-exhaustion
+        return timingDraftability(args.positionTiming![p], args.round) >= FORCE_HONOR_THRESHOLD;
+      })
+    : rawMandatory;
   const completionWindow = inSlotCompletionWindow({
     ownerPicksRemaining: args.ownerPicksRemaining,
     round: args.round,
     totalRounds: args.totalRounds,
     unfilled,
+    timing: args.positionTiming,
   });
+
+  // Data-driven ramp (replaces the old hard round gate): decide admission ONCE PER LATE POSITION
+  // (not per candidate — there are ~14 filler copies of each K/DP/DST, so a per-copy draw would
+  // make "at least one admitted" near-certain and flood them in early). A position is admitted
+  // with probability = its draftability at this round, so it starts appearing around its real
+  // historical window. No timing/rng -> old behavior (excluded until the completion window).
+  const lateAdmit = new Set<RosterPosition>();
+  for (const lp of LATE_SLOTS) {
+    if (completionWindow) { lateAdmit.add(lp); continue; }
+    const d = args.positionTiming ? timingDraftability(args.positionTiming[lp], args.round, TIMING_ADMIT_EARLINESS) : 0;
+    if (d > 0 && args.rng && args.rng() < d) lateAdmit.add(lp);
+  }
 
   let avail = args.weather.available.filter((p) => {
     const rosterPos = simPositionToRosterPos(p.position);
     if (!rosterPos) return false;
     const have = args.ownerRoster[rosterPos] ?? 0;
     if (mandatory.length > 0 && !mandatory.includes(rosterPos)) return false;
-    if ((rosterPos === "K" || rosterPos === "DP" || rosterPos === "DST") && !completionWindow) return false;
+    if (LATE_SLOTS.has(rosterPos) && !lateAdmit.has(rosterPos)) return false;
     if (isPositionSaturatedForDraft(rosterPos, have, args.rosterRules)) return false;
     return true;
   });
@@ -268,6 +334,8 @@ export function resolveMoment(args: {
   poolHas: Partial<Record<RosterPosition, boolean>>;
   ownerPriorKeys: Set<string>;
   rng: Rng;
+  positionTiming?: PositionTimingProfile;
+  scoring?: ScoringWeights;
   noiseScale?: number;
 }): MomentDecision | null {
   const forcePos = mustForceFillThisPick({
@@ -277,8 +345,21 @@ export function resolveMoment(args: {
     ownerPicksRemaining: args.ownerPicksRemaining,
     round: args.round,
     totalRounds: args.totalRounds,
+    timing: args.positionTiming,
   });
-  if (forcePos) {
+  // Loosen the completion force for late slots (Souls v2): only honor a forced K/DP/DST fill
+  // when the owner is near pick-exhaustion (legality safety net) OR we're actually inside the
+  // position's historical window. Otherwise fall through to the softmax so these spread across
+  // their real window instead of every owner filling in the same round. No timing -> old force.
+  const honorForce = (() => {
+    if (!forcePos) return false;
+    if (!args.positionTiming || !LATE_SLOTS.has(forcePos)) return true;
+    const unfilledNow = unfilledRequiredSlots(args.ownerRoster, args.rosterRules, args.poolHas);
+    if (args.ownerPicksRemaining <= unfilledNow.length) return true;
+    if (args.scoring) return false; // ADP path: the synthetic-ADP softmax places late slots; force only at exhaustion
+    return timingDraftability(args.positionTiming[forcePos], args.round) >= FORCE_HONOR_THRESHOLD;
+  })();
+  if (forcePos && honorForce) {
     const fillers = args.weather.available
       .filter((p) => simPositionToRosterPos(p.position) === forcePos)
       .sort((a, b) => b.valueScore - a.valueScore);
@@ -309,6 +390,9 @@ export function resolveMoment(args: {
     totalRounds: args.totalRounds,
     ownerPicksRemaining: args.ownerPicksRemaining,
     poolHas: args.poolHas,
+    positionTiming: args.positionTiming,
+    rng: args.rng,
+    adpScoring: !!args.scoring,
   });
   if (consideration.length === 0) return null;
 
@@ -353,10 +437,63 @@ export function resolveMoment(args: {
   const earlyRound = args.round === 1;
   const regularityPenalty = (pos: string): number =>
     earlyRound && pos === "QB" ? 0.5 * stickRbWr : 0;
-  const utils = alts.map(
-    (_, i) => personalityUtils[i]! + constructionUtils[i]! + noises[i]! - regularityPenalty(alts[i]!.player.position),
-  );
-  const probs = softmaxProbs(utils);
+  // Timing bias for late slots (K/DP/DST): negative before the position's historical window,
+  // positive after — so an admitted kicker/defender is only attractive around its real round,
+  // and gumbel noise spreads the actual picks across that window instead of a single-round wall.
+  const timingBias = (pos: string): number => {
+    if (!args.positionTiming) return 0;
+    const rp = simPositionToRosterPos(pos);
+    if (!rp || !LATE_SLOTS.has(rp)) return 0;
+    return (timingDraftability(args.positionTiming[rp], args.round) - 0.5) * TIMING_UTIL_WEIGHT;
+  };
+  let utils: number[];
+  let probs: number[];
+  if (args.scoring && alts.some((a) => a.player.adp != null)) {
+    // --- ADP-anchored weighted formula ---
+    const w = args.scoring;
+    const N = Math.max(1, Math.floor(w.N || 10));
+    // Band = top-N available by ADP, plus any admitted late slot (no ADP) so it stays pickable.
+    const withAdp = alts.map((a, i) => ({ i, adp: a.player.adp })).filter((x) => x.adp != null).sort((a, b) => a.adp! - b.adp!);
+    const bandIdx = new Set<number>(withAdp.slice(0, N).map((x) => x.i));
+    alts.forEach((a, i) => { const rp = simPositionToRosterPos(a.player.position); if (rp && LATE_SLOTS.has(rp)) bandIdx.add(i); });
+    if (bandIdx.size === 0) alts.forEach((_, i) => bandIdx.add(i));
+    const bestAdp = withAdp.length ? withAdp[0]!.adp! : 0;
+    // soulScore: personality utility renormalized to 0–100 within the band.
+    const bandUtils = [...bandIdx].map((i) => personalityUtils[i]!);
+    const uMin = Math.min(...bandUtils), uMax = Math.max(...bandUtils);
+    const soul01 = (i: number) => (uMax > uMin ? ((personalityUtils[i]! - uMin) / (uMax - uMin)) * 100 : 50);
+    utils = alts.map((a, i) => {
+      if (!bandIdx.has(i)) return -1e9;
+      const adp = a.player.adp;
+      const rp = simPositionToRosterPos(a.player.position);
+      // Skill players score on real ADP; late slots (no ADP) get a synthetic adpScore that ramps
+      // with their timing window, so they compete for the pick around their real historical round
+      // instead of only ever arriving via the completion force (which re-creates the wall).
+      const adpScore =
+        adp != null
+          ? Math.max(0, Math.min(100, 100 - (adp - bestAdp)))
+          : rp && LATE_SLOTS.has(rp) && args.positionTiming
+            ? Math.min(100, 50 + 60 * timingDraftability(args.positionTiming[rp], args.round))
+            : 0;
+      const soulScore = soul01(i);
+      const needScore = needLevelScore(rp, args.ownerRoster, args.rosterRules, args.ownerPicksRemaining);
+      const posScore = rp ? (POS_SCARCITY[rp] ?? 30) : 30;
+      return (
+        w.adp * adpScore + w.soul * soulScore + w.need * needScore + w.pos * posScore +
+        timingBias(a.player.position) + noises[i]! * 60
+      );
+    });
+    const conf = Math.max(0, Math.min(1, args.soul.avgChosenProbability ?? 0.3));
+    const tOwner = Math.max(1, w.T * (1.5 - conf));
+    probs = softmaxProbs(utils.map((u) => u / tOwner));
+  } else {
+    utils = alts.map(
+      (_, i) =>
+        personalityUtils[i]! + constructionUtils[i]! + noises[i]! -
+        regularityPenalty(alts[i]!.player.position) + timingBias(alts[i]!.player.position),
+    );
+    probs = softmaxProbs(utils);
+  }
 
   let chosenIdx = 0;
   const r = args.rng();
@@ -393,6 +530,7 @@ export function resolveMoment(args: {
     totalRounds: args.totalRounds,
     ownerPicksRemaining: args.ownerPicksRemaining,
     poolHas: args.poolHas,
+    timing: args.positionTiming,
   });
 
   if (mandatory.length > 0 && chosenPos && mandatory.includes(chosenPos)) {

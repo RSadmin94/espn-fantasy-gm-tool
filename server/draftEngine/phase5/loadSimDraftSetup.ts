@@ -2,7 +2,7 @@
  * Phase 5 — load draft pool, slot order, and owner priors for simulation.
  */
 
-import { CONFIRMED_ACTIVE_OWNERS, confirmedActiveProfileKeySet } from "../activeOwners";
+import { CONFIRMED_ACTIVE_OWNERS, confirmedActiveProfileKeySet, type ActiveOwnerEntry } from "../activeOwners";
 import { choiceRecordsForOwner } from "../phase1/choiceLedger";
 import type { ChoiceLedger } from "../phase1/types";
 import { normalizePlayerKey, normalizePosition } from "../phase1/types";
@@ -26,22 +26,25 @@ export function poolFromTerrain(terrain: SeasonTerrain): SimPlayer[] {
       playerKey: c.playerKey,
       valueScore: c.valueScore,
       tier: c.tier,
+      adp: c.adp ?? null,
     }))
     .sort((a, b) => b.valueScore - a.valueScore);
 }
 
-export function buildOwnerPriorKeys(args: { ledger: ChoiceLedger }): Map<string, Set<string>> {
+export function buildOwnerPriorKeys(args: { ledger: ChoiceLedger; ownerKeys?: readonly string[] }): Map<string, Set<string>> {
+  const keys = args.ownerKeys ?? CONFIRMED_ACTIVE_OWNERS.map((o) => o.profileOwnerKey);
   const out = new Map<string, Set<string>>();
-  for (const owner of CONFIRMED_ACTIVE_OWNERS) {
-    const records = choiceRecordsForOwner(args.ledger, owner.profileOwnerKey);
-    out.set(owner.profileOwnerKey, new Set(records.map((r) => normalizePlayerKey(r.chosenPlayer.playerName))));
+  for (const key of keys) {
+    const records = choiceRecordsForOwner(args.ledger, key);
+    out.set(key, new Set(records.map((r) => normalizePlayerKey(r.chosenPlayer.playerName))));
   }
   return out;
 }
 
 /** Snake-draft slot order from a prior season's round-1 ledger picks (active seats only). */
-export function resolveDraftOrderFromLedger(args: { ledger: ChoiceLedger; orderSeason: number }): DraftSlot[] {
-  const activeKeys = confirmedActiveProfileKeySet();
+export function resolveDraftOrderFromLedger(args: { ledger: ChoiceLedger; orderSeason: number; activeOwners?: readonly ActiveOwnerEntry[] }): DraftSlot[] {
+  const activeOwners = args.activeOwners ?? CONFIRMED_ACTIVE_OWNERS;
+  const activeKeys = args.activeOwners ? new Set(activeOwners.map((o) => o.profileOwnerKey)) : confirmedActiveProfileKeySet();
   const round1 = args.ledger.choiceRecords
     .filter((r) => r.season === args.orderSeason && r.round === 1 && r.chooserRole === "active")
     .sort((a, b) => a.overallPick - b.overallPick);
@@ -51,7 +54,7 @@ export function resolveDraftOrderFromLedger(args: { ledger: ChoiceLedger; orderS
 
   for (const rec of round1) {
     if (!activeKeys.has(rec.chooserProfileKey) || seen.has(rec.chooserProfileKey)) continue;
-    const owner = CONFIRMED_ACTIVE_OWNERS.find((o) => o.profileOwnerKey === rec.chooserProfileKey);
+    const owner = activeOwners.find((o) => o.profileOwnerKey === rec.chooserProfileKey);
     if (!owner) continue;
     seen.add(rec.chooserProfileKey);
     slots.push({
@@ -62,7 +65,7 @@ export function resolveDraftOrderFromLedger(args: { ledger: ChoiceLedger; orderS
     });
   }
 
-  for (const owner of CONFIRMED_ACTIVE_OWNERS) {
+  for (const owner of activeOwners) {
     if (seen.has(owner.profileOwnerKey)) continue;
     slots.push({
       profileOwnerKey: owner.profileOwnerKey,
