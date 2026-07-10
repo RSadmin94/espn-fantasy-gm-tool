@@ -521,16 +521,18 @@ interface KeeperOverride {
 
 // ── Live Draft Engine (real, stateful: AI fills other teams, you take your picks) ──
 function LiveDraftEngine({
-  picks, teams, availablePool, yourTeamId,
+  picks, teams, availablePool, positionCaps, yourTeamId,
 }: {
-  picks: any[]; teams: any[]; availablePool: any[]; yourTeamId: number | null;
+  picks: any[]; teams: any[]; availablePool: any[]; positionCaps: Record<string, number> | null; yourTeamId: number | null;
 }) {
   // Match drafted players to the pool by NORMALIZED NAME (strip punctuation + Jr/Sr/III suffixes),
   // because the souls board and the available pool carry different ids/name spellings — id matching
   // was leaving already-drafted players showing as available.
   const norm = (n: any) => String(n ?? "").toLowerCase().replace(/[.'’`]/g, "").replace(/\s+(jr|sr|ii|iii|iv|v)$/i, "").trim();
   const keyOf = (p: any) => `name:${norm(p?.name)}`;
-  const POS_CAPS: Record<string, number> = { QB: 2, RB: 6, WR: 6, TE: 2, K: 1, DEF: 1, DP: 1 };
+  // League-driven position caps (from THIS league's real lineup settings, superflex-aware) with a
+  // safe fallback if the server didn't supply them.
+  const POS_CAPS: Record<string, number> = positionCaps ?? { QB: 2, RB: 6, WR: 6, TE: 2, K: 1, DEF: 1, DP: 1 };
 
   const schedule = useMemo(() => [...picks].sort((a, b) => a.pickNumber - b.pickNumber), [picks]);
   // Content signature so the draft only resets when the ACTUAL board changes — not when a parent
@@ -868,11 +870,12 @@ function SoulsBoardView({ board }: {
 }
 
 function MockDraftBoard({
-  picks, teams, availablePool, keeperPredictions, rosterNeeds,
+  picks, teams, availablePool, positionCaps, keeperPredictions, rosterNeeds,
   onKeeperOverride, keeperOverrides, keepersEnabled = true,
 }: {
   picks: any[]; teams: any[];
   availablePool: any[];
+  positionCaps: Record<string, number> | null;
   keeperPredictions: any[];
   rosterNeeds: any[];
   onKeeperOverride: (overrides: KeeperOverride[]) => void;
@@ -1138,7 +1141,7 @@ function MockDraftBoard({
 
       {/* Live Draft (new stateful engine) */}
       {view === "live" && (
-        <LiveDraftEngine picks={picks} teams={teams} availablePool={availablePool} yourTeamId={yourTeamId} />
+        <LiveDraftEngine picks={picks} teams={teams} availablePool={availablePool} positionCaps={positionCaps} yourTeamId={yourTeamId} />
       )}
 
       {/* Old playback live view (disabled) */}
@@ -1843,6 +1846,7 @@ export function DraftWarRoom() {
             picks={mockDraft ?? []}
             teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))}
             availablePool={data?.availablePool ?? []}
+            positionCaps={data?.positionCaps ?? null}
             keeperPredictions={keeperPredictions ?? []}
             rosterNeeds={rosterNeeds ?? []}
             keeperOverrides={keeperOverrides}
