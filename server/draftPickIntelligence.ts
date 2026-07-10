@@ -12,7 +12,8 @@ export type PickPrimaryFactor =
   | "ROSTER_NEED"
   | "POSITION_CAP"
   | "KEEPER"
-  | "OWNER_DNA";
+  | "OWNER_DNA"
+  | "ROSTER_COMPLETION";
 
 export interface PickIntelligenceFactor {
   name: "leagueHistory" | "espnAdp" | "rosterNeed" | "scarcity" | "projections" | "ownerDna";

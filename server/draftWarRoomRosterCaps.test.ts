@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildMockDraft } from "./draftWarRoomRouter";
+import { buildMockDraft, evaluateRosterCompletion } from "./draftWarRoomRouter";
 
 /**
  * Regression: the mock-draft position caps must honor each league's real starting-lineup
@@ -81,5 +81,56 @@ describe("Draft War Room mock caps honor league DP/D-ST roster slots", () => {
     const picks = run({ QB: 1, RB: 1, WR: 2, TE: 1, FLEX: 2, K: 1 });
     expect(countByTeam(picks, ["DP"])).toEqual([0, 0, 0, 0]);
     expect(countByTeam(picks, DEF)).toEqual([0, 0, 0, 0]);
+  });
+});
+
+/**
+ * Roster-completion guarantee: no team may finish with an unfilled required starting slot while an
+ * eligible player remains available. `evaluateRosterCompletion` forces the fill only when a team's
+ * remaining open picks all have to become required starters.
+ */
+const REQS = { QB: 1, RB: 1, WR: 2, TE: 1, FLEX: 2, K: 1, DEF: 1 }; // Teco-like team-D/ST league
+const pl = (name: string, position: string, adp: number) => ({ name, position, adp });
+
+describe("evaluateRosterCompletion — required-starter guarantee", () => {
+  it("one remaining pick + missing K forces K", () => {
+    const counts = { QB: 1, RB: 3, WR: 4, TE: 2, DEF: 1, K: 0 }; // FLEX covered by RB/WR/TE surplus
+    const undrafted = [pl("Backup WR", "WR", 120), pl("Some Kicker", "K", 180)];
+    const res = evaluateRosterCompletion({ counts, lineupReqs: REQS, undrafted, remainingOpenPicks: 1 });
+    expect(res).not.toBeNull();
+    expect(res!.position).toBe("K");
+    expect(res!.player.name).toBe("Some Kicker");
+  });
+
+  it("two remaining picks + missing K and DEF fill both (over two calls)", () => {
+    const counts: Record<string, number> = { QB: 1, RB: 3, WR: 4, TE: 2, DEF: 0, K: 0 };
+    let undrafted = [pl("Bench RB", "RB", 100), pl("Team DEF", "DEF", 150), pl("Some Kicker", "K", 180)];
+    const r1 = evaluateRosterCompletion({ counts, lineupReqs: REQS, undrafted, remainingOpenPicks: 2 });
+    expect(r1).not.toBeNull();
+    counts[r1!.position] = (counts[r1!.position] ?? 0) + 1;
+    undrafted = undrafted.filter((p) => p.name !== r1!.player.name);
+    const r2 = evaluateRosterCompletion({ counts, lineupReqs: REQS, undrafted, remainingOpenPicks: 1 });
+    expect(r2).not.toBeNull();
+    const filled = new Set([r1!.position, r2!.position]);
+    expect(filled.has("K")).toBe(true);
+    expect(filled.has("DEF")).toBe(true);
+  });
+
+  it("already-complete starters do not trigger the guarantee", () => {
+    const counts = { QB: 1, RB: 3, WR: 4, TE: 2, DEF: 1, K: 1 }; // all required starters + FLEX satisfied
+    const undrafted = [pl("Best RB", "RB", 5)];
+    expect(evaluateRosterCompletion({ counts, lineupReqs: REQS, undrafted, remainingOpenPicks: 3 })).toBeNull();
+  });
+
+  it("unavailable required position fails honestly (no fake, no corruption)", () => {
+    const counts = { QB: 1, RB: 3, WR: 4, TE: 2, DEF: 1, K: 0 }; // missing K
+    const undrafted = [pl("Only an RB", "RB", 50)]; // no kicker available
+    expect(evaluateRosterCompletion({ counts, lineupReqs: REQS, undrafted, remainingOpenPicks: 1 })).toBeNull();
+  });
+
+  it("does not trigger while a team still has spare picks (deficit < remaining)", () => {
+    const counts = { QB: 1, RB: 3, WR: 4, TE: 2, DEF: 1, K: 0 }; // only K missing (deficit 1)
+    const undrafted = [pl("Some Kicker", "K", 180)];
+    expect(evaluateRosterCompletion({ counts, lineupReqs: REQS, undrafted, remainingOpenPicks: 3 })).toBeNull();
   });
 });

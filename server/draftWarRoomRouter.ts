@@ -854,6 +854,61 @@ export type MockDraftInputs = {
   lineupReqs?: Record<string, number>;
 };
 
+// ── Roster-completion guarantee ────────────────────────────────────────────────
+// A mock roster may not finish with an unfilled required STARTING slot while an eligible player
+// remains available. When a team's remaining open picks all have to go to required starters
+// (deficit >= remaining picks), we force the best-available player at an unfilled required position.
+const FLEX_ELIGIBLE = new Set(["RB", "WR", "TE"]);
+const NON_STARTER_SLOTS = new Set(["FLEX", "BENCH", "BE", "IR", "OP"]);
+const normReqPos = (p: string): string => {
+  const u = String(p ?? "").toUpperCase();
+  return u === "DST" || u === "D/ST" ? "DEF" : u;
+};
+
+export function evaluateRosterCompletion(args: {
+  counts: Record<string, number>;
+  lineupReqs: Record<string, number>;
+  undrafted: Array<{ name: string; position: string; adp: number | null }>;
+  remainingOpenPicks: number;
+}): { player: any; position: string; reason: string } | null {
+  const { counts, lineupReqs, undrafted, remainingOpenPicks } = args;
+
+  // Per-position required starters (excluding the FLEX meta-slot and bench/IR).
+  const unfilled: string[] = [];
+  let baseDeficit = 0;
+  for (const [posRaw, reqRaw] of Object.entries(lineupReqs)) {
+    const pos = normReqPos(posRaw);
+    if (NON_STARTER_SLOTS.has(pos)) continue;
+    const d = Math.max(0, (Number(reqRaw) || 0) - (counts[pos] ?? 0));
+    if (d > 0) { baseDeficit += d; unfilled.push(pos); }
+  }
+  // FLEX slots are filled by RB/WR/TE beyond their per-position minimums.
+  const flexReq = Number(lineupReqs.FLEX ?? 0);
+  let flexSurplus = 0;
+  for (const pos of FLEX_ELIGIBLE) flexSurplus += Math.max(0, (counts[pos] ?? 0) - (Number((lineupReqs as Record<string, number>)[pos]) || 0));
+  const flexDeficit = Math.max(0, flexReq - flexSurplus);
+  const totalDeficit = baseDeficit + flexDeficit;
+
+  // Only force when every remaining pick is needed to fill a required starter.
+  if (totalDeficit <= 0 || totalDeficit < remainingOpenPicks) return null;
+
+  const wanted = new Set(unfilled);
+  let candidates = undrafted.filter((p) => wanted.has(normReqPos(p.position)));
+  let label = [...wanted].join("/");
+  if (candidates.length === 0 && flexDeficit > 0) {
+    candidates = undrafted.filter((p) => FLEX_ELIGIBLE.has(normReqPos(p.position)));
+    label = "FLEX";
+  }
+  if (candidates.length === 0) return null; // no eligible player available — fail honestly, don't corrupt the draft
+
+  const best = candidates[0]; // undrafted is ADP/board-ordered → best available first
+  return {
+    player: best,
+    position: best.position,
+    reason: `required starter had to be filled because remaining starter needs (${totalDeficit}) equaled remaining picks (${remainingOpenPicks}) — filled ${label}`,
+  };
+}
+
 export function buildMockDraft(params: MockDraftInputs) {
   const { allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool, dpTiming = null, ownerDnaContext = null, lineupReqs = LINEUP_REQS } = params;
   const picks: any[] = [];
@@ -899,6 +954,15 @@ export function buildMockDraft(params: MockDraftInputs) {
   const needMap = new Map(rosterNeeds.map(n => [n.teamId, n]));
   const teamPosCounts = new Map<number, Record<string, number>>();
   for (const p of allPicks) teamPosCounts.set(Number(p.teamId), {});
+  // Per-team OPEN-draft picks (keeper-assigned slots excluded) — powers the roster-completion guarantee.
+  const teamOpenPicks = new Map<number, number[]>();
+  for (const p of allPicks) {
+    const op = Number(p.overallPick);
+    if (keeperByOverallPick.has(op)) continue;
+    const arr = teamOpenPicks.get(Number(p.teamId)) ?? [];
+    arr.push(op);
+    teamOpenPicks.set(Number(p.teamId), arr);
+  }
   /** Phase 2a: consecutive applied DNA nudges per owner (resets on value pick). */
   const ownerDnaNudgeStreak = new Map<string, number>();
 
@@ -1190,6 +1254,22 @@ export function buildMockDraft(params: MockDraftInputs) {
         ownerDnaNudgeStreak.set(ownerKey, (ownerDnaNudgeStreak.get(ownerKey) ?? 0) + 1);
       } else {
         ownerDnaNudgeStreak.set(ownerKey, 0);
+      }
+    }
+
+    // Roster-completion guarantee (highest-priority override): when this team's remaining OPEN picks
+    // all have to become required starters, force the best-available player at an unfilled required
+    // position. Uses the raw undrafted board (so it can override the DP timing window when it must),
+    // fills only up to the requirement (never exceeds caps), and never touches keepers.
+    {
+      const remainingOpenPicks = (teamOpenPicks.get(tid) ?? []).filter((op) => op >= pickNum).length;
+      const completion = evaluateRosterCompletion({ counts, lineupReqs, undrafted, remainingOpenPicks });
+      if (completion) {
+        pick = completion.player;
+        targetPos = completion.position;
+        pickReason = completion.reason;
+        primaryFactor = "ROSTER_COMPLETION";
+        ownerDnaMeta = null;
       }
     }
 
