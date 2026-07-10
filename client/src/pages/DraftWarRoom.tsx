@@ -530,7 +530,7 @@ function LiveDraftEngine({
   // was leaving already-drafted players showing as available.
   const norm = (n: any) => String(n ?? "").toLowerCase().replace(/[.'’`]/g, "").replace(/\s+(jr|sr|ii|iii|iv|v)$/i, "").trim();
   const keyOf = (p: any) => `name:${norm(p?.name)}`;
-  const POS_CAPS: Record<string, number> = { QB: 2, RB: 6, WR: 6, TE: 2, K: 1, DEF: 1 };
+  const POS_CAPS: Record<string, number> = { QB: 2, RB: 6, WR: 6, TE: 2, K: 1, DEF: 1, DP: 1 };
 
   const schedule = useMemo(() => [...picks].sort((a, b) => a.pickNumber - b.pickNumber), [picks]);
   // Content signature so the draft only resets when the ACTUAL board changes — not when a parent
@@ -656,18 +656,29 @@ function LiveDraftEngine({
     timer.current = setTimeout(() => {
       setResults(prev => {
         if (prev[cur.pickNumber]) return prev;
-        // Play back the ACTUAL pre-computed pick for this slot (souls behavioral or mock ADP)
-        // instead of re-simulating — so the Live Draft shows the real board and runs straight
-        // through all rounds without ever stalling on a user pick.
-        const pl = availablePool.find((p: any) => norm(p.name) === norm(cur.player));
-        const chosen = pl ?? {
-          name: cur.player ?? "—",
-          position: cur.position,
-          projectedPoints: cur.projectedPoints ?? 0,
-          adp: cur.adp ?? null,
-          marketValue: cur.marketValue ?? null,
-        };
-        return { ...prev, [cur.pickNumber]: { ...chosen, byAI: true } };
+        // Dynamic best-available-by-need: each AI team drafts LIVE from the remaining board, adapting
+        // to your manual picks — a player you skip gets scooped by the next team that can use him, and
+        // nobody is drafted twice. Holds K/DEF/DP for the final rounds and respects position caps.
+        // Restores the non-scripted engine that commit 7201571 replaced with a static replay.
+        const taken = new Set<string>();
+        const counts: Record<string, number> = {};
+        for (const k of Object.keys(prev)) {
+          const r = prev[Number(k)];
+          taken.add(keyOf(r));
+          const sd = schedule.find((s: any) => s.pickNumber === Number(k));
+          if (sd && Number(sd.teamId) === Number(cur.teamId)) counts[r.position] = (counts[r.position] ?? 0) + 1;
+        }
+        const late = Number(cur.round) > totalRounds - 2;
+        const pool = availablePool
+          .filter((p: any) => !taken.has(keyOf(p)))
+          .sort((a: any, b: any) => byAdp(a) - byAdp(b));
+        const pick = pool.find((p: any) => {
+          if ((p.position === "K" || p.position === "DEF" || p.position === "DP") && !late) return false;
+          if ((counts[p.position] ?? 0) >= (POS_CAPS[p.position] ?? 99)) return false;
+          return true;
+        }) ?? pool[0];
+        if (!pick) return prev;
+        return { ...prev, [cur.pickNumber]: { ...pick, byAI: true } };
       });
       setIdx(i => i + 1);
     }, SPEED_MS);
