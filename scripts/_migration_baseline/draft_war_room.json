@@ -121,151 +121,151 @@
     ],
     "poolTop25": [
       {
-        "adp": 1.88,
+        "adp": 2,
         "marketValue": 100,
         "name": "Jahmyr Gibbs",
         "position": "RB"
       },
       {
-        "adp": 4.62,
+        "adp": 5,
         "marketValue": 99.5,
         "name": "Ja'Marr Chase",
         "position": "WR"
       },
       {
-        "adp": 5.36,
+        "adp": 5,
         "marketValue": 98.2,
         "name": "Christian McCaffrey",
         "position": "RB"
       },
       {
-        "adp": 8.31,
+        "adp": 8,
         "marketValue": 97.4,
         "name": "Jonathan Taylor",
         "position": "RB"
       },
       {
-        "adp": 11.74,
+        "adp": 12,
         "marketValue": 96.5,
         "name": "De'Von Achane",
         "position": "RB"
       },
       {
-        "adp": 13.28,
+        "adp": 13,
         "marketValue": 95.6,
         "name": "Ashton Jeanty",
         "position": "RB"
       },
       {
-        "adp": 15.4,
+        "adp": 15,
         "marketValue": 90.4,
         "name": "Saquon Barkley",
         "position": "RB"
       },
       {
-        "adp": 18.09,
+        "adp": 18,
         "marketValue": 93,
         "name": "Jeremiyah Love",
         "position": "RB"
       },
       {
-        "adp": 18.61,
+        "adp": 19,
         "marketValue": 92.1,
         "name": "Derrick Henry",
         "position": "RB"
       },
       {
-        "adp": 19.9,
+        "adp": 20,
         "marketValue": 96.4,
         "name": "Drake London",
         "position": "WR"
       },
       {
-        "adp": 20.06,
+        "adp": 20,
         "marketValue": 93.9,
         "name": "Omarion Hampton",
         "position": "RB"
       },
       {
-        "adp": 23.59,
+        "adp": 24,
         "marketValue": 95.4,
         "name": "Nico Collins",
         "position": "WR"
       },
       {
-        "adp": 23.8,
+        "adp": 24,
         "marketValue": 100,
         "name": "Josh Allen",
         "position": "QB"
       },
       {
-        "adp": 26.59,
+        "adp": 27,
         "marketValue": 87.7,
         "name": "Chase Brown",
         "position": "RB"
       },
       {
-        "adp": 26.82,
+        "adp": 27,
         "marketValue": 91.2,
         "name": "Josh Jacobs",
         "position": "RB"
       },
       {
-        "adp": 27.14,
+        "adp": 27,
         "marketValue": 94.9,
         "name": "A.J. Brown",
         "position": "WR"
       },
       {
-        "adp": 27.63,
+        "adp": 28,
         "marketValue": 93.8,
         "name": "George Pickens",
         "position": "WR"
       },
       {
-        "adp": 27.93,
+        "adp": 28,
         "marketValue": 88.6,
         "name": "Kenneth Walker III",
         "position": "RB"
       },
       {
-        "adp": 32.88,
+        "adp": 33,
         "marketValue": 94.4,
         "name": "Chris Olave",
         "position": "WR"
       },
       {
-        "adp": 33.16,
+        "adp": 33,
         "marketValue": 89.5,
         "name": "Breece Hall",
         "position": "RB"
       },
       {
-        "adp": 36.87,
+        "adp": 37,
         "marketValue": 98.6,
         "name": "Lamar Jackson",
         "position": "QB"
       },
       {
-        "adp": 37.25,
+        "adp": 37,
         "marketValue": 84.2,
         "name": "Kyren Williams",
         "position": "RB"
       },
       {
-        "adp": 37.35,
+        "adp": 37,
         "marketValue": 86.8,
         "name": "Javonte Williams",
         "position": "RB"
       },
       {
-        "adp": 37.81,
+        "adp": 38,
         "marketValue": 95.9,
         "name": "Garrett Wilson",
         "position": "WR"
       },
       {
-        "adp": 40.55,
+        "adp": 41,
         "marketValue": 92.3,
         "name": "Tetairoa McMillan",
         "position": "WR"
@@ -298,6 +298,6 @@
   },
   "season": 2026,
   "status": "ok",
-  "timestamp": "2026-07-10T19:47:53.766Z",
+  "timestamp": "2026-07-10T22:36:05.615Z",
   "userId": 1
 }

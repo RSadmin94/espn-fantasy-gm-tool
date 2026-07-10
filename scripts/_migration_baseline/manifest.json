@@ -1,5 +1,5 @@
 {
-  "captureTimestamp": "2026-07-10T19:47:53.766Z",
+  "captureTimestamp": "2026-07-10T22:36:05.615Z",
   "league": "457622",
   "season": 2026,
   "userId": 1,
@@ -33,7 +33,7 @@
       "engine": "draft_war_room",
       "file": "draft_war_room.json",
       "status": "ok",
-      "hash": "644e3f6b2666d9bfd08235652683d8a5cf848bce9f63a80eb778259c51f3c475"
+      "hash": "da998edb9254b75b90f1f938ac9bce66364fb6772dec596eff42011aeb3b7187"
     },
     {
       "engine": "keeper_valuation",
@@ -67,7 +67,20 @@
     }
   ],
   "errors": [],
-  "combinedPayloadHash": "baeb3afdf1faed759884faaa87ba6b3f0bec3a0298b00a894e2f5d3230aa8c3f",
+  "combinedPayloadHash": "79ee37c89e77ca0c5ef1cb022c87bdc3e086486b60ac38acc16eb4161668c554",
+  "baselineVersion": "phase-1c-v2",
+  "supersedes": "migration-baseline/phase-1c-step-0",
+  "reason": "Draft War Room snapshot normalization for proven volatile fields (poolTop25.adp integer rounding)",
+  "excludedOrNormalizedFields": [
+    {
+      "engine": "draft_war_room",
+      "path": "payload.poolTop25[].adp",
+      "normalization": "round to nearest integer before hash",
+      "classification": "time-dependent (live ESPN ADP feed micro-drift)",
+      "source": "draftWarRoomRouter.getDraftWarRoomData → availablePool → ESPN ADP cache (espnAdpByPlayerId)",
+      "userVisibleImpact": "Pool rank/order and marketValue unchanged; raw ADP display may differ by ≤0.05 in UI"
+    }
+  ],
   "okCount": 10,
   "errorCount": 0
 }

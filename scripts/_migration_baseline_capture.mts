@@ -13,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { eq, and } from "drizzle-orm";
+import { buildDraftWarRoomBaselinePayload, DWR_NORMALIZED_FIELDS } from "./_migration_baseline_normalize.mts";
 
 const ROOT = process.cwd();
 const LEAGUE_ID = "457622";
@@ -420,46 +421,7 @@ try {
   const caller = makeCaller(userId, fullUserRow as any);
   const dwr: any = await caller.draftWarRoom.getDraftWarRoomData({ season: SEASON });
   if (!dwr?.ok) throw new Error(dwr?.error ?? "DWR not ok");
-  const pool = [...(dwr.availablePool ?? [])].sort((a: any, b: any) => (a.adp ?? 9999) - (b.adp ?? 9999));
-  record("draft_war_room", "draft_war_room.json", "ok", {
-    season: SEASON,
-    teamCount: dwr.teamCount,
-    keeperCount: (dwr.keepers ?? []).length,
-    keepersTop10: (dwr.keepers ?? [])
-      .slice()
-      .sort((a: any, b: any) => (b.keeperValueScore ?? 0) - (a.keeperValueScore ?? 0))
-      .slice(0, 10)
-      .map((k: any) => ({
-        playerName: k.playerName,
-        position: k.position,
-        ownerName: k.ownerName,
-        keeperValueScore: k.keeperValueScore,
-        keeperRoundCost: k.keeperRoundCost,
-      })),
-    poolTop25: pool.slice(0, 25).map((p: any) => ({
-      name: p.name,
-      position: p.position,
-      adp: p.adp,
-      marketValue: p.marketValue,
-    })),
-    scarcityAlerts: (dwr.scarcityAlerts ?? []).map((a: any) => ({
-      position: a.position,
-      severity: a.severity,
-      message: a.message,
-    })),
-    positionRunAlerts: (dwr.positionRunAlerts ?? []).map((a: any) => ({
-      position: a.position,
-      runRisk: a.runRisk,
-      picksUntilWindowCloses: a.picksUntilWindowCloses,
-    })),
-    draftBoardPressure: dwr.draftBoardPressure ?? null,
-    mockDraftFirst28: (dwr.mockDraft ?? []).slice(0, 28).map((p: any) => ({
-      overall: p.overall ?? p.overallPick,
-      playerName: p.playerName ?? p.name,
-      position: p.position,
-      teamId: p.teamId,
-    })),
-  });
+  record("draft_war_room", "draft_war_room.json", "ok", buildDraftWarRoomBaselinePayload(dwr, SEASON));
 } catch (e: any) {
   manifest.errors.push(`draft_war_room: ${e?.message ?? e}`);
   record("draft_war_room", "draft_war_room.json", "error", null, String(e?.message ?? e));
@@ -704,6 +666,11 @@ const combinedHash = crypto
   .update(manifest.engines.map((e) => `${e.engine}:${e.hash}`).sort().join("|"))
   .digest("hex");
 (manifest as any).combinedPayloadHash = combinedHash;
+(manifest as any).baselineVersion = "phase-1c-v2";
+(manifest as any).supersedes = "migration-baseline/phase-1c-step-0";
+(manifest as any).reason =
+  "Draft War Room snapshot normalization for proven volatile fields (poolTop25.adp integer rounding)";
+(manifest as any).excludedOrNormalizedFields = [...DWR_NORMALIZED_FIELDS];
 (manifest as any).okCount = manifest.engines.filter((e) => e.status === "ok").length;
 (manifest as any).errorCount = manifest.engines.filter((e) => e.status === "error").length;
 
