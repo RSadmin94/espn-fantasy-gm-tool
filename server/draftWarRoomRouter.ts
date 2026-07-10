@@ -1617,9 +1617,27 @@ export const draftWarRoomRouter = router({
         }));
       const availablePool = availablePoolAfterKeepers;
 
+      // League-driven position caps for the interactive Live Draft — derived from THIS league's real
+      // lineup settings (superflex-aware via ESPN slot 7 → QB depth), so Superflex/2-QB and unusual
+      // rosters fit. Positions the league doesn't roster are capped at 0.
+      const _hardCap = rosterRulesFromLineupSlotCounts({
+        leagueId: String(leagueId),
+        lineupSlotCounts: (payload as any)?.settings?.rosterSettings?.lineupSlotCounts,
+      }).hardCap;
+      const positionCaps: Record<string, number> = {
+        QB: _hardCap.QB ?? 2,
+        RB: _hardCap.RB ?? 6,
+        WR: _hardCap.WR ?? 7,
+        TE: _hardCap.TE ?? 2,
+        K: (leagueReqs.K ?? 0) > 0 ? (_hardCap.K ?? 1) : 0,
+        DEF: (leagueReqs.DEF ?? 0) > 0 ? Math.max(1, leagueReqs.DEF ?? 0) : 0,
+        DP: (leagueReqs.DP ?? 0) > 0 ? (_hardCap.DP ?? 2) : 0,
+      };
+
       return {
         ok: true, season,
         leagueCapabilities,
+        positionCaps,
         teamCount: teams.length,
         draftBoardSummary,
         keeperPredictions,
