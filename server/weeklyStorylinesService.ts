@@ -23,7 +23,12 @@
  *   getWeeklyStorylinesFromDb() — read cached rows from DB
  */
 
-import { getDb, getCachedView } from "./db";
+import { getDb, getCachedView, resolveActiveLeagueId } from "./db";
+import {
+  getSeasonMatchups,
+  getSeasonTeams,
+  getSeasonTransactions,
+} from "./leagueDataReads";
 import { weeklyStorylines, rivalryScores } from "../drizzle/schema";
 import { isMissingTableError } from "./optionalEnrichmentTable";
 import { eq, and, desc } from "drizzle-orm";
@@ -587,14 +592,28 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
   const db = await getDb();
   if (!db) return [];
 
-  // Load cached season data
-  const data = await getCachedView(season, "combined", undefined, { userId });
-  if (!data) return [];
-  const payload = data.payload as Record<string, unknown>;
+  const { leagueId } = await resolveActiveLeagueId(
+    { user: userId != null ? { id: userId } : undefined },
+    null,
+    season,
+  );
+  const leagueKey = String(leagueId).slice(0, 32);
+  const ref = { leagueId: leagueKey, season };
 
-  const teams = normalizeTeams(payload);
-  const matchups = normalizeMatchups(payload);
-  const transactions = normalizeTransactions(payload) as unknown[];
+  const [teamsRes, matchRes, txRes, data] = await Promise.all([
+    getSeasonTeams(ref),
+    getSeasonMatchups(ref),
+    getSeasonTransactions(ref),
+    getCachedView(season, "combined", undefined, { userId }),
+  ]);
+
+  if (teamsRes.count === 0) return [];
+  const payload = data?.payload as Record<string, unknown> | undefined;
+  if (!payload) return [];
+
+  const teams = teamsRes.rows as ReturnType<typeof normalizeTeams>;
+  const matchups = matchRes.rows as ReturnType<typeof normalizeMatchups>;
+  const transactions = txRes.rows as ReturnType<typeof normalizeTransactions>;
   const settings = normalizeSettings(payload);
 
   const currentWeek = Math.max(1, (settings.currentMatchupPeriod as number) || 1);
@@ -674,10 +693,18 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
   // Load previous season ranks (for COLLAPSE detection)
   const prevSeasonRanks: Record<number, number> = {};
   const prevSeason = season - 1;
-  const prevData = await getCachedView(prevSeason, "combined", undefined, { userId });
-  if (prevData) {
-    const prevPayload = prevData.payload as Record<string, unknown>;
-    const prevTeams = normalizeTeams(prevPayload);
+  const prevTeamsRes = await getSeasonTeams({ leagueId: leagueKey, season: prevSeason });
+  let prevTeams: ReturnType<typeof normalizeTeams> | null =
+    prevTeamsRes.count > 0
+      ? (prevTeamsRes.rows as ReturnType<typeof normalizeTeams>)
+      : null;
+  if (!prevTeams) {
+    const prevData = await getCachedView(prevSeason, "combined", undefined, { userId });
+    if (prevData) {
+      prevTeams = normalizeTeams(prevData.payload as Record<string, unknown>);
+    }
+  }
+  if (prevTeams) {
     const sortedPrev = [...prevTeams].sort((a, b) => {
       const rA = (a.rankFinal as number) || 99;
       const rB = (b.rankFinal as number) || 99;
