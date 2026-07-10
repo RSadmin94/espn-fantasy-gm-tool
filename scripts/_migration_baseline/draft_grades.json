@@ -1,0 +1,234 @@
+{
+  "engine": "draft_grades",
+  "league": "457622",
+  "payload": {
+    "careerSimGrades": {
+      "drafting": {
+        "current": {
+          "grade100": 77,
+          "season": 2025
+        },
+        "overall": {
+          "grade100": 42.7143,
+          "seasons": [
+            2025,
+            2024,
+            2023,
+            2022,
+            2021,
+            2020,
+            2019
+          ],
+          "seasonsUsed": 7
+        },
+        "perSeason": [
+          {
+            "grade100": 77,
+            "season": 2025
+          },
+          {
+            "grade100": 33,
+            "season": 2024
+          },
+          {
+            "grade100": 8,
+            "season": 2023
+          },
+          {
+            "grade100": 8,
+            "season": 2022
+          },
+          {
+            "grade100": 38,
+            "season": 2021
+          },
+          {
+            "grade100": 62,
+            "season": 2020
+          },
+          {
+            "grade100": 73,
+            "season": 2019
+          }
+        ]
+      },
+      "roster": {
+        "current": {
+          "grade100": 82.6923,
+          "season": 2025
+        },
+        "overall": {
+          "grade100": 49.0659,
+          "seasons": [
+            2025,
+            2024,
+            2023,
+            2022,
+            2021,
+            2020,
+            2019
+          ],
+          "seasonsUsed": 7
+        },
+        "perSeason": [
+          {
+            "grade100": 82.6923,
+            "season": 2025
+          },
+          {
+            "grade100": 15,
+            "season": 2024
+          },
+          {
+            "grade100": 74.4231,
+            "season": 2023
+          },
+          {
+            "grade100": 26.7308,
+            "season": 2022
+          },
+          {
+            "grade100": 37.6923,
+            "season": 2021
+          },
+          {
+            "grade100": 44.4231,
+            "season": 2020
+          },
+          {
+            "grade100": 62.5,
+            "season": 2019
+          }
+        ]
+      },
+      "seasons": [
+        2025,
+        2024,
+        2023,
+        2022,
+        2021,
+        2020,
+        2019
+      ]
+    },
+    "draftRealitySeason": 2025,
+    "ownerImpacts": [
+      {
+        "draftGrade": 100,
+        "draftRank": 1,
+        "overallGrade": 76,
+        "ownerKey": "{F0C28C6B-C9FC-4D9E-828C-6BC9FC7D9EA8}",
+        "ownerName": "Jan Graham",
+        "rosterMgmtGrade": 46
+      },
+      {
+        "draftGrade": 92,
+        "draftRank": 2,
+        "overallGrade": 72,
+        "ownerKey": "{0C4B6DC7-265E-4A23-99DE-2B67369E9141}",
+        "ownerName": "Christian Graham",
+        "rosterMgmtGrade": 46
+      },
+      {
+        "draftGrade": 77,
+        "draftRank": 4,
+        "overallGrade": 70,
+        "ownerKey": "{6042EE3C-4B54-42BE-A2A7-52E939D2C706}",
+        "ownerName": "Rod Sellers",
+        "rosterMgmtGrade": 62
+      },
+      {
+        "draftGrade": 85,
+        "draftRank": 3,
+        "overallGrade": 59,
+        "ownerKey": "{54D64361-5249-472A-9643-615249A72AD3}",
+        "ownerName": "Sheldon deRoux",
+        "rosterMgmtGrade": 27
+      },
+      {
+        "draftGrade": 69,
+        "draftRank": 5,
+        "overallGrade": 59,
+        "ownerKey": "{34381793-095A-4099-B91E-04FB92B016A7}",
+        "ownerName": "Bruce Edwards",
+        "rosterMgmtGrade": 46
+      },
+      {
+        "draftGrade": 62,
+        "draftRank": 6,
+        "overallGrade": 58,
+        "ownerKey": "{B7DED29D-BF48-441C-91B8-34CCFBB09271}",
+        "ownerName": "Randy Broner Jr",
+        "rosterMgmtGrade": 54
+      },
+      {
+        "draftGrade": 31,
+        "draftRank": 10,
+        "overallGrade": 50,
+        "ownerKey": "{96E5F3A7-0AB6-4DF1-AE89-E64CAF4A400B}",
+        "ownerName": "Demetri Clark",
+        "rosterMgmtGrade": 73
+      },
+      {
+        "draftGrade": 38,
+        "draftRank": 9,
+        "overallGrade": 47,
+        "ownerKey": "{718A25B0-C7E5-48B3-A27B-D0C23359C3C3}",
+        "ownerName": "Marcus Reese",
+        "rosterMgmtGrade": 58
+      },
+      {
+        "draftGrade": 46,
+        "draftRank": 8,
+        "overallGrade": 44,
+        "ownerKey": "{F468B611-D262-466C-992F-23D7360C5CC0}",
+        "ownerName": "Nate West",
+        "rosterMgmtGrade": 42
+      },
+      {
+        "draftGrade": 54,
+        "draftRank": 7,
+        "overallGrade": 40,
+        "ownerKey": "{1130450A-E524-475A-96E2-F45C79CDBE21}",
+        "ownerName": "Mark Deroux",
+        "rosterMgmtGrade": 23
+      },
+      {
+        "draftGrade": 23,
+        "draftRank": 11,
+        "overallGrade": 40,
+        "ownerKey": "{8D9B45D1-BA89-4DF4-A8E1-32855305A6A4}",
+        "ownerName": "Tony Dorsey",
+        "rosterMgmtGrade": 62
+      },
+      {
+        "draftGrade": 15,
+        "draftRank": 12,
+        "overallGrade": 29,
+        "ownerKey": "{C300FD29-76C4-4FF0-8C91-A4F7BC17ADF2}",
+        "ownerName": "Steffon Bizzell",
+        "rosterMgmtGrade": 46
+      },
+      {
+        "draftGrade": 0,
+        "draftRank": 14,
+        "overallGrade": 28,
+        "ownerKey": "{EE3AD8B7-4239-40B0-BAD8-B7423960B094}",
+        "ownerName": "Marlon Moore",
+        "rosterMgmtGrade": 62
+      },
+      {
+        "draftGrade": 8,
+        "draftRank": 13,
+        "overallGrade": 28,
+        "ownerKey": "{AE295BDF-FC02-479E-969E-0E712690503C}",
+        "ownerName": "LOZELL STYLES",
+        "rosterMgmtGrade": 54
+      }
+    ]
+  },
+  "season": 2026,
+  "status": "ok",
+  "timestamp": "2026-07-10T19:47:53.766Z",
+  "userId": 1
+}

@@ -1,0 +1,77 @@
+{
+  "engine": "weekly_storylines",
+  "league": "457622",
+  "payload": {
+    "triggerCount": 7,
+    "triggers": [
+      {
+        "emotionalTag": "COLLAPSE IN PROGRESS",
+        "intensityScore": 90,
+        "opponentName": "Mark Deroux",
+        "ownerName": "Christian Graham",
+        "storyType": "COLLAPSE",
+        "supportingStat": "Was #3 last season, now #13",
+        "teamId": 27
+      },
+      {
+        "emotionalTag": "COLLAPSE IN PROGRESS",
+        "intensityScore": 85,
+        "opponentName": "Nate West",
+        "ownerName": "Jan Graham",
+        "storyType": "COLLAPSE",
+        "supportingStat": "Was #2 last season, now #11",
+        "teamId": 25
+      },
+      {
+        "emotionalTag": "UNFINISHED BUSINESS",
+        "intensityScore": 75,
+        "opponentName": "Demetri Clark",
+        "ownerName": "Rod Sellers",
+        "storyType": "HEARTBREAK_PENDING",
+        "supportingStat": "Demetri Clark eliminated Rod Sellers from playoffs 1x",
+        "teamId": 11
+      },
+      {
+        "emotionalTag": "THREAT LEVEL RISING",
+        "intensityScore": 55,
+        "opponentName": "Tony Dorsey",
+        "ownerName": "LOZELL STYLES",
+        "storyType": "FEAR_RISING",
+        "supportingStat": "Top-2 in scoring over last 4 weeks (0 pts)",
+        "teamId": 1
+      },
+      {
+        "emotionalTag": "THREAT LEVEL RISING",
+        "intensityScore": 55,
+        "opponentName": "Rod Sellers",
+        "ownerName": "Demetri Clark",
+        "storyType": "FEAR_RISING",
+        "supportingStat": "Top-2 in scoring over last 4 weeks (0 pts)",
+        "teamId": 4
+      },
+      {
+        "emotionalTag": "PLAYOFF BUBBLE",
+        "intensityScore": 50,
+        "opponentName": "Jan Graham",
+        "ownerName": "Nate West",
+        "storyType": "PLAYOFF_BUBBLE",
+        "supportingStat": "Ranked #7 — last playoff spot",
+        "teamId": 21
+      },
+      {
+        "emotionalTag": "PLAYOFF BUBBLE",
+        "intensityScore": 50,
+        "opponentName": "Randy Broner Jr",
+        "ownerName": "Marlon Moore",
+        "storyType": "PLAYOFF_BUBBLE",
+        "supportingStat": "Ranked #8 — first out",
+        "teamId": 22
+      }
+    ],
+    "week": 1
+  },
+  "season": 2026,
+  "status": "ok",
+  "timestamp": "2026-07-10T19:47:53.766Z",
+  "userId": 1
+}

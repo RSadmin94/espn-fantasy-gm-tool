@@ -1,0 +1,120 @@
+{
+  "engine": "rivalry_rankings",
+  "league": "457622",
+  "payload": [
+    {
+      "h2hLosses": 6,
+      "h2hWins": 6,
+      "heatLabel": "Inferno",
+      "playoffEliminations": 4,
+      "rank": 1,
+      "rivalId": "{EE3AD8B7-4239-40B0-BAD8-B7423960B094}",
+      "rivalName": "Marlon Moore",
+      "rivalryScore": 184
+    },
+    {
+      "h2hLosses": 10,
+      "h2hWins": 6,
+      "heatLabel": "Inferno",
+      "playoffEliminations": 3,
+      "rank": 2,
+      "rivalId": "{AE295BDF-FC02-479E-969E-0E712690503C}",
+      "rivalName": "LOZELL STYLES",
+      "rivalryScore": 181
+    },
+    {
+      "h2hLosses": 10,
+      "h2hWins": 7,
+      "heatLabel": "Burning",
+      "playoffEliminations": 2,
+      "rank": 3,
+      "rivalId": "{34381793-095A-4099-B91E-04FB92B016A7}",
+      "rivalName": "Bruce Edwards",
+      "rivalryScore": 168
+    },
+    {
+      "h2hLosses": 15,
+      "h2hWins": 3,
+      "heatLabel": "Burning",
+      "playoffEliminations": 0,
+      "rank": 4,
+      "rivalId": "{96E5F3A7-0AB6-4DF1-AE89-E64CAF4A400B}",
+      "rivalName": "Demetri Clark",
+      "rivalryScore": 142
+    },
+    {
+      "h2hLosses": 8,
+      "h2hWins": 7,
+      "heatLabel": "Burning",
+      "playoffEliminations": 2,
+      "rank": 5,
+      "rivalId": "{1130450A-E524-475A-96E2-F45C79CDBE21}",
+      "rivalName": "Mark Deroux",
+      "rivalryScore": 135
+    },
+    {
+      "h2hLosses": 4,
+      "h2hWins": 11,
+      "heatLabel": "Heated",
+      "playoffEliminations": 3,
+      "rank": 6,
+      "rivalId": "{F0C28C6B-C9FC-4D9E-828C-6BC9FC7D9EA8}",
+      "rivalName": "Jan Graham",
+      "rivalryScore": 122
+    },
+    {
+      "h2hLosses": 12,
+      "h2hWins": 4,
+      "heatLabel": "Heated",
+      "playoffEliminations": 0,
+      "rank": 7,
+      "rivalId": "{C300FD29-76C4-4FF0-8C91-A4F7BC17ADF2}",
+      "rivalName": "Steffon Bizzell",
+      "rivalryScore": 107
+    },
+    {
+      "h2hLosses": 5,
+      "h2hWins": 10,
+      "heatLabel": "Heated",
+      "playoffEliminations": 2,
+      "rank": 8,
+      "rivalId": "{B7DED29D-BF48-441C-91B8-34CCFBB09271}",
+      "rivalName": "Randy Broner Jr",
+      "rivalryScore": 100
+    },
+    {
+      "h2hLosses": 6,
+      "h2hWins": 8,
+      "heatLabel": "Heated",
+      "playoffEliminations": 1,
+      "rank": 9,
+      "rivalId": "{F468B611-D262-466C-992F-23D7360C5CC0}",
+      "rivalName": "Nate West",
+      "rivalryScore": 95
+    },
+    {
+      "h2hLosses": 9,
+      "h2hWins": 9,
+      "heatLabel": "Heated",
+      "playoffEliminations": 0,
+      "rank": 10,
+      "rivalId": "{0C4B6DC7-265E-4A23-99DE-2B67369E9141}",
+      "rivalName": "Christian Graham",
+      "rivalryScore": 94
+    },
+    {
+      "h2hLosses": 3,
+      "h2hWins": 6,
+      "heatLabel": "Simmering",
+      "playoffEliminations": 1,
+      "rank": 11,
+      "rivalId": "{54D64361-5249-472A-9643-615249A72AD3}",
+      "rivalName": "Sheldon deRoux",
+      "rivalryScore": 54
+    }
+  ],
+  "season": 2026,
+  "status": "ok",
+  "timestamp": "2026-07-10T19:47:53.766Z",
+  "userId": 1
+}

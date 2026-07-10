@@ -1,0 +1,303 @@
+{
+  "engine": "draft_war_room",
+  "league": "457622",
+  "payload": {
+    "draftBoardPressure": null,
+    "keeperCount": 0,
+    "keepersTop10": [],
+    "mockDraftFirst28": [
+      {
+        "position": "RB",
+        "teamId": 21
+      },
+      {
+        "position": "WR",
+        "teamId": 17
+      },
+      {
+        "position": "WR",
+        "teamId": 1
+      },
+      {
+        "position": "WR",
+        "teamId": 24
+      },
+      {
+        "position": "RB",
+        "teamId": 14
+      },
+      {
+        "position": "RB",
+        "teamId": 23
+      },
+      {
+        "position": "WR",
+        "teamId": 22
+      },
+      {
+        "position": "RB",
+        "teamId": 25
+      },
+      {
+        "position": "QB",
+        "teamId": 4
+      },
+      {
+        "position": "WR",
+        "teamId": 27
+      },
+      {
+        "position": "RB",
+        "teamId": 23
+      },
+      {
+        "position": "WR",
+        "teamId": 28
+      },
+      {
+        "position": "TE",
+        "teamId": 26
+      },
+      {
+        "position": "RB",
+        "teamId": 17
+      },
+      {
+        "position": "WR",
+        "teamId": 18
+      },
+      {
+        "position": "RB",
+        "teamId": 26
+      },
+      {
+        "position": "RB",
+        "teamId": 28
+      },
+      {
+        "position": "QB",
+        "teamId": 11
+      },
+      {
+        "position": "WR",
+        "teamId": 27
+      },
+      {
+        "position": "WR",
+        "teamId": 4
+      },
+      {
+        "position": "RB",
+        "teamId": 25
+      },
+      {
+        "position": "RB",
+        "teamId": 22
+      },
+      {
+        "position": "TE",
+        "teamId": 11
+      },
+      {
+        "position": "RB",
+        "teamId": 14
+      },
+      {
+        "position": "RB",
+        "teamId": 24
+      },
+      {
+        "position": "WR",
+        "teamId": 1
+      },
+      {
+        "position": "TE",
+        "teamId": 18
+      },
+      {
+        "position": "RB",
+        "teamId": 21
+      }
+    ],
+    "poolTop25": [
+      {
+        "adp": 1.88,
+        "marketValue": 100,
+        "name": "Jahmyr Gibbs",
+        "position": "RB"
+      },
+      {
+        "adp": 4.62,
+        "marketValue": 99.5,
+        "name": "Ja'Marr Chase",
+        "position": "WR"
+      },
+      {
+        "adp": 5.36,
+        "marketValue": 98.2,
+        "name": "Christian McCaffrey",
+        "position": "RB"
+      },
+      {
+        "adp": 8.31,
+        "marketValue": 97.4,
+        "name": "Jonathan Taylor",
+        "position": "RB"
+      },
+      {
+        "adp": 11.74,
+        "marketValue": 96.5,
+        "name": "De'Von Achane",
+        "position": "RB"
+      },
+      {
+        "adp": 13.28,
+        "marketValue": 95.6,
+        "name": "Ashton Jeanty",
+        "position": "RB"
+      },
+      {
+        "adp": 15.4,
+        "marketValue": 90.4,
+        "name": "Saquon Barkley",
+        "position": "RB"
+      },
+      {
+        "adp": 18.09,
+        "marketValue": 93,
+        "name": "Jeremiyah Love",
+        "position": "RB"
+      },
+      {
+        "adp": 18.61,
+        "marketValue": 92.1,
+        "name": "Derrick Henry",
+        "position": "RB"
+      },
+      {
+        "adp": 19.9,
+        "marketValue": 96.4,
+        "name": "Drake London",
+        "position": "WR"
+      },
+      {
+        "adp": 20.06,
+        "marketValue": 93.9,
+        "name": "Omarion Hampton",
+        "position": "RB"
+      },
+      {
+        "adp": 23.59,
+        "marketValue": 95.4,
+        "name": "Nico Collins",
+        "position": "WR"
+      },
+      {
+        "adp": 23.8,
+        "marketValue": 100,
+        "name": "Josh Allen",
+        "position": "QB"
+      },
+      {
+        "adp": 26.59,
+        "marketValue": 87.7,
+        "name": "Chase Brown",
+        "position": "RB"
+      },
+      {
+        "adp": 26.82,
+        "marketValue": 91.2,
+        "name": "Josh Jacobs",
+        "position": "RB"
+      },
+      {
+        "adp": 27.14,
+        "marketValue": 94.9,
+        "name": "A.J. Brown",
+        "position": "WR"
+      },
+      {
+        "adp": 27.63,
+        "marketValue": 93.8,
+        "name": "George Pickens",
+        "position": "WR"
+      },
+      {
+        "adp": 27.93,
+        "marketValue": 88.6,
+        "name": "Kenneth Walker III",
+        "position": "RB"
+      },
+      {
+        "adp": 32.88,
+        "marketValue": 94.4,
+        "name": "Chris Olave",
+        "position": "WR"
+      },
+      {
+        "adp": 33.16,
+        "marketValue": 89.5,
+        "name": "Breece Hall",
+        "position": "RB"
+      },
+      {
+        "adp": 36.87,
+        "marketValue": 98.6,
+        "name": "Lamar Jackson",
+        "position": "QB"
+      },
+      {
+        "adp": 37.25,
+        "marketValue": 84.2,
+        "name": "Kyren Williams",
+        "position": "RB"
+      },
+      {
+        "adp": 37.35,
+        "marketValue": 86.8,
+        "name": "Javonte Williams",
+        "position": "RB"
+      },
+      {
+        "adp": 37.81,
+        "marketValue": 95.9,
+        "name": "Garrett Wilson",
+        "position": "WR"
+      },
+      {
+        "adp": 40.55,
+        "marketValue": 92.3,
+        "name": "Tetairoa McMillan",
+        "position": "WR"
+      }
+    ],
+    "positionRunAlerts": [
+      {
+        "position": "TE"
+      }
+    ],
+    "scarcityAlerts": [
+      {
+        "position": "K"
+      },
+      {
+        "position": "TE"
+      },
+      {
+        "position": "QB"
+      },
+      {
+        "position": "WR"
+      },
+      {
+        "position": "RB"
+      }
+    ],
+    "season": 2026,
+    "teamCount": 14
+  },
+  "season": 2026,
+  "status": "ok",
+  "timestamp": "2026-07-10T19:47:53.766Z",
+  "userId": 1
+}
