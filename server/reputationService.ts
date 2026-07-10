@@ -29,7 +29,12 @@
  *   getReputationEventsFromDb()  — read cached rows from DB
  */
 
-import { getAllCachedSeasons, getCachedView, getDb } from "./db";
+import { getAllCachedSeasons, getDb, resolveActiveLeagueId } from "./db";
+import {
+  getSeasonMatchups,
+  getSeasonTeams,
+  getSeasonTransactions,
+} from "./leagueDataReads";
 import { reputationEvents } from "../drizzle/schema";
 import { isMissingTableError } from "./optionalEnrichmentTable";
 import { eq, desc } from "drizzle-orm";
@@ -533,6 +538,14 @@ export async function refreshReputationEvents(
   const cachedSeasons = await getAllCachedSeasons(undefined, userId);
   if (cachedSeasons.length === 0) return { processed: 0, newLLM: 0, skipped: 0 };
 
+  const anchorSeason = Math.max(...cachedSeasons);
+  const { leagueId } = await resolveActiveLeagueId(
+    { user: userId != null ? { id: userId } : undefined },
+    null,
+    anchorSeason,
+  );
+  const leagueKey = String(leagueId).slice(0, 32);
+
   // Load existing events to avoid re-generating LLM sentences
   const existingEvents = await getAllReputationEventsFromDb();
   const existingKeys = new Set(
@@ -570,12 +583,18 @@ export async function refreshReputationEvents(
 
   for (const season of cachedSeasons) {
     try {
-      const payload = await getCachedView(season, "combined", undefined, { userId });
-      if (!payload) continue;
+      const ref = { leagueId: leagueKey, season };
+      const [teamsRes, matchRes, txRes] = await Promise.all([
+        getSeasonTeams(ref),
+        getSeasonMatchups(ref),
+        getSeasonTransactions(ref),
+      ]);
 
-      const teams = normalizeTeams(payload as Record<string, unknown>);
-      const matchups = normalizeMatchups(payload as Record<string, unknown>);
-      const txs = normalizeTransactions(payload as Record<string, unknown>);
+      if (teamsRes.count === 0) continue;
+
+      const teams = teamsRes.rows as ReturnType<typeof normalizeTeams>;
+      const matchups = matchRes.rows as ReturnType<typeof normalizeMatchups>;
+      const txs = txRes.rows as ReturnType<typeof normalizeTransactions>;
 
       // Build maps
       const teamMemberMap: Record<number, string> = {};
