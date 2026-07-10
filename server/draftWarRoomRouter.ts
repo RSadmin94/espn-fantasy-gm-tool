@@ -1598,9 +1598,10 @@ export const draftWarRoomRouter = router({
       // Board-reality pool — keepers removed by playerId (Deliverable B). Replaces the
       // previous name-based removal. availablePool and availablePoolAfterKeepers are the
       // SAME single board (Rule 4: no duplicate boards), named explicitly for clarity.
-      // Include DP so individual defensive players (already normalized + carrying real ADP in
-      // playerPool) surface in the Available Players board, matching what the mock draft uses.
-      const DRAFT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DP"]);
+      // Include DP (IDP) and DEF (team D/ST) so defenders surface in the Available Players board.
+      // The upstream playerPool is already league-scoped (DEF only for leagues that roster a team
+      // defense, DP only for IDP leagues), so this static allow-list stays league-correct.
+      const DRAFT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DP", "DEF"]);
       const availablePoolAfterKeepers = playerPool
         .filter((p) => !removedKeeperIds.has(Number(p.espnId)) && DRAFT_POSITIONS.has(p.position))
         .slice(0, 320)
