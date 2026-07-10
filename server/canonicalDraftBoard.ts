@@ -2,7 +2,7 @@
  * Draft History V2 — single canonical pipeline for board + owner profiles.
  * Order: chronological pickInRound per round (from overallPick), never snake slot / stored roundPick.
  */
-import { getSeasonDraftPicks } from "./historicalDataService";
+import { getSeasonDraftPicks } from "./leagueDataReads";
 import {
   buildSeasonTeamMap,
   FALLBACK_TEAM_NAME_RE,
@@ -172,7 +172,7 @@ export async function buildCanonicalDraftBoard(
   userId?: number,
 ): Promise<CanonicalDraftBoard> {
   const yr = Math.floor(season);
-  const fb = await getSeasonDraftPicks(yr, leagueId, userId);
+  const fb = await getSeasonDraftPicks({ leagueId, season: yr });
   const teamCount = await resolveSeasonTeamCount(leagueId, yr, userId);
   const teamMap = await buildSeasonTeamMap(leagueId, yr, userId);
   const scrapeRowCount = await countDraftRecapHtmlRows(leagueId, yr);
