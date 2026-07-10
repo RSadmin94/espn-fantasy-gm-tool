@@ -578,7 +578,14 @@ function LiveDraftEngine({
 
   const available = useMemo(() => {
     let list = availablePool.filter((p: any) => !draftedKeys.has(keyOf(p)));
-    if (posFilter !== "ALL") list = list.filter((p: any) => p.position === posFilter);
+    if (posFilter !== "ALL") {
+      const want = posFilter.toUpperCase();
+      const defVariants = new Set(["DEF", "DST", "D/ST"]);
+      list = list.filter((p: any) => {
+        const pos = String(p.position ?? "").toUpperCase();
+        return want === "DEF" ? defVariants.has(pos) : pos === want;
+      });
+    }
     if (searchQ) {
       const q = searchQ.toLowerCase();
       list = list.filter((p: any) => p.name.toLowerCase().includes(q) || (p.position ?? "").toLowerCase().includes(q));
@@ -681,7 +688,14 @@ function LiveDraftEngine({
   }
 
   const SORTS: [typeof sort, string][] = [["adp","ADP"],["proj","Proj"],["value","Value"],["pos","Pos"],["name","Name"]];
-  const POSES = ["ALL","QB","RB","WR","TE","K","DP"];
+  // Position filter tabs are data-driven from the pool, so a team-D/ST league shows a DEF tab and
+  // an IDP league shows a DP tab (instead of a hardcoded DP assumption).
+  const POSES = useMemo(() => {
+    const up = (s: any) => String(s ?? "").toUpperCase();
+    const hasDef = availablePool.some((p: any) => ["DEF", "DST", "D/ST"].includes(up(p.position)));
+    const hasDp = availablePool.some((p: any) => up(p.position) === "DP");
+    return ["ALL", "QB", "RB", "WR", "TE", "K", ...(hasDef ? ["DEF"] : []), ...(hasDp ? ["DP"] : [])];
+  }, [availablePool]);
 
   return (
     <div className="p-4">
