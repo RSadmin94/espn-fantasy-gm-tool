@@ -6,7 +6,7 @@ import { gmLeagueSettings, gmTeams } from "../drizzle/schema";
 import { getDb } from "./db";
 import { and as andDrizzle, eq as eqDrizzle } from "drizzle-orm";
 import { getCachedViewWithTier } from "./db";
-import { getSeasonTeams } from "./historicalDataService";
+import { getSeasonTeams } from "./leagueDataReads";
 import { normalizeSettings, normalizeTeams } from "./espnService";
 
 export const FALLBACK_TEAM_NAME_RE = /^Team\s+\d+$/i;
@@ -118,7 +118,7 @@ export async function buildSeasonTeamMap(
   userId?: number,
 ): Promise<Map<number, { name: string; ownerName: string }>> {
   const map = new Map<number, { name: string; ownerName: string }>();
-  const teamsRes = await getSeasonTeams(season, leagueId, userId);
+  const teamsRes = await getSeasonTeams({ leagueId, season });
   for (const t of teamsRes.rows as Record<string, unknown>[]) {
     mergeTeamRowIntoMap(map, t, false);
   }
