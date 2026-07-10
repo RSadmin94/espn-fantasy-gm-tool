@@ -14,13 +14,10 @@
  * Cached in memCache for 10 min to avoid redundant season scans.
  */
 
-import { getCachedView } from "./db";
+import { getCachedView, resolveActiveLeagueId } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
-import {
-  getSeasonMatchups,
-  getSeasonTeams,
-  listSeasonsForLeagueHistorical,
-} from "./historicalDataService";
+import { listSeasonsForLeagueHistorical } from "./historicalDataService";
+import { getSeasonMatchups, getSeasonTeams } from "./leagueDataReads";
 import { memCache } from "./memCache";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -104,10 +101,16 @@ async function _computeRichH2H(
   const matchups: H2HMatchup[] = [];
 
   for (const season of sortedSeasons) {
-    const matchRes = await getSeasonMatchups(season, undefined, userId);
+    const { leagueId } = await resolveActiveLeagueId(
+      { user: userId != null ? { id: userId } : undefined },
+      null,
+      season,
+    );
+    const ref = { leagueId: String(leagueId).slice(0, 32), season };
+    const matchRes = await getSeasonMatchups(ref);
     if (matchRes.count === 0) continue;
 
-    const teamRes = await getSeasonTeams(season, undefined, userId);
+    const teamRes = await getSeasonTeams(ref);
     const teamToMember = new Map<number, string>();
     for (const team of teamRes.rows) {
       const tr = team as Record<string, unknown>;
