@@ -90,6 +90,7 @@ import {
   getSeasonDraftPicks,
   getSeasonTeams,
 } from "./historicalDataService";
+import { getSeasonDraftPicks as getNormalizedSeasonDraftPicks } from "./leagueDataReads";
 import { upsertMatchups } from "./espnPersistence";
 import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmSeasonRosters, gmLeagueSettings, gmMatchups, syncRuns, leagueMedals, ownerAliases, gmTransactions, gmRosterEntries, gmPlayers } from "../drizzle/schema";
 import { resolveShareMeta } from "./receiptShare";
@@ -2468,8 +2469,7 @@ export const appRouter = router({
       }),
 
     /**
-     * Draft History (Manus): combined ESPN cache → normalizeDraftPicks → rows for UI.
-     * Does not read draft_picks table.
+     * Draft History (Manus): normalized gm_draft_picks first, then combined ESPN cache.
      */
     draftPicks: publicProcedure
       .input(
@@ -2481,6 +2481,89 @@ export const appRouter = router({
       )
       .query(async ({ ctx, input }) => {
         void input.activeLeagueKey;
+
+        const ownerByTeamId = new Map<number, string>();
+        let resolvedLeagueId: string | null = null;
+        if (ctx.user?.id) {
+          try {
+            const { leagueId: ownerLid } = await resolveActiveLeagueId(
+              { user: { id: ctx.user.id } },
+              null,
+              input.season,
+            );
+            resolvedLeagueId = ownerLid || null;
+            const ownerDb = await getDb();
+            if (ownerLid && ownerDb) {
+              const ownerTeamRows = await ownerDb
+                .select({ teamId: gmTeams.teamId, ownerName: gmTeams.ownerName })
+                .from(gmTeams)
+                .where(
+                  andDrizzle(
+                    eqDrizzle(gmTeams.leagueId, ownerLid),
+                    eqDrizzle(gmTeams.season, input.season),
+                  ),
+                );
+              for (const t of ownerTeamRows) {
+                const nm = String(t.ownerName ?? "").trim();
+                if (nm) ownerByTeamId.set(Number(t.teamId), nm);
+              }
+            }
+          } catch {
+            /* best-effort; client falls back to teamName when ownerName is absent */
+          }
+        }
+
+        const mapPickToResponse = (p: {
+          overallPickNumber?: number | null;
+          roundId?: number | null;
+          roundPickNumber?: number | null;
+          playerName?: string | null;
+          position?: string | null;
+          proTeam?: string | null;
+          teamName?: string | null;
+          teamId?: number | null;
+          keeper?: boolean;
+          reservedForKeeper?: boolean;
+        }) => ({
+          overallPick: p.overallPickNumber,
+          roundId: p.roundId,
+          roundPick: p.roundPickNumber,
+          playerName: p.playerName,
+          position: p.position,
+          nflTeam: p.proTeam ?? "",
+          teamName: p.teamName,
+          ownerName: ownerByTeamId.get(Number(p.teamId)) ?? null,
+          teamId: p.teamId,
+          isKeeper: Boolean(p.keeper || p.reservedForKeeper),
+        });
+
+        if (resolvedLeagueId) {
+          const normalized = await getNormalizedSeasonDraftPicks({
+            leagueId: resolvedLeagueId,
+            season: input.season,
+          });
+          if (normalized.count > 0) {
+            const picks = normalized.rows.map((row) =>
+              mapPickToResponse({
+                overallPickNumber: Number(row.overallPickNumber),
+                roundId: Number(row.roundId),
+                roundPickNumber: Number(row.roundPickNumber),
+                playerName: row.playerName != null ? String(row.playerName) : null,
+                position: row.position != null ? String(row.position) : null,
+                proTeam: row.proTeam != null ? String(row.proTeam) : "",
+                teamName: row.teamName != null ? String(row.teamName) : "",
+                teamId: Number(row.teamId),
+                keeper: Boolean(row.keeper),
+                reservedForKeeper: Boolean(row.reservedForKeeper),
+              }),
+            );
+            if (input.teamId !== undefined) {
+              return picks.filter((p) => p.teamId === input.teamId);
+            }
+            return picks;
+          }
+        }
+
         const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rawPicks = normalizeDraftPicks(data);
@@ -2502,46 +2585,7 @@ export const appRouter = router({
             return pick;
           });
         }
-        // Resolve clean owner display names per team for this league+season so the
-        // Draft History "Team View" can show "Owner Name — Team Name" on modern
-        // seasons. Source of truth is teams.ownerName (ARCHITECTURE §9.1) — a real
-        // name, never a raw owner key/GUID. Best-effort: on any miss the field is
-        // null and the client falls back to teamName.
-        const ownerByTeamId = new Map<number, string>();
-        if (ctx.user?.id) {
-          try {
-            const { leagueId: ownerLid } = await resolveActiveLeagueId(
-              { user: { id: ctx.user.id } },
-              null,
-              input.season,
-            );
-            const ownerDb = await getDb();
-            if (ownerLid && ownerDb) {
-              const ownerTeamRows = await ownerDb
-                .select({ teamId: gmTeams.teamId, ownerName: gmTeams.ownerName })
-                .from(gmTeams)
-                .where(andDrizzle(eqDrizzle(gmTeams.leagueId, ownerLid), eqDrizzle(gmTeams.season, input.season)));
-              for (const t of ownerTeamRows) {
-                const nm = String(t.ownerName ?? "").trim();
-                if (nm) ownerByTeamId.set(Number(t.teamId), nm);
-              }
-            }
-          } catch {
-            /* best-effort; client falls back to teamName when ownerName is absent */
-          }
-        }
-        const picks = enriched.map((p) => ({
-          overallPick: p.overallPickNumber,
-          roundId: p.roundId,
-          roundPick: p.roundPickNumber,
-          playerName: p.playerName,
-          position: p.position,
-          nflTeam: p.proTeam ?? "",
-          teamName: p.teamName,
-          ownerName: ownerByTeamId.get(p.teamId) ?? null,
-          teamId: p.teamId,
-          isKeeper: Boolean(p.keeper || p.reservedForKeeper),
-        }));
+        const picks = enriched.map((p) => mapPickToResponse(p));
         if (input.teamId !== undefined) {
           return picks.filter((p) => p.teamId === input.teamId);
         }
