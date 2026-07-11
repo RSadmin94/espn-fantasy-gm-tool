@@ -72,7 +72,13 @@ export class DeepSeekProvider implements SofiaModelProvider {
           model: this.model,
           messages: [{ role: "user", content: prompt }],
           temperature: 0,
-          max_tokens: 300,
+          max_tokens: 512,
+          // Non-thinking mode. This is a JSON truth-classification, not a reasoning task. DeepSeek V4
+          // enables thinking by DEFAULT; leaving it on let reasoning tokens consume the whole completion
+          // budget on interpretive inputs (finish_reason=length, empty content -> empty_response). Disabling
+          // it is DeepSeek's recommended config for classification routes and eliminates that failure class,
+          // while cutting output tokens (cost) and latency. (max_tokens is a ceiling, not a charge.)
+          thinking: { type: "disabled" },
           ...(this.jsonMode ? { response_format: { type: "json_object" } } : {}),
         }),
         signal: controller.signal,
