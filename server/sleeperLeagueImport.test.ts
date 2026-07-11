@@ -2,12 +2,15 @@ import "dotenv/config";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { eq, and } from "drizzle-orm";
 import { runSleeperLeagueImport, runSelectSleeperTeam } from "./providerRouter";
-import { getDb } from "./db";
+import { getDb, getAllCachedSeasons } from "./db";
 import { leagueConnections, gmTeams } from "../drizzle/schema";
 import { countUniversalPersistRows } from "./universalPersistence";
 import type { UniversalLeague } from "./providers/types";
 import * as sleeperAdapter from "./providers/sleeperAdapter";
 import * as universalPersistence from "./universalPersistence";
+import { computeCareerReport } from "./careerReportService";
+import { computeRivalryScores } from "./rivalryService";
+import { memCache } from "./memCache";
 
 const TEST_LEAGUE_ID = "sleeper_import_test";
 const TEST_SEASON = 2098;
@@ -143,6 +146,7 @@ beforeEach(async () => {
 
   vi.spyOn(sleeperAdapter, "fetchSleeperLeagueImportSnapshots").mockResolvedValue({
     current: { league: fixtureLeague, warnings: [], previousLeagueId: null },
+    history: [],
     previous: null,
     warnings: [],
   });
@@ -253,10 +257,23 @@ describe("runSleeperLeagueImport", { timeout: 30_000 }, () => {
 
 const CHAIN_CURRENT_ID = "sleeper_chain_curr";
 const CHAIN_PREV_API_ID = "sleeper_chain_prev_api";
+const CHAIN_S3_API_ID = "sleeper_chain_s3_api";
+const CHAIN_S4_API_ID = "sleeper_chain_s4_api";
+const CHAIN_S5_API_ID = "sleeper_chain_s5_api";
 const CHAIN_OLDER_API_ID = "sleeper_chain_older_api";
 const CHAIN_CURRENT_SEASON = 2098;
 const CHAIN_PREV_SEASON = 2097;
+const CHAIN_S3_SEASON = 2096;
+const CHAIN_S4_SEASON = 2095;
+const CHAIN_S5_SEASON = 2094;
 const CHAIN_USER_ID = 99_003;
+const ALL_CHAIN_SEASONS = [
+  CHAIN_CURRENT_SEASON,
+  CHAIN_PREV_SEASON,
+  CHAIN_S3_SEASON,
+  CHAIN_S4_SEASON,
+  CHAIN_S5_SEASON,
+] as const;
 
 function chainFixture(leagueId: string, season: number, teamOffset: number): UniversalLeague {
   return {
@@ -312,9 +329,9 @@ function chainFixture(leagueId: string, season: number, teamOffset: number): Uni
         week: 1,
         homeTeamId: String(1 + teamOffset),
         awayTeamId: String(2 + teamOffset),
-        homeScore: 100,
-        awayScore: 90,
-        winner: "home",
+        homeScore: 90,
+        awayScore: 100,
+        winner: "away",
         isPlayoff: false,
       },
     ],
@@ -325,6 +342,9 @@ function chainFixture(leagueId: string, season: number, teamOffset: number): Uni
 
 const chainCurrentFixture = chainFixture(CHAIN_CURRENT_ID, CHAIN_CURRENT_SEASON, 0);
 const chainPrevFixture = chainFixture(CHAIN_PREV_API_ID, CHAIN_PREV_SEASON, 10);
+const chainS3Fixture = chainFixture(CHAIN_S3_API_ID, CHAIN_S3_SEASON, 20);
+const chainS4Fixture = chainFixture(CHAIN_S4_API_ID, CHAIN_S4_SEASON, 30);
+const chainS5Fixture = chainFixture(CHAIN_S5_API_ID, CHAIN_S5_SEASON, 40);
 
 async function cleanupChainImportData(): Promise<void> {
   const db = await getDb();
@@ -334,7 +354,7 @@ async function cleanupChainImportData(): Promise<void> {
     .where(
       and(eq(leagueConnections.userId, CHAIN_USER_ID), eq(leagueConnections.leagueId, CHAIN_CURRENT_ID)),
     );
-  for (const season of [CHAIN_CURRENT_SEASON, CHAIN_PREV_SEASON]) {
+  for (const season of ALL_CHAIN_SEASONS) {
     await db.delete(gmTeams).where(and(eq(gmTeams.leagueId, CHAIN_CURRENT_ID), eq(gmTeams.season, season)));
     const { gmMatchups, gmTransactions, gmDraftPicks, gmRosterEntries, gmLeagueSettings } = await import(
       "../drizzle/schema"
@@ -347,7 +367,21 @@ async function cleanupChainImportData(): Promise<void> {
   }
 }
 
-function mockChainSnapshots(options?: { previousFetchFails?: boolean; missingPreviousLink?: boolean }): void {
+function fullHistorySnapshots(): sleeperAdapter.SleeperLeagueSnapshot[] {
+  return [
+    { league: chainPrevFixture, warnings: [], previousLeagueId: CHAIN_S3_API_ID },
+    { league: chainS3Fixture, warnings: [], previousLeagueId: CHAIN_S4_API_ID },
+    { league: chainS4Fixture, warnings: [], previousLeagueId: CHAIN_S5_API_ID },
+    { league: chainS5Fixture, warnings: [], previousLeagueId: null },
+  ];
+}
+
+function mockChainSnapshots(options?: {
+  previousFetchFails?: boolean;
+  missingPreviousLink?: boolean;
+  loopAt?: string;
+  history?: sleeperAdapter.SleeperLeagueSnapshot[];
+}): void {
   vi.spyOn(sleeperAdapter, "fetchSleeperLeagueImportSnapshots").mockImplementation(
     async (_leagueId: string, opts?: { includePreviousSeason?: boolean }) => {
       const warnings: string[] = [];
@@ -357,30 +391,37 @@ function mockChainSnapshots(options?: { previousFetchFails?: boolean; missingPre
         previousLeagueId: options?.missingPreviousLink ? null : CHAIN_PREV_API_ID,
       };
       if (opts?.includePreviousSeason !== true) {
-        return { current, previous: null, warnings };
+        return { current, history: [], previous: null, warnings };
       }
       if (options?.missingPreviousLink) {
         warnings.push("previous season: no previous_league_id on current league");
-        return { current, previous: null, warnings };
+        return { current, history: [], previous: null, warnings };
       }
       if (options?.previousFetchFails) {
-        warnings.push("previous season: fetch failed — previous league unavailable");
-        return { current, previous: null, warnings };
+        warnings.push("season history: fetch failed for league sleeper_chain_prev_api — previous league unavailable");
+        return { current, history: [], previous: null, warnings };
       }
+      if (options?.loopAt) {
+        warnings.push(`league history: stopped at repeated league id ${options.loopAt}`);
+        return {
+          current,
+          history: [{ league: chainPrevFixture, warnings: [], previousLeagueId: options.loopAt }],
+          previous: { league: chainPrevFixture, warnings: [], previousLeagueId: options.loopAt },
+          warnings,
+        };
+      }
+      const history = options?.history ?? fullHistorySnapshots();
       return {
         current,
-        previous: {
-          league: chainPrevFixture,
-          warnings: [],
-          previousLeagueId: CHAIN_OLDER_API_ID,
-        },
+        history,
+        previous: history[0] ?? null,
         warnings,
       };
     },
   );
 }
 
-describe("runSleeperLeagueImport previous season", { timeout: 30_000 }, () => {
+describe("runSleeperLeagueImport league history", { timeout: 30_000 }, () => {
   beforeEach(async () => {
     const db = await getDb();
     dbAvailable = db != null;
@@ -393,7 +434,7 @@ describe("runSleeperLeagueImport previous season", { timeout: 30_000 }, () => {
     if (dbAvailable) await cleanupChainImportData();
   });
 
-  it("imports current league and one linked previous season", async () => {
+  it("imports current league and the full linked history chain", async () => {
     if (!dbAvailable) return;
     const result = await runSleeperLeagueImport({
       userId: CHAIN_USER_ID,
@@ -402,28 +443,49 @@ describe("runSleeperLeagueImport previous season", { timeout: 30_000 }, () => {
     });
 
     expect(result.success).toBe(true);
+    expect(result.importedSeasons).toEqual([...ALL_CHAIN_SEASONS]);
+    expect(result.importedLeagueIds).toEqual([
+      CHAIN_CURRENT_ID,
+      CHAIN_PREV_API_ID,
+      CHAIN_S3_API_ID,
+      CHAIN_S4_API_ID,
+      CHAIN_S5_API_ID,
+    ]);
     expect(result.previousSeason).toBe(CHAIN_PREV_SEASON);
-    expect(result.previousPersist?.counts.teams.persisted).toBe(2);
+    expect(result.historyPersist).toHaveLength(4);
 
-    const currentRows = await countUniversalPersistRows(CHAIN_CURRENT_ID, CHAIN_CURRENT_SEASON);
-    const prevRows = await countUniversalPersistRows(CHAIN_CURRENT_ID, CHAIN_PREV_SEASON);
-    expect(currentRows.teams).toBe(2);
-    expect(prevRows.teams).toBe(2);
-    expect(prevRows.matchups).toBe(1);
+    for (const season of ALL_CHAIN_SEASONS) {
+      const rows = await countUniversalPersistRows(CHAIN_CURRENT_ID, season);
+      expect(rows.teams).toBe(2);
+    }
   });
 
-  it("stops after one previous season even when it has another predecessor", async () => {
+  it("stops when previous_league_id is null at the end of the chain", async () => {
     if (!dbAvailable) return;
-    mockChainSnapshots();
+    mockChainSnapshots({ history: fullHistorySnapshots() });
 
-    await runSleeperLeagueImport({
+    const result = await runSleeperLeagueImport({
       userId: CHAIN_USER_ID,
       leagueId: CHAIN_CURRENT_ID,
       includePreviousSeason: true,
     });
 
-    const prevRows = await countUniversalPersistRows(CHAIN_CURRENT_ID, CHAIN_PREV_SEASON);
-    expect(prevRows.teams).toBe(2);
+    expect(result.importedSeasons).toEqual([...ALL_CHAIN_SEASONS]);
+    expect(result.importedLeagueIds).toHaveLength(5);
+  });
+
+  it("stops when a league id repeats in the chain", async () => {
+    if (!dbAvailable) return;
+    mockChainSnapshots({ loopAt: CHAIN_CURRENT_ID });
+
+    const result = await runSleeperLeagueImport({
+      userId: CHAIN_USER_ID,
+      leagueId: CHAIN_CURRENT_ID,
+      includePreviousSeason: true,
+    });
+
+    expect(result.adapterWarnings.some((w) => w.includes("repeated league id"))).toBe(true);
+    expect(result.importedSeasons).toEqual([CHAIN_CURRENT_SEASON, CHAIN_PREV_SEASON]);
     const db = await getDb();
     const seasons = await db!
       .select({ season: gmTeams.season })
@@ -433,7 +495,7 @@ describe("runSleeperLeagueImport previous season", { timeout: 30_000 }, () => {
     expect(uniqueSeasons).toEqual([CHAIN_PREV_SEASON, CHAIN_CURRENT_SEASON]);
   });
 
-  it("warns but succeeds when previous league fetch fails", async () => {
+  it("warns but succeeds when a historical league fetch fails", async () => {
     if (!dbAvailable) return;
     mockChainSnapshots({ previousFetchFails: true });
 
@@ -445,9 +507,10 @@ describe("runSleeperLeagueImport previous season", { timeout: 30_000 }, () => {
 
     expect(result.success).toBe(true);
     expect(result.previousSeason).toBeNull();
-    expect(result.adapterWarnings.some((w) => w.includes("previous season: fetch failed"))).toBe(true);
+    expect(result.adapterWarnings.some((w) => w.includes("season history: fetch failed"))).toBe(true);
     const currentRows = await countUniversalPersistRows(CHAIN_CURRENT_ID, CHAIN_CURRENT_SEASON);
     expect(currentRows.teams).toBe(2);
+    expect(result.importedSeasons).toEqual([CHAIN_CURRENT_SEASON]);
   });
 
   it("warns when previous_league_id is missing but current import succeeds", async () => {
@@ -531,15 +594,16 @@ describe("runSleeperLeagueImport previous season", { timeout: 30_000 }, () => {
     expect(prevY?.teamId).toBe(12);
   });
 
-  it("re-import with previous season remains idempotent", async () => {
+  it("re-import with full history remains idempotent", async () => {
     if (!dbAvailable) return;
     await runSleeperLeagueImport({
       userId: CHAIN_USER_ID,
       leagueId: CHAIN_CURRENT_ID,
       includePreviousSeason: true,
     });
-    const beforeCurrent = await countUniversalPersistRows(CHAIN_CURRENT_ID, CHAIN_CURRENT_SEASON);
-    const beforePrev = await countUniversalPersistRows(CHAIN_CURRENT_ID, CHAIN_PREV_SEASON);
+    const beforeCounts = await Promise.all(
+      ALL_CHAIN_SEASONS.map((s) => countUniversalPersistRows(CHAIN_CURRENT_ID, s)),
+    );
 
     const second = await runSleeperLeagueImport({
       userId: CHAIN_USER_ID,
@@ -548,9 +612,87 @@ describe("runSleeperLeagueImport previous season", { timeout: 30_000 }, () => {
     });
     expect(second.success).toBe(true);
 
-    const afterCurrent = await countUniversalPersistRows(CHAIN_CURRENT_ID, CHAIN_CURRENT_SEASON);
-    const afterPrev = await countUniversalPersistRows(CHAIN_CURRENT_ID, CHAIN_PREV_SEASON);
-    expect(afterCurrent).toEqual(beforeCurrent);
-    expect(afterPrev).toEqual(beforePrev);
+    const afterCounts = await Promise.all(
+      ALL_CHAIN_SEASONS.map((s) => countUniversalPersistRows(CHAIN_CURRENT_ID, s)),
+    );
+    expect(afterCounts).toEqual(beforeCounts);
+  });
+
+  it("returns imported seasons newest to oldest", async () => {
+    if (!dbAvailable) return;
+    const result = await runSleeperLeagueImport({
+      userId: CHAIN_USER_ID,
+      leagueId: CHAIN_CURRENT_ID,
+      includePreviousSeason: true,
+    });
+    expect(result.importedSeasons).toEqual([...ALL_CHAIN_SEASONS]);
+    for (let i = 1; i < result.importedSeasons.length; i++) {
+      expect(result.importedSeasons[i - 1]).toBeGreaterThan(result.importedSeasons[i]!);
+    }
+  });
+
+  it("exposes every imported season via getAllCachedSeasons", async () => {
+    if (!dbAvailable) return;
+    await runSleeperLeagueImport({
+      userId: CHAIN_USER_ID,
+      leagueId: CHAIN_CURRENT_ID,
+      includePreviousSeason: true,
+    });
+    await runSelectSleeperTeam({
+      userId: CHAIN_USER_ID,
+      leagueId: CHAIN_CURRENT_ID,
+      teamId: 1,
+      ownerId: "owner_x",
+      ownerName: "Owner X",
+    });
+
+    const seasons = await getAllCachedSeasons(CHAIN_CURRENT_ID, CHAIN_USER_ID);
+    for (const season of ALL_CHAIN_SEASONS) {
+      expect(seasons).toContain(season);
+    }
+  });
+
+  it("career timeline includes every imported season", async () => {
+    if (!dbAvailable) return;
+    await runSleeperLeagueImport({
+      userId: CHAIN_USER_ID,
+      leagueId: CHAIN_CURRENT_ID,
+      includePreviousSeason: true,
+    });
+    await runSelectSleeperTeam({
+      userId: CHAIN_USER_ID,
+      leagueId: CHAIN_CURRENT_ID,
+      teamId: 1,
+      ownerId: "owner_x",
+      ownerName: "Owner X",
+    });
+
+    const report = await computeCareerReport(CHAIN_USER_ID, "id:owner_x");
+    const timelineSeasons = report.timeline.map((t) => t.season).sort((a, b) => b - a);
+    expect(timelineSeasons).toEqual([...ALL_CHAIN_SEASONS]);
+  });
+
+  it("rivalry data spans all imported seasons without code changes", async () => {
+    if (!dbAvailable) return;
+    await runSleeperLeagueImport({
+      userId: CHAIN_USER_ID,
+      leagueId: CHAIN_CURRENT_ID,
+      includePreviousSeason: true,
+    });
+    await runSelectSleeperTeam({
+      userId: CHAIN_USER_ID,
+      leagueId: CHAIN_CURRENT_ID,
+      teamId: 1,
+      ownerId: "owner_x",
+      ownerName: "Owner X",
+    });
+    memCache.invalidateAll();
+
+    const scores = await computeRivalryScores(CHAIN_USER_ID, CHAIN_CURRENT_ID);
+    expect(scores.length).toBeGreaterThan(0);
+    const rival = scores.find((s) => s.rivalName === "Owner Y");
+    expect(rival).toBeDefined();
+    const h2hMeetings = (rival?.h2hWins ?? 0) + (rival?.h2hLosses ?? 0) + (rival?.h2hTies ?? 0);
+    expect(h2hMeetings).toBeGreaterThanOrEqual(ALL_CHAIN_SEASONS.length);
   });
 });

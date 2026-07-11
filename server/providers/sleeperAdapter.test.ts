@@ -10,6 +10,8 @@ import {
 const LEAGUE_ID = "sleeper_mock_league";
 const PREV_LEAGUE_ID = "sleeper_mock_prev";
 const OLDER_LEAGUE_ID = "sleeper_mock_older";
+const OLDEST_LEAGUE_ID = "sleeper_mock_oldest";
+const ANCIENT_LEAGUE_ID = "sleeper_mock_ancient";
 
 function leaguePayload(
   leagueId: string,
@@ -110,6 +112,27 @@ function chainRoutes(): Record<string, unknown> {
   return {
     ...routesForLeague(LEAGUE_ID, "2025", PREV_LEAGUE_ID),
     ...routesForLeague(PREV_LEAGUE_ID, "2024", OLDER_LEAGUE_ID),
+    ...routesForLeague(OLDER_LEAGUE_ID, "2023", OLDEST_LEAGUE_ID),
+    ...routesForLeague(OLDEST_LEAGUE_ID, "2022", ANCIENT_LEAGUE_ID),
+    ...routesForLeague(ANCIENT_LEAGUE_ID, "2021"),
+    "/state/nfl": {
+      week: 14,
+      season: "2025",
+      season_type: "regular",
+      leg: 14,
+      display_week: 14,
+    },
+    "/players/nfl": {
+      p1: { full_name: "Patrick Mahomes", position: "QB", team: "KC" },
+      p3: { full_name: "Justin Jefferson", position: "WR", team: "MIN" },
+    },
+  };
+}
+
+function loopChainRoutes(): Record<string, unknown> {
+  return {
+    ...routesForLeague(LEAGUE_ID, "2025", PREV_LEAGUE_ID),
+    ...routesForLeague(PREV_LEAGUE_ID, "2024", LEAGUE_ID),
     "/state/nfl": {
       week: 14,
       season: "2025",
@@ -352,15 +375,38 @@ describe("sleeperAdapter", () => {
     expect(snapshot.previousLeagueId).toBe(PREV_LEAGUE_ID);
   });
 
-  it("imports one linked previous season and stops after one hop", async () => {
+  it("imports the full previous_league_id chain newest to oldest", async () => {
     __setSleeperApiFetchForTests(mockFetch(chainRoutes()));
     const result = await fetchSleeperLeagueImportSnapshots(LEAGUE_ID, {
       includePreviousSeason: true,
     });
     expect(result.current.league.settings.season).toBe(2025);
+    expect(result.history.map((h) => h.league.settings.season)).toEqual([2024, 2023, 2022, 2021]);
     expect(result.previous?.league.settings.season).toBe(2024);
-    expect(result.previous?.previousLeagueId).toBe(OLDER_LEAGUE_ID);
-    expect(result.warnings.some((w) => w.includes(OLDER_LEAGUE_ID))).toBe(false);
+    expect(result.history).toHaveLength(4);
+  });
+
+  it("stops when previous_league_id is null", async () => {
+    const routes = chainRoutes();
+    routes[`/league/${ANCIENT_LEAGUE_ID}`] = {
+      ...(routes[`/league/${ANCIENT_LEAGUE_ID}`] as object),
+      previous_league_id: undefined,
+    };
+    __setSleeperApiFetchForTests(mockFetch(routes));
+    const result = await fetchSleeperLeagueImportSnapshots(LEAGUE_ID, {
+      includePreviousSeason: true,
+    });
+    expect(result.history.map((h) => h.league.settings.season)).toEqual([2024, 2023, 2022, 2021]);
+    expect(result.history[result.history.length - 1]?.previousLeagueId).toBeNull();
+  });
+
+  it("stops and warns when a league id repeats in the chain", async () => {
+    __setSleeperApiFetchForTests(mockFetch(loopChainRoutes()));
+    const result = await fetchSleeperLeagueImportSnapshots(LEAGUE_ID, {
+      includePreviousSeason: true,
+    });
+    expect(result.history.map((h) => h.league.settings.season)).toEqual([2024]);
+    expect(result.warnings.some((w) => w.includes("repeated league id"))).toBe(true);
   });
 
   it("warns when previous_league_id is absent", async () => {
@@ -384,6 +430,6 @@ describe("sleeperAdapter", () => {
     });
     expect(result.current.league.settings.season).toBe(2025);
     expect(result.previous).toBeNull();
-    expect(result.warnings.some((w) => w.includes("previous season: fetch failed"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("season history: fetch failed"))).toBe(true);
   });
 });

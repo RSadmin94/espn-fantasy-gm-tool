@@ -159,8 +159,11 @@ export type SleeperLeagueSnapshot = {
 
 export type SleeperLeagueImportSnapshots = {
   current: SleeperLeagueSnapshot;
-  previous: SleeperLeagueSnapshot | null;
+  /** Linked older seasons via previous_league_id, newest → oldest (excludes current). */
+  history: SleeperLeagueSnapshot[];
   warnings: string[];
+  /** First linked historical snapshot — same as history[0] when present. */
+  previous: SleeperLeagueSnapshot | null;
 };
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
@@ -570,37 +573,66 @@ export async function fetchSleeperLeagueSnapshot(leagueId: string): Promise<Slee
 }
 
 /**
- * Fetch the current Sleeper league and, when requested, one directly linked previous season.
- * Traversal stops after a single `previous_league_id` hop — no further chain walking.
+ * Fetch the current Sleeper league and, when requested, walk the full `previous_league_id`
+ * chain until null, empty, or a repeated league id.
  */
 export async function fetchSleeperLeagueImportSnapshots(
   leagueId: string,
   options?: { includePreviousSeason?: boolean },
 ): Promise<SleeperLeagueImportSnapshots> {
   const warnings: string[] = [];
-  const current = await fetchSleeperLeagueSnapshot(leagueId);
+  const visitedLeagueIds = new Set<string>();
+  const history: SleeperLeagueSnapshot[] = [];
+
+  const rootId = leagueId.trim();
+  if (!rootId) {
+    throw new Error("leagueId required");
+  }
+  visitedLeagueIds.add(rootId);
+
+  const current = await fetchSleeperLeagueSnapshot(rootId);
   warnings.push(...current.warnings);
 
   if (options?.includePreviousSeason !== true) {
-    return { current, previous: null, warnings };
+    return { current, history, previous: null, warnings };
   }
 
-  const prevId = current.previousLeagueId;
-  if (!prevId) {
+  let nextId = current.previousLeagueId;
+  if (!nextId) {
     warnings.push("previous season: no previous_league_id on current league");
-    return { current, previous: null, warnings };
+    return { current, history, previous: null, warnings };
   }
 
-  try {
-    const previous = await fetchSleeperLeagueSnapshot(prevId);
-    warnings.push(...previous.warnings);
-    return { current, previous, warnings };
-  } catch (e) {
-    warnings.push(
-      `previous season: fetch failed — ${e instanceof Error ? e.message : String(e)}`,
-    );
-    return { current, previous: null, warnings };
+  while (nextId) {
+    const id = nextId.trim();
+    if (!id) {
+      break;
+    }
+    if (visitedLeagueIds.has(id)) {
+      warnings.push(`league history: stopped at repeated league id ${id}`);
+      break;
+    }
+    visitedLeagueIds.add(id);
+
+    try {
+      const snapshot = await fetchSleeperLeagueSnapshot(id);
+      warnings.push(...snapshot.warnings);
+      history.push(snapshot);
+      nextId = snapshot.previousLeagueId;
+    } catch (e) {
+      warnings.push(
+        `season history: fetch failed for league ${id} — ${e instanceof Error ? e.message : String(e)}`,
+      );
+      break;
+    }
   }
+
+  return {
+    current,
+    history,
+    previous: history[0] ?? null,
+    warnings,
+  };
 }
 
 async function fetchAndBuildLeague(leagueId: string): Promise<UniversalLeague> {

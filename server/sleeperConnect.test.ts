@@ -90,6 +90,7 @@ beforeEach(async () => {
 
   vi.spyOn(sleeperAdapter, "fetchSleeperLeagueImportSnapshots").mockResolvedValue({
     current: { league: fixtureLeague, warnings: [], previousLeagueId: null },
+    history: [],
     previous: null,
     warnings: [],
   });
