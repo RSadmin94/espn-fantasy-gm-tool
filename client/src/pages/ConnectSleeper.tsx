@@ -27,6 +27,31 @@ export type SleeperSavedSelection = {
   teamName: string | null;
 };
 
+export type ImportedTeam = {
+  teamId: number;
+  ownerId: string | null;
+  ownerKey: string | null;
+  ownerName: string;
+  teamName: string;
+  resolutionStatus?: string;
+  suggestedOwnerKey?: string | null;
+  suggestedOwnerName?: string | null;
+  suggestionReason?: string | null;
+  selectable?: boolean;
+};
+
+export type OwnerResolutionRow = {
+  season: number;
+  teamId: number;
+  teamName: string;
+  status: string;
+  ownerKey: string | null;
+  ownerName: string | null;
+  suggestedOwnerKey: string | null;
+  suggestedOwnerName: string | null;
+  suggestionReason: string | null;
+};
+
 export function leagueIdInputError(leagueId: string): string | null {
   const trimmed = leagueId.trim();
   if (!trimmed) return "Enter a Sleeper league ID";
@@ -85,22 +110,39 @@ export function savedSelectionFromConnection(
   };
 }
 
+export function ownerResolutionStatusLabel(status: string): string {
+  switch (status) {
+    case "verified":
+      return "Verified by Sleeper";
+    case "manual":
+      return "Manually assigned";
+    case "suggested":
+      return "Suggested — needs confirmation";
+    case "unresolved":
+      return "Unresolved";
+    default:
+      return status;
+  }
+}
+
 export function ConnectSleeper() {
   const [leagueId, setLeagueId] = useState("");
   const [previewLeagueId, setPreviewLeagueId] = useState<string | null>(null);
-  const [importedTeams, setImportedTeams] = useState<
-    Array<{
-      teamId: number;
-      ownerId: string | null;
-      ownerKey: string | null;
-      ownerName: string;
-      teamName: string;
-    }>
-  >([]);
+  const [importedTeams, setImportedTeams] = useState<ImportedTeam[]>([]);
+  const [ownerSummary, setOwnerSummary] = useState<{
+    verified: number;
+    suggested: number;
+    unresolved: number;
+    manual: number;
+  } | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [correctingTeamId, setCorrectingTeamId] = useState<number | null>(null);
+  const [correctingSeason, setCorrectingSeason] = useState<number | null>(null);
+  const [chosenOwnerKey, setChosenOwnerKey] = useState("");
+  const [historicalOwnerName, setHistoricalOwnerName] = useState("");
 
   const utils = trpc.useUtils();
   const myLeaguesQuery = trpc.providers.getMyLeagues.useQuery();
@@ -111,6 +153,11 @@ export function ConnectSleeper() {
   const previewQuery = trpc.providers.validateSleeperLeague.useQuery(
     { leagueId: previewLeagueId ?? "" },
     { enabled: previewLeagueId != null },
+  );
+
+  const resolutionsQuery = trpc.providers.listSleeperOwnerResolutions.useQuery(
+    { leagueId: trimmedLeagueId },
+    { enabled: trimmedLeagueId.length > 0 && importedTeams.length > 0 },
   );
 
   const previewDetails = useMemo(
@@ -134,6 +181,15 @@ export function ConnectSleeper() {
     return savedSelectionFromConnection(conn);
   }, [myLeaguesQuery.data, trimmedLeagueId]);
 
+  const attentionRows = useMemo(() => {
+    const rows = resolutionsQuery.data?.resolutions ?? [];
+    return rows.filter(
+      (r) => r.status === "suggested" || r.status === "unresolved" || r.status === "manual",
+    );
+  }, [resolutionsQuery.data?.resolutions]);
+
+  const knownOwners = resolutionsQuery.data?.knownOwners ?? [];
+
   useEffect(() => {
     if (savedConnection) {
       setSelectedTeamId(savedConnection.teamId);
@@ -144,7 +200,9 @@ export function ConnectSleeper() {
     onSuccess: (data) => {
       setActionError(null);
       setImportedTeams(data.teams);
+      setOwnerSummary(data.ownerResolutionSummary);
       void utils.providers.getMyLeagues.invalidate();
+      void utils.providers.listSleeperOwnerResolutions.invalidate({ leagueId: trimmedLeagueId });
     },
     onError: (err) => setActionError(err.message),
   });
@@ -154,6 +212,40 @@ export function ConnectSleeper() {
       setActionError(null);
       setSaveMessage("Team selection saved.");
       void utils.providers.getMyLeagues.invalidate();
+    },
+    onError: (err) => setActionError(err.message),
+  });
+
+  const confirmMutation = trpc.providers.confirmSleeperOwnerSuggestion.useMutation({
+    onSuccess: () => {
+      setActionError(null);
+      setSaveMessage("Owner suggestion confirmed.");
+      void utils.providers.listSleeperOwnerResolutions.invalidate({ leagueId: trimmedLeagueId });
+      void importMutation.mutate({ leagueId: trimmedLeagueId });
+    },
+    onError: (err) => setActionError(err.message),
+  });
+
+  const setOverrideMutation = trpc.providers.setSleeperOwnerOverride.useMutation({
+    onSuccess: () => {
+      setActionError(null);
+      setSaveMessage("Owner assignment saved.");
+      setCorrectingTeamId(null);
+      setCorrectingSeason(null);
+      setChosenOwnerKey("");
+      setHistoricalOwnerName("");
+      void utils.providers.listSleeperOwnerResolutions.invalidate({ leagueId: trimmedLeagueId });
+      void importMutation.mutate({ leagueId: trimmedLeagueId });
+    },
+    onError: (err) => setActionError(err.message),
+  });
+
+  const removeOverrideMutation = trpc.providers.removeSleeperOwnerOverride.useMutation({
+    onSuccess: () => {
+      setActionError(null);
+      setSaveMessage("Manual override removed.");
+      void utils.providers.listSleeperOwnerResolutions.invalidate({ leagueId: trimmedLeagueId });
+      void importMutation.mutate({ leagueId: trimmedLeagueId });
     },
     onError: (err) => setActionError(err.message),
   });
@@ -190,20 +282,46 @@ export function ConnectSleeper() {
     setActionError(null);
     setSaveMessage(null);
     const team = importedTeams.find((t) => t.teamId === selectedTeamId);
-    if (!team?.ownerId) {
-      setActionError("Select a team before saving.");
+    if (!team?.selectable || !team.ownerKey) {
+      setActionError("Select a team with a verified or confirmed owner before saving.");
       return;
     }
     selectMutation.mutate({
       leagueId: trimmedLeagueId,
       teamId: team.teamId,
-      ownerId: team.ownerId,
+      ownerKey: team.ownerKey,
+      ownerId: team.ownerId ?? undefined,
       ownerName: team.ownerName,
+    });
+  }
+
+  function startCorrection(row: OwnerResolutionRow) {
+    setCorrectingTeamId(row.teamId);
+    setCorrectingSeason(row.season);
+    setChosenOwnerKey(row.ownerKey ?? row.suggestedOwnerKey ?? "");
+    setHistoricalOwnerName(row.ownerName ?? row.suggestedOwnerName ?? "");
+  }
+
+  function submitCorrection() {
+    if (correctingTeamId == null || correctingSeason == null) return;
+    const known = knownOwners.find((o) => o.ownerKey === chosenOwnerKey);
+    const ownerName = known?.ownerName || historicalOwnerName.trim();
+    if (!ownerName) {
+      setActionError("Enter an owner name.");
+      return;
+    }
+    setOverrideMutation.mutate({
+      leagueId: trimmedLeagueId,
+      season: correctingSeason,
+      teamId: correctingTeamId,
+      ownerKey: chosenOwnerKey || undefined,
+      ownerName,
     });
   }
 
   const showTeamPicker = importedTeams.length > 0;
   const canImport = previewDetails != null && !importMutation.isPending;
+  const selectableTeams = importedTeams.filter((t) => t.selectable !== false);
 
   return (
     <div className="mx-auto max-w-xl space-y-6 p-6">
@@ -292,6 +410,143 @@ export function ConnectSleeper() {
         </Card>
       )}
 
+      {ownerSummary && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Owner resolution</CardTitle>
+            <CardDescription>Summary across all imported seasons.</CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm">
+            <p>
+              Verified: {ownerSummary.verified} · Suggested: {ownerSummary.suggested} · Unresolved:{" "}
+              {ownerSummary.unresolved} · Manual: {ownerSummary.manual}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {attentionRows.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Owners needing attention</CardTitle>
+            <CardDescription>
+              Confirm suggestions or assign owners for historical teams.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {attentionRows.map((row) => (
+              <div key={`${row.season}-${row.teamId}`} className="rounded border border-border p-3 text-sm">
+                <p className="font-medium">
+                  {row.season} — {row.teamName}
+                </p>
+                <p className="text-muted-foreground">Roster ID: {row.teamId}</p>
+                <p>
+                  Owner:{" "}
+                  {row.status === "unresolved"
+                    ? "Unresolved"
+                    : row.ownerName ?? row.suggestedOwnerName ?? "—"}
+                </p>
+                <p className="text-muted-foreground">{ownerResolutionStatusLabel(row.status)}</p>
+                {row.status === "suggested" && row.suggestedOwnerName && (
+                  <p className="mt-1 text-muted-foreground">
+                    Suggested: {row.suggestedOwnerName}
+                    {row.suggestionReason ? ` — ${row.suggestionReason}` : ""}
+                  </p>
+                )}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {row.status === "suggested" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={confirmMutation.isPending}
+                      onClick={() =>
+                        confirmMutation.mutate({
+                          leagueId: trimmedLeagueId,
+                          season: row.season,
+                          teamId: row.teamId,
+                        })
+                      }
+                    >
+                      Confirm
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => startCorrection(row)}
+                  >
+                    {row.status === "suggested" ? "Choose different owner" : "Correct"}
+                  </Button>
+                  {row.status === "manual" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={removeOverrideMutation.isPending}
+                      onClick={() =>
+                        removeOverrideMutation.mutate({
+                          leagueId: trimmedLeagueId,
+                          season: row.season,
+                          teamId: row.teamId,
+                        })
+                      }
+                    >
+                      Remove override
+                    </Button>
+                  )}
+                </div>
+                {correctingTeamId === row.teamId && correctingSeason === row.season && (
+                  <div className="mt-3 space-y-2 border-t border-border pt-3">
+                    <Label htmlFor={`owner-select-${row.teamId}`}>Known owner</Label>
+                    <select
+                      id={`owner-select-${row.teamId}`}
+                      className="w-full rounded border border-border bg-background px-2 py-1"
+                      value={chosenOwnerKey}
+                      onChange={(e) => setChosenOwnerKey(e.target.value)}
+                    >
+                      <option value="">— Historical / new name —</option>
+                      {knownOwners.map((o) => (
+                        <option key={o.ownerKey} value={o.ownerKey}>
+                          {o.ownerName}
+                        </option>
+                      ))}
+                    </select>
+                    {!chosenOwnerKey && (
+                      <>
+                        <Label htmlFor={`historical-name-${row.teamId}`}>Historical owner name</Label>
+                        <Input
+                          id={`historical-name-${row.teamId}`}
+                          value={historicalOwnerName}
+                          onChange={(e) => setHistoricalOwnerName(e.target.value)}
+                          placeholder="Name for a former league member"
+                        />
+                      </>
+                    )}
+                    <div className="flex gap-2">
+                      <Button type="button" size="sm" onClick={submitCorrection}>
+                        Save assignment
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setCorrectingTeamId(null);
+                          setCorrectingSeason(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {savedConnection && !showTeamPicker && (
         <Card>
           <CardHeader>
@@ -313,10 +568,17 @@ export function ConnectSleeper() {
         <Card>
           <CardHeader>
             <CardTitle>Select your team</CardTitle>
-            <CardDescription>Choose the roster you manage in this league.</CardDescription>
+            <CardDescription>
+              Only teams with verified or confirmed owners can be selected.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {importedTeams.map((team) => (
+            {selectableTeams.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No selectable teams yet. Resolve owners above, then re-import.
+              </p>
+            )}
+            {selectableTeams.map((team) => (
               <label
                 key={team.teamId}
                 className="flex cursor-pointer items-start gap-3 rounded border border-border p-3 hover:bg-muted/40"
@@ -332,13 +594,18 @@ export function ConnectSleeper() {
                   <p className="font-medium">{team.teamName}</p>
                   <p className="text-muted-foreground">{team.ownerName}</p>
                   <p className="text-muted-foreground">Roster ID: {team.teamId}</p>
+                  {team.resolutionStatus && (
+                    <p className="text-muted-foreground">
+                      {ownerResolutionStatusLabel(team.resolutionStatus)}
+                    </p>
+                  )}
                 </div>
               </label>
             ))}
             <Button
               type="button"
               onClick={handleSaveTeam}
-              disabled={selectedTeamId == null || selectMutation.isPending}
+              disabled={selectedTeamId == null || selectMutation.isPending || selectableTeams.length === 0}
             >
               {selectMutation.isPending ? (
                 <>

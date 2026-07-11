@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   leagueIdInputError,
+  ownerResolutionStatusLabel,
   previewDetailsFromValidation,
   previewErrorFromValidation,
   savedSelectionFromConnection,
@@ -28,6 +29,12 @@ describe("ConnectSleeper helpers", () => {
     expect(
       previewErrorFromValidation({ valid: false, error: "Sleeper returned 404" }, null),
     ).toBe("Sleeper returned 404");
+  });
+
+  it("owner resolution status labels are human readable", () => {
+    expect(ownerResolutionStatusLabel("verified")).toBe("Verified by Sleeper");
+    expect(ownerResolutionStatusLabel("suggested")).toContain("confirmation");
+    expect(ownerResolutionStatusLabel("unresolved")).toBe("Unresolved");
   });
 
   it("reload shows saved selection from connection", () => {
