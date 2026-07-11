@@ -375,6 +375,16 @@ export async function getAllCachedSeasons(
     if (r.season > 2000) seasons.add(r.season);
   }
 
+  if (lid && lid !== "default") {
+    const gmSeasonRows = await db
+      .selectDistinct({ season: gmTeams.season })
+      .from(gmTeams)
+      .where(eq(gmTeams.leagueId, lid));
+    for (const r of gmSeasonRows) {
+      if (r.season > 2000) seasons.add(r.season);
+    }
+  }
+
   return Array.from(seasons).sort((a, b) => b - a);
 }
 
