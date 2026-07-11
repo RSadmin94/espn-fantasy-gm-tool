@@ -621,6 +621,11 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem asChild>
+              <Link to="/connected-leagues" className="cursor-pointer">
+                Connected Leagues
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
               <Link to="/settings" className="cursor-pointer">
                 {V1.features.settings}
               </Link>

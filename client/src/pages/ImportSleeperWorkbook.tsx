@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { ConnectedLeagueLimitBanner, useConnectedLeagueLimits } from "@/components/connect";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -24,6 +25,7 @@ function readFileAsBase64(file: File): Promise<string> {
 }
 
 export function ImportSleeperWorkbook() {
+  const { atLimit } = useConnectedLeagueLimits();
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileBase64, setFileBase64] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -97,6 +99,8 @@ export function ImportSleeperWorkbook() {
         </p>
       </div>
 
+      <ConnectedLeagueLimitBanner />
+
       <Card>
         <CardHeader>
           <CardTitle>Upload</CardTitle>
@@ -128,7 +132,7 @@ export function ImportSleeperWorkbook() {
             <Button
               type="button"
               onClick={handleImport}
-              disabled={!preview?.valid || importMutation.isPending}
+              disabled={!preview?.valid || importMutation.isPending || atLimit}
             >
               {importMutation.isPending ? (
                 <>

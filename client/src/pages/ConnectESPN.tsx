@@ -29,7 +29,8 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react";
-import { EspnConnectorGuide } from "@/components/connect";
+import { EspnConnectorGuide, ConnectedLeagueLimitBanner, ProviderConnectCards, useConnectedLeagueLimits } from "@/components/connect";
+import { useConnectTeamStepHighlight } from "@/components/onboarding/SetupGate";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ interface ConnectFormValues {
 
 interface LeagueRow {
   id: number;
+  provider: string;
   leagueId: string;
   leagueName: string;
   season: number;
@@ -76,7 +78,7 @@ function SyncBadge({ status }: { status: string | null | undefined }) {
 
 // ── Quick connect: just enter a League ID ────────────────────────────────────
 
-function QuickConnectCard({ onSuccess }: { onSuccess: (leagueId: string, leagueName: string) => void }) {
+function QuickConnectCard({ onSuccess, disabled }: { onSuccess: (leagueId: string, leagueName: string) => void; disabled?: boolean }) {
   const [leagueId, setLeagueId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const utils = trpc.useUtils();
@@ -129,7 +131,7 @@ function QuickConnectCard({ onSuccess }: { onSuccess: (leagueId: string, leagueN
             inputMode="numeric"
             maxLength={12}
           />
-          <Button onClick={submit} disabled={connectMutation.isPending} className="shrink-0 gap-2">
+          <Button onClick={submit} disabled={connectMutation.isPending || disabled} className="shrink-0 gap-2">
             {connectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />}
             {connectMutation.isPending ? "Connecting…" : "Connect"}
           </Button>
@@ -345,6 +347,8 @@ export function ConnectESPN() {
   const [isWaiting, setIsWaiting] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
   const [newLeague, setNewLeague] = useState<LeagueRow | null>(null);
+  const { atLimit } = useConnectedLeagueLimits();
+  useConnectTeamStepHighlight();
 
   // IDs that existed before polling started
   const baselineIdsRef = useRef<Set<number>>(new Set());
@@ -424,13 +428,14 @@ export function ConnectESPN() {
     setNewLeague(null);
     void utils.league.getMyLeagues.invalidate();
     void utils.league.getActive.invalidate();
-    setNewLeague({ id: 0, leagueId, leagueName: leagueName ?? `ESPN League ${leagueId}`, season: 0, isActive: true, syncStatus: "pending", lastSyncedAt: null });
+    setNewLeague({ id: 0, provider: "espn", leagueId, leagueName: leagueName ?? `ESPN League ${leagueId}`, season: 0, isActive: true, syncStatus: "pending", lastSyncedAt: null });
   }
 
-  const removeMutation = trpc.league.removeLeague.useMutation({
+  const disconnectMutation = trpc.league.disconnectConnectedLeague.useMutation({
     onSuccess: () => {
       void utils.league.getMyLeagues.invalidate();
       void utils.league.getActive.invalidate();
+      void utils.league.getConnectionLimits.invalidate();
       setNewLeague(null);
     },
   });
@@ -441,10 +446,27 @@ export function ConnectESPN() {
     <div className="mx-auto max-w-xl space-y-5">
       {/* Page header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Connect ESPN</h1>
+        <h1 className="text-3xl font-bold text-foreground">Connect your league</h1>
         <p className="mt-1 text-muted-foreground">
-          Link your league using the Fantasy Football Rivals ESPN Connector — a Chrome extension that securely passes
-          your ESPN session to this app.
+          ESPN, Sleeper, or Sleeper workbook — this isn&apos;t another fantasy tool. It knows your league.
+        </p>
+      </div>
+
+      <ConnectedLeagueLimitBanner />
+      <ProviderConnectCards atLimit={atLimit} />
+
+      <div id="team-selection-help" className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+        <p className="font-medium text-foreground">After connecting</p>
+        <p className="mt-1">
+          Sync your history, then select which team is yours on{" "}
+          <a href="/connected-leagues" className="text-primary underline underline-offset-2">
+            Connected Leagues
+          </a>{" "}
+          or open{" "}
+          <a href="/sync" className="text-primary underline underline-offset-2">
+            Sync Data
+          </a>
+          .
         </p>
       </div>
 
@@ -453,7 +475,7 @@ export function ConnectESPN() {
       />
 
       {/* Quick connect by League ID */}
-      <QuickConnectCard onSuccess={(id, name) => handleManualSuccess(id, name)} />
+      <QuickConnectCard onSuccess={(id, name) => handleManualSuccess(id, name)} disabled={atLimit} />
 
       {/* ── Primary connection card ── */}
       <Card className={cn(
@@ -583,6 +605,7 @@ export function ConnectESPN() {
 
               <Button
                 onClick={handleConnect}
+                disabled={atLimit}
                 className="w-full gap-2 font-semibold"
                 size="lg"
               >
@@ -647,11 +670,16 @@ export function ConnectESPN() {
                     size="icon"
                     variant="ghost"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    disabled={removeMutation.isPending}
-                    onClick={() => removeMutation.mutate({ leagueConnectionId: league.id })}
-                    aria-label="Remove league"
+                    disabled={disconnectMutation.isPending}
+                    onClick={() =>
+                      disconnectMutation.mutate({
+                        provider: league.provider ?? "espn",
+                        leagueId: league.leagueId,
+                      })
+                    }
+                    aria-label="Disconnect league"
                   >
-                    {removeMutation.isPending
+                    {disconnectMutation.isPending
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       : <Trash2 className="h-3.5 w-3.5" />}
                   </Button>

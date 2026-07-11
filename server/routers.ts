@@ -1497,7 +1497,12 @@ export const appRouter = router({
         id: row.id,
         provider: row.provider,
         leagueId: row.leagueId,
-        leagueName: await resolveLeagueDisplayName(row, ctx.user.id),
+        leagueName: await (async () => {
+          const canonical = await resolveLeagueDisplayName(row, ctx.user.id);
+          const { getUserDisplayName, resolveConnectedLeagueLabel } = await import("./connectedLeagueDisplayName");
+          const custom = await getUserDisplayName(ctx.user.id, row.provider, row.leagueId);
+          return resolveConnectedLeagueLabel(custom, canonical, row.leagueId);
+        })(),
         season: row.season,
         syncStatus: row.syncStatus,
         lastSyncedAt: row.lastSyncedAt,
@@ -1549,49 +1554,111 @@ export const appRouter = router({
           },
         ];
       }
+      const { connectedLeagueKey } = await import("./connectedLeagueLimits");
+      const { listUserDisplayNamesForKeys, resolveConnectedLeagueLabel } = await import(
+        "./connectedLeagueDisplayName"
+      );
+      const keys = [...new Set(rows.map((row) => connectedLeagueKey(row.provider, row.leagueId)))];
+      const customMap = await listUserDisplayNamesForKeys(ctx.user.id, keys);
       return Promise.all(
-        rows.map(async (r) => ({
-          ...r,
-          isSetupComplete: r.selectedTeamId != null,
-          leagueName: await resolveLeagueDisplayName(r, ctx.user.id),
-        })),
+        rows.map(async (r) => {
+          const canonical = await resolveLeagueDisplayName(r, ctx.user.id);
+          const custom = customMap.get(connectedLeagueKey(r.provider, r.leagueId)) ?? null;
+          return {
+            ...r,
+            isSetupComplete: r.selectedTeamId != null,
+            leagueName: resolveConnectedLeagueLabel(custom, canonical, r.leagueId),
+          };
+        }),
       );
     }),
     removeLeague: protectedProcedure
       .input(z.object({ leagueConnectionId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { success: false };
-        // Only delete rows owned by this user
-        await db
-          .delete(lcTable)
+        if (!db) return { success: false, removedRows: 0 };
+        const [row] = await db
+          .select({ provider: lcTable.provider, leagueId: lcTable.leagueId })
+          .from(lcTable)
           .where(
             andDrizzle(
               eqDrizzle(lcTable.id, input.leagueConnectionId),
-              eqDrizzle(lcTable.userId, ctx.user.id)
-            )
-          );
-        // If the deleted row was the active one, clear activeLeagueId
-        const usersTable = (await import("../drizzle/schema")).users;
-        const userRow = await db
-          .select({ activeLeagueId: usersTable.activeLeagueId })
-          .from(usersTable)
-          .where(eqDrizzle(usersTable.id, ctx.user.id))
-          .then(r => r[0]);
-        if (userRow?.activeLeagueId === input.leagueConnectionId) {
-          // Pick the next available league, or set to 0
-          const remaining = await db
-            .select({ id: lcTable.id })
-            .from(lcTable)
-            .where(eqDrizzle(lcTable.userId, ctx.user.id))
-            .limit(1);
-          const nextId = remaining[0]?.id ?? 0;
-          await db
-            .update(usersTable)
-            .set({ activeLeagueId: nextId })
-            .where(eqDrizzle(usersTable.id, ctx.user.id));
-        }
-        return { success: true };
+              eqDrizzle(lcTable.userId, ctx.user.id),
+            ),
+          )
+          .limit(1);
+        if (!row) return { success: false, removedRows: 0 };
+        const { disconnectConnectedLeague } = await import("./connectedLeagueService");
+        return disconnectConnectedLeague(ctx.user.id, row.provider, row.leagueId);
+      }),
+    getConnectionLimits: protectedProcedure.query(async ({ ctx }) => {
+      const { getConnectedLeagueUsage } = await import("./connectedLeagueLimits");
+      return getConnectedLeagueUsage(ctx.user.id);
+    }),
+    getConnectedLeagueManagement: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) {
+        const { getConnectedLeagueUsage } = await import("./connectedLeagueLimits");
+        const usage = await getConnectedLeagueUsage(ctx.user.id);
+        return { usage, leagues: [] as const };
+      }
+      const usersTable = (await import("../drizzle/schema")).users;
+      const [userRow] = await db
+        .select({ activeLeagueId: usersTable.activeLeagueId })
+        .from(usersTable)
+        .where(eqDrizzle(usersTable.id, ctx.user.id))
+        .limit(1);
+      const { getConnectedLeagueManagementSummary } = await import("./connectedLeagueService");
+      return getConnectedLeagueManagementSummary(ctx.user.id, userRow?.activeLeagueId ?? null);
+    }),
+    disconnectConnectedLeague: protectedProcedure
+      .input(z.object({
+        provider: z.string().min(1).max(32),
+        leagueId: z.string().min(1).max(128),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { disconnectConnectedLeague } = await import("./connectedLeagueService");
+        return disconnectConnectedLeague(ctx.user.id, input.provider, input.leagueId);
+      }),
+    renameConnectedLeagueNickname: protectedProcedure
+      .input(z.object({
+        provider: z.string().min(1).max(32),
+        leagueId: z.string().min(1).max(128),
+        displayName: z.string().max(256).nullable(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { renameConnectedLeague } = await import("./connectedLeagueService");
+        return renameConnectedLeague(ctx.user.id, input.provider, input.leagueId, input.displayName);
+      }),
+    clearConnectedLeagueDisplayName: protectedProcedure
+      .input(z.object({
+        provider: z.string().min(1).max(32),
+        leagueId: z.string().min(1).max(128),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { renameConnectedLeague } = await import("./connectedLeagueService");
+        return renameConnectedLeague(ctx.user.id, input.provider, input.leagueId, null);
+      }),
+    getEspnTeamSelection: protectedProcedure
+      .input(z.object({ leagueId: z.string().min(1).max(128) }))
+      .query(async ({ ctx, input }) => {
+        const { getEspnTeamSelectionContext } = await import("./espnTeamSelection");
+        return getEspnTeamSelectionContext(ctx.user.id, input.leagueId);
+      }),
+    selectEspnTeam: protectedProcedure
+      .input(z.object({
+        leagueId: z.string().min(1).max(128),
+        teamId: z.number().int(),
+        season: z.number().int().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { runSelectEspnTeam } = await import("./espnTeamSelection");
+        return runSelectEspnTeam({
+          userId: ctx.user.id,
+          leagueId: input.leagueId,
+          teamId: input.teamId,
+          season: input.season,
+        });
       }),
     connectByLeagueId: protectedProcedure
       .input(z.object({ leagueId: z.string().min(1).max(20) }))
@@ -1601,6 +1668,8 @@ export const appRouter = router({
         const lid = input.leagueId.trim();
         const yr  = new Date().getFullYear();
         let nm = `League ${lid}`;
+        const { assertCanConnectLeague } = await import("./connectedLeagueLimits");
+        await assertCanConnectLeague(ctx.user.id, "espn", lid);
         try {
           const resp = await fetch(`https://fantasy.espn.com/apis/v3/games/ffl/seasons/${yr}/segments/0/leagues/${lid}?view=mSettings`);
           if (resp.ok) {
@@ -1609,13 +1678,21 @@ export const appRouter = router({
           }
         } catch { /**/ }
         const existing = await db.select({ id: lcTable.id }).from(lcTable)
-          .where(andDrizzle(eqDrizzle(lcTable.userId, ctx.user.id), eqDrizzle(lcTable.leagueId, lid))).limit(1);
+          .where(andDrizzle(
+            eqDrizzle(lcTable.userId, ctx.user.id),
+            eqDrizzle(lcTable.provider, "espn"),
+            eqDrizzle(lcTable.leagueId, lid),
+          )).limit(1);
         if (existing.length > 0)
           return { ok: true as const, leagueConnectionId: existing[0]!.id, leagueName: nm, alreadyExisted: true };
         await db.insert(lcTable).values({ userId: ctx.user.id, provider: "espn", leagueId: lid,
           leagueName: nm, season: yr, isActive: true, syncStatus: "pending" } as any);
         const nr = await db.select({ id: lcTable.id }).from(lcTable)
-          .where(andDrizzle(eqDrizzle(lcTable.userId, ctx.user.id), eqDrizzle(lcTable.leagueId, lid))).limit(1);
+          .where(andDrizzle(
+            eqDrizzle(lcTable.userId, ctx.user.id),
+            eqDrizzle(lcTable.provider, "espn"),
+            eqDrizzle(lcTable.leagueId, lid),
+          )).limit(1);
         return { ok: true as const, leagueConnectionId: nr[0]?.id ?? 0, leagueName: nm, alreadyExisted: false };
       }),
 
@@ -5124,6 +5201,11 @@ export const appRouter = router({
         // Always guarantee a non-empty leagueName
         const passedName = (input.leagueName ?? "").trim();
         let leagueName = passedName || (testLeagueId ? `ESPN League ${testLeagueId}` : "ESPN League");
+
+        if (ctx.user && testLeagueId) {
+          const { assertCanConnectLeague } = await import("./connectedLeagueLimits");
+          await assertCanConnectLeague(ctx.user.id, "espn", testLeagueId);
+        }
 
         // Try to fetch league name from ESPN (non-blocking — failure just uses fallback)
         if (testLeagueId && !passedName) {

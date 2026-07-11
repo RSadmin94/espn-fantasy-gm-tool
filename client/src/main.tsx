@@ -11,6 +11,7 @@ import {
 } from "@clerk/react-router";
 import { AppShell } from "./components/AppShell";
 import { DemoBanner } from "./components/DemoBanner";
+import { SetupGate } from "./components/onboarding/SetupGate";
 import { TryDemoButton } from "./components/TryDemoButton";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ConnectESPN } from "./pages/ConnectESPN";
@@ -31,6 +32,8 @@ import { Advisor } from "./pages/Advisor";
 import { LeagueDna } from "./pages/LeagueDna";
 import { TheCast } from "./pages/TheCast";
 import { Settings } from "./pages/Settings";
+import { ConnectedLeagues } from "./pages/ConnectedLeagues";
+import { EspnSelectTeam } from "./pages/EspnSelectTeam";
 import { Matchups } from "./pages/Matchups";
 import { LeagueHistory } from "./pages/LeagueHistory";
 import { DraftHistory } from "./pages/DraftHistory";
@@ -120,7 +123,9 @@ function ProtectedLayout() {
   return (
     <>
       <DemoBanner />
-      <AppShell />
+      <SetupGate>
+        <AppShell />
+      </SetupGate>
     </>
   );
 }
@@ -226,6 +231,8 @@ const router = createBrowserRouter([
           { path: "/trades", element: <FeatureRouteGate route="/trades"><Trades /></FeatureRouteGate> },
           { path: "/advisor", element: <FeatureRouteGate route="/advisor"><Advisor /></FeatureRouteGate> },
           { path: "/settings", element: <Settings /> },
+          { path: "/connected-leagues", element: <ConnectedLeagues /> },
+          { path: "/select-team/espn/:leagueId", element: <EspnSelectTeam /> },
 
           // ── Legacy route redirects ────────────────────────────────────
           { path: "/command-center", element: <Navigate to="/dashboard" replace /> },

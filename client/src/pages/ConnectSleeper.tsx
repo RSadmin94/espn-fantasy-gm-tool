@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { ConnectedLeagueLimitBanner, useConnectedLeagueLimits } from "@/components/connect";
 
 export type SleeperPreviewDetails = {
   leagueName: string;
@@ -145,6 +146,7 @@ export function ConnectSleeper() {
   const [historicalOwnerName, setHistoricalOwnerName] = useState("");
 
   const utils = trpc.useUtils();
+  const { atLimit } = useConnectedLeagueLimits();
   const myLeaguesQuery = trpc.providers.getMyLeagues.useQuery();
 
   const trimmedLeagueId = leagueId.trim();
@@ -320,7 +322,7 @@ export function ConnectSleeper() {
   }
 
   const showTeamPicker = importedTeams.length > 0;
-  const canImport = previewDetails != null && !importMutation.isPending;
+  const canImport = previewDetails != null && !importMutation.isPending && !atLimit;
   const selectableTeams = importedTeams.filter((t) => t.selectable !== false);
 
   return (
@@ -331,6 +333,8 @@ export function ConnectSleeper() {
           Enter your Sleeper league ID to preview, import, and select your team.
         </p>
       </div>
+
+      <ConnectedLeagueLimitBanner />
 
       <Card>
         <CardHeader>

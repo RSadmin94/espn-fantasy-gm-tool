@@ -842,6 +842,25 @@ export const leagueConnections = mysqlTable(
 export type LeagueConnection = typeof leagueConnections.$inferSelect;
 export type InsertLeagueConnection = typeof leagueConnections.$inferInsert;
 
+/** Per-user display nickname for a connected league (canonical name stays on league_connections). */
+export const leagueConnectionDisplayNames = mysqlTable(
+  "league_connection_display_names",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    provider: varchar("provider", { length: 32 }).notNull(),
+    leagueId: varchar("leagueId", { length: 128 }).notNull(),
+    displayName: varchar("displayName", { length: 256 }).notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_lcdn_user_provider_league").on(t.userId, t.provider, t.leagueId),
+    index("idx_lcdn_user").on(t.userId),
+  ],
+);
+export type LeagueConnectionDisplayName = typeof leagueConnectionDisplayNames.$inferSelect;
+export type InsertLeagueConnectionDisplayName = typeof leagueConnectionDisplayNames.$inferInsert;
+
 
 /**
  * leagueIdentity — stores static ESPN league data per season.

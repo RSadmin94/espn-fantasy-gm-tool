@@ -170,6 +170,9 @@ export async function runSleeperLeagueImport(args: {
   const steps: string[] = [];
   const dryRun = args.dryRun === true;
 
+  const { assertCanConnectLeague } = await import("./connectedLeagueLimits");
+  await assertCanConnectLeague(args.userId, "sleeper", args.leagueId);
+
   steps.push("Connecting to Sleeper API...");
   const { current, history, warnings: adapterWarnings } = await fetchSleeperLeagueImportSnapshots(
     args.leagueId,

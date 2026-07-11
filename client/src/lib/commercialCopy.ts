@@ -43,14 +43,15 @@ export const COMMERCIAL = {
     "One full rivalry — every other rivalry visible but locked",
   ] as const,
   rivalsPlanHighlights: [
+    "Up to 5 connected leagues — unlimited seasons each",
     "All rivalries unlocked",
     "Weekly, Trade, and Draft Intelligence",
     "Deep Records and dynasty rankings",
     "GM Advisor and opponent intelligence",
-    "Behavioral and matchup intelligence",
+    "ESPN, Sleeper API, and Sleeper Workbook",
   ] as const,
   productStorySteps: [
-    { step: 1, title: "Connect your ESPN league", body: "Link your league in under a minute." },
+    { step: 1, title: "Connect your league", body: "ESPN, Sleeper API, or Sleeper workbook — under a minute." },
     {
       step: 2,
       title: "Fantasy Football Rivals analyzes your league",
@@ -67,6 +68,28 @@ export const COMMERCIAL = {
       body: "Interpretation, recommendations, full rivalries, and deep records — from $7.99/month.",
     },
   ] as const,
+  connectedLeaguesIncluded: "Up to 5 connected leagues · unlimited seasons per league",
+  demoPlanNote: "Explore the built-in demo league only — no personal imports.",
+} as const;
+
+export const CONNECTED_LEAGUE_COPY = {
+  atLimitMessage:
+    "You've reached the maximum of 5 connected leagues. Disconnect one of your existing leagues before connecting another.",
+  manageCta: "Manage Connected Leagues",
+  pageDescription:
+    "Each slot is one league (ESPN, Sleeper API, or Sleeper Workbook). Historical seasons never count against the limit.",
+  providerIntro: "Historical seasons import inside each connected league and never use an extra slot.",
+  seasonNote:
+    "Disconnecting a league frees a slot immediately. Reconnecting the same league does not consume an additional slot.",
+} as const;
+
+export const ONBOARDING_COPY = {
+  wowEyebrow: "Your first discovery",
+  wowTitle: "Meet the owner who always stands in your way",
+  wowBody:
+    "Rivalry Center turns years of head-to-head history into receipts, streaks, and bragging rights — the fastest wow moment after connect.",
+  wowPrimaryCta: "Open Rivalry Center",
+  wowSecondaryCta: "Why haven't I won?",
 } as const;
 
 /** @deprecated Legacy alias */

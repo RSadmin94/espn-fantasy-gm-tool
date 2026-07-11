@@ -69,6 +69,11 @@ export async function runSleeperWorkbookImport(args: {
   steps.push(`Validated Sleeper Data Import ${preview.version}`);
   steps.push(`Found league: ${league.settings.leagueName} (${league.teams.length} teams)`);
 
+  if (!dryRun) {
+    const { assertCanConnectLeague } = await import("./connectedLeagueLimits");
+    await assertCanConnectLeague(args.userId, "sleeper_workbook", league.settings.leagueId);
+  }
+
   steps.push(dryRun ? "Dry run — validating persistence mapping..." : "Persisting normalized league data...");
   const persist = await persistUniversalLeague(league, { dryRun });
   const warnings = [...validation.warnings, ...persist.warnings];

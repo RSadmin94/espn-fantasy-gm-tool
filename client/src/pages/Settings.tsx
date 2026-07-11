@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 
 interface LeagueRow {
   id: number;
+  provider: string;
   leagueId: string;
   leagueName: string;
   season: number;
@@ -152,11 +153,13 @@ function LeaguesSection() {
   const leaguesQ = trpc.league.getMyLeagues.useQuery();
   const activeQ = trpc.league.getActive.useQuery();
 
-  const removeMutation = trpc.league.removeLeague.useMutation({
+  const disconnectMutation = trpc.league.disconnectConnectedLeague.useMutation({
     onSuccess: () => {
       setConfirmRemoveId(null);
       void utils.league.getMyLeagues.invalidate();
       void utils.league.getActive.invalidate();
+      void utils.league.getConnectionLimits.invalidate();
+      void utils.league.getConnectedLeagueManagement.invalidate();
     },
   });
 
@@ -168,19 +171,24 @@ function LeaguesSection() {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
-              <Trophy className="h-3.5 w-3.5" /> ESPN Leagues
+              <Trophy className="h-3.5 w-3.5" /> Connected Leagues
             </CardTitle>
             <CardDescription className="text-xs mt-0.5">
               {leagues.length === 0
                 ? "No leagues connected."
-                : `${leagues.length} connected`}
+                : `${leagues.length} season row${leagues.length === 1 ? "" : "s"} — manage slots on Connected Leagues`}
             </CardDescription>
           </div>
-          <Button asChild size="sm" variant="outline" className="gap-1.5 h-8 text-xs shrink-0">
+          <div className="flex gap-2 shrink-0">
+            <Button asChild size="sm" variant="ghost" className="h-8 text-xs">
+              <Link to="/connected-leagues">Manage</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline" className="gap-1.5 h-8 text-xs shrink-0">
             <Link to="/connect">
               <Plus className="h-3 w-3" /> Add League
             </Link>
           </Button>
+          </div>
         </div>
       </CardHeader>
 
@@ -251,10 +259,15 @@ function LeaguesSection() {
                         size="sm"
                         variant="destructive"
                         className="h-7 text-xs px-2"
-                        disabled={removeMutation.isPending}
-                        onClick={() => removeMutation.mutate({ leagueConnectionId: league.id })}
+                        disabled={disconnectMutation.isPending}
+                        onClick={() =>
+                          disconnectMutation.mutate({
+                            provider: league.provider || "espn",
+                            leagueId: league.leagueId,
+                          })
+                        }
                       >
-                        {removeMutation.isPending ? (
+                        {disconnectMutation.isPending ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : "Yes, remove"}
                       </Button>

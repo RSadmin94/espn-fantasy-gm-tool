@@ -103,14 +103,14 @@ export function LandingPage() {
             <div>
               <div className="flex items-center gap-2 text-lime-300/80">
                 <ScanLine className="h-4 w-4" />
-                <span className={MONO}>League Intelligence // ESPN-connected</span>
+                <span className={MONO}>League intelligence · ESPN · Sleeper</span>
               </div>
-              <h1 className="mt-5 max-w-[15ch] text-[44px] font-black leading-[0.95] tracking-tight sm:text-[60px] lg:text-[66px]">
-                Know Your League.{" "}
-                <span className="text-lime-400">Own Your Rivals.</span>
+              <h1 className="mt-5 max-w-[16ch] text-[44px] font-black leading-[0.95] tracking-tight sm:text-[60px] lg:text-[66px]">
+                This isn&apos;t another fantasy tool.{" "}
+                <span className="text-lime-400">It knows your league.</span>
               </h1>
               <p className="mt-6 max-w-[58ch] text-[17px] leading-relaxed text-white/65 sm:text-[19px]">
-                Analyze years of league history to uncover rivalries, owner tendencies, championship paths, draft behavior, and the hidden stories that define your league.
+                Analyze years of real league history — rivalries, owner tendencies, championship paths, and the hidden stories that define your league.
               </p>
               <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                 <CTA label={COMMERCIAL.discoverCta} onClick={go} className="w-full sm:w-auto" />
@@ -267,7 +267,7 @@ export function LandingPage() {
             <div className={cn(PANEL, "flex flex-col p-6")}>
               <span className={MONO}>{COMMERCIAL.freePlanName}</span>
               <div className="mt-3 text-[42px] font-black leading-none">$0</div>
-              <p className="mt-2 text-[13px] text-white/50">Discover yourself — identity and league facts</p>
+              <p className="mt-2 text-[13px] text-white/50">Discover yourself — connect one league, explore identity free</p>
               <ul className="mt-5 flex-1 space-y-2 text-[14px] text-white/75">
                 {COMMERCIAL.freePlanHighlights.map((f) => (
                   <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4 text-white/40" /> {f}</li>
@@ -294,7 +294,7 @@ export function LandingPage() {
                   <p className="text-[13px] text-white/50">{COMMERCIAL.rivalsAnnualPriceLabel}</p>
                 </div>
               </div>
-              <p className="mt-2 text-[13px] font-semibold text-lime-300/90">Competitive intelligence — interpretation + recommendations</p>
+              <p className="mt-2 text-[13px] font-semibold text-lime-300/90">Competitive intelligence — {COMMERCIAL.connectedLeaguesIncluded}</p>
               <ul className="mt-4 flex-1 space-y-2 text-[13px] text-white/75">
                 {COMMERCIAL.rivalsPlanHighlights.map((f) => (
                   <li key={f} className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-lime-400" /> {f}</li>

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { IntelPageShell } from "@/components/layout";
 import { DashboardRecentLeagueEvents } from "@/components/dashboard/DashboardRecentLeagueEvents";
+import { FirstWowMomentCard } from "@/components/onboarding/FirstWowMomentCard";
 import { type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 import { useRivalsProCheckout } from "@/hooks/useRivalsProCheckout";
@@ -493,6 +494,10 @@ export function GmBriefingPage(props: GmBriefingPageProps) {
       />
 
       <PersonalizationStrip welcomeName={props.welcomeName} greeting={greeting} meta={meta} />
+
+      {props.syncReady && rivalryCount === 0 && !rivalryQ.isLoading && (
+        <FirstWowMomentCard />
+      )}
 
       <HeroStory hero={edition.hero} />
 
