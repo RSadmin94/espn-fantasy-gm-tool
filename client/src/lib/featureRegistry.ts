@@ -21,6 +21,7 @@ import {
   Film,
   FileText,
   Library,
+  ScrollText,
 } from "lucide-react";
 
 /** V1 paid tier is Rivals (pro). Commissioner subscription deferred. */
@@ -214,6 +215,22 @@ export const FEATURE_REGISTRY: FeatureEntry[] = [
     experienceCategory: "Draft Intelligence",
     marketingDescription:
       "Live draft intelligence — pick board, rival threat windows, and a decision memo for every pick.",
+  },
+  {
+    entryType: "route",
+    id: "draft-commentary",
+    label: "Draft Commentary",
+    route: "/draft-commentary",
+    navCategory: "knowRivals",
+    icon: ScrollText,
+    requiredPlan: "pro",
+    discoverable: true,
+    showInOnboarding: false,
+    showInPricing: true,
+    showInDashboard: true,
+    experienceCategory: "Draft Intelligence",
+    marketingDescription:
+      "Sofia's evidence-grounded commentary on every pick in your mock draft — verified against league facts.",
   },
   {
     entryType: "route",

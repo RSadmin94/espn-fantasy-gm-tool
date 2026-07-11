@@ -51,6 +51,7 @@ import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
 import { PlayerDatabase }    from "./pages/PlayerDatabase";
 import { LeagueWire }         from "./pages/LeagueWire";
 import { DraftWarRoom }      from "./pages/DraftWarRoom";
+import { DraftCommentary }   from "./pages/DraftCommentary";
 import { RivalryCenter }     from "./pages/RivalryCenter";
 import { AdminConversionFunnel } from "./pages/AdminConversionFunnel";
 import { CommissionerCommandCenter } from "./pages/CommissionerCommandCenter";
@@ -208,6 +209,7 @@ const router = createBrowserRouter([
           { path: "/player-database",         element: <PlayerDatabase /> },
           { path: "/league-wire",               element: <LeagueWire /> },
           { path: "/draft-war-room",           element: <FeatureRouteGate route="/draft-war-room"><DraftWarRoom /></FeatureRouteGate> },
+          { path: "/draft-commentary",         element: <FeatureRouteGate route="/draft-commentary"><DraftCommentary /></FeatureRouteGate> },
           { path: "/transactions", element: <FeatureRouteGate route="/transactions"><Transactions /></FeatureRouteGate> },
           { path: "/standings", element: <Standings /> },
           { path: "/dynasty-power-rankings", element: <DynastyPowerRankings /> },
