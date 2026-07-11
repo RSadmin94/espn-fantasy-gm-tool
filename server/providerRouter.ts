@@ -9,7 +9,7 @@
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { getSupportedProviders, PROVIDER_INFO, getAdapter } from "./providers/registry";
-import { getSleeperLeague } from "./providers/sleeperAdapter";
+import { fetchSleeperLeagueSnapshot } from "./providers/sleeperAdapter";
 import { YahooAdapter, getYahooLeaguesForUser } from "./providers/yahooAdapter";
 import { isYahooConfigured } from "./providers/yahooOAuth";
 import { invokeLLM } from "./_core/llm";
@@ -18,6 +18,153 @@ import { leagueConnections, users } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { fetchEspnViewsHardened, normalizeTeams, normalizeSettings, type EspnCreds } from "./espnService";
 import { encryptCredentialsForDb } from "./_core/crypto";
+import {
+  persistUniversalLeague,
+  type PersistUniversalLeagueResult,
+} from "./universalPersistence";
+
+// ─── Sleeper import orchestration ─────────────────────────────────────────────
+
+export type SleeperLeagueImportResult = {
+  success: boolean;
+  dryRun: boolean;
+  steps: string[];
+  league: {
+    leagueId: string;
+    leagueName: string;
+    season: number;
+    teamCount: number;
+    scoringType: string;
+    currentWeek: number;
+    provider: "sleeper";
+  };
+  persist: PersistUniversalLeagueResult;
+  teams: Array<{
+    teamId: number;
+    ownerId: string | null;
+    ownerKey: string | null;
+    ownerName: string;
+    teamName: string;
+  }>;
+  adapterWarnings: string[];
+  matchupCount: number;
+  transactionCount: number;
+  draftPickCount: number;
+};
+
+export async function runSleeperLeagueImport(args: {
+  userId: number;
+  leagueId: string;
+  season?: number;
+  dryRun?: boolean;
+}): Promise<SleeperLeagueImportResult> {
+  const steps: string[] = [];
+  const dryRun = args.dryRun === true;
+
+  steps.push("Connecting to Sleeper API...");
+  const { league, warnings: adapterWarnings } = await fetchSleeperLeagueSnapshot(args.leagueId);
+  const season = args.season ?? league.settings.season;
+
+  steps.push(`Found league: ${league.settings.leagueName} (${league.teams.length} teams)`);
+  steps.push(
+    dryRun ? "Dry run — validating persistence mapping..." : "Persisting normalized league data...",
+  );
+
+  const persist = await persistUniversalLeague(
+    { ...league, settings: { ...league.settings, season } },
+    { dryRun },
+  );
+
+  const c = persist.counts;
+  steps.push(
+    dryRun
+      ? `Dry run complete (settings=${c.settings.persisted}, teams=${c.teams.persisted}, matchups=${c.matchups.persisted}, transactions=${c.transactions.persisted}, draftPicks=${c.draftPicks.persisted}, rosterEntries=${c.rosterEntries.persisted})`
+      : `Persisted (teams=${c.teams.persisted}, matchups=${c.matchups.persisted}, transactions=${c.transactions.persisted}, draftPicks=${c.draftPicks.persisted})`,
+  );
+
+  const selectableTeams = league.teams.map((t) => {
+    const tid = Number(t.teamId);
+    const ownerId = (t.ownerId || "").trim() || null;
+    return {
+      teamId: Number.isFinite(tid) ? tid : 0,
+      ownerId,
+      ownerKey: ownerId ? `id:${ownerId}` : null,
+      ownerName: t.ownerName,
+      teamName: t.teamName,
+    };
+  });
+
+  const hardFailure = persist.failures.length > 0 || (!dryRun && persist.counts.teams.persisted === 0);
+  const partial =
+    !dryRun &&
+    !hardFailure &&
+    (adapterWarnings.length > 0 || persist.warnings.length > 0 || persist.teamsMissingOwnerId.length > 0);
+
+  if (!dryRun && !hardFailure) {
+    const db = await getDb();
+    if (!db) {
+      throw new Error("Database unavailable");
+    }
+
+    const issueNotes = [
+      ...adapterWarnings,
+      ...persist.warnings,
+      ...persist.failures.map((f) => `${f.entity}: ${f.message}`),
+    ];
+    const syncStatus = partial ? "error" as const : "ok" as const;
+    const syncError = partial && issueNotes.length > 0 ? issueNotes.join("; ").slice(0, 2000) : null;
+
+    await db
+      .insert(leagueConnections)
+      .values({
+        userId: args.userId,
+        provider: "sleeper",
+        leagueId: args.leagueId,
+        leagueName: league.settings.leagueName,
+        season,
+        isActive: true,
+        syncStatus,
+        syncError,
+        lastSyncedAt: new Date(),
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          leagueName: league.settings.leagueName,
+          isActive: true,
+          syncStatus,
+          syncError,
+          lastSyncedAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+
+    await reconcileActiveLeague(args.userId);
+    steps.push("League connection saved.");
+  } else if (!dryRun && hardFailure) {
+    steps.push("Persistence failed — league connection not updated.");
+  }
+
+  return {
+    success: dryRun || !hardFailure,
+    dryRun,
+    steps,
+    league: {
+      leagueId: args.leagueId,
+      leagueName: league.settings.leagueName,
+      season,
+      teamCount: league.teams.length,
+      scoringType: league.settings.scoringType,
+      currentWeek: league.settings.currentWeek,
+      provider: "sleeper",
+    },
+    persist,
+    teams: selectableTeams,
+    adapterWarnings,
+    matchupCount: league.matchups.length,
+    transactionCount: league.transactions.length,
+    draftPickCount: league.draftPicks.length,
+  };
+}
 
 // ─── Provider info ────────────────────────────────────────────────────────────
 
@@ -117,131 +264,21 @@ export const providerRouter = router({
     }),
 
   /**
-   * Import a Sleeper league and generate its DNA profile.
-   * Returns a streaming-friendly response with progress steps.
+   * Import a Sleeper league: fetch snapshot → persist gm_* → save league_connections.
    */
   importSleeperLeague: protectedProcedure
     .input(z.object({
       leagueId: z.string().min(1),
-      season: z.number().default(2025),
+      season: z.number().optional(),
+      dryRun: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const steps: string[] = [];
-
-      steps.push("Connecting to Sleeper API...");
-      const league = await getSleeperLeague(input.leagueId);
-      steps.push(`Found league: ${league.settings.leagueName} (${league.teams.length} teams)`);
-
-      steps.push("Analyzing roster compositions...");
-      const rosterSummary = league.teams.map(t => {
-        const roster = league.rosters.find(r => r.teamId === t.teamId);
-        return {
-          team: t.teamName,
-          owner: t.ownerName,
-          record: `${t.wins}-${t.losses}`,
-          starters: roster?.slots.filter(s => s.slotType === "starter").length ?? 0,
-        };
+      return runSleeperLeagueImport({
+        userId: ctx.user.id,
+        leagueId: input.leagueId,
+        season: input.season,
+        dryRun: input.dryRun,
       });
-
-      steps.push("Detecting behavioral patterns...");
-      const txByTeam = new Map<string, number>();
-      for (const tx of league.transactions) {
-        txByTeam.set(tx.teamId, (txByTeam.get(tx.teamId) || 0) + 1);
-      }
-
-      steps.push("Mapping trade tendencies...");
-      const tradesByTeam = new Map<string, number>();
-      for (const tx of league.transactions.filter(t => t.type === "TRADE")) {
-        tradesByTeam.set(tx.teamId, (tradesByTeam.get(tx.teamId) || 0) + 1);
-      }
-
-      steps.push("Building exploitability models...");
-
-      // Generate DNA profile via LLM
-      steps.push("Generating League DNA Profile...");
-      const teamSummaries = league.teams.map(t => {
-        const trades = tradesByTeam.get(t.teamId) || 0;
-        const moves = txByTeam.get(t.teamId) || 0;
-        return `${t.ownerName} (${t.wins}-${t.losses}, ${t.pointsFor} PF): ${trades} trades, ${moves} total moves`;
-      }).join("\n");
-
-      const dnaResponse = await invokeLLM({
-        messages: [
-          {
-            role: "system" as const,
-            content: `You are an expert fantasy football analyst. Analyze this Sleeper league and provide a DNA profile for each manager. For each manager, identify their archetype from: Aggressive Trader, Waiver Hawk, Draft & Hold, Contrarian, Reactive, Balanced, or Data-Driven. Return JSON matching the provided schema.`,
-          },
-          {
-            role: "user" as const,
-            content: `League: ${league.settings.leagueName} (${league.settings.season} season, ${league.settings.scoringType} scoring)
-Teams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
-          },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "league_dna",
-            strict: true,
-            schema: {
-              type: "object",
-              properties: {
-                leagueName: { type: "string" },
-                season: { type: "number" },
-                provider: { type: "string" },
-                teamProfiles: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      teamId: { type: "string" },
-                      ownerName: { type: "string" },
-                      archetype: { type: "string" },
-                      archetypeReason: { type: "string" },
-                      desperationScore: { type: "number" },
-                      exploitabilityScore: { type: "number" },
-                      keyTrait: { type: "string" },
-                    },
-                    required: ["teamId", "ownerName", "archetype", "archetypeReason", "desperationScore", "exploitabilityScore", "keyTrait"],
-                    additionalProperties: false,
-                  },
-                },
-                leagueSummary: { type: "string" },
-              },
-              required: ["leagueName", "season", "provider", "teamProfiles", "leagueSummary"],
-              additionalProperties: false,
-            },
-          },
-        },
-      });
-
-      const rawContent = dnaResponse.choices?.[0]?.message?.content;
-      const dnaContent = typeof rawContent === "string" ? rawContent : null;
-      let dnaProfile: unknown = null;
-      try {
-        dnaProfile = JSON.parse(dnaContent || "{}");
-      } catch {
-        dnaProfile = { error: "Failed to parse DNA profile" };
-      }
-
-      steps.push("League DNA Profile complete.");
-
-      return {
-        success: true,
-        steps,
-        league: {
-          leagueId: input.leagueId,
-          leagueName: league.settings.leagueName,
-          season: league.settings.season,
-          teamCount: league.teams.length,
-          scoringType: league.settings.scoringType,
-          currentWeek: league.settings.currentWeek,
-          provider: "sleeper" as const,
-        },
-        teams: league.teams,
-        matchupCount: league.matchups.length,
-        transactionCount: league.transactions.length,
-        dnaProfile,
-      };
     }),
 
   /**
