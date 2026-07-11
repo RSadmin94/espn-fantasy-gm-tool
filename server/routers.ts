@@ -33,6 +33,7 @@ import { leagueIntelRouter } from "./leagueIntelRouter";
 import { completedTradeIntelRouter } from "./completedTradeIntelRouter";
 import { rivalryStoryRouter } from "./rivalryStoryRouter";
 import { rivalryShareRouter } from "./rivalryShareRouter";
+import { sofiaRouter } from "./sofiaRouter";
 import { demoRouter } from "./demoRouter";
 import { activityDnaRouter } from "./activityDnaRouter";
 import { transactionAnalysisRouter } from "./transactionAnalysisRouter";
@@ -753,6 +754,7 @@ export const appRouter = router({
   leagueIntel: leagueIntelRouter,
   completedTradeIntel: completedTradeIntelRouter,
   rivalryStory: rivalryStoryRouter,
+  sofia: sofiaRouter,
   rivalryShare: rivalryShareRouter,
   demo: demoRouter,
   activityDna: activityDnaRouter,
