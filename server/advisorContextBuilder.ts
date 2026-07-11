@@ -19,6 +19,9 @@ import {
 } from "./espnService";
 import { readKeeperSlotsPerTeamFromPayload, keepersEnabledFromSlots } from "./leagueCapabilities";
 import {
+  getSeasonTeams,
+} from "./leagueDataReads";
+import {
   calcVORP,
   calcPositionalScarcity,
   calcRosterGaps,
@@ -77,7 +80,24 @@ Rules: Always reference actual team names, owner names, and player names when pr
 
   const data = await getAdvisorSeasonData(season, userId);
   if (data) {
-    const teams = normalizeTeams(data);
+    const leagueKey = String(promptCtx.leagueId ?? "").trim().slice(0, 32);
+    const seasonRef = leagueKey ? { leagueId: leagueKey, season } : null;
+    const cacheTeams = normalizeTeams(data);
+    const teamsRes = seasonRef ? await getSeasonTeams(seasonRef) : { count: 0, rows: [] as Record<string, unknown>[] };
+    const cacheTeamNameById = new Map(
+      cacheTeams.map((t) => [t.teamId as number, t.teamName as string]),
+    );
+    const teams = (
+      teamsRes.count > 0
+        ? teamsRes.rows.map((row) => ({
+            ...row,
+            teamName:
+              cacheTeamNameById.get(row.teamId as number) ||
+              (row.teamName as string) ||
+              String((row as Record<string, unknown>).name || ""),
+          }))
+        : cacheTeams
+    ) as ReturnType<typeof normalizeTeams>;
     const settings = normalizeSettings(data);
     const teamOwnerMapAdvisor: Record<number, string> = {};
     for (const t of teams) teamOwnerMapAdvisor[t.teamId as number] = t.owners as string;
