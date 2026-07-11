@@ -14,6 +14,7 @@ import { DemoBanner } from "./components/DemoBanner";
 import { TryDemoButton } from "./components/TryDemoButton";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ConnectESPN } from "./pages/ConnectESPN";
+import { ConnectSleeper } from "./pages/ConnectSleeper";
 import { LandingPage } from "./pages/LandingPage";
 import { ReceiptShare } from "./pages/ReceiptShare";
 import { RivalryShare } from "./pages/RivalryShare";
@@ -189,6 +190,7 @@ const router = createBrowserRouter([
           // ── Active routes ─────────────────────────────────────────────
           { path: "/dashboard", element: <Dashboard /> },
           { path: "/connect", element: <ConnectESPN /> },
+          { path: "/connect/sleeper", element: <ConnectSleeper /> },
           { path: "/sync", element: <SyncData /> },
           { path: "/commissioner-command-center", element: <FeatureRouteGate route="/commissioner-command-center"><CommissionerCommandCenter /></FeatureRouteGate> },
           { path: "/league-settings",      element: <LeagueSettings /> },

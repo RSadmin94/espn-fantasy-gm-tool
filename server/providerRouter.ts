@@ -13,8 +13,8 @@ import { fetchSleeperLeagueSnapshot } from "./providers/sleeperAdapter";
 import { YahooAdapter, getYahooLeaguesForUser } from "./providers/yahooAdapter";
 import { isYahooConfigured } from "./providers/yahooOAuth";
 import { invokeLLM } from "./_core/llm";
-import { getDb, reconcileActiveLeague } from "./db";
-import { leagueConnections, users } from "../drizzle/schema";
+import { getDb, reconcileActiveLeague, setActiveLeagueForUser } from "./db";
+import { gmTeams, leagueConnections, users } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { fetchEspnViewsHardened, normalizeTeams, normalizeSettings, type EspnCreds } from "./espnService";
 import { encryptCredentialsForDb } from "./_core/crypto";
@@ -166,6 +166,80 @@ export async function runSleeperLeagueImport(args: {
   };
 }
 
+export type SelectSleeperTeamResult =
+  | { success: true; leagueConnectionId: number; isSetupComplete: true }
+  | { success: false; error: string };
+
+export async function runSelectSleeperTeam(args: {
+  userId: number;
+  leagueId: string;
+  teamId: number;
+  ownerId: string;
+  ownerName: string;
+}): Promise<SelectSleeperTeamResult> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "no_db" };
+
+  const leagueId = args.leagueId.trim();
+  const ownerId = args.ownerId.trim();
+  const ownerKey = `id:${ownerId}`;
+
+  const [conn] = await db
+    .select()
+    .from(leagueConnections)
+    .where(
+      and(
+        eq(leagueConnections.userId, args.userId),
+        eq(leagueConnections.provider, "sleeper"),
+        eq(leagueConnections.leagueId, leagueId),
+      ),
+    )
+    .limit(1);
+
+  if (!conn) return { success: false, error: "connection_not_found" };
+
+  const season = conn.season;
+  if (season == null) return { success: false, error: "connection_season_missing" };
+
+  const [team] = await db
+    .select({
+      teamId: gmTeams.teamId,
+      name: gmTeams.name,
+      ownerName: gmTeams.ownerName,
+      ownerId: gmTeams.ownerId,
+    })
+    .from(gmTeams)
+    .where(
+      and(
+        eq(gmTeams.leagueId, leagueId),
+        eq(gmTeams.season, season),
+        eq(gmTeams.teamId, args.teamId),
+      ),
+    )
+    .limit(1);
+
+  if (!team) return { success: false, error: "team_not_found" };
+  if (team.ownerId !== ownerId) return { success: false, error: "owner_mismatch" };
+
+  await db
+    .update(leagueConnections)
+    .set({
+      selectedTeamId: args.teamId,
+      selectedOwnerKey: ownerKey,
+      selectedOwnerName: args.ownerName || team.ownerName || null,
+      selectedFranchiseName: team.name || null,
+      selectedSeason: season,
+      isActive: true,
+      updatedAt: new Date(),
+    })
+    .where(eq(leagueConnections.id, conn.id));
+
+  await setActiveLeagueForUser(args.userId, conn.id);
+  await reconcileActiveLeague(args.userId);
+
+  return { success: true, leagueConnectionId: conn.id, isSetupComplete: true };
+}
+
 // ─── Provider info ────────────────────────────────────────────────────────────
 
 export const providerRouter = router({
@@ -278,6 +352,28 @@ export const providerRouter = router({
         leagueId: input.leagueId,
         season: input.season,
         dryRun: input.dryRun,
+      });
+    }),
+
+  /**
+   * Save the user's team selection for an imported Sleeper league.
+   */
+  selectSleeperTeam: protectedProcedure
+    .input(
+      z.object({
+        leagueId: z.string().min(1),
+        teamId: z.number().int().positive(),
+        ownerId: z.string().min(1),
+        ownerName: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return runSelectSleeperTeam({
+        userId: ctx.user.id,
+        leagueId: input.leagueId,
+        teamId: input.teamId,
+        ownerId: input.ownerId,
+        ownerName: input.ownerName,
       });
     }),
 
