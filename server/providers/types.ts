@@ -48,6 +48,8 @@ export interface UniversalSettings {
 
 export interface UniversalTeam {
   teamId: string;
+  /** Stable provider owner key (e.g. Sleeper user_id, ESPN member GUID). */
+  ownerId?: string;
   ownerName: string;           // display name for the primary owner
   ownerNames: string[];        // all co-owners
   teamName: string;
