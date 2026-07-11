@@ -43,6 +43,10 @@ import {
 } from "./sleeperOwnerResolution";
 import { gmTeamOwnerResolution } from "../drizzle/schema";
 import type { SleeperLeagueSnapshot } from "./providers/sleeperAdapter";
+import {
+  previewSleeperWorkbookFile,
+  runSleeperWorkbookImport,
+} from "./sleeperWorkbookImport";
 
 // ─── Sleeper import orchestration ─────────────────────────────────────────────
 
@@ -577,6 +581,45 @@ export const providerRouter = router({
         season: input.season,
         dryRun: input.dryRun,
         includePreviousSeason: input.includePreviousSeason ?? true,
+      });
+    }),
+
+  previewSleeperWorkbook: protectedProcedure
+    .input(z.object({ fileBase64: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        return previewSleeperWorkbookFile(input.fileBase64);
+      } catch (err) {
+        return {
+          valid: false,
+          version: "unknown",
+          errors: [err instanceof Error ? err.message : "workbook_preview_failed"],
+          warnings: [],
+          leagueName: "",
+          season: 0,
+          leagueId: "",
+          teamCount: 0,
+          ownerCount: 0,
+          draftPickCount: 0,
+          matchupCount: 0,
+          transactionCount: 0,
+          rosterEntryCount: 0,
+        };
+      }
+    }),
+
+  importSleeperWorkbook: protectedProcedure
+    .input(
+      z.object({
+        fileBase64: z.string().min(1),
+        dryRun: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return runSleeperWorkbookImport({
+        userId: ctx.user.id,
+        fileBase64: input.fileBase64,
+        dryRun: input.dryRun,
       });
     }),
 

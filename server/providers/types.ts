@@ -22,6 +22,7 @@ export type FantasyProvider =
   | "espn"
   | "yahoo"
   | "sleeper"
+  | "sleeper_workbook"
   | "nfl"
   | "cbs"
   | "fleaflicker"

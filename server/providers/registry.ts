@@ -98,6 +98,17 @@ export const PROVIDER_INFO: ProviderInfo[] = [
     importInstructions: "Just enter your Sleeper league ID. No login needed.",
   },
   {
+    id: "sleeper_workbook",
+    name: "Sleeper Workbook",
+    description: "Import a Sleeper Data Import v8.xlsx export workbook.",
+    authRequired: false,
+    authType: "none",
+    logoEmoji: "📊",
+    status: "live",
+    importInstructions:
+      "Export Sleeper Data Import v8.xlsx from the Sleeper Data Google Sheets tool, then upload it here.",
+  },
+  {
     id: "yahoo",
     name: "Yahoo Fantasy",
     description: "Yahoo Sports fantasy leagues. Requires OAuth login.",
