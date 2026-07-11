@@ -24,6 +24,7 @@ import {
 } from "./db";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import { normalizeSettings, normalizeTeams } from "./espnService";
+import { getSeasonSettings, getSeasonTeams } from "./leagueDataReads";
 import { getLeagueScoringSettings } from "./leagueScoringService";
 import { readKeeperSlotsPerTeamFromPayload, keepersEnabledFromSlots } from "./leagueCapabilities";
 
@@ -146,15 +147,39 @@ export async function resolveLeaguePromptContext(
         ? seasonRange.end
         : new Date().getFullYear();
 
-  // -- Combined cache for the effective season (team count, scoring, settings) --
+  // -- Combined cache for keeper payload; teams/settings from provider-neutral reads --
   let settings: ReturnType<typeof normalizeSettings> | null = null;
   let teams: ReturnType<typeof normalizeTeams> = [];
   let data: Record<string, unknown> | null = null;
   try {
-    const row = await getCachedView(effectiveSeason, "combined", override ?? undefined, { userId });
+    const leagueKey = leagueId.trim().slice(0, 32);
+    const seasonRef = leagueKey ? { leagueId: leagueKey, season: effectiveSeason } : null;
+    const [row, teamsRes, settingsRes] = await Promise.all([
+      getCachedView(effectiveSeason, "combined", override ?? undefined, { userId }),
+      seasonRef ? getSeasonTeams(seasonRef) : Promise.resolve({ count: 0, rows: [] as Record<string, unknown>[] }),
+      seasonRef ? getSeasonSettings(seasonRef) : Promise.resolve({ count: 0, rows: [] as Record<string, unknown>[] }),
+    ]);
     data = (row?.payload as Record<string, unknown>) || null;
-    if (data) {
+
+    if (settingsRes.count > 0) {
+      settings = settingsRes.rows[0] as ReturnType<typeof normalizeSettings>;
+    } else if (data) {
       settings = normalizeSettings(data);
+    }
+
+    if (teamsRes.count > 0) {
+      const cacheTeams = data ? normalizeTeams(data) : [];
+      const cacheTeamNameById = new Map(
+        cacheTeams.map((t) => [t.teamId as number, t.teamName as string]),
+      );
+      teams = teamsRes.rows.map((teamRow) => ({
+        ...teamRow,
+        teamName:
+          cacheTeamNameById.get(teamRow.teamId as number) ||
+          (teamRow.teamName as string) ||
+          String((teamRow as Record<string, unknown>).name || ""),
+      })) as ReturnType<typeof normalizeTeams>;
+    } else if (data) {
       teams = normalizeTeams(data);
     }
   } catch {
