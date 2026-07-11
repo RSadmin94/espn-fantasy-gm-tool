@@ -185,7 +185,7 @@ export function fixtureForScenario(scenario: RfsnFixtureScenario): RfsnBroadcast
         momentMeter: 0.15,
         primary: undefined,
         secondary: undefined,
-        ticker: [{ id: "t1", commentator: "coach", text: "Clock moving — nothing wild yet." }],
+        ticker: [],
       });
 
     case "notable_pick":

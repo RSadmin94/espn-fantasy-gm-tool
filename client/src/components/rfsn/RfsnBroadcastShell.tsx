@@ -52,13 +52,16 @@ export function RfsnBroadcastShell({
       showSecondary ||
       snapshot.queue.length > 0);
 
-  const mobilePad =
-    mobileSheetOpen &&
-    (prominent === "breaking_news" && showSecondary
-      ? "pb-[52vh]"
-      : showPrimary
-        ? "pb-[44vh]"
-        : "pb-[32vh]");
+  const mobilePad = (() => {
+    if (!mobileSheetOpen) return undefined;
+    const longPrimary = Boolean(primary?.long);
+    if (prominent === "breaking_news" && showSecondary) return "pb-[58vh]";
+    if (prominent === "breaking_news") return "pb-[50vh]";
+    if (showPrimary && showSecondary && longPrimary) return "pb-[52vh]";
+    if (showPrimary && showSecondary) return "pb-[48vh]";
+    if (showPrimary) return "pb-[42vh]";
+    return "pb-[30vh]";
+  })();
 
   return (
     <div className={cn(RFSN_SHELL_CLASS, "flex flex-col", className)}>
@@ -96,13 +99,15 @@ export function RfsnBroadcastShell({
             rows={snapshot.board}
             onClockTeam={snapshot.onClockTeam}
             overallPick={snapshot.overallPick}
-            className="flex-1 min-h-[280px]"
+            className={cn("flex-1", isMobile ? "min-h-[240px]" : "min-h-[280px]")}
           />
 
-          <RfsnContextRail
-            snapshot={snapshot}
-            variant={isMobile ? "quiet-only" : "inline"}
-          />
+          {(!isMobile || !mobileSheetOpen) && (
+            <RfsnContextRail
+              snapshot={snapshot}
+              variant={isMobile ? "quiet-only" : "inline"}
+            />
+          )}
         </main>
 
         {!isMobile && (
@@ -128,8 +133,8 @@ export function RfsnBroadcastShell({
 
       {isMobile && mobileSheetOpen && (
         <div className="fixed inset-x-0 bottom-10 z-40 px-3 pointer-events-none">
-          <div className="pointer-events-auto mx-auto flex max-w-lg flex-col gap-2 max-h-[42vh] overflow-y-auto">
-            <RfsnContextRail snapshot={snapshot} variant="prominent-only" />
+          <div className="pointer-events-auto mx-auto flex max-w-lg flex-col gap-2 max-h-[44vh] overflow-y-auto rounded-t-xl border border-b-0 border-white/10 bg-[#07070c]/95 p-2 pt-3 shadow-2xl backdrop-blur-sm">
+            <RfsnContextRail snapshot={snapshot} variant="prominent-only" compact />
             {shouldShowMomentBanner(snapshot) && (
               <RfsnMomentBanner
                 significance={snapshot.significance}
@@ -146,6 +151,7 @@ export function RfsnBroadcastShell({
             {snapshot.queue.length > 0 && (
               <RfsnCommentaryQueue queue={snapshot.queue} compact />
             )}
+            <RfsnContextRail snapshot={snapshot} variant="quiet-only" />
           </div>
         </div>
       )}

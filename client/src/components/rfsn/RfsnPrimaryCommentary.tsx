@@ -10,16 +10,21 @@ export type RfsnPrimaryCommentaryProps = {
   className?: string;
 };
 
-function CommentatorAvatar({ commentator }: { commentator: RfsnCommentaryCard["commentator"] }) {
+function CommentatorAvatar({
+  commentator,
+  compact = false,
+}: {
+  commentator: RfsnCommentaryCard["commentator"];
+  compact?: boolean;
+}) {
   const meta = COMMENTATOR_META[commentator];
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-full font-bold text-white/90",
+        "flex shrink-0 items-center justify-center rounded-full border-2 font-bold text-white/90",
         meta.bgClass,
         meta.borderClass,
-        "border-2",
-        "h-12 w-12 text-sm",
+        compact ? "h-8 w-8 text-xs" : "h-12 w-12 text-sm",
       )}
       aria-hidden
     >
@@ -60,7 +65,7 @@ export function RfsnPrimaryCommentary({
         {!compact && <CommentatorAvatar commentator={card.commentator} />}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            {compact && <CommentatorAvatar commentator={card.commentator} />}
+            {compact && <CommentatorAvatar commentator={card.commentator} compact />}
             <div>
               <p className={cn("text-sm font-bold", meta.accentClass)}>{meta.displayName}</p>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -71,7 +76,8 @@ export function RfsnPrimaryCommentary({
           <p
             className={cn(
               "mt-2 text-sm leading-relaxed text-white/90",
-              card.long && "max-h-32 overflow-y-auto pr-1",
+              card.long && "overflow-y-auto pr-1",
+              card.long && (compact ? "max-h-24" : "max-h-32"),
             )}
           >
             {card.text}

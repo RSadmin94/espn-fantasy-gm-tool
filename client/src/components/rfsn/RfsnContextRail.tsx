@@ -11,10 +11,17 @@ export type RfsnContextRailVariant = "inline" | "prominent-only" | "quiet-only";
 export type RfsnContextRailProps = {
   snapshot: RfsnBroadcastSnapshot;
   variant?: RfsnContextRailVariant;
+  compact?: boolean;
   className?: string;
 };
 
-function ProminentGraphic({ snapshot }: { snapshot: RfsnBroadcastSnapshot }) {
+function ProminentGraphic({
+  snapshot,
+  compact = false,
+}: {
+  snapshot: RfsnBroadcastSnapshot;
+  compact?: boolean;
+}) {
   const { prominent } = resolveContextGraphic(snapshot);
 
   if (prominent === "breaking_news" && snapshot.breakingNews) {
@@ -22,6 +29,7 @@ function ProminentGraphic({ snapshot }: { snapshot: RfsnBroadcastSnapshot }) {
       <RfsnBreakingNews
         headline={snapshot.breakingNews.headline}
         body={snapshot.breakingNews.body}
+        compact={compact}
         className="animate-in fade-in zoom-in-95 duration-300"
       />
     );
@@ -50,6 +58,7 @@ function ProminentGraphic({ snapshot }: { snapshot: RfsnBroadcastSnapshot }) {
 export function RfsnContextRail({
   snapshot,
   variant = "inline",
+  compact = false,
   className,
 }: RfsnContextRailProps) {
   const { prominent, showQuietOdds } = resolveContextGraphic(snapshot);
@@ -58,7 +67,7 @@ export function RfsnContextRail({
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)} aria-label="Broadcast context">
-      {showProminent && <ProminentGraphic snapshot={snapshot} />}
+      {showProminent && <ProminentGraphic snapshot={snapshot} compact={compact} />}
       {showQuiet && <RfsnChampionshipOdds teams={snapshot.championshipOdds} variant="quiet" />}
     </div>
   );
