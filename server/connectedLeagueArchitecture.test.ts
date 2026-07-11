@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, beforeAll, afterAll } from "vitest";
 import { TRPCError } from "@trpc/server";
 import { and, eq } from "drizzle-orm";
 import {
@@ -24,6 +24,10 @@ import {
   leagueConnectionDisplayNames,
   leagueConnections,
 } from "../drizzle/schema";
+import {
+  prepareSleeperIntegrationTest,
+  registerSleeperIntegrationTeardown,
+} from "./testing/sleeperIntegrationHarness";
 
 const USER_A = 99_101;
 const USER_B = 99_102;
@@ -32,6 +36,8 @@ const SLEEPER_SAME_ID = "arch_test_457622";
 const TEST_SEASON = 2096;
 
 let dbAvailable = false;
+
+registerSleeperIntegrationTeardown("architecture", () => dbAvailable);
 
 async function ensureDisplayNameTable(): Promise<void> {
   const db = await getDb();
@@ -51,17 +57,11 @@ async function ensureDisplayNameTable(): Promise<void> {
   `);
 }
 
-async function cleanup(): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  for (const userId of [USER_A, USER_B]) {
-    await db.delete(leagueConnectionDisplayNames).where(eq(leagueConnectionDisplayNames.userId, userId));
-    await db.delete(leagueConnections).where(eq(leagueConnections.userId, userId));
-  }
-  await db.delete(gmTeams).where(
-    and(eq(gmTeams.leagueId, ESPN_LEAGUE), eq(gmTeams.season, TEST_SEASON)),
-  );
-}
+beforeEach(async () => {
+  dbAvailable = await prepareSleeperIntegrationTest("architecture");
+  if (!dbAvailable) return;
+  await ensureDisplayNameTable();
+});
 
 async function insertConnection(args: {
   userId: number;
@@ -96,18 +96,6 @@ async function insertConnection(args: {
     .limit(1);
   return row!.id;
 }
-
-beforeEach(async () => {
-  const db = await getDb();
-  dbAvailable = db != null;
-  if (!dbAvailable) return;
-  await ensureDisplayNameTable();
-  await cleanup();
-});
-
-afterEach(async () => {
-  if (dbAvailable) await cleanup();
-});
 
 describe("resolveConnectedLeagueLabel", () => {
   it("prefers user display over canonical then fallback", () => {

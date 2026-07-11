@@ -4,6 +4,10 @@ import { eq, and } from "drizzle-orm";
 import { appRouter } from "./routers";
 import { getDb, setActiveLeagueForUser } from "./db";
 import { espnSeasonCache, gmDraftPicks, gmTeams, leagueConnections } from "../drizzle/schema";
+import {
+  prepareSleeperIntegrationTest,
+  registerSleeperIntegrationTeardown,
+} from "./testing/sleeperIntegrationHarness";
 
 const SLEEPER_LEAGUE_ID = "draft_picks_sleeper";
 const ESPN_LEAGUE_ID = "draft_picks_espn";
@@ -24,18 +28,11 @@ function caller(userId: number) {
 
 let dbAvailable = false;
 
-async function cleanup(): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  for (const userId of [SLEEPER_USER_ID, ESPN_USER_ID, OTHER_USER_ID]) {
-    await db.delete(leagueConnections).where(eq(leagueConnections.userId, userId));
-  }
-  for (const leagueId of [SLEEPER_LEAGUE_ID, ESPN_LEAGUE_ID, OTHER_LEAGUE_ID]) {
-    await db.delete(espnSeasonCache).where(eq(espnSeasonCache.leagueId, leagueId));
-    await db.delete(gmDraftPicks).where(eq(gmDraftPicks.leagueId, leagueId));
-    await db.delete(gmTeams).where(eq(gmTeams.leagueId, leagueId));
-  }
-}
+registerSleeperIntegrationTeardown("draftPicks", () => dbAvailable);
+
+beforeEach(async () => {
+  dbAvailable = await prepareSleeperIntegrationTest("draftPicks");
+});
 
 async function seedConnection(userId: number, leagueId: string, provider: "espn" | "sleeper"): Promise<void> {
   const db = await getDb();
@@ -140,16 +137,6 @@ async function seedEspnCombinedCache(leagueId: string, season: number): Promise<
     payload: JSON.stringify(payload),
   });
 }
-
-beforeEach(async () => {
-  const db = await getDb();
-  dbAvailable = db != null;
-  if (dbAvailable) await cleanup();
-});
-
-afterEach(async () => {
-  if (dbAvailable) await cleanup();
-});
 
 describe("espn.draftPicks", () => {
   it("returns Sleeper normalized draft picks", async () => {

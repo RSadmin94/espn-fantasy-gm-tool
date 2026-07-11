@@ -12,6 +12,10 @@ import { computeCareerReport } from "./careerReportService";
 import { computeRivalryScores } from "./rivalryService";
 import { memCache } from "./memCache";
 import { gmTeamOwnerOverrides, gmTeamOwnerResolution } from "../drizzle/schema";
+import {
+  prepareSleeperIntegrationTest,
+  registerSleeperIntegrationTeardown,
+} from "./testing/sleeperIntegrationHarness";
 
 function sleeperSnapshot(
   league: UniversalLeague,
@@ -133,34 +137,10 @@ const fixtureLeague: UniversalLeague = {
 
 let dbAvailable = false;
 
-async function cleanupImportTestData(): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db
-    .delete(leagueConnections)
-    .where(
-      and(
-        eq(leagueConnections.userId, TEST_USER_ID),
-        eq(leagueConnections.leagueId, TEST_LEAGUE_ID),
-      ),
-    );
-  await db.delete(gmTeams).where(and(eq(gmTeams.leagueId, TEST_LEAGUE_ID), eq(gmTeams.season, TEST_SEASON)));
-  const { gmMatchups, gmTransactions, gmDraftPicks, gmRosterEntries, gmLeagueSettings } = await import(
-    "../drizzle/schema"
-  );
-  await db.delete(gmRosterEntries).where(and(eq(gmRosterEntries.leagueId, TEST_LEAGUE_ID), eq(gmRosterEntries.season, TEST_SEASON)));
-  await db.delete(gmDraftPicks).where(and(eq(gmDraftPicks.leagueId, TEST_LEAGUE_ID), eq(gmDraftPicks.season, TEST_SEASON)));
-  await db.delete(gmTransactions).where(and(eq(gmTransactions.leagueId, TEST_LEAGUE_ID), eq(gmTransactions.season, TEST_SEASON)));
-  await db.delete(gmMatchups).where(and(eq(gmMatchups.leagueId, TEST_LEAGUE_ID), eq(gmMatchups.season, TEST_SEASON)));
-  await db.delete(gmLeagueSettings).where(and(eq(gmLeagueSettings.leagueId, TEST_LEAGUE_ID), eq(gmLeagueSettings.season, TEST_SEASON)));
-  await db.delete(gmTeamOwnerOverrides).where(eq(gmTeamOwnerOverrides.leagueId, TEST_LEAGUE_ID));
-  await db.delete(gmTeamOwnerResolution).where(eq(gmTeamOwnerResolution.leagueId, TEST_LEAGUE_ID));
-}
+registerSleeperIntegrationTeardown("import", () => dbAvailable);
 
 beforeEach(async () => {
-  const db = await getDb();
-  dbAvailable = db != null;
-  if (dbAvailable) await cleanupImportTestData();
+  dbAvailable = await prepareSleeperIntegrationTest("import");
 
   vi.spyOn(sleeperAdapter, "fetchSleeperLeagueImportSnapshots").mockResolvedValue({
     current: sleeperSnapshot(fixtureLeague),
@@ -170,9 +150,8 @@ beforeEach(async () => {
   });
 });
 
-afterEach(async () => {
+afterEach(() => {
   vi.restoreAllMocks();
-  if (dbAvailable) await cleanupImportTestData();
 });
 
 describe("runSleeperLeagueImport", { timeout: 30_000 }, () => {
@@ -364,28 +343,6 @@ const chainS3Fixture = chainFixture(CHAIN_S3_API_ID, CHAIN_S3_SEASON, 20);
 const chainS4Fixture = chainFixture(CHAIN_S4_API_ID, CHAIN_S4_SEASON, 30);
 const chainS5Fixture = chainFixture(CHAIN_S5_API_ID, CHAIN_S5_SEASON, 40);
 
-async function cleanupChainImportData(): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db
-    .delete(leagueConnections)
-    .where(
-      and(eq(leagueConnections.userId, CHAIN_USER_ID), eq(leagueConnections.leagueId, CHAIN_CURRENT_ID)),
-    );
-  for (const season of ALL_CHAIN_SEASONS) {
-    await db.delete(gmTeams).where(and(eq(gmTeams.leagueId, CHAIN_CURRENT_ID), eq(gmTeams.season, season)));
-    const { gmMatchups, gmTransactions, gmDraftPicks, gmRosterEntries, gmLeagueSettings } = await import(
-      "../drizzle/schema"
-    );
-    await db.delete(gmRosterEntries).where(and(eq(gmRosterEntries.leagueId, CHAIN_CURRENT_ID), eq(gmRosterEntries.season, season)));
-    await db.delete(gmDraftPicks).where(and(eq(gmDraftPicks.leagueId, CHAIN_CURRENT_ID), eq(gmDraftPicks.season, season)));
-    await db.delete(gmTransactions).where(and(eq(gmTransactions.leagueId, CHAIN_CURRENT_ID), eq(gmTransactions.season, season)));
-    await db.delete(gmMatchups).where(and(eq(gmMatchups.leagueId, CHAIN_CURRENT_ID), eq(gmMatchups.season, season)));
-    await db.delete(gmLeagueSettings).where(and(eq(gmLeagueSettings.leagueId, CHAIN_CURRENT_ID), eq(gmLeagueSettings.season, season)));
-  }
-  await db.delete(gmTeamOwnerOverrides).where(eq(gmTeamOwnerOverrides.leagueId, CHAIN_CURRENT_ID));
-  await db.delete(gmTeamOwnerResolution).where(eq(gmTeamOwnerResolution.leagueId, CHAIN_CURRENT_ID));
-}
 
 function fullHistorySnapshots(): sleeperAdapter.SleeperLeagueSnapshot[] {
   return [
@@ -440,16 +397,15 @@ function mockChainSnapshots(options?: {
 }
 
 describe("runSleeperLeagueImport league history", { timeout: 30_000 }, () => {
+  registerSleeperIntegrationTeardown("chain", () => dbAvailable);
+
   beforeEach(async () => {
-    const db = await getDb();
-    dbAvailable = db != null;
-    if (dbAvailable) await cleanupChainImportData();
+    dbAvailable = await prepareSleeperIntegrationTest("chain");
     mockChainSnapshots();
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     vi.restoreAllMocks();
-    if (dbAvailable) await cleanupChainImportData();
   });
 
   it("imports current league and the full linked history chain", async () => {
@@ -712,5 +668,5 @@ describe("runSleeperLeagueImport league history", { timeout: 30_000 }, () => {
     expect(rival).toBeDefined();
     const h2hMeetings = (rival?.h2hWins ?? 0) + (rival?.h2hLosses ?? 0) + (rival?.h2hTies ?? 0);
     expect(h2hMeetings).toBeGreaterThanOrEqual(ALL_CHAIN_SEASONS.length);
-  });
+  }, 60_000);
 });

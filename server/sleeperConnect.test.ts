@@ -8,9 +8,13 @@ import {
 import { resolveCurrentOwner } from "./currentOwnerService";
 import { getDb } from "./db";
 import { memCache } from "./memCache";
-import { leagueConnections, gmTeams, gmTeamOwnerOverrides, gmTeamOwnerResolution } from "../drizzle/schema";
+import { leagueConnections, gmTeams } from "../drizzle/schema";
 import type { UniversalLeague } from "./providers/types";
 import * as sleeperAdapter from "./providers/sleeperAdapter";
+import {
+  prepareSleeperIntegrationTest,
+  registerSleeperIntegrationTeardown,
+} from "./testing/sleeperIntegrationHarness";
 
 const TEST_LEAGUE_ID = "sleeper_connect_test";
 const OTHER_LEAGUE_ID = "sleeper_connect_other";
@@ -71,23 +75,10 @@ const fixtureLeague: UniversalLeague = {
 
 let dbAvailable = false;
 
-async function cleanup(): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  for (const leagueId of [TEST_LEAGUE_ID, OTHER_LEAGUE_ID]) {
-    await db
-      .delete(leagueConnections)
-      .where(and(eq(leagueConnections.userId, TEST_USER_ID), eq(leagueConnections.leagueId, leagueId)));
-    await db.delete(gmTeams).where(and(eq(gmTeams.leagueId, leagueId), eq(gmTeams.season, TEST_SEASON)));
-    await db.delete(gmTeamOwnerOverrides).where(eq(gmTeamOwnerOverrides.leagueId, leagueId));
-    await db.delete(gmTeamOwnerResolution).where(eq(gmTeamOwnerResolution.leagueId, leagueId));
-  }
-}
+registerSleeperIntegrationTeardown("connect", () => dbAvailable);
 
 beforeEach(async () => {
-  const db = await getDb();
-  dbAvailable = db != null;
-  if (dbAvailable) await cleanup();
+  dbAvailable = await prepareSleeperIntegrationTest("connect");
   memCache.invalidateAll();
 
   vi.spyOn(sleeperAdapter, "fetchSleeperLeagueImportSnapshots").mockResolvedValue({
@@ -103,9 +94,8 @@ beforeEach(async () => {
   });
 });
 
-afterEach(async () => {
+afterEach(() => {
   vi.restoreAllMocks();
-  if (dbAvailable) await cleanup();
 });
 
 describe("Sleeper connect flow", () => {

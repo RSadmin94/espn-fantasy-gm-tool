@@ -25,6 +25,10 @@ import { computeCareerReport } from "../../careerReportService";
 import { buildH2HAuthority } from "../../h2hAuthority";
 import { buildOwnerIdentityAuthority } from "../../ownerIdentityAuthority";
 import { setActiveLeagueForUser } from "../../db";
+import {
+  prepareSleeperIntegrationTest,
+  registerSleeperIntegrationTeardown,
+} from "../../testing/sleeperIntegrationHarness";
 
 const TEST_USER_ID = 99_020;
 const FIXTURE_PATHS = [
@@ -141,22 +145,6 @@ async function selectWorkbookTeam(leagueId: string): Promise<void> {
   await setActiveLeagueForUser(TEST_USER_ID, conn.id);
 }
 
-async function cleanupWorkbookTestData(leagueId: string): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db
-    .delete(leagueConnections)
-    .where(and(eq(leagueConnections.userId, TEST_USER_ID), eq(leagueConnections.leagueId, leagueId)));
-  await db.delete(gmTeams).where(eq(gmTeams.leagueId, leagueId));
-  const { gmMatchups, gmTransactions, gmDraftPicks, gmRosterEntries, gmLeagueSettings } = await import(
-    "../../../drizzle/schema"
-  );
-  await db.delete(gmRosterEntries).where(eq(gmRosterEntries.leagueId, leagueId));
-  await db.delete(gmDraftPicks).where(eq(gmDraftPicks.leagueId, leagueId));
-  await db.delete(gmTransactions).where(eq(gmTransactions.leagueId, leagueId));
-  await db.delete(gmMatchups).where(eq(gmMatchups.leagueId, leagueId));
-  await db.delete(gmLeagueSettings).where(eq(gmLeagueSettings.leagueId, leagueId));
-}
 
 describe("Sleeper workbook parser", () => {
   it("loads a minimal v8 workbook successfully", () => {
@@ -228,14 +216,10 @@ describe("Sleeper workbook parser", () => {
 });
 
 describe("Sleeper workbook import persistence", { timeout: 60_000 }, () => {
-  beforeEach(async () => {
-    const db = await getDb();
-    dbAvailable = db != null;
-    if (dbAvailable) await cleanupWorkbookTestData(MINIMAL_LEAGUE_ID);
-  });
+  registerSleeperIntegrationTeardown("workbook", () => dbAvailable);
 
-  afterEach(async () => {
-    if (dbAvailable) await cleanupWorkbookTestData(MINIMAL_LEAGUE_ID);
+  beforeEach(async () => {
+    dbAvailable = await prepareSleeperIntegrationTest("workbook");
   });
 
   it("imports through persistUniversalLeague successfully", async () => {

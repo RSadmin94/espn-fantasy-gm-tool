@@ -16,6 +16,7 @@ import {
   countUniversalPersistRows,
 } from "./universalPersistence";
 import { txPlayerKey } from "./transactionPersist";
+import { prepareSleeperIntegrationTest } from "./testing/sleeperIntegrationHarness";
 
 const TEST_LEAGUE_ID = "univpersisttest01";
 const TEST_SEASON = 2099;
@@ -266,27 +267,15 @@ function buildFixtureLeague(overrides?: Partial<{ team1Wins: number }>): Univers
 
 let dbAvailable = false;
 
-async function cleanupTestRows(): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  const lid = TEST_LEAGUE_ID;
-  const yr = TEST_SEASON;
-  await db.delete(gmRosterEntries).where(and(eq(gmRosterEntries.leagueId, lid), eq(gmRosterEntries.season, yr)));
-  await db.delete(gmDraftPicks).where(and(eq(gmDraftPicks.leagueId, lid), eq(gmDraftPicks.season, yr)));
-  await db.delete(gmTransactions).where(and(eq(gmTransactions.leagueId, lid), eq(gmTransactions.season, yr)));
-  await db.delete(gmMatchups).where(and(eq(gmMatchups.leagueId, lid), eq(gmMatchups.season, yr)));
-  await db.delete(gmTeams).where(and(eq(gmTeams.leagueId, lid), eq(gmTeams.season, yr)));
-  await db.delete(gmLeagueSettings).where(and(eq(gmLeagueSettings.leagueId, lid), eq(gmLeagueSettings.season, yr)));
-}
-
 beforeAll(async () => {
-  const db = await getDb();
-  dbAvailable = db != null;
-  if (dbAvailable) await cleanupTestRows();
+  dbAvailable = await prepareSleeperIntegrationTest("universalPersistence");
 }, 60_000);
 
 afterAll(async () => {
-  if (dbAvailable) await cleanupTestRows();
+  if (dbAvailable) {
+    const { cleanupSleeperIntegrationScope } = await import("./testing/sleeperIntegrationCleanup");
+    await cleanupSleeperIntegrationScope("universalPersistence");
+  }
 }, 60_000);
 
 describe("universalPersistence", () => {
@@ -317,7 +306,6 @@ describe("universalPersistence", () => {
 
   it("first persist creates expected row counts", async () => {
     if (!dbAvailable) return;
-    await cleanupTestRows();
 
     const result = await persistUniversalLeague(buildFixtureLeague());
     expect(result.failures).toHaveLength(0);

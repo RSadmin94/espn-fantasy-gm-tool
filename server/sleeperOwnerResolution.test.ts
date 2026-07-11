@@ -18,6 +18,10 @@ import { getDb } from "./db";
 import { gmTeamOwnerOverrides, gmTeamOwnerResolution, gmTeams, leagueConnections } from "../drizzle/schema";
 import { buildH2HAuthority } from "./h2hAuthority";
 import { memCache } from "./memCache";
+import {
+  prepareSleeperIntegrationTest,
+  registerSleeperIntegrationTeardown,
+} from "./testing/sleeperIntegrationHarness";
 
 const LEAGUE_A = "owner_res_league_a";
 const LEAGUE_B = "owner_res_league_b";
@@ -75,16 +79,6 @@ function sleeperSnapshot(league: UniversalLeague, knownUserIds: string[]): sleep
   return { league, warnings: [], previousLeagueId: null, knownUserIds };
 }
 
-async function cleanupLeague(leagueId: string): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.delete(gmTeamOwnerOverrides).where(eq(gmTeamOwnerOverrides.leagueId, leagueId));
-  await db.delete(gmTeamOwnerResolution).where(eq(gmTeamOwnerResolution.leagueId, leagueId));
-  await db.delete(gmTeams).where(eq(gmTeams.leagueId, leagueId));
-  await db
-    .delete(leagueConnections)
-    .where(and(eq(leagueConnections.userId, USER_ID), eq(leagueConnections.leagueId, leagueId)));
-}
 
 let dbAvailable = false;
 
@@ -178,21 +172,14 @@ describe("resolveSleeperLeagueOwners", () => {
 });
 
 describe("Sleeper owner resolution persistence", { timeout: 30_000 }, () => {
+  registerSleeperIntegrationTeardown("ownerResolution", () => dbAvailable);
+
   beforeEach(async () => {
-    const db = await getDb();
-    dbAvailable = db != null;
-    if (dbAvailable) {
-      await cleanupLeague(LEAGUE_A);
-      await cleanupLeague(LEAGUE_B);
-    }
+    dbAvailable = await prepareSleeperIntegrationTest("ownerResolution");
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     vi.restoreAllMocks();
-    if (dbAvailable) {
-      await cleanupLeague(LEAGUE_A);
-      await cleanupLeague(LEAGUE_B);
-    }
   });
 
   it("user can confirm a suggested owner", async () => {

@@ -5,6 +5,10 @@ import { appRouter } from "./routers";
 import { getDb, setActiveLeagueForUser } from "./db";
 import { memCache } from "./memCache";
 import { espnSeasonCache, gmMatchups, gmTeams, leagueConnections } from "../drizzle/schema";
+import {
+  prepareSleeperIntegrationTest,
+  registerSleeperIntegrationTeardown,
+} from "./testing/sleeperIntegrationHarness";
 
 const SLEEPER_LEAGUE_ID = "rivalry_sleeper_test";
 const ESPN_LEAGUE_ID = "rivalry_espn_test";
@@ -31,18 +35,11 @@ function entitledCaller(userId: number) {
 
 let dbAvailable = false;
 
-async function cleanup(): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  for (const userId of [SLEEPER_USER_ID, ESPN_USER_ID, OTHER_USER_ID]) {
-    await db.delete(leagueConnections).where(eq(leagueConnections.userId, userId));
-  }
-  for (const leagueId of [SLEEPER_LEAGUE_ID, ESPN_LEAGUE_ID, OTHER_LEAGUE_ID]) {
-    await db.delete(espnSeasonCache).where(eq(espnSeasonCache.leagueId, leagueId));
-    await db.delete(gmMatchups).where(eq(gmMatchups.leagueId, leagueId));
-    await db.delete(gmTeams).where(eq(gmTeams.leagueId, leagueId));
-  }
-}
+registerSleeperIntegrationTeardown("rivalry", () => dbAvailable);
+
+beforeEach(async () => {
+  dbAvailable = await prepareSleeperIntegrationTest("rivalry");
+});
 
 async function seedConnection(
   userId: number,
@@ -216,16 +213,12 @@ async function seedSleeperRivalryFixture(leagueId: string): Promise<void> {
   });
 }
 
-beforeEach(async () => {
-  const db = await getDb();
-  dbAvailable = db != null;
+beforeEach(() => {
   memCache.invalidateAll();
-  if (dbAvailable) await cleanup();
 });
 
-afterEach(async () => {
+afterEach(() => {
   memCache.invalidateAll();
-  if (dbAvailable) await cleanup();
 });
 
 describe("rivalry.h2h", { timeout: 30_000 }, () => {

@@ -1,8 +1,12 @@
 import "dotenv/config";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { eq, and } from "drizzle-orm";
 import { getAllCachedSeasons, getDb, setActiveLeagueForUser } from "./db";
 import { espnSeasonCache, gmTeams, leagueConnections } from "../drizzle/schema";
+import {
+  prepareSleeperIntegrationTest,
+  registerSleeperIntegrationTeardown,
+} from "./testing/sleeperIntegrationHarness";
 
 const ESPN_LEAGUE_ID = "season_disc_espn";
 const SLEEPER_LEAGUE_ID = "season_disc_sleeper";
@@ -17,19 +21,11 @@ const OTHER_SEASON = 2095;
 
 let dbAvailable = false;
 
-async function cleanup(): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
+registerSleeperIntegrationTeardown("cachedSeasons", () => dbAvailable);
 
-  for (const userId of [ESPN_USER_ID, SLEEPER_USER_ID, OTHER_USER_ID]) {
-    await db.delete(leagueConnections).where(eq(leagueConnections.userId, userId));
-  }
-
-  for (const leagueId of [ESPN_LEAGUE_ID, SLEEPER_LEAGUE_ID, OTHER_LEAGUE_ID]) {
-    await db.delete(espnSeasonCache).where(eq(espnSeasonCache.leagueId, leagueId));
-    await db.delete(gmTeams).where(eq(gmTeams.leagueId, leagueId));
-  }
-}
+beforeEach(async () => {
+  dbAvailable = await prepareSleeperIntegrationTest("cachedSeasons");
+});
 
 async function seedConnection(userId: number, leagueId: string, provider: "espn" | "sleeper"): Promise<number> {
   const db = await getDb();
@@ -82,16 +78,6 @@ async function seedGmTeam(
     rawTeam: "{}",
   });
 }
-
-beforeEach(async () => {
-  const db = await getDb();
-  dbAvailable = db != null;
-  if (dbAvailable) await cleanup();
-});
-
-afterEach(async () => {
-  if (dbAvailable) await cleanup();
-});
 
 describe("getAllCachedSeasons", () => {
   it("returns ESPN-only seasons unchanged when no normalized rows exist", async () => {
