@@ -155,6 +155,8 @@ export type SleeperLeagueSnapshot = {
   warnings: string[];
   /** Sleeper `previous_league_id` from the league payload, when present. */
   previousLeagueId: string | null;
+  /** Sleeper user_ids returned by /users for this league season. */
+  knownUserIds: string[];
 };
 
 export type SleeperLeagueImportSnapshots = {
@@ -569,6 +571,7 @@ export async function fetchSleeperLeagueSnapshot(leagueId: string): Promise<Slee
     },
     warnings,
     previousLeagueId: (league.previous_league_id || "").trim() || null,
+    knownUserIds: [...userMap.keys()],
   };
 }
 

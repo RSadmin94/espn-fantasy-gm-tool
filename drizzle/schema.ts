@@ -1472,3 +1472,45 @@ export const gmManualKeeperSelections = mysqlTable(
 
 export type GmManualKeeperSelection      = typeof gmManualKeeperSelections.$inferSelect;
 export type InsertGmManualKeeperSelection = typeof gmManualKeeperSelections.$inferInsert;
+
+// ── Team-season owner overrides (manual corrections) ───────────────────────────
+export const gmTeamOwnerOverrides = mysqlTable(
+  "gm_team_owner_overrides",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    provider: varchar("provider", { length: 16 }).notNull().default("sleeper"),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    teamId: int("teamId").notNull(),
+    ownerKey: varchar("ownerKey", { length: 128 }).notNull(),
+    ownerName: varchar("ownerName", { length: 255 }).notNull().default(""),
+    updatedByUserId: int("updatedByUserId").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_gm_team_owner_override").on(t.leagueId, t.season, t.teamId)],
+);
+export type GmTeamOwnerOverride = typeof gmTeamOwnerOverrides.$inferSelect;
+
+// ── Team-season owner resolution snapshot (refreshed on import) ───────────────
+export const gmTeamOwnerResolution = mysqlTable(
+  "gm_team_owner_resolution",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    provider: varchar("provider", { length: 16 }).notNull().default("sleeper"),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    teamId: int("teamId").notNull(),
+    teamName: varchar("teamName", { length: 255 }).notNull().default(""),
+    status: varchar("status", { length: 16 }).notNull(),
+    ownerKey: varchar("ownerKey", { length: 128 }),
+    ownerName: varchar("ownerName", { length: 255 }),
+    suggestedOwnerKey: varchar("suggestedOwnerKey", { length: 128 }),
+    suggestedOwnerName: varchar("suggestedOwnerName", { length: 255 }),
+    suggestionReason: text("suggestionReason"),
+    sourceDetail: varchar("sourceDetail", { length: 255 }).notNull().default(""),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_gm_team_owner_resolution").on(t.leagueId, t.season, t.teamId)],
+);
+export type GmTeamOwnerResolution = typeof gmTeamOwnerResolution.$inferSelect;
