@@ -11,6 +11,22 @@ import * as universalPersistence from "./universalPersistence";
 import { computeCareerReport } from "./careerReportService";
 import { computeRivalryScores } from "./rivalryService";
 import { memCache } from "./memCache";
+import { gmTeamOwnerOverrides, gmTeamOwnerResolution } from "../drizzle/schema";
+
+function sleeperSnapshot(
+  league: UniversalLeague,
+  opts?: { warnings?: string[]; previousLeagueId?: string | null },
+): sleeperAdapter.SleeperLeagueSnapshot {
+  const knownUserIds = league.teams
+    .map((t) => (t.ownerId || "").trim())
+    .filter((id) => id.length > 0);
+  return {
+    league,
+    warnings: opts?.warnings ?? [],
+    previousLeagueId: opts?.previousLeagueId ?? null,
+    knownUserIds,
+  };
+}
 
 const TEST_LEAGUE_ID = "sleeper_import_test";
 const TEST_SEASON = 2098;
@@ -137,6 +153,8 @@ async function cleanupImportTestData(): Promise<void> {
   await db.delete(gmTransactions).where(and(eq(gmTransactions.leagueId, TEST_LEAGUE_ID), eq(gmTransactions.season, TEST_SEASON)));
   await db.delete(gmMatchups).where(and(eq(gmMatchups.leagueId, TEST_LEAGUE_ID), eq(gmMatchups.season, TEST_SEASON)));
   await db.delete(gmLeagueSettings).where(and(eq(gmLeagueSettings.leagueId, TEST_LEAGUE_ID), eq(gmLeagueSettings.season, TEST_SEASON)));
+  await db.delete(gmTeamOwnerOverrides).where(eq(gmTeamOwnerOverrides.leagueId, TEST_LEAGUE_ID));
+  await db.delete(gmTeamOwnerResolution).where(eq(gmTeamOwnerResolution.leagueId, TEST_LEAGUE_ID));
 }
 
 beforeEach(async () => {
@@ -145,7 +163,7 @@ beforeEach(async () => {
   if (dbAvailable) await cleanupImportTestData();
 
   vi.spyOn(sleeperAdapter, "fetchSleeperLeagueImportSnapshots").mockResolvedValue({
-    current: { league: fixtureLeague, warnings: [], previousLeagueId: null },
+    current: sleeperSnapshot(fixtureLeague),
     history: [],
     previous: null,
     warnings: [],
@@ -365,14 +383,16 @@ async function cleanupChainImportData(): Promise<void> {
     await db.delete(gmMatchups).where(and(eq(gmMatchups.leagueId, CHAIN_CURRENT_ID), eq(gmMatchups.season, season)));
     await db.delete(gmLeagueSettings).where(and(eq(gmLeagueSettings.leagueId, CHAIN_CURRENT_ID), eq(gmLeagueSettings.season, season)));
   }
+  await db.delete(gmTeamOwnerOverrides).where(eq(gmTeamOwnerOverrides.leagueId, CHAIN_CURRENT_ID));
+  await db.delete(gmTeamOwnerResolution).where(eq(gmTeamOwnerResolution.leagueId, CHAIN_CURRENT_ID));
 }
 
 function fullHistorySnapshots(): sleeperAdapter.SleeperLeagueSnapshot[] {
   return [
-    { league: chainPrevFixture, warnings: [], previousLeagueId: CHAIN_S3_API_ID },
-    { league: chainS3Fixture, warnings: [], previousLeagueId: CHAIN_S4_API_ID },
-    { league: chainS4Fixture, warnings: [], previousLeagueId: CHAIN_S5_API_ID },
-    { league: chainS5Fixture, warnings: [], previousLeagueId: null },
+    sleeperSnapshot(chainPrevFixture, { previousLeagueId: CHAIN_S3_API_ID }),
+    sleeperSnapshot(chainS3Fixture, { previousLeagueId: CHAIN_S4_API_ID }),
+    sleeperSnapshot(chainS4Fixture, { previousLeagueId: CHAIN_S5_API_ID }),
+    sleeperSnapshot(chainS5Fixture, { previousLeagueId: null }),
   ];
 }
 
@@ -385,11 +405,9 @@ function mockChainSnapshots(options?: {
   vi.spyOn(sleeperAdapter, "fetchSleeperLeagueImportSnapshots").mockImplementation(
     async (_leagueId: string, opts?: { includePreviousSeason?: boolean }) => {
       const warnings: string[] = [];
-      const current = {
-        league: chainCurrentFixture,
-        warnings: [] as string[],
+      const current = sleeperSnapshot(chainCurrentFixture, {
         previousLeagueId: options?.missingPreviousLink ? null : CHAIN_PREV_API_ID,
-      };
+      });
       if (opts?.includePreviousSeason !== true) {
         return { current, history: [], previous: null, warnings };
       }
@@ -405,8 +423,8 @@ function mockChainSnapshots(options?: {
         warnings.push(`league history: stopped at repeated league id ${options.loopAt}`);
         return {
           current,
-          history: [{ league: chainPrevFixture, warnings: [], previousLeagueId: options.loopAt }],
-          previous: { league: chainPrevFixture, warnings: [], previousLeagueId: options.loopAt },
+          history: [sleeperSnapshot(chainPrevFixture, { previousLeagueId: options.loopAt })],
+          previous: sleeperSnapshot(chainPrevFixture, { previousLeagueId: options.loopAt }),
           warnings,
         };
       }

@@ -8,7 +8,7 @@ import {
 import { resolveCurrentOwner } from "./currentOwnerService";
 import { getDb } from "./db";
 import { memCache } from "./memCache";
-import { leagueConnections, gmTeams } from "../drizzle/schema";
+import { leagueConnections, gmTeams, gmTeamOwnerOverrides, gmTeamOwnerResolution } from "../drizzle/schema";
 import type { UniversalLeague } from "./providers/types";
 import * as sleeperAdapter from "./providers/sleeperAdapter";
 
@@ -79,6 +79,8 @@ async function cleanup(): Promise<void> {
       .delete(leagueConnections)
       .where(and(eq(leagueConnections.userId, TEST_USER_ID), eq(leagueConnections.leagueId, leagueId)));
     await db.delete(gmTeams).where(and(eq(gmTeams.leagueId, leagueId), eq(gmTeams.season, TEST_SEASON)));
+    await db.delete(gmTeamOwnerOverrides).where(eq(gmTeamOwnerOverrides.leagueId, leagueId));
+    await db.delete(gmTeamOwnerResolution).where(eq(gmTeamOwnerResolution.leagueId, leagueId));
   }
 }
 
@@ -89,7 +91,12 @@ beforeEach(async () => {
   memCache.invalidateAll();
 
   vi.spyOn(sleeperAdapter, "fetchSleeperLeagueImportSnapshots").mockResolvedValue({
-    current: { league: fixtureLeague, warnings: [], previousLeagueId: null },
+    current: {
+      league: fixtureLeague,
+      warnings: [],
+      previousLeagueId: null,
+      knownUserIds: ["owner_alpha", "owner_beta"],
+    },
     history: [],
     previous: null,
     warnings: [],

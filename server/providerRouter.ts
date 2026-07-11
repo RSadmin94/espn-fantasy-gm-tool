@@ -23,6 +23,26 @@ import {
   persistUniversalLeague,
   type PersistUniversalLeagueResult,
 } from "./universalPersistence";
+import {
+  type OwnerResolutionSummary,
+  type TeamOwnerResolution,
+  type SleeperOwnerResolutionContext,
+  loadManualOverrides,
+  loadIndexedOwnersFromDb,
+  resolveSleeperLeagueOwners,
+  persistOwnerResolutions,
+  summarizeResolutions,
+  isSelectableOwnerStatus,
+  saveManualOwnerOverride,
+  removeManualOwnerOverride,
+  listOwnerResolutions,
+  listKnownLeagueOwners,
+  reapplyOwnerResolutionForTeam,
+  ownerIdFromOwnerKey,
+  ownerKeyFromHistoricalName,
+} from "./sleeperOwnerResolution";
+import { gmTeamOwnerResolution } from "../drizzle/schema";
+import type { SleeperLeagueSnapshot } from "./providers/sleeperAdapter";
 
 // ─── Sleeper import orchestration ─────────────────────────────────────────────
 
@@ -46,6 +66,11 @@ export type SleeperLeagueImportResult = {
     ownerKey: string | null;
     ownerName: string;
     teamName: string;
+    resolutionStatus: TeamOwnerResolution["status"];
+    suggestedOwnerKey: string | null;
+    suggestedOwnerName: string | null;
+    suggestionReason: string | null;
+    selectable: boolean;
   }>;
   adapterWarnings: string[];
   matchupCount: number;
@@ -56,6 +81,8 @@ export type SleeperLeagueImportResult = {
   importedSeasons: number[];
   importedLeagueIds: string[];
   historyPersist: PersistUniversalLeagueResult[];
+  ownerResolutionSummary: OwnerResolutionSummary;
+  ownerResolutionsNeedingAttention: TeamOwnerResolution[];
 };
 
 function remapUniversalLeagueToLeagueId(league: UniversalLeague, leagueId: string): UniversalLeague {
@@ -66,6 +93,67 @@ function remapUniversalLeagueToLeagueId(league: UniversalLeague, leagueId: strin
       leagueId,
     },
   };
+}
+
+async function importSleeperSnapshotWithOwnerResolution(args: {
+  snap: SleeperLeagueSnapshot;
+  connectionLeagueId: string;
+  seasonOverride?: number;
+  dryRun: boolean;
+  context: SleeperOwnerResolutionContext;
+}): Promise<{
+  persist: PersistUniversalLeagueResult;
+  resolutions: TeamOwnerResolution[];
+}> {
+  const remapped = remapUniversalLeagueToLeagueId(args.snap.league, args.connectionLeagueId);
+  const season = args.seasonOverride ?? remapped.settings.season;
+  const knownUserIds = new Set(args.snap.knownUserIds);
+
+  const { league: resolvedLeague, resolutions } = resolveSleeperLeagueOwners({
+    league: { ...remapped, settings: { ...remapped.settings, season } },
+    connectionLeagueId: args.connectionLeagueId,
+    knownUserIds,
+    context: args.context,
+  });
+
+  const persist = await persistUniversalLeague(resolvedLeague, { dryRun: args.dryRun });
+  await persistOwnerResolutions(args.connectionLeagueId, resolutions, args.dryRun);
+
+  const unresolved = resolutions.filter((r) => r.status === "unresolved").length;
+  if (unresolved > 0) {
+    persist.warnings.push(
+      `owner resolution: ${unresolved} team(s) unresolved in season ${season}`,
+    );
+  }
+
+  return { persist, resolutions };
+}
+
+function buildSelectableTeams(
+  leagueTeams: UniversalLeague["teams"],
+  currentSeasonResolutions: TeamOwnerResolution[],
+): SleeperLeagueImportResult["teams"] {
+  const resolutionByTeam = new Map(currentSeasonResolutions.map((r) => [r.teamId, r]));
+
+  return leagueTeams.map((t) => {
+    const tid = Number(t.teamId);
+    const resolution = resolutionByTeam.get(Number.isFinite(tid) ? tid : -1);
+    const status = resolution?.status ?? "unresolved";
+    const ownerKey = resolution?.ownerKey ?? null;
+    const ownerId = ownerKey ? ownerIdFromOwnerKey(ownerKey) : (t.ownerId || null);
+    return {
+      teamId: Number.isFinite(tid) ? tid : 0,
+      ownerId: ownerId?.trim() || null,
+      ownerKey,
+      ownerName: resolution?.ownerName ?? t.ownerName,
+      teamName: t.teamName,
+      resolutionStatus: status,
+      suggestedOwnerKey: resolution?.suggestedOwnerKey ?? null,
+      suggestedOwnerName: resolution?.suggestedOwnerName ?? null,
+      suggestionReason: resolution?.suggestionReason ?? null,
+      selectable: isSelectableOwnerStatus(status),
+    };
+  });
 }
 
 export async function runSleeperLeagueImport(args: {
@@ -91,15 +179,28 @@ export async function runSleeperLeagueImport(args: {
     dryRun ? "Dry run — validating persistence mapping..." : "Persisting normalized league data...",
   );
 
+  const manualOverrides = dryRun ? new Map() : await loadManualOverrides(args.leagueId);
+  const indexedOwners = dryRun ? new Map() : await loadIndexedOwnersFromDb(args.leagueId);
+  const resolutionContext: SleeperOwnerResolutionContext = {
+    leagueId: args.leagueId,
+    manualOverrides,
+    indexedOwners,
+  };
+
   const importedSeasons: number[] = [];
   const importedLeagueIds: string[] = [];
   const historyPersist: PersistUniversalLeagueResult[] = [];
+  const allResolutions: TeamOwnerResolution[] = [];
 
   console.log(`Importing season ${season}...`);
-  const persist = await persistUniversalLeague(
-    { ...league, settings: { ...league.settings, season } },
-    { dryRun },
-  );
+  const { persist, resolutions: currentResolutions } = await importSleeperSnapshotWithOwnerResolution({
+    snap: current,
+    connectionLeagueId: args.leagueId,
+    seasonOverride: season,
+    dryRun,
+    context: resolutionContext,
+  });
+  allResolutions.push(...currentResolutions);
   if (persist.failures.length === 0) {
     importedSeasons.push(season);
     importedLeagueIds.push(args.leagueId);
@@ -118,9 +219,15 @@ export async function runSleeperLeagueImport(args: {
     const sourceLeagueId = String(snap.league.settings.leagueId);
     steps.push(`Importing linked season ${histSeason}...`);
     console.log(`Importing season ${histSeason}...`);
-    const remapped = remapUniversalLeagueToLeagueId(snap.league, args.leagueId);
-    const histPersist = await persistUniversalLeague(remapped, { dryRun });
+    const { persist: histPersist, resolutions: histResolutions } =
+      await importSleeperSnapshotWithOwnerResolution({
+        snap,
+        connectionLeagueId: args.leagueId,
+        dryRun,
+        context: resolutionContext,
+      });
     historyPersist.push(histPersist);
+    allResolutions.push(...histResolutions);
 
     if (histPersist.failures.length > 0) {
       adapterWarnings.push(
@@ -144,6 +251,11 @@ export async function runSleeperLeagueImport(args: {
     }
   }
 
+  const ownerResolutionSummary = summarizeResolutions(allResolutions);
+  steps.push(
+    `Owner resolution — Verified: ${ownerResolutionSummary.verified}, Suggested: ${ownerResolutionSummary.suggested}, Unresolved: ${ownerResolutionSummary.unresolved}, Manual: ${ownerResolutionSummary.manual}`,
+  );
+
   const c = persist.counts;
   steps.push(
     dryRun
@@ -151,17 +263,11 @@ export async function runSleeperLeagueImport(args: {
       : `Persisted (teams=${c.teams.persisted}, matchups=${c.matchups.persisted}, transactions=${c.transactions.persisted}, draftPicks=${c.draftPicks.persisted})`,
   );
 
-  const selectableTeams = league.teams.map((t) => {
-    const tid = Number(t.teamId);
-    const ownerId = (t.ownerId || "").trim() || null;
-    return {
-      teamId: Number.isFinite(tid) ? tid : 0,
-      ownerId,
-      ownerKey: ownerId ? `id:${ownerId}` : null,
-      ownerName: t.ownerName,
-      teamName: t.teamName,
-    };
-  });
+  const currentSeasonResolutions = allResolutions.filter((r) => r.season === season);
+  const selectableTeams = buildSelectableTeams(league.teams, currentSeasonResolutions);
+  const ownerResolutionsNeedingAttention = allResolutions.filter(
+    (r) => r.status === "suggested" || r.status === "unresolved" || r.status === "manual",
+  );
 
   const hardFailure =
     persist.failures.length > 0 ||
@@ -247,6 +353,8 @@ export async function runSleeperLeagueImport(args: {
     importedSeasons,
     importedLeagueIds,
     historyPersist,
+    ownerResolutionSummary,
+    ownerResolutionsNeedingAttention,
   };
 }
 
@@ -258,15 +366,18 @@ export async function runSelectSleeperTeam(args: {
   userId: number;
   leagueId: string;
   teamId: number;
-  ownerId: string;
+  ownerId?: string;
+  ownerKey?: string;
   ownerName: string;
 }): Promise<SelectSleeperTeamResult> {
   const db = await getDb();
   if (!db) return { success: false, error: "no_db" };
 
   const leagueId = args.leagueId.trim();
-  const ownerId = args.ownerId.trim();
-  const ownerKey = `id:${ownerId}`;
+  const providedOwnerKey =
+    args.ownerKey?.trim() ||
+    (args.ownerId?.trim() ? `id:${args.ownerId.trim()}` : "");
+  if (!providedOwnerKey) return { success: false, error: "owner_required" };
 
   const [conn] = await db
     .select()
@@ -303,13 +414,41 @@ export async function runSelectSleeperTeam(args: {
     .limit(1);
 
   if (!team) return { success: false, error: "team_not_found" };
-  if (team.ownerId !== ownerId) return { success: false, error: "owner_mismatch" };
+
+  const [resolution] = await db
+    .select({
+      status: gmTeamOwnerResolution.status,
+      ownerKey: gmTeamOwnerResolution.ownerKey,
+    })
+    .from(gmTeamOwnerResolution)
+    .where(
+      and(
+        eq(gmTeamOwnerResolution.leagueId, leagueId),
+        eq(gmTeamOwnerResolution.season, season),
+        eq(gmTeamOwnerResolution.teamId, args.teamId),
+      ),
+    )
+    .limit(1);
+
+  if (!resolution || !isSelectableOwnerStatus(resolution.status as TeamOwnerResolution["status"])) {
+    return { success: false, error: "owner_unresolved" };
+  }
+
+  const resolvedKey = (resolution.ownerKey ?? "").trim();
+  if (!resolvedKey || resolvedKey !== providedOwnerKey) {
+    return { success: false, error: "owner_mismatch" };
+  }
+
+  const resolvedOwnerId = ownerIdFromOwnerKey(resolvedKey);
+  if (resolvedOwnerId && team.ownerId !== resolvedOwnerId) {
+    return { success: false, error: "owner_mismatch" };
+  }
 
   await db
     .update(leagueConnections)
     .set({
       selectedTeamId: args.teamId,
-      selectedOwnerKey: ownerKey,
+      selectedOwnerKey: resolvedKey,
       selectedOwnerName: args.ownerName || team.ownerName || null,
       selectedFranchiseName: team.name || null,
       selectedSeason: season,
@@ -441,17 +580,135 @@ export const providerRouter = router({
       });
     }),
 
+  listSleeperOwnerResolutions: protectedProcedure
+    .input(z.object({ leagueId: z.string().min(1) }))
+    .query(async ({ input }) => {
+      const resolutions = await listOwnerResolutions(input.leagueId);
+      const knownOwners = await listKnownLeagueOwners(input.leagueId);
+      return {
+        resolutions,
+        knownOwners,
+        summary: summarizeResolutions(resolutions),
+      };
+    }),
+
+  confirmSleeperOwnerSuggestion: protectedProcedure
+    .input(
+      z.object({
+        leagueId: z.string().min(1),
+        season: z.number().int(),
+        teamId: z.number().int().positive(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const resolutions = await listOwnerResolutions(input.leagueId);
+      const row = resolutions.find(
+        (r) => r.season === input.season && r.teamId === input.teamId,
+      );
+      if (!row || row.status !== "suggested" || !row.suggestedOwnerKey) {
+        return { success: false as const, error: "suggestion_not_found" };
+      }
+      await saveManualOwnerOverride({
+        leagueId: input.leagueId,
+        season: input.season,
+        teamId: input.teamId,
+        ownerKey: row.suggestedOwnerKey,
+        ownerName: row.suggestedOwnerName || "",
+        userId: ctx.user.id,
+      });
+      const updated = await reapplyOwnerResolutionForTeam({
+        leagueId: input.leagueId,
+        season: input.season,
+        teamId: input.teamId,
+        knownUserIds: new Set(),
+      });
+      return { success: true as const, resolution: updated };
+    }),
+
+  setSleeperOwnerOverride: protectedProcedure
+    .input(
+      z.object({
+        leagueId: z.string().min(1),
+        season: z.number().int(),
+        teamId: z.number().int().positive(),
+        ownerKey: z.string().min(1).optional(),
+        ownerId: z.string().min(1).optional(),
+        ownerName: z.string().min(1),
+        applyToSeasons: z.array(z.number().int()).optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const ownerKey =
+        input.ownerKey?.trim() ||
+        (input.ownerId ? `id:${input.ownerId.trim()}` : ownerKeyFromHistoricalName(input.ownerName));
+      const seasons = input.applyToSeasons?.length
+        ? input.applyToSeasons
+        : [input.season];
+
+      for (const season of seasons) {
+        await saveManualOwnerOverride({
+          leagueId: input.leagueId,
+          season,
+          teamId: input.teamId,
+          ownerKey,
+          ownerName: input.ownerName,
+          userId: ctx.user.id,
+        });
+        await reapplyOwnerResolutionForTeam({
+          leagueId: input.leagueId,
+          season,
+          teamId: input.teamId,
+          knownUserIds: new Set(),
+        });
+      }
+      return { success: true as const, seasons };
+    }),
+
+  removeSleeperOwnerOverride: protectedProcedure
+    .input(
+      z.object({
+        leagueId: z.string().min(1),
+        season: z.number().int(),
+        teamId: z.number().int().positive(),
+        applyToSeasons: z.array(z.number().int()).optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const seasons = input.applyToSeasons?.length
+        ? input.applyToSeasons
+        : [input.season];
+      for (const season of seasons) {
+        await removeManualOwnerOverride({
+          leagueId: input.leagueId,
+          season,
+          teamId: input.teamId,
+        });
+        await reapplyOwnerResolutionForTeam({
+          leagueId: input.leagueId,
+          season,
+          teamId: input.teamId,
+          knownUserIds: new Set(),
+        });
+      }
+      return { success: true as const, seasons };
+    }),
+
   /**
    * Save the user's team selection for an imported Sleeper league.
    */
   selectSleeperTeam: protectedProcedure
     .input(
-      z.object({
-        leagueId: z.string().min(1),
-        teamId: z.number().int().positive(),
-        ownerId: z.string().min(1),
-        ownerName: z.string().min(1),
-      }),
+      z
+        .object({
+          leagueId: z.string().min(1),
+          teamId: z.number().int().positive(),
+          ownerId: z.string().min(1).optional(),
+          ownerKey: z.string().min(1).optional(),
+          ownerName: z.string().min(1),
+        })
+        .refine((d) => Boolean(d.ownerId?.trim() || d.ownerKey?.trim()), {
+          message: "owner_required",
+        }),
     )
     .mutation(async ({ input, ctx }) => {
       return runSelectSleeperTeam({
@@ -459,6 +716,7 @@ export const providerRouter = router({
         leagueId: input.leagueId,
         teamId: input.teamId,
         ownerId: input.ownerId,
+        ownerKey: input.ownerKey,
         ownerName: input.ownerName,
       });
     }),
