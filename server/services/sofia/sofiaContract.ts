@@ -1,32 +1,40 @@
 /**
  * Sofia v1 — frozen fact-packet + commentary contract.
  *
- * Types-only module shared by the UI track and Sofia backend. No builder, prompts,
+ * Types-only module shared by the UI track and the Sofia backend. No builder, prompts,
  * model routing, persistence, or endpoints — implementers fill these shapes in later phases.
+ *
+ * The stable seam: the UI-facing `SofiaCommentary` NEVER exposes routing, model tier, or raw
+ * permitted claims. The LLM's universe is the fact packet's `permittedClaims` only; the future
+ * prompt builder must pass nothing else to the model.
  */
 
 export const SOFIA_FACT_PACKET_CONTRACT_VERSION = "sofia.fact_packet.v1" as const;
 export const SOFIA_COMMENTARY_CONTRACT_VERSION = "sofia.commentary.v1" as const;
 
-/** League Exclusivity — storyline-angle weights (frozen v1; sum = 1). */
-export const EXCLUSIVITY_WEIGHTS = {
-  ownerHistory: 0.3,
-  rivalry: 0.25,
-  patternBreak: 0.2,
-  positionRun: 0.1,
-  adp: 0.05,
-  rosterNeed: 0.1,
+/**
+ * League Exclusivity — relative CLASS per storyline angle (frozen v1).
+ * Numeric weights are deliberately NOT frozen here: they are calibrated via the 50-moment
+ * Sofia benchmark and live in the later scoring implementation, not in this contract.
+ */
+export const EXCLUSIVITY_CLASS = {
+  ownerHistory: "high",
+  rivalry: "high",
+  patternBreak: "high",
+  positionRun: "medium",
+  adp: "low",
+  rosterNeed: "low",
 } as const;
 
-export type ExclusivityDimension = keyof typeof EXCLUSIVITY_WEIGHTS;
+export type ExclusivityDimension = keyof typeof EXCLUSIVITY_CLASS;
+export type ExclusivityClass = (typeof EXCLUSIVITY_CLASS)[ExclusivityDimension];
 
 export type CommentaryLevel = "routine" | "notable" | "major" | "historic";
-
 export type CommentaryRoutingStrategy = "template" | "grounded" | "show";
-
 export type IdentityScope = "person" | "franchise";
 
-export type CommentarySource = "fact_packet" | "template" | "grounded" | "show" | "cache";
+/** UI-facing generation source — the model tier is intentionally invisible. */
+export type CommentarySource = "template" | "llm";
 
 export type SofiaReceiptStatus = "available" | "unsupported" | "not_applicable" | "conflicting";
 
@@ -48,15 +56,21 @@ export interface SofiaCommentaryBudget {
   maxWords: number;
 }
 
-export interface SofiaLeagueExclusivity {
-  scores: Record<ExclusivityDimension, number>;
-  weightedScore: number;
-  primaryAngle: ExclusivityDimension;
+/** INTERNAL pipeline type — the routing decision. NEVER placed on `SofiaCommentary` (the wire). */
+export interface SofiaCommentaryRouting {
+  strategy: CommentaryRoutingStrategy;
+  level: CommentaryLevel;
+  reason: string;
 }
 
+/**
+ * INTERNAL — the LLM-facing input, projected from a shipped DraftMoment
+ * (DraftMoment.eventId -> momentId at the projection boundary).
+ * The prompt builder must pass ONLY `permittedClaims` to the model.
+ */
 export interface SofiaFactPacket {
   contractVersion: typeof SOFIA_FACT_PACKET_CONTRACT_VERSION;
-  eventId: string;
+  momentId: string;
   leagueId: string;
   draftId: string;
   season: number;
@@ -85,7 +99,10 @@ export interface SofiaFactPacket {
   forbiddenClaimCategories: string[];
   primaryStoryline: string | null;
   secondaryStoryline: string | null;
-  exclusivity: SofiaLeagueExclusivity;
+  exclusivity: {
+    score: number;
+    drivers: string[];
+  };
   commentaryBudget: SofiaCommentaryBudget;
   validation: {
     valid: boolean;
@@ -94,23 +111,30 @@ export interface SofiaFactPacket {
   };
 }
 
-export interface SofiaCommentaryRouting {
-  strategy: CommentaryRoutingStrategy;
-  level: CommentaryLevel;
-  reason: string;
-}
-
+/**
+ * UI-facing output — the smallest shape the UI needs to render a grounded moment.
+ * No routing, no model tier, no raw permitted claims. One always-present `text`.
+ */
 export interface SofiaCommentary {
   contractVersion: typeof SOFIA_COMMENTARY_CONTRACT_VERSION;
-  eventId: string;
-  leagueId: string;
+  momentId: string;
   draftId: string;
+  leagueId: string;
+  subject: {
+    ownerName: string;
+    playerName: string;
+    position: string;
+    overallPick: number;
+    round: number;
+  };
   level: CommentaryLevel;
-  routing: SofiaCommentaryRouting;
+  primaryStoryline: string | null;
+  text: string;
   source: CommentarySource;
-  headline: string | null;
-  body: string | null;
-  permittedClaims: string[];
+  budget: {
+    maxWords: number;
+    actualWords: number;
+  };
   validation: {
     grounded: boolean;
     fabricationCount: number;
