@@ -90,7 +90,7 @@ import {
   getSeasonDraftPicks,
   getSeasonTeams,
 } from "./historicalDataService";
-import { getSeasonDraftPicks as getNormalizedSeasonDraftPicks } from "./leagueDataReads";
+import { getSeasonDraftPicks as getNormalizedSeasonDraftPicks, getSeasonMatchups as getNormalizedSeasonMatchups, getSeasonTeams as getNormalizedSeasonTeams } from "./leagueDataReads";
 import { upsertMatchups } from "./espnPersistence";
 import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmSeasonRosters, gmLeagueSettings, gmMatchups, syncRuns, leagueMedals, ownerAliases, gmTransactions, gmRosterEntries, gmPlayers } from "../drizzle/schema";
 import { resolveShareMeta } from "./receiptShare";
@@ -274,6 +274,202 @@ async function getSeasonData(season: number, leagueId?: string, userId?: number)
     const cached = await getCachedView(season, "combined", lid);
     return cached ? (cached.payload as Record<string, unknown>) : null;
   });
+}
+
+type RivalryH2HPairAcc = {
+  a: string;
+  b: string;
+  aWins: number;
+  aLosses: number;
+  ties: number;
+  meetings: number;
+  playoff: number;
+  close10: number;
+  close5: number;
+  firstSeason: number;
+  lastSeason: number;
+};
+
+function processRivalryH2HMatchup(args: {
+  season: number;
+  homeName: string;
+  awayName: string;
+  homeScore: number;
+  awayScore: number;
+  winner: string;
+  playoffTierType: unknown;
+  pairMap: Map<string, RivalryH2HPairAcc>;
+  ownerSet: Set<string>;
+  seasonsByOwner: Map<string, Set<number>>;
+}): void {
+  const { season, homeName, awayName, homeScore, awayScore, winner, playoffTierType, pairMap, ownerSet, seasonsByOwner } =
+    args;
+  if (winner !== "HOME" && winner !== "AWAY") return;
+  ownerSet.add(homeName);
+  ownerSet.add(awayName);
+  if (!seasonsByOwner.has(homeName)) seasonsByOwner.set(homeName, new Set());
+  if (!seasonsByOwner.has(awayName)) seasonsByOwner.set(awayName, new Set());
+  seasonsByOwner.get(homeName)!.add(season);
+  seasonsByOwner.get(awayName)!.add(season);
+  const [A, B] = [homeName, awayName].sort();
+  const key = `${A}\u0000${B}`;
+  let p = pairMap.get(key);
+  if (!p) {
+    p = {
+      a: A,
+      b: B,
+      aWins: 0,
+      aLosses: 0,
+      ties: 0,
+      meetings: 0,
+      playoff: 0,
+      close10: 0,
+      close5: 0,
+      firstSeason: season,
+      lastSeason: season,
+    };
+    pairMap.set(key, p);
+  }
+  p.meetings += 1;
+  if (matchupIsPlayoffFromEspnTier(playoffTierType)) p.playoff += 1;
+  const margin = Math.abs(homeScore - awayScore);
+  if (margin < 10) p.close10 += 1;
+  if (margin < 5) p.close5 += 1;
+  if (season < p.firstSeason) p.firstSeason = season;
+  if (season > p.lastSeason) p.lastSeason = season;
+  const homeWon = winner === "HOME";
+  const aWon = (homeWon && homeName === A) || (!homeWon && homeName !== A);
+  if (aWon) p.aWins += 1;
+  else p.aLosses += 1;
+}
+
+async function buildRivalryH2HData(args: {
+  lid: string;
+  userId: number | undefined;
+  seasons: number[];
+}): Promise<{
+  memberName: Map<string, string>;
+  pairMap: Map<string, RivalryH2HPairAcc>;
+  seasonsByOwner: Map<string, Set<number>>;
+}> {
+  const memberName = new Map<string, string>();
+  const pairMap = new Map<string, RivalryH2HPairAcc>();
+  const ownerSet = new Set<string>();
+  const seasonsByOwner = new Map<string, Set<number>>();
+
+  for (const season of args.seasons) {
+    const teamsRes = await getNormalizedSeasonTeams({ leagueId: args.lid, season });
+    const matchupsRes = await getNormalizedSeasonMatchups({ leagueId: args.lid, season });
+
+    if (teamsRes.count > 0 && matchupsRes.count > 0) {
+      const teamToMember = new Map<number, string>();
+      for (const t of teamsRes.rows) {
+        const tid = Number(t.teamId);
+        const ownerId = String(t.primaryOwner ?? (t.memberIds as string[])?.[0] ?? "").trim();
+        const display = String(t.ownerDisplay ?? t.owners ?? "").trim() || ownerId;
+        if (ownerId) {
+          teamToMember.set(tid, ownerId);
+          memberName.set(ownerId, display);
+        }
+      }
+      for (const m of matchupsRes.rows) {
+        const hMid = teamToMember.get(Number(m.homeTeamId));
+        const aMid = teamToMember.get(Number(m.awayTeamId));
+        if (!hMid || !aMid || hMid === aMid) continue;
+        const hName = memberName.get(hMid) ?? hMid;
+        const aName = memberName.get(aMid) ?? aMid;
+        processRivalryH2HMatchup({
+          season,
+          homeName: hName,
+          awayName: aName,
+          homeScore: Number(m.homeTotalPoints ?? 0),
+          awayScore: Number(m.awayTotalPoints ?? 0),
+          winner: String(m.winner ?? "UNDECIDED"),
+          playoffTierType: m.playoffTierType,
+          pairMap,
+          ownerSet,
+          seasonsByOwner,
+        });
+      }
+      continue;
+    }
+
+    const row = await getCachedView(season, "combined", args.lid, { userId: args.userId });
+    if (!row) continue;
+    const data = row.payload as Record<string, unknown>;
+    const members = (data.members as Record<string, unknown>[]) || [];
+    for (const mb of members) {
+      const mid = mb.id as string;
+      const nm = `${mb.firstName || ""} ${mb.lastName || ""}`.trim() || (mb.displayName as string) || mid;
+      if (mid) memberName.set(String(mid), nm);
+    }
+    const teams = normalizeTeams(data) as Array<Record<string, unknown>>;
+    const teamToMember = new Map<number, string>();
+    for (const t of teams) {
+      const po = (t.primaryOwner as string) || ((t.memberIds as string[])?.[0] ?? "");
+      if (po) teamToMember.set(Number(t.teamId), String(po));
+    }
+    const matchups = normalizeMatchups(data) as Array<Record<string, unknown>>;
+    for (const m of matchups) {
+      const hMid = teamToMember.get(Number(m.homeTeamId));
+      const aMid = teamToMember.get(Number(m.awayTeamId));
+      if (!hMid || !aMid || hMid === aMid) continue;
+      const winner = String(m.winner ?? "UNDECIDED");
+      if (winner !== "HOME" && winner !== "AWAY") continue;
+      const hName = memberName.get(hMid) ?? hMid;
+      const aName = memberName.get(aMid) ?? aMid;
+      processRivalryH2HMatchup({
+        season,
+        homeName: hName,
+        awayName: aName,
+        homeScore: Number(m.homeTotalPoints ?? 0),
+        awayScore: Number(m.awayTotalPoints ?? 0),
+        winner,
+        playoffTierType: m.playoffTierType,
+        pairMap,
+        ownerSet,
+        seasonsByOwner,
+      });
+    }
+  }
+
+  return { memberName, pairMap, seasonsByOwner };
+}
+
+async function finalizeRivalryH2HResult(args: {
+  lid: string;
+  memberName: Map<string, string>;
+  pairMap: Map<string, RivalryH2HPairAcc>;
+  seasonsByOwner: Map<string, Set<number>>;
+}): Promise<{
+  owners: Array<{ name: string; seasons: number; ownerKey: string }>;
+  pairs: Array<Record<string, unknown>>;
+}> {
+  const db = await getDb();
+  const allGmRows = db
+    ? ((await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, args.lid))) as GmTeamRow[])
+    : [];
+  const remap = buildRawKeyToCanonicalProfileKey(allGmRows);
+  const nameToOwnerId = buildNameToOwnerId(allGmRows);
+  const canonicalForMember = (mid: string, nm: string): string => {
+    const direct = remap.get(`id:${mid}`);
+    if (direct) return direct;
+    const raw = resolveOwnerKey("", nm, nm, nameToOwnerId);
+    return remap.get(raw) ?? raw;
+  };
+  const canonByName = new Map<string, string>();
+  for (const [mid, nm] of args.memberName) {
+    if (!canonByName.has(nm)) canonByName.set(nm, canonicalForMember(String(mid), nm));
+  }
+  const owners = [...args.seasonsByOwner.entries()]
+    .map(([name, set]) => ({ name, seasons: set.size, ownerKey: canonByName.get(name) ?? "" }))
+    .sort((x, y) => x.name.localeCompare(y.name));
+  const pairs = [...args.pairMap.values()].map((p) => ({
+    ...p,
+    aKey: canonByName.get(p.a) ?? "",
+    bKey: canonByName.get(p.b) ?? "",
+  }));
+  return { owners, pairs };
 }
 
 /** Active league draft geometry for pick-value / keeper charts (settings + draft payload). */
@@ -587,33 +783,22 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         void input?.activeLeagueKey;
       if (!ctx.user?.id) return [];
-      const { getRivalryScoresFromDb } = await import("./rivalryService");
+      const { getRivalryScoresFromDb, computeRivalryScores } = await import("./rivalryService");
       const seasons = await getAllCachedSeasons(undefined, ctx.user.id);
       if (seasons.length === 0) return [];
-      const latestSeason = Math.max(...seasons);
-      const row = await getCachedView(latestSeason, "combined", undefined, { userId: ctx.user.id });
-      if (!row) return [];
-      const data = row.payload as Record<string, unknown>;
-      const members = (data.members as Record<string, unknown>[]) || [];
-      // Resolve focal member ID from the authenticated user's active profile.
       const co = await resolveCurrentOwner(ctx.user ? { id: ctx.user.id } : null);
       const focalMemberId: string | null = co.isSetupComplete ? co.ownerId : null;
       if (!focalMemberId) return [];
-      const focalName = members.find(m => m.id === focalMemberId)
-        ? (() => {
-            const m = members.find(m2 => m2.id === focalMemberId)!;
-            return `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || "";
-          })()
-        : "";
-      // Resolve the active league FIRST so rivalry scores are league-scoped (not member-global).
-      if (!ctx.user?.id) return [];
       const { leagueId: scoreLid } = await resolveActiveLeagueId(
         { user: { id: ctx.user.id } }, null, undefined,
       );
       if (!scoreLid) return [];
       const lid = scoreLid;
-      const scores = await getRivalryScoresFromDb(focalMemberId, lid);
-      // Attach canonical owner-keys so the dossier popup resolves (gmTeams.ownerId === ESPN memberId).
+      let scores = await getRivalryScoresFromDb(focalMemberId, lid);
+      if (scores.length === 0) {
+        scores = await computeRivalryScores(ctx.user.id, lid);
+      }
+      const focalName = (co.displayName ?? "").trim();
       const db = await getDb();
       const allGmRows = db
         ? ((await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))) as GmTeamRow[])
@@ -648,92 +833,13 @@ export const appRouter = router({
       if (!h2hLid) return { owners: [] as Array<{ name: string; seasons: number; ownerKey: string }>, pairs: [] as Array<Record<string, unknown>> };
       const lid = h2hLid;
       const salt = input?.activeLeagueKey ?? "__none__";
-      // Cache the whole all-pairs scan (≈18 sequential cache reads) for 10 min, per league/user.
       const h2hResult = await memCache(`rivalryH2H:${lid}:${userId ?? "anon"}:${salt}`, 10 * 60_000, async () => {
-      const seasons = await getAllCachedSeasons(undefined, userId);
-      if (!seasons.length) return { owners: [] as Array<{ name: string; seasons: number; ownerKey: string }>, pairs: [] as Array<Record<string, unknown>> };
-      const memberName = new Map<string, string>();
-      type P = { a: string; b: string; aWins: number; aLosses: number; ties: number; meetings: number; playoff: number; close10: number; close5: number; firstSeason: number; lastSeason: number };
-      const pairMap = new Map<string, P>();
-      const ownerSet = new Set<string>();
-      const seasonsByOwner = new Map<string, Set<number>>();
-      for (const season of seasons) {
-        const row = await getCachedView(season, "combined", undefined, { userId });
-        if (!row) continue;
-        const data = row.payload as Record<string, unknown>;
-        const members = (data.members as Record<string, unknown>[]) || [];
-        for (const mb of members) {
-          const mid = mb.id as string;
-          const nm = `${mb.firstName || ""} ${mb.lastName || ""}`.trim() || (mb.displayName as string) || mid;
-          if (mid) memberName.set(String(mid), nm);
+        const seasons = await getAllCachedSeasons(undefined, userId);
+        if (!seasons.length) {
+          return { owners: [] as Array<{ name: string; seasons: number; ownerKey: string }>, pairs: [] as Array<Record<string, unknown>> };
         }
-        const teams = normalizeTeams(data) as Array<Record<string, unknown>>;
-        const teamToMember = new Map<number, string>();
-        for (const t of teams) {
-          const po = (t.primaryOwner as string) || ((t.memberIds as string[])?.[0] ?? "");
-          if (po) teamToMember.set(Number(t.teamId), String(po));
-        }
-        const matchups = normalizeMatchups(data) as Array<Record<string, unknown>>;
-        for (const m of matchups) {
-          const hMid = teamToMember.get(Number(m.homeTeamId));
-          const aMid = teamToMember.get(Number(m.awayTeamId));
-          if (!hMid || !aMid || hMid === aMid) continue;
-          const winner = String(m.winner ?? "UNDECIDED");
-          if (winner !== "HOME" && winner !== "AWAY") continue;
-          const hName = memberName.get(hMid) ?? hMid;
-          const aName = memberName.get(aMid) ?? aMid;
-          const hs = Number(m.homeTotalPoints ?? 0);
-          const as = Number(m.awayTotalPoints ?? 0);
-          ownerSet.add(hName);
-          ownerSet.add(aName);
-          if (!seasonsByOwner.has(hName)) seasonsByOwner.set(hName, new Set());
-          if (!seasonsByOwner.has(aName)) seasonsByOwner.set(aName, new Set());
-          seasonsByOwner.get(hName)!.add(season);
-          seasonsByOwner.get(aName)!.add(season);
-          const [A, B] = [hName, aName].sort();
-          const key = `${A}\u0000${B}`;
-          let p = pairMap.get(key);
-          if (!p) { p = { a: A, b: B, aWins: 0, aLosses: 0, ties: 0, meetings: 0, playoff: 0, close10: 0, close5: 0, firstSeason: season, lastSeason: season }; pairMap.set(key, p); }
-          p.meetings += 1;
-          if (matchupIsPlayoffFromEspnTier(m.playoffTierType)) p.playoff += 1;
-          const margin = Math.abs(hs - as);
-          if (margin < 10) p.close10 += 1;
-          if (margin < 5) p.close5 += 1;
-          if (season < p.firstSeason) p.firstSeason = season;
-          if (season > p.lastSeason) p.lastSeason = season;
-          const homeWon = winner === "HOME";
-          const aWon = (homeWon && hName === A) || (!homeWon && hName !== A);
-          if (aWon) p.aWins += 1; else p.aLosses += 1;
-        }
-      }
-      // Canonical owner-key bridge so the dossier popup resolves cleanly.
-      // gmTeams.ownerId === ESPN memberId, so remap.get(`id:${memberId}`) yields the
-      // exact canonical key loadRivalryDossier expects; fall back to a name bridge.
-      const db = await getDb();
-      const allGmRows = db
-        ? ((await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))) as GmTeamRow[])
-        : [];
-      const remap = buildRawKeyToCanonicalProfileKey(allGmRows);
-      const nameToOwnerId = buildNameToOwnerId(allGmRows);
-      const canonicalForMember = (mid: string, nm: string): string => {
-        const direct = remap.get(`id:${mid}`);
-        if (direct) return direct;
-        const raw = resolveOwnerKey("", nm, nm, nameToOwnerId);
-        return remap.get(raw) ?? raw;
-      };
-      const canonByName = new Map<string, string>();
-      for (const [mid, nm] of memberName) {
-        if (!canonByName.has(nm)) canonByName.set(nm, canonicalForMember(String(mid), nm));
-      }
-      const owners = [...seasonsByOwner.entries()]
-        .map(([name, set]) => ({ name, seasons: set.size, ownerKey: canonByName.get(name) ?? "" }))
-        .sort((x, y) => x.name.localeCompare(y.name));
-      const pairs = [...pairMap.values()].map((p) => ({
-        ...p,
-        aKey: canonByName.get(p.a) ?? "",
-        bKey: canonByName.get(p.b) ?? "",
-      }));
-      return { owners, pairs };
+        const { memberName, pairMap, seasonsByOwner } = await buildRivalryH2HData({ lid, userId, seasons });
+        return finalizeRivalryH2HResult({ lid, memberName, pairMap, seasonsByOwner });
       });
       return gateH2H(h2hResult, await resolvePremiumAccess(ctx.user));
     }),
