@@ -88,8 +88,9 @@ beforeEach(async () => {
   if (dbAvailable) await cleanup();
   memCache.invalidateAll();
 
-  vi.spyOn(sleeperAdapter, "fetchSleeperLeagueSnapshot").mockResolvedValue({
-    league: fixtureLeague,
+  vi.spyOn(sleeperAdapter, "fetchSleeperLeagueImportSnapshots").mockResolvedValue({
+    current: { league: fixtureLeague, warnings: [], previousLeagueId: null },
+    previous: null,
     warnings: [],
   });
 });

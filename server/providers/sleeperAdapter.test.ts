@@ -1,12 +1,128 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   fetchSleeperLeagueSnapshot,
+  fetchSleeperLeagueImportSnapshots,
   __setSleeperApiFetchForTests,
   __clearSleeperPlayerCacheForTests,
   type SleeperApiFetch,
 } from "./sleeperAdapter";
 
 const LEAGUE_ID = "sleeper_mock_league";
+const PREV_LEAGUE_ID = "sleeper_mock_prev";
+const OLDER_LEAGUE_ID = "sleeper_mock_older";
+
+function leaguePayload(
+  leagueId: string,
+  season: string,
+  previousLeagueId?: string,
+): Record<string, unknown> {
+  return {
+    league_id: leagueId,
+    name: leagueId === LEAGUE_ID ? "Mock Sleeper League" : `League ${season}`,
+    season,
+    status: "complete",
+    total_rosters: 2,
+    settings: {
+      playoff_teams: 2,
+      playoff_week_start: 15,
+      leg: 14,
+      last_scored_leg: 14,
+    },
+    scoring_settings: { rec: 1 },
+    roster_positions: ["QB", "RB", "WR", "TE", "FLEX", "BN"],
+    ...(previousLeagueId ? { previous_league_id: previousLeagueId } : {}),
+  };
+}
+
+function usersForLeague(leagueId: string): unknown[] {
+  if (leagueId === PREV_LEAGUE_ID) {
+    return [
+      { user_id: "user_a", username: "alpha", display_name: "Alpha Owner" },
+      { user_id: "user_b", username: "beta", display_name: "Beta Owner" },
+    ];
+  }
+  return [
+    { user_id: "user_a", username: "alpha", display_name: "Alpha Owner" },
+    { user_id: "user_b", username: "beta", display_name: "Beta Owner" },
+  ];
+}
+
+function rostersForLeague(leagueId: string): unknown[] {
+  const rosterOffset = leagueId === PREV_LEAGUE_ID ? 10 : 0;
+  return [
+    {
+      roster_id: 1 + rosterOffset,
+      owner_id: "user_a",
+      league_id: leagueId,
+      players: ["p1"],
+      starters: ["p1"],
+      reserve: [],
+      settings: { wins: 1, losses: 0, ties: 0, fpts: 100, fpts_decimal: 0, fpts_against: 90, fpts_against_decimal: 0 },
+    },
+    {
+      roster_id: 2 + rosterOffset,
+      owner_id: "user_b",
+      league_id: leagueId,
+      players: ["p3"],
+      starters: ["p3"],
+      reserve: [],
+      settings: { wins: 0, losses: 1, ties: 0, fpts: 90, fpts_decimal: 0, fpts_against: 100, fpts_against_decimal: 0 },
+    },
+  ];
+}
+
+function routesForLeague(
+  leagueId: string,
+  season: string,
+  previousLeagueId?: string,
+): Record<string, unknown> {
+  const routes: Record<string, unknown> = {
+    [`/league/${leagueId}`]: leaguePayload(leagueId, season, previousLeagueId),
+    [`/league/${leagueId}/users`]: usersForLeague(leagueId),
+    [`/league/${leagueId}/rosters`]: rostersForLeague(leagueId),
+    [`/league/${leagueId}/drafts`]: [],
+    [`/league/${leagueId}/matchups/1`]: [
+      {
+        roster_id: leagueId === PREV_LEAGUE_ID ? 11 : 1,
+        matchup_id: 1,
+        points: 100,
+        starters: ["p1"],
+        players: ["p1"],
+      },
+      {
+        roster_id: leagueId === PREV_LEAGUE_ID ? 12 : 2,
+        matchup_id: 1,
+        points: 90,
+        starters: ["p3"],
+        players: ["p3"],
+      },
+    ],
+    [`/league/${leagueId}/transactions/1`]: [],
+  };
+  for (let w = 2; w <= 14; w++) {
+    routes[`/league/${leagueId}/matchups/${w}`] = [];
+    routes[`/league/${leagueId}/transactions/${w}`] = [];
+  }
+  return routes;
+}
+
+function chainRoutes(): Record<string, unknown> {
+  return {
+    ...routesForLeague(LEAGUE_ID, "2025", PREV_LEAGUE_ID),
+    ...routesForLeague(PREV_LEAGUE_ID, "2024", OLDER_LEAGUE_ID),
+    "/state/nfl": {
+      week: 14,
+      season: "2025",
+      season_type: "regular",
+      leg: 14,
+      display_week: 14,
+    },
+    "/players/nfl": {
+      p1: { full_name: "Patrick Mahomes", position: "QB", team: "KC" },
+      p3: { full_name: "Justin Jefferson", position: "WR", team: "MIN" },
+    },
+  };
+}
 
 function mockFetch(routes: Record<string, unknown>): SleeperApiFetch {
   return async <T>(path: string): Promise<T> => {
@@ -223,5 +339,51 @@ describe("sleeperAdapter", () => {
     __setSleeperApiFetchForTests(mockFetch(routes));
     const { warnings } = await fetchSleeperLeagueSnapshot(LEAGUE_ID);
     expect(warnings.some((w) => w.includes("roster 2"))).toBe(true);
+  });
+
+  it("exposes previous_league_id from the league payload", async () => {
+    const routes = baseRoutes();
+    routes[`/league/${LEAGUE_ID}`] = {
+      ...(routes[`/league/${LEAGUE_ID}`] as object),
+      previous_league_id: PREV_LEAGUE_ID,
+    };
+    __setSleeperApiFetchForTests(mockFetch(routes));
+    const snapshot = await fetchSleeperLeagueSnapshot(LEAGUE_ID);
+    expect(snapshot.previousLeagueId).toBe(PREV_LEAGUE_ID);
+  });
+
+  it("imports one linked previous season and stops after one hop", async () => {
+    __setSleeperApiFetchForTests(mockFetch(chainRoutes()));
+    const result = await fetchSleeperLeagueImportSnapshots(LEAGUE_ID, {
+      includePreviousSeason: true,
+    });
+    expect(result.current.league.settings.season).toBe(2025);
+    expect(result.previous?.league.settings.season).toBe(2024);
+    expect(result.previous?.previousLeagueId).toBe(OLDER_LEAGUE_ID);
+    expect(result.warnings.some((w) => w.includes(OLDER_LEAGUE_ID))).toBe(false);
+  });
+
+  it("warns when previous_league_id is absent", async () => {
+    __setSleeperApiFetchForTests(mockFetch(baseRoutes()));
+    const result = await fetchSleeperLeagueImportSnapshots(LEAGUE_ID, {
+      includePreviousSeason: true,
+    });
+    expect(result.previous).toBeNull();
+    expect(result.warnings.some((w) => w.includes("no previous_league_id"))).toBe(true);
+  });
+
+  it("warns but keeps current snapshot when previous fetch fails", async () => {
+    const routes = baseRoutes();
+    routes[`/league/${LEAGUE_ID}`] = {
+      ...(routes[`/league/${LEAGUE_ID}`] as object),
+      previous_league_id: PREV_LEAGUE_ID,
+    };
+    __setSleeperApiFetchForTests(mockFetch(routes));
+    const result = await fetchSleeperLeagueImportSnapshots(LEAGUE_ID, {
+      includePreviousSeason: true,
+    });
+    expect(result.current.league.settings.season).toBe(2025);
+    expect(result.previous).toBeNull();
+    expect(result.warnings.some((w) => w.includes("previous season: fetch failed"))).toBe(true);
   });
 });

@@ -153,6 +153,14 @@ export type SleeperApiFetch = <T>(path: string) => Promise<T>;
 export type SleeperLeagueSnapshot = {
   league: UniversalLeague;
   warnings: string[];
+  /** Sleeper `previous_league_id` from the league payload, when present. */
+  previousLeagueId: string | null;
+};
+
+export type SleeperLeagueImportSnapshots = {
+  current: SleeperLeagueSnapshot;
+  previous: SleeperLeagueSnapshot | null;
+  warnings: string[];
 };
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
@@ -557,7 +565,42 @@ export async function fetchSleeperLeagueSnapshot(leagueId: string): Promise<Slee
       draftPicks,
     },
     warnings,
+    previousLeagueId: (league.previous_league_id || "").trim() || null,
   };
+}
+
+/**
+ * Fetch the current Sleeper league and, when requested, one directly linked previous season.
+ * Traversal stops after a single `previous_league_id` hop — no further chain walking.
+ */
+export async function fetchSleeperLeagueImportSnapshots(
+  leagueId: string,
+  options?: { includePreviousSeason?: boolean },
+): Promise<SleeperLeagueImportSnapshots> {
+  const warnings: string[] = [];
+  const current = await fetchSleeperLeagueSnapshot(leagueId);
+  warnings.push(...current.warnings);
+
+  if (options?.includePreviousSeason !== true) {
+    return { current, previous: null, warnings };
+  }
+
+  const prevId = current.previousLeagueId;
+  if (!prevId) {
+    warnings.push("previous season: no previous_league_id on current league");
+    return { current, previous: null, warnings };
+  }
+
+  try {
+    const previous = await fetchSleeperLeagueSnapshot(prevId);
+    warnings.push(...previous.warnings);
+    return { current, previous, warnings };
+  } catch (e) {
+    warnings.push(
+      `previous season: fetch failed — ${e instanceof Error ? e.message : String(e)}`,
+    );
+    return { current, previous: null, warnings };
+  }
 }
 
 async function fetchAndBuildLeague(leagueId: string): Promise<UniversalLeague> {

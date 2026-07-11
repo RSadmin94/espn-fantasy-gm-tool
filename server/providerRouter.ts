@@ -9,7 +9,8 @@
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { getSupportedProviders, PROVIDER_INFO, getAdapter } from "./providers/registry";
-import { fetchSleeperLeagueSnapshot } from "./providers/sleeperAdapter";
+import { fetchSleeperLeagueImportSnapshots } from "./providers/sleeperAdapter";
+import type { UniversalLeague } from "./providers/types";
 import { YahooAdapter, getYahooLeaguesForUser } from "./providers/yahooAdapter";
 import { isYahooConfigured } from "./providers/yahooOAuth";
 import { invokeLLM } from "./_core/llm";
@@ -50,19 +51,36 @@ export type SleeperLeagueImportResult = {
   matchupCount: number;
   transactionCount: number;
   draftPickCount: number;
+  previousSeason: number | null;
+  previousPersist: PersistUniversalLeagueResult | null;
 };
+
+function remapUniversalLeagueToLeagueId(league: UniversalLeague, leagueId: string): UniversalLeague {
+  return {
+    ...league,
+    settings: {
+      ...league.settings,
+      leagueId,
+    },
+  };
+}
 
 export async function runSleeperLeagueImport(args: {
   userId: number;
   leagueId: string;
   season?: number;
   dryRun?: boolean;
+  includePreviousSeason?: boolean;
 }): Promise<SleeperLeagueImportResult> {
   const steps: string[] = [];
   const dryRun = args.dryRun === true;
 
   steps.push("Connecting to Sleeper API...");
-  const { league, warnings: adapterWarnings } = await fetchSleeperLeagueSnapshot(args.leagueId);
+  const { current, previous, warnings: adapterWarnings } = await fetchSleeperLeagueImportSnapshots(
+    args.leagueId,
+    { includePreviousSeason: args.includePreviousSeason === true },
+  );
+  const league = current.league;
   const season = args.season ?? league.settings.season;
 
   steps.push(`Found league: ${league.settings.leagueName} (${league.teams.length} teams)`);
@@ -74,6 +92,21 @@ export async function runSleeperLeagueImport(args: {
     { ...league, settings: { ...league.settings, season } },
     { dryRun },
   );
+
+  let previousSeason: number | null = null;
+  let previousPersist: PersistUniversalLeagueResult | null = null;
+  if (previous) {
+    previousSeason = previous.league.settings.season;
+    steps.push(`Importing linked previous season ${previousSeason}...`);
+    const remappedPrevious = remapUniversalLeagueToLeagueId(previous.league, args.leagueId);
+    previousPersist = await persistUniversalLeague(remappedPrevious, { dryRun });
+    const pc = previousPersist.counts;
+    steps.push(
+      dryRun
+        ? `Previous season dry run (teams=${pc.teams.persisted}, matchups=${pc.matchups.persisted})`
+        : `Previous season persisted (teams=${pc.teams.persisted}, matchups=${pc.matchups.persisted})`,
+    );
+  }
 
   const c = persist.counts;
   steps.push(
@@ -94,11 +127,17 @@ export async function runSleeperLeagueImport(args: {
     };
   });
 
-  const hardFailure = persist.failures.length > 0 || (!dryRun && persist.counts.teams.persisted === 0);
+  const hardFailure =
+    persist.failures.length > 0 ||
+    (!dryRun && persist.counts.teams.persisted === 0);
   const partial =
     !dryRun &&
     !hardFailure &&
-    (adapterWarnings.length > 0 || persist.warnings.length > 0 || persist.teamsMissingOwnerId.length > 0);
+    (adapterWarnings.length > 0 ||
+      persist.warnings.length > 0 ||
+      persist.teamsMissingOwnerId.length > 0 ||
+      (previousPersist != null &&
+        (previousPersist.warnings.length > 0 || previousPersist.failures.length > 0)));
 
   if (!dryRun && !hardFailure) {
     const db = await getDb();
@@ -109,7 +148,9 @@ export async function runSleeperLeagueImport(args: {
     const issueNotes = [
       ...adapterWarnings,
       ...persist.warnings,
+      ...(previousPersist?.warnings ?? []),
       ...persist.failures.map((f) => `${f.entity}: ${f.message}`),
+      ...(previousPersist?.failures ?? []).map((f) => `${f.entity}: ${f.message}`),
     ];
     const syncStatus = partial ? "error" as const : "ok" as const;
     const syncError = partial && issueNotes.length > 0 ? issueNotes.join("; ").slice(0, 2000) : null;
@@ -163,6 +204,8 @@ export async function runSleeperLeagueImport(args: {
     matchupCount: league.matchups.length,
     transactionCount: league.transactions.length,
     draftPickCount: league.draftPicks.length,
+    previousSeason,
+    previousPersist,
   };
 }
 
@@ -345,6 +388,7 @@ export const providerRouter = router({
       leagueId: z.string().min(1),
       season: z.number().optional(),
       dryRun: z.boolean().optional(),
+      includePreviousSeason: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       return runSleeperLeagueImport({
@@ -352,6 +396,7 @@ export const providerRouter = router({
         leagueId: input.leagueId,
         season: input.season,
         dryRun: input.dryRun,
+        includePreviousSeason: input.includePreviousSeason ?? true,
       });
     }),
 
