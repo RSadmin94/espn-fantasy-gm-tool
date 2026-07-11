@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
+import { Link } from "react-router";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { displayOwnerName } from "@/lib/ownerName";
@@ -57,8 +58,6 @@ const CRIMSON = "#e23b3b";
 /** Nested sub-panels — maps to IntelPanel variant="sub" */
 const SUB_CLASS = "rounded-intel-sub border-intel-sub bg-intel-sub";
 
-const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell", "rod s"];
-
 const HEAT: Record<string, { c: string; label: string }> = {
   Cold: { c: "#6b7280", label: "Acquaintance" },
   Simmering: { c: "#d8a23a", label: "Rival" },
@@ -69,6 +68,48 @@ const HEAT: Record<string, { c: string; label: string }> = {
 
 const norm = (s: unknown) => String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 const n = (v: unknown) => Number(v ?? 0);
+
+export type RivalryOwnerRef = { ownerKey: string; ownerName?: string };
+
+export type ActiveProfileFocalInput = {
+  isSetupComplete?: boolean;
+  selectedOwnerKey?: string | null;
+};
+
+/** Resolve the signed-in user's focal owner — no impersonation fallback. */
+export function resolveFocalOwnerState(
+  profile: ActiveProfileFocalInput | null | undefined,
+  allOwners: RivalryOwnerRef[],
+): { focalResolved: boolean; focalOwnerKey: string } {
+  const setupComplete = !!profile?.isSetupComplete;
+  const selectedKey = setupComplete ? (profile?.selectedOwnerKey ?? null) : null;
+  const focalResolved = !!selectedKey && allOwners.some((o) => o.ownerKey === selectedKey);
+  return {
+    focalResolved,
+    focalOwnerKey: focalResolved ? selectedKey! : "",
+  };
+}
+
+export type RivalryCenterBodyState = "loading" | "setup_incomplete" | "empty" | "wall";
+
+export const RIVALRY_SETUP_GATE = {
+  title: "Unlock Your Rivalries",
+  description:
+    "Select your team so Fantasy Football Rivals can identify your head-to-head history and league rivals.",
+  ctaLabel: "Select My Team",
+  ctaHref: "/connect",
+} as const;
+
+export function resolveRivalryCenterBodyState(input: {
+  loading: boolean;
+  focalResolved: boolean;
+  allEmpty: boolean;
+}): RivalryCenterBodyState {
+  if (input.loading) return "loading";
+  if (!input.focalResolved) return "setup_incomplete";
+  if (input.allEmpty) return "empty";
+  return "wall";
+}
 
 type Pair = {
   rivalId?: string;
@@ -217,17 +258,10 @@ export function RivalryCenter() {
     return m;
   }, [allOwners]);
 
-  const rodKey = useMemo(() => {
-    // Prefer the signed-in user's selected owner from their active profile.
-    const sel: string | null = profileQ.data?.isSetupComplete ? profileQ.data.selectedOwnerKey : null;
-    if (sel && allOwners.some((o) => o.ownerKey === sel)) return sel;
-    // Fallback (unchanged): focal-name match, else first picker option.
-    for (const o of allOwners) {
-      const nm = norm(o.ownerName);
-      if (ROD_NAMES.some((r) => nm.includes(r))) return o.ownerKey;
-    }
-    return pickerOptions[0]?.ownerKey ?? "";
-  }, [allOwners, pickerOptions, profileQ.data]);
+  const { focalResolved, focalOwnerKey: rodKey } = useMemo(
+    () => resolveFocalOwnerState(profileQ.data, allOwners),
+    [allOwners, profileQ.data],
+  );
 
   const rodName = useMemo(() => {
     const o = allOwners.find((x) => x.ownerKey === rodKey);
@@ -420,8 +454,9 @@ export function RivalryCenter() {
     });
   };
 
-  const loading = !leagueKeyReady || scoresQ.isLoading || listQ.isLoading;
+  const loading = !leagueKeyReady || scoresQ.isLoading || listQ.isLoading || profileQ.isLoading;
   const allEmpty = !leagueLoading && leaguePairs.length === 0 && pairs.length === 0;
+  const bodyState = resolveRivalryCenterBodyState({ loading, focalResolved, allEmpty });
   const hero = pairs[0];
   const heroRivalKey = hero ? nameToKey[norm(String(hero.rivalName ?? ""))] : undefined;
   const heroYearsActive: number = (() => {
@@ -459,7 +494,7 @@ export function RivalryCenter() {
       />
 
       <main className="space-y-3">
-        {rivalryGated && !loading && (
+        {rivalryGated && bodyState === "wall" && (
           <Panel>
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="flex-1">
@@ -485,11 +520,29 @@ export function RivalryCenter() {
             </div>
           </Panel>
         )}
-        {loading ? (
+        {bodyState === "loading" ? (
           <Panel>
             <SectionLoading message="Loading league rivalries…" className="justify-center py-16" />
           </Panel>
-        ) : allEmpty ? (
+        ) : bodyState === "setup_incomplete" ? (
+          <Panel>
+            <div className="py-12 text-center">
+              <Users className="mx-auto mb-3 h-8 w-8" style={{ color: MUTED }} />
+              <div className="text-lg font-extrabold">{RIVALRY_SETUP_GATE.title}</div>
+              <p className="mt-1 mx-auto max-w-md text-sm" style={{ color: MUTED }}>
+                {RIVALRY_SETUP_GATE.description}
+              </p>
+              <Link
+                to={RIVALRY_SETUP_GATE.ctaHref}
+                className="mt-5 inline-flex items-center gap-2 rounded-[10px] px-5 py-3 text-sm font-extrabold"
+                style={{ background: ACCENT, color: "#1e1623" }}
+              >
+                {RIVALRY_SETUP_GATE.ctaLabel}
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </Panel>
+        ) : bodyState === "empty" ? (
           <Panel>
             <div className="py-12 text-center">
               <Swords className="mx-auto mb-3 h-8 w-8" style={{ color: MUTED }} />
