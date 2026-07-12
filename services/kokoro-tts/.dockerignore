@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.hf_cache/
+.audio_cache/
+*.pyc
+*.wav

@@ -1,4 +1,5 @@
-# Dependencies
+# Certification artifacts (local only)
+cert-output/
 **/node_modules
 .pnpm-store/
 
