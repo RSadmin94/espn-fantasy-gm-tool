@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { DraftWarRoomDesk } from "./DraftWarRoomDesk";
 import { useRfsnLiveLockedPickNotify } from "@/hooks/useRfsnLiveLockedPickNotify";
 import { buildRfsnLiveDraftId } from "@/lib/rfsnLiveDraftId";
+import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
 import {
   Zap, BarChart2, RefreshCw, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, Info, Trophy, Target,
@@ -568,7 +569,14 @@ function LiveDraftEngine({
   const [posFilter, setPos]   = useState<string>("ALL");
   const [searchQ, setSearchQ] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const SPEED_MS = 450;
+  // Pace between AI auto-picks. Default "Broadcast" gives the RFSN booth time to
+  // generate + play a line before the next pick; Brisk/Turbo for quick sims.
+  const PACE_OPTIONS = [
+    { key: "broadcast", label: "Broadcast", ms: 9000 },
+    { key: "brisk", label: "Brisk", ms: 3500 },
+    { key: "turbo", label: "Turbo", ms: 450 },
+  ] as const;
+  const [paceMs, setPaceMs] = useState<number>(9000);
 
   useEffect(() => {
     setResults(initialResults); setIdx(0); setRunning(false);
@@ -708,9 +716,9 @@ function LiveDraftEngine({
         return { ...prev, [cur.pickNumber]: { ...pick, byAI: true } };
       });
       setIdx(i => i + 1);
-    }, SPEED_MS);
+    }, paceMs);
     return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [running, idx, done, schedule, yourTeamId, totalRounds, availablePool]);
+  }, [running, idx, done, schedule, yourTeamId, totalRounds, availablePool, paceMs]);
 
   function userDraft(p: any) {
     const cur = schedule[idx];
@@ -742,6 +750,16 @@ function LiveDraftEngine({
         {!running && !done && <button onClick={() => setRunning(true)} className="px-4 py-1.5 rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-xs font-black hover:bg-violet-500/25">{idx === 0 ? "▶ Start Draft" : "▶ Resume"}</button>}
         {running && <button onClick={() => setRunning(false)} className="px-4 py-1.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-black">⏸ Pause</button>}
         {idx > 0 && <button onClick={reset} className="px-3 py-1.5 rounded text-zinc-500 text-xs hover:text-zinc-300 border border-zinc-700">↺ Reset</button>}
+        <div className="flex items-center gap-1 ml-1">
+          <span className="text-[10px] uppercase tracking-wider text-zinc-600">Pace</span>
+          {PACE_OPTIONS.map((p) => (
+            <button key={p.key} onClick={() => setPaceMs(p.ms)}
+              className={cn("px-2 py-0.5 rounded text-[11px] font-bold",
+                paceMs === p.ms ? "bg-violet-600/30 text-violet-200" : "text-zinc-500 hover:text-zinc-300 border border-white/[0.06]")}>
+              {p.label}
+            </button>
+          ))}
+        </div>
         <span className="text-[11px] text-zinc-500 tabular-nums ml-1">Pick {Math.min(idx, schedule.length)}/{schedule.length}</span>
         <span className="text-[11px] text-zinc-600 ml-auto">{yourTeamId == null ? "Spectating — AI drafts everyone" : "AI drafts other teams; you pick for your team"}</span>
       </div>
@@ -758,6 +776,13 @@ function LiveDraftEngine({
         </div>
       )}
       {done && <div className="rounded-lg border border-violet-500/40 bg-violet-500/5 px-4 py-3 mb-3 text-center text-violet-300 font-black text-sm">✓ Draft complete — {schedule.length} picks</div>}
+
+      {/* RFSN broadcast booth + audio — same live session as RFSN Live, on one screen. */}
+      {leagueId && (
+        <div className="mb-4">
+          <RfsnBroadcastPanel leagueId={leagueId} draftId={draftId} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Available pool (sortable) */}
