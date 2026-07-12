@@ -145,6 +145,30 @@ describe("layout", () => {
   });
 });
 
+describe("board and order presentation helpers", () => {
+  it("pads sparse boards to minimum row count", async () => {
+    const { padBoardRows, RFSN_MIN_BOARD_ROWS } = await import("@/lib/rfsnPresentation");
+    const padded = padBoardRows([
+      { rank: 1, player: "A", position: "RB", team: "KC", bye: 0, adp: 1, isOnClock: true },
+    ]);
+    expect(padded.length).toBeGreaterThanOrEqual(RFSN_MIN_BOARD_ROWS);
+    expect(padded[0]?.isOnClock).toBe(true);
+  });
+
+  it("focuses draft order window around on-clock pick", async () => {
+    const { focusDraftOrderWindow } = await import("@/lib/rfsnPresentation");
+    const slots = Array.from({ length: 14 }, (_, i) => ({
+      pickLabel: `1.${String(i + 1).padStart(2, "0")}`,
+      teamName: `Team ${i}`,
+      teamAbbr: `T${i}`,
+      isOnClock: i === 5,
+    }));
+    const window = focusDraftOrderWindow(slots, 6);
+    expect(window.some((s) => s.isOnClock)).toBe(true);
+    expect(window.length).toBeLessThanOrEqual(6);
+  });
+});
+
 describe("RfsnPrototype harness", () => {
   it("exports a prototype page component", async () => {
     const mod = await import("@/pages/RfsnPrototype");

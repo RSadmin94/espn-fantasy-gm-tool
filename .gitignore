@@ -112,6 +112,12 @@ temp/
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
 
+# RFSN local review artifacts (screenshots, shadow playback exports)
+client/public/rfsn-screenshots/
+client/public/rfsn-screenshots-refined/
+client/public/rfsn-screenshots-booth-v*/
+client/public/dev-shadow/
+
 
 # --- Scratch / probe / one-off working files ---
 # Root-anchored (/_*) so it only catches the disposable _*.ts/_*.ps1/_*.txt/_*.mjs

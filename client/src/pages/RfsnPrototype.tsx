@@ -236,9 +236,6 @@ export function RfsnPrototype() {
         <RfsnBroadcastShell
           snapshot={snapshot}
           layout={layout}
-          phase={phase}
-          onDismissPrimary={dismissPrimary}
-          onDismissSecondary={dismissSecondary}
         />
       </div>
     </div>

@@ -11,22 +11,27 @@ export function RfsnPositionRunAlert({ count, position, className }: RfsnPositio
   return (
     <div
       className={cn(
-        "rounded-lg border border-amber-500/40 bg-amber-500/10 p-3",
+        "rounded-md border border-amber-500/45 bg-gradient-to-br from-amber-500/15 to-black/50 p-3",
         className,
       )}
     >
       <div className="flex items-center gap-2 text-amber-400">
-        <TrendingUp className="h-4 w-4" aria-hidden />
-        <span className="text-[10px] font-bold uppercase tracking-widest">
+        <TrendingUp className="h-4 w-4 shrink-0" aria-hidden />
+        <span className="text-[9px] font-black uppercase tracking-[0.18em]">
           Run on {position}s
         </span>
       </div>
-      <p className="mt-1 text-sm font-semibold text-white">
+      <p className="mt-1.5 text-sm font-bold leading-tight text-white md:text-base">
         {count} {position}s taken in the last 9 picks
       </p>
-      <div className="mt-2 flex gap-1" aria-hidden>
-        {Array.from({ length: Math.min(count, 8) }).map((_, i) => (
-          <span key={i} className="h-2 w-2 rounded-full bg-amber-400/70" />
+      <div className="mt-2.5 flex flex-wrap gap-1" aria-hidden>
+        {Array.from({ length: Math.min(count, 10) }).map((_, i) => (
+          <span
+            key={i}
+            className="inline-flex h-5 w-5 items-center justify-center rounded-sm bg-amber-400/20 text-[8px] font-black text-amber-300"
+          >
+            {position[0]}
+          </span>
         ))}
       </div>
     </div>

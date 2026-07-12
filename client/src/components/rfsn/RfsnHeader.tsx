@@ -1,60 +1,89 @@
 import { cn } from "@/lib/utils";
-import { Radio } from "lucide-react";
+import { Clock, Radio, Users } from "lucide-react";
 
 export type RfsnHeaderProps = {
   round: number;
   pickInRound: number;
   overallPick: string;
   onClockTeam: string;
+  clockSeconds?: number;
+  momentScore?: number | null;
   onlineCount?: number;
   className?: string;
 };
 
+function formatClock(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 export function RfsnHeader({
   round,
-  pickInRound,
   overallPick,
   onClockTeam,
+  clockSeconds = 90,
+  momentScore = null,
   onlineCount = 10,
   className,
 }: RfsnHeaderProps) {
   return (
     <header
-      className={cn(
-        "flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-black/40 px-3 py-2 md:px-4",
-        className,
-      )}
+      className={cn("rfsn-score-bug px-2 py-2 md:px-3", className)}
+      aria-label="Broadcast score bug"
     >
-      <div className="flex items-center gap-2">
-        <span className="text-lg font-black tracking-tight text-white">
-          RFS<span className="text-red-500">N</span>
-        </span>
-        <span className="hidden text-xs text-muted-foreground sm:inline">Rivals Fantasy Sports Network</span>
-      </div>
-
-      <div className="flex flex-col items-center text-center">
-        <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-          <span className="inline-flex items-center gap-1 rounded bg-red-600/90 px-1.5 py-0.5 font-bold text-white">
-            <Radio className="h-3 w-3" aria-hidden />
+      <div className="flex flex-wrap items-stretch justify-between gap-y-2 md:flex-nowrap md:items-center">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="text-lg font-black tracking-tighter text-white md:text-xl">
+            RFS<span className="text-red-500">N</span>
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-sm bg-red-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-[0_0_10px_rgba(220,38,38,0.4)]">
+            <Radio className="h-3 w-3 rfsn-mic-live" aria-hidden />
             Live
           </span>
-          <span>Snake Draft</span>
-          <span className="hidden sm:inline">·</span>
-          <span className="hidden sm:inline">10-Team PPR</span>
         </div>
-        <p className="text-sm font-semibold md:text-base">
-          Round {round} · Pick {pickInRound}{" "}
-          <span className="text-muted-foreground">({overallPick})</span>
-        </p>
-        <p className="text-xs font-bold uppercase tracking-wide text-emerald-400 md:text-sm">
-          On the clock: {onClockTeam}
-        </p>
-      </div>
 
-      <div className="text-right text-[10px] text-muted-foreground md:text-xs">
-        <p className="hidden md:block">Aug 24, 2024 · 8:15 PM ET</p>
-        <p>{onlineCount} online</p>
-        <p className="font-medium text-white/70">RFSN · Unfiltered</p>
+        <div className="flex flex-1 flex-wrap items-center justify-center gap-0 md:justify-center">
+          <div className="rfsn-score-bug-segment text-center">
+            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-white/40">Round</span>
+            <span className="text-sm font-black tabular-nums text-white md:text-base">{round}</span>
+          </div>
+          <div className="rfsn-score-bug-segment text-center">
+            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-white/40">Pick</span>
+            <span className="text-sm font-black tabular-nums text-white md:text-base">{overallPick}</span>
+          </div>
+          <div className="rfsn-score-bug-segment hidden text-center sm:flex">
+            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-white/40">League</span>
+            <span className="text-xs font-bold text-white/80">10T PPR</span>
+          </div>
+          <div className="rfsn-score-bug-segment text-center">
+            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-white/40">Clock</span>
+            <span className="inline-flex items-center gap-1 text-sm font-black tabular-nums text-emerald-400">
+              <Clock className="h-3 w-3" aria-hidden />
+              {formatClock(clockSeconds)}
+            </span>
+          </div>
+          {momentScore != null && (
+            <div className="rfsn-score-bug-segment text-center" data-rfsn-focus-target>
+              <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-white/40">Moment</span>
+              <span className="text-sm font-black tabular-nums text-amber-400">{momentScore}</span>
+            </div>
+          )}
+          <div className="rfsn-score-bug-segment text-center">
+            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-white/40">On clock</span>
+            <span className="max-w-[5.5rem] truncate text-xs font-bold text-emerald-400 md:max-w-none">
+              {onClockTeam}
+            </span>
+          </div>
+        </div>
+
+        <div className="rfsn-score-bug-segment items-end border-r-0 text-right">
+          <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-white/40">Viewers</span>
+          <span className="inline-flex items-center gap-1 text-sm font-bold tabular-nums text-white">
+            <Users className="h-3 w-3 text-white/50" aria-hidden />
+            {onlineCount}
+          </span>
+        </div>
       </div>
     </header>
   );

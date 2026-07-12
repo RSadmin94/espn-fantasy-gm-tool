@@ -92,28 +92,50 @@ export function significanceLabel(level: RfsnSignificance): string {
 
 export const COMMENTATOR_META: Record<
   RfsnCommentatorId,
-  { displayName: string; role: string; accentClass: string; borderClass: string; bgClass: string }
+  {
+    displayName: string;
+    role: string;
+    accentClass: string;
+    borderClass: string;
+    bgClass: string;
+    boothGlowClass: string;
+    segmentClass: string;
+    portrait?: string;
+    portraitPosition?: string;
+  }
 > = {
   sofia: {
     displayName: "Sofia",
     role: "Lead Analyst",
-    accentClass: "text-sky-400",
-    borderClass: "border-sky-500/50",
-    bgClass: "bg-sky-500/10",
+    accentClass: "text-sky-300",
+    borderClass: "border-sky-400/55",
+    bgClass: "bg-sky-500/12",
+    boothGlowClass: "rfsn-booth-glow-sofia",
+    segmentClass: "text-sky-400/90",
+    portrait: "/rfsn/sofia.png",
+    portraitPosition: "center 14%",
   },
   coach: {
     displayName: "Coach",
     role: "Roster Construction",
-    accentClass: "text-amber-400",
-    borderClass: "border-amber-500/50",
-    bgClass: "bg-amber-500/10",
+    accentClass: "text-amber-300",
+    borderClass: "border-amber-400/55",
+    bgClass: "bg-amber-500/12",
+    boothGlowClass: "rfsn-booth-glow-coach",
+    segmentClass: "text-amber-400/90",
+    portrait: "/rfsn/coach.png",
+    portraitPosition: "center 20%",
   },
   roxanne: {
     displayName: "Roxanne",
     role: "Debate & Receipts",
-    accentClass: "text-fuchsia-400",
-    borderClass: "border-fuchsia-500/50",
-    bgClass: "bg-fuchsia-500/10",
+    accentClass: "text-fuchsia-300",
+    borderClass: "border-fuchsia-400/55",
+    bgClass: "bg-fuchsia-500/12",
+    boothGlowClass: "rfsn-booth-glow-roxanne",
+    segmentClass: "text-fuchsia-400/90",
+    portrait: "/rfsn/roxanne.png",
+    portraitPosition: "center 20%",
   },
 };
 
@@ -139,6 +161,13 @@ const BASE_BOARD: RfsnDraftPickRow[] = [
   { rank: 6, player: "C. Lamb", position: "WR", team: "DAL", bye: 7, adp: 6.3 },
   { rank: 7, player: "T. McBride", position: "TE", team: "ARI", bye: 11, adp: 7.8 },
   { rank: 8, player: "J. Allen", position: "QB", team: "BUF", bye: 12, adp: 8.2 },
+  { rank: 9, player: "A. St. Brown", position: "WR", team: "DET", bye: 5, adp: 9.1 },
+  { rank: 10, player: "S. Barkley", position: "RB", team: "PHI", bye: 5, adp: 10.4 },
+  { rank: 11, player: "D. Henry", position: "RB", team: "BAL", bye: 14, adp: 11.0 },
+  { rank: 12, player: "N. Collins", position: "WR", team: "HOU", bye: 14, adp: 12.3 },
+  { rank: 13, player: "M. Andrews", position: "TE", team: "BAL", bye: 14, adp: 13.1 },
+  { rank: 14, player: "J. Hurts", position: "QB", team: "PHI", bye: 5, adp: 14.2 },
+  { rank: 15, player: "G. Wilson", position: "WR", team: "NYJ", bye: 12, adp: 15.0 },
 ];
 
 const BASE_ODDS = [
@@ -377,7 +406,50 @@ export function resolveLayoutMode(viewportWidth: number): RfsnLayoutMode {
   return viewportWidth < 768 ? "mobile" : "desktop";
 }
 
-export const RFSN_SHELL_CLASS = "min-h-screen bg-[#07070c] text-foreground overflow-x-hidden";
+export const RFSN_SHELL_CLASS =
+  "min-h-0 flex flex-1 flex-col overflow-hidden bg-[#050508] text-foreground";
+
+/** Maximum broadcast canvas width — ultrawide centers with cinematic margins */
+export const RFSN_BROADCAST_MAX_WIDTH_PX = 1680;
+
+export const RFSN_MIN_BOARD_ROWS = 12;
+
+const BOARD_POS_ROTATION: RfsnDraftPickRow["position"][] = ["RB", "WR", "WR", "RB", "QB", "TE"];
+
+/** Pad sparse adapter boards so the window always feels live during playback. */
+export function padBoardRows(
+  rows: readonly RfsnDraftPickRow[],
+  minRows = RFSN_MIN_BOARD_ROWS,
+): RfsnDraftPickRow[] {
+  if (rows.length >= minRows) return [...rows];
+  const padded = [...rows];
+  const startRank = rows.length > 0 ? Math.max(...rows.map((r) => r.rank)) + 1 : 1;
+  for (let i = 0; i < minRows - rows.length; i++) {
+    const rank = startRank + i;
+    padded.push({
+      rank,
+      player: `—`,
+      position: BOARD_POS_ROTATION[i % BOARD_POS_ROTATION.length]!,
+      team: "—",
+      bye: 0,
+      adp: rank,
+    });
+  }
+  return padded;
+}
+
+/** Focus the order rail on previous, current, and upcoming picks. */
+export function focusDraftOrderWindow(
+  slots: readonly RfsnOrderSlot[],
+  windowSize = 8,
+): RfsnOrderSlot[] {
+  if (slots.length <= windowSize) return [...slots];
+  const onClockIdx = slots.findIndex((s) => s.isOnClock);
+  const anchor = onClockIdx >= 0 ? onClockIdx : slots.findIndex((s) => !s.isComplete);
+  const start = Math.max(0, anchor - 2);
+  const end = Math.min(slots.length, start + windowSize);
+  return slots.slice(start, end);
+}
 
 export const RFSN_PHASE_BEAT_MS = 400;
 export const RFSN_PHASE_PRIMARY_MS = 600;

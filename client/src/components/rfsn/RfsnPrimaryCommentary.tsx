@@ -10,7 +10,7 @@ export type RfsnPrimaryCommentaryProps = {
   className?: string;
 };
 
-function CommentatorAvatar({
+function CommentatorPortrait({
   commentator,
   compact = false,
 }: {
@@ -21,14 +21,13 @@ function CommentatorAvatar({
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-full border-2 font-bold text-white/90",
-        meta.bgClass,
+        "flex shrink-0 items-end justify-center overflow-hidden rounded-md border-2 bg-gradient-to-b from-white/10 to-black/60 font-black uppercase text-white/90",
         meta.borderClass,
-        compact ? "h-8 w-8 text-xs" : "h-12 w-12 text-sm",
+        compact ? "h-14 w-11 text-lg" : "h-28 w-[4.5rem] text-3xl",
       )}
       aria-hidden
     >
-      {meta.displayName[0]}
+      <span className={cn("pb-2", meta.accentClass)}>{meta.displayName[0]}</span>
     </div>
   );
 }
@@ -44,7 +43,8 @@ export function RfsnPrimaryCommentary({
   return (
     <article
       className={cn(
-        "relative rounded-lg border bg-black/50 shadow-lg animate-in fade-in slide-in-from-right-4 duration-300",
+        "relative flex h-full flex-col rounded-md border bg-gradient-to-br from-black/70 to-black/40 shadow-lg",
+        "animate-in fade-in slide-in-from-right-3 duration-500",
         meta.borderClass,
         compact ? "p-3" : "p-4",
         className,
@@ -55,29 +55,32 @@ export function RfsnPrimaryCommentary({
         <button
           type="button"
           onClick={onDismiss}
-          className="absolute right-2 top-2 rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-white"
+          className="absolute right-2 top-2 z-10 rounded p-1 text-white/40 hover:bg-white/10 hover:text-white"
           aria-label="Dismiss commentary"
         >
           <X className="h-4 w-4" />
         </button>
       )}
-      <div className="flex gap-3">
-        {!compact && <CommentatorAvatar commentator={card.commentator} />}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            {compact && <CommentatorAvatar commentator={card.commentator} compact />}
+      <div className={cn("flex gap-3", compact ? "items-start" : "items-stretch")}>
+        <CommentatorPortrait commentator={card.commentator} compact={compact} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-start justify-between gap-2 pr-6">
             <div>
-              <p className={cn("text-sm font-bold", meta.accentClass)}>{meta.displayName}</p>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              <p className={cn("font-black tracking-tight", meta.accentClass, compact ? "text-sm" : "text-lg")}>
+                {meta.displayName}
+              </p>
+              <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/40">
                 {card.label}
               </p>
             </div>
+            <span className="text-[8px] font-black uppercase tracking-widest text-white/20">RFSN</span>
           </div>
           <p
             className={cn(
-              "mt-2 text-sm leading-relaxed text-white/90",
+              "mt-2 flex-1 leading-relaxed text-white/92",
+              compact ? "text-xs" : "text-sm md:text-[15px]",
               card.long && "overflow-y-auto pr-1",
-              card.long && (compact ? "max-h-24" : "max-h-32"),
+              card.long && (compact ? "max-h-24" : "max-h-40"),
             )}
           >
             {card.text}
