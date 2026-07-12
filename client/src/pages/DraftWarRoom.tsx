@@ -3,9 +3,12 @@ import { useAuth } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { APP_VERSION } from "@/lib/version";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { DraftWarRoomDesk } from "./DraftWarRoomDesk";
+import { useRfsnLiveLockedPickNotify } from "@/hooks/useRfsnLiveLockedPickNotify";
+import { buildRfsnLiveDraftId } from "@/lib/rfsnLiveDraftId";
 import {
   Zap, BarChart2, RefreshCw, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, Info, Trophy, Target,
@@ -522,8 +525,11 @@ interface KeeperOverride {
 // ── Live Draft Engine (real, stateful: AI fills other teams, you take your picks) ──
 function LiveDraftEngine({
   picks, teams, availablePool, positionCaps, yourTeamId,
+  leagueId, draftId,
 }: {
   picks: any[]; teams: any[]; availablePool: any[]; positionCaps: Record<string, number> | null; yourTeamId: number | null;
+  leagueId?: string | null;
+  draftId: string;
 }) {
   // Match drafted players to the pool by NORMALIZED NAME (strip punctuation + Jr/Sr/III suffixes),
   // because the souls board and the available pool carry different ids/name spellings — id matching
@@ -646,6 +652,25 @@ function LiveDraftEngine({
   const done = idx >= schedule.length;
   const awaitingUser = !!slot && !slot.isKeeperSlot && yourTeamId != null && Number(slot.teamId) === yourTeamId && !results[slot.pickNumber];
   const onClock = slot ? teams.find((t: any) => Number(t.teamId) === Number(slot.teamId)) : null;
+
+  useRfsnLiveLockedPickNotify({
+    enabled: Boolean(leagueId),
+    leagueId,
+    draftId,
+    schedule: schedule.map((s: any) => ({
+      pickNumber: s.pickNumber,
+      round: s.round,
+      roundPick: s.roundPick,
+      teamId: s.teamId,
+      ownerName: teams.find((t: any) => Number(t.teamId) === Number(s.teamId))?.ownerName ?? s.ownerName,
+      isKeeperSlot: s.isKeeperSlot,
+    })),
+    results,
+    draftComplete: done,
+    teamCount: teams.length || 14,
+    resetKey: scheduleSig,
+    baselineResults: initialResults,
+  });
 
   // Step engine: keeper slots auto-advance, AI auto-picks, your pick pauses
   useEffect(() => {
@@ -872,6 +897,7 @@ function SoulsBoardView({ board }: {
 function MockDraftBoard({
   picks, teams, availablePool, positionCaps, keeperPredictions, rosterNeeds,
   onKeeperOverride, keeperOverrides, keepersEnabled = true,
+  leagueId, draftId,
 }: {
   picks: any[]; teams: any[];
   availablePool: any[];
@@ -881,6 +907,8 @@ function MockDraftBoard({
   onKeeperOverride: (overrides: KeeperOverride[]) => void;
   keeperOverrides: KeeperOverride[];
   keepersEnabled?: boolean;
+  leagueId?: string | null;
+  draftId: string;
 }) {
   const [view, setView]           = useState<"board" | "team" | "live">("board");
   const [selTeam, setSelTeam]     = useState<number | null>(null);
@@ -1141,7 +1169,15 @@ function MockDraftBoard({
 
       {/* Live Draft (new stateful engine) */}
       {view === "live" && (
-        <LiveDraftEngine picks={picks} teams={teams} availablePool={availablePool} positionCaps={positionCaps} yourTeamId={yourTeamId} />
+        <LiveDraftEngine
+          picks={picks}
+          teams={teams}
+          availablePool={availablePool}
+          positionCaps={positionCaps}
+          yourTeamId={yourTeamId}
+          leagueId={leagueId}
+          draftId={draftId}
+        />
       )}
 
       {/* Old playback live view (disabled) */}
@@ -1640,7 +1676,7 @@ function DwrSectionNav({ keepersOn }: { keepersOn: boolean }) {
 export function DraftWarRoom() {
   const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const { leagueContextKey } = useLeagueActiveGate();
-  const season = new Date().getFullYear();
+  const { season } = useLeagueContext();
   const [keeperOverrides, setKeeperOverrides] = useState<any[]>([]);
   const leagueKeyReady =
     authLoaded && isSignedIn && !leagueContextKey.startsWith("__");
@@ -1661,6 +1697,11 @@ export function DraftWarRoom() {
     warRoomInput,
     { enabled: leagueKeyReady },
   );
+  const activeLeagueQ = trpc.league.getActive.useQuery(undefined, { enabled: leagueKeyReady });
+  const leagueId = leagueKeyReady && activeLeagueQ.data?.leagueId
+    ? String(activeLeagueQ.data.leagueId)
+    : null;
+  const rfsnLiveDraftId = buildRfsnLiveDraftId(season);
   const soulsQ = { data: null as any, isLoading: false };
   void soulsQ;
 
@@ -1844,13 +1885,15 @@ export function DraftWarRoom() {
         <Section id="dwr-mock" title="Mock Draft Board" icon={Target} badge={totalPicks} defaultOpen={true}>
           <MockDraftBoard
             picks={mockDraft ?? []}
-            teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName }))}
+            teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName, ownerName: n.ownerName }))}
             availablePool={data?.availablePool ?? []}
             positionCaps={data?.positionCaps ?? null}
             keeperPredictions={keeperPredictions ?? []}
             rosterNeeds={rosterNeeds ?? []}
             keeperOverrides={keeperOverrides}
             keepersEnabled={keepersOn}
+            leagueId={leagueId}
+            draftId={rfsnLiveDraftId}
             onKeeperOverride={(overrides) => {
               setKeeperOverrides(overrides);
             }}

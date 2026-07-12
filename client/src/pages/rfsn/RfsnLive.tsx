@@ -3,6 +3,7 @@ import { skipToken } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { RfsnMediaShell } from "@/components/rfsn/RfsnMediaShell";
 import { RfsnBroadcastShell } from "@/components/rfsn/RfsnBroadcastShell";
@@ -20,9 +21,9 @@ import { resolveLayoutMode } from "@/lib/rfsnPresentation";
 import { initialCardStates } from "@/lib/rfsnBoothPresentation";
 import { AlertCircle, Loader2, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { buildRfsnLiveDraftId } from "@/lib/rfsnLiveDraftId";
 
 const LIVE_POLL_MS = 2000;
-const INTERNAL_DRAFT_ID = "rfsn-live-internal";
 
 function RfsnLiveDisabled() {
   return (
@@ -99,6 +100,7 @@ function RfsnLiveStandby({
 export function RfsnLive() {
   const _trpc = trpc as any;
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const { season } = useLeagueContext();
   const leagueKeyReady = Boolean(
     authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"),
   );
@@ -111,10 +113,11 @@ export function RfsnLive() {
   const activeLeagueQ = _trpc.league.getActive.useQuery(undefined, { enabled: leagueKeyReady });
   const leagueId = leagueKeyReady ? String(activeLeagueQ.data?.leagueId ?? "") : "";
   const leagueName = leagueKeyReady ? String(activeLeagueQ.data?.leagueName ?? "") : "";
+  const liveDraftId = buildRfsnLiveDraftId(season);
 
   const snapshotQ = _trpc.rfsnBroadcast.getLiveSnapshot.useQuery(
     leagueKeyReady && leagueId && accessQ.data?.canAccess
-      ? withLeagueSalt({ leagueId, draftId: INTERNAL_DRAFT_ID }, leagueContextKey)
+      ? withLeagueSalt({ leagueId, draftId: liveDraftId }, leagueContextKey)
       : skipToken,
     {
       refetchInterval: LIVE_POLL_MS,
