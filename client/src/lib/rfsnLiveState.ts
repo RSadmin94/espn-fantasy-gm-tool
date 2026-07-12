@@ -74,6 +74,22 @@ export function createRfsnLiveStandbySnapshot(
   };
 }
 
+/**
+ * Read-only board projection for RFSN Live — uses the polled snapshot when present,
+ * otherwise an empty standing-by scaffold (no fabricated picks).
+ */
+export function resolveRfsnLiveDisplaySnapshot(
+  payload: RfsnLivePublicPayload | null | undefined,
+  leagueName?: string,
+): RfsnBroadcastSnapshot {
+  if (payload?.snapshot) {
+    return payload.snapshot;
+  }
+  return createRfsnLiveStandbySnapshot({
+    onClockTeam: leagueName ? `${leagueName} draft` : "Standing by for draft",
+  });
+}
+
 export function liveSessionStatusLabel(state: RfsnLiveSessionState): string {
   switch (state) {
     case "waiting_for_draft":
