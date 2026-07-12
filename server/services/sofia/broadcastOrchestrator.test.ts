@@ -56,10 +56,13 @@ const contradictChecker: EntailmentChecker = {
 };
 
 function mockGenerate(lines: Record<string, string>) {
+  const defaultPremise = "Alice Owner selected Test Player (WR) at pick 42, round 3.";
   return async (prompt: string) => {
     const voice = prompt.includes("Sofia") ? "sofia" : prompt.includes("Coach") ? "coach" : "roxanne";
-    const line = lines[voice] ?? "Alice Owner selected Test Player (WR) at pick 42, round 3.";
-    return JSON.stringify({ line, premise: "pick fact" });
+    const line = lines[voice] ?? defaultPremise;
+    const premiseMatch = prompt.match(/VERIFIED FACTS:\n1\. (.+)/);
+    const premise = premiseMatch?.[1] ?? defaultPremise;
+    return JSON.stringify({ line, premise });
   };
 }
 
@@ -123,9 +126,9 @@ describe("BroadcastOrchestrator", () => {
         playerOracle: buildPlayerRegistryOracle([]),
         ledger: new SessionEditorialLedger(),
         generate: async (prompt) => {
-          if (prompt.includes("Sofia")) voices.push("sofia");
-          if (prompt.includes("Coach")) voices.push("coach");
-          if (prompt.includes("Roxanne")) voices.push("roxanne");
+          if (prompt.includes("Write Sofia's reaction")) voices.push("sofia");
+          if (prompt.includes("Write Coach's reaction")) voices.push("coach");
+          if (prompt.includes("Write Roxanne's reaction")) voices.push("roxanne");
           return JSON.stringify({ line: "Alice Owner selected Test Player (WR) at pick 42, round 3.", premise: "f" });
         },
       });

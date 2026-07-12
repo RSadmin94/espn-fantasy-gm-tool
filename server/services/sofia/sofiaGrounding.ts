@@ -34,6 +34,10 @@ export type SubjectFallback = {
   position: string;
   overallPick: number;
   round: number;
+  /** Round-within-draft pick (for draft-slot notation e.g. 1.12). */
+  roundPick?: number;
+  /** League team count — used to derive round pick when omitted. */
+  teamCount?: number;
 };
 
 function normalizeToken(token: string): string {

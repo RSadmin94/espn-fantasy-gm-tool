@@ -29,6 +29,7 @@ import type { FactPacket, PersonalityModule, VoiceResult } from "./broadcastVoic
 import { generateVoice } from "./broadcastVoice";
 import type { EntailmentChecker } from "./sofiaDeterministicValidation";
 import type { PlayerRegistryOracle } from "./playerRegistryOracle";
+import type { RegenerationTelemetry } from "./voiceRegeneration";
 
 export type BroadcastLogger = {
   warn(message: string, meta?: Record<string, unknown>): void;
@@ -48,6 +49,9 @@ export type BroadcastOrchestratorDeps = {
   generate?: (prompt: string) => Promise<string>;
   clock?: () => number;
   logger?: BroadcastLogger;
+  regenerationTelemetry?: RegenerationTelemetry;
+  /** Shadow/cert only — production live broadcast keeps this false/undefined. */
+  enableDeterministicRegeneration?: boolean;
 };
 
 export type BroadcastOptions = {
@@ -304,6 +308,8 @@ export class BroadcastOrchestrator {
             generate: generateFn,
             checker: this.deps.checker,
             playerOracle: this.deps.playerOracle,
+            regenerationTelemetry: this.deps.regenerationTelemetry,
+            enableDeterministicRegeneration: this.deps.enableDeterministicRegeneration,
           }),
           timeoutMs,
         );

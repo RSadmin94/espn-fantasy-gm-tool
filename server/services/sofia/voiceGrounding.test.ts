@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkEntityGuard, checkNumbersWithTolerance, disallowedEntities } from "./voiceGrounding";
+import { checkEntityGuard, checkNumbersWithTolerance, checkRoundReferences, checkUnsupportedFactualAnchors, checkPremiseAnchored, checkSofiaAddsValue, checkCoachLaneProtection, disallowedEntities } from "./voiceGrounding";
 import { buildPlayerRegistryOracle } from "./playerRegistryOracle";
 import { DEFAULT_PLAYER_REGISTRY_ORACLE } from "./playerRegistryOracle";
 import type { SubjectFallback } from "./sofiaDeterministicValidation";
@@ -67,6 +67,46 @@ describe("entity guard (mention resolution)", () => {
       expect.arrayContaining(["Andrew Luck"]),
     );
   });
+
+  it("does NOT flag owner surname Graham as Jimmy Graham", () => {
+    const allowed = ["Jan Graham", "Puka Nacua"];
+    expect(checkEntityGuard("Jan Graham just made a statement with this Puka Nacua grab.", allowed).pass).toBe(true);
+    expect(checkEntityGuard("Graham is playing for keeps tonight.", allowed).pass).toBe(true);
+  });
+
+  it("still flags unauthorized Jimmy Graham when not an owner reference", () => {
+    const allowed = ["Jan Graham", "Puka Nacua"];
+    const r = checkEntityGuard("This is the next Jimmy Graham at tight end.", allowed);
+    expect(r.pass).toBe(false);
+    expect(r.violations[0]?.canonicalName).toBe("Jimmy Graham");
+  });
+
+  it("does NOT flag Hall of Fame as Breece Hall", () => {
+    const allowed = ["Bruce Edwards", "Kenneth Walker III"];
+    expect(checkEntityGuard("Bruce Edwards is building a Hall of Fame roster.", allowed).pass).toBe(true);
+  });
+
+  it("does NOT flag owner surname Williams as Caleb Williams", () => {
+    const allowed = ["Mark Williams", "Puka Nacua"];
+    expect(checkEntityGuard("Mark Williams just made a bold move with Puka Nacua.", allowed).pass).toBe(true);
+    expect(checkEntityGuard("Williams is loading up on receivers early.", allowed).pass).toBe(true);
+  });
+
+  it("does NOT flag owner surname Brown when multiple NFL Browns exist", () => {
+    const o = buildPlayerRegistryOracle([
+      { playerId: "b1", fullName: "A.J. Brown", normalizedName: "aj brown" },
+      { playerId: "b2", fullName: "Antonio Brown", normalizedName: "antonio brown" },
+    ]);
+    const allowed = ["James Brown", "Kenneth Walker III"];
+    expect(checkEntityGuard("James Brown is betting big on Kenneth Walker III.", allowed, o).pass).toBe(true);
+  });
+
+  it("still flags unauthorized Caleb Williams when not an owner reference", () => {
+    const allowed = ["Mark Deroux", "Jaxon Smith-Njigba"];
+    const r = checkEntityGuard("Is this the next Caleb Williams at quarterback?", allowed);
+    expect(r.pass).toBe(false);
+    expect(r.violations[0]?.canonicalName).toBe("Caleb Williams");
+  });
 });
 
 describe("numeric tolerance guard", () => {
@@ -106,5 +146,116 @@ describe("numeric tolerance guard", () => {
   it("does NOT flag position codes or structural references", () => {
     expect(checkNumbersWithTolerance("your QB1 is set but your RB1 is thin by Week 1", claims, subject).pass).toBe(true);
     expect(checkNumbersWithTolerance("he waited until round 1 anyway", claims, subject).pass).toBe(true);
+  });
+});
+
+describe("round reference guard", () => {
+  const claims = ["Tony Dorsey selected Patrick Mahomes (QB) at pick 168, round 12."];
+  const subject: SubjectFallback = { ownerName: "Tony Dorsey", playerName: "Patrick Mahomes", position: "QB", overallPick: 168, round: 12 };
+
+  it("passes correct round reference", () => {
+    expect(checkRoundReferences("a twelfth-round quarterback stash", subject, claims).pass).toBe(true);
+    expect(checkRoundReferences("taken in round 12", subject, claims).pass).toBe(true);
+  });
+
+  it("rejects wrong ordinal round", () => {
+    const r = checkRoundReferences("relying on a sixth-round quarterback", subject, claims);
+    expect(r.pass).toBe(false);
+    expect(r.mismatches).toContain("6");
+  });
+
+  it("rejects wrong digit round", () => {
+    expect(checkRoundReferences("you waited until round 6", subject, claims).pass).toBe(false);
+  });
+});
+
+describe("unsupported factual anchors", () => {
+  const claims = ["Jan Graham selected Puka Nacua at pick 130, round 10."];
+
+  it("rejects invented injury in opinion", () => {
+    const r = checkUnsupportedFactualAnchors(
+      "Puka already has an injury history — risky depth pick.",
+      claims,
+      "OPINION",
+    );
+    expect(r.pass).toBe(false);
+  });
+
+  it("allows injury when in verified facts", () => {
+    expect(checkUnsupportedFactualAnchors(
+      "Brooks is coming off a torn ACL.",
+      ["Jonathon Brooks is a rookie returning from a torn ACL."],
+      "OPINION",
+    ).pass).toBe(true);
+  });
+});
+
+describe("premise anchoring", () => {
+  const claims = ["Rod Sellers selected Lamar Jackson (QB) at pick 18, round 2."];
+
+  it("passes when premise matches a verified fact", () => {
+    expect(checkPremiseAnchored("Rod Sellers selected Lamar Jackson (QB) at pick 18, round 2.", claims).pass).toBe(true);
+  });
+
+  it("rejects unanchored premise", () => {
+    expect(checkPremiseAnchored("pick fact", claims).pass).toBe(false);
+  });
+});
+
+describe("Sofia adds-value guard", () => {
+  const subject: SubjectFallback = { ownerName: "Mark Deroux", playerName: "Jaxon Smith-Njigba", position: "WR", overallPick: 105, round: 8 };
+
+  it("rejects bare receipt when ADP fact exists", () => {
+    const r = checkSofiaAddsValue(
+      "Mark Deroux selected Jaxon Smith-Njigba (WR) at pick 105, round 8.",
+      {
+        subject,
+        verifiedFacts: [
+          "Mark Deroux selected Jaxon Smith-Njigba (WR) at pick 105, round 8.",
+          "Jaxon Smith-Njigba fell 98 picks past ADP.",
+        ],
+      },
+    );
+    expect(r.pass).toBe(false);
+  });
+
+  it("passes when milestone language present", () => {
+    expect(checkSofiaAddsValue(
+      "Nate West selected Sam LaPorta in the third round, the earliest a tight end has ever been drafted in this league.",
+      {
+        subject: { ...subject, ownerName: "Nate West", playerName: "Sam LaPorta", position: "TE" },
+        verifiedFacts: [
+          "Nate West selected Sam LaPorta (TE) at pick 41, round 3.",
+          "This is the earliest a tight end has ever been drafted in this league.",
+        ],
+      },
+    ).pass).toBe(true);
+  });
+});
+
+describe("coach lane protection", () => {
+  it("rejects coach restating verified milestone", () => {
+    const r = checkCoachLaneProtection(
+      "It's a league record pick, folks — the earliest tight end ever taken.",
+      {
+        verifiedFacts: [
+          "Nate West selected Sam LaPorta (TE) at pick 41, round 3.",
+          "This is the earliest a tight end has ever been drafted in this league.",
+        ],
+      },
+    );
+    expect(r.pass).toBe(false);
+  });
+
+  it("passes coach reacting with strategy instead of restating milestone", () => {
+    expect(checkCoachLaneProtection(
+      "That move puts pressure on every other manager to upgrade at tight end before the window closes.",
+      {
+        verifiedFacts: [
+          "Nate West selected Sam LaPorta (TE) at pick 41, round 3.",
+          "This is the earliest a tight end has ever been drafted in this league.",
+        ],
+      },
+    ).pass).toBe(true);
   });
 });

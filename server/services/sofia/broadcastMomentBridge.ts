@@ -24,6 +24,7 @@ export function draftMomentToFactPacket(moment: DraftMoment): FactPacket {
       position: moment.player.position,
       overallPick: moment.overallPick,
       round: moment.round,
+      roundPick: moment.roundPick,
     },
     verifiedFacts: claims.length > 0 ? claims : [
       `${moment.owner.ownerName} selected ${moment.player.playerName} (${moment.player.position}) at pick ${moment.overallPick}, round ${moment.round}.`,

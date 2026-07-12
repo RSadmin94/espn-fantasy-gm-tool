@@ -181,9 +181,9 @@ describe("buildAuthorizedEntities", () => {
     expect(players[0]?.playerId).toBe("p2");
   });
 
-  it("collects owner tokens for non-registry names", () => {
-    const { ownerTokens } = buildAuthorizedEntities(["Bruce Edwards"], oracle());
-    expect(ownerTokens.has("bruce")).toBe(true);
-    expect(ownerTokens.has("edwards")).toBe(true);
+  it("collects owner identities for non-registry names", () => {
+    const { owners } = buildAuthorizedEntities(["Bruce Edwards"], oracle());
+    expect(owners[0]?.fullName).toBe("Bruce Edwards");
+    expect(owners[0]?.surname).toBe("Edwards");
   });
 });
