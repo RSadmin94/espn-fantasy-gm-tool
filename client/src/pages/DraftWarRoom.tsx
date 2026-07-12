@@ -777,14 +777,7 @@ function LiveDraftEngine({
       )}
       {done && <div className="rounded-lg border border-violet-500/40 bg-violet-500/5 px-4 py-3 mb-3 text-center text-violet-300 font-black text-sm">✓ Draft complete — {schedule.length} picks</div>}
 
-      {/* RFSN broadcast booth + audio — same live session as RFSN Live, on one screen. */}
-      {leagueId && (
-        <div className="mb-4">
-          <RfsnBroadcastPanel leagueId={leagueId} draftId={draftId} />
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Available pool (sortable) */}
         <div className="lg:col-span-2">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -863,6 +856,13 @@ function LiveDraftEngine({
             })}
           </div>
         </div>
+
+        {/* RFSN booth + audio — compact right rail, same live session as RFSN Live. */}
+        {leagueId && (
+          <aside className="lg:col-span-1 min-w-0">
+            <RfsnBroadcastPanel leagueId={leagueId} draftId={draftId} />
+          </aside>
+        )}
       </div>
     </div>
   );
