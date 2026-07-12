@@ -2,9 +2,9 @@
  * Authenticated WAV delivery for RFSN Live analyst clips.
  */
 import type { Express, Request, Response } from "express";
-import { sdk } from "./_core/sdk";
 import { canAccessRfsnLiveBroadcast } from "./services/sofia/liveBroadcastFeature";
 import { logRfsnAudio } from "./services/rfsn/rfsnAudioInstrumentation";
+import { resolveClerkUserFromRequest } from "./services/rfsn/rfsnAudioAuth";
 import { getStoredAudioClip } from "./services/rfsn/rfsnVoiceAudioCache";
 import type { RfsnCommentatorId } from "../client/src/lib/rfsnPresentation";
 
@@ -45,15 +45,13 @@ export function registerRfsnAudioRoute(app: Express): void {
     let statusCode = 500;
 
     try {
-      let user: Awaited<ReturnType<typeof sdk.authenticateRequest>> | null = null;
-      try {
-        user = await sdk.authenticateRequest(req);
-      } catch {
+      const user = await resolveClerkUserFromRequest(req);
+      if (!user) {
         statusCode = 401;
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      if (!user || !canAccessRfsnLiveBroadcast(user)) {
+      if (!canAccessRfsnLiveBroadcast(user)) {
         statusCode = 403;
         res.status(403).json({ error: "Forbidden" });
         return;
