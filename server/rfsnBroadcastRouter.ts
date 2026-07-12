@@ -41,12 +41,17 @@ function assertLiveAccess(user: Parameters<typeof canAccessRfsnLiveBroadcast>[0]
   }
 }
 
-function publicPayloadOrStandby(
+async function publicPayloadOrStandby(
   leagueId: string,
   draftId: string,
-): PublicLiveBroadcastPayload {
+): Promise<PublicLiveBroadcastPayload> {
   const session = getOrCreateLiveSession(leagueId, draftId);
-  return session.payload;
+  const sharedAudio = await getLiveAudioStatus(leagueId, draftId);
+  if (!sharedAudio) return session.payload;
+  return {
+    ...session.payload,
+    audioStatus: sharedAudio,
+  };
 }
 
 export const rfsnBroadcastRouter = router({
@@ -64,7 +69,7 @@ export const rfsnBroadcastRouter = router({
         draftId: z.string().min(1).max(128),
       }),
     )
-    .query(({ ctx, input }) => {
+    .query(async ({ ctx, input }) => {
       assertLiveAccess(ctx.user);
       return publicPayloadOrStandby(input.leagueId, input.draftId);
     }),
@@ -76,7 +81,7 @@ export const rfsnBroadcastRouter = router({
         draftId: z.string().min(1).max(128),
       }),
     )
-    .query(({ ctx, input }) => {
+    .query(async ({ ctx, input }) => {
       assertLiveAccess(ctx.user);
       return getLiveAudioStatus(input.leagueId, input.draftId);
     }),

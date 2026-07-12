@@ -2,17 +2,20 @@
 import type { RfsnBroadcastSnapshot } from "./rfsnPresentation";
 
 export type RfsnVoiceAudioRef = {
-  audioId: string;
   voice: "sofia" | "coach" | "roxanne";
   commentaryId: string;
   contentType: "audio/wav";
   expiresAt: string;
-  status: "pending" | "ready" | "failed";
+  status: "pending" | "ready" | "failed" | "expired";
+  audioId?: string;
 };
 
 export type RfsnLiveAudioStatus = {
   enabled: boolean;
+  leagueId?: string;
+  draftId: string;
   pickId: string;
+  pickNumber: number;
   clips: RfsnVoiceAudioRef[];
   updatedAt: string;
 };

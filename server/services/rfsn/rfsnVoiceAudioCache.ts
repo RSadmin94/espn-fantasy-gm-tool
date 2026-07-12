@@ -1,165 +1,245 @@
 /**
- * Short-lived in-memory audio clip store for RFSN Live delivery.
+ * Shared RFSN Live audio clip + draft status store (cross-instance safe).
  */
 import { randomUUID } from "crypto";
 import type { RfsnCommentatorId } from "../../../client/src/lib/rfsnPresentation";
-import type { RfsnLiveAudioStatus, RfsnVoiceAudioRef } from "./rfsnAudioTypes";
+import { logRfsnAudio } from "./rfsnAudioInstrumentation";
+import {
+  deleteAudioClip,
+  deleteDraftAudioStatus,
+  emptyDraftAudioStatus,
+  readAudioClip,
+  readDraftAudioStatus,
+  writeAudioClip,
+  writeDraftAudioStatus,
+  type StoredAudioClipRecord,
+} from "./rfsnAudioSharedStore";
+import type { RfsnAudioFetchIdentity, RfsnLiveAudioStatus, RfsnVoiceAudioRef, StoredAudioClip } from "./rfsnAudioTypes";
 
 const TTL_MS = 30 * 60 * 1000;
-const MAX_CLIPS = 250;
 
-type StoredClip = {
-  audioId: string;
-  leagueId: string;
-  draftId: string;
-  pickId: string;
-  commentaryId: string;
-  voice: RfsnCommentatorId;
-  bytes: Buffer;
-  contentType: "audio/wav";
-  expiresAt: number;
-  epoch: number;
-};
-
-type DraftAudioState = {
-  pickId: string;
-  epoch: number;
-  clips: Map<string, RfsnVoiceAudioRef>;
-  updatedAt: string;
-};
-
-const clips = new Map<string, StoredClip>();
-const draftAudio = new Map<string, DraftAudioState>();
-
-function draftKey(leagueId: string, draftId: string): string {
-  return `${leagueId}:${draftId}`;
-}
-
-function pruneExpired(): void {
-  const now = Date.now();
-  for (const [id, clip] of clips) {
-    if (clip.expiresAt <= now) clips.delete(id);
-  }
-  if (clips.size <= MAX_CLIPS) return;
-  const sorted = [...clips.entries()].sort((a, b) => a[1].expiresAt - b[1].expiresAt);
-  for (const [id] of sorted.slice(0, clips.size - MAX_CLIPS)) {
-    clips.delete(id);
-  }
+function recordToClip(record: StoredAudioClipRecord): StoredAudioClip {
+  return {
+    audioId: record.audioId,
+    leagueId: record.leagueId,
+    draftId: record.draftId,
+    pickId: record.pickId,
+    pickNumber: record.pickNumber,
+    commentaryId: record.commentaryId,
+    voice: record.voice,
+    bytes: Buffer.from(record.bytesBase64, "base64"),
+    contentType: "audio/wav",
+    expiresAt: record.expiresAtMs,
+    epoch: record.epoch,
+  };
 }
 
 export function resetRfsnVoiceAudioCacheForTests(): void {
-  clips.clear();
-  draftAudio.clear();
+  // Shared store reset handled by resetRfsnAudioSharedStoreForTests in tests.
 }
 
-export function initDraftAudioStatus(
+export async function clearDraftAudioStatus(
+  leagueId: string,
+  draftId: string,
+): Promise<RfsnLiveAudioStatus> {
+  const status = emptyDraftAudioStatus(leagueId, draftId);
+  await writeDraftAudioStatus(leagueId, draftId, status);
+  logRfsnAudio("draft_status_cleared", { leagueId, draftId });
+  return status;
+}
+
+export async function initDraftAudioStatus(
   leagueId: string,
   draftId: string,
   pickId: string,
+  pickNumber: number,
   epoch: number,
   pending: Array<{ commentaryId: string; voice: RfsnCommentatorId }>,
-): RfsnLiveAudioStatus {
+): Promise<RfsnLiveAudioStatus> {
   const now = new Date().toISOString();
-  const clipMap = new Map<string, RfsnVoiceAudioRef>();
   const expiresAt = new Date(Date.now() + TTL_MS).toISOString();
-  for (const item of pending) {
-    clipMap.set(item.commentaryId, {
-      audioId: "",
-      voice: item.voice,
-      commentaryId: item.commentaryId,
-      contentType: "audio/wav",
-      expiresAt,
-      status: "pending",
-    });
-  }
-  const state: DraftAudioState = { pickId, epoch, clips: clipMap, updatedAt: now };
-  draftAudio.set(draftKey(leagueId, draftId), state);
-  return toPublicStatus(state, true);
+  const clips: RfsnVoiceAudioRef[] = pending.map((item) => ({
+    voice: item.voice,
+    commentaryId: item.commentaryId,
+    contentType: "audio/wav",
+    expiresAt,
+    status: "pending",
+  }));
+  const status: RfsnLiveAudioStatus = {
+    enabled: true,
+    leagueId,
+    draftId,
+    pickId,
+    pickNumber,
+    clips,
+    updatedAt: now,
+    epoch,
+  };
+  await writeDraftAudioStatus(leagueId, draftId, status);
+  logRfsnAudio("draft_status_initialized", {
+    leagueId,
+    draftId,
+    pickId,
+    pickNumber,
+    epoch,
+    pendingClips: clips.length,
+  });
+  return status;
 }
 
-export function storeVoiceAudioClip(input: {
+export async function storeVoiceAudioClip(input: {
   leagueId: string;
   draftId: string;
   pickId: string;
+  pickNumber: number;
   commentaryId: string;
   voice: RfsnCommentatorId;
   bytes: Buffer;
   epoch: number;
-}): RfsnVoiceAudioRef | null {
-  const key = draftKey(input.leagueId, input.draftId);
-  const state = draftAudio.get(key);
-  if (!state || state.pickId !== input.pickId || state.epoch !== input.epoch) {
+}): Promise<RfsnVoiceAudioRef | null> {
+  const status = await readDraftAudioStatus(input.leagueId, input.draftId);
+  if (
+    !status ||
+    status.pickId !== input.pickId ||
+    status.pickNumber !== input.pickNumber ||
+    status.epoch !== input.epoch
+  ) {
     return null;
   }
 
-  pruneExpired();
   const audioId = randomUUID();
-  const expiresAt = Date.now() + TTL_MS;
-  clips.set(audioId, {
+  const expiresAtMs = Date.now() + TTL_MS;
+  const record: StoredAudioClipRecord = {
     audioId,
     leagueId: input.leagueId,
     draftId: input.draftId,
     pickId: input.pickId,
+    pickNumber: input.pickNumber,
     commentaryId: input.commentaryId,
     voice: input.voice,
-    bytes: input.bytes,
     contentType: "audio/wav",
-    expiresAt,
+    expiresAtMs,
     epoch: input.epoch,
-  });
+    bytesBase64: input.bytes.toString("base64"),
+    createdAtMs: Date.now(),
+  };
+  await writeAudioClip(record);
 
   const ref: RfsnVoiceAudioRef = {
     audioId,
     voice: input.voice,
     commentaryId: input.commentaryId,
     contentType: "audio/wav",
-    expiresAt: new Date(expiresAt).toISOString(),
+    expiresAt: new Date(expiresAtMs).toISOString(),
     status: "ready",
   };
-  state.clips.set(input.commentaryId, ref);
-  state.updatedAt = new Date().toISOString();
+
+  const nextClips = status.clips.map((clip) =>
+    clip.commentaryId === input.commentaryId ? ref : clip,
+  );
+  const nextStatus: RfsnLiveAudioStatus = {
+    ...status,
+    clips: nextClips,
+    updatedAt: new Date().toISOString(),
+  };
+  await writeDraftAudioStatus(input.leagueId, input.draftId, nextStatus);
+
+  logRfsnAudio("clip_created", {
+    audioId,
+    leagueId: input.leagueId,
+    draftId: input.draftId,
+    pickId: input.pickId,
+    pickNumber: input.pickNumber,
+    voice: input.voice,
+    bytes: input.bytes.length,
+    epoch: input.epoch,
+  });
+
   return ref;
 }
 
-export function markVoiceAudioFailed(
+export async function markVoiceAudioFailed(
   leagueId: string,
   draftId: string,
   pickId: string,
+  pickNumber: number,
   commentaryId: string,
-  epoch: number,
-): void {
-  const state = draftAudio.get(draftKey(leagueId, draftId));
-  if (!state || state.pickId !== pickId || state.epoch !== epoch) return;
-  const existing = state.clips.get(commentaryId);
-  if (!existing) return;
-  state.clips.set(commentaryId, { ...existing, status: "failed" });
-  state.updatedAt = new Date().toISOString();
+): Promise<void> {
+  const status = await readDraftAudioStatus(leagueId, draftId);
+  if (!status || status.pickId !== pickId || status.pickNumber !== pickNumber) return;
+  const nextClips = status.clips.map((clip) =>
+    clip.commentaryId === commentaryId ? { ...clip, status: "failed" as const } : clip,
+  );
+  await writeDraftAudioStatus(leagueId, draftId, {
+    ...status,
+    clips: nextClips,
+    updatedAt: new Date().toISOString(),
+  });
 }
 
-export function getLiveAudioStatus(
+export async function getLiveAudioStatus(
   leagueId: string,
   draftId: string,
-): RfsnLiveAudioStatus | null {
-  const state = draftAudio.get(draftKey(leagueId, draftId));
-  if (!state) return null;
-  return toPublicStatus(state, true);
+): Promise<RfsnLiveAudioStatus | null> {
+  const status = await readDraftAudioStatus(leagueId, draftId);
+  if (!status) return null;
+  const now = Date.now();
+  const clips = status.clips.map((clip) => {
+    if (clip.status === "ready" && clip.expiresAt && Date.parse(clip.expiresAt) <= now) {
+      return { ...clip, status: "expired" as const };
+    }
+    return clip;
+  });
+  return { ...status, clips };
 }
 
-export function getStoredAudioClip(audioId: string): StoredClip | null {
-  pruneExpired();
-  const clip = clips.get(audioId);
-  if (!clip || clip.expiresAt <= Date.now()) {
-    clips.delete(audioId);
+export async function getStoredAudioClip(
+  audioId: string,
+  identity?: RfsnAudioFetchIdentity,
+): Promise<StoredAudioClip | null> {
+  logRfsnAudio("clip_requested", { audioId });
+
+  const record = await readAudioClip(audioId);
+  if (!record) {
+    logRfsnAudio("clip_not_found", { audioId });
     return null;
   }
-  return clip;
+
+  if (record.expiresAtMs <= Date.now()) {
+    await deleteAudioClip(audioId);
+    logRfsnAudio("clip_expired", { audioId });
+    return null;
+  }
+
+  if (identity) {
+    const mismatch =
+      record.draftId !== identity.draftId ||
+      record.pickId !== identity.pickId ||
+      record.pickNumber !== identity.pickNumber ||
+      record.voice !== identity.voice;
+    if (mismatch) {
+      logRfsnAudio("clip_identity_mismatch", {
+        audioId,
+        expectedDraftId: identity.draftId,
+        expectedPickId: identity.pickId,
+        expectedPickNumber: identity.pickNumber,
+        expectedVoice: identity.voice,
+      });
+      return null;
+    }
+  }
+
+  logRfsnAudio("clip_found", {
+    audioId,
+    draftId: record.draftId,
+    pickId: record.pickId,
+    pickNumber: record.pickNumber,
+    voice: record.voice,
+  });
+
+  return recordToClip(record);
 }
 
-function toPublicStatus(state: DraftAudioState, enabled: boolean): RfsnLiveAudioStatus {
-  return {
-    enabled,
-    pickId: state.pickId,
-    clips: [...state.clips.values()],
-    updatedAt: state.updatedAt,
-  };
+export async function resetDraftAudioForTests(leagueId: string, draftId: string): Promise<void> {
+  await deleteDraftAudioStatus(leagueId, draftId);
 }

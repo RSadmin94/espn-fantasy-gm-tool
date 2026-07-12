@@ -9,6 +9,7 @@ import { resetLiveDraftMomentSessionsForTests } from "./services/sofia/liveDraft
 import { resetLiveBroadcastPickHookForTests } from "./services/sofia/liveBroadcastPickHook";
 import { resetRfsnVoiceAudioCacheForTests } from "./services/rfsn/rfsnVoiceAudioCache";
 import { resetRfsnLiveTtsServiceForTests } from "./services/rfsn/rfsnLiveTtsService";
+import { resetRfsnAudioSharedStoreForTests } from "./services/rfsn/rfsnAudioSharedStore";
 
 const ENV_KEY = "RFSN_LIVE_BROADCAST_ENABLED";
 const TTS_ENV = {
@@ -94,6 +95,7 @@ describe("rfsnBroadcastRouter", () => {
     resetLiveBroadcastPickHookForTests();
     resetRfsnVoiceAudioCacheForTests();
     resetRfsnLiveTtsServiceForTests();
+    resetRfsnAudioSharedStoreForTests();
   });
 
   afterEach(() => {

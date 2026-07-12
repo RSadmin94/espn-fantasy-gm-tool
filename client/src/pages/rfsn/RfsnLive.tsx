@@ -6,6 +6,8 @@ import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { RfsnMediaShell } from "@/components/rfsn/RfsnMediaShell";
 import { RfsnBroadcastShell } from "@/components/rfsn/RfsnBroadcastShell";
+import { RfsnAudioControls } from "@/components/rfsn/RfsnAudioControls";
+import { useRfsnAudioPlayback } from "@/hooks/useRfsnAudioPlayback";
 import { RfsnAnalystBooth } from "@/components/rfsn/RfsnAnalystBooth";
 import { RFSN_ROUTES } from "@/lib/rfsnEditorial";
 import {
@@ -153,6 +155,8 @@ export function RfsnLive() {
   const snapshot = renderCommentary && payload?.snapshot
     ? payload.snapshot
     : null;
+  const ttsAvailable = Boolean(accessQ.data?.ttsEnabled);
+  const audio = useRfsnAudioPlayback(ttsAvailable, payload?.audioStatus ?? null);
 
   return (
     <RfsnMediaShell
@@ -161,12 +165,16 @@ export function RfsnLive() {
       leagueName={leagueName}
       subtitle="RFSN Live · Draft Broadcast"
     >
+      {ttsAvailable && (
+        <div className="px-2 md:px-3 mb-2 max-w-[1600px] mx-auto w-full">
+          <RfsnAudioControls audio={audio} ttsAvailable={ttsAvailable} />
+        </div>
+      )}
       {snapshot ? (
         <RfsnBroadcastShell
           snapshot={snapshot}
           layout={layout}
-          ttsAvailable={Boolean(accessQ.data?.ttsEnabled)}
-          audioStatus={payload?.audioStatus ?? null}
+          audio={audio}
         />
       ) : (
         <RfsnLiveStandby

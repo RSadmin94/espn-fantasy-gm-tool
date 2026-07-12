@@ -46,6 +46,17 @@ function findClip(
   return audioStatus.clips.find((c) => c.commentaryId === commentaryId) ?? null;
 }
 
+function buildAudioUrl(audioStatus: RfsnLiveAudioStatus, clip: RfsnVoiceAudioRef): string | null {
+  if (!clip.audioId) return null;
+  const params = new URLSearchParams({
+    draftId: audioStatus.draftId,
+    pickId: audioStatus.pickId,
+    pickNumber: String(audioStatus.pickNumber),
+    voice: clip.voice,
+  });
+  return `/api/rfsn/audio/${encodeURIComponent(clip.audioId)}?${params.toString()}`;
+}
+
 export function useRfsnAudioPlayback(
   ttsAvailable: boolean,
   audioStatus: RfsnLiveAudioStatus | null | undefined,
@@ -63,6 +74,7 @@ export function useRfsnAudioPlayback(
   const onEndedRef = useRef<(() => void) | null>(null);
   const onFallbackRef = useRef<(() => void) | null>(null);
   const lastCardRef = useRef<RfsnCommentaryCard | null>(null);
+  const activePickRef = useRef<string>("");
 
   const cleanupAudio = useCallback(() => {
     if (audioRef.current) {
@@ -116,8 +128,19 @@ export function useRfsnAudioPlayback(
         return;
       }
 
+      if (!audioStatus) {
+        setState("loading");
+        return;
+      }
+
+      const pickKey = `${audioStatus.draftId}:${audioStatus.pickId}:${audioStatus.pickNumber}`;
+      if (activePickRef.current && activePickRef.current !== pickKey) {
+        cleanupAudio();
+      }
+      activePickRef.current = pickKey;
+
       const clip = findClip(audioStatus, card.id);
-      if (!clip || clip.status === "failed") {
+      if (!clip || clip.status === "failed" || clip.status === "expired") {
         setState("failed");
         onFallback();
         return;
@@ -127,9 +150,15 @@ export function useRfsnAudioPlayback(
         return;
       }
 
+      const url = buildAudioUrl(audioStatus, clip);
+      if (!url) {
+        setState("loading");
+        return;
+      }
+
       cleanupAudio();
       setState("loading");
-      const audio = new Audio(`/api/rfsn/audio/${encodeURIComponent(clip.audioId)}`);
+      const audio = new Audio(url);
       audio.muted = muted;
       audio.volume = volume;
       audioRef.current = audio;
@@ -167,6 +196,7 @@ export function useRfsnAudioPlayback(
 
   const onSnapshotChange = useCallback(() => {
     stopCurrent();
+    activePickRef.current = "";
   }, [stopCurrent]);
 
   useEffect(() => {

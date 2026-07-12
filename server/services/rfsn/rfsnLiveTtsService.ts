@@ -9,6 +9,7 @@ import { memCache } from "../../memCache";
 import { synthesizeAnalystSpeech } from "./kokoroTtsClient";
 import type { RfsnLiveAudioStatus } from "./rfsnAudioTypes";
 import {
+  clearDraftAudioStatus,
   getLiveAudioStatus,
   initDraftAudioStatus,
   markVoiceAudioFailed,
@@ -58,15 +59,21 @@ function mergeAudioIntoPayload(
   });
 }
 
-function publishAudioStatus(leagueId: string, draftId: string): void {
-  const status = getLiveAudioStatus(leagueId, draftId);
+async function publishAudioStatus(leagueId: string, draftId: string): Promise<void> {
+  const status = await getLiveAudioStatus(leagueId, draftId);
   if (status) mergeAudioIntoPayload(leagueId, draftId, status);
+}
+
+async function publishClearedAudio(leagueId: string, draftId: string): Promise<void> {
+  const status = await clearDraftAudioStatus(leagueId, draftId);
+  mergeAudioIntoPayload(leagueId, draftId, status);
 }
 
 async function synthesizeOne(input: {
   leagueId: string;
   draftId: string;
   pickId: string;
+  pickNumber: number;
   epoch: number;
   commentaryId: string;
   voice: string;
@@ -110,10 +117,11 @@ async function synthesizeOne(input: {
       return;
     }
 
-    const stored = storeVoiceAudioClip({
+    const stored = await storeVoiceAudioClip({
       leagueId: input.leagueId,
       draftId: input.draftId,
       pickId: input.pickId,
+      pickNumber: input.pickNumber,
       commentaryId: input.commentaryId,
       voice: input.voice as "sofia" | "coach" | "roxanne",
       bytes: result.bytes,
@@ -142,7 +150,7 @@ async function synthesizeOne(input: {
       bytes: result.bytes.length,
       cacheStatus: result.cacheStatus,
     });
-    publishAudioStatus(input.leagueId, input.draftId);
+    await publishAudioStatus(input.leagueId, input.draftId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "synthesis failed";
     const event = message === "timeout" ? "audio_timeout" : "audio_failure";
@@ -153,14 +161,14 @@ async function synthesizeOne(input: {
       event,
       error: message === "timeout" ? "timeout" : "synthesis failed",
     });
-    markVoiceAudioFailed(
+    await markVoiceAudioFailed(
       input.leagueId,
       input.draftId,
       input.pickId,
+      input.pickNumber,
       input.commentaryId,
-      input.epoch,
     );
-    publishAudioStatus(input.leagueId, input.draftId);
+    await publishAudioStatus(input.leagueId, input.draftId);
   }
 }
 
@@ -171,35 +179,54 @@ export function scheduleLiveFrameAudio(input: {
   frame: BroadcastFrame;
   snapshot: RfsnBroadcastSnapshot;
   pickId: string;
+  pickNumber: number;
 }): void {
-  if (!isRfsnTtsOperational()) return;
-  if (input.frame.public.status === "suppressed" || input.frame.public.status === "expired") return;
-  if (input.frame.public.status === "failed") return;
-  if (input.frame.diagnostics.stale) return;
+  void (async () => {
+    if (!isRfsnTtsOperational()) {
+      await publishClearedAudio(input.leagueId, input.draftId);
+      return;
+    }
 
-  const targets = boothTargets(input.snapshot).filter((t) => t.text.length > 0);
-  if (targets.length === 0) return;
+    const suppressed =
+      input.frame.public.status === "suppressed" ||
+      input.frame.public.status === "expired" ||
+      input.frame.public.status === "failed" ||
+      input.frame.diagnostics.stale;
 
-  const audioStatus = initDraftAudioStatus(
-    input.leagueId,
-    input.draftId,
-    input.pickId,
-    input.epoch,
-    targets.map((t) => ({ commentaryId: t.commentaryId, voice: t.voice })),
-  );
-  mergeAudioIntoPayload(input.leagueId, input.draftId, audioStatus);
+    if (suppressed) {
+      await publishClearedAudio(input.leagueId, input.draftId);
+      return;
+    }
 
-  for (const target of targets) {
-    void synthesizeOne({
-      leagueId: input.leagueId,
-      draftId: input.draftId,
-      pickId: input.pickId,
-      epoch: input.epoch,
-      commentaryId: target.commentaryId,
-      voice: target.voice,
-      text: target.text,
-    });
-  }
+    const targets = boothTargets(input.snapshot).filter((t) => t.text.length > 0);
+    if (targets.length === 0) {
+      await publishClearedAudio(input.leagueId, input.draftId);
+      return;
+    }
+
+    const audioStatus = await initDraftAudioStatus(
+      input.leagueId,
+      input.draftId,
+      input.pickId,
+      input.pickNumber,
+      input.epoch,
+      targets.map((t) => ({ commentaryId: t.commentaryId, voice: t.voice })),
+    );
+    mergeAudioIntoPayload(input.leagueId, input.draftId, audioStatus);
+
+    for (const target of targets) {
+      void synthesizeOne({
+        leagueId: input.leagueId,
+        draftId: input.draftId,
+        pickId: input.pickId,
+        pickNumber: input.pickNumber,
+        epoch: input.epoch,
+        commentaryId: target.commentaryId,
+        voice: target.voice,
+        text: target.text,
+      });
+    }
+  })();
 }
 
 export function resetRfsnLiveTtsServiceForTests(): void {
