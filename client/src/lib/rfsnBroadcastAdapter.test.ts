@@ -162,6 +162,92 @@ describe("selectOnAirCommentary", () => {
     expect(sel.secondary?.commentator).toBe("roxanne");
   });
 
+describe("selectOnAirCommentary — editorial roles", () => {
+  it("keeps Coach primary when Sofia is secondary", () => {
+    const sel = selectOnAirCommentary(
+      [
+        voice("coach", { editorialRole: "primary" }),
+        voice("sofia", { editorialRole: "secondary" }),
+      ],
+      "notable",
+    );
+    expect(sel.primary?.commentator).toBe("coach");
+    expect(sel.secondary?.commentator).toBe("sofia");
+  });
+
+  it("keeps Roxanne primary on rivalry moment", () => {
+    const sel = selectOnAirCommentary(
+      [
+        voice("roxanne", { editorialRole: "primary" }),
+        voice("coach", { editorialRole: "secondary" }),
+        voice("sofia", { editorialRole: "deferred" }),
+      ],
+      "major",
+    );
+    expect(sel.primary?.commentator).toBe("roxanne");
+    expect(sel.secondary?.commentator).toBe("coach");
+    expect(sel.overflow.map((o) => o.commentator)).toEqual(["sofia"]);
+  });
+
+  it("keeps Sofia primary on record moment", () => {
+    const sel = selectOnAirCommentary(
+      [
+        voice("sofia", { editorialRole: "primary" }),
+        voice("coach", { editorialRole: "secondary" }),
+      ],
+      "historic",
+    );
+    expect(sel.primary?.commentator).toBe("sofia");
+    expect(sel.secondary?.commentator).toBe("coach");
+  });
+
+  it("never promotes deferred to primary when primary and secondary exist", () => {
+    const sel = selectOnAirCommentary(
+      [
+        voice("coach", { editorialRole: "primary" }),
+        voice("sofia", { editorialRole: "secondary" }),
+        voice("roxanne", { editorialRole: "deferred" }),
+      ],
+      "major",
+    );
+    expect(sel.primary?.commentator).toBe("coach");
+    expect(sel.overflow[0]?.commentator).toBe("roxanne");
+  });
+
+  it("falls back to secondary when primary rejected", () => {
+    const accepted = filterAcceptedCommentary([
+      voice("coach", { editorialRole: "primary", status: "rejected" }),
+      voice("sofia", { editorialRole: "secondary" }),
+    ]);
+    const sel = selectOnAirCommentary(accepted, "major");
+    expect(sel.primary?.commentator).toBe("sofia");
+    expect(sel.secondary).toBeNull();
+  });
+
+  it("falls back to deferred when primary and secondary rejected", () => {
+    const accepted = filterAcceptedCommentary([
+      voice("roxanne", { editorialRole: "primary", status: "rejected" }),
+      voice("coach", { editorialRole: "secondary", status: "rejected" }),
+      voice("sofia", { editorialRole: "deferred" }),
+    ]);
+    const sel = selectOnAirCommentary(accepted, "major");
+    expect(sel.primary?.commentator).toBe("sofia");
+  });
+
+  it("maps deferred to overflow for ticker via buildRfsnBroadcastSnapshot", () => {
+    const { snapshot } = buildRfsnBroadcastSnapshot(adapterInput({
+      commentaryResults: [
+        voice("roxanne", { editorialRole: "primary" }),
+        voice("coach", { editorialRole: "secondary" }),
+        voice("sofia", { editorialRole: "deferred", text: "Deferred fact line for ticker." }),
+      ],
+    }));
+    expect(snapshot.primary?.commentator).toBe("roxanne");
+    expect(snapshot.secondary?.commentator).toBe("coach");
+    expect(snapshot.ticker.some((t) => t.commentator === "sofia")).toBe(true);
+  });
+});
+
   it("handles rejected secondary without placeholder", () => {
     const accepted = filterAcceptedCommentary([
       voice("sofia"),

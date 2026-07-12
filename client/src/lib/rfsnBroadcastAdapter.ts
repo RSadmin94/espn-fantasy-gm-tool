@@ -31,6 +31,9 @@ export type CommentaryAcceptanceStatus =
   | "generation_failed"
   | "empty";
 
+/** When set, adapter preserves orchestrator editorial role assignment. */
+export type CommentaryEditorialRole = "primary" | "secondary" | "deferred";
+
 /** One voice result bound to a specific pick. */
 export type RfsnCommentaryResult = {
   draftId: string;
@@ -41,6 +44,7 @@ export type RfsnCommentaryResult = {
   text: string;
   status: CommentaryAcceptanceStatus;
   long?: boolean;
+  editorialRole?: CommentaryEditorialRole;
 };
 
 export type RfsnBroadcastMomentContext = {
@@ -210,6 +214,40 @@ function sortByVoicePriority(results: RfsnCommentaryResult[]): RfsnCommentaryRes
   );
 }
 
+function selectByEditorialRole(
+  accepted: readonly RfsnCommentaryResult[],
+): OnAirCommentarySelection {
+  const primaryR = accepted.find((r) => r.editorialRole === "primary");
+  let secondaryR = accepted.find((r) => r.editorialRole === "secondary");
+  const deferred = accepted.filter((r) => r.editorialRole === "deferred");
+
+  let primary = primaryR ?? null;
+  let secondary = secondaryR ?? null;
+  let overflow = [...deferred];
+
+  // Explicit fallback when intended primary was rejected (not in accepted list)
+  if (!primary && secondary) {
+    primary = secondary;
+    secondary = overflow.shift() ?? null;
+  } else if (!primary && overflow.length > 0) {
+    primary = overflow.shift() ?? null;
+  }
+
+  if (secondary && primary && secondary.commentator === primary.commentator) {
+    secondary = overflow.shift() ?? null;
+  }
+
+  return {
+    primary: primary ? toCard(primary, "primary") : null,
+    secondary: secondary ? toCard(secondary, "secondary") : null,
+    overflow,
+  };
+}
+
+function hasEditorialRoles(results: readonly RfsnCommentaryResult[]): boolean {
+  return results.some((r) => r.editorialRole != null);
+}
+
 function toCard(
   result: RfsnCommentaryResult,
   slot: "primary" | "secondary",
@@ -243,19 +281,22 @@ export type OnAirCommentarySelection = {
 
 /**
  * Select on-air cards from accepted commentary.
- * Rejected or failed voices are excluded before this runs.
- * Highest-priority accepted voice becomes primary; next becomes secondary.
+ * When editorialRole is present on results, preserves orchestrator assignment.
+ * Otherwise falls back to legacy voice-priority ordering.
  */
 export function selectOnAirCommentary(
   accepted: readonly RfsnCommentaryResult[],
   significance: RfsnSignificance,
 ): OnAirCommentarySelection {
-  const sorted = sortByVoicePriority([...accepted]);
-
   if (significance === "routine") {
     return { primary: null, secondary: null, overflow: [] };
   }
 
+  if (hasEditorialRoles(accepted)) {
+    return selectByEditorialRole(accepted);
+  }
+
+  const sorted = sortByVoicePriority([...accepted]);
   const [first, second, ...rest] = sorted;
   return {
     primary: first ? toCard(first, "primary") : null,
