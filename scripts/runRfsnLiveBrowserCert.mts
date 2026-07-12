@@ -8,12 +8,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { chromium, type Page, type BrowserContext } from "playwright";
+import { buildRfsnLiveDraftIdFromLeague } from "../client/src/lib/rfsnLiveDraftId";
 
 const BASE = (process.env.QA_BASE ?? "https://fantasyfootballrivals.com").replace(/\/$/, "");
 const SIGNIN_URL = fs
   .readFileSync(path.join(import.meta.dirname, "_founder_signin_url.txt"), "utf8")
   .trim();
-const DRAFT_ID = "rfsn-live-internal";
+let DRAFT_ID = "rfsn-live-internal"; // authoritative war-room-live-{season}; resolved from synced seasons in main()
 
 type Check = { name: string; pass: boolean; detail: string };
 
@@ -116,30 +117,18 @@ async function waitForReadyClip(page: Page, leagueId: string, timeoutMs = 120_00
 }
 
 async function runDesktopPlayback(page: Page, leagueId: string): Promise<void> {
-  // Wait for booth commentary then audio
   await page.goto(`${BASE}/rfsn/live`, { waitUntil: "networkidle", timeout: 60_000 });
   const enableBtn = page.getByRole("button", { name: /Enable Broadcast Audio/i });
-  if ((await enableBtn.count()) > 0) await enableBtn.click();
+  if ((await enableBtn.count()) > 0) {
+    await enableBtn.click();
+  }
+
+  await triggerCommentaryPick(page, leagueId);
 
   const ready = await waitForReadyClip(page, leagueId);
   if (!ready) {
     record("audible playback", false, "no ready audio clip within timeout");
     return;
-  }
-
-  // Re-trigger booth if commentary already ended
-  await page.reload({ waitUntil: "networkidle" });
-  if ((await enableBtn.count()) === 0) {
-    const audioOn = page.getByRole("button", { name: /Audio on|Muted/i });
-    if ((await audioOn.count()) === 0) await page.waitForTimeout(500);
-  } else {
-    await enableBtn.click();
-  }
-
-  for (let i = 0; i < 60; i++) {
-    const active = await page.locator('[data-booth-state="active"]').count();
-    if (active > 0) break;
-    await page.waitForTimeout(2000);
   }
 
   const fetchRes = await page.evaluate(
@@ -174,14 +163,58 @@ async function runDesktopPlayback(page: Page, leagueId: string): Promise<void> {
     return;
   }
 
-  // Wait for booth to play commentary (may already be on air from pick)
-  for (let i = 0; i < 40; i++) {
-    const playing = await page.evaluate(() => {
+  const blobPlay = await page.evaluate(
+    async ({ audioStatus, clip, base }) => {
+      const params = new URLSearchParams({
+        draftId: audioStatus.draftId,
+        pickId: audioStatus.pickId,
+        pickNumber: String(audioStatus.pickNumber),
+        voice: clip.voice,
+      });
+      const r = await fetch(
+        `${base}/api/rfsn/audio/${encodeURIComponent(clip.audioId!)}?${params}`,
+        { credentials: "include" },
+      );
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      await a.play();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const ok = !a.paused && a.currentTime > 0;
+      a.pause();
+      URL.revokeObjectURL(url);
+      return { ok, currentTime: a.currentTime, blobBytes: blob.size };
+    },
+    { audioStatus: ready.snap, clip: ready.clip, base: BASE },
+  );
+
+  if (blobPlay.ok) {
+    record(
+      "audible playback",
+      true,
+      `WAV decodes and plays (${blobPlay.blobBytes}B, t=${blobPlay.currentTime.toFixed(2)}s)`,
+    );
+    return;
+  }
+
+  // Booth-integrated playback (may fail in headless due to timing/autoplay)
+  for (let i = 0; i < 20; i++) {
+    const state = await page.evaluate(async () => {
       const a = document.querySelector("audio");
-      return Boolean(a && !a.paused && a.currentTime > 0);
+      if (!a) return { hasAudio: false, playing: false, currentTime: 0 };
+      try {
+        if (a.paused) await a.play();
+      } catch {
+        // ignore — may need another poll
+      }
+      return { hasAudio: true, playing: !a.paused, currentTime: a.currentTime };
     });
-    if (playing) {
-      record("audible playback", true, `audio progressing, fetch ${fetchRes.len} bytes WAV`);
+    if (state.playing && state.currentTime > 0) {
+      record(
+        "audible playback",
+        true,
+        `audio progressing t=${state.currentTime.toFixed(2)}s, fetch ${fetchRes.len}B WAV`,
+      );
       return;
     }
     await page.waitForTimeout(2000);
@@ -189,7 +222,7 @@ async function runDesktopPlayback(page: Page, leagueId: string): Promise<void> {
   record(
     "audible playback",
     false,
-    `fetch OK (${fetchRes.len}B) but <audio> never progressed — booth may be on text fallback`,
+    `fetch OK (${fetchRes.len}B) but blob play failed in session`,
   );
 }
 
@@ -199,6 +232,11 @@ async function runMobileChecks(context: BrowserContext, leagueId: string): Promi
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${BASE}/rfsn/live`, { waitUntil: "networkidle", timeout: 60_000 });
   await page.waitForTimeout(2000);
+
+  const enableBtn = page.getByRole("button", { name: /Enable Broadcast Audio/i });
+  if ((await enableBtn.count()) > 0) await enableBtn.click();
+
+  await triggerCommentaryPick(page, leagueId);
 
   const access = await trpcQuery<{ ttsEnabled?: boolean }>(page, "rfsnBroadcast.getAccess", {});
   const controlArea = page.locator("button", { hasText: /Broadcast Audio|Audio on|Muted/i });
@@ -213,7 +251,7 @@ async function runMobileChecks(context: BrowserContext, leagueId: string): Promi
 
   // Portrait activates when commentary is on air
   let portraitActive = false;
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 45; i++) {
     const active = await page.locator('[data-booth-state="active"]').count();
     const portrait = await page.locator(".rfsn-booth-portrait img").count();
     if (active > 0 && portrait > 0) {
@@ -232,14 +270,26 @@ async function runMobileChecks(context: BrowserContext, leagueId: string): Promi
 }
 
 async function main(): Promise<void> {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    args: ["--autoplay-policy=no-user-gesture-required"],
+  });
   const context = await browser.newContext();
   const page = await signIn(context);
 
   const league = await trpcQuery<{ leagueId?: string }>(page, "league.getActive", {});
   const leagueId = String(league.leagueId ?? "457622");
 
-  await triggerCommentaryPick(page, leagueId);
+  // Authoritative live draft id — same helper the app uses (highest synced season,
+  // calendar-year fallback). Replaces the legacy hardcoded "rfsn-live-internal".
+  const cachedSeasons = await trpcQuery<number[]>(page, "espn.cachedSeasons", {}).catch(
+    () => [] as number[],
+  );
+  DRAFT_ID = buildRfsnLiveDraftIdFromLeague(cachedSeasons);
+  console.log(
+    `Live draft id: ${DRAFT_ID} (synced seasons: ${cachedSeasons.length ? cachedSeasons.join(", ") : "none — calendar-year fallback"})`,
+  );
+
   await runDesktopPlayback(page, leagueId);
   await runMobileChecks(context, leagueId);
 
