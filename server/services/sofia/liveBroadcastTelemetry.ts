@@ -49,6 +49,7 @@ export function summarizeFrameTelemetry(
     deliverySuccess: boolean;
     editorialPlan: string | null;
     requestedVoices: string[];
+    entailmentLatencyMs?: number;
   },
 ): Omit<LiveBroadcastTelemetryEvent, "at"> {
   const momentId =
@@ -79,7 +80,7 @@ export function summarizeFrameTelemetry(
     suppressedVoices,
     rejectionCategories,
     generationLatencyMs: genMs,
-    entailmentLatencyMs: 0,
+    entailmentLatencyMs: meta.entailmentLatencyMs ?? 0,
     frameReadyLatencyMs: meta.frameReadyLatencyMs,
     staleDiscarded: meta.staleDiscarded,
     timedOut: meta.timedOut,

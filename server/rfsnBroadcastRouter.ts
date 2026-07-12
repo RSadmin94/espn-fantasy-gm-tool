@@ -5,6 +5,8 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { router, protectedProcedure } from "./_core/trpc";
 import { canAccessRfsnLiveBroadcast, isRfsnLiveBroadcastEnabled } from "./services/sofia/liveBroadcastFeature";
+import { isRfsnTtsEnabled, isRfsnTtsConfigured } from "./services/rfsn/rfsnTtsConfig";
+import { getLiveAudioStatus } from "./services/rfsn/rfsnVoiceAudioCache";
 import {
   getOrCreateLiveSession,
   resetLiveSession,
@@ -52,6 +54,7 @@ export const rfsnBroadcastRouter = router({
   getAccess: protectedProcedure.query(({ ctx }) => ({
     enabled: isRfsnLiveBroadcastEnabled(),
     canAccess: canAccessRfsnLiveBroadcast(ctx.user),
+    ttsEnabled: isRfsnTtsEnabled() && isRfsnTtsConfigured(),
   })),
 
   getLiveSnapshot: protectedProcedure
@@ -64,6 +67,18 @@ export const rfsnBroadcastRouter = router({
     .query(({ ctx, input }) => {
       assertLiveAccess(ctx.user);
       return publicPayloadOrStandby(input.leagueId, input.draftId);
+    }),
+
+  getAudioStatus: protectedProcedure
+    .input(
+      z.object({
+        leagueId: z.string().min(1).max(64),
+        draftId: z.string().min(1).max(128),
+      }),
+    )
+    .query(({ ctx, input }) => {
+      assertLiveAccess(ctx.user);
+      return getLiveAudioStatus(input.leagueId, input.draftId);
     }),
 
   /** Fire-and-forget after a pick is final — returns immediately. */

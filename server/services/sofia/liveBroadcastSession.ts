@@ -4,6 +4,8 @@
 import type { RfsnBroadcastSnapshot } from "../../../client/src/lib/rfsnPresentation";
 import type { BroadcastFrameStatus } from "./broadcastFrameContract";
 
+import type { RfsnLiveAudioStatus } from "../rfsn/rfsnAudioTypes";
+
 export type RfsnLiveSessionState =
   | "waiting_for_draft"
   | "live"
@@ -25,6 +27,8 @@ export type PublicLiveBroadcastPayload = {
   frameStatus: BroadcastFrameStatus | "idle";
   generatedAt: string | null;
   draftComplete: boolean;
+  /** Additive audio transport — text broadcast works without this. */
+  audioStatus?: RfsnLiveAudioStatus | null;
 };
 
 type DraftSession = {

@@ -25,10 +25,13 @@ import {
   type RfsnLiveSessionState,
 } from "./liveBroadcastSession";
 import { recordLiveBroadcastTelemetry, summarizeFrameTelemetry } from "./liveBroadcastTelemetry";
+import { scheduleLiveFrameAudio } from "../rfsn/rfsnLiveTtsService";
 import {
   createDeterministicLiveOrchestrator,
   createProductionLiveOrchestrator,
+  mergeAccumulatedLiveProviderTelemetry,
 } from "./liveBroadcastOrchestratorFactory";
+import type { RealShadowTelemetry } from "./realBroadcastShadowDeps";
 import type { BroadcastOrchestrator } from "./broadcastOrchestrator";
 
 export type BuildLiveBroadcastFrameInput = {
@@ -128,14 +131,23 @@ function snapshotFromFrame(
 async function resolveOrchestrator(
   ledger: SessionEditorialLedger,
   useDeterministic: boolean,
-): Promise<{ orchestrator: BroadcastOrchestrator; estimatedCost: () => number }> {
+): Promise<{
+  orchestrator: BroadcastOrchestrator;
+  estimatedCost: () => number;
+  productionTelemetry: RealShadowTelemetry | null;
+}> {
   if (useDeterministic) {
-    return { orchestrator: createDeterministicLiveOrchestrator(ledger), estimatedCost: () => 0 };
+    return {
+      orchestrator: createDeterministicLiveOrchestrator(ledger),
+      estimatedCost: () => 0,
+      productionTelemetry: null,
+    };
   }
   const { orchestrator, telemetry } = await createProductionLiveOrchestrator(ledger);
   return {
     orchestrator,
     estimatedCost: () => estimateShadowCertCostUsd(telemetry),
+    productionTelemetry: telemetry,
   };
 }
 
@@ -163,7 +175,7 @@ export async function buildLiveBroadcastFrame(
     },
   });
 
-  const { orchestrator, estimatedCost } = await resolveOrchestrator(
+  const { orchestrator, estimatedCost, productionTelemetry } = await resolveOrchestrator(
     ledger,
     input.useDeterministicProvider ?? false,
   );
@@ -177,6 +189,9 @@ export async function buildLiveBroadcastFrame(
         return active instanceof Promise ? false : (active ?? true);
       },
     });
+    if (productionTelemetry) {
+      mergeAccumulatedLiveProviderTelemetry(productionTelemetry);
+    }
   } catch {
     updateLiveSession(input.leagueId, input.draftId, { state: "broadcast_unavailable" });
     recordLiveBroadcastTelemetry({
@@ -249,8 +264,20 @@ export async function buildLiveBroadcastFrame(
       deliverySuccess: true,
       editorialPlan: resolveEditorialPlanId(input.moment),
       requestedVoices: buildEditorialAssignment(input.moment, ledger).request,
+      entailmentLatencyMs: productionTelemetry
+        ? productionTelemetry.entailmentLatencyMs
+        : 0,
     }),
   );
+
+  scheduleLiveFrameAudio({
+    leagueId: input.leagueId,
+    draftId: input.draftId,
+    epoch,
+    frame,
+    snapshot,
+    pickId: input.draftMoment.eventId,
+  });
 
   return { frame, snapshot, publicPayload };
 }

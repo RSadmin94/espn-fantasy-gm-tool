@@ -7,6 +7,8 @@ import {
 import { resetLiveBroadcastServiceForTests } from "./services/sofia/liveBroadcastService";
 import { resetLiveDraftMomentSessionsForTests } from "./services/sofia/liveDraftMomentSession";
 import { resetLiveBroadcastPickHookForTests } from "./services/sofia/liveBroadcastPickHook";
+import { resetRfsnVoiceAudioCacheForTests } from "./services/rfsn/rfsnVoiceAudioCache";
+import { resetRfsnLiveTtsServiceForTests } from "./services/rfsn/rfsnLiveTtsService";
 
 const ENV_KEY = "RFSN_LIVE_BROADCAST_ENABLED";
 const LEAGUE = "CERT";
@@ -60,6 +62,8 @@ describe("rfsnBroadcastRouter", () => {
     resetLiveBroadcastServiceForTests();
     resetLiveDraftMomentSessionsForTests();
     resetLiveBroadcastPickHookForTests();
+    resetRfsnVoiceAudioCacheForTests();
+    resetRfsnLiveTtsServiceForTests();
   });
 
   afterEach(() => {
@@ -77,6 +81,7 @@ describe("rfsnBroadcastRouter", () => {
     const access = await founderCaller().rfsnBroadcast.getAccess();
     expect(access.enabled).toBe(true);
     expect(access.canAccess).toBe(true);
+    expect(access.ttsEnabled).toBe(false);
   });
 
   it("regular user cannot access live", async () => {

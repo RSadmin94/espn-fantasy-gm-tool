@@ -8,11 +8,35 @@ import { DEFAULT_PLAYER_REGISTRY_ORACLE } from "./playerRegistryOracle";
 import { createShadowGroundedVoiceProvider } from "./shadowGroundedVoiceProvider";
 import {
   createRealShadowBroadcastDeps,
+  emptyRealShadowTelemetry,
   resolveRealShadowPlayerOracle,
   type RealShadowTelemetry,
 } from "./realBroadcastShadowDeps";
 
 const LIVE_VOICE_TIMEOUT_MS = 15_000;
+
+let accumulatedProviderTelemetry: RealShadowTelemetry = emptyRealShadowTelemetry();
+
+function mergeProviderTelemetry(next: RealShadowTelemetry): void {
+  accumulatedProviderTelemetry.voiceGenerationCalls += next.voiceGenerationCalls;
+  accumulatedProviderTelemetry.entailmentCalls += next.entailmentCalls;
+  accumulatedProviderTelemetry.voiceGenerationFailures += next.voiceGenerationFailures;
+  accumulatedProviderTelemetry.entailmentFailures += next.entailmentFailures;
+  accumulatedProviderTelemetry.voiceGenerationLatencyMs += next.voiceGenerationLatencyMs;
+  accumulatedProviderTelemetry.entailmentLatencyMs += next.entailmentLatencyMs;
+  for (const [k, v] of Object.entries(next.providerErrors)) {
+    accumulatedProviderTelemetry.providerErrors[k] =
+      (accumulatedProviderTelemetry.providerErrors[k] ?? 0) + v;
+  }
+}
+
+export function getAccumulatedLiveProviderTelemetry(): RealShadowTelemetry {
+  return { ...accumulatedProviderTelemetry, providerErrors: { ...accumulatedProviderTelemetry.providerErrors } };
+}
+
+export function resetAccumulatedLiveProviderTelemetry(): void {
+  accumulatedProviderTelemetry = emptyRealShadowTelemetry();
+}
 
 export function createDeterministicLiveOrchestrator(ledger: EditorialLedger): BroadcastOrchestrator {
   return new BroadcastOrchestrator(
@@ -45,4 +69,8 @@ export async function createProductionLiveOrchestrator(
     { voiceTimeoutMs: LIVE_VOICE_TIMEOUT_MS, maxTransientRetries: 1 },
   );
   return { orchestrator, telemetry };
+}
+
+export function mergeAccumulatedLiveProviderTelemetry(next: RealShadowTelemetry): void {
+  mergeProviderTelemetry(next);
 }
