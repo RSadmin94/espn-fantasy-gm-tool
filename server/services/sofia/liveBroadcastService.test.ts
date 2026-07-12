@@ -1,0 +1,123 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DraftMoment } from "../draftMoments/draftMomentTypes";
+import {
+  buildLiveBroadcastFrame,
+  processLockedDraftMoment,
+  resetLiveBroadcastServiceForTests,
+} from "./liveBroadcastService";
+import { draftMomentToBroadcastMoment } from "./broadcastMomentBridge";
+import {
+  resetLiveSessionsForTests,
+  getLiveSession,
+} from "./liveBroadcastSession";
+import { resetLiveBroadcastTelemetryForTests, getLiveBroadcastTelemetrySnapshot } from "./liveBroadcastTelemetry";
+import { resetLiveBroadcastPickHookForTests } from "./liveBroadcastPickHook";
+import { resetLiveDraftMomentSessionsForTests } from "./liveDraftMomentSession";
+
+const ENV_KEY = "RFSN_LIVE_BROADCAST_ENABLED";
+
+function dm(over: Partial<DraftMoment> = {}): DraftMoment {
+  return {
+    eventId: "LIVE:draft:5",
+    leagueId: "LIVE",
+    draftId: "draft-1",
+    overallPick: 5,
+    round: 1,
+    roundPick: 5,
+    owner: { teamId: "1", ownerId: "u1", ownerName: "Alice", identityScope: "person", identitySource: "x" },
+    player: { playerId: "p1", playerName: "CeeDee Lamb", position: "WR", nflTeam: "DAL", adp: 4 },
+    rosterBeforePick: {},
+    receipts: [],
+    signals: ["STEAL"],
+    level: "notable",
+    permittedClaims: ["Alice selected CeeDee Lamb (WR) at pick 5, round 1."],
+    forbiddenClaimCategories: [],
+    primaryStoryline: null,
+    secondaryStoryline: null,
+    commentaryBudget: { enabled: true, maxSentences: 2, maxWords: 40 },
+    validation: { valid: true, errors: [], warnings: [] },
+    ...over,
+  };
+}
+
+describe("liveBroadcastService", () => {
+  beforeEach(() => {
+    process.env[ENV_KEY] = "true";
+    resetLiveBroadcastServiceForTests();
+    resetLiveSessionsForTests();
+    resetLiveBroadcastTelemetryForTests();
+    resetLiveBroadcastPickHookForTests();
+    resetLiveDraftMomentSessionsForTests();
+  });
+
+  afterEach(() => {
+    delete process.env[ENV_KEY];
+    vi.restoreAllMocks();
+  });
+
+  it("returns null with zero provider work when flag disabled", async () => {
+    process.env[ENV_KEY] = "false";
+    const result = await processLockedDraftMoment(dm(), { useDeterministicProvider: true });
+    expect(result).toBeNull();
+    expect(getLiveBroadcastTelemetrySnapshot()).toHaveLength(0);
+  });
+
+  it("builds public snapshot without diagnostics when enabled", async () => {
+    const draftMoment = dm({ level: "notable" });
+    const result = await buildLiveBroadcastFrame({
+      moment: draftMomentToBroadcastMoment(draftMoment),
+      leagueId: draftMoment.leagueId,
+      draftId: draftMoment.draftId,
+      draftMoment,
+      useDeterministicProvider: true,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.publicPayload.snapshot).toBeDefined();
+    expect(result!.publicPayload.snapshot!.significance).toBe("notable");
+    expect((result!.publicPayload as any).diagnostics).toBeUndefined();
+    expect(getLiveBroadcastTelemetrySnapshot().length).toBeGreaterThan(0);
+  });
+
+  it("newer pick supersedes older build in session", async () => {
+    await processLockedDraftMoment(dm({ overallPick: 5, eventId: "LIVE:draft:5" }), {
+      useDeterministicProvider: true,
+    });
+    await processLockedDraftMoment(dm({ overallPick: 6, eventId: "LIVE:draft:6" }), {
+      useDeterministicProvider: true,
+    });
+    expect(getLiveSession("LIVE", "draft-1")?.lastProcessedPickId).toBe("LIVE:draft:6");
+  });
+
+  it("routine pick stays silent in snapshot", async () => {
+    const result = await processLockedDraftMoment(dm({ level: "routine", signals: [] }), {
+      useDeterministicProvider: true,
+    });
+    expect(result?.snapshot?.primary).toBeUndefined();
+    expect(result?.sessionState).toBe("between_picks");
+  });
+
+  it("marks session unavailable when orchestrator throws", async () => {
+    const draftMoment = dm();
+    const { createDeterministicLiveOrchestrator } = await import("./liveBroadcastOrchestratorFactory");
+    const spy = vi.spyOn(
+      await import("./liveBroadcastOrchestratorFactory"),
+      "createDeterministicLiveOrchestrator",
+    ).mockReturnValue({
+      buildFrame: async () => {
+        throw new Error("provider down");
+      },
+    } as any);
+
+    const result = await buildLiveBroadcastFrame({
+      moment: draftMomentToBroadcastMoment(draftMoment),
+      leagueId: draftMoment.leagueId,
+      draftId: draftMoment.draftId,
+      draftMoment,
+      useDeterministicProvider: true,
+    });
+    expect(result).toBeNull();
+    expect(getLiveSession(draftMoment.leagueId, draftMoment.draftId)?.state).toBe("broadcast_unavailable");
+    spy.mockRestore();
+    void createDeterministicLiveOrchestrator;
+  });
+});
