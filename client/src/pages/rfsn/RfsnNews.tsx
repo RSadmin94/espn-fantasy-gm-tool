@@ -24,13 +24,18 @@ export function RfsnNews() {
   );
 
   const activeLeagueQ = _trpc.league.getActive.useQuery(undefined, { enabled: leagueKeyReady });
+  const liveAccessQ = _trpc.rfsnBroadcast.getAccess.useQuery(undefined, {
+    enabled: leagueKeyReady,
+    staleTime: 60_000,
+  });
+  const showLiveNav = Boolean(liveAccessQ.data?.enabled && liveAccessQ.data?.canAccess);
   const leagueName = useMemo(
     () => (leagueKeyReady && activeLeagueQ.data?.leagueName ? activeLeagueQ.data.leagueName : ""),
     [activeLeagueQ.data?.leagueName, leagueKeyReady],
   );
 
   return (
-    <RfsnMediaShell active="news" leagueName={leagueName}>
+    <RfsnMediaShell active="news" leagueName={leagueName} showLive={showLiveNav}>
       <LeagueWireNewsroom
         brand="rfsn"
         hideMasthead

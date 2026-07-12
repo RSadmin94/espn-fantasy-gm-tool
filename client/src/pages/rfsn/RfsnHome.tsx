@@ -40,6 +40,11 @@ export function RfsnHome() {
   );
 
   const activeLeagueQ = _trpc.league.getActive.useQuery(undefined, { enabled: leagueKeyReady });
+  const liveAccessQ = _trpc.rfsnBroadcast.getAccess.useQuery(undefined, {
+    enabled: leagueKeyReady,
+    staleTime: 60_000,
+  });
+  const showLiveNav = Boolean(liveAccessQ.data?.enabled && liveAccessQ.data?.canAccess);
   const leagueName =
     leagueKeyReady && activeLeagueQ.data?.leagueName ? activeLeagueQ.data.leagueName : "";
 
@@ -78,7 +83,7 @@ export function RfsnHome() {
   const loading = !leagueKeyReady || feedQ.isLoading;
 
   return (
-    <RfsnMediaShell active="home" leagueName={leagueName}>
+    <RfsnMediaShell active="home" leagueName={leagueName} showLive={showLiveNav}>
       <div className="space-y-6">
         {/* Featured */}
         <section className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#1f1624,#18111c)] overflow-hidden">

@@ -51,6 +51,7 @@ import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
 import { PlayerDatabase }    from "./pages/PlayerDatabase";
 import { RfsnHome } from "./pages/rfsn/RfsnHome";
 import { RfsnNews } from "./pages/rfsn/RfsnNews";
+import { RfsnLive } from "./pages/rfsn/RfsnLive";
 import { DraftWarRoom }      from "./pages/DraftWarRoom";
 import { DraftCommentary }   from "./pages/DraftCommentary";
 import { RivalryCenter }     from "./pages/RivalryCenter";
@@ -217,6 +218,7 @@ const router = createBrowserRouter([
           { path: "/rfsn", element: <RfsnHome /> },
           { path: "/rfsn/news", element: <RfsnNews /> },
           { path: "/rfsn/news/article/:articleId", element: <RfsnNews /> },
+          { path: "/rfsn/live", element: <RfsnLive /> },
           { path: "/league-wire", element: <Navigate to="/rfsn/news" replace /> },
           { path: "/league-wire/article/:articleId", element: <LegacyWireArticleRedirect /> },
           { path: "/draft-war-room",           element: <FeatureRouteGate route="/draft-war-room"><DraftWarRoom /></FeatureRouteGate> },

@@ -17,6 +17,7 @@ export type NewsroomArticle = {
 export const RFSN_ROUTES = {
   home: "/rfsn",
   news: "/rfsn/news",
+  live: "/rfsn/live",
   newsArticle: (id: number | string) => `/rfsn/news/article/${id}`,
   legacyWire: "/league-wire",
   legacyWireArticle: (id: number | string) => `/league-wire/article/${id}`,

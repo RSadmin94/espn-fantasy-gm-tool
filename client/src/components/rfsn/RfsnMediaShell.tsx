@@ -17,11 +17,13 @@ export function RfsnMediaShell({
   active,
   leagueName,
   subtitle,
+  showLive = false,
   children,
 }: {
   active: RfsnDestination;
   leagueName?: string;
   subtitle?: string;
+  showLive?: boolean;
   children: ReactNode;
 }) {
   const tagline =
@@ -36,7 +38,7 @@ export function RfsnMediaShell({
       <header className="border-b border-white/[0.06] pb-4 mb-6">
         <RfsnBrandMark />
         <p className="text-[11px] text-[#8b97a8] uppercase tracking-[0.2em] font-bold mt-1">{tagline}</p>
-        <RfsnDestinationNav active={active} className="mt-4" />
+        <RfsnDestinationNav active={active} showLive={showLive} className="mt-4" />
       </header>
       {children}
     </div>
