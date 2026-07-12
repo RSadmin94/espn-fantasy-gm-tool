@@ -137,6 +137,12 @@ export function RfsnLive() {
 
   const showLiveNav = Boolean(accessQ.data?.enabled && accessQ.data?.canAccess);
 
+  // Hooks must run unconditionally on every render. Keep useRfsnAudioPlayback
+  // ABOVE the early returns below, or React throws error #310 the first time
+  // access resolves from loading -> ready (hook count changes between renders).
+  const ttsAvailable = Boolean(accessQ.data?.ttsEnabled);
+  const audio = useRfsnAudioPlayback(ttsAvailable, payload?.audioStatus ?? null);
+
   if (!leagueKeyReady || accessQ.isLoading) {
     return (
       <RfsnMediaShell active="home" showLive={showLiveNav} leagueName={leagueName} subtitle="RFSN Live">
@@ -155,8 +161,6 @@ export function RfsnLive() {
   const snapshot = renderCommentary && payload?.snapshot
     ? payload.snapshot
     : null;
-  const ttsAvailable = Boolean(accessQ.data?.ttsEnabled);
-  const audio = useRfsnAudioPlayback(ttsAvailable, payload?.audioStatus ?? null);
 
   return (
     <RfsnMediaShell

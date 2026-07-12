@@ -277,6 +277,7 @@ export async function buildLiveBroadcastFrame(
     frame,
     snapshot,
     pickId: input.draftMoment.eventId,
+    pickNumber: input.draftMoment.overallPick,
   });
 
   return { frame, snapshot, publicPayload };
