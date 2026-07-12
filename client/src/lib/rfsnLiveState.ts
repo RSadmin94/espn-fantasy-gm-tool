@@ -1,6 +1,32 @@
 /** Client helpers for RFSN Live session states and standby presentation. */
 import type { RfsnBroadcastSnapshot } from "./rfsnPresentation";
 
+export type RfsnVoiceAudioRef = {
+  audioId: string;
+  voice: "sofia" | "coach" | "roxanne";
+  commentaryId: string;
+  contentType: "audio/wav";
+  expiresAt: string;
+  status: "pending" | "ready" | "failed";
+};
+
+export type RfsnLiveAudioStatus = {
+  enabled: boolean;
+  pickId: string;
+  clips: RfsnVoiceAudioRef[];
+  updatedAt: string;
+};
+
+export type RfsnAudioState =
+  | "disabled"
+  | "locked"
+  | "loading"
+  | "ready"
+  | "playing"
+  | "paused"
+  | "ended"
+  | "failed";
+
 export type RfsnLiveSessionState =
   | "waiting_for_draft"
   | "live"
@@ -22,6 +48,7 @@ export type RfsnLivePublicPayload = {
   frameStatus: string;
   generatedAt: string | null;
   draftComplete: boolean;
+  audioStatus?: RfsnLiveAudioStatus | null;
 };
 
 export function createRfsnLiveStandbySnapshot(

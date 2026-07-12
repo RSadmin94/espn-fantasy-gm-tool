@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RfsnBroadcastSnapshot, RfsnCommentaryCard, RfsnCommentatorId, RfsnTickerItem } from "@/lib/rfsnPresentation";
+import type { RfsnAudioPlayback } from "@/hooks/useRfsnAudioPlayback";
 import {
   BOOTH_BETWEEN_SPEAKERS_MS,
   BOOTH_DISMISS_MS,
@@ -25,7 +26,16 @@ export type RfsnBoothController = {
   sequenceIndex: number;
 };
 
-export function useRfsnBoothController(snapshot: RfsnBroadcastSnapshot): RfsnBoothController {
+export type RfsnBoothControllerOptions = {
+  audio?: RfsnAudioPlayback | null;
+};
+
+export function useRfsnBoothController(
+  snapshot: RfsnBroadcastSnapshot,
+  options: RfsnBoothControllerOptions = {},
+): RfsnBoothController {
+  const audio = options.audio ?? null;
+  const audioActive = Boolean(audio && audio.userEnabled && audio.state !== "disabled");
   const reducedMotion = usePrefersReducedMotion();
   const sequence = useMemo(() => buildBoothCommentarySequence(snapshot), [snapshot]);
   const sequenceRef = useRef(sequence);
@@ -40,11 +50,16 @@ export function useRfsnBoothController(snapshot: RfsnBroadcastSnapshot): RfsnBoo
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const snapshotKeyRef = useRef("");
   const sequenceIndexRef = useRef(-1);
+  const audioRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
+    }
+    if (audioRetryRef.current) {
+      clearTimeout(audioRetryRef.current);
+      audioRetryRef.current = null;
     }
   }, []);
 
@@ -60,6 +75,13 @@ export function useRfsnBoothController(snapshot: RfsnBroadcastSnapshot): RfsnBoo
   const exitSpeakerRef = useRef<(commentator: RfsnCommentatorId, index: number, manual: boolean) => void>(
     () => {},
   );
+
+  const scheduleTextExit = useCallback((commentator: RfsnCommentatorId, index: number, text: string) => {
+    const displayMs = commentaryDisplayMs(text, reducedMotion);
+    timerRef.current = setTimeout(() => {
+      exitSpeakerRef.current(commentator, index, false);
+    }, displayMs);
+  }, [reducedMotion]);
 
   const beginSpeaker = useCallback(
     (index: number, card: RfsnCommentaryCard) => {
@@ -80,13 +102,34 @@ export function useRfsnBoothController(snapshot: RfsnBroadcastSnapshot): RfsnBoo
           [card.commentator]: "active",
         }));
 
-        const displayMs = commentaryDisplayMs(card.text, reducedMotion);
-        timerRef.current = setTimeout(() => {
-          exitSpeakerRef.current(card.commentator, index, false);
-        }, displayMs);
+        if (audioActive && audio) {
+          let fallbackScheduled = false;
+          const scheduleFallback = () => {
+            if (fallbackScheduled) return;
+            fallbackScheduled = true;
+            scheduleTextExit(card.commentator, index, card.text);
+          };
+          const tryAudio = () => {
+            audio.playForCard(
+              card,
+              () => exitSpeakerRef.current(card.commentator, index, false),
+              scheduleFallback,
+            );
+          };
+          tryAudio();
+          audioRetryRef.current = setTimeout(() => {
+            if (audio.state === "loading" || audio.state === "ready") tryAudio();
+          }, 1200);
+          timerRef.current = setTimeout(() => {
+            if (audio.state !== "playing") scheduleFallback();
+          }, 8000);
+          return;
+        }
+
+        scheduleTextExit(card.commentator, index, card.text);
       }, enterMs);
     },
-    [clearTimer, reducedMotion],
+    [audio, audioActive, clearTimer, reducedMotion, scheduleTextExit],
   );
 
   const beginSpeakerRef = useRef(beginSpeaker);
@@ -94,6 +137,7 @@ export function useRfsnBoothController(snapshot: RfsnBroadcastSnapshot): RfsnBoo
 
   exitSpeakerRef.current = (commentator, index, manual) => {
     clearTimer();
+    audio?.stopCurrent();
     const card = sequenceRef.current[index];
     if (!card) {
       finishStandby();
@@ -132,8 +176,9 @@ export function useRfsnBoothController(snapshot: RfsnBroadcastSnapshot): RfsnBoo
     if (activeCommentator !== commentator || sequenceIndexRef.current < 0) return;
     const state = cardStates[commentator];
     if (state !== "active" && state !== "entering") return;
+    audio?.stopCurrent();
     exitSpeakerRef.current(commentator, sequenceIndexRef.current, true);
-  }, [activeCommentator, cardStates]);
+  }, [activeCommentator, audio, cardStates]);
 
   const dismissActive = useCallback(() => {
     if (activeCommentator) dismissFor(activeCommentator);
@@ -145,6 +190,7 @@ export function useRfsnBoothController(snapshot: RfsnBroadcastSnapshot): RfsnBoo
     snapshotKeyRef.current = key;
 
     clearTimer();
+    audio?.onSnapshotChange();
     setConsumedTickerIds(new Set());
     setCardStates(initialCardStates());
     setActiveCommentator(null);
@@ -163,7 +209,7 @@ export function useRfsnBoothController(snapshot: RfsnBroadcastSnapshot): RfsnBoo
       clearTimer();
       snapshotKeyRef.current = "";
     };
-  }, [snapshot, sequence, clearTimer, reducedMotion]);
+  }, [snapshot, sequence, clearTimer, reducedMotion, audio]);
 
   useEffect(() => clearTimer, [clearTimer]);
 

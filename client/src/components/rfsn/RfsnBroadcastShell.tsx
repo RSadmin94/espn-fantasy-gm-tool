@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import type { RfsnLiveAudioStatus } from "@/lib/rfsnLiveState";
 import type { RfsnBroadcastSnapshot, RfsnLayoutMode } from "@/lib/rfsnPresentation";
 import {
   RFSN_BROADCAST_MAX_WIDTH_PX,
@@ -11,6 +12,8 @@ import {
 import { buildBoothCommentarySequence } from "@/lib/rfsnBoothPresentation";
 import { resolveBroadcastFocus } from "@/lib/rfsnBroadcastProduction";
 import { useRfsnBoothController } from "@/hooks/useRfsnBoothController";
+import { useRfsnAudioPlayback } from "@/hooks/useRfsnAudioPlayback";
+import { RfsnAudioControls } from "./RfsnAudioControls";
 import { RfsnHeader } from "./RfsnHeader";
 import { RfsnDraftOrder } from "./RfsnDraftOrder";
 import { RfsnDraftBoard } from "./RfsnDraftBoard";
@@ -24,14 +27,19 @@ export type RfsnBroadcastShellProps = {
   snapshot: RfsnBroadcastSnapshot;
   layout: RfsnLayoutMode;
   className?: string;
+  ttsAvailable?: boolean;
+  audioStatus?: RfsnLiveAudioStatus | null;
 };
 
 export function RfsnBroadcastShell({
   snapshot,
   layout,
   className,
+  ttsAvailable = false,
+  audioStatus = null,
 }: RfsnBroadcastShellProps) {
-  const booth = useRfsnBoothController(snapshot);
+  const audio = useRfsnAudioPlayback(ttsAvailable, audioStatus);
+  const booth = useRfsnBoothController(snapshot, { audio });
   const sequence = buildBoothCommentarySequence(snapshot);
   const broadcastFocus = resolveBroadcastFocus(booth.activeCommentator, booth.cardStates);
   const momentScore =
@@ -101,6 +109,9 @@ export function RfsnBroadcastShell({
             momentScore={momentScore}
             onlineCount={10}
           />
+          <div className="px-2 md:px-3">
+            <RfsnAudioControls audio={audio} ttsAvailable={ttsAvailable} />
+          </div>
 
           <div
             className={cn(

@@ -162,7 +162,12 @@ export function RfsnLive() {
       subtitle="RFSN Live · Draft Broadcast"
     >
       {snapshot ? (
-        <RfsnBroadcastShell snapshot={snapshot} layout={layout} />
+        <RfsnBroadcastShell
+          snapshot={snapshot}
+          layout={layout}
+          ttsAvailable={Boolean(accessQ.data?.ttsEnabled)}
+          audioStatus={payload?.audioStatus ?? null}
+        />
       ) : (
         <RfsnLiveStandby
           payload={
