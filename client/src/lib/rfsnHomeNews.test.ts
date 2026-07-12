@@ -127,14 +127,36 @@ describe("rfsnHomeNews", () => {
     expect(rfsnNews).not.toContain("RfsnBroadcastShell");
   });
 
-  it("RFSN internal nav exposes only Home and News", () => {
+  it("RFSN internal nav always includes Home and News", () => {
     const nav = fs.readFileSync(
       path.join(repoRoot, "client", "src", "components", "rfsn", "RfsnDestinationNav.tsx"),
       "utf-8",
     );
     expect(nav).toContain('label: "Home"');
     expect(nav).toContain('label: "News"');
-    expect(nav).not.toContain("/rfsn/live");
     expect(nav).not.toContain("/rfsn/weekly");
+  });
+
+  it("RFSN internal nav omits Live by default", () => {
+    const nav = fs.readFileSync(
+      path.join(repoRoot, "client", "src", "components", "rfsn", "RfsnDestinationNav.tsx"),
+      "utf-8",
+    );
+    expect(nav).toContain("showLive = false");
+    expect(nav).toContain("showLive ? [...BASE_ITEMS, LIVE_ITEM] : BASE_ITEMS");
+  });
+
+  it("RFSN internal nav includes Live only when showLive is true", () => {
+    const nav = fs.readFileSync(
+      path.join(repoRoot, "client", "src", "components", "rfsn", "RfsnDestinationNav.tsx"),
+      "utf-8",
+    );
+    expect(nav).toContain('href: "/rfsn/live"');
+    const home = fs.readFileSync(path.join(repoRoot, "client", "src", "pages", "rfsn", "RfsnHome.tsx"), "utf-8");
+    const news = fs.readFileSync(path.join(repoRoot, "client", "src", "pages", "rfsn", "RfsnNews.tsx"), "utf-8");
+    expect(home).toContain("showLive={showLiveNav}");
+    expect(home).toContain("liveAccessQ.data?.enabled && liveAccessQ.data?.canAccess");
+    expect(news).toContain("showLive={showLiveNav}");
+    expect(news).toContain("liveAccessQ.data?.enabled && liveAccessQ.data?.canAccess");
   });
 });

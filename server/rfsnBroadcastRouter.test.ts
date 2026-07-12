@@ -11,6 +11,34 @@ import { resetRfsnVoiceAudioCacheForTests } from "./services/rfsn/rfsnVoiceAudio
 import { resetRfsnLiveTtsServiceForTests } from "./services/rfsn/rfsnLiveTtsService";
 
 const ENV_KEY = "RFSN_LIVE_BROADCAST_ENABLED";
+const TTS_ENV = {
+  ENABLED: "RFSN_TTS_ENABLED",
+  URL: "RFSN_TTS_SERVICE_URL",
+  TOKEN: "RFSN_TTS_SERVICE_TOKEN",
+} as const;
+
+const SAVED_TTS_ENV: Partial<Record<(typeof TTS_ENV)[keyof typeof TTS_ENV], string | undefined>> = {};
+
+function saveTtsEnv(): void {
+  for (const key of Object.values(TTS_ENV)) {
+    SAVED_TTS_ENV[key] = process.env[key];
+  }
+}
+
+function restoreTtsEnv(): void {
+  for (const key of Object.values(TTS_ENV)) {
+    const saved = SAVED_TTS_ENV[key];
+    if (saved === undefined) delete process.env[key];
+    else process.env[key] = saved;
+  }
+}
+
+function clearTtsEnv(): void {
+  for (const key of Object.values(TTS_ENV)) {
+    delete process.env[key];
+  }
+}
+
 const LEAGUE = "CERT";
 const DRAFT = "cert-live";
 
@@ -57,6 +85,8 @@ const routinePick = {
 
 describe("rfsnBroadcastRouter", () => {
   beforeEach(() => {
+    saveTtsEnv();
+    clearTtsEnv();
     process.env[ENV_KEY] = "true";
     resetLiveSessionsForTests();
     resetLiveBroadcastServiceForTests();
@@ -68,6 +98,7 @@ describe("rfsnBroadcastRouter", () => {
 
   afterEach(() => {
     delete process.env[ENV_KEY];
+    restoreTtsEnv();
   });
 
   it("getAccess reports disabled when flag off", async () => {
@@ -81,6 +112,30 @@ describe("rfsnBroadcastRouter", () => {
     const access = await founderCaller().rfsnBroadcast.getAccess();
     expect(access.enabled).toBe(true);
     expect(access.canAccess).toBe(true);
+    expect(access.ttsEnabled).toBe(false);
+  });
+
+  it("reports tts disabled when flag off", async () => {
+    process.env[TTS_ENV.ENABLED] = "false";
+    process.env[TTS_ENV.URL] = "https://kokoro.example";
+    process.env[TTS_ENV.TOKEN] = "secret-token";
+    const access = await founderCaller().rfsnBroadcast.getAccess();
+    expect(access.ttsEnabled).toBe(false);
+  });
+
+  it("reports tts enabled when flag on with url and token", async () => {
+    process.env[TTS_ENV.ENABLED] = "true";
+    process.env[TTS_ENV.URL] = "https://kokoro.example";
+    process.env[TTS_ENV.TOKEN] = "secret-token";
+    const access = await founderCaller().rfsnBroadcast.getAccess();
+    expect(access.ttsEnabled).toBe(true);
+  });
+
+  it("reports tts disabled when enabled but not configured", async () => {
+    process.env[TTS_ENV.ENABLED] = "true";
+    delete process.env[TTS_ENV.URL];
+    delete process.env[TTS_ENV.TOKEN];
+    const access = await founderCaller().rfsnBroadcast.getAccess();
     expect(access.ttsEnabled).toBe(false);
   });
 
