@@ -24,7 +24,7 @@ function csvEnv(name: string): string[] {
 
 /** In-code beta/demo sign-in emails (lowercased). */
 export const BETA_DEMO_EMAILS: ReadonlySet<string> = new Set<string>([
-  "flurrysports@gmail.com", // Zach Brunner / FlurrySports
+  // (none) — Zach Brunner promoted to founder whitelist; demo access removed.
 ]);
 
 /** Clerk user ids for beta/demo accounts (preferred once known). */
@@ -34,7 +34,7 @@ export const BETA_DEMO_CLERK_IDS: ReadonlySet<string> = new Set<string>([
 
 /** Subset of beta/demo users who also receive premium demo entitlements (Draft War Room, etc.). */
 export const BETA_DEMO_PREMIUM_EMAILS: ReadonlySet<string> = new Set<string>([
-  "flurrysports@gmail.com", // Zach Brunner — premium demo only; not global paywall removal.
+  // (none) — Zach Brunner promoted to founder whitelist; demo access removed.
 ]);
 
 function allBetaDemoEmails(): ReadonlySet<string> {
