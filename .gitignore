@@ -132,3 +132,8 @@ client/public/dev-shadow/
 !/_dryrun/*.json
 !/_dryrun/*.csv
 !/_dryrun/*.sql
+
+
+# Founder QA authentication artifacts — never commit (sign-in tickets / minting)
+scripts/_founder_signin_url.txt
+scripts/_mint_founder_signin.mts
