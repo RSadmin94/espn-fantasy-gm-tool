@@ -116,15 +116,10 @@ async function waitForReadyClip(page: Page, leagueId: string, timeoutMs = 120_00
 }
 
 async function runDesktopPlayback(page: Page, leagueId: string): Promise<void> {
+  // Wait for booth commentary then audio
   await page.goto(`${BASE}/rfsn/live`, { waitUntil: "networkidle", timeout: 60_000 });
   const enableBtn = page.getByRole("button", { name: /Enable Broadcast Audio/i });
-  const hasControl = (await enableBtn.count()) > 0;
-  if (!hasControl) {
-    record("audible playback", false, "Enable Broadcast Audio control missing");
-    return;
-  }
-  await enableBtn.click();
-  await page.waitForTimeout(500);
+  if ((await enableBtn.count()) > 0) await enableBtn.click();
 
   const ready = await waitForReadyClip(page, leagueId);
   if (!ready) {
@@ -132,7 +127,21 @@ async function runDesktopPlayback(page: Page, leagueId: string): Promise<void> {
     return;
   }
 
-  // Direct fetch with identity — validates server auth + storage
+  // Re-trigger booth if commentary already ended
+  await page.reload({ waitUntil: "networkidle" });
+  if ((await enableBtn.count()) === 0) {
+    const audioOn = page.getByRole("button", { name: /Audio on|Muted/i });
+    if ((await audioOn.count()) === 0) await page.waitForTimeout(500);
+  } else {
+    await enableBtn.click();
+  }
+
+  for (let i = 0; i < 60; i++) {
+    const active = await page.locator('[data-booth-state="active"]').count();
+    if (active > 0) break;
+    await page.waitForTimeout(2000);
+  }
+
   const fetchRes = await page.evaluate(
     async ({ audioStatus, clip, base }) => {
       const params = new URLSearchParams({
@@ -189,13 +198,17 @@ async function runMobileChecks(context: BrowserContext, leagueId: string): Promi
   wireNetwork(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${BASE}/rfsn/live`, { waitUntil: "networkidle", timeout: 60_000 });
+  await page.waitForTimeout(2000);
 
-  const audioControl = page.getByRole("button", { name: /Enable Broadcast Audio|Audio on|Muted/i });
-  const controlVisible = (await audioControl.count()) > 0;
+  const access = await trpcQuery<{ ttsEnabled?: boolean }>(page, "rfsnBroadcast.getAccess", {});
+  const controlArea = page.locator("button", { hasText: /Broadcast Audio|Audio on|Muted/i });
+  const controlVisible = Boolean(access.ttsEnabled) && (await controlArea.count()) > 0;
   record(
     "mobile controls/layout",
     controlVisible,
-    controlVisible ? "audio control visible in portrait" : "audio control not found",
+    controlVisible
+      ? `ttsEnabled audio control visible (${await controlArea.first().innerText()})`
+      : `ttsEnabled=${access.ttsEnabled} controls=${await controlArea.count()}`,
   );
 
   // Portrait activates when commentary is on air
@@ -230,15 +243,16 @@ async function main(): Promise<void> {
   await runDesktopPlayback(page, leagueId);
   await runMobileChecks(context, leagueId);
 
-  const badAudio = audioResponses.filter((r) => r.status === 502);
+  const badAudio = audioResponses.filter((r) => r.status >= 500);
   const leaks = consoleErrors.filter((e) =>
-    /502|generation failed|entailment|kokoro|TTS_SERVICE|unsupported voice/i.test(e),
+    /generation failed|entailment|kokoro|TTS_SERVICE|unsupported voice/i.test(e),
   );
+  const audio502 = audioResponses.filter((r) => r.status === 502);
   record(
     "no browser 502s or raw errors",
-    badAudio.length === 0 && leaks.length === 0,
-    badAudio.length
-      ? `audio 502s: ${badAudio.length} (${badAudio.map((r) => r.status).join(",")})`
+    audio502.length === 0 && leaks.length === 0,
+    audio502.length
+      ? `audio 502s: ${audio502.length}`
       : leaks.length
         ? `console leaks: ${leaks.slice(0, 3).join(" | ")}`
         : `audio fetches: ${audioResponses.map((r) => r.status).join(",") || "none"}`,

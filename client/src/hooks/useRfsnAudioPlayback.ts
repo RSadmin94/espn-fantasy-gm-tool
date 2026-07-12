@@ -158,32 +158,43 @@ export function useRfsnAudioPlayback(
 
       cleanupAudio();
       setState("loading");
-      const audio = new Audio(url);
-      audio.muted = muted;
-      audio.volume = volume;
-      audioRef.current = audio;
 
-      const handleEnded = () => {
-        setState("ended");
-        cleanupAudio();
-        onEndedRef.current?.();
-      };
-      const handleError = () => {
-        setState("failed");
-        cleanupAudio();
-        onFallbackRef.current?.();
-      };
+      void (async () => {
+        try {
+          const res = await fetch(url, { credentials: "include" });
+          if (!res.ok) throw new Error(`audio fetch ${res.status}`);
+          const blob = await res.blob();
+          if (!blob.size) throw new Error("empty audio");
 
-      audio.addEventListener("ended", handleEnded, { once: true });
-      audio.addEventListener("error", handleError, { once: true });
+          const objectUrl = URL.createObjectURL(blob);
+          objectUrlRef.current = objectUrl;
+          const audio = new Audio(objectUrl);
+          audio.muted = muted;
+          audio.volume = volume;
+          audioRef.current = audio;
 
-      void audio.play().then(() => {
-        setState("playing");
-      }).catch(() => {
-        setState("failed");
-        cleanupAudio();
-        onFallbackRef.current?.();
-      });
+          const handleEnded = () => {
+            setState("ended");
+            cleanupAudio();
+            onEndedRef.current?.();
+          };
+          const handleError = () => {
+            setState("failed");
+            cleanupAudio();
+            onFallbackRef.current?.();
+          };
+
+          audio.addEventListener("ended", handleEnded, { once: true });
+          audio.addEventListener("error", handleError, { once: true });
+
+          await audio.play();
+          setState("playing");
+        } catch {
+          setState("failed");
+          cleanupAudio();
+          onFallbackRef.current?.();
+        }
+      })();
     },
     [audioStatus, cleanupAudio, muted, ttsAvailable, unlocked, userEnabled, volume],
   );
