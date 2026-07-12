@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
-import { createBrowserRouter, Link, Navigate, Outlet, RouterProvider } from "react-router";
+import { createBrowserRouter, Link, Navigate, Outlet, RouterProvider, useParams } from "react-router";
 import superjson from "superjson";
 import {
   AuthenticateWithRedirectCallback,
@@ -49,7 +49,8 @@ import { AcquisitionImpact } from "./pages/AcquisitionImpact";
 import { LeagueDataHealth } from "./pages/LeagueDataHealth";
 import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
 import { PlayerDatabase }    from "./pages/PlayerDatabase";
-import { LeagueWire }         from "./pages/LeagueWire";
+import { RfsnHome } from "./pages/rfsn/RfsnHome";
+import { RfsnNews } from "./pages/rfsn/RfsnNews";
 import { DraftWarRoom }      from "./pages/DraftWarRoom";
 import { DraftCommentary }   from "./pages/DraftCommentary";
 import { RivalryCenter }     from "./pages/RivalryCenter";
@@ -89,6 +90,12 @@ const trpcClient = trpc.createClient({
     }),
   ],
 });
+
+function LegacyWireArticleRedirect() {
+  const { articleId } = useParams();
+  if (!articleId) return <Navigate to="/rfsn/news" replace />;
+  return <Navigate to={`/rfsn/news/article/${articleId}`} replace />;
+}
 
 function LoadingSpinner() {
   return (
@@ -207,7 +214,11 @@ const router = createBrowserRouter([
           { path: "/owner-identity-review",  element: <OwnerIdentityReview /> },
           { path: "/player-intelligence",    element: <Navigate to="/player-database" replace /> },
           { path: "/player-database",         element: <PlayerDatabase /> },
-          { path: "/league-wire",               element: <LeagueWire /> },
+          { path: "/rfsn", element: <RfsnHome /> },
+          { path: "/rfsn/news", element: <RfsnNews /> },
+          { path: "/rfsn/news/article/:articleId", element: <RfsnNews /> },
+          { path: "/league-wire", element: <Navigate to="/rfsn/news" replace /> },
+          { path: "/league-wire/article/:articleId", element: <LegacyWireArticleRedirect /> },
           { path: "/draft-war-room",           element: <FeatureRouteGate route="/draft-war-room"><DraftWarRoom /></FeatureRouteGate> },
           { path: "/draft-commentary",         element: <FeatureRouteGate route="/draft-commentary"><DraftCommentary /></FeatureRouteGate> },
           { path: "/transactions", element: <FeatureRouteGate route="/transactions"><Transactions /></FeatureRouteGate> },

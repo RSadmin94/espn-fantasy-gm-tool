@@ -52,6 +52,7 @@ export const V1 = {
   },
   navGroups: {
     home: "Welcome Back, Coach",
+    media: "RFSN",
     weekly: "Weekly",
     knowRivals: "Know Rivals",
     knowYourself: "Know Yourself",
@@ -67,7 +68,8 @@ export const V1 = {
     rivalries: "Rivalries",
     myGmProfile: "My GM Profile",
     leagueDna: "League DNA",
-    leagueWire: "League Wire",
+    leagueWire: "RFSN",
+    rfsn: "RFSN",
     advisor: "GM Advisor",
     rosters: "Rosters",
     matchups: "Matchups",

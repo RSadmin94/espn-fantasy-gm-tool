@@ -7,7 +7,7 @@ import {
   Award,
   Building2,
   Trophy,
-  Newspaper,
+  Radio,
   ArrowLeftRight,
   Clapperboard,
   Gem,
@@ -29,6 +29,7 @@ export type RequiredPlan = "free" | "pro";
 
 export type NavCategory =
   | "home"
+  | "media"
   | "weekly"
   | "knowRivals"
   | "knowYourself"
@@ -71,6 +72,7 @@ export type FeatureEntry = RouteFeatureEntry | CapabilityFeatureEntry;
 /** Sidebar nav group order — preserve when deriving NAV_GROUPS. */
 export const NAV_CATEGORY_ORDER: NavCategory[] = [
   "home",
+  "media",
   "weekly",
   "knowRivals",
   "knowYourself",
@@ -108,11 +110,11 @@ export const FEATURE_REGISTRY: FeatureEntry[] = [
   },
   {
     entryType: "route",
-    id: "league-wire",
-    label: "League Wire",
-    route: "/league-wire",
-    navCategory: "weekly",
-    icon: Newspaper,
+    id: "rfsn",
+    label: "RFSN",
+    route: "/rfsn",
+    navCategory: "media",
+    icon: Radio,
     requiredPlan: "free",
     discoverable: true,
     showInOnboarding: true,
@@ -120,7 +122,7 @@ export const FEATURE_REGISTRY: FeatureEntry[] = [
     showInDashboard: true,
     experienceCategory: null,
     marketingDescription:
-      "The week's headlines — trades, injuries, and league drama as they happen.",
+      "Your league's year-round sports network — news, wire reports, and broadcast coverage.",
   },
   {
     entryType: "route",

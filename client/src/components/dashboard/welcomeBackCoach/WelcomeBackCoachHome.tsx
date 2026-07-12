@@ -254,10 +254,10 @@ export function WelcomeBackCoachHome(props: WelcomeBackCoachHomeProps) {
         <section aria-label={V1.home.leaguePulse} className="space-y-4">
           <SectionHeading
             eyebrow={V1.home.leaguePulse}
-            title={`${V1.home.recentEvents} + ${V1.features.leagueWire}`}
+            title={`${V1.home.recentEvents} + ${V1.features.rfsn}`}
             action={
-              <Link to="/league-wire" className="text-xs font-medium text-violet-400 hover:text-violet-300">
-                {V1.features.leagueWire} →
+              <Link to="/rfsn" className="text-xs font-medium text-violet-400 hover:text-violet-300">
+                {V1.features.rfsn} →
               </Link>
             }
           />

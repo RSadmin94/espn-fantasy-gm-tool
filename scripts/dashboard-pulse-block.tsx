@@ -97,8 +97,8 @@ __PULSE_START__
                       Full Draft War Room <ChevronRight className="h-3.5 w-3.5" />
                     </Link>
                     <span className="text-zinc-700">·</span>
-                    <Link to="/league-wire" className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-                      League Wire <ChevronRight className="h-3.5 w-3.5" />
+                    <Link to="/rfsn" className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                      RFSN <ChevronRight className="h-3.5 w-3.5" />
                     </Link>
                   </div>
                 </div>

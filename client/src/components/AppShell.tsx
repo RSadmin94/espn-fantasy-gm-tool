@@ -47,6 +47,7 @@ type NavGroup = { id: string; title: string; items: NavEntry[] };
 
 const NAV_GROUP_TITLES = {
   home: V1.navGroups.home,
+  media: V1.navGroups.media,
   weekly: V1.navGroups.weekly,
   knowRivals: V1.navGroups.knowRivals,
   knowYourself: V1.navGroups.knowYourself,
@@ -367,6 +368,7 @@ function NavItemRow({
   const locked = entry.locked === true;
   const isActive =
     pathname === entry.href ||
+    (entry.href === "/rfsn" && pathname.startsWith("/rfsn")) ||
     (entry.href === "/hall-of-fame" &&
       (pathname === "/ring-of-honor" || pathname === "/championships")) ||
     (entry.href === "/history" && pathname === "/history");

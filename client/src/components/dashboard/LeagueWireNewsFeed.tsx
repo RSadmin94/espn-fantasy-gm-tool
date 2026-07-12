@@ -1,6 +1,5 @@
 /**
- * LeagueWireNewsFeed — compact news feed widget for the Dashboard.
- * Shows the most recent completed week's postgame reports.
+ * RFSN dashboard widget — latest weekly wire reports and link to the network home.
  */
 import { useMemo } from "react";
 import { skipToken } from "@tanstack/react-query";
@@ -95,18 +94,25 @@ export function LeagueWireNewsFeed() {
     <div className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
-        <div className="flex items-center gap-2">
-          <Radio className="h-3.5 w-3.5 text-lime-400" />
-          <span className="text-sm font-black text-foreground tracking-tight">League Wire</span>
-          <span className="text-[10px] text-muted-foreground font-medium">
-            S{latest.season} · Wk{latest.week}
-          </span>
+        <div className="flex items-center gap-2 min-w-0">
+          <Radio className="h-3.5 w-3.5 text-lime-400 shrink-0" />
+          <div className="min-w-0">
+            <span className="text-sm font-black text-foreground tracking-tight block">RFSN</span>
+            <span className="text-[10px] text-muted-foreground font-medium block truncate">
+              Latest league stories and weekly coverage
+            </span>
+          </div>
+          {latest && (
+            <span className="text-[10px] text-muted-foreground font-medium shrink-0 hidden sm:inline">
+              · S{latest.season} Wk{latest.week}
+            </span>
+          )}
         </div>
         <Link
-          to="/league-wire"
-          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+          to="/rfsn"
+          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
         >
-          All reports <ArrowRight className="h-3 w-3" />
+          View all <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
 

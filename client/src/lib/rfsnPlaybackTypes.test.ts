@@ -59,10 +59,10 @@ describe("rfsnPlaybackTypes", () => {
     expect(typeof isDevPlaybackEnabled()).toBe("boolean");
   });
 
-  it("is not registered in production navigation", () => {
+  it("registers RFSN in production navigation but not dev playback", () => {
     const routes = FEATURE_REGISTRY.map((f) => f.route);
+    expect(routes).toContain("/rfsn");
     expect(routes).not.toContain("/dev/rfsn-playback");
-    expect(routes).not.toContain("/rfsn");
   });
 
   it("uses a standalone dev HTML entry outside production routing", () => {

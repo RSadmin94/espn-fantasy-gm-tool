@@ -121,7 +121,7 @@ export function CommandDashboard(){
   const shortcuts = [
     { t:"Draft War Room", to:"/draft-war-room", d:"Live pick board, rival threat windows, and decision memo." },
     { t:"Rivalries", to:"/rivalry-center", d:"Head-to-head records, heat, and matchup history." },
-    { t:"League Wire", to:"/league-wire", d:"Newsfeed, transactions, and league movement." },
+    { t:"RFSN", to:"/rfsn", d:"League news, wire reports, and year-round media." },
     { t:"My GM Profile", to:"/owner-profiles", d:"Scouting report, historical behavior, and career arc." },
   ];
   const actions = [
