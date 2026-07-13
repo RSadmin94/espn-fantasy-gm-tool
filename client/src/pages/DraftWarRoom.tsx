@@ -17,7 +17,7 @@ import {
 import { buildRfsnLiveDraftId } from "@/lib/rfsnLiveDraftId";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
 import { RfsnPickClock } from "@/components/rfsn/RfsnPickClock";
-import { resolveClockState, isPickManual, MAX_BROADCAST_HOLD_MS } from "@/lib/draftClock";
+import { resolveClockState, isPickManual, MAX_BROADCAST_HOLD_MS, draftPaceFromTimerMs } from "@/lib/draftClock";
 import {
   Zap, BarChart2, RefreshCw, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, Info, Trophy, Target,
@@ -716,6 +716,7 @@ function LiveDraftEngine({
     results,
     draftComplete: done,
     teamCount: teams.length || 14,
+    draftPace: draftPaceFromTimerMs(paceMs),
     resetKey: scheduleSig,
     baselineResults: initialResults,
   });

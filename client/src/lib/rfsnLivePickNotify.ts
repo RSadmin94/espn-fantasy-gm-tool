@@ -26,6 +26,7 @@ export type LockedPickNotifyInput = {
   player: LockedPickPlayerResult;
   teamCount: number;
   draftComplete?: boolean;
+  draftPace?: "broadcast" | "brisk" | "turbo";
 };
 
 export function lockedPickNotifyKey(
@@ -61,6 +62,7 @@ export function buildLockedPickNotifyPayload(input: LockedPickNotifyInput) {
       nflTeam: input.player.nflTeam ?? null,
     },
     draftComplete: input.draftComplete ?? false,
+    draftPace: input.draftPace,
   };
 }
 

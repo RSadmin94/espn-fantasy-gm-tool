@@ -4,6 +4,7 @@
 import { buildDraftMomentsFromContext } from "../draftMoments/draftMomentBuilder";
 import { buildIdentityResolver } from "../draftMoments/draftMomentIdentityService";
 import type { DraftMoment } from "../draftMoments/draftMomentTypes";
+import { momentConfigForDraftPace, type DraftPace } from "../draftMoments/draftMomentTypes";
 import type { MockPickLike, ReceiptContext } from "../draftMoments/draftMomentReceiptService";
 import { makeShadowReceiptContext } from "./shadowDraftSources";
 
@@ -66,7 +67,7 @@ export function buildDraftMomentForLockedPick(
   leagueId: string,
   draftId: string,
   pick: LockedPickInput,
-  opts: { season?: number; reset?: boolean } = {},
+  opts: { season?: number; reset?: boolean; draftPace?: DraftPace } = {},
 ): DraftMoment {
   const key = accKey(leagueId, draftId);
   if (opts.reset) accumulators.delete(key);
@@ -101,6 +102,7 @@ export function buildDraftMomentForLockedPick(
     mockPicks: acc.picks,
     ctx: receiptContextFor(leagueId),
     resolver: resolverForPicks(acc.picks),
+    config: momentConfigForDraftPace(opts.draftPace),
   });
 
   const moment = moments.find((m) => m.overallPick === pick.overallPick);

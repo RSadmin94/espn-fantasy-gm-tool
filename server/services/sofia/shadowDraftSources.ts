@@ -4,37 +4,56 @@
  */
 import { buildDraftMomentsFromContext } from "../draftMoments/draftMomentBuilder";
 import { buildIdentityResolver } from "../draftMoments/draftMomentIdentityService";
-import type { DraftMoment } from "../draftMoments/draftMomentTypes";
-import type { MockPickLike, ReceiptContext } from "../draftMoments/draftMomentReceiptService";
+import {
+  BROADCAST_PACE_MOMENT_CONFIG,
+  type DraftMoment,
+  type MomentConfig,
+} from "../draftMoments/draftMomentTypes";
+import { normName, type MockPickLike, type ReceiptContext } from "../draftMoments/draftMomentReceiptService";
 
 const TEAM_COUNT = 14;
 
+/** Fixed story beats in the 168-pick broadcast certification fixture — real pick rows, not seed-derived. */
+const BROADCAST_STORY_BEATS: ReadonlyArray<{
+  overall: number;
+  playerName: string;
+  position: string;
+  playerId: string;
+  adp: number;
+}> = [
+  { overall: 4, playerName: "CeeDee Lamb", position: "WR", playerId: "lamb", adp: 4 },
+  { overall: 9, playerName: "Josh Allen", position: "QB", playerId: "allen", adp: 24 },
+  { overall: 14, playerName: "Kenneth Walker III", position: "RB", playerId: "kw3", adp: 54 },
+  { overall: 21, playerName: "Patrick Mahomes", position: "QB", playerId: "mahomes", adp: 8 },
+  { overall: 28, playerName: "Lamar Jackson", position: "QB", playerId: "lamar", adp: 18 },
+  { overall: 38, playerName: "Travis Kelce", position: "TE", playerId: "kelce", adp: 22 },
+  { overall: 45, playerName: "Jaxon Smith-Njigba", position: "WR", playerId: "jsn", adp: 105 },
+  { overall: 59, playerName: "Sam LaPorta", position: "TE", playerId: "laporta", adp: 80 },
+  { overall: 67, playerName: "Christian McCaffrey", position: "RB", playerId: "cmc", adp: 1 },
+  { overall: 84, playerName: "DK Metcalf", position: "WR", playerId: "metcalf", adp: 48 },
+  { overall: 112, playerName: "Chris Olave", position: "WR", playerId: "olave", adp: 72 },
+  { overall: 140, playerName: "Rachaad White", position: "RB", playerId: "white", adp: 88 },
+];
+
 export function makeShadowReceiptContext(over: Partial<ReceiptContext> = {}): ReceiptContext {
-  const routineRegistry = Array.from({ length: 120 }, (_, i) => {
+  const routineRegistry = Array.from({ length: 200 }, (_, i) => {
     const pick = i + 1;
     return { norm: `routine wr ${pick}`, position: "WR", adp: pick };
   });
+
+  const storyRegistry = BROADCAST_STORY_BEATS.map((b) => ({
+    norm: normName(b.playerName),
+    position: b.position,
+    adp: b.adp,
+  }));
 
   return {
     leagueId: "SHADOW",
     adpByName: new Map([
       ...routineRegistry.map((r) => [r.norm, r.adp] as const),
-      ["ceedee lamb", 4],
-      ["josh allen", 24],
-      ["kenneth walker iii", 54],
-      ["jaxon smith-njigba", 105],
-      ["lamar jackson", 18],
-      ["sam laporta", 80],
+      ...storyRegistry.map((r) => [r.norm, r.adp] as const),
     ]),
-    registry: [
-      ...routineRegistry,
-      { norm: "ceedee lamb", position: "WR", adp: 4 },
-      { norm: "josh allen", position: "QB", adp: 24 },
-      { norm: "kenneth walker iii", position: "RB", adp: 54 },
-      { norm: "jaxon smith-njigba", position: "WR", adp: 105 },
-      { norm: "lamar jackson", position: "QB", adp: 18 },
-      { norm: "sam laporta", position: "TE", adp: 80 },
-    ],
+    registry: [...routineRegistry, ...storyRegistry],
     historyByKey: new Map(),
     seasonsByKey: new Map(),
     rivalById: new Map([["PID_ALICE", { rivalName: "Alice", heat: "Heated" }]]),
@@ -100,7 +119,7 @@ function routinePick(overall: number): MockPickLike {
   });
 }
 
-function buildMoments(picks: MockPickLike[], draftId: string): DraftMoment[] {
+function buildMoments(picks: MockPickLike[], draftId: string, config?: MomentConfig): DraftMoment[] {
   return buildDraftMomentsFromContext({
     leagueId: "SHADOW",
     draftId,
@@ -108,6 +127,7 @@ function buildMoments(picks: MockPickLike[], draftId: string): DraftMoment[] {
     mockPicks: picks,
     ctx: makeShadowReceiptContext(),
     resolver: shadowResolver,
+    config,
   });
 }
 
@@ -121,7 +141,6 @@ export function buildSimulatedDraftMoments(): DraftMoment[] {
     picks.push(routinePick(i));
   }
 
-  // Story injections (everything else stays on-ADP → routine)
   picks[3] = mp({
     ...routinePick(4),
     playerName: "Lamar Jackson",
@@ -191,12 +210,41 @@ export function buildMockDraftMoments(): DraftMoment[] {
   return buildMoments(picks, "shadow-mock-2026");
 }
 
-export type ShadowDraftSource = "simulated" | "mock" | "scenario";
+const BROADCAST_ROUNDS = 12;
+
+/**
+ * Canonical 14-team × 12-round (168-pick) fixture for broadcast-pace certification.
+ * Fixed story injects with registered ADP — no seed-derived synthetic events.
+ */
+export function buildBroadcastPaceDraftMoments(
+  seed = "broadcast-pace-168",
+  config: MomentConfig = BROADCAST_PACE_MOMENT_CONFIG,
+): DraftMoment[] {
+  const total = TEAM_COUNT * BROADCAST_ROUNDS;
+  const picks: MockPickLike[] = Array.from({ length: total }, (_, i) => routinePick(i + 1));
+
+  for (const beat of BROADCAST_STORY_BEATS) {
+    const o = ownerFor(beat.overall);
+    picks[beat.overall - 1] = mp({
+      ...routinePick(beat.overall),
+      teamId: o.teamId,
+      ownerName: o.ownerName,
+      playerId: beat.playerId,
+      playerName: beat.playerName,
+      position: beat.position,
+    });
+  }
+
+  return buildMoments(picks, `shadow-${seed}`, config);
+}
+
+export type ShadowDraftSource = "simulated" | "mock" | "scenario" | "broadcast_pace";
 
 export function buildShadowDraftMoments(source: ShadowDraftSource): DraftMoment[] {
   switch (source) {
     case "simulated": return buildSimulatedDraftMoments();
     case "mock": return buildMockDraftMoments();
     case "scenario": return buildScenarioDraftMoments();
+    case "broadcast_pace": return buildBroadcastPaceDraftMoments();
   }
 }

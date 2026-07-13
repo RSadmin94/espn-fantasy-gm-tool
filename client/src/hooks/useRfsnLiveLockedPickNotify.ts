@@ -18,6 +18,7 @@ type UseRfsnLiveLockedPickNotifyArgs = {
   results: Record<number, LockedPickPlayerResult>;
   draftComplete: boolean;
   teamCount: number;
+  draftPace?: "broadcast" | "brisk" | "turbo";
   resetKey?: string;
   baselineResults?: Record<number, LockedPickPlayerResult>;
 };
@@ -34,6 +35,7 @@ export function useRfsnLiveLockedPickNotify({
   results,
   draftComplete,
   teamCount,
+  draftPace,
   resetKey,
   baselineResults = {},
 }: UseRfsnLiveLockedPickNotifyArgs): void {
@@ -85,6 +87,7 @@ export function useRfsnLiveLockedPickNotify({
         leagueId,
         draftId,
         teamCount,
+        draftPace,
         draftComplete: draftComplete && item.slot.pickNumber === lastPickNumber,
       });
       void notifyMut.mutateAsync(payload).catch((err: unknown) => {
@@ -97,7 +100,7 @@ export function useRfsnLiveLockedPickNotify({
         }
       });
     }
-  }, [canNotify, draftComplete, draftId, leagueId, notifyMut, results, schedule, teamCount]);
+  }, [canNotify, draftComplete, draftId, draftPace, leagueId, notifyMut, results, schedule, teamCount]);
 }
 
 export function useRfsnLivePickNotifyAccess(enabled: boolean) {

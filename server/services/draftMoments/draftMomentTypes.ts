@@ -82,11 +82,12 @@ export interface MomentConfig {
   };
 }
 
-export const DEFAULT_MOMENT_CONFIG: MomentConfig = {
-  adp: { moderateDelta: 8, strongDelta: 25, maxRound: 10, strongMaxRound: 7 },
-  tierCliff: { moderateGap: 12, strongGap: 25, maxRound: 12 },
-  patternBreak: { minSeasons: 3, minRoundBreak: 3 },
-  consequentialRun: { minRunInWindow: 4, window: 6, requiresTierCliff: true },
+/** Pre–pace-tuning thresholds — baseline for editorial rate comparison tests. */
+export const LEGACY_MOMENT_CONFIG: MomentConfig = {
+  adp: { moderateDelta: 9, strongDelta: 24, maxRound: 9, strongMaxRound: 6 },
+  tierCliff: { moderateGap: 13, strongGap: 24, maxRound: 11 },
+  patternBreak: { minSeasons: 4, minRoundBreak: 4 },
+  consequentialRun: { minRunInWindow: 5, window: 5, requiresTierCliff: true },
   dpTiming: { moderateDeviation: 3, strongDeviation: 5 },
   positionRunWindow: 6,
   commentary: {
@@ -96,6 +97,52 @@ export const DEFAULT_MOMENT_CONFIG: MomentConfig = {
     historic: { enabled: true, maxSentences: 2, maxWords: 45 },
   },
 };
+
+export const DEFAULT_MOMENT_CONFIG: MomentConfig = {
+  adp: { moderateDelta: 6, strongDelta: 22, maxRound: 10, strongMaxRound: 7 },
+  tierCliff: { moderateGap: 10, strongGap: 22, maxRound: 12 },
+  patternBreak: { minSeasons: 3, minRoundBreak: 2 },
+  consequentialRun: { minRunInWindow: 3, window: 6, requiresTierCliff: true },
+  dpTiming: { moderateDeviation: 3, strongDeviation: 5 },
+  positionRunWindow: 6,
+  commentary: {
+    routine: { enabled: false, maxSentences: 0, maxWords: 0 },
+    notable: { enabled: true, maxSentences: 1, maxWords: 20 },
+    major: { enabled: true, maxSentences: 2, maxWords: 35 },
+    historic: { enabled: true, maxSentences: 2, maxWords: 45 },
+  },
+};
+
+/** Broadcast-pace live draft — more sensitive classification; Brisk/Turbo use DEFAULT/LEGACY. */
+export const BROADCAST_PACE_MOMENT_CONFIG: MomentConfig = {
+  adp: { moderateDelta: 3, strongDelta: 14, maxRound: 12, strongMaxRound: 9 },
+  tierCliff: { moderateGap: 7, strongGap: 16, maxRound: 12 },
+  patternBreak: { minSeasons: 3, minRoundBreak: 2 },
+  consequentialRun: { minRunInWindow: 3, window: 6, requiresTierCliff: true },
+  dpTiming: { moderateDeviation: 2, strongDeviation: 4 },
+  positionRunWindow: 6,
+  commentary: {
+    routine: { enabled: false, maxSentences: 0, maxWords: 0 },
+    notable: { enabled: true, maxSentences: 1, maxWords: 22 },
+    major: { enabled: true, maxSentences: 2, maxWords: 38 },
+    historic: { enabled: true, maxSentences: 2, maxWords: 45 },
+  },
+};
+
+export type DraftPace = "broadcast" | "brisk" | "turbo";
+
+export function momentConfigForDraftPace(pace?: DraftPace): MomentConfig {
+  if (pace === "broadcast") return BROADCAST_PACE_MOMENT_CONFIG;
+  if (pace === "turbo") return LEGACY_MOMENT_CONFIG;
+  return DEFAULT_MOMENT_CONFIG;
+}
+
+/** Map Live Draft UI pace timer to server classification profile. */
+export function draftPaceFromTimerMs(paceMs: number): DraftPace {
+  if (paceMs >= 8000) return "broadcast";
+  if (paceMs >= 2000) return "brisk";
+  return "turbo";
+}
 
 /** Claim categories the validator forbids unless a receipt explicitly supports them. */
 export const FORBIDDEN_CLAIM_CATEGORIES = [

@@ -94,6 +94,7 @@ export const rfsnBroadcastRouter = router({
         draftId: z.string().min(1).max(128),
         pick: lockedPickSchema,
         draftComplete: z.boolean().optional(),
+        draftPace: z.enum(["broadcast", "brisk", "turbo"]).optional(),
         /** Test-only — forces deterministic provider (no API calls). */
         useDeterministicProvider: z.boolean().optional(),
       }),
@@ -108,7 +109,9 @@ export const rfsnBroadcastRouter = router({
 
       let draftMoment;
       try {
-        draftMoment = buildDraftMomentForLockedPick(input.leagueId, input.draftId, input.pick as LockedPickInput);
+        draftMoment = buildDraftMomentForLockedPick(input.leagueId, input.draftId, input.pick as LockedPickInput, {
+          draftPace: input.draftPace,
+        });
       } catch {
         return { accepted: false, reason: "moment_build_failed" as const };
       }
