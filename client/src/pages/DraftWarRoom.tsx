@@ -25,6 +25,7 @@ import {
   resetTeamControlsManualIds,
 } from "@/lib/draftManualTeams";
 import {
+  clearAllLiveDraftSessionsForDraft,
   clearLiveDraftSession,
   liveDraftSessionStorageKey,
   readLiveDraftSession,
@@ -785,6 +786,7 @@ function LiveDraftEngine({
   });
 
   const resetSession = (trpc as any).rfsnBroadcast.resetLiveSession.useMutation();
+  const trpcUtils = trpc.useUtils();
 
   // ── Authoritative clock engine (reactive broadcast pause; never extends routine picks) ──
   const onClockIsManual = awaitingUser;
@@ -915,12 +917,26 @@ function LiveDraftEngine({
     } else if (!replaySameSeed) {
       setDraftSeed(createRandomDraftSeed());
     }
-    setResults(initialResults); setIdx(0); setRunning(false);
-    setHolding(false); setRemainingMs(paceMs);
+    setResults(initialResults);
+    setIdx(0);
+    setRunning(false);
+    setHolding(false);
+    setBroadcastBusy(false);
+    setRemainingMs(paceMs);
+    clearAllLiveDraftSessionsForDraft(leagueId, draftId);
     clearLiveDraftSession(draftSessionKey);
     // Manual-team choices preserved through draft reset except pause-on-my-picks sync;
     // they reset only on league/season/schedule change or via "Reset team controls".
-    if (leagueId) resetSession.mutate?.({ leagueId, draftId });
+    if (leagueId) {
+      resetSession.mutate(
+        { leagueId, draftId },
+        {
+          onSuccess: () => {
+            void trpcUtils.rfsnBroadcast.getLiveSnapshot.invalidate({ leagueId, draftId });
+          },
+        },
+      );
+    }
     setResetCounter((n) => n + 1);
   }
 

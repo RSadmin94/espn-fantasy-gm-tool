@@ -21,6 +21,24 @@ export function liveDraftSessionStorageKey(
   return `rfsn-live-draft:${leagueId ?? "no-league"}:${draftId}:${scheduleSig}`;
 }
 
+/** Structural schedule identity — ignores mock-predicted open-pick player churn on refetch. */
+export function buildLiveDraftScheduleSig(
+  schedule: ReadonlyArray<{
+    pickNumber: number;
+    teamId: number;
+    isKeeperSlot?: boolean;
+    player?: string | null;
+  }>,
+): string {
+  return schedule
+    .map((s) =>
+      s.isKeeperSlot
+        ? `${s.pickNumber}:${s.teamId}:k:${String(s.player ?? "").toLowerCase().trim()}`
+        : `${s.pickNumber}:${s.teamId}:o`,
+    )
+    .join("|");
+}
+
 export function readLiveDraftSession(key: string): LiveDraftPersistedState | null {
   try {
     const raw = sessionStorage.getItem(key);
@@ -42,6 +60,24 @@ export function writeLiveDraftSession(key: string, state: LiveDraftPersistedStat
 export function clearLiveDraftSession(key: string): void {
   try {
     sessionStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
+/** Drop every persisted engine session for a draft (all schedule signatures). */
+export function clearAllLiveDraftSessionsForDraft(
+  leagueId: string | null | undefined,
+  draftId: string,
+): void {
+  const prefix = `rfsn-live-draft:${leagueId ?? "no-league"}:${draftId}:`;
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+    for (const key of keys) sessionStorage.removeItem(key);
   } catch {
     // ignore
   }

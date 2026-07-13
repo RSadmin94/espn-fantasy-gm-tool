@@ -83,6 +83,26 @@ function sessionStateFromFrame(frame: BroadcastFrame): RfsnLiveSessionState {
   return "commentary_active";
 }
 
+function restoreIdleSessionAfterPendingDiscard(
+  leagueId: string,
+  draftId: string,
+  identity: { draftId: string; pickNumber: number; pickId: string },
+  draftComplete: boolean,
+): void {
+  updateLiveSession(leagueId, draftId, {
+    state: "between_picks",
+    payload: {
+      schemaVersion: 1,
+      sessionState: "between_picks",
+      snapshot: null,
+      activePickIdentity: identity,
+      frameStatus: "idle",
+      generatedAt: null,
+      draftComplete,
+    },
+  });
+}
+
 function pickIdentityFromMoment(moment: BroadcastMoment, draftId: string) {
   if (moment.identity.kind === "draft_pick") {
     return {
@@ -211,7 +231,7 @@ export async function buildLiveBroadcastFrame(
       mergeAccumulatedLiveProviderTelemetry(productionTelemetry);
     }
   } catch {
-    updateLiveSession(input.leagueId, input.draftId, { state: "broadcast_unavailable" });
+    restoreIdleSessionAfterPendingDiscard(input.leagueId, input.draftId, identity, draftComplete);
     recordLiveBroadcastTelemetry({
       momentId: identity.pickId,
       editorialPlan: resolveEditorialPlanId(input.moment),
@@ -250,6 +270,7 @@ export async function buildLiveBroadcastFrame(
       }),
       staleDiscarded: true,
     });
+    restoreIdleSessionAfterPendingDiscard(input.leagueId, input.draftId, identity, draftComplete);
     return null;
   }
 

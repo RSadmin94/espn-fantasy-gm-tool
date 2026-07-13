@@ -116,8 +116,89 @@ describe("liveBroadcastService", () => {
       useDeterministicProvider: true,
     });
     expect(result).toBeNull();
-    expect(getLiveSession(draftMoment.leagueId, draftMoment.draftId)?.state).toBe("broadcast_unavailable");
+    expect(getLiveSession(draftMoment.leagueId, draftMoment.draftId)?.state).toBe("between_picks");
+    expect(getLiveSession(draftMoment.leagueId, draftMoment.draftId)?.payload.sessionState).toBe(
+      "between_picks",
+    );
     spy.mockRestore();
     void createDeterministicLiveOrchestrator;
+  });
+
+  it("restores between_picks when a stale frame is discarded after commentary_pending", async () => {
+    const draftMoment = dm({ overallPick: 7, eventId: "LIVE:draft:7" });
+    const { bumpLiveSessionEpoch } = await import("./liveBroadcastSession");
+    const identity = {
+      kind: "draft_pick" as const,
+      draftId: draftMoment.draftId,
+      pickNumber: draftMoment.overallPick,
+      pickId: draftMoment.eventId,
+    };
+    const spy = vi
+      .spyOn(await import("./liveBroadcastOrchestratorFactory"), "createDeterministicLiveOrchestrator")
+      .mockReturnValue({
+        buildFrame: async () => ({
+          public: {
+            status: "ready",
+            generatedAt: new Date().toISOString(),
+            identity,
+            primaryVoice: { accepted: true },
+            secondaryVoice: null,
+            deferredVoices: [],
+            context: {},
+          },
+          diagnostics: { stale: true, voiceAttempts: [], providerFailures: [] },
+        }),
+      } as any);
+
+    const result = await buildLiveBroadcastFrame({
+      moment: draftMomentToBroadcastMoment(draftMoment),
+      leagueId: draftMoment.leagueId,
+      draftId: draftMoment.draftId,
+      draftMoment,
+      useDeterministicProvider: true,
+    });
+
+    expect(result).toBeNull();
+    const session = getLiveSession(draftMoment.leagueId, draftMoment.draftId);
+    expect(session?.state).toBe("between_picks");
+    expect(session?.payload.sessionState).not.toBe("commentary_pending");
+    expect(session?.payload.sessionState).toBe("between_picks");
+    spy.mockRestore();
+    void bumpLiveSessionEpoch;
+  });
+
+  it("restores between_picks when epoch advances before build completes", async () => {
+    const draftMoment = dm({ overallPick: 8, eventId: "LIVE:draft:8" });
+    const { bumpLiveSessionEpoch } = await import("./liveBroadcastSession");
+    const identity = {
+      kind: "draft_pick" as const,
+      draftId: draftMoment.draftId,
+      pickNumber: draftMoment.overallPick,
+      pickId: draftMoment.eventId,
+    };
+    const spy = vi
+      .spyOn(await import("./liveBroadcastOrchestratorFactory"), "createDeterministicLiveOrchestrator")
+      .mockReturnValue({
+        buildFrame: async () => {
+          bumpLiveSessionEpoch(draftMoment.leagueId, draftMoment.draftId);
+          return {
+            public: {
+              status: "ready",
+              generatedAt: new Date().toISOString(),
+              identity,
+              primaryVoice: { accepted: true },
+              secondaryVoice: null,
+              deferredVoices: [],
+              context: {},
+            },
+            diagnostics: { stale: false, voiceAttempts: [], providerFailures: [] },
+          };
+        },
+      } as any);
+
+    const result = await processLockedDraftMoment(draftMoment, { useDeterministicProvider: true });
+    expect(result?.sessionState).toBe("between_picks");
+    expect(result?.sessionState).not.toBe("commentary_pending");
+    spy.mockRestore();
   });
 });
