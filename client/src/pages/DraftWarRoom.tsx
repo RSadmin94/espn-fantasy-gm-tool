@@ -8,8 +8,16 @@ import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { DraftWarRoomDesk } from "./DraftWarRoomDesk";
 import { useRfsnLiveLockedPickNotify } from "@/hooks/useRfsnLiveLockedPickNotify";
+import {
+  createRandomDraftSeed,
+  formatDraftSeed,
+  mulberry32,
+  selectAiPick,
+} from "@/lib/liveDraftSeed";
 import { buildRfsnLiveDraftId } from "@/lib/rfsnLiveDraftId";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
+import { RfsnPickClock } from "@/components/rfsn/RfsnPickClock";
+import { resolveClockState, isPickManual, MAX_BROADCAST_HOLD_MS } from "@/lib/draftClock";
 import {
   Zap, BarChart2, RefreshCw, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, Info, Trophy, Target,
@@ -525,10 +533,10 @@ interface KeeperOverride {
 
 // ── Live Draft Engine (real, stateful: AI fills other teams, you take your picks) ──
 function LiveDraftEngine({
-  picks, teams, availablePool, positionCaps, yourTeamId,
+  picks, teams, availablePool, positionCaps,
   leagueId, draftId,
 }: {
-  picks: any[]; teams: any[]; availablePool: any[]; positionCaps: Record<string, number> | null; yourTeamId: number | null;
+  picks: any[]; teams: any[]; availablePool: any[]; positionCaps: Record<string, number> | null;
   leagueId?: string | null;
   draftId: string;
 }) {
@@ -578,8 +586,40 @@ function LiveDraftEngine({
   ] as const;
   const [paceMs, setPaceMs] = useState<number>(9000);
 
+  // Seeded AI variation — fresh seed each new draft; replay keeps the same seed.
+  const [draftSeed, setDraftSeed] = useState<number>(() => createRandomDraftSeed());
+  const [replaySameSeed, setReplaySameSeed] = useState(false);
+  const rngRef = useRef(mulberry32(draftSeed));
+  const pickCounterRef = useRef(0);
+  useEffect(() => {
+    rngRef.current = mulberry32(draftSeed);
+    pickCounterRef.current = 0;
+  }, [draftSeed, scheduleSig]);
+
+  // Authoritative clock + broadcast-hold state.
+  const TICK_MS = 250;
+  const [remainingMs, setRemainingMs] = useState<number>(paceMs);
+  const [holding, setHolding] = useState<boolean>(false); // paused for a broadcast moment
+  const [broadcastBusy, setBroadcastBusy] = useState<boolean>(false); // reported by the booth panel
+  const holdStartRef = useRef<number>(0);
+
+  // ── Manual control (P6) — single source of truth `manualTeamIds`. ────────────
+  // Default: the signed-in user's team. Zero selected = full AI; all selected = fully manual.
+  const { myTeamId } = useLeagueContext();
+  const buildDefaultManual = () =>
+    myTeamId != null ? new Set<number>([myTeamId]) : new Set<number>();
+  const [manualTeamIds, setManualTeamIds] = useState<Set<number>>(buildDefaultManual);
+  // Reset selections to the user's team on league/season/schedule identity change (and seed
+  // once myTeamId resolves). User toggles never hit this — myTeamId is stable within a league,
+  // and scheduleSig only changes on a real board/league/season change (never on draft reset).
+  useEffect(() => {
+    setManualTeamIds(myTeamId != null ? new Set<number>([myTeamId]) : new Set<number>());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleSig, myTeamId]);
+
   useEffect(() => {
     setResults(initialResults); setIdx(0); setRunning(false);
+    setHolding(false); setRemainingMs(paceMs);
     if (timer.current) clearTimeout(timer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleSig]);
@@ -658,7 +698,7 @@ function LiveDraftEngine({
 
   const slot = schedule[idx];
   const done = idx >= schedule.length;
-  const awaitingUser = !!slot && !slot.isKeeperSlot && yourTeamId != null && Number(slot.teamId) === yourTeamId && !results[slot.pickNumber];
+  const awaitingUser = !!slot && !slot.isKeeperSlot && isPickManual(manualTeamIds, slot?.teamId) && !results[slot.pickNumber];
   const onClock = slot ? teams.find((t: any) => Number(t.teamId) === Number(slot.teamId)) : null;
 
   useRfsnLiveLockedPickNotify({
@@ -680,58 +720,150 @@ function LiveDraftEngine({
     baselineResults: initialResults,
   });
 
-  // Step engine: keeper slots auto-advance, AI auto-picks, your pick pauses
+  const resetSession = (trpc as any).rfsnBroadcast.resetLiveSession.useMutation();
+
+  // ── Authoritative clock engine (reactive broadcast pause; never extends routine picks) ──
+  const onClockIsManual = awaitingUser;
+
+  // Reset the countdown when the pick changes. Reads paceMs at that moment, so a pace change
+  // applies to FUTURE picks without corrupting the current one.
   useEffect(() => {
-    if (!running || done) return;
+    setRemainingMs(paceMs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx]);
+
+  // Keeper slots auto-advance (no clock, no broadcast).
+  useEffect(() => {
+    if (!running || done || holding) return;
     const cur = schedule[idx];
-    if (!cur) return;
-    if (cur.isKeeperSlot) { timer.current = setTimeout(() => setIdx(i => i + 1), 50); return () => clearTimeout(timer.current!); }
-    // Your team pauses for a manual pick; every other team auto-plays the pre-computed board.
-    if (yourTeamId != null && Number(cur.teamId) === yourTeamId) { setRunning(false); return; }
-    timer.current = setTimeout(() => {
-      setResults(prev => {
-        if (prev[cur.pickNumber]) return prev;
-        // Dynamic best-available-by-need: each AI team drafts LIVE from the remaining board, adapting
-        // to your manual picks — a player you skip gets scooped by the next team that can use him, and
-        // nobody is drafted twice. Holds K/DEF/DP for the final rounds and respects position caps.
-        // Restores the non-scripted engine that commit 7201571 replaced with a static replay.
-        const taken = new Set<string>();
-        const counts: Record<string, number> = {};
-        for (const k of Object.keys(prev)) {
-          const r = prev[Number(k)];
-          taken.add(keyOf(r));
-          const sd = schedule.find((s: any) => s.pickNumber === Number(k));
-          if (sd && Number(sd.teamId) === Number(cur.teamId)) counts[r.position] = (counts[r.position] ?? 0) + 1;
-        }
-        const late = Number(cur.round) > totalRounds - 2;
-        const pool = availablePool
-          .filter((p: any) => !taken.has(keyOf(p)))
-          .sort((a: any, b: any) => byAdp(a) - byAdp(b));
-        const pick = pool.find((p: any) => {
-          if ((p.position === "K" || p.position === "DEF" || p.position === "DP") && !late) return false;
-          if ((counts[p.position] ?? 0) >= (POS_CAPS[p.position] ?? 99)) return false;
-          return true;
-        }) ?? pool[0];
-        if (!pick) return prev;
-        return { ...prev, [cur.pickNumber]: { ...pick, byAI: true } };
+    if (cur && cur.isKeeperSlot) {
+      const t = setTimeout(() => setIdx((i) => i + 1), 50);
+      return () => clearTimeout(t);
+    }
+  }, [running, done, holding, schedule, idx]);
+
+  // Countdown tick — only while an AI pick is genuinely on the clock (never for a manual
+  // team, a keeper, or while paused for a broadcast moment).
+  useEffect(() => {
+    const cur = schedule[idx];
+    const counting = running && !done && !holding && !onClockIsManual && !!cur && !cur.isKeeperSlot;
+    if (!counting) return;
+    const iv = setInterval(() => setRemainingMs((ms) => Math.max(0, ms - TICK_MS)), TICK_MS);
+    return () => clearInterval(iv);
+  }, [running, done, holding, onClockIsManual, schedule, idx]);
+
+  // Fire the AI pick when the countdown hits 0, then advance IMMEDIATELY. The pause is
+  // reactive (below), so routine picks incur no post-pick grace.
+  useEffect(() => {
+    if (remainingMs > 0) return;
+    const cur = schedule[idx];
+    const counting = running && !done && !holding && !onClockIsManual && !!cur && !cur.isKeeperSlot;
+    if (!counting) return;
+    setResults((prev) => {
+      if (prev[cur.pickNumber]) return prev;
+      const taken = new Set<string>();
+      const counts: Record<string, number> = {};
+      for (const k of Object.keys(prev)) {
+        const r = prev[Number(k)];
+        taken.add(keyOf(r));
+        const sd = schedule.find((s: any) => s.pickNumber === Number(k));
+        if (sd && Number(sd.teamId) === Number(cur.teamId)) counts[r.position] = (counts[r.position] ?? 0) + 1;
+      }
+      const late = Number(cur.round) > totalRounds - 2;
+      const pool = availablePool
+        .filter((p: any) => !taken.has(keyOf(p)));
+      const pick = selectAiPick({
+        pool,
+        teamId: Number(cur.teamId),
+        round: Number(cur.round),
+        positionCounts: counts,
+        posCaps: POS_CAPS,
+        lateRound: late,
+        rng: () => {
+          pickCounterRef.current += 1;
+          return rngRef.current();
+        },
       });
-      setIdx(i => i + 1);
-    }, paceMs);
-    return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [running, idx, done, schedule, yourTeamId, totalRounds, availablePool, paceMs]);
+      if (!pick) return prev;
+      return { ...prev, [cur.pickNumber]: { ...pick, byAI: true } };
+    });
+    setIdx((i) => i + 1);
+  }, [remainingMs, running, done, holding, onClockIsManual, schedule, idx, totalRounds, availablePool]);
+
+  // Reactive broadcast pause — freeze the countdown + AI ONLY while a moment is actually on
+  // air (busy). Silent picks never set busy, so they are never extended (the 1.8s grace is
+  // gone). The hold is separate from the configured pick clock and capped at 20s.
+  useEffect(() => {
+    if (broadcastBusy && !holding) {
+      holdStartRef.current = Date.now();
+      setHolding(true);
+    } else if (!broadcastBusy && holding) {
+      setHolding(false);
+    }
+  }, [broadcastBusy, holding]);
+
+  // Watchdog — the draft can never freeze longer than 20s, even if a moment gets stuck.
+  useEffect(() => {
+    if (!holding) return;
+    const remaining = Math.max(0, MAX_BROADCAST_HOLD_MS - (Date.now() - holdStartRef.current));
+    const t = setTimeout(() => setHolding(false), remaining);
+    return () => clearTimeout(t);
+  }, [holding]);
 
   function userDraft(p: any) {
     const cur = schedule[idx];
     if (!cur) return;
-    setResults(prev => ({ ...prev, [cur.pickNumber]: { ...p, byUser: true } }));
-    setIdx(i => i + 1);
+    setResults((prev) => ({ ...prev, [cur.pickNumber]: { ...p, byUser: true } }));
     setSearchQ("");
     setRunning(true);
+    setIdx((i) => i + 1); // advance immediately; the reactive pause holds if a moment fires
   }
-  function reset() {
+
+  // Toggle a team's manual control (single source of truth). Checking the on-clock AI team
+  // stops its clock instantly (counting halts). Unchecking the on-clock manual team starts a
+  // fresh full countdown.
+  function toggleManual(teamId: number) {
+    const wasManual = manualTeamIds.has(teamId);
+    setManualTeamIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(teamId)) next.delete(teamId);
+      else next.add(teamId);
+      return next;
+    });
+    if (wasManual && slot && Number(slot.teamId) === Number(teamId)) setRemainingMs(paceMs);
+  }
+
+  function resetTeamControls() {
+    setManualTeamIds(myTeamId != null ? new Set<number>([myTeamId]) : new Set<number>());
+    if (slot && (myTeamId == null || Number(slot.teamId) !== myTeamId)) setRemainingMs(paceMs);
+  }
+
+  function reset(newSeed?: number) {
     if (timer.current) clearTimeout(timer.current);
+    if (newSeed != null) {
+      setDraftSeed(newSeed);
+      setReplaySameSeed(false);
+    } else if (!replaySameSeed) {
+      setDraftSeed(createRandomDraftSeed());
+    }
     setResults(initialResults); setIdx(0); setRunning(false);
+    setHolding(false); setRemainingMs(paceMs);
+    // Manual-team choices (manualTeamIds) are intentionally PRESERVED through draft reset;
+    // they reset only on league/season/schedule change or via "Reset team controls".
+    if (leagueId) resetSession.mutate?.({ leagueId, draftId });
   }
+
+  function newRandomDraft() {
+    setReplaySameSeed(false);
+    reset(createRandomDraftSeed());
+  }
+
+  function replayCurrentSeed() {
+    setReplaySameSeed(true);
+    reset(draftSeed);
+  }
+
+  const clockState = resolveClockState({ done, isManualPick: onClockIsManual, isHolding: holding, remainingMs });
 
   const SORTS: [typeof sort, string][] = [["adp","ADP"],["proj","Proj"],["value","Value"],["pos","Pos"],["name","Name"]];
   // Position filter tabs are data-driven from the pool, so a team-D/ST league shows a DEF tab and
@@ -749,7 +881,16 @@ function LiveDraftEngine({
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         {!running && !done && <button onClick={() => setRunning(true)} className="px-4 py-1.5 rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-xs font-black hover:bg-violet-500/25">{idx === 0 ? "▶ Start Draft" : "▶ Resume"}</button>}
         {running && <button onClick={() => setRunning(false)} className="px-4 py-1.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-black">⏸ Pause</button>}
-        {idx > 0 && <button onClick={reset} className="px-3 py-1.5 rounded text-zinc-500 text-xs hover:text-zinc-300 border border-zinc-700">↺ Reset</button>}
+        {idx > 0 && (
+          <>
+            <button onClick={() => reset()} className="px-3 py-1.5 rounded text-zinc-400 text-xs hover:text-zinc-200 border border-zinc-600">↺ Reset</button>
+            <button onClick={newRandomDraft} className="px-3 py-1.5 rounded text-zinc-400 text-xs hover:text-zinc-200 border border-zinc-600">New random draft</button>
+            <button onClick={replayCurrentSeed} className="px-3 py-1.5 rounded text-zinc-400 text-xs hover:text-zinc-200 border border-zinc-600">Replay same seed</button>
+          </>
+        )}
+        <span className="text-[11px] text-zinc-400 tabular-nums border border-zinc-700/80 rounded px-2 py-0.5" title="Draft randomization seed">
+          Seed {formatDraftSeed(draftSeed)}
+        </span>
         <div className="flex items-center gap-1 ml-1">
           <span className="text-[10px] uppercase tracking-wider text-zinc-600">Pace</span>
           {PACE_OPTIONS.map((p) => (
@@ -761,19 +902,21 @@ function LiveDraftEngine({
           ))}
         </div>
         <span className="text-[11px] text-zinc-500 tabular-nums ml-1">Pick {Math.min(idx, schedule.length)}/{schedule.length}</span>
-        <span className="text-[11px] text-zinc-600 ml-auto">{yourTeamId == null ? "Spectating — AI drafts everyone" : "AI drafts other teams; you pick for your team"}</span>
+        <span className="text-[11px] text-zinc-600 ml-auto">{manualTeamIds.size === 0 ? "Spectating — AI drafts everyone" : manualTeamIds.size >= teams.length ? "Fully manual — you pick every team" : `You control ${manualTeamIds.size} team${manualTeamIds.size > 1 ? "s" : ""}; AI drafts the rest`}</span>
       </div>
 
-      {/* On the clock */}
-      {!done && onClock && (
-        <div className={cn("rounded-lg border px-4 py-2.5 mb-3 flex items-center gap-3 flex-wrap",
-          awaitingUser ? "border-violet-500/50 bg-violet-500/10" : "border-zinc-800 bg-white/[0.03]")}>
-          {awaitingUser ? <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" /> : null}
-          <span className="text-[11px] text-zinc-500 uppercase tracking-wider">{awaitingUser ? "Your pick" : "On the clock"}</span>
-          <span className="font-black text-zinc-100">{onClock.teamName}</span>
-          <span className="text-[11px] text-zinc-600">{onClock.ownerName}</span>
-          <span className="text-[11px] text-zinc-600 ml-auto tabular-nums">Round {slot?.round} · Pick #{slot?.pickNumber}</span>
-        </div>
+      {/* Authoritative pick clock — drives AI timing + shows the broadcast pause. */}
+      {!done && (
+        <RfsnPickClock
+          state={clockState}
+          round={Number(slot?.round ?? 0)}
+          overallPick={Number(slot?.pickNumber ?? 0)}
+          totalPicks={schedule.length}
+          onClockTeam={onClock?.teamName ?? "—"}
+          onClockOwner={onClock?.ownerName}
+          remainingMs={remainingMs}
+          className="mb-3"
+        />
       )}
       {done && <div className="rounded-lg border border-violet-500/40 bg-violet-500/5 px-4 py-3 mb-3 text-center text-violet-300 font-black text-sm">✓ Draft complete — {schedule.length} picks</div>}
 
@@ -812,19 +955,43 @@ function LiveDraftEngine({
           </div>
         </div>
 
-        {/* Live team rosters */}
+        {/* Live team rosters + per-team manual control */}
         <div>
-          <span className="text-xs font-black text-zinc-300 uppercase tracking-wider mb-2 block">Teams</span>
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span className="text-xs font-black text-zinc-300 uppercase tracking-wider">Your Teams</span>
+            <span className="text-[10px] text-zinc-500">
+              {manualTeamIds.size === 0
+                ? "Full AI draft"
+                : manualTeamIds.size >= teams.length
+                  ? "Fully manual"
+                  : `${manualTeamIds.size} manual`}
+            </span>
+            <button
+              onClick={resetTeamControls}
+              className="ml-auto text-[10px] text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded px-1.5 py-0.5"
+            >
+              Reset team controls
+            </button>
+          </div>
           <div className="space-y-2 max-h-[500px] overflow-auto pr-1">
             {teams.map((t: any) => {
               const tid = Number(t.teamId);
               const roster = (rostersByTeam.get(tid) ?? []).sort((a, b) => a.pickNumber - b.pickNumber);
               const grade = draftGrades.get(tid);
               const isOnClock = !done && slot && Number(slot.teamId) === tid;
-              const isYou = yourTeamId === tid;
+              const isYou = myTeamId === tid;
+              const isManual = manualTeamIds.has(tid);
               return (
-                <div key={tid} className={cn("rounded-lg border p-2", isOnClock ? "border-violet-500/50 bg-violet-500/5" : isYou ? "border-violet-500/30 bg-violet-500/5" : "border-white/[0.06] bg-white/[0.03]")}>
+                <div key={tid} className={cn("rounded-lg border p-2", isOnClock ? "border-violet-500/50 bg-violet-500/5" : isManual ? "border-violet-500/30 bg-violet-500/5" : "border-white/[0.06] bg-white/[0.03]")}>
                   <div className="flex items-center gap-1.5 mb-1">
+                    <input
+                      type="checkbox"
+                      checked={isManual}
+                      onChange={() => toggleManual(tid)}
+                      className="accent-violet-500 h-3.5 w-3.5 shrink-0 cursor-pointer"
+                      aria-label={`Manually control ${t.teamName}`}
+                      title="Manually control this team"
+                    />
                     <span className="text-[11px] font-black text-zinc-200 truncate">{t.teamName}</span>
                     {grade && grade.letter !== "—" && (
                       <span
@@ -1199,7 +1366,6 @@ function MockDraftBoard({
           teams={teams}
           availablePool={availablePool}
           positionCaps={positionCaps}
-          yourTeamId={yourTeamId}
           leagueId={leagueId}
           draftId={draftId}
         />
