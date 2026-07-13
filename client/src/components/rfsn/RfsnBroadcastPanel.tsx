@@ -8,6 +8,7 @@
  * redesign. Polls the same getLiveSnapshot(draftId) RFSN Live polls.
  */
 import { skipToken } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useRfsnAudioPlayback } from "@/hooks/useRfsnAudioPlayback";
 import { useRfsnBoothController } from "@/hooks/useRfsnBoothController";
@@ -27,15 +28,21 @@ const PANEL_POLL_MS = 2000;
 export type RfsnBroadcastPanelProps = {
   leagueId?: string | null;
   draftId: string;
+  /** Bumps when the draft resets or league/schedule identity changes — clears stale replay clips. */
+  sessionResetKey?: string | number;
   layout?: "desktop" | "mobile";
   className?: string;
+  /** Reports whether a broadcast moment is generating or on air (drives the draft pause). */
+  onBusyChange?: (busy: boolean) => void;
 };
 
 export function RfsnBroadcastPanel({
   leagueId,
   draftId,
+  sessionResetKey,
   layout = "desktop",
   className,
+  onBusyChange,
 }: RfsnBroadcastPanelProps) {
   const _trpc = trpc as any;
 
@@ -52,6 +59,11 @@ export function RfsnBroadcastPanel({
 
   // Hooks run unconditionally (before any early return) — Rules of Hooks.
   const audio = useRfsnAudioPlayback(ttsAvailable, payload?.audioStatus ?? null);
+
+  useEffect(() => {
+    audio.clearReplay();
+  }, [draftId, sessionResetKey, audio.clearReplay]);
+
   const displaySnapshot = resolveRfsnLiveDisplaySnapshot(payload, "");
   const boothSnapshot =
     payload && shouldRenderLiveCommentary(payload) && payload.snapshot
@@ -60,6 +72,20 @@ export function RfsnBroadcastPanel({
   const booth = useRfsnBoothController(boothSnapshot, { audio });
   const sequence = buildBoothCommentarySequence(boothSnapshot);
   const isMobile = layout === "mobile";
+
+  // A broadcast moment is "busy" (should hold the draft) while it is generating
+  // (commentary_pending) or while the booth sequence is still playing (sequenceIndex >= 0).
+  // When the sequence completes / is dismissed / all voices fail, the controller returns
+  // sequenceIndex to -1, so busy clears and the engine resumes.
+  const busy = Boolean(
+    enabled && payload && (payload.sessionState === "commentary_pending" || booth.sequenceIndex >= 0),
+  );
+  const lastBusyRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (lastBusyRef.current === busy) return;
+    lastBusyRef.current = busy;
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
 
   if (!enabled) return null; // broadcast disabled → render nothing; War Room board unaffected
 

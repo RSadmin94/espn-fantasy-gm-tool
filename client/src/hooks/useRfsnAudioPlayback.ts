@@ -4,11 +4,25 @@ import type { RfsnCommentaryCard } from "@/lib/rfsnPresentation";
 
 const AUDIO_PREF_KEY = "rfsn-live-audio-enabled";
 
+export type RfsnLastPlayableClip = {
+  commentaryId: string;
+  voice: string;
+  pickId: string;
+  pickNumber: number;
+  draftId: string;
+  audioId?: string;
+  status: "ready" | "failed" | "expired" | "pending";
+  expiresAt?: string;
+};
+
 export type RfsnAudioPlayback = {
   state: RfsnAudioState;
   userEnabled: boolean;
   muted: boolean;
   volume: number;
+  unlocked: boolean;
+  lastPlayable: RfsnLastPlayableClip | null;
+  replayAvailable: boolean;
   unlockAudio: () => void;
   setMuted: (muted: boolean) => void;
   setVolume: (volume: number) => void;
@@ -20,6 +34,7 @@ export type RfsnAudioPlayback = {
     onFallback: () => void,
   ) => void;
   onSnapshotChange: () => void;
+  clearReplay: () => void;
 };
 
 function readPref(): boolean {
@@ -74,6 +89,8 @@ export function useRfsnAudioPlayback(
   const onEndedRef = useRef<(() => void) | null>(null);
   const onFallbackRef = useRef<(() => void) | null>(null);
   const lastCardRef = useRef<RfsnCommentaryCard | null>(null);
+  const lastPlayableRef = useRef<RfsnLastPlayableClip | null>(null);
+  const [lastPlayable, setLastPlayable] = useState<RfsnLastPlayableClip | null>(null);
   const activePickRef = useRef<string>("");
 
   const cleanupAudio = useCallback(() => {
@@ -150,6 +167,18 @@ export function useRfsnAudioPlayback(
         return;
       }
 
+      lastPlayableRef.current = {
+        commentaryId: card.id,
+        voice: clip.voice,
+        pickId: audioStatus.pickId,
+        pickNumber: audioStatus.pickNumber,
+        draftId: audioStatus.draftId,
+        audioId: clip.audioId,
+        status: clip.status,
+        expiresAt: clip.expiresAt,
+      };
+      setLastPlayable(lastPlayableRef.current);
+
       const url = buildAudioUrl(audioStatus, clip);
       if (!url) {
         setState("loading");
@@ -201,13 +230,42 @@ export function useRfsnAudioPlayback(
 
   const replayCurrent = useCallback(() => {
     const card = lastCardRef.current;
-    if (!card || !onEndedRef.current || !onFallbackRef.current) return;
+    const playable = lastPlayableRef.current;
+    if (!card || !playable?.audioId || playable.status !== "ready") return;
+    if (!onEndedRef.current || !onFallbackRef.current) return;
     playForCard(card, onEndedRef.current, onFallbackRef.current);
   }, [playForCard]);
+
+  const clearReplay = useCallback(() => {
+    lastPlayableRef.current = null;
+    lastCardRef.current = null;
+    setLastPlayable(null);
+  }, []);
+
+  // When the user finally unlocks (a real gesture), immediately play the line that is
+  // already on air. While locked, playForCard bailed to the text fallback, so without this
+  // the active line would stay silent until the next pick. Uses a ref for playForCard to
+  // read the freshly-unlocked closure, and fires once per unlock transition.
+  const playForCardRef = useRef(playForCard);
+  playForCardRef.current = playForCard;
+  const autoPlayedOnUnlockRef = useRef(false);
+  useEffect(() => {
+    if (!unlocked) {
+      autoPlayedOnUnlockRef.current = false;
+      return;
+    }
+    if (autoPlayedOnUnlockRef.current) return;
+    autoPlayedOnUnlockRef.current = true;
+    const card = lastCardRef.current;
+    if (card && onEndedRef.current && onFallbackRef.current) {
+      playForCardRef.current(card, onEndedRef.current, onFallbackRef.current);
+    }
+  }, [unlocked]);
 
   const onSnapshotChange = useCallback(() => {
     stopCurrent();
     activePickRef.current = "";
+    // Retain lastPlayable for post-completion replay.
   }, [stopCurrent]);
 
   useEffect(() => {
@@ -225,6 +283,11 @@ export function useRfsnAudioPlayback(
     userEnabled,
     muted,
     volume,
+    unlocked,
+    lastPlayable,
+    replayAvailable: Boolean(
+      unlocked && lastPlayable?.audioId && lastPlayable.status === "ready",
+    ),
     unlockAudio,
     setMuted,
     setVolume,
@@ -232,5 +295,6 @@ export function useRfsnAudioPlayback(
     replayCurrent,
     playForCard,
     onSnapshotChange,
+    clearReplay,
   };
 }

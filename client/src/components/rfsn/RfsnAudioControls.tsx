@@ -11,7 +11,8 @@ type RfsnAudioControlsProps = {
 export function RfsnAudioControls({ audio, ttsAvailable, className }: RfsnAudioControlsProps) {
   if (!ttsAvailable) return null;
 
-  const locked = audio.state === "locked" || (!audio.userEnabled && audio.state !== "disabled");
+  // "locked" = enabled preference but no user gesture yet this session (autoplay guard).
+  const locked = !audio.unlocked && audio.state !== "disabled";
 
   return (
     <div
@@ -20,14 +21,14 @@ export function RfsnAudioControls({ audio, ttsAvailable, className }: RfsnAudioC
         className,
       )}
     >
-      {!audio.userEnabled ? (
+      {locked ? (
         <button
           type="button"
           onClick={audio.unlockAudio}
           className="inline-flex items-center gap-1.5 rounded-md bg-[#a3e635]/15 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-[#a3e635] hover:bg-[#a3e635]/25"
         >
           <Radio className="h-3.5 w-3.5" aria-hidden />
-          Enable Broadcast Audio
+          {audio.userEnabled ? "Tap to Enable Sound" : "Enable Broadcast Audio"}
         </button>
       ) : (
         <>
@@ -63,15 +64,18 @@ export function RfsnAudioControls({ audio, ttsAvailable, className }: RfsnAudioC
           <button
             type="button"
             onClick={audio.replayCurrent}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#dbe4f0] hover:bg-white/5"
+            disabled={!audio.replayAvailable}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs",
+              audio.replayAvailable
+                ? "text-[#dbe4f0] hover:bg-white/5"
+                : "text-[#5a6470] cursor-not-allowed opacity-60",
+            )}
           >
             <RotateCcw className="h-3.5 w-3.5" aria-hidden />
             Replay
           </button>
         </>
-      )}
-      {locked && audio.userEnabled && (
-        <span className="text-[10px] uppercase tracking-wide text-[#8b97a8]">Tap enable if audio is blocked</span>
       )}
     </div>
   );

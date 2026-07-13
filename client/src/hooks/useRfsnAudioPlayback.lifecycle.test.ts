@@ -237,4 +237,41 @@ describe("useRfsnAudioPlayback — deterministic lifecycle harness", () => {
     expect(result.current.state).toBe("failed");
     expect(MockAudio.instances.length).toBe(0); // never created audio -> text fallback
   });
+
+  it("[unlock] a line that arrived while locked plays as soon as the user unlocks", async () => {
+    const onEnded = vi.fn();
+    const onFallback = vi.fn();
+    const view = renderHook(
+      ({ tts, s }: { tts: boolean; s: RfsnLiveAudioStatus }) => useRfsnAudioPlayback(tts, s),
+      { initialProps: { tts: true, s: status("pick-9", [{ commentaryId: CID }]) } },
+    );
+    // Locked (no user gesture yet): the on-air line must fall back to text, create no audio.
+    await act(async () => view.result.current.playForCard(card(CID), onEnded, onFallback));
+    await flushPlayback();
+    expect(onFallback).toHaveBeenCalledTimes(1);
+    expect(MockAudio.instances.length).toBe(0);
+    // Real gesture unlock -> the pending line plays immediately (root-cause fix for no sound).
+    await act(async () => view.result.current.unlockAudio());
+    await flushPlayback();
+    expect(MockAudio.instances.length).toBe(1);
+    expect(last().paused).toBe(false);
+  });
+
+  it("[replay] stores last playable clip and replayCurrent reuses it", async () => {
+    const { result } = await setupPlaying();
+    expect(result.current.replayAvailable).toBe(true);
+    const count = MockAudio.instances.length;
+    act(() => result.current.replayCurrent());
+    await flushPlayback();
+    expect(MockAudio.instances.length).toBeGreaterThan(count);
+  });
+
+  it("[replay-reset] clearReplay disables replay until a new clip arrives", async () => {
+    const { result } = await setupPlaying();
+    expect(result.current.replayAvailable).toBe(true);
+    act(() => result.current.clearReplay());
+    expect(result.current.replayAvailable).toBe(false);
+    act(() => result.current.replayCurrent());
+    expect(MockAudio.instances.length).toBe(1);
+  });
 });

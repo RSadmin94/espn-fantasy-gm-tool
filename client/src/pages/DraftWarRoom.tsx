@@ -590,6 +590,7 @@ function LiveDraftEngine({
   // Seeded AI variation — fresh seed each new draft; replay keeps the same seed.
   const [draftSeed, setDraftSeed] = useState<number>(() => createRandomDraftSeed());
   const [replaySameSeed, setReplaySameSeed] = useState(false);
+  const [resetCounter, setResetCounter] = useState(0);
   const rngRef = useRef(mulberry32(draftSeed));
   const pickCounterRef = useRef(0);
   useEffect(() => {
@@ -853,6 +854,7 @@ function LiveDraftEngine({
     // Manual-team choices (manualTeamIds) are intentionally PRESERVED through draft reset;
     // they reset only on league/season/schedule change or via "Reset team controls".
     if (leagueId) resetSession.mutate?.({ leagueId, draftId });
+    setResetCounter((n) => n + 1);
   }
 
   function newRandomDraft() {
@@ -878,7 +880,7 @@ function LiveDraftEngine({
   }, [availablePool]);
 
   return (
-    <div className="p-4">
+    <div className="p-4 live-draft-surface text-[1.2rem] min-w-0 overflow-x-hidden">
       {/* Control bar */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         {!running && !done && <button onClick={() => setRunning(true)} className="px-4 py-1.5 rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-xs font-black hover:bg-violet-500/25">{idx === 0 ? "▶ Start Draft" : "▶ Resume"}</button>}
@@ -894,7 +896,7 @@ function LiveDraftEngine({
           Seed {formatDraftSeed(draftSeed)}
         </span>
         <div className="flex items-center gap-1 ml-1">
-          <span className="text-[10px] uppercase tracking-wider text-zinc-600">Pace</span>
+          <span className="text-[10px] uppercase tracking-wider text-zinc-500">Pace</span>
           {PACE_OPTIONS.map((p) => (
             <button key={p.key} onClick={() => setPaceMs(p.ms)}
               className={cn("px-2 py-0.5 rounded text-[11px] font-bold",
@@ -903,8 +905,8 @@ function LiveDraftEngine({
             </button>
           ))}
         </div>
-        <span className="text-[11px] text-zinc-500 tabular-nums ml-1">Pick {Math.min(idx, schedule.length)}/{schedule.length}</span>
-        <span className="text-[11px] text-zinc-600 ml-auto">{manualTeamIds.size === 0 ? "Spectating — AI drafts everyone" : manualTeamIds.size >= teams.length ? "Fully manual — you pick every team" : `You control ${manualTeamIds.size} team${manualTeamIds.size > 1 ? "s" : ""}; AI drafts the rest`}</span>
+        <span className="text-[11px] text-zinc-400 tabular-nums ml-1">Pick {Math.min(idx, schedule.length)}/{schedule.length}</span>
+        <span className="text-[11px] text-zinc-500 ml-auto">{manualTeamIds.size === 0 ? "Spectating — AI drafts everyone" : manualTeamIds.size >= teams.length ? "Fully manual — you pick every team" : `You control ${manualTeamIds.size} team${manualTeamIds.size > 1 ? "s" : ""}; AI drafts the rest`}</span>
       </div>
 
       {/* Authoritative pick clock — drives AI timing + shows the broadcast pause. */}
@@ -934,17 +936,17 @@ function LiveDraftEngine({
         {/* Available pool (sortable) */}
         <div className="lg:col-span-2">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="text-xs font-black text-zinc-300 uppercase tracking-wider">Available</span>
-            <span className="text-[11px] text-zinc-600">{available.length} players</span>
+            <span className="text-xs font-black text-zinc-200 uppercase tracking-wider">Available</span>
+            <span className="text-[11px] text-zinc-500">{available.length} players</span>
             <div className="flex gap-1 ml-auto">
               {SORTS.map(([k, lbl]) => (
-                <button key={k} onClick={() => setSort(k)} className={cn("px-2 py-0.5 rounded text-[11px] font-bold", sort === k ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300")}>{lbl}</button>
+                <button key={k} onClick={() => setSort(k)} className={cn("px-2 py-0.5 rounded text-[11px] font-bold", sort === k ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200")}>{lbl}</button>
               ))}
             </div>
           </div>
           <div className="flex gap-1 mb-2 flex-wrap">
             {POSES.map(p => (
-              <button key={p} onClick={() => setPos(p)} className={cn("px-2 py-0.5 rounded text-[11px] font-bold", posFilter === p ? "bg-violet-600/30 text-violet-200" : "text-zinc-500 hover:text-zinc-300 border border-white/[0.06]")}>{p}</button>
+              <button key={p} onClick={() => setPos(p)} className={cn("px-2 py-0.5 rounded text-[11px] font-bold", posFilter === p ? "bg-violet-600/30 text-violet-200" : "text-zinc-400 hover:text-zinc-200 border border-white/[0.06]")}>{p}</button>
             ))}
             <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search…" className="ml-auto text-[11px] bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-zinc-200 placeholder-zinc-600" />
           </div>
@@ -968,7 +970,7 @@ function LiveDraftEngine({
         {/* Live team rosters + per-team manual control */}
         <div>
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="text-xs font-black text-zinc-300 uppercase tracking-wider">Your Teams</span>
+            <span className="text-xs font-black text-zinc-200 uppercase tracking-wider">Your Teams</span>
             <span className="text-[10px] text-zinc-500">
               {manualTeamIds.size === 0
                 ? "Full AI draft"
@@ -1037,7 +1039,12 @@ function LiveDraftEngine({
         {/* RFSN booth + audio — compact right rail, same live session as RFSN Live. */}
         {leagueId && (
           <aside className="lg:col-span-1 min-w-0">
-            <RfsnBroadcastPanel leagueId={leagueId} draftId={draftId} />
+            <RfsnBroadcastPanel
+              leagueId={leagueId}
+              draftId={draftId}
+              sessionResetKey={`${draftId}:${scheduleSig}:${resetCounter}`}
+              onBusyChange={setBroadcastBusy}
+            />
           </aside>
         )}
       </div>
