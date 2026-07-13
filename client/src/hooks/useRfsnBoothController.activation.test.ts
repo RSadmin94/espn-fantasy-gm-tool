@@ -213,6 +213,20 @@ describe("useRfsnBoothController — new frames, audio independence, silence", (
     expect(result.current.cardStates.coach).toBe("active");
   });
 
+  it("[8b] preference on but locked registers card and waits for gesture", () => {
+    const audio = mockAudio({ unlocked: false, userEnabled: true });
+    const { result } = renderHook(
+      (s: RfsnBroadcastSnapshot) => useRfsnBoothController(s, { audio }),
+      { initialProps: snap({ pick: "9.01", primary: mkCard("coach", "c-9") }) },
+    );
+    settle();
+    expect(result.current.activeCommentator).toBe("coach");
+    expect(result.current.cardStates.coach).toBe("active");
+    expect(audio.playForCard).toHaveBeenCalledTimes(1);
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(result.current.cardStates.coach).toBe("active");
+  });
+
   it("[8] audio enabled starts playback for the active card", () => {
     const audio = mockAudio({ state: "ready", userEnabled: true });
     const { result } = renderHook(

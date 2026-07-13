@@ -18,11 +18,29 @@ export const TIMEOUTS = {
   draftSessionActive: 30_000,
   firstPickLocked: 45_000,
   commentaryCard: 60_000,
-  enableSound: 15_000,
+  unlockControlAfterCommentary: 60_000,
+  unlockPlaybackVerification: 30_000,
   firstAudioAttempt: 90_000,
   smokeTotal: 180_000,
   fullCertTotal: 900_000,
 } as const;
+
+export const AUDIO_UNLOCK_CONTROL_SELECTOR =
+  '[data-rfsn-warroom-broadcast] role=button[/Enable Broadcast Audio|Tap to Enable Sound/]';
+
+export type AudioUnlockEvidence = {
+  buttonSelector: string;
+  clickTimestamp: string | null;
+  persistedUserEnabledBefore: boolean;
+  runtimeUnlockedAfter: boolean;
+  enableButtonVisibleBefore: boolean;
+  enableButtonVisibleAfter: boolean;
+  audioOnLabelBefore: boolean;
+  audioOnLabelAfter: boolean;
+  playCalls: number;
+  audioFetches: number;
+  audioStarts: number;
+};
 
 export type SmokeStep = {
   id: string;
@@ -607,50 +625,273 @@ export async function waitForCommentaryCard(
   return false;
 }
 
-export async function clickEnableSound(page: Page, steps: SmokeStep[], outDir: string): Promise<boolean> {
-  const enableBtn = page
-    .locator("[data-rfsn-warroom-broadcast]")
-    .getByRole("button", { name: /Enable Broadcast Audio|Tap to Enable Sound/i });
-  const selector = '[data-rfsn-warroom-broadcast] role=button[/Enable Broadcast Audio|Tap to Enable Sound/]';
+/** Wait until the booth is actively presenting commentary (card bound for playback). */
+export async function waitForBoothOnAir(page: Page, timeoutMs = 45_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const ui = await readDraftUiState(page);
+    if (ui.boothActive || ui.boothLabel === "On air") return true;
+    await page.waitForTimeout(500);
+  }
+  return false;
+}
 
-  try {
-    await enableBtn.first().waitFor({ state: "visible", timeout: TIMEOUTS.enableSound });
-  } catch {
+export async function clearRfsnAudioCertState(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key?.startsWith("rfsn-")) localStorage.removeItem(key);
+      }
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const key = sessionStorage.key(i);
+        if (key?.startsWith("rfsn-")) sessionStorage.removeItem(key);
+      }
+      // Preference on, gesture unlock not established — booth should show Enable/Tap button.
+      localStorage.setItem("rfsn-live-audio-enabled", "true");
+    } catch {
+      // ignore private mode
+    }
+  });
+}
+
+async function readAudioControlState(page: Page): Promise<{
+  persistedUserEnabled: boolean;
+  enableButtonVisible: boolean;
+  audioOnLabelVisible: boolean;
+}> {
+  return page.evaluate(() => {
+    const persistedUserEnabled = localStorage.getItem("rfsn-live-audio-enabled") === "true";
+    const booth = document.querySelector("[data-rfsn-warroom-broadcast]");
+    const labels = booth
+      ? Array.from(booth.querySelectorAll("button, span")).map((el) => el.textContent ?? "")
+      : [];
+    return {
+      persistedUserEnabled,
+      enableButtonVisible: labels.some((t) => /Enable Broadcast Audio|Tap to Enable Sound/i.test(t)),
+      audioOnLabelVisible: labels.some((t) => /\bAudio on\b/i.test(t)),
+    };
+  });
+}
+
+function unlockMetricsProveGesture(
+  before: { playCalls: number; audioFetches: number; audioStarts: number },
+  after: { playCalls: number; audioFetches: number; audioStarts: number },
+): boolean {
+  return (
+    after.playCalls > before.playCalls ||
+    after.audioFetches > before.audioFetches ||
+    after.audioStarts > before.audioStarts
+  );
+}
+
+/** Wait until server audio status has at least one ready clip for the current pick. */
+export async function waitForAudioClipReady(
+  page: Page,
+  ctx: HarnessContext,
+  timeoutMs = TIMEOUTS.commentaryCard,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const status = await trpcQuery<{
+        clips?: Array<{ status?: string; audioId?: string }>;
+      }>(page, ctx.base, "rfsnBroadcast.getAudioStatus", {
+        leagueId: ctx.leagueId,
+        draftId: ctx.draftId,
+      });
+      const ready = status?.clips?.some((c) => c.status === "ready" && Boolean(c.audioId));
+      if (ready) {
+        await page.waitForTimeout(2000);
+        return true;
+      }
+    } catch {
+      // retry
+    }
+    await page.waitForTimeout(500);
+  }
+  return false;
+}
+
+/**
+ * Perform a real Playwright click on Enable Sound and verify playback activation via runtime counters.
+ * Does not accept label-only "Audio on" as unlock evidence.
+ */
+export async function performRealAudioUnlock(
+  page: Page,
+  steps: SmokeStep[],
+  outDir: string,
+  ctx?: HarnessContext,
+): Promise<{ ok: boolean; evidence: AudioUnlockEvidence; errorCode?: string }> {
+  let clipReadyBeforeUnlock = false;
+  if (ctx) {
+    clipReadyBeforeUnlock = await waitForAudioClipReady(page, ctx, TIMEOUTS.commentaryCard);
+    recordStep(steps, {
+      id: "SMOKE-09c",
+      requirement: "Commentary audio clip readiness before unlock (informational)",
+      pass: true,
+      evidence: clipReadyBeforeUnlock ? "clip-ready-before-unlock" : "clip-pending-at-unlock-window",
+    });
+  }
+
+  const booth = page.locator("[data-rfsn-warroom-broadcast]");
+  const enableBtn = booth.getByRole("button", { name: /Enable Broadcast Audio|Tap to Enable Sound/i });
+  const selector = AUDIO_UNLOCK_CONTROL_SELECTOR;
+
+  const beforeControls = await readAudioControlState(page);
+  const beforeMetrics = await certMetrics(page);
+
+  const deadline = Date.now() + TIMEOUTS.unlockControlAfterCommentary;
+  let enableVisible = false;
+  while (Date.now() < deadline) {
+    if ((await enableBtn.count()) > 0 && (await enableBtn.first().isVisible())) {
+      enableVisible = true;
+      break;
+    }
+    await page.waitForTimeout(300);
+  }
+
+  if (!enableVisible) {
+    const controls = await readAudioControlState(page);
+    const evidence: AudioUnlockEvidence = {
+      buttonSelector: selector,
+      clickTimestamp: null,
+      persistedUserEnabledBefore: controls.persistedUserEnabled,
+      runtimeUnlockedAfter: false,
+      enableButtonVisibleBefore: controls.enableButtonVisible,
+      enableButtonVisibleAfter: controls.enableButtonVisible,
+      audioOnLabelBefore: controls.audioOnLabelVisible,
+      audioOnLabelAfter: controls.audioOnLabelVisible,
+      playCalls: beforeMetrics.playCalls,
+      audioFetches: beforeMetrics.audioFetches,
+      audioStarts: beforeMetrics.audioStarts,
+    };
     recordStep(steps, {
       id: "SMOKE-10",
-      requirement: "Enable Sound button is clicked and unlock verified",
+      requirement: "Real Enable Sound click establishes browser unlock",
       pass: false,
-      evidence: "Enable button never became visible",
+      evidence: JSON.stringify(evidence),
       selector,
       screenshot: await shot(page, outDir, "smoke-10-enable-missing"),
-      rootCause: "TTS controls not rendered or booth panel missing",
+      rootCause: "AUDIO_UNLOCK_CONTROL_NOT_RENDERED",
     });
-    return false;
+    return { ok: false, evidence, errorCode: "AUDIO_UNLOCK_CONTROL_NOT_RENDERED" };
   }
 
-  for (let i = 0; i < 5 && (await enableBtn.count()) > 0; i++) {
-    await enableBtn.first().click();
-    await page.waitForTimeout(400);
+  const clickTimestamp = new Date().toISOString();
+  const box = await enableBtn.first().boundingBox();
+  if (box) {
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { delay: 50 });
+  } else {
+    await enableBtn.first().click({ delay: 50 });
   }
 
-  const unlockRemaining = await enableBtn.count();
-  const audioOnVisible =
-    (await page.locator("[data-rfsn-warroom-broadcast]").getByText("Audio on").count()) > 0;
-  const pass = unlockRemaining === 0 && audioOnVisible;
+  const verifyDeadline = Date.now() + TIMEOUTS.firstAudioAttempt;
+  let afterMetrics = beforeMetrics;
+  let afterControls = await readAudioControlState(page);
+  let gestureVerified = false;
+  while (Date.now() < verifyDeadline) {
+    afterMetrics = await certMetrics(page);
+    afterControls = await readAudioControlState(page);
+    if (unlockMetricsProveGesture(beforeMetrics, afterMetrics)) {
+      gestureVerified = true;
+      break;
+    }
+    await page.waitForTimeout(300);
+  }
+
+  if (!gestureVerified) {
+    const evidence: AudioUnlockEvidence = {
+      buttonSelector: selector,
+      clickTimestamp,
+      persistedUserEnabledBefore: beforeControls.persistedUserEnabled,
+      runtimeUnlockedAfter: false,
+      enableButtonVisibleBefore: beforeControls.enableButtonVisible,
+      enableButtonVisibleAfter: afterControls.enableButtonVisible,
+      audioOnLabelBefore: beforeControls.audioOnLabelVisible,
+      audioOnLabelAfter: afterControls.audioOnLabelVisible,
+      playCalls: afterMetrics.playCalls,
+      audioFetches: afterMetrics.audioFetches,
+      audioStarts: afterMetrics.audioStarts,
+    };
+    recordStep(steps, {
+      id: "SMOKE-10",
+      requirement: "Real Enable Sound click establishes browser unlock",
+      pass: false,
+      evidence: JSON.stringify(evidence),
+      selector,
+      screenshot: await shot(page, outDir, "smoke-10-unlock-failed"),
+      rootCause: "AUDIO_UNLOCK_GESTURE_DID_NOT_ACTIVATE_PLAYBACK",
+    });
+    return { ok: false, evidence, errorCode: "AUDIO_UNLOCK_GESTURE_DID_NOT_ACTIVATE_PLAYBACK" };
+  }
+
+  const fullSmokeDeadline = Date.now() + TIMEOUTS.firstAudioAttempt;
+  while (Date.now() < fullSmokeDeadline) {
+    afterMetrics = await certMetrics(page);
+    if (afterMetrics.playCalls >= 1 && afterMetrics.audioFetches >= 1 && afterMetrics.audioStarts >= 1) {
+      break;
+    }
+    await page.waitForTimeout(500);
+  }
+
+  const runtimeUnlockedAfter =
+    !afterControls.enableButtonVisible &&
+    afterMetrics.playCalls >= 1 &&
+    unlockMetricsProveGesture(beforeMetrics, afterMetrics);
+
+  const evidence: AudioUnlockEvidence = {
+    buttonSelector: selector,
+    clickTimestamp,
+    persistedUserEnabledBefore: beforeControls.persistedUserEnabled,
+    runtimeUnlockedAfter,
+    enableButtonVisibleBefore: beforeControls.enableButtonVisible,
+    enableButtonVisibleAfter: afterControls.enableButtonVisible,
+    audioOnLabelBefore: beforeControls.audioOnLabelVisible,
+    audioOnLabelAfter: afterControls.audioOnLabelVisible,
+    playCalls: afterMetrics.playCalls,
+    audioFetches: afterMetrics.audioFetches,
+    audioStarts: afterMetrics.audioStarts,
+  };
+
+  const smokePass =
+    afterMetrics.playCalls >= 1 &&
+    afterMetrics.audioFetches >= 1 &&
+    afterMetrics.audioStarts >= 1;
+
   recordStep(steps, {
     id: "SMOKE-10",
-    requirement: "Enable Sound button is clicked and unlock verified",
-    pass,
-    evidence: `unlockButtonsRemaining=${unlockRemaining} audioOn=${audioOnVisible}`,
+    requirement: "Real Enable Sound click establishes browser unlock",
+    pass: smokePass,
+    evidence: JSON.stringify(evidence),
     selector,
-    screenshot: await shot(page, outDir, "smoke-10-enable-sound"),
-    rootCause: pass
+    screenshot: await shot(page, outDir, smokePass ? "smoke-10-enable-sound" : "smoke-10-unlock-failed"),
+    rootCause: smokePass
       ? undefined
-      : unlockRemaining > 0
-        ? "Enable button still visible after clicks"
-        : 'Audio on label not shown after unlock',
+      : afterMetrics.playCalls < 1
+        ? "AUDIO_UNLOCK_GESTURE_DID_NOT_ACTIVATE_PLAYBACK"
+        : "Playback counters incomplete after unlock click",
   });
-  return pass;
+
+  recordStep(steps, {
+    id: "SMOKE-11",
+    requirement: "First audio play is attempted after real unlock",
+    pass: smokePass,
+    evidence: `playCalls=${afterMetrics.playCalls} audioStarts=${afterMetrics.audioStarts} audioFetches=${afterMetrics.audioFetches}`,
+    selector: "HTMLAudioElement.play / window.Audio / fetch /api/rfsn/audio/",
+    screenshot: smokePass ? undefined : await shot(page, outDir, "smoke-11-no-audio"),
+    rootCause: smokePass
+      ? undefined
+      : `playCalls=${afterMetrics.playCalls} audioFetches=${afterMetrics.audioFetches} audioStarts=${afterMetrics.audioStarts}`,
+  });
+
+  return { ok: smokePass, evidence };
+}
+
+/** @deprecated Use performRealAudioUnlock — never accepts label-only unlock. */
+export async function clickEnableSound(page: Page, steps: SmokeStep[], outDir: string): Promise<boolean> {
+  const result = await performRealAudioUnlock(page, steps, outDir);
+  return result.ok;
 }
 
 export async function waitForFirstAudioAttempt(
@@ -663,7 +904,7 @@ export async function waitForFirstAudioAttempt(
   let metrics = { playCalls: 0, audioStarts: 0, audioFetches: 0 };
   while (Date.now() < deadline) {
     metrics = await certMetrics(page);
-    if (metrics.playCalls >= 1 || metrics.audioStarts >= 1 || metrics.audioFetches >= 1) {
+    if (metrics.playCalls >= 1 && metrics.audioFetches >= 1 && metrics.audioStarts >= 1) {
       recordStep(steps, {
         id: "SMOKE-11",
         requirement: "First audio play is attempted",
@@ -756,6 +997,7 @@ export function writeSmokeReport(
   ctx: HarnessContext,
   steps: SmokeStep[],
   status: "READY" | "NOT READY",
+  unlockEvidence?: AudioUnlockEvidence,
 ): string {
   fs.mkdirSync(outDir, { recursive: true });
   const report = {
@@ -766,6 +1008,7 @@ export function writeSmokeReport(
     leagueId: ctx.leagueId,
     draftId: ctx.draftId,
     at: new Date().toISOString(),
+    unlockEvidence: unlockEvidence ?? null,
     steps,
     passed: steps.filter((s) => s.pass).length,
     failed: steps.filter((s) => !s.pass).length,

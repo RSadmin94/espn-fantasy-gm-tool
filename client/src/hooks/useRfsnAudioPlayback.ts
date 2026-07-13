@@ -2,12 +2,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RfsnAudioState, RfsnLiveAudioStatus, RfsnVoiceAudioRef } from "@/lib/rfsnLiveState";
 import type { RfsnCommentaryCard } from "@/lib/rfsnPresentation";
 import {
+  clipReadiness,
+  createPlaybackTracer,
+  evaluatePlaybackGate,
+} from "@/lib/rfsnPlaybackActivation";
+import {
   clearWarRoomAudioSession,
   getWarRoomAudioSession,
   setWarRoomAudioSession,
 } from "@/lib/rfsnWarRoomAudioSession";
 
 const AUDIO_PREF_KEY = "rfsn-live-audio-enabled";
+const AUDIO_UNLOCK_KEY = "rfsn-live-audio-gesture";
 
 export type RfsnLastPlayableClip = {
   commentaryId: string;
@@ -21,9 +27,9 @@ export type RfsnLastPlayableClip = {
 };
 
 export type RfsnAudioPlaybackOptions = {
-  /** When set, audio + replay survive panel unmount (navigation) until sessionEpoch bumps. */
   persistKey?: string;
   sessionEpoch?: string | number;
+  tracePlayback?: boolean;
 };
 
 export type RfsnAudioPlayback = {
@@ -65,6 +71,22 @@ function writePref(enabled: boolean): void {
   }
 }
 
+function readUnlockGesture(): boolean {
+  try {
+    return sessionStorage.getItem(AUDIO_UNLOCK_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writeUnlockGesture(): void {
+  try {
+    sessionStorage.setItem(AUDIO_UNLOCK_KEY, "true");
+  } catch {
+    // ignore
+  }
+}
+
 function findClip(
   audioStatus: RfsnLiveAudioStatus | null | undefined,
   commentaryId: string,
@@ -89,11 +111,12 @@ export function useRfsnAudioPlayback(
   audioStatus: RfsnLiveAudioStatus | null | undefined,
   options: RfsnAudioPlaybackOptions = {},
 ): RfsnAudioPlayback {
-  const { persistKey, sessionEpoch } = options;
+  const { persistKey, sessionEpoch, tracePlayback } = options;
   const restored = persistKey ? getWarRoomAudioSession(persistKey) : undefined;
+  const tracer = useRef(createPlaybackTracer(Boolean(tracePlayback)));
 
   const [userEnabled, setUserEnabled] = useState(() => restored?.userEnabled ?? readPref());
-  const [unlocked, setUnlocked] = useState(() => restored?.unlocked ?? false);
+  const [unlocked, setUnlocked] = useState(() => restored?.unlocked ?? readUnlockGesture());
   const [muted, setMutedState] = useState(() => restored?.muted ?? false);
   const [volume, setVolumeState] = useState(() => restored?.volume ?? 0.85);
   const [state, setState] = useState<RfsnAudioState>(() => {
@@ -124,6 +147,10 @@ export function useRfsnAudioPlayback(
   const volumeRef = useRef(volume);
   volumeRef.current = volume;
   const playInFlightRef = useRef(false);
+  const audioStatusRef = useRef(audioStatus);
+  audioStatusRef.current = audioStatus;
+  const playbackStartedForCardRef = useRef<string | null>(null);
+  const fallbackHandledForCardRef = useRef<string | null>(null);
 
   const cleanupAudio = useCallback((revoke = true) => {
     if (audioRef.current) {
@@ -142,16 +169,184 @@ export function useRfsnAudioPlayback(
     return Boolean(el && !el.paused && el.currentTime > 0 && !el.ended);
   }, []);
 
+  const resetPlaybackAttemptState = useCallback(() => {
+    playbackStartedForCardRef.current = null;
+    fallbackHandledForCardRef.current = null;
+    playInFlightRef.current = false;
+  }, []);
+
   const stopCurrent = useCallback(() => {
     cleanupAudio();
+    playInFlightRef.current = false;
     setState(userEnabled && unlocked ? "ready" : userEnabled ? "locked" : "disabled");
   }, [cleanupAudio, unlocked, userEnabled]);
 
+  const startPlaybackForReadyClip = useCallback(
+    (card: RfsnCommentaryCard, liveStatus: RfsnLiveAudioStatus, clip: RfsnVoiceAudioRef) => {
+      const pickKey = `${liveStatus.draftId}:${liveStatus.pickId}:${liveStatus.pickNumber}`;
+      if (activePickRef.current && activePickRef.current !== pickKey) {
+        cleanupAudio();
+        resetPlaybackAttemptState();
+      }
+      activePickRef.current = pickKey;
+      playbackStartedForCardRef.current = card.id;
+
+      lastPlayableRef.current = {
+        commentaryId: card.id,
+        voice: clip.voice,
+        pickId: liveStatus.pickId,
+        pickNumber: liveStatus.pickNumber,
+        draftId: liveStatus.draftId,
+        audioId: clip.audioId,
+        status: clip.status,
+        expiresAt: clip.expiresAt,
+      };
+      setLastPlayable(lastPlayableRef.current);
+
+      const url = buildAudioUrl(liveStatus, clip);
+      if (!url) {
+        setState("loading");
+        playbackStartedForCardRef.current = null;
+        return;
+      }
+
+      cleanupAudio();
+      setState("loading");
+      playInFlightRef.current = true;
+      tracer.current.log("audio_fetch_start", { cardId: card.id, clipStatus: "ready" });
+
+      void (async () => {
+        try {
+          const res = await fetch(url, { credentials: "include" });
+          if (!res.ok) throw new Error(`audio fetch ${res.status}`);
+          const blob = await res.blob();
+          if (!blob.size) throw new Error("empty audio");
+
+          const objectUrl = URL.createObjectURL(blob);
+          objectUrlRef.current = objectUrl;
+          const audio = new Audio(objectUrl);
+          audio.muted = mutedRef.current;
+          audio.volume = volumeRef.current;
+          audioRef.current = audio;
+
+          const handleEnded = () => {
+            playInFlightRef.current = false;
+            setState("ended");
+            tracer.current.log("audio_ended", { cardId: card.id });
+            cleanupAudio();
+            onEndedRef.current?.();
+          };
+          const handleError = () => {
+            playInFlightRef.current = false;
+            setState("failed");
+            playbackStartedForCardRef.current = null;
+            cleanupAudio();
+            onFallbackRef.current?.();
+          };
+
+          audio.addEventListener("ended", handleEnded, { once: true });
+          audio.addEventListener("error", handleError, { once: true });
+
+          await audio.play();
+          tracer.current.log("audio_start", { cardId: card.id });
+          setState("playing");
+        } catch {
+          playInFlightRef.current = false;
+          playbackStartedForCardRef.current = null;
+          setState("failed");
+          cleanupAudio();
+          onFallbackRef.current?.();
+        }
+      })();
+    },
+    [cleanupAudio, resetPlaybackAttemptState],
+  );
+
+  const tryActivatePlayback = useCallback(
+    (source: string) => {
+      const card = lastCardRef.current;
+      const cardId = card?.id ?? null;
+      const readiness = cardId ? clipReadiness(audioStatusRef.current, cardId) : "missing";
+      tracer.current.log("try_activate", {
+        cardId: cardId ?? undefined,
+        clipStatus: readiness,
+        detail: source,
+      });
+
+      const gate = evaluatePlaybackGate({
+        ttsAvailable,
+        userEnabled: userEnabledRef.current,
+        unlocked: unlockedRef.current,
+        card,
+        audioStatus: audioStatusRef.current,
+        isPlaying: isPlaying(),
+        playInFlight: playInFlightRef.current,
+        playbackStartedForCardId: playbackStartedForCardRef.current,
+        targetCardId: cardId,
+      });
+
+      if (gate.action === "wait") {
+        if (gate.reason === "locked") setState("locked");
+        else if (gate.reason === "disabled") setState("disabled");
+        else if (
+          gate.reason === "clip-pending" ||
+          gate.reason === "clip-missing" ||
+          gate.reason === "no-status"
+        ) {
+          setState("loading");
+        }
+        return;
+      }
+
+      if (gate.action === "fallback") {
+        if (cardId && fallbackHandledForCardRef.current !== cardId) {
+          fallbackHandledForCardRef.current = cardId;
+          setState("failed");
+          tracer.current.log("clip_failed_fallback", { cardId, clipStatus: readiness });
+          onFallbackRef.current?.();
+        }
+        return;
+      }
+
+      if (!card || !audioStatusRef.current) return;
+      const clip = findClip(audioStatusRef.current, card.id);
+      if (!clip) return;
+      tracer.current.log("play_for_card", { cardId: card.id, clipStatus: "ready", detail: source });
+      startPlaybackForReadyClip(card, audioStatusRef.current, clip);
+    },
+    [isPlaying, startPlaybackForReadyClip, ttsAvailable],
+  );
+
+  const tryActivatePlaybackRef = useRef(tryActivatePlayback);
+  tryActivatePlaybackRef.current = tryActivatePlayback;
+
   const unlockAudio = useCallback(() => {
+    tracer.current.log("unlock_click");
     setUserEnabled(true);
     writePref(true);
+    writeUnlockGesture();
     setUnlocked(true);
     setState("ready");
+    if (persistKeyRef.current) {
+      const key = persistKeyRef.current;
+      const session = getWarRoomAudioSession(key);
+      setWarRoomAudioSession(key, {
+        draftId: session?.draftId ?? "",
+        audioEl: audioRef.current,
+        objectUrl: objectUrlRef.current,
+        currentTime: audioRef.current?.currentTime ?? 0,
+        wasPlaying: false,
+        state: "ready",
+        unlocked: true,
+        userEnabled: true,
+        muted: mutedRef.current,
+        volume: volumeRef.current,
+        lastPlayable: lastPlayableRef.current,
+        lastCard: lastCardRef.current,
+        activePickKey: activePickRef.current,
+      });
+    }
+    tryActivatePlaybackRef.current("unlock");
   }, []);
 
   const setMuted = useCallback((next: boolean) => {
@@ -169,105 +364,25 @@ export function useRfsnAudioPlayback(
     (card: RfsnCommentaryCard, onEnded: () => void, onFallback: () => void) => {
       onEndedRef.current = onEnded;
       onFallbackRef.current = onFallback;
+      if (lastCardRef.current?.id !== card.id) {
+        playbackStartedForCardRef.current = null;
+        fallbackHandledForCardRef.current = null;
+      }
       lastCardRef.current = card;
+      tracer.current.log("card_registered", { cardId: card.id });
 
-      if (!ttsAvailable || !userEnabled) {
+      if (!ttsAvailable) {
         setState("disabled");
         onFallback();
         return;
       }
-      if (!unlocked) {
+      if (!userEnabledRef.current || !unlockedRef.current) {
         setState("locked");
-        onFallback();
         return;
       }
-
-      if (!audioStatus) {
-        setState("loading");
-        return;
-      }
-
-      const pickKey = `${audioStatus.draftId}:${audioStatus.pickId}:${audioStatus.pickNumber}`;
-      if (activePickRef.current && activePickRef.current !== pickKey) {
-        cleanupAudio();
-      }
-      activePickRef.current = pickKey;
-
-      const clip = findClip(audioStatus, card.id);
-      if (!clip || clip.status === "failed" || clip.status === "expired") {
-        setState("failed");
-        onFallback();
-        return;
-      }
-      if (clip.status === "pending" || !clip.audioId) {
-      setState("loading");
-      playInFlightRef.current = false;
-      return;
-    }
-
-      lastPlayableRef.current = {
-        commentaryId: card.id,
-        voice: clip.voice,
-        pickId: audioStatus.pickId,
-        pickNumber: audioStatus.pickNumber,
-        draftId: audioStatus.draftId,
-        audioId: clip.audioId,
-        status: clip.status,
-        expiresAt: clip.expiresAt,
-      };
-      setLastPlayable(lastPlayableRef.current);
-
-      const url = buildAudioUrl(audioStatus, clip);
-      if (!url) {
-        setState("loading");
-        return;
-      }
-
-      cleanupAudio();
-      setState("loading");
-      playInFlightRef.current = true;
-
-      void (async () => {
-        try {
-          const res = await fetch(url, { credentials: "include" });
-          if (!res.ok) throw new Error(`audio fetch ${res.status}`);
-          const blob = await res.blob();
-          if (!blob.size) throw new Error("empty audio");
-
-          const objectUrl = URL.createObjectURL(blob);
-          objectUrlRef.current = objectUrl;
-          const audio = new Audio(objectUrl);
-          audio.muted = muted;
-          audio.volume = volume;
-          audioRef.current = audio;
-
-          const handleEnded = () => {
-            playInFlightRef.current = false;
-            setState("ended");
-            cleanupAudio();
-            onEndedRef.current?.();
-          };
-          const handleError = () => {
-            playInFlightRef.current = false;
-            setState("failed");
-            cleanupAudio();
-            onFallbackRef.current?.();
-          };
-
-          audio.addEventListener("ended", handleEnded, { once: true });
-          audio.addEventListener("error", handleError, { once: true });
-
-          await audio.play();
-          setState("playing");
-        } catch {
-          playInFlightRef.current = false;
-          setState("failed");
-          cleanupAudio();
-          onFallbackRef.current?.();
-        }
-      })();
+      tryActivatePlaybackRef.current("playForCard");
     },
-    [audioStatus, cleanupAudio, muted, ttsAvailable, unlocked, userEnabled, volume],
+    [ttsAvailable],
   );
 
   const replayCurrent = useCallback(() => {
@@ -275,51 +390,41 @@ export function useRfsnAudioPlayback(
     const playable = lastPlayableRef.current;
     if (!card || !playable?.audioId || playable.status !== "ready") return;
     if (!onEndedRef.current || !onFallbackRef.current) return;
-    playForCard(card, onEndedRef.current, onFallbackRef.current);
-  }, [playForCard]);
+    cleanupAudio();
+    playInFlightRef.current = false;
+    playbackStartedForCardRef.current = null;
+    tryActivatePlaybackRef.current("replay");
+  }, [cleanupAudio]);
 
   const clearReplay = useCallback(() => {
     lastPlayableRef.current = null;
     lastCardRef.current = null;
+    resetPlaybackAttemptState();
     setLastPlayable(null);
     if (persistKeyRef.current) {
       clearWarRoomAudioSession(persistKeyRef.current);
     }
-  }, []);
+  }, [resetPlaybackAttemptState]);
 
-  const playForCardRef = useRef(playForCard);
-  playForCardRef.current = playForCard;
-
-  const autoPlayedOnUnlockRef = useRef(false);
   useEffect(() => {
-    if (!unlocked) {
-      autoPlayedOnUnlockRef.current = false;
-      return;
+    const liveStatus = audioStatus;
+    if (liveStatus && lastCardRef.current) {
+      const pickKey = `${liveStatus.draftId}:${liveStatus.pickId}:${liveStatus.pickNumber}`;
+      if (activePickRef.current && activePickRef.current !== pickKey) {
+        cleanupAudio();
+        resetPlaybackAttemptState();
+        activePickRef.current = "";
+      }
     }
-    if (autoPlayedOnUnlockRef.current) return;
-    const card = lastCardRef.current;
-    if (!card || !onEndedRef.current || !onFallbackRef.current) return;
-    if (playInFlightRef.current || stateRef.current === "playing" || stateRef.current === "loading") {
-      return;
-    }
-    autoPlayedOnUnlockRef.current = true;
-    playForCardRef.current(card, onEndedRef.current, onFallbackRef.current);
-  }, [unlocked]);
-
-  // Clip pending → ready: auto-retry the on-air card (line 2+ after TTS synthesis).
-  useEffect(() => {
-    const card = lastCardRef.current;
-    if (!card || !unlocked || !onEndedRef.current || !onFallbackRef.current) return;
-    if (playInFlightRef.current || stateRef.current === "playing") return;
-    const clip = findClip(audioStatus, card.id);
-    if (!clip || clip.status !== "ready" || !clip.audioId) return;
-    playForCardRef.current(card, onEndedRef.current, onFallbackRef.current);
-  }, [audioStatus, unlocked]);
+    tryActivatePlaybackRef.current("effect_unlock_or_status");
+  }, [audioStatus, unlocked, cleanupAudio, resetPlaybackAttemptState]);
 
   const onSnapshotChange = useCallback(() => {
     stopCurrent();
     activePickRef.current = "";
-  }, [stopCurrent]);
+    lastCardRef.current = null;
+    resetPlaybackAttemptState();
+  }, [resetPlaybackAttemptState, stopCurrent]);
 
   useEffect(() => {
     if (!ttsAvailable || !userEnabled) {
@@ -330,7 +435,6 @@ export function useRfsnAudioPlayback(
     setState(unlocked ? "ready" : "locked");
   }, [ttsAvailable, unlocked, userEnabled]);
 
-  // Explicit draft reset — clear persisted session + replay.
   const lastEpochRef = useRef(sessionEpoch);
   useEffect(() => {
     if (sessionEpoch === undefined || sessionEpoch === lastEpochRef.current) return;
@@ -338,11 +442,11 @@ export function useRfsnAudioPlayback(
     if (persistKey) clearWarRoomAudioSession(persistKey);
     lastPlayableRef.current = null;
     lastCardRef.current = null;
+    resetPlaybackAttemptState();
     setLastPlayable(null);
     cleanupAudio();
-  }, [sessionEpoch, persistKey, cleanupAudio]);
+  }, [sessionEpoch, persistKey, cleanupAudio, resetPlaybackAttemptState]);
 
-  // Navigation away: pause + persist; do not destroy unlock/replay.
   useEffect(() => {
     if (!persistKey) {
       return () => cleanupAudio();
@@ -390,6 +494,13 @@ export function useRfsnAudioPlayback(
       audioRef.current = null;
     };
   }, [persistKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (tracePlayback) {
+      (window as unknown as { __rfsnPlaybackTrace?: typeof tracer.current.events }).__rfsnPlaybackTrace =
+        tracer.current.events;
+    }
+  }, [tracePlayback, state, audioStatus]);
 
   return {
     state,

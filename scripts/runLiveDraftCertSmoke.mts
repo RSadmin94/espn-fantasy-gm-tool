@@ -7,13 +7,15 @@ import {
   CertNotReadyError,
   SMOKE_OUT_DIR,
   TIMEOUTS,
+  type AudioUnlockEvidence,
   type HarnessContext,
   type SmokeStep,
-  clickEnableSound,
+  clearRfsnAudioCertState,
   createHarnessContext,
   ensureFreshDraftSession,
   launchCertBrowser,
   openLiveDraftTab,
+  performRealAudioUnlock,
   recordStep,
   resolveLeagueDraft,
   signInForCert,
@@ -22,7 +24,6 @@ import {
   verifyDeploySha,
   waitForBroadcastPickReceived,
   waitForCommentaryCard,
-  waitForFirstAudioAttempt,
   waitForFirstLockedPick,
   waitForPickClockRunning,
   writeSmokeReport,
@@ -33,6 +34,7 @@ async function runSmoke(): Promise<{
   blockingStep?: string;
   steps: SmokeStep[];
   ctx: HarnessContext;
+  unlockEvidence?: AudioUnlockEvidence;
 }> {
   const ctx = createHarnessContext();
   const steps: SmokeStep[] = [];
@@ -58,6 +60,11 @@ async function runSmoke(): Promise<{
       return { ready: false, blockingStep: "SMOKE-03", steps, ctx };
     }
 
+    await clearRfsnAudioCertState(page);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: /Live Draft/i }).click();
+    await page.waitForSelector(".live-draft-surface", { timeout: 60_000 });
+
     if (Date.now() - started > TIMEOUTS.draftSessionActive) {
       throw new CertNotReadyError("SMOKE-04", "Exceeded 30s before draft session setup");
     }
@@ -65,7 +72,7 @@ async function runSmoke(): Promise<{
       return { ready: false, blockingStep: "SMOKE-04", steps, ctx };
     }
 
-    if (!(await startSimulation(page, steps, { pace: "Broadcast" }))) {
+    if (!(await startSimulation(page, steps, { pace: "Brisk" }))) {
       return { ready: false, blockingStep: "SMOKE-05", steps, ctx };
     }
 
@@ -91,14 +98,15 @@ async function runSmoke(): Promise<{
       return { ready: false, blockingStep: "SMOKE-09", steps, ctx };
     }
 
-    if (!(await clickEnableSound(page, steps, SMOKE_OUT_DIR))) {
-      return { ready: false, blockingStep: "SMOKE-10", steps, ctx };
-    }
-
-    const audioDeadline = started + TIMEOUTS.firstAudioAttempt;
-    const audioTimeout = Math.max(10_000, audioDeadline - Date.now());
-    if (!(await waitForFirstAudioAttempt(page, steps, SMOKE_OUT_DIR, audioTimeout))) {
-      return { ready: false, blockingStep: "SMOKE-11", steps, ctx };
+    const unlock = await performRealAudioUnlock(page, steps, SMOKE_OUT_DIR, ctx);
+    if (!unlock.ok) {
+      return {
+        ready: false,
+        blockingStep: unlock.errorCode ?? "SMOKE-10",
+        steps,
+        ctx,
+        unlockEvidence: unlock.evidence,
+      };
     }
 
     if (Date.now() - started > TIMEOUTS.smokeTotal) {
@@ -112,7 +120,7 @@ async function runSmoke(): Promise<{
       return { ready: false, blockingStep: "SMOKE-TIMEOUT", steps, ctx };
     }
 
-    return { ready: true, steps, ctx };
+    return { ready: true, steps, ctx, unlockEvidence: unlock.evidence };
   } finally {
     await browser.close();
   }
@@ -122,12 +130,14 @@ async function main(): Promise<void> {
   let status: "READY" | "NOT READY" = "NOT READY";
   let blockingStep = "unknown";
   let steps: SmokeStep[] = [];
+  let unlockEvidence: AudioUnlockEvidence | undefined;
   let ctx = createHarnessContext();
 
   try {
     const result = await runSmoke();
     steps = result.steps;
     ctx = result.ctx;
+    unlockEvidence = result.unlockEvidence;
     if (result.ready) {
       status = "READY";
       console.log("\n✅ SMOKE READY — draft startup chain verified");
@@ -158,7 +168,7 @@ async function main(): Promise<void> {
     console.log(`\n🔴 NOT READY — ${blockingStep}`);
   }
 
-  const reportPath = writeSmokeReport(SMOKE_OUT_DIR, ctx, steps, status);
+  const reportPath = writeSmokeReport(SMOKE_OUT_DIR, ctx, steps, status, unlockEvidence);
   console.log(`Report → ${reportPath}`);
   process.exit(status === "READY" ? 0 : 2);
 }

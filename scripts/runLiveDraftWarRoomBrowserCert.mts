@@ -11,12 +11,14 @@ import {
   OUT_DIR,
   TIMEOUTS,
   CertNotReadyError,
+  type AudioUnlockEvidence,
   certMetrics,
-  clickEnableSound,
+  clearRfsnAudioCertState,
   createHarnessContext,
   ensureFreshDraftSession,
   launchCertBrowser,
   openLiveDraftTab,
+  performRealAudioUnlock,
   readDraftUiState,
   recordStep,
   resolveLeagueDraft,
@@ -27,6 +29,7 @@ import {
   verifyClerk,
   verifyDeploySha,
   waitForCommentaryCard,
+  waitForBroadcastPickReceived,
   waitForFirstLockedPick,
   type HarnessContext,
   type SmokeStep,
@@ -42,6 +45,7 @@ type ReqResult = {
 };
 
 const results: ReqResult[] = [];
+let unlockEvidence: AudioUnlockEvidence | undefined;
 
 function record(r: ReqResult): void {
   results.push(r);
@@ -63,20 +67,6 @@ async function assertDraftStartup(page: Page, ctx: HarnessContext): Promise<void
     throw new CertNotReadyError("GATE-TIMEOUT", "No active draft session within 30s");
   }
 
-  if (!(await clickEnableSound(page, gates, OUT_DIR))) {
-    const fail = gates.find((g) => g.id === "SMOKE-10");
-    throw new CertNotReadyError("REQ-0", fail?.rootCause ?? "Enable Sound failed");
-  }
-  const enable = gates.find((g) => g.id === "SMOKE-10");
-  record({
-    id: "REQ-0",
-    requirement: "Enable Sound once at draft start",
-    pass: Boolean(enable?.pass),
-    evidence: enable?.evidence ?? "Enable Sound gate missing",
-    screenshot: enable?.screenshot,
-    rootCause: enable?.pass ? undefined : enable?.rootCause,
-  });
-
   if (!(await startSimulation(page, gates, { pace: "Brisk" }))) {
     const fail = gates.find((g) => g.id === "SMOKE-05");
     throw new CertNotReadyError("GATE-05", fail?.rootCause ?? "Simulation did not start");
@@ -88,11 +78,34 @@ async function assertDraftStartup(page: Page, ctx: HarnessContext): Promise<void
     throw new CertNotReadyError("GATE-07", fail?.rootCause ?? "No pick locked within 45s");
   }
 
+  const broadcastTimeout = Math.max(5_000, TIMEOUTS.commentaryCard - (Date.now() - started));
+  if (!(await waitForBroadcastPickReceived(page, ctx, gates, broadcastTimeout))) {
+    const fail = gates.find((g) => g.id === "SMOKE-08");
+    throw new CertNotReadyError("GATE-08", fail?.rootCause ?? "Broadcast did not receive locked pick");
+  }
+
   const commentaryTimeout = Math.max(5_000, TIMEOUTS.commentaryCard - (Date.now() - started));
   if (!(await waitForCommentaryCard(page, gates, commentaryTimeout))) {
     const fail = gates.find((g) => g.id === "SMOKE-09");
     throw new CertNotReadyError("GATE-09", fail?.rootCause ?? "No commentary card within 60s");
   }
+
+  await page.waitForTimeout(1500);
+
+  const unlock = await performRealAudioUnlock(page, gates, OUT_DIR, ctx);
+  unlockEvidence = unlock.evidence;
+  if (!unlock.ok) {
+    throw new CertNotReadyError(unlock.errorCode ?? "REQ-0", unlock.errorCode ?? "Enable Sound failed");
+  }
+  const enable = gates.find((g) => g.id === "SMOKE-10");
+  record({
+    id: "REQ-0",
+    requirement: "Enable Sound once at draft start",
+    pass: Boolean(enable?.pass),
+    evidence: enable?.evidence ?? JSON.stringify(unlock.evidence),
+    screenshot: enable?.screenshot,
+    rootCause: enable?.pass ? undefined : unlock.errorCode,
+  });
 
   for (const g of gates.filter((g) => g.id.startsWith("SMOKE-"))) {
     console.log(`${g.pass ? "PASS" : "FAIL"} — [startup ${g.id}] ${g.requirement}`);
@@ -111,8 +124,13 @@ async function boothPlayingAligned(page: Page): Promise<boolean> {
 }
 
 async function runSingleDraftCert(page: Page, ctx: HarnessContext): Promise<void> {
-  await openLiveDraftTab(page, ctx.base, []);
-  await page.waitForTimeout(1500);
+  if (!(await openLiveDraftTab(page, ctx.base, []))) {
+    throw new CertNotReadyError("SMOKE-03", "Live Draft tab not reachable");
+  }
+  await clearRfsnAudioCertState(page);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /Live Draft/i }).click();
+  await page.waitForSelector(".live-draft-surface", { timeout: 60_000 });
   await assertDraftStartup(page, ctx);
 
   const pauseToggle = page.locator('.live-draft-surface label:has-text("Pause on my picks") input');
@@ -399,6 +417,7 @@ function writeReport(ctx: HarnessContext, status: string): void {
     leagueId: ctx.leagueId,
     draftId: ctx.draftId,
     at: new Date().toISOString(),
+    unlockEvidence: unlockEvidence ?? null,
     results,
     passed: results.filter((r) => r.pass).length,
     failed: results.filter((r) => !r.pass).length,

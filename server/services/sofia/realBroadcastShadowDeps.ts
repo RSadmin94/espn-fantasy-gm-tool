@@ -35,14 +35,12 @@ export type RealShadowDepsOptions = {
   entailTimeoutMs?: number;
   voiceModel?: string;
   entailModel?: string;
-  voiceTemperature?: number;
   playerOracle?: PlayerRegistryOracle;
   /** When true, load gm_player_registry; falls back to embedded seed. */
   loadPlayerRegistryFromDb?: boolean;
   orchestratorVoiceTimeoutMs?: number;
 };
 
-const DEFAULT_VOICE_TEMPERATURE = 0.9;
 const ESTIMATED_VOICE_INPUT_TOKENS = 450;
 const ESTIMATED_VOICE_OUTPUT_TOKENS = 80;
 const ESTIMATED_ENTAIL_INPUT_TOKENS = 320;
@@ -112,14 +110,12 @@ export function createRealShadowBroadcastDeps(
   const voiceProvider = new DeepSeekProvider({
     model: opts.voiceModel,
     timeoutMs: opts.voiceTimeoutMs ?? 20_000,
-    temperature: opts.voiceTemperature ?? DEFAULT_VOICE_TEMPERATURE,
     jsonMode: true,
   });
 
   const entailProvider = new DeepSeekProvider({
     model: opts.entailModel,
     timeoutMs: opts.entailTimeoutMs ?? 20_000,
-    temperature: 0,
     jsonMode: true,
   });
 

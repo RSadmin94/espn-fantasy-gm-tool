@@ -38,7 +38,6 @@ export function useRfsnBoothController(
   options: RfsnBoothControllerOptions = {},
 ): RfsnBoothController {
   const audio = options.audio ?? null;
-  const audioActive = Boolean(audio && audio.userEnabled && audio.state !== "disabled");
   const reducedMotion = usePrefersReducedMotion();
   const sequence = useMemo(() => buildBoothCommentarySequence(snapshot), [snapshot]);
   const sequenceRef = useRef(sequence);
@@ -87,6 +86,49 @@ export function useRfsnBoothController(
     }, displayMs);
   }, [reducedMotion]);
 
+  const audioAttemptedKeyRef = useRef<string | null>(null);
+
+  const attemptActiveCardAudio = useCallback(
+    (index: number, card: RfsnCommentaryCard) => {
+      clearTimer();
+      const liveAudio = audioRef.current;
+      if (!liveAudio?.userEnabled) return false;
+
+      let fallbackScheduled = false;
+      const scheduleFallback = () => {
+        if (fallbackScheduled) return;
+        fallbackScheduled = true;
+        scheduleTextExit(card.commentator, index, card.text);
+      };
+      const onAudioEnded = () => exitSpeakerRef.current(card.commentator, index, false);
+      const tryAudio = () => {
+        audioRef.current?.playForCard(card, onAudioEnded, scheduleFallback);
+      };
+      tryAudio();
+
+      if (!liveAudio.unlocked) return false;
+      if (liveAudio.isPlaying?.()) return true;
+      if (liveAudio.state === "loading") return true;
+
+      audioRetryRef.current = setTimeout(() => {
+        const a = audioRef.current;
+        if (!a) return;
+        if (a.state === "loading" || a.state === "ready") tryAudio();
+      }, 1200);
+      timerRef.current = setTimeout(() => {
+        const a = audioRef.current;
+        if (!a) return;
+        if (a.isPlaying?.()) return;
+        scheduleFallback();
+      }, AUDIO_SAFETY_FALLBACK_MS);
+      return true;
+    },
+    [clearTimer, scheduleTextExit],
+  );
+
+  const attemptActiveCardAudioRef = useRef(attemptActiveCardAudio);
+  attemptActiveCardAudioRef.current = attemptActiveCardAudio;
+
   const beginSpeaker = useCallback(
     (index: number, card: RfsnCommentaryCard) => {
       clearTimer();
@@ -106,37 +148,20 @@ export function useRfsnBoothController(
           [card.commentator]: "active",
         }));
 
-        if (audioActive && audioRef.current) {
-          let fallbackScheduled = false;
-          const scheduleFallback = () => {
-            if (fallbackScheduled) return;
-            fallbackScheduled = true;
-            scheduleTextExit(card.commentator, index, card.text);
-          };
-          const onAudioEnded = () => exitSpeakerRef.current(card.commentator, index, false);
-          const tryAudio = () => {
-            audioRef.current?.playForCard(card, onAudioEnded, scheduleFallback);
-          };
-          tryAudio();
-          audioRetryRef.current = setTimeout(() => {
-            const a = audioRef.current;
-            if (!a) return;
-            if (a.state === "loading" || a.state === "ready") tryAudio();
-          }, 1200);
-          // Safety only — never cut a playing clip; advance is driven by `ended`.
+        const liveAudio = audioRef.current;
+        if (!liveAudio?.userEnabled) {
+          scheduleTextExit(card.commentator, index, card.text);
+        } else if (!liveAudio.unlocked) {
+          // Preference on but gesture pending — keep card on-air until unlock or safety timeout.
           timerRef.current = setTimeout(() => {
             const a = audioRef.current;
-            if (!a) return;
-            if (a.isPlaying?.()) return;
-            scheduleFallback();
+            if (a?.unlocked || a?.isPlaying?.()) return;
+            scheduleTextExit(card.commentator, index, card.text);
           }, AUDIO_SAFETY_FALLBACK_MS);
-          return;
         }
-
-        scheduleTextExit(card.commentator, index, card.text);
       }, enterMs);
     },
-    [audioActive, clearTimer, reducedMotion, scheduleTextExit],
+    [clearTimer, reducedMotion, scheduleTextExit],
   );
 
   const beginSpeakerRef = useRef(beginSpeaker);
@@ -201,6 +226,7 @@ export function useRfsnBoothController(
   useEffect(() => {
     clearTimer();
     audioRef.current?.onSnapshotChange();
+    audioAttemptedKeyRef.current = null;
     setConsumedTickerIds(new Set());
     setCardStates(initialCardStates());
     setActiveCommentator(null);
@@ -222,6 +248,52 @@ export function useRfsnBoothController(
   }, [snapshotKey, clearTimer, reducedMotion]);
 
   useEffect(() => clearTimer, [clearTimer]);
+
+  // Active speaker + unlocked audio — attempt playback once the card reaches "active".
+  useEffect(() => {
+    if (!activeCard || activeCommentator == null || sequenceIndexRef.current < 0) return;
+    if (cardStates[activeCommentator] !== "active") return;
+    attemptActiveCardAudioRef.current(sequenceIndexRef.current, activeCard);
+  }, [
+    activeCard,
+    activeCommentator,
+    cardStates,
+    audio?.userEnabled,
+    audio?.unlocked,
+  ]);
+
+  const unlockRetryRef = useRef(false);
+  const wasUnlockedRef = useRef(false);
+  const activeCardIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeCard?.id !== activeCardIdRef.current) {
+      activeCardIdRef.current = activeCard?.id ?? null;
+      unlockRetryRef.current = false;
+      audioAttemptedKeyRef.current = null;
+    }
+  }, [activeCard?.id]);
+
+  // User unlocks after a line started in text-only mode — switch the active card to audio.
+  useEffect(() => {
+    const nowUnlocked = Boolean(audio?.userEnabled && audio?.unlocked);
+    const justUnlocked = nowUnlocked && !wasUnlockedRef.current;
+    wasUnlockedRef.current = nowUnlocked;
+    if (!justUnlocked) return;
+    if (!activeCard || activeCommentator == null || sequenceIndexRef.current < 0) return;
+    if (cardStates[activeCommentator] !== "active") return;
+    if (unlockRetryRef.current) return;
+    unlockRetryRef.current = true;
+    audioAttemptedKeyRef.current = null;
+    clearTimer();
+    attemptActiveCardAudioRef.current(sequenceIndexRef.current, activeCard);
+  }, [
+    audio?.unlocked,
+    audio?.userEnabled,
+    activeCard,
+    activeCommentator,
+    cardStates,
+    clearTimer,
+  ]);
 
   const filteredTicker = useMemo(
     () => filterTickerForBooth(snapshot.ticker, activeCard, consumedTickerIds),
