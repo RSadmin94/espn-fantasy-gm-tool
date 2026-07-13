@@ -16,6 +16,7 @@ import {
 } from "@/lib/liveDraftSeed";
 import { buildRfsnLiveDraftId } from "@/lib/rfsnLiveDraftId";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
+import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
 import { RfsnPickClock } from "@/components/rfsn/RfsnPickClock";
 import { resolveClockState, isPickManual, MAX_BROADCAST_HOLD_MS, draftPaceFromTimerMs } from "@/lib/draftClock";
 import {
@@ -916,6 +917,14 @@ function LiveDraftEngine({
           onClockTeam={onClock?.teamName ?? "—"}
           onClockOwner={onClock?.ownerName}
           remainingMs={remainingMs}
+          className="mb-3"
+        />
+      )}
+      {done && (
+        <LiveDraftWrapUp
+          teams={teams}
+          draftGrades={draftGrades}
+          rostersByTeam={rostersByTeam}
           className="mb-3"
         />
       )}

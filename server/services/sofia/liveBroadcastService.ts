@@ -20,6 +20,8 @@ import {
   bumpLiveSessionEpoch,
   getLiveSession,
   getLiveSessionEpoch,
+  hasWrapUpBeenProcessed,
+  markWrapUpProcessed,
   updateLiveSession,
   type PublicLiveBroadcastPayload,
   type RfsnLiveSessionState,
@@ -33,6 +35,12 @@ import {
 } from "./liveBroadcastOrchestratorFactory";
 import type { RealShadowTelemetry } from "./realBroadcastShadowDeps";
 import type { BroadcastOrchestrator } from "./broadcastOrchestrator";
+import { getLockedPicksForSession } from "./liveDraftMomentSession";
+import {
+  buildDraftWrapUpBroadcastMoment,
+  summarizeDraftWrapUp,
+  wrapUpEventIdForDraft,
+} from "./liveDraftWrapUp";
 
 export type BuildLiveBroadcastFrameInput = {
   moment: BroadcastMoment;
@@ -41,6 +49,8 @@ export type BuildLiveBroadcastFrameInput = {
   draftMoment?: DraftMoment;
   isStillActive?: (identity: BroadcastMomentIdentity) => boolean | Promise<boolean>;
   useDeterministicProvider?: boolean;
+  /** When true, public payload is marked draft-complete (wrap-up / final frame). */
+  markDraftComplete?: boolean;
 };
 
 export type LiveBroadcastBuildResult = {
@@ -79,6 +89,13 @@ function pickIdentityFromMoment(moment: BroadcastMoment, draftId: string) {
       draftId: moment.identity.draftId,
       pickNumber: moment.identity.pickNumber,
       pickId: moment.identity.pickId,
+    };
+  }
+  if (moment.identity.kind === "league_event") {
+    return {
+      draftId,
+      pickNumber: 0,
+      pickId: moment.identity.eventId,
     };
   }
   return { draftId, pickNumber: 1, pickId: "evt" };
@@ -161,6 +178,7 @@ export async function buildLiveBroadcastFrame(
   const epoch = bumpLiveSessionEpoch(input.leagueId, input.draftId);
   const ledger = ledgerForDraft(input.leagueId, input.draftId);
   const identity = pickIdentityFromMoment(input.moment, input.draftId);
+  const draftComplete = Boolean(input.markDraftComplete);
 
   updateLiveSession(input.leagueId, input.draftId, {
     state: "commentary_pending",
@@ -171,7 +189,7 @@ export async function buildLiveBroadcastFrame(
       activePickIdentity: identity,
       frameStatus: "pending",
       generatedAt: null,
-      draftComplete: false,
+      draftComplete,
     },
   });
 
@@ -241,7 +259,7 @@ export async function buildLiveBroadcastFrame(
     frame,
     snapshot,
     sessionState,
-    false,
+    draftComplete,
     input.moment,
     input.draftId,
   );
@@ -276,11 +294,55 @@ export async function buildLiveBroadcastFrame(
     epoch,
     frame,
     snapshot,
-    pickId: input.draftMoment.eventId,
-    pickNumber: input.draftMoment.overallPick,
+    pickId: identity.pickId,
+    pickNumber: identity.pickNumber,
   });
 
   return { frame, snapshot, publicPayload };
+}
+
+export async function processDraftWrapUp(
+  input: {
+    leagueId: string;
+    draftId: string;
+    finalDraftMoment: DraftMoment;
+    teamCount?: number;
+    useDeterministicProvider?: boolean;
+  },
+): Promise<PublicLiveBroadcastPayload | null> {
+  if (!isRfsnLiveBroadcastEnabled()) return null;
+
+  const eventId = wrapUpEventIdForDraft(input.draftId);
+  if (hasWrapUpBeenProcessed(input.leagueId, input.draftId)) {
+    return getLiveSessionPayload(input.leagueId, input.draftId);
+  }
+
+  markWrapUpProcessed(input.leagueId, input.draftId, eventId);
+
+  const picks = getLockedPicksForSession(input.leagueId, input.draftId);
+  const summary = summarizeDraftWrapUp(picks, input.teamCount ?? 14);
+  const wrapMoment = buildDraftWrapUpBroadcastMoment(input.leagueId, input.draftId, summary);
+
+  const result = await buildLiveBroadcastFrame({
+    moment: wrapMoment,
+    leagueId: input.leagueId,
+    draftId: input.draftId,
+    draftMoment: input.finalDraftMoment,
+    useDeterministicProvider: input.useDeterministicProvider,
+    markDraftComplete: true,
+    isStillActive: () => true,
+  });
+
+  if (!result) {
+    return getLiveSessionPayload(input.leagueId, input.draftId);
+  }
+
+  updateLiveSession(input.leagueId, input.draftId, {
+    state: "draft_complete",
+    payload: { ...result.publicPayload, draftComplete: true, sessionState: "draft_complete" },
+  });
+
+  return getLiveSessionPayload(input.leagueId, input.draftId);
 }
 
 export async function processLockedDraftMoment(

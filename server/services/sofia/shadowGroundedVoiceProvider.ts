@@ -1,10 +1,22 @@
 /**
- * Shadow grounded voice provider — deterministic generation that passes the real grounding stack.
- * Used only for shadow/certification runs; not a mock adapter or pipeline fixture.
+ * Deterministic shadow voice provider — vitest and offline pipeline checks only.
+ * Real shadow certification uses createRealShadowBroadcastOrchestrator (DeepSeek).
  */
 export function createShadowGroundedVoiceProvider(): (prompt: string) => Promise<string> {
   return async (prompt: string) => {
     const voice = prompt.includes("Sofia") ? "sofia" : prompt.includes("Coach") ? "coach" : "roxanne";
+
+    if (prompt.includes("DRAFT_WRAP_UP") || prompt.includes("Draft complete:")) {
+      const factLine =
+        prompt.match(/1\.\s*(Draft complete:[^\n]+)/i)?.[1] ?? "Draft complete: 168 picks across 14 teams.";
+      const lines: Record<string, string> = {
+        sofia: factLine,
+        coach: "Several rosters still look thin at receiver after this draft.",
+        roxanne: "This draft will be talked about all season.",
+      };
+      return JSON.stringify({ line: lines[voice], premise: factLine });
+    }
+
     const momentMatch = prompt.match(/MOMENT:\s*(.+?)\s+selected\s+(.+?)\s+\((\w+)\)\s+at pick (\d+), round (\d+)/i);
     const owner = momentMatch?.[1] ?? "Owner";
     const player = momentMatch?.[2] ?? "Player";

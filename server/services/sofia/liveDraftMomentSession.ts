@@ -41,6 +41,11 @@ export function resetLiveDraftMomentSession(leagueId: string, draftId: string): 
   accumulators.delete(accKey(leagueId, draftId));
 }
 
+export function getLockedPicksForSession(leagueId: string, draftId: string): MockPickLike[] {
+  const acc = accumulators.get(accKey(leagueId, draftId));
+  return acc ? [...acc.picks] : [];
+}
+
 function receiptContextFor(leagueId: string): ReceiptContext {
   return makeShadowReceiptContext({ leagueId, teamCount: 14 });
 }

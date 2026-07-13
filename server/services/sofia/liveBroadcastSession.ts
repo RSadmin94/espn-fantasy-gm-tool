@@ -38,6 +38,7 @@ type DraftSession = {
   state: RfsnLiveSessionState;
   payload: PublicLiveBroadcastPayload;
   lastProcessedPickId: string | null;
+  wrapUpEventId: string | null;
 };
 
 const sessions = new Map<string, DraftSession>();
@@ -56,6 +57,7 @@ export function getOrCreateLiveSession(leagueId: string, draftId: string): Draft
       epoch: 0,
       state: "waiting_for_draft",
       lastProcessedPickId: null,
+      wrapUpEventId: null,
       payload: {
         schemaVersion: 1,
         sessionState: "waiting_for_draft",
@@ -101,6 +103,16 @@ export function updateLiveSession(
 
 export function resetLiveSession(leagueId: string, draftId: string): void {
   sessions.delete(sessionKey(leagueId, draftId));
+}
+
+export function hasWrapUpBeenProcessed(leagueId: string, draftId: string): boolean {
+  const s = sessions.get(sessionKey(leagueId, draftId));
+  return Boolean(s?.wrapUpEventId);
+}
+
+export function markWrapUpProcessed(leagueId: string, draftId: string, eventId: string): void {
+  const s = getOrCreateLiveSession(leagueId, draftId);
+  s.wrapUpEventId = eventId;
 }
 
 export function resetLiveSessionsForTests(): void {

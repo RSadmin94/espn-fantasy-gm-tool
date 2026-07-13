@@ -25,7 +25,8 @@ export type EditorialPlanId =
   | "hall_of_fame"
   | "season_story"
   | "weekly_story"
-  | "documentary";
+  | "documentary"
+  | "draft_wrap_up";
 
 export type DecompressionBehavior = "none" | "trigger" | "inherit";
 
@@ -199,6 +200,13 @@ export const EDITORIAL_PLANS: Record<EditorialPlanId, EditorialPlan> = {
     decompressionBehavior: "trigger",
     decompressionWindowPicks: 1,
     callbackEligible: true,
+  }),
+
+  draft_wrap_up: plan("draft_wrap_up", "sofia", ["coach", "roxanne"], [], 3, {
+    silenceEligible: false,
+    energyLevel: "peak",
+    decompressionBehavior: "none",
+    callbackEligible: false,
   }),
 };
 
