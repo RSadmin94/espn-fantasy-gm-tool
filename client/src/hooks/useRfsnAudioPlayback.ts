@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RfsnAudioState, RfsnLiveAudioStatus, RfsnVoiceAudioRef } from "@/lib/rfsnLiveState";
 import type { RfsnCommentaryCard } from "@/lib/rfsnPresentation";
+import {
+  clearWarRoomAudioSession,
+  getWarRoomAudioSession,
+  setWarRoomAudioSession,
+} from "@/lib/rfsnWarRoomAudioSession";
 
 const AUDIO_PREF_KEY = "rfsn-live-audio-enabled";
 
@@ -15,6 +20,12 @@ export type RfsnLastPlayableClip = {
   expiresAt?: string;
 };
 
+export type RfsnAudioPlaybackOptions = {
+  /** When set, audio + replay survive panel unmount (navigation) until sessionEpoch bumps. */
+  persistKey?: string;
+  sessionEpoch?: string | number;
+};
+
 export type RfsnAudioPlayback = {
   state: RfsnAudioState;
   userEnabled: boolean;
@@ -23,6 +34,7 @@ export type RfsnAudioPlayback = {
   unlocked: boolean;
   lastPlayable: RfsnLastPlayableClip | null;
   replayAvailable: boolean;
+  isPlaying: () => boolean;
   unlockAudio: () => void;
   setMuted: (muted: boolean) => void;
   setVolume: (volume: number) => void;
@@ -75,34 +87,59 @@ function buildAudioUrl(audioStatus: RfsnLiveAudioStatus, clip: RfsnVoiceAudioRef
 export function useRfsnAudioPlayback(
   ttsAvailable: boolean,
   audioStatus: RfsnLiveAudioStatus | null | undefined,
+  options: RfsnAudioPlaybackOptions = {},
 ): RfsnAudioPlayback {
-  const [userEnabled, setUserEnabled] = useState(() => readPref());
-  const [unlocked, setUnlocked] = useState(false);
-  const [muted, setMutedState] = useState(false);
-  const [volume, setVolumeState] = useState(0.85);
-  const [state, setState] = useState<RfsnAudioState>(() =>
-    ttsAvailable && userEnabled ? "locked" : "disabled",
-  );
+  const { persistKey, sessionEpoch } = options;
+  const restored = persistKey ? getWarRoomAudioSession(persistKey) : undefined;
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const objectUrlRef = useRef<string | null>(null);
+  const [userEnabled, setUserEnabled] = useState(() => restored?.userEnabled ?? readPref());
+  const [unlocked, setUnlocked] = useState(() => restored?.unlocked ?? false);
+  const [muted, setMutedState] = useState(() => restored?.muted ?? false);
+  const [volume, setVolumeState] = useState(() => restored?.volume ?? 0.85);
+  const [state, setState] = useState<RfsnAudioState>(() => {
+    if (restored) return restored.state;
+    return ttsAvailable && userEnabled ? "locked" : "disabled";
+  });
+
+  const audioRef = useRef<HTMLAudioElement | null>(restored?.audioEl ?? null);
+  const objectUrlRef = useRef<string | null>(restored?.objectUrl ?? null);
+  const stateRef = useRef<RfsnAudioState>(state);
+  stateRef.current = state;
   const onEndedRef = useRef<(() => void) | null>(null);
   const onFallbackRef = useRef<(() => void) | null>(null);
-  const lastCardRef = useRef<RfsnCommentaryCard | null>(null);
-  const lastPlayableRef = useRef<RfsnLastPlayableClip | null>(null);
-  const [lastPlayable, setLastPlayable] = useState<RfsnLastPlayableClip | null>(null);
-  const activePickRef = useRef<string>("");
+  const lastCardRef = useRef<RfsnCommentaryCard | null>(restored?.lastCard ?? null);
+  const lastPlayableRef = useRef<RfsnLastPlayableClip | null>(restored?.lastPlayable ?? null);
+  const [lastPlayable, setLastPlayable] = useState<RfsnLastPlayableClip | null>(
+    restored?.lastPlayable ?? null,
+  );
+  const activePickRef = useRef<string>(restored?.activePickKey ?? "");
+  const persistKeyRef = useRef(persistKey);
+  persistKeyRef.current = persistKey;
+  const unlockedRef = useRef(unlocked);
+  unlockedRef.current = unlocked;
+  const userEnabledRef = useRef(userEnabled);
+  userEnabledRef.current = userEnabled;
+  const mutedRef = useRef(muted);
+  mutedRef.current = muted;
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+  const playInFlightRef = useRef(false);
 
-  const cleanupAudio = useCallback(() => {
+  const cleanupAudio = useCallback((revoke = true) => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = "";
       audioRef.current = null;
     }
-    if (objectUrlRef.current) {
+    if (revoke && objectUrlRef.current) {
       URL.revokeObjectURL(objectUrlRef.current);
       objectUrlRef.current = null;
     }
+  }, []);
+
+  const isPlaying = useCallback(() => {
+    const el = audioRef.current;
+    return Boolean(el && !el.paused && el.currentTime > 0 && !el.ended);
   }, []);
 
   const stopCurrent = useCallback(() => {
@@ -163,9 +200,10 @@ export function useRfsnAudioPlayback(
         return;
       }
       if (clip.status === "pending" || !clip.audioId) {
-        setState("loading");
-        return;
-      }
+      setState("loading");
+      playInFlightRef.current = false;
+      return;
+    }
 
       lastPlayableRef.current = {
         commentaryId: card.id,
@@ -187,6 +225,7 @@ export function useRfsnAudioPlayback(
 
       cleanupAudio();
       setState("loading");
+      playInFlightRef.current = true;
 
       void (async () => {
         try {
@@ -203,11 +242,13 @@ export function useRfsnAudioPlayback(
           audioRef.current = audio;
 
           const handleEnded = () => {
+            playInFlightRef.current = false;
             setState("ended");
             cleanupAudio();
             onEndedRef.current?.();
           };
           const handleError = () => {
+            playInFlightRef.current = false;
             setState("failed");
             cleanupAudio();
             onFallbackRef.current?.();
@@ -219,6 +260,7 @@ export function useRfsnAudioPlayback(
           await audio.play();
           setState("playing");
         } catch {
+          playInFlightRef.current = false;
           setState("failed");
           cleanupAudio();
           onFallbackRef.current?.();
@@ -240,14 +282,14 @@ export function useRfsnAudioPlayback(
     lastPlayableRef.current = null;
     lastCardRef.current = null;
     setLastPlayable(null);
+    if (persistKeyRef.current) {
+      clearWarRoomAudioSession(persistKeyRef.current);
+    }
   }, []);
 
-  // When the user finally unlocks (a real gesture), immediately play the line that is
-  // already on air. While locked, playForCard bailed to the text fallback, so without this
-  // the active line would stay silent until the next pick. Uses a ref for playForCard to
-  // read the freshly-unlocked closure, and fires once per unlock transition.
   const playForCardRef = useRef(playForCard);
   playForCardRef.current = playForCard;
+
   const autoPlayedOnUnlockRef = useRef(false);
   useEffect(() => {
     if (!unlocked) {
@@ -255,17 +297,28 @@ export function useRfsnAudioPlayback(
       return;
     }
     if (autoPlayedOnUnlockRef.current) return;
-    autoPlayedOnUnlockRef.current = true;
     const card = lastCardRef.current;
-    if (card && onEndedRef.current && onFallbackRef.current) {
-      playForCardRef.current(card, onEndedRef.current, onFallbackRef.current);
+    if (!card || !onEndedRef.current || !onFallbackRef.current) return;
+    if (playInFlightRef.current || stateRef.current === "playing" || stateRef.current === "loading") {
+      return;
     }
+    autoPlayedOnUnlockRef.current = true;
+    playForCardRef.current(card, onEndedRef.current, onFallbackRef.current);
   }, [unlocked]);
+
+  // Clip pending → ready: auto-retry the on-air card (line 2+ after TTS synthesis).
+  useEffect(() => {
+    const card = lastCardRef.current;
+    if (!card || !unlocked || !onEndedRef.current || !onFallbackRef.current) return;
+    if (playInFlightRef.current || stateRef.current === "playing") return;
+    const clip = findClip(audioStatus, card.id);
+    if (!clip || clip.status !== "ready" || !clip.audioId) return;
+    playForCardRef.current(card, onEndedRef.current, onFallbackRef.current);
+  }, [audioStatus, unlocked]);
 
   const onSnapshotChange = useCallback(() => {
     stopCurrent();
     activePickRef.current = "";
-    // Retain lastPlayable for post-completion replay.
   }, [stopCurrent]);
 
   useEffect(() => {
@@ -273,10 +326,70 @@ export function useRfsnAudioPlayback(
       setState("disabled");
       return;
     }
+    if (stateRef.current === "playing") return;
     setState(unlocked ? "ready" : "locked");
   }, [ttsAvailable, unlocked, userEnabled]);
 
-  useEffect(() => () => cleanupAudio(), [cleanupAudio]);
+  // Explicit draft reset — clear persisted session + replay.
+  const lastEpochRef = useRef(sessionEpoch);
+  useEffect(() => {
+    if (sessionEpoch === undefined || sessionEpoch === lastEpochRef.current) return;
+    lastEpochRef.current = sessionEpoch;
+    if (persistKey) clearWarRoomAudioSession(persistKey);
+    lastPlayableRef.current = null;
+    lastCardRef.current = null;
+    setLastPlayable(null);
+    cleanupAudio();
+  }, [sessionEpoch, persistKey, cleanupAudio]);
+
+  // Navigation away: pause + persist; do not destroy unlock/replay.
+  useEffect(() => {
+    if (!persistKey) {
+      return () => cleanupAudio();
+    }
+
+    const session = getWarRoomAudioSession(persistKey);
+    const el = session?.audioEl;
+    if (el && session) {
+      audioRef.current = el;
+      objectUrlRef.current = session.objectUrl;
+      if (session.currentTime > 0 && Math.abs(el.currentTime - session.currentTime) > 0.25) {
+        el.currentTime = session.currentTime;
+      }
+      const handleEnded = () => {
+        setState("ended");
+        cleanupAudio();
+        onEndedRef.current?.();
+      };
+      el.addEventListener("ended", handleEnded, { once: true });
+      if (session.wasPlaying) {
+        void el.play().catch(() => undefined);
+        setState("playing");
+      }
+    }
+
+    return () => {
+      const liveEl = audioRef.current;
+      const wasPlaying = isPlaying();
+      if (liveEl) liveEl.pause();
+      setWarRoomAudioSession(persistKey, {
+        draftId: audioStatus?.draftId ?? session?.draftId ?? "",
+        audioEl: liveEl,
+        objectUrl: objectUrlRef.current,
+        currentTime: liveEl?.currentTime ?? 0,
+        wasPlaying,
+        state: stateRef.current,
+        unlocked: unlockedRef.current,
+        userEnabled: userEnabledRef.current,
+        muted: mutedRef.current,
+        volume: volumeRef.current,
+        lastPlayable: lastPlayableRef.current,
+        lastCard: lastCardRef.current,
+        activePickKey: activePickRef.current,
+      });
+      audioRef.current = null;
+    };
+  }, [persistKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     state,
@@ -288,6 +401,7 @@ export function useRfsnAudioPlayback(
     replayAvailable: Boolean(
       unlocked && lastPlayable?.audioId && lastPlayable.status === "ready",
     ),
+    isPlaying,
     unlockAudio,
     setMuted,
     setVolume,

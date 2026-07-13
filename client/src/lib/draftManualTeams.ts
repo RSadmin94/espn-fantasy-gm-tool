@@ -2,8 +2,9 @@
  * Pure helpers for Live Draft manual-team control — mirrors LiveDraftEngine semantics.
  */
 
-export function buildDefaultManualTeamIds(myTeamId: number | null | undefined): Set<number> {
-  return myTeamId != null ? new Set<number>([myTeamId]) : new Set<number>();
+/** Default: full AI draft — user must explicitly check teams to pause for manual picks. */
+export function buildDefaultManualTeamIds(_myTeamId?: number | null | undefined): Set<number> {
+  return new Set<number>();
 }
 
 export function toggleManualTeamIds(prev: ReadonlySet<number>, teamId: number): Set<number> {
@@ -40,13 +41,13 @@ export function shouldStopClockForManualCheck(input: {
 }
 
 export function manualTeamIdsAfterScheduleIdentityChange(
-  myTeamId: number | null | undefined,
+  _myTeamId?: number | null | undefined,
 ): Set<number> {
-  return buildDefaultManualTeamIds(myTeamId);
+  return buildDefaultManualTeamIds();
 }
 
-export function resetTeamControlsManualIds(myTeamId: number | null | undefined): Set<number> {
-  return buildDefaultManualTeamIds(myTeamId);
+export function resetTeamControlsManualIds(_myTeamId?: number | null | undefined): Set<number> {
+  return buildDefaultManualTeamIds();
 }
 
 export function isAiCountdownActive(input: {

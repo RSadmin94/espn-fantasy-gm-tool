@@ -20,6 +20,17 @@ import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
 import { RfsnPickClock } from "@/components/rfsn/RfsnPickClock";
 import { resolveClockState, isPickManual, MAX_BROADCAST_HOLD_MS, draftPaceFromTimerMs } from "@/lib/draftClock";
 import {
+  buildDefaultManualTeamIds,
+  manualTeamIdsAfterScheduleIdentityChange,
+  resetTeamControlsManualIds,
+} from "@/lib/draftManualTeams";
+import {
+  clearLiveDraftSession,
+  liveDraftSessionStorageKey,
+  readLiveDraftSession,
+  writeLiveDraftSession,
+} from "@/lib/liveDraftSessionStorage";
+import {
   Zap, BarChart2, RefreshCw, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, Info, Trophy, Target,
   ShieldCheck, TrendingUp, Activity, ArrowUpRight, ArrowDownRight,
@@ -571,9 +582,19 @@ function LiveDraftEngine({
     return r;
   }, [schedule]);
 
-  const [results, setResults] = useState<Record<number, any>>(initialResults);
-  const [idx, setIdx]         = useState(0);
-  const [running, setRunning] = useState(false);
+  const [results, setResults] = useState<Record<number, any>>(() => {
+    const key = liveDraftSessionStorageKey(leagueId, draftId, scheduleSig);
+    const saved = readLiveDraftSession(key);
+    return (saved?.results as Record<number, any> | undefined) ?? initialResults;
+  });
+  const [idx, setIdx]         = useState(() => {
+    const key = liveDraftSessionStorageKey(leagueId, draftId, scheduleSig);
+    return readLiveDraftSession(key)?.idx ?? 0;
+  });
+  const [running, setRunning] = useState(() => {
+    const key = liveDraftSessionStorageKey(leagueId, draftId, scheduleSig);
+    return readLiveDraftSession(key)?.running ?? false;
+  });
   const [sort, setSort]       = useState<"adp" | "proj" | "value" | "pos" | "name">("adp");
   const [posFilter, setPos]   = useState<string>("ALL");
   const [searchQ, setSearchQ] = useState("");
@@ -585,10 +606,19 @@ function LiveDraftEngine({
     { key: "brisk", label: "Brisk", ms: 3500 },
     { key: "turbo", label: "Turbo", ms: 450 },
   ] as const;
-  const [paceMs, setPaceMs] = useState<number>(9000);
+  const [paceMs, setPaceMs] = useState<number>(() => {
+    const key = liveDraftSessionStorageKey(leagueId, draftId, scheduleSig);
+    return readLiveDraftSession(key)?.paceMs ?? 9000;
+  });
+
+  const draftSessionKey = liveDraftSessionStorageKey(leagueId, draftId, scheduleSig);
+  const scheduleIdentityInit = useRef(true);
 
   // Seeded AI variation — fresh seed each new draft; replay keeps the same seed.
-  const [draftSeed, setDraftSeed] = useState<number>(() => createRandomDraftSeed());
+  const [draftSeed, setDraftSeed] = useState<number>(() => {
+    const key = liveDraftSessionStorageKey(leagueId, draftId, scheduleSig);
+    return readLiveDraftSession(key)?.draftSeed ?? createRandomDraftSeed();
+  });
   const [replaySameSeed, setReplaySameSeed] = useState(false);
   const [resetCounter, setResetCounter] = useState(0);
   const rngRef = useRef(mulberry32(draftSeed));
@@ -606,18 +636,49 @@ function LiveDraftEngine({
   const holdStartRef = useRef<number>(0);
 
   // ── Manual control (P6) — single source of truth `manualTeamIds`. ────────────
-  // Default: the signed-in user's team. Zero selected = full AI; all selected = fully manual.
   const { myTeamId } = useLeagueContext();
-  const buildDefaultManual = () =>
-    myTeamId != null ? new Set<number>([myTeamId]) : new Set<number>();
-  const [manualTeamIds, setManualTeamIds] = useState<Set<number>>(buildDefaultManual);
-  // Reset selections to the user's team on league/season/schedule identity change (and seed
-  // once myTeamId resolves). User toggles never hit this — myTeamId is stable within a league,
-  // and scheduleSig only changes on a real board/league/season change (never on draft reset).
+  const [pauseOnMyPicks, setPauseOnMyPicks] = useState(() => {
+    const key = liveDraftSessionStorageKey(leagueId, draftId, scheduleSig);
+    return readLiveDraftSession(key)?.pauseOnMyPicks ?? false;
+  });
+  const [manualTeamIds, setManualTeamIds] = useState<Set<number>>(() => {
+    const key = liveDraftSessionStorageKey(leagueId, draftId, scheduleSig);
+    const saved = readLiveDraftSession(key);
+    if (saved?.manualTeamIds?.length) return new Set(saved.manualTeamIds);
+    return buildDefaultManualTeamIds();
+  });
   useEffect(() => {
-    setManualTeamIds(myTeamId != null ? new Set<number>([myTeamId]) : new Set<number>());
+    if (scheduleIdentityInit.current) {
+      scheduleIdentityInit.current = false;
+      return;
+    }
+    setManualTeamIds(manualTeamIdsAfterScheduleIdentityChange());
+    setPauseOnMyPicks(false);
+    clearLiveDraftSession(liveDraftSessionStorageKey(leagueId, draftId, scheduleSig));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scheduleSig, myTeamId]);
+  }, [scheduleSig]);
+
+  useEffect(() => {
+    if (myTeamId == null) return;
+    setManualTeamIds((prev) => {
+      const next = new Set(prev);
+      if (pauseOnMyPicks) next.add(myTeamId);
+      else next.delete(myTeamId);
+      return next;
+    });
+  }, [pauseOnMyPicks, myTeamId]);
+
+  useEffect(() => {
+    writeLiveDraftSession(draftSessionKey, {
+      idx,
+      running,
+      results,
+      manualTeamIds: [...manualTeamIds],
+      pauseOnMyPicks,
+      draftSeed,
+      paceMs,
+    });
+  }, [draftSessionKey, idx, running, results, manualTeamIds, pauseOnMyPicks, draftSeed, paceMs]);
 
   useEffect(() => {
     setResults(initialResults); setIdx(0); setRunning(false);
@@ -833,12 +894,17 @@ function LiveDraftEngine({
       else next.add(teamId);
       return next;
     });
+    if (myTeamId != null && Number(teamId) === myTeamId) {
+      setPauseOnMyPicks(!wasManual);
+    }
     if (wasManual && slot && Number(slot.teamId) === Number(teamId)) setRemainingMs(paceMs);
   }
 
   function resetTeamControls() {
-    setManualTeamIds(myTeamId != null ? new Set<number>([myTeamId]) : new Set<number>());
-    if (slot && (myTeamId == null || Number(slot.teamId) !== myTeamId)) setRemainingMs(paceMs);
+    const wasOnClockManual = Boolean(slot && manualTeamIds.has(Number(slot.teamId)));
+    setPauseOnMyPicks(false);
+    setManualTeamIds(resetTeamControlsManualIds());
+    if (wasOnClockManual) setRemainingMs(paceMs);
   }
 
   function reset(newSeed?: number) {
@@ -851,7 +917,8 @@ function LiveDraftEngine({
     }
     setResults(initialResults); setIdx(0); setRunning(false);
     setHolding(false); setRemainingMs(paceMs);
-    // Manual-team choices (manualTeamIds) are intentionally PRESERVED through draft reset;
+    clearLiveDraftSession(draftSessionKey);
+    // Manual-team choices preserved through draft reset except pause-on-my-picks sync;
     // they reset only on league/season/schedule change or via "Reset team controls".
     if (leagueId) resetSession.mutate?.({ leagueId, draftId });
     setResetCounter((n) => n + 1);
@@ -905,6 +972,17 @@ function LiveDraftEngine({
             </button>
           ))}
         </div>
+        {myTeamId != null && (
+          <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={pauseOnMyPicks}
+              onChange={(e) => setPauseOnMyPicks(e.target.checked)}
+              className="accent-violet-500 h-3.5 w-3.5"
+            />
+            Pause on my picks
+          </label>
+        )}
         <span className="text-[11px] text-zinc-400 tabular-nums ml-1">Pick {Math.min(idx, schedule.length)}/{schedule.length}</span>
         <span className="text-[11px] text-zinc-500 ml-auto">{manualTeamIds.size === 0 ? "Spectating — AI drafts everyone" : manualTeamIds.size >= teams.length ? "Fully manual — you pick every team" : `You control ${manualTeamIds.size} team${manualTeamIds.size > 1 ? "s" : ""}; AI drafts the rest`}</span>
       </div>
@@ -1211,7 +1289,7 @@ function MockDraftBoard({
       {/* Controls bar */}
       <div className="flex items-center gap-2 px-5 py-3 border-b border-white/[0.06] flex-wrap">
         {(["board", "team", "live"] as const).map(v => (
-          <button key={v} onClick={() => { setView(v); if (v === "live") resetSim(); }}
+          <button key={v} onClick={() => setView(v)}
             className={cn("px-3 py-1.5 rounded text-xs font-bold transition-colors",
               view === v ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300")}>
             {v === "live" ? "⚡ Live Draft" : v === "board" ? "Draft Board" : "By Team"}
@@ -1376,8 +1454,8 @@ function MockDraftBoard({
         </div>
       )}
 
-      {/* Live Draft (new stateful engine) */}
-      {view === "live" && (
+      {/* Live Draft (new stateful engine) — stay mounted when switching tabs so draft + audio persist. */}
+      <div className={view !== "live" ? "hidden" : undefined} aria-hidden={view !== "live"}>
         <LiveDraftEngine
           picks={picks}
           teams={teams}
@@ -1386,7 +1464,7 @@ function MockDraftBoard({
           leagueId={leagueId}
           draftId={draftId}
         />
-      )}
+      </div>
 
       {/* Old playback live view (disabled) */}
       {false && view === "live" && !myPick && (

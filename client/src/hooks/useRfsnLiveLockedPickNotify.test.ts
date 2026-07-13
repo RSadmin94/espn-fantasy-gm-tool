@@ -152,6 +152,36 @@ describe("useRfsnLiveLockedPickNotify", () => {
     expect(mocks.mutateAsync.mock.calls[1]![0].pick.playerName).toBe("Josh Allen");
   });
 
+  it("final pick sends draftComplete on the last scheduled pick only", async () => {
+    const schedule = [
+      { pickNumber: 1, round: 1, teamId: 1 },
+      { pickNumber: 2, round: 1, teamId: 2 },
+    ];
+    const { rerender } = renderHook(useRfsnLiveLockedPickNotify, {
+      initialProps: {
+        ...baseProps,
+        schedule,
+        draftComplete: true,
+        results: { 1: { name: "A", position: "WR", id: "a" } },
+      },
+    });
+    await vi.waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mocks.mutateAsync.mock.calls[0]![0].draftComplete).toBe(false);
+
+    rerender({
+      ...baseProps,
+      schedule,
+      draftComplete: true,
+      results: {
+        1: { name: "A", position: "WR", id: "a" },
+        2: { name: "B", position: "QB", id: "b" },
+      },
+    });
+    await vi.waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledTimes(2));
+    expect(mocks.mutateAsync.mock.calls[1]![0].draftComplete).toBe(true);
+    expect(mocks.mutateAsync.mock.calls[1]![0].teamCount).toBe(14);
+  });
+
   it("rapid picks preserve identity in payloads", async () => {
     const { rerender } = renderHook(useRfsnLiveLockedPickNotify, {
       initialProps: baseProps,

@@ -63,6 +63,7 @@ export function buildLockedPickNotifyPayload(input: LockedPickNotifyInput) {
     },
     draftComplete: input.draftComplete ?? false,
     draftPace: input.draftPace,
+    teamCount: input.teamCount,
   };
 }
 

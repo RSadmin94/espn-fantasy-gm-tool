@@ -11,8 +11,8 @@ import {
 } from "./draftManualTeams";
 
 describe("manual team controls", () => {
-  it("defaults to the signed-in user team only", () => {
-    expect([...buildDefaultManualTeamIds(11)]).toEqual([11]);
+  it("defaults to full AI draft (no teams checked)", () => {
+    expect([...buildDefaultManualTeamIds(11)]).toEqual([]);
     expect(buildDefaultManualTeamIds(null).size).toBe(0);
   });
 
@@ -77,17 +77,17 @@ describe("manual team controls", () => {
     expect([...afterReset].sort((a, b) => a - b)).toEqual([7, 11]);
   });
 
-  it("schedule/league identity change resets to the user team", () => {
+  it("schedule/league identity change resets to full AI", () => {
     const dirty = toggleManualTeamIds(new Set([11]), 7);
     expect(dirty.size).toBe(2);
     const reset = manualTeamIdsAfterScheduleIdentityChange(11);
-    expect([...reset]).toEqual([11]);
+    expect(reset.size).toBe(0);
   });
 
-  it("Reset team controls restores user team only", () => {
+  it("Reset team controls clears all manual teams", () => {
     const dirty = toggleManualTeamIds(toggleManualTeamIds(new Set([11]), 7), 3);
     const restored = resetTeamControlsManualIds(11);
-    expect([...restored]).toEqual([11]);
+    expect(restored.size).toBe(0);
     expect(dirty.has(7)).toBe(true);
   });
 });

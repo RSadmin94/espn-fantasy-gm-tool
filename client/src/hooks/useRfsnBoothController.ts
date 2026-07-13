@@ -15,6 +15,9 @@ import {
 } from "@/lib/rfsnBoothPresentation";
 import { usePrefersReducedMotion } from "./usePrefersReducedMotion";
 
+/** Safety cap only — normal advance is audio `ended` or text dwell after onFallback. */
+const AUDIO_SAFETY_FALLBACK_MS = 120_000;
+
 export type RfsnBoothController = {
   cardStates: Record<RfsnCommentatorId, BoothCardState>;
   activeCommentator: RfsnCommentatorId | null;
@@ -40,8 +43,6 @@ export function useRfsnBoothController(
   const sequence = useMemo(() => buildBoothCommentarySequence(snapshot), [snapshot]);
   const sequenceRef = useRef(sequence);
   sequenceRef.current = sequence;
-  // useRfsnAudioPlayback returns a NEW object every render; keep it in a ref so the
-  // activation effect can reach the latest audio without listing it as a dependency.
   const audioRef = useRef(audio);
   audioRef.current = audio;
 
@@ -105,34 +106,37 @@ export function useRfsnBoothController(
           [card.commentator]: "active",
         }));
 
-        if (audioActive && audio) {
+        if (audioActive && audioRef.current) {
           let fallbackScheduled = false;
           const scheduleFallback = () => {
             if (fallbackScheduled) return;
             fallbackScheduled = true;
             scheduleTextExit(card.commentator, index, card.text);
           };
+          const onAudioEnded = () => exitSpeakerRef.current(card.commentator, index, false);
           const tryAudio = () => {
-            audio.playForCard(
-              card,
-              () => exitSpeakerRef.current(card.commentator, index, false),
-              scheduleFallback,
-            );
+            audioRef.current?.playForCard(card, onAudioEnded, scheduleFallback);
           };
           tryAudio();
           audioRetryRef.current = setTimeout(() => {
-            if (audio.state === "loading" || audio.state === "ready") tryAudio();
+            const a = audioRef.current;
+            if (!a) return;
+            if (a.state === "loading" || a.state === "ready") tryAudio();
           }, 1200);
+          // Safety only — never cut a playing clip; advance is driven by `ended`.
           timerRef.current = setTimeout(() => {
-            if (audio.state !== "playing") scheduleFallback();
-          }, 8000);
+            const a = audioRef.current;
+            if (!a) return;
+            if (a.isPlaying?.()) return;
+            scheduleFallback();
+          }, AUDIO_SAFETY_FALLBACK_MS);
           return;
         }
 
         scheduleTextExit(card.commentator, index, card.text);
       }, enterMs);
     },
-    [audio, audioActive, clearTimer, reducedMotion, scheduleTextExit],
+    [audioActive, clearTimer, reducedMotion, scheduleTextExit],
   );
 
   const beginSpeakerRef = useRef(beginSpeaker);
@@ -140,7 +144,7 @@ export function useRfsnBoothController(
 
   exitSpeakerRef.current = (commentator, index, manual) => {
     clearTimer();
-    audio?.stopCurrent();
+    audioRef.current?.stopCurrent();
     const card = sequenceRef.current[index];
     if (!card) {
       finishStandby();
@@ -179,34 +183,19 @@ export function useRfsnBoothController(
     if (activeCommentator !== commentator || sequenceIndexRef.current < 0) return;
     const state = cardStates[commentator];
     if (state !== "active" && state !== "entering") return;
-    audio?.stopCurrent();
+    audioRef.current?.stopCurrent();
     exitSpeakerRef.current(commentator, sequenceIndexRef.current, true);
-  }, [activeCommentator, audio, cardStates]);
+  }, [activeCommentator, cardStates]);
 
   const dismissActive = useCallback(() => {
     if (activeCommentator) dismissFor(activeCommentator);
   }, [activeCommentator, dismissFor]);
 
-  // Semantic identity of the current commentary frame. The activation effect keys off
-  // THIS — not the snapshot / sequence / audio object references — because 2s polling
-  // hands us new object references for identical data, and useRfsnAudioPlayback returns a
-  // fresh `audio` object every render. Depending on those references re-ran this effect on
-  // every render, tearing an active speaker back to standby (and stopping audio) before
-  // beginSpeaker could fire — leaving valid commentary permanently in standby.
-  //
-  // The key includes card TEXT, not just ids: card ids are structural
-  // (`${pickId}:${commentator}:${slot}`) and stay constant when a line is re-generated or
-  // corrected for the same pick, so a text-only revision must still restart the booth.
-  // (Audio-clip URL / status corrections live in audioStatus and are driven separately by
-  // useRfsnAudioPlayback.)
   const snapshotKey = useMemo(() => {
     const sig = (c: RfsnCommentaryCard | null | undefined) => (c ? `${c.id}~${c.text}` : "");
-    return [
-      snapshot.overallPick,
-      sig(snapshot.primary),
-      sig(snapshot.secondary),
-      snapshot.ticker.map((t) => `${t.id}~${t.text}`).join(","),
-    ].join("|");
+    // Ticker lines are consumed incrementally during the booth sequence — polling must
+    // NOT restart the frame when the ticker array grows or gets new object refs.
+    return [snapshot.overallPick, sig(snapshot.primary), sig(snapshot.secondary)].join("|");
   }, [snapshot]);
 
   useEffect(() => {

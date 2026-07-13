@@ -21,6 +21,7 @@ import {
   shouldRenderLiveCommentary,
   type RfsnLivePublicPayload,
 } from "@/lib/rfsnLiveState";
+import { warRoomAudioSessionKey } from "@/lib/rfsnWarRoomAudioSession";
 import { cn } from "@/lib/utils";
 
 const PANEL_POLL_MS = 2000;
@@ -58,11 +59,12 @@ export function RfsnBroadcastPanel({
   const payload = snapshotQ.data as RfsnLivePublicPayload | undefined;
 
   // Hooks run unconditionally (before any early return) — Rules of Hooks.
-  const audio = useRfsnAudioPlayback(ttsAvailable, payload?.audioStatus ?? null);
-
-  useEffect(() => {
-    audio.clearReplay();
-  }, [draftId, sessionResetKey, audio.clearReplay]);
+  const persistKey =
+    leagueId && draftId ? warRoomAudioSessionKey(leagueId, draftId) : undefined;
+  const audio = useRfsnAudioPlayback(ttsAvailable, payload?.audioStatus ?? null, {
+    persistKey,
+    sessionEpoch: sessionResetKey,
+  });
 
   const displaySnapshot = resolveRfsnLiveDisplaySnapshot(payload, "");
   const boothSnapshot =

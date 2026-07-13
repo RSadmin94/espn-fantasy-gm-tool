@@ -114,6 +114,7 @@ export function liveSessionStatusLabel(state: RfsnLiveSessionState): string {
 export function shouldRenderLiveCommentary(payload: RfsnLivePublicPayload): boolean {
   if (!payload.snapshot) return false;
   if (payload.sessionState === "commentary_active") return true;
+  if (payload.sessionState === "draft_complete" && payload.snapshot.primary) return true;
   if (payload.sessionState === "between_picks" && payload.snapshot.primary) return true;
   return false;
 }
