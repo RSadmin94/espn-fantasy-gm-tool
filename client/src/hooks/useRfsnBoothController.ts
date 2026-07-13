@@ -40,6 +40,10 @@ export function useRfsnBoothController(
   const sequence = useMemo(() => buildBoothCommentarySequence(snapshot), [snapshot]);
   const sequenceRef = useRef(sequence);
   sequenceRef.current = sequence;
+  // useRfsnAudioPlayback returns a NEW object every render; keep it in a ref so the
+  // activation effect can reach the latest audio without listing it as a dependency.
+  const audioRef = useRef(audio);
+  audioRef.current = audio;
 
   const [cardStates, setCardStates] = useState(initialCardStates);
   const [activeCommentator, setActiveCommentator] = useState<RfsnCommentatorId | null>(null);
@@ -48,7 +52,6 @@ export function useRfsnBoothController(
   const [consumedTickerIds, setConsumedTickerIds] = useState<Set<string>>(() => new Set());
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const snapshotKeyRef = useRef("");
   const sequenceIndexRef = useRef(-1);
   const audioRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -184,13 +187,31 @@ export function useRfsnBoothController(
     if (activeCommentator) dismissFor(activeCommentator);
   }, [activeCommentator, dismissFor]);
 
-  useEffect(() => {
-    const key = `${snapshot.overallPick}:${snapshot.primary?.id ?? ""}:${snapshot.secondary?.id ?? ""}:${snapshot.ticker.map((t) => t.id).join(",")}`;
-    if (key === snapshotKeyRef.current) return;
-    snapshotKeyRef.current = key;
+  // Semantic identity of the current commentary frame. The activation effect keys off
+  // THIS — not the snapshot / sequence / audio object references — because 2s polling
+  // hands us new object references for identical data, and useRfsnAudioPlayback returns a
+  // fresh `audio` object every render. Depending on those references re-ran this effect on
+  // every render, tearing an active speaker back to standby (and stopping audio) before
+  // beginSpeaker could fire — leaving valid commentary permanently in standby.
+  //
+  // The key includes card TEXT, not just ids: card ids are structural
+  // (`${pickId}:${commentator}:${slot}`) and stay constant when a line is re-generated or
+  // corrected for the same pick, so a text-only revision must still restart the booth.
+  // (Audio-clip URL / status corrections live in audioStatus and are driven separately by
+  // useRfsnAudioPlayback.)
+  const snapshotKey = useMemo(() => {
+    const sig = (c: RfsnCommentaryCard | null | undefined) => (c ? `${c.id}~${c.text}` : "");
+    return [
+      snapshot.overallPick,
+      sig(snapshot.primary),
+      sig(snapshot.secondary),
+      snapshot.ticker.map((t) => `${t.id}~${t.text}`).join(","),
+    ].join("|");
+  }, [snapshot]);
 
+  useEffect(() => {
     clearTimer();
-    audio?.onSnapshotChange();
+    audioRef.current?.onSnapshotChange();
     setConsumedTickerIds(new Set());
     setCardStates(initialCardStates());
     setActiveCommentator(null);
@@ -198,18 +219,18 @@ export function useRfsnBoothController(
     sequenceIndexRef.current = -1;
     setSequenceIndex(-1);
 
-    if (sequence.length === 0) return;
+    const seq = sequenceRef.current;
+    if (seq.length === 0) return;
 
     const startMs = reducedMotion ? 0 : 200;
     timerRef.current = setTimeout(() => {
-      beginSpeakerRef.current(0, sequence[0]!);
+      beginSpeakerRef.current(0, seq[0]!);
     }, startMs);
 
     return () => {
       clearTimer();
-      snapshotKeyRef.current = "";
     };
-  }, [snapshot, sequence, clearTimer, reducedMotion, audio]);
+  }, [snapshotKey, clearTimer, reducedMotion]);
 
   useEffect(() => clearTimer, [clearTimer]);
 
