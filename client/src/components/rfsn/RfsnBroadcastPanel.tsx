@@ -17,10 +17,11 @@ import { RfsnAnalystBooth } from "./RfsnAnalystBooth";
 import { RfsnAudioControls } from "./RfsnAudioControls";
 import {
   liveSessionStatusLabel,
-  resolveRfsnLiveDisplaySnapshot,
+  resolveBoothFeedSnapshot,
   shouldRenderLiveCommentary,
   type RfsnLivePublicPayload,
 } from "@/lib/rfsnLiveState";
+import { warRoomAudioSessionKey } from "@/lib/rfsnWarRoomAudioSession";
 import { cn } from "@/lib/utils";
 
 const PANEL_POLL_MS = 2000;
@@ -58,17 +59,15 @@ export function RfsnBroadcastPanel({
   const payload = snapshotQ.data as RfsnLivePublicPayload | undefined;
 
   // Hooks run unconditionally (before any early return) — Rules of Hooks.
-  const audio = useRfsnAudioPlayback(ttsAvailable, payload?.audioStatus ?? null);
+  const persistKey =
+    leagueId && draftId ? warRoomAudioSessionKey(leagueId, draftId) : undefined;
+  const audio = useRfsnAudioPlayback(ttsAvailable, payload?.audioStatus ?? null, {
+    persistKey,
+    sessionEpoch: sessionResetKey,
+  });
 
-  useEffect(() => {
-    audio.clearReplay();
-  }, [draftId, sessionResetKey, audio.clearReplay]);
-
-  const displaySnapshot = resolveRfsnLiveDisplaySnapshot(payload, "");
-  const boothSnapshot =
-    payload && shouldRenderLiveCommentary(payload) && payload.snapshot
-      ? payload.snapshot
-      : displaySnapshot;
+  const displaySnapshot = resolveBoothFeedSnapshot(payload, "");
+  const boothSnapshot = displaySnapshot;
   const booth = useRfsnBoothController(boothSnapshot, { audio });
   const sequence = buildBoothCommentarySequence(boothSnapshot);
   const isMobile = layout === "mobile";

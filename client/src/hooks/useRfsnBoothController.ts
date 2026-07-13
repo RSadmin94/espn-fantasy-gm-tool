@@ -15,6 +15,9 @@ import {
 } from "@/lib/rfsnBoothPresentation";
 import { usePrefersReducedMotion } from "./usePrefersReducedMotion";
 
+/** Safety cap only — normal advance is audio `ended` or text dwell after onFallback. */
+const AUDIO_SAFETY_FALLBACK_MS = 120_000;
+
 export type RfsnBoothController = {
   cardStates: Record<RfsnCommentatorId, BoothCardState>;
   activeCommentator: RfsnCommentatorId | null;
@@ -35,13 +38,10 @@ export function useRfsnBoothController(
   options: RfsnBoothControllerOptions = {},
 ): RfsnBoothController {
   const audio = options.audio ?? null;
-  const audioActive = Boolean(audio && audio.userEnabled && audio.state !== "disabled");
   const reducedMotion = usePrefersReducedMotion();
   const sequence = useMemo(() => buildBoothCommentarySequence(snapshot), [snapshot]);
   const sequenceRef = useRef(sequence);
   sequenceRef.current = sequence;
-  // useRfsnAudioPlayback returns a NEW object every render; keep it in a ref so the
-  // activation effect can reach the latest audio without listing it as a dependency.
   const audioRef = useRef(audio);
   audioRef.current = audio;
 
@@ -86,6 +86,49 @@ export function useRfsnBoothController(
     }, displayMs);
   }, [reducedMotion]);
 
+  const audioAttemptedKeyRef = useRef<string | null>(null);
+
+  const attemptActiveCardAudio = useCallback(
+    (index: number, card: RfsnCommentaryCard) => {
+      clearTimer();
+      const liveAudio = audioRef.current;
+      if (!liveAudio?.userEnabled) return false;
+
+      let fallbackScheduled = false;
+      const scheduleFallback = () => {
+        if (fallbackScheduled) return;
+        fallbackScheduled = true;
+        scheduleTextExit(card.commentator, index, card.text);
+      };
+      const onAudioEnded = () => exitSpeakerRef.current(card.commentator, index, false);
+      const tryAudio = () => {
+        audioRef.current?.playForCard(card, onAudioEnded, scheduleFallback);
+      };
+      tryAudio();
+
+      if (!liveAudio.unlocked) return false;
+      if (liveAudio.isPlaying?.()) return true;
+      if (liveAudio.state === "loading") return true;
+
+      audioRetryRef.current = setTimeout(() => {
+        const a = audioRef.current;
+        if (!a) return;
+        if (a.state === "loading" || a.state === "ready") tryAudio();
+      }, 1200);
+      timerRef.current = setTimeout(() => {
+        const a = audioRef.current;
+        if (!a) return;
+        if (a.isPlaying?.()) return;
+        scheduleFallback();
+      }, AUDIO_SAFETY_FALLBACK_MS);
+      return true;
+    },
+    [clearTimer, scheduleTextExit],
+  );
+
+  const attemptActiveCardAudioRef = useRef(attemptActiveCardAudio);
+  attemptActiveCardAudioRef.current = attemptActiveCardAudio;
+
   const beginSpeaker = useCallback(
     (index: number, card: RfsnCommentaryCard) => {
       clearTimer();
@@ -105,34 +148,20 @@ export function useRfsnBoothController(
           [card.commentator]: "active",
         }));
 
-        if (audioActive && audio) {
-          let fallbackScheduled = false;
-          const scheduleFallback = () => {
-            if (fallbackScheduled) return;
-            fallbackScheduled = true;
-            scheduleTextExit(card.commentator, index, card.text);
-          };
-          const tryAudio = () => {
-            audio.playForCard(
-              card,
-              () => exitSpeakerRef.current(card.commentator, index, false),
-              scheduleFallback,
-            );
-          };
-          tryAudio();
-          audioRetryRef.current = setTimeout(() => {
-            if (audio.state === "loading" || audio.state === "ready") tryAudio();
-          }, 1200);
+        const liveAudio = audioRef.current;
+        if (!liveAudio?.userEnabled) {
+          scheduleTextExit(card.commentator, index, card.text);
+        } else if (!liveAudio.unlocked) {
+          // Preference on but gesture pending — keep card on-air until unlock or safety timeout.
           timerRef.current = setTimeout(() => {
-            if (audio.state !== "playing") scheduleFallback();
-          }, 8000);
-          return;
+            const a = audioRef.current;
+            if (a?.unlocked || a?.isPlaying?.()) return;
+            scheduleTextExit(card.commentator, index, card.text);
+          }, AUDIO_SAFETY_FALLBACK_MS);
         }
-
-        scheduleTextExit(card.commentator, index, card.text);
       }, enterMs);
     },
-    [audio, audioActive, clearTimer, reducedMotion, scheduleTextExit],
+    [clearTimer, reducedMotion, scheduleTextExit],
   );
 
   const beginSpeakerRef = useRef(beginSpeaker);
@@ -140,7 +169,7 @@ export function useRfsnBoothController(
 
   exitSpeakerRef.current = (commentator, index, manual) => {
     clearTimer();
-    audio?.stopCurrent();
+    audioRef.current?.stopCurrent();
     const card = sequenceRef.current[index];
     if (!card) {
       finishStandby();
@@ -179,39 +208,25 @@ export function useRfsnBoothController(
     if (activeCommentator !== commentator || sequenceIndexRef.current < 0) return;
     const state = cardStates[commentator];
     if (state !== "active" && state !== "entering") return;
-    audio?.stopCurrent();
+    audioRef.current?.stopCurrent();
     exitSpeakerRef.current(commentator, sequenceIndexRef.current, true);
-  }, [activeCommentator, audio, cardStates]);
+  }, [activeCommentator, cardStates]);
 
   const dismissActive = useCallback(() => {
     if (activeCommentator) dismissFor(activeCommentator);
   }, [activeCommentator, dismissFor]);
 
-  // Semantic identity of the current commentary frame. The activation effect keys off
-  // THIS — not the snapshot / sequence / audio object references — because 2s polling
-  // hands us new object references for identical data, and useRfsnAudioPlayback returns a
-  // fresh `audio` object every render. Depending on those references re-ran this effect on
-  // every render, tearing an active speaker back to standby (and stopping audio) before
-  // beginSpeaker could fire — leaving valid commentary permanently in standby.
-  //
-  // The key includes card TEXT, not just ids: card ids are structural
-  // (`${pickId}:${commentator}:${slot}`) and stay constant when a line is re-generated or
-  // corrected for the same pick, so a text-only revision must still restart the booth.
-  // (Audio-clip URL / status corrections live in audioStatus and are driven separately by
-  // useRfsnAudioPlayback.)
   const snapshotKey = useMemo(() => {
     const sig = (c: RfsnCommentaryCard | null | undefined) => (c ? `${c.id}~${c.text}` : "");
-    return [
-      snapshot.overallPick,
-      sig(snapshot.primary),
-      sig(snapshot.secondary),
-      snapshot.ticker.map((t) => `${t.id}~${t.text}`).join(","),
-    ].join("|");
+    // Ticker lines are consumed incrementally during the booth sequence — polling must
+    // NOT restart the frame when the ticker array grows or gets new object refs.
+    return [snapshot.overallPick, sig(snapshot.primary), sig(snapshot.secondary)].join("|");
   }, [snapshot]);
 
   useEffect(() => {
     clearTimer();
     audioRef.current?.onSnapshotChange();
+    audioAttemptedKeyRef.current = null;
     setConsumedTickerIds(new Set());
     setCardStates(initialCardStates());
     setActiveCommentator(null);
@@ -233,6 +248,54 @@ export function useRfsnBoothController(
   }, [snapshotKey, clearTimer, reducedMotion]);
 
   useEffect(() => clearTimer, [clearTimer]);
+
+  // Attempt playback once a card reaches "active". Unlock transitions are owned by the
+  // dedicated "just unlocked" effect below — so unlocked/userEnabled are intentionally NOT
+  // deps here. Including them made this effect re-fire on unlock and issue a second
+  // playForCard for the already-active card (harmless via the hook's idempotent gate, but
+  // a redundant double-attempt). One attempt per activation; the unlock effect owns re-attempts.
+  useEffect(() => {
+    if (!activeCard || activeCommentator == null || sequenceIndexRef.current < 0) return;
+    if (cardStates[activeCommentator] !== "active") return;
+    attemptActiveCardAudioRef.current(sequenceIndexRef.current, activeCard);
+  }, [
+    activeCard,
+    activeCommentator,
+    cardStates,
+  ]);
+
+  const unlockRetryRef = useRef(false);
+  const wasUnlockedRef = useRef(false);
+  const activeCardIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeCard?.id !== activeCardIdRef.current) {
+      activeCardIdRef.current = activeCard?.id ?? null;
+      unlockRetryRef.current = false;
+      audioAttemptedKeyRef.current = null;
+    }
+  }, [activeCard?.id]);
+
+  // User unlocks after a line started in text-only mode — switch the active card to audio.
+  useEffect(() => {
+    const nowUnlocked = Boolean(audio?.userEnabled && audio?.unlocked);
+    const justUnlocked = nowUnlocked && !wasUnlockedRef.current;
+    wasUnlockedRef.current = nowUnlocked;
+    if (!justUnlocked) return;
+    if (!activeCard || activeCommentator == null || sequenceIndexRef.current < 0) return;
+    if (cardStates[activeCommentator] !== "active") return;
+    if (unlockRetryRef.current) return;
+    unlockRetryRef.current = true;
+    audioAttemptedKeyRef.current = null;
+    clearTimer();
+    attemptActiveCardAudioRef.current(sequenceIndexRef.current, activeCard);
+  }, [
+    audio?.unlocked,
+    audio?.userEnabled,
+    activeCard,
+    activeCommentator,
+    cardStates,
+    clearTimer,
+  ]);
 
   const filteredTicker = useMemo(
     () => filterTickerForBooth(snapshot.ticker, activeCard, consumedTickerIds),

@@ -103,6 +103,7 @@ beforeEach(() => {
     revokeObjectURL: vi.fn(),
   });
   try { localStorage.clear(); } catch { /* ignore */ }
+  try { sessionStorage.clear(); } catch { /* ignore */ }
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -238,23 +239,76 @@ describe("useRfsnAudioPlayback — deterministic lifecycle harness", () => {
     expect(MockAudio.instances.length).toBe(0); // never created audio -> text fallback
   });
 
-  it("[unlock] a line that arrived while locked plays as soon as the user unlocks", async () => {
+  it("[unlock] clip ready before unlock: locked line waits, then plays on gesture", async () => {
     const onEnded = vi.fn();
     const onFallback = vi.fn();
     const view = renderHook(
       ({ tts, s }: { tts: boolean; s: RfsnLiveAudioStatus }) => useRfsnAudioPlayback(tts, s),
       { initialProps: { tts: true, s: status("pick-9", [{ commentaryId: CID }]) } },
     );
-    // Locked (no user gesture yet): the on-air line must fall back to text, create no audio.
     await act(async () => view.result.current.playForCard(card(CID), onEnded, onFallback));
     await flushPlayback();
-    expect(onFallback).toHaveBeenCalledTimes(1);
+    expect(onFallback).not.toHaveBeenCalled();
+    expect(view.result.current.state).toBe("locked");
     expect(MockAudio.instances.length).toBe(0);
-    // Real gesture unlock -> the pending line plays immediately (root-cause fix for no sound).
     await act(async () => view.result.current.unlockAudio());
     await flushPlayback();
     expect(MockAudio.instances.length).toBe(1);
     expect(last().paused).toBe(false);
+    expect(onFallback).not.toHaveBeenCalled();
+  });
+
+  it("[race] unlock before clip ready: one play after pending → ready", async () => {
+    const onEnded = vi.fn();
+    const onFallback = vi.fn();
+    const pendingStatus = status("pick-9", [{ commentaryId: CID, status: "pending", audioId: undefined }]);
+    const view = renderHook(
+      ({ tts, s }: { tts: boolean; s: RfsnLiveAudioStatus }) => useRfsnAudioPlayback(tts, s),
+      { initialProps: { tts: true, s: pendingStatus } },
+    );
+    await act(async () => view.result.current.unlockAudio());
+    await act(async () => view.result.current.playForCard(card(CID), onEnded, onFallback));
+    await flushPlayback();
+    expect(MockAudio.instances.length).toBe(0);
+    expect(onFallback).not.toHaveBeenCalled();
+    expect(view.result.current.state).toBe("loading");
+    const readyStatus = status("pick-9", [{ commentaryId: CID, status: "ready" }]);
+    view.rerender({ tts: true, s: readyStatus });
+    await flushPlayback();
+    expect(MockAudio.instances.length).toBe(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(last().paused).toBe(false);
+    view.rerender({ tts: true, s: readyStatus });
+    await flushPlayback();
+    expect(MockAudio.instances.length).toBe(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("[race] failed clip after unlock invokes fallback once and does not fetch", async () => {
+    const onEnded = vi.fn();
+    const onFallback = vi.fn();
+    const view = renderHook(
+      ({ tts, s }: { tts: boolean; s: RfsnLiveAudioStatus }) => useRfsnAudioPlayback(tts, s),
+      { initialProps: {
+        tts: true,
+        s: status("pick-9", [{ commentaryId: CID, status: "pending", audioId: undefined }]),
+      } },
+    );
+    act(() => view.result.current.unlockAudio());
+    await act(async () => view.result.current.playForCard(card(CID), onEnded, onFallback));
+    view.rerender({
+      tts: true,
+      s: status("pick-9", [{ commentaryId: CID, status: "failed" }]),
+    });
+    await flushPlayback();
+    expect(onFallback).toHaveBeenCalledTimes(1);
+    expect(MockAudio.instances.length).toBe(0);
+    view.rerender({
+      tts: true,
+      s: status("pick-9", [{ commentaryId: CID, status: "failed" }]),
+    });
+    await flushPlayback();
+    expect(onFallback).toHaveBeenCalledTimes(1);
   });
 
   it("[replay] stores last playable clip and replayCurrent reuses it", async () => {

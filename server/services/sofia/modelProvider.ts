@@ -31,6 +31,8 @@ export class SofiaProviderError extends Error {
 export interface DeepSeekProviderOptions {
   model?: string;
   timeoutMs?: number;
+  /** Sampling temperature. Default 0 (classification / grounding). Voice generation uses ~0.9. */
+  temperature?: number;
   /** Request DeepSeek's API-enforced JSON output. Default true. */
   jsonMode?: boolean;
 }
@@ -47,11 +49,13 @@ const DEFAULT_TIMEOUT_MS = 20_000;
 export class DeepSeekProvider implements SofiaModelProvider {
   private readonly model: string;
   private readonly timeoutMs: number;
+  private readonly temperature: number;
   private readonly jsonMode: boolean;
 
   constructor(opts: DeepSeekProviderOptions = {}) {
     this.model = opts.model ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_MODEL;
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.temperature = opts.temperature ?? 0;
     this.jsonMode = opts.jsonMode ?? true;
   }
 
@@ -71,7 +75,7 @@ export class DeepSeekProvider implements SofiaModelProvider {
         body: JSON.stringify({
           model: this.model,
           messages: [{ role: "user", content: prompt }],
-          temperature: 0,
+          temperature: this.temperature,
           max_tokens: 512,
           // Non-thinking mode. This is a JSON truth-classification, not a reasoning task. DeepSeek V4
           // enables thinking by DEFAULT; leaving it on let reasoning tokens consume the whole completion

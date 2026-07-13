@@ -114,6 +114,19 @@ export function liveSessionStatusLabel(state: RfsnLiveSessionState): string {
 export function shouldRenderLiveCommentary(payload: RfsnLivePublicPayload): boolean {
   if (!payload.snapshot) return false;
   if (payload.sessionState === "commentary_active") return true;
+  if (payload.sessionState === "commentary_pending") return true;
+  if (payload.sessionState === "draft_complete" && payload.snapshot.primary) return true;
   if (payload.sessionState === "between_picks" && payload.snapshot.primary) return true;
   return false;
+}
+
+/** Booth feed snapshot — same resolution as RfsnBroadcastPanel. */
+export function resolveBoothFeedSnapshot(
+  payload: RfsnLivePublicPayload | null | undefined,
+  leagueName = "",
+): RfsnBroadcastSnapshot {
+  const displaySnapshot = resolveRfsnLiveDisplaySnapshot(payload, leagueName);
+  return payload && shouldRenderLiveCommentary(payload) && payload.snapshot
+    ? payload.snapshot
+    : displaySnapshot;
 }

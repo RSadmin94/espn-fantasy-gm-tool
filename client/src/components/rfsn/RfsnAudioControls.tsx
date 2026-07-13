@@ -11,8 +11,9 @@ type RfsnAudioControlsProps = {
 export function RfsnAudioControls({ audio, ttsAvailable, className }: RfsnAudioControlsProps) {
   if (!ttsAvailable) return null;
 
-  // "locked" = enabled preference but no user gesture yet this session (autoplay guard).
-  const locked = !audio.unlocked && audio.state !== "disabled";
+  // Show unlock when preference is off OR autoplay gesture not granted this session.
+  // Do not gate on audio.state — "disabled" before TTS loads must not masquerade as "Audio on".
+  const showUnlock = !audio.userEnabled || !audio.unlocked;
 
   return (
     <div
@@ -21,7 +22,7 @@ export function RfsnAudioControls({ audio, ttsAvailable, className }: RfsnAudioC
         className,
       )}
     >
-      {locked ? (
+      {showUnlock ? (
         <button
           type="button"
           onClick={audio.unlockAudio}

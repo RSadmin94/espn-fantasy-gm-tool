@@ -67,6 +67,10 @@ function mockAudio(overrides: Partial<RfsnAudioPlayback> = {}): RfsnAudioPlaybac
     userEnabled: true,
     muted: false,
     volume: 1,
+    unlocked: true,
+    lastPlayable: null,
+    replayAvailable: false,
+    isPlaying: () => false,
     stopCurrent: vi.fn(),
     playForCard: vi.fn(),
     onSnapshotChange: vi.fn(),
@@ -74,6 +78,7 @@ function mockAudio(overrides: Partial<RfsnAudioPlayback> = {}): RfsnAudioPlaybac
     setMuted: vi.fn(),
     setVolume: vi.fn(),
     replayCurrent: vi.fn(),
+    clearReplay: vi.fn(),
     ...overrides,
   } as unknown as RfsnAudioPlayback;
 }
@@ -208,6 +213,20 @@ describe("useRfsnBoothController — new frames, audio independence, silence", (
     expect(result.current.cardStates.coach).toBe("active");
   });
 
+  it("[8b] preference on but locked registers card and waits for gesture", () => {
+    const audio = mockAudio({ unlocked: false, userEnabled: true });
+    const { result } = renderHook(
+      (s: RfsnBroadcastSnapshot) => useRfsnBoothController(s, { audio }),
+      { initialProps: snap({ pick: "9.01", primary: mkCard("coach", "c-9") }) },
+    );
+    settle();
+    expect(result.current.activeCommentator).toBe("coach");
+    expect(result.current.cardStates.coach).toBe("active");
+    expect(audio.playForCard).toHaveBeenCalledTimes(1);
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(result.current.cardStates.coach).toBe("active");
+  });
+
   it("[8] audio enabled starts playback for the active card", () => {
     const audio = mockAudio({ state: "ready", userEnabled: true });
     const { result } = renderHook(
@@ -258,7 +277,7 @@ describe("useRfsnBoothController — new frames, audio independence, silence", (
   it("[11] a corrected line for the same pick (same id, new text) restarts the booth", () => {
     const audio = mockAudio();
     const cardWith = (text: string): RfsnCommentaryCard => ({
-      id: "9:coach:primary", // structural id — identical across the correction
+      id: "9:coach:primary",
       commentator: "coach",
       label: "ROLE",
       text,
@@ -270,10 +289,35 @@ describe("useRfsnBoothController — new frames, audio independence, silence", (
     settle();
     expect(result.current.activeCard?.text).toBe("Original line.");
     (audio.onSnapshotChange as ReturnType<typeof vi.fn>).mockClear();
-    // Same pick + same card id, but the line was re-generated with corrected text.
     rerender(snap({ pick: "9.01", primary: cardWith("Corrected line.") }));
     settle();
-    expect(audio.onSnapshotChange).toHaveBeenCalled(); // frame restarted
-    expect(result.current.activeCard?.text).toBe("Corrected line."); // shows the new content
+    expect(audio.onSnapshotChange).toHaveBeenCalled();
+    expect(result.current.activeCard?.text).toBe("Corrected line.");
+  });
+
+  it("[12] ticker growth on poll does NOT reset the active speaker", () => {
+    const audio = mockAudio();
+    const primary = mkCard("coach", "c-9");
+    const { result, rerender } = renderHook(
+      (s: RfsnBroadcastSnapshot) => useRfsnBoothController(s, { audio }),
+      {
+        initialProps: snap({
+          pick: "9.01",
+          primary,
+          secondary: undefined,
+        }),
+      },
+    );
+    settle();
+    expect(result.current.activeCommentator).toBe("coach");
+    (audio.onSnapshotChange as ReturnType<typeof vi.fn>).mockClear();
+    const withTicker = snap({ pick: "9.01", primary });
+    withTicker.ticker = [
+      { id: "t1", text: "New ticker line.", commentator: "roxanne" as const, label: "X" },
+    ];
+    rerender(withTicker);
+    settle();
+    expect(result.current.activeCommentator).toBe("coach");
+    expect(audio.onSnapshotChange).not.toHaveBeenCalled();
   });
 });
