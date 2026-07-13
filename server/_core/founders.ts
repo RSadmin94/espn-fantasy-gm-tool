@@ -26,6 +26,7 @@ export const FOUNDER_CLERK_IDS: ReadonlySet<string> = new Set<string>([
 // account's first login has been mapped to a Clerk id).
 export const FOUNDER_EMAILS: ReadonlySet<string> = new Set<string>([
   "flurrysports@gmail.com", // Zach Brunner / FlurrySports — full access (beta tester)
+  "stylsz22@gmail.com", // Lozell Styles — full access (beta tester)
   // TODO(founder-list): add Mark + Demetri sign-in emails, lowercased.
 ]);
 
