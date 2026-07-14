@@ -117,6 +117,7 @@ export function buildDraftWrapUpBroadcastMoment(
     verifiedFacts: claims,
     storylines: ["DRAFT_WRAP_UP"],
     entities: [...entities],
+    significance: "historic",
   };
 
   return leagueEventToBroadcastMoment({

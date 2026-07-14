@@ -26,6 +26,8 @@ export interface FactPacket {
   verifiedFacts: string[];
   storylines?: string[];
   entities: string[];
+  /** When set, prompts scale length (routine concise vs longer analysis). */
+  significance?: "routine" | "notable" | "major" | "historic";
 }
 
 export interface PersonalityModule {
@@ -64,9 +66,23 @@ const SHARED_RULES = `HARD RULES (never break):
 - Round and pick labels in your line MUST match VERIFIED FACTS (if the moment is round 12, never say sixth-round or round 6).
 - You may name ONLY the people and players listed in ALLOWED NAMES. Never mention any other player, person, coach, or team — not even as a comparison ("the next ___"). If a name is not in ALLOWED NAMES, you do not know it and must not say it.
 - Never present opinion or speculation as established fact. Your "premise" field MUST quote or closely paraphrase one VERIFIED FACT you rely on.
-- One or two short sentences. Fantasy football only; never cruel, never personal.
+- NEVER write transaction-log wording: ban the exact shape "Owner selected Player (POS) at pick N, round R." Explain why the pick matters in your voice using verified evidence / league context when present.
+- Fantasy football only; never cruel, never personal.
 
 Return ONLY JSON: {"line":"<your line>","premise":"<the single verified fact you lean on>"}`;
+
+function lengthGuidance(significance?: FactPacket["significance"]): string {
+  if (significance === "routine") {
+    return "LENGTH: one concise sentence. Routine pick — stay short.";
+  }
+  if (significance === "major" || significance === "historic") {
+    return "LENGTH: one or two sentences. Longer analysis is reserved for this moment — use extra verified facts or league context when available.";
+  }
+  if (significance === "notable") {
+    return "LENGTH: usually one sentence; a short second sentence only when a second verified fact or storyline adds why it matters.";
+  }
+  return "LENGTH: one or two short sentences.";
+}
 
 export function buildVoicePrompt(packet: FactPacket, p: PersonalityModule, correction?: string): string {
   const facts = packet.verifiedFacts.map((f, i) => `${i + 1}. ${f}`).join("\n");
@@ -75,10 +91,14 @@ export function buildVoicePrompt(packet: FactPacket, p: PersonalityModule, corre
   const correctionBlock = correction
     ? `\nCORRECTION REQUIRED: ${correction}\nRewrite in one or two sentences. Do not repeat the mistake.\n`
     : "";
+  const significanceLine = packet.significance
+    ? `SIGNIFICANCE: ${packet.significance}\n${lengthGuidance(packet.significance)}\n`
+    : `${lengthGuidance(packet.significance)}\n`;
   return `${p.persona}
 
 ${SHARED_RULES}
 ${correctionBlock}
+${significanceLine}
 ALLOWED NAMES (the ONLY people/players you may mention): ${packet.entities.join(", ")}
 
 VERIFIED FACTS:

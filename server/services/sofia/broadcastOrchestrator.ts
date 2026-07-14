@@ -159,7 +159,11 @@ export class BroadcastOrchestrator {
       return frame;
     }
 
-    const voiceAttempts = await this.executeVoices(moment.factPacket, assignment.request, epoch, options);
+    const packetForVoices: typeof moment.factPacket = {
+      ...moment.factPacket,
+      significance: moment.factPacket.significance ?? moment.significance,
+    };
+    const voiceAttempts = await this.executeVoices(packetForVoices, assignment.request, epoch, options);
 
     const stale =
       epoch !== this.generationEpoch ||

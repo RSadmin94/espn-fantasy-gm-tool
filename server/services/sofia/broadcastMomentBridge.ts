@@ -31,6 +31,7 @@ export function draftMomentToFactPacket(moment: DraftMoment): FactPacket {
     ],
     storylines: [moment.primaryStoryline, moment.secondaryStoryline].filter((s): s is string => Boolean(s)),
     entities: [moment.owner.ownerName, moment.player.playerName],
+    significance: moment.level,
   };
 }
 
