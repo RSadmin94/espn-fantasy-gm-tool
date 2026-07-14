@@ -4,7 +4,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { router, protectedProcedure } from "./_core/trpc";
-import { canAccessRfsnLiveBroadcast, isRfsnLiveBroadcastEnabled } from "./services/sofia/liveBroadcastFeature";
+import { canAccessRfsnLiveBroadcast, isRfsnLiveBroadcastEnabled, isRfsnVoiceBeta } from "./services/sofia/liveBroadcastFeature";
 import { isRfsnTtsEnabled, isRfsnTtsConfigured } from "./services/rfsn/rfsnTtsConfig";
 import { getLiveAudioStatus } from "./services/rfsn/rfsnVoiceAudioCache";
 import {
@@ -59,7 +59,8 @@ export const rfsnBroadcastRouter = router({
   getAccess: protectedProcedure.query(({ ctx }) => ({
     enabled: isRfsnLiveBroadcastEnabled(),
     canAccess: canAccessRfsnLiveBroadcast(ctx.user),
-    ttsEnabled: isRfsnTtsEnabled() && isRfsnTtsConfigured(),
+    // Voice off by default — match client RFSN_VOICE_BETA.
+    ttsEnabled: isRfsnVoiceBeta() && isRfsnTtsEnabled() && isRfsnTtsConfigured(),
   })),
 
   getLiveSnapshot: protectedProcedure
@@ -120,7 +121,8 @@ export const rfsnBroadcastRouter = router({
       scheduleLiveBroadcastForDraftMoment(draftMoment, {
         draftComplete: input.draftComplete,
         teamCount: input.teamCount,
-        useDeterministicProvider: input.useDeterministicProvider ?? false,
+        // Written launch path: deterministic provider so cards never depend on live LLM/TTS.
+        useDeterministicProvider: input.useDeterministicProvider ?? !isRfsnVoiceBeta(),
       });
 
       return { accepted: true, pickId: draftMoment.eventId };

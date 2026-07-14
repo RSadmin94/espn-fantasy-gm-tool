@@ -11,6 +11,14 @@ export function isRfsnLiveBroadcastEnabled(): boolean {
   return process.env.RFSN_LIVE_BROADCAST_ENABLED === "true";
 }
 
+/**
+ * Voice/TTS beta. Default false — written commentary is the launch path and uses the
+ * deterministic voice provider (no live LLM dependency for booth cards).
+ */
+export function isRfsnVoiceBeta(): boolean {
+  return process.env.RFSN_VOICE_BETA === "true";
+}
+
 /** Internal beta: founders, staff, or beta-demo premium users when flag is on. */
 export function canAccessRfsnLiveBroadcast(user: User | null | undefined): boolean {
   if (!isRfsnLiveBroadcastEnabled()) return false;

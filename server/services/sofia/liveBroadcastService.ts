@@ -355,6 +355,45 @@ export async function processDraftWrapUp(
   });
 
   if (!result) {
+    // Never leave the session stuck in commentary_pending after a failed wrap-up.
+    const claims = [
+      `Draft complete: ${summary.totalPicks} picks across ${summary.teamCount} teams.`,
+    ];
+    updateLiveSession(input.leagueId, input.draftId, {
+      state: "draft_complete",
+      payload: {
+        schemaVersion: 1,
+        sessionState: "draft_complete",
+        snapshot: {
+          round: 1,
+          pickInRound: 1,
+          overallPick: String(summary.totalPicks),
+          onClockTeam: "Draft complete",
+          clockSeconds: 0,
+          draftOrder: [],
+          board: [],
+          significance: "historic",
+          momentMeter: 1,
+          championshipOdds: [],
+          ticker: [],
+          queue: [],
+          primary: {
+            id: `${eventId}:sofia:primary`,
+            commentator: "sofia",
+            label: "Wrap-Up",
+            text: claims[0]!,
+          },
+        },
+        activePickIdentity: {
+          draftId: input.draftId,
+          pickNumber: summary.totalPicks,
+          pickId: eventId,
+        },
+        frameStatus: "fallback",
+        generatedAt: new Date().toISOString(),
+        draftComplete: true,
+      },
+    });
     return getLiveSessionPayload(input.leagueId, input.draftId);
   }
 
