@@ -55,11 +55,64 @@ describe("liveBroadcastService", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns null with zero provider work when flag disabled", async () => {
-    process.env[ENV_KEY] = "false";
-    const result = await processLockedDraftMoment(dm(), { useDeterministicProvider: true });
-    expect(result).toBeNull();
-    expect(getLiveBroadcastTelemetrySnapshot()).toHaveLength(0);
+  it("preserves prior booth snapshot while commentary_pending", async () => {
+    const first = dm({ overallPick: 5, eventId: "LIVE:draft:5", level: "notable", signals: ["STEAL"] });
+    const firstResult = await buildLiveBroadcastFrame({
+      moment: draftMomentToBroadcastMoment(first),
+      leagueId: first.leagueId,
+      draftId: first.draftId,
+      draftMoment: first,
+      useDeterministicProvider: true,
+    });
+    expect(firstResult?.publicPayload.snapshot?.primary?.text).toBeTruthy();
+    const priorText = firstResult!.publicPayload.snapshot!.primary!.text;
+
+    let pendingSnapshotText: string | null | undefined;
+    const identity = {
+      kind: "draft_pick" as const,
+      draftId: first.draftId,
+      pickNumber: 6,
+      pickId: "LIVE:draft:6",
+    };
+    const spy = vi
+      .spyOn(await import("./liveBroadcastOrchestratorFactory"), "createDeterministicLiveOrchestrator")
+      .mockReturnValue({
+        buildFrame: async () => {
+          pendingSnapshotText = getLiveSession(first.leagueId, first.draftId)?.payload.snapshot?.primary?.text ?? null;
+          return {
+            public: {
+              status: "ready",
+              generatedAt: new Date().toISOString(),
+              identity,
+              primaryVoice: {
+                voice: "coach",
+                accepted: true,
+                text: "Next construction note.",
+                premise: "x",
+              },
+              secondaryVoice: null,
+              deferredVoices: [],
+              context: { kind: "none" },
+              significance: "notable",
+              headline: null,
+              momentType: "draft_pick",
+            },
+            diagnostics: { stale: false, voiceAttempts: [], providerFailures: [] },
+          };
+        },
+      } as any);
+
+    const second = dm({ overallPick: 6, eventId: "LIVE:draft:6", level: "notable", signals: ["STEAL"] });
+    await buildLiveBroadcastFrame({
+      moment: draftMomentToBroadcastMoment(second),
+      leagueId: second.leagueId,
+      draftId: second.draftId,
+      draftMoment: second,
+      useDeterministicProvider: true,
+    });
+
+    expect(pendingSnapshotText).toBe(priorText);
+    spy.mockRestore();
   });
 
   it("builds public snapshot without diagnostics when enabled", async () => {

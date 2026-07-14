@@ -200,12 +200,16 @@ export async function buildLiveBroadcastFrame(
   const identity = pickIdentityFromMoment(input.moment, input.draftId);
   const draftComplete = Boolean(input.markDraftComplete);
 
+  // Keep the previous booth snapshot during generation so an in-flight card is not
+  // wiped to standby (and so dwell can finish) before the next frame is ready.
+  const priorSnapshot = getLiveSession(input.leagueId, input.draftId)?.payload.snapshot ?? null;
+
   updateLiveSession(input.leagueId, input.draftId, {
     state: "commentary_pending",
     payload: {
       schemaVersion: 1,
       sessionState: "commentary_pending",
-      snapshot: null,
+      snapshot: priorSnapshot,
       activePickIdentity: identity,
       frameStatus: "pending",
       generatedAt: null,
@@ -355,45 +359,6 @@ export async function processDraftWrapUp(
   });
 
   if (!result) {
-    // Never leave the session stuck in commentary_pending after a failed wrap-up.
-    const claims = [
-      `Draft complete: ${summary.totalPicks} picks across ${summary.teamCount} teams.`,
-    ];
-    updateLiveSession(input.leagueId, input.draftId, {
-      state: "draft_complete",
-      payload: {
-        schemaVersion: 1,
-        sessionState: "draft_complete",
-        snapshot: {
-          round: 1,
-          pickInRound: 1,
-          overallPick: String(summary.totalPicks),
-          onClockTeam: "Draft complete",
-          clockSeconds: 0,
-          draftOrder: [],
-          board: [],
-          significance: "historic",
-          momentMeter: 1,
-          championshipOdds: [],
-          ticker: [],
-          queue: [],
-          primary: {
-            id: `${eventId}:sofia:primary`,
-            commentator: "sofia",
-            label: "Wrap-Up",
-            text: claims[0]!,
-          },
-        },
-        activePickIdentity: {
-          draftId: input.draftId,
-          pickNumber: summary.totalPicks,
-          pickId: eventId,
-        },
-        frameStatus: "fallback",
-        generatedAt: new Date().toISOString(),
-        draftComplete: true,
-      },
-    });
     return getLiveSessionPayload(input.leagueId, input.draftId);
   }
 

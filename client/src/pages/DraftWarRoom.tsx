@@ -18,13 +18,19 @@ import { buildRfsnLiveDraftId } from "@/lib/rfsnLiveDraftId";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
 import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
 import { RfsnPickClock } from "@/components/rfsn/RfsnPickClock";
-import { resolveClockState, isPickManual, MAX_BROADCAST_HOLD_MS, draftPaceFromTimerMs, nextBroadcastHoldState } from "@/lib/draftClock";
+import { resolveClockState, MAX_BROADCAST_HOLD_MS, draftPaceFromTimerMs, nextBroadcastHoldState } from "@/lib/draftClock";
 import {
   buildDefaultManualTeamIds,
+  formatManualOwnerLabel,
+  isTeamPausedForManualPick,
   manualTeamIdsAfterScheduleIdentityChange,
   resetTeamControlsManualIds,
+  shouldRefreshClockOnManualUncheck,
+  shouldStopClockForManualCheck,
+  toggleManualTeamIds,
 } from "@/lib/draftManualTeams";
 import {
+  buildLiveDraftScheduleSig,
   clearAllLiveDraftSessionsForDraft,
   clearLiveDraftSession,
   liveDraftSessionStorageKey,
@@ -565,7 +571,7 @@ function LiveDraftEngine({
   const schedule = useMemo(() => [...picks].sort((a, b) => a.pickNumber - b.pickNumber), [picks]);
   // Content signature so the draft only resets when the ACTUAL board changes — not when a parent
   // re-render hands us a fresh-but-identical picks array (which was wiping the draft mid-pick).
-  const scheduleSig = useMemo(() => schedule.map((s: any) => `${s.pickNumber}:${s.teamId}:${s.player ?? ""}`).join("|"), [schedule]);
+  const scheduleSig = useMemo(() => buildLiveDraftScheduleSig(schedule), [schedule]);
   const totalRounds = useMemo(() => schedule.reduce((m, s) => Math.max(m, Number(s.round) || 0), 0), [schedule]);
 
   // Keeper slots are pre-filled before the draft starts
@@ -614,6 +620,7 @@ function LiveDraftEngine({
 
   const draftSessionKey = liveDraftSessionStorageKey(leagueId, draftId, scheduleSig);
   const scheduleIdentityInit = useRef(true);
+  const scheduleResetInit = useRef(true);
 
   // Seeded AI variation — fresh seed each new draft; replay keeps the same seed.
   const [draftSeed, setDraftSeed] = useState<number>(() => {
@@ -660,15 +667,7 @@ function LiveDraftEngine({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleSig]);
 
-  useEffect(() => {
-    if (myTeamId == null) return;
-    setManualTeamIds((prev) => {
-      const next = new Set(prev);
-      if (pauseOnMyPicks) next.add(myTeamId);
-      else next.delete(myTeamId);
-      return next;
-    });
-  }, [pauseOnMyPicks, myTeamId]);
+  // "Pause on my picks" is a separate preference — never writes into manualTeamIds.
 
   useEffect(() => {
     writeLiveDraftSession(draftSessionKey, {
@@ -683,6 +682,10 @@ function LiveDraftEngine({
   }, [draftSessionKey, idx, running, results, manualTeamIds, pauseOnMyPicks, draftSeed, paceMs]);
 
   useEffect(() => {
+    if (scheduleResetInit.current) {
+      scheduleResetInit.current = false;
+      return;
+    }
     setResults(initialResults); setIdx(0); setRunning(false);
     setHolding(false); setRemainingMs(paceMs);
     if (timer.current) clearTimeout(timer.current);
@@ -763,7 +766,16 @@ function LiveDraftEngine({
 
   const slot = schedule[idx];
   const done = idx >= schedule.length;
-  const awaitingUser = !!slot && !slot.isKeeperSlot && isPickManual(manualTeamIds, slot?.teamId) && !results[slot.pickNumber];
+  const awaitingUser =
+    !!slot &&
+    !slot.isKeeperSlot &&
+    !results[slot.pickNumber] &&
+    isTeamPausedForManualPick({
+      manualTeamIds,
+      teamId: slot?.teamId,
+      pauseOnMyPicks,
+      myTeamId,
+    });
   const onClock = slot ? teams.find((t: any) => Number(t.teamId) === Number(slot.teamId)) : null;
 
   useRfsnLiveLockedPickNotify({
@@ -857,8 +869,9 @@ function LiveDraftEngine({
     setIdx((i) => i + 1);
   }, [remainingMs, running, done, holding, onClockIsManual, schedule, idx, totalRounds, availablePool]);
 
-  // Reactive broadcast pause — freeze ONLY while a written card is on air (busy).
-  // Pending LLM generation does not hold. Watchdog force-clear cannot re-arm until busy ends.
+  // Reactive broadcast pause — freeze while a written card is on air OR while
+  // commentary is pending (so Turbo locks cannot race past a 6s dwell).
+  // Watchdog force-clear cannot re-arm until busy ends.
   useEffect(() => {
     const next = nextBroadcastHoldState({
       broadcastBusy,
@@ -896,26 +909,34 @@ function LiveDraftEngine({
 
   // Toggle a team's manual control (single source of truth). Checking the on-clock AI team
   // stops its clock instantly (counting halts). Unchecking the on-clock manual team starts a
-  // fresh full countdown.
+  // fresh full countdown. Does not couple to "Pause on my picks".
   function toggleManual(teamId: number) {
     const wasManual = manualTeamIds.has(teamId);
-    setManualTeamIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(teamId)) next.delete(teamId);
-      else next.add(teamId);
-      return next;
-    });
-    if (myTeamId != null && Number(teamId) === myTeamId) {
-      setPauseOnMyPicks(!wasManual);
+    setManualTeamIds((prev) => toggleManualTeamIds(prev, teamId));
+    if (
+      shouldRefreshClockOnManualUncheck({
+        wasManual,
+        teamId,
+        onClockTeamId: slot?.teamId,
+      })
+    ) {
+      setRemainingMs(paceMs);
+    } else if (
+      shouldStopClockForManualCheck({
+        wasManual,
+        teamId,
+        onClockTeamId: slot?.teamId,
+      })
+    ) {
+      // awaitingUser becomes true and the AI countdown effect stops — no remainingMs reset.
     }
-    if (wasManual && slot && Number(slot.teamId) === Number(teamId)) setRemainingMs(paceMs);
   }
 
   function resetTeamControls() {
     const wasOnClockManual = Boolean(slot && manualTeamIds.has(Number(slot.teamId)));
-    setPauseOnMyPicks(false);
     setManualTeamIds(resetTeamControlsManualIds());
-    if (wasOnClockManual) setRemainingMs(paceMs);
+    // Leave pauseOnMyPicks alone — it is a separate setting from checkbox selection.
+    if (wasOnClockManual && !pauseOnMyPicks) setRemainingMs(paceMs);
   }
 
   function reset(newSeed?: number) {
@@ -935,8 +956,6 @@ function LiveDraftEngine({
     setRemainingMs(paceMs);
     clearAllLiveDraftSessionsForDraft(leagueId, draftId);
     clearLiveDraftSession(draftSessionKey);
-    // Manual-team choices preserved through draft reset except pause-on-my-picks sync;
-    // they reset only on league/season/schedule change or via "Reset team controls".
     if (leagueId) {
       resetSession.mutate(
         { leagueId, draftId },
@@ -1003,7 +1022,19 @@ function LiveDraftEngine({
             <input
               type="checkbox"
               checked={pauseOnMyPicks}
-              onChange={(e) => setPauseOnMyPicks(e.target.checked)}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setPauseOnMyPicks(next);
+                // Clock refresh when clearing pause while on my pick and team is not checkbox-manual.
+                if (
+                  !next &&
+                  slot &&
+                  Number(slot.teamId) === Number(myTeamId) &&
+                  !manualTeamIds.has(Number(myTeamId))
+                ) {
+                  setRemainingMs(paceMs);
+                }
+              }}
               className="accent-violet-500 h-3.5 w-3.5"
             />
             Pause on my picks
@@ -1083,6 +1114,7 @@ function LiveDraftEngine({
                   : `${manualTeamIds.size} manual`}
             </span>
             <button
+              type="button"
               onClick={resetTeamControls}
               className="ml-auto text-[10px] text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded px-1.5 py-0.5"
             >
@@ -1097,18 +1129,39 @@ function LiveDraftEngine({
               const isOnClock = !done && slot && Number(slot.teamId) === tid;
               const isYou = myTeamId === tid;
               const isManual = manualTeamIds.has(tid);
+              const ownerLabel = formatManualOwnerLabel(t.ownerName, t.teamName);
               return (
-                <div key={tid} className={cn("rounded-lg border p-2", isOnClock ? "border-violet-500/50 bg-violet-500/5" : isManual ? "border-violet-500/30 bg-violet-500/5" : "border-white/[0.06] bg-white/[0.03]")}>
-                  <div className="flex items-center gap-1.5 mb-1">
+                <div
+                  key={tid}
+                  className={cn(
+                    "rounded-lg border p-2",
+                    isOnClock
+                      ? "border-violet-500/50 bg-violet-500/5"
+                      : isManual
+                        ? "border-violet-500/30 bg-violet-500/10"
+                        : "border-white/[0.06] bg-white/[0.03]",
+                  )}
+                >
+                  <label
+                    className={cn(
+                      "flex items-center gap-2 mb-1 cursor-pointer select-none rounded-md px-1 py-0.5 -mx-1",
+                      isManual && "bg-violet-500/10",
+                    )}
+                  >
                     <input
                       type="checkbox"
                       checked={isManual}
                       onChange={() => toggleManual(tid)}
                       className="accent-violet-500 h-3.5 w-3.5 shrink-0 cursor-pointer"
-                      aria-label={`Manually control ${t.teamName}`}
-                      title="Manually control this team"
                     />
-                    <span className="text-[11px] font-black text-zinc-200 truncate">{t.teamName}</span>
+                    <span className="text-[11px] text-zinc-200 truncate min-w-0 flex-1">
+                      <span className="font-semibold text-zinc-300">{(t.ownerName ?? "Owner").trim() || "Owner"}</span>
+                      <span className="text-zinc-600"> — </span>
+                      <span className="font-black uppercase tracking-wide text-zinc-100">
+                        {(t.teamName ?? "Team").trim() || "Team"}
+                      </span>
+                    </span>
+                    <span className="sr-only">{isManual ? `Selected: ${ownerLabel}` : ownerLabel}</span>
                     {grade && grade.letter !== "—" && (
                       <span
                         title={`Draft grade ${grade.letter} — ${grade.avgDelta >= 0 ? "+" : ""}${grade.avgDelta.toFixed(0)} avg value vs ADP, ${grade.strength.toFixed(0)}/100 avg talent`}
@@ -1121,9 +1174,9 @@ function LiveDraftEngine({
                         {grade.letter}
                       </span>
                     )}
-                    {isYou && <span className="text-[10px] font-black text-violet-300 bg-violet-500/15 px-1 rounded">YOU</span>}
-                    <span className="text-[10px] text-zinc-600 ml-auto tabular-nums">{roster.length}</span>
-                  </div>
+                    {isYou && <span className="text-[10px] font-black text-violet-300 bg-violet-500/15 px-1 rounded shrink-0">YOU</span>}
+                    <span className="text-[10px] text-zinc-600 ml-auto tabular-nums shrink-0">{roster.length}</span>
+                  </label>
                   <div className="flex flex-wrap gap-1">
                     {roster.map((r: any) => (
                       <span key={r.pickNumber} className={cn("text-[10px] px-1.5 py-0.5 rounded border truncate max-w-[120px]",
@@ -2007,7 +2060,7 @@ export function DraftWarRoom() {
 
   const { data, isLoading, refetch } = trpc.draftWarRoom.getDraftWarRoomData.useQuery(
     warRoomInput,
-    { enabled: leagueKeyReady },
+    { enabled: leagueKeyReady, refetchOnWindowFocus: false },
   );
   const activeLeagueQ = trpc.league.getActive.useQuery(undefined, { enabled: leagueKeyReady });
   const leagueId = leagueKeyReady && activeLeagueQ.data?.leagueId

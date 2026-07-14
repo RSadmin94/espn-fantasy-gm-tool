@@ -1,29 +1,34 @@
 /**
  * RfsnBroadcastPanel — compact booth + audio, embeddable in the Draft War Room.
  *
- * Written commentary is the launch path (RFSN_VOICE_BETA=false): cards, running log,
- * and wrap-up render without Enable Sound / clip readiness / TTS.
+ * Reuses the EXACT RFSN Live wiring (useRfsnBoothController + useRfsnAudioPlayback
+ * + RfsnAnalystBooth + RfsnAudioControls) so the War Room's Live Draft screen shows
+ * the Sofia/Coach/Roxanne booth and plays audio from the same live session — no
+ * board duplication (the War Room already renders its own board), no broadcast
+ * redesign. Polls the same getLiveSnapshot(draftId) RFSN Live polls.
+ *
+ * Written commentary is the launch path: cards, running log, and wrap-up render
+ * without Enable Sound / clip readiness / TTS.
  */
 import { skipToken } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useRfsnAudioPlayback } from "@/hooks/useRfsnAudioPlayback";
 import { useRfsnBoothController } from "@/hooks/useRfsnBoothController";
-import { buildBoothCommentarySequence, RFSN_VOICE_BETA } from "@/lib/rfsnBoothPresentation";
+import { buildBoothCommentarySequence } from "@/lib/rfsnBoothPresentation";
 import { appendCommentaryLogEntry, type RfsnCommentaryLogEntry } from "@/lib/rfsnCommentaryLog";
 import { RfsnAnalystBooth } from "./RfsnAnalystBooth";
 import { RfsnAudioControls } from "./RfsnAudioControls";
 import { RfsnCommentaryLog } from "./RfsnCommentaryLog";
 import {
   liveSessionStatusLabel,
-  resolveRfsnLiveDisplaySnapshot,
-  shouldRenderLiveCommentary,
+  resolveBoothFeedSnapshot,
   type RfsnLivePublicPayload,
 } from "@/lib/rfsnLiveState";
 import { warRoomAudioSessionKey } from "@/lib/rfsnWarRoomAudioSession";
 import { cn } from "@/lib/utils";
 
-const PANEL_POLL_MS = 2000;
+const PANEL_POLL_MS = 750;
 
 export type RfsnBroadcastPanelProps = {
   leagueId?: string | null;
@@ -47,7 +52,7 @@ export function RfsnBroadcastPanel({
   const _trpc = trpc as any;
 
   const accessQ = _trpc.rfsnBroadcast.getAccess.useQuery(undefined, { staleTime: 60_000 });
-  const ttsAvailable = RFSN_VOICE_BETA && Boolean(accessQ.data?.ttsEnabled);
+  const ttsAvailable = Boolean(accessQ.data?.ttsEnabled);
   const enabled = Boolean(accessQ.data?.canAccess);
 
   const snapshotQ = _trpc.rfsnBroadcast.getLiveSnapshot.useQuery(
@@ -65,14 +70,9 @@ export function RfsnBroadcastPanel({
     sessionEpoch: sessionResetKey,
   });
 
-  const displaySnapshot = resolveRfsnLiveDisplaySnapshot(payload, "");
-  const boothSnapshot =
-    payload && shouldRenderLiveCommentary(payload) && payload.snapshot
-      ? payload.snapshot
-      : displaySnapshot;
-  // Voice off (written broadcast default): pass no audio so the booth advances on text
-  // timers only — written commentary never waits for TTS / unlock / clip readiness.
-  const booth = useRfsnBoothController(boothSnapshot, { audio: RFSN_VOICE_BETA ? audio : null });
+  const displaySnapshot = resolveBoothFeedSnapshot(payload, "");
+  const boothSnapshot = displaySnapshot;
+  const booth = useRfsnBoothController(boothSnapshot, { audio });
   const sequence = buildBoothCommentarySequence(boothSnapshot);
   const isMobile = layout === "mobile";
 
@@ -102,8 +102,12 @@ export function RfsnBroadcastPanel({
     );
   }, [booth.activeCard, boothSnapshot.overallPick]);
 
-  // Hold only while a written card is actually on air — never freeze for pending generation.
-  const busy = Boolean(enabled && booth.sequenceIndex >= 0);
+  // Hold while a card is on air OR while the server is generating the next written
+  // frame. Nulling the booth on pending was racing Turbo locks past 6s dwell.
+  // Watchdog (MAX_BROADCAST_HOLD_MS) still caps any stuck hold.
+  const busy = Boolean(
+    enabled && (booth.sequenceIndex >= 0 || payload?.sessionState === "commentary_pending"),
+  );
   const lastBusyRef = useRef<boolean | null>(null);
   useEffect(() => {
     if (lastBusyRef.current === busy) return;
@@ -111,7 +115,7 @@ export function RfsnBroadcastPanel({
     onBusyChange?.(busy);
   }, [busy, onBusyChange]);
 
-  if (!enabled) return null;
+  if (!enabled) return null; // broadcast disabled → render nothing; War Room board unaffected
 
   const statusLabel = payload
     ? liveSessionStatusLabel(payload.sessionState)
