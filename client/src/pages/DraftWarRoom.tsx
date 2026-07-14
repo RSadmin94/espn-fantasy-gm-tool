@@ -18,7 +18,7 @@ import { buildRfsnLiveDraftId } from "@/lib/rfsnLiveDraftId";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
 import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
 import { RfsnPickClock } from "@/components/rfsn/RfsnPickClock";
-import { resolveClockState, isPickManual, MAX_BROADCAST_HOLD_MS, draftPaceFromTimerMs } from "@/lib/draftClock";
+import { resolveClockState, isPickManual, MAX_BROADCAST_HOLD_MS, draftPaceFromTimerMs, nextBroadcastHoldState } from "@/lib/draftClock";
 import {
   buildDefaultManualTeamIds,
   manualTeamIdsAfterScheduleIdentityChange,
@@ -635,6 +635,7 @@ function LiveDraftEngine({
   const [holding, setHolding] = useState<boolean>(false); // paused for a broadcast moment
   const [broadcastBusy, setBroadcastBusy] = useState<boolean>(false); // reported by the booth panel
   const holdStartRef = useRef<number>(0);
+  const holdForceClearedRef = useRef(false);
 
   // ── Manual control (P6) — single source of truth `manualTeamIds`. ────────────
   const { myTeamId } = useLeagueContext();
@@ -856,14 +857,19 @@ function LiveDraftEngine({
     setIdx((i) => i + 1);
   }, [remainingMs, running, done, holding, onClockIsManual, schedule, idx, totalRounds, availablePool]);
 
-  // Reactive broadcast pause — freeze the countdown + AI ONLY while a moment is actually on
-  // air (busy). Silent picks never set busy, so they are never extended (the 1.8s grace is
-  // gone). The hold is separate from the configured pick clock and capped at 20s.
+  // Reactive broadcast pause — freeze ONLY while a written card is on air (busy).
+  // Pending LLM generation does not hold. Watchdog force-clear cannot re-arm until busy ends.
   useEffect(() => {
-    if (broadcastBusy && !holding) {
+    const next = nextBroadcastHoldState({
+      broadcastBusy,
+      holding,
+      holdForceCleared: holdForceClearedRef.current,
+    });
+    holdForceClearedRef.current = next.holdForceCleared;
+    if (next.holding && !holding) {
       holdStartRef.current = Date.now();
       setHolding(true);
-    } else if (!broadcastBusy && holding) {
+    } else if (!next.holding && holding) {
       setHolding(false);
     }
   }, [broadcastBusy, holding]);
@@ -872,7 +878,10 @@ function LiveDraftEngine({
   useEffect(() => {
     if (!holding) return;
     const remaining = Math.max(0, MAX_BROADCAST_HOLD_MS - (Date.now() - holdStartRef.current));
-    const t = setTimeout(() => setHolding(false), remaining);
+    const t = setTimeout(() => {
+      holdForceClearedRef.current = true;
+      setHolding(false);
+    }, remaining);
     return () => clearTimeout(t);
   }, [holding]);
 
@@ -922,6 +931,7 @@ function LiveDraftEngine({
     setRunning(false);
     setHolding(false);
     setBroadcastBusy(false);
+    holdForceClearedRef.current = false;
     setRemainingMs(paceMs);
     clearAllLiveDraftSessionsForDraft(leagueId, draftId);
     clearLiveDraftSession(draftSessionKey);

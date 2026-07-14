@@ -45,6 +45,7 @@ export function useRfsnLiveLockedPickNotify({
     staleTime: 60_000,
   });
   const notifyMut = _trpc.rfsnBroadcast.notifyLockedPick.useMutation();
+  const utils = trpc.useUtils() as any;
 
   const canNotify = Boolean(
     enabled &&
@@ -90,17 +91,22 @@ export function useRfsnLiveLockedPickNotify({
         draftPace,
         draftComplete: draftComplete && item.slot.pickNumber === lastPickNumber,
       });
-      void notifyMut.mutateAsync(payload).catch((err: unknown) => {
-        if (import.meta.env.DEV) {
-          console.debug("[rfsn] notifyLockedPick failed", {
-            pickNumber: payload.pick.overallPick,
-            draftId: payload.draftId,
-            message: err instanceof Error ? err.message : "unknown",
-          });
-        }
-      });
+      void notifyMut
+        .mutateAsync(payload)
+        .then(() => {
+          void utils.rfsnBroadcast.getLiveSnapshot.invalidate({ leagueId, draftId });
+        })
+        .catch((err: unknown) => {
+          if (import.meta.env.DEV) {
+            console.debug("[rfsn] notifyLockedPick failed", {
+              pickNumber: payload.pick.overallPick,
+              draftId: payload.draftId,
+              message: err instanceof Error ? err.message : "unknown",
+            });
+          }
+        });
     }
-  }, [canNotify, draftComplete, draftId, draftPace, leagueId, notifyMut, results, schedule, teamCount]);
+  }, [canNotify, draftComplete, draftId, draftPace, leagueId, notifyMut, results, schedule, teamCount, utils]);
 }
 
 export function useRfsnLivePickNotifyAccess(enabled: boolean) {

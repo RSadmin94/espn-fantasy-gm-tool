@@ -7,6 +7,7 @@ import type { DraftMoment } from "../draftMoments/draftMomentTypes";
 import { momentConfigForDraftPace, type DraftPace } from "../draftMoments/draftMomentTypes";
 import type { MockPickLike, ReceiptContext } from "../draftMoments/draftMomentReceiptService";
 import { makeShadowReceiptContext } from "./shadowDraftSources";
+import { applyEarlyRoundWrittenFloor } from "./liveDraftWrittenFloor";
 
 export type LockedPickInput = {
   overallPick: number;
@@ -114,5 +115,5 @@ export function buildDraftMomentForLockedPick(
   if (!moment) {
     throw new Error(`Failed to build DraftMoment for pick ${pick.overallPick}`);
   }
-  return moment;
+  return applyEarlyRoundWrittenFloor(moment);
 }

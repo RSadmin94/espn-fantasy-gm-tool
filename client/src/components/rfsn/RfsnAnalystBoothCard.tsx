@@ -122,7 +122,7 @@ function FullBoothCard({
   const liveIndicator = analystLiveIndicatorVisible(isActiveSpeaker, cardState);
   const { visiblePhrases } = usePhraseReveal(
     showText ? commentary?.text : undefined,
-    Boolean(showText && cardState === "active"),
+    Boolean(showText && (cardState === "active" || cardState === "entering")),
   );
   const segmentLabel = showText && commentary ? commentary.label : meta.role;
   const entering = cardState === "entering" && isActiveSpeaker;
@@ -200,7 +200,7 @@ function FullBoothCard({
                   compact ? "text-[13px] line-clamp-5" : "text-[15px] md:text-base line-clamp-6",
                 )}
               >
-                {visiblePhrases.map((phrase, i) => (
+                {(visiblePhrases.length > 0 ? visiblePhrases : [commentary.text]).map((phrase, i) => (
                   <span key={`${commentary.id}-${i}`} className={cn(i > 0 && "rfsn-phrase-in")}>
                     {i > 0 ? " " : ""}
                     {phrase}

@@ -87,7 +87,7 @@ export function LiveDraftWrapUp({
         </div>
       </div>
       <p className="text-[11px] text-zinc-500">
-        RFSN terminal wrap-up commentary generates in the booth when the final pick locks.
+        RFSN wrap-up commentary appears in the booth and running log when the final pick locks.
       </p>
     </section>
   );

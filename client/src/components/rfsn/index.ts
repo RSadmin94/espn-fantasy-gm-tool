@@ -13,4 +13,5 @@ export { RfsnPositionRunAlert } from "./RfsnPositionRunAlert";
 export { RfsnLeagueStoryline } from "./RfsnLeagueStoryline";
 export { RfsnChampionshipOdds } from "./RfsnChampionshipOdds";
 export { RfsnTicker } from "./RfsnTicker";
+export { RfsnCommentaryLog } from "./RfsnCommentaryLog";
 export { RfsnCommentaryQueue } from "./RfsnCommentaryQueue";

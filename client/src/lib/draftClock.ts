@@ -34,6 +34,24 @@ export const URGENT_MS = 3000;
 /** Hard cap on a broadcast hold — the draft can never freeze longer than this. */
 export const MAX_BROADCAST_HOLD_MS = 20_000;
 
+/**
+ * Hold arming for War Room — after the watchdog force-clears, do not re-arm until
+ * broadcastBusy drops, otherwise a stuck busy flag freezes the draft forever.
+ */
+export function nextBroadcastHoldState(input: {
+  broadcastBusy: boolean;
+  holding: boolean;
+  holdForceCleared: boolean;
+}): { holding: boolean; holdForceCleared: boolean } {
+  if (!input.broadcastBusy) {
+    return { holding: false, holdForceCleared: false };
+  }
+  if (input.holdForceCleared) {
+    return { holding: false, holdForceCleared: true };
+  }
+  return { holding: true, holdForceCleared: false };
+}
+
 export function resolveClockState(input: {
   done: boolean;
   isManualPick: boolean;

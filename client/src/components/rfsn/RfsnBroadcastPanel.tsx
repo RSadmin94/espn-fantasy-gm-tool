@@ -1,20 +1,19 @@
 /**
  * RfsnBroadcastPanel — compact booth + audio, embeddable in the Draft War Room.
  *
- * Reuses the EXACT RFSN Live wiring (useRfsnBoothController + useRfsnAudioPlayback
- * + RfsnAnalystBooth + RfsnAudioControls) so the War Room's Live Draft screen shows
- * the Sofia/Coach/Roxanne booth and plays audio from the same live session — no
- * board duplication (the War Room already renders its own board), no broadcast
- * redesign. Polls the same getLiveSnapshot(draftId) RFSN Live polls.
+ * Written commentary is the launch path (RFSN_VOICE_BETA=false): cards, running log,
+ * and wrap-up render without Enable Sound / clip readiness / TTS.
  */
 import { skipToken } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useRfsnAudioPlayback } from "@/hooks/useRfsnAudioPlayback";
 import { useRfsnBoothController } from "@/hooks/useRfsnBoothController";
 import { buildBoothCommentarySequence, RFSN_VOICE_BETA } from "@/lib/rfsnBoothPresentation";
+import { appendCommentaryLogEntry, type RfsnCommentaryLogEntry } from "@/lib/rfsnCommentaryLog";
 import { RfsnAnalystBooth } from "./RfsnAnalystBooth";
 import { RfsnAudioControls } from "./RfsnAudioControls";
+import { RfsnCommentaryLog } from "./RfsnCommentaryLog";
 import {
   liveSessionStatusLabel,
   resolveRfsnLiveDisplaySnapshot,
@@ -33,7 +32,7 @@ export type RfsnBroadcastPanelProps = {
   sessionResetKey?: string | number;
   layout?: "desktop" | "mobile";
   className?: string;
-  /** Reports whether a broadcast moment is generating or on air (drives the draft pause). */
+  /** Reports whether a broadcast moment is on air (drives the draft pause). */
   onBusyChange?: (busy: boolean) => void;
 };
 
@@ -77,13 +76,34 @@ export function RfsnBroadcastPanel({
   const sequence = buildBoothCommentarySequence(boothSnapshot);
   const isMobile = layout === "mobile";
 
-  // A broadcast moment is "busy" (should hold the draft) while it is generating
-  // (commentary_pending) or while the booth sequence is still playing (sequenceIndex >= 0).
-  // When the sequence completes / is dismissed / all voices fail, the controller returns
-  // sequenceIndex to -1, so busy clears and the engine resumes.
-  const busy = Boolean(
-    enabled && payload && (payload.sessionState === "commentary_pending" || booth.sequenceIndex >= 0),
-  );
+  const [logEntries, setLogEntries] = useState<RfsnCommentaryLogEntry[]>([]);
+  const lastLoggedIdRef = useRef<string | null>(null);
+  const lastSessionResetRef = useRef(sessionResetKey);
+
+  useEffect(() => {
+    if (sessionResetKey === lastSessionResetRef.current) return;
+    lastSessionResetRef.current = sessionResetKey;
+    setLogEntries([]);
+    lastLoggedIdRef.current = null;
+  }, [sessionResetKey]);
+
+  useEffect(() => {
+    const card = booth.activeCard;
+    if (!card?.text?.trim()) return;
+    if (card.id === lastLoggedIdRef.current) return;
+    lastLoggedIdRef.current = card.id;
+    setLogEntries((prev) =>
+      appendCommentaryLogEntry(prev, {
+        id: card.id,
+        pickLabel: boothSnapshot.overallPick,
+        commentator: card.commentator,
+        text: card.text,
+      }),
+    );
+  }, [booth.activeCard, boothSnapshot.overallPick]);
+
+  // Hold only while a written card is actually on air — never freeze for pending generation.
+  const busy = Boolean(enabled && booth.sequenceIndex >= 0);
   const lastBusyRef = useRef<boolean | null>(null);
   useEffect(() => {
     if (lastBusyRef.current === busy) return;
@@ -91,7 +111,13 @@ export function RfsnBroadcastPanel({
     onBusyChange?.(busy);
   }, [busy, onBusyChange]);
 
-  if (!enabled) return null; // broadcast disabled → render nothing; War Room board unaffected
+  if (!enabled) return null;
+
+  const statusLabel = payload
+    ? liveSessionStatusLabel(payload.sessionState)
+    : "Standing by";
+  const wrapUpOnAir =
+    payload?.sessionState === "draft_complete" && Boolean(boothSnapshot.primary || booth.activeCard);
 
   return (
     <div
@@ -100,13 +126,14 @@ export function RfsnBroadcastPanel({
         className,
       )}
       data-rfsn-warroom-broadcast
+      data-rfsn-wrap-up={wrapUpOnAir ? "true" : "false"}
     >
       <div className="mb-2 flex items-center gap-2">
         <span className="text-[11px] font-black uppercase tracking-wider text-[#a3e635]">
           RFSN Booth
         </span>
         <span className="text-[11px] uppercase tracking-wider text-[#8b97a8]">
-          {payload ? liveSessionStatusLabel(payload.sessionState) : "Standing by"}
+          {statusLabel}
         </span>
       </div>
 
@@ -124,6 +151,8 @@ export function RfsnBroadcastPanel({
         onDismiss={booth.dismissFor}
         layout={isMobile ? "mobile" : "desktop"}
       />
+
+      <RfsnCommentaryLog entries={logEntries} />
     </div>
   );
 }

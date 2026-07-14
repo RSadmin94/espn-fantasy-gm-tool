@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   mutateAsync: vi.fn(async () => ({ accepted: true, pickId: "pick-1" })),
+  invalidateLiveSnapshot: vi.fn(async () => undefined),
   accessData: { enabled: true, canAccess: true, ttsEnabled: true } as {
     enabled: boolean;
     canAccess: boolean;
@@ -17,6 +18,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    useUtils: () => ({
+      rfsnBroadcast: {
+        getLiveSnapshot: { invalidate: mocks.invalidateLiveSnapshot },
+      },
+    }),
     rfsnBroadcast: {
       getAccess: {
         useQuery: () => ({ data: mocks.accessData, isLoading: false }),
@@ -80,6 +86,7 @@ const baseProps = {
 describe("useRfsnLiveLockedPickNotify", () => {
   beforeEach(() => {
     mocks.mutateAsync.mockClear();
+    mocks.invalidateLiveSnapshot.mockClear();
     mocks.accessData = { enabled: true, canAccess: true, ttsEnabled: true };
   });
 
@@ -93,6 +100,7 @@ describe("useRfsnLiveLockedPickNotify", () => {
     });
     await vi.waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledTimes(1));
     expect(mocks.mutateAsync.mock.calls[0]![0].pick.playerName).toBe("CeeDee Lamb");
+    await vi.waitFor(() => expect(mocks.invalidateLiveSnapshot).toHaveBeenCalledTimes(1));
   });
 
   it("duplicate rerender does not resend", async () => {

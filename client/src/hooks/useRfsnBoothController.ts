@@ -13,8 +13,10 @@ import {
   initialCardStates,
   nextBoothSegment,
 } from "@/lib/rfsnBoothPresentation";
-import { PLAYBACK_MAX_WATCHDOG_MS } from "@/lib/rfsnPlaybackTerminal";
 import { usePrefersReducedMotion } from "./usePrefersReducedMotion";
+
+/** While audio is still playing after min dwell, re-check ownership briefly. */
+const AUDIO_OWNED_POLL_MS = 500;
 
 export type RfsnBoothController = {
   cardStates: Record<RfsnCommentatorId, BoothCardState>;
@@ -31,14 +33,6 @@ export type RfsnBoothControllerOptions = {
   audio?: RfsnAudioPlayback | null;
 };
 
-function audioOwnsBooth(audio: RfsnAudioPlayback | null | undefined): boolean {
-  if (!audio) return false;
-  if (audio.state === "loading" || audio.state === "playing") return true;
-  if (audio.isPlayInFlight?.()) return true;
-  if (audio.isPlaying?.()) return true;
-  return false;
-}
-
 export function useRfsnBoothController(
   snapshot: RfsnBroadcastSnapshot,
   options: RfsnBoothControllerOptions = {},
@@ -54,15 +48,13 @@ export function useRfsnBoothController(
   const [cardStates, setCardStates] = useState(initialCardStates);
   const [activeCommentator, setActiveCommentator] = useState<RfsnCommentatorId | null>(null);
   const [activeCard, setActiveCard] = useState<RfsnCommentaryCard | null>(null);
-  const activeCardRef = useRef(activeCard);
-  activeCardRef.current = activeCard;
   const [sequenceIndex, setSequenceIndex] = useState(-1);
   const [consumedTickerIds, setConsumedTickerIds] = useState<Set<string>>(() => new Set());
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sequenceIndexRef = useRef(-1);
   const audioRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const activeCardIdRef = useRef<string | null>(null);
+  const cardStartedAtRef = useRef(0);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -89,37 +81,51 @@ export function useRfsnBoothController(
   );
 
   const scheduleTextExit = useCallback((commentator: RfsnCommentatorId, index: number, text: string) => {
-    // Never schedule an independent speaker timer while audio owns the card.
-    if (audioOwnsBooth(audioRef.current)) return;
     const displayMs = commentaryDisplayMs(text, reducedMotion);
-    timerRef.current = setTimeout(() => {
-      if (audioOwnsBooth(audioRef.current)) return;
+    const tryExit = () => {
+      const elapsed = Date.now() - cardStartedAtRef.current;
+      const remainingMin = displayMs - elapsed;
+      // Readable dwell: never leave before BOOTH_MIN_DISPLAY_MS (via commentaryDisplayMs).
+      if (remainingMin > 0) {
+        timerRef.current = setTimeout(tryExit, remainingMin);
+        return;
+      }
+      // Written path owns advance unless audio is still playing (do not cut mid-clip).
+      if (audioRef.current?.isPlaying?.()) {
+        timerRef.current = setTimeout(tryExit, AUDIO_OWNED_POLL_MS);
+        return;
+      }
       exitSpeakerRef.current(commentator, index, false);
-    }, displayMs);
+    };
+    timerRef.current = setTimeout(tryExit, displayMs);
   }, [reducedMotion]);
 
   const audioAttemptedKeyRef = useRef<string | null>(null);
 
   const attemptActiveCardAudio = useCallback(
     (index: number, card: RfsnCommentaryCard) => {
-      clearTimer();
+      // Never clearTimer here — written dwell must keep running. Audio end respects min dwell.
       const liveAudio = audioRef.current;
       if (!liveAudio?.userEnabled) return false;
 
+      const displayMs = commentaryDisplayMs(card.text, reducedMotion);
       let fallbackScheduled = false;
       const scheduleFallback = () => {
         if (fallbackScheduled) return;
-        // Competing text exit must not fire under active media — force audio terminal instead.
-        if (audioOwnsBooth(audioRef.current)) {
-          audioRef.current?.forceTerminalTimedOut?.();
-          return;
-        }
         fallbackScheduled = true;
-        scheduleTextExit(card.commentator, index, card.text);
+        if (!timerRef.current) scheduleTextExit(card.commentator, index, card.text);
       };
       const onAudioEnded = () => {
-        fallbackScheduled = true;
-        clearTimer();
+        const elapsed = Date.now() - cardStartedAtRef.current;
+        const remaining = Math.max(0, displayMs - elapsed);
+        if (remaining > 0) {
+          if (!timerRef.current) {
+            timerRef.current = setTimeout(() => {
+              exitSpeakerRef.current(card.commentator, index, false);
+            }, remaining);
+          }
+          return;
+        }
         exitSpeakerRef.current(card.commentator, index, false);
       };
       const tryAudio = () => {
@@ -128,26 +134,17 @@ export function useRfsnBoothController(
       tryAudio();
 
       if (!liveAudio.unlocked) return false;
-      if (audioOwnsBooth(liveAudio)) return true;
 
+      // Clip pending / lock / not playing — keep written text dwell (already scheduled).
+      if (!timerRef.current) scheduleTextExit(card.commentator, index, card.text);
       audioRetryRef.current = setTimeout(() => {
         const a = audioRef.current;
         if (!a) return;
-        if (a.state === "loading" || a.state === "ready" || a.state === "playing") tryAudio();
+        if (a.state === "loading" || a.state === "ready") tryAudio();
       }, 1200);
-
-      // Pre-play wait only. Once audio owns the card, the holding effect cancels this and
-      // any fire while holding routes through forceTerminalTimedOut (never exitSpeaker).
-      timerRef.current = setTimeout(() => {
-        if (audioOwnsBooth(audioRef.current)) {
-          audioRef.current?.forceTerminalTimedOut?.();
-          return;
-        }
-        scheduleFallback();
-      }, PLAYBACK_MAX_WATCHDOG_MS);
-      return true;
+      return Boolean(liveAudio.isPlaying?.());
     },
-    [clearTimer, scheduleTextExit],
+    [reducedMotion, scheduleTextExit],
   );
 
   const attemptActiveCardAudioRef = useRef(attemptActiveCardAudio);
@@ -160,6 +157,7 @@ export function useRfsnBoothController(
       setSequenceIndex(index);
       setActiveCommentator(card.commentator);
       setActiveCard(card);
+      cardStartedAtRef.current = Date.now();
       setCardStates((prev) => ({
         ...prev,
         [card.commentator]: "entering",
@@ -171,18 +169,10 @@ export function useRfsnBoothController(
           ...prev,
           [card.commentator]: "active",
         }));
-
-        const liveAudio = audioRef.current;
-        if (!liveAudio?.userEnabled) {
-          scheduleTextExit(card.commentator, index, card.text);
-        } else if (!liveAudio.unlocked) {
-          // Preference on but gesture pending — keep card on-air until unlock or safety timeout.
-          timerRef.current = setTimeout(() => {
-            const a = audioRef.current;
-            if (a?.unlocked || audioOwnsBooth(a)) return;
-            scheduleTextExit(card.commentator, index, card.text);
-          }, PLAYBACK_MAX_WATCHDOG_MS);
-        }
+        cardStartedAtRef.current = Date.now();
+        // Written commentary always starts text dwell immediately — never gated on
+        // Enable Sound, unlock, clip readiness, or TTS availability.
+        scheduleTextExit(card.commentator, index, card.text);
       }, enterMs);
     },
     [clearTimer, reducedMotion, scheduleTextExit],
@@ -232,11 +222,6 @@ export function useRfsnBoothController(
     if (activeCommentator !== commentator || sequenceIndexRef.current < 0) return;
     const state = cardStates[commentator];
     if (state !== "active" && state !== "entering") return;
-    // Manual dismiss still stops media; prefer terminal when an attempt is active.
-    if (audioOwnsBooth(audioRef.current)) {
-      audioRef.current?.forceTerminalTimedOut?.();
-      return;
-    }
     audioRef.current?.stopCurrent();
     exitSpeakerRef.current(commentator, sequenceIndexRef.current, true);
   }, [activeCommentator, cardStates]);
@@ -247,21 +232,12 @@ export function useRfsnBoothController(
 
   const snapshotKey = useMemo(() => {
     const sig = (c: RfsnCommentaryCard | null | undefined) => (c ? `${c.id}~${c.text}` : "");
-    // The reset key must change ONLY when the actual commentary sequence changes — never on
-    // every pick. overallPick advances each pick while the commentary cards lag behind it, so
-    // keying on it tore down the active clip mid-playback on each pick transition (endedEvents=0).
-    // Ticker lines are consumed incrementally, so they are intentionally excluded too.
-    return [sig(snapshot.primary), sig(snapshot.secondary)].join("|");
+    // Ticker lines are consumed incrementally during the booth sequence — polling must
+    // NOT restart the frame when the ticker array grows or gets new object refs.
+    return [snapshot.overallPick, sig(snapshot.primary), sig(snapshot.secondary)].join("|");
   }, [snapshot]);
 
   useEffect(() => {
-    // GUARDRAIL: never tear down an actively-playing clip whose card is still part of the new
-    // sequence. Let it finish — the booth advances via onEnded. Reset only when the active card
-    // has left the sequence, the sequence is empty, or an explicit/terminal reset occurs.
-    const activeId = activeCardRef.current?.id;
-    if (activeId && audioRef.current?.isPlaying?.() && sequenceRef.current.some((c) => c.id === activeId)) {
-      return;
-    }
     clearTimer();
     audioRef.current?.onSnapshotChange();
     audioAttemptedKeyRef.current = null;
@@ -287,7 +263,11 @@ export function useRfsnBoothController(
 
   useEffect(() => clearTimer, [clearTimer]);
 
-  // Active speaker + unlocked audio — attempt playback once the card reaches "active".
+  // Attempt playback once a card reaches "active". Unlock transitions are owned by the
+  // dedicated "just unlocked" effect below — so unlocked/userEnabled are intentionally NOT
+  // deps here. Including them made this effect re-fire on unlock and issue a second
+  // playForCard for the already-active card (harmless via the hook's idempotent gate, but
+  // a redundant double-attempt). One attempt per activation; the unlock effect owns re-attempts.
   useEffect(() => {
     if (!activeCard || activeCommentator == null || sequenceIndexRef.current < 0) return;
     if (cardStates[activeCommentator] !== "active") return;
@@ -296,12 +276,11 @@ export function useRfsnBoothController(
     activeCard,
     activeCommentator,
     cardStates,
-    audio?.userEnabled,
-    audio?.unlocked,
   ]);
 
   const unlockRetryRef = useRef(false);
   const wasUnlockedRef = useRef(false);
+  const activeCardIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (activeCard?.id !== activeCardIdRef.current) {
       activeCardIdRef.current = activeCard?.id ?? null;
@@ -321,7 +300,8 @@ export function useRfsnBoothController(
     if (unlockRetryRef.current) return;
     unlockRetryRef.current = true;
     audioAttemptedKeyRef.current = null;
-    clearTimer();
+    // Do not clearTimer — written dwell must keep running until audio actually plays
+    // or the text timer advances the booth.
     attemptActiveCardAudioRef.current(sequenceIndexRef.current, activeCard);
   }, [
     audio?.unlocked,
@@ -329,32 +309,7 @@ export function useRfsnBoothController(
     activeCard,
     activeCommentator,
     cardStates,
-    clearTimer,
   ]);
-
-  /**
-   * Ownership rule: once audio is loading/playing/in-flight, only completePlayback
-   * (via onEnded / forceTerminalTimedOut) may release the speaker.
-   * Cancel any pre-play text/fallback timers immediately when playback takes hold.
-   */
-  useEffect(() => {
-    const holding = audioOwnsBooth(audio);
-    if (!holding || !activeCard) return;
-
-    clearTimer();
-    const expectedCardId = activeCard.id;
-    const ceiling = setTimeout(() => {
-      if (activeCardIdRef.current !== expectedCardId) return;
-      if (!audioOwnsBooth(audioRef.current)) return;
-      audioRef.current?.forceTerminalTimedOut?.();
-    }, PLAYBACK_MAX_WATCHDOG_MS);
-    timerRef.current = ceiling;
-
-    return () => {
-      clearTimeout(ceiling);
-      if (timerRef.current === ceiling) timerRef.current = null;
-    };
-  }, [audio?.state, activeCard?.id, clearTimer, audio]);
 
   const filteredTicker = useMemo(
     () => filterTickerForBooth(snapshot.ticker, activeCard, consumedTickerIds),

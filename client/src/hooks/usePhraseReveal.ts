@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import { phraseRevealIntervalMs, splitCommentaryPhrases } from "@/lib/rfsnBroadcastProduction";
 import { usePrefersReducedMotion } from "./usePrefersReducedMotion";
 
@@ -11,7 +11,8 @@ export function usePhraseReveal(text: string | undefined, active: boolean): {
   const phrases = useMemo(() => (text ? splitCommentaryPhrases(text) : []), [text]);
   const [visibleCount, setVisibleCount] = useState(0);
 
-  useEffect(() => {
+  // Layout effect so written commentary is painted before the frame — never wait on audio.
+  useLayoutEffect(() => {
     if (!active || !text) {
       setVisibleCount(0);
       return;

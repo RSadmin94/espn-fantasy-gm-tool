@@ -80,8 +80,8 @@ export function commentaryDisplayMs(text: string, reducedMotion = false): number
   return Math.min(BOOTH_MAX_DISPLAY_MS, Math.max(BOOTH_MIN_DISPLAY_MS, byLength));
 }
 
-function commentaryKey(card: Pick<RfsnCommentaryCard, "commentator" | "text" | "id">): string {
-  return `${card.commentator}:${card.id}:${card.text}`;
+function commentaryDedupeKey(card: Pick<RfsnCommentaryCard, "commentator" | "text">): string {
+  return `${card.commentator}:${card.text.trim().toLowerCase()}`;
 }
 
 /** Ordered on-air sequence: primary → secondary → non-duplicate ticker lines (max 3). */
@@ -92,10 +92,12 @@ export function buildBoothCommentarySequence(
   const seen = new Set<string>();
 
   const add = (card: RfsnCommentaryCard) => {
-    const key = commentaryKey(card);
+    const text = card.text?.trim() ?? "";
+    if (!text) return;
+    const key = commentaryDedupeKey({ commentator: card.commentator, text });
     if (seen.has(key)) return;
     seen.add(key);
-    seq.push(card);
+    seq.push({ ...card, text });
   };
 
   if (snapshot.primary) add(snapshot.primary);
@@ -146,7 +148,8 @@ export function initialCardStates(): Record<RfsnCommentatorId, BoothCardState> {
 }
 
 export function isCommentaryVisibleState(state: BoothCardState): boolean {
-  return state === "active" || state === "dismissing";
+  // Entering must show written commentary immediately — never wait for audio/`active`.
+  return state === "entering" || state === "active" || state === "dismissing";
 }
 
 export function analystOpacity(

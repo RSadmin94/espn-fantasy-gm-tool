@@ -19,6 +19,7 @@ vi.mock("./usePrefersReducedMotion", () => ({ usePrefersReducedMotion: () => tru
 
 import { useRfsnBoothController } from "./useRfsnBoothController";
 import { createRfsnLiveStandbySnapshot } from "@/lib/rfsnLiveState";
+import { commentaryDisplayMs } from "@/lib/rfsnBoothPresentation";
 import type {
   RfsnBroadcastSnapshot,
   RfsnCommentaryCard,
@@ -71,9 +72,7 @@ function mockAudio(overrides: Partial<RfsnAudioPlayback> = {}): RfsnAudioPlaybac
     lastPlayable: null,
     replayAvailable: false,
     isPlaying: () => false,
-    isPlayInFlight: () => false,
     stopCurrent: vi.fn(),
-    forceTerminalTimedOut: vi.fn(),
     playForCard: vi.fn(),
     onSnapshotChange: vi.fn(),
     unlockAudio: vi.fn(),
@@ -169,28 +168,6 @@ describe("useRfsnBoothController — activation regression", () => {
     expect(audio.playForCard).not.toHaveBeenCalled(); // no restart
   });
 
-  it("[4b] pick advance with unchanged commentary does NOT tear down active audio (overallPick teardown regression)", () => {
-    const audio = mockAudio({ isPlaying: () => true });
-    const primary = mkCard("coach", "c-9");
-    const { result, rerender } = renderHook(
-      (s: RfsnBroadcastSnapshot) => useRfsnBoothController(s, { audio }),
-      { initialProps: snap({ pick: "9.01", primary }) },
-    );
-    settle();
-    expect(result.current.activeCommentator).toBe("coach");
-    (audio.playForCard as ReturnType<typeof vi.fn>).mockClear();
-    (audio.onSnapshotChange as ReturnType<typeof vi.fn>).mockClear();
-    // Draft advances to the next pick — new overallPick — while the commentary cards are
-    // unchanged (server commentary lags the pick lock). The active clip must keep playing;
-    // the booth must NOT reset merely because the draft moved to a new pick.
-    rerender(snap({ pick: "9.05", primary: mkCard("coach", "c-9") }));
-    settle();
-    expect(result.current.activeCommentator).toBe("coach"); // still active — survives the pick
-    expect(result.current.cardStates.coach).toBe("active");
-    expect(audio.onSnapshotChange).not.toHaveBeenCalled(); // no teardown on pick advance
-    expect(audio.playForCard).not.toHaveBeenCalled(); // no restart
-  });
-
   it("[5] repeated 2s polls (new refs each time) never suppress the active speaker", () => {
     const audio = mockAudio();
     const { result, rerender } = renderHook(
@@ -237,18 +214,40 @@ describe("useRfsnBoothController — new frames, audio independence, silence", (
     expect(result.current.cardStates.coach).toBe("active");
   });
 
-  it("[8b] preference on but locked registers card and waits for gesture", () => {
+  it("[8b] preference on but locked still advances via written text timing", () => {
     const audio = mockAudio({ unlocked: false, userEnabled: true });
+    const card = mkCard("coach", "c-9");
     const { result } = renderHook(
       (s: RfsnBroadcastSnapshot) => useRfsnBoothController(s, { audio }),
-      { initialProps: snap({ pick: "9.01", primary: mkCard("coach", "c-9") }) },
+      { initialProps: snap({ pick: "9.01", primary: card }) },
     );
     settle();
     expect(result.current.activeCommentator).toBe("coach");
     expect(result.current.cardStates.coach).toBe("active");
     expect(audio.playForCard).toHaveBeenCalledTimes(1);
-    act(() => vi.advanceTimersByTime(29_000));
-    expect(result.current.cardStates.coach).toBe("active");
+    // Written dwell owns advance — never waits on Enable Sound / unlock.
+    act(() => vi.advanceTimersByTime(commentaryDisplayMs(card.text, true) + 50));
+    act(() => vi.advanceTimersByTime(50)); // exit + gap under reduced motion
+    expect(result.current.activeCommentator).toBeNull();
+    expect(result.current.sequenceIndex).toBe(-1);
+  });
+
+  it("[8c] tts preference off shows written card and advances without audio", () => {
+    const audio = mockAudio({ userEnabled: false, unlocked: false });
+    const card = mkCard("sofia", "s-9");
+    const { result } = renderHook(
+      (s: RfsnBroadcastSnapshot) => useRfsnBoothController(s, { audio }),
+      { initialProps: snap({ pick: "9.01", primary: card }) },
+    );
+    settle();
+    expect(result.current.activeCommentator).toBe("sofia");
+    expect(result.current.cardStates.sofia).toBe("active");
+    expect(result.current.activeCard?.text).toBe(card.text);
+    expect(audio.playForCard).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(commentaryDisplayMs(card.text, true) + 50));
+    act(() => vi.advanceTimersByTime(50));
+    expect(result.current.activeCommentator).toBeNull();
+    expect(result.current.sequenceIndex).toBe(-1);
   });
 
   it("[8] audio enabled starts playback for the active card", () => {
