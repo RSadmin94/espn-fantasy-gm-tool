@@ -102,12 +102,13 @@ export function RfsnBroadcastPanel({
     );
   }, [booth.activeCard, boothSnapshot.overallPick]);
 
-  // Hold while a card is on air OR while the server is generating the next written
-  // frame. Nulling the booth on pending was racing Turbo locks past 6s dwell.
-  // Watchdog (MAX_BROADCAST_HOLD_MS) still caps any stuck hold.
-  const busy = Boolean(
-    enabled && (booth.sequenceIndex >= 0 || payload?.sessionState === "commentary_pending"),
+  // Hold while booth is on air/pending OR while a freshly notified frame is still landing.
+  const serverOnAir = Boolean(
+    payload?.sessionState === "commentary_pending" ||
+      ((payload?.sessionState === "commentary_active" || payload?.sessionState === "draft_complete") &&
+        payload?.snapshot?.primary?.text?.trim()),
   );
+  const busy = Boolean(enabled && (booth.sequenceIndex >= 0 || serverOnAir));
   const lastBusyRef = useRef<boolean | null>(null);
   useEffect(() => {
     if (lastBusyRef.current === busy) return;

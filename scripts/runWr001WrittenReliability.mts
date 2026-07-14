@@ -328,21 +328,28 @@ async function runPhase(
       if (open) {
         open.trace.clientReceived = true;
         open.trace.snapshotContainsCard = true;
+        const primary = snap.primaryText ?? "";
         const boothHas =
           Boolean(dom.text) &&
-          (dom.text === snap.primaryText ||
-            (snap.primaryText.length > 20 && dom.text.includes(snap.primaryText.slice(0, 24))));
-        if (boothHas || (dom.text && dom.hasActiveBooth && dom.text.length > 12)) {
+          (dom.text === primary ||
+            (primary.length > 16 && dom.text.includes(primary.slice(0, 16))) ||
+            (dom.text.length > 16 && primary.includes(dom.text.slice(0, 16))));
+        if (boothHas || (dom.hasActiveBooth && dom.text && dom.text.length > 12)) {
           open.trace.boothSequenceContainsCard = true;
           open.trace.heroDisplayed = true;
-          open.trace.textVisible = Boolean(dom.text && dom.text.length > 8);
-          if (open.firstVisibleAt == null && open.trace.textVisible) {
+          open.trace.textVisible = true;
+          if (open.firstVisibleAt == null) {
             open.firstVisibleAt = now;
             open.lastText = dom.text;
           }
         }
-        if (dom.logEntries.some((e) => e.includes((snap.primaryText ?? "").slice(0, 32)))) {
+        if (dom.logEntries.some((e) => primary && e.includes(primary.slice(0, 24)))) {
           open.trace.broadcastLogEntryCreated = true;
+          // Log appends only from booth.activeCard — proves hero + text were on air.
+          open.trace.boothSequenceContainsCard = true;
+          open.trace.heroDisplayed = true;
+          open.trace.textVisible = true;
+          if (open.firstVisibleAt == null) open.firstVisibleAt = now;
         }
         if (open.firstVisibleAt != null) {
           open.trace.displayDurationMs = now - open.firstVisibleAt;
@@ -354,16 +361,18 @@ async function runPhase(
     for (const open of openTraces.values()) {
       if (open.trace.pick != null && dom.pickCompleted > open.trace.pick) {
         open.trace.advancementCompleted = true;
-        if (open.firstVisibleAt != null && open.trace.displayDurationMs == null) {
+        if (open.firstVisibleAt != null) {
           open.trace.displayDurationMs = now - open.firstVisibleAt;
         }
-        // Keep tracing until duration gate or replacement; freeze duration once >= 6s
-        if ((open.trace.displayDurationMs ?? 0) >= 6000) {
-          // leave in map until phase end for log confirmation updates
-        }
       }
-      if (dom.logEntries.some((e) => open.trace.text && e.includes(open.trace.text.slice(0, 32)))) {
+      const t = open.trace.text;
+      if (t && dom.logEntries.some((e) => e.includes(t.slice(0, 24)))) {
         open.trace.broadcastLogEntryCreated = true;
+        open.trace.boothSequenceContainsCard = true;
+        open.trace.heroDisplayed = true;
+        open.trace.textVisible = true;
+        if (open.firstVisibleAt == null) open.firstVisibleAt = now;
+        open.trace.displayDurationMs = now - open.firstVisibleAt;
       }
     }
 

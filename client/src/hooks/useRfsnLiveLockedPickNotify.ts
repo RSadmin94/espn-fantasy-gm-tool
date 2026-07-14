@@ -21,6 +21,8 @@ type UseRfsnLiveLockedPickNotifyArgs = {
   draftPace?: "broadcast" | "brisk" | "turbo";
   resetKey?: string;
   baselineResults?: Record<number, LockedPickPlayerResult>;
+  /** Arm draft hold immediately after notify so Turbo cannot race past booth start. */
+  onNotified?: (pickNumber: number) => void;
 };
 
 /**
@@ -38,6 +40,7 @@ export function useRfsnLiveLockedPickNotify({
   draftPace,
   resetKey,
   baselineResults = {},
+  onNotified,
 }: UseRfsnLiveLockedPickNotifyArgs): void {
   const _trpc = trpc as any;
   const accessQ = _trpc.rfsnBroadcast.getAccess.useQuery(undefined, {
@@ -94,6 +97,7 @@ export function useRfsnLiveLockedPickNotify({
       void notifyMut
         .mutateAsync(payload)
         .then(() => {
+          onNotified?.(payload.pick.overallPick);
           void utils.rfsnBroadcast.getLiveSnapshot.invalidate({ leagueId, draftId });
         })
         .catch((err: unknown) => {
@@ -106,7 +110,7 @@ export function useRfsnLiveLockedPickNotify({
           }
         });
     }
-  }, [canNotify, draftComplete, draftId, draftPace, leagueId, notifyMut, results, schedule, teamCount, utils]);
+  }, [canNotify, draftComplete, draftId, draftPace, leagueId, notifyMut, onNotified, results, schedule, teamCount, utils]);
 }
 
 export function useRfsnLivePickNotifyAccess(enabled: boolean) {

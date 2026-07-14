@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { APP_VERSION } from "@/lib/version";
@@ -634,8 +634,19 @@ function LiveDraftEngine({
   const [remainingMs, setRemainingMs] = useState<number>(paceMs);
   const [holding, setHolding] = useState<boolean>(false); // paused for a broadcast moment
   const [broadcastBusy, setBroadcastBusy] = useState<boolean>(false); // reported by the booth panel
+  const [notifyHold, setNotifyHold] = useState(false); // arm on notify until booth claims the frame
   const holdStartRef = useRef<number>(0);
   const holdForceClearedRef = useRef(false);
+  const notifyHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armNotifyHold = useCallback(() => {
+    setNotifyHold(true);
+    if (notifyHoldTimerRef.current) clearTimeout(notifyHoldTimerRef.current);
+    notifyHoldTimerRef.current = setTimeout(() => setNotifyHold(false), 8_000);
+  }, []);
+  useEffect(() => {
+    if (broadcastBusy) setNotifyHold(false);
+  }, [broadcastBusy]);
+  const clockBusy = broadcastBusy || notifyHold;
 
   // ── Manual control (P6) — single source of truth `manualTeamIds`. ────────────
   const { myTeamId } = useLeagueContext();
@@ -784,6 +795,7 @@ function LiveDraftEngine({
     draftPace: draftPaceFromTimerMs(paceMs),
     resetKey: scheduleSig,
     baselineResults: initialResults,
+    onNotified: armNotifyHold,
   });
 
   const resetSession = (trpc as any).rfsnBroadcast.resetLiveSession.useMutation();
@@ -862,7 +874,7 @@ function LiveDraftEngine({
   // Watchdog force-clear cannot re-arm until busy ends.
   useEffect(() => {
     const next = nextBroadcastHoldState({
-      broadcastBusy,
+      broadcastBusy: clockBusy,
       holding,
       holdForceCleared: holdForceClearedRef.current,
     });
@@ -873,7 +885,7 @@ function LiveDraftEngine({
     } else if (!next.holding && holding) {
       setHolding(false);
     }
-  }, [broadcastBusy, holding]);
+  }, [clockBusy, holding]);
 
   // Watchdog — the draft can never freeze longer than 20s, even if a moment gets stuck.
   useEffect(() => {
