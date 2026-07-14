@@ -6,7 +6,15 @@ import { isRfsnLiveBroadcastEnabled } from "./liveBroadcastFeature";
 import { getOrCreateLiveSession } from "./liveBroadcastSession";
 import { processDraftWrapUp, processLockedDraftMoment } from "./liveBroadcastService";
 
+/** Keep each on-air written frame publishable for at least this long before overwrite. */
+export const WRITTEN_FRAME_DWELL_MS = 6_000;
+
 const inFlight = new Map<string, Promise<unknown>>();
+const lastOnAirPublishedAt = new Map<string, number>();
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export function scheduleLiveBroadcastForDraftMoment(
   draftMoment: DraftMoment,
@@ -25,7 +33,22 @@ export function scheduleLiveBroadcastForDraftMoment(
   const prior = inFlight.get(sessionKey);
   const work = (async () => {
     if (prior) await prior.catch(() => null);
+
+    const lastAt = lastOnAirPublishedAt.get(sessionKey) ?? 0;
+    if (lastAt > 0) {
+      const waitMs = Math.max(0, WRITTEN_FRAME_DWELL_MS - (Date.now() - lastAt));
+      if (waitMs > 0) await sleep(waitMs);
+    }
+
     const result = await processLockedDraftMoment(draftMoment, opts);
+    if (
+      result &&
+      result.snapshot?.primary?.text?.trim() &&
+      (result.sessionState === "commentary_active" || result.sessionState === "draft_complete")
+    ) {
+      lastOnAirPublishedAt.set(sessionKey, Date.now());
+    }
+
     if (opts.draftComplete) {
       await processDraftWrapUp({
         leagueId: draftMoment.leagueId,
@@ -34,6 +57,7 @@ export function scheduleLiveBroadcastForDraftMoment(
         teamCount: opts.teamCount,
         useDeterministicProvider: opts.useDeterministicProvider,
       });
+      lastOnAirPublishedAt.set(sessionKey, Date.now());
     }
     return result;
   })().catch(() => null);
@@ -46,6 +70,7 @@ export function scheduleLiveBroadcastForDraftMoment(
 
 export function resetLiveBroadcastPickHookForTests(): void {
   inFlight.clear();
+  lastOnAirPublishedAt.clear();
 }
 
 export async function awaitLiveBroadcastIdle(leagueId: string, draftId: string): Promise<void> {
