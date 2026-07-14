@@ -110,6 +110,10 @@ export function resolveEditorialPlanId(moment: BroadcastMoment): EditorialPlanId
   if (moment.significance === "notable") {
     if (hasSignal(moment, "STEAL")) return "value_pick";
     if (hasSignal(moment, "REACH")) return "slight_reach";
+    // Early written floor + receipt-first notables — Sofia lead (ledger rotates streaks).
+    if (hasSignal(moment, "EARLY_ROUND_FLOOR") || moment.signals.length === 0) {
+      return "written_notable";
+    }
     return "value_pick";
   }
 
@@ -121,7 +125,19 @@ export function buildEditorialAssignment(
   ledger: EditorialLedger,
 ): EditorialAssignment {
   const planId = resolveEditorialPlanId(moment);
-  const basePlan = getEditorialPlan(planId);
+  let basePlan = getEditorialPlan(planId);
+
+  // Spread early written leads so Sofia / Coach / Roxanne each appear naturally.
+  if (planId === "written_notable" && moment.identity.kind === "draft_pick") {
+    const rotation: VoiceId[] = ["sofia", "coach", "roxanne"];
+    const lead = rotation[moment.identity.pickNumber % 3]!;
+    basePlan = {
+      ...basePlan,
+      leadVoice: lead,
+      optionalVoices: rotation.filter((v) => v !== lead),
+    };
+  }
+
   const resolution = ledger.resolveForMoment(basePlan, moment);
   const plan = resolution.plan;
 

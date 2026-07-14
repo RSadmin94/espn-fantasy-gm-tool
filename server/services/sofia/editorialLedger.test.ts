@@ -92,9 +92,9 @@ describe("SessionEditorialLedger", () => {
     expect(res.silenced).toBe(false);
   });
 
-  it("does not rotate coach when plan has no optional voices", () => {
+  it("rotates coach lead on value_pick when optionals exist", () => {
     const plan = getEditorialPlan("value_pick");
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       ledger.recordFrame({
         planId: "value_pick",
         leadVoice: "coach",
@@ -109,13 +109,13 @@ describe("SessionEditorialLedger", () => {
       });
     }
     const res = ledger.resolveForMoment(plan, bm());
-    expect(res.leadRotated).toBe(false);
-    expect(res.plan.leadVoice).toBe("coach");
+    expect(res.leadRotated).toBe(true);
+    expect(res.plan.leadVoice).not.toBe("coach");
   });
 
   it("rotates coach lead on position_run with optional sofia", () => {
     const plan = getEditorialPlan("position_run");
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       ledger.recordFrame({
         planId: "position_run",
         leadVoice: "coach",

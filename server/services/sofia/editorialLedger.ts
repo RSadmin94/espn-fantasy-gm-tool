@@ -48,7 +48,8 @@ const MAX_LEAD_HISTORY = 8;
 const MAX_VOICE_HISTORY = 24;
 const MAX_CATCHPHRASE_HISTORY = 6;
 const CALLBACK_COOLDOWN_PICKS = 4;
-const COACH_LEAD_STREAK_LIMIT = 3;
+/** Any lead repeating this many frames in a row yields to an optional voice. */
+const LEAD_STREAK_LIMIT = 2;
 
 const ROXANNE_CATCHPHRASE_PATTERNS = [
   /\bdid\s+.+\s+just\b/i,
@@ -113,9 +114,9 @@ export class SessionEditorialLedger implements EditorialLedger {
       };
     }
 
-    const coachStreak = consecutiveLeadStreak(this.recentLeadVoices, "coach");
-    if (plan.leadVoice === "coach" && coachStreak >= COACH_LEAD_STREAK_LIMIT) {
-      const alt = plan.optionalVoices.find((v) => !plan.prohibitedVoices.includes(v));
+    const leadStreak = consecutiveLeadStreak(this.recentLeadVoices, plan.leadVoice);
+    if (leadStreak >= LEAD_STREAK_LIMIT) {
+      const alt = plan.optionalVoices.find((v) => v !== plan.leadVoice && !plan.prohibitedVoices.includes(v));
       if (alt) {
         plan = {
           ...plan,
