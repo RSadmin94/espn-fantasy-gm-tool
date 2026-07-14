@@ -931,6 +931,7 @@ export async function waitForFirstAudioAttempt(
 export function installAudioCounterInitScript(context: BrowserContext): Promise<void> {
   return context.addInitScript(() => {
     const w = window as unknown as {
+      __RFSN_AUDIO_PROBE__?: boolean;
       __rfsnCert: {
         audioStarts: number;
         endedEvents: number;
@@ -939,6 +940,8 @@ export function installAudioCounterInitScript(context: BrowserContext): Promise<
         audioFetches: number;
       };
     };
+    // Always-on for cert browsers — product records lifecycle only when this flag is set.
+    w.__RFSN_AUDIO_PROBE__ = true;
     w.__rfsnCert = { audioStarts: 0, endedEvents: 0, replayStarts: 0, playCalls: 0, audioFetches: 0 };
     const origFetch = window.fetch.bind(window);
     window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {

@@ -13,10 +13,8 @@ import {
   initialCardStates,
   nextBoothSegment,
 } from "@/lib/rfsnBoothPresentation";
+import { PLAYBACK_MAX_WATCHDOG_MS } from "@/lib/rfsnPlaybackTerminal";
 import { usePrefersReducedMotion } from "./usePrefersReducedMotion";
-
-/** Safety cap only — normal advance is audio `ended` or text dwell after onFallback. */
-const AUDIO_SAFETY_FALLBACK_MS = 120_000;
 
 export type RfsnBoothController = {
   cardStates: Record<RfsnCommentatorId, BoothCardState>;
@@ -32,6 +30,14 @@ export type RfsnBoothController = {
 export type RfsnBoothControllerOptions = {
   audio?: RfsnAudioPlayback | null;
 };
+
+function audioOwnsBooth(audio: RfsnAudioPlayback | null | undefined): boolean {
+  if (!audio) return false;
+  if (audio.state === "loading" || audio.state === "playing") return true;
+  if (audio.isPlayInFlight?.()) return true;
+  if (audio.isPlaying?.()) return true;
+  return false;
+}
 
 export function useRfsnBoothController(
   snapshot: RfsnBroadcastSnapshot,
@@ -56,6 +62,7 @@ export function useRfsnBoothController(
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sequenceIndexRef = useRef(-1);
   const audioRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeCardIdRef = useRef<string | null>(null);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -82,8 +89,11 @@ export function useRfsnBoothController(
   );
 
   const scheduleTextExit = useCallback((commentator: RfsnCommentatorId, index: number, text: string) => {
+    // Never schedule an independent speaker timer while audio owns the card.
+    if (audioOwnsBooth(audioRef.current)) return;
     const displayMs = commentaryDisplayMs(text, reducedMotion);
     timerRef.current = setTimeout(() => {
+      if (audioOwnsBooth(audioRef.current)) return;
       exitSpeakerRef.current(commentator, index, false);
     }, displayMs);
   }, [reducedMotion]);
@@ -99,30 +109,42 @@ export function useRfsnBoothController(
       let fallbackScheduled = false;
       const scheduleFallback = () => {
         if (fallbackScheduled) return;
+        // Competing text exit must not fire under active media — force audio terminal instead.
+        if (audioOwnsBooth(audioRef.current)) {
+          audioRef.current?.forceTerminalTimedOut?.();
+          return;
+        }
         fallbackScheduled = true;
         scheduleTextExit(card.commentator, index, card.text);
       };
-      const onAudioEnded = () => exitSpeakerRef.current(card.commentator, index, false);
+      const onAudioEnded = () => {
+        fallbackScheduled = true;
+        clearTimer();
+        exitSpeakerRef.current(card.commentator, index, false);
+      };
       const tryAudio = () => {
         audioRef.current?.playForCard(card, onAudioEnded, scheduleFallback);
       };
       tryAudio();
 
       if (!liveAudio.unlocked) return false;
-      if (liveAudio.isPlaying?.()) return true;
-      if (liveAudio.state === "loading") return true;
+      if (audioOwnsBooth(liveAudio)) return true;
 
       audioRetryRef.current = setTimeout(() => {
         const a = audioRef.current;
         if (!a) return;
-        if (a.state === "loading" || a.state === "ready") tryAudio();
+        if (a.state === "loading" || a.state === "ready" || a.state === "playing") tryAudio();
       }, 1200);
+
+      // Pre-play wait only. Once audio owns the card, the holding effect cancels this and
+      // any fire while holding routes through forceTerminalTimedOut (never exitSpeaker).
       timerRef.current = setTimeout(() => {
-        const a = audioRef.current;
-        if (!a) return;
-        if (a.isPlaying?.()) return;
+        if (audioOwnsBooth(audioRef.current)) {
+          audioRef.current?.forceTerminalTimedOut?.();
+          return;
+        }
         scheduleFallback();
-      }, AUDIO_SAFETY_FALLBACK_MS);
+      }, PLAYBACK_MAX_WATCHDOG_MS);
       return true;
     },
     [clearTimer, scheduleTextExit],
@@ -157,9 +179,9 @@ export function useRfsnBoothController(
           // Preference on but gesture pending — keep card on-air until unlock or safety timeout.
           timerRef.current = setTimeout(() => {
             const a = audioRef.current;
-            if (a?.unlocked || a?.isPlaying?.()) return;
+            if (a?.unlocked || audioOwnsBooth(a)) return;
             scheduleTextExit(card.commentator, index, card.text);
-          }, AUDIO_SAFETY_FALLBACK_MS);
+          }, PLAYBACK_MAX_WATCHDOG_MS);
         }
       }, enterMs);
     },
@@ -210,6 +232,11 @@ export function useRfsnBoothController(
     if (activeCommentator !== commentator || sequenceIndexRef.current < 0) return;
     const state = cardStates[commentator];
     if (state !== "active" && state !== "entering") return;
+    // Manual dismiss still stops media; prefer terminal when an attempt is active.
+    if (audioOwnsBooth(audioRef.current)) {
+      audioRef.current?.forceTerminalTimedOut?.();
+      return;
+    }
     audioRef.current?.stopCurrent();
     exitSpeakerRef.current(commentator, sequenceIndexRef.current, true);
   }, [activeCommentator, cardStates]);
@@ -275,7 +302,6 @@ export function useRfsnBoothController(
 
   const unlockRetryRef = useRef(false);
   const wasUnlockedRef = useRef(false);
-  const activeCardIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (activeCard?.id !== activeCardIdRef.current) {
       activeCardIdRef.current = activeCard?.id ?? null;
@@ -305,6 +331,30 @@ export function useRfsnBoothController(
     cardStates,
     clearTimer,
   ]);
+
+  /**
+   * Ownership rule: once audio is loading/playing/in-flight, only completePlayback
+   * (via onEnded / forceTerminalTimedOut) may release the speaker.
+   * Cancel any pre-play text/fallback timers immediately when playback takes hold.
+   */
+  useEffect(() => {
+    const holding = audioOwnsBooth(audio);
+    if (!holding || !activeCard) return;
+
+    clearTimer();
+    const expectedCardId = activeCard.id;
+    const ceiling = setTimeout(() => {
+      if (activeCardIdRef.current !== expectedCardId) return;
+      if (!audioOwnsBooth(audioRef.current)) return;
+      audioRef.current?.forceTerminalTimedOut?.();
+    }, PLAYBACK_MAX_WATCHDOG_MS);
+    timerRef.current = ceiling;
+
+    return () => {
+      clearTimeout(ceiling);
+      if (timerRef.current === ceiling) timerRef.current = null;
+    };
+  }, [audio?.state, activeCard?.id, clearTimer, audio]);
 
   const filteredTicker = useMemo(
     () => filterTickerForBooth(snapshot.ticker, activeCard, consumedTickerIds),

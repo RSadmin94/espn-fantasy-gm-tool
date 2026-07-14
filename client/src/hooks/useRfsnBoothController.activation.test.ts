@@ -71,7 +71,9 @@ function mockAudio(overrides: Partial<RfsnAudioPlayback> = {}): RfsnAudioPlaybac
     lastPlayable: null,
     replayAvailable: false,
     isPlaying: () => false,
+    isPlayInFlight: () => false,
     stopCurrent: vi.fn(),
+    forceTerminalTimedOut: vi.fn(),
     playForCard: vi.fn(),
     onSnapshotChange: vi.fn(),
     unlockAudio: vi.fn(),
@@ -245,7 +247,7 @@ describe("useRfsnBoothController — new frames, audio independence, silence", (
     expect(result.current.activeCommentator).toBe("coach");
     expect(result.current.cardStates.coach).toBe("active");
     expect(audio.playForCard).toHaveBeenCalledTimes(1);
-    act(() => vi.advanceTimersByTime(30_000));
+    act(() => vi.advanceTimersByTime(29_000));
     expect(result.current.cardStates.coach).toBe("active");
   });
 

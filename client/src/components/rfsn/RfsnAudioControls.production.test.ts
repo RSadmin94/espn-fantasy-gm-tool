@@ -35,9 +35,9 @@ describe("RfsnAudioControls production unlock regression (behavioral)", () => {
     };
   }
 
-  function unlockLabel(userEnabled: boolean, unlocked: boolean, state: string): string {
-    const locked = !unlocked && state !== "disabled";
-    if (!locked) return "Audio on";
+  function unlockLabel(userEnabled: boolean, unlocked: boolean, _state: string): string {
+    const needsGesture = !unlocked || !userEnabled;
+    if (!needsGesture) return "Audio on";
     return userEnabled ? "Tap to Enable Sound" : "Enable Broadcast Audio";
   }
 
@@ -49,8 +49,16 @@ describe("RfsnAudioControls production unlock regression (behavioral)", () => {
     expect(unlockLabel(false, false, "locked")).toBe("Enable Broadcast Audio");
   });
 
+  it("does not show Audio on when state is disabled but preference is off (stale-label regression)", () => {
+    expect(unlockLabel(false, false, "disabled")).toBe("Enable Broadcast Audio");
+  });
+
   it("shows Audio on after unlock gesture", () => {
     expect(unlockLabel(true, true, "ready")).toBe("Audio on");
+  });
+
+  it("shows Enable when unlocked flag is true but preference is off", () => {
+    expect(unlockLabel(false, true, "ready")).toBe("Enable Broadcast Audio");
   });
 
   it("plays on-air line when unlock lands and clip is already ready", () => {

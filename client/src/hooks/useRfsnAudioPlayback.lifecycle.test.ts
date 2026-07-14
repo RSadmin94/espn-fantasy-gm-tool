@@ -60,23 +60,32 @@ import type { RfsnCommentaryCard } from "@/lib/rfsnPresentation";
 
 class MockAudio {
   static instances: MockAudio[] = [];
+  static lastEndedListenerAttachedBeforePlay = false;
   src: string;
   muted = false;
   volume = 1;
   currentTime = 0;
+  duration = 5;
   paused = true;
+  ended = false;
+  readyState = 4;
+  networkState = 1;
   private listeners: Record<string, Array<() => void>> = {};
+  private endedListenerAttached = false;
   constructor(src?: string) {
     this.src = src ?? "";
     MockAudio.instances.push(this);
   }
   addEventListener(ev: string, fn: () => void) {
     (this.listeners[ev] ||= []).push(fn);
+    if (ev === "ended") this.endedListenerAttached = true;
   }
   removeEventListener() {}
   play() {
+    MockAudio.lastEndedListenerAttachedBeforePlay = this.endedListenerAttached;
     this.paused = false;
     this.currentTime = 0.01;
+    this.emit("playing");
     return Promise.resolve();
   }
   pause() {
@@ -89,6 +98,7 @@ class MockAudio {
 
 beforeEach(() => {
   MockAudio.instances = [];
+  MockAudio.lastEndedListenerAttachedBeforePlay = false;
   (globalThis as any).Audio = MockAudio as unknown as typeof Audio;
   (window as any).Audio = MockAudio;
   vi.stubGlobal(
@@ -105,7 +115,10 @@ beforeEach(() => {
   try { localStorage.clear(); } catch { /* ignore */ }
   try { sessionStorage.clear(); } catch { /* ignore */ }
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 const last = () => MockAudio.instances[MockAudio.instances.length - 1];
 const card = (id: string): RfsnCommentaryCard => ({ id } as unknown as RfsnCommentaryCard);
@@ -320,6 +333,37 @@ describe("useRfsnAudioPlayback — deterministic lifecycle harness", () => {
     expect(MockAudio.instances.length).toBeGreaterThan(count);
   });
 
+  it("[wrap-up-replay] after booth clears card + live clips, lastPlayable still replays", async () => {
+    const wrapId = "196:sofia:wrap";
+    const { result, rerender, onEnded } = await setupPlaying("pick-196", wrapId);
+    act(() => last().emit("ended"));
+    expect(onEnded).toHaveBeenCalledTimes(1);
+    expect(result.current.lastPlayable?.commentaryId).toBe(wrapId);
+    expect(result.current.replayAvailable).toBe(true);
+
+    // Simulate post-wrap-up booth standby + draft_complete poll: card gone, clips pruned.
+    act(() => result.current.onSnapshotChange());
+    rerender({
+      tts: true,
+      s: {
+        enabled: true,
+        draftId: "D",
+        pickId: "pick-196",
+        pickNumber: 196,
+        updatedAt: "",
+        clips: [],
+      },
+    });
+    expect(result.current.replayAvailable).toBe(true);
+
+    const before = MockAudio.instances.length;
+    act(() => result.current.replayCurrent());
+    await flushPlayback();
+    expect(MockAudio.instances.length).toBeGreaterThan(before);
+    expect(last().paused).toBe(false);
+    expect(result.current.lastPlayable?.commentaryId).toBe(wrapId);
+  });
+
   it("[replay-reset] clearReplay disables replay until a new clip arrives", async () => {
     const { result } = await setupPlaying();
     expect(result.current.replayAvailable).toBe(true);
@@ -327,5 +371,92 @@ describe("useRfsnAudioPlayback — deterministic lifecycle harness", () => {
     expect(result.current.replayAvailable).toBe(false);
     act(() => result.current.replayCurrent());
     expect(MockAudio.instances.length).toBe(1);
+  });
+
+  it("[terminal] attaches ended listener before play()", async () => {
+    await setupPlaying();
+    expect(MockAudio.lastEndedListenerAttachedBeforePlay).toBe(true);
+  });
+
+  it("[terminal] normal ended completes once and advances booth via onEnded", async () => {
+    const { onEnded, onFallback } = await setupPlaying();
+    act(() => last().emit("ended"));
+    expect(onEnded).toHaveBeenCalledTimes(1);
+    expect(onFallback).not.toHaveBeenCalled();
+    act(() => last().emit("ended"));
+    expect(onEnded).toHaveBeenCalledTimes(1);
+  });
+
+  it("[terminal] duration-known watchdog releases when ended never fires", async () => {
+    const onEnded = vi.fn();
+    const onFallback = vi.fn();
+    const view = renderHook(
+      ({ tts, s }: { tts: boolean; s: RfsnLiveAudioStatus }) =>
+        useRfsnAudioPlayback(tts, s, { watchdogMsOverride: 40 }),
+      { initialProps: { tts: true, s: status("pick-9", [{ commentaryId: CID }]) } },
+    );
+    act(() => view.result.current.unlockAudio());
+    await act(async () => {
+      view.result.current.playForCard(card(CID), onEnded, onFallback);
+    });
+    await flushPlayback();
+    expect(last()).toBeTruthy();
+    expect(onEnded).not.toHaveBeenCalled();
+    await new Promise((r) => setTimeout(r, 80));
+    expect(onEnded).toHaveBeenCalledTimes(1);
+    expect(onFallback).not.toHaveBeenCalled();
+    expect(view.result.current.replayAvailable).toBe(true);
+  });
+
+  it("[terminal] duration-unknown watchdog uses fallback max", async () => {
+    class NoDurationAudio extends MockAudio {
+      duration = Number.NaN;
+    }
+    (globalThis as any).Audio = NoDurationAudio as unknown as typeof Audio;
+    (window as any).Audio = NoDurationAudio;
+    const onEnded = vi.fn();
+    const onFallback = vi.fn();
+    const view = renderHook(
+      ({ tts, s }: { tts: boolean; s: RfsnLiveAudioStatus }) =>
+        useRfsnAudioPlayback(tts, s, { watchdogMsOverride: 40 }),
+      { initialProps: { tts: true, s: status("pick-9", [{ commentaryId: CID }]) } },
+    );
+    act(() => view.result.current.unlockAudio());
+    await act(async () => {
+      view.result.current.playForCard(card(CID), onEnded, onFallback);
+    });
+    await flushPlayback();
+    expect(onEnded).not.toHaveBeenCalled();
+    await new Promise((r) => setTimeout(r, 80));
+    expect(onEnded).toHaveBeenCalledTimes(1);
+  });
+
+  it("[terminal] error event releases via onFallback once", async () => {
+    const { onEnded, onFallback } = await setupPlaying();
+    act(() => last().emit("error"));
+    expect(onFallback).toHaveBeenCalledTimes(1);
+    expect(onEnded).not.toHaveBeenCalled();
+    act(() => last().emit("error"));
+    expect(onFallback).toHaveBeenCalledTimes(1);
+  });
+
+  it("[terminal] duplicate ended + watchdog only completes once", async () => {
+    const onEnded = vi.fn();
+    const onFallback = vi.fn();
+    const view = renderHook(
+      ({ tts, s }: { tts: boolean; s: RfsnLiveAudioStatus }) =>
+        useRfsnAudioPlayback(tts, s, { watchdogMsOverride: 80 }),
+      { initialProps: { tts: true, s: status("pick-9", [{ commentaryId: CID }]) } },
+    );
+    act(() => view.result.current.unlockAudio());
+    await act(async () => {
+      view.result.current.playForCard(card(CID), onEnded, onFallback);
+    });
+    await flushPlayback();
+    act(() => last().emit("ended"));
+    expect(onEnded).toHaveBeenCalledTimes(1);
+    await new Promise((r) => setTimeout(r, 120));
+    expect(onEnded).toHaveBeenCalledTimes(1);
+    expect(onFallback).not.toHaveBeenCalled();
   });
 });

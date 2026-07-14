@@ -11,8 +11,10 @@ type RfsnAudioControlsProps = {
 export function RfsnAudioControls({ audio, ttsAvailable, className }: RfsnAudioControlsProps) {
   if (!ttsAvailable) return null;
 
-  // "locked" = enabled preference but no user gesture yet this session (autoplay guard).
-  const locked = !audio.unlocked && audio.state !== "disabled";
+  // Preference (userEnabled) and browser unlock (unlocked) are independent.
+  // Never treat state==="disabled" as unlocked — that hid the Enable control and
+  // showed a stale "Audio on" label when preference was off or TTS path disabled.
+  const needsGesture = !audio.unlocked || !audio.userEnabled;
 
   return (
     <div
@@ -21,7 +23,7 @@ export function RfsnAudioControls({ audio, ttsAvailable, className }: RfsnAudioC
         className,
       )}
     >
-      {locked ? (
+      {needsGesture ? (
         <button
           type="button"
           onClick={audio.unlockAudio}

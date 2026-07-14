@@ -115,8 +115,15 @@ async function assertDraftStartup(page: Page, ctx: HarnessContext): Promise<void
 
 async function boothPlayingAligned(page: Page): Promise<boolean> {
   return page.evaluate(() => {
-    const audio = document.querySelector("audio");
-    const playing = Boolean(audio && !audio.paused && audio.currentTime > 0);
+    const w = window as unknown as {
+      __rfsnAudioProbe?: {
+        samples: Array<{ currentTime: number; ended: boolean | null; playInFlight: boolean }>;
+      };
+    };
+    const last = w.__rfsnAudioProbe?.samples?.at(-1);
+    const playing = Boolean(
+      last && last.playInFlight && !last.ended && (last.currentTime ?? 0) > 0,
+    );
     const active = document.querySelector('[data-booth-state="active"]');
     if (playing && !active) return false;
     return true;
@@ -156,6 +163,9 @@ async function runSingleDraftCert(page: Page, ctx: HarnessContext): Promise<void
   let pickBeforeNav = "";
   let lastPickCompleted = 0;
   let idleSince = Date.now();
+  let maxPickReached = 0;
+  let resetObserved = false;
+  const draftTrace: Array<Record<string, unknown>> = [];
 
   while (Date.now() - start < TIMEOUTS.fullCertTotal) {
     const metrics = await certMetrics(page);
@@ -178,16 +188,56 @@ async function runSingleDraftCert(page: Page, ctx: HarnessContext): Promise<void
       );
     }
 
-    const { playing } = await page.evaluate(() => {
-      const a = document.querySelector("audio");
-      return { playing: Boolean(a && !a.paused && a.currentTime > 0) };
+    const audioProgress = await page.evaluate(() => {
+      const w = window as unknown as {
+        __rfsnAudioProbe?: {
+          samples: Array<{ currentTime: number; ended: boolean | null; playInFlight: boolean }>;
+        };
+      };
+      const samples = w.__rfsnAudioProbe?.samples ?? [];
+      const last = samples[samples.length - 1];
+      const playing = Boolean(
+        last && last.playInFlight && !last.ended && (last.currentTime ?? 0) > 0,
+      );
+      return { playing, currentTime: last?.currentTime ?? 0 };
     });
-    if (playing) longPlayMs += 2000;
+    if (audioProgress.playing) longPlayMs += 2000;
 
     const aligned = await boothPlayingAligned(page);
-    if (playing && !aligned) prematureCutoff = true;
+    if (audioProgress.playing && !aligned) prematureCutoff = true;
 
     const pickNum = ui.pickCompleted;
+    if (pickNum > maxPickReached) {
+      maxPickReached = pickNum;
+      draftTrace.push({
+        tMs: Date.now() - start,
+        event: "pick_highwater",
+        pick: pickNum,
+        startVisible: ui.startVisible,
+        pauseVisible: ui.pauseVisible,
+        clockState: ui.clockState,
+      });
+    }
+    if (maxPickReached > 0 && pickNum < maxPickReached && !resetObserved) {
+      resetObserved = true;
+      draftTrace.push({
+        tMs: Date.now() - start,
+        event: "PICK_RESET",
+        pick: pickNum,
+        fromHighwater: maxPickReached,
+        startVisible: ui.startVisible,
+        pauseVisible: ui.pauseVisible,
+        clockState: ui.clockState,
+        buttons: await page.evaluate(() =>
+          [...(document.querySelector(".live-draft-surface")?.querySelectorAll("button") ?? [])]
+            .map((b) => (b.textContent ?? "").trim())
+            .filter(Boolean),
+        ),
+      });
+      console.log(
+        `RESET DETECTED t=${Date.now() - start}ms pick ${maxPickReached}→${pickNum} startVisible=${ui.startVisible}`,
+      );
+    }
 
     if (!navigated && pickNum >= 8) {
       pickBeforeNav = `Pick ${pickNum}/${ui.pickTotal}`;
@@ -198,34 +248,94 @@ async function runSingleDraftCert(page: Page, ctx: HarnessContext): Promise<void
       await page.waitForTimeout(3000);
       navigated = true;
       const afterUi = await readDraftUiState(page);
-      const replayVisible = (await page.getByRole("button", { name: /Replay/i }).count()) > 0;
+      const boothReplayVisible =
+        (await page.locator("[data-rfsn-warroom-broadcast]").getByRole("button", { name: /^Replay$/i }).count()) >
+        0;
       const resumeVisible = (await page.getByRole("button", { name: /Resume/i }).count()) > 0;
       if (resumeVisible) await page.getByRole("button", { name: /Resume/i }).first().click();
       record({
         id: "REQ-5",
         requirement: "Leaving Draft War Room pauses instead of resetting session",
         pass: afterUi.pickCompleted >= pickNum,
-        evidence: `before=${pickBeforeNav} after=Pick ${afterUi.pickCompleted}/${afterUi.pickTotal} replay=${replayVisible} resumed=${resumeVisible}`,
+        evidence: `before=${pickBeforeNav} after=Pick ${afterUi.pickCompleted}/${afterUi.pickTotal} boothReplay=${boothReplayVisible} resumed=${resumeVisible}`,
         screenshot: await shot(page, OUT_DIR, "req5-navigation-return"),
         rootCause: afterUi.pickCompleted < pickNum ? "Tab navigation reset live draft idx" : undefined,
       });
     }
 
-    if (!replayTested && (metrics.audioStarts >= 1 || metrics.playCalls >= 1)) {
-      const replayBtn = page.getByRole("button", { name: /Replay/i }).first();
-      if ((await replayBtn.count()) > 0 && (await replayBtn.isEnabled())) {
-        const before = metrics.audioStarts;
-        await replayBtn.click();
-        await page.waitForTimeout(2500);
-        const after = await certMetrics(page);
-        replayTested = true;
-        record({
-          id: "REQ-4",
-          requirement: "Replay works for commentary",
-          pass: after.audioStarts > before || after.playCalls > before || after.endedEvents >= metrics.endedEvents,
-          evidence: `audioStarts before=${before} after=${after.audioStarts} playCalls after=${after.playCalls}`,
-          screenshot: await shot(page, OUT_DIR, "req4-replay"),
-        });
+    // REQ-4: only after a confirmed terminal state — never click "Replay same seed".
+    if (!replayTested) {
+      const probe = await page.evaluate(() => {
+        const w = window as unknown as {
+          __rfsnAudioProbe?: {
+            samples: Array<{ label: string; playInFlight: boolean }>;
+          };
+        };
+        const samples = w.__rfsnAudioProbe?.samples ?? [];
+        const lastComplete = [...samples].reverse().find((s) => s.label.startsWith("complete_"));
+        const last = samples[samples.length - 1];
+        return {
+          endedEvents: (window as unknown as { __rfsnCert?: { endedEvents?: number } }).__rfsnCert
+            ?.endedEvents ?? 0,
+          playInFlight: Boolean(last?.playInFlight),
+          completeObserved: Boolean(lastComplete),
+          completeLabel: lastComplete?.label ?? null,
+        };
+      });
+      const terminalReady =
+        (probe.endedEvents >= 1 || probe.completeObserved) && probe.playInFlight === false;
+      if (terminalReady) {
+        const booth = page.locator("[data-rfsn-warroom-broadcast]");
+        const replayBtn = booth.getByRole("button", { name: /^Replay$/i });
+        if ((await replayBtn.count()) > 0 && (await replayBtn.isEnabled())) {
+          const before = await certMetrics(page);
+          await replayBtn.click();
+          await page.waitForTimeout(2500);
+          const after = await certMetrics(page);
+          // Allow up to ~20s for the replayed clip to terminal.
+          const replayTermDeadline = Date.now() + 20_000;
+          let replayTerminal = after.endedEvents > before.endedEvents;
+          while (Date.now() < replayTermDeadline && !replayTerminal) {
+            const m = await certMetrics(page);
+            if (m.endedEvents > before.endedEvents) {
+              replayTerminal = true;
+              break;
+            }
+            const complete = await page.evaluate(() => {
+              const samples =
+                (window as unknown as { __rfsnAudioProbe?: { samples: Array<{ label: string }> } })
+                  .__rfsnAudioProbe?.samples ?? [];
+              return samples.some((s) => s.label.startsWith("complete_"));
+            });
+            if (complete && (await certMetrics(page)).endedEvents > before.endedEvents) {
+              replayTerminal = true;
+              break;
+            }
+            await page.waitForTimeout(500);
+          }
+          const finalAfter = await certMetrics(page);
+          replayTested = true;
+          const playAdvanced = finalAfter.playCalls === before.playCalls + 1;
+          record({
+            id: "REQ-4",
+            requirement: "Replay works for commentary",
+            pass: playAdvanced,
+            evidence: `playCalls before=${before.playCalls} after=${finalAfter.playCalls} ended before=${before.endedEvents} after=${finalAfter.endedEvents} replayTerminal=${replayTerminal} preTerminal=${probe.completeLabel ?? `ended=${probe.endedEvents}`}`,
+            screenshot: await shot(page, OUT_DIR, "req4-replay"),
+            rootCause: !playAdvanced
+              ? "Booth Replay did not increment playCalls by exactly 1"
+              : undefined,
+          });
+          draftTrace.push({
+            tMs: Date.now() - start,
+            event: "req4_booth_replay",
+            pick: (await readDraftUiState(page)).pickCompleted,
+            playBefore: before.playCalls,
+            playAfter: finalAfter.playCalls,
+            endedBefore: before.endedEvents,
+            endedAfter: finalAfter.endedEvents,
+          });
+        }
       }
     }
 
@@ -239,6 +349,26 @@ async function runSingleDraftCert(page: Page, ctx: HarnessContext): Promise<void
 
   const finalMetrics = await certMetrics(page);
   wrapUpCount = await page.locator("[data-live-draft-wrap-up]").count();
+  const finalUi = await readDraftUiState(page);
+  draftTrace.push({
+    tMs: Date.now() - start,
+    event: "loop_exit",
+    pick: finalUi.pickCompleted,
+    maxPickReached,
+    resetObserved,
+    startVisible: finalUi.startVisible,
+    draftComplete: finalUi.draftComplete,
+    playCalls: finalMetrics.playCalls,
+    endedEvents: finalMetrics.endedEvents,
+  });
+  fs.writeFileSync(
+    path.join(OUT_DIR, "draft-reset-trace.json"),
+    JSON.stringify({ maxPickReached, resetObserved, elapsedMs: Date.now() - start, draftTrace }, null, 2),
+    "utf8",
+  );
+  console.log(
+    `Draft trace: maxPick=${maxPickReached} resetObserved=${resetObserved} finalPick=${finalUi.pickCompleted} startVisible=${finalUi.startVisible}`,
+  );
 
   record({
     id: "REQ-1",
@@ -309,7 +439,9 @@ async function runSingleDraftCert(page: Page, ctx: HarnessContext): Promise<void
           : undefined,
   });
 
-  const replayAtEnd = page.getByRole("button", { name: /Replay/i }).first();
+  const replayAtEnd = page
+    .locator("[data-rfsn-warroom-broadcast]")
+    .getByRole("button", { name: /^Replay$/i });
   if ((await replayAtEnd.count()) > 0 && (await replayAtEnd.isEnabled())) {
     const beforeMetrics = await certMetrics(page);
     await replayAtEnd.click();
@@ -327,7 +459,7 @@ async function runSingleDraftCert(page: Page, ctx: HarnessContext): Promise<void
       id: "REQ-9",
       requirement: "Wrap-up replay works",
       pass: false,
-      evidence: "Replay button not available at wrap-up",
+      evidence: "Booth Replay button not available at wrap-up",
       rootCause: "No replayable wrap-up clip stored",
     });
   }

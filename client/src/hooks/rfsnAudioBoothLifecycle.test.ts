@@ -58,8 +58,10 @@ class MockAudio {
   muted = false;
   volume = 1;
   currentTime = 0;
+  duration = Number.NaN;
   paused = true;
   ended = false;
+  readyState = 4;
   private listeners: Record<string, Array<() => void>> = {};
   constructor(src?: string) {
     this.src = src ?? "";
@@ -135,9 +137,11 @@ function useBoothWithAudio(input: {
   snapshot: RfsnBroadcastSnapshot;
   tts: boolean;
   audioStatus: RfsnLiveAudioStatus | null;
+  watchdogMsOverride?: number;
 }) {
   const audio = useRfsnAudioPlayback(input.tts, input.audioStatus, {
     persistKey: warRoomAudioSessionKey("league-1", "draft-1"),
+    watchdogMsOverride: input.watchdogMsOverride,
   });
   const booth = useRfsnBoothController(input.snapshot, { audio });
   return { audio, booth };
@@ -168,7 +172,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.runOnlyPendingTimers();
+  try {
+    vi.runOnlyPendingTimers();
+  } catch {
+    // real timers active in timeout describe
+  }
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -232,13 +240,47 @@ describe("RFSN live-draft lifecycle sequences", () => {
     const clip = last();
     expect(clip.paused).toBe(false);
 
+    // Old speaker timer max was ~12s — booth must remain active past that while audio plays.
     act(() => vi.advanceTimersByTime(12_000));
     expect(result.current.booth.activeCommentator).toBe("coach");
     expect(result.current.booth.cardStates.coach).toBe("active");
+    expect(clip.paused).toBe(false);
 
     act(() => clip.emit("ended"));
     settleBooth();
     expect(result.current.booth.activeCommentator).toBeNull();
+  });
+
+  it("watchdog terminal (not booth text timer) advances after hang past speaker dwell", async () => {
+    const longLine = mkCard(
+      "coach",
+      "p9:coach:primary",
+      "Short text dwell, long hang.",
+    );
+    const { result } = renderHook(useBoothWithAudio, {
+      initialProps: {
+        snapshot: snap("9.01", longLine),
+        tts: true,
+        audioStatus: audioStatus("pick-9", 9, [{ commentaryId: longLine.id }]),
+        // Past text dwell (≤12s) but before terminal — proves booth ignores speaker timer.
+        watchdogMsOverride: 20_000,
+      },
+    });
+    act(() => result.current.audio.unlockAudio());
+    settleBooth();
+    await flushPlayback();
+    expect(result.current.booth.activeCommentator).toBe("coach");
+    expect(last().paused).toBe(false);
+
+    act(() => vi.advanceTimersByTime(12_000));
+    expect(result.current.booth.activeCommentator).toBe("coach");
+    expect(result.current.booth.cardStates.coach).toBe("active");
+
+    // Watchdog override → completePlayback(timed_out) → onEnded → advance once.
+    act(() => vi.advanceTimersByTime(8_500));
+    settleBooth();
+    expect(result.current.booth.activeCommentator).toBeNull();
+    expect(last().paused).toBe(true);
   });
 
   it("navigate away → playback pauses → return → same session and replay remain", async () => {
@@ -283,5 +325,56 @@ describe("RFSN live-draft lifecycle sequences", () => {
     expect(second.result.current.unlocked).toBe(true);
     expect(second.result.current.replayAvailable).toBe(true);
     expect(getWarRoomAudioSession(key)?.audioEl?.currentTime).toBe(4.2);
+  });
+});
+
+describe("timeout advances next booth card", () => {
+  it("A never emits ended → onEnded terminal → B still activates", () => {
+    const lineA = mkCard("coach", "p9:coach:primary", "Card A never ends.");
+    const lineB = mkCard("sofia", "p9:sofia:secondary", "Card B must still play.");
+    const playForCard = vi.fn((card: RfsnCommentaryCard, onEnded: () => void) => {
+      // Simulate completePlayback(timed_out) — no HTMLAudioElement `ended`.
+      if (card.id === lineA.id) {
+        setTimeout(() => onEnded(), 500);
+        return;
+      }
+      setTimeout(() => onEnded(), 40);
+    });
+    const audio = {
+      state: "ready" as const,
+      userEnabled: true,
+      muted: false,
+      volume: 1,
+      unlocked: true,
+      lastPlayable: null,
+      replayAvailable: true,
+      isPlaying: () => false,
+      isPlayInFlight: () => false,
+      stopCurrent: vi.fn(),
+      forceTerminalTimedOut: vi.fn(),
+      playForCard,
+      onSnapshotChange: vi.fn(),
+      unlockAudio: vi.fn(),
+      setMuted: vi.fn(),
+      setVolume: vi.fn(),
+      replayCurrent: vi.fn(),
+      clearReplay: vi.fn(),
+    };
+    const { result } = renderHook(
+      (s: RfsnBroadcastSnapshot) => useRfsnBoothController(s, { audio: audio as never }),
+      { initialProps: snap("9.01", lineA, lineB) },
+    );
+    settleBooth();
+    expect(result.current.sequenceLength).toBe(2);
+    expect(result.current.activeCommentator).toBe("coach");
+    expect(playForCard).toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+      vi.advanceTimersByTime(50);
+      vi.advanceTimersByTime(50);
+    });
+    expect(result.current.activeCommentator).toBe("sofia");
+    expect(playForCard.mock.calls.some((c) => c[0].id === lineB.id)).toBe(true);
   });
 });
