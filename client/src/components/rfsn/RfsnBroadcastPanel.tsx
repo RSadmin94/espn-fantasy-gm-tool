@@ -12,7 +12,7 @@ import { useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useRfsnAudioPlayback } from "@/hooks/useRfsnAudioPlayback";
 import { useRfsnBoothController } from "@/hooks/useRfsnBoothController";
-import { buildBoothCommentarySequence } from "@/lib/rfsnBoothPresentation";
+import { buildBoothCommentarySequence, RFSN_VOICE_BETA } from "@/lib/rfsnBoothPresentation";
 import { RfsnAnalystBooth } from "./RfsnAnalystBooth";
 import { RfsnAudioControls } from "./RfsnAudioControls";
 import {
@@ -48,7 +48,7 @@ export function RfsnBroadcastPanel({
   const _trpc = trpc as any;
 
   const accessQ = _trpc.rfsnBroadcast.getAccess.useQuery(undefined, { staleTime: 60_000 });
-  const ttsAvailable = Boolean(accessQ.data?.ttsEnabled);
+  const ttsAvailable = RFSN_VOICE_BETA && Boolean(accessQ.data?.ttsEnabled);
   const enabled = Boolean(accessQ.data?.canAccess);
 
   const snapshotQ = _trpc.rfsnBroadcast.getLiveSnapshot.useQuery(
@@ -71,7 +71,9 @@ export function RfsnBroadcastPanel({
     payload && shouldRenderLiveCommentary(payload) && payload.snapshot
       ? payload.snapshot
       : displaySnapshot;
-  const booth = useRfsnBoothController(boothSnapshot, { audio });
+  // Voice off (written broadcast default): pass no audio so the booth advances on text
+  // timers only — written commentary never waits for TTS / unlock / clip readiness.
+  const booth = useRfsnBoothController(boothSnapshot, { audio: RFSN_VOICE_BETA ? audio : null });
   const sequence = buildBoothCommentarySequence(boothSnapshot);
   const isMobile = layout === "mobile";
 

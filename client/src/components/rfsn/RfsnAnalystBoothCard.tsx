@@ -12,6 +12,7 @@ import {
   boothPortraitMinHeight,
   boothStandbyLine,
   isCommentaryVisibleState,
+  RFSN_VOICE_BETA,
 } from "@/lib/rfsnBoothPresentation";
 import { analystLiveIndicatorVisible, BOOTH_ENTER_ANIM_CLASS } from "@/lib/rfsnBroadcastProduction";
 import { usePhraseReveal } from "@/hooks/usePhraseReveal";
@@ -217,7 +218,7 @@ function FullBoothCard({
               </p>
             )}
           </div>
-          <Waveform active={cardState === "active" && isActiveSpeaker} />
+          <Waveform active={RFSN_VOICE_BETA && cardState === "active" && isActiveSpeaker} />
         </div>
       </div>
 

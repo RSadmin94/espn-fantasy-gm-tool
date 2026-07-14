@@ -26,9 +26,16 @@ export const BOOTH_ENTER_MS = 400;
 export const BOOTH_EXIT_MS = 450;
 export const BOOTH_BETWEEN_SPEAKERS_MS = 400;
 export const BOOTH_DISMISS_MS = 400;
-export const BOOTH_MIN_DISPLAY_MS = 3000;
+export const BOOTH_MIN_DISPLAY_MS = 6000;
 export const BOOTH_MAX_DISPLAY_MS = 12000;
 export const BOOTH_MS_PER_CHAR = 50;
+
+/**
+ * Written-broadcast default. When false, RFSN runs as a written booth: voice/TTS is a
+ * disabled experimental feature — audio controls, replay, and the speaking equalizer are
+ * hidden and the booth advances on text timers only, never waiting for audio.
+ */
+export const RFSN_VOICE_BETA = false;
 
 export const BOOTH_INACTIVE_OPACITY = 0.72;
 
