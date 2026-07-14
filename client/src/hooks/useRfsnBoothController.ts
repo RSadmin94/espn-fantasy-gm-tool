@@ -48,6 +48,8 @@ export function useRfsnBoothController(
   const [cardStates, setCardStates] = useState(initialCardStates);
   const [activeCommentator, setActiveCommentator] = useState<RfsnCommentatorId | null>(null);
   const [activeCard, setActiveCard] = useState<RfsnCommentaryCard | null>(null);
+  const activeCardRef = useRef(activeCard);
+  activeCardRef.current = activeCard;
   const [sequenceIndex, setSequenceIndex] = useState(-1);
   const [consumedTickerIds, setConsumedTickerIds] = useState<Set<string>>(() => new Set());
 
@@ -218,12 +220,21 @@ export function useRfsnBoothController(
 
   const snapshotKey = useMemo(() => {
     const sig = (c: RfsnCommentaryCard | null | undefined) => (c ? `${c.id}~${c.text}` : "");
-    // Ticker lines are consumed incrementally during the booth sequence — polling must
-    // NOT restart the frame when the ticker array grows or gets new object refs.
-    return [snapshot.overallPick, sig(snapshot.primary), sig(snapshot.secondary)].join("|");
+    // The reset key must change ONLY when the actual commentary sequence changes — never on
+    // every pick. overallPick advances each pick while the commentary cards lag behind it, so
+    // keying on it tore down the active clip mid-playback on each pick transition (endedEvents=0).
+    // Ticker lines are consumed incrementally, so they are intentionally excluded too.
+    return [sig(snapshot.primary), sig(snapshot.secondary)].join("|");
   }, [snapshot]);
 
   useEffect(() => {
+    // GUARDRAIL: never tear down an actively-playing clip whose card is still part of the new
+    // sequence. Let it finish — the booth advances via onEnded. Reset only when the active card
+    // has left the sequence, the sequence is empty, or an explicit/terminal reset occurs.
+    const activeId = activeCardRef.current?.id;
+    if (activeId && audioRef.current?.isPlaying?.() && sequenceRef.current.some((c) => c.id === activeId)) {
+      return;
+    }
     clearTimer();
     audioRef.current?.onSnapshotChange();
     audioAttemptedKeyRef.current = null;
