@@ -166,7 +166,7 @@ Write Coach's reaction. JSON:`;
     expect(parseVoicePromptForCommentary(prompt).voice).toBe("coach");
   });
 
-  it("routes early-round floor to written_notable (Sofia-led)", () => {
+  it("does not route zero-signal / EARLY_ROUND_FLOOR notables to written commentary", () => {
     const moment = {
       identity: { kind: "draft_pick", draftId: "d", pickNumber: 3, pickId: "e3" },
       momentType: "draft_pick",
@@ -190,6 +190,6 @@ Write Coach's reaction. JSON:`;
       receipts: [],
       primaryStoryline: null,
     } as BroadcastMoment;
-    expect(resolveEditorialPlanId(moment)).toBe("written_notable");
+    expect(resolveEditorialPlanId(moment)).toBe("routine_pick");
   });
 });

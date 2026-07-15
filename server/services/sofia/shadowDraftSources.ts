@@ -20,25 +20,50 @@ const BROADCAST_STORY_BEATS: ReadonlyArray<{
   position: string;
   playerId: string;
   adp: number;
+  nflTeam: string;
 }> = [
-  { overall: 4, playerName: "CeeDee Lamb", position: "WR", playerId: "lamb", adp: 4 },
-  { overall: 9, playerName: "Josh Allen", position: "QB", playerId: "allen", adp: 24 },
-  { overall: 14, playerName: "Kenneth Walker III", position: "RB", playerId: "kw3", adp: 54 },
-  { overall: 21, playerName: "Patrick Mahomes", position: "QB", playerId: "mahomes", adp: 8 },
-  { overall: 28, playerName: "Lamar Jackson", position: "QB", playerId: "lamar", adp: 18 },
-  { overall: 38, playerName: "Travis Kelce", position: "TE", playerId: "kelce", adp: 22 },
-  { overall: 45, playerName: "Jaxon Smith-Njigba", position: "WR", playerId: "jsn", adp: 105 },
-  { overall: 59, playerName: "Sam LaPorta", position: "TE", playerId: "laporta", adp: 80 },
-  { overall: 67, playerName: "Christian McCaffrey", position: "RB", playerId: "cmc", adp: 1 },
-  { overall: 84, playerName: "DK Metcalf", position: "WR", playerId: "metcalf", adp: 48 },
-  { overall: 112, playerName: "Chris Olave", position: "WR", playerId: "olave", adp: 72 },
-  { overall: 140, playerName: "Rachaad White", position: "RB", playerId: "white", adp: 88 },
+  { overall: 4, playerName: "CeeDee Lamb", position: "WR", playerId: "lamb", adp: 4, nflTeam: "DAL" },
+  { overall: 9, playerName: "Josh Allen", position: "QB", playerId: "allen", adp: 24, nflTeam: "BUF" },
+  { overall: 14, playerName: "Kenneth Walker III", position: "RB", playerId: "kw3", adp: 54, nflTeam: "SEA" },
+  { overall: 21, playerName: "Patrick Mahomes", position: "QB", playerId: "mahomes", adp: 8, nflTeam: "KC" },
+  { overall: 28, playerName: "Lamar Jackson", position: "QB", playerId: "lamar", adp: 18, nflTeam: "BAL" },
+  { overall: 38, playerName: "Travis Kelce", position: "TE", playerId: "kelce", adp: 22, nflTeam: "KC" },
+  { overall: 45, playerName: "Jaxon Smith-Njigba", position: "WR", playerId: "jsn", adp: 105, nflTeam: "SEA" },
+  { overall: 59, playerName: "Sam LaPorta", position: "TE", playerId: "laporta", adp: 80, nflTeam: "DET" },
+  { overall: 67, playerName: "Christian McCaffrey", position: "RB", playerId: "cmc", adp: 1, nflTeam: "SF" },
+  { overall: 84, playerName: "DK Metcalf", position: "WR", playerId: "metcalf", adp: 48, nflTeam: "SEA" },
+  { overall: 112, playerName: "Chris Olave", position: "WR", playerId: "olave", adp: 72, nflTeam: "NO" },
+  { overall: 140, playerName: "Rachaad White", position: "RB", playerId: "white", adp: 88, nflTeam: "TB" },
 ];
+
+function shadowFillerSpec(overall: number): { position: string; nflTeam: string; owner: { teamId: string; ownerName: string }; round: number } {
+  const o = ownerFor(overall);
+  const round = roundFor(overall);
+  let position = fillerPosition(overall);
+  // Fixture strategy shapes (deterministic, evidence-backed — not random promotion):
+  // Carol waits on RB into mid-draft; Bob waits on QB past early rounds.
+  if (o.ownerName === "Carol" && round <= 5 && position === "RB") position = "WR";
+  if (o.ownerName === "Bob" && round < 6 && position === "QB") position = "WR";
+  // Bob opens on RB so a second early RB can surface hero-RB.
+  if (overall === 2) position = "RB";
+
+  const ownerPickSeq = Math.floor((overall - 1) / 3);
+  const home = OWNER_HOME_NFL[o.ownerName] ?? NFL_CYCLE[(overall - 1) % NFL_CYCLE.length]!;
+  let nflTeam: string = NFL_CYCLE[(overall - 1) % NFL_CYCLE.length]!;
+  // One intentional pass-catcher on the owner's home team → enables a later QB stack beat.
+  if ((position === "WR" || position === "TE") && ownerPickSeq === 2) nflTeam = home;
+  return { position, nflTeam, owner: o, round };
+}
 
 export function makeShadowReceiptContext(over: Partial<ReceiptContext> = {}): ReceiptContext {
   const routineRegistry = Array.from({ length: 200 }, (_, i) => {
     const pick = i + 1;
-    return { norm: `routine wr ${pick}`, position: "WR", adp: pick };
+    const { position } = shadowFillerSpec(pick);
+    return {
+      norm: `routine ${position.toLowerCase()} ${pick}`,
+      position,
+      adp: pick,
+    };
   });
 
   const storyRegistry = BROADCAST_STORY_BEATS.map((b) => ({
@@ -72,6 +97,35 @@ const shadowResolver = buildIdentityResolver([
   { season: 2025, teamId: 1, name: "Alice Team", ownerName: "Alice", ownerId: "PID_ALICE" },
 ]);
 
+const NFL_CYCLE = ["KC", "BUF", "SF", "PHI", "DAL", "MIA", "DET", "BAL", "CIN", "LAR", "GB", "MIN", "NYJ", "CHI"] as const;
+const OWNER_HOME_NFL: Record<string, string> = { Alice: "BUF", Bob: "KC", Carol: "SF" };
+
+/**
+ * Deterministic positional slate for ADP-aligned fillers — mirrors real early/mid/late
+ * draft composition so editorial signals (need, runs, stacks, specialists) can fire.
+ * BROADCAST_STORY_BEATS still overwrite specific overall picks.
+ */
+function fillerPosition(overall: number): string {
+  const round = Math.ceil(overall / TEAM_COUNT);
+  const slot = (overall - 1) % TEAM_COUNT;
+  if (round <= 2) {
+    return ["RB", "WR", "RB", "WR", "RB", "WR", "TE", "WR", "RB", "WR", "RB", "WR", "TE", "WR"][slot]!;
+  }
+  if (round <= 4) {
+    return ["WR", "RB", "WR", "QB", "RB", "WR", "TE", "WR", "RB", "WR", "QB", "RB", "WR", "TE"][slot]!;
+  }
+  if (round <= 6) {
+    return ["WR", "RB", "TE", "WR", "QB", "RB", "WR", "RB", "WR", "TE", "WR", "RB", "WR", "QB"][slot]!;
+  }
+  if (round <= 8) {
+    return ["WR", "RB", "WR", "TE", "RB", "WR", "QB", "WR", "RB", "WR", "TE", "RB", "WR", "DST"][slot]!;
+  }
+  if (round <= 10) {
+    return ["WR", "RB", "TE", "WR", "DST", "RB", "WR", "K", "WR", "RB", "TE", "WR", "DST", "K"][slot]!;
+  }
+  return ["K", "DST", "WR", "RB", "TE", "WR", "DST", "K", "WR", "RB", "TE", "WR", "DST", "K"][slot]!;
+}
+
 function mp(over: Partial<MockPickLike> = {}): MockPickLike {
   return {
     overall: 1,
@@ -104,18 +158,19 @@ function ownerFor(overall: number): { teamId: string; ownerName: string } {
       : { teamId: "3", ownerName: "Carol" };
 }
 
-/** On-ADP filler pick — classifies routine when ADP matches overall pick. */
+/** On-ADP filler pick — positional slate + occasional owner-home NFL for genuine stack moments. */
 function routinePick(overall: number): MockPickLike {
-  const o = ownerFor(overall);
+  const { position, nflTeam, owner: o, round } = shadowFillerSpec(overall);
   return mp({
     overall,
-    round: roundFor(overall),
+    round,
     roundPick: roundPickFor(overall),
     teamId: o.teamId,
     ownerName: o.ownerName,
     playerId: `routine-${overall}`,
-    playerName: `Routine WR ${overall}`,
-    position: "WR",
+    playerName: `Routine ${position} ${overall}`,
+    position,
+    nflTeam,
   });
 }
 
@@ -232,6 +287,7 @@ export function buildBroadcastPaceDraftMoments(
       playerId: beat.playerId,
       playerName: beat.playerName,
       position: beat.position,
+      nflTeam: beat.nflTeam,
     });
   }
 

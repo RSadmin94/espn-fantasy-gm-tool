@@ -41,18 +41,16 @@ export function inferBroadcastContext(
 ): BroadcastContext {
   if (override) return override;
 
-  const positionRun = moment.receipts.find((r) => r.id === "positionRun" && r.status === "available");
-  if (positionRun?.value && typeof positionRun.value === "object") {
-    const v = positionRun.value as { count?: number; position?: string };
-    if (v.count != null && v.position) {
-      return { kind: "position_run", count: v.count, position: v.position };
-    }
-  }
-
-  if (moment.primaryStoryline === "POSITION_RUN" || moment.signals.some((s) => s.startsWith("CONSEQUENTIAL_RUN"))) {
-    const pos = moment.player.position;
-    const count = moment.rosterBeforePick[pos] ?? 0;
-    return { kind: "position_run", count: Math.max(1, count), position: pos };
+  const hasRunSignal =
+    moment.primaryStoryline === "POSITION_RUN" ||
+    moment.signals.some((s) => s.startsWith("POSITION_RUN") || s.startsWith("CONSEQUENTIAL_RUN"));
+  if (hasRunSignal) {
+    const positionRun = moment.receipts.find((r) => r.id === "positionRun" && r.status === "available");
+    const v = positionRun?.value && typeof positionRun.value === "object"
+      ? (positionRun.value as { includingThis?: number; count?: number })
+      : null;
+    const count = v?.includingThis ?? v?.count ?? Math.max(1, moment.rosterBeforePick[moment.player.position] ?? 1);
+    return { kind: "position_run", count, position: moment.player.position };
   }
 
   return { kind: "none" };

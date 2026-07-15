@@ -26,8 +26,7 @@ export type EditorialPlanId =
   | "season_story"
   | "weekly_story"
   | "documentary"
-  | "draft_wrap_up"
-  | "written_notable";
+  | "draft_wrap_up";
 
 export type DecompressionBehavior = "none" | "trigger" | "inherit";
 
@@ -78,17 +77,12 @@ export const EDITORIAL_PLANS: Record<EditorialPlanId, EditorialPlan> = {
     energyLevel: "low",
   }),
 
-  value_pick: plan("value_pick", "coach", ["sofia", "roxanne"], [], 1, {
+  value_pick: plan("value_pick", "coach", [], ["roxanne"], 1, {
     energyLevel: "medium",
     callbackEligible: true,
   }),
 
-  /** Early-round written floor / generic notable — Sofia leads so receipts surface; others rotate in. */
-  written_notable: plan("written_notable", "sofia", ["coach", "roxanne"], [], 1, {
-    energyLevel: "medium",
-  }),
-
-  slight_reach: plan("slight_reach", "coach", ["sofia", "roxanne"], [], 2, {
+  slight_reach: plan("slight_reach", "sofia", ["coach"], ["roxanne"], 2, {
     energyLevel: "medium",
     callbackEligible: true,
   }),

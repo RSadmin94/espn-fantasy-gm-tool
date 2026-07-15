@@ -58,7 +58,22 @@ export interface DraftMoment {
 
 /** A detected significance signal (internal to the classifier). */
 export interface MomentSignal {
-  name: "REACH" | "STEAL" | "TIER_CLIFF" | "PATTERN_BREAK" | "CONSEQUENTIAL_RUN" | "DP_TIMING";
+  name:
+    | "REACH"
+    | "STEAL"
+    | "TIER_CLIFF"
+    | "PATTERN_BREAK"
+    | "CONSEQUENTIAL_RUN"
+    | "DP_TIMING"
+    | "POSITION_RUN"
+    | "STARTER_NEED"
+    | "NFL_STACK"
+    | "ZERO_RB"
+    | "HERO_RB"
+    | "LATE_PATTERN"
+    | "SPECIALIST_EARLY"
+    | "QB_WAITING"
+    | "TE_WAITING";
   strong: boolean;
   why: string;
 }
@@ -72,8 +87,28 @@ export interface MomentConfig {
   tierCliff: { moderateGap: number; strongGap: number; maxRound: number };
   patternBreak: { minSeasons: number; minRoundBreak: number };
   consequentialRun: { minRunInWindow: number; window: number; requiresTierCliff: boolean };
+  /** Positional run without requiring a tier cliff (run "begins / accelerates"). */
+  positionRunAlone: { minRunInWindow: number };
   dpTiming: { moderateDeviation: number; strongDeviation: number };
   positionRunWindow: number;
+  /**
+   * Closing an open starter slot after the position's typical early window —
+   * Coach construction lane (not every first starter fill).
+   */
+  starterNeed: { maxRound: number; minRoundByPos: Record<string, number> };
+  /** Same-NFL-team stack (QB with WR/TE or WR/TE with QB). */
+  nflStack: { enabled: boolean };
+  /** Strategy-shape milestones (landmark rounds only — not continuous spam). */
+  strategyShape: {
+    zeroRbLandmarks: readonly number[];
+    heroRbMaxRound: number;
+    qbWaitingLandmarks: readonly number[];
+    teWaitingLandmarks: readonly number[];
+  };
+  /** First K / DST meaningfully earlier than league norms. */
+  specialistEarly: { kMaxRound: number; dstMaxRound: number };
+  /** Latest-ever positional timing (mirror of earliest pattern break). */
+  latePattern: { minSeasons: number; minRoundBreak: number };
   commentary: {
     routine: { enabled: boolean; maxSentences: number; maxWords: number };
     notable: { enabled: boolean; maxSentences: number; maxWords: number };
@@ -81,6 +116,23 @@ export interface MomentConfig {
     historic: { enabled: boolean; maxSentences: number; maxWords: number };
   };
 }
+
+const EDITORIAL_INTELLIGENCE = {
+  positionRunAlone: { minRunInWindow: 4 },
+  starterNeed: {
+    maxRound: 10,
+    minRoundByPos: { QB: 5, RB: 4, WR: 4, TE: 6 },
+  },
+  nflStack: { enabled: true },
+  strategyShape: {
+    zeroRbLandmarks: [4, 6, 8],
+    heroRbMaxRound: 3,
+    qbWaitingLandmarks: [6, 8],
+    teWaitingLandmarks: [7, 9],
+  },
+  specialistEarly: { kMaxRound: 8, dstMaxRound: 9 },
+  latePattern: { minSeasons: 3, minRoundBreak: 2 },
+} as const;
 
 /** Pre–pace-tuning thresholds — baseline for editorial rate comparison tests. */
 export const LEGACY_MOMENT_CONFIG: MomentConfig = {
@@ -90,6 +142,7 @@ export const LEGACY_MOMENT_CONFIG: MomentConfig = {
   consequentialRun: { minRunInWindow: 5, window: 5, requiresTierCliff: true },
   dpTiming: { moderateDeviation: 3, strongDeviation: 5 },
   positionRunWindow: 6,
+  ...EDITORIAL_INTELLIGENCE,
   commentary: {
     routine: { enabled: false, maxSentences: 0, maxWords: 0 },
     notable: { enabled: true, maxSentences: 1, maxWords: 20 },
@@ -105,6 +158,7 @@ export const DEFAULT_MOMENT_CONFIG: MomentConfig = {
   consequentialRun: { minRunInWindow: 3, window: 6, requiresTierCliff: true },
   dpTiming: { moderateDeviation: 3, strongDeviation: 5 },
   positionRunWindow: 6,
+  ...EDITORIAL_INTELLIGENCE,
   commentary: {
     routine: { enabled: false, maxSentences: 0, maxWords: 0 },
     notable: { enabled: true, maxSentences: 1, maxWords: 20 },
@@ -121,6 +175,8 @@ export const BROADCAST_PACE_MOMENT_CONFIG: MomentConfig = {
   consequentialRun: { minRunInWindow: 3, window: 6, requiresTierCliff: true },
   dpTiming: { moderateDeviation: 2, strongDeviation: 4 },
   positionRunWindow: 6,
+  ...EDITORIAL_INTELLIGENCE,
+  latePattern: { minSeasons: 3, minRoundBreak: 2 },
   commentary: {
     routine: { enabled: false, maxSentences: 0, maxWords: 0 },
     notable: { enabled: true, maxSentences: 1, maxWords: 22 },

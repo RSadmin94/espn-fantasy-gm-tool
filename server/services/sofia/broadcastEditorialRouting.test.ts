@@ -134,11 +134,102 @@ describe("buildEditorialAssignment", () => {
     expect(a.request).toEqual([]);
   });
 
-  it("requests coach only for value_pick", () => {
+  it("requests sofia for steal / ADP value_pick (not pick-number rotation)", () => {
     const a = buildEditorialAssignment(bm({ signals: ["STEAL"] }), ledger);
+    expect(a.planId).toBe("value_pick");
+    expect(a.leadVoice).toBe("sofia");
+    expect(a.request).toEqual(["sofia"]);
+    expect(a.request).not.toContain("roxanne");
+  });
+
+  it("does not route zero-signal notable to written_notable", () => {
+    expect(resolveEditorialPlanId(bm({ signals: [], significance: "notable" }))).toBe("routine_pick");
+  });
+
+  it("does not rotate leads by pickNumber % 3", () => {
+    const facts = ["Alice selected Player (WR) at pick 10, round 1.", "Player fell 12 picks past ADP."];
+    const a1 = buildEditorialAssignment(
+      bm({
+        identity: { kind: "draft_pick", draftId: "d1", pickNumber: 1, pickId: "e1" },
+        signals: [],
+        significance: "notable",
+        factPacket: {
+          subject: { ownerName: "Alice", playerName: "Player", position: "WR", overallPick: 1, round: 1 },
+          verifiedFacts: facts,
+          entities: ["Alice", "Player"],
+        },
+      }),
+      new SessionEditorialLedger(),
+    );
+    const a2 = buildEditorialAssignment(
+      bm({
+        identity: { kind: "draft_pick", draftId: "d1", pickNumber: 2, pickId: "e2" },
+        signals: [],
+        significance: "notable",
+        factPacket: {
+          subject: { ownerName: "Alice", playerName: "Player", position: "WR", overallPick: 2, round: 1 },
+          verifiedFacts: facts,
+          entities: ["Alice", "Player"],
+        },
+      }),
+      new SessionEditorialLedger(),
+    );
+    const a3 = buildEditorialAssignment(
+      bm({
+        identity: { kind: "draft_pick", draftId: "d1", pickNumber: 3, pickId: "e3" },
+        signals: [],
+        significance: "notable",
+        factPacket: {
+          subject: { ownerName: "Alice", playerName: "Player", position: "WR", overallPick: 3, round: 1 },
+          verifiedFacts: facts,
+          entities: ["Alice", "Player"],
+        },
+      }),
+      new SessionEditorialLedger(),
+    );
+    expect(a1.leadVoice).toBe("sofia");
+    expect(a2.leadVoice).toBe("sofia");
+    expect(a3.leadVoice).toBe("sofia");
+    expect([a1.leadVoice, a2.leadVoice, a3.leadVoice]).not.toContain("roxanne");
+  });
+
+  it("assigns coach for roster-construction value evidence", () => {
+    const a = buildEditorialAssignment(
+      bm({
+        signals: [],
+        significance: "notable",
+        factPacket: {
+          subject: { ownerName: "Alice", playerName: "Player", position: "RB", overallPick: 10, round: 1 },
+          verifiedFacts: [
+            "Alice selected Player (RB) at pick 10, round 1.",
+            "Alice still needs a starting RB on the roster.",
+          ],
+          entities: ["Alice", "Player"],
+        },
+      }),
+      new SessionEditorialLedger(),
+    );
     expect(a.planId).toBe("value_pick");
     expect(a.leadVoice).toBe("coach");
     expect(a.request).toEqual(["coach"]);
+  });
+
+  it("keeps Roxanne absent on ordinary value picks", () => {
+    const a = buildEditorialAssignment(bm({ signals: ["STEAL"] }), new SessionEditorialLedger());
+    expect(a.request).not.toContain("roxanne");
+    expect(a.plan.prohibitedVoices).toContain("roxanne");
+  });
+
+  it("keeps Roxanne reachable for rivalry receipts", () => {
+    const a = buildEditorialAssignment(
+      bm({
+        significance: "major",
+        receipts: [{ id: "rivalry", type: "rivalry" }],
+      }),
+      new SessionEditorialLedger(),
+    );
+    expect(a.leadVoice).toBe("roxanne");
+    expect(a.request[0]).toBe("roxanne");
   });
 
   it("requests sofia lead for major_reach", () => {
@@ -159,15 +250,31 @@ describe("buildEditorialAssignment", () => {
   it("never requests prohibited voices", () => {
     const a = buildEditorialAssignment(bm({ signals: ["STEAL"] }), ledger);
     const plan = getEditorialPlan(a.planId);
+    // value_pick lead may be remapped; check assignment prohibition set.
     for (const v of a.request) {
-      expect(plan.prohibitedVoices).not.toContain(v);
+      expect(a.plan.prohibitedVoices).not.toContain(v);
+      expect(plan.id).toBe("value_pick");
     }
   });
 });
 
 describe("assignEditorialRoles", () => {
-  it("places coach as primary when coach leads", () => {
-    const assignment = buildEditorialAssignment(bm({ signals: ["STEAL"] }), new SessionEditorialLedger());
+  it("places coach as primary when coach leads construction value", () => {
+    const assignment = buildEditorialAssignment(
+      bm({
+        signals: [],
+        significance: "notable",
+        factPacket: {
+          subject: { ownerName: "Alice", playerName: "Player", position: "RB", overallPick: 10, round: 1 },
+          verifiedFacts: [
+            "Alice selected Player (RB) at pick 10, round 1.",
+            "Alice still needs a starting RB on the roster.",
+          ],
+          entities: ["Alice", "Player"],
+        },
+      }),
+      new SessionEditorialLedger(),
+    );
     const roles = assignEditorialRoles(assignment, [diag("coach")]);
     expect(roles.primary?.voice).toBe("coach");
   });

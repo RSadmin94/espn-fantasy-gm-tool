@@ -8,15 +8,38 @@
  */
 import { DEFAULT_MOMENT_CONFIG, type DraftMoment, type MomentConfig } from "./draftMomentTypes";
 import { classifyMoment } from "./draftMomentClassifier";
-import { collectReceipts, normName, type MockPickLike, type ReceiptContext, type RegistryEntry } from "./draftMomentReceiptService";
+import { collectReceipts, normName, type MockPickLike, type OwnerNflPick, type ReceiptContext, type RegistryEntry } from "./draftMomentReceiptService";
 import { finalizeClaims, degradeToRoutine } from "./draftMomentEvidenceValidator";
 import { buildIdentityResolver, loadTeamSeasonRows, type IdentityResolver, type TeamSeasonRow } from "./draftMomentIdentityService";
 import { parseDraftPickTeamNameFromRawPick } from "../../resolveDraftPickOwner";
 
 const STORY_BY_SIGNAL: Record<string, string> = {
-  REACH: "REACH", STEAL: "STEAL", TIER_CLIFF: "TIER_BREAK", PATTERN_BREAK: "PATTERN_BREAK",
-  CONSEQUENTIAL_RUN: "POSITION_RUN", DP_TIMING: "DP_TIMING",
+  REACH: "REACH",
+  STEAL: "STEAL",
+  TIER_CLIFF: "TIER_BREAK",
+  PATTERN_BREAK: "PATTERN_BREAK",
+  CONSEQUENTIAL_RUN: "POSITION_RUN",
+  POSITION_RUN: "POSITION_RUN",
+  DP_TIMING: "DP_TIMING",
+  STARTER_NEED: "ROSTER_NEED",
+  NFL_STACK: "NFL_STACK",
+  ZERO_RB: "ZERO_RB",
+  HERO_RB: "HERO_RB",
+  LATE_PATTERN: "LATE_PATTERN",
+  SPECIALIST_EARLY: "SPECIALIST_EARLY",
+  QB_WAITING: "QB_WAITING",
+  TE_WAITING: "TE_WAITING",
 };
+
+/** Strategy-shape milestones fire once per owner so continuous board patterns don't spam. */
+const ONCE_PER_OWNER_SIGNALS = new Set([
+  "ZERO_RB",
+  "QB_WAITING",
+  "TE_WAITING",
+  "HERO_RB",
+  "SPECIALIST_EARLY",
+  "NFL_STACK",
+]);
 
 export interface BuildContext {
   leagueId: string;
@@ -34,6 +57,10 @@ export function buildDraftMomentsFromContext(b: BuildContext): DraftMoment[] {
   const config = b.config ?? DEFAULT_MOMENT_CONFIG;
   const picks = [...b.mockPicks].sort((a, b2) => a.overall - b2.overall);
   const rosterByKey = new Map<string, Record<string, number>>();
+  const nflPicksByKey = new Map<string, OwnerNflPick[]>();
+  const onceSignalsByKey = new Map<string, Set<string>>();
+  /** After announcing a POSITION_RUN for a position, suppress re-fires through this overall pick. */
+  const posRunCooldownThrough = new Map<string, number>();
   const drafted = new Set<string>();
   const recent: string[] = [];
   const moments: DraftMoment[] = [];
@@ -44,8 +71,43 @@ export function buildDraftMomentsFromContext(b: BuildContext): DraftMoment[] {
     try {
       const owner = b.resolver.resolve(b.season, pick.teamId, pick.ownerName); // current-season resolution
       const before = { ...(rosterByKey.get(owner.historyKey) ?? {}) };
-      const { receipts, facts } = collectReceipts(pick, b.ctx, owner, before, recent, drafted, config);
-      const { signals, level } = classifyMoment(facts, config);
+      const nflBefore = [...(nflPicksByKey.get(owner.historyKey) ?? [])];
+      const { receipts, facts } = collectReceipts(
+        pick,
+        b.ctx,
+        owner,
+        before,
+        recent,
+        drafted,
+        config,
+        nflBefore,
+      );
+      const classified = classifyMoment(facts, config);
+      const already = onceSignalsByKey.get(owner.historyKey) ?? new Set<string>();
+      const signals = classified.signals.filter((s) => {
+        if (s.name === "POSITION_RUN") {
+          // Begin-only in the classifier, plus a run-window cooldown so sliding
+          // re-hits of the same run do not restack identical commentary.
+          const coolThrough = posRunCooldownThrough.get(pos) ?? 0;
+          if (pick.overall <= coolThrough) return false;
+          posRunCooldownThrough.set(pos, pick.overall + config.positionRunWindow - 1);
+          return true;
+        }
+        if (!ONCE_PER_OWNER_SIGNALS.has(s.name)) return true;
+        if (already.has(s.name)) return false;
+        already.add(s.name);
+        return true;
+      });
+      onceSignalsByKey.set(owner.historyKey, already);
+      const strongCount = signals.filter((s) => s.strong).length;
+      const level =
+        strongCount >= 1 && signals.length >= 2
+          ? "historic" as const
+          : strongCount >= 1 || signals.length >= 2
+            ? "major" as const
+            : signals.length === 1
+              ? "notable" as const
+              : "routine" as const;
       const fin = finalizeClaims({ receipts, owner });
       const budget = config.commentary[level];
       const stories = signals.map((s) => STORY_BY_SIGNAL[s.name] ?? s.name);
@@ -88,7 +150,14 @@ export function buildDraftMomentsFromContext(b: BuildContext): DraftMoment[] {
     drafted.add(normName(pick.playerName));
     recent.push(pos);
     const owner = b.resolver.resolve(b.season, pick.teamId, pick.ownerName);
-    const rb = rosterByKey.get(owner.historyKey) ?? {}; rb[pos] = (rb[pos] ?? 0) + 1; rosterByKey.set(owner.historyKey, rb);
+    const rb = rosterByKey.get(owner.historyKey) ?? {};
+    rb[pos] = (rb[pos] ?? 0) + 1;
+    rosterByKey.set(owner.historyKey, rb);
+    if (pick.nflTeam) {
+      const teams = nflPicksByKey.get(owner.historyKey) ?? [];
+      teams.push({ team: String(pick.nflTeam).toUpperCase(), position: pos });
+      nflPicksByKey.set(owner.historyKey, teams);
+    }
   }
   return moments;
 }

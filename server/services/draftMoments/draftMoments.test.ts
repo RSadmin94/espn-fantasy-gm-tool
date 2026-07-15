@@ -6,7 +6,23 @@ import { buildIdentityResolver } from "./draftMomentIdentityService";
 import { buildDraftMomentsFromContext } from "./draftMomentBuilder";
 import { DEFAULT_MOMENT_CONFIG } from "./draftMomentTypes";
 
-const base: ClassifierInput = { position: "WR", round: 1, adpDelta: null, tierCliffGap: null, positionRunIncludingThis: 1, ownerTiming: null, dpDeviation: null };
+const base: ClassifierInput = {
+  position: "WR",
+  round: 1,
+  adpDelta: null,
+  tierCliffGap: null,
+  positionRunIncludingThis: 1,
+  ownerTiming: null,
+  dpDeviation: null,
+  needsStarter: false,
+  sameNflTeamBefore: 0,
+  stackInvolvesQb: false,
+  rbBefore: 0,
+  wrBefore: 0,
+  teBefore: 0,
+  qbBefore: 0,
+  nflTeam: null,
+};
 const C = (o: Partial<ClassifierInput>) => classifyMoment({ ...base, ...o });
 
 describe("classifier — recalibrated gates", () => {
@@ -15,12 +31,37 @@ describe("classifier — recalibrated gates", () => {
   it("major strong reach", () => { const r = C({ position: "QB", round: 1, adpDelta: -30, tierCliffGap: 5 }); expect(r.level).toBe("major"); expect(r.strongCount).toBe(1); });
   it("historic strong steal + tier cliff", () => { const r = C({ position: "WR", round: 5, adpDelta: 40, tierCliffGap: 30 }); expect(r.level).toBe("historic"); expect(r.strongCount).toBe(2); });
   it("late-round ADP delta is capped (no signal past round 10)", () => { expect(C({ position: "WR", round: 13, adpDelta: 80 }).level).toBe("routine"); });
-  it("roster need alone stays routine (need is not a classifier signal)", () => { expect(C({ position: "QB", round: 2, adpDelta: 3, tierCliffGap: 4 }).level).toBe("routine"); });
-  it("latest-ever is context only", () => { expect(C({ position: "K", round: 14, ownerTiming: { anomaly: "latest_ever", priorEarliest: 10, seasons: 5 } }).level).toBe("routine"); });
-  it("position frequency is context only (no anomaly, no signal)", () => { expect(C({ position: "WR", round: 6, ownerTiming: { anomaly: null, priorEarliest: 4, seasons: 8 } }).level).toBe("routine"); });
-  it("position run needs a tier consequence", () => {
-    expect(C({ position: "WR", round: 4, positionRunIncludingThis: 4, tierCliffGap: 5 }).level).toBe("routine"); // run, no cliff
-    const withCliff = C({ position: "WR", round: 4, positionRunIncludingThis: 4, tierCliffGap: 15 });
+  it("early starter fill stays routine; late fill is notable", () => {
+    expect(C({ position: "QB", round: 2, adpDelta: 3, tierCliffGap: 4, needsStarter: true }).level).toBe("routine");
+    expect(C({ position: "QB", round: 5, adpDelta: 3, tierCliffGap: 4, needsStarter: true }).signals.map(s => s.name)).toContain("STARTER_NEED");
+  });
+  it("latest-ever fires LATE_PATTERN when round break and seasons qualify", () => {
+    expect(C({
+      position: "K",
+      round: 14,
+      ownerTiming: { anomaly: "latest_ever", priorEarliest: 10, priorLatest: 10, seasons: 5 },
+    }).signals.map(s => s.name)).toContain("LATE_PATTERN");
+    expect(C({
+      position: "K",
+      round: 11,
+      ownerTiming: { anomaly: "latest_ever", priorEarliest: 10, priorLatest: 10, seasons: 5 },
+    }).level).toBe("routine"); // only 1-round later than prior latest
+  });
+  it("position frequency is context only (no anomaly, no signal)", () => {
+    expect(C({
+      position: "WR",
+      round: 6,
+      ownerTiming: { anomaly: null, priorEarliest: 4, seasons: 8 },
+      rbBefore: 2,
+      qbBefore: 1,
+      teBefore: 1,
+    }).level).toBe("routine");
+  });
+  it("position run alone is notable when a run begins at the threshold", () => {
+    expect(C({ position: "WR", round: 3, positionRunIncludingThis: 3, tierCliffGap: 5, rbBefore: 1, qbBefore: 1 }).level).toBe("routine");
+    expect(C({ position: "WR", round: 3, positionRunIncludingThis: 4, tierCliffGap: 5, rbBefore: 1, qbBefore: 1 }).signals.map(s => s.name)).toEqual(["POSITION_RUN"]);
+    expect(C({ position: "WR", round: 3, positionRunIncludingThis: 5, tierCliffGap: 5, rbBefore: 1, qbBefore: 1 }).level).toBe("routine");
+    const withCliff = C({ position: "WR", round: 3, positionRunIncludingThis: 4, tierCliffGap: 15, rbBefore: 1, qbBefore: 1 });
     expect(withCliff.signals.map(s => s.name).sort()).toEqual(["CONSEQUENTIAL_RUN", "TIER_CLIFF"]);
     expect(withCliff.level).toBe("major");
   });
@@ -32,6 +73,21 @@ describe("classifier — recalibrated gates", () => {
   it("pattern break requires >=3 seasons and >=3 round break", () => {
     expect(C({ position: "QB", round: 1, ownerTiming: { anomaly: "earliest_ever", priorEarliest: 2, seasons: 5 } }).level).toBe("routine"); // only 1-round break
     expect(C({ position: "QB", round: 1, ownerTiming: { anomaly: "earliest_ever", priorEarliest: 5, seasons: 5 } }).signals.map(s => s.name)).toContain("PATTERN_BREAK");
+  });
+  it("zero-RB / QB-waiting / TE-waiting fire only on landmark rounds", () => {
+    expect(C({ position: "WR", round: 5, rbBefore: 0 }).level).toBe("routine");
+    expect(C({ position: "WR", round: 6, rbBefore: 0 }).signals.map(s => s.name)).toContain("ZERO_RB");
+    expect(C({ position: "WR", round: 6, qbBefore: 0 }).signals.map(s => s.name)).toContain("QB_WAITING");
+    expect(C({ position: "RB", round: 7, teBefore: 0 }).signals.map(s => s.name)).toContain("TE_WAITING");
+  });
+  it("NFL stack requires QB involved with WR/TE", () => {
+    expect(C({ position: "WR", nflTeam: "KC", sameNflTeamBefore: 1, stackInvolvesQb: false }).level).toBe("routine");
+    expect(C({ position: "WR", nflTeam: "KC", sameNflTeamBefore: 1, stackInvolvesQb: true, qbBefore: 1 }).signals.map(s => s.name)).toContain("NFL_STACK");
+  });
+  it("hero-RB and early specialist are notable construction/timing moments", () => {
+    expect(C({ position: "RB", round: 2, rbBefore: 1, wrBefore: 0, teBefore: 0 }).signals.map(s => s.name)).toContain("HERO_RB");
+    expect(C({ position: "K", round: 7 }).signals.map(s => s.name)).toContain("SPECIALIST_EARLY");
+    expect(C({ position: "K", round: 12 }).level).toBe("routine");
   });
 });
 
@@ -173,5 +229,42 @@ describe("builder integration", () => {
     const a = buildDraftMomentsFromContext({ leagueId: "TEST", draftId: "d", season: 2026, mockPicks: picks, ctx, resolver: personResolver });
     const b = buildDraftMomentsFromContext({ leagueId: "TEST", draftId: "d", season: 2026, mockPicks: picks, ctx, resolver: personResolver });
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  });
+
+  it("POSITION_RUN fires once per run cluster — continues stay routine", () => {
+    const registry = Array.from({ length: 12 }, (_, i) => ({
+      norm: `wr ${i + 1}`,
+      position: "WR",
+      adp: i + 1,
+    }));
+    const ctx = makeCtx({
+      adpByName: new Map(registry.map((r) => [r.norm, r.adp as number])),
+      registry,
+      starters: { WR: 5, QB: 1, RB: 2, TE: 1 },
+    });
+    const picks = Array.from({ length: 8 }, (_, i) =>
+      pick({
+        overall: i + 1,
+        round: 1,
+        roundPick: i + 1,
+        playerName: `WR ${i + 1}`,
+        position: "WR",
+        teamId: String((i % 3) + 1),
+        ownerName: ["Alice", "Bob", "Carol"][i % 3]!,
+      }),
+    );
+    const moments = buildDraftMomentsFromContext({
+      leagueId: "TEST",
+      draftId: "d",
+      season: 2026,
+      mockPicks: picks,
+      ctx,
+      resolver: personResolver,
+    });
+    const runHits = moments.filter((m) => m.signals.some((s) => s.startsWith("POSITION_RUN")));
+    expect(runHits).toHaveLength(1);
+    expect(runHits[0]!.overallPick).toBe(4); // begin at threshold 4
+    // picks 5–9 are inside the run-window cooldown even if the sliding count re-hits 4
+    expect(moments.slice(4).every((m) => !m.signals.some((s) => s.startsWith("POSITION_RUN")))).toBe(true);
   });
 });

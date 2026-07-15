@@ -49,6 +49,9 @@ export interface CollectResult {
   adp: number | null;
 }
 
+/** Prior owner picks with NFL team for stack detection. */
+export type OwnerNflPick = { team: string; position: string };
+
 const R = (r: Omit<DraftMomentReceipt, "confidence"> & { confidence?: number }): DraftMomentReceipt =>
   ({ ...r, confidence: r.confidence ?? (r.status === "available" ? 0.9 : 0) });
 
@@ -60,11 +63,13 @@ export function collectReceipts(
   recentPositions: string[],
   drafted: Set<string>,
   config: MomentConfig = DEFAULT_MOMENT_CONFIG,
+  ownerNflPicksBefore: OwnerNflPick[] = [],
 ): CollectResult {
   const pos = String(pick.position ?? "?").toUpperCase();
   const isIdp = IDP_POSITIONS.has(pos);
   const round = pick.round;
   const plN = normName(pick.playerName);
+  const nflTeam = pick.nflTeam ? String(pick.nflTeam).toUpperCase() : null;
   const receipts: DraftMomentReceipt[] = [];
 
   // identity receipt
@@ -82,13 +87,15 @@ export function collectReceipts(
 
   // roster need / starter requirement
   const startReq = ctx.starters[pos] ?? 0;
+  const have = rosterBefore[pos] ?? 0;
+  const needsStarter = startReq > 0 && have < startReq;
   receipts.push(startReq > 0
-    ? R({ id: "rosterNeed", type: "rosterNeed", status: "available", source: "leagueRosterRules", authority: "leagueRosterRules", confidence: 0.8, value: { have: rosterBefore[pos] ?? 0, need: startReq, needsStarter: (rosterBefore[pos] ?? 0) < startReq }, supportedClaim: (rosterBefore[pos] ?? 0) < startReq ? `${owner.ownerName} still needed a starting ${pos}.` : undefined })
+    ? R({ id: "rosterNeed", type: "rosterNeed", status: "available", source: "leagueRosterRules", authority: "leagueRosterRules", confidence: 0.8, value: { have, need: startReq, needsStarter }, supportedClaim: needsStarter ? `${owner.ownerName} still needed a starting ${pos}.` : undefined })
     : R({ id: "rosterNeed", type: "rosterNeed", status: "not_applicable", source: "leagueRosterRules", authority: "leagueRosterRules", notes: `league does not start ${pos}` }));
 
   // position run (derived)
   const runIncl = recentPositions.slice(-config.positionRunWindow).filter((p) => p === pos).length + 1;
-  receipts.push(R({ id: "positionRun", type: "positionRun", status: "available", source: "derived(window)", authority: "derived", confidence: 0.85, value: { includingThis: runIncl, window: config.positionRunWindow }, supportedClaim: runIncl >= 3 ? `${runIncl} ${pos}s in the last ${config.positionRunWindow} picks.` : undefined }));
+  receipts.push(R({ id: "positionRun", type: "positionRun", status: "available", source: "derived(window)", authority: "derived", confidence: 0.85, value: { includingThis: runIncl, window: config.positionRunWindow }, supportedClaim: runIncl >= config.positionRunAlone.minRunInWindow ? `${runIncl} ${pos}s in the last ${config.positionRunWindow} picks.` : undefined }));
 
   // tier cliff (offense only; IDP explicitly excluded from ADP-based scoring)
   let tierGap: number | null = null;
@@ -104,7 +111,7 @@ export function collectReceipts(
     receipts.push(R({ id: "tierCliff", type: "tierCliff", status: "not_applicable", source: "derived", authority: "derived", notes: isIdp ? "IDP not scored via offense ADP" : "no ADP" }));
   }
 
-  // owner/franchise frequency + earliest-timing anomaly (from draft_picks by historyKey)
+  // owner/franchise frequency + earliest/latest timing anomaly
   const posHist = ctx.historyByKey.get(owner.historyKey)?.get(pos) ?? [];
   const seasons = ctx.seasonsByKey.get(owner.historyKey)?.size ?? 0;
   const idKind = owner.identityScope === "person" ? "draft_picks/person" : "draft_picks/franchise";
@@ -114,16 +121,22 @@ export function collectReceipts(
     const latest = Math.max(...posHist.map((h) => h.round));
     const seasonsWithPos = new Set(posHist.map((h) => h.season)).size;
     const anomaly = round < earliest ? "earliest_ever" : round > latest ? "latest_ever" : null;
-    timingFacts = { anomaly, priorEarliest: earliest, seasons };
+    timingFacts = { anomaly, priorEarliest: earliest, priorLatest: latest, seasons };
     const subject = owner.identityScope === "person" ? owner.ownerName : "This franchise";
     receipts.push(R({ id: "ownerFrequency", type: "ownerFrequency", status: "available", source: idKind, authority: "draft_picks", confidence: 0.7, value: { seasons, seasonsWithPos }, supportedClaim: `${subject} has drafted a ${pos} in ${seasonsWithPos} of ${seasons} tracked drafts.` }));
-    receipts.push(R({ id: "ownerTiming", type: "ownerTiming", status: "available", source: idKind, authority: "draft_picks", confidence: 0.7, value: { thisRound: round, priorEarliest: earliest, priorLatest: latest, anomaly }, supportedClaim: anomaly === "earliest_ever" ? `${subject === "This franchise" ? "This franchise has not drafted a " + pos + " this early" : subject + "'s earliest " + pos} in tracked history (prev R${earliest}).` : undefined }));
+    const timingClaim =
+      anomaly === "earliest_ever"
+        ? `${subject === "This franchise" ? "This franchise has not drafted a " + pos + " this early" : subject + "'s earliest " + pos} in tracked history (prev R${earliest}).`
+        : anomaly === "latest_ever"
+          ? `${subject === "This franchise" ? "This franchise has not waited this long for a " + pos : subject + " waited until R" + round + " for a " + pos} (prev latest R${latest}).`
+          : undefined;
+    receipts.push(R({ id: "ownerTiming", type: "ownerTiming", status: "available", source: idKind, authority: "draft_picks", confidence: 0.7, value: { thisRound: round, priorEarliest: earliest, priorLatest: latest, anomaly }, supportedClaim: timingClaim }));
   } else {
     receipts.push(R({ id: "ownerFrequency", type: "ownerFrequency", status: "unsupported", source: idKind, authority: "draft_picks", notes: `<2 tracked seasons for ${owner.identityScope}` }));
     receipts.push(R({ id: "ownerTiming", type: "ownerTiming", status: "unsupported", source: idKind, authority: "draft_picks" }));
   }
 
-  // DP timing (IDP only) — deviation in rounds OUTSIDE the verified DP window (overall-pick bounds)
+  // DP timing (IDP only)
   let dpDeviation: number | null = null;
   if (isIdp) {
     const w = ctx.dpWindow;
@@ -141,6 +154,134 @@ export function collectReceipts(
     receipts.push(R({ id: "dpTiming", type: "dpTiming", status: "not_applicable", source: "leagueDraftTimingProfile.dp", authority: "leagueDraftTimingProfile", notes: "DP-window applies to IDP only" }));
   }
 
+  // NFL stack (QB involved with WR/TE from same team)
+  const sameNflBefore = nflTeam
+    ? ownerNflPicksBefore.filter((p) => p.team === nflTeam).length
+    : 0;
+  const priorFromTeam = nflTeam ? ownerNflPicksBefore.filter((p) => p.team === nflTeam) : [];
+  const hadQbFromTeam = priorFromTeam.some((p) => p.position === "QB");
+  const hadPassCatcherFromTeam = priorFromTeam.some((p) => p.position === "WR" || p.position === "TE");
+  const stackInvolvesQb =
+    Boolean(nflTeam) &&
+    sameNflBefore >= 1 &&
+    ((pos === "QB" && hadPassCatcherFromTeam) || ((pos === "WR" || pos === "TE") && hadQbFromTeam));
+  if (stackInvolvesQb) {
+    receipts.push(R({
+      id: "nflStack",
+      type: "nflStack",
+      status: "available",
+      source: "derived(owner roster nflTeam)",
+      authority: "derived",
+      confidence: 0.85,
+      value: { nflTeam, priorFromTeam: sameNflBefore, stackInvolvesQb: true },
+      supportedClaim: `${owner.ownerName} is stacking ${pick.playerName} with a prior ${nflTeam} ${pos === "QB" ? "pass catcher" : "QB"} on the roster.`,
+    }));
+  } else {
+    receipts.push(R({
+      id: "nflStack",
+      type: "nflStack",
+      status: nflTeam ? "not_applicable" : "unsupported",
+      source: "derived(owner roster nflTeam)",
+      authority: "derived",
+      notes: nflTeam
+        ? sameNflBefore >= 1
+          ? "same-team players present but not a QB+WR/TE stack"
+          : "first player from this NFL team on the roster"
+        : "nflTeam unknown",
+    }));
+  }
+
+  // Strategy shape claims
+  const rbBefore = rosterBefore.RB ?? 0;
+  const wrBefore = rosterBefore.WR ?? 0;
+  const teBefore = rosterBefore.TE ?? 0;
+  const qbBefore = rosterBefore.QB ?? 0;
+  if (pos !== "RB" && rbBefore === 0 && config.strategyShape.zeroRbLandmarks.includes(round)) {
+    receipts.push(R({
+      id: "zeroRb",
+      type: "strategyShape",
+      status: "available",
+      source: "derived(rosterBefore)",
+      authority: "derived",
+      confidence: 0.85,
+      value: { rbBefore, round },
+      supportedClaim: `${owner.ownerName} still has 0 RBs through round ${round} after taking ${pick.playerName}.`,
+    }));
+  }
+  if (pos !== "QB" && qbBefore === 0 && config.strategyShape.qbWaitingLandmarks.includes(round)) {
+    receipts.push(R({
+      id: "qbWaiting",
+      type: "strategyShape",
+      status: "available",
+      source: "derived(rosterBefore)",
+      authority: "derived",
+      confidence: 0.85,
+      value: { qbBefore, round },
+      supportedClaim: `${owner.ownerName} is still waiting on a QB through round ${round} after taking ${pick.playerName}.`,
+    }));
+  }
+  if (pos !== "TE" && teBefore === 0 && config.strategyShape.teWaitingLandmarks.includes(round)) {
+    receipts.push(R({
+      id: "teWaiting",
+      type: "strategyShape",
+      status: "available",
+      source: "derived(rosterBefore)",
+      authority: "derived",
+      confidence: 0.85,
+      value: { teBefore, round },
+      supportedClaim: `${owner.ownerName} is still waiting on a TE through round ${round} after taking ${pick.playerName}.`,
+    }));
+  }
+  if (pos === "RB" && rbBefore >= 1 && round <= config.strategyShape.heroRbMaxRound && wrBefore + teBefore <= 1) {
+    receipts.push(R({
+      id: "heroRb",
+      type: "strategyShape",
+      status: "available",
+      source: "derived(rosterBefore)",
+      authority: "derived",
+      confidence: 0.85,
+      value: { rbBefore, wrBefore, teBefore, round },
+      supportedClaim: `${owner.ownerName} is doubling RB early (RB #${rbBefore + 1} by round ${round}) with a still-light WR/TE room.`,
+    }));
+  }
+
+  // Late starter fill claim (align with classifier window)
+  const starterMinRound = config.starterNeed.minRoundByPos[pos] ?? 99;
+  if (
+    needsStarter &&
+    pos !== "K" && pos !== "DEF" && pos !== "DST" &&
+    round <= config.starterNeed.maxRound &&
+    round >= starterMinRound
+  ) {
+    receipts.push(R({
+      id: "lateStarterFill",
+      type: "rosterNeed",
+      status: "available",
+      source: "leagueRosterRules+round",
+      authority: "derived",
+      confidence: 0.85,
+      value: { have, need: startReq, round, minRound: starterMinRound },
+      supportedClaim: `${owner.ownerName} finally filled a starting ${pos} hole in round ${round}.`,
+    }));
+  }
+
+  // Early specialist
+  if ((pos === "K" || pos === "DEF" || pos === "DST")) {
+    const maxRound = pos === "K" ? config.specialistEarly.kMaxRound : config.specialistEarly.dstMaxRound;
+    if (round <= maxRound) {
+      receipts.push(R({
+        id: "specialistEarly",
+        type: "specialistEarly",
+        status: "available",
+        source: "derived(round vs specialist norms)",
+        authority: "derived",
+        confidence: 0.8,
+        value: { pos, round, maxRound },
+        supportedClaim: `${owner.ownerName} took ${pos === "K" ? "a kicker" : "a defense"} in round ${round} — earlier than typical league timing.`,
+      }));
+    }
+  }
+
   // rivalry (memberId match; context only unless a specific impact receipt exists — which it never does here)
   if (ctx.focalMemberId) {
     const hit = owner.ownerId && (owner.ownerId === ctx.focalMemberId || ctx.rivalById.has(owner.ownerId))
@@ -151,7 +292,6 @@ export function collectReceipts(
   } else {
     receipts.push(R({ id: "rivalry", type: "rivalry", status: "unsupported", source: "rivalryService", authority: "rivalryService" }));
   }
-  // specific rivalry IMPACT is never computed here → explicit not_applicable so validator blocks impact language
   receipts.push(R({ id: "rivalryImpact", type: "rivalryImpact", status: "not_applicable", source: "n/a", authority: "n/a", notes: "specific pick-vs-rival impact not computed" }));
 
   const facts: ClassifierInput = {
@@ -162,6 +302,14 @@ export function collectReceipts(
     positionRunIncludingThis: runIncl,
     ownerTiming: timingFacts,
     dpDeviation,
+    needsStarter,
+    sameNflTeamBefore: sameNflBefore,
+    stackInvolvesQb,
+    rbBefore,
+    wrBefore,
+    teBefore,
+    qbBefore,
+    nflTeam,
   };
   return { receipts, facts, adp };
 }

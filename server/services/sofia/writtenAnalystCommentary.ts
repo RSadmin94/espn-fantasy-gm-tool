@@ -393,7 +393,7 @@ function roxanneLine(input: CommentaryFacts): { line: string; premise: string } 
 
   if (long && angle === "adp_ahead" && b.rosterNeed) {
     candidates = candidates.map(
-      (c) => `${c.replace(/\.$/, "")} Starter need made them aggressive.`,
+      (c) => `${c.replace(/\.$/, "")}. Starter need made them aggressive.`,
     );
   }
 

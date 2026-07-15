@@ -25,6 +25,12 @@ export type EditorialAssignment = {
   leadVoice: VoiceId;
   leadRotated: boolean;
   callbackSuppressed: boolean;
+  /** Test-visible routing telemetry (lightweight; avoids broad interface churn). */
+  routingEvidence?: {
+    triggerEvidence: string[];
+    valueLeadReason?: string;
+    fallbackUsed: boolean;
+  };
 };
 
 export type RoleAssignment = {
@@ -43,6 +49,79 @@ function hasSignal(moment: BroadcastMoment, prefix: string, strong = false): boo
 
 function hasStrongSignal(moment: BroadcastMoment, prefix: string): boolean {
   return moment.signals.some((s) => s === `${prefix}:strong`);
+}
+
+const BARE_SELECTION_FACT_RE = /^.+ selected .+ at pick \d+(?:, round \d+)?\.?$/i;
+
+function analyticalFacts(moment: BroadcastMoment): string[] {
+  return moment.factPacket.verifiedFacts.filter((f) => f?.trim() && !BARE_SELECTION_FACT_RE.test(f.trim()));
+}
+
+function triggerEvidence(moment: BroadcastMoment): string[] {
+  const signals = moment.signals.filter((s) => s && s !== "EARLY_ROUND_FLOOR");
+  const facts = analyticalFacts(moment);
+  const receipts = moment.receipts.map((r) => `${r.type}:${r.id}`);
+  const storylines = moment.storylines.filter(Boolean);
+  return [...signals, ...facts, ...receipts, ...storylines];
+}
+
+function hasNotableValueEvidence(moment: BroadcastMoment): boolean {
+  return triggerEvidence(moment).length > 0;
+}
+
+const COACH_EVIDENCE_RE =
+  /\b(need|starter|roster|lineup|construction|fit|build|depth|hole|slot|flex|bench|positional)\b/i;
+const SOFIA_EVIDENCE_RE =
+  /\b(ADP|ahead|fell|behind|reach|steal|consensus|tier|board|trend|value|history|record|earliest|latest|zero.?rb|stack|waiting|strategy|specialist|defense|kicker)\b/i;
+const ROXANNE_DRAMA_RE =
+  /\b(rival|rivalry|drama|revenge|feud|receipt|temperature|consequence|upset|championship|dynasty|trade war)\b/i;
+
+/**
+ * One lead for ordinary value: Coach = construction/need; Sofia = ADP/value/reach/steal/strategy.
+ * No pick-number or random rotation.
+ */
+export function resolveValueLeadVoice(moment: BroadcastMoment): {
+  lead: VoiceId;
+  reason: string;
+} {
+  const corpus = [
+    ...moment.signals,
+    ...moment.factPacket.verifiedFacts,
+    ...moment.storylines,
+    moment.primaryStoryline ?? "",
+  ].join(" | ");
+
+  const constructionLead =
+    hasSignal(moment, "STARTER_NEED") ||
+    hasSignal(moment, "HERO_RB") ||
+    moment.primaryStoryline === "ROSTER_NEED" ||
+    moment.primaryStoryline === "HERO_RB";
+  if (constructionLead) {
+    return { lead: "coach", reason: "roster_construction_or_need" };
+  }
+
+  if (hasSignal(moment, "STEAL") || hasSignal(moment, "REACH") || SOFIA_EVIDENCE_RE.test(corpus)) {
+    return { lead: "sofia", reason: "adp_value_reach_or_steal" };
+  }
+  if (COACH_EVIDENCE_RE.test(corpus)) {
+    return { lead: "coach", reason: "roster_construction_or_need" };
+  }
+  // Default analytical value → Sofia (factual comparison lane); never Roxanne.
+  return { lead: "sofia", reason: "default_analytical_value" };
+}
+
+export function roxanneEligible(moment: BroadcastMoment): boolean {
+  if (hasReceipt(moment, "rivalry", "rivalry")) return true;
+  if (moment.primaryStoryline && ROXANNE_DRAMA_RE.test(moment.primaryStoryline)) return true;
+  if (moment.storylines.some((s) => ROXANNE_DRAMA_RE.test(s))) return true;
+  if (moment.factPacket.verifiedFacts.some((f) => ROXANNE_DRAMA_RE.test(f))) return true;
+  if (hasSignal(moment, "REACH") && moment.significance === "historic") return true;
+  if (hasStrongSignal(moment, "REACH") && moment.significance === "historic") return true;
+  // Meaningful steal with rivalry/drama language already covered by ROXANNE_DRAMA_RE on facts.
+  if (hasSignal(moment, "STEAL") && moment.factPacket.verifiedFacts.some((f) => ROXANNE_DRAMA_RE.test(f))) {
+    return true;
+  }
+  return false;
 }
 
 /** Classify moment into an editorial plan — explicit rules, not significance passthrough. */
@@ -110,14 +189,32 @@ export function resolveEditorialPlanId(moment: BroadcastMoment): EditorialPlanId
   if (moment.significance === "notable") {
     if (hasSignal(moment, "STEAL")) return "value_pick";
     if (hasSignal(moment, "REACH")) return "slight_reach";
-    // Early written floor + receipt-first notables — Sofia lead (ledger rotates streaks).
-    if (hasSignal(moment, "EARLY_ROUND_FLOOR") || moment.signals.length === 0) {
-      return "written_notable";
-    }
+    // Zero-signal / bare-selection notables are not written-worthy.
+    if (!hasNotableValueEvidence(moment)) return "routine_pick";
     return "value_pick";
   }
 
   return "routine_pick";
+}
+
+function withValueLead(plan: EditorialPlan, moment: BroadcastMoment): {
+  plan: EditorialPlan;
+  leadReason: string;
+  fallbackUsed: boolean;
+} {
+  const { lead, reason } = resolveValueLeadVoice(moment);
+  const others = (["sofia", "coach", "roxanne"] as VoiceId[]).filter((v) => v !== lead);
+  return {
+    plan: {
+      ...plan,
+      leadVoice: lead,
+      optionalVoices: [],
+      prohibitedVoices: others,
+      maxVoices: 1,
+    },
+    leadReason: reason,
+    fallbackUsed: reason === "default_analytical_value",
+  };
 }
 
 export function buildEditorialAssignment(
@@ -126,20 +223,47 @@ export function buildEditorialAssignment(
 ): EditorialAssignment {
   const planId = resolveEditorialPlanId(moment);
   let basePlan = getEditorialPlan(planId);
+  const evidence = triggerEvidence(moment);
+  let valueLeadReason: string | undefined;
+  let fallbackUsed = false;
 
-  // Spread early written leads so Sofia / Coach / Roxanne each appear naturally.
-  if (planId === "written_notable" && moment.identity.kind === "draft_pick") {
-    const rotation: VoiceId[] = ["sofia", "coach", "roxanne"];
-    const lead = rotation[moment.identity.pickNumber % 3]!;
+  if (planId === "value_pick") {
+    const adjusted = withValueLead(basePlan, moment);
+    basePlan = adjusted.plan;
+    valueLeadReason = adjusted.leadReason;
+    fallbackUsed = adjusted.fallbackUsed;
+  }
+
+  // Gate Roxanne on plans that optionally include her unless drama evidence exists.
+  if (basePlan.optionalVoices.includes("roxanne") && !roxanneEligible(moment)) {
     basePlan = {
       ...basePlan,
-      leadVoice: lead,
-      optionalVoices: rotation.filter((v) => v !== lead),
+      optionalVoices: basePlan.optionalVoices.filter((v) => v !== "roxanne"),
+      prohibitedVoices: basePlan.prohibitedVoices.includes("roxanne")
+        ? basePlan.prohibitedVoices
+        : [...basePlan.prohibitedVoices, "roxanne"],
     };
+  }
+  if (basePlan.leadVoice === "roxanne" && !roxanneEligible(moment)) {
+    // Should not happen for rivalry-led plans (evidence present); defensive fallback to Sofia.
+    basePlan = {
+      ...basePlan,
+      leadVoice: "sofia",
+      optionalVoices: basePlan.optionalVoices.filter((v) => v !== "sofia"),
+      prohibitedVoices: [...new Set<VoiceId>([...basePlan.prohibitedVoices, "roxanne"])],
+    };
+    fallbackUsed = true;
+    valueLeadReason = valueLeadReason ?? "roxanne_ineligible_fallback_sofia";
   }
 
   const resolution = ledger.resolveForMoment(basePlan, moment);
   const plan = resolution.plan;
+
+  const routingEvidence = {
+    triggerEvidence: evidence,
+    valueLeadReason,
+    fallbackUsed,
+  };
 
   if (resolution.silenced) {
     return {
@@ -151,6 +275,22 @@ export function buildEditorialAssignment(
       leadVoice: plan.leadVoice,
       leadRotated: resolution.leadRotated,
       callbackSuppressed: resolution.callbackSuppressed,
+      routingEvidence,
+    };
+  }
+
+  // Notable routed to routine_pick for lack of evidence.
+  if (planId === "routine_pick" && moment.significance === "notable") {
+    return {
+      planId: "routine_pick",
+      plan: getEditorialPlan("routine_pick"),
+      silence: true,
+      silenceReason: "no analytical evidence beyond selection fact",
+      request: [],
+      leadVoice: "coach",
+      leadRotated: false,
+      callbackSuppressed: false,
+      routingEvidence,
     };
   }
 
@@ -162,6 +302,7 @@ export function buildEditorialAssignment(
     leadVoice: plan.leadVoice,
     leadRotated: resolution.leadRotated,
     callbackSuppressed: resolution.callbackSuppressed,
+    routingEvidence,
   };
 }
 
