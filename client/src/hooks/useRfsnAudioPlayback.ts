@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RfsnAudioState, RfsnLiveAudioStatus, RfsnVoiceAudioRef } from "@/lib/rfsnLiveState";
 import type { RfsnCommentaryCard } from "@/lib/rfsnPresentation";
 import {
@@ -29,6 +29,8 @@ export type RfsnLastPlayableClip = {
 export type RfsnAudioPlaybackOptions = {
   persistKey?: string;
   sessionEpoch?: string | number;
+  /** When true, stops active speech and ignores async play/poll completions until false. */
+  draftPaused?: boolean;
   tracePlayback?: boolean;
 };
 
@@ -41,10 +43,14 @@ export type RfsnAudioPlayback = {
   lastPlayable: RfsnLastPlayableClip | null;
   replayAvailable: boolean;
   isPlaying: () => boolean;
+  /** Monotonic generation for the active draft session — bump on pause/reset/new draft. */
+  playbackGeneration: number;
   unlockAudio: () => void;
   setMuted: (muted: boolean) => void;
   setVolume: (volume: number) => void;
   stopCurrent: () => void;
+  /** Hard stop for pause/reset — clears card/replay intent and bumps generation. */
+  haltSession: () => void;
   replayCurrent: () => void;
   playForCard: (
     card: RfsnCommentaryCard,
@@ -111,7 +117,7 @@ export function useRfsnAudioPlayback(
   audioStatus: RfsnLiveAudioStatus | null | undefined,
   options: RfsnAudioPlaybackOptions = {},
 ): RfsnAudioPlayback {
-  const { persistKey, sessionEpoch, tracePlayback } = options;
+  const { persistKey, sessionEpoch, draftPaused = false, tracePlayback } = options;
   const restored = persistKey ? getWarRoomAudioSession(persistKey) : undefined;
   const tracer = useRef(createPlaybackTracer(Boolean(tracePlayback)));
 
@@ -123,6 +129,7 @@ export function useRfsnAudioPlayback(
     if (restored) return restored.state;
     return ttsAvailable && userEnabled ? "locked" : "disabled";
   });
+  const [playbackGeneration, setPlaybackGeneration] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(restored?.audioEl ?? null);
   const objectUrlRef = useRef<string | null>(restored?.objectUrl ?? null);
@@ -151,6 +158,14 @@ export function useRfsnAudioPlayback(
   audioStatusRef.current = audioStatus;
   const playbackStartedForCardRef = useRef<string | null>(null);
   const fallbackHandledForCardRef = useRef<string | null>(null);
+  const generationRef = useRef(0);
+  const draftPausedRef = useRef(draftPaused);
+  draftPausedRef.current = draftPaused;
+
+  const bumpGeneration = useCallback(() => {
+    generationRef.current += 1;
+    setPlaybackGeneration(generationRef.current);
+  }, []);
 
   const cleanupAudio = useCallback((revoke = true) => {
     if (audioRef.current) {
@@ -181,8 +196,24 @@ export function useRfsnAudioPlayback(
     setState(userEnabled && unlocked ? "ready" : userEnabled ? "locked" : "disabled");
   }, [cleanupAudio, unlocked, userEnabled]);
 
+  const haltSession = useCallback(() => {
+    bumpGeneration();
+    onEndedRef.current = null;
+    onFallbackRef.current = null;
+    lastCardRef.current = null;
+    lastPlayableRef.current = null;
+    setLastPlayable(null);
+    activePickRef.current = "";
+    resetPlaybackAttemptState();
+    cleanupAudio();
+    if (persistKeyRef.current) clearWarRoomAudioSession(persistKeyRef.current);
+    setState(userEnabledRef.current && unlockedRef.current ? "ready" : userEnabledRef.current ? "locked" : "disabled");
+  }, [bumpGeneration, cleanupAudio, resetPlaybackAttemptState]);
+
   const startPlaybackForReadyClip = useCallback(
     (card: RfsnCommentaryCard, liveStatus: RfsnLiveAudioStatus, clip: RfsnVoiceAudioRef) => {
+      if (draftPausedRef.current) return;
+      const startGen = generationRef.current;
       const pickKey = `${liveStatus.draftId}:${liveStatus.pickId}:${liveStatus.pickNumber}`;
       if (activePickRef.current && activePickRef.current !== pickKey) {
         cleanupAudio();
@@ -218,8 +249,10 @@ export function useRfsnAudioPlayback(
       void (async () => {
         try {
           const res = await fetch(url, { credentials: "include" });
+          if (startGen !== generationRef.current || draftPausedRef.current) return;
           if (!res.ok) throw new Error(`audio fetch ${res.status}`);
           const blob = await res.blob();
+          if (startGen !== generationRef.current || draftPausedRef.current) return;
           if (!blob.size) throw new Error("empty audio");
 
           const objectUrl = URL.createObjectURL(blob);
@@ -230,6 +263,7 @@ export function useRfsnAudioPlayback(
           audioRef.current = audio;
 
           const handleEnded = () => {
+            if (startGen !== generationRef.current) return;
             playInFlightRef.current = false;
             setState("ended");
             tracer.current.log("audio_ended", { cardId: card.id });
@@ -237,6 +271,7 @@ export function useRfsnAudioPlayback(
             onEndedRef.current?.();
           };
           const handleError = () => {
+            if (startGen !== generationRef.current) return;
             playInFlightRef.current = false;
             setState("failed");
             playbackStartedForCardRef.current = null;
@@ -248,9 +283,16 @@ export function useRfsnAudioPlayback(
           audio.addEventListener("error", handleError, { once: true });
 
           await audio.play();
+          if (startGen !== generationRef.current || draftPausedRef.current) {
+            audio.pause();
+            cleanupAudio();
+            playInFlightRef.current = false;
+            return;
+          }
           tracer.current.log("audio_start", { cardId: card.id });
           setState("playing");
         } catch {
+          if (startGen !== generationRef.current) return;
           playInFlightRef.current = false;
           playbackStartedForCardRef.current = null;
           setState("failed");
@@ -264,6 +306,7 @@ export function useRfsnAudioPlayback(
 
   const tryActivatePlayback = useCallback(
     (source: string) => {
+      if (draftPausedRef.current) return;
       const card = lastCardRef.current;
       const cardId = card?.id ?? null;
       const readiness = cardId ? clipReadiness(audioStatusRef.current, cardId) : "missing";
@@ -362,6 +405,7 @@ export function useRfsnAudioPlayback(
 
   const playForCard = useCallback(
     (card: RfsnCommentaryCard, onEnded: () => void, onFallback: () => void) => {
+      if (draftPausedRef.current) return;
       onEndedRef.current = onEnded;
       onFallbackRef.current = onFallback;
       if (lastCardRef.current?.id !== card.id) {
@@ -386,6 +430,7 @@ export function useRfsnAudioPlayback(
   );
 
   const replayCurrent = useCallback(() => {
+    if (draftPausedRef.current) return;
     const card = lastCardRef.current;
     const playable = lastPlayableRef.current;
     if (!card || !playable?.audioId || playable.status !== "ready") return;
@@ -423,7 +468,9 @@ export function useRfsnAudioPlayback(
         }
       }
     }
-    tryActivatePlaybackRef.current("effect_unlock_or_status");
+    if (!draftPausedRef.current) {
+      tryActivatePlaybackRef.current("effect_unlock_or_status");
+    }
   }, [audioStatus, unlocked, cleanupAudio, resetPlaybackAttemptState]);
 
   const onSnapshotChange = useCallback(() => {
@@ -443,16 +490,35 @@ export function useRfsnAudioPlayback(
   }, [ttsAvailable, unlocked, userEnabled]);
 
   const lastEpochRef = useRef(sessionEpoch);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (sessionEpoch === undefined || sessionEpoch === lastEpochRef.current) return;
     lastEpochRef.current = sessionEpoch;
-    if (persistKey) clearWarRoomAudioSession(persistKey);
-    lastPlayableRef.current = null;
-    lastCardRef.current = null;
-    resetPlaybackAttemptState();
-    setLastPlayable(null);
-    cleanupAudio();
-  }, [sessionEpoch, persistKey, cleanupAudio, resetPlaybackAttemptState]);
+    haltSession();
+  }, [sessionEpoch, haltSession]);
+
+  const lastPausedRef = useRef(draftPaused);
+  useLayoutEffect(() => {
+    if (draftPaused === lastPausedRef.current) return;
+    lastPausedRef.current = draftPaused;
+    if (draftPaused) {
+      bumpGeneration();
+      onEndedRef.current = null;
+      onFallbackRef.current = null;
+      // Keep lastPlayable for Replay after resume, but stop active speech and clear
+      // the active card so pause does not continue consuming the booth queue.
+      lastCardRef.current = null;
+      resetPlaybackAttemptState();
+      cleanupAudio();
+      if (persistKeyRef.current) {
+        const key = persistKeyRef.current;
+        const session = getWarRoomAudioSession(key);
+        if (session) {
+          setWarRoomAudioSession(key, { ...session, wasPlaying: false, audioEl: null, objectUrl: null });
+        }
+      }
+      setState(userEnabledRef.current && unlockedRef.current ? "ready" : userEnabledRef.current ? "locked" : "disabled");
+    }
+  }, [draftPaused, bumpGeneration, cleanupAudio, resetPlaybackAttemptState]);
 
   useEffect(() => {
     if (!persistKey) {
@@ -461,7 +527,7 @@ export function useRfsnAudioPlayback(
 
     const session = getWarRoomAudioSession(persistKey);
     const el = session?.audioEl;
-    if (el && session) {
+    if (el && session && !draftPausedRef.current) {
       audioRef.current = el;
       objectUrlRef.current = session.objectUrl;
       if (session.currentTime > 0 && Math.abs(el.currentTime - session.currentTime) > 0.25) {
@@ -481,12 +547,12 @@ export function useRfsnAudioPlayback(
 
     return () => {
       const liveEl = audioRef.current;
-      const wasPlaying = isPlaying();
+      const wasPlaying = !draftPausedRef.current && isPlaying();
       if (liveEl) liveEl.pause();
       setWarRoomAudioSession(persistKey, {
         draftId: audioStatus?.draftId ?? session?.draftId ?? "",
-        audioEl: liveEl,
-        objectUrl: objectUrlRef.current,
+        audioEl: draftPausedRef.current ? null : liveEl,
+        objectUrl: draftPausedRef.current ? null : objectUrlRef.current,
         currentTime: liveEl?.currentTime ?? 0,
         wasPlaying,
         state: stateRef.current,
@@ -517,13 +583,15 @@ export function useRfsnAudioPlayback(
     unlocked,
     lastPlayable,
     replayAvailable: Boolean(
-      unlocked && lastPlayable?.audioId && lastPlayable.status === "ready",
+      unlocked && lastPlayable?.audioId && lastPlayable.status === "ready" && !draftPaused,
     ),
     isPlaying,
+    playbackGeneration,
     unlockAudio,
     setMuted,
     setVolume,
     stopCurrent,
+    haltSession,
     replayCurrent,
     playForCard,
     onSnapshotChange,

@@ -189,20 +189,24 @@ describe("useRfsnAudioPlayback — deterministic lifecycle harness", () => {
     expect(onEnded).toHaveBeenCalledTimes(1); // page advances to secondary only now
   });
 
-  it("[item8] a new pick stops stale audio before playing the new clip", async () => {
+  it("[item8] a new pick does not truncate active speech until the booth stops it", async () => {
     const { result, rerender } = await setupPlaying("pick-9", "pick-9:coach:primary");
     const stale = last();
     expect(stale.paused).toBe(false);
-    // new pick arrives: page passes new audioStatus, then plays the new card
+    // Status for a faster pick alone must not cut the live element (booth deferral owns handoff).
     const nextStatus = status("pick-10", [{ commentaryId: "pick-10:coach:primary" }]);
     rerender({ tts: true, s: nextStatus });
+    await flushPlayback();
+    expect(stale.paused).toBe(false);
+    // After explicit stop (booth finished / reset), the next card can play.
+    act(() => result.current.stopCurrent());
+    expect(stale.paused).toBe(true);
     await act(async () => {
       result.current.playForCard(card("pick-10:coach:primary"), vi.fn(), vi.fn());
     });
     await flushPlayback();
-    expect(stale.paused).toBe(true); // stale clip stopped
     expect(MockAudio.instances.length).toBe(2);
-    expect(last().paused).toBe(false); // new clip playing
+    expect(last().paused).toBe(false);
   });
 
   it("[item9] re-render / poll with identical status does not replay", async () => {
@@ -327,5 +331,75 @@ describe("useRfsnAudioPlayback — deterministic lifecycle harness", () => {
     expect(result.current.replayAvailable).toBe(false);
     act(() => result.current.replayCurrent());
     expect(MockAudio.instances.length).toBe(1);
+  });
+
+  it("[pause] draftPaused stops active playback and blocks catch-up", async () => {
+    const onEnded = vi.fn();
+    const onFallback = vi.fn();
+    const view = renderHook(
+      ({ tts, s, paused }: { tts: boolean; s: RfsnLiveAudioStatus; paused: boolean }) =>
+        useRfsnAudioPlayback(tts, s, { draftPaused: paused }),
+      { initialProps: { tts: true, s: status("pick-9", [{ commentaryId: CID }]), paused: false } },
+    );
+    act(() => view.result.current.unlockAudio());
+    await act(async () => view.result.current.playForCard(card(CID), onEnded, onFallback));
+    await flushPlayback();
+    expect(last().paused).toBe(false);
+    const genBefore = view.result.current.playbackGeneration;
+    view.rerender({ tts: true, s: status("pick-9", [{ commentaryId: CID }]), paused: true });
+    await flushPlayback();
+    expect(last().paused).toBe(true);
+    // Generation bumps on the pause transition (0 → 1 on first pause).
+    expect(view.result.current.playbackGeneration).toBe(genBefore + 1);
+    expect(view.result.current.isPlaying()).toBe(false);
+    // While paused, status updates must not start a new play
+    const count = MockAudio.instances.length;
+    view.rerender({
+      tts: true,
+      s: status("pick-9", [{ commentaryId: CID, audioId: "aud-new" }]),
+      paused: true,
+    });
+    await flushPlayback();
+    expect(MockAudio.instances.length).toBe(count);
+  });
+
+  it("[reset] sessionEpoch halt ignores stale play completion", async () => {
+    let resolveFetch: ((v: unknown) => void) | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = resolve;
+          }),
+      ),
+    );
+    const view = renderHook(
+      ({ tts, s, epoch }: { tts: boolean; s: RfsnLiveAudioStatus; epoch: number }) =>
+        useRfsnAudioPlayback(tts, s, { sessionEpoch: epoch }),
+      { initialProps: { tts: true, s: status("pick-9", [{ commentaryId: CID }]), epoch: 1 } },
+    );
+    act(() => view.result.current.unlockAudio());
+    await act(async () => view.result.current.playForCard(card(CID), vi.fn(), vi.fn()));
+    // Reset before fetch resolves
+    view.rerender({ tts: true, s: status("pick-9", [{ commentaryId: CID }]), epoch: 2 });
+    await flushPlayback();
+    resolveFetch?.({
+      ok: true,
+      blob: async () => new Blob(["RIFFxxxx"], { type: "audio/wav" }),
+    });
+    await flushPlayback();
+    expect(view.result.current.isPlaying()).toBe(false);
+    expect(MockAudio.instances.every((a) => a.paused)).toBe(true);
+  });
+
+  it("[haltSession] clears queue intent so resume does not dump clips", async () => {
+    const { result } = await setupPlaying();
+    act(() => result.current.haltSession());
+    expect(result.current.isPlaying()).toBe(false);
+    expect(result.current.replayAvailable).toBe(false);
+    const count = MockAudio.instances.length;
+    await flushPlayback();
+    expect(MockAudio.instances.length).toBe(count);
   });
 });

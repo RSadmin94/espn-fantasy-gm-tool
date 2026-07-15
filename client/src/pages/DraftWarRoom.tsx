@@ -869,6 +869,19 @@ function LiveDraftEngine({
 
   const clockState = resolveClockState({ done, isManualPick: onClockIsManual, isHolding: holding, remainingMs });
 
+  const lastLockedPlayerName = useMemo(() => {
+    let maxPick = 0;
+    let name: string | null = null;
+    for (const [k, v] of Object.entries(results)) {
+      const n = Number(k);
+      const playerName = String((v as any)?.name ?? "").trim();
+      if (!playerName || !Number.isFinite(n) || n <= maxPick) continue;
+      maxPick = n;
+      name = playerName;
+    }
+    return name;
+  }, [results]);
+
   const SORTS: [typeof sort, string][] = [["adp","ADP"],["proj","Proj"],["value","Value"],["pos","Pos"],["name","Name"]];
   // Position filter tabs are data-driven from the pool, so a team-D/ST league shows a DEF tab and
   // an IDP league shows a DP tab (instead of a hardcoded DP assumption).
@@ -919,6 +932,7 @@ function LiveDraftEngine({
           onClockTeam={onClock?.teamName ?? "—"}
           onClockOwner={onClock?.ownerName}
           remainingMs={remainingMs}
+          lastLockedPlayerName={lastLockedPlayerName}
           className="mb-3"
         />
       )}
@@ -1043,6 +1057,7 @@ function LiveDraftEngine({
               leagueId={leagueId}
               draftId={draftId}
               sessionResetKey={`${draftId}:${scheduleSig}:${resetCounter}`}
+              draftPaused={!running}
               onBusyChange={setBroadcastBusy}
             />
           </aside>

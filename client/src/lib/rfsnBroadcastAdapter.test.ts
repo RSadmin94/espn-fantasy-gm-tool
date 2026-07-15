@@ -235,16 +235,20 @@ describe("selectOnAirCommentary — editorial roles", () => {
   });
 
   it("maps deferred to overflow for ticker via buildRfsnBroadcastSnapshot", () => {
+    const long =
+      "Deferred fact line for ticker that is intentionally longer than eighty characters so the booth receives the complete Roxanne sentence.";
     const { snapshot } = buildRfsnBroadcastSnapshot(adapterInput({
       commentaryResults: [
         voice("roxanne", { editorialRole: "primary" }),
         voice("coach", { editorialRole: "secondary" }),
-        voice("sofia", { editorialRole: "deferred", text: "Deferred fact line for ticker." }),
+        voice("sofia", { editorialRole: "deferred", text: long }),
       ],
     }));
     expect(snapshot.primary?.commentator).toBe("roxanne");
     expect(snapshot.secondary?.commentator).toBe("coach");
-    expect(snapshot.ticker.some((t) => t.commentator === "sofia")).toBe(true);
+    const tick = snapshot.ticker.find((t) => t.commentator === "sofia");
+    expect(tick?.text).toBe(long);
+    expect(tick?.text.includes("...")).toBe(false);
   });
 });
 

@@ -12,7 +12,28 @@ export type RfsnPickClockProps = {
   onClockOwner?: string;
   remainingMs: number;
   className?: string;
+  /**
+   * Most recently locked player name (confirmed pick only).
+   * When null/empty, shows DRAFT READY.
+   */
+  lastLockedPlayerName?: string | null;
 };
+
+/** Decorative stars wrap the name for sighted users; a11y uses aria-label only. */
+export function formatPlayerTicker(name: string | null | undefined): {
+  display: string;
+  accessible: string;
+} {
+  const trimmed = String(name ?? "").trim();
+  if (!trimmed) {
+    return { display: "******** DRAFT READY ********", accessible: "Draft ready" };
+  }
+  const upper = trimmed.toUpperCase();
+  return {
+    display: `******** ${upper} ********`,
+    accessible: `Last pick: ${upper}`,
+  };
+}
 
 const TONE: Record<DraftClockState, string> = {
   running: "border-zinc-700 bg-white/[0.03] text-zinc-100",
@@ -31,6 +52,7 @@ export function RfsnPickClock({
   onClockOwner,
   remainingMs,
   className,
+  lastLockedPlayerName,
 }: RfsnPickClockProps) {
   const Icon =
     state === "paused_for_broadcast" ? Radio
@@ -39,6 +61,7 @@ export function RfsnPickClock({
       : state === "urgent" ? Pause
       : Clock;
   const showCountdown = state === "running" || state === "urgent";
+  const ticker = formatPlayerTicker(lastLockedPlayerName);
 
   return (
     <div
@@ -70,7 +93,16 @@ export function RfsnPickClock({
         </div>
       )}
 
-      <div className="ml-auto flex items-center gap-2">
+      <div
+        className="min-w-0 max-w-[min(100%,28rem)] flex-1 basis-[12rem] truncate text-center font-black tracking-[0.12em] text-[11px] sm:text-xs uppercase opacity-90"
+        data-player-ticker
+        aria-label={ticker.accessible}
+        title={ticker.display}
+      >
+        <span aria-hidden>{ticker.display}</span>
+      </div>
+
+      <div className="ml-auto flex items-center gap-2 shrink-0">
         {showCountdown ? (
           <span className="font-black tabular-nums text-base">{formatClock(remainingMs)}</span>
         ) : (

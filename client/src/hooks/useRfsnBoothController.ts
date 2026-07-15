@@ -33,6 +33,8 @@ export type RfsnBoothController = {
 
 export type RfsnBoothControllerOptions = {
   audio?: RfsnAudioPlayback | null;
+  /** When true, stop booth timers/sequence and clear the active card (draft Pause). */
+  draftPaused?: boolean;
 };
 
 export function useRfsnBoothController(
@@ -40,6 +42,7 @@ export function useRfsnBoothController(
   options: RfsnBoothControllerOptions = {},
 ): RfsnBoothController {
   const audio = options.audio ?? null;
+  const draftPaused = Boolean(options.draftPaused);
   const reducedMotion = usePrefersReducedMotion();
   const sequence = useMemo(() => buildBoothCommentarySequence(snapshot), [snapshot]);
   const sequenceRef = useRef(sequence);
@@ -52,6 +55,8 @@ export function useRfsnBoothController(
   const [activeCard, setActiveCard] = useState<RfsnCommentaryCard | null>(null);
   const [sequenceIndex, setSequenceIndex] = useState(-1);
   const [consumedTickerIds, setConsumedTickerIds] = useState<Set<string>>(() => new Set());
+  const consumedTickerIdsRef = useRef(consumedTickerIds);
+  consumedTickerIdsRef.current = consumedTickerIds;
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sequenceIndexRef = useRef(-1);
@@ -248,6 +253,16 @@ export function useRfsnBoothController(
     return [snapshot.overallPick, sig(snapshot.primary), sig(snapshot.secondary)].join("|");
   }, [snapshot]);
 
+  /** Stable id of deferred booth speakers — used only to start idle booth when Roxanne arrives late. */
+  const deferredBoothSig = useMemo(
+    () =>
+      snapshot.ticker
+        .map((t) => t.id)
+        .sort()
+        .join(","),
+    [snapshot.ticker],
+  );
+
   useEffect(() => {
     const generation = ++snapshotGenerationRef.current;
     clearTimer();
@@ -299,6 +314,27 @@ export function useRfsnBoothController(
       clearTimer();
     };
   }, [snapshotKey, clearTimer, reducedMotion]);
+
+  // Late-arriving deferred voices (e.g. Roxanne on ticker) after primary/secondary finished:
+  // resume from the first unconsumed sequence card while idle — never replay finished speakers.
+  useEffect(() => {
+    if (!deferredBoothSig) return;
+    if (sequenceIndexRef.current >= 0) return;
+    if (audioRef.current?.isPlaying?.()) return;
+    if (consumedTickerIdsRef.current.size === 0) return; // cold start owned by snapshotKey applyFrame
+    const seq = sequenceRef.current;
+    if (seq.length === 0) return;
+    const startIdx = seq.findIndex((c) => !consumedTickerIdsRef.current.has(c.id));
+    if (startIdx < 0) return;
+    beginSpeakerRef.current(startIdx, seq[startIdx]!);
+  }, [deferredBoothSig, snapshotKey]);
+
+  useEffect(() => {
+    if (!draftPaused) return;
+    pendingSnapshotApplyRef.current = false;
+    finishStandby();
+    audioRef.current?.stopCurrent();
+  }, [draftPaused, finishStandby]);
 
   useEffect(() => clearTimer, [clearTimer]);
 

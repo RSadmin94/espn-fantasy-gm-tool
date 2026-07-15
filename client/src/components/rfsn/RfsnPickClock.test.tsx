@@ -64,6 +64,31 @@ describe("RfsnPickClock — states", () => {
   });
 });
 
+describe("RfsnPickClock — player ticker", () => {
+  it("shows DRAFT READY before the first locked pick", () => {
+    const c = render({ ...base, lastLockedPlayerName: null });
+    const t = c.querySelector("[data-player-ticker]");
+    expect(t?.getAttribute("aria-label")).toBe("Draft ready");
+    expect(t?.textContent).toContain("DRAFT READY");
+  });
+  it("shows uppercase locked player with star wrappers", () => {
+    const c = render({ ...base, lastLockedPlayerName: "Nico Collins" });
+    const t = c.querySelector("[data-player-ticker]");
+    expect(t?.getAttribute("aria-label")).toBe("Last pick: NICO COLLINS");
+    expect(t?.textContent).toBe("******** NICO COLLINS ********");
+  });
+  it("truncates long names without breaking the bar layout classes", () => {
+    const c = render({
+      ...base,
+      lastLockedPlayerName: "Christian McCaffrey Extremely Long Suffix Name",
+    });
+    const t = c.querySelector("[data-player-ticker]") as HTMLElement;
+    expect(t.className).toContain("truncate");
+    expect(t.className).toContain("max-w-");
+    expect(c.querySelector("[data-clock-state]")?.className).toContain("flex-wrap");
+  });
+});
+
 describe("RfsnPickClock — responsive (desktop/mobile)", () => {
   it("reflows on narrow widths and hides the owner on mobile, showing it at sm+", () => {
     const c = render(base);

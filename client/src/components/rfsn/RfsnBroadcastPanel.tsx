@@ -18,7 +18,6 @@ import { RfsnAudioControls } from "./RfsnAudioControls";
 import {
   liveSessionStatusLabel,
   resolveBoothFeedSnapshot,
-  shouldRenderLiveCommentary,
   type RfsnLivePublicPayload,
 } from "@/lib/rfsnLiveState";
 import { warRoomAudioSessionKey } from "@/lib/rfsnWarRoomAudioSession";
@@ -31,6 +30,8 @@ export type RfsnBroadcastPanelProps = {
   draftId: string;
   /** Bumps when the draft resets or league/schedule identity changes — clears stale replay clips. */
   sessionResetKey?: string | number;
+  /** War Room Pause — stops analyst speech and booth equalizer immediately. */
+  draftPaused?: boolean;
   layout?: "desktop" | "mobile";
   className?: string;
   /** Reports whether a broadcast moment is generating or on air (drives the draft pause). */
@@ -41,6 +42,7 @@ export function RfsnBroadcastPanel({
   leagueId,
   draftId,
   sessionResetKey,
+  draftPaused = false,
   layout = "desktop",
   className,
   onBusyChange,
@@ -64,20 +66,25 @@ export function RfsnBroadcastPanel({
   const audio = useRfsnAudioPlayback(ttsAvailable, payload?.audioStatus ?? null, {
     persistKey,
     sessionEpoch: sessionResetKey,
+    draftPaused,
   });
 
   const displaySnapshot = resolveBoothFeedSnapshot(payload, "");
   const boothSnapshot = displaySnapshot;
-  const booth = useRfsnBoothController(boothSnapshot, { audio });
+  const booth = useRfsnBoothController(boothSnapshot, { audio, draftPaused });
   const sequence = buildBoothCommentarySequence(boothSnapshot);
   const isMobile = layout === "mobile";
+  const audioIsSpeaking = audio.state === "playing" && Boolean(booth.activeCommentator);
 
   // A broadcast moment is "busy" (should hold the draft) while it is generating
   // (commentary_pending) or while the booth sequence is still playing (sequenceIndex >= 0).
   // When the sequence completes / is dismissed / all voices fail, the controller returns
   // sequenceIndex to -1, so busy clears and the engine resumes.
   const busy = Boolean(
-    enabled && payload && (payload.sessionState === "commentary_pending" || booth.sequenceIndex >= 0),
+    enabled &&
+      !draftPaused &&
+      payload &&
+      (payload.sessionState === "commentary_pending" || booth.sequenceIndex >= 0),
   );
   const lastBusyRef = useRef<boolean | null>(null);
   useEffect(() => {
@@ -118,6 +125,7 @@ export function RfsnBroadcastPanel({
         sequence={sequence}
         onDismiss={booth.dismissFor}
         layout={isMobile ? "mobile" : "desktop"}
+        audioIsSpeaking={audioIsSpeaking}
       />
     </div>
   );

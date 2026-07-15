@@ -72,6 +72,10 @@ describe("resolveEditorialPlanId", () => {
     expect(resolveEditorialPlanId(bm({ signals: ["STEAL"] }))).toBe("value_pick");
   });
 
+  it("resolves major_reach for any REACH on major (not slight_reach)", () => {
+    expect(resolveEditorialPlanId(bm({ signals: ["REACH"], significance: "major" }))).toBe("major_reach");
+  });
+
   it("resolves slight_reach for moderate reach", () => {
     expect(resolveEditorialPlanId(bm({ signals: ["REACH"], significance: "notable" }))).toBe("slight_reach");
   });

@@ -30,6 +30,8 @@ const lockedPickSchema = z.object({
   playerName: z.string().min(1),
   position: z.string().min(1),
   nflTeam: z.string().nullable().optional(),
+  /** War Room pool ADP — enables REACH/STEAL classification (and Roxanne) on live picks. */
+  adp: z.number().finite().nullable().optional(),
 });
 
 function assertLiveAccess(user: Parameters<typeof canAccessRfsnLiveBroadcast>[0]): void {

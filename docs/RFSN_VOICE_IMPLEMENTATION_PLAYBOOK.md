@@ -260,25 +260,41 @@ Only one hook-owned element plays. Starting a new clip cleans up the previous. B
 
 ## 7. Speech normalization
 
-> **Deploy status:** Football abbreviations shipped with voice polish (`6cbb610`). Possessive / apostrophe normalization is a TTS-only follow-up on the same `normalizeSpeechForTts` path. Written booth text stays abbreviated and keeps its original apostrophes.
+> **Deploy status:** Football abbreviations + possessive of-forms + **contraction expansions** all run on the TTS-only `normalizeSpeechForTts` path. Written booth text stays abbreviated and keeps original apostrophes/contractions.
 
 ### Why written stays compact
 
-Booth cards remain scannable with standard fantasy shorthand (`WR`, `QB`, …) and natural written possessives (`Rod's roster`).
+Booth cards remain scannable with standard fantasy shorthand (`WR`, `QB`, …) and natural written possessives / contractions (`Rod's roster`, `that's a reach`).
 
 ### Why TTS needs a separate string
 
-Kokoro would otherwise speak letter names (“double-you-are”) and often mangles `'s` / curly `’s` possessives (tokenization / G2P). Normalization expands positions and rewrites possessives **only** on the TTS path.
+Kokoro otherwise speaks letter names (“double-you-are”) and often mangles apostrophe tokens — possessives and contractions (`that's`, `he's`, curly `’`) — via tokenization / G2P.
+
+### Pipeline order (`normalizeSpeechForTts`)
+
+1. Fold curly apostrophes (`’` / related) → ASCII `'`.
+2. **Expand common contractions** into pronunciation-safe phrases (before possessives).
+3. Rewrite non-contraction possessives to natural of-forms (`Rod's roster` → `the roster of Rod`).
+4. Expand fantasy football abbreviations.
+
+### Contraction strategy (TTS only)
+
+- Do **not** strip all apostrophes globally.
+- Expand known contraction words (straight and curly, after fold).
+- Prefer spoken expansions over awkward formal prose:
+  - `that's` → `that is`, `what's` → `what is`, `there's` → `there is`, `it's` → `it is`
+  - `don't` → `do not`, `can't` → `cannot`, `won't` → `will not`
+  - `isn't` → `is not`, `wasn't` → `was not`, etc.
+- **Ambiguous `'s` (he's / she's):** default to **is**. Use **has** only when followed by a clear participial cue (`been|gone|done|had|got|gotten|seen|taken|made|given`).
+- Leftover contraction tokens still skip the possessive of-form rewriter.
 
 ### Possessives / apostrophes (TTS only)
 
-1. Fold curly apostrophes (`’` / related) → ASCII `'`.
-2. Normalize bare plurals (`James'` → `James's`).
-3. Rewrite non-contraction possessives to natural of-forms (`Rod's roster` → `the roster of Rod`).
-4. Preserve contractions (`don't`, `can't`, `it's`, `they're`, …).
-5. Protect `\bS\b` → `safety` from matching the `s` inside `it's` / `he's`.
+1. Normalize bare plurals (`James'` → `James's`).
+2. Rewrite non-contraction possessives to of-forms.
+3. Protect `\bS\b` → `safety` from matching leftover contraction `s`.
 
-### Mapping (`normalizeSpeechForTts`)
+### Mapping (`normalizeSpeechForTts`) — football
 
 Longer tokens first, all word-boundary protected (`\b`):
 
@@ -299,17 +315,13 @@ Longer tokens first, all word-boundary protected (`\b`):
 | K | kicker |
 | S | safety |
 
-### Ordering & word boundaries
-
-Multi-letter / slash forms run before single-letter `S` / `K` to avoid partial collisions. `\b` prevents corrupting words like `This` / `class`.
-
 ### Tests
 
-`server/services/rfsn/rfsnSpeechNormalize.test.ts` — expansions + false-negative protections.
+`server/services/rfsn/rfsnSpeechNormalize.test.ts` — contractions, possessives, abbreviations, false-negative protections.
 
 ### Where to add future sports terms
 
-Append to `SPEECH_EXPANSIONS` in `rfsnSpeechNormalize.ts` (longer patterns first). Never mutate display/commentary generation for speech-only terms.
+Append to `SPEECH_EXPANSIONS` / `CONTRACTION_EXPANSIONS` in `rfsnSpeechNormalize.ts` (longer patterns first). Never mutate display/commentary generation for speech-only terms.
 
 ---
 
@@ -325,19 +337,46 @@ Append to `SPEECH_EXPANSIONS` in `rfsnSpeechNormalize.ts` (longer patterns first
 - App sends logical `voice` to Kokoro (`synthesizeAnalystSpeech`); provider resolves to concrete Kokoro voices.
 - To replace the provider: keep persona ids stable; swap only the HTTP client / provider map. Booth UI and commentary assignment stay provider-neutral.
 
-### Roxanne presence (selective)
+### Roxanne presence (selective) — runtime failure & correction
 
 Roxanne is rivalry / entertainment — **not** the default value analyst.
 
+**What earlier checks failed to prove:** isolated `major_reach` assignment (request includes Roxanne) ≠ preview booth visibility. The live War Room path still needed grounded REACH/STEAL on real players and full deferred text on the booth path.
+
 | Gate | Behavior |
 |------|----------|
+| Live ADP on notify | `LockedPickInput.adp` merges into receipt `adpByName` so REACH/STEAL fire on real player names (shadow ADP alone only covered ~12 story-beat names) |
 | Live rivalry overlay | `loadLiveRivalryOverlay(userId, leagueId)` maps real rivalryService pairs onto draft `PID_*` owner keys; never fabricates rivals |
 | `roxanneEligible` | Rivalry receipt / drama evidence, or major/historic REACH/STEAL |
+| Plan routing | Any **major** REACH → `major_reach` (no longer demoted to `slight_reach`, which prohibited Roxanne) |
+| Deferred booth text | Ticker keeps **full** commentary for booth/TTS (UI crawl may truncate separately) |
+| Late deferred | Idle booth resumes from first unconsumed sequence card when Roxanne arrives after Sofia/Coach finish |
 | Ordinary notable steal / slight reach | Sofia/Coach only |
 | `major_reach` | Lead Sofia; optional Coach + Roxanne (`sofia`, `coach`, `roxanne`) |
 | `rivalry_receipt` | Lead Roxanne when rivalry receipt is available |
 
 Without grounded rivalry data, shadow Alice rivals remain for offline fixtures only; production notify passes `userId` so real rivals replace the fixture set when available.
+
+**Preview success criteria:** pick → grounded Roxanne text → visible Roxanne card → Roxanne clip ready → heard. Do not claim fixed from unit “request includes roxanne” alone.
+
+---
+
+## 8b. Draft-session audio ownership
+
+| Control | Behavior |
+|---------|----------|
+| `playbackGeneration` | Bumped on Pause, Reset/`sessionEpoch`, and `haltSession` |
+| Stale fetch/`play()` | Completions for older generations are ignored |
+| Pause (`draftPaused`) | Stops `HTMLAudioElement` immediately, clears active card, does **not** dump the queue on resume, does not let pending polls catch up while paused |
+| Reset / new draft | `sessionResetKey` → `haltSession` clears replay, queue intent, persist session |
+| Replay | Still works within the active generation using `lastPlayable` when not paused |
+| Equalizer | Driven by `audio.state === "playing"` on the active booth speaker only; respects `prefers-reduced-motion` (CSS) |
+
+---
+
+## 8c. Pick-clock player ticker
+
+Same bar as the pick clock: `******** PLAYER NAME ********` (uppercase locked pick). Before first pick: `******** DRAFT READY ********`. Source = most recent confirmed `results[n].name`; cleared on draft reset. Accessible label announces the name without reading stars individually.
 
 ---
 
@@ -480,12 +519,16 @@ RFSN is one proven instance of this pattern: fantasy draft booth + Kokoro WAV + 
 pnpm exec vitest run \
   server/services/rfsn/rfsnSpeechNormalize.test.ts \
   server/services/rfsn/kokoroTtsClient.test.ts \
+  server/services/sofia/broadcastEditorialRouting.test.ts \
   server/rfsnBroadcastRouter.test.ts \
   client/src/lib/rfsnBoothPresentation.test.ts \
+  client/src/lib/rfsnBroadcastAdapter.test.ts \
   client/src/hooks/useRfsnBoothController.activation.test.ts \
   client/src/hooks/rfsnAudioBoothLifecycle.test.ts \
   client/src/hooks/useRfsnAudioPlayback.lifecycle.test.ts \
-  client/src/components/rfsn/RfsnAudioControls.production.test.ts
+  client/src/components/rfsn/RfsnAudioControls.production.test.ts \
+  client/src/components/rfsn/RfsnPickClock.test.tsx \
+  client/src/components/rfsn/formatPlayerTicker.test.ts
 
 pnpm run check
 pnpm run build

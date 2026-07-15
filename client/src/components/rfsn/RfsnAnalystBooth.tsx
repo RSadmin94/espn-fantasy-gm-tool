@@ -11,6 +11,8 @@ export type RfsnAnalystBoothProps = {
   onDismiss: (commentator: RfsnCommentatorId) => void;
   layout?: "desktop" | "mobile";
   className?: string;
+  /** True only while HTMLAudioElement is actively playing for the booth speaker. */
+  audioIsSpeaking?: boolean;
 };
 
 function commentaryForAnalyst(
@@ -30,6 +32,7 @@ export function RfsnAnalystBooth({
   onDismiss,
   layout = "desktop",
   className,
+  audioIsSpeaking = false,
 }: RfsnAnalystBoothProps) {
   const isMobile = layout === "mobile";
 
@@ -46,6 +49,7 @@ export function RfsnAnalystBooth({
                 activeCommentator={activeCommentator}
                 commentary={commentaryForAnalyst(id, sequence, activeCard)}
                 layout="mobile-tab"
+                audioIsSpeaking={audioIsSpeaking && id === activeCommentator}
               />
             ))}
           </div>
@@ -57,6 +61,7 @@ export function RfsnAnalystBooth({
               commentary={activeCard}
               onDismiss={() => onDismiss(activeCommentator)}
               layout="mobile-expanded"
+              audioIsSpeaking={audioIsSpeaking}
             />
           </div>
         </div>
@@ -77,6 +82,7 @@ export function RfsnAnalystBooth({
             activeCommentator={activeCommentator}
             commentary={commentaryForAnalyst(id, sequence, activeCard)}
             layout="mobile-standby"
+            audioIsSpeaking={false}
           />
         ))}
       </div>
@@ -99,6 +105,7 @@ export function RfsnAnalystBooth({
           commentary={commentaryForAnalyst(id, sequence, activeCard)}
           onDismiss={() => onDismiss(id)}
           layout="desktop"
+          audioIsSpeaking={audioIsSpeaking && id === activeCommentator}
         />
       ))}
     </div>

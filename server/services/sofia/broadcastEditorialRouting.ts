@@ -129,8 +129,8 @@ export function resolveEditorialPlanId(moment: BroadcastMoment): EditorialPlanId
   }
 
   if (moment.significance === "major") {
-    if (hasStrongSignal(moment, "REACH")) return "major_reach";
-    if (hasSignal(moment, "REACH")) return "slight_reach";
+    // Any major REACH is major_reach (Roxanne eligible). Slight_reach is notable-only.
+    if (hasSignal(moment, "REACH") || hasStrongSignal(moment, "REACH")) return "major_reach";
     return "major_reach";
   }
 

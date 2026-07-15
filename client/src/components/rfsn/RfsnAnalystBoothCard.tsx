@@ -24,6 +24,8 @@ export type RfsnAnalystBoothCardProps = {
   onDismiss?: () => void;
   layout?: "desktop" | "mobile-tab" | "mobile-expanded" | "mobile-standby";
   className?: string;
+  /** Equalizer runs only when this card's HTMLAudioElement is playing. */
+  audioIsSpeaking?: boolean;
 };
 
 function RfsnBrandMark({ className }: { className?: string }) {
@@ -112,10 +114,12 @@ function FullBoothCard({
   onDismiss,
   compact = false,
   className,
+  audioIsSpeaking = false,
 }: Omit<RfsnAnalystBoothCardProps, "layout"> & { compact?: boolean }) {
   const meta = COMMENTATOR_META[commentator];
   const isActiveSpeaker = activeCommentator === commentator;
   const isSpeaking = isActiveSpeaker && (cardState === "active" || cardState === "entering");
+  const showEqualizer = Boolean(audioIsSpeaking && isActiveSpeaker && cardState === "active");
   const showText = Boolean(commentary && isCommentaryVisibleState(cardState) && isActiveSpeaker);
   const opacity = analystOpacity(commentator, activeCommentator, cardState);
   const liveIndicator = analystLiveIndicatorVisible(isActiveSpeaker, cardState);
@@ -217,7 +221,7 @@ function FullBoothCard({
               </p>
             )}
           </div>
-          <Waveform active={cardState === "active" && isActiveSpeaker} />
+          <Waveform active={showEqualizer} />
         </div>
       </div>
 
@@ -232,7 +236,7 @@ function FullBoothCard({
         </p>
       </footer>
 
-      {isActiveSpeaker && cardState === "active" && (
+      {showEqualizer && (
         <span className="sr-only">{meta.displayName} is speaking</span>
       )}
     </article>
@@ -247,6 +251,7 @@ export function RfsnAnalystBoothCard({
   onDismiss,
   layout = "desktop",
   className,
+  audioIsSpeaking = false,
 }: RfsnAnalystBoothCardProps) {
   const meta = COMMENTATOR_META[commentator];
   const isActiveSpeaker = activeCommentator === commentator;
@@ -262,7 +267,7 @@ export function RfsnAnalystBoothCard({
           className,
         )}
         aria-current={isActiveSpeaker ? "true" : undefined}
-        aria-label={`${meta.displayName}${isActiveSpeaker ? ", speaking" : ", standby"}`}
+        aria-label={`${meta.displayName}${audioIsSpeaking ? ", speaking" : isActiveSpeaker ? ", on air" : ", standby"}`}
       >
         {meta.portrait ? (
           <img
@@ -289,6 +294,7 @@ export function RfsnAnalystBoothCard({
       onDismiss={onDismiss}
       compact={layout === "mobile-expanded" || layout === "mobile-standby"}
       className={className}
+      audioIsSpeaking={audioIsSpeaking}
     />
   );
 }

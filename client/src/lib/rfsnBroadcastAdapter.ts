@@ -264,11 +264,12 @@ function toCard(
 }
 
 function toTickerItem(result: RfsnCommentaryResult, index: number): RfsnTickerItem {
+  // Keep full text — booth/TTS consume ticker-derived cards; UI crawl truncates separately.
   const text = result.text.trim();
   return {
     id: `${result.pickId}:${result.commentator}:ticker:${index}`,
     commentator: result.commentator,
-    text: text.length > 80 ? `${text.slice(0, 77)}...` : text,
+    text,
   };
 }
 

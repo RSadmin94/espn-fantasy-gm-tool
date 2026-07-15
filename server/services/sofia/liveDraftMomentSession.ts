@@ -5,7 +5,7 @@ import { buildDraftMomentsFromContext } from "../draftMoments/draftMomentBuilder
 import { buildIdentityResolver } from "../draftMoments/draftMomentIdentityService";
 import type { DraftMoment } from "../draftMoments/draftMomentTypes";
 import { momentConfigForDraftPace, type DraftPace } from "../draftMoments/draftMomentTypes";
-import type { MockPickLike } from "../draftMoments/draftMomentReceiptService";
+import { normName, type MockPickLike } from "../draftMoments/draftMomentReceiptService";
 import { makeShadowReceiptContext } from "./shadowDraftSources";
 import {
   applyLiveRivalryOverlay,
@@ -23,6 +23,8 @@ export type LockedPickInput = {
   playerName: string;
   position: string;
   nflTeam?: string | null;
+  /** Pool ADP for REACH/STEAL — preferred over shadow-story ADP alone. */
+  adp?: number | null;
 };
 
 type DraftAccumulator = {
@@ -30,6 +32,8 @@ type DraftAccumulator = {
   draftId: string;
   season: number;
   picks: MockPickLike[];
+  /** Player-name → ADP from War Room notifies (live board). */
+  liveAdpByName: Map<string, number>;
   rivalry: LiveRivalryOverlay | null;
   rivalryLoaded: boolean;
 };
@@ -95,11 +99,13 @@ export async function buildDraftMomentForLockedPick(
       draftId,
       season: opts.season ?? 2026,
       picks: [],
+      liveAdpByName: new Map(),
       rivalry: null,
       rivalryLoaded: false,
     };
     accumulators.set(key, acc);
   }
+  if (!acc.liveAdpByName) acc.liveAdpByName = new Map();
 
   const mockPick: MockPickLike = {
     overall: pick.overallPick,
@@ -116,6 +122,9 @@ export async function buildDraftMomentForLockedPick(
   if (!acc.picks.some((p) => p.overall === mockPick.overall)) {
     acc.picks.push(mockPick);
     acc.picks.sort((a, b) => a.overall - b.overall);
+  }
+  if (pick.adp != null && Number.isFinite(Number(pick.adp))) {
+    acc.liveAdpByName.set(normName(pick.playerName), Number(pick.adp));
   }
 
   if (opts.rivalryOverlay !== undefined) {
@@ -143,7 +152,10 @@ export async function buildDraftMomentForLockedPick(
 
   // When a real rivalry overlay is present, replace shadow Alice faux rivals.
   // When unavailable, keep the shadow context so offline/dev drafts still exercise the lane.
-  let ctx = makeShadowReceiptContext({ leagueId, teamCount: 14 });
+  // Merge live War Room ADPs so REACH/STEAL (and Roxanne eligibility) work on real player names.
+  const mergedAdp = new Map(makeShadowReceiptContext().adpByName);
+  for (const [n, adp] of acc.liveAdpByName) mergedAdp.set(n, adp);
+  let ctx = makeShadowReceiptContext({ leagueId, teamCount: 14, adpByName: mergedAdp });
   if (acc.rivalry) {
     ctx = {
       ...ctx,
